@@ -4,14 +4,14 @@
 
 Atrib is value provenance infrastructure for the agent economy. It makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance — the missing infrastructure layer between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP).
 
-The complete protocol specification is in `atrib-spec.md`. The founding design conversation is in `atrib-design-conversation.md`. The implementation brief is in `atrib-handoff-brief.md`. Read the spec before making any implementation decisions.
+The complete protocol specification is in `atrib-spec.md`. The implementation guide is in `internal planning doc`. The founding design conversation is in `atrib-design-conversation.md`. Read the spec before making any implementation decisions.
 
 ## Repository structure
 
 ```
 atrib/
   atrib-spec.md                # The single source of truth for the protocol
-  atrib-handoff-brief.md       # Implementation summary and critical invariants
+  internal planning doc    # Implementation guide with build order and package details
   atrib-design-conversation.md # Founding conversation (context, not authority)
   atrib-foundation.html        # Original §0 (HTML archive)
   atrib-section-[1-5].html     # Original §1-§5 (HTML archive)
@@ -32,13 +32,13 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 |-----|----------------|
 | `atrib-spec.md` | Complete protocol specification — record format, Merkle log, graph model, policy format, SDK contract |
 | `CLAUDE.md` | Project conventions, invariants, implementation guidance |
-| `atrib-handoff-brief.md` | Implementation summary, critical invariants, v2 deferrals |
+| `internal planning doc` | Implementation guide — build order, package details, testing strategy, what not to build |
 
 ## Sync triggers
 
 | Event | Update |
 |-------|--------|
-| Protocol decision changed | `atrib-spec.md` first, then `atrib-handoff-brief.md` if invariants affected |
+| Protocol decision changed | `atrib-spec.md` first, then `internal planning doc` if build guidance affected |
 | New package created | This file (repository structure) |
 | Implementation convention established | This file (conventions section) |
 
