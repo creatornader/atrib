@@ -41,3 +41,14 @@ export type {
   VercelAiSdkMcpClientLike,
   AttributeVercelAiSdkMcpOptions,
 } from './adapters/vercel-ai-sdk-mcp.js'
+
+// LangChain JS MCP adapter — patches every internal `@modelcontextprotocol/sdk`
+// Client owned by a `@langchain/mcp-adapters` `MultiServerMCPClient` so every
+// outbound `tools/call` (and every forked client from per-call-header
+// workflows) flows through Atrib's interceptor.
+export { attributeLangchainMcp } from './adapters/langchain-mcp.js'
+export type {
+  LangchainMcpClientLike,
+  LangchainMultiServerMcpClientLike,
+  AttributeLangchainMcpOptions,
+} from './adapters/langchain-mcp.js'

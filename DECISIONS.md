@@ -608,3 +608,75 @@ The runnable examples (`surface-1-mcp-agent.ts`, `surface-2-agent-client.ts`) ar
 **Test results:** 366 tests passing across all 4 packages (was 360; +6 vercel-ai-sdk-mcp unit tests). No regressions in mcp, verify, or integration.
 
 **Followup:** With three framework adapters shipped (Claude Agent SDK, Cloudflare Agents, Vercel AI SDK), the framework-adapter rollout is substantially complete. Remaining §6 work: decide whether to add OpenAI Agents SDK and/or Mastra adapters based on the GitHub usage data from the prior research session. Then §7 (developer integration documentation) and §8 (TypeDoc API reference). A pattern is emerging across D018/D021/D022/D023: each adapter required source-reading the host framework before deciding the integration shape, and in every case my initial guess from D020 was wrong in the specifics. The general approach (interceptor lifecycle + structural-shape adapters) holds, but the integration point varies per framework: server-side `setRequestHandler` patch (@atrib/mcp), in-process `McpServer` proxy (Claude Agent SDK Case B), in-place `client` field replacement (Cloudflare Agent), and `request()` monkey-patch (Vercel AI SDK).
+
+---
+
+## D024 — LangChain JS MCP adapter: NOT docs-only. `MultiServerMCPClient` needs a proper helper because its internal Client references are `#private`
+
+**Date:** 2026-04-06
+**Context:** D020 asserted that LangChain would ship as a docs-only adapter because `loadMcpTools(name, rawClient)` accepts an injected `@modelcontextprotocol/sdk` Client, so `wrapMcpClient` from `@atrib/agent` would cover it transparently. After user pushback on "why docs-only instead of doing it properly", I unpacked `@langchain/mcp-adapters@1.1.3` and source-read the actual API. The docs-only claim was half right and half wrong.
+
+**What the SDK actually exposes (verified against `@langchain/mcp-adapters@1.1.3`):**
+
+LangChain has **two** MCP APIs, not one:
+
+1. **Low-level: `loadMcpTools(serverName, client, options?)`** — second parameter is typed `Client | Client_from_mcp_sdk` at `dist/tools.d.ts:28`. Users construct their own Client, call `.connect(transport)`, then pass it in. For this path, `wrapMcpClient` works transparently because the user owns the Client and can substitute a wrapped version. D020's "docs-only" claim is correct for this path.
+
+2. **High-level: `new MultiServerMCPClient({ mcpServers: {...} })`** — config-driven, used by the vast majority of LangChain agents because it handles multi-server setup, reconnection, and auth plumbing internally. The multi-client constructs `@modelcontextprotocol/sdk` Client instances behind `#private` fields (`dist/client.d.ts:12`). Users NEVER see the Client reference directly. There is a `getClient(serverName)` getter that returns the internal Client, but NO corresponding setter — `wrapMcpClient` (which returns a NEW Proxy-wrapped object) cannot be substituted because there is nowhere to put the new reference. D020's "docs-only" claim is WRONG for this path.
+
+**Fork propagation — the second structural finding that makes this a non-trivial adapter:**
+
+LangChain's `_callTool` function (`dist/tools.js:340-420`) supports per-call HTTP header changes via a `beforeToolCall` hook and an internal `client.fork(headers)` call that creates a fresh Client with the requested headers, then invokes `callTool` on the forked instance (line 384: `const finalClient = hasHeaderChanges && typeof client.fork === "function" ? await client.fork(headers) : client`). This is the idiomatic pattern for per-user authentication in LangChain MCP tools.
+
+A naive monkey-patch on the original Client's `callTool` would silently drop attribution for every per-call-header tool invocation. The forked client is a fresh instance with its own unpatched `callTool`. This is exactly the kind of invisible bug that would only surface months later when an auditor asked "why are our per-user tool calls not in the attribution log?"
+
+**Decision:** Ship `attributeLangchainMcp(multiClient, { interceptor, serverUrls?, servers? })` as a fourth adapter shape, living at `packages/agent/src/adapters/langchain-mcp.ts`. The helper:
+
+1. Reads `multiClient.config.mcpServers` to enumerate configured server names (default — overridable via `options.servers`).
+2. For each server, calls `multiClient.getClient(serverName)` to reach the internal Client.
+3. Monkey-patches `callTool` on each Client in place (Vercel AI SDK adapter pattern, not `wrapMcpClient` Proxy pattern, because there's nowhere to put a Proxy replacement).
+4. **Also monkey-patches `fork()` when present**, so forked clients are recursively patched via the same `patchClient` helper before being returned to LangChain's `_callTool`. Every forked instance goes through Atrib just like the original. This closes the per-call-header attribution gap.
+5. Idempotent via `Symbol.for('atrib.langchain-mcp.patched')` on each patched Client.
+6. Order-independent: can be called before or after `multiClient.getTools()` because LangChain dereferences `client.callTool` at invocation time (`dist/tools.js:391`), not at tool construction time.
+7. Async: returns `Promise<number>` (count of newly patched clients) because `getClient()` is async — it lazy-initializes connections if they haven't been started yet.
+
+The low-level `loadMcpTools(name, rawClient)` path still works with the existing `wrapMcpClient` helper and is documented in the example README rather than having a dedicated helper — that path genuinely is a docs-only surface because the user owns the Client.
+
+**Why not `wrapMcpClient` for the high-level path:**
+
+Because `MultiServerMCPClient.getClient(name)` is a getter, not a setter. The multi-client's internal client references are private (`#private` in TypeScript, enforced at the class level). Even if we construct a Proxy via `wrapMcpClient(originalClient, { interceptor })`, there is no public API to inject it back into the multi-client. The only mechanism that works is in-place mutation of the Client the getter returned — i.e., monkey-patch.
+
+**Why not subclass `MultiServerMCPClient`:**
+
+Would require importing `@langchain/mcp-adapters` as a hard dependency, which we explicitly avoid. The LangChain ecosystem has a heavy transitive dependency tree (langgraph, core messages, zod) that would inflate `@atrib/agent`'s build. Structural typing + runtime patching keeps the integration zero-dependency on LangChain.
+
+**Why not the Vercel-AI-SDK-style `request()` monkey-patch:**
+
+LangChain's extended `Client` (from `@langchain/mcp-adapters`'s `connection.ts`) IS a `@modelcontextprotocol/sdk` Client subclass, so it exposes `callTool` directly — no custom JSON-RPC layer between tool dispatch and the transport. Patching at `callTool` is the natural integration point; patching `request()` would be two layers deeper than necessary.
+
+**Idempotency and fork recursion — interaction:**
+
+A fork of an already-patched client: when the patched `fork()` is invoked, it calls the original `fork`, then passes the returned forked client through `patchClient` which checks the idempotency marker. The returned forked client is a fresh object with no marker, so it gets patched fresh. A subsequent `fork()` on an already-patched-by-recursion forked client returns a new client that also needs patching. Each fork is independently patched. The idempotency marker prevents double-patching of the SAME client instance, not of its fork descendants.
+
+**Alternatives considered:**
+
+- **Docs-only for both paths (D020's original plan).** Rejected because it leaves `MultiServerMCPClient` — the idiomatic LangChain API — unsupported. Users following our docs would have to rewrite their agent to use `loadMcpTools` directly, which is a non-starter for existing LangChain apps.
+- **Subclass `MultiServerMCPClient` and publish as `@atrib/langchain-mcp`.** Rejected for the dependency-tree reason above.
+- **Proxy-wrap `getClient` itself** so every call returns a wrapped client. Would work for direct `getClient` users, but LangChain's internal `_initializeConnection` doesn't go through `getClient` — it uses the `#private` field directly, so the proxy would not catch the Client that tool construction binds to. Fragile.
+- **Skip fork propagation** and document the per-call-header limitation. Rejected per the radical-honesty rule: a silent attribution drop for an idiomatic LangChain pattern would be exactly the kind of bug that undermines trust in the protocol.
+
+**Test coverage:** 9 unit tests against a structural mock (`makeFakeClient` + `makeFakeMultiClient` in `test/langchain-mcp.test.ts`):
+
+1. Patches every configured server by default, returns count
+2. Idempotent — second call returns 0, callTool reference unchanged
+3. Injects `_meta` from interceptor on tools/call, with `traceparent` assertion
+4. Does not mutate caller-supplied params object
+5. Flows responses through `onAfterToolResponse` with raw `_meta`
+6. **Fork propagation: forked clients are recursively patched**
+7. §5.8 degradation: `onBeforeToolCall` failure does not break the call
+8. Skips servers whose `getClient` returns undefined (not initialized)
+9. Selective patching via `options.servers`
+
+**Test results:** 375 tests passing across all 4 packages (was 366; +9 langchain-mcp). No regressions.
+
+**Followup:** Four framework adapters shipped (Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS). With the unified `packages/agent/README.md` (shipped in this change) now documenting all adapters side-by-side under two coverage matrices (framework adapters + payment protocols), the "one interceptor, any framework" story is concrete and demonstrable. Remaining §6 work: OpenAI Agents SDK (deferred per D020 — meaningfully different architecture, custom transports) and Mastra (deferred — smaller footprint, needs source verification). Next priority is §7 developer integration docs, including the local log stub and end-to-end demo that unblocks customer conversations (per an earlier strategic sanity-check).
