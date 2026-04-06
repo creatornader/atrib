@@ -4,6 +4,12 @@
 export { atrib } from './middleware.js'
 export type { AtribOptions, AtribServer } from './middleware.js'
 
+// Proxy: in-process McpServer that forwards to an upstream MCP server with
+// attribution applied at the proxy layer. Use for hosts that accept an
+// in-process McpServer instance (Claude Agent SDK, Cloudflare Agents).
+export { createAtribProxy } from './proxy.js'
+export type { AtribProxy, AtribProxyOptions, UpstreamTransport } from './proxy.js'
+
 // Types
 export type { AtribRecord, UnsignedAtribRecord, DecodedToken } from './types.js'
 export { VALID_EVENT_TYPES } from './types.js'
