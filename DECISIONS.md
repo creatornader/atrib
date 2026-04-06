@@ -87,3 +87,26 @@ Architectural and design decisions made during the Atrib protocol development. E
 **Context:** For the protocol to be trusted as infrastructure, it must be open. For the company to be sustainable, something must be commercial.
 **Decision:** The spec, signing libraries, and log infrastructure are open and free. The queryable attribution graph (`graph.atrib.io`), analytics dashboard, and settlement resolution API (`resolve.atrib.io`) are commercial products. This follows the Stripe model: open standards, best implementation.
 **Alternatives considered:** Fully open with donations (Wikipedia model, chronically underfunded), fully closed (no trust, no adoption), token-funded (crypto baggage).
+
+## D013, "Observability without surveillance" is delivered across three layers, not one
+
+**Date:** 2026-04-05
+**Context:** During the implementation, we examined whether the core primitives alone deliver the spec's central privacy claim ("observability without surveillance", §0). The answer is that the claim requires three layers working together, and it's important to track which layers are built and which aren't.
+**Decision:** The privacy architecture is:
+
+- **Layer 1 (record format):** The `AtribRecord` type captures structural metadata only, no tool call arguments, no response content, no user queries, no transaction amounts. Content never enters the hashing pipeline. This is implemented in .
+- **Layer 2 (log commitments):** The Merkle log stores 90-byte entries (record_hash, creator_key, context_id, timestamp, event_type), commitments, not records. Full records stay with the parties. This is implemented via log submission in .
+- **Layer 3 (middleware discipline):** The degradation contract (§5.8) ensures errors, retries, and failure modes don't leak content through logs or error messages. Proof bundles serve inclusion proofs, not records. This is implemented in .
+
+All three layers are necessary. Layer 1 alone is necessary but not sufficient.
+
+**Known tension:** `content_id = sha256(serverUrl + ":" + toolName)` reveals *which tool at which server* was called. The spec treats this as acceptable structural metadata (tool existence is public via MCP `tools/list`, same information exists in OTel spans), but it is the closest the protocol gets to the surveillance line. A future revision could explore blinded content_ids if this proves problematic.
+**Alternatives considered:** Salting/blinding content_ids (would break independent reproducibility required by §4.6), encrypting log entries (adds key management complexity, deferred).
+
+## D014, Cross-package integration tests live in a private workspace package and re-derive primitives
+
+**Date:** 2026-04-06
+**Context:** The end-to-end test plan calls for an end-to-end test exercising the full attribution flow across all three SDK packages. The question was where this test should live and what it should import. Two options: (a) put it inside an existing package (e.g., `@atrib/verify/test/integration.test.ts`), reusing existing imports; (b) create a separate private workspace package that depends on all three SDK packages and re-derives shared primitives independently.
+**Decision:** Created `@atrib/integration` as a private workspace package (`"private": true`, no `dist/`, only test runner). It depends on `@atrib/mcp`, `@atrib/agent`, and `@atrib/verify` as peers. Critically, its `graph-builder.ts` re-implements `recordHash()` from primitives (`sha256(canonicalRecord(...))`) rather than importing a hash function from `@atrib/mcp`. This mirrors what a real graph indexing service (`graph.atrib.io`) would do, index records arriving from arbitrary creators across the open log, without depending on the SDK that produced them.
+**Why this matters:** The §4.6 calculation algorithm's correctness rests on the claim that "any party with the same inputs gets the same result." If integration tests reused the SDK's hash function, two implementations could silently agree because they share code. By re-deriving in the test, we validate that JCS canonicalization + SHA-256 produce identical output across two independent code paths. The end-to-end test passing demonstrates that the chain reconstructs (`A → B → tx`) precisely because `chain_root` references match record hashes derived independently.
+**Alternatives considered:** Test inside `@atrib/verify` (would hide the boundary), test at the repo root (no package isolation), publish `@atrib/integration` as a public package (no value to consumers, only to the project).

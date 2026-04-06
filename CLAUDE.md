@@ -20,6 +20,7 @@ atrib/
     mcp/                       # @atrib/mcp, MCP server middleware
     agent/                     # @atrib/agent, Agent/MCP client middleware
     verify/                    # @atrib/verify, Merchant verification library
+    integration/               # @atrib/integration, private cross-package end-to-end tests
 ```
 
 ## Hub doc
