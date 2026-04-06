@@ -90,7 +90,10 @@ describe('buildOutboundMeta', () => {
     const session = createSession({ creatorKey: TEST_KEY_B64, sessionToken: 'tok' })
     session.policyRecordId = 'sha256:abc123'
     const meta = buildOutboundMeta(session)
-    expect(meta.baggage).toBe('atrib-session=tok,atrib-policy=sha256:abc123')
+    // atrib-policy is added after atrib-session, so it ends up leftmost
+    // (most-recent vendor first per W3C). Both atrib entries are still
+    // grouped at the front of the baggage string.
+    expect(meta.baggage).toBe('atrib-policy=sha256:abc123,atrib-session=tok')
   })
 
   it('omits atrib-policy from baggage when policyRecordId is null', () => {
@@ -121,28 +124,33 @@ describe('buildOutboundMeta', () => {
     expect(meta['X-Atrib-Chain']).toBe(meta.atrib)
   })
 
-  describe('§5.4.3 merging with existing _meta', () => {
-    it('appends atrib-session to existing baggage', () => {
+  describe('§5.4.3 merging with existing _meta (W3C leftmost = most recent)', () => {
+    it('prepends atrib-session to existing baggage (most-recent vendor first)', () => {
       const session = createSession({ creatorKey: TEST_KEY_B64, sessionToken: 'tok' })
       const meta = buildOutboundMeta(session, { baggage: 'vendor=acme' })
-      expect(meta.baggage).toBe('vendor=acme,atrib-session=tok')
+      // Per W3C, the most recent vendor's entries appear leftmost.
+      expect(meta.baggage).toBe('atrib-session=tok,vendor=acme')
     })
 
-    it('appends both atrib-session and atrib-policy to existing baggage', () => {
+    it('prepends atrib-policy and atrib-session leftmost in existing baggage', () => {
       const session = createSession({ creatorKey: TEST_KEY_B64, sessionToken: 'tok' })
       session.policyRecordId = 'sha256:abc'
       const meta = buildOutboundMeta(session, { baggage: 'vendor=acme' })
-      expect(meta.baggage).toBe('vendor=acme,atrib-session=tok,atrib-policy=sha256:abc')
+      // policy-record entry is added after the session merge, so it ends up
+      // at the very front. Both atrib entries are leftmost; the caller's
+      // existing vendor entries are preserved on the right.
+      expect(meta.baggage).toBe('atrib-policy=sha256:abc,atrib-session=tok,vendor=acme')
     })
 
-    it('appends atrib= to existing tracestate when token present', () => {
+    it('prepends atrib= to existing tracestate (most-recent vendor first)', () => {
       const session = createSession({ creatorKey: TEST_KEY_B64 })
       session.latestContext = {
         recordHash: new Uint8Array(32).fill(0xab),
         creatorKey: new Uint8Array(32).fill(0xcd),
       }
       const meta = buildOutboundMeta(session, { tracestate: 'rojo=00f067aa' })
-      expect(meta.tracestate).toMatch(/^rojo=00f067aa,atrib=/)
+      // atrib MUST appear leftmost per W3C convention.
+      expect(meta.tracestate).toMatch(/^atrib=[^,]+,rojo=00f067aa$/)
     })
 
     it('preserves existing tracestate when no atrib token to append', () => {

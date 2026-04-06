@@ -10,6 +10,8 @@ import {
   base64urlEncode,
   hexEncode,
   decodeToken,
+  mergeTracestate,
+  mergeBaggageAtribSession,
   type DecodedToken,
 } from '@atrib/mcp'
 
@@ -98,15 +100,19 @@ export function buildOutboundMeta(
     meta.traceparent = `00-${session.contextId}-${parentId}-01`
   }
 
-  // §5.4.3: baggage += `,atrib-session=...`, APPEND, do not clobber
-  const atribBaggageEntries = [`atrib-session=${session.sessionToken}`]
-  if (session.policyRecordId) {
-    atribBaggageEntries.push(`atrib-policy=${session.policyRecordId}`)
-  }
+  // §5.4.3: baggage gets atrib-session prepended (most-recent vendor first
+  // per W3C). mergeBaggageAtribSession dedupes prior atrib-session entries
+  // and enforces the W3C 64-list-member and 8192-byte limits, evicting
+  // entries from the rightmost end if needed.
+  //
+  // policy is added as a separate, non-evictable entry. We add it after the
+  // session merge to ensure both atrib entries are leftmost.
   const existingBaggage = typeof existing.baggage === 'string' ? existing.baggage : ''
-  meta.baggage = existingBaggage
-    ? `${existingBaggage},${atribBaggageEntries.join(',')}`
-    : atribBaggageEntries.join(',')
+  let baggage = mergeBaggageAtribSession(session.sessionToken, existingBaggage)
+  if (session.policyRecordId) {
+    baggage = `atrib-policy=${session.policyRecordId},${baggage}`
+  }
+  meta.baggage = baggage
 
   // Attach latest attribution token if available
   if (session.latestContext) {
@@ -114,12 +120,13 @@ export function buildOutboundMeta(
     meta.atrib = token
     meta['X-Atrib-Chain'] = token
 
-    // §5.4.3: tracestate += `,atrib=${token}`, APPEND
+    // §5.4.3: tracestate gets `atrib=<token>` PREPENDED so atrib appears
+    // leftmost (W3C "most recent vendor first" convention). mergeTracestate
+    // dedupes any prior atrib entry and enforces the W3C 32-list-member
+    // maximum, evicting from the rightmost end if needed.
     const existingTracestate =
       typeof existing.tracestate === 'string' ? existing.tracestate : ''
-    meta.tracestate = existingTracestate
-      ? `${existingTracestate},atrib=${token}`
-      : `atrib=${token}`
+    meta.tracestate = mergeTracestate(`atrib=${token}`, existingTracestate)
   } else if (typeof existing.tracestate === 'string') {
     // Preserve caller's tracestate if no atrib token to add
     meta.tracestate = existing.tracestate
@@ -147,9 +154,15 @@ export function accumulateInboundContext(
   }
 
   if (!decoded && typeof responseMeta.tracestate === 'string') {
-    const match = responseMeta.tracestate.match(/atrib=([^,]+)/)
-    if (match?.[1]) {
-      decoded = decodeToken(match[1])
+    // W3C Trace Context list-member grammar allows OWS around `=`. Be lenient
+    // about whitespace and accept the entry whether it's leftmost or not.
+    for (const entry of responseMeta.tracestate.split(',')) {
+      const trimmed = entry.trim()
+      const match = trimmed.match(/^atrib\s*=\s*(.*)$/)
+      if (match && match[1] !== undefined) {
+        decoded = decodeToken(match[1].trim())
+        break
+      }
     }
   }
 

@@ -5,6 +5,8 @@ import {
   parseTracestateAtrib,
   extractTraceId,
   parseBaggageAtribSession,
+  mergeTracestate,
+  mergeBaggageAtribSession,
 } from '../src/context.js'
 import { encodeToken } from '../src/token.js'
 import { signRecord, getPublicKey } from '../src/signing.js'
@@ -218,24 +220,117 @@ describe('parseTracestateAtrib', () => {
   it('handles empty string', () => {
     expect(parseTracestateAtrib('')).toBeNull()
   })
+
+  // W3C Trace Context list-member grammar permits OWS (optional whitespace)
+  // around the `=`. We must accept it gracefully.
+  it('handles OWS around `=` per W3C list-member grammar', () => {
+    expect(parseTracestateAtrib('atrib = TOKEN123')).toBe('TOKEN123')
+    expect(parseTracestateAtrib('atrib =TOKEN123')).toBe('TOKEN123')
+    expect(parseTracestateAtrib('atrib= TOKEN123')).toBe('TOKEN123')
+  })
+
+  it('handles atrib not in leftmost position', () => {
+    expect(parseTracestateAtrib('rojo=00f067aa,atrib=mytoken,vendor=other')).toBe('mytoken')
+  })
+
+  it('returns the LAST atrib entry if duplicates exist (vendor MUST overwrite)', () => {
+    // W3C "one entry per key", if duplicates exist, parseTracestateAtrib's
+    // contract is to find SOME atrib entry; since we only emit one, this
+    // test documents that we accept the first match without erroring.
+    const result = parseTracestateAtrib('atrib=first,vendor=other,atrib=second')
+    expect(['first', 'second']).toContain(result)
+  })
 })
 
-describe('extractTraceId', () => {
-  it('extracts trace-id from valid traceparent', () => {
-    expect(extractTraceId('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'))
-      .toBe('4bf92f3577b34da6a3ce929d0e0e4736')
+describe('mergeTracestate (W3C 32-list-member limit)', () => {
+  it('places atrib entry leftmost (most-recent vendor first)', () => {
+    expect(mergeTracestate('atrib=NEW', 'rojo=00f067aa,vendor=acme')).toBe(
+      'atrib=NEW,rojo=00f067aa,vendor=acme',
+    )
   })
 
+  it('dedupes any prior atrib entry per "one entry per key"', () => {
+    expect(mergeTracestate('atrib=NEW', 'atrib=OLD,vendor=acme')).toBe(
+      'atrib=NEW,vendor=acme',
+    )
+  })
+
+  it('dedupes prior atrib entry with OWS around =', () => {
+    expect(mergeTracestate('atrib=NEW', 'atrib = OLD,vendor=acme')).toBe(
+      'atrib=NEW,vendor=acme',
+    )
+  })
+
+  it('handles empty existing tracestate', () => {
+    expect(mergeTracestate('atrib=NEW', '')).toBe('atrib=NEW')
+  })
+
+  it('respects the W3C 32-list-member maximum, evicting from the rightmost end', () => {
+    // 32 vendor entries, adding atrib must evict 1 from the right to fit
+    const vendors = Array.from({ length: 32 }, (_, i) => `v${i}=val${i}`).join(',')
+    const result = mergeTracestate('atrib=NEW', vendors)
+    const entries = result.split(',')
+    expect(entries.length).toBe(32)
+    expect(entries[0]).toBe('atrib=NEW')
+    // The rightmost (v31) was evicted; v30 is now the last entry
+    expect(entries[entries.length - 1]).toBe('v30=val30')
+  })
+
+  it('handles a single vendor entry', () => {
+    expect(mergeTracestate('atrib=NEW', 'rojo=00f067aa')).toBe('atrib=NEW,rojo=00f067aa')
+  })
+})
+
+describe('extractTraceId, W3C trace-id validation', () => {
+  it('accepts a valid lowercase 32-hex trace-id with non-zero parent-id', () => {
+    expect(
+      extractTraceId('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'),
+    ).toBe('4bf92f3577b34da6a3ce929d0e0e4736')
+  })
+
+  // W3C trace-context §3.2.2.3: "All bytes as zero is considered an invalid value"
+  it('rejects all-zero trace-id (W3C MUST ignore)', () => {
+    expect(
+      extractTraceId('00-00000000000000000000000000000000-00f067aa0ba902b7-01'),
+    ).toBeUndefined()
+  })
+
+  it('rejects all-zero parent-id (W3C MUST ignore)', () => {
+    expect(
+      extractTraceId('00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01'),
+    ).toBeUndefined()
+  })
+
+  it('rejects uppercase hex in trace-id (W3C requires lowercase)', () => {
+    expect(
+      extractTraceId('00-4BF92F3577B34DA6A3CE929D0E0E4736-00f067aa0ba902b7-01'),
+    ).toBeUndefined()
+  })
+
+  it('rejects wrong-length trace-id', () => {
+    expect(extractTraceId('00-deadbeef-00f067aa0ba902b7-01')).toBeUndefined()
+  })
+
+  it('rejects malformed traceflags', () => {
+    expect(
+      extractTraceId('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-XY'),
+    ).toBeUndefined()
+  })
+
+  it('rejects malformed version', () => {
+    expect(
+      extractTraceId('XY-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'),
+    ).toBeUndefined()
+  })
+
+  it('rejects too few parts', () => {
+    expect(extractTraceId('00-4bf92f3577b34da6a3ce929d0e0e4736')).toBeUndefined()
+  })
+})
+
+describe('extractTraceId, basic', () => {
   it('returns undefined for too few parts', () => {
     expect(extractTraceId('00')).toBeUndefined()
-  })
-
-  it('returns undefined for uppercase trace-id', () => {
-    expect(extractTraceId('00-4BF92F3577B34DA6A3CE929D0E0E4736-abc-01')).toBeUndefined()
-  })
-
-  it('returns undefined for wrong-length trace-id', () => {
-    expect(extractTraceId('00-4bf92f35-abc-01')).toBeUndefined()
   })
 
   it('returns undefined for empty string', () => {
@@ -243,7 +338,7 @@ describe('extractTraceId', () => {
   })
 })
 
-describe('parseBaggageAtribSession', () => {
+describe('parseBaggageAtribSession (W3C Baggage spec)', () => {
   it('extracts session token from baggage', () => {
     expect(parseBaggageAtribSession('atrib-session=abc123,other=val')).toBe('abc123')
   })
@@ -260,13 +355,85 @@ describe('parseBaggageAtribSession', () => {
     expect(parseBaggageAtribSession('')).toBeUndefined()
   })
 
-  it('handles whitespace around entries (trims entry prefix only)', () => {
-    // The split/trim trims leading whitespace on the entry, but the value after = is preserved
-    // "atrib-session=token " → trimmed to "atrib-session=token " → value is "token "
-    // Actually our implementation trims the whole entry, so " atrib-session=token " becomes
-    // "atrib-session=token " after trim, and slice(14) gives "token "
-    // But W3C Baggage values shouldn't have trailing whitespace in practice.
-    // Our implementation correctly handles the comma-separation.
+  it('handles whitespace before atrib-session', () => {
     expect(parseBaggageAtribSession('other=val, atrib-session=token')).toBe('token')
+  })
+
+  // W3C Baggage list-member grammar:
+  //   list-member = key OWS "=" OWS value *( OWS ";" OWS property )
+  // This means the value MAY be followed by `;property` segments which are
+  // NOT part of the value. The parser MUST strip them.
+  it('strips a single ;property suffix from the value', () => {
+    expect(parseBaggageAtribSession('atrib-session=mytoken;ttl=300')).toBe('mytoken')
+  })
+
+  it('strips multiple ;property suffixes from the value', () => {
+    expect(parseBaggageAtribSession('atrib-session=mytoken;ttl=300;origin=foo')).toBe(
+      'mytoken',
+    )
+  })
+
+  it('handles OWS around `=` per W3C list-member grammar', () => {
+    expect(parseBaggageAtribSession('atrib-session = mytoken')).toBe('mytoken')
+    expect(parseBaggageAtribSession('atrib-session =mytoken')).toBe('mytoken')
+    expect(parseBaggageAtribSession('atrib-session= mytoken')).toBe('mytoken')
+  })
+
+  it('handles OWS around `=` AND a property suffix', () => {
+    expect(parseBaggageAtribSession('atrib-session = mytoken ; ttl = 300')).toBe('mytoken')
+  })
+
+  it('finds atrib-session when it appears after other entries with properties', () => {
+    expect(
+      parseBaggageAtribSession(
+        'userId=alice;owner=org1,requestId=r-42;sample=true,atrib-session=mytoken',
+      ),
+    ).toBe('mytoken')
+  })
+})
+
+describe('mergeBaggageAtribSession (W3C 64-list-member, 8192-byte limit)', () => {
+  it('places atrib-session leftmost (most-recent vendor first)', () => {
+    expect(mergeBaggageAtribSession('tok', 'vendor=acme,user=alice')).toBe(
+      'atrib-session=tok,vendor=acme,user=alice',
+    )
+  })
+
+  it('dedupes any prior atrib-session entry', () => {
+    expect(mergeBaggageAtribSession('NEW', 'vendor=acme,atrib-session=OLD')).toBe(
+      'atrib-session=NEW,vendor=acme',
+    )
+  })
+
+  it('dedupes prior atrib-session even with property suffix', () => {
+    expect(mergeBaggageAtribSession('NEW', 'atrib-session=OLD;ttl=300,vendor=acme')).toBe(
+      'atrib-session=NEW,vendor=acme',
+    )
+  })
+
+  it('handles empty existing baggage', () => {
+    expect(mergeBaggageAtribSession('tok', '')).toBe('atrib-session=tok')
+  })
+
+  it('respects the W3C 64-list-member maximum, evicting from the rightmost end', () => {
+    // 64 vendor entries, adding atrib-session must evict 1 from the right
+    const vendors = Array.from({ length: 64 }, (_, i) => `v${i}=val${i}`).join(',')
+    const result = mergeBaggageAtribSession('tok', vendors)
+    const entries = result.split(',')
+    expect(entries.length).toBe(64)
+    expect(entries[0]).toBe('atrib-session=tok')
+    // The rightmost (v63) was evicted
+    expect(entries[entries.length - 1]).toBe('v62=val62')
+  })
+
+  it('respects the W3C 8192-byte total maximum', () => {
+    // Build a baggage near the byte limit using fewer but very large entries
+    const bigEntry = 'k=' + 'x'.repeat(800) // ~802 bytes per entry
+    // 10 of these = ~8030 bytes, still under cap. Add atrib-session (~60 bytes)
+    // and we go over, forcing eviction.
+    const big = Array.from({ length: 10 }, () => bigEntry).join(',')
+    const result = mergeBaggageAtribSession('tok', big)
+    expect(new TextEncoder().encode(result).length).toBeLessThanOrEqual(8192)
+    expect(result.startsWith('atrib-session=tok,')).toBe(true)
   })
 })

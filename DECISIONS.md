@@ -181,3 +181,52 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - Removing the legacy W3C VC fallback entirely (rejected, costs nothing to keep, costs developer trust to silently break a research-fork integration)
 
 **Followup:** §4 (W3C Trace Context conformance) and §5 (MCP SDK extension API) per the internal planning doc. The handoff also calls out that this verification would touch `emitTransactionRecord` for AP2 content_id derivation; in the end no change was needed there because AP2 still uses the MCP server URL fallback (the PaymentMandate carries useful identifiers like `payment_request_id` but extracting them per-protocol is not required for v1, see future v2 work in the open questions section of the handoff).
+
+## D018, W3C Trace Context and Baggage conformance: leftmost atrib, lenient parse, evict-from-end on overflow
+
+**Date:** 2026-04-06
+**Context:** W3C Trace Context conformance verification verification. The v1 SDK emitted W3C tracestate and baggage but had three classes of bugs against the W3C specs (`https://www.w3.org/TR/trace-context/` and `https://www.w3.org/TR/baggage/`), all flagged in the internal planning doc §4 success criteria.
+
+**What the real specs say:**
+- **Tracestate** (W3C trace-context):
+  - List-member grammar is `key OWS "=" OWS value`, comma-separated. OWS around the `=` is allowed and receivers must accept it.
+  - Maximum **32 list-members**. Vendors SHOULD propagate at least 512 characters total.
+  - "One entry per key is allowed", vendors MUST overwrite duplicate keys.
+  - When size-limited, "entries larger than 128 characters long SHOULD be removed first. Then entries SHOULD be removed starting from the end of `tracestate`."
+  - The convention is that the most recent vendor's entry appears leftmost.
+- **Baggage** (W3C baggage):
+  - List-member grammar is `key OWS "=" OWS value *( OWS ";" OWS property )`. The optional `;property` segments are NOT part of the value and MUST be stripped on parse.
+  - Maximum **64 list-members**, maximum **8192 bytes total**.
+  - Duplicate keys SHOULD be deduped; entries with invalid format MAY be removed.
+- **Traceparent** (W3C trace-context):
+  - trace-id is exactly 32 lowercase hex characters and **MUST NOT be all zeros** (receivers MUST ignore the entire traceparent if the trace-id is invalid).
+  - parent-id is exactly 16 lowercase hex characters and MUST NOT be all zeros.
+  - Version and trace-flags are 2 lowercase hex characters each.
+
+**Three real bugs found and fixed:**
+1. **`parseBaggageAtribSession` returned `value;property` instead of stripping the property suffix.** A baggage entry like `atrib-session=tok;ttl=300` decoded to `tok;ttl=300` instead of `tok`. Fixed: parser now matches up to the first `;` (or end of entry).
+2. **OWS around `=` was not handled** in either tracestate or baggage parsing. Both `parseTracestateAtrib` and `parseBaggageAtribSession` used `startsWith('atrib=')` which fails for `atrib = TOKEN`. The agent's `accumulateInboundContext` had the same bug in its inline tracestate regex. Fixed: all three call sites now use a regex that allows OWS around `=`.
+3. **atrib tracestate entry was being appended (rightmost) by the agent's `buildOutboundMeta`, not prepended (leftmost).** The MCP middleware's `writeOutboundContext` was already prepending correctly, but the agent was inconsistent. Per W3C convention, the most recent vendor appears leftmost; the agent IS the most recent vendor when forwarding an outbound request. Fixed: both code paths now prepend.
+
+**Robustness additions:**
+- New `extractTraceId` rejects all-zero trace-id and parent-id, malformed version/traceflags, uppercase hex, and wrong-length fields. Previously it only checked the trace-id length and lowercase pattern.
+- New `mergeTracestate(entry, existing)` and `mergeBaggageAtribSession(token, existing)` helpers in `@atrib/mcp/context` enforce the W3C list-member maximums (32 for tracestate, 64 for baggage) and the 8192-byte baggage cap. Both helpers dedupe prior atrib entries and place the new atrib entry leftmost. Eviction is from the rightmost end per W3C truncation guidance.
+- These helpers are exported from `@atrib/mcp` and used by both `@atrib/mcp` (`writeOutboundContext`) and `@atrib/agent` (`buildOutboundMeta`) so the discipline is symmetric across producer and consumer code paths.
+
+**Tests added (25 new):**
+- `parseTracestateAtrib`: OWS around `=`, atrib not in leftmost position, duplicate atrib entries.
+- `mergeTracestate`: leftmost placement, dedupe, OWS-tolerant dedupe, empty existing, **32-list-member overflow with rightmost eviction**, single-vendor case.
+- `extractTraceId`: all-zero trace-id rejection, all-zero parent-id rejection, uppercase hex rejection, malformed traceflags rejection, malformed version rejection, too-few-parts rejection, valid case.
+- `parseBaggageAtribSession`: single `;property` strip, multiple `;property` strips, OWS around `=`, OWS + property combination, atrib-session after entries with their own properties.
+- `mergeBaggageAtribSession`: leftmost placement, dedupe (including with property suffix), empty existing, **64-list-member overflow with rightmost eviction**, **8192-byte total cap with rightmost eviction**.
+
+**Decision:**
+- Lenient parsing (accept OWS, accept atrib in any position) but strict emission (always emit the canonical W3C-conformant form: atrib leftmost, no OWS, deduped).
+- The merge helpers are exported from `@atrib/mcp` so consumers can integrate Atrib into their own header-handling code without re-deriving the discipline. This becomes the canonical W3C-conformant API surface.
+
+**Alternatives considered:**
+- Validating tracestate/baggage on the way IN as well as on the way OUT (rejected, receivers should be lenient per Postel's principle, and rejecting malformed inbound state would break the degradation contract by silently dropping legitimate but slightly-off inputs from upstream vendors)
+- Using a separate W3C trace-context library (rejected, adds a dependency for a small amount of straightforward parsing; we own the discipline and can keep it pinned to spec)
+- Adding a runtime warning when truncation occurs (deferred, would require a logger plumbed through to the merge helpers; future-work item if observed in practice)
+
+**Followup:** §5 (MCP SDK extension API) and §6 (framework adapters) per the internal planning doc.

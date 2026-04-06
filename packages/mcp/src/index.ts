@@ -18,7 +18,15 @@ export { genesisChainRoot, chainRoot } from './chain-root.js'
 export { encodeToken, decodeToken } from './token.js'
 
 // Context (for advanced usage)
-export { readInboundContext, writeOutboundContext } from './context.js'
+export {
+  readInboundContext,
+  writeOutboundContext,
+  parseTracestateAtrib,
+  parseBaggageAtribSession,
+  extractTraceId,
+  mergeTracestate,
+  mergeBaggageAtribSession,
+} from './context.js'
 export type { InboundContext, OutboundContextOptions } from './context.js'
 
 // Submission queue (for @atrib/agent and advanced usage)
