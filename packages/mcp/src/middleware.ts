@@ -135,19 +135,22 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     underlyingServer,
   )
 
-  // Override setRequestHandler to intercept the tools/call handler.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(underlyingServer as any).setRequestHandler = (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    schema: any,
+  // The attribution wrapper. Extracted so we can apply it both to newly-
+  // registered handlers (via the setRequestHandler patch) AND retroactively
+  // to a handler that was already installed before atrib() was called.
+  //
+  // The canonical README pattern is wrap-then-register: call `atrib(server)`
+  // first, then `server.tool(...)`. But McpServer's `.tool()` / `.registerTool()`
+  // eagerly installs the tools/call dispatcher on first registration, so if a
+  // user calls `atrib()` AFTER their first `.tool()`, our setRequestHandler
+  // patch would never see the dispatcher. To support both orderings, we also
+  // reach into the underlying Server's `_requestHandlers` map (an undocumented
+  // internal, but stable through SDK 1.x) and rewrite the existing entry in
+  // place if it's already there.
+  const makeWrappedHandler = (
     handler: (request: Record<string, unknown>, extra: unknown) => Promise<unknown>,
   ) => {
-    if (!isToolsCallSchema(schema)) {
-      return origSetHandler(schema, handler)
-    }
-
-    // Wrap the tools/call handler with attribution logic
-    const wrappedHandler = async (request: Record<string, unknown>, extra: unknown) => {
+    return async (request: Record<string, unknown>, extra: unknown) => {
       // Call the original handler FIRST, outside the try block for attribution.
       // §5.8: If the handler itself throws, that's the tool's error, let it propagate.
       const result = await handler(request, extra)
@@ -237,8 +240,34 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
         return result
       }
     }
+  }
 
-    return origSetHandler(schema, wrappedHandler)
+  // Override setRequestHandler to intercept any FUTURE tools/call registration.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(underlyingServer as any).setRequestHandler = (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    schema: any,
+    handler: (request: Record<string, unknown>, extra: unknown) => Promise<unknown>,
+  ) => {
+    if (!isToolsCallSchema(schema)) {
+      return origSetHandler(schema, handler)
+    }
+    return origSetHandler(schema, makeWrappedHandler(handler))
+  }
+
+  // Retroactively wrap any ALREADY-registered tools/call handler. The
+  // underlying Server keeps handlers in `_requestHandlers: Map<string, Fn>`
+  // keyed by method name. If the user called .tool() before atrib(), the
+  // dispatcher is already sitting in that map; rewrite it in place.
+  const handlerMap = (underlyingServer as { _requestHandlers?: Map<string, unknown> })
+    ._requestHandlers
+  if (handlerMap instanceof Map) {
+    const existing = handlerMap.get('tools/call') as
+      | ((request: Record<string, unknown>, extra: unknown) => Promise<unknown>)
+      | undefined
+    if (typeof existing === 'function') {
+      handlerMap.set('tools/call', makeWrappedHandler(existing))
+    }
   }
 
   atribServer.flush = () => queue.flush()

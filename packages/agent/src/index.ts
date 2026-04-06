@@ -15,3 +15,10 @@ export type { TransactionDetection } from './transaction.js'
 // Policy negotiation
 export { initializeSessionPolicy } from './policy.js'
 export type { SessionPolicyRecord, PolicyDocument, CreatorPolicyEntry } from './policy.js'
+
+// Framework adapters
+export { wrapMcpClient } from './adapters/mcp-client.js'
+export type {
+  MinimalMcpClient,
+  WrapMcpClientOptions,
+} from './adapters/mcp-client.js'
