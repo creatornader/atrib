@@ -557,31 +557,50 @@ UCP does not yet expose a documented free-form metadata field for arbitrary agen
 
 #### 1.7.3 — x402
 
-x402 uses HTTP 402 / 200 request-response cycles. The transaction event is the HTTP 200 response containing a `Payment-Receipt` header. The agent MUST include the context_id as a custom header on the payment request:
+x402 is the Coinbase open payment protocol published at `github.com/coinbase/x402`. It uses HTTP 402 / 200 request-response cycles. The transaction event is the HTTP 200 response containing a **`PAYMENT-RESPONSE`** header (x402 v2) — or the legacy **`X-PAYMENT-RESPONSE`** header (x402 v1, deprecated per RFC 6648 but still in deployment). Detection MUST accept both names case-insensitively.
+
+The header value is base64-encoded JSON containing a `SettlementResponse` object: `{ success, transaction, network, payer, requirements }`. Atrib treats header presence as the on-wire detection signal — the body is not decoded for detection purposes (decoding is appropriate when extracting `transaction` or `payer` for content_id derivation in higher-fidelity downstream tooling).
+
+The agent MUST include the context_id as a custom header on the outbound payment request:
 
 ```
-// Outbound x402 payment request:
+// Outbound x402 v2 payment request:
 GET /paid-resource HTTP/1.1
-X-Payment: ...                       // x402 payment proof
+PAYMENT-SIGNATURE: <base64 JSON>     // v2 (v1 used X-PAYMENT)
 X-Atrib-Context: 4bf92f3577b34da6a3ce929d0e0e4736
 
-// The receiving server reads X-Atrib-Context and includes it
-// in the transaction record it writes to the Atrib log.
-// If the server does not have Atrib installed, the context
-// is present in the request for future retrieval from proxy logs.
+// 200 success response with the transaction signal:
+HTTP/1.1 200 OK
+PAYMENT-RESPONSE: <base64 JSON>      // v2 detection header
+Content-Type: application/json
+
+// The receiving server reads X-Atrib-Context and includes it in the
+// transaction record it writes to the Atrib log. If the server does
+// not have Atrib installed, the context is present in the request
+// for future retrieval from proxy logs.
 ```
 
 #### 1.7.4 — MPP (Machine Payments Protocol)
 
-MPP uses the HTTP authentication scheme with `WWW-Authenticate: Payment` challenges and `Authorization: Payment` credentials. The transaction event is the HTTP 200 response containing a `Payment-Receipt` header.
+MPP is a separate protocol from x402, also built on HTTP 402, formally specified in IETF `draft-ryan-httpauth-payment-01` ("The 'Payment' HTTP Authentication Scheme") authored by engineers from Tempo Labs and Stripe and launched in March 2026. MPP uses the standard HTTP authentication scheme with `WWW-Authenticate: Payment` challenges and `Authorization: Payment` credentials.
 
-The `context_id` MUST travel in the MPP session metadata and in the same `X-Atrib-Context` custom header used for x402:
+The transaction event is the HTTP 200 response containing a **`Payment-Receipt`** header (per draft §5.3). The header value is base64url-nopad JSON with the required fields `{ status: "success", method, timestamp, reference }`. The draft specifies: *"Servers MUST NOT return a Payment-Receipt header on error responses,"* so header presence is a reliable detection signal.
+
+**`PAYMENT-RESPONSE` (x402) and `Payment-Receipt` (MPP) are different headers for different protocols.** Earlier drafts of this specification incorrectly attributed `Payment-Receipt` to both protocols; this has been corrected after verification against the published x402 docs and the IETF MPP draft.
+
+The `context_id` MUST travel in the same `X-Atrib-Context` custom header used for x402:
 
 ```
-// MPP payment retry request (after fulfilling Payment challenge):
+// MPP payment retry request (after fulfilling the WWW-Authenticate: Payment challenge):
 GET /paid-resource HTTP/1.1
-Authorization: Payment
+Authorization: Payment <credential>
 X-Atrib-Context: 4bf92f3577b34da6a3ce929d0e0e4736
+
+// 200 success response with the MPP transaction signal:
+HTTP/1.1 200 OK
+Payment-Receipt: <base64url-nopad JSON>     // MPP detection header
+Cache-Control: private                      // required by draft §5.3
+Content-Type: application/json
 
 // For MCP transport (draft-payment-transport-mcp-00):
 // The context_id travels in params._meta as defined in §1.5.4
@@ -2334,13 +2353,15 @@ function detectTransaction(toolName, response, headers):
       checkoutUrl: response.data?.permalink_url ?? null,
     }
 
-  // x402 / MPP: Payment-Receipt header on 200. The two protocols share the
-  // same response header; if a Payment-Protocol marker on the response signals
-  // MPP, prefer 'MPP', else default to 'x402'.
-  if (headers?.['payment-receipt'] || headers?.['Payment-Receipt']):
-    const proto = (headers?.['payment-protocol'] ?? headers?.['Payment-Protocol'])
-    const isMpp = typeof proto === 'string' && /mpp/i.test(proto)
-    return { detected: true, protocol: isMpp ? 'MPP' : 'x402' }
+  // x402 and MPP: distinct protocols, distinct headers (case-insensitive
+  // per RFC 7230). x402 takes precedence if both are present.
+  //   x402 v2 → PAYMENT-RESPONSE      (renamed from v1 X-PAYMENT-RESPONSE)
+  //   MPP     → Payment-Receipt       (per draft-ryan-httpauth-payment-01 §5.3)
+  const lower = lowercaseKeys(headers)
+  if (lower['payment-response'] || lower['x-payment-response']):
+    return { detected: true, protocol: 'x402' }
+  if (lower['payment-receipt']):
+    return { detected: true, protocol: 'MPP' }
 
   // AP2: Payment Mandate Verifiable Credential. Per W3C VC Data Model v2,
   // `type` is an array containing both "VerifiableCredential" and a

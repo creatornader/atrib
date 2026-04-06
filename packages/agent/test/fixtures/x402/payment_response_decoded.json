@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "transaction": "0xabc123def456789",
+  "network": "eip155:84532",
+  "payer": "0xPAYER0000000000000000000000000000000000",
+  "requirements": {
+    "scheme": "exact",
+    "network": "eip155:84532",
+    "amount": "1000",
+    "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    "payTo": "0xMERCHANT0000000000000000000000000000000",
+    "maxTimeoutSeconds": 300,
+    "extra": {
+      "name": "USDC",
+      "version": "2",
+      "resourceUrl": "http://localhost:4021/weather"
+    }
+  }
+}

@@ -10,9 +10,18 @@
  * - UCP: github.com/universal-commerce-protocol/ucp
  *        docs/specification/checkout-rest.md (version 2026-01-11)
  * - AP2: per spec §1.7.5 (verifiable credential with PaymentMandate type)
- * - x402: per spec §1.7.3 (HTTP 200 + Payment-Receipt header)
- * - MPP: per spec §1.7.4 (HTTP 200 + Payment-Receipt header, distinguished
- *        from x402 by Authorization: Payment scheme on the request side)
+ * - x402: github.com/coinbase/x402 — response header `PAYMENT-RESPONSE` (v2)
+ *        or `X-PAYMENT-RESPONSE` (v1 legacy). Value is base64-encoded JSON
+ *        with shape { success: bool, transaction, network, payer, requirements }.
+ * - MPP: IETF draft-ryan-httpauth-payment-01 ("The 'Payment' HTTP Authentication
+ *        Scheme"), per Section 5.3. Response header is `Payment-Receipt` on a
+ *        200 success after the client retries with Authorization: Payment.
+ *        Value is base64url-nopad JSON with required field { status: "success",
+ *        method, timestamp, reference }.
+ *
+ * x402 and MPP are DIFFERENT protocols that use DIFFERENT headers. Earlier
+ * versions of this code conflated them on a fictitious shared `Payment-Receipt`
+ * header — see DECISIONS.md D016 for the verification trail.
  */
 
 export type TransactionProtocol = 'ACP' | 'UCP' | 'x402' | 'MPP' | 'AP2' | 'heuristic'
@@ -75,22 +84,26 @@ export function detectTransaction(
     }
   }
 
-  // x402 / MPP: HTTP 200 + Payment-Receipt header (§1.7.3, §1.7.4).
-  // Both protocols use the same response header for the receipt; we
-  // distinguish on the request side via Authorization: Payment for MPP.
-  // In the response-only detection path here, we cannot reliably tell them
-  // apart, so we report whichever signal is present and let the spec sort
-  // it out. We default to x402 because it's the more common deployment.
+  // x402 and MPP: distinct protocols, distinct response headers.
+  //
+  //   x402 v2  →  PAYMENT-RESPONSE       (renamed from v1 X-PAYMENT-RESPONSE)
+  //   MPP      →  Payment-Receipt        (per draft-ryan-httpauth-payment-01 §5.3)
+  //
+  // HTTP header names are case-insensitive per RFC 7230, so we accept any
+  // letter casing. JS object keys are not case-insensitive, so we lower-case
+  // the lookup table once and probe by lowercase key.
   if (headers) {
-    const receipt = headers['payment-receipt'] ?? headers['Payment-Receipt']
-    if (receipt) {
-      // If the response carries an MPP-specific scheme marker, prefer 'MPP';
-      // otherwise default to 'x402'. The spec keeps these as separate event
-      // protocols (§1.7.3 vs §1.7.4) but the on-wire detection signal is the
-      // same header.
-      const authScheme = headers['payment-protocol'] ?? headers['Payment-Protocol']
-      const isMpp = typeof authScheme === 'string' && /mpp/i.test(authScheme)
-      return { detected: true, protocol: isMpp ? 'MPP' : 'x402', checkoutUrl: null }
+    const lower: Record<string, string | undefined> = {}
+    for (const [k, v] of Object.entries(headers)) {
+      if (typeof v === 'string') lower[k.toLowerCase()] = v
+    }
+    // x402 — accept v2 and v1 names
+    if (lower['payment-response'] || lower['x-payment-response']) {
+      return { detected: true, protocol: 'x402', checkoutUrl: null }
+    }
+    // MPP — IETF draft Payment-Receipt header
+    if (lower['payment-receipt']) {
+      return { detected: true, protocol: 'MPP', checkoutUrl: null }
     }
   }
 
