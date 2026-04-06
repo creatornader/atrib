@@ -230,3 +230,42 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - Adding a runtime warning when truncation occurs (deferred — would require a logger plumbed through to the merge helpers; future-work item if observed in practice)
 
 **Followup:** §5 (MCP SDK extension API) and §6 (framework adapters) per the internal planning doc.
+
+## D019 — MCP SDK monkey-patch is documented and shape-tested against the real SDK
+
+**Date:** 2026-04-06
+**Context:** MCP SDK extension API verification verification. The v1 SDK monkey-patches `McpServer.server.setRequestHandler` and detects the tools/call request via Zod schema introspection (`schema.shape.method.value === 'tools/call'`). Both are internal implementation details of `@modelcontextprotocol/sdk` that could change between versions. The internal planning doc §5 success criteria asked for either (a) refactoring to a documented extension API, or (b) clear documentation plus a regression test that catches SDK upgrade breakage.
+
+**What the SDK actually exposes** (verified against `@modelcontextprotocol/sdk@^1.29.0` with `context7` and direct inspection of `node_modules/.pnpm/@modelcontextprotocol+sdk@1.29.0_zod@4.3.6/.../server/index.d.ts` and `server/mcp.d.ts`):
+- `McpServer.registerTool(name, config, callback)` — current high-level API for registering tools (replaces deprecated `.tool()` overloads).
+- `McpServer.tool(...)` — deprecated variadic API, still supported.
+- `Server.setRequestHandler<T extends AnyObjectSchema>(requestSchema: T, handler)` — low-level API. Currently takes a Zod schema (e.g., `CallToolRequestSchema`) as the first argument. The v2 migration docs hint at a future string-based form (`setRequestHandler('tools/call', handler)`), but that has not landed in 1.x.
+- **No documented middleware, interceptor, or `use(...)` extension API exists** in any current version of the SDK.
+- McpServer internally accumulates tool callbacks from `registerTool` / `tool` and lazily registers a single dispatching `tools/call` handler on the underlying low-level Server. This is why our patch works: both the high-level `registerTool` path and direct low-level `setRequestHandler` use funnel through the same underlying call.
+
+**Decision:** Take option (b) — keep the monkey-patch, but make it survivable across SDK changes:
+1. **Robust schema detection**: a new `isToolsCallSchema(schema)` helper accepts FOUR known forms: `schema === 'tools/call'` (v2 string form), `schema.shape.method.value === 'tools/call'` (1.x Zod literal), `schema.shape.method._def.value === 'tools/call'` (deeper Zod traversal), and `schema.method === 'tools/call'` (pre-parsed). The patch survives both the v2 migration AND any of several common Zod-version variations without code change.
+2. **Runtime sanity check at init time**: the middleware now checks that `server.server` exists and `server.server.setRequestHandler` is a function. If not, it logs a loud warning identifying the SDK shape change and degrades to pass-through mode (per §5.8) instead of throwing or silently doing nothing.
+3. **Real-SDK regression test** in `packages/mcp/test/middleware-sdk-shape.test.ts` that imports the actual `@modelcontextprotocol/sdk` package and asserts:
+   - `McpServer.server` exists
+   - `McpServer.server.setRequestHandler` is a function
+   - `CallToolRequestSchema` matches at least one of the paths `isToolsCallSchema` checks
+   - `CallToolRequestSchema.safeParse({ method: 'tools/call', params: { name: 'test_tool', arguments: {...} } })` succeeds
+   - End-to-end: registering a tool via the SDK's high-level API, calling it through the dispatcher with a real `tools/call` request, and observing both the tool's own response and an attribution record submission via mocked fetch
+   - The graceful-degradation path: a fake McpServer with no `.server` triggers the loud warning and pass-through mode
+4. **Source documentation**: a 30-line block comment in `src/middleware.ts` explains the patch, lists the two specific fragility points, points future maintainers at the regression test, and notes that if a documented extension API ever ships (`Server.use(middleware)` or `Server.fallbackRequestHandler`), the body of the patch can be replaced with that API without touching the surrounding wrap function.
+
+**Why this is the right tradeoff:**
+- The ideal fix (refactor to a documented API) is impossible because no such API exists in any version of the SDK. Filing an upstream issue is the long-term play but doesn't help today.
+- Refactoring to wrap `McpServer.registerTool` / `tool` directly was considered. It's slightly cleaner but requires more wrap surface area (two methods, two signatures each in 1.x), it doesn't cover users who use the low-level Server directly, and the regression risk is the same — both APIs are internal to McpServer and can change. The monkey-patch on `setRequestHandler` is the single chokepoint.
+- A regression test that imports the real SDK is the strongest possible mitigation: any SDK upgrade that breaks our assumptions fails CI immediately, with a precise error message naming what changed.
+
+**Tests added (6):**
+- `McpServer.server` exists
+- `McpServer.server.setRequestHandler` is a function
+- `CallToolRequestSchema` matches at least one detection path
+- `CallToolRequestSchema.safeParse` accepts a real tools/call request
+- End-to-end: real SDK + atrib() + tool registration + dispatch + attribution record submission
+- Graceful degradation: fake McpServer with missing `.server` triggers warning + pass-through
+
+**Followup:** §6 (framework adapters) per the internal planning doc. After §6, the handoff also lists §7 (developer integration documentation) and §8 (TypeDoc API reference) as the remaining work.

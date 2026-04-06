@@ -76,28 +76,73 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     publicKeyB64 = base64urlEncode(pk)
   })
 
-  // Intercept the Server's request handler for tools/call.
-  // McpServer registers its handler when the first tool is registered via .tool().
-  // We patch setRequestHandler on the underlying Server to wrap the tools/call handler.
-  const underlyingServer = server.server
+  // === MCP SDK integration: setRequestHandler monkey-patch ===
+  //
+  // The MCP TypeScript SDK does not currently expose a documented middleware
+  // or interceptor extension point (verified against
+  // github.com/modelcontextprotocol/typescript-sdk as of @^1.29.0). The high-
+  // level `McpServer.registerTool(name, config, cb)` API accumulates tool
+  // callbacks and lazily registers a single dispatching handler on the
+  // underlying low-level `Server` via `setRequestHandler(CallToolRequestSchema, ...)`.
+  //
+  // We patch that low-level setRequestHandler to wrap the tools/call dispatcher
+  // with attribution logic. This intercepts BOTH high-level usage
+  // (`McpServer.registerTool` / deprecated `tool`) AND low-level direct usage
+  // (`server.server.setRequestHandler('tools/call', ...)`), because both code
+  // paths funnel through the same low-level call.
+  //
+  // The patch is fragile in two specific ways:
+  //   1. It depends on `server.server` being the underlying Server instance
+  //      (an internal implementation detail of McpServer).
+  //   2. It detects the tools/call request by inspecting the Zod schema
+  //      passed to setRequestHandler. SDK 1.29 uses `CallToolRequestSchema`
+  //      whose shape exposes `.shape.method.value === 'tools/call'`. The v2
+  //      migration docs hint at a future string-based form
+  //      (`setRequestHandler('tools/call', handler)`); we accept both forms
+  //      via `isToolsCallSchema` below so the patch survives that migration.
+  //
+  // We add a runtime sanity check that warns loudly if `server.server` is
+  // missing or `setRequestHandler` is not a function — this turns silent
+  // failures on SDK upgrades into visible warnings. A regression test in
+  // `packages/mcp/test/middleware-sdk-shape.test.ts` imports the real SDK
+  // and asserts the shape we depend on, so an SDK upgrade that breaks
+  // either assumption fails CI immediately.
+  //
+  // If the SDK eventually exposes a documented middleware API
+  // (e.g., `Server.use(middleware)` or `Server.fallbackRequestHandler`),
+  // the body of this patch should be replaced with that API. The wrap()
+  // function below stays unchanged.
+  const underlyingServer = (server as { server?: unknown }).server as
+    | { setRequestHandler: unknown }
+    | undefined
+
+  if (!underlyingServer || typeof underlyingServer.setRequestHandler !== 'function') {
+    console.warn(
+      'atrib: McpServer.server.setRequestHandler is not a function — ' +
+        'the MCP SDK shape this middleware depends on has changed. ' +
+        'Operating in pass-through mode. Please file an issue at ' +
+        'github.com/anthropics/atrib with your @modelcontextprotocol/sdk version.',
+    )
+    atribServer.flush = async () => {}
+    return atribServer
+  }
 
   // We need to intercept setRequestHandler to wrap the tools/call handler.
   // The MCP SDK uses complex Zod-based types internally, so we use `any` for
-  // the interop boundary — we only inspect the schema to detect tools/call.
+  // the interop boundary.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const origSetHandler: any = underlyingServer.setRequestHandler.bind(underlyingServer)
+  const origSetHandler: any = (underlyingServer.setRequestHandler as Function).bind(
+    underlyingServer,
+  )
 
-  // Override setRequestHandler to intercept the CallToolRequest handler
+  // Override setRequestHandler to intercept the tools/call handler.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ;(underlyingServer as any).setRequestHandler = (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     schema: any,
     handler: (request: Record<string, unknown>, extra: unknown) => Promise<unknown>,
   ) => {
-    // Detect CallToolRequest by checking the schema's method value
-    const isCallTool = schema?.shape?.method?.value === 'tools/call'
-
-    if (!isCallTool) {
+    if (!isToolsCallSchema(schema)) {
       return origSetHandler(schema, handler)
     }
 
@@ -199,4 +244,52 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   atribServer.flush = () => queue.flush()
 
   return atribServer
+}
+
+/**
+ * Detect whether a schema passed to `Server.setRequestHandler(schema, handler)`
+ * represents the `tools/call` request method.
+ *
+ * The MCP TypeScript SDK has used several shapes for this over its history:
+ *
+ *   - SDK 1.x:                   Zod object schema where `schema.shape.method`
+ *                                is `z.literal('tools/call')` whose `.value`
+ *                                exposes the literal string. We detect by
+ *                                inspecting `schema.shape.method.value`.
+ *   - SDK 1.x (deeper Zod):     Some Zod versions place the literal value at
+ *                                `schema.shape.method._def.value`. We probe
+ *                                that path as a fallback.
+ *   - SDK v2 migration:         The migration docs at
+ *                                github.com/modelcontextprotocol/typescript-sdk/blob/main/docs/migration.md
+ *                                hint at a string-based form
+ *                                `setRequestHandler('tools/call', handler)`.
+ *                                We accept that too so the patch survives the
+ *                                migration without code change.
+ *   - Wrapped Zod schemas:       Some users pre-parse the schema before passing
+ *                                it; we also accept `schema.method` directly.
+ *
+ * If none of these match, we treat the schema as "not tools/call" and pass
+ * the registration through unchanged. The regression test in
+ * `middleware-sdk-shape.test.ts` ensures this stays in sync with the real
+ * `@modelcontextprotocol/sdk` package we depend on.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isToolsCallSchema(schema: any): boolean {
+  if (schema == null) return false
+
+  // SDK v2 migration: string-based method name
+  if (typeof schema === 'string') {
+    return schema === 'tools/call'
+  }
+
+  // SDK 1.x Zod literal: schema.shape.method.value === 'tools/call'
+  if (schema.shape?.method?.value === 'tools/call') return true
+
+  // Some Zod versions wrap the literal value in _def
+  if (schema.shape?.method?._def?.value === 'tools/call') return true
+
+  // Pre-parsed schema with the method exposed at the top level
+  if (schema.method === 'tools/call') return true
+
+  return false
 }
