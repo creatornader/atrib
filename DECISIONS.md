@@ -431,3 +431,142 @@ export function createAtribProxy(options: AtribProxyOptions): Promise<AtribProxy
 - The `StreamableHTTPClientTransport` returned by `createUpstreamTransport` requires a structural cast through `unknown` because its `sessionId?: string` getter is structurally incompatible with the `Transport` interface's `sessionId?: string` declaration under `exactOptionalPropertyTypes: true` (the getter returns `string | undefined`, the interface expects `string` when present). Runtime conformance is guaranteed by `implements Transport` on the SDK's class declaration.
 
 **Followup:** Build the runnable Claude Agent SDK example (Case A and Case B side-by-side), update `README.md` with a "Use with Claude Agent SDK" section pointing at the example, then start the Cloudflare Agents adapter on the same `createAtribProxy` primitive. The handoff doc §6 framework list still needs to be synced to D020/D021 in a follow-up commit.
+
+## D022, Cloudflare Agents adapter: McpAgent server-side is zero-code; Agent client-side uses attributeCloudflareAgentMcp() (NOT createAtribProxy)
+
+**Date:** 2026-04-06
+**Context:** D020 set the the framework-adapter rollout build order as Claude Agent SDK → Cloudflare Agents → Vercel AI SDK and described the Cloudflare adapter as "the same proxy server pattern as Claude Agent SDK", i.e. expected to reuse the `createAtribProxy()` primitive shipped in D021. Before writing code, the actual `agents@0.9.0` source was inspected (npm pack + grep on `dist/index-BtHngIIG.d.ts` and `dist/client-BwgM3cRz.js`). The findings make the right architecture noticeably different from D020's prediction in two ways: the proxy isn't needed for either of Cloudflare's two MCP surfaces, and the client-side surface is even smaller than expected.
+
+**What Cloudflare Agents actually exposes (verified against `agents@0.9.0`):**
+
+There are **two distinct MCP integration surfaces** in the `agents` package, and they're orthogonal, a single Worker may use one, the other, or both:
+
+### Surface 1, `McpAgent` (server-side, you're building an MCP server on Cloudflare)
+
+`McpAgent` is an abstract base class (`dist/index-BtHngIIG.d.ts:264`) that you extend to build an MCP server hosted as a Cloudflare Durable Object. Its key shape:
+
+```ts
+declare abstract class McpAgent<Env, State, Props> extends Agent<Env, State, Props> {
+  abstract server: MaybePromise<McpServer | Server$1>;
+  abstract init(): Promise<void>;
+  // ...
+  static serve(path: string, options?: ServeOptions): { fetch: ... };
+}
+```
+
+The user defines `server = new McpServer({ name, version })` as a class field and registers tools in `init()`. `McpServer` here is the **exact same class** from `@modelcontextprotocol/sdk/server/mcp.js` that `@atrib/mcp` already wraps. The McpAgent base class wires up a Cloudflare-specific transport that bridges Worker requests to `McpServer.connect(transport)`, which goes through the standard SDK dispatch path.
+
+**This means the Atrib integration for McpAgent is one line, with zero new code in `@atrib/mcp`:**
+
+```ts
+export class WeatherMcp extends McpAgent<Env> {
+  server = new McpServer({ name: 'weather', version: '1.0.0' })
+  async init() {
+    this.server.registerTool('get_temperature', {...}, async (args) => {...})
+    atrib(this.server, { creatorKey: this.env.ATRIB_PRIVATE_KEY, serverUrl: '...' })
+  }
+}
+```
+
+This is the same Case A pattern as Claude Agent SDK in D021. The retroactive wrapping shipped in commit `c450672` lets `atrib()` be called before OR after `registerTool()`.
+
+### Surface 2, `Agent.addMcpServer` (client-side, your Agent connects out to upstream MCP servers)
+
+The base `Agent` class (`dist/index-BtHngIIG.d.ts:1648`) exposes `readonly mcp: MCPClientManager`. `MCPClientManager.mcpConnections` is `Record<string, MCPClientConnection>` where each connection has a publicly typed `client: Client` field, a real `@modelcontextprotocol/sdk` Client.
+
+`MCPClientManager.callTool({ serverId, name, arguments })` delegates **straight to** `mcpConnections[serverId].client.callTool(...)`. Verified at `dist/client-BwgM3cRz.js:1444`:
+
+```js
+async callTool(params, resultSchema, options) {
+  const { serverId, ...mcpParams } = params;
+  const unqualifiedName = mcpParams.name.replace(`${serverId}.`, "");
+  return this.mcpConnections[serverId].client.callTool({
+    ...mcpParams,
+    name: unqualifiedName
+  }, resultSchema, options);
+}
+```
+
+Tool invocations through `getAITools()` (the AI SDK ToolSet returned by Cloudflare's MCPClientManager, `dist/client-BwgM3cRz.js:1319`) all flow through this `callTool` path. Tools-list discovery is cached on the connection at `addMcpServer` time but tool *invocations* re-read `mcpConnections[serverId].client` on each call.
+
+**This means we can wrap each connection's `client` field in place after `addMcpServer` runs**, no proxy server, no Worker route, no separate deployment, and no monkey-patching of `addMcpServer` itself. The user calls one helper:
+
+```ts
+import { atrib, attributeCloudflareAgentMcp } from '@atrib/agent'
+
+class WeatherChatAgent extends Agent<Env> {
+  interceptor = atrib({ creatorKey: this.env.ATRIB_PRIVATE_KEY, ... })
+  async onStart() {
+    await this.addMcpServer('weather', 'https://weather-mcp.example.com/mcp', {...})
+    attributeCloudflareAgentMcp(this, { interceptor: this.interceptor })
+  }
+}
+```
+
+`attributeCloudflareAgentMcp` walks `agent.mcp.mcpConnections` and replaces each connection's `client` with one wrapped by `wrapMcpClient` (the existing primitive from commit `c450672`). Subsequent `MCPClientManager.callTool` invocations re-read the field and pick up the wrapped client.
+
+**Decision:** Ship Cloudflare Agents adapter as **two separate non-conflicting integrations**:
+
+1. **McpAgent server-side:** documentation + runnable example only. **Zero new code.** Users call `atrib(this.server, opts)` in `init()` exactly as they would for any other `McpServer`.
+
+2. **Agent client-side:** new helper `attributeCloudflareAgentMcp(agent, { interceptor })` in `@atrib/agent` (NOT in `@atrib/mcp`, the wrap happens on the agent/consumer side, and it builds on the existing `wrapMcpClient` adapter). Plus a runnable example.
+
+**Why this is different from D020's prediction:**
+
+D020 said the Cloudflare adapter would "use the same proxy server pattern as Claude Agent SDK". That prediction was based on the dependency-graph signal that `agents` bundles `@modelcontextprotocol/sdk`, and assumed the integration shape would mirror Claude SDK's. It was right that the McpAgent server-side surface exists, but the Cloudflare-specific architecture also exposes the client field publicly on `MCPClientConnection`, which is a more direct integration point than building a full proxy MCP server. The proxy approach would have worked but would have required deploying a separate Worker as the proxy URL, operationally heavier than necessary. Reading the source revealed the simpler path.
+
+**`createAtribProxy` is NOT part of the Cloudflare adapter.** The proxy primitive shipped in D021 is still useful, for hosts that DON'T expose the underlying Client field publicly, or for upstream MCP servers that the user wants to attribute from outside any host (e.g. exposing a stdio MCP server as an attributed HTTP endpoint that any consumer can connect to). But for Cloudflare specifically, the client-wrap path is strictly simpler and more direct.
+
+**Workers runtime constraint:** Cloudflare Workers don't support child processes, so the MCP SDK's `StdioClientTransport` doesn't work in the Worker runtime. Cloudflare Agents can only connect to upstream MCP servers via HTTP transports (`streamable-http` or the deprecated `sse`). If a user needs to attribute a stdio upstream from a Cloudflare Agent, they have to either run the stdio server elsewhere with an HTTP front-end, or use `createAtribProxy()` on a non-Worker runtime that proxies stdio out as Streamable HTTP and have the Cloudflare Agent connect to that proxy URL. The README in `packages/integration/examples/cloudflare-agents/` documents this.
+
+**Alternatives considered:**
+
+- **Proxy-Worker pattern**: deploy a separate Worker that uses `createAtribProxy() + McpAgent.serve('/')` to expose an attributed MCP server, then have the consuming Agent connect to it via `addMcpServer(name, 'https://my-proxy.workers.dev/mcp')`. Architecturally clean and validates that `createAtribProxy()` composes with `McpAgent.serve()`. **Rejected for v1 as the primary path** because it adds operational complexity (a second Worker deployment, a second URL, potentially a second Durable Object class) for a use case that the in-place client wrap solves more directly. Still documented as an option for stdio upstream cases where it's the only viable path.
+- **Subclass `Agent` with an `AtribAgent` class** that overrides `addMcpServer` to wrap automatically. **Rejected** because users already extend `Agent`/`AIChatAgent` (or other framework classes), and forcing them to also extend `AtribAgent` creates a multiple-inheritance problem TypeScript can't solve. The helper-function approach lets users keep their existing inheritance hierarchy.
+- **Monkey-patch `Agent.addMcpServer`** to auto-wrap on every call. **Considered for a future version** as a `installAttributionHook(agent, options)` helper that the user calls once at startup instead of after every `addMcpServer`. Deferred from v1: the explicit one-line helper at the call site is more honest and easier to debug than a hidden monkey-patch.
+- **Wrap every method on `MCPClientManager`** instead of swapping the `client` field on each connection. **Rejected** because `MCPClientManager` has many methods (`callTool`, `readResource`, `getPrompt`, `listTools`, etc.) and only `callTool` needs attribution. Wrapping at the per-connection `client` level is narrower and requires no knowledge of `MCPClientManager`'s evolving API.
+
+**Files added:**
+
+- `packages/agent/src/adapters/cloudflare-agent.ts` (~170 lines), `attributeCloudflareAgentMcp(agent, options)` helper. Walks `agent.mcp.mcpConnections`, wraps each `client` with `wrapMcpClient`, marks wrapped clients with a `Symbol.for('atrib.cloudflare.wrapped')` for idempotency. Per-connection failures are caught and skipped per spec §5.8 degradation.
+- `packages/agent/test/cloudflare-agent.test.ts`, 5 unit tests using a structural mock of `agents`'s `Agent.mcp` interface (we can't import the real `agents` package because it requires the WorkerD runtime). Tests cover: tool calls flow through the interceptor with W3C trace context in outbound `_meta`, idempotency on second helper call, malformed connection skip-without-throwing, missing `mcp.mcpConnections` returns 0 with warning, and `serverUrls` override.
+- `packages/integration/examples/cloudflare-agents/README.md`, Surface 1 + Surface 2 walkthrough, runtime-constraint notes, environment variables, and expected behavior.
+- `packages/integration/examples/cloudflare-agents/surface-1-mcp-agent.ts`, runnable McpAgent server example.
+- `packages/integration/examples/cloudflare-agents/surface-2-agent-client.ts`, runnable Agent client example.
+
+**Files modified:**
+
+- `packages/agent/src/index.ts`, exports `attributeCloudflareAgentMcp` + types (`CloudflareAgentLike`, `AttributeCloudflareAgentMcpOptions`). Also exports `MinimalMcpClient` and `WrapMcpClientOptions` from the existing `mcp-client` adapter (these were previously private to the package).
+
+**Public API surface added (`@atrib/agent`):**
+
+```ts
+export interface CloudflareAgentLike {
+  mcp: {
+    mcpConnections: Record<string, { client: unknown; url?: URL | string }>
+  }
+}
+
+export interface AttributeCloudflareAgentMcpOptions {
+  interceptor: ToolCallInterceptor
+  /** Optional override map of server name → canonical serverUrl */
+  serverUrls?: Record<string, string>
+}
+
+export function attributeCloudflareAgentMcp(
+  agent: CloudflareAgentLike,
+  options: AttributeCloudflareAgentMcpOptions,
+): number  // returns number of newly-wrapped connections
+```
+
+The `CloudflareAgentLike.mcp.mcpConnections[*].client` field is typed as `unknown` (not `MinimalMcpClient`) so the real Cloudflare `MCPClientConnection.client: Client` is structurally assignable without forcing users to cast at the call site. The helper performs a runtime structural check (`isMinimalMcpClient`) on each connection's client before wrapping.
+
+**Notes on test coverage:**
+
+The cloudflare-agent unit tests can't import the real `agents` package because it depends on the WorkerD runtime (Durable Object bindings, Cloudflare-specific globals, etc.). Instead, the tests construct a structural mock that mirrors the public shape we depend on: `{ mcp: { mcpConnections: { [name]: { client: MinimalMcpClient, url } } } }`. This validates the helper's behavior against the same field shapes the real Cloudflare classes expose. If `agents` ever changes the public shape, the integration would break in production silently, a future improvement is to add a daily/weekly CI job that npm-installs the latest `agents` and runs a regression test against the real types (similar to the SDK shape regression test added in D019).
+
+The runnable examples (`surface-1-mcp-agent.ts`, `surface-2-agent-client.ts`) are the secondary line of defense: they typecheck against user-installed `agents` in a real Worker project, and any breaking change in the Cloudflare API would surface there at deploy time.
+
+**Test results:** 360 tests passing across all 4 packages (was 355; +5 cloudflare-agent unit tests). No regressions in mcp (166), verify (82), or integration (5).
+
+**Followup:** Vercel AI SDK adapter is the next §6 chunk. Different shape entirely, wrap the `tools()` record returned by `createMCPClient`, not `callTool()`. Lives in `@atrib/agent`, similar surface to `attributeCloudflareAgentMcp` but different mechanism. After Vercel AI SDK, §7 (developer integration documentation) and §8 (TypeDoc API reference) remain.
