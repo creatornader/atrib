@@ -9,7 +9,16 @@
  *        rfcs/rfc.agentic_checkout.md
  * - UCP: github.com/universal-commerce-protocol/ucp
  *        docs/specification/checkout-rest.md (version 2026-01-11)
- * - AP2: per spec §1.7.5 (verifiable credential with PaymentMandate type)
+ * - AP2: github.com/google-agentic-commerce/ap2 (v0.1), A2A Message with a
+ *        DataPart containing the key `ap2.mandates.PaymentMandate`. AP2 does
+ *        NOT currently use W3C Verifiable Credentials despite earlier drafts
+ *        of this code and the Atrib spec assuming it would.
+ * - a2a-x402: github.com/google-agentic-commerce/a2a-x402, extension that
+ *        layers x402 crypto payments over A2A. Detection signal is
+ *        `status.message.metadata["x402.payment.status"] === "payment-completed"`
+ *        with at least one `success: true` entry in
+ *        `status.message.metadata["x402.payment.receipts"]`. Both shapes are
+ *        reported as `protocol: 'AP2'` since a2a-x402 IS the AP2 crypto path.
  * - x402: github.com/coinbase/x402, response header `PAYMENT-RESPONSE` (v2)
  *        or `X-PAYMENT-RESPONSE` (v1 legacy). Value is base64-encoded JSON
  *        with shape { success: bool, transaction, network, payer, requirements }.
@@ -107,12 +116,50 @@ export function detectTransaction(
     }
   }
 
-  // AP2: Payment Mandate Verifiable Credential (§1.7.5).
-  // Per W3C VC Data Model v2, `type` is an array containing both
-  // "VerifiableCredential" and a payment-specific type.
-  // We accept both array form (v2, normative) and string form (v1, lenient
-  // backward-compat), see DECISIONS.md for the rationale.
+  // AP2 v0.1, PaymentMandate Message inside an A2A DataPart.
+  // Source: github.com/google-agentic-commerce/ap2 docs/specification.md
+  // Shape: { ..., parts: [{ kind: "data", data: { "ap2.mandates.PaymentMandate": {...} } }, ...] }
   if (resp) {
+    const parts = resp['parts']
+    if (Array.isArray(parts)) {
+      for (const part of parts) {
+        if (part && typeof part === 'object') {
+          const data = (part as Record<string, unknown>)['data']
+          if (
+            data &&
+            typeof data === 'object' &&
+            'ap2.mandates.PaymentMandate' in (data as Record<string, unknown>)
+          ) {
+            return { detected: true, protocol: 'AP2', checkoutUrl: null }
+          }
+        }
+      }
+    }
+
+    // a2a-x402 extension, payment-completed via A2A task status metadata.
+    // Source: github.com/google-agentic-commerce/a2a-x402 spec/v0.1/spec.md
+    // Shape: { kind: "task", status: { message: { metadata: { "x402.payment.status": "payment-completed", "x402.payment.receipts": [{success, transaction, ...}] } } } }
+    const status = resp['status'] as Record<string, unknown> | undefined
+    const statusMessage = status?.['message'] as Record<string, unknown> | undefined
+    const metadata = statusMessage?.['metadata'] as Record<string, unknown> | undefined
+    if (metadata && metadata['x402.payment.status'] === 'payment-completed') {
+      const receipts = metadata['x402.payment.receipts']
+      if (
+        Array.isArray(receipts) &&
+        receipts.some(
+          (r) =>
+            r !== null &&
+            typeof r === 'object' &&
+            (r as Record<string, unknown>)['success'] === true,
+        )
+      ) {
+        return { detected: true, protocol: 'AP2', checkoutUrl: null }
+      }
+    }
+
+    // Legacy: W3C Verifiable Credential PaymentMandate. AP2 v0.1 does NOT use
+    // VCs, but research forks and earlier drafts may. Kept as a backward-
+    // compatible fallback. Accepts both VC v2 array form and v1 string form.
     const respType = resp['type']
     const credentialSubject = resp['credentialSubject'] as Record<string, unknown> | undefined
     const subjectType = credentialSubject?.['type']
@@ -120,9 +167,7 @@ export function detectTransaction(
     const isVcArray =
       Array.isArray(respType) &&
       respType.includes('VerifiableCredential') &&
-      respType.some(
-        (t) => typeof t === 'string' && /paymentmandate/i.test(t),
-      )
+      respType.some((t) => typeof t === 'string' && /paymentmandate/i.test(t))
     const isVcStringLegacy = respType === 'VerifiableCredential'
 
     const subjectIsPaymentMandate =

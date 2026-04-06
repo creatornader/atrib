@@ -1,0 +1,37 @@
+{
+  "messageId": "b5951b1a-8d5b-4ad3-a06f-92bf74e76589",
+  "contextId": "sample-payment-context",
+  "taskId": "sample-payment-task",
+  "role": "user",
+  "parts": [
+    {
+      "kind": "data",
+      "data": {
+        "ap2.mandates.PaymentMandate": {
+          "payment_details": {
+            "cart_mandate": "<user-signed hash of the cart mandate>",
+            "payment_request_id": "order_shoes_123",
+            "merchant_agent_card": {
+              "name": "MerchantAgent"
+            },
+            "payment_method": {
+              "supported_methods": "CARD",
+              "data": {
+                "token": "xyz789"
+              }
+            },
+            "amount": {
+              "currency": "USD",
+              "value": 120.0
+            },
+            "risk_info": {
+              "device_imei": "abc123"
+            },
+            "display_info": "<image bytes>"
+          },
+          "creation_time": "2025-08-26T19:36:36.377022Z"
+        }
+      }
+    }
+  ]
+}

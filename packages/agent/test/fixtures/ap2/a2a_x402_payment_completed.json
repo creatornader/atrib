@@ -1,0 +1,26 @@
+{
+  "kind": "task",
+  "id": "task-123",
+  "status": {
+    "state": "working",
+    "message": {
+      "kind": "message",
+      "role": "agent",
+      "parts": [
+        { "kind": "text", "text": "Payment successful. Your image is ready." }
+      ],
+      "metadata": {
+        "x402.payment.status": "payment-completed",
+        "x402.payment.receipts": [
+          {
+            "success": true,
+            "transaction": "0xabc123def456",
+            "network": "base",
+            "payer": "0xPAYER0000000000000000000000000000000000"
+          }
+        ]
+      }
+    },
+    "artifacts": []
+  }
+}
