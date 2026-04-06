@@ -24,11 +24,13 @@ The protocol records facts. What those facts are worth is a policy judgment made
 
 ## Packages
 
-| Package | Purpose | Install |
-|---------|---------|---------|
-| `@atrib/mcp` | MCP server middleware — wraps an MCP server, emits signed attribution records automatically | `npm install @atrib/mcp` |
-| `@atrib/agent` | Agent middleware — wraps an MCP client, propagates attribution context, detects transactions | `npm install @atrib/agent` |
-| `@atrib/verify` | Merchant verification — independently verifies settlement recommendations | `npm install @atrib/verify` |
+| Package | Purpose |
+|---------|---------|
+| `@atrib/mcp` | MCP server middleware — wraps an MCP server, emits signed attribution records automatically |
+| `@atrib/agent` | Agent middleware — interceptor for MCP clients, propagates attribution context, detects transactions |
+| `@atrib/verify` | Merchant verification — independently verifies settlement recommendations |
+
+> **Status:** v1 SDK is feature-complete in this monorepo (300 passing tests). Packages are not yet published to npm. Use `pnpm install` at the workspace root and import from `workspace:*` until publication.
 
 ## Quick start
 
@@ -39,7 +41,8 @@ import { atrib } from '@atrib/mcp'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
-  creatorKey: process.env.ATRIB_PRIVATE_KEY
+  creatorKey: process.env.ATRIB_PRIVATE_KEY,
+  serverUrl: 'https://my-tool.example.com',
 })
 ```
 
@@ -47,16 +50,30 @@ One line. Everything else is automatic. Every successful tool call emits a signe
 
 ### Agent (consumer)
 
+`@atrib/agent` is framework-agnostic — instead of wrapping a specific agent class, it returns an interceptor that the host integrates at outbound and inbound tool call boundaries.
+
 ```typescript
 import { atrib } from '@atrib/agent'
 
-const agent = atrib(existingAgentOrMcpClient, {
+const interceptor = atrib({
   creatorKey: process.env.ATRIB_PRIVATE_KEY,
-  merchantDomain: 'https://merchant.example.com'
+  merchantDomain: 'https://merchant.example.com',
+  serverUrls: ['https://tool-a.example', 'https://tool-b.example'],
 })
+
+// Before sending a tools/call request:
+const meta = await interceptor.onBeforeToolCall(toolName, existingMeta)
+
+// After receiving a tools/call response:
+interceptor.onAfterToolResponse(toolName, response, response._meta, {
+  serverUrl: 'https://tool-a.example',
+})
+
+// On shutdown:
+await interceptor.flush()
 ```
 
-One line. The middleware propagates attribution context on every tool call, negotiates policies at session start, and detects transactions automatically.
+The interceptor handles session initialization, policy negotiation, context propagation (W3C traceparent / tracestate / baggage / `X-Atrib-Chain`), and transaction detection automatically. Wrap it in a callback or middleware to plug into LangChain, the AI SDK, Mastra, or any direct MCP client.
 
 ### Merchant (verifier)
 
@@ -64,7 +81,7 @@ One line. The middleware propagates attribution context on every tool call, nego
 import { AtribVerifier } from '@atrib/verify'
 
 const verifier = new AtribVerifier({
-  merchantKey: process.env.ATRIB_MERCHANT_KEY
+  merchantKey: process.env.ATRIB_MERCHANT_KEY,
 })
 
 const result = await verifier.verify(recommendationDoc)
@@ -73,11 +90,17 @@ const result = await verifier.verify(recommendationDoc)
 
 ## Key generation
 
-```
-npx @atrib/cli keygen
+A v1 keypair is a base64url-encoded 32-byte Ed25519 seed (§5.6 of the spec). Until a dedicated CLI ships, generate one inline:
+
+```typescript
+import { base64urlEncode } from '@atrib/mcp'
+import { randomBytes } from 'node:crypto'
+
+const seed = randomBytes(32)
+console.log('ATRIB_PRIVATE_KEY=' + base64urlEncode(seed))
 ```
 
-Generates an Ed25519 keypair. Store `ATRIB_PRIVATE_KEY` in your environment. The public key is derived at runtime.
+Store the result as `ATRIB_PRIVATE_KEY` in your environment. The public key is derived at runtime — only the seed needs to be secured.
 
 ## Specification
 

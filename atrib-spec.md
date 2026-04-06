@@ -2150,18 +2150,43 @@ serverInfo: {
 
 #### 5.4.1 — Init Interface
 
-The agent middleware wraps an agent instance. It intercepts all outbound tool calls and inbound tool responses, maintaining attribution context across the session.
+The agent middleware exposes an interception surface that the host application or MCP client integrates at outbound tool call and inbound tool response boundaries. This is a framework-agnostic design — the middleware does not monkey-patch a specific agent implementation, because no single agent shape covers the LangChain / Mastra / AI SDK / direct-MCP-client landscape. Instead, the middleware returns an interceptor object that the caller hooks into their own request/response lifecycle.
 
 ```
 import { atrib } from '@atrib/agent'
 
-// Wrap once at startup. Framework-agnostic — works with any MCP client implementation.
-const agent = atrib(existingAgentOrMcpClient, {
+// Create the interceptor once at startup.
+const interceptor = atrib({
   creatorKey:     process.env.ATRIB_PRIVATE_KEY,  // REQUIRED — see §5.6
   merchantDomain: 'https://merchant.example.com', // OPTIONAL — for policy fetch at session init
   logEndpoint:    'https://log.atrib.io/v1/entries', // OPTIONAL — default shown
+  sessionToken:   'my-session',                    // OPTIONAL — see §1.5.5
+  serverUrls:     ['https://tool-a.example', 'https://tool-b.example'], // OPTIONAL — for policy fetch
 })
+
+// The interceptor exposes four methods. The caller invokes them at the
+// appropriate points in their MCP client's request/response lifecycle:
+//
+// 1. Before sending a tools/call request:
+const meta = await interceptor.onBeforeToolCall(toolName, existingMeta)
+// `meta` is the merged _meta object to attach to the outbound request.
+// Init runs lazily on the first call (§5.4.2).
+//
+// 2. After receiving a tools/call response:
+interceptor.onAfterToolResponse(toolName, response, response._meta, {
+  serverUrl: 'https://tool-a.example',
+  isError: false,
+  headers: { /* HTTP response headers if available */ },
+})
+//
+// 3. Inspect the session policy record (e.g., to share with merchant):
+const record = interceptor.getSessionPolicyRecord()
+//
+// 4. Drain pending log submissions before shutdown:
+await interceptor.flush()
 ```
+
+Implementations are free to wrap this surface in higher-level adapters for specific frameworks (a LangChain callback, an AI SDK middleware, an MCP client subclass), but the protocol-level contract is the four methods above. The reference implementation in `@atrib/agent` ships only the interceptor; framework adapters are out of scope for v1.
 
 **Init options**
 
@@ -2309,7 +2334,7 @@ The session policy record (§4.5.3) is created at session initialization (§5.4.
 
 — `warnings`: appended throughout the session — on policy fetch failures, heuristic transaction detection, agent-side transaction emission (path 2 of §5.4.5), unknown modifier types, negotiation skips, and policy negotiation timeouts.
 
-The session policy record is stored in memory and SHOULD be persisted to disk or a database at session end. It is made available to the merchant via a call to `agent.getSessionPolicyRecord(context_id)`.
+The session policy record is stored in memory and SHOULD be persisted to disk or a database at session end. It is made available to the merchant via a call to `interceptor.getSessionPolicyRecord(context_id)` on the object returned by `atrib()` (§5.4.1).
 
 ---
 
