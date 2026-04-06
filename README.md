@@ -75,6 +75,15 @@ await interceptor.flush()
 
 The interceptor handles session initialization, policy negotiation, context propagation (W3C traceparent / tracestate / baggage / `X-Atrib-Chain`), and transaction detection automatically. Wrap it in a callback or middleware to plug into LangChain, the AI SDK, Mastra, or any direct MCP client.
 
+### Use with Claude Agent SDK
+
+If you're building on `@anthropic-ai/claude-agent-sdk`, Atrib supports two integration patterns:
+
+- **In-process tools** (your own `createSdkMcpServer()`): one extra line — `atrib(weatherServer.instance, options)` — and every `tools/call` is attributed.
+- **Third-party MCP servers** (filesystem, fetch, custom stdio): use `createAtribProxy()` from `@atrib/mcp` to stand up a thin in-process surrogate that forwards calls to the upstream and attributes them at the proxy layer.
+
+Both runnable examples are in [`packages/integration/examples/claude-agent-sdk/`](packages/integration/examples/claude-agent-sdk/), and the architectural rationale (why no Claude-SDK-specific package is needed) is recorded in [`DECISIONS.md`](DECISIONS.md) D021.
+
 ### Merchant (verifier)
 
 ```typescript

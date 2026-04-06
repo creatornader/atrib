@@ -319,3 +319,115 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - The Vercel AI SDK adapter is the smallest change: a single function in `packages/agent/` that takes the result of `createMCPClient` and wraps the `tools()` record's `execute` callbacks with the existing interceptor lifecycle.
 
 **Followup:** Build the proxy server primitive, then the Claude Agent SDK adapter on top of it, then the Cloudflare Agents adapter on the same primitive, then the Vercel AI SDK `tools()` wrap. The handoff doc `thoughts/shared/handoffs/general/2026-04-06_01-00-00_internal-planning.md` §6 framework list should be updated to match this decision in a follow-up commit.
+
+## D021 — Claude Agent SDK Case A is zero-new-code; Case B uses createAtribProxy() in-process forwarder
+
+**Date:** 2026-04-06
+**Context:** D020 set the the framework-adapter rollout build order as Claude Agent SDK → Cloudflare Agents → Vercel AI SDK and described the Claude Agent SDK adapter as "an in-process proxy MCP server living in `packages/mcp/`". Before writing code, the actual `@anthropic-ai/claude-agent-sdk` source was inspected (npm pack of v0.2.92) to verify how the SDK accepts and invokes user-provided MCP servers. The finding materially refines D020's plan: the Claude Agent SDK adapter splits cleanly into two cases, and the first case requires zero new code in `@atrib/mcp`.
+
+**What the SDK actually does (verified against `@anthropic-ai/claude-agent-sdk@0.2.92`):**
+
+1. The SDK accepts five MCP server config types in its `mcpServers` option: `stdio`, `sse`, `http`, `claudeai-proxy`, and `sdk`. The first three spawn a child or open a network connection externally to the SDK; `claudeai-proxy` is for Claude.ai-hosted servers.
+2. The `sdk` type is structurally `{ type: 'sdk', name: string, instance: McpServer }` where `McpServer` is **the exact class from `@modelcontextprotocol/sdk/server/mcp.js`** (verified at `package/sdk.d.ts:7,357,716–720`):
+   ```ts
+   import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+   export declare function createSdkMcpServer(_options: CreateSdkMcpServerOptions): McpSdkServerConfigWithInstance;
+   export declare type McpSdkServerConfigWithInstance = McpSdkServerConfig & { instance: McpServer; };
+   ```
+   `createSdkMcpServer()` is the user-facing helper that wraps a list of `tool()`-defined functions and returns this config object. The `instance` is a real, standard `McpServer`.
+3. The SDK invokes the in-process server via the standard `McpServer.connect(transport)` API. From `package/sdk.mjs` line 62 (de-minified):
+   ```js
+   connectSdkMcpServer($, X) {
+     let J = new fz((Q) => this.sendMcpServerMessageToCli($, Q));
+     this.sdkMcpTransports.set($, J);
+     this.sdkMcpServerInstances.set($, X);
+     X.connect(J).catch(...)
+   }
+   ```
+   `fz` is a custom in-process `Transport` that bridges to the Claude Code CLI. Crucially, `X.connect(J)` is the **same** `McpServer.connect(Transport)` method any other host would call. When the host sends a `tools/call` request through `fz`, it lands at the standard `McpServer.server.setRequestHandler(CallToolRequestSchema, ...)` dispatch.
+
+**Decision:** The Claude Agent SDK adapter has two cases, treated separately:
+
+### Case A — User-built in-process tools (the common case for `createSdkMcpServer`)
+
+**Zero new code in `@atrib/mcp`.** The user already has a real `McpServer` (returned as `sdkServer.instance` from `createSdkMcpServer`). They call `atrib(sdkServer.instance, { creatorKey })` exactly as they would for any other `McpServer`. Our existing `setRequestHandler` monkey-patch fires on every `tools/call` because the Claude Agent SDK invokes the standard dispatch path. The "adapter" is a documentation page and a runnable example — no library changes.
+
+```ts
+import { createSdkMcpServer, tool, query } from '@anthropic-ai/claude-agent-sdk'
+import { atrib } from '@atrib/mcp'
+
+const myTool = tool('my_tool', 'desc', schema, async (args) => { /* … */ })
+const sdkServer = createSdkMcpServer({ name: 'my-tools', tools: [myTool] })
+
+atrib(sdkServer.instance, { creatorKey, serverUrl: 'https://my.tools/' })
+
+for await (const msg of query({
+  prompt: '…',
+  options: { mcpServers: { tools: sdkServer } },
+})) { /* … */ }
+```
+
+### Case B — Third-party MCP servers (filesystem, fetch, custom stdio servers, etc.)
+
+**New code: `createAtribProxy()`** in `packages/mcp/src/proxy.ts`. The user has an existing upstream MCP server (stdio child process or HTTP endpoint) and wants its tool calls attributed. The proxy is a thin in-process `McpServer` that:
+
+1. Connects to the upstream via `Client` + the appropriate transport (`StdioClientTransport`, `StreamableHTTPClientTransport`).
+2. Snapshots the upstream's tool catalog at construction time via `listTools()`.
+3. Uses **low-level `setRequestHandler`** registration on its underlying `Server` for both `tools/list` (returns the snapshot) and `tools/call` (forwards to the upstream client). It deliberately bypasses `McpServer.registerTool()` because that API expects Zod-shape input schemas while the upstream returns JSON Schema; converting JSON Schema → Zod is lossy and fragile.
+4. Has `atrib()` middleware applied **before** the `tools/call` handler is registered, so the existing `setRequestHandler` patch wraps the forwarding handler with the standard attribution lifecycle.
+5. Returns `{ server: AtribServer, upstreamClient: Client, close(): Promise<void> }`. The host owns connecting `proxy.server` to its own transport (the host calls `proxy.server.connect(hostTransport)`); the proxy only owns the upstream client lifecycle.
+
+The user passes the proxy to Claude Agent SDK as `{ type: 'sdk', name, instance: proxy.server }` — same shape as Case A.
+
+**Why the architecture splits this way:**
+- For Case A, the user already constructs the `McpServer`, so middleware can be applied directly. Adding a Claude-SDK-specific adapter would be a strict downgrade — more API surface for no benefit.
+- For Case B, the upstream `McpServer` lives in another process or network endpoint and the host can't see it. We need an in-process surrogate. The proxy is that surrogate; it exists specifically to pull the call dispatch into a process where our middleware can sit on it.
+- The proxy primitive is **reusable for Cloudflare Agents**, which has the same architectural shape (host accepts in-process MCP servers, third-party upstreams need a surrogate). This is why the new code lives in `@atrib/mcp` rather than in a Claude-SDK-specific package.
+
+**Alternatives considered:**
+- **A Claude-SDK-specific wrapper helper** like `wrapClaudeAgentSdkMcpServer(sdkConfig)`. Rejected: it would only repackage the one-line `atrib(sdkServer.instance, opts)` call into a less explicit form, hiding the fact that the user already owns a real `McpServer`. Worse, it would create the false impression that Atrib needs Claude-Agent-SDK-aware code — discouraging users from understanding that the same `atrib()` function works against any MCP host.
+- **A JSON-Schema → Zod converter** so `createAtribProxy` could use `McpServer.registerTool()`. Rejected: `registerTool` is not the only path to register a `tools/call` handler (the low-level `setRequestHandler` is supported and more honest about what we're doing), the conversion is lossy for JSON Schema features Zod doesn't model cleanly (e.g., `oneOf`, `not`), and it adds a new failure mode for v1 with no real upside.
+- **Forwarding upstream tool definitions through `registerTool` with a permissive `z.any()` schema.** Rejected: `z.any()` schemas defeat the entire purpose of the schema validation that the SDK does at registration time; tool inputs would be passed through unchecked. The low-level approach is structurally identical without misleading about validation.
+- **Multi-upstream fan-out per proxy.** Rejected for v1 (D020 already locked this in). Each proxy maps 1:1 to an upstream; users with N upstreams create N proxies. Simpler reasoning, no namespace-collision logic, easier failure isolation per upstream.
+- **Dynamic tool list refresh.** Deferred to V2. The proxy snapshots `listTools()` once at construction. Restart the proxy if the upstream catalog changes. The upstream-driven `tools/list_changed` notification path can be added later without breaking the public API.
+
+**Files added:**
+- `packages/mcp/src/proxy.ts` (~250 lines)
+- `packages/mcp/test/proxy.test.ts` — 5 unit tests using `InMemoryTransport.createLinkedPair()` against a real upstream `McpServer`:
+  1. `tools/list` is forwarded from the upstream snapshot
+  2. `tools/call` forwards arguments and returns the response unchanged
+  3. Attribution records are emitted on the proxy side (verified via mocked submission `fetch` and outbound `_meta.atrib` token)
+  4. §5.8 degradation: upstream `isError: true` results propagate without record emission (per §5.3.3)
+  5. `close()` disconnects the upstream client cleanly
+
+**Files modified:**
+- `packages/mcp/src/index.ts` — exports `createAtribProxy`, `AtribProxy`, `AtribProxyOptions`, `UpstreamTransport`
+
+**Public API surface added:**
+```ts
+export interface UpstreamTransport
+  | { type: 'stdio'; command: string; args?: string[]; env?: Record<string, string> }
+  | { type: 'http'; url: string; headers?: Record<string, string> }
+  | { type: 'inMemory'; transport: Transport }   // escape hatch for tests/legacy SSE
+
+export interface AtribProxyOptions {
+  name: string
+  version?: string
+  upstream: UpstreamTransport
+  atrib: AtribOptions
+}
+
+export interface AtribProxy {
+  server: AtribServer
+  upstreamClient: Client
+  close(): Promise<void>
+}
+
+export function createAtribProxy(options: AtribProxyOptions): Promise<AtribProxy>
+```
+
+**Notes on transports:**
+- The MCP SDK's `SSEClientTransport` is marked `@deprecated` as of `@modelcontextprotocol/sdk@1.29.0` in favor of Streamable HTTP. We do **not** add a `type: 'sse'` upstream option to avoid baking a deprecated transport into our public API. Users with a legacy SSE upstream construct their own `SSEClientTransport` and pass it via `{ type: 'inMemory', transport: theirSseTransport }` — that path works and isolates the deprecation concern in user code rather than our package API.
+- The `StreamableHTTPClientTransport` returned by `createUpstreamTransport` requires a structural cast through `unknown` because its `sessionId?: string` getter is structurally incompatible with the `Transport` interface's `sessionId?: string` declaration under `exactOptionalPropertyTypes: true` (the getter returns `string | undefined`, the interface expects `string` when present). Runtime conformance is guaranteed by `implements Transport` on the SDK's class declaration.
+
+**Followup:** Build the runnable Claude Agent SDK example (Case A and Case B side-by-side), update `README.md` with a "Use with Claude Agent SDK" section pointing at the example, then start the Cloudflare Agents adapter on the same `createAtribProxy` primitive. The handoff doc §6 framework list still needs to be synced to D020/D021 in a follow-up commit.
