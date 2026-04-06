@@ -269,3 +269,53 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - Graceful degradation: fake McpServer with missing `.server` triggers warning + pass-through
 
 **Followup:** §6 (framework adapters) per the internal planning doc. After §6, the handoff also lists §7 (developer integration documentation) and §8 (TypeDoc API reference) as the remaining work.
+
+## D020 — the framework-adapter rollout framework adapter targets: Claude Agent SDK, Cloudflare Agents, Vercel AI SDK (re-ranked from incomplete prior decision)
+
+**Date:** 2026-04-06
+**Context:** The internal planning doc doc and an earlier in-session "final decision" (an earlier ranking pass, recorded earlier in development) listed the §6 framework adapter targets as **Vercel AI SDK → Mastra → LangChain JS** with OpenAI Agents and Claude Agent SDK as tier-2 and Cloudflare Agents deferred. That decision was written **before** several rounds of GitHub code search results arrived, and its conclusions were never updated against the complete data. After a after a data refresh, the relevant searches were re-run with the refreshed data and the gap on OpenAI Agents (which had no GitHub data at all in the prior pass) was filled. The integrated picture changes the right answer materially.
+
+**Methodology corrections to the prior decision:**
+- The earlier in development "final decision" weighted purely on **npm package downloads of MCP-specific subpackages** (`@ai-sdk/mcp` 509K/wk, `@langchain/mcp-adapters` 261K/wk, `@mastra/mcp` 169K/wk). It explicitly noted "GitHub code search for framework-specific import patterns was blocked by authentication — no code search counts available."
+- 5 minutes after the decision was recorded, GitHub CLI auth was confirmed working in the local environment and three batches of authenticated code searches ran (a later research pass–#28597, 3:26–later in development). The decision was not revisited against that data before the was paused.
+- Two additional bugs in the prior search batches were also caught and fixed during the data-refresh pass: quoted-string queries in `gh search code` were returning `0` due to encoding issues (e.g. Cloudflare `from "agents/mcp"` returned 0 quoted, **892** unquoted), and the OpenAI Agents queries were never run at all because the a prior search batch had been auth-blocked and an earlier search pass only ran the Cloudflare/Anthropic/Vercel/Mastra/LangChain ones before stopping.
+- The data-refresh pass re-ran the complete set authenticated against `gh api search/code` (which returns total counts directly via `total_count`), filling the OpenAI Agents gap and confirming all alternate-name queries.
+
+**Complete GitHub real-usage data (TypeScript files, fetched 2026-04-06):**
+
+| Framework | Primary signal | Files | Alternate-name signals |
+|---|---|---|---|
+| Claude Agent SDK | `"@anthropic-ai/claude-agent-sdk" McpServer` | **1,680** | `mcpServers` + `claude-agent-sdk` 1,376; pkg import 3,160; `ClaudeSDKClient` 98 |
+| Cloudflare Agents | `agents/mcp` (client) + `MCPClientConnection` | **~1,050** | unquoted `agents/mcp` 892; `MCPClientConnection` 158; server `extends McpAgent` 868 |
+| Vercel AI SDK | `experimental_createMCPClient` | **908** | bare `createMCPClient` 1,936 (overcounts non-Vercel); `@ai-sdk/mcp` 704 |
+| OpenAI Agents | `MCPServerSSE` | **616** | `MCPServerStdio` 266; `MCPServerStreamableHttp` 171; `getAllMcpTools` 235; `connectMcpServers` 176; pkg import `@openai/agents` 2,768 |
+| Mastra | `"@mastra/mcp" MCPClient` | **494** | pkg import `@mastra/mcp` 506; legacy `MastraMCPClient` 98 |
+| LangChain | `MultiServerMCPClient` | **442** | `loadMcpTools` 408; pkg `@langchain/mcp-adapters` 374 |
+| (substrate) | `@modelcontextprotocol/sdk/client` | 2,224 | already covered by `wrapMcpClient` in commit `c450672` |
+
+**Decision:** Replace the prior tier list. The new §6 build order is:
+
+1. **Claude Agent SDK** — highest GitHub footprint (1,680 files), bundles `@modelcontextprotocol/sdk` directly (an earlier dependency analysis confirmed dependency analysis), and the architecturally cleanest interception path. Because the SDK fully encapsulates MCP server setup from the consumer (users pass `mcpServers: {...}` config, never touch the Client themselves), the right interception point is **not** an agent-side wrapper — it is an **in-process proxy MCP server** that lives in `packages/mcp/` and re-uses the existing `atrib()` middleware. The user configures their Claude Agent SDK to point at the proxy, the proxy forwards to the real upstream MCP servers, and attribution records are emitted at the proxy layer. Zero changes to `packages/agent/` for this adapter.
+2. **Cloudflare Agents** — second highest (~1,050 client-side files), also bundles `@modelcontextprotocol/sdk` directly. Same proxy architecture as Claude Agent SDK applies. The 892 figure was hidden from the prior decision by a quoted-query encoding bug; without that bug, Cloudflare would have ranked second from the start instead of being deferred.
+3. **Vercel AI SDK** — third by GitHub footprint (908 `experimental_createMCPClient` files), strongest pure-npm signal (509K/wk for `@ai-sdk/mcp`). Different interception strategy: wrap the `tools()` record returned by `createMCPClient` rather than `callTool()` directly. Lives in `packages/agent/` as a thin export.
+4. **(Deferred to a follow-up)** OpenAI Agents — has the largest *parent* framework footprint (2,768 import sites) but its MCP transport is custom and does not depend on `@modelcontextprotocol/sdk`. Adapter requires subclassing `MCPServerStdio`/`MCPServerSSE`/`MCPServerStreamableHttp` rather than wrapping a Client. This is the highest implementation cost per unit of coverage and should ship after the top three are validated against real users.
+5. **(Deferred)** Mastra and LangChain JS — both have lower GitHub footprints than the top four. LangChain is technically the easiest adapter (`loadMcpTools(name, wrappedRawClient)` accepts an injected raw `@modelcontextprotocol/sdk` Client, so `wrapMcpClient` already covers it transparently), so it can be ticked off with a documentation page rather than new code. Mastra's API was 404 in earlier docs research and needs source verification before adapter work.
+
+**Why the prior decision (#28586) reached a different answer:**
+- It weighted only on **MCP-specific npm package downloads**, which favored frameworks that ship MCP support in a *separate* installable package (`@ai-sdk/mcp`, `@langchain/mcp-adapters`, `@mastra/mcp`) and disadvantaged frameworks that **bundle** MCP into the parent package (Claude Agent SDK, Cloudflare Agents). Bundling makes the per-package metric invisible but is architecturally a stronger signal — a bundled dependency is non-optional, while a separate package is opt-in.
+- The 892-file Cloudflare client signal was missing entirely (quoted query bug returned 0).
+- The OpenAI Agents data was missing entirely (auth-blocked and never re-run).
+- The Mastra "highest attach ratio" claim (~29% of `@mastra/core` users install `@mastra/mcp`) was true but applied to a smaller absolute base (Mastra core has ~583K/wk vs. Claude Agent SDK at 3.6M/wk and Vercel AI SDK at 10.1M/wk).
+
+**Alternatives considered:**
+- **Stay with #28586 (Vercel/Mastra/LangChain).** Rejected: pure-npm-MCP weighting double-penalizes bundlers, and the GitHub data shows ~3x more developers configuring MCP via Claude Agent SDK than via Vercel's separate package. Following the npm ranking would mean shipping adapters for the smaller addressable populations first.
+- **Hybrid (Claude SDK + Vercel AI SDK + one more).** Considered. The chosen plan is essentially this hybrid extended to three: it picks the highest GitHub-signal target (Claude SDK), the highest pure-npm target (Vercel AI SDK), and the second-highest GitHub-signal target (Cloudflare Agents) which the prior decision wrongly deferred.
+- **Ship OpenAI Agents in the top three.** Rejected for the first cut: 2,768 parent imports is impressive but the custom-transport path means the adapter is structurally different from every other one we'd ship and produces no reusable patterns. Better to validate the proxy-server pattern (Claude + Cloudflare) and the tools-record-wrap pattern (Vercel) first.
+- **Defer the re-ranking and ship #28586 anyway because it's already documented.** Rejected per the radical-honesty rule: shipping the wrong adapter set first because it was decided first is exactly the kind of avoidable mistake the rule exists to prevent. The cost of correcting this here is one DECISIONS.md entry; the cost of not correcting it is shipping examples for the wrong frameworks and potentially having to rip them out later.
+
+**What this means architecturally:**
+- The §6 work is **not** purely a `packages/agent/` problem. Two of the three top adapters (Claude Agent SDK and Cloudflare Agents) are *server-side proxy* plays that live in `packages/mcp/`. The §6 success criteria need to be expanded accordingly — "framework adapters" was a misleading shorthand.
+- The proxy server pattern requires new code: a thin wrapper in `packages/mcp/` that constructs an `McpServer`, calls `atrib()` on it, registers handlers that fan out to one or more upstream MCP servers (via `Client` from `@modelcontextprotocol/sdk`), and propagates results back. This is reusable across both the Claude SDK and Cloudflare adapters and possibly more in the future.
+- The Vercel AI SDK adapter is the smallest change: a single function in `packages/agent/` that takes the result of `createMCPClient` and wraps the `tools()` record's `execute` callbacks with the existing interceptor lifecycle.
+
+**Followup:** Build the proxy server primitive, then the Claude Agent SDK adapter on top of it, then the Cloudflare Agents adapter on the same primitive, then the Vercel AI SDK `tools()` wrap. The handoff doc `thoughts/shared/handoffs/general/2026-04-06_01-00-00_internal-planning.md` §6 framework list should be updated to match this decision in a follow-up commit.
