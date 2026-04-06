@@ -271,11 +271,13 @@ async function emitTransactionRecord(
   let contentIdToolName: string
 
   switch (detection.protocol) {
-    case 'ACP/UCP':
+    case 'ACP':
+    case 'UCP':
       contentIdServerUrl = detection.checkoutUrl ?? callServerUrl ?? ''
       contentIdToolName = 'checkout'
       break
-    case 'x402/MPP':
+    case 'x402':
+    case 'MPP':
       // Use the HTTP endpoint URL that returned Payment-Receipt
       contentIdServerUrl = callServerUrl ?? ''
       contentIdToolName = 'checkout'

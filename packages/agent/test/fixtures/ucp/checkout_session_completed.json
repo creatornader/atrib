@@ -1,0 +1,39 @@
+{
+  "ucp": {
+    "version": "2026-01-11",
+    "capabilities": [
+      { "name": "dev.ucp.shopping.checkout", "version": "2026-01-11" }
+    ]
+  },
+  "id": "chk_123456789",
+  "status": "completed",
+  "currency": "USD",
+  "order": {
+    "id": "ord_99887766",
+    "permalink_url": "https://merchant.com/orders/ord_99887766"
+  },
+  "line_items": [
+    {
+      "id": "li_1",
+      "item": { "id": "item_123", "title": "Red T-Shirt", "price": 2500 },
+      "quantity": 2,
+      "totals": [
+        { "type": "subtotal", "amount": 5000 },
+        { "type": "total", "amount": 5000 }
+      ]
+    }
+  ],
+  "buyer": {
+    "email": "jane@example.com",
+    "first_name": "Jane",
+    "last_name": "Doe"
+  },
+  "totals": [
+    { "type": "subtotal", "amount": 5000 },
+    { "type": "tax", "amount": 400 },
+    { "type": "total", "amount": 5400 }
+  ],
+  "links": [
+    { "type": "terms_of_service", "url": "https://merchant.com/terms" }
+  ]
+}
