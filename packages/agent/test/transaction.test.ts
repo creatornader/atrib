@@ -5,6 +5,8 @@ import acpCompletedFixture from './fixtures/acp/checkout_session_completed.json'
 import acpOrderCreateFixture from './fixtures/acp/order_create_event.json'
 import acpOrderUpdateFixture from './fixtures/acp/order_update_event.json'
 import ucpCompletedFixture from './fixtures/ucp/checkout_session_completed.json'
+import ap2PaymentMandateFixture from './fixtures/ap2/payment_mandate_message.json'
+import a2aX402PaymentCompletedFixture from './fixtures/ap2/a2a_x402_payment_completed.json'
 
 describe('detectTransaction', () => {
   describe('ACP detection', () => {
@@ -148,33 +150,99 @@ describe('detectTransaction', () => {
   })
 
   describe('AP2 detection', () => {
-    it('detects W3C VC v2 array-form Payment Mandate credential', () => {
-      // Per spec §1.7.5 — `type` is an array
-      const response = {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        type: ['VerifiableCredential', 'PaymentMandateCredential'],
-        credentialSubject: { 'io.atrib/context_id': 'abc' },
-      }
-      const result = detectTransaction('credential_tool', response)
+    it('detects a real AP2 PaymentMandate Message (A2A DataPart)', () => {
+      // Source: github.com/google-agentic-commerce/ap2 docs/specification.md
+      const result = detectTransaction('payment_tool', ap2PaymentMandateFixture)
       expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
     })
 
-    it('detects v1-style string type with PaymentMandate credentialSubject (legacy)', () => {
-      const response = {
-        type: 'VerifiableCredential',
-        credentialSubject: { type: 'PaymentMandate' },
-      }
-      const result = detectTransaction('credential_tool', response)
+    it('detects a real a2a-x402 payment-completed task message', () => {
+      // Source: github.com/google-agentic-commerce/a2a-x402 spec/v0.1/spec.md
+      const result = detectTransaction('payment_tool', a2aX402PaymentCompletedFixture)
       expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
     })
 
-    it('does not detect a non-PaymentMandate VC', () => {
-      const response = {
-        type: ['VerifiableCredential', 'IdentityCredential'],
-        credentialSubject: { id: 'did:example:123' },
+    it('does NOT detect an AP2 IntentMandate (upstream funnel, not transaction)', () => {
+      const intentMandate = {
+        messageId: 'e0b84c60-3f5f-4234-adc6-91f2b73b19e5',
+        contextId: 'sample-payment-context',
+        role: 'user',
+        parts: [
+          {
+            kind: 'data',
+            data: {
+              'ap2.mandates.IntentMandate': {
+                natural_language_description: "I'd like some cool red shoes",
+              },
+            },
+          },
+        ],
       }
-      const result = detectTransaction('credential_tool', response)
+      const result = detectTransaction('shopping_tool', intentMandate)
       expect(result.detected).toBe(false)
+    })
+
+    it('does NOT detect an AP2 CartMandate (cart commitment, not transaction)', () => {
+      const cartMandate = {
+        parts: [
+          {
+            kind: 'data',
+            data: {
+              'ap2.mandates.CartMandate': { contents: { id: 'cart_123' } },
+            },
+          },
+        ],
+      }
+      const result = detectTransaction('cart_tool', cartMandate)
+      expect(result.detected).toBe(false)
+    })
+
+    it('does NOT detect a2a-x402 payment-completed without a successful receipt', () => {
+      const failed = {
+        kind: 'task',
+        status: {
+          message: {
+            metadata: {
+              'x402.payment.status': 'payment-completed',
+              'x402.payment.receipts': [{ success: false, error: 'insufficient funds' }],
+            },
+          },
+        },
+      }
+      const result = detectTransaction('payment_tool', failed)
+      expect(result.detected).toBe(false)
+    })
+
+    // Backward-compat fallback path for any research fork that wraps
+    // PaymentMandate in a W3C Verifiable Credential envelope.
+    describe('legacy W3C VC fallback (research forks)', () => {
+      it('detects v2 array-form Payment Mandate credential', () => {
+        const response = {
+          '@context': ['https://www.w3.org/ns/credentials/v2'],
+          type: ['VerifiableCredential', 'PaymentMandateCredential'],
+          credentialSubject: { 'io.atrib/context_id': 'abc' },
+        }
+        const result = detectTransaction('credential_tool', response)
+        expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
+      })
+
+      it('detects v1-style string type with PaymentMandate credentialSubject', () => {
+        const response = {
+          type: 'VerifiableCredential',
+          credentialSubject: { type: 'PaymentMandate' },
+        }
+        const result = detectTransaction('credential_tool', response)
+        expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
+      })
+
+      it('does not detect a non-PaymentMandate VC', () => {
+        const response = {
+          type: ['VerifiableCredential', 'IdentityCredential'],
+          credentialSubject: { id: 'did:example:123' },
+        }
+        const result = detectTransaction('credential_tool', response)
+        expect(result.detected).toBe(false)
+      })
     })
   })
 

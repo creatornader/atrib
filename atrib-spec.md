@@ -609,29 +609,91 @@ Content-Type: application/json
 
 #### 1.7.5 — AP2 and a2a-x402
 
-AP2 uses Verifiable Digital Credentials (VDCs) for payment authorization. The Payment Mandate VDC is the transaction event hook. Implementations MUST embed the context_id in the Payment Mandate's extension claims:
+AP2 (Agent Payments Protocol) is Google's open protocol at `github.com/google-agentic-commerce/ap2`, version v0.1, extension URI `https://github.com/google-agentic-commerce/ap2/tree/v0.1`. **AP2 v0.1 does NOT use W3C Verifiable Credentials.** Earlier drafts of this specification assumed it would; that assumption was incorrect. The real wire format is an A2A (Agent2Agent) Message with a DataPart whose `data` object contains the key `ap2.mandates.PaymentMandate`.
 
-```
-// AP2 Payment Mandate extension (W3C VC extensibility):
+The PaymentMandate is the transaction event. (`IntentMandate` and `CartMandate` represent earlier funnel stages — intent capture and cart commitment respectively — and MUST NOT be detected as transaction events.) Implementations SHOULD embed the `context_id` in the agent extension fields where supported by the host A2A implementation; until AP2 standardizes a metadata field for it, the `context_id` MUST also travel via `params._meta.atrib` per §1.5.4.
+
+```jsonc
+// AP2 v0.1 PaymentMandate Message (A2A DataPart shape)
+// Source: github.com/google-agentic-commerce/ap2 docs/specification.md
 {
-  "@context": ["https://www.w3.org/ns/credentials/v2", "..."],
-  "type": ["VerifiableCredential", "PaymentMandate"],
-  "credentialSubject": {
-    "...": "...",                 // AP2 mandate fields
-    "io.atrib/context_id": "4bf92f3577b34da6a3ce929d0e0e4736"
+  "messageId": "b5951b1a-8d5b-4ad3-a06f-92bf74e76589",
+  "contextId": "sample-payment-context",
+  "taskId": "sample-payment-task",
+  "role": "user",
+  "parts": [
+    {
+      "kind": "data",
+      "data": {
+        "ap2.mandates.PaymentMandate": {            // detection signal
+          "payment_details": {
+            "cart_mandate": "<user-signed hash>",
+            "payment_request_id": "order_shoes_123",
+            "merchant_agent_card": { "name": "MerchantAgent" },
+            "payment_method": { "supported_methods": "CARD", "data": { "token": "xyz789" } },
+            "amount": { "currency": "USD", "value": 120.0 },
+            "risk_info": { "device_imei": "abc123" },
+            "display_info": "<image bytes>"
+          },
+          "creation_time": "2025-08-26T19:36:36.377022Z"
+        }
+      }
+    }
+  ]
+}
+```
+
+**a2a-x402** (`github.com/google-agentic-commerce/a2a-x402`) is the AP2 extension for crypto payments via x402. When the merchant agent settles a payment on-chain it returns an A2A task whose `status.message.metadata` carries `x402.payment.status: "payment-completed"` and a `x402.payment.receipts` array with at least one entry where `success: true`. Atrib reports this as `protocol: 'AP2'` because a2a-x402 IS the AP2 crypto path; it is not a separate protocol.
+
+```jsonc
+// a2a-x402 payment-completed task message
+// Source: github.com/google-agentic-commerce/a2a-x402 spec/v0.1/spec.md
+{
+  "kind": "task",
+  "id": "task-123",
+  "status": {
+    "state": "working",
+    "message": {
+      "kind": "message",
+      "role": "agent",
+      "parts": [ { "kind": "text", "text": "Payment successful." } ],
+      "metadata": {
+        "x402.payment.status": "payment-completed",   // first detection signal
+        "x402.payment.receipts": [
+          {
+            "success": true,                          // second detection signal
+            "transaction": "0xabc123def456",
+            "network": "base",
+            "payer": "0xPAYER..."
+          }
+        ]
+      }
+    },
+    "artifacts": []
   }
 }
+```
 
-// For a2a-x402 (github.com/google-agentic-commerce/a2a-x402):
-// The context_id travels in the payment-completed A2A message metadata.
+Detection MUST require BOTH the `payment-completed` status AND at least one receipt with `success: true`. A task that says "payment-completed" but contains only `success: false` receipts represents a failed settlement and is NOT a transaction event.
+
+For backward compatibility with research forks of AP2 that may have implemented Payment Mandates as W3C Verifiable Credentials (matching the obsolete spec language), Atrib's detector also accepts the legacy VC envelope shape:
+
+```jsonc
+// Legacy / non-canonical: VC-wrapped PaymentMandate (research forks only)
 {
-  "role": "agent",
-  "parts": [{ "type": "payment-completed", "...": "..." }],
-  "metadata": {
-    "atrib_context_id": "4bf92f3577b34da6a3ce929d0e0e4736"
-  }
+  "@context": ["https://www.w3.org/ns/credentials/v2"],
+  "type": ["VerifiableCredential", "PaymentMandateCredential"],   // v2 array form
+  "credentialSubject": { "io.atrib/context_id": "..." }
+}
+
+// Or v1 string form:
+{
+  "type": "VerifiableCredential",
+  "credentialSubject": { "type": "PaymentMandate" }
 }
 ```
+
+Implementations MAY skip the legacy fallback if they target only AP2 v0.1 deployments.
 
 ---
 
@@ -2363,10 +2425,26 @@ function detectTransaction(toolName, response, headers):
   if (lower['payment-receipt']):
     return { detected: true, protocol: 'MPP' }
 
-  // AP2: Payment Mandate Verifiable Credential. Per W3C VC Data Model v2,
-  // `type` is an array containing both "VerifiableCredential" and a
-  // payment-specific type. Legacy v1 string form is accepted for back-compat
-  // when the credentialSubject.type carries the PaymentMandate marker.
+  // AP2 v0.1 — PaymentMandate Message inside an A2A DataPart.
+  // Source: github.com/google-agentic-commerce/ap2 docs/specification.md
+  if (Array.isArray(response?.parts)):
+    for (part in response.parts):
+      if (typeof part?.data === 'object'
+          && 'ap2.mandates.PaymentMandate' in part.data):
+        return { detected: true, protocol: 'AP2' }
+
+  // a2a-x402 extension — payment-completed via A2A task status metadata.
+  // Source: github.com/google-agentic-commerce/a2a-x402 spec/v0.1/spec.md
+  // Requires BOTH the payment-completed status AND a successful receipt.
+  const meta = response?.status?.message?.metadata
+  if (meta?.['x402.payment.status'] === 'payment-completed'
+      && Array.isArray(meta?.['x402.payment.receipts'])
+      && meta['x402.payment.receipts'].some(r => r?.success === true)):
+    return { detected: true, protocol: 'AP2' }
+
+  // Legacy / non-canonical: W3C VC envelope around a PaymentMandate
+  // (research forks only — AP2 v0.1 itself does NOT use W3C VCs).
+  // Accepts both v2 array form and v1 string form.
   if (Array.isArray(response?.type)
       && response.type.includes('VerifiableCredential')
       && response.type.some(t => /paymentmandate/i.test(t))):

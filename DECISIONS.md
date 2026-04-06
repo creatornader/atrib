@@ -150,3 +150,34 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - Adding a single combined `'x402-or-mpp'` literal back to the protocol type (rejected for the same reason as the joint `'ACP/UCP'` literal in D015 — it hides information consumers care about)
 
 **Followup:** §3 (AP2 / W3C VC) verification, then §4 (W3C Trace Context conformance) and §5 (MCP SDK extension API) per the internal planning doc.
+
+## D017 — AP2 v0.1 uses A2A DataParts, not W3C Verifiable Credentials
+
+**Date:** 2026-04-06
+**Context:** AP2 cross-spec verification verification. The v1 SDK and the original spec §1.7.5 both assumed Google's AP2 (Agent Payments Protocol) would use W3C Verifiable Credentials with `type === 'VerifiableCredential'` and `credentialSubject.type === 'PaymentMandate'` to express a Payment Mandate. When verified against the actual AP2 v0.1 specification at `github.com/google-agentic-commerce/ap2`, this turned out to be wrong. AP2 v0.1 does not use W3C VCs at all.
+**What the real AP2 spec says:**
+- AP2 is built on top of A2A (Agent2Agent). The wire format for a Payment Mandate is an A2A `Message` containing one or more `parts`, where the `kind: "data"` part has a `data` object with the key `ap2.mandates.PaymentMandate` and the AP2 PaymentMandate schema as its value.
+- The PaymentMandate schema includes `payment_details.payment_request_id`, `payment_details.merchant_agent_card.name`, `payment_details.amount`, etc. — all plain JSON, no JSON-LD `@context`, no `proof` field, no W3C VC machinery.
+- AP2 also defines `IntentMandate` (intent capture, upstream of cart) and `CartMandate` (cart commitment, upstream of payment). These appear in the same A2A DataPart shape under `ap2.mandates.IntentMandate` and `ap2.mandates.CartMandate`. They are NOT transaction events and MUST NOT be detected as such.
+- The extension URI is `https://github.com/google-agentic-commerce/ap2/tree/v0.1`.
+
+**What a2a-x402 is:**
+- a2a-x402 (`github.com/google-agentic-commerce/a2a-x402`) is the AP2 extension for crypto payments via x402, co-developed by Google with Coinbase, Ethereum Foundation, and MetaMask. It is NOT a separate protocol — it is the AP2 crypto payment path.
+- The success-path message is an A2A task with `status.message.metadata["x402.payment.status"] === "payment-completed"` AND `status.message.metadata["x402.payment.receipts"]` containing at least one entry where `success: true`. A `payment-completed` status with only `success: false` receipts represents a failed settlement and is NOT a transaction event.
+- Atrib reports a2a-x402 transactions as `protocol: 'AP2'` (not as a separate literal) because the on-wire mechanism is part of AP2.
+
+**Decision:**
+- Detection now checks two real AP2 paths: (1) `parts[].data["ap2.mandates.PaymentMandate"]` for the standard AP2 v0.1 shape, (2) the a2a-x402 task metadata shape requiring BOTH `payment-completed` status AND a successful receipt.
+- Both paths report `protocol: 'AP2'`. We do not introduce a separate `'a2a-x402'` literal for the same reason D015 split joint literals: extra distinctions only when consumers care, and a2a-x402 IS AP2.
+- The legacy W3C VC envelope check is kept as a fallback for research forks that may have implemented Payment Mandates as VCs (matching the obsolete spec language), but the canonical detection path is the A2A DataPart shape. The fallback accepts both VC v2 array form and v1 string form.
+- IntentMandate and CartMandate are explicitly tested as non-transaction events to lock in the correct funnel semantics.
+- Real captured fixtures from the published spec examples live under `packages/agent/test/fixtures/ap2/` with a provenance README citing both the AP2 v0.1 spec and the a2a-x402 v0.1 spec.
+- Spec §1.7.5 was rewritten to match real AP2 / a2a-x402 shapes with a clear note that the prior W3C VC assumption was wrong. The §5.4.5 detection pseudocode was updated correspondingly.
+
+**Alternatives considered:**
+- Detecting all three mandate types (Intent, Cart, Payment) as transaction events (rejected — would falsely close attribution chains on intent-capture or cart-commit events, violating §3.1's structure-not-causality rule)
+- Treating a2a-x402 as a separate `'a2a-x402'` protocol literal (rejected — it is the AP2 crypto payment path; consumers care about AP2-vs-not-AP2, not AP2-card-vs-AP2-crypto)
+- Decoding and validating the cart_mandate hash chain in the PaymentMandate (rejected — that's verification work belonging in `@atrib/verify`, not on the agent middleware critical path)
+- Removing the legacy W3C VC fallback entirely (rejected — costs nothing to keep, costs developer trust to silently break a research-fork integration)
+
+**Followup:** §4 (W3C Trace Context conformance) and §5 (MCP SDK extension API) per the internal planning doc. The handoff also calls out that this verification would touch `emitTransactionRecord` for AP2 content_id derivation; in the end no change was needed there because AP2 still uses the MCP server URL fallback (the PaymentMandate carries useful identifiers like `payment_request_id` but extracting them per-protocol is not required for v1 — see future v2 work in the open questions section of the handoff).
