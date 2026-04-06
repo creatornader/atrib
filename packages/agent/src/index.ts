@@ -22,3 +22,12 @@ export type {
   MinimalMcpClient,
   WrapMcpClientOptions,
 } from './adapters/mcp-client.js'
+
+// Cloudflare Agents adapter — wraps MCP connections on a Cloudflare `Agent`
+// (or `AIChatAgent`) after `addMcpServer` so subsequent tool calls flow
+// through Atrib's interceptor lifecycle.
+export { attributeCloudflareAgentMcp } from './adapters/cloudflare-agent.js'
+export type {
+  CloudflareAgentLike,
+  AttributeCloudflareAgentMcpOptions,
+} from './adapters/cloudflare-agent.js'
