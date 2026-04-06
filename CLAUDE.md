@@ -33,12 +33,14 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 | `atrib-spec.md` | Complete protocol specification, record format, Merkle log, graph model, policy format, SDK contract |
 | `CLAUDE.md` | Project conventions, invariants, implementation guidance |
 | `internal planning doc` | Implementation guide, build order, package details, testing strategy, what not to build |
+| `DECISIONS.md` | Architectural decision log, what was decided, why, what alternatives were considered |
 
 ## Sync triggers
 
 | Event | Update |
 |-------|--------|
 | Protocol decision changed | `atrib-spec.md` first, then `internal planning doc` if build guidance affected |
+| Architectural decision made | `DECISIONS.md`, new entry with date, context, decision, alternatives |
 | New package created | This file (repository structure) |
 | Implementation convention established | This file (conventions section) |
 
