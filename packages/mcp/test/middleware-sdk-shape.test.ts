@@ -160,6 +160,64 @@ describe('atrib() end-to-end against the real MCP SDK', () => {
     expect(submission.record?.content_id).toMatch(/^sha256:[0-9a-f]{64}$/)
   })
 
+  it('register-then-wrap order: retroactively wraps a pre-existing tools/call dispatcher', async () => {
+    // The canonical order is wrap-then-register, but McpServer eagerly
+    // installs its tools/call dispatcher on the first .tool() call, so a
+    // user who calls atrib() AFTER registering tools would otherwise get no
+    // attribution. The middleware must reach into the underlying server's
+    // _requestHandlers map and rewrite the existing entry.
+    const submissions: unknown[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      const body = JSON.parse(((init as { body: string })?.body) as string)
+      submissions.push(body)
+      return new Response(JSON.stringify({ logIndex: 1 }), { status: 200 })
+    })
+
+    const mcpServer = new McpServer({ name: 'test', version: '1.0.0' })
+
+    // Register the tool BEFORE wrapping — this installs the dispatcher
+    // eagerly, so our setRequestHandler patch arrives too late.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(mcpServer as any).tool('echo', async () => ({
+      content: [{ type: 'text', text: 'hello' }],
+    }))
+
+    const wrapped = atrib(mcpServer, {
+      creatorKey: TEST_KEY_B64,
+      serverUrl: 'https://test.example.com',
+    })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const underlyingServer = mcpServer.server as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handlers = (underlyingServer as any)._requestHandlers as Map<string, unknown>
+    const toolsCallHandler = handlers.get('tools/call') as (
+      req: unknown,
+      extra: unknown,
+    ) => Promise<unknown>
+
+    const result = (await toolsCallHandler(
+      {
+        method: 'tools/call',
+        params: { name: 'echo', arguments: {} },
+      },
+      {
+        signal: new AbortController().signal,
+        requestId: 1,
+        sendNotification: async () => {},
+        sendRequest: async () => ({}),
+      },
+    )) as { content: { text: string }[]; _meta?: { atrib?: string } }
+
+    // Tool output preserved AND attribution attached, even though atrib()
+    // was called after .tool()
+    expect(result.content[0]?.text).toBe('hello')
+    expect(result._meta?.atrib).toBeDefined()
+
+    await wrapped.flush()
+    expect(submissions.length).toBeGreaterThan(0)
+  })
+
   it('warns and degrades gracefully if McpServer.server shape is unexpected', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     // Pass an object that LOOKS like an McpServer but has no .server.setRequestHandler
