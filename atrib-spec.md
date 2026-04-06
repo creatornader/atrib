@@ -476,37 +476,84 @@ In every case, the linking mechanism is the same: the `context_id` of the agent 
 
 #### 1.7.1 — ACP (Agentic Commerce Protocol)
 
-When creating an ACP checkout session, the agent MUST embed the context_id in the session metadata field:
+ACP is the open standard published at `github.com/agentic-commerce-protocol/agentic-commerce-protocol`. The transaction event hook is the success response from `POST /checkout_sessions/{id}/complete`. A successful completion is signaled by `status === "completed"` together with an embedded `order` object whose `id` is a string. The `order.permalink_url` (when present) is the canonical post-purchase URL Atrib uses to derive the transaction record's `content_id`.
 
-```
-// ACP checkout session creation:
-POST /checkout/sessions
+Because ACP `POST /checkout_sessions/...` requests do not currently expose a free-form metadata field for arbitrary extension data, the `context_id` MUST travel via the same channels used for HTTP transports (§1.5.4): the `X-Atrib-Context` HTTP header on the outbound request, and `params._meta.atrib` for MCP-transport ACP integrations.
+
+```jsonc
+// POST /checkout_sessions/{id}/complete success response
 {
-  "...": "...",                   // other ACP fields
-  "metadata": {
-    "atrib_context_id": "4bf92f3577b34da6a3ce929d0e0e4736"
+  "id": "checkout_session_123",
+  "status": "completed",            // detection signal
+  "currency": "usd",
+  "buyer": { "...": "..." },
+  "line_items": [ "..." ],
+  "totals": [ "..." ],
+  "order": {                        // embedded order proves the completion
+    "id": "ord_abc123",
+    "checkout_session_id": "checkout_session_123",
+    "permalink_url": "https://example.com/orders/ord_abc123"
+  }
+}
+```
+
+The server-to-merchant order webhook events use snake_case event types, NOT dot-notation:
+
+```jsonc
+// order_create event (NOT "order.created" or "ORDER_CREATED")
+{
+  "type": "order_create",
+  "data": {
+    "type": "order",
+    "checkout_session_id": "checkout_session_123",
+    "permalink_url": "https://www.testshop.com/orders/checkout_session_123",
+    "status": "created",
+    "refunds": []
   }
 }
 
-// On order.created webhook receipt, read the context_id from:
-event.data.object.metadata.atrib_context_id
+// order_update event (state changes after creation: shipped, refunded, etc.)
+{
+  "type": "order_update",
+  "data": {
+    "type": "order",
+    "checkout_session_id": "checkout_session_123",
+    "permalink_url": "https://www.testshop.com/orders/checkout_session_123",
+    "status": "shipped",
+    "refunds": [ { "type": "original_payment", "amount": 100 } ]
+  }
+}
 ```
+
+Detection MUST match all three shapes (completion response, `order_create`, `order_update`).
 
 #### 1.7.2 — UCP (Universal Commerce Protocol)
 
-UCP checkout sessions support extension fields. The agent MUST include the context_id in the UCP checkout session's extension data:
+UCP is the open standard published at `github.com/universal-commerce-protocol/ucp`. As of UCP version `2026-01-11`, the on-wire shape of a UCP checkout completion response is identical to ACP's, with one structural addition: a top-level `ucp` envelope carrying the protocol version and capability list. Detection MUST therefore use the presence of `ucp.version` to distinguish UCP from ACP when both produce a `status: "completed"` payload.
 
-```
-// UCP checkout session extension:
+```jsonc
+// POST /checkout-sessions/{id}/complete success response (UCP)
 {
-  "ucp": { "...": "..." },
-  "extensions": {
-    "io.atrib/context_id": "4bf92f3577b34da6a3ce929d0e0e4736"
-  }
+  "ucp": {                          // distinguishes UCP from ACP
+    "version": "2026-01-11",
+    "capabilities": [
+      { "name": "dev.ucp.shopping.checkout", "version": "2026-01-11" }
+    ]
+  },
+  "id": "chk_123456789",
+  "status": "completed",            // detection signal (same as ACP)
+  "currency": "USD",
+  "order": {
+    "id": "ord_99887766",
+    "permalink_url": "https://merchant.com/orders/ord_99887766"
+  },
+  "buyer": { "...": "..." },
+  "line_items": [ "..." ],
+  "totals": [ "..." ]
 }
-
-// On order webhook receipt, read from extensions["io.atrib/context_id"]
 ```
+
+UCP does not yet expose a documented free-form metadata field for arbitrary agent context. The `context_id` MUST travel via the `X-Atrib-Context` HTTP header on UCP checkout requests, and via `params._meta.atrib` for any MCP-transport UCP integrations.
 
 #### 1.7.3 — x402
 
@@ -2270,21 +2317,41 @@ The middleware detects transaction events automatically from the response shapes
 
 ```
 function detectTransaction(toolName, response, headers):
-  // ACP / UCP: order.created or order_created webhook payload shape
-  if (response?.data?.object?.object === 'checkout_session'
-```
-          || response?.type === 'order.created'
-          || response?.event_type === 'ORDER_CREATED'):
-```
-    return { detected: true, protocol: 'ACP/UCP' }
+  // ACP / UCP: completion response with embedded order, OR ACP webhook event.
+  // Per §1.7.1 and §1.7.2 — both protocols converged on the same shape; UCP
+  // is distinguished by the top-level `ucp.version` envelope.
+  if (response?.status === 'completed' && typeof response?.order?.id === 'string'):
+    const isUcp = typeof response?.ucp?.version === 'string'
+    return {
+      detected: true,
+      protocol: isUcp ? 'UCP' : 'ACP',
+      checkoutUrl: response.order.permalink_url ?? null,
+    }
+  if (response?.type === 'order_create' || response?.type === 'order_update'):
+    return {
+      detected: true,
+      protocol: 'ACP',
+      checkoutUrl: response.data?.permalink_url ?? null,
+    }
 
-  // x402 / MPP: Payment-Receipt header on 200
+  // x402 / MPP: Payment-Receipt header on 200. The two protocols share the
+  // same response header; if a Payment-Protocol marker on the response signals
+  // MPP, prefer 'MPP', else default to 'x402'.
   if (headers?.['payment-receipt'] || headers?.['Payment-Receipt']):
-    return { detected: true, protocol: 'x402/MPP' }
+    const proto = (headers?.['payment-protocol'] ?? headers?.['Payment-Protocol'])
+    const isMpp = typeof proto === 'string' && /mpp/i.test(proto)
+    return { detected: true, protocol: isMpp ? 'MPP' : 'x402' }
 
-  // AP2: Payment Mandate VDC in response
+  // AP2: Payment Mandate Verifiable Credential. Per W3C VC Data Model v2,
+  // `type` is an array containing both "VerifiableCredential" and a
+  // payment-specific type. Legacy v1 string form is accepted for back-compat
+  // when the credentialSubject.type carries the PaymentMandate marker.
+  if (Array.isArray(response?.type)
+      && response.type.includes('VerifiableCredential')
+      && response.type.some(t => /paymentmandate/i.test(t))):
+    return { detected: true, protocol: 'AP2' }
   if (response?.type === 'VerifiableCredential'
-      && response?.credentialSubject?.type === 'PaymentMandate'):
+      && /paymentmandate/i.test(response?.credentialSubject?.type ?? '')):
     return { detected: true, protocol: 'AP2' }
 
   // Tool name heuristic — last resort only, lower reliability
@@ -2304,9 +2371,9 @@ When a transaction is detected, the middleware emits a `transaction` attribution
 
 **Path 2 — Agent-side detection (fallback).** When the merchant has no Atrib integration, the agent detects the transaction and emits the record itself, signed with the agent's `creatorKey`. The `content_id` is derived as follows by protocol:
 
-— **ACP/UCP:** use the checkout session URL from the response body (`response.data.url` or equivalent) as the server_url, with tool_name `"checkout"`.
+— **ACP / UCP:** use `order.permalink_url` from the completion response as the server_url, with tool_name `"checkout"`. If the response is an `order_create` / `order_update` webhook event, use `data.permalink_url`. If neither is available (e.g., the merchant returned a minimal completion without an order URL), fall back to the MCP server URL of the tool that was called.
 
-— **x402/MPP:** use the HTTP endpoint URL that returned the `Payment-Receipt` header as the server_url, with tool_name `"checkout"`.
+— **x402 / MPP:** use the HTTP endpoint URL that returned the `Payment-Receipt` header as the server_url, with tool_name `"checkout"`.
 
 — **Heuristic:** use the MCP server URL of the tool that was called as the server_url, with the actual tool_name. This is the weakest case — the content_id identifies the tool, not the checkout endpoint specifically.
 

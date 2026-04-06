@@ -228,7 +228,7 @@ describe('atrib() agent middleware', () => {
       expect(txn.record.chain_root).not.toBe(`sha256:${'0'.repeat(64)}`)
     })
 
-    it('Path 2 ACP/UCP derives content_id from checkout URL', async () => {
+    it('Path 2 ACP derives content_id from order.permalink_url', async () => {
       const submissions: any[] = []
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any)?.body as string)
@@ -237,22 +237,29 @@ describe('atrib() agent middleware', () => {
       })
 
       const { computeContentId } = await import('@atrib/mcp')
-      const expectedContentId = computeContentId('https://merchant.com/checkout/abc', 'checkout')
+      const expectedContentId = computeContentId(
+        'https://example.com/orders/ord_abc123',
+        'checkout',
+      )
 
       const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
       interceptor.onAfterToolResponse(
         'do_checkout',
         {
-          data: {
-            object: { object: 'checkout_session' },
-            url: 'https://merchant.com/checkout/abc',
+          // Real ACP completion shape: status === 'completed' + order object
+          id: 'checkout_session_123',
+          status: 'completed',
+          order: {
+            id: 'ord_abc123',
+            checkout_session_id: 'checkout_session_123',
+            permalink_url: 'https://example.com/orders/ord_abc123',
           },
         },
         {},
       )
       await interceptor.flush()
 
-      const txn = submissions.find(s => s.record?.event_type === 'transaction')
+      const txn = submissions.find((s) => s.record?.event_type === 'transaction')
       expect(txn.record.content_id).toBe(expectedContentId)
     })
 

@@ -1,0 +1,10 @@
+{
+  "type": "order_create",
+  "data": {
+    "type": "order",
+    "checkout_session_id": "checkout_session_123",
+    "permalink_url": "https://www.testshop.com/orders/checkout_session_123",
+    "status": "created",
+    "refunds": []
+  }
+}
