@@ -7,3 +7,5 @@ dist/
 coverage/
 .turbo/
 .DS_Store
+.remember/
+.claude/
