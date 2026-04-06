@@ -97,12 +97,11 @@ export function writeOutboundContext(
   // Write atrib token (§5.3.4)
   meta.atrib = token
 
-  // Write/append to tracestate — atrib entry leftmost per W3C convention
-  if (typeof meta.tracestate === 'string') {
-    meta.tracestate = `atrib=${token},${meta.tracestate}`
-  } else {
-    meta.tracestate = `atrib=${token}`
-  }
+  // Write/prepend atrib to tracestate. The W3C convention is "most recent
+  // vendor first" — see https://www.w3.org/TR/trace-context/#tracestate-header.
+  // Dedupe any existing atrib= entry first per "one entry per key is allowed".
+  const existingTracestate = typeof meta.tracestate === 'string' ? meta.tracestate : ''
+  meta.tracestate = mergeTracestate(`atrib=${token}`, existingTracestate)
 
   // Write X-Atrib-Chain fallback (§1.5.3)
   meta['X-Atrib-Chain'] = token
@@ -112,46 +111,155 @@ export function writeOutboundContext(
     meta.traceparent = options.traceparent
   }
 
-  // Write session_token to baggage (§1.5.5 MUST)
+  // Write session_token to baggage (§1.5.5 MUST). Prepend, dedupe.
   if (options?.sessionToken) {
-    if (typeof meta.baggage === 'string') {
-      meta.baggage = `atrib-session=${options.sessionToken},${meta.baggage}`
-    } else {
-      meta.baggage = `atrib-session=${options.sessionToken}`
-    }
+    const existingBaggage = typeof meta.baggage === 'string' ? meta.baggage : ''
+    meta.baggage = mergeBaggageAtribSession(options.sessionToken, existingBaggage)
   }
 }
 
-/** Parse the `atrib=` entry from a tracestate string. */
+/**
+ * Merge a new atrib tracestate entry into an existing tracestate string,
+ * placing atrib leftmost (most-recent), removing any prior atrib entry, and
+ * enforcing the W3C 32-list-member maximum.
+ *
+ * If adding atrib would exceed the 32-entry limit, the rightmost entries are
+ * evicted first per W3C truncation guidance: "entries SHOULD be removed
+ * starting from the end of `tracestate`."
+ */
+export function mergeTracestate(atribEntry: string, existing: string): string {
+  const cleanedExisting = existing
+    .split(',')
+    .map((e) => e.trim())
+    .filter((e) => e.length > 0 && !/^atrib\s*=/.test(e))
+
+  // Reserve one slot for atrib, evict from the end if needed
+  const MAX_LIST_MEMBERS = 32
+  while (cleanedExisting.length > MAX_LIST_MEMBERS - 1) {
+    cleanedExisting.pop()
+  }
+
+  return cleanedExisting.length > 0
+    ? `${atribEntry},${cleanedExisting.join(',')}`
+    : atribEntry
+}
+
+/**
+ * Merge a new atrib-session baggage entry into an existing baggage string,
+ * deduping any prior atrib-session entry and enforcing the W3C 64-list-member
+ * and 8192-byte maximums.
+ */
+export function mergeBaggageAtribSession(sessionToken: string, existing: string): string {
+  const newEntry = `atrib-session=${sessionToken}`
+  const cleanedExisting = existing
+    .split(',')
+    .map((e) => e.trim())
+    .filter((e) => e.length > 0 && !/^atrib-session\s*=/.test(e))
+
+  // Reserve one slot for atrib-session, evict from the end if needed
+  const MAX_LIST_MEMBERS = 64
+  while (cleanedExisting.length > MAX_LIST_MEMBERS - 1) {
+    cleanedExisting.pop()
+  }
+
+  let merged =
+    cleanedExisting.length > 0 ? `${newEntry},${cleanedExisting.join(',')}` : newEntry
+
+  // Enforce 8192-byte total cap. Drop entries from the right until under cap.
+  // Atrib-session itself is < 60 bytes so this only fires when callers
+  // bring near-cap baggage.
+  const MAX_BYTES = 8192
+  if (encodedByteLength(merged) > MAX_BYTES) {
+    while (cleanedExisting.length > 0 && encodedByteLength(merged) > MAX_BYTES) {
+      cleanedExisting.pop()
+      merged =
+        cleanedExisting.length > 0 ? `${newEntry},${cleanedExisting.join(',')}` : newEntry
+    }
+  }
+
+  return merged
+}
+
+/** UTF-8 byte length of a string (W3C baggage uses bytes, not chars). */
+function encodedByteLength(s: string): number {
+  // TextEncoder is available in all our supported runtimes (Node 18+, browsers).
+  return new TextEncoder().encode(s).length
+}
+
+/**
+ * Parse the `atrib=` entry from a W3C tracestate string.
+ *
+ * Spec: https://www.w3.org/TR/trace-context/ — list-member grammar is
+ * `key=value` separated by commas with optional whitespace (OWS) on either
+ * side of the comma. Per the spec, callers SHOULD use single space or no
+ * whitespace, but receivers must accept either.
+ *
+ * Note: tracestate values per the spec are 0-256 printable ASCII, no comma,
+ * no equals sign — so the first `=` after `atrib` cleanly delimits the value.
+ */
 export function parseTracestateAtrib(tracestate: string): string | null {
   for (const entry of tracestate.split(',')) {
     const trimmed = entry.trim()
-    if (trimmed.startsWith('atrib=')) {
-      return trimmed.slice(6)
+    // Be lenient about OWS around `=`: `atrib=value` and `atrib = value` both valid
+    const match = trimmed.match(/^atrib\s*=\s*(.*)$/)
+    if (match && match[1] !== undefined) {
+      return match[1].trim()
     }
   }
   return null
 }
 
-/** Extract 32-char trace-id from a W3C traceparent header value. */
+/**
+ * Extract 32-char trace-id from a W3C traceparent header value.
+ *
+ * Spec: https://www.w3.org/TR/trace-context/#traceparent-header — format is
+ * `version-trace_id-parent_id-trace_flags` where trace-id is 32 lowercase
+ * hex characters and MUST NOT be all zeros. Receivers MUST ignore the
+ * traceparent entirely if either trace-id or parent-id is invalid.
+ */
 export function extractTraceId(traceparent: string): string | undefined {
   // Format: version-traceid-parentid-traceflags
   const parts = traceparent.split('-')
-  if (parts.length >= 2) {
-    const traceId = parts[1]
-    if (traceId && /^[0-9a-f]{32}$/.test(traceId)) {
-      return traceId
-    }
-  }
-  return undefined
+  if (parts.length < 4) return undefined
+
+  const [version, traceId, parentId, traceFlags] = parts
+  if (!version || !traceId || !parentId || !traceFlags) return undefined
+
+  // Per W3C: version is 2 lowercase hex
+  if (!/^[0-9a-f]{2}$/.test(version)) return undefined
+  // Per W3C: trace-id is exactly 32 lowercase hex, NOT all zeros
+  if (!/^[0-9a-f]{32}$/.test(traceId)) return undefined
+  if (traceId === '0'.repeat(32)) return undefined
+  // Per W3C: parent-id is exactly 16 lowercase hex, NOT all zeros
+  if (!/^[0-9a-f]{16}$/.test(parentId)) return undefined
+  if (parentId === '0'.repeat(16)) return undefined
+  // Per W3C: trace-flags is 2 lowercase hex
+  if (!/^[0-9a-f]{2}$/.test(traceFlags)) return undefined
+
+  return traceId
 }
 
-/** Parse `atrib-session=` value from W3C Baggage string. */
+/**
+ * Parse the `atrib-session=` value from a W3C Baggage string.
+ *
+ * Spec: https://www.w3.org/TR/baggage/ — list-member grammar is
+ * `key OWS = OWS value *( OWS ; OWS property )`. The value may be followed
+ * by zero or more `;property` segments which are NOT part of the value.
+ * Receivers MUST strip the property suffix when extracting the value.
+ *
+ * Examples:
+ *   `atrib-session=tok123`              → `tok123`
+ *   `atrib-session = tok123`            → `tok123` (OWS around `=`)
+ *   `atrib-session=tok123;ttl=300`      → `tok123` (property stripped)
+ *   `atrib-session = tok123 ; ttl=300`  → `tok123` (OWS + property stripped)
+ */
 export function parseBaggageAtribSession(baggage: string): string | undefined {
   for (const entry of baggage.split(',')) {
     const trimmed = entry.trim()
-    if (trimmed.startsWith('atrib-session=')) {
-      return trimmed.slice(14)
+    // Be lenient about OWS around `=` per the W3C grammar
+    const match = trimmed.match(/^atrib-session\s*=\s*([^;]*)/)
+    if (match && match[1] !== undefined) {
+      return match[1].trim()
     }
   }
   return undefined
