@@ -124,3 +124,29 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - Because neither ACP nor UCP currently exposes a documented free-form metadata field on `POST /checkout_sessions/...` requests, the spec now requires `context_id` to travel via the `X-Atrib-Context` HTTP header (consistent with x402/MPP) and via `params._meta.atrib` for MCP-transport integrations. The earlier spec language describing `metadata.atrib_context_id` and `extensions["io.atrib/context_id"]` was speculative and has been removed.
 **Alternatives considered:** Keeping the joint `'ACP/UCP'` literal (loses information consumers want), making detection lenient with multiple synonymous keys (false positives), waiting for ACP/UCP to add metadata fields before fixing the spec (blocks the SDK indefinitely on upstream protocol decisions).
 **Followup work:** §2 (x402/MPP) and §3 (AP2) verification, pending in the same internal planning doc. The MPP-vs-x402 distinction in the new code uses an optional `Payment-Protocol` response header marker; this is an Atrib convention because both protocols share the same `Payment-Receipt` header on the response side and we need a way to distinguish them when both might be in use. If a future revision of x402 or MPP standardizes a different distinguisher, update this rule.
+
+**Update (2026-04-06, same day):** D016 supersedes the "shared `Payment-Receipt` header" assumption above. Verification against the actual specs revealed that x402 and MPP use **different** response headers and there is no need for an Atrib-invented `Payment-Protocol` marker.
+
+## D016, x402 and MPP detect on different headers, not a shared one
+
+**Date:** 2026-04-06
+**Context:** x402/MPP cross-spec verification verification. The v1 SDK and the original §1.7.3/§1.7.4 spec text both claimed x402 and MPP use a shared `Payment-Receipt` response header. D015 even introduced an Atrib-invented `Payment-Protocol` distinguisher to tell them apart. When we cross-checked against the published specs, both claims turned out to be wrong.
+**What the real specs say:**
+- **x402** (`github.com/coinbase/x402`): the success-path response header is `PAYMENT-RESPONSE` in v2, renamed from v1's `X-PAYMENT-RESPONSE` per RFC 6648 (deprecation of the `X-` prefix). The value is base64-encoded JSON containing a `SettlementResponse` with `success`, `transaction`, `network`, `payer`, `requirements` fields.
+- **MPP** (IETF `draft-ryan-httpauth-payment-01`, "The 'Payment' HTTP Authentication Scheme", co-authored by Tempo Labs and Stripe, launched March 2026): the success-path response header is `Payment-Receipt`, value is base64url-nopad JSON with required fields `{ status: "success", method, timestamp, reference }`. The draft explicitly states *"Servers MUST NOT return a Payment-Receipt header on error responses"*, which makes header presence a reliable detection signal.
+- The two protocols are different. They both build on HTTP 402 Payment Required, but their on-wire mechanisms diverge: x402 uses custom `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE` headers, while MPP uses standard HTTP authentication (`WWW-Authenticate: Payment` / `Authorization: Payment`) plus the new `Payment-Receipt` response header.
+
+**Decision:**
+- Detection now checks `PAYMENT-RESPONSE` (or v1 legacy `X-PAYMENT-RESPONSE`) for x402 and `Payment-Receipt` for MPP, all matched case-insensitively per RFC 7230.
+- The fictional `Payment-Protocol` marker introduced in D015's footnote was removed.
+- Precedence rule when both headers are somehow present: x402 wins. This is documented in tests.
+- Spec §1.7.3 and §1.7.4 rewritten to cite the real headers and source documents. The §5.4.5 detection pseudocode was updated to match. A note was added flagging the prior conflation as an error so future readers don't reintroduce it.
+- Real captured payload shapes (decoded JSON for both `PAYMENT-RESPONSE` and `Payment-Receipt`) live under `packages/agent/test/fixtures/{x402,mpp}/` with provenance README files citing the canonical sources.
+- Detection uses **header presence** as the on-wire signal. Decoding the base64 body to validate `success: true` (x402) or `status: "success"` (MPP) is not done in v1, the spec language for both protocols treats the header as the authoritative signal, and the degradation contract (§5.8) means false positives from a misconfigured server are preferable to false negatives caused by overly strict shape matching. Higher-fidelity downstream tooling that needs to extract the transaction hash for content_id derivation can decode the body itself.
+
+**Alternatives considered:**
+- Decoding the header value and validating `success: true` / `status: "success"` (rejected, tightens detection at the cost of robustness; the degradation contract favors silent passes over silent fails)
+- Treating `Payment-Receipt` as a synonym for `PAYMENT-RESPONSE` (rejected, they are different protocols with different wire formats and tooling, and the SDK consumer needs to know which one fired)
+- Adding a single combined `'x402-or-mpp'` literal back to the protocol type (rejected for the same reason as the joint `'ACP/UCP'` literal in D015, it hides information consumers care about)
+
+**Followup:** §3 (AP2 / W3C VC) verification, then §4 (W3C Trace Context conformance) and §5 (MCP SDK extension API) per the internal planning doc.

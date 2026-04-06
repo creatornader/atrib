@@ -74,24 +74,76 @@ describe('detectTransaction', () => {
     })
   })
 
-  describe('x402 / MPP detection', () => {
-    it('detects Payment-Receipt header (lowercase) as x402 by default', () => {
-      const result = detectTransaction('api_call', {}, { 'payment-receipt': 'receipt123' })
-      expect(result).toMatchObject({ detected: true, protocol: 'x402' })
-    })
-
-    it('detects Payment-Receipt header (mixed case) as x402 by default', () => {
-      const result = detectTransaction('api_call', {}, { 'Payment-Receipt': 'receipt123' })
-      expect(result).toMatchObject({ detected: true, protocol: 'x402' })
-    })
-
-    it('reports MPP when a Payment-Protocol marker is present', () => {
+  describe('x402 detection', () => {
+    // Source: github.com/coinbase/x402, v2 response header is PAYMENT-RESPONSE
+    it('detects PAYMENT-RESPONSE header (v2, exact case from spec)', () => {
       const result = detectTransaction(
         'api_call',
         {},
-        { 'payment-receipt': 'r', 'payment-protocol': 'mpp' },
+        { 'PAYMENT-RESPONSE': 'eyJzdWNjZXNzIjp0cnVlfQ==' },
       )
-      expect(result.protocol).toBe('MPP')
+      expect(result).toMatchObject({ detected: true, protocol: 'x402' })
+    })
+
+    it('detects PAYMENT-RESPONSE header (lowercase variant)', () => {
+      const result = detectTransaction(
+        'api_call',
+        {},
+        { 'payment-response': 'eyJzdWNjZXNzIjp0cnVlfQ==' },
+      )
+      expect(result).toMatchObject({ detected: true, protocol: 'x402' })
+    })
+
+    // Source: x402 v1 → v2 header rename per RFC 6648 X- deprecation
+    it('detects X-PAYMENT-RESPONSE header (v1 legacy)', () => {
+      const result = detectTransaction(
+        'api_call',
+        {},
+        { 'X-PAYMENT-RESPONSE': 'eyJzdWNjZXNzIjp0cnVlfQ==' },
+      )
+      expect(result).toMatchObject({ detected: true, protocol: 'x402' })
+    })
+
+    it('does NOT detect Payment-Receipt as x402 (that is MPP)', () => {
+      const result = detectTransaction('api_call', {}, { 'Payment-Receipt': 'r' })
+      expect(result.protocol).not.toBe('x402')
+    })
+  })
+
+  describe('MPP detection', () => {
+    // Source: draft-ryan-httpauth-payment-01 §5.3, response header is Payment-Receipt
+    it('detects Payment-Receipt header (canonical case from IETF draft)', () => {
+      const result = detectTransaction(
+        'api_call',
+        {},
+        { 'Payment-Receipt': 'eyJzdGF0dXMiOiJzdWNjZXNzIn0' },
+      )
+      expect(result).toMatchObject({ detected: true, protocol: 'MPP' })
+    })
+
+    it('detects Payment-Receipt header (lowercase variant per HTTP case insensitivity)', () => {
+      const result = detectTransaction(
+        'api_call',
+        {},
+        { 'payment-receipt': 'eyJzdGF0dXMiOiJzdWNjZXNzIn0' },
+      )
+      expect(result).toMatchObject({ detected: true, protocol: 'MPP' })
+    })
+
+    it('does NOT detect PAYMENT-RESPONSE as MPP (that is x402)', () => {
+      const result = detectTransaction('api_call', {}, { 'PAYMENT-RESPONSE': 'r' })
+      expect(result.protocol).not.toBe('MPP')
+    })
+
+    it('prefers x402 PAYMENT-RESPONSE over MPP Payment-Receipt when both are present', () => {
+      // Should not realistically happen, but document the precedence so the
+      // behavior is deterministic if a misconfigured server emits both.
+      const result = detectTransaction(
+        'api_call',
+        {},
+        { 'PAYMENT-RESPONSE': 'r1', 'Payment-Receipt': 'r2' },
+      )
+      expect(result.protocol).toBe('x402')
     })
   })
 
