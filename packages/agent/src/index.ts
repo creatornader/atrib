@@ -31,3 +31,13 @@ export type {
   CloudflareAgentLike,
   AttributeCloudflareAgentMcpOptions,
 } from './adapters/cloudflare-agent.js'
+
+// Vercel AI SDK MCP adapter, patches an `@ai-sdk/mcp` MCPClient's `request`
+// method so every outbound `tools/call` flows through Atrib's interceptor.
+// The Vercel client has its own JSON-RPC implementation (NOT
+// `@modelcontextprotocol/sdk` Client), so `wrapMcpClient` does not apply.
+export { attributeVercelAiSdkMcp } from './adapters/vercel-ai-sdk-mcp.js'
+export type {
+  VercelAiSdkMcpClientLike,
+  AttributeVercelAiSdkMcpOptions,
+} from './adapters/vercel-ai-sdk-mcp.js'
