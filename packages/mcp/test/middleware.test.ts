@@ -363,12 +363,21 @@ describe('atrib() middleware', () => {
 
   describe('chain integrity', () => {
     it('second record chain_root equals sha256 of first signed record', async () => {
-      // Spy on fetch to capture the signed records submitted to the log
+      // Spy on fetch to capture the signed records submitted to the log.
+      // Spec §2.6.1: the body IS the bare signed record, not a wrapper.
       const submittedRecords: any[] = []
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any).body as string)
-        submittedRecords.push(body.record)
-        return new Response(JSON.stringify({ logIndex: 1, inclusionProof: {}, checkpoint: '' }), { status: 200 })
+        submittedRecords.push(body)
+        return new Response(
+          JSON.stringify({
+            log_index: 1,
+            checkpoint: 'log.test/v1\n2\nrootHashBase64\n',
+            inclusion_proof: [],
+            leaf_hash: 'leafHashBase64',
+          }),
+          { status: 200 },
+        )
       })
 
       const { mockServer, registerToolHandler, getToolHandler } = createMockServer()

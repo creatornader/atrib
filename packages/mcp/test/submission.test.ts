@@ -51,7 +51,7 @@ describe('createSubmissionQueue', () => {
   }
 
   it('submit() returns void synchronously (non-blocking)', async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ logIndex: 1 }), { status: 200 }))
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ log_index: 1 }), { status: 200 }))
     const queue = createSubmissionQueue('https://log.test/v1/entries')
     const record = await makeSignedRecord()
 
@@ -63,7 +63,13 @@ describe('createSubmissionQueue', () => {
   })
 
   it('caches proof bundle on successful submission', async () => {
-    const proof = { logIndex: 42, inclusionProof: {}, checkpoint: 'test' }
+    // Spec §2.6.2 — fields are snake_case on the wire
+    const proof = {
+      log_index: 42,
+      checkpoint: 'log.test/v1\n43\nrootHashBase64\n',
+      inclusion_proof: ['siblingHashBase64'],
+      leaf_hash: 'leafHashBase64',
+    }
     fetchMock.mockResolvedValue(new Response(JSON.stringify(proof), { status: 200 }))
 
     const queue = createSubmissionQueue('https://log.test/v1/entries')
@@ -180,7 +186,12 @@ describe('createSubmissionQueue', () => {
         return new Response('Server Error', { status: 500 })
       }
       return new Response(
-        JSON.stringify({ logIndex: 99, inclusionProof: {}, checkpoint: '' }),
+        JSON.stringify({
+          log_index: 99,
+          checkpoint: 'log.test/v1\n100\nrootHashBase64\n',
+          inclusion_proof: [],
+          leaf_hash: 'leafHashBase64',
+        }),
         { status: 200 },
       )
     })
@@ -197,13 +208,13 @@ describe('createSubmissionQueue', () => {
 
     const proof = queue.getProof(hash)
     expect(proof).toBeDefined()
-    expect(proof!.logIndex).toBe(99)
+    expect(proof!.log_index).toBe(99)
 
     warnSpy.mockRestore()
   })
 
   it('sends to the configured endpoint', async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ logIndex: 1 }), { status: 200 }))
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ log_index: 1 }), { status: 200 }))
     const queue = createSubmissionQueue('https://custom-log.test/submit')
     const record = await makeSignedRecord()
 
@@ -217,8 +228,8 @@ describe('createSubmissionQueue', () => {
     )
   })
 
-  it('sends record and priority in request body', async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ logIndex: 1 }), { status: 200 }))
+  it('sends bare record as POST body per spec §2.6.1 (NOT a wrapper)', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ log_index: 1 }), { status: 200 }))
     const queue = createSubmissionQueue('https://log.test/v1/entries')
     const record = await makeSignedRecord()
 
@@ -227,7 +238,111 @@ describe('createSubmissionQueue', () => {
     await queue.flush()
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
-    expect(body.record).toBeDefined()
-    expect(body.priority).toBe('high')
+    // Spec §2.6.1: the body IS the signed record. No wrapper, no priority field.
+    expect(body.spec_version).toBe('atrib/1.0')
+    expect(body.creator_key).toBeDefined()
+    expect(body.signature).toBeDefined()
+    expect(body.context_id).toBeDefined()
+    expect(body.record).toBeUndefined()
+    expect(body.priority).toBeUndefined()
+  })
+
+  it('sends X-Atrib-Priority header (HTTP-level extension to §2.6.1)', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ log_index: 1 }), { status: 200 }))
+    const queue = createSubmissionQueue('https://log.test/v1/entries')
+    const record = await makeSignedRecord()
+
+    queue.submit(record, 'high')
+    await advanceUntilSettled()
+    await queue.flush()
+
+    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>
+    expect(headers['X-Atrib-Priority']).toBe('high')
+    expect(headers['Content-Type']).toBe('application/json')
+  })
+
+  it('sends X-Atrib-Priority: normal for tool_call records', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ log_index: 1 }), { status: 200 }))
+    const queue = createSubmissionQueue('https://log.test/v1/entries')
+    const record = await makeSignedRecord()
+
+    queue.submit(record, 'normal')
+    await advanceUntilSettled()
+    await queue.flush()
+
+    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>
+    expect(headers['X-Atrib-Priority']).toBe('normal')
+  })
+
+  it('flush() drains pendingRecords in priority order — high before normal', async () => {
+    // Three records, two normal and one high. The first 6 fetch calls fail
+    // (3 retries × 2 records, since the high-priority record is submitted
+    // last and shares the failure run). On flush(), the records are retried
+    // and we capture the order they hit the wire to assert the high record
+    // came before the normal records.
+    let callCount = 0
+    const orderObserved: Array<{ priority: string; attempt: number }> = []
+
+    fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
+      callCount++
+      const headers = init.headers as Record<string, string>
+      const isFlushAttempt = callCount > 9 // initial 3 records × 3 attempts each = 9 calls
+      if (isFlushAttempt) {
+        orderObserved.push({ priority: headers['X-Atrib-Priority']!, attempt: callCount })
+        return new Response(
+          JSON.stringify({
+            log_index: callCount,
+            checkpoint: 'log.test/v1\n1\nrootHashBase64\n',
+            inclusion_proof: [],
+            leaf_hash: 'leafHashBase64',
+          }),
+          { status: 200 },
+        )
+      }
+      return new Response('Server Error', { status: 500 })
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const queue = createSubmissionQueue('https://log.test/v1/entries')
+
+    // Make three signed records that differ enough to have different hashes.
+    // We use different timestamps to ensure unique signatures.
+    async function makeRecordAt(ts: number): Promise<AtribRecord> {
+      const pubKey = await getPublicKey(TEST_KEY)
+      const record: AtribRecord = {
+        spec_version: 'atrib/1.0',
+        content_id: 'sha256:3f8a2b0000000000000000000000000000000000000000000000000000000000',
+        creator_key: base64urlEncode(pubKey),
+        chain_root: genesisChainRoot('4bf92f3577b34da6a3ce929d0e0e4736'),
+        event_type: 'tool_call',
+        context_id: '4bf92f3577b34da6a3ce929d0e0e4736',
+        timestamp: ts,
+        signature: '',
+      } as AtribRecord
+      return signRecord(record, TEST_KEY)
+    }
+
+    // Submit normal, normal, high — in arrival order. The high one comes
+    // last, but flush() should retry it first because of priority ordering.
+    const normalA = await makeRecordAt(1743850000001)
+    const normalB = await makeRecordAt(1743850000002)
+    const highX = await makeRecordAt(1743850000003)
+
+    queue.submit(normalA, 'normal')
+    queue.submit(normalB, 'normal')
+    queue.submit(highX, 'high')
+
+    // Drive the initial-submit retries through their backoffs.
+    for (let i = 0; i < 30; i++) {
+      await vi.advanceTimersByTimeAsync(5000)
+    }
+
+    await queue.flush()
+
+    // The first observed flush attempt should be the high-priority record.
+    expect(orderObserved.length).toBeGreaterThanOrEqual(1)
+    expect(orderObserved[0]!.priority).toBe('high')
+
+    warnSpy.mockRestore()
   })
 })

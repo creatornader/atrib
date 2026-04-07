@@ -92,9 +92,10 @@ async function makeUpstream(opts: {
 }
 
 describe('createAtribProxy', () => {
-  let submissions: Array<{
-    record?: { event_type?: string; content_id?: string }
-  }>
+  // Spec §2.6.1: the POST body is a bare signed attribution record.
+  // Earlier versions of this test wrapped the body in a `.record` field
+  // to match the (incorrect) wire format the submission queue used.
+  let submissions: Array<{ event_type?: string; content_id?: string }>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let fetchSpy: any
 
@@ -106,9 +107,15 @@ describe('createAtribProxy', () => {
       .mockImplementation(async (_url: any, init: any) => {
         const body = JSON.parse(init?.body as string)
         submissions.push(body)
-        return new Response(JSON.stringify({ logIndex: submissions.length }), {
-          status: 200,
-        })
+        return new Response(
+          JSON.stringify({
+            log_index: submissions.length,
+            checkpoint: `log.test/v1\n${submissions.length + 1}\nrootHashBase64\n`,
+            inclusion_proof: [],
+            leaf_hash: 'leafHashBase64',
+          }),
+          { status: 200 },
+        )
       })
   })
 
@@ -230,16 +237,14 @@ describe('createAtribProxy', () => {
     await proxy.server.flush()
     await new Promise((resolve) => setTimeout(resolve, 50))
 
-    // At least one record was submitted to the mocked log endpoint
-    const records = submissions
-      .map((s) => s.record)
-      .filter((r): r is NonNullable<typeof r> => r !== undefined)
-    expect(records.length).toBeGreaterThanOrEqual(1)
+    // At least one record was submitted to the mocked log endpoint.
+    // Spec §2.6.1: each `submissions` entry IS the bare record.
+    expect(submissions.length).toBeGreaterThanOrEqual(1)
 
     // It's a tool_call (not a transaction — 'compute' is not in transactionTools)
-    expect(records[0]!.event_type).toBe('tool_call')
+    expect(submissions[0]!.event_type).toBe('tool_call')
     // content_id is derived from PROXY_URL + 'compute'
-    expect(records[0]!.content_id).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(submissions[0]!.content_id).toMatch(/^sha256:[0-9a-f]{64}$/)
 
     await hostClient.close()
     await proxy.close()
@@ -287,10 +292,7 @@ describe('createAtribProxy', () => {
     // Per §5.3.3, no record is emitted for isError: true responses.
     await proxy.server.flush()
     await new Promise((resolve) => setTimeout(resolve, 50))
-    const records = submissions
-      .map((s) => s.record)
-      .filter((r): r is NonNullable<typeof r> => r !== undefined)
-    expect(records.length).toBe(0)
+    expect(submissions.length).toBe(0)
 
     await hostClient.close()
     await proxy.close()

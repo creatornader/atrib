@@ -135,7 +135,7 @@ describe('atrib() agent middleware', () => {
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any)?.body as string)
         submissions.push(body)
-        return new Response(JSON.stringify({ logIndex: 1 }), { status: 200 })
+        return new Response(JSON.stringify({ log_index: 1, checkpoint: 'log.test/v1\n2\nrootHashBase64\n', inclusion_proof: [], leaf_hash: 'leafHashBase64' }), { status: 200 })
       })
 
       const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
@@ -149,8 +149,9 @@ describe('atrib() agent middleware', () => {
 
       await interceptor.flush()
 
-      // No transaction record should have been submitted (Path 2 suppressed)
-      const txnSubmissions = submissions.filter((s: any) => s.record?.event_type === 'transaction')
+      // No transaction record should have been submitted (Path 2 suppressed).
+      // Spec §2.6.1: each `submissions` entry IS the bare record.
+      const txnSubmissions = submissions.filter((s: any) => s?.event_type === 'transaction')
       expect(txnSubmissions.length).toBe(0)
     })
 
@@ -159,7 +160,7 @@ describe('atrib() agent middleware', () => {
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any)?.body as string)
         submissions.push(body)
-        return new Response(JSON.stringify({ logIndex: 1 }), { status: 200 })
+        return new Response(JSON.stringify({ log_index: 1, checkpoint: 'log.test/v1\n2\nrootHashBase64\n', inclusion_proof: [], leaf_hash: 'leafHashBase64' }), { status: 200 })
       })
 
       const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
@@ -172,9 +173,9 @@ describe('atrib() agent middleware', () => {
 
       await interceptor.flush()
 
-      const txnSubmissions = submissions.filter(s => s.record?.event_type === 'transaction')
+      const txnSubmissions = submissions.filter(s => s?.event_type === 'transaction')
       expect(txnSubmissions.length).toBeGreaterThanOrEqual(1)
-      expect(txnSubmissions[0].record.event_type).toBe('transaction')
+      expect(txnSubmissions[0].event_type).toBe('transaction')
     })
 
     it('Path 2 transaction record has session_token (cross-trace)', async () => {
@@ -182,7 +183,7 @@ describe('atrib() agent middleware', () => {
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any)?.body as string)
         submissions.push(body)
-        return new Response(JSON.stringify({ logIndex: 1 }), { status: 200 })
+        return new Response(JSON.stringify({ log_index: 1, checkpoint: 'log.test/v1\n2\nrootHashBase64\n', inclusion_proof: [], leaf_hash: 'leafHashBase64' }), { status: 200 })
       })
 
       const interceptor = atrib({
@@ -197,9 +198,9 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find(s => s.record?.event_type === 'transaction')
+      const txn = submissions.find(s => s?.event_type === 'transaction')
       expect(txn).toBeDefined()
-      expect(txn.record.session_token).toBe('my_session')
+      expect(txn.session_token).toBe('my_session')
     })
 
     it('Path 2 with no prior context uses genesis chain_root', async () => {
@@ -207,7 +208,7 @@ describe('atrib() agent middleware', () => {
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any)?.body as string)
         submissions.push(body)
-        return new Response(JSON.stringify({ logIndex: 1 }), { status: 200 })
+        return new Response(JSON.stringify({ log_index: 1, checkpoint: 'log.test/v1\n2\nrootHashBase64\n', inclusion_proof: [], leaf_hash: 'leafHashBase64' }), { status: 200 })
       })
 
       const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
@@ -220,12 +221,12 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find(s => s.record?.event_type === 'transaction')
+      const txn = submissions.find(s => s?.event_type === 'transaction')
       expect(txn).toBeDefined()
       // chain_root should match genesisChainRoot(context_id) — sha256 prefix + 64 hex
-      expect(txn.record.chain_root).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(txn.chain_root).toMatch(/^sha256:[0-9a-f]{64}$/)
       // It should NOT be all zeros
-      expect(txn.record.chain_root).not.toBe(`sha256:${'0'.repeat(64)}`)
+      expect(txn.chain_root).not.toBe(`sha256:${'0'.repeat(64)}`)
     })
 
     it('Path 2 ACP derives content_id from order.permalink_url', async () => {
@@ -233,7 +234,7 @@ describe('atrib() agent middleware', () => {
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any)?.body as string)
         submissions.push(body)
-        return new Response(JSON.stringify({ logIndex: 1 }), { status: 200 })
+        return new Response(JSON.stringify({ log_index: 1, checkpoint: 'log.test/v1\n2\nrootHashBase64\n', inclusion_proof: [], leaf_hash: 'leafHashBase64' }), { status: 200 })
       })
 
       const { computeContentId } = await import('@atrib/mcp')
@@ -259,8 +260,8 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find((s) => s.record?.event_type === 'transaction')
-      expect(txn.record.content_id).toBe(expectedContentId)
+      const txn = submissions.find((s) => s?.event_type === 'transaction')
+      expect(txn.content_id).toBe(expectedContentId)
     })
 
     it('Path 2 heuristic uses serverUrl + tool name', async () => {
@@ -268,7 +269,7 @@ describe('atrib() agent middleware', () => {
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any)?.body as string)
         submissions.push(body)
-        return new Response(JSON.stringify({ logIndex: 1 }), { status: 200 })
+        return new Response(JSON.stringify({ log_index: 1, checkpoint: 'log.test/v1\n2\nrootHashBase64\n', inclusion_proof: [], leaf_hash: 'leafHashBase64' }), { status: 200 })
       })
 
       const { computeContentId } = await import('@atrib/mcp')
@@ -284,9 +285,9 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find(s => s.record?.event_type === 'transaction')
+      const txn = submissions.find(s => s?.event_type === 'transaction')
       expect(txn).toBeDefined()
-      expect(txn.record.content_id).toBe(expectedContentId)
+      expect(txn.content_id).toBe(expectedContentId)
     })
   })
 

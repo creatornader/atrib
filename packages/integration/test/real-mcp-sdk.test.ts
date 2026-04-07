@@ -41,7 +41,8 @@ const AGENT_KEY = base64urlEncode(new Uint8Array(32).fill(44))
 const TOOL_URL = 'https://search.example.com'
 
 describe('Real @modelcontextprotocol/sdk end-to-end', () => {
-  let submissions: Array<{ record?: { event_type?: string; chain_root?: string; content_id?: string } }>
+  // Spec §2.6.1: each submitted body IS the bare signed record.
+  let submissions: Array<{ event_type?: string; chain_root?: string; content_id?: string }>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let fetchSpy: any
 
@@ -53,9 +54,15 @@ describe('Real @modelcontextprotocol/sdk end-to-end', () => {
       .mockImplementation(async (_url: any, init: any) => {
         const body = JSON.parse(init?.body as string)
         submissions.push(body)
-        return new Response(JSON.stringify({ logIndex: submissions.length }), {
-          status: 200,
-        })
+        return new Response(
+          JSON.stringify({
+            log_index: submissions.length,
+            checkpoint: `log.test/v1\n${submissions.length + 1}\nrootHashBase64\n`,
+            inclusion_proof: [],
+            leaf_hash: 'leafHashBase64',
+          }),
+          { status: 200 },
+        )
       })
   })
 
@@ -146,10 +153,9 @@ describe('Real @modelcontextprotocol/sdk end-to-end', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
 
     // ── 7. Inspect submitted records ────────────────────────────────────
+    // Spec §2.6.1: each submission IS the bare record. No `.record` indirection.
     expect(submissions.length).toBeGreaterThanOrEqual(2)
-
     const records = submissions
-      .map((s) => s.record)
       .filter((r): r is NonNullable<typeof r> => r !== undefined)
     expect(records.length).toBeGreaterThanOrEqual(2)
 
