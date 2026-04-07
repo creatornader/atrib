@@ -16,6 +16,8 @@ Three concrete use cases. None of them are "running a real attribution log."
 
 3. **Test fixtures for `@atrib/mcp` and `@atrib/agent`.** Existing tests in those packages mock `globalThis.fetch` to capture submissions; new tests can spin up a real `@atrib/log-dev` instance, point the submission queue at it, and inspect the captured records via the inspection API. This is more faithful than mocking fetch because it exercises the real spec §2.6.1 wire format end-to-end (the kind of bug fixed in commit-when-this-was-introduced was caught precisely because of the spec/code drift between client and server — having a real server side catches more drift earlier).
 
+4. **Reference consumer for the spec §2.6.1 conformance corpus.** The shared corpus at [`spec/conformance/2.6.1/`](../../spec/conformance/2.6.1/) is the contract every Atrib log implementation must honor. `@atrib/log-dev` consumes it via [`test/conformance.test.ts`](test/conformance.test.ts) — when the future Tessera-backed Go service ships at [`services/log/`](../../services/log/), it will consume the same corpus. The generator at [`scripts/generate-conformance-corpus.ts`](scripts/generate-conformance-corpus.ts) is here too because it needs `@atrib/mcp`'s canonical `signRecord`. Regenerate with `pnpm --filter @atrib/log-dev corpus`.
+
 ## What this package implements
 
 The minimum subset of spec §2.6 that the existing Atrib client (`@atrib/mcp`'s submission queue) needs to talk to a log:

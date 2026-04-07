@@ -1,0 +1,26 @@
+{
+  "name": "reject-future-timestamp",
+  "spec_section": "2.6.1",
+  "validation_step": 4,
+  "description": "timestamp is 20 minutes ahead of the reference time, beyond the 10-minute clock-skew tolerance. The log MUST reject with 400. The test consumer freezes Date.now() to the manifest reference_time_ms before sending this case so the validation outcome is stable across runs.",
+  "request": {
+    "method": "POST",
+    "path": "/v1/entries",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:3f8a2b00000000000000000000000000000000000000000000000000000000ff",
+      "creator_key": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw",
+      "chain_root": "sha256:398acaee65c4e533cea249865ab1cee576445dc23178f8b39d5efdcedd57a829",
+      "event_type": "tool_call",
+      "context_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "timestamp": 1767226800000,
+      "signature": "2N2TGgXklrgbry6lcdZ4y3HgZ7Y2Awv9ra2Y7-1RCkDjIKDC1DUI9CQzmJ2xXTi31x1aK4tPUoJMYSqc8g8sDQ"
+    }
+  },
+  "expected": {
+    "status": 400
+  }
+}

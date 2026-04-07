@@ -1,0 +1,57 @@
+{
+  "name": "idempotent-resubmission",
+  "spec_section": "2.6.1",
+  "validation_step": 6,
+  "description": "Submitting the same signed record twice MUST return the same proof bundle (same log_index) without double-admitting. record_hash is the idempotency key.",
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/entries",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:3f8a2b00000000000000000000000000000000000000000000000000000000ff",
+          "creator_key": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw",
+          "chain_root": "sha256:398acaee65c4e533cea249865ab1cee576445dc23178f8b39d5efdcedd57a829",
+          "event_type": "tool_call",
+          "context_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+          "timestamp": 1767225600001,
+          "signature": "PnnVQ3IgLhkiTTx0hrPoMCMNT0ADQR2ENf4ljB_ho6kMJcCovSL6hHzO4AOneVHVZ-drSKLRBnWRoCAuyVM6Cg"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "capture_log_index_as": "first"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/entries",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:3f8a2b00000000000000000000000000000000000000000000000000000000ff",
+          "creator_key": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw",
+          "chain_root": "sha256:398acaee65c4e533cea249865ab1cee576445dc23178f8b39d5efdcedd57a829",
+          "event_type": "tool_call",
+          "context_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+          "timestamp": 1767225600001,
+          "signature": "PnnVQ3IgLhkiTTx0hrPoMCMNT0ADQR2ENf4ljB_ho6kMJcCovSL6hHzO4AOneVHVZ-drSKLRBnWRoCAuyVM6Cg"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "log_index_matches": "first"
+      }
+    }
+  ],
+  "post": {
+    "log_size": 1
+  }
+}

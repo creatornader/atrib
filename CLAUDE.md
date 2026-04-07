@@ -31,7 +31,11 @@ atrib/
         cloudflare-agents/     # McpAgent + Agent examples
         vercel-ai-sdk/         # createMCPClient + AI Gateway example
         langchain-js/          # MultiServerMCPClient + loadMcpTools example
-  services/                    # FUTURE — Tessera-backed Merkle log (Go, ships at services/log/)
+  services/
+    log/                       # FUTURE — Tessera-backed Merkle log (Go), placeholder README
+  spec/
+    conformance/
+      2.6.1/                   # Shared §2.6.1 submission API conformance corpus (consumed by @atrib/log-dev today; future Go log tomorrow)
 ```
 
 Public packages are intended for npm publication. Private packages (`log-dev`, `integration`) live in the workspace as fixtures and demos and have `private: true` in their `package.json` so they cannot be accidentally published.
@@ -60,6 +64,7 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 | New runnable example added | `packages/integration/README.md` AND a `README.md` inside the example directory |
 | Implementation convention established | This file (conventions section) |
 | Wire-format or wire-protocol change | `atrib-spec.md` (if normative), this file's "Key technical decisions" section, AND DECISIONS.md |
+| §2.6.1 validation rule changed | Regenerate `spec/conformance/2.6.1/` corpus via `pnpm --filter @atrib/log-dev corpus`, update `spec/conformance/2.6.1/README.md` if the format changed |
 | Test count changed materially | `internal planning doc` build status table |
 
 ## Critical invariants (never violate)

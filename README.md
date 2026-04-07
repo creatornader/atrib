@@ -86,7 +86,7 @@ Every signed record, every chain hash, and every transaction detection in that o
 | `@atrib/log-dev` *(private, dev only)* | In-memory development Merkle log stub — implements spec §2.6 for local testing and the end-to-end demo. **Never deploy to production.** | [`packages/log-dev/README.md`](packages/log-dev/README.md) |
 | `@atrib/integration` *(private)* | Cross-package end-to-end tests + the runnable framework examples | [`packages/integration/README.md`](packages/integration/README.md) |
 
-> **Status:** v1 SDK is feature-complete in this monorepo (391 passing tests across all packages). Public packages (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`) are not yet published to npm. Use `pnpm install` at the workspace root and import via `workspace:*` until publication. The production Merkle log at `log.atrib.io/v1` is not yet deployed; use `@atrib/log-dev` for local development until it ships.
+> **Status:** v1 SDK is feature-complete in this monorepo (399 passing tests across all packages, plus a shared spec §2.6.1 conformance corpus at [`spec/conformance/2.6.1/`](spec/conformance/2.6.1/) that the dev log consumes today and the future Go log service will consume tomorrow). Public packages (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`) are not yet published to npm. Use `pnpm install` at the workspace root and import via `workspace:*` until publication. The production Merkle log at `log.atrib.io/v1` is not yet deployed; use `@atrib/log-dev` for local development until it ships.
 
 ## Quick start
 
