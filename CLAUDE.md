@@ -65,6 +65,7 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 | Implementation convention established | This file (conventions section) |
 | Wire-format or wire-protocol change | `atrib-spec.md` (if normative), this file's "Key technical decisions" section, AND DECISIONS.md |
 | §2.6.1 validation rule changed | Regenerate `spec/conformance/2.6.1/` corpus via `pnpm --filter @atrib/log-dev corpus`, update `spec/conformance/2.6.1/README.md` if the format changed |
+| Research artifact added (e.g. external-spec briefing, prior-art notes) | Drop under `thoughts/shared/research/<YYYY-MM-DD>_<slug>.md` with YAML frontmatter, link from any handoff or `DECISIONS.md` entry that consumes it |
 | Test count changed materially | `internal planning doc` build status table |
 
 ## Critical invariants (never violate)
