@@ -957,8 +957,10 @@ The write interface accepts attribution records and returns inclusion proofs. Th
 ```
 POST https://log.atrib.io/v1/entries
 Content-Type: application/json
+X-Atrib-Priority: normal              // optional, see below
 
-// Request body: a complete, signed attribution record (§1.2)
+// Request body: a complete, signed attribution record (§1.2) — bare,
+// not wrapped in any envelope object.
 {
   "spec_version": "atrib/1.0",
   "content_id":   "sha256:3f8a2b...",
@@ -970,6 +972,15 @@ Content-Type: application/json
   "signature":    "XYZ..."
 }
 ```
+
+The request body MUST be the bare JCS-canonical signed record exactly as defined in §1.2 — there is no enclosing wrapper object, and no field may be added or removed by the client during transport. The body bytes MUST be the same bytes that were signed (modulo whitespace, since `Content-Type: application/json` does not require canonical re-serialization on the wire — it is the receiver's responsibility to re-canonicalize before signature verification per §1.4.3).
+
+`X-Atrib-Priority` is an OPTIONAL HTTP-level extension to the wire format. When present, its value MUST be one of `"high"` or `"normal"`. The semantics are:
+
+- `"high"` — the submitting client believes this record is on the critical path of an attribution chain that needs to be queryable promptly (per §5.3.5, transaction records are sent with `priority: "high"` so they are admitted before any pending `tool_call` records when the log's admission queue is congested).
+- `"normal"` — best-effort submission. This is the default when the header is absent.
+
+Logs MAY use this header to order admission when their ingestion capacity is finite, but MUST NOT use it to reject entries (a log that consistently rejects "normal" priority submissions is misbehaving). Logs MAY ignore the header entirely. The header is non-normative for log correctness — it is purely an admission-control hint that lets a congested log preserve transaction-record latency under load.
 
 The log MUST perform the following validation before accepting an entry:
 

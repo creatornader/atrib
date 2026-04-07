@@ -43,6 +43,108 @@ All detection logic lives in `packages/agent/src/transaction.ts` and runs agains
 
 **You do not install a separate package for each protocol.** ACP, UCP, x402, MPP, AP2 and a2a-x402 detection all ship in `@atrib/agent` and `@atrib/mcp` by default. Adding a new payment protocol happens by adding a detector in `transaction.ts`, not by asking users to install anything.
 
+### What each detector actually looks for on the wire
+
+These are the exact shapes the production `detectTransaction()` function in [`packages/agent/src/transaction.ts`](src/transaction.ts) matches against. Every shape below is covered by a unit test against a real spec fixture in [`packages/agent/test/fixtures/`](test/fixtures/) — the customer-facing question "what does Atrib actually detect" has a one-paragraph answer per protocol.
+
+#### ACP — Stripe / OpenAI Agentic Commerce Protocol
+
+Detected on the success response of `POST /checkout_sessions/{id}/complete`. Required fields: top-level `status: "completed"` plus an `order` object with a string `id`. The optional `order.permalink_url` becomes the `checkoutUrl` for Path 2 `content_id` derivation per spec §5.4.5.
+
+```json
+{
+  "id": "checkout_session_abc123",
+  "status": "completed",
+  "order": {
+    "id": "ord_xyz789",
+    "permalink_url": "https://merchant.example.com/orders/ord_xyz789"
+  }
+}
+```
+
+The `order_create` and `order_update` webhook event shapes are also detected (`type: "order_create"` plus a `data` object containing the order fields).
+
+#### UCP — Universal Commerce Protocol
+
+Identical to ACP **plus** a top-level `ucp` envelope with a `version` string. The envelope is the only structural distinguisher between ACP and UCP — without it the same shape is reported as ACP.
+
+```json
+{
+  "ucp": { "version": "1.0", "capabilities": [] },
+  "id": "checkout_session_abc123",
+  "status": "completed",
+  "order": { "id": "ord_xyz789", "permalink_url": "https://..." }
+}
+```
+
+#### x402 — Coinbase
+
+Detected entirely from an HTTP **response header**, not the body. The v2 header is `PAYMENT-RESPONSE` (per [github.com/coinbase/x402](https://github.com/coinbase/x402)); the v1 legacy header `X-PAYMENT-RESPONSE` is also accepted. Header name lookup is case-insensitive per RFC 7230.
+
+```http
+HTTP/1.1 200 OK
+PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlfQ==
+```
+
+The header value is base64-encoded JSON `{success, transaction, network, payer, requirements}` but `detectTransaction()` only checks for the header's *presence* — the surrounding `wrapMcpClient` / framework adapter is responsible for capturing response headers and passing them to the detector.
+
+#### MPP — IETF draft `draft-ryan-httpauth-payment-01`
+
+Also header-based, but a **different** header from x402 (the two were conflated in earlier drafts of this code — see [`DECISIONS.md` D016](../../DECISIONS.md)). MPP uses `Payment-Receipt` per §5.3 of the IETF draft. Both headers may not co-exist on a real response, but if they do, x402 wins (deterministic precedence documented in the test suite).
+
+```http
+HTTP/1.1 200 OK
+Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIn0
+```
+
+#### AP2 — Google Agent Payments Protocol (v0.1)
+
+Detected from an A2A `Message` containing a `DataPart` whose `data` object has the literal key `"ap2.mandates.PaymentMandate"`. AP2 v0.1 does **not** use W3C Verifiable Credentials despite earlier drafts assuming it would (a legacy VC fallback is kept for research forks).
+
+```json
+{
+  "messageId": "b5951b1a-8d5b-4ad3-a06f-92bf74e76589",
+  "contextId": "sample-payment-context",
+  "role": "user",
+  "parts": [
+    {
+      "kind": "data",
+      "data": {
+        "ap2.mandates.PaymentMandate": {
+          "payment_details": { "payment_request_id": "order_shoes_123", "...": "..." }
+        }
+      }
+    }
+  ]
+}
+```
+
+`IntentMandate` and `CartMandate` are **not** detected — they are upstream funnel events, not transaction events. Only `PaymentMandate` closes the chain.
+
+#### a2a-x402 — Google AP2 crypto path
+
+Detected from an A2A `task` whose `status.message.metadata` contains `"x402.payment.status": "payment-completed"` **and** at least one entry in `"x402.payment.receipts"` with `success: true`. A `payment-completed` status with no successful receipt does NOT detect (a failed receipt is not a transaction). Reported as `protocol: 'AP2'` because a2a-x402 is the AP2 crypto path, not a separate protocol.
+
+```json
+{
+  "kind": "task",
+  "status": {
+    "message": {
+      "metadata": {
+        "x402.payment.status": "payment-completed",
+        "x402.payment.receipts": [
+          { "success": true, "transaction": "0xabc...", "network": "base" }
+        ]
+      }
+    }
+  }
+}
+```
+
+#### Heuristic fallback (last resort)
+
+If none of the above match, the detector falls back to checking the **tool name** against a set of common keywords: `create_order`, `complete_checkout`, `process_payment`, `place_order`, `purchase`, `checkout`. A match returns `protocol: 'heuristic'` and is included in the chain, but it's a weaker signal than any of the protocol-specific detectors above. Use this only when no payment protocol is in play and you want the chain to still close on a domain-specific tool name.
+
 ---
 
 ## Quick start — one interceptor, any framework
