@@ -680,3 +680,55 @@ A fork of an already-patched client: when the patched `fork()` is invoked, it ca
 **Test results:** 375 tests passing across all 4 packages (was 366; +9 langchain-mcp). No regressions.
 
 **Followup:** Four framework adapters shipped (Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS). With the unified `packages/agent/README.md` (shipped in this change) now documenting all adapters side-by-side under two coverage matrices (framework adapters + payment protocols), the "one interceptor, any framework" story is concrete and demonstrable. Remaining §6 work: OpenAI Agents SDK (deferred per D020, meaningfully different architecture, custom transports) and Mastra (deferred, smaller footprint, needs source verification). Next priority is §7 developer integration docs, including the local log stub and end-to-end demo that unblocks customer conversations (per an earlier strategic review).
+
+---
+
+## D025, `@atrib/log-dev` + spec/code drift fix in submission wire format + `priority` wired to two real consumers
+
+**Date:** 2026-04-06
+**Context:** Strategic review session concluded that the highest-leverage next chunk was a runnable end-to-end demo a customer can watch in 15 minutes, and that the demo required a local Merkle log stub because the production Tessera-backed log at `log.atrib.io/v1` doesn't exist yet. While preparing to build that stub against spec §2.6, source-reading `@atrib/mcp/src/submission.ts` surfaced two real wire-format bugs that would have caused every submission from the existing client to be rejected by any spec-compliant log:
+
+**Discrepancy 1: Request body shape was wrong.** Spec §2.6.1 specifies the POST body as a bare attribution record. The existing `submitWithRetry` was wrapping it as `{record, priority}`. The wrapping pattern was even codified in `packages/mcp/test/submission.test.ts` ("sends record and priority in request body"), meaning the test was written against the buggy code rather than against the spec.
+
+**Discrepancy 2: Proof bundle field naming was wrong.** Spec §2.6.2 returns `{log_index, checkpoint, inclusion_proof, leaf_hash}` (snake_case). The existing `ProofBundle` interface used camelCase (`logIndex`, `inclusionProof`). This was less load-bearing because the cast to `ProofBundle` in the submission queue is opaque, nothing read the fields after caching, but `@atrib/verify`'s `GraphNode.log_index` already used snake_case correctly, so the two packages were inconsistent with each other and only one matched the spec.
+
+**Decision:** Fix both discrepancies as part of this chunk and ship `@atrib/log-dev` as a faithful spec §2.6 reference implementation. Specifically:
+
+1. **Wire format fix in `submission.ts`:** POST body is now a bare signed record per §2.6.1. The `ProofBundle` interface uses snake_case to match §2.6.2 exactly. Updated all consuming tests across `@atrib/mcp`, `@atrib/agent`, and `@atrib/integration` (test-harness mocked the wrong shape too, fixed there as well).
+
+2. **`@atrib/log-dev`**, new private workspace package at `packages/log-dev/` (option A from the "where should the log stub live?" sanity check, after feedback indicated on "this seems more proper"). Implements `POST /v1/entries` with full §2.6.1 validation (Steps 2-6, skipping Step 1 cryptographic signature verification to avoid a circular dep on `@atrib/verify`), returns spec §2.6.2-shaped proof bundles with deterministic placeholder hashes, and exposes an inspection API (`entries`, `onSubmit`, `clear`) for tests and demos. Marked `private: true` so it cannot be `pnpm publish`'d to npm. README has a prominent ⚠️ NOT FOR PRODUCTION warning at the top.
+
+3. **`priority` wired to two real consumers**, this was the most impactful direction-correction in the session. My initial plan was to drop `priority` from the wire entirely after recognizing that the in-memory dev log can't meaningfully consume it. Direction was reconsidered: "can you find a real consumer today? Just do it all properly." Re-thinking, I found two real consumers that ship in this change:
+
+   **Consumer #1: `flush()` retry ordering in `@atrib/mcp/src/submission.ts`.** When the process is shutting down and `pendingRecords` contains records whose initial submission failed, `flush()` now drains them in priority order, high (transactions) before normal (tool calls). If the process is killed mid-flush (container restart, OOM, deploy rollover), high-priority records have already had their final retry and are more likely to make it to the log. Losing a transaction record (the receipt of money moving) is meaningfully worse than losing a tool-call record, so this ordering is a real safety property. `pendingRecords` was changed from `Map<string, AtribRecord>` to `Map<string, {record, priority}>` to track priority across the failure→flush boundary. Verified by a new test in `submission.test.ts` ("flush() drains pendingRecords in priority order").
+
+   **Consumer #2: `@atrib/log-dev`'s admission control under capacity.** The dev log accepts a `maxConcurrent` option (default `Infinity`). When capacity is finite and the in-flight submission count is at the cap, new submissions go into a priority queue inside `storage.ts` and high-priority records are admitted first when capacity frees up. This faithfully models the admission-control behavior a real Tessera-backed log would expose under load. Verified by a new test in `log-dev/test/server.test.ts` ("high-priority submissions are admitted before normal under capacity pressure") that uses `maxConcurrent: 1` and `processingDelayMs: 30` to deterministically demonstrate the priority ordering.
+
+   The wire format is `X-Atrib-Priority: high|normal` HTTP header, a non-conflicting extension to spec §2.6.1 that does not require a spec change because HTTP headers are a standard extension mechanism.
+
+4. **End-to-end demo** at `packages/integration/examples/end-to-end/demo.ts`, runnable in a single command (`pnpm --filter @atrib/integration demo`), wires together the dev log + a fake merchant tool server (wrapped with `@atrib/mcp`'s `atrib()`) + a fake agent client (wrapped with `@atrib/agent`'s `wrapMcpClient`) + a stubbed x402 payment receipt that triggers the production transaction-detection logic in `transaction.ts`. CLI visualizer subscribes to the dev log via `onSubmit()` and pretty-prints each record with colored chain hashes as it lands. Verified end-to-end: one run produces 2 tool_call records + 1 transaction record, all chained, all visible in the CLI output.
+
+**Why this matters strategically:**
+
+The end-to-end demo is the answer to "what can I hand a customer in 15 minutes?", the question we identified in the strategic review earlier in development. Before this commit, the protocol was implemented but a customer couldn't watch it work without standing up Tessera first (which doesn't exist). After this commit, `pnpm demo` produces a complete attribution chain visible in real time, with real signatures and real transaction detection, against a real (but in-memory) spec-compliant log. The fakery is in the surrounding environment, the merchant returns hardcoded search results, the agent issues hardcoded tool calls, the x402 payment is a stubbed header, but the protocol layer is real.
+
+The spec/code drift fix is the kind of thing that only gets caught when you build a real reference implementation. Mocking `globalThis.fetch` in unit tests doesn't catch wire-format bugs because the mocks don't validate the request shape against the spec. The dev log is a real server that validates per §2.6.1; it caught the wrong wire format on the first integration attempt. This is a strong argument for keeping `@atrib/log-dev` in the test infrastructure permanently rather than treating it as a one-off demo helper.
+
+**Alternatives considered:**
+
+- **Drop `priority` from the wire entirely (option (a) from the priority discussion).** Initially leaned toward this on the grounds that no consumer existed. A closer review surfaced two real consumers that had not yet been wired. Rejected after that pushback because two real consumers DO exist, they just hadn't been wired yet.
+- **Keep the broken wire format and note the spec drift in TODO.md.** Rejected per the radical-honesty rule. Shipping a known wire-format bug to customers because "we'll fix it later" is exactly the kind of avoidable failure the rule exists to prevent.
+- **Build the dev log as a separate `services/log/dev-server/` directory rather than a workspace package.** Rejected after weighing trade-offs: option A (workspace package) wins because the demo can `import { startDevLog } from '@atrib/log-dev'` directly without spawning a child process, the inspection API is type-safe and ergonomic, and the existing `@atrib/mcp` and `@atrib/agent` test suites can reuse the dev log as a real fixture in the future instead of mocking `fetch`.
+- **Build the dev log in Go (matching the future Tessera service).** Rejected for this chunk. The Go Tessera-backed log will live in `services/log/` when it ships; the dev log is a TypeScript fixture for in-process integration tests and demos. They have different operational profiles and can coexist, the dev log is not a stepping stone to the real one.
+- **Implement signature verification (§2.6.1 Step 1) in the dev log.** Rejected because it would create a circular workspace dep: `@atrib/log-dev` would have to import from `@atrib/verify`, which already imports from `@atrib/mcp`. The dev log skips signature verification and is honest about it in the file header. Anyone using the dev log for end-to-end correctness testing should run `@atrib/verify` against the captured records separately.
+
+**Test results:** 391 tests passing across all 5 packages (was 375 + 16 new):
+- `@atrib/mcp`: 169 (was 166, +3 wire-format conformance tests + 1 priority ordering test, -1 deleted "wraps record/priority in body" test that asserted the wrong shape)
+- `@atrib/agent`: 122 (unchanged)
+- `@atrib/verify`: 82 (unchanged)
+- `@atrib/log-dev`: **13 (new)**, wire-format conformance + priority queue ordering + inspection API
+- `@atrib/integration`: 5 (unchanged; test harness updated to match new wire format)
+
+Plus the demo runs end-to-end and produces the expected output (verified manually before commit).
+
+**Followup:** With the spec/code drift fixed and the dev log in place, the next layer of customer-readiness work is (a) the `services/log/` Tessera-backed Go service for production deployments, and (b) publishing `@atrib/mcp`, `@atrib/agent`, and `@atrib/verify` to npm so customers can actually `pnpm add` them. Both are out of scope for this chunk but are the next logical steps after this commit. The unified `packages/agent/README.md` is ready to be the customer-facing entry point once packages are published.

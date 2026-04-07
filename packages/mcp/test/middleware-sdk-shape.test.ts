@@ -78,11 +78,12 @@ describe('@modelcontextprotocol/sdk shape assumptions', () => {
 
 describe('atrib() end-to-end against the real MCP SDK', () => {
   it('intercepts a tool registered via McpServer.registerTool', async () => {
-    const submissions: unknown[] = []
+    // Spec §2.6.1: the POST body is a bare signed attribution record.
+    const submissions: Array<{ event_type?: string; content_id?: string }> = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
       const body = JSON.parse(((init as { body: string })?.body) as string)
       submissions.push(body)
-      return new Response(JSON.stringify({ logIndex: 1 }), { status: 200 })
+      return new Response(JSON.stringify({ log_index: 1 }), { status: 200 })
     })
 
     const mcpServer = new McpServer({ name: 'test', version: '1.0.0' })
@@ -153,11 +154,11 @@ describe('atrib() end-to-end against the real MCP SDK', () => {
     // Flush so the submission queue actually fires
     await wrapped.flush()
 
-    // An attribution record was submitted to the log
+    // An attribution record was submitted to the log. The body IS the
+    // record per §2.6.1, no wrapper.
     expect(submissions.length).toBeGreaterThan(0)
-    const submission = submissions[0] as { record?: { event_type?: string; content_id?: string } }
-    expect(submission.record?.event_type).toBe('tool_call')
-    expect(submission.record?.content_id).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(submissions[0]!.event_type).toBe('tool_call')
+    expect(submissions[0]!.content_id).toMatch(/^sha256:[0-9a-f]{64}$/)
   })
 
   it('register-then-wrap order: retroactively wraps a pre-existing tools/call dispatcher', async () => {
@@ -170,7 +171,7 @@ describe('atrib() end-to-end against the real MCP SDK', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
       const body = JSON.parse(((init as { body: string })?.body) as string)
       submissions.push(body)
-      return new Response(JSON.stringify({ logIndex: 1 }), { status: 200 })
+      return new Response(JSON.stringify({ log_index: 1 }), { status: 200 })
     })
 
     const mcpServer = new McpServer({ name: 'test', version: '1.0.0' })

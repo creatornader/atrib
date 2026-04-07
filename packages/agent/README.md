@@ -12,13 +12,13 @@ Two coverage surfaces define what you get:
 
 | Framework | Package | Adapter helper | Integration shape | Status |
 |---|---|---|---|---|
-| **Raw `@modelcontextprotocol/sdk` Client** | `@modelcontextprotocol/sdk` | `wrapMcpClient(client, { interceptor })` | Proxy-based wrapper, returns new client | ✅ Shipped |
+| **Raw `@modelcontextprotocol/sdk` Client** | `@modelcontextprotocol/sdk` | `wrapMcpClient(client, interceptor, { serverUrl? })` | Proxy-based wrapper, returns new client | ✅ Shipped |
 | **Claude Agent SDK** | `@anthropic-ai/claude-agent-sdk` | **Case A (in-process tools):** zero code, the SDK's `createSdkMcpServer` returns a real `McpServer` that `@atrib/mcp` wraps directly | Reuses `@atrib/mcp`'s `atrib()` middleware on the server side | ✅ Shipped |
 |  |  | **Case B (third-party servers):** `createAtribProxy({ upstream, interceptor })` from `@atrib/mcp`, in-process surrogate `McpServer` that forwards to an upstream | Proxy McpServer between SDK and upstream transport | ✅ Shipped |
 | **Cloudflare Agents** | `agents` | `attributeCloudflareAgentMcp(agent, { interceptor, serverUrls })` | Walks `agent.mcp.mcpConnections`, replaces `.client` via `wrapMcpClient` | ✅ Shipped |
 | **Vercel AI SDK MCP** | `@ai-sdk/mcp` | `attributeVercelAiSdkMcp(mcpClient, { interceptor, serverUrl })` | Monkey-patches `mcpClient.request()` (custom JSON-RPC, not SDK Client) | ✅ Shipped |
 | **LangChain JS MCP adapters** | `@langchain/mcp-adapters` | **High-level:** `attributeLangchainMcp(multiClient, { interceptor, serverUrls })` | Walks `multiClient.config.mcpServers`, monkey-patches `callTool` + `fork` on each internal Client | ✅ Shipped |
-|  |  | **Low-level:** `wrapMcpClient(rawClient, { interceptor })` passed to `loadMcpTools(name, wrapped)` | Reuses raw-SDK wrapper path | ✅ Shipped |
+|  |  | **Low-level:** `wrapMcpClient(rawClient, interceptor)` passed to `loadMcpTools(name, wrapped)` | Reuses raw-SDK wrapper path | ✅ Shipped |
 | **OpenAI Agents SDK** | `@openai/agents` | *(deferred, custom transport architecture, not `@modelcontextprotocol/sdk`)* | Planned: subclass `MCPServerSSE` / `MCPServerStdio` / `MCPServerStreamableHttp` | ⏳ Deferred |
 | **Mastra** | `@mastra/mcp` | *(deferred, smaller footprint, needs source verification)* |, | ⏳ Deferred |
 
@@ -78,7 +78,9 @@ import { wrapMcpClient } from '@atrib/agent'
 
 const raw = new Client({ name: 'my-agent', version: '1.0.0' }, { capabilities: {} })
 await raw.connect(transport)
-const client = wrapMcpClient(raw, { interceptor })
+const client = wrapMcpClient(raw, interceptor, {
+  serverUrl: 'https://my-tool.example.com',
+})
 // Use `client` anywhere the raw Client would have been used.
 ```
 

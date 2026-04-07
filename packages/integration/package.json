@@ -6,12 +6,14 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "demo": "tsx examples/end-to-end/demo.ts"
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
     "@atrib/agent": "workspace:*",
-    "@atrib/verify": "workspace:*"
+    "@atrib/verify": "workspace:*",
+    "@atrib/log-dev": "workspace:*"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

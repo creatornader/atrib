@@ -32,21 +32,32 @@ export function createRecordStore(): RecordStore {
         _input: RequestInfo | URL,
         init?: RequestInit,
       ): Promise<Response> => {
-        // Capture record submissions
+        // Capture record submissions. Spec §2.6.1: the POST body is a
+        // bare signed attribution record. Earlier versions of this harness
+        // expected a `{record, priority}` wrapper to match the (incorrect)
+        // wire format the submission queue used; that has been fixed.
         try {
           if (init?.body && typeof init.body === 'string') {
-            const parsed = JSON.parse(init.body) as { record?: AtribRecord }
-            if (parsed.record && parsed.record.spec_version === 'atrib/1.0') {
-              records.push(parsed.record)
+            const parsed = JSON.parse(init.body) as Partial<AtribRecord>
+            if (parsed.spec_version === 'atrib/1.0') {
+              records.push(parsed as AtribRecord)
             }
           }
         } catch {
           // ignore, not all fetches are submissions
         }
-        return new Response(JSON.stringify({ logIndex: records.length }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        })
+        return new Response(
+          JSON.stringify({
+            log_index: records.length,
+            checkpoint: `log.test/v1\n${records.length + 1}\nrootHashBase64\n`,
+            inclusion_proof: [],
+            leaf_hash: 'leafHashBase64',
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        )
       }) as typeof fetch
     },
     restore() {
