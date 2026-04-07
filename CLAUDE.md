@@ -10,18 +10,31 @@ The complete protocol specification is in `atrib-spec.md`. The implementation gu
 
 ```
 atrib/
+  README.md                    # Public-facing project description (customer entry point)
+  CLAUDE.md                    # THIS FILE, hub doc, conventions, invariants
   atrib-spec.md                # The single source of truth for the protocol
   internal planning doc    # Implementation guide with build order and package details
+  DECISIONS.md                 # Architectural decision log (D001-D025+)
   atrib-design-conversation.md # Founding conversation (context, not authority)
   atrib-foundation.html        # Original §0 (HTML archive)
   atrib-section-[1-5].html     # Original §1-§5 (HTML archive)
   atrib-current-art-map.html   # Prior art research (HTML archive)
   packages/
-    mcp/                       # @atrib/mcp, MCP server middleware
-    agent/                     # @atrib/agent, Agent/MCP client middleware
-    verify/                    # @atrib/verify, Merchant verification library
-    integration/               # @atrib/integration, private cross-package end-to-end tests
+    mcp/                       # @atrib/mcp, MCP server middleware (public)
+    agent/                     # @atrib/agent, Agent middleware + framework adapters (public)
+    verify/                    # @atrib/verify, Merchant verification library (public)
+    log-dev/                   # @atrib/log-dev, in-memory dev Merkle log stub (PRIVATE, dev only)
+    integration/               # @atrib/integration, cross-package tests + runnable framework examples (private)
+      examples/
+        end-to-end/            # Runnable demo for customer walkthroughs (`pnpm demo`)
+        claude-agent-sdk/      # Case A + Case B examples
+        cloudflare-agents/     # McpAgent + Agent examples
+        vercel-ai-sdk/         # createMCPClient + AI Gateway example
+        langchain-js/          # MultiServerMCPClient + loadMcpTools example
+  services/                    # FUTURE, Tessera-backed Merkle log (Go, ships at services/log/)
 ```
+
+Public packages are intended for npm publication. Private packages (`log-dev`, `integration`) live in the workspace as fixtures and demos and have `private: true` in their `package.json` so they cannot be accidentally published.
 
 ## Hub doc
 
@@ -42,8 +55,12 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 |-------|--------|
 | Protocol decision changed | `atrib-spec.md` first, then `internal planning doc` if build guidance affected |
 | Architectural decision made | `DECISIONS.md`, new entry with date, context, decision, alternatives |
-| New package created | This file (repository structure) |
+| New package created | This file (repository structure) AND `README.md` (packages table) |
+| New framework adapter shipped | `packages/agent/README.md` (adapter table + side-by-side quick-starts) AND `README.md` (top-level adapter table) AND `DECISIONS.md` (a Dxxx entry with the integration shape decision and rejected alternatives) |
+| New runnable example added | `packages/integration/README.md` AND a `README.md` inside the example directory |
 | Implementation convention established | This file (conventions section) |
+| Wire-format or wire-protocol change | `atrib-spec.md` (if normative), this file's "Key technical decisions" section, AND DECISIONS.md |
+| Test count changed materially | `internal planning doc` build status table |
 
 ## Critical invariants (never violate)
 
@@ -91,7 +108,7 @@ These are non-negotiable. They come from the founding conversation and are the l
 
 ### Monorepo
 
-This is a TypeScript monorepo with three packages. Use pnpm workspaces and turborepo for builds.
+This is a TypeScript monorepo with **five workspace packages** (three public, two private). Uses pnpm workspaces and turborepo for builds.
 
 ### Package structure
 
@@ -100,18 +117,35 @@ Each package under `packages/` follows:
 packages/<name>/
   src/
     index.ts          # Public API surface
+    adapters/         # Framework adapters (only in packages with multiple host integrations, e.g. @atrib/agent)
   test/
     *.test.ts         # Tests
+  README.md           # Customer-facing documentation (per-package)
   package.json
   tsconfig.json
 ```
+
+The `@atrib/integration` package additionally has an `examples/` directory containing one runnable example per supported framework (excluded from `tsconfig` so examples typecheck against user-installed dependency versions, not the workspace build). New framework support always ships with both a unit test in `packages/agent/test/` and a runnable example in `packages/integration/examples/`.
+
+### Framework adapter pattern (established by D018, D021, D022, D023, D024)
+
+When adding support for a new MCP framework, the integration shape is determined by **source-reading the host framework first**, not by guessing from the dependency graph. Five integrations have shipped (`@modelcontextprotocol/sdk` raw client, Claude Agent SDK Cases A and B, Cloudflare Agents, Vercel AI SDK, LangChain JS) and every one had a different correct integration point that the source revealed. The general approach holds: one `atrib()` interceptor + one adapter helper per framework + identical observable behavior. The adapter helper signature varies because the host framework's surface varies, that variation is forced, not invented.
+
+Each adapter ships with:
+1. Source file at `packages/agent/src/adapters/<framework>.ts`
+2. Test file at `packages/agent/test/<framework>.test.ts` covering at minimum: passthrough, `_meta` injection, no caller mutation, response flow, idempotency, and §5.8 degradation
+3. Runnable example at `packages/integration/examples/<framework>/` with both `README.md` and `integration.ts`
+4. Entry in the unified adapter table in `packages/agent/README.md`
+5. A `Dxxx` entry in `DECISIONS.md` documenting the integration-shape choice and the alternatives rejected
+6. Adapter export from `packages/agent/src/index.ts`
 
 ### Dependencies
 
 - **Ed25519:** Use `@noble/ed25519`, pure JS, no native deps, audited.
 - **JCS:** Use `canonicalize` npm package (RFC 8785 implementation).
-- **SHA-256:** Use Web Crypto API (`crypto.subtle.digest`) with Node.js `crypto` fallback.
-- **MCP SDK:** `@modelcontextprotocol/sdk`, the official MCP TypeScript SDK.
+- **SHA-256:** Use `@noble/hashes/sha2.js` (`sha256` named export). The earlier convention of "Web Crypto API with Node fallback" was simplified, `@noble/hashes` works in both runtimes without a fallback path and is already a dep.
+- **MCP SDK:** `@modelcontextprotocol/sdk`, the official MCP TypeScript SDK. Note that `@ai-sdk/mcp` (Vercel) and the LangChain `MultiServerMCPClient` ship their own JSON-RPC implementations and are NOT structurally compatible with this SDK at the Client level, see D023 and D024 for the integration implications.
+- **Framework dependencies (Vercel AI SDK, LangChain, Cloudflare Agents, Claude Agent SDK):** Never imported as hard dependencies of `@atrib/agent`. Adapters use structural typing against the host framework's public shape so users only pay the dependency cost of frameworks they actually use.
 
 ### Testing
 

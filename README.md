@@ -2,7 +2,7 @@
 
 Value provenance infrastructure for the agent economy.
 
-Atrib makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance. It is the missing infrastructure layer between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP).
+Atrib makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance. It is the missing infrastructure layer between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP/AP2).
 
 ## The problem
 
@@ -14,27 +14,83 @@ Advertising exists because there is no native provenance infrastructure on the i
 
 Atrib records the structural relationships in agent sessions, which tool calls happened, in what order, in what context, without recording the content of those interactions. When a transaction completes, the attribution chain is already there: signed, tamper-evident, and verifiable by any party.
 
-- **Attribution records** travel with every MCP tool call, signed by the creator
-- **A Merkle log** provides global verifiability without exposing content
-- **An attribution graph** connects tool calls to transaction outcomes
+- **Attribution records** travel with every MCP tool call, signed by the creator (Ed25519, JCS-canonicalized)
+- **A Merkle log** provides global verifiability without exposing content (C2SP tlog-tiles, Tessera-backed)
+- **An attribution graph** connects tool calls to transaction outcomes via five deterministically-derived edge types
 - **Attribution policies** let creators and merchants express what contributions are worth
 - **Settlement recommendations** map the graph to value distribution under agreed policies
 
 The protocol records facts. What those facts are worth is a policy judgment made by the parties involved, not by Atrib.
 
+## Two coverage surfaces
+
+Atrib's value to a customer is defined by two things: which MCP frameworks you can drop it into, and which agent payment protocols it sits above. One install covers both axes.
+
+### MCP framework adapters
+
+| Framework | Adapter helper | Status |
+|---|---|---|
+| **Raw `@modelcontextprotocol/sdk` Client** | `wrapMcpClient(client, interceptor, { serverUrl? })` | ✅ Shipped |
+| **Claude Agent SDK** (in-process tools, Case A) | Zero code, wrap the SDK's `McpServer` instance directly with `@atrib/mcp`'s `atrib()` | ✅ Shipped |
+| **Claude Agent SDK** (third-party MCP servers, Case B) | `createAtribProxy({ upstream, interceptor })` from `@atrib/mcp` | ✅ Shipped |
+| **Cloudflare Agents** | `attributeCloudflareAgentMcp(agent, { interceptor, serverUrls })` | ✅ Shipped |
+| **Vercel AI SDK MCP** | `attributeVercelAiSdkMcp(mcpClient, { interceptor, serverUrl })` | ✅ Shipped |
+| **LangChain JS MCP adapters** | `attributeLangchainMcp(multiClient, { interceptor, serverUrls })` (high-level) or `wrapMcpClient` + `loadMcpTools` (low-level) | ✅ Shipped |
+| OpenAI Agents SDK |, | ⏳ Deferred, meaningfully different architecture |
+| Mastra |, | ⏳ Deferred, smaller footprint |
+
+The full adapter table with quick-start snippets for every framework is in [`packages/agent/README.md`](packages/agent/README.md).
+
+### Agent payment protocols
+
+Atrib **detects** transaction events from any of these, it does not implement payments, move money, or enforce transactions. The detection logic for all six protocols ships in `@atrib/agent`'s `transaction.ts` and runs simultaneously; you do not choose a payment protocol at install time.
+
+| Protocol | Sponsor | Detection signal | Spec ref |
+|---|---|---|---|
+| **ACP** | Stripe / OpenAI (Agentic Commerce Protocol) | `status === "completed"` + embedded `order` on checkout completion | §1.7.1 |
+| **UCP** | Universal Commerce Protocol | Same as ACP + top-level `ucp.version` envelope | §1.7.2 |
+| **x402** | Coinbase | HTTP `PAYMENT-RESPONSE` header on success response | §1.7.3 |
+| **MPP** | Tempo Labs / Stripe (IETF draft) | HTTP `Payment-Receipt` header on success response | §1.7.4 |
+| **AP2** | Google (Agent Payments Protocol) | A2A DataPart with `ap2.mandates.PaymentMandate` | §1.7.5 |
+| **a2a-x402** | Google (AP2 crypto path) | A2A task `metadata["x402.payment.status"] === "payment-completed"` | §1.7.5 |
+
+## Try it in one command
+
+The `@atrib/integration` package ships a runnable end-to-end demo that wires together all the moving pieces in a single process: a fake MCP merchant tool server, a fake AI agent, the production transaction-detection logic, and a development-mode Merkle log. One command, one terminal window, full attribution chain visible in real time.
+
+```bash
+ATRIB_PRIVATE_KEY=$(node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))') \
+  pnpm --filter @atrib/integration demo
+```
+
+Output (colorized in a real terminal):
+
+```
+[demo] starting dev log...
+[demo] dev log running at http://127.0.0.1:55013
+[log]  +tool_call   ctx=73df4367… chain=sha256:d5a8f8996… idx=0
+[log]  +tool_call   ctx=73df4367… chain=sha256:7e5ae4b5b… idx=1
+[log]  +transaction ctx=73df4367… chain=sha256:cda3d448c… idx=2
+[demo] 3 records in the log (2 tool_call, 1 transaction)
+```
+
+Every signed record, every chain hash, and every transaction detection in that output is real and uses the production code paths. The fakery is in the surrounding environment (the merchant returns hardcoded search results, the x402 payment is a stubbed header), not in the protocol layer. See [`packages/integration/examples/end-to-end/`](packages/integration/examples/end-to-end/) for the full walkthrough.
+
 ## Packages
 
-| Package | Purpose |
-|---------|---------|
-| `@atrib/mcp` | MCP server middleware, wraps an MCP server, emits signed attribution records automatically |
-| `@atrib/agent` | Agent middleware, interceptor for MCP clients, propagates attribution context, detects transactions |
-| `@atrib/verify` | Merchant verification, independently verifies settlement recommendations |
+| Package | Purpose | Customer doc |
+|---|---|---|
+| `@atrib/mcp` | MCP server middleware, wraps an MCP server, emits signed attribution records automatically | [`packages/mcp/README.md`](packages/mcp/README.md) |
+| `@atrib/agent` | Agent middleware, interceptor + framework adapters for raw SDK, Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS | [`packages/agent/README.md`](packages/agent/README.md) |
+| `@atrib/verify` | Merchant verification, independently verifies settlement recommendations against the spec §4.6 calculation | [`packages/verify/README.md`](packages/verify/README.md) |
+| `@atrib/log-dev` *(private, dev only)* | In-memory development Merkle log stub, implements spec §2.6 for local testing and the end-to-end demo. **Never deploy to production.** | [`packages/log-dev/README.md`](packages/log-dev/README.md) |
+| `@atrib/integration` *(private)* | Cross-package end-to-end tests + the runnable framework examples | [`packages/integration/README.md`](packages/integration/README.md) |
 
-> **Status:** v1 SDK is feature-complete in this monorepo (300 passing tests). Packages are not yet published to npm. Use `pnpm install` at the workspace root and import from `workspace:*` until publication.
+> **Status:** v1 SDK is feature-complete in this monorepo (391 passing tests across all packages). Public packages (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`) are not yet published to npm. Use `pnpm install` at the workspace root and import via `workspace:*` until publication. The production Merkle log at `log.atrib.io/v1` is not yet deployed; use `@atrib/log-dev` for local development until it ships.
 
 ## Quick start
 
-### MCP server (creator)
+### MCP server (creator side)
 
 ```typescript
 import { atrib } from '@atrib/mcp'
@@ -46,43 +102,19 @@ const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
 })
 ```
 
-One line. Everything else is automatic. Every successful tool call emits a signed attribution record. No further code needed.
+One line. Everything else is automatic: every successful tool call emits a signed attribution record, propagates W3C trace context, and submits to the configured log endpoint asynchronously.
 
-### Agent (consumer)
+### Agent (consumer side), pick your framework
 
-`@atrib/agent` is framework-agnostic, instead of wrapping a specific agent class, it returns an interceptor that the host integrates at outbound and inbound tool call boundaries.
+`@atrib/agent` exports one core interceptor (`atrib()`) plus adapter helpers for every supported framework. The adapter name varies because the host framework's surface varies, but the `atrib()` interceptor setup is identical across all of them. See [`packages/agent/README.md`](packages/agent/README.md) for side-by-side quick-starts for every framework. Examples for each:
 
-```typescript
-import { atrib } from '@atrib/agent'
-
-const interceptor = atrib({
-  creatorKey: process.env.ATRIB_PRIVATE_KEY,
-  merchantDomain: 'https://merchant.example.com',
-  serverUrls: ['https://tool-a.example', 'https://tool-b.example'],
-})
-
-// Before sending a tools/call request:
-const meta = await interceptor.onBeforeToolCall(toolName, existingMeta)
-
-// After receiving a tools/call response:
-interceptor.onAfterToolResponse(toolName, response, response._meta, {
-  serverUrl: 'https://tool-a.example',
-})
-
-// On shutdown:
-await interceptor.flush()
-```
-
-The interceptor handles session initialization, policy negotiation, context propagation (W3C traceparent / tracestate / baggage / `X-Atrib-Chain`), and transaction detection automatically. Wrap it in a callback or middleware to plug into LangChain, the AI SDK, Mastra, or any direct MCP client.
-
-### Use with Claude Agent SDK
-
-If you're building on `@anthropic-ai/claude-agent-sdk`, Atrib supports two integration patterns:
-
-- **In-process tools** (your own `createSdkMcpServer()`): one extra line, `atrib(weatherServer.instance, options)`, and every `tools/call` is attributed.
-- **Third-party MCP servers** (filesystem, fetch, custom stdio): use `createAtribProxy()` from `@atrib/mcp` to stand up a thin in-process surrogate that forwards calls to the upstream and attributes them at the proxy layer.
-
-Both runnable examples are in [`packages/integration/examples/claude-agent-sdk/`](packages/integration/examples/claude-agent-sdk/), and the architectural rationale (why no Claude-SDK-specific package is needed) is recorded in [`DECISIONS.md`](DECISIONS.md) D021.
+| Example | Path |
+|---|---|
+| Vercel AI SDK + AI Gateway routing | [`packages/integration/examples/vercel-ai-sdk/`](packages/integration/examples/vercel-ai-sdk/) |
+| Claude Agent SDK (Case A in-process + Case B proxy) | [`packages/integration/examples/claude-agent-sdk/`](packages/integration/examples/claude-agent-sdk/) |
+| Cloudflare Agents (server-side `McpAgent` + client-side `Agent`) | [`packages/integration/examples/cloudflare-agents/`](packages/integration/examples/cloudflare-agents/) |
+| LangChain JS (`MultiServerMCPClient` and `loadMcpTools`) | [`packages/integration/examples/langchain-js/`](packages/integration/examples/langchain-js/) |
+| End-to-end runnable demo (all moving parts in one process) | [`packages/integration/examples/end-to-end/`](packages/integration/examples/end-to-end/) |
 
 ### Merchant (verifier)
 
@@ -97,16 +129,14 @@ const result = await verifier.verify(recommendationDoc)
 // { valid: true, signatureOk: true, calcMatch: true, distribution: {...} }
 ```
 
+Verification runs the spec §4.6 calculation algorithm locally (a pure function of graph + policy) and compares the result against what the recommendation document claims. No trust in any intermediary required.
+
 ## Key generation
 
 A v1 keypair is a base64url-encoded 32-byte Ed25519 seed (§5.6 of the spec). Until a dedicated CLI ships, generate one inline:
 
-```typescript
-import { base64urlEncode } from '@atrib/mcp'
-import { randomBytes } from 'node:crypto'
-
-const seed = randomBytes(32)
-console.log('ATRIB_PRIVATE_KEY=' + base64urlEncode(seed))
+```bash
+node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))'
 ```
 
 Store the result as `ATRIB_PRIVATE_KEY` in your environment. The public key is derived at runtime, only the seed needs to be secured.
@@ -116,8 +146,8 @@ Store the result as `ATRIB_PRIVATE_KEY` in your environment. The public key is d
 The complete protocol specification is in [`atrib-spec.md`](./atrib-spec.md). It covers:
 
 - **Section 0**, Foundations (principles, thesis)
-- **Section 1**, Attribution Record Format (data model, signing, propagation)
-- **Section 2**, Merkle Log Protocol (C2SP tlog-tiles, commitments, proofs)
+- **Section 1**, Attribution Record Format (data model, signing, propagation, transaction event hooks for all 6 payment protocols)
+- **Section 2**, Merkle Log Protocol (C2SP tlog-tiles, commitments, proofs, witnessing)
 - **Section 3**, Graph Query Interface (five edge types, deterministic derivation)
 - **Section 4**, Attribution Policy Format (weights, negotiation, calculation algorithm)
 - **Section 5**, SDK Specification (middleware contract, automation triggers, degradation contract)
@@ -128,7 +158,7 @@ The complete protocol specification is in [`atrib-spec.md`](./atrib-spec.md). It
 2. **Accountability without content exposure.** The log stores hashes, not content.
 3. **Settlement is separate from attribution.** The protocol records what happened. It does not move money.
 4. **No central arbiter of value.** Trust from math and open spec, not from trusting Atrib Inc.
-5. **The protocol is a public good; the product is not.** Spec and libraries are open. The queryable graph and analytics are commercial.
+5. **The protocol is a public good; the product is not.** Spec, signing libraries, and transparency log infrastructure are open. The queryable graph and analytics are commercial.
 
 ## Prior art
 
