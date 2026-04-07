@@ -732,3 +732,50 @@ The spec/code drift fix is the kind of thing that only gets caught when you buil
 Plus the demo runs end-to-end and produces the expected output (verified manually before commit).
 
 **Followup:** With the spec/code drift fixed and the dev log in place, the next layer of customer-readiness work is (a) the `services/log/` Tessera-backed Go service for production deployments, and (b) publishing `@atrib/mcp`, `@atrib/agent`, and `@atrib/verify` to npm so customers can actually `pnpm add` them. Both are out of scope for this chunk but are the next logical steps after this commit. The unified `packages/agent/README.md` is ready to be the customer-facing entry point once packages are published.
+
+---
+
+## D026, Spec §2.6.1 conformance corpus at `spec/conformance/2.6.1/` (shared between TS dev log and future Go log)
+
+**Date:** 2026-04-06
+
+**Context:** During the docs sync that followed D025, the question raised was what gaps remained that a docs sync couldn't fix. One was that `@atrib/log-dev` and the future `services/log/` Tessera-backed Go service had no shared agreement on §2.6.1 behavior beyond the prose in the spec. Two implementations of "what does §2.6.1 reject" derived independently from the spec text would inevitably drift in subtle ways. Direction was to shipping the corpus immediately even though the Go consumer doesn't yet exist: "is that something you can do now or do you need to wait?"
+
+**Decision:** Build a static, shared, language-neutral conformance corpus at `spec/conformance/2.6.1/` consisting of one JSON file per test case plus a manifest. Each case is a fully self-contained `{request, expected}` pair: the `request.body` is the bare signed `AtribRecord` ready to JSON.stringify, and `expected.status` is the canonical accept/reject outcome. A reference TypeScript consumer ships in `@atrib/log-dev`'s test suite today; the future Go service will consume the same files when it ships.
+
+**Implementation details:**
+
+1. **Corpus structure** (8 cases + 1 sequence at this writing, growable):
+   - `cases/accept-tool-call.json` and `accept-transaction.json`, well-formed signed records
+   - `cases/reject-bad-signature.json`, §2.6.1 Step 1 (Ed25519 verify fails)
+   - `cases/reject-wrong-spec-version.json`, §2.6.1 Step 2
+   - `cases/reject-unknown-event-type.json`, §2.6.1 Step 3
+   - `cases/reject-future-timestamp.json`, §2.6.1 Step 4 (timestamp 20 minutes ahead of `reference_time_ms`)
+   - `cases/reject-malformed-context-id.json`, §2.6.1 Step 5
+   - `cases/reject-non-json-body.json`, pre-Step-1 sanity (raw string body, not parseable)
+   - `sequences/idempotent-resubmission.json`, §2.6.1 Step 6 (same record twice, same proof, log_size stays at 1)
+
+2. **Time handling.** The corpus stores fully-signed records with frozen timestamps, so the bytes are byte-deterministic across regenerations. Step 4 (the future-timestamp case) only produces stable validation outcomes if the consumer pretends "now" is the manifest's `reference_time_ms` (`2026-01-01T00:00:00Z`). The TS consumer uses `vi.useFakeTimers()` + `vi.setSystemTime()`. A Go consumer would inject a `clock.Clock` interface into its validator. The mock-clock requirement is documented in the corpus README and in the consumer code.
+
+3. **Hardcoded signing seed.** The seed is `0x07` repeated 32 times, committed in `manifest.json` as `signing.seed_b64url`. This is so the corpus is regeneration-deterministic, successive runs of the generator produce byte-identical files unless the inputs change. The seed is loudly marked NEVER-FOR-PRODUCTION in both the README and the manifest.
+
+4. **Per-implementation skip lists in the consumer, not in the corpus.** `@atrib/log-dev` cannot honor `reject-bad-signature` because it skips §2.6.1 Step 1 to avoid a circular workspace dep on `@atrib/verify`. The TS consumer maintains a `DEV_LOG_SKIPS` map keyed by case name, with a justification string. The corpus itself stays canonical, the Go service is expected to honor every case (its `DEV_LOG_SKIPS` equivalent will be empty). This keeps the corpus clean of implementation-specific notes.
+
+5. **Generator at `packages/log-dev/scripts/generate-conformance-corpus.ts`** (run via `pnpm --filter @atrib/log-dev corpus`). It uses `signRecord` from `@atrib/mcp` (the canonical signer) so the test signatures are byte-identical to what a real `@atrib/mcp`-using merchant would produce. The generator imports nothing implementation-specific to the dev log, it only writes JSON.
+
+6. **Consumer at `packages/log-dev/test/conformance.test.ts`** (9 tests, 1 skipped). Reads the manifest, iterates over `cases/` and `sequences/`, freezes the clock per test, and asserts the expected outcome.
+
+**Why a separate corpus directory rather than a fixture directory inside `@atrib/log-dev`:**
+
+The corpus is shared infrastructure between TypeScript and Go implementations of the same protocol. Putting it inside `packages/log-dev/test/fixtures/` would either force the future Go service to copy it (drift risk) or to reach across language boundaries (awkward). Sitting at `spec/conformance/2.6.1/` next to `atrib-spec.md` makes it discoverable from the spec itself and accessible to any subtree of the repo. The generator stays inside `@atrib/log-dev` because that's where the canonical signer is reachable as a workspace dep, but the output is implementation-neutral.
+
+**What this DOESN'T solve:**
+
+- Verification that the corpus is truly implementation-independent. We catch this only when the Go consumer ships and runs the same files. Until then, there's a small risk that I've encoded a TS-specific assumption into the JSON (e.g., header name casing, JSON field ordering). I've kept the consumer trivial enough that this risk is small but it exists.
+- §2.6.2 proof bundle shape conformance beyond "is the type of each field correct?", the dev log returns placeholder hashes, so the corpus can't assert specific bytes. A real Tessera service will produce real Merkle proofs that the corpus consumer would need to verify with `@atrib/verify`'s strict path, which is a different test layer.
+- §2.5.1 (checkpoint endpoint), §2.5.2 (tile endpoints), and §2.9 (witnessing). These are deferred until the Go service ships, there's no point conformance-testing endpoints that no implementation has yet.
+
+**Test results:** 8 conformance cases + 1 sequence = 9 new tests in `@atrib/log-dev`, of which 8 pass and 1 is skipped (the bad-signature case, with documented reason). Total package tests: 22 (was 13). Total workspace tests: 400 (399 passing, 1 documented skip), up from 391.
+
+**Followup:** When `services/log/` ships, the Go service's test suite reads the same `spec/conformance/2.6.1/` directory. Any drift between the two implementations surfaces immediately as a test failure. If the spec grows new validation rules (e.g., a Step 7), regenerate the corpus with `pnpm --filter @atrib/log-dev corpus` and add a new case file in the same PR. The sync trigger for this is now in `CLAUDE.md`.
+

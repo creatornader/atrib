@@ -1,0 +1,27 @@
+{
+  "name": "reject-unknown-event-type",
+  "spec_section": "2.6.1",
+  "validation_step": 3,
+  "description": "event_type is neither \"tool_call\" nor \"transaction\". The log MUST reject with 400.",
+  "request": {
+    "method": "POST",
+    "path": "/v1/entries",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:3f8a2b00000000000000000000000000000000000000000000000000000000ff",
+      "creator_key": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw",
+      "chain_root": "sha256:398acaee65c4e533cea249865ab1cee576445dc23178f8b39d5efdcedd57a829",
+      "event_type": "banana",
+      "context_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "timestamp": 1767225600000,
+      "signature": "r9YUUgqjmSQdFBmdKqhNjKpfHrFR4BLRoPgJi5osxhWsFxJeasTlYrA04-IbJG6L97J4LCTK0QKrIB9GZfC6AQ"
+    }
+  },
+  "expected": {
+    "status": 400,
+    "error_contains": "event_type"
+  }
+}

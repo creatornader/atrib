@@ -1,0 +1,18 @@
+{
+  "name": "reject-non-json-body",
+  "spec_section": "2.6.1",
+  "validation_step": 0,
+  "description": "The body is not valid JSON. The log MUST reject with 400 before any §2.6.1 step runs.",
+  "request": {
+    "method": "POST",
+    "path": "/v1/entries",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "this is not json",
+    "body_is_raw_string": true
+  },
+  "expected": {
+    "status": 400
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "reject-bad-signature",
+  "spec_section": "2.6.1",
+  "validation_step": 1,
+  "description": "A record whose Ed25519 signature does not verify against creator_key. The log MUST reject with 400.",
+  "request": {
+    "method": "POST",
+    "path": "/v1/entries",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:3f8a2b00000000000000000000000000000000000000000000000000000000ff",
+      "creator_key": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw",
+      "chain_root": "sha256:398acaee65c4e533cea249865ab1cee576445dc23178f8b39d5efdcedd57a829",
+      "event_type": "tool_call",
+      "context_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "timestamp": 1767225600000,
+      "signature": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ"
+    }
+  },
+  "expected": {
+    "status": 400
+  },
+  "notes": "@atrib/log-dev currently SKIPS Step 1 verification to avoid a workspace circular dep on @atrib/verify; this case is documented in the corpus but the dev log consumer skips it. The future services/log/ Tessera service is expected to honor it."
+}

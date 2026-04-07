@@ -18,7 +18,8 @@
     "build": "tsc",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "corpus": "tsx scripts/generate-conformance-corpus.ts"
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
