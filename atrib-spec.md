@@ -223,11 +223,11 @@ content_id = "sha256:" + hex(digest)  // lowercase hex, no spaces
 // content_id = "sha256:3f8a2b..."
 ```
 
-**Note (Server URL Normalization):** Before hashing, implementations MUST normalize the server URL: lowercase the scheme and host, remove any trailing slash from the path, and preserve the port if explicitly specified. Query strings and fragments are excluded. A server at `HTTPS://Tools.Example.Com/` and one at `https://tools.example.com` must produce the same content_id.
+**Note (Server URL Normalization):** Before hashing, implementations MUST normalize the server URL: lowercase the scheme and host, remove any trailing slash from the path, and preserve the port if explicitly specified. Query strings and fragments are excluded. A server at `HTTPS://Tools.Example.Com/` and one at `https://tools.example.com` must produce the same content_id. Default ports (443 for HTTPS, 80 for HTTP) MUST be omitted. `https://tools.example.com:443` normalizes to `https://tools.example.com`. The server URL is the base URL of the MCP server, not individual tool endpoints.
 
 #### 1.2.3 chain_root for Genesis Records
 
-Every attribution chain begins with a genesis record: the first hop in a session that has no upstream atrib context. Genesis records arise when a tool server receives a call that carries no `params._meta.atrib` field, or when the propagated context cannot be verified.
+Every attribution chain begins with a genesis record: the first hop in a session that has no upstream atrib context. A record is a genesis record when the inbound context contains no `atrib` token (no `params._meta.atrib`, no `tracestate` atrib entry, no `X-Atrib-Chain` header), OR when the token is present but malformed (cannot be decoded by the procedure in §1.5.2). In both cases, `chain_root` is computed as the genesis chain root per the formula below.
 
 For a genesis record, the `chain_root` MUST be computed as:
 
@@ -1048,6 +1048,8 @@ Step 5: Verify that `context_id` is exactly 32 lowercase hex characters. Reject 
 
 Step 6: Check for a duplicate: if an entry with the same `record_hash` already exists in the log, return the existing inclusion proof with `200 OK` rather than `409 Conflict`. Idempotent submission is required to handle retries safely.
 
+Error responses from the submission API use `Content-Type: application/json` with a JSON object containing an `error` field (string). Example: `{"error": "spec_version must be 'atrib/1.0'"}`. The format is not RFC 9457 Problem Details (that format is reserved for the graph query API, §3.5.4).
+
 #### 2.6.2 Inclusion Proof Response
 
 On successful submission or duplicate detection, the log returns a proof bundle:
@@ -1069,6 +1071,8 @@ Content-Type: application/json
 
 // All hashes are standard base64 (RFC 4648 §4, with padding).
 ```
+
+The log MUST NOT return 200 until the entry is included in a signed checkpoint. The response is synchronous: the proof bundle in the response body reflects the entry's committed position. There is no asynchronous or polling model.
 
 Clients MUST verify the inclusion proof before treating the record as committed. The verification procedure is specified in §2.7.
 
@@ -1335,7 +1339,7 @@ for each record R:
 
 **Step 2:** SESSION_PRECEDES edges**
 
-For each ordered pair (A, B) of nodes sharing a context_id where no CHAIN_PRECEDES edge exists between them in either direction: if `A.timestamp < B.timestamp`, create SESSION_PRECEDES A → B. When timestamps are equal, use ascending log_index as the tiebreaker. If log_index is also equal (nodes in the same batch), skip; they are SESSION_PARALLEL candidates.
+For each ordered pair (A, B) of nodes sharing a context_id where no CHAIN_PRECEDES edge exists between them in either direction: if `A.timestamp < B.timestamp`, create SESSION_PRECEDES A → B. When timestamps are equal, use ascending log_index as the tiebreaker. Gap nodes with `log_index: null` are sorted after all nodes with the same timestamp that have a numeric `log_index`. Among multiple gap nodes with the same timestamp, order is arbitrary (SESSION_PARALLEL is assigned). If log_index is also equal (nodes in the same batch), skip; they are SESSION_PARALLEL candidates.
 
 **Step 3:** SESSION_PARALLEL edges**
 
@@ -1861,6 +1865,8 @@ The calculation algorithm is a pure function: given the attribution graph for a 
 
 Any party (creator, merchant, auditor, regulator) with access to the graph data and the policy document MUST be able to run this algorithm locally and arrive at the same result as any other party running the same inputs. The atrib resolution API (at `https://resolve.atrib.dev/v1/calculate`) is a convenience implementation of this algorithm, not an authority. Its output is no more or less trustworthy than a local implementation producing the same output from the same inputs.
 
+All arithmetic in the calculation algorithm uses IEEE 754 double-precision floating-point. Intermediate rounding is acceptable. The 1e-9 tolerance in `distributionsMatch()` (§4.7.3) accounts for accumulated floating-point error across implementations.
+
 #### 4.6.1 Inputs and Preconditions
 
 Inputs:
@@ -1912,6 +1918,12 @@ function raw_score(n, G, P):
     // in the reachable set. This ensures that intermediate structural edges
     // (e.g., CHAIN_PRECEDES between non-transaction nodes on a path to a
     // transaction) contribute their weight to n's base score.
+    //
+    // When traversing an undirected SESSION_PARALLEL edge from node A to node B,
+    // the traversal proceeds in both directions. If B can reach a transaction
+    // node, SESSION_PARALLEL is added to A's collected edge types. The collected
+    // edge types for a node are the union of all edge types on any path (directed
+    // or undirected) from that node to any transaction node.
     weights = [P.edge_weights[t] ?? 0.0 for t in edge_types]
     base = max(weights) if weights else 0.0
 
@@ -1933,12 +1945,17 @@ function apply_modifier(modifier, score, n, G):
     depth = shortest_chain_path_length(n, G)  // hops to nearest transaction via CHAIN_PRECEDES
     // The shortest chain path length from node N to any transaction node is the
     // minimum number of CHAIN_PRECEDES edges on any directed path from N to a
-    // transaction node. If no CHAIN_PRECEDES path exists, the depth is treated
-    // as unbounded (the penalty factor becomes zero).
+    // transaction node. If no directed CHAIN_PRECEDES path exists from N to any
+    // transaction node, the depth is set to the ceiling of
+    // `1.0 / penalty_per_level`, which is the smallest integer that drives
+    // `max(0.0, 1.0 - depth * penalty_per_level)` to zero. The resulting
+    // factor is 0.0.
     factor = max(0.0, 1.0 - depth * modifier.penalty_per_level)
     return score * factor
 
   if modifier.type == "call_count_boost":
+    // Nodes with `content_id: null` (gap nodes) do not match any other node's
+    // content_id. Their call count is always 1.
     count = count_nodes_with_same_content_id(n.content_id, G)
     factor = min(modifier.cap, 1.0 + (count - 1) * modifier.multiplier_per_call)
     return score * factor
@@ -1985,6 +2002,10 @@ function apply_minimum_floor(normalized, floor):
   above_total = sum(above.values())
   if above_total <= boost_needed:
     return {n: 1.0/len(normalized) for n in normalized}  // equal distribution fallback
+    // The equal distribution fallback MAY produce node shares below
+    // `minimum_share`. This is acceptable because the constraint cannot be
+    // honored: the sum of all minimum floors exceeds 1.0. The fallback
+    // preserves the sum-to-1.0 invariant at the cost of the floor invariant.
   scale = (above_total - boost_needed) / above_total
   result = {n: floor for n in below}
   result |= {n: s * scale for n, s in above.items()}
@@ -2325,12 +2346,12 @@ const creator_key_bytes = publicKeyBytes(creatorKey)
 const token = base64url(record_hash_bytes) + '.' + base64url(creator_key_bytes)
 
 // Write to response in all applicable locations:
-response.params._meta.atrib = token                  // always, MCP metadata
-response.headers['tracestate'] += `,atrib=${token}`   // HTTP transport
+response._meta.atrib = token                         // always, MCP metadata (CallToolResult top-level _meta)
+response.headers['tracestate'] = `atrib=${token},` + response.headers['tracestate']  // HTTP transport, prepend per W3C
 response.headers['X-atrib-Chain'] = token            // fallback header
 ```
 
-The tracestate value MUST be appended to any existing tracestate entries, not replace them. The full token is 87 characters maximum and fits within the W3C tracestate per-vendor limit of 256 characters.
+The tracestate value MUST NOT replace existing tracestate entries. Per W3C Trace Context, the most recently modified entry SHOULD be leftmost. Implementations SHOULD prepend the `atrib=` entry rather than appending it. The full token is 87 characters maximum and fits within the W3C tracestate per-vendor limit of 256 characters.
 
 #### 5.3.5 Log Submission
 
@@ -2463,7 +2484,7 @@ const token = sessionState.latestContext
 
 if (token) {
   request.params._meta.atrib = token               // always
-  request.headers.tracestate  += `,atrib=${token}`  // HTTP transport
+  request.headers.tracestate  = `atrib=${token},` + request.headers.tracestate  // HTTP transport, prepend per W3C
   request.headers['X-atrib-Chain'] = token          // fallback
 }
 
