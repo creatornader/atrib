@@ -4,7 +4,7 @@
  * In-memory graph builder for the integration test.
  *
  * Implements the §3.2.4 edge derivation rules normatively. This is the
- * algorithm a graph indexing service (graph.atrib.io) would run on log data.
+ * algorithm a graph indexing service (graph.atrib.dev) would run on log data.
  * Two implementations applying these rules to identical records MUST produce
  * identical edge sets.
  */

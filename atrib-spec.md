@@ -88,7 +88,7 @@ The attribution chain is verifiable by any party with the relevant records. No s
 
 ### Principle V: The protocol is open. The product is commercial.
 
-The specification, the signing libraries, the calculation algorithm, and the log software are open. Anyone can run their own log, build their own graph service, and run the calculation locally. atrib operates a hosted graph service, analytics, and managed log at `atrib.io` as a commercial product built on the open protocol. Using the hosted service is a convenience, not a requirement.
+The specification, the signing libraries, the calculation algorithm, and the log software are open. Anyone can run their own log, build their own graph service, and run the calculation locally. atrib operates a hosted graph service, analytics, and managed log at `atrib.dev` as a commercial product built on the open protocol. Using the hosted service is a convenience, not a requirement.
 
 ---
 
@@ -795,7 +795,7 @@ The log enforces two properties that are the foundation of atrib's trust model:
 
 **Accountability without content exposure.** The log stores hashes and commitments, not content. A third party can verify that a record was committed at a specific time without reading what the record contains. Privacy and auditability are structurally separated: the log proves existence and integrity; the content remains with the creator.
 
-The log is built on the tlog-tiles specification (c2sp.org/tlog-tiles), which defines an efficient HTTP-based read interface used by Certificate Transparency logs and the Tessera library (github.com/transparency-dev/tessera). `log.atrib.io` is a Tessera-based personality. Any operator may run a compatible log using Tessera; the open specification ensures that client implementations are not tied to atrib's log infrastructure.
+The log is built on the tlog-tiles specification (c2sp.org/tlog-tiles), which defines an efficient HTTP-based read interface used by Certificate Transparency logs and the Tessera library (github.com/transparency-dev/tessera). `log.atrib.dev` is a Tessera-based personality. Any operator may run a compatible log using Tessera; the open specification ensures that client implementations are not tied to atrib's log infrastructure.
 
 ---
 
@@ -803,15 +803,15 @@ The log is built on the tlog-tiles specification (c2sp.org/tlog-tiles), which de
 
 A tiled transparency log is identified by three parameters:
 
-| Parameter      | Value for log.atrib.io                  | Description                                                                                                                 |
+| Parameter      | Value for log.atrib.dev                  | Description                                                                                                                 |
 | -------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| URL prefix     | https://log.atrib.io/v1                 | The base URL from which all log endpoints are served.                                                                       |
-| Origin         | log.atrib.io/v1                         | The scheme-less URL prefix. Used as the first line of every checkpoint. Uniquely identifies this log instance globally.     |
-| Log public key | Published at log.atrib.io/v1/log-pubkey | The Ed25519 public key used to sign checkpoints. Distributed as a verifier key (vkey) string per the C2SP signed-note spec. |
+| URL prefix     | https://log.atrib.dev/v1                 | The base URL from which all log endpoints are served.                                                                       |
+| Origin         | log.atrib.dev/v1                         | The scheme-less URL prefix. Used as the first line of every checkpoint. Uniquely identifies this log instance globally.     |
+| Log public key | Published at log.atrib.dev/v1/log-pubkey | The Ed25519 public key used to sign checkpoints. Distributed as a verifier key (vkey) string per the C2SP signed-note spec. |
 
 Log operators running compatible logs MUST use a unique origin matching their URL prefix, and MUST publish their log public key at a stable, documented URL.
 
-**Note (Log versioning):** The `/v1` path component in the URL prefix and origin is the log version, not the atrib spec version. When the log's entry format requires a breaking change, a new origin (`log.atrib.io/v2`) will be used rather than modifying the existing log. Existing entries in `log.atrib.io/v1` will remain accessible indefinitely.
+**Note (Log versioning):** The `/v1` path component in the URL prefix and origin is the log version, not the atrib spec version. When the log's entry format requires a breaking change, a new origin (`log.atrib.dev/v2`) will be used rather than modifying the existing log. Existing entries in `log.atrib.dev/v1` will remain accessible indefinitely.
 
 ---
 
@@ -862,7 +862,7 @@ The log's state at any moment is summarized in a **checkpoint**: a signed statem
 A checkpoint body is a UTF-8 text block with exactly three mandatory lines followed by a newline, formatted as follows:
 
 ```
-log.atrib.io/v1                                    ← origin line (matches §2.2)
+log.atrib.dev/v1                                    ← origin line (matches §2.2)
 4821937                                             ← tree size (decimal, no leading zeros)
 CsUYapGGPo4dkMgIAUqom/Xajj7h2fB2MPA3j2jxq2I=      ← root hash (standard base64, 44 chars)
                                                     ← mandatory trailing newline
@@ -881,15 +881,15 @@ key_id = SHA-256(
   log_public_key_bytes // raw 32-byte Ed25519 public key
 )[:4]                   // truncated to 4 bytes
 
-// For log.atrib.io/v1:
-key_name = "log.atrib.io/v1"
+// For log.atrib.dev/v1:
+key_name = "log.atrib.dev/v1"
 ```
 
-The verifier key string published at `log.atrib.io/v1/log-pubkey` encodes the key name, key ID, and public key in the C2SP vkey format:
+The verifier key string published at `log.atrib.dev/v1/log-pubkey` encodes the key name, key ID, and public key in the C2SP vkey format:
 
 ```
 // vkey format: +hex(key_id)+base64(sig_type_byte || public_key)
-log.atrib.io/v1+a3b2c1d0+AQ...base64encodedpublickey...==
+log.atrib.dev/v1+a3b2c1d0+AQ...base64encodedpublickey...==
 // "AQ" is base64(0x01), the Ed25519 signature type byte
 ```
 
@@ -898,11 +898,11 @@ log.atrib.io/v1+a3b2c1d0+AQ...base64encodedpublickey...==
 The complete checkpoint (body plus signatures) is a signed note per the C2SP signed-note specification (c2sp.org/signed-note). The note has the checkpoint body as its text, followed by one or more signature lines:
 
 ```
-log.atrib.io/v1
+log.atrib.dev/v1
 4821937
 CsUYapGGPo4dkMgIAUqom/Xajj7h2fB2MPA3j2jxq2I=
 
-— log.atrib.io/v1 a3b2c1d0+base64(Ed25519-signature-over-body)
+— log.atrib.dev/v1 a3b2c1d0+base64(Ed25519-signature-over-body)
 — witness.example.com e1f2a3b4+base64(cosignature)
 ```
 
@@ -919,7 +919,7 @@ The log's read interface serves static resources over HTTP, following the C2SP t
 #### 2.5.1 Checkpoint Endpoint
 
 ```
-GET https://log.atrib.io/v1/checkpoint
+GET https://log.atrib.dev/v1/checkpoint
 
 Response:
 Content-Type: text/plain; charset=utf-8
@@ -936,10 +936,10 @@ Merkle tree hashes are served as tiles: concatenated sequences of 32-byte SHA-25
 
 ```
 // Full tile:
-GET https://log.atrib.io/v1/tile/<L>/<N>
+GET https://log.atrib.dev/v1/tile/<L>/<N>
 
 // Partial tile:
-GET https://log.atrib.io/v1/tile/<L>/<N>.p/<W>
+GET https://log.atrib.dev/v1/tile/<L>/<N>.p/<W>
 
 // <L>: level (0 = leaf hashes, 1+ = internal nodes), decimal, no leading zeros
 // <N>: tile index, zero-padded into 3-digit path elements:
@@ -957,8 +957,8 @@ Cache-Control: max-age=31536000, immutable  // full tiles are immutable
 Log entries are served as entry bundles at the level-0 path. Each bundle contains entries in sequence, each prefixed with a big-endian uint16 length.
 
 ```
-GET https://log.atrib.io/v1/tile/entries/<N>
-GET https://log.atrib.io/v1/tile/entries/<N>.p/<W>
+GET https://log.atrib.dev/v1/tile/entries/<N>
+GET https://log.atrib.dev/v1/tile/entries/<N>.p/<W>
 
 Response:
 Content-Type: application/octet-stream
@@ -990,7 +990,7 @@ The write interface accepts attribution records and returns inclusion proofs. Th
 #### 2.6.1 Submit Entry
 
 ```
-POST https://log.atrib.io/v1/entries
+POST https://log.atrib.dev/v1/entries
 Content-Type: application/json
 X-atrib-Priority: normal              // optional, see below
 
@@ -1041,7 +1041,7 @@ Content-Type: application/json
 
 {
   "log_index":       4821936,           // zero-based index in the log
-  "checkpoint":      "log.atrib.io/v1\n4821937\nCsUY...=\n\n— log.atrib.io/v1 ...",
+  "checkpoint":      "log.atrib.dev/v1\n4821937\nCsUY...=\n\n— log.atrib.dev/v1 ...",
   "inclusion_proof": [
     "gSKyXoYZUgZ6jduW...",   // base64-encoded SHA-256 sibling hashes
     "B95lDa8R83lS8n0e...",   // from leaf level up to root
@@ -1125,11 +1125,11 @@ gSKyXoYZUgZ6jduWYrkDOARinOMGJveXjgMkBTcdPlQ=
 B95lDa8R83lS8n0eG+o0buTxRKQTYFi//1U8anccXmA=
 EKNzoDWG8LGC0Yp9o+sv3qllpMP9uHQ9B20KNL+Q1zs=
 
-log.atrib.io/v1
+log.atrib.dev/v1
 4821937
 CsUYapGGPo4dkMgIAUqom/Xajj7h2fB2MPA3j2jxq2I=
 
-— log.atrib.io/v1 a3b2c1d0+base64signature
+— log.atrib.dev/v1 a3b2c1d0+base64signature
 — witness.example.com e1f2a3b4+cosignature
 
 // Format: tlog-proof header, empty line, inclusion proof hashes (one per line),
@@ -1138,7 +1138,7 @@ CsUYapGGPo4dkMgIAUqom/Xajj7h2fB2MPA3j2jxq2I=
 // Proof bundles SHOULD be stored alongside the attribution record.
 ```
 
-A proof bundle is sufficient to verify log commitment offline given only the log's origin (`log.atrib.io/v1`) and its trusted public key. No network request is required for verification after the bundle is obtained.
+A proof bundle is sufficient to verify log commitment offline given only the log's origin (`log.atrib.dev/v1`) and its trusted public key. No network request is required for verification after the bundle is obtained.
 
 Implementations SHOULD store proof bundles alongside attribution records. The `@atrib/mcp` SDK SHOULD return the proof bundle as part of the record submission response and cache it locally for at least the duration of the active session.
 
@@ -1167,7 +1167,7 @@ struct timestamped_signature {
 
 Clients that require strong tamper-evidence guarantees SHOULD require at least one witness cosignature before trusting an inclusion proof. atrib's SDK SHOULD ship with a default witness policy of one cosignature from a publicly documented witness operated independently of atrib.
 
-The witnessing infrastructure used by `log.atrib.io` will be publicly documented including witness names and public keys. Third parties are encouraged to run compatible witnesses using the transparency-dev ecosystem tooling.
+The witnessing infrastructure used by `log.atrib.dev` will be publicly documented including witness names and public keys. Third parties are encouraged to run compatible witnesses using the transparency-dev ecosystem tooling.
 
 ---
 
@@ -1361,7 +1361,7 @@ Verification states are strictly ordered: `unsigned < signature_valid < log_comm
 
 ### 3.4 Query API
 
-All endpoints are served at `https://graph.atrib.io/v1/`. All responses use `Content-Type: application/json`. All errors use RFC 9457 Problem Details (`Content-Type: application/problem+json`). The API is read-only.
+All endpoints are served at `https://graph.atrib.dev/v1/`. All responses use `Content-Type: application/json`. All errors use RFC 9457 Problem Details (`Content-Type: application/problem+json`). The API is read-only.
 
 #### 3.4.1 GET /v1/graph/{context_id}
 
@@ -1483,18 +1483,18 @@ GET /v1/creators/ABC.../sessions
 ```
 // RFC 9457 Problem Details. All errors use this format:
 {
-  "type":     "https://atrib.io/problems/session-not-found",
+  "type":     "https://atrib.dev/problems/session-not-found",
   "title":    "Session not found",
   "status":   404,
   "detail":   "No attribution records found for context_id 4bf92f35...",
   "instance": "/v1/graph/4bf92f3577b34da6a3ce929d0e0e4736"
 }
 // Defined problem types:
-// atrib.io/problems/session-not-found     404
-// atrib.io/problems/invalid-context-id    400
-// atrib.io/problems/invalid-creator-key   400
-// atrib.io/problems/unauthorized          401
-// atrib.io/problems/graph-unavailable     503
+// atrib.dev/problems/session-not-found     404
+// atrib.dev/problems/invalid-context-id    400
+// atrib.dev/problems/invalid-creator-key   400
+// atrib.dev/problems/unauthorized          401
+// atrib.dev/problems/graph-unavailable     503
 ```
 
 ---
@@ -1698,7 +1698,7 @@ When the default policy applies because no merchant policy is present, creator `
 ```
 {
   "spec_version": "atrib/1.0",
-  "policy_id":    "https://atrib.io/policies/default/v1",
+  "policy_id":    "https://atrib.dev/policies/default/v1",
   "role":         "default",
   "edge_weights": {
     "CHAIN_PRECEDES":  1.0,
@@ -1834,7 +1834,7 @@ The session policy record is not submitted to the Merkle log; it is not an attri
 
 The calculation algorithm is a pure function: given the attribution graph for a session (§3) and the agreed policy document (§4.5), it produces a distribution: a mapping from creator public keys to share fractions summing to 1.0. No other inputs are required. No network calls are made. No timestamps beyond those in the records are used.
 
-Any party (creator, merchant, auditor, regulator) with access to the graph data and the policy document MUST be able to run this algorithm locally and arrive at the same result as any other party running the same inputs. The atrib resolution API (at `https://resolve.atrib.io/v1/calculate`) is a convenience implementation of this algorithm, not an authority. Its output is no more or less trustworthy than a local implementation producing the same output from the same inputs.
+Any party (creator, merchant, auditor, regulator) with access to the graph data and the policy document MUST be able to run this algorithm locally and arrive at the same result as any other party running the same inputs. The atrib resolution API (at `https://resolve.atrib.dev/v1/calculate`) is a convenience implementation of this algorithm, not an authority. Its output is no more or less trustworthy than a local implementation producing the same output from the same inputs.
 
 #### 4.6.1 Inputs and Preconditions
 
@@ -2078,10 +2078,10 @@ The settlement recommendation document is the output of the calculation algorith
   "context_id":      "4bf92f3577b34da6a3ce929d0e0e4736",
   "transaction_id":  "sha256:8b2f1c...",     // record_hash of the transaction node
   "policy_record_id":"sha256:3f8a2b...",    // record_id of the session policy record (§4.5.3)
-  "graph_checkpoint":"log.atrib.io/v1",   // log origin used for graph data
+  "graph_checkpoint":"log.atrib.dev/v1",   // log origin used for graph data
   "graph_tree_size": 4821937,              // log tree size at calculation time
   "calculated_at":   1743860000000,
-  "calculated_by":   "https://resolve.atrib.io/v1",
+  "calculated_by":   "https://resolve.atrib.dev/v1",
   // URL of the service that ran the calculation, or "local" if self-calculated.
 
   "distribution": {
@@ -2111,7 +2111,7 @@ The settlement recommendation document is the output of the calculation algorith
 
 The settlement recommendation MUST be signed by whoever produced it, using their Ed25519 private key and the same JCS canonicalization procedure defined in §1.4.2. This signature proves that the stated party produced this exact recommendation at the stated time. It does not prove the recommendation is correct; correctness is established by independent verification.
 
-When the atrib resolution API produces the recommendation, it signs with atrib's key (published at `https://resolve.atrib.io/v1/pubkey`). When a merchant or third party runs the calculation locally, they sign with their own key. Any verifier who checks the signature must use the appropriate public key based on `calculated_by`.
+When the atrib resolution API produces the recommendation, it signs with atrib's key (published at `https://resolve.atrib.dev/v1/pubkey`). When a merchant or third party runs the calculation locally, they sign with their own key. Any verifier who checks the signature must use the appropriate public key based on `calculated_by`.
 
 #### 4.7.3 Independent Verification
 
@@ -2228,7 +2228,7 @@ const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
 | Option           | Type       | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ---------------- | ---------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | creatorKey       | string     | Required | Base64url-encoded 32-byte Ed25519 seed. Used to sign all attribution records emitted by this server. See §5.6 for generation and storage requirements.                                                                                                                                                                                                                                                                                                       |
-| logEndpoint      | string     | Optional | URL of the Merkle log submission endpoint. Default: `https://log.atrib.io/v1/entries`. Override for private log deployments.                                                                                                                                                                                                                                                                                                                                           |
+| logEndpoint      | string     | Optional | URL of the Merkle log submission endpoint. Default: `https://log.atrib.dev/v1/entries`. Override for private log deployments.                                                                                                                                                                                                                                                                                                                                           |
 | policy           | object     | Optional | Inline attribution policy document (§4.2). If provided, served at `/.well-known/atrib-policy.json`. If absent, a 404 is served at that path (default policy applies for callers).                                                                                                                                                                                                                                                                                      |
 | serverUrl        | string     | Optional | Canonical URL of this MCP server, used to compute `content_id` values (§1.2.2). Default: derived from the server's HTTP host header. MUST be set explicitly for stdio transport where no host header is available.                                                                                                                                                                                                                                                     |
 | transactionTools | string\[\] | Optional | Array of tool names that complete commerce transactions. When a successful call to one of these tools is detected, `@atrib/mcp` emits a `transaction` record (event_type: "transaction") rather than a `tool_call` record. This is how Path 1 merchant-side transaction emission (§5.4.5) is implemented. The merchant's checkout tool name(s) should be listed here. If not set, `@atrib/mcp` emits only `tool_call` records and Path 2 agent-side detection applies. |
@@ -2355,7 +2355,7 @@ import { atrib } from '@atrib/agent'
 const interceptor = atrib({
   creatorKey:     process.env.ATRIB_PRIVATE_KEY,  // REQUIRED (see §5.6)
   merchantDomain: 'https://merchant.example.com', // OPTIONAL, for policy fetch at session init
-  logEndpoint:    'https://log.atrib.io/v1/entries', // OPTIONAL, default shown
+  logEndpoint:    'https://log.atrib.dev/v1/entries', // OPTIONAL, default shown
   sessionToken:   'my-session',                    // OPTIONAL (see §1.5.5)
   serverUrls:     ['https://tool-a.example', 'https://tool-b.example'], // OPTIONAL, for policy fetch
 })
@@ -2390,7 +2390,7 @@ Implementations are free to wrap this surface in higher-level adapters for speci
 | -------------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | creatorKey     | string | Required | Base64url Ed25519 private key. Used to sign agent-level attribution records when the agent itself is a contributor (e.g., it produces content that influences a transaction). Also used to sign the session policy record. |
 | merchantDomain | string | Optional | Base URL of the merchant whose policies should be fetched at session initialization. If not provided, policy negotiation is skipped and the default policy applies.                                                        |
-| logEndpoint    | string | Optional | Merkle log submission endpoint. Default: `https://log.atrib.io/v1/entries`.                                                                                                                                                |
+| logEndpoint    | string | Optional | Merkle log submission endpoint. Default: `https://log.atrib.dev/v1/entries`.                                                                                                                                                |
 | sessionToken   | string | Optional | If provided, used as the session_token for cross-trace attribution linking (§1.5.5). If absent, the middleware generates one automatically at session start and propagates it via W3C Baggage.                             |
 | serverUrls     | string[] | Required | URLs of all MCP servers the agent connects to. Used for context propagation and transaction detection scope. |
 
@@ -2581,9 +2581,9 @@ The session policy record is stored in memory and SHOULD be persisted to disk or
 import { AtribVerifier } from '@atrib/verify'
 
 const verifier = new AtribVerifier({
-  logEndpoint:     'https://log.atrib.io/v1',    // OPTIONAL, default shown
-  graphEndpoint:   'https://graph.atrib.io/v1',  // OPTIONAL, default shown
-  resolveEndpoint: 'https://resolve.atrib.io/v1', // OPTIONAL, for remote calculation
+  logEndpoint:     'https://log.atrib.dev/v1',    // OPTIONAL, default shown
+  graphEndpoint:   'https://graph.atrib.dev/v1',  // OPTIONAL, default shown
+  resolveEndpoint: 'https://resolve.atrib.dev/v1', // OPTIONAL, for remote calculation
   merchantKey:     process.env.ATRIB_MERCHANT_KEY, // OPTIONAL, for self-signing recommendations
 })
 

@@ -85,7 +85,7 @@ Architectural and design decisions made during the atrib protocol development. E
 
 **Date:** 2026-04-05
 **Context:** For the protocol to be trusted as infrastructure, it must be open. For the company to be sustainable, something must be commercial.
-**Decision:** The spec, signing libraries, and log infrastructure are open and free. The queryable attribution graph (`graph.atrib.io`), analytics dashboard, and settlement resolution API (`resolve.atrib.io`) are commercial products. This follows the Stripe model: open standards, best implementation.
+**Decision:** The spec, signing libraries, and log infrastructure are open and free. The queryable attribution graph (`graph.atrib.dev`), analytics dashboard, and settlement resolution API (`resolve.atrib.dev`) are commercial products. This follows the Stripe model: open standards, best implementation.
 **Alternatives considered:** Fully open with donations (Wikipedia model — chronically underfunded), fully closed (no trust, no adoption), token-funded (crypto baggage).
 
 ## D013 — "Observability without surveillance" is delivered across three layers, not one
@@ -107,7 +107,7 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 
 **Date:** 2026-04-06
 **Context:** The end-to-end test plan calls for an end-to-end test exercising the full attribution flow across all three SDK packages. The question was where this test should live and what it should import. Two options: (a) put it inside an existing package (e.g., `@atrib/verify/test/integration.test.ts`), reusing existing imports; (b) create a separate private workspace package that depends on all three SDK packages and re-derives shared primitives independently.
-**Decision:** Created `@atrib/integration` as a private workspace package (`"private": true`, no `dist/`, only test runner). It depends on `@atrib/mcp`, `@atrib/agent`, and `@atrib/verify` as peers. Critically, its `graph-builder.ts` re-implements `recordHash()` from primitives (`sha256(canonicalRecord(...))`) rather than importing a hash function from `@atrib/mcp`. This mirrors what a real graph indexing service (`graph.atrib.io`) would do — index records arriving from arbitrary creators across the open log, without depending on the SDK that produced them.
+**Decision:** Created `@atrib/integration` as a private workspace package (`"private": true`, no `dist/`, only test runner). It depends on `@atrib/mcp`, `@atrib/agent`, and `@atrib/verify` as peers. Critically, its `graph-builder.ts` re-implements `recordHash()` from primitives (`sha256(canonicalRecord(...))`) rather than importing a hash function from `@atrib/mcp`. This mirrors what a real graph indexing service (`graph.atrib.dev`) would do — index records arriving from arbitrary creators across the open log, without depending on the SDK that produced them.
 **Why this matters:** The §4.6 calculation algorithm's correctness rests on the claim that "any party with the same inputs gets the same result." If integration tests reused the SDK's hash function, two implementations could silently agree because they share code. By re-deriving in the test, we validate that JCS canonicalization + SHA-256 produce identical output across two independent code paths. The end-to-end test passing demonstrates that the chain reconstructs (`A → B → tx`) precisely because `chain_root` references match record hashes derived independently.
 **Alternatives considered:** Test inside `@atrib/verify` (would hide the boundary), test at the repo root (no package isolation), publish `@atrib/integration` as a public package (no value to consumers, only to the project).
 
@@ -720,7 +720,7 @@ A fork of an already-patched client: when the patched `fork()` is invoked, it ca
 ## D025 — `@atrib/log-dev` + spec/code drift fix in submission wire format + `priority` wired to two real consumers
 
 **Date:** 2026-04-06
-**Context:** Strategic sanity-check session concluded that the highest-leverage next chunk was a runnable end-to-end demo a customer can watch in 15 minutes — and that the demo required a local Merkle log stub because the production Tessera-backed log at `log.atrib.io/v1` doesn't exist yet. While preparing to build that stub against spec §2.6, source-reading `@atrib/mcp/src/submission.ts` surfaced two real wire-format bugs that would have caused every submission from the existing client to be rejected by any spec-compliant log:
+**Context:** Strategic sanity-check session concluded that the highest-leverage next chunk was a runnable end-to-end demo a customer can watch in 15 minutes — and that the demo required a local Merkle log stub because the production Tessera-backed log at `log.atrib.dev/v1` doesn't exist yet. While preparing to build that stub against spec §2.6, source-reading `@atrib/mcp/src/submission.ts` surfaced two real wire-format bugs that would have caused every submission from the existing client to be rejected by any spec-compliant log:
 
 **Discrepancy 1: Request body shape was wrong.** Spec §2.6.1 specifies the POST body as a bare attribution record. The existing `submitWithRetry` was wrapping it as `{record, priority}`. The wrapping pattern was even codified in `packages/mcp/test/submission.test.ts` ("sends record and priority in request body"), meaning the test was written against the buggy code rather than against the spec.
 

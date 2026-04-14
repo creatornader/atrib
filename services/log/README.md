@@ -1,6 +1,6 @@
 # `services/log/` - atrib production Merkle log _(not yet built)_
 
-This directory is a placeholder for the production atrib transparency log: a [Tessera](https://github.com/transparency-dev/tessera)-backed Merkle log implementing the [C2SP tlog-tiles](https://c2sp.org/tlog-tiles) specification, deployed at `log.atrib.io/v1`.
+This directory is a placeholder for the production atrib transparency log: a [Tessera](https://github.com/transparency-dev/tessera)-backed Merkle log implementing the [C2SP tlog-tiles](https://c2sp.org/tlog-tiles) specification, deployed at `log.atrib.dev/v1`.
 
 **Status:** Not yet implemented. Tracked in [`DECISIONS.md`](../../DECISIONS.md) and [`internal planning doc`](../../internal planning doc). Work has not started in this directory.
 
@@ -8,7 +8,7 @@ Until this service ships, all local development, testing, and customer demos use
 
 ## Why this lives outside the TypeScript monorepo
 
-The TypeScript packages under `packages/` are SDK code — they ship to merchants, agent builders, and verifiers. The log is **infrastructure**: a long-lived service that any third party (a merchant, an auditor, a witness) can run on their own infrastructure, and that one operator (atrib) runs at `log.atrib.io/v1` as the canonical instance.
+The TypeScript packages under `packages/` are SDK code — they ship to merchants, agent builders, and verifiers. The log is **infrastructure**: a long-lived service that any third party (a merchant, an auditor, a witness) can run on their own infrastructure, and that one operator (atrib) runs at `log.atrib.dev/v1` as the canonical instance.
 
 Tessera is a Go library, so this service is Go. Mixing a Go service into a TypeScript pnpm monorepo would force every TS contributor to install the Go toolchain to run a build that they will never touch. Keeping it under `services/` (and eventually a sibling `go.mod`) preserves the SDK monorepo's invariant: `pnpm install && pnpm build` is enough.
 
@@ -25,7 +25,7 @@ When implemented, this service will:
 
 2. **Honor the `X-atrib-Priority` admission header** so transaction records are admitted ahead of pending tool_call records during ingestion congestion (matches what `@atrib/log-dev` already does, see [`packages/log-dev/src/storage.ts`](../../packages/log-dev/src/storage.ts)).
 
-3. **Use Tessera's storage backends** — `tessera/cmd/storage` supports GCP, AWS, MySQL, and POSIX filesystem. The canonical `log.atrib.io/v1` deployment will likely target GCP Spanner + GCS tile storage; self-hosted deployments can use any supported backend.
+3. **Use Tessera's storage backends** — `tessera/cmd/storage` supports GCP, AWS, MySQL, and POSIX filesystem. The canonical `log.atrib.dev/v1` deployment will likely target GCP Spanner + GCS tile storage; self-hosted deployments can use any supported backend.
 
 4. **Stay wire-compatible with `@atrib/log-dev`** — anything that flows through the dev stub MUST also be accepted by this service, and vice versa. This is tested by pointing the integration tests in [`packages/integration/`](../../packages/integration/) at both backends.
 

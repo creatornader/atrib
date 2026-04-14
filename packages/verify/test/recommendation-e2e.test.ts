@@ -94,7 +94,7 @@ function buildUnsignedRecommendation(
     context_id: CTX,
     transaction_id: g.nodes.find((n) => n.event_type === 'transaction')?.id ?? '',
     policy_record_id: sessionPolicy?.record_id ?? 'default',
-    graph_checkpoint: 'log.atrib.io/v1',
+    graph_checkpoint: 'log.atrib.dev/v1',
     graph_tree_size: g.node_count,
     calculated_at: 1743860000000,
     calculated_by: 'local',

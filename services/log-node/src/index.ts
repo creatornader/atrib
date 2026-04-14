@@ -40,7 +40,7 @@ export interface LogServer {
   close(): Promise<void>
 }
 
-const LOG_ORIGIN = 'log.atrib.io/v1'
+const LOG_ORIGIN = 'log.atrib.dev/v1'
 
 /**
  * Start a production log HTTP server.

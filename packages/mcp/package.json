@@ -14,14 +14,14 @@
     "dist"
   ],
   "description": "MCP server middleware — signed receipts for every tool call. One-line integration.",
-  "author": "Atrib <hello@atrib.io>",
+  "author": "Atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/creatornader/atrib.git",
     "directory": "packages/mcp"
   },
-  "homepage": "https://atrib.io",
+  "homepage": "https://atrib.dev",
   "keywords": [
     "mcp",
     "model-context-protocol",

@@ -76,7 +76,7 @@ describe('@atrib/log-dev — HTTP submission API', () => {
 
       // Checkpoint body shape per §2.4.1: origin\nsize\nrootHash\n
       const checkpointLines = (proof.checkpoint as string).split('\n')
-      expect(checkpointLines[0]).toBe('log.atrib.io/v1')
+      expect(checkpointLines[0]).toBe('log.atrib.dev/v1')
 
       // Storage now has the record
       expect(log.size).toBe(1)

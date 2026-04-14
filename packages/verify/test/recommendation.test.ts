@@ -17,7 +17,7 @@ function baseDoc(): Omit<RecommendationDocument, 'signature'> {
     context_id: '4bf92f3577b34da6a3ce929d0e0e4736',
     transaction_id: 'sha256:8b2f1c0000000000000000000000000000000000000000000000000000000000',
     policy_record_id: 'sha256:3f8a2b0000000000000000000000000000000000000000000000000000000000',
-    graph_checkpoint: 'log.atrib.io/v1',
+    graph_checkpoint: 'log.atrib.dev/v1',
     graph_tree_size: 4821937,
     calculated_at: 1743860000000,
     calculated_by: 'local',
