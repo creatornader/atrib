@@ -65,16 +65,13 @@ export function parseCheckpointBody(
   const treeSizeStr = lines[1] as string
   const rootHash = lines[2] as string
 
-  if (origin.includes('\n') || origin.includes('\r')) {
-    throw new Error('parseCheckpointBody: origin contains newline characters')
+  if (origin.includes('\r')) {
+    throw new Error('parseCheckpointBody: origin contains carriage return')
   }
 
-  const treeSize = parseInt(treeSizeStr, 10)
-  if (isNaN(treeSize) || treeSize < 0) {
+  const treeSize = Number(treeSizeStr)
+  if (!Number.isInteger(treeSize) || treeSize < 0) {
     throw new Error(`parseCheckpointBody: invalid tree size "${treeSizeStr}"`)
-  }
-  if (!Number.isInteger(treeSize)) {
-    throw new Error(`parseCheckpointBody: tree size is not an integer "${treeSizeStr}"`)
   }
   return { origin, treeSize, rootHash }
 }

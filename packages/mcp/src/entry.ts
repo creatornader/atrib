@@ -10,6 +10,8 @@
  *   [89]     event_type    u8  , 0x01 = tool_call, 0x02 = transaction
  */
 
+import { hexDecode } from './hash.js'
+
 export const ENTRY_VERSION = 0x01 as const
 export const EVENT_TYPE_TOOL_CALL = 0x01 as const
 export const EVENT_TYPE_TRANSACTION = 0x02 as const
@@ -40,7 +42,10 @@ export function serializeEntry(input: EntryInput): Uint8Array {
   buf[0] = ENTRY_VERSION
 
   // [1-32] record_hash, decode 64-char hex string to 32 bytes
-  const recordHash = hexToBytes(input.record_hash_hex, 32)
+  const recordHash = hexDecode(input.record_hash_hex)
+  if (recordHash.length !== 32) {
+    throw new Error(`serializeEntry: record_hash_hex must be 64 hex chars, got ${input.record_hash_hex.length}`)
+  }
   buf.set(recordHash, 1)
 
   // [33-64] creator_key, decode base64url to 32 bytes
@@ -48,7 +53,10 @@ export function serializeEntry(input: EntryInput): Uint8Array {
   buf.set(creatorKey, 33)
 
   // [65-80] context_id, decode 32-char hex string to 16 bytes
-  const contextId = hexToBytes(input.context_id, 16)
+  const contextId = hexDecode(input.context_id)
+  if (contextId.length !== 16) {
+    throw new Error(`serializeEntry: context_id must be 32 hex chars, got ${input.context_id.length}`)
+  }
   buf.set(contextId, 65)
 
   // [81-88] timestamp_ms, big-endian u64
@@ -64,19 +72,6 @@ export function serializeEntry(input: EntryInput): Uint8Array {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-function hexToBytes(hex: string, expectedBytes: number): Uint8Array {
-  if (hex.length !== expectedBytes * 2) {
-    throw new Error(
-      `hexToBytes: expected ${expectedBytes * 2} hex chars, got ${hex.length}`,
-    )
-  }
-  const bytes = new Uint8Array(expectedBytes)
-  for (let i = 0; i < expectedBytes; i++) {
-    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
-  }
-  return bytes
-}
 
 function base64urlToBytes(b64url: string, expectedBytes: number): Uint8Array {
   // Convert base64url → base64 → Buffer

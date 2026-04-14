@@ -14,7 +14,8 @@ export { createCheckpointSigner, formatCheckpointBody, parseCheckpointBody } fro
 export type { CheckpointSigner } from './checkpoint.js';
 
 export { bindServer } from './server.js';
-export type { ServerHandle, ProofBundle } from './server.js';
+export type { ServerHandle } from './server.js';
+export type { ProofBundle } from '@atrib/mcp';
 
 import * as ed from '@noble/ed25519';
 import { sha512 } from '@noble/hashes/sha2.js';
