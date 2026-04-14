@@ -2,9 +2,9 @@
 
 **Attribution for agent-side tool calls. Works with every major MCP framework. Sits above every major agent payment protocol.**
 
-`@atrib/agent` is the client-side half of the [atrib value provenance protocol](../../atrib-spec.md). It turns the MCP tool calls flowing out of your agent into signed, chainable attribution records — so the creators, tools, and data sources that contributed to an outcome can be identified and paid without any centralized intermediary seeing what happened inside the call.
+`@atrib/agent` is the client-side half of the [atrib value provenance protocol](../../atrib-spec.md). It turns the MCP tool calls flowing out of your agent into signed, chainable attribution records, so the creators, tools, and data sources that contributed to an outcome can be identified and paid without any centralized intermediary seeing what happened inside the call.
 
-You set up one `atrib()` interceptor, plug it into your framework's adapter, and every outbound `tools/call` from that point on carries W3C trace context, an attribution chain token, and the full atrib session lifecycle. When a payment completes — through any of the supported commerce protocols — a transaction record closes the chain and links contributions to the purchase.
+You set up one `atrib()` interceptor, plug it into your framework's adapter, and every outbound `tools/call` from that point on carries W3C trace context, an attribution chain token, and the full atrib session lifecycle. When a payment completes (through any of the supported commerce protocols), a transaction record closes the chain and links contributions to the purchase.
 
 Two coverage surfaces define what you get:
 

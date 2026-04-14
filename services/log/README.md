@@ -1,4 +1,4 @@
-# `services/log/` — atrib production Merkle log _(not yet built)_
+# `services/log/` - atrib production Merkle log _(not yet built)_
 
 This directory is a placeholder for the production atrib transparency log: a [Tessera](https://github.com/transparency-dev/tessera)-backed Merkle log implementing the [C2SP tlog-tiles](https://c2sp.org/tlog-tiles) specification, deployed at `log.atrib.io/v1`.
 
