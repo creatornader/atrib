@@ -1043,17 +1043,32 @@ leaf_hash   = SHA-256(0x00 || entry_bytes)      // RFC 6962 leaf prefix
 
 Step 4: Verify that the recomputed `leaf_hash` matches the `leaf_hash` in the proof response.
 
-Step 5: Compute the root hash by applying the inclusion proof path from the leaf up to the root, alternating left and right according to the leaf's position in the tree:
+Step 5: Compute the root hash by applying the inclusion proof path from the leaf up to the root. The left/right placement at each level is determined by the RFC 6962 tree decomposition (split at the largest power of 2 strictly less than the current subtree size), NOT by `index % 2`, the `index % 2` shortcut is only correct for power-of-2 trees and produces wrong results for odd-sized trees:
 
 ```
 function verifyInclusion(index, treeSize, leafHash, proof):
+  // Collect the (index, subtreeSize) path from root to leaf
+  path = []
+  idx = index; sz = treeSize
+  while sz > 1:
+    path.append((idx, sz))
+    k = largestPowerOfTwoLessThan(sz)
+    if idx < k:
+      sz = k                    // descend into left subtree
+    else:
+      idx = idx - k; sz = sz - k // descend into right subtree
+
+  // Reverse to get leaf-to-root order matching the proof array
+  path.reverse()
+
   hash = leafHash
-  for each siblingHash in proof:
-    if index is left child:  // index % 2 == 0
-      hash = SHA-256(0x01 || hash || siblingHash)
-    else:                     // index is right child
-      hash = SHA-256(0x01 || siblingHash || hash)
-    index = floor(index / 2)
+  for i in 0..proof.length:
+    (pathIdx, pathSz) = path[i]
+    k = largestPowerOfTwoLessThan(pathSz)
+    if pathIdx < k:              // target is in left subtree
+      hash = SHA-256(0x01 || hash || proof[i])
+    else:                        // target is in right subtree
+      hash = SHA-256(0x01 || proof[i] || hash)
   return hash
 ```
 
