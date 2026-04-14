@@ -4,7 +4,7 @@
 
 This package exists for two purposes:
 
-1. **Cross-package integration tests** that exercise `@atrib/mcp` + `@atrib/agent` + `@atrib/verify` + `@atrib/log-dev` together against real `@modelcontextprotocol/sdk` clients and servers — the kind of test that doesn't belong in any single public package because it would create circular dependencies or pull in dev-only deps.
+1. **Cross-package integration tests** that exercise `@atrib/mcp` + `@atrib/agent` + `@atrib/verify` + `@atrib/log-dev` together against real `@modelcontextprotocol/sdk` clients and servers; the kind of test that doesn't belong in any single public package because it would create circular dependencies or pull in dev-only deps.
 2. **Runnable framework examples** showing how to wire atrib into every supported MCP host: Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS, plus the standalone end-to-end demo.
 
 If you're a customer trying to figure out how to plug atrib in, the examples here are the answer. If you're contributing to atrib, the tests here are how the cross-package contract is enforced.
@@ -29,17 +29,17 @@ In ~150 lines of TypeScript, the demo runs a fake MCP merchant tool server (with
 [demo] 3 records in the log (2 tool_call, 1 transaction)
 ```
 
-Every signature, every chain hash, and every transaction event in that output is **real production code**. The fakery is in the surrounding environment (hardcoded merchant responses, stubbed x402 header) — not in the protocol layer. See [`examples/end-to-end/README.md`](examples/end-to-end/README.md) for the full walkthrough.
+Every signature, every chain hash, and every transaction event in that output is **real production code**. The fakery is in the surrounding environment (hardcoded merchant responses, stubbed x402 header); not in the protocol layer. See [`examples/end-to-end/README.md`](examples/end-to-end/README.md) for the full walkthrough.
 
 ## Examples
 
 | Example                        | Path                                                         | What it shows                                                                                                                                                                         |
 | ------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **End-to-end demo**            | [`examples/end-to-end/`](examples/end-to-end/)               | All moving parts in a single process: dev log + merchant + agent + payment + visualizer. Run with `pnpm demo`.                                                                        |
-| **Claude Agent SDK**           | [`examples/claude-agent-sdk/`](examples/claude-agent-sdk/)   | Both Case A (in-process tools — wrap the SDK's `McpServer` with `atrib()`) and Case B (third-party MCP servers — proxy via `createAtribProxy`).                                       |
+| **Claude Agent SDK**           | [`examples/claude-agent-sdk/`](examples/claude-agent-sdk/)   | Both Case A (in-process tools. wrap the SDK's `McpServer` with `atrib()`) and Case B (third-party MCP servers; proxy via `createAtribProxy`).                                       |
 | **Cloudflare Agents**          | [`examples/cloudflare-agents/`](examples/cloudflare-agents/) | Both surfaces: server-side `McpAgent` (Surface 1) and client-side `Agent` calling external MCP servers (Surface 2).                                                                   |
 | **Vercel AI SDK + AI Gateway** | [`examples/vercel-ai-sdk/`](examples/vercel-ai-sdk/)         | Vercel AI SDK with MCP tools, routed through the AI Gateway (recommended pattern for model fallback + observability).                                                                 |
-| **LangChain JS**               | [`examples/langchain-js/`](examples/langchain-js/)           | `MultiServerMCPClient` patched in-place by `attributeLangchainMcp` so every server it manages emits attributed records — including forked clients used for per-call header workflows. |
+| **LangChain JS**               | [`examples/langchain-js/`](examples/langchain-js/)           | `MultiServerMCPClient` patched in-place by `attributeLangchainMcp` so every server it manages emits attributed records. including forked clients used for per-call header workflows. |
 
 Every example has a `README.md` next to it explaining what's wired up and which lines a real customer would copy.
 
@@ -47,10 +47,10 @@ Every example has a `README.md` next to it explaining what's wired up and which 
 
 Run with `pnpm --filter @atrib/integration test`. Currently 5 tests across 2 files:
 
-- **`test/end-to-end.test.ts`** (3 tests) — full attribution chain across the public packages: agent calls a tool, server emits a signed record, the record's chain hash links to the previous step, the verifier re-runs the calculation against the resulting graph.
-- **`test/real-mcp-sdk.test.ts`** (2 tests) — exercises both the wrapped MCP client and wrapped MCP server against a real `@modelcontextprotocol/sdk@1.29.0` transport, including the §6 retroactive dispatcher wrap path and the `wrapMcpClient` adapter.
+- **`test/end-to-end.test.ts`** (3 tests), full attribution chain across the public packages: agent calls a tool, server emits a signed record, the record's chain hash links to the previous step, the verifier re-runs the calculation against the resulting graph.
+- **`test/real-mcp-sdk.test.ts`** (2 tests), exercises both the wrapped MCP client and wrapped MCP server against a real `@modelcontextprotocol/sdk@1.29.0` transport, including the §6 retroactive dispatcher wrap path and the `wrapMcpClient` adapter.
 
-These tests are deliberately small in number — most behavior is covered by the per-package unit tests (391 total across the workspace). The integration tests are the **cross-package contract** layer: they catch the kind of bug that happens when one package's wire format quietly drifts from another's expectations.
+These tests are deliberately small in number; most behavior is covered by the per-package unit tests (391 total across the workspace). The integration tests are the **cross-package contract** layer: they catch the kind of bug that happens when one package's wire format quietly drifts from another's expectations.
 
 ## Why this package is private
 
@@ -58,9 +58,9 @@ These tests are deliberately small in number — most behavior is covered by the
 
 - It depends on `@atrib/log-dev`, which is also private and intentionally never published.
 - It pulls in every public atrib package as a workspace dependency, plus `@modelcontextprotocol/sdk`, plus framework SDKs as dev deps. None of that should ship to a customer.
-- The examples are reference material, not a library — customers should copy the patterns into their own code, not depend on this package.
+- The examples are reference material, not a library; customers should copy the patterns into their own code, not depend on this package.
 
-The `"private": true` in `package.json` enforces this — `pnpm publish` will refuse to publish it.
+The `"private": true` in `package.json` enforces this; `pnpm publish` will refuse to publish it.
 
 ## How customer conversations use this package
 
@@ -70,15 +70,15 @@ When a prospective customer (Exa, Firecrawl, Browserbase, a checkout-tool builde
 2. Watch the colored chain hashes scroll past.
 3. Walk them through which lines of code they'd add on the merchant side (~3 lines: import, wrap, set log endpoint) and on the agent side (~2 lines: import, wrap with `wrapMcpClient` or the framework adapter).
 4. Open the example matching their stack and show them the integration point.
-5. Switch to the production answer: "the dev log is for local development; the production log is `log.atrib.dev/v1`, Tessera-backed per spec §2 — same wire format, no client changes needed when it ships."
+5. Switch to the production answer: "the dev log is for local development; the production log is `log.atrib.dev/v1`, Tessera-backed per spec §2; same wire format, no client changes needed when it ships."
 
 The examples make the abstract protocol concrete in a way that the spec and the package READMEs cannot.
 
 ## See also
 
-- [`@atrib/mcp`](../mcp/README.md) — server-side middleware
-- [`@atrib/agent`](../agent/README.md) — agent-side interceptor + all framework adapters
-- [`@atrib/verify`](../verify/README.md) — merchant verification
-- [`@atrib/log-dev`](../log-dev/README.md) — in-memory dev Merkle log stub used by the demo
-- [`atrib-spec.md`](../../atrib-spec.md) — the protocol specification
-- [`DECISIONS.md`](../../DECISIONS.md) — architectural decision log
+- [`@atrib/mcp`](../mcp/README.md), server-side middleware
+- [`@atrib/agent`](../agent/README.md), agent-side interceptor + all framework adapters
+- [`@atrib/verify`](../verify/README.md), merchant verification
+- [`@atrib/log-dev`](../log-dev/README.md), in-memory dev Merkle log stub used by the demo
+- [`atrib-spec.md`](../../atrib-spec.md), the protocol specification
+- [`DECISIONS.md`](../../DECISIONS.md), architectural decision log

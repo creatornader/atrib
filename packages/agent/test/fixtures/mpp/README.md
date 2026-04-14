@@ -5,7 +5,7 @@ Real captured payload shapes from the Machine Payments Protocol (MPP).
 **Sources:**
 
 - https://github.com/tempoxyz/mpp-specs
-- https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/ (`draft-ryan-httpauth-payment-01` — "The 'Payment' HTTP Authentication Scheme", co-authored by engineers from Tempo Labs and Stripe)
+- https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/ (`draft-ryan-httpauth-payment-01`; "The 'Payment' HTTP Authentication Scheme", co-authored by engineers from Tempo Labs and Stripe)
 - https://mpp.dev/overview
 - https://stripe.com/blog/machine-payments-protocol (March 2026 launch)
 
@@ -22,7 +22,7 @@ MPP is an HTTP authentication scheme. The flow:
 4. Client retries: `GET /resource` with `Authorization: Payment <credential>`
 5. Server validates the credential, settles, and returns `200 OK` with `Payment-Receipt: <base64url-nopad JSON>` in the response
 
-The detector triggers on step 5 — presence of the `Payment-Receipt` header on a successful response.
+The detector triggers on step 5; presence of the `Payment-Receipt` header on a successful response.
 
 ## Required fields in the decoded receipt
 
@@ -39,7 +39,7 @@ The spec says: _"Servers MUST NOT return a Payment-Receipt header on error respo
 
 ## Files
 
-- `payment_receipt_decoded.json` — Example decoded `Payment-Receipt` payload. We do NOT decode this in detection (header presence is the on-wire signal); fixture is here for future shape validation.
+- `payment_receipt_decoded.json`: Example decoded `Payment-Receipt` payload. We do NOT decode this in detection (header presence is the on-wire signal); fixture is here for future shape validation.
 
 ## How MPP differs from x402
 
@@ -48,7 +48,7 @@ Both protocols build on HTTP 402 but use different on-wire mechanisms:
 - **x402** uses custom request/response headers: `PAYMENT-SIGNATURE` (request) and `PAYMENT-RESPONSE` (response, base64-encoded JSON SettlementResponse)
 - **MPP** uses HTTP standard authentication headers: `WWW-Authenticate: Payment` (challenge) and `Authorization: Payment` (credential), with `Payment-Receipt` as the success signal
 
-They are not mutually exclusive — a single endpoint could in principle support both — and the detector treats them as distinct protocols.
+They are not mutually exclusive; a single endpoint could in principle support both, and the detector treats them as distinct protocols.
 
 ## Redactions
 

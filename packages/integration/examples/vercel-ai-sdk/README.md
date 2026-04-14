@@ -13,10 +13,10 @@ The `@ai-sdk/mcp` MCPClient is **not** a `@modelcontextprotocol/sdk` Client. It 
 | `@modelcontextprotocol/sdk` Client        | `@ai-sdk/mcp` MCPClient                                                                           |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `callTool({ name, arguments, _meta })`    | `callTool({ name, args, options })`                                                               |
-| Accepts `_meta` field on the request      | Does NOT accept `_meta` — it's stripped before the JSON-RPC request is built                      |
+| Accepts `_meta` field on the request      | Does NOT accept `_meta`; it's stripped before the JSON-RPC request is built                      |
 | `client.callTool()` is the public surface | `client.tools()` returns an AI-SDK ToolSet whose `execute()` calls `client.callTool()` internally |
 
-Because the `_meta` field is stripped at the AI SDK MCPClient layer, wrapping at the AI SDK execute callback level loses atrib's outbound metadata. The right integration point is the **`request()` method** — the JSON-RPC bottleneck through which every MCP call flows on its way to the transport. Patching here lets atrib inject `_meta` into outbound `tools/call` and read raw `_meta` from the response before AI-SDK-specific transformations like `extractStructuredContent` strip it.
+Because the `_meta` field is stripped at the AI SDK MCPClient layer, wrapping at the AI SDK execute callback level loses atrib's outbound metadata. The right integration point is the **`request()` method**; the JSON-RPC bottleneck through which every MCP call flows on its way to the transport. Patching here lets atrib inject `_meta` into outbound `tools/call` and read raw `_meta` from the response before AI-SDK-specific transformations like `extractStructuredContent` strip it.
 
 This is symmetrical to how `@atrib/mcp` patches `setRequestHandler` on the server side: same pattern, opposite end of the wire. Full architectural rationale is in [`DECISIONS.md`](../../../../DECISIONS.md) D023.
 
@@ -47,8 +47,8 @@ const mcpClient = await createMCPClient({
   },
 })
 
-// 3. ★ ATRIB ★ — patch the client's request method.
-//    Idempotent — safe to call multiple times.
+// 3. ★ ATRIB ★ Patch the client's request method.
+//    Idempotent. Safe to call multiple times.
 //    Order: can be called BEFORE or AFTER mcpClient.tools() because the
 //    AI SDK builds tool execute() callbacks that read client.request at
 //    INVOCATION time, not at build time.
@@ -86,9 +86,9 @@ That's the entire integration. Every successful tool call going through the AI S
 
 The example above passes `model: 'openai/gpt-5.4'` as a string. In AI SDK v6 this `provider/model` shape automatically routes through the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway), which is the recommended pattern. Benefits:
 
-- **OIDC auth** — pull credentials with `vercel env pull`; no provider keys to manage in your environment
-- **Automatic provider failover** — if one model is down, the gateway falls back transparently
-- **Cost tracking and observability** — unified usage metrics across all model calls
+- **OIDC auth**: pull credentials with `vercel env pull`; no provider keys to manage in your environment
+- **Automatic provider failover**: if one model is down, the gateway falls back transparently
+- **Cost tracking and observability**: unified usage metrics across all model calls
 - **Zero data retention** by default
 
 If you want to be explicit about routing through the Gateway (e.g. for clarity in code review, or to attach gateway-specific options), use the `gateway()` helper from `@ai-sdk/gateway`:
@@ -103,13 +103,13 @@ const result = await streamText({
 })
 ```
 
-Both forms route through the Gateway and use OIDC auth — no provider API keys required. **atrib's behavior is identical in both forms** — the attribution interceptor patches `mcpClient.request`, which sits below the model layer, so every MCP `tools/call` flowing out of the AI SDK gets attributed the same way regardless of which Gateway form you use.
+Both forms route through the Gateway and use OIDC auth; no provider API keys required. **atrib's behavior is identical in both forms**; the attribution interceptor patches `mcpClient.request`, which sits below the model layer, so every MCP `tools/call` flowing out of the AI SDK gets attributed the same way regardless of which Gateway form you use.
 
 ---
 
 ## Multiple MCP servers
 
-If your app connects to several MCP servers, call `attributeVercelAiSdkMcp` on each client. The helper is idempotent — calling it twice on the same client is a no-op — so it's safe to call defensively if you're not sure whether a client has been patched already.
+If your app connects to several MCP servers, call `attributeVercelAiSdkMcp` on each client. The helper is idempotent; calling it twice on the same client is a no-op, so it's safe to call defensively if you're not sure whether a client has been patched already.
 
 ```ts
 const stdioClient = await createMCPClient({ transport: stdioTransport })
@@ -133,11 +133,11 @@ The atrib interceptor is shared across all clients (it's the agent's identity, n
 
 ## Environment variables
 
-- **`ATRIB_PRIVATE_KEY`** — base64url-encoded 32-byte Ed25519 seed. Generate one for development with:
+- **`ATRIB_PRIVATE_KEY`**: base64url-encoded 32-byte Ed25519 seed. Generate one for development with:
   ```bash
   node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))'
   ```
-- **`ATRIB_LOG_ENDPOINT`** — URL of your atrib Merkle log submission endpoint. Optional in development; the submission queue silently buffers when unset.
+- **`ATRIB_LOG_ENDPOINT`**: URL of your atrib Merkle log submission endpoint. Optional in development; the submission queue silently buffers when unset.
 
 If `ATRIB_PRIVATE_KEY` is omitted, atrib operates in pass-through mode with a console warning. No records are emitted, but the AI SDK keeps working.
 
@@ -150,7 +150,7 @@ After running with `ATRIB_LOG_ENDPOINT` pointed at your log:
 - Every successful `tools/call` from the AI SDK emits a signed atrib record
 - Records share a `context_id` per agent session and chain via `chain_root` references
 - Failed tool calls (`isError: true` from the upstream) emit no record per spec §5.3.3
-- atrib failures (network, signing, interceptor errors) never reach the AI SDK's tool dispatch — they're caught and logged with the `atrib:` console prefix per §5.8
+- atrib failures (network, signing, interceptor errors) never reach the AI SDK's tool dispatch; they're caught and logged with the `atrib:` console prefix per §5.8
 
 If you don't see records, check:
 
@@ -163,7 +163,7 @@ If you don't see records, check:
 
 ## What about `experimental_createMCPClient`?
 
-The legacy `experimental_createMCPClient` from older versions of the `ai` package (re-exported from `@ai-sdk/mcp` for backward compatibility) returns a structurally compatible MCPClient. The helper accepts both — `attributeVercelAiSdkMcp` only depends on the public `request()` method shape, which has been stable across the experimental → stable transition.
+The legacy `experimental_createMCPClient` from older versions of the `ai` package (re-exported from `@ai-sdk/mcp` for backward compatibility) returns a structurally compatible MCPClient. The helper accepts both; `attributeVercelAiSdkMcp` only depends on the public `request()` method shape, which has been stable across the experimental → stable transition.
 
 ```ts
 import { experimental_createMCPClient } from 'ai'  // legacy

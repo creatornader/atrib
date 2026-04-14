@@ -20,13 +20,13 @@ In ~150 lines of TypeScript and one terminal window, this demo runs the **entire
 
 1. A **fake MCP merchant tool server** that pretends to be a search API. It uses `@atrib/mcp`'s `atrib()` middleware so every tool call it serves emits a signed attribution record.
 
-2. A **fake AI agent** built on the raw `@modelcontextprotocol/sdk` Client (wrapped with `wrapMcpClient` from `@atrib/agent`), which calls the merchant's tool twice — chaining the second call to the first via `_meta.atrib`.
+2. A **fake AI agent** built on the raw `@modelcontextprotocol/sdk` Client (wrapped with `wrapMcpClient` from `@atrib/agent`), which calls the merchant's tool twice; chaining the second call to the first via `_meta.atrib`.
 
-3. A **stubbed x402-style payment** detected by `@atrib/agent`'s transaction middleware — closing the chain with a transaction record per spec §5.4.
+3. A **stubbed x402-style payment** detected by `@atrib/agent`'s transaction middleware; closing the chain with a transaction record per spec §5.4.
 
 4. **`@atrib/log-dev`** in-process, receiving every signed record per spec §2.6.1, validating shape, and returning well-formed inclusion proofs.
 
-5. A **CLI visualizer** that subscribes to the dev log via `onSubmit()` and pretty-prints each record as it lands — showing the chain build up step by step.
+5. A **CLI visualizer** that subscribes to the dev log via `onSubmit()` and pretty-prints each record as it lands; showing the chain build up step by step.
 
 By the end of the demo, you've watched a full attribution chain form: tool call → tool call → transaction, with chain linkage visible at each step, and you've seen how a customer would verify the attribution after the fact.
 
@@ -77,6 +77,6 @@ This is the answer to "where does this go in 15 minutes?" When a prospective cus
 2. Watch the records flow
 3. Point at each step in the CLI output and explain what's happening at the protocol level
 4. Show them which lines of code they would have to add on their merchant side (~3 lines: import, wrap, set log endpoint) and on their agent side (~2 lines: import, wrap)
-5. Switch to the production answer: "this is the dev log; the production log is `log.atrib.dev/v1` and is Tessera-backed per spec §2 — same wire format, same record shape, no client changes."
+5. Switch to the production answer: "this is the dev log; the production log is `log.atrib.dev/v1` and is Tessera-backed per spec §2; same wire format, same record shape, no client changes."
 
 The demo makes the abstract protocol concrete in a way that the spec and the README cannot.

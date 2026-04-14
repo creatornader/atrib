@@ -13,7 +13,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
   creatorKey: process.env.ATRIB_PRIVATE_KEY!, // Ed25519 seed, base64url, 32 bytes
   serverUrl: 'https://my-tool.example.com', // canonical URL for content_id derivation
-  logEndpoint: process.env.ATRIB_LOG_ENDPOINT, // optional in dev — use @atrib/log-dev locally
+  logEndpoint: process.env.ATRIB_LOG_ENDPOINT, // optional in dev. Use @atrib/log-dev locally
 })
 
 // Register your tools the normal way; the wrapper is fully transparent.
@@ -39,7 +39,7 @@ After the tool's own handler returns successfully (`isError: false`), **before**
 5. **Computes the propagation token** (sha256 of the signed record + creator public key), 87 chars max, fitting the W3C tracestate value limit.
 6. **Writes the token to the response** at `response._meta.atrib`, `tracestate`, and `X-atrib-Chain` so the calling agent can chain the next call to it.
 
-After the response is sent (non-blocking — see invariant #4 below):
+After the response is sent (non-blocking; see invariant #4 below):
 
 7. **Submits the signed record to the log endpoint** with retry (exponential backoff, max 3 attempts, 30s window).
 8. **Caches the proof bundle on success**, or caches the signed record for `flush()` retry on failure.
@@ -50,7 +50,7 @@ The middleware is built around one absolute invariant: **atrib failures must nev
 
 - If `ATRIB_PRIVATE_KEY` (or `creatorKey`) is unset → pass-through mode with one console warning per process. Tools work normally; no records are emitted.
 - All exceptions inside the middleware are caught, logged with the `atrib:` prefix, and never propagated to the caller.
-- Log submission failures are silent and retried. Records that fail repeatedly are cached locally and given one final retry on `flush()`, drained in priority order (high before normal — see "How priority works on the wire" below).
+- Log submission failures are silent and retried. Records that fail repeatedly are cached locally and given one final retry on `flush()`, drained in priority order (high before normal; see "How priority works on the wire" below).
 - If a tool handler returns `isError: true`, **no record is emitted** per §5.3.3 and no context is written to the response. Errors do not contribute to attribution chains.
 
 ## Wire format (spec §2.6.1)
@@ -74,7 +74,7 @@ X-atrib-Priority: high
 }
 ```
 
-The body is the bare record per spec §2.6.1 — there is no wrapper object. The `X-atrib-Priority` header is a non-conflicting HTTP-level extension to the spec used by the dev log's admission queue and by the `flush()` retry ordering inside this package. See the `submission.ts` file header for the full rationale on the two real consumers of priority.
+The body is the bare record per spec §2.6.1; there is no wrapper object. The `X-atrib-Priority` header is a non-conflicting HTTP-level extension to the spec used by the dev log's admission queue and by the `flush()` retry ordering inside this package. See the `submission.ts` file header for the full rationale on the two real consumers of priority.
 
 The expected response is a proof bundle per §2.6.2 (snake_case fields):
 
@@ -93,9 +93,9 @@ The expected response is a proof bundle per §2.6.2 (snake_case fields):
 
 Wraps an `McpServer` instance in place. The wrapper is idempotent and can be called before or after `server.tool()` registration (the middleware retroactively wraps a pre-existing `tools/call` dispatcher if needed).
 
-**`server`** — an `McpServer` from `@modelcontextprotocol/sdk/server/mcp.js`. The package supports both `server.tool()` (deprecated low-level) and `server.registerTool()` (current high-level) registration paths.
+**`server`**; an `McpServer` from `@modelcontextprotocol/sdk/server/mcp.js`. The package supports both `server.tool()` (deprecated low-level) and `server.registerTool()` (current high-level) registration paths.
 
-**`options`** — `AtribOptions`:
+**`options`**; `AtribOptions`:
 
 | Field              | Type             | Required                | Description                                                                                                                                                      |
 | ------------------ | ---------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -107,8 +107,8 @@ Wraps an `McpServer` instance in place. The wrapper is idempotent and can be cal
 
 Returns a `SubmissionQueue`-aware wrapper exposing:
 
-- `flush()` — drain pending submissions before shutdown (idempotent)
-- `getProof(recordHash)` — retrieve a cached proof bundle by record hash
+- `flush()`: drain pending submissions before shutdown (idempotent)
+- `getProof(recordHash)`: retrieve a cached proof bundle by record hash
 
 ### `createAtribProxy(options): Promise<AtribProxy>`
 
@@ -145,7 +145,7 @@ await server.flush()
 await log.close()
 ```
 
-`@atrib/log-dev` implements spec §2.6.1 wire format conformance exactly — anything that flows through it would also be accepted by a real Tessera log. It uses placeholder Merkle hashes and is **not for production use**. See [`packages/log-dev/README.md`](../log-dev/README.md) for the full warning and the package's purpose.
+`@atrib/log-dev` implements spec §2.6.1 wire format conformance exactly; anything that flows through it would also be accepted by a real Tessera log. It uses placeholder Merkle hashes and is **not for production use**. See [`packages/log-dev/README.md`](../log-dev/README.md) for the full warning and the package's purpose.
 
 ## Test coverage
 
@@ -160,7 +160,7 @@ await log.close()
 - The `setRequestHandler` monkey-patch shape regression test against `@modelcontextprotocol/sdk@1.29.0`
 - The retroactive register-then-wrap path
 - `createAtribProxy` end-to-end with real upstream MCP servers
-- §5.8 degradation contract — every failure mode caught, never propagated
+- §5.8 degradation contract; every failure mode caught, never propagated
 - Submission queue retry, backoff, and `flush()` priority ordering
 
 Run them with `pnpm --filter @atrib/mcp test`.
@@ -178,14 +178,14 @@ Run them with `pnpm --filter @atrib/mcp test`.
 | §5.3         | Server-side middleware behavior                                            |
 | §5.3.3       | No emission for `isError: true`                                            |
 | §5.3.5       | Non-blocking submission queue                                              |
-| §5.8         | Degradation contract — failures never break the host                       |
+| §5.8         | Degradation contract; failures never break the host                       |
 
 The full protocol spec is at [`atrib-spec.md`](../../atrib-spec.md).
 
 ## See also
 
-- [`@atrib/agent`](../agent/README.md) — the client-side counterpart for agents calling MCP tools
-- [`@atrib/verify`](../verify/README.md) — independent verification of settlement recommendations
-- [`@atrib/log-dev`](../log-dev/README.md) — development-mode Merkle log stub for local testing
-- [`packages/integration/examples/end-to-end/`](../integration/examples/end-to-end/) — runnable demo wiring everything together
-- [`DECISIONS.md`](../../DECISIONS.md) — architectural decision log
+- [`@atrib/agent`](../agent/README.md), the client-side counterpart for agents calling MCP tools
+- [`@atrib/verify`](../verify/README.md), independent verification of settlement recommendations
+- [`@atrib/log-dev`](../log-dev/README.md), development-mode Merkle log stub for local testing
+- [`packages/integration/examples/end-to-end/`](../integration/examples/end-to-end/), runnable demo wiring everything together
+- [`DECISIONS.md`](../../DECISIONS.md), architectural decision log

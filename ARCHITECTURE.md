@@ -1,6 +1,6 @@
 # atrib architecture
 
-How the protocol works, what the trust model actually guarantees, and why the design is the way it is. If you want the pitch, read the [README](README.md). If you want every normative detail, read the [spec](atrib-spec.md). This is the middle layer — enough to evaluate whether atrib is worth building on.
+How the protocol works, what the trust model actually guarantees, and why the design is the way it is. If you want the pitch, read the [README](README.md). If you want every normative detail, read the [spec](atrib-spec.md). This is the middle layer: enough to evaluate whether atrib is worth building on.
 
 Architectural decisions and rejected alternatives are logged in [DECISIONS.md](DECISIONS.md).
 
@@ -49,7 +49,7 @@ Three protocol layers, one SDK layer that automates them. Data flows in one dire
                 │  Layer 3: Attribution Graph (§3)                     │
                 │                                                     │
                 │  5 edge types, deterministic derivation              │
-                │  Structure only — no causal claims                  │
+                │  Structure only, no causal claims                    │
                 └────────────────────────┬────────────────────────────┘
                                          │
                               graph + policy
@@ -122,19 +122,19 @@ The goal is simple: every claim the protocol makes should be independently verif
 
 **Verifiable by anyone:**
 
-Record signatures — each record is Ed25519 signed. The public key is embedded in the record itself, so anyone can verify. No certificate authority, no PKI.
+Record signatures: each record is Ed25519 signed. The public key is embedded in the record itself, so anyone can verify. No certificate authority, no PKI.
 
-Log inclusion — the Merkle log returns RFC 6962 inclusion proofs. A hash path from the leaf to the root. Pure math. If you have the checkpoint, you can verify that a record was committed at a specific index.
+Log inclusion: the Merkle log returns RFC 6962 inclusion proofs. A hash path from the leaf to the root. Pure math. If you have the checkpoint, you can verify that a record was committed at a specific index.
 
-Log consistency — consecutive checkpoints can be verified for consistency. This proves the log only grew and nothing was modified or deleted between checkpoints. Same mechanism Certificate Transparency uses.
+Log consistency: consecutive checkpoints can be verified for consistency. This proves the log only grew and nothing was modified or deleted between checkpoints. Same mechanism Certificate Transparency uses.
 
-Graph edges — all five edge types are deterministically derived from record fields. Given the same records, any implementation following Section 3.2.4 must produce the same graph. You can verify by rebuilding it yourself.
+Graph edges: all five edge types are deterministically derived from record fields. Given the same records, any implementation following Section 3.2.4 must produce the same graph. You can verify by rebuilding it yourself.
 
-Settlement calculation — the algorithm (Section 4.6) is a pure function. Graph + policy in, distribution out. No network calls, no randomness. Any party with the same inputs gets the same answer. `@atrib/verify` exists so merchants can run this locally and check.
+Settlement calculation: the algorithm (Section 4.6) is a pure function. Graph + policy in, distribution out. No network calls, no randomness. Any party with the same inputs gets the same answer. `@atrib/verify` exists so merchants can run this locally and check.
 
 **Trusted (but auditable):**
 
-The log operator's append-only behavior. The operator could theoretically refuse entries (censorship) or show different views to different parties (equivocation). Both are detectable: censorship is obvious to the submitter (no inclusion proof comes back), and equivocation is caught by consistency proofs and the witnessing protocol (Section 2.9). The trust assumption is that the operator doesn't equivocate — and the audit mechanism makes equivocation a bad bet.
+The log operator's append-only behavior. The operator could theoretically refuse entries (censorship) or show different views to different parties (equivocation). Both are detectable: censorship is obvious to the submitter (no inclusion proof comes back), and equivocation is caught by consistency proofs and the witnessing protocol (Section 2.9). The trust assumption is that the operator doesn't equivocate, and the audit mechanism makes equivocation a bad bet.
 
 **Not trusted at all:**
 
@@ -144,7 +144,7 @@ atrib. The protocol is an open spec. The signing libraries are open source. The 
 
 ## Why Certificate Transparency, not blockchain
 
-People always ask this. CT Merkle logs give you the same cryptographic guarantees — append-only, tamper-evident, publicly auditable — without tokens, gas fees, block times, or the cultural baggage of crypto.
+People always ask this. CT Merkle logs give you the same cryptographic guarantees (append-only, tamper-evident, publicly auditable) without tokens, gas fees, block times, or the cultural baggage of crypto.
 
 Here is why, specifically:
 
@@ -216,7 +216,7 @@ Each adapter ships with: source at `packages/agent/src/adapters/`, tests at `pac
 
 ## Degradation contract
 
-Section 5.8 of the spec. atrib failures never affect the primary tool call or agent response. Not a best practice — a hard protocol requirement. The guarantees:
+Section 5.8 of the spec. atrib failures never affect the primary tool call or agent response. Not a best practice; a hard protocol requirement. The guarantees:
 
 - **All exceptions caught.** Any exception inside an atrib trigger handler is caught by the middleware, logged at warning level with an `atrib:` prefix, and swallowed. Exceptions never propagate to the tool handler, the agent, or calling code.
 

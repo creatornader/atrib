@@ -2,8 +2,8 @@
 
 A canonical set of test fixtures for the atrib log submission API. This corpus is the **shared contract** between every atrib log implementation:
 
-- [`@atrib/log-dev`](../../../packages/log-dev/) — the in-memory TypeScript dev stub
-- [`services/log/`](../../../services/log/) — the future Tessera-backed Go service (not yet built)
+- [`@atrib/log-dev`](../../../packages/log-dev/), the in-memory TypeScript dev stub
+- [`services/log/`](../../../services/log/), the future Tessera-backed Go service (not yet built)
 - any third party that wants to run a conformant atrib log
 
 If your log implementation passes this corpus, it agrees with `@atrib/mcp`'s submission queue on the wire format defined in [`atrib-spec.md` §2.6.1](../../../atrib-spec.md). If it doesn't, the spec is the arbiter.
@@ -42,7 +42,7 @@ Each case file has the same shape:
     "body": {
       /* the bare signed AtribRecord, ready to JSON.stringify */
     },
-    "body_is_raw_string": false, // optional — true for non-JSON-body cases
+    "body_is_raw_string": false, // optional; true for non-JSON-body cases
   },
   "expected": {
     "status": 200,
@@ -67,7 +67,7 @@ Sequences are similar but contain a `steps` array, each step having its own requ
 2. For each case in `cases/`, send the described HTTP request to your log and assert the response matches `expected`.
 3. For each sequence in `sequences/`, run the steps in order, capturing values where requested (e.g., `capture_log_index_as`) and asserting later steps match (`log_index_matches`).
 4. After each test, reset the log to a clean state (the dev log uses one fresh `startDevLog()` per test).
-5. If your implementation cannot honor a particular case (e.g., it intentionally skips a validation step), maintain a per-implementation skip list with a justification — never silently disable a case. The TS reference consumer at [`packages/log-dev/test/conformance.test.ts`](../../../packages/log-dev/test/conformance.test.ts) does this for `reject-bad-signature` because the dev log skips Step 1.
+5. If your implementation cannot honor a particular case (e.g., it intentionally skips a validation step), maintain a per-implementation skip list with a justification; never silently disable a case. The TS reference consumer at [`packages/log-dev/test/conformance.test.ts`](../../../packages/log-dev/test/conformance.test.ts) does this for `reject-bad-signature` because the dev log skips Step 1.
 
 ## Time handling
 
@@ -79,7 +79,7 @@ Test consumers MUST mock the system clock to `reference_time_ms` before sending 
 
 ## Signing keys
 
-The corpus uses a hardcoded Ed25519 seed (`0x07` repeated 32 times — see `manifest.json`'s `signing.seed_b64url`). **This seed must NEVER be used in production.** It exists solely so the corpus is byte-deterministic across regenerations and so any implementation can independently re-derive `creator_key` from the seed if it wants to verify the test signatures itself.
+The corpus uses a hardcoded Ed25519 seed (`0x07` repeated 32 times; see `manifest.json`'s `signing.seed_b64url`). **This seed must NEVER be used in production.** It exists solely so the corpus is byte-deterministic across regenerations and so any implementation can independently re-derive `creator_key` from the seed if it wants to verify the test signatures itself.
 
 The `creator_key` and `context_id` are also pinned in the manifest so consumers don't need to re-derive them at test time.
 
@@ -97,17 +97,17 @@ Regenerate when:
 - The canonical record format (§1.2) or JCS encoding changes
 - A new test case is needed (e.g., spec §2.6.1 grows a Step 7)
 
-After regenerating, review the diff carefully — the whole point of byte-determinism is that diffs in PR review are trivial to read.
+After regenerating, review the diff carefully; the whole point of byte-determinism is that diffs in PR review are trivial to read.
 
 ## Why this lives at `spec/conformance/` rather than inside a package
 
 The corpus is shared infrastructure between TypeScript and Go (and possibly other) implementations. If it lived inside `packages/log-dev/test/fixtures/`, the future Go service would have to either copy it or reach across language boundaries to consume it. Sitting at `spec/conformance/` next to `atrib-spec.md` makes it discoverable from the spec itself and accessible from any subtree of the repo.
 
-The generator and the TypeScript test consumer live in `@atrib/log-dev` because that's where the canonical signer (`@atrib/mcp`'s `signRecord`) is reachable as a workspace dep — but the corpus output is implementation-neutral.
+The generator and the TypeScript test consumer live in `@atrib/log-dev` because that's where the canonical signer (`@atrib/mcp`'s `signRecord`) is reachable as a workspace dep, but the corpus output is implementation-neutral.
 
 ## See also
 
-- [`atrib-spec.md` §2.6.1](../../../atrib-spec.md) — the normative spec text the corpus tests
-- [`packages/log-dev/scripts/generate-conformance-corpus.ts`](../../../packages/log-dev/scripts/generate-conformance-corpus.ts) — the corpus generator
-- [`packages/log-dev/test/conformance.test.ts`](../../../packages/log-dev/test/conformance.test.ts) — the TypeScript reference consumer
-- [`services/log/README.md`](../../../services/log/README.md) — the future Go log service that will also consume this corpus
+- [`atrib-spec.md` §2.6.1](../../../atrib-spec.md), the normative spec text the corpus tests
+- [`packages/log-dev/scripts/generate-conformance-corpus.ts`](../../../packages/log-dev/scripts/generate-conformance-corpus.ts), the corpus generator
+- [`packages/log-dev/test/conformance.test.ts`](../../../packages/log-dev/test/conformance.test.ts), the TypeScript reference consumer
+- [`services/log/README.md`](../../../services/log/README.md), the future Go log service that will also consume this corpus

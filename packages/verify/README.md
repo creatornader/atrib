@@ -32,9 +32,9 @@ const result = await verifier.verify(recommendationDoc)
 
 1. **Resolves the calculator's public key** from `recommendationDoc.calculated_by`. For the well-known `resolve.atrib.dev` service, the key is fetched from the `/pubkey` endpoint. For other calculators, the merchant supplies the key out-of-band.
 2. **Verifies the Ed25519 signature** over the JCS-canonicalized recommendation document (excluding the `signature` field).
-3. **Fetches the attribution graph** at `recommendationDoc.graph_tree_size` from the configured graph endpoint. Pinning to a specific tree size makes the verification reproducible — the graph is fixed, not "live."
+3. **Fetches the attribution graph** at `recommendationDoc.graph_tree_size` from the configured graph endpoint. Pinning to a specific tree size makes the verification reproducible; the graph is fixed, not "live."
 4. **Fetches the session policy record** referenced by `policy_record_id`, or uses the spec §4.3 default policy if `policy_record_id === 'default'`.
-5. **Re-runs `calculate(graph, policy, sessionPolicyRecord)`** locally — a pure function with no network calls and no randomness.
+5. **Re-runs `calculate(graph, policy, sessionPolicyRecord)`** locally; a pure function with no network calls and no randomness.
 6. **Compares distributions** using `distributionsMatch()` (within `1e-9` per recipient, accounting for floating-point drift across implementations).
 
 The key invariant per spec §4.6: any party with the same graph and the same policy MUST get the same distribution. If they don't, either the calculator cheated, the document was tampered with, or one party has a buggy implementation. Either way the merchant should not pay against this document.
@@ -52,7 +52,7 @@ const recommendation = await verifier.calculate({
 // → fully-shaped RecommendationDocument, ready to settle against
 ```
 
-Per the §5.8 degradation contract, this never throws on a missing key — if `signWith === 'merchant'` but `merchantKey` is unset, the document is returned **unsigned** with a warning rather than crashing the merchant pipeline.
+Per the §5.8 degradation contract, this never throws on a missing key; if `signWith === 'merchant'` but `merchantKey` is unset, the document is returned **unsigned** with a warning rather than crashing the merchant pipeline.
 
 ## API reference
 
@@ -63,27 +63,27 @@ Per the §5.8 degradation contract, this never throws on a missing key — if `s
 | `logEndpoint`     | `string` | `https://log.atrib.dev/v1`     | The Merkle log to fetch checkpoints and proofs from.                    |
 | `graphEndpoint`   | `string` | `https://graph.atrib.dev/v1`   | The graph query endpoint (spec §3).                                     |
 | `resolveEndpoint` | `string` | `https://resolve.atrib.dev/v1` | Reserved for v2 remote calculation.                                     |
-| `merchantKey`     | `string` | unset                         | Base64url Ed25519 32-byte seed. Optional — `verify()` works without it. |
+| `merchantKey`     | `string` | unset                         | Base64url Ed25519 32-byte seed. Optional. `verify()` works without it. |
 
 ### `verify(doc): Promise<VerificationResult>`
 
-Independently re-runs the §4.6 calculation and verifies the document signature. Always returns a result object — never throws. Inspect `valid`, `signatureOk`, `calcMatch`, and `warnings` to understand the outcome.
+Independently re-runs the §4.6 calculation and verifies the document signature. Always returns a result object; never throws. Inspect `valid`, `signatureOk`, `calcMatch`, and `warnings` to understand the outcome.
 
 ### `calculate(options): Promise<RecommendationDocument>`
 
-Post-hoc calculation when no agent SDK was present. Always returns a fully-shaped document — unsigned with a warning if the merchant key is missing.
+Post-hoc calculation when no agent SDK was present. Always returns a fully-shaped document, unsigned with a warning if the merchant key is missing.
 
 ### Lower-level primitives
 
 For advanced use (custom calculators, alternative signing flows), the package also exports:
 
-- `calculate(graph, policy, sessionPolicyRecord)` — the pure §4.6 calculation function
-- `DEFAULT_POLICY` — the spec §4.3 default policy document
-- `isValidPolicy(doc)` — schema check for `PolicyDocument`
-- `signRecommendation(unsigned, privateKey)` — JCS + Ed25519 signing
-- `verifyRecommendationSignature(doc, publicKey)` — signature verification
-- `recommendationSigningInput(doc)` — the canonical bytes that get signed
-- `distributionsMatch(a, b)` — float-tolerant equality (within `1e-9` per recipient)
+- `calculate(graph, policy, sessionPolicyRecord)`: the pure §4.6 calculation function
+- `DEFAULT_POLICY`: the spec §4.3 default policy document
+- `isValidPolicy(doc)`: schema check for `PolicyDocument`
+- `signRecommendation(unsigned, privateKey)`: JCS + Ed25519 signing
+- `verifyRecommendationSignature(doc, publicKey)`: signature verification
+- `recommendationSigningInput(doc)`: the canonical bytes that get signed
+- `distributionsMatch(a, b)`: float-tolerant equality (within `1e-9` per recipient)
 - `fetchGraph(endpoint, contextId, treeSize?)`, `fetchSessionPolicyRecord`, `fetchPolicyDocument`
 
 ## Why pure functions matter
@@ -95,7 +95,7 @@ The §4.6 calculation algorithm is intentionally a **pure function** of `(graph,
 - **No randomness**. No "tie-breaker by hash of current time" or anything like that. Ties are broken deterministically per the spec.
 - **No floating-point ordering surprises**. The algorithm walks the graph in a deterministic order so two implementations on identical input produce identical output (within `1e-9` for the final distribution shares).
 
-This is what makes verification possible: the merchant's local recalculation is the same code the calculator ran, producing the same output, so any disagreement is a real signal — not implementation drift.
+This is what makes verification possible: the merchant's local recalculation is the same code the calculator ran, producing the same output, so any disagreement is a real signal; not implementation drift.
 
 ## §5.8 degradation contract
 
@@ -111,10 +111,10 @@ The merchant's payment pipeline never crashes because of an atrib problem. It ju
 
 82 tests across 4 test files:
 
-- **`calculate.test.ts`** — the §4.6 calculation algorithm: edge weight aggregation (`max()` not `sum()`), CONVERGES_ON handling, tie-breaking determinism, default policy correctness, constraint enforcement.
-- **`graph-fetch.test.ts`** — graph endpoint client, session policy record fetch, policy document fetch, error handling.
-- **`recommendation.test.ts`** — JCS canonicalization round-trips, Ed25519 signing/verification, `distributionsMatch()` floating-point tolerance, `recommendationSigningInput()` byte stability.
-- **`verifier.test.ts`** — full `verify()` and `calculate()` paths, including the §5.8 degradation cases and the `valid === false` failure modes.
+- **`calculate.test.ts`**: the §4.6 calculation algorithm: edge weight aggregation (`max()` not `sum()`), CONVERGES_ON handling, tie-breaking determinism, default policy correctness, constraint enforcement.
+- **`graph-fetch.test.ts`**: graph endpoint client, session policy record fetch, policy document fetch, error handling.
+- **`recommendation.test.ts`**: JCS canonicalization round-trips, Ed25519 signing/verification, `distributionsMatch()` floating-point tolerance, `recommendationSigningInput()` byte stability.
+- **`verifier.test.ts`**: full `verify()` and `calculate()` paths, including the §5.8 degradation cases and the `valid === false` failure modes.
 
 Run them with `pnpm --filter @atrib/verify test`.
 
@@ -126,15 +126,15 @@ Run them with `pnpm --filter @atrib/verify test`.
 | §4.3         | Default policy document                              |
 | §4.6         | Pure calculation algorithm                           |
 | §4.7         | Recommendation document signing/verification         |
-| §5.5         | `AtribVerifier` class — `verify()` and `calculate()` |
-| §5.8         | Degradation contract — failures never break the host |
+| §5.5         | `AtribVerifier` class. `verify()` and `calculate()` |
+| §5.8         | Degradation contract; failures never break the host |
 
 The full protocol spec is at [`atrib-spec.md`](../../atrib-spec.md).
 
 ## See also
 
-- [`@atrib/mcp`](../mcp/README.md) — server-side middleware that produces the signed records `verify()` ultimately validates
-- [`@atrib/agent`](../agent/README.md) — agent-side interceptor + framework adapters
-- [`@atrib/log-dev`](../log-dev/README.md) — development-mode Merkle log stub. Returns placeholder Merkle hashes that **will not pass** strict cryptographic verification — fine for end-to-end shape testing, not for production verification.
-- [`packages/integration/examples/end-to-end/`](../integration/examples/end-to-end/) — runnable demo wiring everything together
-- [`DECISIONS.md`](../../DECISIONS.md) — architectural decision log
+- [`@atrib/mcp`](../mcp/README.md), server-side middleware that produces the signed records `verify()` ultimately validates
+- [`@atrib/agent`](../agent/README.md), agent-side interceptor + framework adapters
+- [`@atrib/log-dev`](../log-dev/README.md), development-mode Merkle log stub. Returns placeholder Merkle hashes that **will not pass** strict cryptographic verification, fine for end-to-end shape testing, not for production verification.
+- [`packages/integration/examples/end-to-end/`](../integration/examples/end-to-end/), runnable demo wiring everything together
+- [`DECISIONS.md`](../../DECISIONS.md), architectural decision log

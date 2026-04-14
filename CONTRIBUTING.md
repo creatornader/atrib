@@ -40,7 +40,7 @@ Open a [GitHub Issue](https://github.com/creatornader/atrib/issues/new?template=
 ### Pull Requests
 
 1. Fork the repo and create a branch from `main`
-2. Write tests first — every normative MUST in the spec needs a corresponding test
+2. Write tests first. Every normative MUST in the spec needs a corresponding test
 3. Run `pnpm -r build && pnpm -r typecheck && pnpm -r test` before submitting
 4. Reference the spec section your change relates to (e.g., "per §2.6.1 Step 4")
 
@@ -48,7 +48,7 @@ Open a [GitHub Issue](https://github.com/creatornader/atrib/issues/new?template=
 
 New MCP framework adapters follow an established pattern (see `CLAUDE.md` for the full checklist):
 
-1. **Source-read the host framework first** — don't guess from the dependency graph
+1. **Source-read the host framework first.** Don't guess from the dependency graph
 2. Create `packages/agent/src/adapters/<framework>.ts`
 3. Create `packages/agent/test/<framework>.test.ts` covering: passthrough, `_meta` injection, no caller mutation, response flow, idempotency, §5.8 degradation
 4. Create a runnable example at `packages/integration/examples/<framework>/`
@@ -58,7 +58,7 @@ New MCP framework adapters follow an established pattern (see `CLAUDE.md` for th
 
 ## Code Style
 
-- TypeScript strict mode — no `any` types
+- TypeScript strict mode, no `any` types
 - Error handling per the spec's degradation contract (§5.8): catch everything, log with `atrib:` prefix, never throw to caller
 - Tests use vitest
 - Follow existing patterns in the codebase
