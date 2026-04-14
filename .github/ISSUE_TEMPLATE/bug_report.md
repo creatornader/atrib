@@ -12,6 +12,7 @@ A clear description of what the bug is.
 
 **To reproduce**
 Steps to reproduce:
+
 1.
 2.
 3.
@@ -20,6 +21,7 @@ Steps to reproduce:
 What you expected to happen.
 
 **Environment**
+
 - Node.js version:
 - pnpm version:
 - OS:

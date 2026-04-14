@@ -86,7 +86,7 @@ Every signed record, every chain hash, and every transaction detection in that o
 | `@atrib/log-dev` _(private, dev only)_ | In-memory development Merkle log stub — implements spec §2.6 for local testing and the end-to-end demo. **Never deploy to production.** | [`packages/log-dev/README.md`](packages/log-dev/README.md)         |
 | `@atrib/integration` _(private)_       | Cross-package end-to-end tests + the runnable framework examples                                                                        | [`packages/integration/README.md`](packages/integration/README.md) |
 
-> **Status:** v1 SDK is feature-complete in this monorepo (399 passing tests across all packages, plus a shared spec §2.6.1 conformance corpus at [`spec/conformance/2.6.1/`](spec/conformance/2.6.1/) that the dev log consumes today and the future Go log service will consume tomorrow). Public packages (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`) are not yet published to npm. Use `pnpm install` at the workspace root and import via `workspace:*` until publication. The production Merkle log at `log.atrib.io/v1` is not yet deployed; use `@atrib/log-dev` for local development until it ships.
+> **Status:** v1 SDK is feature-complete in this monorepo (481 tests across all packages, plus a shared spec §2.6.1 conformance corpus at [`spec/conformance/2.6.1/`](spec/conformance/2.6.1/)). Public packages (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`) are not yet published to npm. Use `pnpm install` at the workspace root and import via `workspace:*` until publication. A production Merkle log with real RFC 6962 proofs is at [`services/log-node/`](services/log-node/); the hosted service at `log.atrib.dev/v1` is not yet deployed.
 
 ## Quick start
 
@@ -160,9 +160,13 @@ The complete protocol specification is in [`atrib-spec.md`](./atrib-spec.md). It
 4. **No central arbiter of value.** Trust from math and open spec, not from trusting Atrib Inc.
 5. **The protocol is a public good; the product is not.** Spec, signing libraries, and transparency log infrastructure are open. The queryable graph and analytics are commercial.
 
+## Architecture
+
+For a deep technical overview of how the protocol layers fit together, the trust model, and key design decisions, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## Prior art
 
-Atrib builds on and differentiates from: C2PA (provenance without closed loop), ProRata (attribution with ads), Story Protocol (provenance on blockchain), OpenTelemetry (observability without attribution semantics), LangSmith/Langfuse (agent tracing without economic attribution). See [`atrib-current-art-map.html`](./atrib-current-art-map.html) for the full competitive landscape.
+Atrib builds on and differentiates from: C2PA (provenance without closed loop), ProRata (attribution with ads), Story Protocol (provenance on blockchain), OpenTelemetry (observability without attribution semantics), LangSmith/Langfuse (agent tracing without economic attribution). See [PRIOR-ART.md](PRIOR-ART.md) for the full standards and protocols map.
 
 ## License
 
