@@ -2700,3 +2700,118 @@ The degradation contract is:
 **If `ATRIB_PRIVATE_KEY` is not set at init, the middleware MUST log a warning and operate in pass-through mode.** Pass-through mode: all requests and responses are forwarded without modification, no attribution records are emitted, no context is attached. The tool or agent operates as if the `atrib()` wrapper were not present.
 
 The degradation contract means a developer can add `@atrib/mcp` or `@atrib/agent` to a production system with zero risk of introducing failures.
+
+---
+
+## Appendix A: Test Vectors
+
+The following test vectors are generated from the reference implementation. Two independent implementations that produce identical outputs for these inputs are interoperable.
+
+All values are deterministic given the inputs. Ed25519 signing with a fixed seed produces a fixed signature.
+
+### A.1 Key Material
+
+| Field | Value |
+| --- | --- |
+| Private key seed (hex) | `0101010101010101010101010101010101010101010101010101010101010101` |
+| Public key (hex) | `8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c` |
+| Public key (base64url) | `iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w` |
+
+### A.2 Record Fields
+
+| Field | Value |
+| --- | --- |
+| spec_version | `atrib/1.0` |
+| event_type | `tool_call` |
+| timestamp | `1700000000000` |
+| context_id | `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` |
+| creator_key | `iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w` |
+| content_id | `sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e` |
+| chain_root (genesis) | `sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547` |
+
+### A.3 Canonical Signing Input (§1.3)
+
+The signing input is `JCS(record without signature)`:
+
+```
+{"chain_root":"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547","content_id":"sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e","context_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","creator_key":"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w","event_type":"tool_call","spec_version":"atrib/1.0","timestamp":1700000000000}
+```
+
+SHA-256 of signing input (hex): `78046879d2a762e9a1a65ab1ef284ca65f77384db8050069eaa2cb5cbf9ca8f1`
+
+### A.4 Signature (§1.4)
+
+| Field | Value |
+| --- | --- |
+| Signature (base64url) | `PrhhwDFrAcDwbfHVzQWG0y58SwGP3FWZdSKyxMeKVSA5EQOZQJYXbqwEZJC1MkFj6W1M0_17o22cGyzKEtSVDg` |
+| Signature (hex) | `3eb861c0316b01c0f06df1d5cd0586d32e7c4b018fdc55997522b2c4c78a5520391103994096176eac046490b5324163e96d4cd3fd7ba36d9c1b2cca12d4950e` |
+| Verification passes | `true` |
+
+### A.5 Canonical Record and Record Hash
+
+The canonical record is `JCS(complete record with signature)`:
+
+```
+{"chain_root":"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547","content_id":"sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e","context_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","creator_key":"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w","event_type":"tool_call","signature":"PrhhwDFrAcDwbfHVzQWG0y58SwGP3FWZdSKyxMeKVSA5EQOZQJYXbqwEZJC1MkFj6W1M0_17o22cGyzKEtSVDg","spec_version":"atrib/1.0","timestamp":1700000000000}
+```
+
+| Field | Value |
+| --- | --- |
+| Record hash (hex) | `ab30b97e78ce078da518536f43929429a0eab164cd4d8896548215ccea50faba` |
+| Record hash (base64url) | `qzC5fnjOB42lGFNvQ5KUKaDqsWTNTYiWVIIVzOpQ-ro` |
+
+### A.6 Propagation Token (§1.5.2)
+
+| Field | Value |
+| --- | --- |
+| Token | `qzC5fnjOB42lGFNvQ5KUKaDqsWTNTYiWVIIVzOpQ-ro.iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w` |
+| Format | `base64url(record_hash) + "." + base64url(creator_key)` |
+
+### A.7 Chain Root for Next Record
+
+| Field | Value |
+| --- | --- |
+| chain_root | `sha256:ab30b97e78ce078da518536f43929429a0eab164cd4d8896548215ccea50faba` |
+| Format | `"sha256:" + hex(record_hash)` |
+| Matches record_hash from A.5 | `true` |
+
+### A.8 Log Entry Serialization (§2.3.1)
+
+| Field | Value |
+| --- | --- |
+| Entry (hex, 90 bytes) | `01ab30b97e78ce078da518536f43929429a0eab164cd4d8896548215ccea50faba8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5caaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0000018bcfe5680001` |
+| Entry length | `90` |
+
+Byte layout:
+- Byte 0: version (`0x01`)
+- Byte 1: event_type (`0x01` = tool_call)
+- Bytes 2-33: record_hash (32 bytes)
+- Bytes 34-65: creator_key (32 bytes)
+- Bytes 66-81: context_id (16 bytes)
+- Bytes 82-89: timestamp (uint64 big-endian)
+
+### A.9 Merkle Tree (§2.3.2, §2.7)
+
+**Single-entry tree (tree_size = 1):**
+
+| Field | Value |
+| --- | --- |
+| Leaf hash | `1f0bd2c5ad2518265eff0e13a65167f1f2ce990bd0de19af8fd8ec285bee03ab` |
+| Leaf hash (base64) | `HwvSxa0lGCZe/w4TplFn8fLOmQvQ3hmvj9jsKFvuA6s=` |
+| Root (= leaf hash for size 1) | `1f0bd2c5ad2518265eff0e13a65167f1f2ce990bd0de19af8fd8ec285bee03ab` |
+| Inclusion proof | `[]` (empty for single-entry tree) |
+| Verification passes | `true` |
+
+**Two-entry tree (tree_size = 2):**
+
+| Field | Value |
+| --- | --- |
+| Leaf 0 hash | `1f0bd2c5ad2518265eff0e13a65167f1f2ce990bd0de19af8fd8ec285bee03ab` |
+| Leaf 1 hash | `5133c40d0435ff1b7db13abebf7a417c03dbe86309ca8ed9121e04cf1d728866` |
+| Root | `a09fe35042ae854ac848f33b02e78b5c8340de5272b87717d2b03fa331aa5744` |
+| Inclusion proof for index 0 | `["UTPEDQQ1/xt9sTq+v3pBfAPb6GMJyo7ZEh4Ezx1yiGY="]` |
+| Inclusion proof for index 1 | `["HwvSxa0lGCZe/w4TplFn8fLOmQvQ3hmvj9jsKFvuA6s="]` |
+
+Leaf hash computation: `SHA-256(0x00 || entry_bytes)`
+Internal node hash: `SHA-256(0x01 || left || right)`
+Root of 2-entry tree: `SHA-256(0x01 || leaf_hash_0 || leaf_hash_1)`
