@@ -1,7 +1,7 @@
 {
   "spec_version": "atrib/1.0",
   "spec_section": "§2.6.1 + §2.6.2 (the submission API)",
-  "description": "Conformance corpus for the atrib log submission API. Implementations of the atrib log (TS dev stub, Go Tessera service, etc.) MUST produce the expected response status for every case. The corpus is intentionally static, see the generator at packages/log-dev/scripts/generate-conformance-corpus.ts.",
+  "description": "Conformance corpus for the atrib log submission API. Implementations of the atrib log (TS dev stub, Go Tessera service, etc.) MUST produce the expected response status for every case. The corpus is intentionally static. see the generator at packages/log-dev/scripts/generate-conformance-corpus.ts.",
   "reference_time_ms": 1767225600000,
   "reference_time_iso": "2026-01-01T00:00:00.000Z",
   "signing": {
