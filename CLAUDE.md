@@ -4,7 +4,7 @@
 
 Atrib is value provenance infrastructure for the agent economy. It makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance, the missing infrastructure layer between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP).
 
-The complete protocol specification is in `atrib-spec.md`. The implementation guide is in `internal planning doc`. The founding design conversation is in `atrib-design-conversation.md`. Read the spec before making any implementation decisions.
+The complete protocol specification is in `atrib-spec.md`. The implementation guide is in `internal planning doc`. The technical architecture overview is in `ARCHITECTURE.md`. Read the spec before making any implementation decisions.
 
 ## Repository structure
 
@@ -15,10 +15,8 @@ atrib/
   atrib-spec.md                # The single source of truth for the protocol
   internal planning doc    # Implementation guide with build order and package details
   DECISIONS.md                 # Architectural decision log (D001-D025+)
-  atrib-design-conversation.md # Founding conversation (context, not authority)
-  atrib-foundation.html        # Original §0 (HTML archive)
-  atrib-section-[1-5].html     # Original §1-§5 (HTML archive)
-  atrib-current-art-map.html   # Prior art research (HTML archive)
+  ARCHITECTURE.md              # Technical architecture overview, trust model, protocol layers, design decisions
+  PRIOR-ART.md                 # Prior art & standards map, every spec/protocol Atrib builds on, organized by layer
   packages/
     mcp/                       # @atrib/mcp, MCP server middleware (public)
     agent/                     # @atrib/agent, Agent middleware + framework adapters (public)
@@ -51,23 +49,25 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 | --------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `atrib-spec.md`             | Complete protocol specification, record format, Merkle log, graph model, policy format, SDK contract |
 | `CLAUDE.md`                 | Project conventions, invariants, implementation guidance                                              |
+| `ARCHITECTURE.md`           | Technical architecture overview, trust model, protocol layers, payment integration, design decisions |
 | `internal planning doc` | Implementation guide, build order, package details, testing strategy, what not to build              |
 | `DECISIONS.md`              | Architectural decision log, what was decided, why, what alternatives were considered                 |
+| `PRIOR-ART.md`              | Every standard and protocol Atrib builds on, extends, or hooks into, organized by layer              |
 
 ## Sync triggers
 
-| Event                                                                  | Update                                                                                                                                                                                                           |
-| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Protocol decision changed                                              | `atrib-spec.md` first, then `internal planning doc` if build guidance affected                                                                                                                               |
-| Architectural decision made                                            | `DECISIONS.md`, new entry with date, context, decision, alternatives                                                                                                                                            |
-| New package created                                                    | This file (repository structure) AND `README.md` (packages table)                                                                                                                                                |
-| New framework adapter shipped                                          | `packages/agent/README.md` (adapter table + side-by-side quick-starts) AND `README.md` (top-level adapter table) AND `DECISIONS.md` (a Dxxx entry with the integration shape decision and rejected alternatives) |
-| New runnable example added                                             | `packages/integration/README.md` AND a `README.md` inside the example directory                                                                                                                                  |
-| Implementation convention established                                  | This file (conventions section)                                                                                                                                                                                  |
-| Wire-format or wire-protocol change                                    | `atrib-spec.md` (if normative), this file's "Key technical decisions" section, AND DECISIONS.md                                                                                                                  |
-| §2.6.1 validation rule changed                                         | Regenerate `spec/conformance/2.6.1/` corpus via `pnpm --filter @atrib/log-dev corpus`, update `spec/conformance/2.6.1/README.md` if the format changed                                                           |
-| Research artifact added (e.g. external-spec briefing, prior-art notes) | Drop under `thoughts/shared/research/<YYYY-MM-DD>_<slug>.md` with YAML frontmatter, link from any handoff or `DECISIONS.md` entry that consumes it                                                               |
-| Test count changed materially                                          | `internal planning doc` build status table                                                                                                                                                                   |
+| Event                                 | Update                                                                                                                                                                                                           |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Protocol decision changed             | `atrib-spec.md` first, then `internal planning doc` if build guidance affected                                                                                                                               |
+| Architectural decision made           | `DECISIONS.md`, new entry with date, context, decision, alternatives                                                                                                                                            |
+| New package created                   | This file (repository structure) AND `README.md` (packages table)                                                                                                                                                |
+| New framework adapter shipped         | `packages/agent/README.md` (adapter table + side-by-side quick-starts) AND `README.md` (top-level adapter table) AND `DECISIONS.md` (a Dxxx entry with the integration shape decision and rejected alternatives) |
+| New runnable example added            | `packages/integration/README.md` AND a `README.md` inside the example directory                                                                                                                                  |
+| Implementation convention established | This file (conventions section)                                                                                                                                                                                  |
+| Wire-format or wire-protocol change   | `atrib-spec.md` (if normative), this file's "Key technical decisions" section, AND DECISIONS.md                                                                                                                  |
+| §2.6.1 validation rule changed        | Regenerate `spec/conformance/2.6.1/` corpus via `pnpm --filter @atrib/log-dev corpus`, update `spec/conformance/2.6.1/README.md` if the format changed                                                           |
+| Prior art landscape changed           | Update `PRIOR-ART.md` with new entries                                                                                                                                                                           |
+| Test count changed materially         | `internal planning doc` build status table                                                                                                                                                                   |
 
 ## Critical invariants (never violate)
 
