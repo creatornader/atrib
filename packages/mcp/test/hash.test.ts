@@ -43,12 +43,13 @@ describe('hexEncode / hexDecode', () => {
     expect(decoded).toEqual(new Uint8Array(0))
   })
 
-  it('hexDecode with odd-length string produces truncated output', () => {
-    // Odd-length hex is malformed. hexDecode truncates, it processes pairs only.
-    // "abc" → processes "ab" → [0xab], ignores trailing "c"
-    const decoded = hexDecode('abc')
-    // Length is floor(3/2) = 1
-    expect(decoded.length).toBe(1)
-    expect(decoded[0]).toBe(0xab)
+  it('hexDecode throws on odd-length string', () => {
+    // Odd-length hex is malformed, hexDecode now throws rather than silently truncating.
+    expect(() => hexDecode('abc')).toThrow('hexDecode: invalid hex string')
+  })
+
+  it('hexDecode throws on non-hex characters', () => {
+    expect(() => hexDecode('zz')).toThrow('hexDecode: invalid hex string')
+    expect(() => hexDecode('0g')).toThrow('hexDecode: invalid hex string')
   })
 })

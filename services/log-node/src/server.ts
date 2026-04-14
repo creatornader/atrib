@@ -15,16 +15,12 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { canonicalRecord } from '@atrib/mcp'
+import { canonicalRecord, validateSubmission } from '@atrib/mcp'
 import { sha256 } from '@noble/hashes/sha2.js'
 import type { AtribRecord } from '@atrib/mcp'
 import { serializeEntry } from './entry.js'
 import type { MerkleTree } from './tree.js'
 import type { CheckpointSigner } from './checkpoint.js'
-
-const VALID_EVENT_TYPES = new Set(['tool_call', 'transaction'])
-const SPEC_VERSION = 'atrib/1.0'
-const MAX_FUTURE_SKEW_MS = 10 * 60 * 1000 // §2.6.1 Step 4: 10 minutes
 
 /**
  * In-memory duplicate detection cache. Keyed by record_hash hex → serialized
@@ -131,45 +127,12 @@ async function handleSubmit(
 
   const record = parsed as Partial<AtribRecord>
 
-  // §2.6.1 Step 2: spec_version must be 'atrib/1.0'
-  if (record.spec_version !== SPEC_VERSION) {
-    return reject(
-      res,
-      400,
-      `spec_version must be '${SPEC_VERSION}', got ${JSON.stringify(record.spec_version)}`,
-    )
-  }
-
-  // §2.6.1 Step 3: event_type must be a known value
-  if (typeof record.event_type !== 'string' || !VALID_EVENT_TYPES.has(record.event_type)) {
-    return reject(
-      res,
-      400,
-      `event_type must be one of ${[...VALID_EVENT_TYPES].join(', ')}, got ${JSON.stringify(record.event_type)}`,
-    )
-  }
-
-  // §2.6.1 Step 4: timestamp not more than 10 minutes in the future
-  if (typeof record.timestamp !== 'number') {
-    return reject(res, 400, 'timestamp must be a number (ms since epoch)')
-  }
-  if (record.timestamp - Date.now() > MAX_FUTURE_SKEW_MS) {
-    return reject(res, 400, 'timestamp is more than 10 minutes in the future')
-  }
-
-  // §2.6.1 Step 5: context_id must be exactly 32 lowercase hex chars
-  if (
-    typeof record.context_id !== 'string' ||
-    !/^[0-9a-f]{32}$/.test(record.context_id)
-  ) {
-    return reject(res, 400, 'context_id must be 32 lowercase hex characters')
-  }
-
-  // Required string fields for record_hash computation
-  for (const field of ['creator_key', 'chain_root', 'content_id', 'signature'] as const) {
-    if (typeof record[field] !== 'string') {
-      return reject(res, 400, `${field} is required and must be a string`)
-    }
+  // §2.6.1 Steps 2–5 + required-field presence checks.
+  // Step 1 (signature verification) lives in @atrib/verify, see file header.
+  // Step 6 (idempotency) is handled by the proof cache below.
+  const validation = validateSubmission(record)
+  if (!validation.ok) {
+    return reject(res, validation.status!, validation.error!)
   }
 
   const fullRecord = record as AtribRecord

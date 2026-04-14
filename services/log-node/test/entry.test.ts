@@ -5,7 +5,7 @@ import {
   EVENT_TYPE_TOOL_CALL,
   EVENT_TYPE_TRANSACTION,
   type EntryInput,
-} from '../src/entry.js';
+} from '@atrib/mcp';
 
 const ENTRY_SIZE = 90;
 

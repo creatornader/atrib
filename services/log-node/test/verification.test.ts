@@ -18,9 +18,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as ed from '@noble/ed25519';
 import { sha512, sha256 } from '@noble/hashes/sha2.js';
-import { canonicalRecord, leafHash, verifyInclusion, signRecord } from '@atrib/mcp';
+import { canonicalRecord, leafHash, verifyInclusion, signRecord, serializeEntry } from '@atrib/mcp';
 import type { AtribRecord } from '@atrib/mcp';
-import { serializeEntry } from '../src/entry.js';
 import { parseCheckpointBody } from '../src/checkpoint.js';
 import { startLogServer, type LogServer } from '../src/index.js';
 
