@@ -2,7 +2,7 @@
 
 Value provenance infrastructure for the agent economy.
 
-atrib makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance. It sits between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP/AP2), a layer that doesn't exist yet.
+atrib makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance. It sits between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP/AP2), in a layer that doesn't exist yet.
 
 ## The problem
 
@@ -12,7 +12,7 @@ Advertising exists because there is no native provenance infrastructure on the i
 
 ## What atrib does
 
-atrib records the structural relationships in agent sessions, which tool calls happened, in what order, in what context, without recording the content of those interactions. When a transaction completes, the attribution chain is already there: signed, tamper-evident, and verifiable by any party.
+atrib records the structural relationships in agent sessions (which tool calls happened, in what order, in what context) without recording the content of those interactions. When a transaction completes, the attribution chain is already there: signed, tamper-evident, and verifiable by any party.
 
 - Attribution records travel with every MCP tool call, signed by the creator (Ed25519, JCS-canonicalized)
 - A Merkle log provides global verifiability without exposing content (C2SP tlog-tiles, Tessera-backed)
@@ -43,7 +43,7 @@ The full adapter table with quick-start snippets for every framework is in [`pac
 
 ### Agent payment protocols
 
-atrib **detects** transaction events from any of these, it does not implement payments, move money, or enforce transactions. The detection logic for all six protocols ships in `@atrib/agent`'s `transaction.ts` and runs simultaneously; you do not choose a payment protocol at install time.
+atrib **detects** transaction events from any of these. It does not implement payments, move money, or enforce transactions. The detection logic for all six protocols ships in `@atrib/agent`'s `transaction.ts` and runs simultaneously; you do not choose a payment protocol at install time.
 
 | Protocol     | Sponsor                                     | Detection signal                                                   | Spec ref |
 | ------------ | ------------------------------------------- | ------------------------------------------------------------------ | -------- |
@@ -80,10 +80,10 @@ The signed records, chain hashes, and transaction detection are all real product
 
 | Package                                | Purpose                                                                                                                                 | Customer doc                                                       |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `@atrib/mcp`                           | MCP server middleware, wraps an MCP server, emits signed attribution records automatically                                             | [`packages/mcp/README.md`](packages/mcp/README.md)                 |
-| `@atrib/agent`                         | Agent middleware, interceptor + framework adapters for raw SDK, Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS       | [`packages/agent/README.md`](packages/agent/README.md)             |
-| `@atrib/verify`                        | Merchant verification, independently verifies settlement recommendations against the spec §4.6 calculation                             | [`packages/verify/README.md`](packages/verify/README.md)           |
-| `@atrib/log-dev` _(private, dev only)_ | In-memory development Merkle log stub, implements spec §2.6 for local testing and the end-to-end demo. **Never deploy to production.** | [`packages/log-dev/README.md`](packages/log-dev/README.md)         |
+| `@atrib/mcp`                           | MCP server middleware. Wraps an MCP server, emits signed attribution records automatically.                                             | [`packages/mcp/README.md`](packages/mcp/README.md)                 |
+| `@atrib/agent`                         | Agent middleware. Interceptor + framework adapters for raw SDK, Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS.       | [`packages/agent/README.md`](packages/agent/README.md)             |
+| `@atrib/verify`                        | Merchant verification. Independently verifies settlement recommendations against the spec §4.6 calculation.                             | [`packages/verify/README.md`](packages/verify/README.md)           |
+| `@atrib/log-dev` _(private, dev only)_ | In-memory development Merkle log stub. Implements spec §2.6 for local testing and the end-to-end demo. **Never deploy to production.** | [`packages/log-dev/README.md`](packages/log-dev/README.md)         |
 | `@atrib/integration` _(private)_       | Cross-package end-to-end tests + the runnable framework examples                                                                        | [`packages/integration/README.md`](packages/integration/README.md) |
 
 > **Status:** v1 SDK is feature-complete in this monorepo (481 tests across all packages, plus a shared spec §2.6.1 conformance corpus at [`spec/conformance/2.6.1/`](spec/conformance/2.6.1/)). Public packages (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`) are not yet published to npm. Use `pnpm install` at the workspace root and import via `workspace:*` until publication. A production Merkle log with real RFC 6962 proofs is at [`services/log-node/`](services/log-node/); the hosted service at `log.atrib.dev/v1` is not yet deployed.
@@ -104,7 +104,7 @@ const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
 
 One line. Everything else is automatic: every successful tool call emits a signed attribution record, propagates W3C trace context, and submits to the configured log endpoint asynchronously.
 
-### Agent (consumer side), pick your framework
+### Agent (consumer side)
 
 `@atrib/agent` exports one interceptor (`atrib()`) plus an adapter helper per framework. The adapter name varies because each framework's surface varies, but `atrib()` setup is the same everywhere. See [`packages/agent/README.md`](packages/agent/README.md) for side-by-side quick-starts.
 
@@ -139,18 +139,18 @@ A v1 keypair is a base64url-encoded 32-byte Ed25519 seed (§5.6 of the spec). Un
 node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))'
 ```
 
-Store the result as `ATRIB_PRIVATE_KEY` in your environment. The public key is derived at runtime, only the seed needs to be secured.
+Store the result as `ATRIB_PRIVATE_KEY` in your environment. The public key is derived at runtime; only the seed needs to be secured.
 
 ## Specification
 
 The complete protocol specification is in [`atrib-spec.md`](./atrib-spec.md). It covers:
 
-- **Section 0**, Foundations (principles, thesis)
-- **Section 1**, Attribution Record Format (data model, signing, propagation, transaction event hooks for all 6 payment protocols)
-- **Section 2**, Merkle Log Protocol (C2SP tlog-tiles, commitments, proofs, witnessing)
-- **Section 3**, Graph Query Interface (five edge types, deterministic derivation)
-- **Section 4**, Attribution Policy Format (weights, negotiation, calculation algorithm)
-- **Section 5**, SDK Specification (middleware contract, automation triggers, degradation contract)
+- **Section 0:** Foundations (principles, thesis)
+- **Section 1:** Attribution Record Format (data model, signing, propagation, transaction event hooks for all 6 payment protocols)
+- **Section 2:** Merkle Log Protocol (C2SP tlog-tiles, commitments, proofs, witnessing)
+- **Section 3:** Graph Query Interface (five edge types, deterministic derivation)
+- **Section 4:** Attribution Policy Format (weights, negotiation, calculation algorithm)
+- **Section 5:** SDK Specification (middleware contract, automation triggers, degradation contract)
 
 ## Design principles
 

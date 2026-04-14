@@ -1,6 +1,6 @@
 # `@atrib/mcp`
 
-**MCP server middleware for atrib attribution. One line of code wraps your existing MCP server and emits a signed attribution record for every successful tool call, automatically, asynchronously, and with zero impact on the tool's primary response.**
+**MCP server middleware for atrib attribution. One line of code wraps your existing MCP server and emits a signed attribution record for every successful tool call, automatically and asynchronously, with zero impact on the tool's primary response.**
 
 This is the **server-side half** of the atrib protocol: the package merchants and tool providers install. If you're building an agent that _calls_ MCP tools, you want [`@atrib/agent`](../agent/README.md) instead.
 

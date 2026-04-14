@@ -1,6 +1,6 @@
 # `@atrib/verify`
 
-**Independent merchant-side verification of atrib settlement recommendations. Re-runs the spec §4.6 calculation algorithm locally and checks the result against what a recommendation document claims, without trusting any intermediary.**
+**Independent merchant-side verification of atrib settlement recommendations. Re-runs the spec §4.6 calculation algorithm locally and checks the result against what a recommendation document claims. No trust in any intermediary required.**
 
 This is the **merchant/auditor half** of the atrib protocol. The agent and tool servers produce signed attribution records. The Merkle log stores them. This package answers the question every merchant has to answer before paying anyone: _given the graph and the policy, is this distribution actually correct?_
 
