@@ -32,6 +32,11 @@ export interface ValidationResult {
  * if any check fails.
  */
 export function validateSubmission(record: Partial<AtribRecord>): ValidationResult {
+  // Guard: reject non-object input (null, undefined, primitives)
+  if (!record || typeof record !== 'object') {
+    return { ok: false, status: 400, error: `spec_version must be '${SPEC_VERSION}'` }
+  }
+
   // Step 2: spec_version must be 'atrib/1.0'
   if (record.spec_version !== SPEC_VERSION) {
     return { ok: false, status: 400, error: `spec_version must be '${SPEC_VERSION}'` }
