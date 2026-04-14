@@ -5,17 +5,14 @@
  *   POST /v1/entries     — submit a signed attribution record
  *   GET  /v1/checkpoint  — return the latest signed checkpoint as text/plain
  *
- * Validation follows §2.6.1 Steps 2-6. Step 1 (signature verification) is
- * intentionally skipped here — it lives in @atrib/verify and would create a
- * circular dep. Callers needing full verification should run @atrib/verify
- * separately.
+ * Validation follows §2.6.1 Steps 1-6.
  *
  * All hashes in the JSON response are standard base64 (RFC 4648 §4, with
  * padding), matching the tlog-tiles checkpoint format.
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { canonicalRecord, validateSubmission } from '@atrib/mcp'
+import { canonicalRecord, validateSubmission, verifyRecord, hexEncode } from '@atrib/mcp'
 import { sha256 } from '@noble/hashes/sha2.js'
 import type { AtribRecord } from '@atrib/mcp'
 import { serializeEntry } from './entry.js'
@@ -38,6 +35,8 @@ export interface ServerHandle {
   close(): Promise<void>
 }
 
+const MAX_PROOF_CACHE = 100_000 // entries; ~30MB at ~300 bytes/entry
+
 /**
  * Bind an HTTP server that handles POST /v1/entries and GET /v1/checkpoint.
  */
@@ -47,6 +46,7 @@ export async function bindServer(
   port: number,
 ): Promise<ServerHandle> {
   // Dedup cache: record_hash hex → proof bundle
+  // Bounded to MAX_PROOF_CACHE entries (~30MB at ~300 bytes/entry)
   const proofCache = new Map<string, ProofBundle>()
 
   const server = createServer((req, res) => {
@@ -60,6 +60,10 @@ export async function bindServer(
       }
     })
   })
+
+  // Protect against Slowloris and slow-request DoS attacks
+  server.headersTimeout = 5_000    // 5 seconds to receive headers
+  server.requestTimeout = 30_000   // 30 seconds for full request
 
   await new Promise<void>((resolve) => {
     server.listen(port, '127.0.0.1', resolve)
@@ -113,7 +117,12 @@ async function handleSubmit(
   signer: CheckpointSigner,
   proofCache: Map<string, ProofBundle>,
 ): Promise<void> {
-  const body = await readBody(req)
+  let body: string
+  try {
+    body = await readBody(req)
+  } catch {
+    return reject(res, 413, 'request body too large')
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(body)
@@ -128,7 +137,6 @@ async function handleSubmit(
   const record = parsed as Partial<AtribRecord>
 
   // §2.6.1 Steps 2–5 + required-field presence checks.
-  // Step 1 (signature verification) lives in @atrib/verify — see file header.
   // Step 6 (idempotency) is handled by the proof cache below.
   const validation = validateSubmission(record)
   if (!validation.ok) {
@@ -137,10 +145,16 @@ async function handleSubmit(
 
   const fullRecord = record as AtribRecord
 
+  // §2.6.1 Step 1: verify Ed25519 signature
+  const sigValid = await verifyRecord(fullRecord)
+  if (!sigValid) {
+    return reject(res, 400, 'Ed25519 signature verification failed (§2.6.1 Step 1)')
+  }
+
   // Compute record_hash: SHA-256 of JCS canonical bytes
   const canonBytes = canonicalRecord(fullRecord)
   const recordHashBytes = sha256(canonBytes)
-  const recordHashHex = bytesToHex(recordHashBytes)
+  const recordHashHex = hexEncode(recordHashBytes)
 
   // §2.6.1 Step 6: idempotency — return existing proof if already submitted
   const cached = proofCache.get(recordHashHex)
@@ -176,11 +190,16 @@ async function handleSubmit(
   const proof: ProofBundle = {
     log_index: logIndex,
     checkpoint: signedCheckpoint,
+    // Node-only: this service runs server-side only
     inclusion_proof: inclusionProof.map((h) => Buffer.from(h).toString('base64')),
     leaf_hash: Buffer.from(leafHashBytes).toString('base64'),
   }
 
-  // Cache for idempotency
+  // Cache for idempotency — evict oldest entry if at capacity
+  if (proofCache.size >= MAX_PROOF_CACHE) {
+    const oldest = proofCache.keys().next().value
+    if (oldest !== undefined) proofCache.delete(oldest)
+  }
   proofCache.set(recordHashHex, proof)
 
   res.statusCode = 200
@@ -230,6 +249,3 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf-8')
 }
 
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-}
