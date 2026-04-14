@@ -1,0 +1,14 @@
+Atrib, Value Provenance Infrastructure for the Agent Economy
+Copyright 2025-2026 Atrib contributors
+
+This product includes software developed by third parties:
+
+- @noble/ed25519 and @noble/hashes by Paul Miller (MIT License)
+  https://github.com/paulmillr/noble-ed25519
+  https://github.com/paulmillr/noble-hashes
+
+- canonicalize by Anders Rundgren (Apache-2.0 License)
+  https://github.com/nicktomlin/canonicalize
+
+- @modelcontextprotocol/sdk by Anthropic (MIT License)
+  https://github.com/modelcontextprotocol/typescript-sdk
