@@ -9,3 +9,6 @@ export {
 
 export { createMerkleTree } from './tree.js';
 export type { MerkleTree } from './tree.js';
+
+export { createCheckpointSigner, formatCheckpointBody, parseCheckpointBody } from './checkpoint.js';
+export type { CheckpointSigner } from './checkpoint.js';
