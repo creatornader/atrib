@@ -1,0 +1,33 @@
+{
+  "spec_version": "atrib/1.0",
+  "spec_section": "§1.4 (signing and verification)",
+  "description": "Test vectors for the atrib signing pipeline. Any conforming implementation MUST produce identical outputs for these inputs.",
+  "vectors": [
+    {
+      "name": "canonical signing, signature, and verification",
+      "input": {
+        "private_key_seed_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+        "record": {
+          "spec_version": "atrib/1.0",
+          "event_type": "tool_call",
+          "timestamp": 1700000000000,
+          "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "creator_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+          "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+          "content_id": "sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e",
+          "signature": ""
+        }
+      },
+      "expected": {
+        "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+        "canonical_signing_input": "{\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w\",\"event_type\":\"tool_call\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1700000000000}",
+        "signing_input_sha256_hex": "78046879d2a762e9a1a65ab1ef284ca65f77384db8050069eaa2cb5cbf9ca8f1",
+        "signature_base64url": "PrhhwDFrAcDwbfHVzQWG0y58SwGP3FWZdSKyxMeKVSA5EQOZQJYXbqwEZJC1MkFj6W1M0_17o22cGyzKEtSVDg",
+        "record_hash_hex": "ab30b97e78ce078da518536f43929429a0eab164cd4d8896548215ccea50faba",
+        "propagation_token": "qzC5fnjOB42lGFNvQ5KUKaDqsWTNTYiWVIIVzOpQ-ro.iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "next_chain_root": "sha256:ab30b97e78ce078da518536f43929429a0eab164cd4d8896548215ccea50faba",
+        "verification_passes": true
+      }
+    }
+  ]
+}
