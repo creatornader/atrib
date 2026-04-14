@@ -14,6 +14,7 @@ import { sha256 } from './hash.js'
 
 /**
  * Concatenate multiple Uint8Arrays into one.
+ * Local concat for domain-separated hashing, intentionally not shared.
  */
 function concat(...arrays: Uint8Array[]): Uint8Array {
   const total = arrays.reduce((s, a) => s + a.length, 0)

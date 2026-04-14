@@ -129,9 +129,12 @@ export function createCheckpointSigner(
       const bodyBytes = new TextEncoder().encode(body)
       const sigBytes = await ed.signAsync(bodyBytes, privateKey)
       const sigBase64 = Buffer.from(sigBytes).toString('base64')
+      // The signed-note format uses em-dash (U+2014), not ASCII hyphen-minus.
+      // This follows the Go note.Signature format (golang.org/x/mod/sumdb/note)
+      // which is the reference implementation for C2SP signed-notes.
+      //
       // Signed note format per spec Section 2.4.3:
       //   body\n\n— origin keyIdHex+sigBase64\n
-      // Note: em-dash (U+2014) followed by a space
       return `${body}\n\u2014 ${origin} ${keyIdHex}+${sigBase64}\n`
     },
   }
