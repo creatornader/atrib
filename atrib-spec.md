@@ -102,33 +102,33 @@ _The canonical data model, signing protocol, and propagation mechanism for atrib
 
 Contents
 
-1.  1.1Normative Requirements Language
-2.  1.2The Attribution Record
-3.  1.2.1Field definitions
-4.  1.2.2content_id derivation
-5.  1.2.3chain_root for genesis records
-6.  1.2.4event_type values
-7.  1.3Canonical Serialization
-8.  1.4Signing and Verification
-9.  1.4.1Key format
-10. 1.4.2Signing procedure
-11. 1.4.3Verification procedure
-12. 1.4.4Test vector validation
-13. 1.5Context Propagation
-14. 1.5.1context_id: the session anchor
-15. 1.5.2HTTP transport: tracestate
-16. 1.5.3HTTP fallback: X-atrib-Chain
-17. 1.5.4MCP transport: params.\_meta
-18. 1.5.5Cross-trace session continuity
-19. 1.6Unsigned Hops and Gap Nodes
-20. 1.7Transaction Event Hooks
-21. 1.7.1ACP
-22. 1.7.2UCP
-23. 1.7.3x402
-24. 1.7.4MPP
-25. 1.7.5AP2 / a2a-x402
-26. 1.8Known Limitations
-27. Interoperability Roadmap
+- [1.1 Normative Requirements Language](#11-normative-requirements-language)
+- [1.2 The Attribution Record](#12-the-attribution-record)
+  - [1.2.1 Field definitions](#121-field-definitions)
+  - [1.2.2 content_id derivation](#122-content_id-derivation)
+  - [1.2.3 chain_root for genesis records](#123-chain_root-for-genesis-records)
+  - [1.2.4 event_type values](#124-event_type-values)
+- [1.3 Canonical Serialization](#13-canonical-serialization)
+- [1.4 Signing and Verification](#14-signing-and-verification)
+  - [1.4.1 Key format](#141-key-format)
+  - [1.4.2 Signing procedure](#142-signing-procedure)
+  - [1.4.3 Verification procedure](#143-verification-procedure)
+  - [1.4.4 Test vector validation](#144-test-vector-validation)
+- [1.5 Context Propagation](#15-context-propagation)
+  - [1.5.1 context_id: the session anchor](#151-context_id-the-session-anchor)
+  - [1.5.2 HTTP transport: tracestate](#152-http-transport-tracestate)
+  - [1.5.3 HTTP fallback: X-atrib-Chain](#153-http-fallback-x-atrib-chain)
+  - [1.5.4 MCP transport: params.\_meta](#154-mcp-transport-params_meta)
+  - [1.5.5 Cross-trace session continuity](#155-cross-trace-session-continuity)
+- [1.6 Unsigned Hops and Gap Nodes](#16-unsigned-hops-and-gap-nodes)
+- [1.7 Transaction Event Hooks](#17-transaction-event-hooks)
+  - [1.7.1 ACP](#171-acp)
+  - [1.7.2 UCP](#172-ucp)
+  - [1.7.3 x402](#173-x402)
+  - [1.7.4 MPP](#174-mpp)
+  - [1.7.5 AP2 / a2a-x402](#175-ap2--a2a-x402)
+- [1.8 Known Limitations](#18-known-limitations)
+- [Interoperability Roadmap](#interoperability-roadmap)
 
 ### 1.1 Normative Requirements Language
 
@@ -732,26 +732,26 @@ The append-only transparency log where attribution records are committed, making
 
 Contents
 
-1.  2.1Purpose and Design Rationale
-2.  2.2Log Identity and Parameters
-3.  2.3Log Entry Format
-4.  2.3.1Entry serialization
-5.  2.3.2Leaf hash computation
-6.  2.4Checkpoint Format
-7.  2.4.1Body structure
-8.  2.4.2Log signing key and key ID
-9.  2.4.3Signed note format
-10. 2.5Tile API (Read Interface)
-11. 2.5.1Checkpoint endpoint
-12. 2.5.2Tile endpoints
-13. 2.5.3Entry bundle endpoint
-14. 2.6Submission API (Write Interface)
-15. 2.6.1Submit entry
-16. 2.6.2Inclusion proof response
-17. 2.7Inclusion Proof Verification
-18. 2.8Proof Bundle Format
-19. 2.9Witnessing and Cosignatures
-20. 2.10What the Log Stores and What It Does Not
+- [2.1 Purpose and Design Rationale](#21-purpose-and-design-rationale)
+- [2.2 Log Identity and Parameters](#22-log-identity-and-parameters)
+- [2.3 Log Entry Format](#23-log-entry-format)
+  - [2.3.1 Entry serialization](#231-entry-serialization)
+  - [2.3.2 Leaf hash computation](#232-leaf-hash-computation)
+- [2.4 Checkpoint Format](#24-checkpoint-format)
+  - [2.4.1 Body structure](#241-body-structure)
+  - [2.4.2 Log signing key and key ID](#242-log-signing-key-and-key-id)
+  - [2.4.3 Signed note format](#243-signed-note-format)
+- [2.5 Tile API (Read Interface)](#25-tile-api-read-interface)
+  - [2.5.1 Checkpoint endpoint](#251-checkpoint-endpoint)
+  - [2.5.2 Tile endpoints](#252-tile-endpoints)
+  - [2.5.3 Entry bundle endpoint](#253-entry-bundle-endpoint)
+- [2.6 Submission API (Write Interface)](#26-submission-api-write-interface)
+  - [2.6.1 Submit entry](#261-submit-entry)
+  - [2.6.2 Inclusion proof response](#262-inclusion-proof-response)
+- [2.7 Inclusion Proof Verification](#27-inclusion-proof-verification)
+- [2.8 Proof Bundle Format](#28-proof-bundle-format)
+- [2.9 Witnessing and Cosignatures](#29-witnessing-and-cosignatures)
+- [2.10 What the Log Stores and What It Does Not](#210-what-the-log-stores-and-what-it-does-not)
 
 ### 2.1 Purpose and Design Rationale
 
@@ -1159,25 +1159,25 @@ The data model and query API for turning attribution records into a structured p
 
 Contents
 
-1.  3.1Design Principles
-2.  3.2Graph Data Model
-3.  3.2.1Node types
-4.  3.2.2Interaction patterns and their structural signatures
-5.  3.2.3Edge types
-6.  3.2.4Edge derivation rules
-7.  3.2.5Gap nodes
-8.  3.3Verification State
-9.  3.4Query API
-10. 3.4.1GET /v1/graph/{context_id}
-11. 3.4.2GET /v1/graph/{context_id}/nodes
-12. 3.4.3GET /v1/graph/{context_id}/transaction
-13. 3.4.4GET /v1/creators/{creator_key}/sessions
-14. 3.5Response Schema
-15. 3.5.1Graph response object
-16. 3.5.2Node object
-17. 3.5.3Edge object
-18. 3.5.4Error responses
-19. 3.6Implementation Notes
+- [3.1 Design Principles](#31-design-principles-and-rationale)
+- [3.2 Graph Data Model](#32-graph-data-model)
+  - [3.2.1 Node types](#321-node-types)
+  - [3.2.2 Interaction patterns and their structural signatures](#322-interaction-patterns-and-their-structural-signatures)
+  - [3.2.3 Edge types](#323-edge-types)
+  - [3.2.4 Edge derivation rules](#324-edge-derivation-rules)
+  - [3.2.5 Gap nodes](#325-gap-nodes)
+- [3.3 Verification State](#33-verification-state)
+- [3.4 Query API](#34-query-api)
+  - [3.4.1 GET /v1/graph/{context_id}](#341-get-v1graphcontext_id)
+  - [3.4.2 GET /v1/graph/{context_id}/nodes](#342-get-v1graphcontext_idnodes)
+  - [3.4.3 GET /v1/graph/{context_id}/transaction](#343-get-v1graphcontext_idtransaction)
+  - [3.4.4 GET /v1/creators/{creator_key}/sessions](#344-get-v1creatorscreator_keysessions)
+- [3.5 Response Schema](#35-response-schema)
+  - [3.5.1 Graph response object](#351-graph-response-object)
+  - [3.5.2 Node object](#352-node-object)
+  - [3.5.3 Edge object](#353-edge-object)
+  - [3.5.4 Error responses](#354-error-responses)
+- [3.6 Implementation Notes](#36-implementation-notes)
 
 ### 3.1 Design Principles and Rationale
 
@@ -1481,32 +1481,32 @@ The machine-readable document format for expressing how graph structure maps to 
 
 Contents
 
-1.  4.1Purpose and Position in the Protocol
-2.  4.2Policy Document Format
-3.  4.2.1Top-level fields
-4.  4.2.2Edge weights
-5.  4.2.3Modifiers
-6.  4.2.4Distribution method
-7.  4.2.5Constraints
-8.  4.3The Default Policy
-9.  4.4Publication and Discovery
-10. 4.5Session Negotiation
-11. 4.5.1Negotiation protocol
-12. 4.5.2Conflict resolution
-13. 4.5.3Session policy record
-14. 4.6The Calculation Algorithm
-15. 4.6.1Inputs and preconditions
-16. 4.6.2Step 1: Identify contributing nodes
-17. 4.6.3Step 2: Compute raw scores
-18. 4.6.4Step 3: Apply constraints
-19. 4.6.5Step 4: Normalize to a distribution
-20. 4.6.6Step 5: Aggregate by creator
-21. 4.6.7Step 6: Apply creator floors
-22. 4.7Settlement Recommendation Document
-23. 4.7.1Document format
-24. 4.7.2Signing the recommendation
-25. 4.7.3Independent verification
-26. 4.8Known Limitations and V2 Deferrals
+- [4.1 Purpose and Position in the Protocol](#41-purpose-and-position-in-the-protocol)
+- [4.2 Policy Document Format](#42-policy-document-format)
+  - [4.2.1 Top-level fields](#421-top-level-fields)
+  - [4.2.2 Edge weights](#422-edge-weights)
+  - [4.2.3 Modifiers](#423-modifiers)
+  - [4.2.4 Distribution method](#424-distribution-method)
+  - [4.2.5 Constraints](#425-constraints)
+- [4.3 The Default Policy](#43-the-default-policy)
+- [4.4 Publication and Discovery](#44-publication-and-discovery)
+- [4.5 Session Negotiation](#45-session-negotiation)
+  - [4.5.1 Negotiation protocol](#451-negotiation-protocol)
+  - [4.5.2 Conflict resolution](#452-conflict-resolution)
+  - [4.5.3 Session policy record](#453-session-policy-record)
+- [4.6 The Calculation Algorithm](#46-the-calculation-algorithm)
+  - [4.6.1 Inputs and preconditions](#461-inputs-and-preconditions)
+  - [4.6.2 Step 1: Identify contributing nodes](#462-step-1-identify-contributing-nodes)
+  - [4.6.3 Step 2: Compute raw scores](#463-step-2-compute-raw-scores)
+  - [4.6.4 Step 3: Apply constraints](#464-step-3-apply-constraints)
+  - [4.6.5 Step 4: Normalize to a distribution](#465-step-4-normalize-to-a-distribution)
+  - [4.6.6 Step 5: Aggregate by creator](#466-step-5-aggregate-by-creator)
+  - [4.6.7 Step 6: Apply creator floors](#467-step-6-apply-creator-floors)
+- [4.7 Settlement Recommendation Document](#47-settlement-recommendation-document)
+  - [4.7.1 Document format](#471-document-format)
+  - [4.7.2 Signing the recommendation](#472-signing-the-recommendation)
+  - [4.7.3 Independent verification](#473-independent-verification)
+- [4.8 Known Limitations and V2 Deferrals](#48-known-limitations-and-v2-deferrals)
 
 ### 4.1 Purpose and Position in the Protocol
 
@@ -2100,32 +2100,32 @@ The conformance specification for @atrib/mcp, @atrib/agent, and @atrib/verify, d
 
 Contents
 
-1.  5.1Design Principle: Zero Ongoing Surface Area
-2.  5.2Package Overview
-3.  5.3@atrib/mcp: MCP Server Middleware
-4.  5.3.1Init interface
-5.  5.3.2Inbound context reading
-6.  5.3.3Record construction and signing
-7.  5.3.4Outbound context writing
-8.  5.3.5Log submission
-9.  5.3.6Policy exposure
-10. 5.4@atrib/agent: Agent Middleware
-11. 5.4.1Init interface
-12. 5.4.2Session initialization
-13. 5.4.3Outbound context forwarding
-14. 5.4.4Inbound context accumulation
-15. 5.4.5Transaction detection
-16. 5.4.6Session policy record creation
-17. 5.5@atrib/verify: Merchant Verification Library
-18. 5.5.1Init interface
-19. 5.5.2Verifying a settlement recommendation
-20. 5.5.3Post-hoc calculation (no agent SDK)
-21. 5.6Key Management
-22. 5.6.1Key generation
-23. 5.6.2Environment variable convention
-24. 5.6.3Key storage requirements
-25. 5.7Automation Triggers (Normative)
-26. 5.8Degradation Contract
+- [5.1 Design Principle: Zero Ongoing Surface Area](#51-design-principle-zero-ongoing-surface-area)
+- [5.2 Package Overview](#52-package-overview)
+- [5.3 @atrib/mcp: MCP Server Middleware](#53-atribmcp-mcp-server-middleware)
+  - [5.3.1 Init interface](#531-init-interface)
+  - [5.3.2 Inbound context reading](#532-inbound-context-reading)
+  - [5.3.3 Record construction and signing](#533-record-construction-and-signing)
+  - [5.3.4 Outbound context writing](#534-outbound-context-writing)
+  - [5.3.5 Log submission](#535-log-submission)
+  - [5.3.6 Policy exposure](#536-policy-exposure)
+- [5.4 @atrib/agent: Agent Middleware](#54-atribagent-agent-middleware)
+  - [5.4.1 Init interface](#541-init-interface-1)
+  - [5.4.2 Session initialization](#542-session-initialization)
+  - [5.4.3 Outbound context forwarding](#543-outbound-context-forwarding)
+  - [5.4.4 Inbound context accumulation](#544-inbound-context-accumulation)
+  - [5.4.5 Transaction detection](#545-transaction-detection)
+  - [5.4.6 Session policy record creation](#546-session-policy-record-creation)
+- [5.5 @atrib/verify: Merchant Verification Library](#55-atribverify-merchant-verification-library)
+  - [5.5.1 Init interface](#551-init-interface-2)
+  - [5.5.2 Verifying a settlement recommendation](#552-verifying-a-settlement-recommendation)
+  - [5.5.3 Post-hoc calculation (no agent SDK)](#553-post-hoc-calculation-no-agent-sdk)
+- [5.6 Key Management](#56-key-management)
+  - [5.6.1 Key generation](#561-key-generation)
+  - [5.6.2 Environment variable convention](#562-environment-variable-convention)
+  - [5.6.3 Key storage requirements](#563-key-storage-requirements)
+- [5.7 Automation Triggers (Normative)](#57-automation-triggers-normative)
+- [5.8 Degradation Contract](#58-degradation-contract)
 
 ### 5.1 Design Principle: Zero Ongoing Surface Area
 
