@@ -40,7 +40,7 @@ export interface AtribServer extends McpServer {
 }
 
 /**
- * Wrap an MCP server with Atrib attribution middleware (§5.3).
+ * Wrap an MCP server with atrib attribution middleware (§5.3).
  *
  * If creatorKey is not provided, operates in pass-through mode:
  * all requests and responses forwarded without modification.

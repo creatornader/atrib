@@ -1,5 +1,5 @@
 /**
- * Atrib end-to-end demo — single-process runnable showcase.
+ * atrib end-to-end demo — single-process runnable showcase.
  *
  * Run with:
  *   ATRIB_PRIVATE_KEY=$(node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))') \
@@ -93,7 +93,7 @@ async function main(): Promise<void> {
   ;(merchantServer as any).tool('search', async () => ({
     content: [
       { type: 'text', text: 'Found 3 results for query.' },
-      { type: 'text', text: '1. Atrib protocol overview' },
+      { type: 'text', text: '1. atrib protocol overview' },
       { type: 'text', text: '2. Implementation guide' },
       { type: 'text', text: '3. Spec §2 Merkle log' },
     ],

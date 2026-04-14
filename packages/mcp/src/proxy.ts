@@ -32,14 +32,14 @@
  *                                                  └─────────────────────┘
  *
  * Attribution records are emitted at the proxy layer, on the in-process side.
- * The upstream sees a normal `tools/call` request with no Atrib metadata; the
- * forwarder strips Atrib's outbound `_meta.atrib` token before sending
+ * The upstream sees a normal `tools/call` request with no atrib metadata; the
+ * forwarder strips atrib's outbound `_meta.atrib` token before sending
  * upstream so the upstream's response shape is unchanged.
  *
  * Per spec §3.1 (graph records structure, not causality), the proxy never
  * inspects upstream responses for semantic content — it forwards the response
  * unchanged after attribution. Per §5.8, any failure on the upstream side is
- * surfaced to the host as a tool error; Atrib stays out of the failure path.
+ * surfaced to the host as a tool error; atrib stays out of the failure path.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -95,7 +95,7 @@ export interface AtribProxyOptions {
   /** Upstream MCP server transport — what the proxy forwards calls to. */
   upstream: UpstreamTransport
 
-  /** Atrib middleware options applied to the in-process side of the proxy. */
+  /** atrib middleware options applied to the in-process side of the proxy. */
   atrib: AtribOptions
 }
 

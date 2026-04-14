@@ -1,6 +1,6 @@
-# Atrib architecture
+# atrib architecture
 
-How the protocol works, what the trust model actually guarantees, and why the design is the way it is. If you want the pitch, read the [README](README.md). If you want every normative detail, read the [spec](atrib-spec.md). This is the middle layer — enough to evaluate whether Atrib is worth building on.
+How the protocol works, what the trust model actually guarantees, and why the design is the way it is. If you want the pitch, read the [README](README.md). If you want every normative detail, read the [spec](atrib-spec.md). This is the middle layer — enough to evaluate whether atrib is worth building on.
 
 Architectural decisions and rejected alternatives are logged in [DECISIONS.md](DECISIONS.md).
 
@@ -162,7 +162,7 @@ The decision is documented in D006.
 
 ## Payment protocol integration
 
-Atrib detects transaction events from six agent commerce protocols simultaneously:
+atrib detects transaction events from six agent commerce protocols simultaneously:
 
 | Protocol                | Detection signal                                          | Source                       |
 | ----------------------- | --------------------------------------------------------- | ---------------------------- |
@@ -173,17 +173,17 @@ Atrib detects transaction events from six agent commerce protocols simultaneousl
 | AP2 (Google)            | A2A DataPart with `ap2.mandates.PaymentMandate`           | A2A task response            |
 | a2a-x402 (Google)       | `metadata["x402.payment.status"] === "payment-completed"` | A2A task metadata            |
 
-The design principle: detect, don't implement. Atrib pattern-matches on tool call responses to identify when a transaction occurred. It doesn't initiate payments, move money, hold funds, or enforce settlement. The detection logic for all six protocols is in `@atrib/agent`'s `transaction.ts` and runs simultaneously. You don't choose a payment protocol at install time.
+The design principle: detect, don't implement. atrib pattern-matches on tool call responses to identify when a transaction occurred. It doesn't initiate payments, move money, hold funds, or enforce settlement. The detection logic for all six protocols is in `@atrib/agent`'s `transaction.ts` and runs simultaneously. You don't choose a payment protocol at install time.
 
 Why this matters:
 
-Protocol agnosticism. Atrib works regardless of which payment rail the merchant uses. If a seventh protocol shows up tomorrow, adding detection is a pattern-matching rule, not a protocol change.
+Protocol agnosticism. atrib works regardless of which payment rail the merchant uses. If a seventh protocol shows up tomorrow, adding detection is a pattern-matching rule, not a protocol change.
 
 Separation of concerns. Attribution and payment are orthogonal problems. Attribution answers "who contributed to this outcome?" Payment answers "how does money move?" Coupling them would mean each one's adoption depends on the other's.
 
 When a transaction is detected, the agent emits a `transaction` record (event_type `"transaction"`) with the same `context_id` as the session. This closes the attribution loop -- the graph now has a terminal node that all contributing tool calls converge on. See Section 1.7 for the detection rules for each protocol.
 
-There are two emission paths for transaction records (Section 5.4.5, D011). Path 1: the merchant has `@atrib/mcp` installed and emits the transaction record directly. Path 2: the merchant does not have Atrib, so the agent detects the transaction from the response and emits it. Anti-double-emission logic prevents both from firing: the agent checks whether the response already contains an attribution token, and suppresses Path 2 if it does.
+There are two emission paths for transaction records (Section 5.4.5, D011). Path 1: the merchant has `@atrib/mcp` installed and emits the transaction record directly. Path 2: the merchant does not have atrib, so the agent detects the transaction from the response and emits it. Anti-double-emission logic prevents both from firing: the agent checks whether the response already contains an attribution token, and suppresses Path 2 if it does.
 
 ---
 
@@ -195,7 +195,7 @@ The SDK ships one core interceptor (`atrib()`) and one adapter helper per suppor
 
 Every MCP framework has a different integration surface. The Claude Agent SDK exposes an `McpServer` instance you can wrap directly. Cloudflare Agents has an `McpAgent` class with lifecycle hooks. Vercel AI SDK's `@ai-sdk/mcp` ships its own JSON-RPC implementation that is structurally incompatible with the standard `@modelcontextprotocol/sdk` Client. LangChain's `MultiServerMCPClient` wraps multiple connections and needs a different hook point.
 
-The project established a "source-read-first" principle early (D018): before writing an adapter, read the host framework's source code to find the correct integration point. All six shipped adapters were built this way, and every one had a different correct answer. The adapter helper signature varies because the host framework's surface varies -- that variation is forced by the host, not invented by Atrib.
+The project established a "source-read-first" principle early (D018): before writing an adapter, read the host framework's source code to find the correct integration point. All six shipped adapters were built this way, and every one had a different correct answer. The adapter helper signature varies because the host framework's surface varies -- that variation is forced by the host, not invented by atrib.
 
 ### Shipped adapters
 
@@ -216,9 +216,9 @@ Each adapter ships with: source at `packages/agent/src/adapters/`, tests at `pac
 
 ## Degradation contract
 
-Section 5.8 of the spec. Atrib failures never affect the primary tool call or agent response. Not a best practice — a hard protocol requirement. The guarantees:
+Section 5.8 of the spec. atrib failures never affect the primary tool call or agent response. Not a best practice — a hard protocol requirement. The guarantees:
 
-- **All exceptions caught.** Any exception inside an Atrib trigger handler is caught by the middleware, logged at warning level with an `atrib:` prefix, and swallowed. Exceptions never propagate to the tool handler, the agent, or calling code.
+- **All exceptions caught.** Any exception inside an atrib trigger handler is caught by the middleware, logged at warning level with an `atrib:` prefix, and swallowed. Exceptions never propagate to the tool handler, the agent, or calling code.
 
 - **All network failures silent.** Log submission failures use exponential backoff (max 3 attempts, 30-second window). If all retries fail, the signed record is cached locally. The tool response is returned regardless.
 
@@ -238,7 +238,7 @@ The load-bearing choices. Each is in [DECISIONS.md](DECISIONS.md) with full rati
 
 **Ed25519, 32-byte seed (D003).** Not RSA, not ECDSA, not DIDs. Ed25519 is fast, has a small key size, deterministic signatures, and no PKI dependency. The 32-byte seed (not the 64-byte NaCl expanded format) keeps key management simple. Key rotation is deferred to v2.
 
-**JCS canonicalization, not JWS/COSE (D003, Section 1.3).** RFC 8785 JSON Canonicalization Scheme gives deterministic serialization: lexicographic key ordering, no whitespace. This means any party can independently compute the same canonical bytes from the same record, which is necessary for signature verification and hash chain integrity. JWS wrapping was rejected because it adds envelope complexity without adding security properties Atrib needs.
+**JCS canonicalization, not JWS/COSE (D003, Section 1.3).** RFC 8785 JSON Canonicalization Scheme gives deterministic serialization: lexicographic key ordering, no whitespace. This means any party can independently compute the same canonical bytes from the same record, which is necessary for signature verification and hash chain integrity. JWS wrapping was rejected because it adds envelope complexity without adding security properties atrib needs.
 
 **tlog-tiles, not a custom log format (D006).** The C2SP tlog-tiles spec defines an HTTP-based read interface for tiled Merkle trees. It is used by Certificate Transparency, Go module checksums, and Sigstore. Using a standard format means existing tooling (Tessera, witnesses, monitors) works out of the box.
 

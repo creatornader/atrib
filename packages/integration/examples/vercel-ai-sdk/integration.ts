@@ -1,9 +1,9 @@
 /**
- * Atrib + Vercel AI SDK MCP — runnable integration snippet
+ * atrib + Vercel AI SDK MCP — runnable integration snippet
  *
- * Demonstrates the Atrib wiring for an `@ai-sdk/mcp` MCPClient.
+ * Demonstrates the atrib wiring for an `@ai-sdk/mcp` MCPClient.
  * The model invocation step (`streamText` / `generateText`) is omitted from
- * this file so the example stays focused on the Atrib integration. Drop this
+ * this file so the example stays focused on the atrib integration. Drop this
  * pattern into any AI SDK app that uses MCP tools — the rest of your AI SDK
  * code is unchanged.
  *
@@ -26,7 +26,7 @@ import { createMCPClient } from '@ai-sdk/mcp'
 import { atrib, attributeVercelAiSdkMcp } from '@atrib/agent'
 
 async function main() {
-  // 1. Construct the Atrib interceptor.
+  // 1. Construct the atrib interceptor.
   //    Handles session lifecycle, policy negotiation, W3C trace context
   //    propagation, and Path 1/2 transaction detection per spec §5.4.
   const interceptor = atrib({
@@ -57,7 +57,7 @@ async function main() {
     // 4. Build the AI SDK ToolSet. Pass `tools` to streamText/generateText
     //    in your application code as you normally would. Each tool's
     //    execute() callback calls client.request() under the hood, which
-    //    is now patched — every tool call flows through the Atrib
+    //    is now patched — every tool call flows through the atrib
     //    interceptor without further changes to your AI SDK wiring.
     const tools = await mcpClient.tools()
     console.log(`Loaded ${Object.keys(tools).length} tools from MCP server`)
@@ -75,7 +75,7 @@ async function main() {
   } finally {
     // 5. Cleanup. Closing the MCP client releases the transport, and
     //    flushing the interceptor drains the submission queue (any
-    //    pending Atrib records get one final POST attempt).
+    //    pending atrib records get one final POST attempt).
     await mcpClient.close()
     await interceptor.flush()
   }

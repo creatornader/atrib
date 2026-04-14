@@ -42,7 +42,7 @@ export interface DevLog {
 
   /**
    * The submission endpoint URL — pass this to `@atrib/mcp`'s
-   * `atrib({ logEndpoint: ... })` option, or to any other Atrib client
+   * `atrib({ logEndpoint: ... })` option, or to any other atrib client
    * that needs a log endpoint.
    */
   readonly submissionEndpoint: string

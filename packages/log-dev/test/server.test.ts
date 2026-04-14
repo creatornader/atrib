@@ -9,7 +9,7 @@
  *      means a regression in the dev log's validation surfaces here
  *      rather than in a customer's first deploy.
  *
- *   2. Real-consumer demonstration for `X-Atrib-Priority` — verify the
+ *   2. Real-consumer demonstration for `X-atrib-Priority` — verify the
  *      priority queue actually orders submissions by priority when
  *      `maxConcurrent` is finite. This is the second of the two real
  *      consumers documented in `@atrib/mcp/src/submission.ts`'s file
@@ -230,7 +230,7 @@ describe('@atrib/log-dev — HTTP submission API', () => {
   })
 })
 
-describe('@atrib/log-dev — X-Atrib-Priority real consumer', () => {
+describe('@atrib/log-dev — X-atrib-Priority real consumer', () => {
   it('high-priority submissions are admitted before normal under capacity pressure', async () => {
     // maxConcurrent: 1 means only one submission is in-flight at a time.
     // processingDelayMs: 30 makes the in-flight slot held long enough for
@@ -264,17 +264,17 @@ describe('@atrib/log-dev — X-Atrib-Priority real consumer', () => {
       const [, ,] = await Promise.all([
         fetch(log.submissionEndpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Atrib-Priority': 'normal' },
+          headers: { 'Content-Type': 'application/json', 'X-atrib-Priority': 'normal' },
           body: JSON.stringify(normalA),
         }),
         fetch(log.submissionEndpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Atrib-Priority': 'normal' },
+          headers: { 'Content-Type': 'application/json', 'X-atrib-Priority': 'normal' },
           body: JSON.stringify(normalB),
         }),
         fetch(log.submissionEndpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Atrib-Priority': 'high' },
+          headers: { 'Content-Type': 'application/json', 'X-atrib-Priority': 'high' },
           body: JSON.stringify(highX),
         }),
       ])
@@ -293,7 +293,7 @@ describe('@atrib/log-dev — X-Atrib-Priority real consumer', () => {
     }
   })
 
-  it('defaults priority to normal when X-Atrib-Priority header is absent', async () => {
+  it('defaults priority to normal when X-atrib-Priority header is absent', async () => {
     const log = await startDevLog({ port: 0 })
     try {
       const record = await makeSignedRecord()
@@ -315,7 +315,7 @@ describe('@atrib/log-dev — X-Atrib-Priority real consumer', () => {
       const record = await makeSignedRecord()
       const response = await fetch(log.submissionEndpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Atrib-Priority': 'banana' },
+        headers: { 'Content-Type': 'application/json', 'X-atrib-Priority': 'banana' },
         body: JSON.stringify(record),
       })
       expect(response.status).toBe(200)

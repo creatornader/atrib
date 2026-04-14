@@ -1,8 +1,8 @@
-# Atrib + Vercel AI SDK (`@ai-sdk/mcp`)
+# atrib + Vercel AI SDK (`@ai-sdk/mcp`)
 
-This example shows how to add Atrib attribution to a Vercel AI SDK application that uses MCP tools via `createMCPClient` from `@ai-sdk/mcp`.
+This example shows how to add atrib attribution to a Vercel AI SDK application that uses MCP tools via `createMCPClient` from `@ai-sdk/mcp`.
 
-The integration is **one extra line**: `attributeVercelAiSdkMcp(mcpClient, { interceptor })` after `createMCPClient(...)` resolves. The helper patches the client's `request` method so every outbound `tools/call` flows through Atrib's interceptor lifecycle (W3C trace context propagation, attribution token chaining, transaction detection per spec §5.4).
+The integration is **one extra line**: `attributeVercelAiSdkMcp(mcpClient, { interceptor })` after `createMCPClient(...)` resolves. The helper patches the client's `request` method so every outbound `tools/call` flows through atrib's interceptor lifecycle (W3C trace context propagation, attribution token chaining, transaction detection per spec §5.4).
 
 ---
 
@@ -16,7 +16,7 @@ The `@ai-sdk/mcp` MCPClient is **not** a `@modelcontextprotocol/sdk` Client. It 
 | Accepts `_meta` field on the request      | Does NOT accept `_meta` — it's stripped before the JSON-RPC request is built                      |
 | `client.callTool()` is the public surface | `client.tools()` returns an AI-SDK ToolSet whose `execute()` calls `client.callTool()` internally |
 
-Because the `_meta` field is stripped at the AI SDK MCPClient layer, wrapping at the AI SDK execute callback level loses Atrib's outbound metadata. The right integration point is the **`request()` method** — the JSON-RPC bottleneck through which every MCP call flows on its way to the transport. Patching here lets Atrib inject `_meta` into outbound `tools/call` and read raw `_meta` from the response before AI-SDK-specific transformations like `extractStructuredContent` strip it.
+Because the `_meta` field is stripped at the AI SDK MCPClient layer, wrapping at the AI SDK execute callback level loses atrib's outbound metadata. The right integration point is the **`request()` method** — the JSON-RPC bottleneck through which every MCP call flows on its way to the transport. Patching here lets atrib inject `_meta` into outbound `tools/call` and read raw `_meta` from the response before AI-SDK-specific transformations like `extractStructuredContent` strip it.
 
 This is symmetrical to how `@atrib/mcp` patches `setRequestHandler` on the server side: same pattern, opposite end of the wire. Full architectural rationale is in [`DECISIONS.md`](../../../../DECISIONS.md) D023.
 
@@ -29,7 +29,7 @@ import { createMCPClient } from '@ai-sdk/mcp'
 import { streamText } from 'ai'
 import { atrib, attributeVercelAiSdkMcp } from '@atrib/agent'
 
-// 1. Construct the Atrib interceptor (once per agent process / request).
+// 1. Construct the atrib interceptor (once per agent process / request).
 //    Handles session lifecycle, policy negotiation, W3C trace context
 //    propagation, and Path 1/2 transaction detection.
 const interceptor = atrib({
@@ -80,7 +80,7 @@ for await (const chunk of result.textStream) {
 }
 ```
 
-That's the entire integration. Every successful tool call going through the AI SDK emits a signed Atrib record. Tool inputs and outputs are unchanged from the AI SDK's perspective.
+That's the entire integration. Every successful tool call going through the AI SDK emits a signed atrib record. Tool inputs and outputs are unchanged from the AI SDK's perspective.
 
 ### Model routing through the AI Gateway
 
@@ -103,7 +103,7 @@ const result = await streamText({
 })
 ```
 
-Both forms route through the Gateway and use OIDC auth — no provider API keys required. **Atrib's behavior is identical in both forms** — the attribution interceptor patches `mcpClient.request`, which sits below the model layer, so every MCP `tools/call` flowing out of the AI SDK gets attributed the same way regardless of which Gateway form you use.
+Both forms route through the Gateway and use OIDC auth — no provider API keys required. **atrib's behavior is identical in both forms** — the attribution interceptor patches `mcpClient.request`, which sits below the model layer, so every MCP `tools/call` flowing out of the AI SDK gets attributed the same way regardless of which Gateway form you use.
 
 ---
 
@@ -127,7 +127,7 @@ const tools = {
 }
 ```
 
-The Atrib interceptor is shared across all clients (it's the agent's identity, not per-server), but the `serverUrl` option distinguishes them in the resulting attribution records.
+The atrib interceptor is shared across all clients (it's the agent's identity, not per-server), but the `serverUrl` option distinguishes them in the resulting attribution records.
 
 ---
 
@@ -137,9 +137,9 @@ The Atrib interceptor is shared across all clients (it's the agent's identity, n
   ```bash
   node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))'
   ```
-- **`ATRIB_LOG_ENDPOINT`** — URL of your Atrib Merkle log submission endpoint. Optional in development; the submission queue silently buffers when unset.
+- **`ATRIB_LOG_ENDPOINT`** — URL of your atrib Merkle log submission endpoint. Optional in development; the submission queue silently buffers when unset.
 
-If `ATRIB_PRIVATE_KEY` is omitted, Atrib operates in pass-through mode with a console warning. No records are emitted, but the AI SDK keeps working.
+If `ATRIB_PRIVATE_KEY` is omitted, atrib operates in pass-through mode with a console warning. No records are emitted, but the AI SDK keeps working.
 
 ---
 
@@ -147,10 +147,10 @@ If `ATRIB_PRIVATE_KEY` is omitted, Atrib operates in pass-through mode with a co
 
 After running with `ATRIB_LOG_ENDPOINT` pointed at your log:
 
-- Every successful `tools/call` from the AI SDK emits a signed Atrib record
+- Every successful `tools/call` from the AI SDK emits a signed atrib record
 - Records share a `context_id` per agent session and chain via `chain_root` references
 - Failed tool calls (`isError: true` from the upstream) emit no record per spec §5.3.3
-- Internal atrib failures (network, signing, interceptor errors) never reach the AI SDK's tool dispatch — they're caught and logged with the `atrib:` console prefix per §5.8
+- atrib failures (network, signing, interceptor errors) never reach the AI SDK's tool dispatch — they're caught and logged with the `atrib:` console prefix per §5.8
 
 If you don't see records, check:
 

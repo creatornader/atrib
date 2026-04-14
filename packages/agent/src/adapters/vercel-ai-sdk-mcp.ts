@@ -75,7 +75,7 @@ export interface VercelAiSdkMcpClientLike {
 
 /** Options for `attributeVercelAiSdkMcp`. */
 export interface AttributeVercelAiSdkMcpOptions {
-  /** The Atrib interceptor that observes tool calls on this client. */
+  /** The atrib interceptor that observes tool calls on this client. */
   interceptor: ToolCallInterceptor
 
   /**
@@ -90,7 +90,7 @@ export interface AttributeVercelAiSdkMcpOptions {
 
 /**
  * Patch a Vercel AI SDK MCP client so every outbound `tools/call` flows
- * through Atrib's interceptor lifecycle.
+ * through atrib's interceptor lifecycle.
  *
  * Mutates the passed client in place by replacing its `request` method with
  * a wrapped version. Returns the same client reference for convenience.

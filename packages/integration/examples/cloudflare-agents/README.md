@@ -1,8 +1,8 @@
-# Atrib + Cloudflare Agents
+# atrib + Cloudflare Agents
 
-This example shows how to add Atrib attribution to a Cloudflare-deployed application using the [`agents`](https://www.npmjs.com/package/agents) package. Cloudflare exposes two distinct MCP integration surfaces, and Atrib has a different (one-line) integration story for each.
+This example shows how to add atrib attribution to a Cloudflare-deployed application using the [`agents`](https://www.npmjs.com/package/agents) package. Cloudflare exposes two distinct MCP integration surfaces, and atrib has a different (one-line) integration story for each.
 
-| Surface                                | What it does                                                                                         | Atrib integration                                                                                                                                                                     |
+| Surface                                | What it does                                                                                         | atrib integration                                                                                                                                                                     |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`McpAgent`** (server-side)           | Builds an MCP server that runs as a Durable Object on Cloudflare. You define tools on `this.server`. | One-line `atrib(this.server, options)` from `@atrib/mcp`. Same primitive that works for Claude Agent SDK Case A.                                                                      |
 | **`Agent.addMcpServer`** (client-side) | Your Agent connects out to one or more upstream MCP servers via HTTP.                                | One-line `attributeCloudflareAgentMcp(this, { interceptor })` from `@atrib/agent`. Wraps each connection's underlying `Client` so subsequent tool calls flow through the interceptor. |
@@ -13,9 +13,9 @@ Both integrations are zero-deploy: no extra Worker, no proxy hop, no architectur
 
 ## Why this works without a Cloudflare-specific package
 
-`McpAgent` exposes `this.server` as a real `McpServer` from `@modelcontextprotocol/sdk` — the same class Atrib's existing middleware wraps. When `McpAgent.serve()` routes a request to your Durable Object, the underlying call lands at `McpServer.server.setRequestHandler(CallToolRequestSchema, ...)`, which is exactly the chokepoint our middleware monkey-patches.
+`McpAgent` exposes `this.server` as a real `McpServer` from `@modelcontextprotocol/sdk` — the same class atrib's existing middleware wraps. When `McpAgent.serve()` routes a request to your Durable Object, the underlying call lands at `McpServer.server.setRequestHandler(CallToolRequestSchema, ...)`, which is exactly the chokepoint our middleware monkey-patches.
 
-`Agent.addMcpServer` uses an internal `MCPClientManager` whose `callTool({ serverId, name, arguments })` method delegates straight to `mcpConnections[serverId].client.callTool(...)` (verified at `agents@0.9.0` `dist/client-BwgM3cRz.js:1444`). The `client` field is publicly exposed on `MCPClientConnection`, so we can wrap it in place after `addMcpServer` runs and every subsequent tool call goes through Atrib's interceptor.
+`Agent.addMcpServer` uses an internal `MCPClientManager` whose `callTool({ serverId, name, arguments })` method delegates straight to `mcpConnections[serverId].client.callTool(...)` (verified at `agents@0.9.0` `dist/client-BwgM3cRz.js:1444`). The `client` field is publicly exposed on `MCPClientConnection`, so we can wrap it in place after `addMcpServer` runs and every subsequent tool call goes through atrib's interceptor.
 
 See `DECISIONS.md` D022 for the full architectural rationale.
 
@@ -23,7 +23,7 @@ See `DECISIONS.md` D022 for the full architectural rationale.
 
 ## Surface 1 — `McpAgent` (you're building an MCP server on Cloudflare)
 
-Your Worker exposes tools that other agents can call. Add Atrib in **one line** inside `init()`.
+Your Worker exposes tools that other agents can call. Add atrib in **one line** inside `init()`.
 
 ```ts
 // src/index.ts
@@ -112,7 +112,7 @@ Both work — see `packages/mcp/src/middleware.ts:258` for the retroactive-wrap 
 
 ## Surface 2 — `Agent` connecting out to upstream MCP servers
 
-Your Worker is a chat agent (or similar) that connects to one or more upstream MCP servers and calls their tools. Add Atrib by calling `attributeCloudflareAgentMcp(this, { interceptor })` once after your `addMcpServer` calls.
+Your Worker is a chat agent (or similar) that connects to one or more upstream MCP servers and calls their tools. Add atrib by calling `attributeCloudflareAgentMcp(this, { interceptor })` once after your `addMcpServer` calls.
 
 ```ts
 // src/index.ts
@@ -125,7 +125,7 @@ interface Env {
 }
 
 export class WeatherChatAgent extends Agent<Env> {
-  // Construct the Atrib interceptor once per agent instance.
+  // Construct the atrib interceptor once per agent instance.
   // The interceptor handles session lifecycle, policy negotiation, W3C
   // trace context propagation, and transaction detection.
   interceptor = atrib({
@@ -174,11 +174,11 @@ When the Cloudflare Agent's tool dispatcher (e.g. via `streamText({ tools: this.
 ```
 ai SDK execute callback
   → MCPClientManager.callTool({ serverId, name, arguments })
-    → mcpConnections[serverId].client.callTool(...)   ← wrapped by Atrib
-      → Atrib interceptor.onBeforeToolCall(name, _meta)
+    → mcpConnections[serverId].client.callTool(...)   ← wrapped by atrib
+      → atrib interceptor.onBeforeToolCall(name, _meta)
         → forward to original Client.callTool
           → upstream MCP server (HTTP/SSE)
-      ← Atrib interceptor.onAfterToolResponse(name, result, _meta)
+      ← atrib interceptor.onAfterToolResponse(name, result, _meta)
 ```
 
 The key insight is that `attributeCloudflareAgentMcp` replaces the `client` field on each `MCPClientConnection` in place. `MCPClientManager.callTool` reads `mcpConnections[serverId].client` at invocation time, so subsequent calls automatically use the wrapped version.
@@ -199,9 +199,9 @@ If your upstream is stdio-only, you have two options:
 Both surfaces assume:
 
 - **`ATRIB_PRIVATE_KEY`** — base64url-encoded 32-byte Ed25519 seed. Set via `wrangler secret put ATRIB_PRIVATE_KEY`. In production, store the matching public key on the merchant verification side.
-- **`ATRIB_LOG_ENDPOINT`** — URL of your Atrib Merkle log submission endpoint. Optional in development; submission queue silently buffers when unset (per spec §5.8 degradation contract).
+- **`ATRIB_LOG_ENDPOINT`** — URL of your atrib Merkle log submission endpoint. Optional in development; submission queue silently buffers when unset (per spec §5.8 degradation contract).
 
-If `ATRIB_PRIVATE_KEY` is omitted, Atrib operates in pass-through mode with a console warning. No records are emitted, but tool calls (and the Cloudflare DO lifecycle) still work normally.
+If `ATRIB_PRIVATE_KEY` is omitted, atrib operates in pass-through mode with a console warning. No records are emitted, but tool calls (and the Cloudflare DO lifecycle) still work normally.
 
 ---
 
@@ -209,8 +209,8 @@ If `ATRIB_PRIVATE_KEY` is omitted, Atrib operates in pass-through mode with a co
 
 After deploying either example:
 
-- **Surface 1 (McpAgent)**: every successful `tools/call` to your Worker emits a signed Atrib record. Records share a `context_id` per MCP session and chain via `chain_root` references. Each Durable Object instance (per-session) constructs its own submission queue — that's per the spec's session model.
-- **Surface 2 (Agent)**: every tool call your Agent makes to an upstream MCP server emits a signed Atrib record on the agent side. The upstream's response is unchanged from the agent's perspective. If the upstream is also Atrib-instrumented (using `@atrib/mcp`), you'll get records from both sides forming a verifiable chain.
+- **Surface 1 (McpAgent)**: every successful `tools/call` to your Worker emits a signed atrib record. Records share a `context_id` per MCP session and chain via `chain_root` references. Each Durable Object instance (per-session) constructs its own submission queue — that's per the spec's session model.
+- **Surface 2 (Agent)**: every tool call your Agent makes to an upstream MCP server emits a signed atrib record on the agent side. The upstream's response is unchanged from the agent's perspective. If the upstream is also atrib-instrumented (using `@atrib/mcp`), you'll get records from both sides forming a verifiable chain.
 
 If you don't see records, check:
 

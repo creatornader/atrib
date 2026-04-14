@@ -1,5 +1,5 @@
 /**
- * Atrib + Claude Agent SDK — Case B: instrument a third-party MCP server
+ * atrib + Claude Agent SDK — Case B: instrument a third-party MCP server
  *
  * Your tools live in an upstream MCP server (filesystem, fetch, GitHub, etc.)
  * that you connect to via stdio or HTTP. You don't own the McpServer instance,

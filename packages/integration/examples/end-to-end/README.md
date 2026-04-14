@@ -1,6 +1,6 @@
-# Atrib end-to-end demo
+# atrib end-to-end demo
 
-A complete, runnable Atrib attribution chain in a single process. One command to start, one CLI window to watch records flow.
+A complete, runnable atrib attribution chain in a single process. One command to start, one CLI window to watch records flow.
 
 ```bash
 ATRIB_PRIVATE_KEY=$(node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))') \
@@ -16,7 +16,7 @@ ATRIB_PRIVATE_KEY=$(node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toS
 
 ## What this demo proves
 
-In ~150 lines of TypeScript and one terminal window, this demo runs the **entire Atrib protocol** end-to-end:
+In ~150 lines of TypeScript and one terminal window, this demo runs the **entire atrib protocol** end-to-end:
 
 1. A **fake MCP merchant tool server** that pretends to be a search API. It uses `@atrib/mcp`'s `atrib()` middleware so every tool call it serves emits a signed attribution record.
 
@@ -71,7 +71,7 @@ Despite all those simplifications, **the wire format and the cryptographic signa
 
 ## How this demo informs a customer conversation
 
-This is the answer to "where does this go in 15 minutes?" When a prospective customer (Exa, Firecrawl, Browserbase, etc.) asks how Atrib actually works, you can:
+This is the answer to "where does this go in 15 minutes?" When a prospective customer (Exa, Firecrawl, Browserbase, etc.) asks how atrib actually works, you can:
 
 1. Run `pnpm tsx packages/integration/examples/end-to-end/demo.ts` in front of them
 2. Watch the records flow

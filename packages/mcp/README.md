@@ -1,8 +1,8 @@
 # `@atrib/mcp`
 
-**MCP server middleware for Atrib attribution. One line of code wraps your existing MCP server and emits a signed attribution record for every successful tool call — automatically, asynchronously, and with zero impact on the tool's primary response.**
+**MCP server middleware for atrib attribution. One line of code wraps your existing MCP server and emits a signed attribution record for every successful tool call — automatically, asynchronously, and with zero impact on the tool's primary response.**
 
-This is the **server-side half** of the Atrib protocol: the package merchants and tool providers install. If you're building an agent that _calls_ MCP tools, you want [`@atrib/agent`](../agent/README.md) instead.
+This is the **server-side half** of the atrib protocol: the package merchants and tool providers install. If you're building an agent that _calls_ MCP tools, you want [`@atrib/agent`](../agent/README.md) instead.
 
 ## Quick start
 
@@ -23,13 +23,13 @@ server.tool('search', { q: z.string() }, async ({ q }) => {
 })
 ```
 
-That's the entire integration. Every successful `tools/call` your server handles now emits a signed Atrib record carrying the spec §1.2 record format, propagates W3C trace context to the response, and submits to your configured log endpoint asynchronously per spec §5.3.5.
+That's the entire integration. Every successful `tools/call` your server handles now emits a signed atrib record carrying the spec §1.2 record format, propagates W3C trace context to the response, and submits to your configured log endpoint asynchronously per spec §5.3.5.
 
 ## What the middleware does on every tool call
 
 Per spec §5.3, on every inbound `tools/call`:
 
-1. **Reads inbound attribution context** from `params._meta.atrib`, `tracestate`, and `X-Atrib-Chain` (in priority order). If the calling agent is wrapped with `@atrib/agent`, the previous record's hash and creator key are extracted from this token to set the next record's `chain_root`.
+1. **Reads inbound attribution context** from `params._meta.atrib`, `tracestate`, and `X-atrib-Chain` (in priority order). If the calling agent is wrapped with `@atrib/agent`, the previous record's hash and creator key are extracted from this token to set the next record's `chain_root`.
 2. **Reads `session_token` from baggage** if present, for cross-trace session continuity.
 
 After the tool's own handler returns successfully (`isError: false`), **before** returning the response to the caller:
@@ -37,7 +37,7 @@ After the tool's own handler returns successfully (`isError: false`), **before**
 3. **Constructs the attribution record** with `content_id` derived from `serverUrl` + tool name (§1.2.2), `chain_root` from inbound context or genesis (§1.2.3), `event_type` from the optional `transactionTools` set in your options.
 4. **Signs it with Ed25519** using the configured `creatorKey`.
 5. **Computes the propagation token** (sha256 of the signed record + creator public key), 87 chars max, fitting the W3C tracestate value limit.
-6. **Writes the token to the response** at `response._meta.atrib`, `tracestate`, and `X-Atrib-Chain` so the calling agent can chain the next call to it.
+6. **Writes the token to the response** at `response._meta.atrib`, `tracestate`, and `X-atrib-Chain` so the calling agent can chain the next call to it.
 
 After the response is sent (non-blocking — see invariant #4 below):
 
@@ -46,7 +46,7 @@ After the response is sent (non-blocking — see invariant #4 below):
 
 ## Critical behaviors (degradation contract per spec §5.8)
 
-The middleware is built around one absolute invariant: **Atrib failures must never affect the primary tool call or agent response.** Concretely:
+The middleware is built around one absolute invariant: **atrib failures must never affect the primary tool call or agent response.** Concretely:
 
 - If `ATRIB_PRIVATE_KEY` (or `creatorKey`) is unset → pass-through mode with one console warning per process. Tools work normally; no records are emitted.
 - All exceptions inside the middleware are caught, logged with the `atrib:` prefix, and never propagated to the caller.
@@ -60,7 +60,7 @@ The submission queue POSTs each signed record as a **bare attribution record** t
 ```http
 POST https://your-log.example.com/v1/entries
 Content-Type: application/json
-X-Atrib-Priority: high
+X-atrib-Priority: high
 
 {
   "spec_version": "atrib/1.0",
@@ -74,7 +74,7 @@ X-Atrib-Priority: high
 }
 ```
 
-The body is the bare record per spec §2.6.1 — there is no wrapper object. The `X-Atrib-Priority` header is a non-conflicting HTTP-level extension to the spec used by the dev log's admission queue and by the `flush()` retry ordering inside this package. See the `submission.ts` file header for the full rationale on the two real consumers of priority.
+The body is the bare record per spec §2.6.1 — there is no wrapper object. The `X-atrib-Priority` header is a non-conflicting HTTP-level extension to the spec used by the dev log's admission queue and by the `flush()` retry ordering inside this package. See the `submission.ts` file header for the full rationale on the two real consumers of priority.
 
 The expected response is a proof bundle per §2.6.2 (snake_case fields):
 
@@ -172,7 +172,7 @@ Run them with `pnpm --filter @atrib/mcp test`.
 | §1.2         | Attribution record format                                                  |
 | §1.3         | JCS canonicalization (RFC 8785)                                            |
 | §1.4         | Ed25519 signing and verification                                           |
-| §1.5         | Context propagation via `params._meta`, tracestate, baggage, X-Atrib-Chain |
+| §1.5         | Context propagation via `params._meta`, tracestate, baggage, X-atrib-Chain |
 | §2.6.1       | Submission API client (POST a bare signed record)                          |
 | §2.6.2       | Proof bundle response shape                                                |
 | §5.3         | Server-side middleware behavior                                            |

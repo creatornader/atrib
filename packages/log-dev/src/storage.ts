@@ -9,7 +9,7 @@
  * proof on duplicate, not 409 Conflict).
  *
  * The interesting behavior here is the **priority queue** that demonstrates
- * the second real consumer of `X-Atrib-Priority` (see `submission.ts` in
+ * the second real consumer of `X-atrib-Priority` (see `submission.ts` in
  * `@atrib/mcp` for the rationale). When `maxConcurrent` is finite and the
  * in-flight submission count is at capacity, new submissions are placed in
  * a priority queue and high-priority records are admitted first when

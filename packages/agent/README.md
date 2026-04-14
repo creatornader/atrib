@@ -2,9 +2,9 @@
 
 **Attribution for agent-side tool calls. Works with every major MCP framework. Sits above every major agent payment protocol.**
 
-`@atrib/agent` is the client-side half of the [Atrib value provenance protocol](../../atrib-spec.md). It turns the MCP tool calls flowing out of your agent into signed, chainable attribution records — so the creators, tools, and data sources that contributed to an outcome can be identified and paid without any centralized intermediary seeing what happened inside the call.
+`@atrib/agent` is the client-side half of the [atrib value provenance protocol](../../atrib-spec.md). It turns the MCP tool calls flowing out of your agent into signed, chainable attribution records — so the creators, tools, and data sources that contributed to an outcome can be identified and paid without any centralized intermediary seeing what happened inside the call.
 
-You set up one `atrib()` interceptor, plug it into your framework's adapter, and every outbound `tools/call` from that point on carries W3C trace context, an attribution chain token, and the full Atrib session lifecycle. When a payment completes — through any of the supported commerce protocols — a transaction record closes the chain and links contributions to the purchase.
+You set up one `atrib()` interceptor, plug it into your framework's adapter, and every outbound `tools/call` from that point on carries W3C trace context, an attribution chain token, and the full atrib session lifecycle. When a payment completes — through any of the supported commerce protocols — a transaction record closes the chain and links contributions to the purchase.
 
 Two coverage surfaces define what you get:
 
@@ -39,13 +39,13 @@ All detection logic lives in `packages/agent/src/transaction.ts` and runs agains
 | **AP2** — Agent Payments Protocol     | Google — `github.com/google-agentic-commerce/ap2`           | A2A Message with DataPart containing `ap2.mandates.PaymentMandate`                                                            | §1.7.5                               |
 | **a2a-x402**                          | Google — `github.com/google-agentic-commerce/a2a-x402`      | A2A task `status.message.metadata["x402.payment.status"] === "payment-completed"` + `receipts[].success === true`             | §1.7.5 (reported as AP2 crypto path) |
 
-**The linking mechanism is the same across all six:** the session `context_id` (16-byte anchor, equal to the W3C OTel trace-id by default) travels with the outbound payment request — via `X-Atrib-Context` HTTP header for protocols that don't expose a free-form metadata field, or via `params._meta.atrib` for any payment protocol running over MCP transport. When the merchant's side sees the payment-completed signal, Atrib writes a transaction record with that `context_id`, and the attribution graph can reconstruct the full chain from contributing tool calls → transaction → settlement.
+**The linking mechanism is the same across all six:** the session `context_id` (16-byte anchor, equal to the W3C OTel trace-id by default) travels with the outbound payment request — via `X-atrib-Context` HTTP header for protocols that don't expose a free-form metadata field, or via `params._meta.atrib` for any payment protocol running over MCP transport. When the merchant's side sees the payment-completed signal, atrib writes a transaction record with that `context_id`, and the attribution graph can reconstruct the full chain from contributing tool calls → transaction → settlement.
 
 **You do not install a separate package for each protocol.** ACP, UCP, x402, MPP, AP2 and a2a-x402 detection all ship in `@atrib/agent` and `@atrib/mcp` by default. Adding a new payment protocol happens by adding a detector in `transaction.ts`, not by asking users to install anything.
 
 ### What each detector actually looks for on the wire
 
-These are the exact shapes the production `detectTransaction()` function in [`packages/agent/src/transaction.ts`](src/transaction.ts) matches against. Every shape below is covered by a unit test against a real spec fixture in [`packages/agent/test/fixtures/`](test/fixtures/) — the customer-facing question "what does Atrib actually detect" has a one-paragraph answer per protocol.
+These are the exact shapes the production `detectTransaction()` function in [`packages/agent/src/transaction.ts`](src/transaction.ts) matches against. Every shape below is covered by a unit test against a real spec fixture in [`packages/agent/test/fixtures/`](test/fixtures/) — the customer-facing question "what does atrib actually detect" has a one-paragraph answer per protocol.
 
 #### ACP — Stripe / OpenAI Agentic Commerce Protocol
 
@@ -184,7 +184,7 @@ const client = wrapMcpClient(raw, interceptor, {
 // Use `client` anywhere the raw Client would have been used.
 ```
 
-### Claude Agent SDK — Case A (in-process tools, zero Atrib code on this side)
+### Claude Agent SDK — Case A (in-process tools, zero atrib code on this side)
 
 ```ts
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
@@ -269,7 +269,7 @@ const tools = await multi.getTools()
 // ... pass `tools` to your LangChain agent as normal
 ```
 
-**In every case:** same interceptor, one adapter call, identical behavior. The differences between adapters are forced by differences between host frameworks — not invented by Atrib.
+**In every case:** same interceptor, one adapter call, identical behavior. The differences between adapters are forced by differences between host frameworks — not invented by atrib.
 
 ---
 
@@ -282,7 +282,7 @@ Once the adapter is wired in, every successful `tools/call` from your agent:
 3. **Emits a signed attribution record** to the submission queue asynchronously — zero blocking on the hot path (§5.3.5).
 4. **Updates session state** with the response's own `_meta.atrib` token, so the next call chains correctly from the current response.
 5. **Detects transaction events** in the response via the `transaction.ts` detector, across all six payment protocols in coverage matrix 2. When a transaction is detected, a transaction record is emitted linking the session `context_id` to the transaction.
-6. **Fails silent** — if any Internal atrib step (signing, submission, interceptor logic) throws, the error is caught, logged with the `atrib:` prefix, and the tool call proceeds normally per spec §5.8.
+6. **Fails silent** — if any atrib step (signing, submission, interceptor logic) throws, the error is caught, logged with the `atrib:` prefix, and the tool call proceeds normally per spec §5.8.
 
 ---
 
@@ -299,7 +299,7 @@ Each example directory contains a `README.md` with framework-specific rationale 
 
 ## Failure model (spec §5.8)
 
-The entire Atrib integration is wrapped in defensive error handling at every adapter boundary. If any of the following fails, the original tool call continues normally and an `atrib:`-prefixed warning is logged:
+The entire atrib integration is wrapped in defensive error handling at every adapter boundary. If any of the following fails, the original tool call continues normally and an `atrib:`-prefixed warning is logged:
 
 - `onBeforeToolCall` throws → forward the request with original `_meta` (no injection)
 - `onAfterToolResponse` throws → return the result to the caller anyway
@@ -307,7 +307,7 @@ The entire Atrib integration is wrapped in defensive error handling at every ada
 - Submission network error → the submission queue retries with exponential backoff; final failure drops the record silently
 - `creatorKey` missing → pass-through mode with one console warning per process
 
-**Atrib failures never affect the primary tool call or agent response.** This is invariant #1 in `CLAUDE.md` and is enforced by unit tests in each adapter's test file.
+**atrib failures never affect the primary tool call or agent response.** This is invariant #1 in `CLAUDE.md` and is enforced by unit tests in each adapter's test file.
 
 ---
 

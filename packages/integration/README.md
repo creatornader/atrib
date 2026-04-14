@@ -1,17 +1,17 @@
 # `@atrib/integration` _(private)_
 
-**Cross-package end-to-end tests and runnable framework examples for the Atrib value provenance protocol. Not published to npm.**
+**Cross-package end-to-end tests and runnable framework examples for the atrib value provenance protocol. Not published to npm.**
 
 This package exists for two purposes:
 
 1. **Cross-package integration tests** that exercise `@atrib/mcp` + `@atrib/agent` + `@atrib/verify` + `@atrib/log-dev` together against real `@modelcontextprotocol/sdk` clients and servers — the kind of test that doesn't belong in any single public package because it would create circular dependencies or pull in dev-only deps.
-2. **Runnable framework examples** showing how to wire Atrib into every supported MCP host: Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS, plus the standalone end-to-end demo.
+2. **Runnable framework examples** showing how to wire atrib into every supported MCP host: Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS, plus the standalone end-to-end demo.
 
-If you're a customer trying to figure out how to plug Atrib in, the examples here are the answer. If you're contributing to Atrib, the tests here are how the cross-package contract is enforced.
+If you're a customer trying to figure out how to plug atrib in, the examples here are the answer. If you're contributing to atrib, the tests here are how the cross-package contract is enforced.
 
 ## Try the end-to-end demo
 
-The fastest way to see Atrib working end-to-end in a single process:
+The fastest way to see atrib working end-to-end in a single process:
 
 ```bash
 ATRIB_PRIVATE_KEY=$(node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))') \
@@ -57,14 +57,14 @@ These tests are deliberately small in number — most behavior is covered by the
 `@atrib/integration` will never be published to npm because:
 
 - It depends on `@atrib/log-dev`, which is also private and intentionally never published.
-- It pulls in every public Atrib package as a workspace dependency, plus `@modelcontextprotocol/sdk`, plus framework SDKs as dev deps. None of that should ship to a customer.
+- It pulls in every public atrib package as a workspace dependency, plus `@modelcontextprotocol/sdk`, plus framework SDKs as dev deps. None of that should ship to a customer.
 - The examples are reference material, not a library — customers should copy the patterns into their own code, not depend on this package.
 
 The `"private": true` in `package.json` enforces this — `pnpm publish` will refuse to publish it.
 
 ## How customer conversations use this package
 
-When a prospective customer (Exa, Firecrawl, Browserbase, a checkout-tool builder, etc.) asks how Atrib actually works:
+When a prospective customer (Exa, Firecrawl, Browserbase, a checkout-tool builder, etc.) asks how atrib actually works:
 
 1. Run `pnpm --filter @atrib/integration demo` in front of them.
 2. Watch the colored chain hashes scroll past.

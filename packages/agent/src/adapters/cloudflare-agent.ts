@@ -23,7 +23,7 @@
  * This file is the helper for surface (2). It walks `agent.mcp.mcpConnections`
  * after the agent has finished registering its upstream MCP servers and
  * replaces each connection's `client` field with one wrapped by `wrapMcpClient`.
- * Subsequent tool calls go through Atrib's interceptor lifecycle.
+ * Subsequent tool calls go through atrib's interceptor lifecycle.
  *
  * Usage:
  *
@@ -101,7 +101,7 @@ export interface CloudflareAgentLike {
 
 /** Options for `attributeCloudflareAgentMcp`. */
 export interface AttributeCloudflareAgentMcpOptions {
-  /** The Atrib interceptor that should observe tool calls on this agent. */
+  /** The atrib interceptor that should observe tool calls on this agent. */
   interceptor: ToolCallInterceptor
 
   /**
@@ -118,7 +118,7 @@ export interface AttributeCloudflareAgentMcpOptions {
 }
 
 /**
- * Wrap every currently-connected MCP client on a Cloudflare Agent with Atrib
+ * Wrap every currently-connected MCP client on a Cloudflare Agent with atrib
  * attribution. Returns the number of connections wrapped (excluding ones that
  * were already wrapped). Idempotent — safe to call multiple times.
  *

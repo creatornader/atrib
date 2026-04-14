@@ -16,7 +16,7 @@
  * for end-to-end correctness testing should also run `@atrib/verify` on
  * the captured records separately.
  *
- * Reads the `X-Atrib-Priority` header (extension to §2.6.1, see
+ * Reads the `X-atrib-Priority` header (extension to §2.6.1, see
  * `@atrib/mcp/src/submission.ts` file header for the rationale on the two
  * real consumers of priority). Forwards the header value to the storage
  * layer's priority queue for admission control.

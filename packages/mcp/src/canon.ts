@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * JCS canonicalization (RFC 8785) for Atrib records.
+ * JCS canonicalization (RFC 8785) for atrib records.
  *
  * Uses the `canonicalize` npm package. The signing input is the JCS
  * serialization of the record with the `signature` field removed.

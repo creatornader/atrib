@@ -38,7 +38,7 @@
  *
  * The patch therefore ALSO wraps `fork()` when present, so the forked Client
  * is recursively patched before being returned to `_callTool`. This means
- * every forked instance also flows through the Atrib interceptor — no silent
+ * every forked instance also flows through the atrib interceptor — no silent
  * attribution drop for header-changing tools.
  *
  * ## Idempotency
@@ -113,7 +113,7 @@ export interface LangchainMultiServerMcpClientLike {
 
 /** Options for `attributeLangchainMcp`. */
 export interface AttributeLangchainMcpOptions {
-  /** The Atrib interceptor that observes tool calls on this client. */
+  /** The atrib interceptor that observes tool calls on this client. */
   interceptor: ToolCallInterceptor
 
   /**
@@ -136,7 +136,7 @@ export interface AttributeLangchainMcpOptions {
 
 /**
  * Patch a LangChain `MultiServerMCPClient` so every outbound `tools/call`
- * flows through Atrib's interceptor lifecycle.
+ * flows through atrib's interceptor lifecycle.
  *
  * Walks the multi-client's configured servers, calls `getClient(serverName)`
  * on each to reach the internal `@modelcontextprotocol/sdk` Client, and
@@ -242,7 +242,7 @@ function patchClient(
     const existingMeta = (params._meta ?? {}) as Record<string, unknown>
 
     // §5.4.3: Build outbound _meta via the interceptor. The interceptor
-    // returns a record that includes any existing _meta keys plus Atrib's
+    // returns a record that includes any existing _meta keys plus atrib's
     // own (atrib token, traceparent, tracestate, baggage, X-Atrib-Chain).
     let outboundMeta: Record<string, unknown> | undefined
     try {
@@ -281,7 +281,7 @@ function patchClient(
   // Fork propagation: LangChain's _callTool creates a new Client via fork()
   // when per-call header changes are requested (dist/tools.js:384). The
   // forked client needs its own callTool patch, or it silently bypasses
-  // Atrib. We wrap fork so the returned forked client is patched recursively
+  // atrib. We wrap fork so the returned forked client is patched recursively
   // before being handed back to the caller.
   if (typeof client.fork === 'function') {
     const originalFork = client.fork.bind(client)

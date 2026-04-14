@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Adapter: wrap a raw `@modelcontextprotocol/sdk` Client with Atrib attribution.
+ * Adapter: wrap a raw `@modelcontextprotocol/sdk` Client with atrib attribution.
  *
  * The MCP TypeScript SDK exposes a `Client` class with a `callTool(params, ...)`
  * method. This adapter returns a thin proxy around such a client whose
@@ -69,7 +69,7 @@ export interface WrapMcpClientOptions {
 
 /**
  * Wrap a raw MCP Client so every `callTool` invocation participates in
- * Atrib attribution.
+ * atrib attribution.
  *
  * Returns a Proxy over the client. All non-`callTool` methods are forwarded
  * unchanged via the prototype, so the wrapped client is API-compatible with

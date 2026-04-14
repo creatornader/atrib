@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Ed25519 signing and verification for Atrib records (§1.4).
+ * Ed25519 signing and verification for atrib records (§1.4).
  * Uses @noble/ed25519 — pure JS, no native deps, audited.
  */
 

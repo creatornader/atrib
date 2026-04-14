@@ -1,9 +1,9 @@
 /**
- * Atrib + Cloudflare Agents — Surface 2: Agent client-side instrumentation
+ * atrib + Cloudflare Agents — Surface 2: Agent client-side instrumentation
  *
  * This is a Cloudflare Worker that runs an Agent (or AIChatAgent) which
  * connects out to one or more upstream MCP servers via this.addMcpServer().
- * Atrib's `attributeCloudflareAgentMcp` helper wraps each connection's
+ * atrib's `attributeCloudflareAgentMcp` helper wraps each connection's
  * underlying @modelcontextprotocol/sdk Client so subsequent tool calls flow
  * through the interceptor's onBeforeToolCall / onAfterToolResponse lifecycle.
  *
@@ -33,7 +33,7 @@ interface Env {
 }
 
 export class WeatherChatAgent extends Agent<Env> {
-  // Construct the Atrib interceptor once per agent instance. This handles
+  // Construct the atrib interceptor once per agent instance. This handles
   // session lifecycle, policy negotiation, W3C trace context propagation,
   // and Path 1/2 transaction detection.
   interceptor = atrib({

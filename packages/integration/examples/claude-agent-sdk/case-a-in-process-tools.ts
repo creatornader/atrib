@@ -1,8 +1,8 @@
 /**
- * Atrib + Claude Agent SDK — Case A: instrument in-process tools
+ * atrib + Claude Agent SDK — Case A: instrument in-process tools
  *
  * Your tools are defined in your own TypeScript with createSdkMcpServer().
- * Adding Atrib is one extra line: call atrib() on the server's .instance.
+ * Adding atrib is one extra line: call atrib() on the server's .instance.
  *
  * Run with:
  *   ATRIB_PRIVATE_KEY=<base64url-32-bytes> \
@@ -59,7 +59,7 @@ const weatherServer = createSdkMcpServer({
 const ATRIB_KEY = process.env.ATRIB_PRIVATE_KEY
 if (!ATRIB_KEY) {
   console.warn(
-    'ATRIB_PRIVATE_KEY not set — Atrib will operate in pass-through mode (no records emitted).',
+    'ATRIB_PRIVATE_KEY not set — atrib will operate in pass-through mode (no records emitted).',
   )
 }
 
@@ -69,7 +69,7 @@ atrib(weatherServer.instance, {
   ...(process.env.ATRIB_LOG_ENDPOINT ? { logEndpoint: process.env.ATRIB_LOG_ENDPOINT } : {}),
 })
 
-// 4. Drive the agent. From Claude's perspective there is no Atrib involvement.
+// 4. Drive the agent. From Claude's perspective there is no atrib involvement.
 async function main() {
   for await (const message of query({
     prompt: "What's the temperature in San Francisco?",

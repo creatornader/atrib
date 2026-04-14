@@ -1,8 +1,8 @@
-# Atrib — Value Provenance Protocol
+# atrib — Value Provenance Protocol
 
 ## What this is
 
-Atrib is value provenance infrastructure for the agent economy. It makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance — the missing infrastructure layer between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP).
+atrib is value provenance infrastructure for the agent economy. It makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance — the missing infrastructure layer between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP).
 
 The complete protocol specification is in `atrib-spec.md`. The implementation guide is in `internal planning doc`. The technical architecture overview is in `ARCHITECTURE.md`. Read the spec before making any implementation decisions.
 
@@ -16,7 +16,7 @@ atrib/
   internal planning doc    # Implementation guide with build order and package details
   DECISIONS.md                 # Architectural decision log (D001-D025+)
   ARCHITECTURE.md              # Technical architecture overview — trust model, protocol layers, design decisions
-  PRIOR-ART.md                 # Prior art & standards map — every spec/protocol Atrib builds on, organized by layer
+  PRIOR-ART.md                 # Prior art & standards map — every spec/protocol atrib builds on, organized by layer
   packages/
     mcp/                       # @atrib/mcp — MCP server middleware (public)
     agent/                     # @atrib/agent — Agent middleware + framework adapters (public)
@@ -52,7 +52,7 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 | `ARCHITECTURE.md`           | Technical architecture overview — trust model, protocol layers, payment integration, design decisions |
 | `internal planning doc` | Implementation guide — build order, package details, testing strategy, what not to build              |
 | `DECISIONS.md`              | Architectural decision log — what was decided, why, what alternatives were considered                 |
-| `PRIOR-ART.md`              | Every standard and protocol Atrib builds on, extends, or hooks into — organized by layer              |
+| `PRIOR-ART.md`              | Every standard and protocol atrib builds on, extends, or hooks into — organized by layer              |
 
 ## Sync triggers
 
@@ -73,7 +73,7 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 
 These are non-negotiable. They come from the founding conversation and are the load-bearing design decisions.
 
-1. **Atrib failures must never affect the primary tool call or agent response.** All exceptions caught. All network failures silent with retry. Pass-through mode if no key. This is §5.8 of the spec. No exceptions.
+1. **atrib failures must never affect the primary tool call or agent response.** All exceptions caught. All network failures silent with retry. Pass-through mode if no key. This is §5.8 of the spec. No exceptions.
 
 2. **The graph records structure, not causality.** Never add edge types based on semantic interpretation of tool names or response content. Edges are derived from observable record structure only. This is §3.1 of the spec.
 
@@ -85,7 +85,7 @@ These are non-negotiable. They come from the founding conversation and are the l
 
 6. **Fact/policy separation is absolute.** The graph (§3) is a pure fact layer. The policy (§4) is where weights and distribution decisions live. Graph endpoints must never return weighted data. This is §3.6 of the spec.
 
-7. **The protocol has no thumb on the scale.** Atrib does not decide what contributions are worth. Merchants and creators publish machine-readable policy documents. Agents negotiate them. The protocol provides the schema; the parties provide the values. This is §4.1 of the spec.
+7. **The protocol has no thumb on the scale.** atrib does not decide what contributions are worth. Merchants and creators publish machine-readable policy documents. Agents negotiate them. The protocol provides the schema; the parties provide the values. This is §4.1 of the spec.
 
 ## Key technical decisions (preserve exactly)
 
