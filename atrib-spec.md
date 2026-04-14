@@ -11,7 +11,11 @@ Contents
 - [The Problem We Inherit](#the-problem-we-inherit)
 - [The Shift We Are Living Through](#the-shift-we-are-living-through)
 - [What We Are Building](#what-we-are-building)
-- [Principles I-V](#principle-i)
+- [Principle I: Provenance travels with the artifact](#principle-i-provenance-travels-with-the-artifact)
+- [Principle II: Accountability without content exposure](#principle-ii-accountability-without-content-exposure)
+- [Principle III: Settlement is separate from attribution](#principle-iii-settlement-is-separate-from-attribution)
+- [Principle IV: No central arbiter of value](#principle-iv-no-central-arbiter-of-value)
+- [Principle V: The protocol is open. The product is commercial.](#principle-v-the-protocol-is-open-the-product-is-commercial)
 - [The Claim About Advertising](#the-claim-about-advertising)
 
 _On the relationship between transparency, trust, and value in a world where agents act on our behalf._
@@ -54,33 +58,23 @@ This distinction matters because every prior attempt at provenance has collapsed
 
 atrib is built on a different principle: **you can record what happened and who was present without claiming to know what caused what, and you can distribute credit fairly without trusting any single intermediary to arbitrate it.** The structure of contributions is a verifiable fact. What those contributions are worth is a policy judgment. atrib provides the former without pretending to settle the latter.
 
-Principle I
-
-Provenance travels with the artifact
+### Principle I: Provenance travels with the artifact
 
 Every tool call, every content retrieval, every agent action carries a signed record of its origin and its structural position in the session: who called what, in what order, in what context. This record is embedded at creation time, not appended later, not inferred from logs. It is native to the interaction, not a post-hoc annotation. What those structural relationships mean for value distribution is a question for the policy layer, not for the record itself.
 
-Principle II
-
-Accountability without content exposure
+### Principle II: Accountability without content exposure
 
 What is published globally is not the content of interactions but cryptographic commitments to them. Anyone can verify that an attribution record existed and was unaltered. No one can read what it contained without the holder's consent. Privacy and accountability are not in tension here; they are structurally separated.
 
-Principle III
-
-Settlement is separate from attribution
+### Principle III: Settlement is separate from attribution
 
 atrib records what happened and who contributed. It does not move money, enforce agreements, or determine outcomes. Payment rails, legal agreements, and business decisions happen on top of verified attribution data. The protocol is neutral about what participants do with the truth; it only insists that the truth be available.
 
-Principle IV
-
-No central arbiter of value
+### Principle IV: No central arbiter of value
 
 The attribution chain is verifiable by any party with the relevant records. No single operator can alter it, suppress it, or adjudicate disputes about it. The Merkle log provides global verifiability without global visibility. Trust comes from mathematics and open specification, not from trusting atrib.
 
-Principle V
-
-The protocol is open. The product is commercial.
+### Principle V: The protocol is open. The product is commercial.
 
 The atrib specification, the signing libraries, and the transparency log infrastructure are open and free. The queryable attribution graph, the analytics products, and the settlement resolution services are commercial.
 
@@ -126,6 +120,7 @@ Contents
   - [1.5.1 context_id: the session anchor](#151-context_id-the-session-anchor)
   - [1.5.2 HTTP transport: tracestate](#152-http-transport-tracestate)
   - [1.5.3 HTTP fallback: X-atrib-Chain](#153-http-fallback-x-atrib-chain)
+    - [1.5.3.1 Context ID Header: X-atrib-Context](#1531-context-id-header-x-atrib-context)
   - [1.5.4 MCP transport: params.\_meta](#154-mcp-transport-params_meta)
   - [1.5.5 Cross-trace session continuity](#155-cross-trace-session-continuity)
 - [1.6 Unsigned Hops and Gap Nodes](#16-unsigned-hops-and-gap-nodes)
@@ -216,6 +211,15 @@ chain_root = "sha256:" + hex(SHA-256(UTF-8(context_id)))
 ```
 
 This anchors every genesis record to its session without requiring a parent record. It is verifiable by any party who knows the context_id.
+
+**Normative clarification:** Both `chain_root` and the propagation token's `record_hash` component are computed over the JCS canonicalization of the COMPLETE signed record, INCLUDING the `signature` field. This differs from the signing input (§1.3), which EXCLUDES the `signature` field. Specifically:
+
+- Signing input: `JCS(record without signature)` -- used for Ed25519 sign/verify
+- Record hash: `SHA-256(JCS(complete record with signature))` -- used for `chain_root` and propagation token
+- chain_root format: `"sha256:" + hex(record_hash)` -- prefixed hex encoding of the record hash
+- Token format: `base64url(record_hash) + "." + base64url(creator_key)` -- base64url encoding of raw bytes
+
+A receiving implementation that decodes a propagation token and needs to set `chain_root` MUST convert: `chain_root = "sha256:" + hex(decoded_token.record_hash)`.
 
 #### 1.2.4 event_type Values
 
@@ -400,6 +404,14 @@ X-atrib-Chain: D4a6GHvb...ABC.XYZ...QRS
 
 Implementations SHOULD set both `tracestate: atrib=...` and `X-atrib-Chain: ...` on outbound requests. Implementations MUST prefer the tracestate entry over the fallback header when both are present.
 
+#### 1.5.3.1 Context ID Header: X-atrib-Context
+
+For HTTP-transport payment protocol integrations (§1.7), the agent MUST propagate the session's `context_id` as the `X-atrib-Context` HTTP header on outbound requests that may trigger transaction events. The header value is the raw 32-character lowercase hexadecimal context_id, not the propagation token.
+
+This header is distinct from `X-atrib-Chain` (which carries the propagation token) and serves a different purpose: it embeds the session anchor in HTTP requests so that transaction events (ACP checkout, x402 payment, MPP receipt) can be linked back to the attribution session.
+
+Implementations MUST set `X-atrib-Context` on any outbound HTTP request to a URL listed in the agent's `serverUrls` configuration. The header name is case-insensitive per RFC 7230.
+
 #### 1.5.4 MCP Transport: params.\_meta
 
 MCP messages do not have HTTP headers. Attribution context MUST be propagated inside the `params._meta` property bag of MCP request messages, following the OTel MCP Semantic Conventions (opentelemetry.io/docs/specs/semconv/gen-ai/mcp/).
@@ -484,7 +496,7 @@ In every case, the linking mechanism is the same: the `context_id` of the agent 
 
 ACP is the open standard published at `github.com/agentic-commerce-protocol/agentic-commerce-protocol`. The transaction event hook is the success response from `POST /checkout_sessions/{id}/complete`. A successful completion is signaled by `status === "completed"` together with an embedded `order` object whose `id` is a string. The `order.permalink_url` (when present) is the canonical post-purchase URL atrib uses to derive the transaction record's `content_id`.
 
-Because ACP `POST /checkout_sessions/...` requests do not currently expose a free-form metadata field for arbitrary extension data, the `context_id` MUST travel via the same channels used for HTTP transports (§1.5.4): the `X-atrib-Context` HTTP header on the outbound request, and `params._meta.atrib` for MCP-transport ACP integrations.
+Because ACP `POST /checkout_sessions/...` requests do not currently expose a free-form metadata field for arbitrary extension data, the `context_id` MUST travel via the same channels used for HTTP transports (per §1.5.2, §1.5.3, and §1.5.3.1): the `X-atrib-Context` HTTP header on the outbound request, and `params._meta.atrib` for MCP-transport ACP integrations.
 
 ```jsonc
 // POST /checkout_sessions/{id}/complete success response
@@ -617,7 +629,7 @@ Content-Type: application/json
 
 AP2 (Agent Payments Protocol) is Google's open protocol at `github.com/google-agentic-commerce/ap2`, version v0.1, extension URI `https://github.com/google-agentic-commerce/ap2/tree/v0.1`. **AP2 v0.1 does NOT use W3C Verifiable Credentials.** Earlier drafts of this specification assumed it would; that assumption was incorrect. The real wire format is an A2A (Agent2Agent) Message with a DataPart whose `data` object contains the key `ap2.mandates.PaymentMandate`.
 
-The PaymentMandate is the transaction event. (`IntentMandate` and `CartMandate` represent earlier funnel stages, intent capture and cart commitment respectively, and MUST NOT be detected as transaction events.) Implementations SHOULD embed the `context_id` in the agent extension fields where supported by the host A2A implementation; until AP2 standardizes a metadata field for it, the `context_id` MUST also travel via `params._meta.atrib` per §1.5.4.
+The PaymentMandate is the transaction event. (`IntentMandate` and `CartMandate` represent earlier funnel stages, intent capture and cart commitment respectively, and MUST NOT be detected as transaction events.) Implementations SHOULD embed the `context_id` in the agent extension fields where supported by the host A2A implementation; until AP2 standardizes a metadata field for it, the `context_id` MUST also travel via `params._meta.atrib` per §1.5.2, §1.5.3, and §1.5.3.1.
 
 ```jsonc
 // AP2 v0.1 PaymentMandate Message (A2A DataPart shape)
@@ -952,6 +964,10 @@ struct LengthPrefixedEntry {
 ```
 
 **Note (Entry bundle size):** In v1, every AtribLogEntry is exactly 90 bytes, so every uint16 length prefix in an entry bundle will be `0x00 0x5A` (90 in big-endian). Clients MAY rely on this fixed size as a consistency check; future spec versions that change the entry size will use a new log origin.
+
+Tile API error responses:
+- 404 Not Found: the requested tile, entry bundle, or checkpoint does not exist (e.g., tile coordinates beyond the current tree)
+- 400 Bad Request: malformed path (non-numeric level or index)
 
 ---
 
@@ -1296,6 +1312,8 @@ For each pair (A, B) of nodes sharing a context_id where no CHAIN_PRECEDES edge 
 
 For each transaction node T: for each other node N sharing T's context_id (tool_call or gap_node), create CONVERGES_ON N → T.
 
+If a session contains multiple transaction nodes, each non-transaction node receives CONVERGES_ON edges to all of them. The calculation algorithm (§4.6) uses the first transaction node (by log_index) for modifier computations such as temporal_decay.
+
 **Step 5:** CROSS_SESSION edges**
 
 For each transaction node T: search the record set for tool_call nodes A where `A.context_id ≠ T.context_id` and A's `session_token` field (§1.2.1) matches T's `session_token` field. For each such A, create CROSS_SESSION A → T.
@@ -1377,7 +1395,7 @@ GET /v1/graph/4bf92f3577b34da6a3ce929d0e0e4736/transaction
 
 #### 3.4.4 GET /v1/creators/{creator_key}/sessions
 
-Returns a paginated list of sessions in which a given creator appears. Requires authentication proving control of the creator_key (mechanism defined in the SDK specification, not in this protocol section).
+Returns a paginated list of sessions in which a given creator appears. Requires authentication proving control of the creator_key. The authentication mechanism is implementation-defined; the reference implementation uses Ed25519 challenge-response over the creator's public key.
 
 ```
 GET /v1/creators/ABC.../sessions
@@ -1766,8 +1784,10 @@ The session policy record is a lightweight document created at negotiation time 
 {
   "spec_version":    "atrib/1.0",
   "record_id":       "sha256:",
-  // SHA-256 of the UTF-8 JCS-canonical serialization of this record,
-  // excluding the record_id field itself. Used as a stable reference.
+  // The record_id is computed as SHA-256(JCS(record_without_record_id)),
+  // where record_without_record_id is the session policy record with the
+  // record_id field omitted (not set to empty string). The JCS serialization
+  // follows RFC 8785. Used as a stable reference.
   "context_id":      "4bf92f3577b34da6a3ce929d0e0e4736",
   "created_at":      1743850000000,
   "merchant_policy": "https://merchant.example.com/.well-known/atrib-policy.json",
@@ -1846,6 +1866,15 @@ function raw_score(n, G, P):
     // also include CHAIN_PRECEDES and SESSION_* edges between non-transaction nodes
     // that form a path leading to a transaction node
     edge_types |= {e.type for e in all_edges_on_paths_to_transaction(n, G)}
+    // all_edges_on_paths_to_transaction(n, G) returns the set of edges on any
+    // path from n to a transaction node. The algorithm: (1) build both directed
+    // (CHAIN_PRECEDES, SESSION_PRECEDES, CONVERGES_ON, CROSS_SESSION) and
+    // undirected (SESSION_PARALLEL) adjacency from G; (2) reverse BFS from all
+    // transaction nodes to find the set of nodes that can reach a transaction;
+    // (3) forward BFS from n, collecting edge types for edges whose target is
+    // in the reachable set. This ensures that intermediate structural edges
+    // (e.g., CHAIN_PRECEDES between non-transaction nodes on a path to a
+    // transaction) contribute their weight to n's base score.
     weights = [P.edge_weights[t] ?? 0.0 for t in edge_types]
     base = max(weights) if weights else 0.0
 
@@ -1865,6 +1894,10 @@ function apply_modifier(modifier, score, n, G):
 
   if modifier.type == "chain_depth_penalty":
     depth = shortest_chain_path_length(n, G)  // hops to nearest transaction via CHAIN_PRECEDES
+    // The shortest chain path length from node N to any transaction node is the
+    // minimum number of CHAIN_PRECEDES edges on any directed path from N to a
+    // transaction node. If no CHAIN_PRECEDES path exists, the depth is treated
+    // as unbounded (the penalty factor becomes zero).
     factor = max(0.0, 1.0 - depth * modifier.penalty_per_level)
     return score * factor
 
@@ -2347,6 +2380,7 @@ Implementations are free to wrap this surface in higher-level adapters for speci
 | merchantDomain | string | Optional | Base URL of the merchant whose policies should be fetched at session initialization. If not provided, policy negotiation is skipped and the default policy applies.                                                        |
 | logEndpoint    | string | Optional | Merkle log submission endpoint. Default: `https://log.atrib.io/v1/entries`.                                                                                                                                                |
 | sessionToken   | string | Optional | If provided, used as the session_token for cross-trace attribution linking (§1.5.5). If absent, the middleware generates one automatically at session start and propagates it via W3C Baggage.                             |
+| serverUrls     | string[] | Required | URLs of all MCP servers the agent connects to. Used for context propagation and transaction detection scope. |
 
 #### 5.4.2 Session Initialization
 
