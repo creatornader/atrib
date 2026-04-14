@@ -1,0 +1,33 @@
+name: Conformance corpus drift check
+
+on:
+  push:
+    paths:
+      - 'packages/log-dev/scripts/**'
+      - 'spec/conformance/**'
+  pull_request:
+    paths:
+      - 'packages/log-dev/scripts/**'
+      - 'spec/conformance/**'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @atrib/mcp build
+
+      - run: pnpm --filter @atrib/log-dev corpus
+
+      - name: Check for uncommitted corpus changes
+        run: git diff --exit-code spec/conformance/2.6.1/
