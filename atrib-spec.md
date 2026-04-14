@@ -6,6 +6,14 @@
 
 ## §0 Foundations
 
+Contents
+
+- [The Problem We Inherit](#the-problem-we-inherit)
+- [The Shift We Are Living Through](#the-shift-we-are-living-through)
+- [What We Are Building](#what-we-are-building)
+- [Principles I-V](#principle-i)
+- [The Claim About Advertising](#the-claim-about-advertising)
+
 _On the relationship between transparency, trust, and value in a world where agents act on our behalf._
 
 The internet has always promised portability of value. It has never delivered it. atrib is an attempt to finally make that promise real, not by controlling how value moves, but by making visible how it flows.
@@ -1159,7 +1167,7 @@ The data model and query API for turning attribution records into a structured p
 
 Contents
 
-- [3.1 Design Principles](#31-design-principles-and-rationale)
+- [3.1 Design Principles and Rationale](#31-design-principles-and-rationale)
 - [3.2 Graph Data Model](#32-graph-data-model)
   - [3.2.1 Node types](#321-node-types)
   - [3.2.2 Interaction patterns and their structural signatures](#322-interaction-patterns-and-their-structural-signatures)
@@ -1530,7 +1538,7 @@ A policy document is a JSON object. It MUST be UTF-8 encoded and served with `Co
   "policy_id":     "https://example.com/.well-known/atrib-policy.json",
                                            // REQUIRED. Stable URL where this policy is published.
                                            // Used as the canonical identifier in session policy records.
-  "role":          "creator",            // REQUIRED. "creator" or "merchant".
+  "role":          "creator",            // REQUIRED. "creator", "merchant", or "default".
   "edge_weights":  { /* §4.2.2 */ },     // REQUIRED.
   "modifiers":     [ /* §4.2.3 */ ],     // OPTIONAL. Default: no modifiers.
   "distribution":  "proportional",      // REQUIRED. See §4.2.4.
@@ -2174,7 +2182,7 @@ const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
 
 | Option           | Type       | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ---------------- | ---------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| creatorKey       | string     | Required | Base64url-encoded Ed25519 private key (64 bytes). Used to sign all attribution records emitted by this server. See §5.6 for generation and storage requirements.                                                                                                                                                                                                                                                                                                       |
+| creatorKey       | string     | Required | Base64url-encoded 32-byte Ed25519 seed. Used to sign all attribution records emitted by this server. See §5.6 for generation and storage requirements.                                                                                                                                                                                                                                                                                                       |
 | logEndpoint      | string     | Optional | URL of the Merkle log submission endpoint. Default: `https://log.atrib.io/v1/entries`. Override for private log deployments.                                                                                                                                                                                                                                                                                                                                           |
 | policy           | object     | Optional | Inline attribution policy document (§4.2). If provided, served at `/.well-known/atrib-policy.json`. If absent, a 404 is served at that path (default policy applies for callers).                                                                                                                                                                                                                                                                                      |
 | serverUrl        | string     | Optional | Canonical URL of this MCP server, used to compute `content_id` values (§1.2.2). Default: derived from the server's HTTP host header. MUST be set explicitly for stdio transport where no host header is available.                                                                                                                                                                                                                                                     |
