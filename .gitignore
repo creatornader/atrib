@@ -9,3 +9,6 @@ coverage/
 .DS_Store
 .remember/
 .claude/
+
+docs/superpowers/
+thoughts/
