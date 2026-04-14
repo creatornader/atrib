@@ -30,22 +30,26 @@ jobs:
 
       - run: pnpm -r test
 
+      # pnpm publish resolves workspace:* to real versions before publishing.
+      # npm publish would leave literal "workspace:*" in published package.json.
       - name: Publish @atrib/mcp
-        run: cd packages/mcp && npm publish --provenance --access public
+        run: pnpm --filter @atrib/mcp publish --provenance --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @atrib/agent
-        run: cd packages/agent && npm publish --provenance --access public
+        run: pnpm --filter @atrib/agent publish --provenance --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @atrib/verify
-        run: cd packages/verify && npm publish --provenance --access public
+        run: pnpm --filter @atrib/verify publish --provenance --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        # Pinned to commit SHA to prevent supply-chain attacks via tag poisoning.
+        # This job has id-token:write (OIDC) and contents:write permissions.
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.2.1
         with:
           generate_release_notes: true
