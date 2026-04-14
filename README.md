@@ -1,18 +1,18 @@
-# Atrib
+# atrib
 
 Value provenance infrastructure for the agent economy.
 
-Atrib makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance. It sits between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP/AP2), a layer that doesn't exist yet.
+atrib makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance. It sits between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP/AP2), a layer that doesn't exist yet.
 
 ## The problem
 
 The agent economy is generating real commerce with zero verified attribution infrastructure. When an AI agent recommends a product and a user buys it, no existing system can answer: which tools, content, and agent decisions influenced that purchase? Attribution is invisible. Value pools at the platform layer.
 
-Advertising exists because there is no native provenance infrastructure on the internet. Atrib is that infrastructure.
+Advertising exists because there is no native provenance infrastructure on the internet. atrib is that infrastructure.
 
-## What Atrib does
+## What atrib does
 
-Atrib records the structural relationships in agent sessions, which tool calls happened, in what order, in what context, without recording the content of those interactions. When a transaction completes, the attribution chain is already there: signed, tamper-evident, and verifiable by any party.
+atrib records the structural relationships in agent sessions, which tool calls happened, in what order, in what context, without recording the content of those interactions. When a transaction completes, the attribution chain is already there: signed, tamper-evident, and verifiable by any party.
 
 - Attribution records travel with every MCP tool call, signed by the creator (Ed25519, JCS-canonicalized)
 - A Merkle log provides global verifiability without exposing content (C2SP tlog-tiles, Tessera-backed)
@@ -20,11 +20,11 @@ Atrib records the structural relationships in agent sessions, which tool calls h
 - Attribution policies let creators and merchants express what contributions are worth
 - Settlement recommendations map the graph to value distribution under agreed policies
 
-The protocol records facts. What those facts are worth is a policy judgment made by the parties involved, not by Atrib.
+The protocol records facts. What those facts are worth is a policy judgment made by the parties involved, not by atrib.
 
 ## Two coverage surfaces
 
-Two things determine whether Atrib works for you: which MCP framework you use, and which payment protocol your merchants are on. One install covers both.
+Two things determine whether atrib works for you: which MCP framework you use, and which payment protocol your merchants are on. One install covers both.
 
 ### MCP framework adapters
 
@@ -36,14 +36,14 @@ Two things determine whether Atrib works for you: which MCP framework you use, a
 | **Cloudflare Agents**                                  | `attributeCloudflareAgentMcp(agent, { interceptor, serverUrls })`                                                              | ✅ Shipped                                        |
 | **Vercel AI SDK MCP**                                  | `attributeVercelAiSdkMcp(mcpClient, { interceptor, serverUrl })`                                                               | ✅ Shipped                                        |
 | **LangChain JS MCP adapters**                          | `attributeLangchainMcp(multiClient, { interceptor, serverUrls })` (high-level) or `wrapMcpClient` + `loadMcpTools` (low-level) | ✅ Shipped                                        |
-| OpenAI Agents SDK                                      |,                                                                                                                              | ⏳ Deferred, meaningfully different architecture |
-| Mastra                                                 |,                                                                                                                              | ⏳ Deferred, smaller footprint                   |
+| OpenAI Agents SDK                                      |,                                                                                                                              | ⏳ Planned, meaningfully different architecture  |
+| Mastra                                                 |,                                                                                                                              | ⏳ Planned, smaller footprint                    |
 
 The full adapter table with quick-start snippets for every framework is in [`packages/agent/README.md`](packages/agent/README.md).
 
 ### Agent payment protocols
 
-Atrib **detects** transaction events from any of these, it does not implement payments, move money, or enforce transactions. The detection logic for all six protocols ships in `@atrib/agent`'s `transaction.ts` and runs simultaneously; you do not choose a payment protocol at install time.
+atrib **detects** transaction events from any of these, it does not implement payments, move money, or enforce transactions. The detection logic for all six protocols ships in `@atrib/agent`'s `transaction.ts` and runs simultaneously; you do not choose a payment protocol at install time.
 
 | Protocol     | Sponsor                                     | Detection signal                                                   | Spec ref |
 | ------------ | ------------------------------------------- | ------------------------------------------------------------------ | -------- |
@@ -166,7 +166,7 @@ How the protocol layers fit together, the trust model, and why the design is the
 
 ## Prior art
 
-Atrib builds on and differentiates from: C2PA (provenance without closed loop), ProRata (attribution with ads), Story Protocol (provenance on blockchain), OpenTelemetry (observability without attribution semantics), LangSmith/Langfuse (agent tracing without economic attribution). See [PRIOR-ART.md](PRIOR-ART.md) for the full standards and protocols map.
+atrib builds on and differentiates from: C2PA (provenance without closed loop), ProRata (attribution with ads), Story Protocol (provenance on blockchain), OpenTelemetry (observability without attribution semantics), LangSmith/Langfuse (agent tracing without economic attribution). See [PRIOR-ART.md](PRIOR-ART.md) for the full standards and protocols map.
 
 ## License
 

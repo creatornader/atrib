@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Standalone entry point for the Atrib log service.
+ * Standalone entry point for the atrib log service.
  *
  * Usage:
  *   ATRIB_LOG_KEY=<base64url-ed25519-seed> pnpm --filter @atrib/log-node start
@@ -24,7 +24,12 @@ if (process.env.ATRIB_LOG_KEY) {
   logPrivateKey = Uint8Array.from(Buffer.from(b64 + '='.repeat(pad), 'base64'))
 }
 
-const server = await startLogServer(logPrivateKey ? { port, logPrivateKey } : { port })
+const opts = {
+  port,
+  ...(logPrivateKey ? { logPrivateKey } : {}),
+  ...(process.env.HOST ? { host: process.env.HOST } : {}),
+}
+const server = await startLogServer(opts)
 
 // eslint-disable-next-line no-console
 console.log(`atrib-log listening on ${server.url}`)

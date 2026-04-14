@@ -35,6 +35,7 @@ export async function bindServer(
   tree: MerkleTree,
   signer: CheckpointSigner,
   port: number,
+  host?: string,
 ): Promise<ServerHandle> {
   // Serialization lock: the append→proof→sign sequence must not be
   // interleaved by concurrent requests, because signer.sign is async
@@ -78,15 +79,16 @@ export async function bindServer(
   server.headersTimeout = 5_000 // 5 seconds to receive headers
   server.requestTimeout = 30_000 // 30 seconds for full request
 
+  const bindHost = host ?? '127.0.0.1'
   await new Promise<void>((resolve) => {
-    server.listen(port, '127.0.0.1', resolve)
+    server.listen(port, bindHost, resolve)
   })
 
   const address = server.address()
   if (!address || typeof address === 'string') {
     throw new Error('atrib-log-node: server.address() returned unexpected shape')
   }
-  const url = `http://127.0.0.1:${address.port}`
+  const url = `http://${bindHost === '0.0.0.0' ? '127.0.0.1' : bindHost}:${address.port}`
 
   return {
     url,
