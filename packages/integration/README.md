@@ -70,7 +70,7 @@ When a prospective customer (Exa, Firecrawl, Browserbase, a checkout-tool builde
 2. Watch the colored chain hashes scroll past.
 3. Walk them through which lines of code they'd add on the merchant side (~3 lines: import, wrap, set log endpoint) and on the agent side (~2 lines: import, wrap with `wrapMcpClient` or the framework adapter).
 4. Open the example matching their stack and show them the integration point.
-5. Switch to the production answer: "the dev log is for local development; the production log is `log.atrib.io/v1`, Tessera-backed per spec §2, same wire format, no client changes needed when it ships."
+5. Switch to the production answer: "the dev log is for local development; the production log is `log.atrib.dev/v1`, Tessera-backed per spec §2, same wire format, no client changes needed when it ships."
 
 The examples make the abstract protocol concrete in a way that the spec and the package READMEs cannot.
 

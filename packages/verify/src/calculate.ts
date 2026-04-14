@@ -59,7 +59,7 @@ export function isValidPolicy(policy: unknown): policy is PolicyDocument {
 /** §4.3 default policy. */
 export const DEFAULT_POLICY: PolicyDocument = {
   spec_version: 'atrib/1.0',
-  policy_id: 'https://atrib.io/policies/default/v1',
+  policy_id: 'https://atrib.dev/policies/default/v1',
   role: 'default',
   edge_weights: {
     CHAIN_PRECEDES: 1.0,

@@ -4,7 +4,7 @@
 >
 > This is an in-memory development log stub for local testing, examples, and CI fixtures. It does **not** implement the C2SP tlog-tiles specification, does **not** persist entries beyond process lifetime, does **not** produce real Merkle inclusion proofs, and is **not** witnessed.
 >
-> The production atrib log lives at `log.atrib.io/v1` and is Tessera-backed per spec §2. Anything you submit to this stub is discarded when the process exits. Inclusion proofs returned by this stub are well-formed (correct field shapes per §2.6.2) but their hashes are deterministic placeholders, not real Merkle hashes, they will not pass `@atrib/verify`'s strict verification path.
+> The production atrib log lives at `log.atrib.dev/v1` and is Tessera-backed per spec §2. Anything you submit to this stub is discarded when the process exits. Inclusion proofs returned by this stub are well-formed (correct field shapes per §2.6.2) but their hashes are deterministic placeholders, not real Merkle hashes, they will not pass `@atrib/verify`'s strict verification path.
 
 ## What this package is for
 
@@ -72,7 +72,7 @@ await log.close()
 
 ## Why this isn't published to npm
 
-The `package.json` has `"private": true`. This package will never be published to the npm registry. It exists only inside the atrib monorepo as a development and testing fixture. If someone tries to `pnpm publish` it, npm will refuse, and that's intentional. Customers should never see this package; they should use the production log at `log.atrib.io/v1` (when it exists) or run their own Tessera-backed instance.
+The `package.json` has `"private": true`. This package will never be published to the npm registry. It exists only inside the atrib monorepo as a development and testing fixture. If someone tries to `pnpm publish` it, npm will refuse, and that's intentional. Customers should never see this package; they should use the production log at `log.atrib.dev/v1` (when it exists) or run their own Tessera-backed instance.
 
 ## Replacement plan
 
@@ -80,7 +80,7 @@ When the real Tessera-backed log ships at `services/log/` (Go, per the eventual 
 
 | Use case                      | What runs                                                     |
 | ----------------------------- | ------------------------------------------------------------- |
-| Production attribution log    | `services/log/` (Tessera, Go) → deployed at `log.atrib.io/v1` |
+| Production attribution log    | `services/log/` (Tessera, Go) → deployed at `log.atrib.dev/v1` |
 | Customer self-hosted log      | `services/log/` (Tessera, Go) → deployed at customer infra    |
 | Local development             | `@atrib/log-dev` (TypeScript, in-process)                     |
 | CI / automated tests          | `@atrib/log-dev` (TypeScript, in-process)                     |

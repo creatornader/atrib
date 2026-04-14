@@ -26,7 +26,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import type { ProofBundle } from '@atrib/mcp'
 import type { StoredEntry } from './storage.js'
 
-const LOG_ORIGIN = 'log.atrib.io/v1'
+const LOG_ORIGIN = 'log.atrib.dev/v1'
 
 /**
  * Build a proof bundle for a stored entry. The bundle is well-formed per

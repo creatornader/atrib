@@ -107,7 +107,7 @@ function computeKeyId(origin: string, publicKey: Uint8Array): Uint8Array {
  *
  * @param privateKey - Raw 32-byte Ed25519 seed
  * @param publicKey  - Raw 32-byte Ed25519 public key
- * @param origin     - The log origin string (e.g. "log.atrib.io/v1")
+ * @param origin     - The log origin string (e.g. "log.atrib.dev/v1")
  */
 export function createCheckpointSigner(
   privateKey: Uint8Array,

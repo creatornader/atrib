@@ -11,8 +11,8 @@ import { AtribVerifier } from '@atrib/verify'
 
 const verifier = new AtribVerifier({
   merchantKey: process.env.ATRIB_MERCHANT_KEY, // optional, base64url Ed25519 seed
-  graphEndpoint: 'https://graph.atrib.io/v1', // defaults to atrib.io endpoints
-  logEndpoint: 'https://log.atrib.io/v1',
+  graphEndpoint: 'https://graph.atrib.dev/v1', // defaults to atrib.dev endpoints
+  logEndpoint: 'https://log.atrib.dev/v1',
 })
 
 const result = await verifier.verify(recommendationDoc)
@@ -30,7 +30,7 @@ const result = await verifier.verify(recommendationDoc)
 
 ## What `verify()` actually does (per spec §5.5.2)
 
-1. **Resolves the calculator's public key** from `recommendationDoc.calculated_by`. For the well-known `resolve.atrib.io` service, the key is fetched from the `/pubkey` endpoint. For other calculators, the merchant supplies the key out-of-band.
+1. **Resolves the calculator's public key** from `recommendationDoc.calculated_by`. For the well-known `resolve.atrib.dev` service, the key is fetched from the `/pubkey` endpoint. For other calculators, the merchant supplies the key out-of-band.
 2. **Verifies the Ed25519 signature** over the JCS-canonicalized recommendation document (excluding the `signature` field).
 3. **Fetches the attribution graph** at `recommendationDoc.graph_tree_size` from the configured graph endpoint. Pinning to a specific tree size makes the verification reproducible, the graph is fixed, not "live."
 4. **Fetches the session policy record** referenced by `policy_record_id`, or uses the spec §4.3 default policy if `policy_record_id === 'default'`.
@@ -60,9 +60,9 @@ Per the §5.8 degradation contract, this never throws on a missing key, if `sign
 
 | Field             | Type     | Default                       | Description                                                             |
 | ----------------- | -------- | ----------------------------- | ----------------------------------------------------------------------- |
-| `logEndpoint`     | `string` | `https://log.atrib.io/v1`     | The Merkle log to fetch checkpoints and proofs from.                    |
-| `graphEndpoint`   | `string` | `https://graph.atrib.io/v1`   | The graph query endpoint (spec §3).                                     |
-| `resolveEndpoint` | `string` | `https://resolve.atrib.io/v1` | Reserved for v2 remote calculation.                                     |
+| `logEndpoint`     | `string` | `https://log.atrib.dev/v1`     | The Merkle log to fetch checkpoints and proofs from.                    |
+| `graphEndpoint`   | `string` | `https://graph.atrib.dev/v1`   | The graph query endpoint (spec §3).                                     |
+| `resolveEndpoint` | `string` | `https://resolve.atrib.dev/v1` | Reserved for v2 remote calculation.                                     |
 | `merchantKey`     | `string` | unset                         | Base64url Ed25519 32-byte seed. Optional, `verify()` works without it. |
 
 ### `verify(doc): Promise<VerificationResult>`

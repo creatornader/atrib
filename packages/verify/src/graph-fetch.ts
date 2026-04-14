@@ -12,7 +12,7 @@ const DEFAULT_TIMEOUT_MS = 10_000
 /**
  * Fetch a graph snapshot for a context_id at a specific tree size (§3.4.1).
  *
- * @param graphEndpoint, base URL, e.g. "https://graph.atrib.io/v1"
+ * @param graphEndpoint, base URL, e.g. "https://graph.atrib.dev/v1"
  * @param contextId
  * @param treeSize, optional; if provided, pins the graph to that log tree size
  */

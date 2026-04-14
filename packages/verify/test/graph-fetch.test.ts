@@ -20,7 +20,7 @@ describe('fetchGraph', () => {
       capturedUrl = String(url)
       return jsonResponse({ nodes: [], edges: [] })
     })
-    await fetchGraph('https://graph.atrib.io/v1', CTX)
+    await fetchGraph('https://graph.atrib.dev/v1', CTX)
     expect(capturedUrl).toContain(`/graph/${CTX}`)
     expect(capturedUrl).toContain('include_gap_nodes=true')
     expect(capturedUrl).toContain('include_cross_session=true')
@@ -33,7 +33,7 @@ describe('fetchGraph', () => {
       capturedUrl = String(url)
       return jsonResponse({})
     })
-    await fetchGraph('https://graph.atrib.io/v1', CTX, 4821937)
+    await fetchGraph('https://graph.atrib.dev/v1', CTX, 4821937)
     expect(capturedUrl).toContain('tree_size=4821937')
   })
 
@@ -43,7 +43,7 @@ describe('fetchGraph', () => {
       capturedUrl = String(url)
       return jsonResponse({})
     })
-    await fetchGraph('https://graph.atrib.io/v1/', CTX)
+    await fetchGraph('https://graph.atrib.dev/v1/', CTX)
     expect(capturedUrl).not.toContain('//graph/')
     expect(capturedUrl).toContain('/v1/graph/')
   })
@@ -52,7 +52,7 @@ describe('fetchGraph', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('not found', { status: 404, statusText: 'Not Found' }),
     )
-    await expect(fetchGraph('https://graph.atrib.io/v1', CTX)).rejects.toThrow(
+    await expect(fetchGraph('https://graph.atrib.dev/v1', CTX)).rejects.toThrow(
       /fetchGraph failed: 404/,
     )
   })
@@ -61,7 +61,7 @@ describe('fetchGraph', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('boom', { status: 500, statusText: 'Internal Server Error' }),
     )
-    await expect(fetchGraph('https://graph.atrib.io/v1', CTX)).rejects.toThrow(/500/)
+    await expect(fetchGraph('https://graph.atrib.dev/v1', CTX)).rejects.toThrow(/500/)
   })
 
   it('returns parsed JSON body on success', async () => {
@@ -72,7 +72,7 @@ describe('fetchGraph', () => {
       edges: [],
     }
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(expected))
-    const result = await fetchGraph('https://graph.atrib.io/v1', CTX)
+    const result = await fetchGraph('https://graph.atrib.dev/v1', CTX)
     expect(result).toEqual(expected)
   })
 })
@@ -87,14 +87,14 @@ describe('fetchSessionPolicyRecord', () => {
       capturedUrl = String(url)
       return jsonResponse({})
     })
-    await fetchSessionPolicyRecord('https://graph.atrib.io/v1', 'sha256:abc/def')
+    await fetchSessionPolicyRecord('https://graph.atrib.dev/v1', 'sha256:abc/def')
     expect(capturedUrl).toContain('/policy-records/sha256%3Aabc%2Fdef')
   })
 
   it('throws on non-2xx', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 404 }))
     await expect(
-      fetchSessionPolicyRecord('https://graph.atrib.io/v1', 'sha256:abc'),
+      fetchSessionPolicyRecord('https://graph.atrib.dev/v1', 'sha256:abc'),
     ).rejects.toThrow(/fetchSessionPolicyRecord failed/)
   })
 })

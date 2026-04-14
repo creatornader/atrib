@@ -81,7 +81,7 @@ The expected response is a proof bundle per §2.6.2 (snake_case fields):
 ```json
 {
   "log_index": 4821936,
-  "checkpoint": "log.atrib.io/v1\n4821937\n...",
+  "checkpoint": "log.atrib.dev/v1\n4821937\n...",
   "inclusion_proof": ["...", "...", "..."],
   "leaf_hash": "..."
 }
@@ -101,7 +101,7 @@ Wraps an `McpServer` instance in place. The wrapper is idempotent and can be cal
 | ------------------ | ---------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `creatorKey`       | `string`         | yes (else pass-through) | Base64url-encoded Ed25519 seed (32 bytes). If absent, the middleware enters pass-through mode with one console warning.                                          |
 | `serverUrl`        | `string`         | recommended             | Canonical URL for `content_id` derivation per §1.2.2. Required for stdio transports where no host header is available.                                           |
-| `logEndpoint`      | `string`         | optional in dev         | Where to POST signed records. Defaults to `https://log.atrib.io/v1/entries`. Use `@atrib/log-dev`'s submission endpoint for local development.                   |
+| `logEndpoint`      | `string`         | optional in dev         | Where to POST signed records. Defaults to `https://log.atrib.dev/v1/entries`. Use `@atrib/log-dev`'s submission endpoint for local development.                   |
 | `policy`           | `PolicyDocument` | optional                | Policy document to serve at `/.well-known/atrib-policy.json` (for HTTP transports) and embed in `serverInfo` (for stdio).                                        |
 | `transactionTools` | `string[]`       | optional                | Tool names that should emit `event_type: 'transaction'` records instead of `tool_call`. Defaults to a built-in heuristic for common checkout/payment tool names. |
 
@@ -120,7 +120,7 @@ For advanced use cases (custom transports, manual signing, recommendation calcul
 
 ## Local development with `@atrib/log-dev`
 
-Until the production Tessera-backed log at `log.atrib.io/v1` is deployed, you can run a faithful in-memory log stub for local development:
+Until the production Tessera-backed log at `log.atrib.dev/v1` is deployed, you can run a faithful in-memory log stub for local development:
 
 ```typescript
 import { startDevLog } from '@atrib/log-dev'

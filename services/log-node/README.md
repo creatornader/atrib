@@ -8,7 +8,7 @@
 
 `@atrib/log-node` is the production log service for the atrib value provenance protocol. It accepts signed attribution records over HTTP and returns real cryptographic inclusion proofs, Merkle path from the submitted leaf to the current signed checkpoint. Checkpoint signatures use Ed25519 (RFC 8032). The checkpoint format follows the C2SP signed-note spec. The log API follows the C2SP tlog-tiles read API.
 
-This package is `private: true` and is never published to npm. It is deployed as a service at `log.atrib.io/v1`.
+This package is `private: true` and is never published to npm. It is deployed as a service at `log.atrib.dev/v1`.
 
 ## How it relates to `@atrib/log-dev`
 

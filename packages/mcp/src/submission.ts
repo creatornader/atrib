@@ -51,7 +51,7 @@ import { canonicalRecord } from './canon.js'
 import { sha256, hexEncode } from './hash.js'
 import type { AtribRecord } from './types.js'
 
-const DEFAULT_LOG_ENDPOINT = 'https://log.atrib.io/v1/entries'
+const DEFAULT_LOG_ENDPOINT = 'https://log.atrib.dev/v1/entries'
 const MAX_RETRIES = 3
 const INITIAL_BACKOFF_MS = 1000
 const MAX_WINDOW_MS = 30_000

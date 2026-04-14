@@ -25,9 +25,9 @@ import type {
   VerificationResult,
 } from './types.js'
 
-const DEFAULT_LOG_ENDPOINT = 'https://log.atrib.io/v1'
-const DEFAULT_GRAPH_ENDPOINT = 'https://graph.atrib.io/v1'
-const DEFAULT_RESOLVE_ENDPOINT = 'https://resolve.atrib.io/v1'
+const DEFAULT_LOG_ENDPOINT = 'https://log.atrib.dev/v1'
+const DEFAULT_GRAPH_ENDPOINT = 'https://graph.atrib.dev/v1'
+const DEFAULT_RESOLVE_ENDPOINT = 'https://resolve.atrib.dev/v1'
 
 /** Init options for AtribVerifier (§5.5.1). */
 export interface AtribVerifierOptions {
@@ -236,7 +236,7 @@ export class AtribVerifier {
     // Validate hostname to prevent SSRF via crafted calculated_by URLs.
     try {
       const parsed = new URL(calculatedBy)
-      if (parsed.protocol !== 'https:' || parsed.hostname !== 'resolve.atrib.io') {
+      if (parsed.protocol !== 'https:' || parsed.hostname !== 'resolve.atrib.dev') {
         return null
       }
       const url = `${calculatedBy.replace(/\/$/, '')}/pubkey`

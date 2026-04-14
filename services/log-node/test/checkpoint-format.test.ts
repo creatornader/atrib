@@ -22,10 +22,10 @@ ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
 describe('C2SP signed-note format', () => {
   it('formatCheckpointBody produces origin\\nsize\\nbase64hash\\n', () => {
     const root = new Uint8Array(32).fill(0xaa)
-    const body = formatCheckpointBody('log.atrib.io/v1', 42, root)
+    const body = formatCheckpointBody('log.atrib.dev/v1', 42, root)
 
     const lines = body.split('\n')
-    expect(lines[0]).toBe('log.atrib.io/v1')
+    expect(lines[0]).toBe('log.atrib.dev/v1')
     expect(lines[1]).toBe('42')
     expect(lines[2]!.length).toBeGreaterThan(0) // base64 hash
     expect(lines[3]).toBe('') // trailing newline

@@ -63,7 +63,7 @@ The colored chain hash on each line is what makes the chain visible: every recor
 
 ## What this demo is NOT
 
-- **It is NOT a real attribution log.** `@atrib/log-dev` is an in-memory dev stub. The proof bundles it returns have placeholder hashes, not real Merkle hashes. They will not pass `@atrib/verify`'s strict cryptographic verification path. The production log lives at `log.atrib.io/v1` (Tessera-backed, per spec §2) and will exist as a separate Go service in `services/log/`.
+- **It is NOT a real attribution log.** `@atrib/log-dev` is an in-memory dev stub. The proof bundles it returns have placeholder hashes, not real Merkle hashes. They will not pass `@atrib/verify`'s strict cryptographic verification path. The production log lives at `log.atrib.dev/v1` (Tessera-backed, per spec §2) and will exist as a separate Go service in `services/log/`.
 - **It is NOT a real merchant server.** The merchant in this demo serves a hardcoded fake search response. A real merchant would integrate `@atrib/mcp` into their actual MCP server with real tool implementations.
 - **It is NOT a real agent.** The agent in this demo issues two hardcoded tool calls and observes a hardcoded payment response. A real agent would be invoked by an LLM via one of the framework adapters in `@atrib/agent` (Vercel AI SDK, LangChain, Cloudflare Agents, etc.).
 
@@ -77,6 +77,6 @@ This is the answer to "where does this go in 15 minutes?" When a prospective cus
 2. Watch the records flow
 3. Point at each step in the CLI output and explain what's happening at the protocol level
 4. Show them which lines of code they would have to add on their merchant side (~3 lines: import, wrap, set log endpoint) and on their agent side (~2 lines: import, wrap)
-5. Switch to the production answer: "this is the dev log; the production log is `log.atrib.io/v1` and is Tessera-backed per spec §2, same wire format, same record shape, no client changes."
+5. Switch to the production answer: "this is the dev log; the production log is `log.atrib.dev/v1` and is Tessera-backed per spec §2, same wire format, same record shape, no client changes."
 
 The demo makes the abstract protocol concrete in a way that the spec and the README cannot.

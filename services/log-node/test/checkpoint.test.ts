@@ -12,7 +12,7 @@ import {
   createCheckpointSigner,
 } from '../src/checkpoint.js'
 
-const TEST_ORIGIN = 'log.atrib.io/v1'
+const TEST_ORIGIN = 'log.atrib.dev/v1'
 const TEST_TREE_SIZE = 4821937
 // A stable 32-byte root hash
 const TEST_ROOT_HASH = new Uint8Array(32).fill(0xab)
@@ -42,12 +42,12 @@ describe('formatCheckpointBody', () => {
 
   it('matches the spec example format', () => {
     // From spec Section 2.4.1 example:
-    //   log.atrib.io/v1\n
+    //   log.atrib.dev/v1\n
     //   4821937\n
     //   CsUYapGGPo4dkMgIAUqom/Xajj7h2fB2MPA3j2jxq2I=\n
     const rootHashBytes = Buffer.from('CsUYapGGPo4dkMgIAUqom/Xajj7h2fB2MPA3j2jxq2I=', 'base64')
-    const body = formatCheckpointBody('log.atrib.io/v1', 4821937, new Uint8Array(rootHashBytes))
-    expect(body).toBe('log.atrib.io/v1\n4821937\nCsUYapGGPo4dkMgIAUqom/Xajj7h2fB2MPA3j2jxq2I=\n')
+    const body = formatCheckpointBody('log.atrib.dev/v1', 4821937, new Uint8Array(rootHashBytes))
+    expect(body).toBe('log.atrib.dev/v1\n4821937\nCsUYapGGPo4dkMgIAUqom/Xajj7h2fB2MPA3j2jxq2I=\n')
   })
 })
 

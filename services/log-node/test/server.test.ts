@@ -128,7 +128,7 @@ describe('GET /v1/checkpoint', () => {
     expect(res.headers.get('content-type')).toMatch(/text\/plain/)
     const text = await res.text()
     // Should contain the log origin and a signature line
-    expect(text).toContain('log.atrib.io/v1')
+    expect(text).toContain('log.atrib.dev/v1')
     expect(text).toContain('\u2014')
   })
 })
