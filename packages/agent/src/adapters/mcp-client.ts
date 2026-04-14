@@ -140,7 +140,10 @@ export function wrapMcpClient<C extends MinimalMcpClient>(
       const responseMeta = (result?._meta ?? {}) as Record<string, unknown>
       // exactOptionalPropertyTypes: only include serverUrl when it's set,
       // because the interceptor's option type doesn't accept undefined.
-      const responseOptions = serverUrl !== undefined ? { serverUrl } : {}
+      const responseOptions = {
+        ...(serverUrl !== undefined ? { serverUrl } : {}),
+        isError: (result as Record<string, unknown>)?.isError === true,
+      }
       interceptor.onAfterToolResponse(toolName, result, responseMeta, responseOptions)
     } catch (err) {
       console.warn('atrib: wrapMcpClient onAfterToolResponse failed, passing through', err)

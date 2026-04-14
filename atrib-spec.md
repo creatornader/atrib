@@ -100,8 +100,6 @@ Atrib is a bet that the answer does not have to be a company. It can be a protoc
 
 _The canonical data model, signing protocol, and propagation mechanism for Atrib attribution records._
 
-The canonical data model, signing protocol, and propagation mechanism for Atrib attribution records.
-
 Contents
 
 1.  1.1Normative Requirements Language

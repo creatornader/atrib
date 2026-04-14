@@ -56,6 +56,10 @@ export async function bindServer(storage: Storage, port: number): Promise<Server
     })
   })
 
+  // Match log-node's connection timeout protections
+  server.headersTimeout = 5_000
+  server.requestTimeout = 30_000
+
   await new Promise<void>((resolve) => {
     server.listen(port, '127.0.0.1', resolve)
   })

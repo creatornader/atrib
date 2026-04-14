@@ -163,7 +163,11 @@ export class AtribVerifier {
     const warnings: string[] = []
     const policy: PolicyDocument = options.policy === 'default' ? DEFAULT_POLICY : options.policy
 
-    let graphCheckpoint = this.logEndpoint
+    // graph_checkpoint records the log origin, not a full signed checkpoint.
+    // A full checkpoint would require fetching GET /v1/checkpoint from the log,
+    // which is not available in the post-hoc path. The origin string is
+    // sufficient for identifying which log the data came from.
+    const graphCheckpoint = this.logEndpoint
     let treeSize = options.treeSize ?? 0
     let distribution: Record<string, number> = {}
     let transactionId = ''
@@ -171,8 +175,7 @@ export class AtribVerifier {
 
     try {
       const graph = await fetchGraph(this.graphEndpoint, options.context_id, options.treeSize)
-      graphCheckpoint = this.logEndpoint
-      treeSize = options.treeSize ?? graph.node_count
+      treeSize = options.treeSize ?? 0 // 0 = unpinned; caller should supply treeSize for reproducible verification
       const txNode = graph.nodes.find((n) => n.event_type === 'transaction')
       if (!txNode) {
         warnings.push('no transaction node found in graph; distribution is empty')
@@ -229,18 +232,20 @@ export class AtribVerifier {
       // out-of-band. Return null to surface this.
       return null
     }
-    // Atrib resolution service publishes its key at /pubkey
-    if (calculatedBy.includes('resolve.atrib.io')) {
-      try {
-        const url = `${calculatedBy.replace(/\/$/, '')}/pubkey`
-        const res = await fetch(url)
-        if (!res.ok) return null
-        const text = (await res.text()).trim()
-        return text
-      } catch {
+    // Atrib resolution service publishes its key at /pubkey.
+    // Validate hostname to prevent SSRF via crafted calculated_by URLs.
+    try {
+      const parsed = new URL(calculatedBy)
+      if (parsed.protocol !== 'https:' || parsed.hostname !== 'resolve.atrib.io') {
         return null
       }
+      const url = `${calculatedBy.replace(/\/$/, '')}/pubkey`
+      const res = await fetch(url)
+      if (!res.ok) return null
+      const text = (await res.text()).trim()
+      return text
+    } catch {
+      return null
     }
-    return null
   }
 }

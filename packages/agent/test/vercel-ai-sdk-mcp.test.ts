@@ -213,7 +213,7 @@ describe('attributeVercelAiSdkMcp', () => {
     const [toolName, _response, responseMeta, callOptions] = spy.mock.calls[0]!
     expect(toolName).toBe('doit')
     expect(responseMeta).toEqual({ atrib: serverAtribToken })
-    expect(callOptions).toEqual({ serverUrl: 'https://doit.example.com' })
+    expect(callOptions).toEqual({ serverUrl: 'https://doit.example.com', isError: false })
 
     await interceptor.flush()
   })

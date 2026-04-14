@@ -186,8 +186,11 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
         serverUrl?: string
       },
     ): void {
-      // §5.7: tool_call_inbound trigger only fires when isError is false
+      // §5.7: tool_call_inbound trigger only fires when isError is false.
+      // Check both the explicit option (set by adapters) and the response
+      // body's own isError field (guards direct callers who omit options).
       if (callOptions?.isError === true) return
+      if ((response as Record<string, unknown>)?.isError === true) return
 
       try {
         // §5.4.4: Accumulate inbound context
@@ -224,6 +227,9 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
             queue,
           ).catch((err) => {
             console.warn('atrib: transaction emission failed', err)
+          }).finally(() => {
+            const idx = pendingEmissions.indexOf(emission)
+            if (idx !== -1) pendingEmissions.splice(idx, 1)
           })
           pendingEmissions.push(emission)
         }
@@ -237,10 +243,19 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
     },
 
     async flush(): Promise<void> {
-      // Wait for any pending transaction emissions to complete
-      await Promise.allSettled(pendingEmissions)
-      pendingEmissions.length = 0
+      // Drain in a loop: emissions arriving during our await are caught
+      // by the next iteration. Terminates when no new emissions appear.
+      while (pendingEmissions.length > 0) {
+        const snapshot = pendingEmissions.splice(0)
+        await Promise.allSettled(snapshot)
+      }
       await queue.flush()
+      // Drain any emissions that submitted to the queue during queue.flush()
+      while (pendingEmissions.length > 0) {
+        const snapshot = pendingEmissions.splice(0)
+        await Promise.allSettled(snapshot)
+        await queue.flush()
+      }
     },
   }
 }

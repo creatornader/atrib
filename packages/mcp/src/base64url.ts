@@ -25,6 +25,9 @@ export function base64urlDecode(str: string): Uint8Array {
   if (!/^[A-Za-z0-9_-]*$/.test(str)) {
     throw new Error('base64urlDecode: invalid base64url characters')
   }
+  if (str.length % 4 === 1) {
+    throw new Error('base64urlDecode: invalid base64url length')
+  }
   const lookup = new Uint8Array(128)
   for (let i = 0; i < CHARS.length; i++) {
     lookup[CHARS.charCodeAt(i)] = i

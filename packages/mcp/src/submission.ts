@@ -132,16 +132,32 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
         })
 
         if (response.ok) {
-          const proof = (await response.json()) as ProofBundle
-          proofCache.set(hash, proof)
+          const raw = (await response.json()) as Record<string, unknown>
+          // Validate proof bundle shape before caching — a malicious or buggy
+          // log server returning garbage should not be cached silently.
+          if (
+            typeof raw.log_index === 'number' &&
+            Number.isInteger(raw.log_index) &&
+            raw.log_index >= 0 &&
+            typeof raw.checkpoint === 'string' &&
+            Array.isArray(raw.inclusion_proof) &&
+            (raw.inclusion_proof as unknown[]).every((e) => typeof e === 'string') &&
+            typeof raw.leaf_hash === 'string'
+          ) {
+            proofCache.set(hash, raw as unknown as ProofBundle)
+          }
           pendingRecords.delete(hash)
           return
         }
 
-        // Non-retryable status
+        // Non-retryable status — permanent rejection. Delete from
+        // pendingRecords in case this is a flush-retry (the record was
+        // already in the map from a prior 5xx failure). On the initial
+        // submission path the record isn't in the map yet, so delete
+        // is a harmless no-op.
         if (response.status >= 400 && response.status < 500) {
           console.warn(`atrib: log submission rejected (${response.status})`, { record_hash: hash })
-          pendingRecords.set(hash, { record, priority })
+          pendingRecords.delete(hash)
           return
         }
       } catch {
@@ -163,6 +179,11 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
     submit(record: AtribRecord, priority: Priority): void {
       const promise = submitWithRetry(record, priority).catch((err) => {
         console.warn('atrib: unexpected submission error', err)
+      }).finally(() => {
+        // Prune resolved promise to prevent unbounded growth in long-running
+        // processes that never call flush().
+        const idx = pendingPromises.indexOf(promise)
+        if (idx !== -1) pendingPromises.splice(idx, 1)
       })
       pendingPromises.push(promise)
     },
@@ -172,28 +193,26 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
     },
 
     async flush(): Promise<void> {
-      // Wait for in-flight submissions
-      await Promise.allSettled(pendingPromises)
-      pendingPromises.length = 0
+      // Drain in a loop: submissions arriving during our await are caught
+      // by the next iteration. Terminates when no new promises appear.
+      while (pendingPromises.length > 0) {
+        const inFlight = pendingPromises.splice(0)
+        await Promise.allSettled(inFlight)
+      }
 
-      // Retry any permanently-failed records one more time. Drain in
-      // priority order: high (transactions) before normal (tool calls).
-      // If the process is killed mid-flush, high-priority records have
-      // already had their final attempt and are more likely to make it
-      // to the log. This is consumer #1 of the priority signal — see
-      // file header for rationale.
+      // Retry any failed records one more time. Drain in priority order:
+      // high (transactions) before normal (tool calls).
       if (pendingRecords.size > 0) {
         const all = [...pendingRecords.values()]
         const highFirst = [
           ...all.filter((e) => e.priority === 'high'),
           ...all.filter((e) => e.priority === 'normal'),
         ]
+        const retryPromises: Promise<void>[] = []
         for (const entry of highFirst) {
-          const promise = submitWithRetry(entry.record, entry.priority).catch(() => {})
-          pendingPromises.push(promise)
+          retryPromises.push(submitWithRetry(entry.record, entry.priority).catch(() => {}))
         }
-        await Promise.allSettled(pendingPromises)
-        pendingPromises.length = 0
+        await Promise.allSettled(retryPromises)
       }
     },
   }

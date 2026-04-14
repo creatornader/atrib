@@ -6,7 +6,7 @@
  * Implements the §3.2.4 edge derivation rules normatively. This is the
  * algorithm a graph indexing service (graph.atrib.io) would run on log data.
  * Two implementations applying these rules to identical records MUST produce
- * identical edge sets — this is one such implementation.
+ * identical edge sets.
  */
 
 import { sha256, hexEncode, canonicalRecord, base64urlEncode } from '@atrib/mcp'

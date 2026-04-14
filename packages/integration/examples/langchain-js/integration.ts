@@ -1,7 +1,7 @@
 /**
  * Atrib + LangChain JS MCP — runnable integration snippet
  *
- * Demonstrates the five-line Atrib wiring for a `@langchain/mcp-adapters`
+ * Demonstrates the Atrib wiring for a `@langchain/mcp-adapters`
  * `MultiServerMCPClient`. The agent invocation step (`createReactAgent` +
  * `agent.invoke(...)`) is omitted from this file so the example stays focused
  * on the Atrib integration. Drop this pattern into any LangChain app that
