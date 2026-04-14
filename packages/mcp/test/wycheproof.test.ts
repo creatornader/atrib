@@ -97,9 +97,7 @@ describe('Wycheproof Ed25519 vectors', () => {
     }
 
     if (failures.length > 0) {
-      throw new Error(
-        `Wycheproof failures (${failures.length}):\n${failures.join('\n')}`,
-      )
+      throw new Error(`Wycheproof failures (${failures.length}):\n${failures.join('\n')}`)
     }
 
     expect(validCount).toBeGreaterThan(0)

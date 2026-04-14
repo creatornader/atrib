@@ -3,6 +3,7 @@
 Real captured payload shapes from the x402 protocol (Coinbase).
 
 **Sources:**
+
 - https://github.com/coinbase/x402
 - https://github.com/coinbase/x402/blob/main/docs/core-concepts/http-402.md
 - https://github.com/coinbase/x402/blob/main/typescript/site/CHANGELOG-v2.md (v1 → v2 header rename)
@@ -14,10 +15,10 @@ Real captured payload shapes from the x402 protocol (Coinbase).
 
 The on-wire signal is a response header on the 200 success path:
 
-| Version | Request header     | Response header        |
-|---------|--------------------|------------------------|
-| v2      | `PAYMENT-SIGNATURE` | `PAYMENT-RESPONSE`     |
-| v1      | `X-PAYMENT`         | `X-PAYMENT-RESPONSE`   |
+| Version | Request header      | Response header      |
+| ------- | ------------------- | -------------------- |
+| v2      | `PAYMENT-SIGNATURE` | `PAYMENT-RESPONSE`   |
+| v1      | `X-PAYMENT`         | `X-PAYMENT-RESPONSE` |
 
 The v1 `X-PAYMENT-RESPONSE` was renamed to `PAYMENT-RESPONSE` per RFC 6648
 (deprecation of the `X-` prefix). The detector accepts both names so a

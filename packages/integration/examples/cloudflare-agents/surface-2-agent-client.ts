@@ -47,11 +47,9 @@ export class WeatherChatAgent extends Agent<Env> {
     // 1. Register your upstream MCP servers as you normally would.
     //    Workers runtime: only HTTP transports work — no stdio, no child
     //    processes.
-    await this.addMcpServer(
-      'weather',
-      'https://weather-mcp.example.com/mcp',
-      { transport: { type: 'streamable-http' } },
-    )
+    await this.addMcpServer('weather', 'https://weather-mcp.example.com/mcp', {
+      transport: { type: 'streamable-http' },
+    })
 
     // 2. ★ ATRIB ★
     // Wrap every connected MCP client. After this call, every tool invoked

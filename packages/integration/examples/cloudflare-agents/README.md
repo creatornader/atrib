@@ -2,10 +2,10 @@
 
 This example shows how to add Atrib attribution to a Cloudflare-deployed application using the [`agents`](https://www.npmjs.com/package/agents) package. Cloudflare exposes two distinct MCP integration surfaces, and Atrib has a different (one-line) integration story for each.
 
-| Surface | What it does | Atrib integration |
-|---|---|---|
-| **`McpAgent`** (server-side) | Builds an MCP server that runs as a Durable Object on Cloudflare. You define tools on `this.server`. | One-line `atrib(this.server, options)` from `@atrib/mcp`. Same primitive that works for Claude Agent SDK Case A. |
-| **`Agent.addMcpServer`** (client-side) | Your Agent connects out to one or more upstream MCP servers via HTTP. | One-line `attributeCloudflareAgentMcp(this, { interceptor })` from `@atrib/agent`. Wraps each connection's underlying `Client` so subsequent tool calls flow through the interceptor. |
+| Surface                                | What it does                                                                                         | Atrib integration                                                                                                                                                                     |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`McpAgent`** (server-side)           | Builds an MCP server that runs as a Durable Object on Cloudflare. You define tools on `this.server`. | One-line `atrib(this.server, options)` from `@atrib/mcp`. Same primitive that works for Claude Agent SDK Case A.                                                                      |
+| **`Agent.addMcpServer`** (client-side) | Your Agent connects out to one or more upstream MCP servers via HTTP.                                | One-line `attributeCloudflareAgentMcp(this, { interceptor })` from `@atrib/agent`. Wraps each connection's underlying `Client` so subsequent tool calls flow through the interceptor. |
 
 Both integrations are zero-deploy: no extra Worker, no proxy hop, no architectural change to your app.
 
@@ -56,9 +56,7 @@ export class WeatherMcp extends McpAgent<Env> {
         )
         const data = (await r.json()) as { current: { temperature_2m: number } }
         return {
-          content: [
-            { type: 'text', text: `Temperature: ${data.current.temperature_2m}°F` },
-          ],
+          content: [{ type: 'text', text: `Temperature: ${data.current.temperature_2m}°F` }],
         }
       },
     )
@@ -80,6 +78,7 @@ export default WeatherMcp.serve('/mcp', { binding: 'WeatherMcp' })
 ```
 
 **`wrangler.toml` snippet:**
+
 ```toml
 name = "atrib-weather-mcp"
 main = "src/index.ts"
@@ -138,11 +137,9 @@ export class WeatherChatAgent extends Agent<Env> {
 
   async onStart() {
     // 1. Register your upstream MCP servers as you normally would.
-    await this.addMcpServer(
-      'weather',
-      'https://weather-mcp.example.com/mcp',
-      { transport: { type: 'streamable-http' } },
-    )
+    await this.addMcpServer('weather', 'https://weather-mcp.example.com/mcp', {
+      transport: { type: 'streamable-http' },
+    })
 
     // 2. ★ ATRIB: one line to wrap every connected MCP client ★
     // After this call, every tool invoked via this.mcp.getAITools() goes

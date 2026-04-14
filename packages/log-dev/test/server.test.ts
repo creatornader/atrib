@@ -261,7 +261,7 @@ describe('@atrib/log-dev — X-Atrib-Priority real consumer', () => {
       // the only in-flight slot for ~30ms; while it's processing, the
       // other two go into the priority queue. When the slot frees, the
       // priority queue admits HIGH first regardless of arrival order.
-      const [, , ] = await Promise.all([
+      const [, ,] = await Promise.all([
         fetch(log.submissionEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Atrib-Priority': 'normal' },

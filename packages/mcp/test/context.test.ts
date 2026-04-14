@@ -250,15 +250,11 @@ describe('mergeTracestate (W3C 32-list-member limit)', () => {
   })
 
   it('dedupes any prior atrib entry per "one entry per key"', () => {
-    expect(mergeTracestate('atrib=NEW', 'atrib=OLD,vendor=acme')).toBe(
-      'atrib=NEW,vendor=acme',
-    )
+    expect(mergeTracestate('atrib=NEW', 'atrib=OLD,vendor=acme')).toBe('atrib=NEW,vendor=acme')
   })
 
   it('dedupes prior atrib entry with OWS around =', () => {
-    expect(mergeTracestate('atrib=NEW', 'atrib = OLD,vendor=acme')).toBe(
-      'atrib=NEW,vendor=acme',
-    )
+    expect(mergeTracestate('atrib=NEW', 'atrib = OLD,vendor=acme')).toBe('atrib=NEW,vendor=acme')
   })
 
   it('handles empty existing tracestate', () => {
@@ -283,9 +279,9 @@ describe('mergeTracestate (W3C 32-list-member limit)', () => {
 
 describe('extractTraceId — W3C trace-id validation', () => {
   it('accepts a valid lowercase 32-hex trace-id with non-zero parent-id', () => {
-    expect(
-      extractTraceId('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'),
-    ).toBe('4bf92f3577b34da6a3ce929d0e0e4736')
+    expect(extractTraceId('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01')).toBe(
+      '4bf92f3577b34da6a3ce929d0e0e4736',
+    )
   })
 
   // W3C trace-context §3.2.2.3: "All bytes as zero is considered an invalid value"
@@ -368,9 +364,7 @@ describe('parseBaggageAtribSession (W3C Baggage spec)', () => {
   })
 
   it('strips multiple ;property suffixes from the value', () => {
-    expect(parseBaggageAtribSession('atrib-session=mytoken;ttl=300;origin=foo')).toBe(
-      'mytoken',
-    )
+    expect(parseBaggageAtribSession('atrib-session=mytoken;ttl=300;origin=foo')).toBe('mytoken')
   })
 
   it('handles OWS around `=` per W3C list-member grammar', () => {

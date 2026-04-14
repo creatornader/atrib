@@ -41,9 +41,7 @@
     { "type": "total", "display_text": "Total", "amount": 830 }
   ],
   "messages": [],
-  "links": [
-    { "type": "terms_of_use", "url": "https://www.testshop.com/legal/terms-of-use" }
-  ],
+  "links": [{ "type": "terms_of_use", "url": "https://www.testshop.com/legal/terms-of-use" }],
   "order": {
     "id": "ord_abc123",
     "checkout_session_id": "checkout_session_123",

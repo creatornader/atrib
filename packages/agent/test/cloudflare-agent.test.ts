@@ -60,10 +60,7 @@ function makeFakeClient(onCall: (params: unknown) => unknown): MinimalMcpClient 
 
 /** Build a structural Cloudflare Agent mock with the named connections. */
 function makeFakeAgent(
-  connections: Record<
-    string,
-    { client: MinimalMcpClient; url?: URL | string }
-  >,
+  connections: Record<string, { client: MinimalMcpClient; url?: URL | string }>,
 ): CloudflareAgentLike {
   return {
     mcp: {
@@ -209,9 +206,7 @@ describe('attributeCloudflareAgentMcp', () => {
       interceptor,
     })
     expect(wrapped).toBe(0)
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('mcp.mcpConnections'),
-    )
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('mcp.mcpConnections'))
     warnSpy.mockRestore()
   })
 

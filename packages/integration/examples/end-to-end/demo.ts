@@ -54,7 +54,9 @@ async function main(): Promise<void> {
     console.error('error: ATRIB_PRIVATE_KEY env var is required')
     console.error()
     console.error('generate one with:')
-    console.error('  node -e \'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))\'')
+    console.error(
+      '  node -e \'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))\'',
+    )
     process.exit(1)
   }
 
@@ -66,9 +68,7 @@ async function main(): Promise<void> {
   // Subscribe to the dev log so we can pretty-print every admitted record.
   log.onSubmit((entry) => {
     const evt =
-      entry.record.event_type === 'transaction'
-        ? magenta('+transaction')
-        : green('+tool_call  ')
+      entry.record.event_type === 'transaction' ? magenta('+transaction') : green('+tool_call  ')
     const ctx = yellow(entry.record.context_id.slice(0, 8) + '…')
     const chain = entry.record.chain_root
       ? cyan(entry.record.chain_root.slice(0, 16) + '…')
@@ -106,9 +106,9 @@ async function main(): Promise<void> {
   // The agent uses a different keypair than the merchant — it's a separate
   // attributing party. In a real deployment this would be the agent
   // operator's key, distinct from the merchant's.
-  const agentKey = Buffer.from(
-    new Uint8Array(32).map((_, i) => (i + 100) & 0xff),
-  ).toString('base64url')
+  const agentKey = Buffer.from(new Uint8Array(32).map((_, i) => (i + 100) & 0xff)).toString(
+    'base64url',
+  )
 
   const agentInterceptor = createInterceptor({
     creatorKey: agentKey,
@@ -124,10 +124,7 @@ async function main(): Promise<void> {
     (async () => {
       // The agent uses a raw @modelcontextprotocol/sdk Client wrapped with
       // wrapMcpClient — the same pattern as any of the framework adapters.
-      const rawClient = new Client(
-        { name: 'demo-agent', version: '1.0.0' },
-        { capabilities: {} },
-      )
+      const rawClient = new Client({ name: 'demo-agent', version: '1.0.0' }, { capabilities: {} })
       await rawClient.connect(agentTransport)
       const client = wrapMcpClient(rawClient, agentInterceptor, {
         serverUrl: 'https://merchant.example.com',
@@ -181,9 +178,14 @@ async function main(): Promise<void> {
     // Some content the agent saw alongside the payment header
     content: [{ type: 'text', text: 'Payment confirmed.' }],
   }
-  agentInterceptor.onAfterToolResponse('checkout', fakePaymentResponse, {}, {
-    serverUrl: 'https://merchant.example.com',
-  })
+  agentInterceptor.onAfterToolResponse(
+    'checkout',
+    fakePaymentResponse,
+    {},
+    {
+      serverUrl: 'https://merchant.example.com',
+    },
+  )
   await sleep(60)
 
   // ── 5. Drain everything and report ───────────────────────────────────────

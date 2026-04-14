@@ -3,11 +3,7 @@ import { AtribVerifier } from '../src/verifier.js'
 import { signRecommendation } from '../src/recommendation.js'
 import { calculate, DEFAULT_POLICY } from '../src/calculate.js'
 import { base64urlEncode, getPublicKey } from '@atrib/mcp'
-import type {
-  GraphResponse,
-  RecommendationDocument,
-  SessionPolicyRecord,
-} from '../src/types.js'
+import type { GraphResponse, RecommendationDocument, SessionPolicyRecord } from '../src/types.js'
 
 const MERCHANT_KEY = new Uint8Array(32).fill(11)
 const MERCHANT_KEY_B64 = base64urlEncode(MERCHANT_KEY)
@@ -186,7 +182,7 @@ describe('AtribVerifier.verify()', () => {
     expect(result.signatureOk).toBe(true) // sig is fine
     expect(result.calcMatch).toBe(false) // calc doesn't match
     expect(result.valid).toBe(false)
-    expect(result.warnings.some(w => w.includes('local recalculation'))).toBe(true)
+    expect(result.warnings.some((w) => w.includes('local recalculation'))).toBe(true)
   })
 
   it('returns signatureOk=false for tampered document', async () => {
@@ -255,7 +251,7 @@ describe('AtribVerifier.verify()', () => {
     expect(result.calcMatch).toBe(true)
     expect(result.signatureOk).toBe(false)
     expect(result.valid).toBe(false)
-    expect(result.warnings.some(w => w.includes('unknown calculated_by'))).toBe(true)
+    expect(result.warnings.some((w) => w.includes('unknown calculated_by'))).toBe(true)
   })
 
   it('uses session policy record + agreed policy when policy_record_id is not "default"', async () => {
@@ -366,12 +362,12 @@ describe('AtribVerifier.calculate() — post-hoc (§5.5.3)', () => {
       signWith: 'merchant',
     })
     expect(rec).toBeDefined()
-    expect(rec.warnings.some(w => w.includes('graph fetch'))).toBe(true)
+    expect(rec.warnings.some((w) => w.includes('graph fetch'))).toBe(true)
   })
 
   it('records warning when graph has no transaction node', async () => {
     const graph = makeGraph()
-    graph.nodes = graph.nodes.filter(n => n.event_type !== 'transaction')
+    graph.nodes = graph.nodes.filter((n) => n.event_type !== 'transaction')
     graph.has_transaction = false
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async () => new Response(JSON.stringify(graph), { status: 200 }),
@@ -382,7 +378,7 @@ describe('AtribVerifier.calculate() — post-hoc (§5.5.3)', () => {
       policy: 'default',
       signWith: 'merchant',
     })
-    expect(rec.warnings.some(w => w.includes('no transaction node'))).toBe(true)
+    expect(rec.warnings.some((w) => w.includes('no transaction node'))).toBe(true)
     expect(rec.distribution).toEqual({})
   })
 

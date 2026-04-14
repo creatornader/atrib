@@ -44,10 +44,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js'
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { atrib, type AtribOptions, type AtribServer } from './middleware.js'
 
@@ -140,9 +137,7 @@ export interface AtribProxy {
  * DECISIONS D021). For now, restart the proxy if the upstream changes its
  * tool catalog.
  */
-export async function createAtribProxy(
-  options: AtribProxyOptions,
-): Promise<AtribProxy> {
+export async function createAtribProxy(options: AtribProxyOptions): Promise<AtribProxy> {
   // ── 1. Connect upstream client ───────────────────────────────────────
   const upstreamTransport = createUpstreamTransport(options.upstream)
   const upstreamClient = new Client({
@@ -182,10 +177,7 @@ export async function createAtribProxy(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const underlying = (wrappedServer as any).server
 
-  underlying.setRequestHandler(
-    ListToolsRequestSchema,
-    async () => ({ tools: upstreamTools.tools }),
-  )
+  underlying.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: upstreamTools.tools }))
 
   // ── 6. Register tools/call — forward to upstream client ──────────────
   // atrib()'s patched setRequestHandler will wrap this handler with the
@@ -238,9 +230,7 @@ function createUpstreamTransport(spec: UpstreamTransport): Transport {
       // when present). Cast through `unknown` — the runtime conformance is
       // guaranteed by `implements Transport` on the SDK side.
       return new StreamableHTTPClientTransport(new URL(spec.url), {
-        ...(spec.headers
-          ? { requestInit: { headers: spec.headers } }
-          : {}),
+        ...(spec.headers ? { requestInit: { headers: spec.headers } } : {}),
       }) as unknown as Transport
     case 'inMemory':
       return spec.transport

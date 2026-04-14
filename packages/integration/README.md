@@ -1,4 +1,4 @@
-# `@atrib/integration` *(private)*
+# `@atrib/integration` _(private)_
 
 **Cross-package end-to-end tests and runnable framework examples for the Atrib value provenance protocol. Not published to npm.**
 
@@ -33,13 +33,13 @@ Every signature, every chain hash, and every transaction event in that output is
 
 ## Examples
 
-| Example | Path | What it shows |
-|---|---|---|
-| **End-to-end demo** | [`examples/end-to-end/`](examples/end-to-end/) | All moving parts in a single process: dev log + merchant + agent + payment + visualizer. Run with `pnpm demo`. |
-| **Claude Agent SDK** | [`examples/claude-agent-sdk/`](examples/claude-agent-sdk/) | Both Case A (in-process tools — wrap the SDK's `McpServer` with `atrib()`) and Case B (third-party MCP servers — proxy via `createAtribProxy`). |
-| **Cloudflare Agents** | [`examples/cloudflare-agents/`](examples/cloudflare-agents/) | Both surfaces: server-side `McpAgent` (Surface 1) and client-side `Agent` calling external MCP servers (Surface 2). |
-| **Vercel AI SDK + AI Gateway** | [`examples/vercel-ai-sdk/`](examples/vercel-ai-sdk/) | Vercel AI SDK with MCP tools, routed through the AI Gateway (recommended pattern for model fallback + observability). |
-| **LangChain JS** | [`examples/langchain-js/`](examples/langchain-js/) | `MultiServerMCPClient` patched in-place by `attributeLangchainMcp` so every server it manages emits attributed records — including forked clients used for per-call header workflows. |
+| Example                        | Path                                                         | What it shows                                                                                                                                                                         |
+| ------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **End-to-end demo**            | [`examples/end-to-end/`](examples/end-to-end/)               | All moving parts in a single process: dev log + merchant + agent + payment + visualizer. Run with `pnpm demo`.                                                                        |
+| **Claude Agent SDK**           | [`examples/claude-agent-sdk/`](examples/claude-agent-sdk/)   | Both Case A (in-process tools — wrap the SDK's `McpServer` with `atrib()`) and Case B (third-party MCP servers — proxy via `createAtribProxy`).                                       |
+| **Cloudflare Agents**          | [`examples/cloudflare-agents/`](examples/cloudflare-agents/) | Both surfaces: server-side `McpAgent` (Surface 1) and client-side `Agent` calling external MCP servers (Surface 2).                                                                   |
+| **Vercel AI SDK + AI Gateway** | [`examples/vercel-ai-sdk/`](examples/vercel-ai-sdk/)         | Vercel AI SDK with MCP tools, routed through the AI Gateway (recommended pattern for model fallback + observability).                                                                 |
+| **LangChain JS**               | [`examples/langchain-js/`](examples/langchain-js/)           | `MultiServerMCPClient` patched in-place by `attributeLangchainMcp` so every server it manages emits attributed records — including forked clients used for per-call header workflows. |
 
 Every example has a `README.md` next to it explaining what's wired up and which lines a real customer would copy.
 

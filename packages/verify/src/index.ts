@@ -16,11 +16,7 @@ export {
 } from './recommendation.js'
 
 // Graph fetch (advanced usage)
-export {
-  fetchGraph,
-  fetchSessionPolicyRecord,
-  fetchPolicyDocument,
-} from './graph-fetch.js'
+export { fetchGraph, fetchSessionPolicyRecord, fetchPolicyDocument } from './graph-fetch.js'
 
 // Types
 export type {

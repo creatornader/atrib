@@ -147,7 +147,7 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
       }
 
       if (attempt < MAX_RETRIES - 1) {
-        await new Promise(resolve => setTimeout(resolve, backoff))
+        await new Promise((resolve) => setTimeout(resolve, backoff))
         backoff *= 2
       }
     }
@@ -159,7 +159,7 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
 
   return {
     submit(record: AtribRecord, priority: Priority): void {
-      const promise = submitWithRetry(record, priority).catch(err => {
+      const promise = submitWithRetry(record, priority).catch((err) => {
         console.warn('atrib: unexpected submission error', err)
       })
       pendingPromises.push(promise)

@@ -18,10 +18,7 @@ export type { SessionPolicyRecord, PolicyDocument, CreatorPolicyEntry } from './
 
 // Framework adapters
 export { wrapMcpClient } from './adapters/mcp-client.js'
-export type {
-  MinimalMcpClient,
-  WrapMcpClientOptions,
-} from './adapters/mcp-client.js'
+export type { MinimalMcpClient, WrapMcpClientOptions } from './adapters/mcp-client.js'
 
 // Cloudflare Agents adapter — wraps MCP connections on a Cloudflare `Agent`
 // (or `AIChatAgent`) after `addMcpServer` so subsequent tool calls flow

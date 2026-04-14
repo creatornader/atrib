@@ -9,7 +9,12 @@
  * cannot be published to npm — it is a workspace-internal fixture only.
  */
 
-import { createStorage, type StorageOptions, type StoredEntry, type SubmitListener } from './storage.js'
+import {
+  createStorage,
+  type StorageOptions,
+  type StoredEntry,
+  type SubmitListener,
+} from './storage.js'
 import { bindServer, type ServerHandle } from './server.js'
 
 export type { StoredEntry, SubmitListener } from './storage.js'
@@ -95,9 +100,7 @@ export interface DevLog {
  *
  *   await log.close()
  */
-export async function startDevLog(
-  options: StartDevLogOptions = {},
-): Promise<DevLog> {
+export async function startDevLog(options: StartDevLogOptions = {}): Promise<DevLog> {
   const storage = createStorage(options)
   const port = options.port ?? 0
   const handle: ServerHandle = await bindServer(storage, port)

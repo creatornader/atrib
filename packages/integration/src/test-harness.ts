@@ -72,10 +72,7 @@ export function createRecordStore(): RecordStore {
 // Mock MCP server that mimics McpServer.server.setRequestHandler() interface
 // ─────────────────────────────────────────────────────────────────────────────
 
-type RequestHandler = (
-  request: Record<string, unknown>,
-  extra: unknown,
-) => Promise<unknown>
+type RequestHandler = (request: Record<string, unknown>, extra: unknown) => Promise<unknown>
 
 export interface MockMcpServerHandle {
   /** The McpServer-shaped object to pass to atrib() */

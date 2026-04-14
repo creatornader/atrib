@@ -48,7 +48,11 @@ function makeFakeClient(opts: {
   defaultResponse?: unknown
   withFork?: boolean
 }): LangchainMcpClientLike & {
-  invocations: Array<{ name: string; arguments?: Record<string, unknown>; _meta?: Record<string, unknown> }>
+  invocations: Array<{
+    name: string
+    arguments?: Record<string, unknown>
+    _meta?: Record<string, unknown>
+  }>
   forks: Array<Record<string, string>>
 } {
   const invocations: Array<{
@@ -109,12 +113,17 @@ function makeFakeClient(opts: {
  * Build a fake MultiServerMCPClient with the given set of named servers.
  * Each server maps to its own fake Client constructed via `makeFakeClient`.
  */
-function makeFakeMultiClient(servers: Record<string, LangchainMcpClientLike>): LangchainMultiServerMcpClientLike {
+function makeFakeMultiClient(
+  servers: Record<string, LangchainMcpClientLike>,
+): LangchainMultiServerMcpClientLike {
   return {
     get config() {
       return {
         mcpServers: Object.fromEntries(
-          Object.keys(servers).map((name) => [name, { transport: 'http', url: `https://${name}.example.com/mcp` }]),
+          Object.keys(servers).map((name) => [
+            name,
+            { transport: 'http', url: `https://${name}.example.com/mcp` },
+          ]),
         ),
       }
     },
@@ -192,9 +201,7 @@ describe('attributeLangchainMcp', () => {
     // traceparent is always set on the first call; the atrib token only
     // shows up on 2nd+ calls when chaining from a prior response.
     expect(typeof sentMeta!.traceparent).toBe('string')
-    expect(sentMeta!.traceparent as string).toMatch(
-      /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/,
-    )
+    expect(sentMeta!.traceparent as string).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/)
 
     await interceptor.flush()
   })
@@ -210,9 +217,11 @@ describe('attributeLangchainMcp', () => {
     await searchClient.callTool(callerParams)
 
     expect((callerParams as Record<string, unknown>)._meta).toBeUndefined()
-    const recorded = (searchClient as LangchainMcpClientLike & {
-      invocations: Array<{ _meta?: Record<string, unknown> }>
-    }).invocations[0]!._meta
+    const recorded = (
+      searchClient as LangchainMcpClientLike & {
+        invocations: Array<{ _meta?: Record<string, unknown> }>
+      }
+    ).invocations[0]!._meta
     expect(recorded).toBeDefined()
 
     await interceptor.flush()
@@ -280,10 +289,10 @@ describe('attributeLangchainMcp', () => {
 
     // The forked client's invocation should ALSO have had _meta injected,
     // proving the recursive patch worked.
-    const recorded = (client as LangchainMcpClientLike & {
+    const recorded = client as LangchainMcpClientLike & {
       invocations: Array<{ _meta?: Record<string, unknown> }>
       forks: Array<Record<string, string>>
-    })
+    }
     expect(recorded.forks).toEqual([{ 'X-User-Id': 'u123' }])
     expect(recorded.invocations.length).toBe(1)
     expect(recorded.invocations[0]!._meta).toBeDefined()
@@ -297,9 +306,7 @@ describe('attributeLangchainMcp', () => {
     const multi = makeFakeMultiClient({ search: searchClient })
     const interceptor = createInterceptor({ creatorKey: AGENT_KEY })
 
-    interceptor.onBeforeToolCall = vi
-      .fn()
-      .mockRejectedValue(new Error('interceptor blew up'))
+    interceptor.onBeforeToolCall = vi.fn().mockRejectedValue(new Error('interceptor blew up'))
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -313,9 +320,11 @@ describe('attributeLangchainMcp', () => {
     expect(result.content).toEqual([{ type: 'text', text: 'ok' }])
 
     // The forwarded request had NO _meta injected (interceptor failure → passthrough)
-    const recorded = (searchClient as LangchainMcpClientLike & {
-      invocations: Array<{ _meta?: Record<string, unknown> }>
-    }).invocations[0]!
+    const recorded = (
+      searchClient as LangchainMcpClientLike & {
+        invocations: Array<{ _meta?: Record<string, unknown> }>
+      }
+    ).invocations[0]!
     expect(recorded._meta).toBeUndefined()
 
     expect(warnSpy).toHaveBeenCalledWith(
@@ -342,9 +351,7 @@ describe('attributeLangchainMcp', () => {
     const patched = await attributeLangchainMcp(multi, { interceptor })
 
     expect(patched).toBe(1)
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("server 'missing' has no client"),
-    )
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("server 'missing' has no client"))
 
     warnSpy.mockRestore()
     await interceptor.flush()
@@ -365,16 +372,20 @@ describe('attributeLangchainMcp', () => {
 
     // search was patched: calling it records a _meta
     await searchClient.callTool({ name: 'x', arguments: {} })
-    const searchRec = (searchClient as LangchainMcpClientLike & {
-      invocations: Array<{ _meta?: Record<string, unknown> }>
-    }).invocations[0]!
+    const searchRec = (
+      searchClient as LangchainMcpClientLike & {
+        invocations: Array<{ _meta?: Record<string, unknown> }>
+      }
+    ).invocations[0]!
     expect(searchRec._meta).toBeDefined()
 
     // shop was NOT patched: calling it does not inject _meta
     await shopClient.callTool({ name: 'y', arguments: {} })
-    const shopRec = (shopClient as LangchainMcpClientLike & {
-      invocations: Array<{ _meta?: Record<string, unknown> }>
-    }).invocations[0]!
+    const shopRec = (
+      shopClient as LangchainMcpClientLike & {
+        invocations: Array<{ _meta?: Record<string, unknown> }>
+      }
+    ).invocations[0]!
     expect(shopRec._meta).toBeUndefined()
 
     await interceptor.flush()

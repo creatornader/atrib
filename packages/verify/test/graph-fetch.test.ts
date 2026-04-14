@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import {
-  fetchGraph,
-  fetchSessionPolicyRecord,
-  fetchPolicyDocument,
-} from '../src/graph-fetch.js'
+import { fetchGraph, fetchSessionPolicyRecord, fetchPolicyDocument } from '../src/graph-fetch.js'
 
 const CTX = '4bf92f3577b34da6a3ce929d0e0e4736'
 
@@ -65,9 +61,7 @@ describe('fetchGraph', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('boom', { status: 500, statusText: 'Internal Server Error' }),
     )
-    await expect(fetchGraph('https://graph.atrib.io/v1', CTX)).rejects.toThrow(
-      /500/,
-    )
+    await expect(fetchGraph('https://graph.atrib.io/v1', CTX)).rejects.toThrow(/500/)
   })
 
   it('returns parsed JSON body on success', async () => {
@@ -112,7 +106,9 @@ describe('fetchPolicyDocument', () => {
   it('returns parsed policy document', async () => {
     const policy = { spec_version: 'atrib/1.0', edge_weights: { CONVERGES_ON: 1.0 } }
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(policy))
-    const result = await fetchPolicyDocument('https://merchant.example/.well-known/atrib-policy.json')
+    const result = await fetchPolicyDocument(
+      'https://merchant.example/.well-known/atrib-policy.json',
+    )
     expect(result).toEqual(policy)
   })
 

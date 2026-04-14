@@ -155,7 +155,7 @@ export function attributeVercelAiSdkMcp<C extends VercelAiSdkMcpClientLike>(
 
     const params = args.request.params ?? {}
     const toolName = (params.name as string) ?? ''
-    const existingMeta = ((params._meta as Record<string, unknown>) ?? {})
+    const existingMeta = (params._meta as Record<string, unknown>) ?? {}
 
     // §5.4.3: Build outbound _meta. The interceptor returns a record that
     // includes any existing _meta keys plus atrib's own (atrib token,
@@ -165,10 +165,7 @@ export function attributeVercelAiSdkMcp<C extends VercelAiSdkMcpClientLike>(
       outboundMeta = await interceptor.onBeforeToolCall(toolName, existingMeta)
     } catch (err) {
       // §5.8 degradation: pass through with the original meta on failure
-      console.warn(
-        'atrib: vercel-ai-sdk-mcp onBeforeToolCall failed, passing through',
-        err,
-      )
+      console.warn('atrib: vercel-ai-sdk-mcp onBeforeToolCall failed, passing through', err)
       outboundMeta = undefined
     }
 
@@ -191,15 +188,11 @@ export function attributeVercelAiSdkMcp<C extends VercelAiSdkMcpClientLike>(
     // SDK MCPClient returns the raw CallToolResult here BEFORE any
     // extractStructuredContent transformation, so the _meta field is intact.
     try {
-      const responseMeta =
-        ((result as { _meta?: Record<string, unknown> })?._meta ?? {})
+      const responseMeta = (result as { _meta?: Record<string, unknown> })?._meta ?? {}
       const responseOptions = serverUrl !== undefined ? { serverUrl } : {}
       interceptor.onAfterToolResponse(toolName, result, responseMeta, responseOptions)
     } catch (err) {
-      console.warn(
-        'atrib: vercel-ai-sdk-mcp onAfterToolResponse failed, passing through',
-        err,
-      )
+      console.warn('atrib: vercel-ai-sdk-mcp onAfterToolResponse failed, passing through', err)
     }
 
     return result

@@ -30,7 +30,7 @@ describe('canonicalSigningInput', () => {
     const record = makeRecord()
     const bytes = canonicalSigningInput(record)
     const json = decoder.decode(bytes)
-    const keys = [...json.matchAll(/"([a-z_]+)":/g)].map(m => m[1])
+    const keys = [...json.matchAll(/"([a-z_]+)":/g)].map((m) => m[1])
     const sorted = [...keys].sort()
     expect(keys).toEqual(sorted)
   })
@@ -73,7 +73,7 @@ describe('canonicalSigningInput', () => {
     const record = { ...makeRecord(), session_token: 'abc' } as AtribRecord
     const bytes = canonicalSigningInput(record)
     const json = decoder.decode(bytes)
-    const keys = [...json.matchAll(/"([a-z_]+)":/g)].map(m => m[1])
+    const keys = [...json.matchAll(/"([a-z_]+)":/g)].map((m) => m[1])
     const sessionIdx = keys.indexOf('session_token')
     const eventIdx = keys.indexOf('event_type')
     const specIdx = keys.indexOf('spec_version')

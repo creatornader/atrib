@@ -33,9 +33,7 @@ async function main() {
     creatorKey: process.env.ATRIB_PRIVATE_KEY!,
     merchantDomain: 'https://merchant.example.com',
     serverUrls: ['https://search.example.com', 'https://shop.example.com'],
-    ...(process.env.ATRIB_LOG_ENDPOINT
-      ? { logEndpoint: process.env.ATRIB_LOG_ENDPOINT }
-      : {}),
+    ...(process.env.ATRIB_LOG_ENDPOINT ? { logEndpoint: process.env.ATRIB_LOG_ENDPOINT } : {}),
   })
 
   // 2. Construct the MultiServerMCPClient as you normally would.
@@ -71,7 +69,9 @@ async function main() {
     //    tool call flows through the Atrib interceptor without further
     //    changes to your LangChain wiring.
     const tools = await multi.getTools()
-    console.log(`Loaded ${tools.length} tools from ${Object.keys(multi.config.mcpServers ?? {}).length} servers`)
+    console.log(
+      `Loaded ${tools.length} tools from ${Object.keys(multi.config.mcpServers ?? {}).length} servers`,
+    )
     console.log(`Tool names: ${tools.map((t) => t.name).join(', ')}`)
 
     // ... your existing LangChain code goes here, e.g.:

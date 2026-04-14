@@ -122,8 +122,8 @@ describe('createCheckpointSigner', () => {
     const keyNameBytes = encoder.encode(TEST_ORIGIN)
     const preimage = new Uint8Array(keyNameBytes.length + 1 + 1 + publicKey.length)
     preimage.set(keyNameBytes, 0)
-    preimage[keyNameBytes.length] = 0x0a       // newline
-    preimage[keyNameBytes.length + 1] = 0x01   // Ed25519 type byte
+    preimage[keyNameBytes.length] = 0x0a // newline
+    preimage[keyNameBytes.length + 1] = 0x01 // Ed25519 type byte
     preimage.set(publicKey, keyNameBytes.length + 2)
     const hash = sha256(preimage)
     const expectedKeyId = hash.slice(0, 4)

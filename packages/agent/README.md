@@ -10,17 +10,17 @@ Two coverage surfaces define what you get:
 
 ## Coverage Matrix 1 — MCP Framework Adapters
 
-| Framework | Package | Adapter helper | Integration shape | Status |
-|---|---|---|---|---|
-| **Raw `@modelcontextprotocol/sdk` Client** | `@modelcontextprotocol/sdk` | `wrapMcpClient(client, interceptor, { serverUrl? })` | Proxy-based wrapper, returns new client | ✅ Shipped |
-| **Claude Agent SDK** | `@anthropic-ai/claude-agent-sdk` | **Case A (in-process tools):** zero code — the SDK's `createSdkMcpServer` returns a real `McpServer` that `@atrib/mcp` wraps directly | Reuses `@atrib/mcp`'s `atrib()` middleware on the server side | ✅ Shipped |
-|  |  | **Case B (third-party servers):** `createAtribProxy({ upstream, interceptor })` from `@atrib/mcp` — in-process surrogate `McpServer` that forwards to an upstream | Proxy McpServer between SDK and upstream transport | ✅ Shipped |
-| **Cloudflare Agents** | `agents` | `attributeCloudflareAgentMcp(agent, { interceptor, serverUrls })` | Walks `agent.mcp.mcpConnections`, replaces `.client` via `wrapMcpClient` | ✅ Shipped |
-| **Vercel AI SDK MCP** | `@ai-sdk/mcp` | `attributeVercelAiSdkMcp(mcpClient, { interceptor, serverUrl })` | Monkey-patches `mcpClient.request()` (custom JSON-RPC, not SDK Client) | ✅ Shipped |
-| **LangChain JS MCP adapters** | `@langchain/mcp-adapters` | **High-level:** `attributeLangchainMcp(multiClient, { interceptor, serverUrls })` | Walks `multiClient.config.mcpServers`, monkey-patches `callTool` + `fork` on each internal Client | ✅ Shipped |
-|  |  | **Low-level:** `wrapMcpClient(rawClient, interceptor)` passed to `loadMcpTools(name, wrapped)` | Reuses raw-SDK wrapper path | ✅ Shipped |
-| **OpenAI Agents SDK** | `@openai/agents` | *(deferred — custom transport architecture, not `@modelcontextprotocol/sdk`)* | Planned: subclass `MCPServerSSE` / `MCPServerStdio` / `MCPServerStreamableHttp` | ⏳ Deferred |
-| **Mastra** | `@mastra/mcp` | *(deferred — smaller footprint, needs source verification)* | — | ⏳ Deferred |
+| Framework                                  | Package                          | Adapter helper                                                                                                                                                    | Integration shape                                                                                 | Status      |
+| ------------------------------------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------- |
+| **Raw `@modelcontextprotocol/sdk` Client** | `@modelcontextprotocol/sdk`      | `wrapMcpClient(client, interceptor, { serverUrl? })`                                                                                                              | Proxy-based wrapper, returns new client                                                           | ✅ Shipped  |
+| **Claude Agent SDK**                       | `@anthropic-ai/claude-agent-sdk` | **Case A (in-process tools):** zero code — the SDK's `createSdkMcpServer` returns a real `McpServer` that `@atrib/mcp` wraps directly                             | Reuses `@atrib/mcp`'s `atrib()` middleware on the server side                                     | ✅ Shipped  |
+|                                            |                                  | **Case B (third-party servers):** `createAtribProxy({ upstream, interceptor })` from `@atrib/mcp` — in-process surrogate `McpServer` that forwards to an upstream | Proxy McpServer between SDK and upstream transport                                                | ✅ Shipped  |
+| **Cloudflare Agents**                      | `agents`                         | `attributeCloudflareAgentMcp(agent, { interceptor, serverUrls })`                                                                                                 | Walks `agent.mcp.mcpConnections`, replaces `.client` via `wrapMcpClient`                          | ✅ Shipped  |
+| **Vercel AI SDK MCP**                      | `@ai-sdk/mcp`                    | `attributeVercelAiSdkMcp(mcpClient, { interceptor, serverUrl })`                                                                                                  | Monkey-patches `mcpClient.request()` (custom JSON-RPC, not SDK Client)                            | ✅ Shipped  |
+| **LangChain JS MCP adapters**              | `@langchain/mcp-adapters`        | **High-level:** `attributeLangchainMcp(multiClient, { interceptor, serverUrls })`                                                                                 | Walks `multiClient.config.mcpServers`, monkey-patches `callTool` + `fork` on each internal Client | ✅ Shipped  |
+|                                            |                                  | **Low-level:** `wrapMcpClient(rawClient, interceptor)` passed to `loadMcpTools(name, wrapped)`                                                                    | Reuses raw-SDK wrapper path                                                                       | ✅ Shipped  |
+| **OpenAI Agents SDK**                      | `@openai/agents`                 | _(deferred — custom transport architecture, not `@modelcontextprotocol/sdk`)_                                                                                     | Planned: subclass `MCPServerSSE` / `MCPServerStdio` / `MCPServerStreamableHttp`                   | ⏳ Deferred |
+| **Mastra**                                 | `@mastra/mcp`                    | _(deferred — smaller footprint, needs source verification)_                                                                                                       | —                                                                                                 | ⏳ Deferred |
 
 **The pattern across every row is identical:** one `atrib()` interceptor object, one adapter helper call, zero changes to your existing tool invocation code. The name of the helper varies because each host framework exposes a structurally different integration surface — but the `ToolCallInterceptor` type, the options shape, and the observable behavior are uniform.
 
@@ -30,14 +30,14 @@ Two coverage surfaces define what you get:
 
 All detection logic lives in `packages/agent/src/transaction.ts` and runs against unit tests for each protocol's published spec.
 
-| Protocol | Sponsor / origin | Detection signal | Spec reference |
-|---|---|---|---|
-| **ACP** — Agentic Commerce Protocol | Stripe / OpenAI — `github.com/agentic-commerce-protocol` | `status === "completed"` + embedded `order` on `/checkout_sessions/{id}/complete`, or `order_create` / `order_update` webhook | §1.7.1 |
-| **UCP** — Universal Commerce Protocol | `github.com/universal-commerce-protocol/ucp` | Same shape as ACP + top-level `ucp.version` envelope | §1.7.2 |
-| **x402** | Coinbase — `github.com/coinbase/x402` | HTTP `PAYMENT-RESPONSE` header (v2) or legacy `X-PAYMENT-RESPONSE` (v1) on the 200 response | §1.7.3 |
-| **MPP** — Machine Payments Protocol | Tempo Labs / Stripe — IETF `draft-ryan-httpauth-payment-01` | HTTP `Payment-Receipt` header on 200 success response | §1.7.4 |
-| **AP2** — Agent Payments Protocol | Google — `github.com/google-agentic-commerce/ap2` | A2A Message with DataPart containing `ap2.mandates.PaymentMandate` | §1.7.5 |
-| **a2a-x402** | Google — `github.com/google-agentic-commerce/a2a-x402` | A2A task `status.message.metadata["x402.payment.status"] === "payment-completed"` + `receipts[].success === true` | §1.7.5 (reported as AP2 crypto path) |
+| Protocol                              | Sponsor / origin                                            | Detection signal                                                                                                              | Spec reference                       |
+| ------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| **ACP** — Agentic Commerce Protocol   | Stripe / OpenAI — `github.com/agentic-commerce-protocol`    | `status === "completed"` + embedded `order` on `/checkout_sessions/{id}/complete`, or `order_create` / `order_update` webhook | §1.7.1                               |
+| **UCP** — Universal Commerce Protocol | `github.com/universal-commerce-protocol/ucp`                | Same shape as ACP + top-level `ucp.version` envelope                                                                          | §1.7.2                               |
+| **x402**                              | Coinbase — `github.com/coinbase/x402`                       | HTTP `PAYMENT-RESPONSE` header (v2) or legacy `X-PAYMENT-RESPONSE` (v1) on the 200 response                                   | §1.7.3                               |
+| **MPP** — Machine Payments Protocol   | Tempo Labs / Stripe — IETF `draft-ryan-httpauth-payment-01` | HTTP `Payment-Receipt` header on 200 success response                                                                         | §1.7.4                               |
+| **AP2** — Agent Payments Protocol     | Google — `github.com/google-agentic-commerce/ap2`           | A2A Message with DataPart containing `ap2.mandates.PaymentMandate`                                                            | §1.7.5                               |
+| **a2a-x402**                          | Google — `github.com/google-agentic-commerce/a2a-x402`      | A2A task `status.message.metadata["x402.payment.status"] === "payment-completed"` + `receipts[].success === true`             | §1.7.5 (reported as AP2 crypto path) |
 
 **The linking mechanism is the same across all six:** the session `context_id` (16-byte anchor, equal to the W3C OTel trace-id by default) travels with the outbound payment request — via `X-Atrib-Context` HTTP header for protocols that don't expose a free-form metadata field, or via `params._meta.atrib` for any payment protocol running over MCP transport. When the merchant's side sees the payment-completed signal, Atrib writes a transaction record with that `context_id`, and the attribution graph can reconstruct the full chain from contributing tool calls → transaction → settlement.
 
@@ -86,7 +86,7 @@ HTTP/1.1 200 OK
 PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlfQ==
 ```
 
-The header value is base64-encoded JSON `{success, transaction, network, payer, requirements}` but `detectTransaction()` only checks for the header's *presence* — the surrounding `wrapMcpClient` / framework adapter is responsible for capturing response headers and passing them to the detector.
+The header value is base64-encoded JSON `{success, transaction, network, payer, requirements}` but `detectTransaction()` only checks for the header's _presence_ — the surrounding `wrapMcpClient` / framework adapter is responsible for capturing response headers and passing them to the detector.
 
 #### MPP — IETF draft `draft-ryan-httpauth-payment-01`
 
@@ -132,9 +132,7 @@ Detected from an A2A `task` whose `status.message.metadata` contains `"x402.paym
     "message": {
       "metadata": {
         "x402.payment.status": "payment-completed",
-        "x402.payment.receipts": [
-          { "success": true, "transaction": "0xabc...", "network": "base" }
-        ]
+        "x402.payment.receipts": [{ "success": true, "transaction": "0xabc...", "network": "base" }]
       }
     }
   }
@@ -315,17 +313,17 @@ The entire Atrib integration is wrapped in defensive error handling at every ada
 
 ## Spec references
 
-| Spec section | What it defines |
-|---|---|
-| §1.3 | JCS canonical serialization of records |
-| §1.4 | Ed25519 signing and verification |
-| §1.5 | Context propagation via `params._meta` and W3C trace context |
-| §1.7 | Transaction event hooks for all 6 payment protocols |
-| §2 | Merkle log protocol (Tessera-backed, tlog-tiles spec) |
-| §3 | Graph query interface (fact layer only) |
-| §4 | Policy format (merchant-side value distribution) |
-| §5.3 | Agent-side middleware behavior |
-| §5.4 | Path 1 / Path 2 transaction detection |
-| §5.8 | Degradation contract — silent failure never breaks the host |
+| Spec section | What it defines                                              |
+| ------------ | ------------------------------------------------------------ |
+| §1.3         | JCS canonical serialization of records                       |
+| §1.4         | Ed25519 signing and verification                             |
+| §1.5         | Context propagation via `params._meta` and W3C trace context |
+| §1.7         | Transaction event hooks for all 6 payment protocols          |
+| §2           | Merkle log protocol (Tessera-backed, tlog-tiles spec)        |
+| §3           | Graph query interface (fact layer only)                      |
+| §4           | Policy format (merchant-side value distribution)             |
+| §5.3         | Agent-side middleware behavior                               |
+| §5.4         | Path 1 / Path 2 transaction detection                        |
+| §5.8         | Degradation contract — silent failure never breaks the host  |
 
 The full protocol spec is at [`atrib-spec.md`](../../atrib-spec.md).

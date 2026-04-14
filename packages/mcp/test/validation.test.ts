@@ -65,7 +65,7 @@ describe('validateSubmission (§2.6.1 Steps 2-5)', () => {
   })
 
   it('accepts record without session_token (omitted)', () => {
-    const { session_token, ...noToken } = valid as any
+    const { session_token: _token, ...noToken } = valid as any
     expect(validateSubmission(noToken).ok).toBe(true)
   })
 })

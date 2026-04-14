@@ -14,10 +14,7 @@ export type AtribRecord = {
   context_id: string
   timestamp: number
   signature: string
-} & (
-  | { session_token: string }
-  | { session_token?: never }
-)
+} & ({ session_token: string } | { session_token?: never })
 
 /** An unsigned record — all fields except signature. */
 export type UnsignedAtribRecord = Omit<AtribRecord, 'signature'>

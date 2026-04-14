@@ -10,7 +10,7 @@
 
 Three concrete use cases. None of them are "running a real attribution log."
 
-1. **Local development of Atrib agents and merchants.** When building an agent or merchant integration, you want to point `ATRIB_LOG_ENDPOINT` at *something* so the submission queue doesn't silently buffer pending records or warn about an unreachable endpoint. This stub is that something.
+1. **Local development of Atrib agents and merchants.** When building an agent or merchant integration, you want to point `ATRIB_LOG_ENDPOINT` at _something_ so the submission queue doesn't silently buffer pending records or warn about an unreachable endpoint. This stub is that something.
 
 2. **End-to-end demos and customer walkthroughs.** The runnable demo at [`packages/integration/examples/end-to-end/`](../integration/examples/end-to-end/) uses `@atrib/log-dev` so a viewer can run **`pnpm --filter @atrib/integration demo`** and watch real attribution records flow through a fake merchant tool, an agent, and a stubbed x402 payment — all in a single process — without standing up Tessera first. The visible behavior is faithful (real signatures, real chain hashes, real transaction detection) even though the cryptographic guarantees of the log itself are not.
 
@@ -22,14 +22,14 @@ Three concrete use cases. None of them are "running a real attribution log."
 
 The minimum subset of spec §2.6 that the existing Atrib client (`@atrib/mcp`'s submission queue) needs to talk to a log:
 
-| Spec section | Endpoint | Status in `@atrib/log-dev` |
-|---|---|---|
-| §2.6.1 | `POST /v1/entries` (submission) | ✅ Implemented — accepts a bare signed record per spec, validates shape, stores it, returns a proof bundle |
-| §2.6.2 | Inclusion proof response | ✅ Implemented — returns `{log_index, checkpoint, inclusion_proof, leaf_hash}` with the right shapes (placeholder hashes) |
-| §2.5.1 | `GET /v1/checkpoint` | ⏳ Not implemented — Tessera handles this; not needed for the demo |
-| §2.5.2 | Tile API (`/v1/tile/...`) | ⏳ Not implemented — Tessera handles this |
-| §2.9 | Witnessing/cosignatures | ⏳ Not implemented — out of scope for a dev stub |
-| **Extension** | Honors `X-Atrib-Priority` header | ✅ Implemented — high-priority submissions are admitted first when `maxConcurrent` is finite |
+| Spec section  | Endpoint                         | Status in `@atrib/log-dev`                                                                                                |
+| ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| §2.6.1        | `POST /v1/entries` (submission)  | ✅ Implemented — accepts a bare signed record per spec, validates shape, stores it, returns a proof bundle                |
+| §2.6.2        | Inclusion proof response         | ✅ Implemented — returns `{log_index, checkpoint, inclusion_proof, leaf_hash}` with the right shapes (placeholder hashes) |
+| §2.5.1        | `GET /v1/checkpoint`             | ⏳ Not implemented — Tessera handles this; not needed for the demo                                                        |
+| §2.5.2        | Tile API (`/v1/tile/...`)        | ⏳ Not implemented — Tessera handles this                                                                                 |
+| §2.9          | Witnessing/cosignatures          | ⏳ Not implemented — out of scope for a dev stub                                                                          |
+| **Extension** | Honors `X-Atrib-Priority` header | ✅ Implemented — high-priority submissions are admitted first when `maxConcurrent` is finite                              |
 
 ## What this package adds beyond spec §2.6
 
@@ -48,7 +48,7 @@ import { atrib } from '@atrib/mcp'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 // 1. Spin up the dev log on a free port.
-const log = await startDevLog({ port: 0 })  // 0 = let OS pick
+const log = await startDevLog({ port: 0 }) // 0 = let OS pick
 console.log(`dev log listening at ${log.url}`)
 
 // 2. Point the @atrib/mcp middleware at it.
@@ -78,12 +78,12 @@ The `package.json` has `"private": true`. This package will never be published t
 
 When the real Tessera-backed log ships at `services/log/` (Go, per the eventual sequencing), this package stays — it's still useful as the lightweight test fixture. The relationship will be:
 
-| Use case | What runs |
-|---|---|
-| Production attribution log | `services/log/` (Tessera, Go) → deployed at `log.atrib.io/v1` |
-| Customer self-hosted log | `services/log/` (Tessera, Go) → deployed at customer infra |
-| Local development | `@atrib/log-dev` (TypeScript, in-process) |
-| CI / automated tests | `@atrib/log-dev` (TypeScript, in-process) |
-| End-to-end demo / walkthrough | `@atrib/log-dev` (TypeScript, in-process) |
+| Use case                      | What runs                                                     |
+| ----------------------------- | ------------------------------------------------------------- |
+| Production attribution log    | `services/log/` (Tessera, Go) → deployed at `log.atrib.io/v1` |
+| Customer self-hosted log      | `services/log/` (Tessera, Go) → deployed at customer infra    |
+| Local development             | `@atrib/log-dev` (TypeScript, in-process)                     |
+| CI / automated tests          | `@atrib/log-dev` (TypeScript, in-process)                     |
+| End-to-end demo / walkthrough | `@atrib/log-dev` (TypeScript, in-process)                     |
 
 The dev log and the real log should accept the same wire format — that's the entire point of having both speak spec §2.6.1 — but they live in different runtimes with different operational profiles.

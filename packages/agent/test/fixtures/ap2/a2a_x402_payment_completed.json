@@ -6,9 +6,7 @@
     "message": {
       "kind": "message",
       "role": "agent",
-      "parts": [
-        { "kind": "text", "text": "Payment successful. Your image is ready." }
-      ],
+      "parts": [{ "kind": "text", "text": "Payment successful. Your image is ready." }],
       "metadata": {
         "x402.payment.status": "payment-completed",
         "x402.payment.receipts": [

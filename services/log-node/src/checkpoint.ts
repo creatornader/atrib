@@ -53,9 +53,11 @@ export function formatCheckpointBody(
 /**
  * Parse a checkpoint body back into its components.
  */
-export function parseCheckpointBody(
-  body: string,
-): { origin: string; treeSize: number; rootHash: string } {
+export function parseCheckpointBody(body: string): {
+  origin: string
+  treeSize: number
+  rootHash: string
+} {
   const lines = body.split('\n')
   // lines: [origin, treeSize, rootHash, ''] — trailing newline produces empty last element
   if (lines.length < 3) {
@@ -91,8 +93,8 @@ function computeKeyId(origin: string, publicKey: Uint8Array): Uint8Array {
   const keyNameBytes = encoder.encode(origin)
   const preimage = new Uint8Array(keyNameBytes.length + 1 + 1 + publicKey.length)
   preimage.set(keyNameBytes, 0)
-  preimage[keyNameBytes.length] = 0x0a       // newline
-  preimage[keyNameBytes.length + 1] = 0x01   // Ed25519 type byte
+  preimage[keyNameBytes.length] = 0x0a // newline
+  preimage[keyNameBytes.length + 1] = 0x01 // Ed25519 type byte
   preimage.set(publicKey, keyNameBytes.length + 2)
   const hash = sha256(preimage)
   return hash.slice(0, 4)

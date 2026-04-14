@@ -135,7 +135,15 @@ describe('atrib() agent middleware', () => {
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any)?.body as string)
         submissions.push(body)
-        return new Response(JSON.stringify({ log_index: 1, checkpoint: 'log.test/v1\n2\nrootHashBase64\n', inclusion_proof: [], leaf_hash: 'leafHashBase64' }), { status: 200 })
+        return new Response(
+          JSON.stringify({
+            log_index: 1,
+            checkpoint: 'log.test/v1\n2\nrootHashBase64\n',
+            inclusion_proof: [],
+            leaf_hash: 'leafHashBase64',
+          }),
+          { status: 200 },
+        )
       })
 
       const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
@@ -160,7 +168,15 @@ describe('atrib() agent middleware', () => {
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any)?.body as string)
         submissions.push(body)
-        return new Response(JSON.stringify({ log_index: 1, checkpoint: 'log.test/v1\n2\nrootHashBase64\n', inclusion_proof: [], leaf_hash: 'leafHashBase64' }), { status: 200 })
+        return new Response(
+          JSON.stringify({
+            log_index: 1,
+            checkpoint: 'log.test/v1\n2\nrootHashBase64\n',
+            inclusion_proof: [],
+            leaf_hash: 'leafHashBase64',
+          }),
+          { status: 200 },
+        )
       })
 
       const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
@@ -173,7 +189,7 @@ describe('atrib() agent middleware', () => {
 
       await interceptor.flush()
 
-      const txnSubmissions = submissions.filter(s => s?.event_type === 'transaction')
+      const txnSubmissions = submissions.filter((s) => s?.event_type === 'transaction')
       expect(txnSubmissions.length).toBeGreaterThanOrEqual(1)
       expect(txnSubmissions[0].event_type).toBe('transaction')
     })
@@ -183,7 +199,15 @@ describe('atrib() agent middleware', () => {
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any)?.body as string)
         submissions.push(body)
-        return new Response(JSON.stringify({ log_index: 1, checkpoint: 'log.test/v1\n2\nrootHashBase64\n', inclusion_proof: [], leaf_hash: 'leafHashBase64' }), { status: 200 })
+        return new Response(
+          JSON.stringify({
+            log_index: 1,
+            checkpoint: 'log.test/v1\n2\nrootHashBase64\n',
+            inclusion_proof: [],
+            leaf_hash: 'leafHashBase64',
+          }),
+          { status: 200 },
+        )
       })
 
       const interceptor = atrib({
@@ -198,7 +222,7 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find(s => s?.event_type === 'transaction')
+      const txn = submissions.find((s) => s?.event_type === 'transaction')
       expect(txn).toBeDefined()
       expect(txn.session_token).toBe('my_session')
     })
@@ -208,7 +232,15 @@ describe('atrib() agent middleware', () => {
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any)?.body as string)
         submissions.push(body)
-        return new Response(JSON.stringify({ log_index: 1, checkpoint: 'log.test/v1\n2\nrootHashBase64\n', inclusion_proof: [], leaf_hash: 'leafHashBase64' }), { status: 200 })
+        return new Response(
+          JSON.stringify({
+            log_index: 1,
+            checkpoint: 'log.test/v1\n2\nrootHashBase64\n',
+            inclusion_proof: [],
+            leaf_hash: 'leafHashBase64',
+          }),
+          { status: 200 },
+        )
       })
 
       const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
@@ -221,7 +253,7 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find(s => s?.event_type === 'transaction')
+      const txn = submissions.find((s) => s?.event_type === 'transaction')
       expect(txn).toBeDefined()
       // chain_root should match genesisChainRoot(context_id) — sha256 prefix + 64 hex
       expect(txn.chain_root).toMatch(/^sha256:[0-9a-f]{64}$/)
@@ -234,7 +266,15 @@ describe('atrib() agent middleware', () => {
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any)?.body as string)
         submissions.push(body)
-        return new Response(JSON.stringify({ log_index: 1, checkpoint: 'log.test/v1\n2\nrootHashBase64\n', inclusion_proof: [], leaf_hash: 'leafHashBase64' }), { status: 200 })
+        return new Response(
+          JSON.stringify({
+            log_index: 1,
+            checkpoint: 'log.test/v1\n2\nrootHashBase64\n',
+            inclusion_proof: [],
+            leaf_hash: 'leafHashBase64',
+          }),
+          { status: 200 },
+        )
       })
 
       const { computeContentId } = await import('@atrib/mcp')
@@ -269,7 +309,15 @@ describe('atrib() agent middleware', () => {
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any)?.body as string)
         submissions.push(body)
-        return new Response(JSON.stringify({ log_index: 1, checkpoint: 'log.test/v1\n2\nrootHashBase64\n', inclusion_proof: [], leaf_hash: 'leafHashBase64' }), { status: 200 })
+        return new Response(
+          JSON.stringify({
+            log_index: 1,
+            checkpoint: 'log.test/v1\n2\nrootHashBase64\n',
+            inclusion_proof: [],
+            leaf_hash: 'leafHashBase64',
+          }),
+          { status: 200 },
+        )
       })
 
       const { computeContentId } = await import('@atrib/mcp')
@@ -285,7 +333,7 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find(s => s?.event_type === 'transaction')
+      const txn = submissions.find((s) => s?.event_type === 'transaction')
       expect(txn).toBeDefined()
       expect(txn.content_id).toBe(expectedContentId)
     })
@@ -391,7 +439,9 @@ describe('atrib() agent middleware', () => {
       await interceptor.flush()
 
       const record = interceptor.getSessionPolicyRecord()
-      const occurrences = record!.warnings.filter(w => w === 'transaction_emitted_by_agent').length
+      const occurrences = record!.warnings.filter(
+        (w) => w === 'transaction_emitted_by_agent',
+      ).length
       expect(occurrences).toBe(1)
     })
   })

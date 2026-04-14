@@ -106,10 +106,7 @@ export interface LangchainMcpClientLike {
  */
 export interface LangchainMultiServerMcpClientLike {
   readonly config: { mcpServers?: Record<string, unknown> | undefined }
-  getClient(
-    serverName: string,
-    options?: unknown,
-  ): Promise<LangchainMcpClientLike | undefined>
+  getClient(serverName: string, options?: unknown): Promise<LangchainMcpClientLike | undefined>
 }
 
 /** Options for `attributeLangchainMcp`. */
@@ -250,30 +247,25 @@ function patchClient(
       outboundMeta = await interceptor.onBeforeToolCall(toolName, existingMeta)
     } catch (err) {
       // §5.8 degradation: pass through with the original params on failure
-      console.warn(
-        'atrib: langchain-mcp onBeforeToolCall failed, passing through',
-        err,
-      )
+      console.warn('atrib: langchain-mcp onBeforeToolCall failed, passing through', err)
       outboundMeta = undefined
     }
 
     // Construct new params rather than mutating — caller's reference is preserved.
-    const forwardedParams =
-      outboundMeta !== undefined ? { ...params, _meta: outboundMeta } : params
+    const forwardedParams = outboundMeta !== undefined ? { ...params, _meta: outboundMeta } : params
 
     const result = await originalCallTool(forwardedParams, resultSchema, opts)
 
     // §5.4.4: Update session state from the response _meta.
     try {
-      const responseMeta =
-        ((result as { _meta?: Record<string, unknown> })?._meta ?? {}) as Record<string, unknown>
+      const responseMeta = ((result as { _meta?: Record<string, unknown> })?._meta ?? {}) as Record<
+        string,
+        unknown
+      >
       const responseOptions = serverUrl !== undefined ? { serverUrl } : {}
       interceptor.onAfterToolResponse(toolName, result, responseMeta, responseOptions)
     } catch (err) {
-      console.warn(
-        'atrib: langchain-mcp onAfterToolResponse failed, passing through',
-        err,
-      )
+      console.warn('atrib: langchain-mcp onAfterToolResponse failed, passing through', err)
     }
 
     return result

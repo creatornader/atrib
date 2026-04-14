@@ -38,10 +38,7 @@ export interface ServerHandle {
  * Bind an HTTP server to the given port and route POST /v1/entries to the
  * storage layer. Returns the bound URL and a `close()` function.
  */
-export async function bindServer(
-  storage: Storage,
-  port: number,
-): Promise<ServerHandle> {
+export async function bindServer(storage: Storage, port: number): Promise<ServerHandle> {
   const server = createServer((req, res) => {
     handleRequest(req, res, storage).catch((err) => {
       // Last-resort error handler. The dev log is non-critical

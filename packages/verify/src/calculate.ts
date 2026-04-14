@@ -86,7 +86,7 @@ export function calculate(
   sessionPolicyRecord?: SessionPolicyRecord | null,
 ): Distribution {
   // §4.6.1: precondition — must have at least one transaction node
-  const txNode = graph.nodes.find(n => n.event_type === 'transaction')
+  const txNode = graph.nodes.find((n) => n.event_type === 'transaction')
   if (!txNode) {
     return {}
   }
@@ -129,7 +129,7 @@ function identifyContributingNodes(graph: GraphResponse): GraphNode[] {
   // A contributing node is non-transaction (tool_call or gap_node) AND has
   // an edge to a transaction node (CONVERGES_ON or CROSS_SESSION).
   const txNodeIds = new Set(
-    graph.nodes.filter(n => n.event_type === 'transaction').map(n => n.id),
+    graph.nodes.filter((n) => n.event_type === 'transaction').map((n) => n.id),
   )
   const hasEdgeToTx = new Set<string>()
   for (const edge of graph.edges) {
@@ -142,7 +142,7 @@ function identifyContributingNodes(graph: GraphResponse): GraphNode[] {
   }
   // Sort by id for deterministic iteration
   return graph.nodes
-    .filter(n => n.event_type !== 'transaction' && hasEdgeToTx.has(n.id))
+    .filter((n) => n.event_type !== 'transaction' && hasEdgeToTx.has(n.id))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
 }
 
@@ -197,14 +197,11 @@ function rawScore(
  * CHAIN_PRECEDES and SESSION_* edges between non-transaction nodes that form
  * a path leading to a transaction node"
  */
-function collectEdgeTypesToTransaction(
-  nodeId: string,
-  graph: GraphResponse,
-): Set<EdgeType> {
+function collectEdgeTypesToTransaction(nodeId: string, graph: GraphResponse): Set<EdgeType> {
   const txNodeIds = new Set(
-    graph.nodes.filter(n => n.event_type === 'transaction').map(n => n.id),
+    graph.nodes.filter((n) => n.event_type === 'transaction').map((n) => n.id),
   )
-  const nodeMap = new Map(graph.nodes.map(n => [n.id, n]))
+  const nodeMap = new Map(graph.nodes.map((n) => [n.id, n]))
 
   // Traversal: BFS from nodeId following ANY outgoing edge (including
   // SESSION_PARALLEL undirected, plus reverse direction which we treat as
@@ -320,9 +317,7 @@ function shortestChainPath(nodeId: string, graph: GraphResponse): number {
       chainAdj.get(edge.source)?.push(edge.target)
     }
   }
-  const txIds = new Set(
-    graph.nodes.filter(n => n.event_type === 'transaction').map(n => n.id),
-  )
+  const txIds = new Set(graph.nodes.filter((n) => n.event_type === 'transaction').map((n) => n.id))
   // BFS
   const visited = new Set<string>([nodeId])
   type Step = { id: string; depth: number }
@@ -341,10 +336,7 @@ function shortestChainPath(nodeId: string, graph: GraphResponse): number {
   return Number.MAX_SAFE_INTEGER
 }
 
-function countNodesWithSameContentId(
-  contentId: string | null,
-  graph: GraphResponse,
-): number {
+function countNodesWithSameContentId(contentId: string | null, graph: GraphResponse): number {
   if (!contentId) return 1
   let count = 0
   for (const n of graph.nodes) {
@@ -384,10 +376,7 @@ function applyConstraints(
   return normalized
 }
 
-function applyMinimumFloor(
-  normalized: Map<string, number>,
-  floor: number,
-): Map<string, number> {
+function applyMinimumFloor(normalized: Map<string, number>, floor: number): Map<string, number> {
   const below = new Map<string, number>()
   const above = new Map<string, number>()
   for (const [id, s] of normalized) {
@@ -412,10 +401,7 @@ function applyMinimumFloor(
   return result
 }
 
-function applyMaximumCap(
-  normalized: Map<string, number>,
-  cap: number,
-): Map<string, number> {
+function applyMaximumCap(normalized: Map<string, number>, cap: number): Map<string, number> {
   const above = new Map<string, number>()
   const below = new Map<string, number>()
   for (const [id, s] of normalized) {
@@ -459,7 +445,7 @@ function aggregateByCreator(
   normalized: Map<string, number>,
   graph: GraphResponse,
 ): Map<string, number> {
-  const nodeMap = new Map(graph.nodes.map(n => [n.id, n]))
+  const nodeMap = new Map(graph.nodes.map((n) => [n.id, n]))
   const byCreator = new Map<string, number>()
   // Sort node ids for deterministic accumulation order
   const sortedIds = [...normalized.keys()].sort()

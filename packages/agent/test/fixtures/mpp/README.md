@@ -3,6 +3,7 @@
 Real captured payload shapes from the Machine Payments Protocol (MPP).
 
 **Sources:**
+
 - https://github.com/tempoxyz/mpp-specs
 - https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/ (`draft-ryan-httpauth-payment-01` — "The 'Payment' HTTP Authentication Scheme", co-authored by engineers from Tempo Labs and Stripe)
 - https://mpp.dev/overview
@@ -27,14 +28,14 @@ The detector triggers on step 5 — presence of the `Payment-Receipt` header on 
 
 Per draft §5.3:
 
-| Field      | Type   | Value                                |
-|------------|--------|--------------------------------------|
-| `status`   | string | `"success"` (the only canonical value for the success path) |
-| `method`   | string | Payment method identifier            |
-| `timestamp`| string | RFC 3339 settlement timestamp        |
-| `reference`| string | Method-specific reference / receipt ID |
+| Field       | Type   | Value                                                       |
+| ----------- | ------ | ----------------------------------------------------------- |
+| `status`    | string | `"success"` (the only canonical value for the success path) |
+| `method`    | string | Payment method identifier                                   |
+| `timestamp` | string | RFC 3339 settlement timestamp                               |
+| `reference` | string | Method-specific reference / receipt ID                      |
 
-The spec says: *"Servers MUST NOT return a Payment-Receipt header on error responses."* So header presence is a reliable detection signal.
+The spec says: _"Servers MUST NOT return a Payment-Receipt header on error responses."_ So header presence is a reliable detection signal.
 
 ## Files
 

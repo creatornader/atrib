@@ -45,7 +45,7 @@ function makeGraph(nodes: GraphNode[], edges: GraphEdge[]): GraphResponse {
     generated_at: 0,
     node_count: nodes.length,
     edge_count: edges.length,
-    has_transaction: nodes.some(n => n.event_type === 'transaction'),
+    has_transaction: nodes.some((n) => n.event_type === 'transaction'),
     cross_session_count: 0,
     nodes,
     edges,
@@ -139,10 +139,7 @@ describe('calculate() — default policy, equal-weight distribution', () => {
 
   it('excludes the transaction node itself from the distribution', () => {
     const g = makeGraph(
-      [
-        node('a', 'tool_call', 'KEY_A'),
-        node('t', 'transaction', 'KEY_M'),
-      ],
+      [node('a', 'tool_call', 'KEY_A'), node('t', 'transaction', 'KEY_M')],
       [edge('CONVERGES_ON', 'a', 't')],
     )
     const dist = calculate(g, DEFAULT_POLICY)
@@ -274,10 +271,7 @@ describe('calculate() — modifiers (§4.6.3)', () => {
       modifiers: [{ type: 'mystery_modifier', some_field: 99 }],
     }
     const g = makeGraph(
-      [
-        node('a', 'tool_call', 'KEY_A'),
-        node('t', 'transaction', 'KEY_M'),
-      ],
+      [node('a', 'tool_call', 'KEY_A'), node('t', 'transaction', 'KEY_M')],
       [edge('CONVERGES_ON', 'a', 't')],
     )
     const dist = calculate(g, policy)
@@ -584,7 +578,7 @@ describe('calculate() — call_count_boost modifier (§4.6.3)', () => {
     const g = makeGraph(
       [...sharedNodes, node('solo', 'tool_call', 'KEY_B'), node('t', 'transaction', 'KEY_M')],
       [
-        ...sharedNodes.map(n => edge('CONVERGES_ON', n.id, 't')),
+        ...sharedNodes.map((n) => edge('CONVERGES_ON', n.id, 't')),
         edge('CONVERGES_ON', 'solo', 't'),
       ],
     )
@@ -617,15 +611,8 @@ describe('calculate() — edge cases', () => {
       context_id: otherCtx, // different session
     }
     const g = makeGraph(
-      [
-        aCross,
-        node('b', 'tool_call', 'KEY_LOCAL'),
-        node('t', 'transaction', 'KEY_M'),
-      ],
-      [
-        edge('CROSS_SESSION', 'a', 't'),
-        edge('CONVERGES_ON', 'b', 't'),
-      ],
+      [aCross, node('b', 'tool_call', 'KEY_LOCAL'), node('t', 'transaction', 'KEY_M')],
+      [edge('CROSS_SESSION', 'a', 't'), edge('CONVERGES_ON', 'b', 't')],
     )
     const policy: PolicyDocument = {
       spec_version: 'atrib/1.0',

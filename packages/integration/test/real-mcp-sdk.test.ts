@@ -96,10 +96,7 @@ describe('Real @modelcontextprotocol/sdk end-to-end', () => {
     const client = new Client({ name: 'test-agent', version: '1.0.0' })
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
 
-    await Promise.all([
-      mcpServer.connect(serverTransport),
-      client.connect(clientTransport),
-    ])
+    await Promise.all([mcpServer.connect(serverTransport), client.connect(clientTransport)])
 
     // ── 3. Wrap the client with the @atrib/agent adapter ───────────────
     const interceptor = createAgent({
@@ -155,8 +152,7 @@ describe('Real @modelcontextprotocol/sdk end-to-end', () => {
     // ── 7. Inspect submitted records ────────────────────────────────────
     // Spec §2.6.1: each submission IS the bare record. No `.record` indirection.
     expect(submissions.length).toBeGreaterThanOrEqual(2)
-    const records = submissions
-      .filter((r): r is NonNullable<typeof r> => r !== undefined)
+    const records = submissions.filter((r): r is NonNullable<typeof r> => r !== undefined)
     expect(records.length).toBeGreaterThanOrEqual(2)
 
     // Both records are tool_call (not transaction) since 'search' is not in
@@ -186,8 +182,7 @@ describe('Real @modelcontextprotocol/sdk end-to-end', () => {
     expect(secondRecord.chain_root).not.toBe(firstRecord.chain_root)
 
     // The second record's chain_root should be the hex of decoded1.recordHash
-    const expectedChainRoot =
-      'sha256:' + Buffer.from(decoded1.recordHash).toString('hex')
+    const expectedChainRoot = 'sha256:' + Buffer.from(decoded1.recordHash).toString('hex')
     expect(secondRecord.chain_root).toBe(expectedChainRoot)
 
     // ── 9. Cleanup ──────────────────────────────────────────────────────
@@ -210,10 +205,7 @@ describe('Real @modelcontextprotocol/sdk end-to-end', () => {
 
     const client = new Client({ name: 'list-agent', version: '1.0.0' })
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
-    await Promise.all([
-      mcpServer.connect(serverTransport),
-      client.connect(clientTransport),
-    ])
+    await Promise.all([mcpServer.connect(serverTransport), client.connect(clientTransport)])
 
     const interceptor = createAgent({ creatorKey: AGENT_KEY })
     // The Client's exact callTool signature is more specific than our

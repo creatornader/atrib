@@ -140,9 +140,7 @@ describe('attributeVercelAiSdkMcp', () => {
     // is only set on the second+ call when chaining from a prior response —
     // see packages/agent/src/session.ts buildOutboundMeta lines 117-122)
     expect(typeof sentMeta.traceparent).toBe('string')
-    expect(sentMeta.traceparent as string).toMatch(
-      /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/,
-    )
+    expect(sentMeta.traceparent as string).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/)
     // Original tool params (name, arguments) are still there
     expect(sentParams.name).toBe('search')
     expect(sentParams.arguments).toEqual({ query: 'foo' })
@@ -197,11 +195,9 @@ describe('attributeVercelAiSdkMcp', () => {
     // Spy on onAfterToolResponse to verify the interceptor sees the right
     // response meta
     const original = interceptor.onAfterToolResponse.bind(interceptor)
-    const spy = vi
-      .fn()
-      .mockImplementation((toolName, response, responseMeta, callOptions) => {
-        return original(toolName, response, responseMeta, callOptions)
-      })
+    const spy = vi.fn().mockImplementation((toolName, response, responseMeta, callOptions) => {
+      return original(toolName, response, responseMeta, callOptions)
+    })
     interceptor.onAfterToolResponse = spy
 
     attributeVercelAiSdkMcp(client, {
@@ -243,9 +239,7 @@ describe('attributeVercelAiSdkMcp', () => {
     const interceptor = createInterceptor({ creatorKey: AGENT_KEY })
 
     // Force the interceptor to throw on onBeforeToolCall
-    interceptor.onBeforeToolCall = vi
-      .fn()
-      .mockRejectedValue(new Error('interceptor blew up'))
+    interceptor.onBeforeToolCall = vi.fn().mockRejectedValue(new Error('interceptor blew up'))
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 

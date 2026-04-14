@@ -46,9 +46,9 @@ describe('signRecommendation', () => {
   })
 
   it('rejects keys that are not 32 bytes', async () => {
-    await expect(
-      signRecommendation(baseDoc(), new Uint8Array(16)),
-    ).rejects.toThrow('privateKey must be 32 bytes')
+    await expect(signRecommendation(baseDoc(), new Uint8Array(16))).rejects.toThrow(
+      'privateKey must be 32 bytes',
+    )
   })
 
   it('produces different signatures for different documents', async () => {
@@ -150,20 +150,12 @@ describe('distributionsMatch', () => {
 
   it('matches __unsigned__ sentinel when present in both', () => {
     expect(
-      distributionsMatch(
-        { KEY_A: 0.5, __unsigned__: 0.5 },
-        { KEY_A: 0.5, __unsigned__: 0.5 },
-      ),
+      distributionsMatch({ KEY_A: 0.5, __unsigned__: 0.5 }, { KEY_A: 0.5, __unsigned__: 0.5 }),
     ).toBe(true)
   })
 
   it('returns false when only one has __unsigned__', () => {
-    expect(
-      distributionsMatch(
-        { KEY_A: 0.5, __unsigned__: 0.5 },
-        { KEY_A: 1.0 },
-      ),
-    ).toBe(false)
+    expect(distributionsMatch({ KEY_A: 0.5, __unsigned__: 0.5 }, { KEY_A: 1.0 })).toBe(false)
   })
 
   it('handles empty distributions', () => {

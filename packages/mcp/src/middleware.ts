@@ -64,7 +64,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   if (!serverUrl) {
     console.warn(
       'atrib: no serverUrl provided — content_id values will not uniquely identify this server. ' +
-      'Set serverUrl explicitly, especially for stdio transport where no host header is available.',
+        'Set serverUrl explicitly, especially for stdio transport where no host header is available.',
     )
   }
   const transactionTools = new Set(options.transactionTools ?? [])
@@ -72,7 +72,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
 
   // Derive the public key once at init (async, cached).
   let publicKeyB64: string | undefined
-  const publicKeyReady = getPublicKey(privateKey).then(pk => {
+  const publicKeyReady = getPublicKey(privateKey).then((pk) => {
     publicKeyB64 = base64urlEncode(pk)
   })
 
@@ -203,7 +203,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
 
         // Determine event_type
         const toolName = (params.name as string) ?? ''
-        const eventType = transactionTools.has(toolName) ? 'transaction' : 'tool_call' as const
+        const eventType = transactionTools.has(toolName) ? 'transaction' : ('tool_call' as const)
 
         // Construct the record
         const contentId = computeContentId(serverUrl, toolName)
@@ -229,7 +229,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
         })
 
         // §5.3.5: Non-blocking log submission
-        const priority = eventType === 'transaction' ? 'high' : 'normal' as const
+        const priority = eventType === 'transaction' ? 'high' : ('normal' as const)
         queue.submit(signed, priority)
 
         return result

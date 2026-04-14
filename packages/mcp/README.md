@@ -2,7 +2,7 @@
 
 **MCP server middleware for Atrib attribution. One line of code wraps your existing MCP server and emits a signed attribution record for every successful tool call — automatically, asynchronously, and with zero impact on the tool's primary response.**
 
-This is the **server-side half** of the Atrib protocol: the package merchants and tool providers install. If you're building an agent that *calls* MCP tools, you want [`@atrib/agent`](../agent/README.md) instead.
+This is the **server-side half** of the Atrib protocol: the package merchants and tool providers install. If you're building an agent that _calls_ MCP tools, you want [`@atrib/agent`](../agent/README.md) instead.
 
 ## Quick start
 
@@ -11,9 +11,9 @@ import { atrib } from '@atrib/mcp'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
-  creatorKey: process.env.ATRIB_PRIVATE_KEY!,         // Ed25519 seed, base64url, 32 bytes
-  serverUrl: 'https://my-tool.example.com',           // canonical URL for content_id derivation
-  logEndpoint: process.env.ATRIB_LOG_ENDPOINT,        // optional in dev — use @atrib/log-dev locally
+  creatorKey: process.env.ATRIB_PRIVATE_KEY!, // Ed25519 seed, base64url, 32 bytes
+  serverUrl: 'https://my-tool.example.com', // canonical URL for content_id derivation
+  logEndpoint: process.env.ATRIB_LOG_ENDPOINT, // optional in dev — use @atrib/log-dev locally
 })
 
 // Register your tools the normal way; the wrapper is fully transparent.
@@ -97,15 +97,16 @@ Wraps an `McpServer` instance in place. The wrapper is idempotent and can be cal
 
 **`options`** — `AtribOptions`:
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `creatorKey` | `string` | yes (else pass-through) | Base64url-encoded Ed25519 seed (32 bytes). If absent, the middleware enters pass-through mode with one console warning. |
-| `serverUrl` | `string` | recommended | Canonical URL for `content_id` derivation per §1.2.2. Required for stdio transports where no host header is available. |
-| `logEndpoint` | `string` | optional in dev | Where to POST signed records. Defaults to `https://log.atrib.io/v1/entries`. Use `@atrib/log-dev`'s submission endpoint for local development. |
-| `policy` | `PolicyDocument` | optional | Policy document to serve at `/.well-known/atrib-policy.json` (for HTTP transports) and embed in `serverInfo` (for stdio). |
-| `transactionTools` | `string[]` | optional | Tool names that should emit `event_type: 'transaction'` records instead of `tool_call`. Defaults to a built-in heuristic for common checkout/payment tool names. |
+| Field              | Type             | Required                | Description                                                                                                                                                      |
+| ------------------ | ---------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `creatorKey`       | `string`         | yes (else pass-through) | Base64url-encoded Ed25519 seed (32 bytes). If absent, the middleware enters pass-through mode with one console warning.                                          |
+| `serverUrl`        | `string`         | recommended             | Canonical URL for `content_id` derivation per §1.2.2. Required for stdio transports where no host header is available.                                           |
+| `logEndpoint`      | `string`         | optional in dev         | Where to POST signed records. Defaults to `https://log.atrib.io/v1/entries`. Use `@atrib/log-dev`'s submission endpoint for local development.                   |
+| `policy`           | `PolicyDocument` | optional                | Policy document to serve at `/.well-known/atrib-policy.json` (for HTTP transports) and embed in `serverInfo` (for stdio).                                        |
+| `transactionTools` | `string[]`       | optional                | Tool names that should emit `event_type: 'transaction'` records instead of `tool_call`. Defaults to a built-in heuristic for common checkout/payment tool names. |
 
 Returns a `SubmissionQueue`-aware wrapper exposing:
+
 - `flush()` — drain pending submissions before shutdown (idempotent)
 - `getProof(recordHash)` — retrieve a cached proof bundle by record hash
 
@@ -166,18 +167,18 @@ Run them with `pnpm --filter @atrib/mcp test`.
 
 ## Spec references
 
-| Spec section | What this package implements |
-|---|---|
-| §1.2 | Attribution record format |
-| §1.3 | JCS canonicalization (RFC 8785) |
-| §1.4 | Ed25519 signing and verification |
-| §1.5 | Context propagation via `params._meta`, tracestate, baggage, X-Atrib-Chain |
-| §2.6.1 | Submission API client (POST a bare signed record) |
-| §2.6.2 | Proof bundle response shape |
-| §5.3 | Server-side middleware behavior |
-| §5.3.3 | No emission for `isError: true` |
-| §5.3.5 | Non-blocking submission queue |
-| §5.8 | Degradation contract — failures never break the host |
+| Spec section | What this package implements                                               |
+| ------------ | -------------------------------------------------------------------------- |
+| §1.2         | Attribution record format                                                  |
+| §1.3         | JCS canonicalization (RFC 8785)                                            |
+| §1.4         | Ed25519 signing and verification                                           |
+| §1.5         | Context propagation via `params._meta`, tracestate, baggage, X-Atrib-Chain |
+| §2.6.1       | Submission API client (POST a bare signed record)                          |
+| §2.6.2       | Proof bundle response shape                                                |
+| §5.3         | Server-side middleware behavior                                            |
+| §5.3.3       | No emission for `isError: true`                                            |
+| §5.3.5       | Non-blocking submission queue                                              |
+| §5.8         | Degradation contract — failures never break the host                       |
 
 The full protocol spec is at [`atrib-spec.md`](../../atrib-spec.md).
 
