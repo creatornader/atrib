@@ -68,7 +68,7 @@ Principle IV
 
 No central arbiter of value
 
-The attribution chain is verifiable by any party with the relevant records. No single operator can alter it, suppress it, or adjudicate disputes about it. The Merkle log provides global verifiability without global visibility. Trust comes from mathematics and open specification, not from trusting Atrib Inc.
+The attribution chain is verifiable by any party with the relevant records. No single operator can alter it, suppress it, or adjudicate disputes about it. The Merkle log provides global verifiability without global visibility. Trust comes from mathematics and open specification, not from trusting atrib.
 
 Principle V
 
@@ -1129,7 +1129,7 @@ struct timestamped_signature {
 }
 ```
 
-Clients that require strong tamper-evidence guarantees SHOULD require at least one witness cosignature before trusting an inclusion proof. atrib's SDK SHOULD ship with a default witness policy of one cosignature from a publicly documented witness operated independently of Atrib Inc.
+Clients that require strong tamper-evidence guarantees SHOULD require at least one witness cosignature before trusting an inclusion proof. atrib's SDK SHOULD ship with a default witness policy of one cosignature from a publicly documented witness operated independently of atrib.
 
 The witnessing infrastructure used by `log.atrib.io` will be publicly documented including witness names and public keys. Third parties are encouraged to run compatible witnesses using the transparency-dev ecosystem tooling.
 
@@ -1516,7 +1516,7 @@ The attribution graph (§3) is a fact layer: it reports the structural relations
 
 Policies are first-class protocol primitives, not configuration files or implementation details. They are machine-readable documents that agents can fetch, parse, apply, and reason about autonomously. The spec defines the policy schema; creators and merchants define their own policies within that schema. The protocol defines how policies are negotiated and how the calculation is performed; it does not define what any contribution is worth.
 
-This separation reflects a core principle: **the protocol has no thumb on the scale.** A merchant who wants to weight chain-adjacent contributions more heavily than parallel ones can express that in their policy. A creator who wants a minimum floor for their own contribution regardless of graph position can express that via `minimum_own_share` in their policy. Neither needs Atrib Inc.'s permission or a protocol change. They need only publish a conforming policy document.
+This separation reflects a core principle: **the protocol has no thumb on the scale.** A merchant who wants to weight chain-adjacent contributions more heavily than parallel ones can express that in their policy. A creator who wants a minimum floor for their own contribution regardless of graph position can express that via `minimum_own_share` in their policy. Neither needs atrib's permission or a protocol change. They need only publish a conforming policy document.
 
 Two moments in the session lifecycle are relevant to this section. **Negotiation** happens at session initialization — before any tool calls are made, the agent reads available creator and merchant policies and establishes the agreed policy for the session (§4.5). **Calculation** happens after the transaction closes — the agreed policy is applied to the completed graph to produce a settlement recommendation (§4.6). These are distinct operations on distinct inputs separated in time. The policy negotiated at session start is the policy applied at calculation time, regardless of whether policies have changed in between.
 

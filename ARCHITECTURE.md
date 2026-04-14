@@ -138,7 +138,7 @@ The log operator's append-only behavior. The operator could theoretically refuse
 
 **Not trusted at all:**
 
-Atrib Inc. The protocol is an open spec. The signing libraries are open source. The log format is a public standard. The calculation algorithm is published and locally executable. Nobody — including the company that wrote the spec — has privileged access or override capability.
+atrib. The protocol is an open spec. The signing libraries are open source. The log format is a public standard. The calculation algorithm is published and locally executable. Nobody, including the team that wrote the spec, has privileged access or override capability.
 
 ---
 
