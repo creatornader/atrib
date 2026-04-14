@@ -18,6 +18,8 @@
 
 ## §0 Foundations
 
+_This section is informative._
+
 Contents
 
 - [The Problem We Inherit](#the-problem-we-inherit)
@@ -148,6 +150,17 @@ Contents
 ### 1.1 Normative Requirements Language
 
 The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RECOMMENDED, MAY, and OPTIONAL in this document are to be interpreted as described in RFC 2119 and RFC 8174.
+
+#### 1.1.1 Conformance Targets
+
+This specification defines requirements for four conformance targets:
+
+- **MCP server middleware**: satisfies all MUST requirements in §1.2-§1.5, §2.3, §2.6, and §5.3.
+- **Agent middleware**: satisfies all MUST requirements in §1.5, §1.7, §4.5, and §5.4.
+- **Log operator**: satisfies all MUST requirements in §2.
+- **Verification library**: satisfies all MUST requirements in §4.6, §4.7, and §5.5.
+
+A graph query service, when implemented, must satisfy all MUST requirements in §3. A witness, when implemented, must satisfy all MUST requirements in §2.9.
 
 All normative requirements in this section are prefixed with their requirement level. A conforming implementation satisfies all MUST requirements and is RECOMMENDED to satisfy all SHOULD requirements.
 
@@ -472,7 +485,7 @@ Attribution records that carry a `session_token` across trace boundaries can be 
 
 ### 1.6 Unsigned Hops and Gap Nodes
 
-Not every MCP server in an agent's tool chain will have atrib installed in v1. When an agent calls a tool that does not emit a signed attribution record, the chain has an unsigned hop. This is expected and must be handled gracefully.
+Not every MCP server in an agent's tool chain will have atrib installed in v1. When an agent calls a tool that does not emit a signed attribution record, the chain has an unsigned hop. This is expected and MUST be handled gracefully.
 
 An unsigned hop arises when:
 
@@ -730,6 +743,8 @@ Implementations MAY skip the legacy fallback if they target only AP2 v0.1 deploy
 
 ### 1.8 Known Limitations
 
+_This section is informative._
+
 The following limitations are acknowledged and explicitly deferred.
 
 **Cross-session attribution.** When a user receives a recommendation from an agent and subsequently completes a purchase in a browser session (minutes, hours, or days later) the transaction carries no attribution chain. The agent session that produced the recommendation and the browser session that completed the purchase are structurally disconnected. A partial mitigation is available via recommendation tokens: opaque identifiers the agent embeds in recommendation URLs, which a merchant can capture on conversion. This is closer to affiliate attribution than provenance and carries the same limitations. A first-class solution requires persistent agent identity across sessions, which depends on work in progress at the DIF Trusted AI Agents Working Group and W3C AI Agent Protocol CG. This is a v2 integration target.
@@ -786,6 +801,8 @@ Contents
 - [2.10 What the Log Stores and What It Does Not](#210-what-the-log-stores-and-what-it-does-not)
 
 ### 2.1 Purpose and Design Rationale
+
+_This section is informative._
 
 The atrib log is a public, append-only Merkle tree. When a creator submits an attribution record to the log, they receive an inclusion proof: a cryptographic commitment that the record exists at a specific position in the tree, verifiable by any third party without trusting the log operator.
 
@@ -1173,6 +1190,8 @@ The witnessing infrastructure used by `log.atrib.dev` will be publicly documente
 
 ### 2.10 What the Log Stores and What It Does Not
 
+_This section is informative._
+
 This section states the privacy properties of the log precisely, because they are the foundation of atrib's claim to be "observability without surveillance."
 
 **The log stores:** the record hash, the creator's public key, the context_id (as raw bytes), the timestamp, and the event type. These are committed in the AtribLogEntry (§2.3.1) and are visible to any party that fetches entry bundles.
@@ -1216,6 +1235,8 @@ Contents
 - [3.6 Implementation Notes](#36-implementation-notes)
 
 ### 3.1 Design Principles and Rationale
+
+_This section is informative._
 
 This section explains the reasoning behind the graph model's core design decisions. These are not preferences or conventions; they are the logical consequences of what a trust infrastructure can and cannot honestly assert. Understanding the reasoning matters as much as the rules themselves, because it determines how to evaluate proposed changes and extensions.
 
@@ -1501,6 +1522,8 @@ GET /v1/creators/ABC.../sessions
 
 ### 3.6 Implementation Notes
 
+_This section is informative._
+
 **Technology independence.** This section specifies the graph model and API shape. It does not specify storage technology. Any queryable store capable of producing conforming responses is acceptable. The derivation rules in §3.2.4 are the normative definition of graph structure and must be applied identically regardless of underlying storage.
 
 **On delegated sub-agents.** When agent A delegates to sub-agent B via A2A, B's tool calls share A's `context_id` because context_id propagates through A2A delegation boundaries (§1.5.1). The graph represents this naturally: A's and B's records appear as nodes in the same session, distinguishable by `creator_key`. No special edge type is needed. Policy engines read creator_key diversity within a session to identify delegation structure and can weight contributions by originating agent accordingly.
@@ -1547,6 +1570,8 @@ Contents
 - [4.8 Known Limitations and V2 Deferrals](#48-known-limitations-and-v2-deferrals)
 
 ### 4.1 Purpose and Position in the Protocol
+
+_This section is informative._
 
 The three preceding sections define what happened. This section defines how to evaluate what happened for the purpose of distributing value.
 
@@ -1980,6 +2005,8 @@ function apply_maximum_cap(normalized, cap):
   return result
 ```
 
+This order is normative. Implementations MUST apply minimum_share before maximum_share.
+
 #### 4.6.5 Step 4: Normalize to a Distribution
 
 After applying constraints, re-normalize so shares sum to exactly 1.0, correcting for any floating-point accumulation during constraint application:
@@ -2133,6 +2160,8 @@ Step 5: Compare the output with the `distribution` field. Shares MUST match with
 
 ### 4.8 Known Limitations and V2 Deferrals
 
+_This section is informative._
+
 **Policy versioning (deferred to v2).** In v1, policies are identified by URL with no formal versioning; the session policy record partially mitigates this by capturing agreed terms at session time. A normative policy versioning mechanism supporting immutable snapshots and policy history will be defined in v2.
 
 **Settlement webhook format (deferred to v2).** In v1, settlement recommendations are produced on demand only. A standardized push mechanism (event format, delivery guarantees, retry behavior) will be defined in v2.
@@ -2182,6 +2211,8 @@ Contents
 
 ### 5.1 Design Principle: Zero Ongoing Surface Area
 
+_This section is informative._
+
 The fundamental design requirement for all atrib SDKs is that attribution must happen automatically as a consequence of agents and tools doing what they already do, not as something developers explicitly trigger. The moment a developer must decide when to call an attribution method, adoption fails. They will intend to add it later and never do.
 
 This means the SDK specification defines a **middleware contract**, not an API. There are no methods for developers to call after init. There are no configuration options for when to emit. There is one function call at startup and zero ongoing surface area.
@@ -2191,6 +2222,8 @@ A conforming SDK implementation MUST satisfy all the automation triggers defined
 ---
 
 ### 5.2 Package Overview
+
+_This section is informative._
 
 Three packages are defined in this specification. All are TypeScript/JavaScript packages distributed via npm. Implementations in other languages SHOULD follow the same interface contracts using idiomatic patterns for their language.
 
@@ -2275,7 +2308,7 @@ const record = {
 const signed = signRecord(record, creatorKey)             // §1.4.2, synchronous
 ```
 
-Record construction and signing MUST complete before the response is returned to the caller. Log submission (§5.3.5) always happens after the response is sent and is always non-blocking, including for transaction records. See §5.3.5 for submission behavior, retry logic, and the priority distinction between transaction and tool_call records.
+Record construction and signing MUST complete before the response is returned to the caller. Log submission (§5.3.5) MUST happen after the response is sent and is always non-blocking, including for transaction records. See §5.3.5 for submission behavior, retry logic, and the priority distinction between transaction and tool_call records.
 
 **Note (Tool call failures):** Attribution records are only emitted for successful tool calls (`isError: false`). A tool call that returns an error does not generate an attribution record and does not extend the chain. The OTel span for the failed call will create a gap node in the graph (§3.2.5), visible as an unsigned hop.
 
@@ -2549,7 +2582,7 @@ The session policy record MUST include a warning: `"transaction_emitted_by_agent
 
 **Path selection rule:** preventing double-emission.** The agent middleware MUST NOT emit a transaction record (Path 2) when the checkout tool response contains an attribution context token (i.e., `params._meta.atrib`, `tracestate: atrib=...`, or `X-atrib-Chain` is present in the response). The presence of an attribution token in the checkout response indicates that `@atrib/mcp` is installed on the merchant's server and has already emitted the transaction record (Path 1). Emitting a second record would create two transaction nodes for the same economic event, violating the single-transaction-per-session assumption in §4.6.1. When Path 1 is detected, the agent updates its session state with the inbound context token as normal, but skips transaction record emission.
 
-In both paths, when Path 2 is taken, the record is submitted to the log immediately, not deferred, because the transaction event is the closing anchor of the attribution graph.
+In both paths, when Path 2 is taken, the record MUST be submitted to the log immediately, because the transaction event is the closing anchor of the attribution graph.
 
 **Note (Heuristic detection is a fallback):** The tool name heuristic fires only when no protocol-level transaction signal is present. It is less reliable; a tool named `checkout` might be a UI component, not a payment completion. When heuristic detection fires, the transaction record's `event_type` is still `"transaction"` but the session policy record includes a warning: `"transaction_detected_by_heuristic"`. Merchants may choose to require protocol-level detection for settlement purposes by filtering on this warning in their verification workflow.
 
@@ -2721,6 +2754,8 @@ The following test vectors are generated from the reference implementation. Two 
 
 All values are deterministic given the inputs. Ed25519 signing with a fixed seed produces a fixed signature.
 
+This appendix is normative. A conforming implementation MUST produce outputs identical to these test vectors for the given inputs.
+
 ### A.1 Key Material
 
 | Field | Value |
@@ -2796,11 +2831,11 @@ The canonical record is `JCS(complete record with signature)`:
 
 Byte layout:
 - Byte 0: version (`0x01`)
-- Byte 1: event_type (`0x01` = tool_call)
-- Bytes 2-33: record_hash (32 bytes)
-- Bytes 34-65: creator_key (32 bytes)
-- Bytes 66-81: context_id (16 bytes)
-- Bytes 82-89: timestamp (uint64 big-endian)
+- Bytes 1-32: record_hash (32 bytes)
+- Bytes 33-64: creator_key (32 bytes)
+- Bytes 65-80: context_id (16 bytes)
+- Bytes 81-88: timestamp_ms (uint64 big-endian)
+- Byte 89: event_type (`0x01` = tool_call)
 
 ### A.9 Merkle Tree (§2.3.2, §2.7)
 
@@ -2827,3 +2862,32 @@ Byte layout:
 Leaf hash computation: `SHA-256(0x00 || entry_bytes)`
 Internal node hash: `SHA-256(0x01 || left || right)`
 Root of 2-entry tree: `SHA-256(0x01 || leaf_hash_0 || leaf_hash_1)`
+
+---
+
+## References
+
+### Normative References
+
+- **[RFC 2119]** Bradner, S., "Key words for use in RFCs to Indicate Requirement Levels", BCP 14, RFC 2119, March 1997. https://www.rfc-editor.org/rfc/rfc2119
+- **[RFC 8174]** Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words", BCP 14, RFC 8174, May 2017. https://www.rfc-editor.org/rfc/rfc8174
+- **[RFC 8785]** Rundgren, A., Jordan, B., Erdtman, S., "JSON Canonicalization Scheme (JCS)", RFC 8785, June 2020. https://www.rfc-editor.org/rfc/rfc8785
+- **[RFC 8032]** Josefsson, S., Liusvaara, I., "Edwards-Curve Digital Signature Algorithm (EdDSA)", RFC 8032, January 2017. https://www.rfc-editor.org/rfc/rfc8032
+- **[RFC 4648]** Josefsson, S., "The Base16, Base32, and Base64 Data Encodings", RFC 4648, October 2006. https://www.rfc-editor.org/rfc/rfc4648
+- **[RFC 9162]** Laurie, B., Messeri, E., Stradling, R., "Certificate Transparency Version 2.0", RFC 9162, December 2021. https://www.rfc-editor.org/rfc/rfc9162
+- **[RFC 9457]** Nottingham, M., Wilde, E., Dalal, S., "Problem Details for HTTP APIs", RFC 9457, July 2023. https://www.rfc-editor.org/rfc/rfc9457
+- **[W3C Trace Context]** W3C, "Trace Context Level 1", W3C Recommendation, February 2020. https://www.w3.org/TR/trace-context-1/
+- **[W3C Baggage]** W3C, "Baggage", W3C Candidate Recommendation, November 2023. https://www.w3.org/TR/baggage/
+- **[C2SP tlog-tiles]** C2SP, "Tiled Transparency Logs", c2sp.org/tlog-tiles
+- **[C2SP signed-note]** C2SP, "Signed Note", c2sp.org/signed-note
+
+### Informative References
+
+- **[ACP]** Agentic Commerce Protocol, https://github.com/agentic-commerce-protocol/agentic-commerce-protocol (verified 2026-04-06)
+- **[UCP]** Universal Commerce Protocol, version 2026-01-11, https://github.com/universal-commerce-protocol/ucp
+- **[x402]** x402 HTTP Payment Protocol, https://x402.org (v2, April 2026)
+- **[MPP]** Machine Payments Protocol, IETF draft-ryan-httpauth-payment-01, March 2026, https://mpp.dev
+- **[AP2]** Agent Payments Protocol v0.1, https://github.com/google-agentic-commerce/ap2
+- **[a2a-x402]** A2A Payment Extension v0.1, https://github.com/google-agentic-commerce/a2a-x402
+- **[MCP]** Model Context Protocol Specification, version 2025-11-25, https://modelcontextprotocol.io/specification/2025-11-25/
+- **[Tessera]** Transparency-dev Tessera, https://github.com/transparency-dev/tessera
