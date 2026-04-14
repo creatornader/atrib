@@ -16,10 +16,9 @@
  *      @atrib/agent's transaction detection (spec §5.4)
  *   5. A CLI visualizer that prints each record as it lands in the dev log
  *
- * The fakery is in the SURROUNDING ENVIRONMENT, not in the protocol,
- * every signed record, every chain hash, every transaction detection in
- * the output below is real and uses the production transaction-detection
- * logic from @atrib/agent/src/transaction.ts.
+ * The mock is limited to the surrounding environment (fake search results,
+ * in-memory transport, stubbed payment header). All attribution logic,
+ * signing, chaining, transaction detection, runs the production code paths.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'

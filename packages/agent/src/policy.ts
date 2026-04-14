@@ -53,11 +53,19 @@ export interface SessionPolicyRecord {
  */
 async function fetchPolicy(url: string): Promise<PolicyDocument | null> {
   try {
+    // Validate URL scheme to prevent SSRF via crafted merchantDomain/serverUrls
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null
+
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), POLICY_FETCH_TIMEOUT_MS)
 
-    const response = await fetch(url, { signal: controller.signal })
-    clearTimeout(timeoutId)
+    let response: Response
+    try {
+      response = await fetch(url, { signal: controller.signal })
+    } finally {
+      clearTimeout(timeoutId)
+    }
 
     if (!response.ok) return null
 
@@ -210,8 +218,13 @@ function negotiatePolicies(
           `creator ${entry.server_url} minimum floor ${floor} exceeds merchant cap ${merchantCap}, ` +
             `falling back to default`,
         )
+        // Only mark creators whose floor actually exceeds the cap as
+        // conflict_defaulted, creators with floors that fit are not at fault.
         for (const e of creatorEntries) {
-          if (e.status !== 'not_found') e.status = 'conflict_defaulted'
+          const eFloor = e.policy?.constraints?.minimum_own_share
+          if (e.status !== 'not_found' && eFloor !== undefined && eFloor > merchantCap) {
+            e.status = 'conflict_defaulted'
+          }
         }
         return { agreedPolicy: 'default', minimumFloors: {}, negotiationWarnings: warnings }
       }
@@ -268,8 +281,10 @@ function buildSessionPolicyRecord(
     warnings,
   }
 
-  // Compute record_id = sha256 of JCS canonical form (excluding record_id)
-  const { record_id: _, ...forHashing } = record
+  // Compute record_id = sha256 of JCS canonical form, excluding record_id
+  // and warnings (warnings are mutable, runtime warnings are appended after
+  // negotiation, so including them would make record_id stale).
+  const { record_id: _, warnings: _w, ...forHashing } = record
   const canonical = canonicalize(forHashing)
   if (canonical) {
     const encoder = new TextEncoder()

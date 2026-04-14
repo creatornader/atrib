@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-Atrib is cryptographic infrastructure. We take security seriously.
+Atrib is cryptographic infrastructure.
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
@@ -56,4 +56,4 @@ Atrib uses exclusively audited libraries implementing published standards:
 | Canonicalization | JCS (RFC 8785)                      | canonicalize                                |
 | Merkle tree      | RFC 6962 (Certificate Transparency) | In-house, tested against Wycheproof vectors |
 
-Zero custom cryptographic algorithms. All cryptographic operations use audited implementations of published standards.
+No custom cryptography.

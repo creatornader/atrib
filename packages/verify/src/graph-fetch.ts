@@ -53,6 +53,11 @@ export async function fetchSessionPolicyRecord(
  * Fetch a policy document by URL (§4.4).
  */
 export async function fetchPolicyDocument(url: string): Promise<PolicyDocument> {
+  // Validate URL scheme to prevent SSRF via crafted agreed_policy URLs
+  const parsed = new URL(url)
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`fetchPolicyDocument: only https: URLs are allowed, got ${parsed.protocol}`)
+  }
   const res = await fetchWithTimeout(url)
   if (!res.ok) {
     throw new Error(`fetchPolicyDocument failed: ${res.status} ${res.statusText}`)

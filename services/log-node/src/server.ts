@@ -36,6 +36,13 @@ export async function bindServer(
   signer: CheckpointSigner,
   port: number,
 ): Promise<ServerHandle> {
+  // Serialization lock: the append→proof→sign sequence must not be
+  // interleaved by concurrent requests, because signer.sign is async
+  // (ed.signAsync) and yields the event loop. Without this, concurrent
+  // submissions produce proof bundles where the checkpoint tree size
+  // doesn't match the tree size the inclusion proof was computed against.
+  let submitQueue = Promise.resolve<void>(undefined)
+
   // Dedup cache: record_hash hex → proof bundle
   // Bounded to MAX_PROOF_CACHE entries (~30MB at ~300 bytes/entry).
   // NOTE: Idempotency is best-effort. After cache eviction, re-submission
@@ -45,8 +52,18 @@ export async function bindServer(
   // SHOULD, not a MUST, for implementations with bounded caches.
   const proofCache = new Map<string, ProofBundle>()
 
+  // Acquire the submit lock: waits for previous submission to finish,
+  // returns a release function. This serializes the append→proof→sign
+  // critical section so concurrent requests don't interleave.
+  function acquireSubmitLock(): { wait: Promise<void>; release: () => void } {
+    const prev = submitQueue
+    let release!: () => void
+    submitQueue = new Promise<void>((r) => { release = r })
+    return { wait: prev, release }
+  }
+
   const server = createServer((req, res) => {
-    handleRequest(req, res, tree, signer, proofCache).catch((err) => {
+    handleRequest(req, res, tree, signer, proofCache, acquireSubmitLock).catch((err) => {
       // eslint-disable-next-line no-console
       console.error('atrib-log-node: request handler crashed', err)
       if (!res.headersSent) {
@@ -81,15 +98,18 @@ export async function bindServer(
   }
 }
 
+type AcquireLock = () => { wait: Promise<void>; release: () => void }
+
 async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
   tree: MerkleTree,
   signer: CheckpointSigner,
   proofCache: Map<string, ProofBundle>,
+  acquireLock: AcquireLock,
 ): Promise<void> {
   if (req.method === 'POST' && req.url === '/v1/entries') {
-    return handleSubmit(req, res, tree, signer, proofCache)
+    return handleSubmit(req, res, tree, signer, proofCache, acquireLock)
   }
 
   if (req.method === 'GET' && req.url === '/v1/checkpoint') {
@@ -108,6 +128,7 @@ async function handleSubmit(
   tree: MerkleTree,
   signer: CheckpointSigner,
   proofCache: Map<string, ProofBundle>,
+  acquireLock: AcquireLock,
 ): Promise<void> {
   let body: string
   try {
@@ -164,33 +185,44 @@ async function handleSubmit(
     event_type: fullRecord.event_type,
   })
 
-  // Append to Merkle tree
-  const logIndex = tree.append(entryBytes)
+  // Critical section: append→proof→sign must be atomic. signer.sign is
+  // async (ed.signAsync yields the event loop), so without serialization
+  // a concurrent request could tree.append() between our append and sign,
+  // producing a checkpoint whose tree size doesn't match our proof.
+  const lock = acquireLock()
+  await lock.wait
+  let proof: ProofBundle
+  try {
+    // Re-check cache inside the lock, two concurrent requests for the same
+    // record can both miss the fast-path check above, but only the first
+    // should append. The second finds the proof cached by the first.
+    const cachedInLock = proofCache.get(recordHashHex)
+    if (cachedInLock !== undefined) {
+      sendJson(res, 200, cachedInLock)
+      return // finally block releases the lock
+    }
+    const logIndex = tree.append(entryBytes)
+    const inclusionProof = tree.inclusionProof(logIndex)
+    const leafHashBytes = tree.leafHash(logIndex)
+    const rootHash = tree.root()
+    const signedCheckpoint = await signer.sign(tree.size, rootHash)
 
-  // Generate inclusion proof
-  const inclusionProof = tree.inclusionProof(logIndex)
+    proof = {
+      log_index: logIndex,
+      checkpoint: signedCheckpoint,
+      inclusion_proof: inclusionProof.map((h) => Buffer.from(h).toString('base64')),
+      leaf_hash: Buffer.from(leafHashBytes).toString('base64'),
+    }
 
-  // Get cached leaf hash for this entry
-  const leafHashBytes = tree.leafHash(logIndex)
-
-  // Sign a checkpoint covering the current tree state
-  const rootHash = tree.root()
-  const signedCheckpoint = await signer.sign(tree.size, rootHash)
-
-  const proof: ProofBundle = {
-    log_index: logIndex,
-    checkpoint: signedCheckpoint,
-    // Node-only: this service runs server-side only
-    inclusion_proof: inclusionProof.map((h) => Buffer.from(h).toString('base64')),
-    leaf_hash: Buffer.from(leafHashBytes).toString('base64'),
+    // Cache for idempotency, evict oldest entry if at capacity
+    if (proofCache.size >= MAX_PROOF_CACHE) {
+      const oldest = proofCache.keys().next().value
+      if (oldest !== undefined) proofCache.delete(oldest)
+    }
+    proofCache.set(recordHashHex, proof)
+  } finally {
+    lock.release()
   }
-
-  // Cache for idempotency, evict oldest entry if at capacity
-  if (proofCache.size >= MAX_PROOF_CACHE) {
-    const oldest = proofCache.keys().next().value
-    if (oldest !== undefined) proofCache.delete(oldest)
-  }
-  proofCache.set(recordHashHex, proof)
 
   sendJson(res, 200, proof)
 }
@@ -205,8 +237,13 @@ async function handleCheckpoint(
     return
   }
 
+  // Snapshot both values synchronously before the async sign call.
+  // Without this, a concurrent POST /v1/entries can tree.append()
+  // between root() and the tree.size read inside signer.sign,
+  // producing a checkpoint where treeSize doesn't match rootHash.
+  const treeSize = tree.size
   const rootHash = tree.root()
-  const signedCheckpoint = await signer.sign(tree.size, rootHash)
+  const signedCheckpoint = await signer.sign(treeSize, rootHash)
 
   const checkpointBytes = Buffer.byteLength(signedCheckpoint)
   res.statusCode = 200

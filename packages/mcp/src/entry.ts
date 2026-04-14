@@ -13,6 +13,7 @@
  */
 
 import { hexDecode } from './hash.js'
+import { base64urlDecode } from './base64url.js'
 
 export const ENTRY_VERSION = 0x01 as const
 export const EVENT_TYPE_TOOL_CALL = 0x01 as const
@@ -80,11 +81,9 @@ export function serializeEntry(input: EntryInput): Uint8Array {
 // ---------------------------------------------------------------------------
 
 function base64urlToBytes(b64url: string, expectedBytes: number): Uint8Array {
-  // Convert base64url → base64 → Buffer
-  const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/')
-  const raw = Buffer.from(b64, 'base64')
+  const raw = base64urlDecode(b64url)
   if (raw.byteLength !== expectedBytes) {
     throw new Error(`base64urlToBytes: expected ${expectedBytes} bytes, got ${raw.byteLength}`)
   }
-  return new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
+  return raw
 }

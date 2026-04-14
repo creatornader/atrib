@@ -264,7 +264,10 @@ function patchClient(
         string,
         unknown
       >
-      const responseOptions = serverUrl !== undefined ? { serverUrl } : {}
+      const responseOptions = {
+        ...(serverUrl !== undefined ? { serverUrl } : {}),
+        isError: (result as Record<string, unknown>)?.isError === true,
+      }
       interceptor.onAfterToolResponse(toolName, result, responseMeta, responseOptions)
     } catch (err) {
       console.warn('atrib: langchain-mcp onAfterToolResponse failed, passing through', err)

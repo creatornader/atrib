@@ -1,7 +1,7 @@
 /**
  * Atrib + Vercel AI SDK MCP, runnable integration snippet
  *
- * Demonstrates the four-line Atrib wiring for an `@ai-sdk/mcp` MCPClient.
+ * Demonstrates the Atrib wiring for an `@ai-sdk/mcp` MCPClient.
  * The model invocation step (`streamText` / `generateText`) is omitted from
  * this file so the example stays focused on the Atrib integration. Drop this
  * pattern into any AI SDK app that uses MCP tools, the rest of your AI SDK

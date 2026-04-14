@@ -191,7 +191,10 @@ export function attributeVercelAiSdkMcp<C extends VercelAiSdkMcpClientLike>(
     // extractStructuredContent transformation, so the _meta field is intact.
     try {
       const responseMeta = (result as { _meta?: Record<string, unknown> })?._meta ?? {}
-      const responseOptions = serverUrl !== undefined ? { serverUrl } : {}
+      const responseOptions = {
+        ...(serverUrl !== undefined ? { serverUrl } : {}),
+        isError: (result as Record<string, unknown>)?.isError === true,
+      }
       interceptor.onAfterToolResponse(toolName, result, responseMeta, responseOptions)
     } catch (err) {
       console.warn('atrib: vercel-ai-sdk-mcp onAfterToolResponse failed, passing through', err)

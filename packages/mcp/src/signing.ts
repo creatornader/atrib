@@ -72,10 +72,11 @@ export async function verifyRecord(record: AtribRecord): Promise<boolean> {
     // Step 6: event_type must be known
     if (!VALID_EVENT_TYPES.has(record.event_type)) return false
 
-    // Step 7: timestamp must not be >5 min in the future (§1.4.3).
-    // Note: the log server (§2.6.1 Step 4) uses a wider 10-minute window to
+    // Step 7: timestamp must be a finite number and not >5 min in the future.
+    // NaN, Infinity, negative values are all invalid.
+    // The log server (§2.6.1 Step 4) uses a wider 10-minute window to
     // account for network/queue delay between signing and log submission.
-    // The client-side verifier uses the tighter 5-minute window.
+    if (!Number.isInteger(record.timestamp) || record.timestamp < 0) return false
     const fiveMinutesFromNow = Date.now() + 5 * 60 * 1000
     if (record.timestamp > fiveMinutesFromNow) return false
 

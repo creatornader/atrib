@@ -141,21 +141,25 @@ export function detectTransaction(
     // a2a-x402 extension, payment-completed via A2A task status metadata.
     // Source: github.com/google-agentic-commerce/a2a-x402 spec/v0.1/spec.md
     // Shape: { kind: "task", status: { message: { metadata: { "x402.payment.status": "payment-completed", "x402.payment.receipts": [{success, transaction, ...}] } } } }
-    const status = resp['status'] as Record<string, unknown> | undefined
-    const statusMessage = status?.['message'] as Record<string, unknown> | undefined
-    const metadata = statusMessage?.['metadata'] as Record<string, unknown> | undefined
-    if (metadata && metadata['x402.payment.status'] === 'payment-completed') {
-      const receipts = metadata['x402.payment.receipts']
-      if (
-        Array.isArray(receipts) &&
-        receipts.some(
-          (r) =>
-            r !== null &&
-            typeof r === 'object' &&
-            (r as Record<string, unknown>)['success'] === true,
-        )
-      ) {
-        return { detected: true, protocol: 'AP2', checkoutUrl: null }
+    // Guard on kind === "task" to prevent false positives from responses
+    // that incidentally contain matching metadata keys.
+    if (resp['kind'] === 'task') {
+      const status = resp['status'] as Record<string, unknown> | undefined
+      const statusMessage = status?.['message'] as Record<string, unknown> | undefined
+      const metadata = statusMessage?.['metadata'] as Record<string, unknown> | undefined
+      if (metadata && metadata['x402.payment.status'] === 'payment-completed') {
+        const receipts = metadata['x402.payment.receipts']
+        if (
+          Array.isArray(receipts) &&
+          receipts.some(
+            (r) =>
+              r !== null &&
+              typeof r === 'object' &&
+              (r as Record<string, unknown>)['success'] === true,
+          )
+        ) {
+          return { detected: true, protocol: 'AP2', checkoutUrl: null }
+        }
       }
     }
 
@@ -177,6 +181,9 @@ export function detectTransaction(
       (Array.isArray(subjectType) &&
         subjectType.some((t) => typeof t === 'string' && /paymentmandate/i.test(t)))
 
+    // For v2 array form: the PaymentMandate type is in the type array itself,
+    // so no credentialSubject check needed. For v1 string form: type is just
+    // "VerifiableCredential" so we need credentialSubject to confirm it's a PaymentMandate.
     if (isVcArray || (isVcStringLegacy && subjectIsPaymentMandate)) {
       return { detected: true, protocol: 'AP2', checkoutUrl: null }
     }

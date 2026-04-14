@@ -47,8 +47,8 @@ export function validateSubmission(record: Partial<AtribRecord>): ValidationResu
   }
 
   // Step 4: timestamp must be present and not more than 10 minutes in the future
-  if (typeof record.timestamp !== 'number' || !Number.isFinite(record.timestamp)) {
-    return { ok: false, status: 400, error: 'timestamp must be a finite number' }
+  if (typeof record.timestamp !== 'number' || !Number.isInteger(record.timestamp) || record.timestamp < 0) {
+    return { ok: false, status: 400, error: 'timestamp must be a non-negative integer' }
   }
   if (record.timestamp - Date.now() > MAX_FUTURE_SKEW_MS) {
     return { ok: false, status: 400, error: 'timestamp is more than 10 minutes in the future' }

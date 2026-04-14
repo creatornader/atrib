@@ -404,25 +404,40 @@ function applyMinimumFloor(normalized: Map<string, number>, floor: number): Map<
 }
 
 function applyMaximumCap(normalized: Map<string, number>, cap: number): Map<string, number> {
-  const above = new Map<string, number>()
-  const below = new Map<string, number>()
-  for (const [id, s] of normalized) {
-    if (s > cap) above.set(id, s)
-    else below.set(id, s)
-  }
-  let excess = 0
-  for (const s of above.values()) excess += s - cap
-  let belowTotal = 0
-  for (const s of below.values()) belowTotal += s
+  // Iterate until no entries exceed cap. Each pass caps at least one new
+  // entry, so the loop terminates in at most N passes. A safety bound
+  // prevents infinite loops if redistribution ping-pongs between entries
+  // (possible when cap * N < 1.0 and excess can't be absorbed).
+  let current = normalized
+  const maxIters = normalized.size + 1
+  for (let iter = 0; iter < maxIters; iter++) {
+    const above = new Map<string, number>()
+    const below = new Map<string, number>()
+    for (const [id, s] of current) {
+      if (s > cap) above.set(id, s)
+      else below.set(id, s)
+    }
+    if (above.size === 0) return current
 
-  const result = new Map<string, number>()
-  for (const id of above.keys()) result.set(id, cap)
-  if (belowTotal > 0) {
-    const scale = (belowTotal + excess) / belowTotal
-    for (const [id, s] of below) result.set(id, s * scale)
-  } else {
-    for (const [id, s] of below) result.set(id, s)
+    let excess = 0
+    for (const s of above.values()) excess += s - cap
+    let belowTotal = 0
+    for (const s of below.values()) belowTotal += s
+
+    const result = new Map<string, number>()
+    for (const id of above.keys()) result.set(id, cap)
+    if (belowTotal > 0) {
+      const scale = (belowTotal + excess) / belowTotal
+      for (const [id, s] of below) result.set(id, s * scale)
+    } else {
+      for (const [id, s] of below) result.set(id, s)
+    }
+    current = result
   }
+  // Safety: if we exhaust iterations (ping-pong), cap everyone at cap
+  // and let finalNormalize handle the sum.
+  const result = new Map<string, number>()
+  for (const [id, s] of current) result.set(id, Math.min(s, cap))
   return result
 }
 
