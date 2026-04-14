@@ -72,7 +72,7 @@ The attribution chain is verifiable by any party with the relevant records. No s
 
 Principle V
 
-The protocol is a public good; the product is not
+The protocol is open. The product is commercial.
 
 The atrib specification, the signing libraries, and the transparency log infrastructure are open and free. The queryable attribution graph, the analytics products, and the settlement resolution services are commercial.
 
