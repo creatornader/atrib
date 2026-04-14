@@ -10,7 +10,7 @@ node --version  # >= 20
 corepack enable  # enables pnpm
 
 # Clone and install
-git clone https://github.com/atrib-dev/atrib.git
+git clone https://github.com/creatornader/atrib.git
 cd atrib
 pnpm install
 
@@ -28,7 +28,7 @@ pnpm -r typecheck
 
 ### Bug Reports
 
-Open a [GitHub Issue](https://github.com/atrib-dev/atrib/issues/new?template=bug_report.md) with:
+Open a [GitHub Issue](https://github.com/creatornader/atrib/issues/new?template=bug_report.md) with:
 
 - Which package is affected (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`)
 - Steps to reproduce
@@ -37,7 +37,7 @@ Open a [GitHub Issue](https://github.com/atrib-dev/atrib/issues/new?template=bug
 
 ### Feature Requests
 
-Open a [GitHub Issue](https://github.com/atrib-dev/atrib/issues/new?template=feature_request.md) with your use case. Features that change the protocol must reference the spec (`atrib-spec.md`).
+Open a [GitHub Issue](https://github.com/creatornader/atrib/issues/new?template=feature_request.md) with your use case. Features that change the protocol must reference the spec (`atrib-spec.md`).
 
 ### Pull Requests
 

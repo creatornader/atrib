@@ -121,7 +121,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
       'atrib: McpServer.server.setRequestHandler is not a function — ' +
         'the MCP SDK shape this middleware depends on has changed. ' +
         'Operating in pass-through mode. Please file an issue at ' +
-        'github.com/anthropics/atrib with your @modelcontextprotocol/sdk version.',
+        'github.com/creatornader/atrib with your @modelcontextprotocol/sdk version.',
     )
     atribServer.flush = async () => {}
     return atribServer
