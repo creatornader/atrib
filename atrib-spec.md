@@ -1,22 +1,22 @@
-# atrib — Value Provenance Protocol
+# atrib
 
-**Draft 0.1 — April 2026**
+**Draft 0.1, April 2026**
 
 ---
 
-## §0 — Foundations
+## §0 Foundations
 
 _On the relationship between transparency, trust, and value in a world where agents act on our behalf._
 
-The internet has always promised portability of value. It has never delivered it. atrib is an attempt to finally make that promise real — not by controlling how value moves, but by making visible how it flows.
+The internet has always promised portability of value. It has never delivered it. atrib is an attempt to finally make that promise real, not by controlling how value moves, but by making visible how it flows.
 
 ## The Problem We Inherit
 
-The web was built to move information. It was never built to account for the value that information creates. When a piece of content influences a decision, when a tool enables an outcome, when an idea travels through a network and eventually causes something to happen — the web has no native way to record that journey. No memory. No receipt. No mechanism for credit to follow contribution.
+The web was built to move information. It was never built to account for the value that information creates. When a piece of content influences a decision, when a tool enables an outcome, when an idea travels through a network and eventually causes something to happen, the web has no native way to record that journey. No memory. No receipt. No mechanism for credit to follow contribution.
 
-Into that vacuum, advertising stepped. Advertising is not fundamentally about showing people things. It is about solving a provenance problem: how does a business know what caused a customer to appear? In the absence of native provenance infrastructure, the only solution was to surrender that question to a centralized intermediary — Google, Facebook, whoever owned enough of the pipe to see both the influence and the outcome simultaneously. Those intermediaries became the most valuable companies in the world not by creating value, but by **owning the layer that connects value creation to value capture.**
+Into that vacuum, advertising stepped. Advertising is not fundamentally about showing people things. It is about solving a provenance problem: how does a business know what caused a customer to appear? In the absence of native provenance infrastructure, the only solution was to surrender that question to a centralized intermediary (Google, Facebook, whoever owned enough of the pipe to see both the influence and the outcome simultaneously). Those intermediaries became the most valuable companies in the world not by creating value, but by **owning the layer that connects value creation to value capture.**
 
-The cost of that arrangement is visible everywhere. Content is optimized for engagement rather than truth because engagement is what the intermediary measures. Creators are compensated for attention rather than impact because attention is what the intermediary can see. Privacy is eroded because surveillance is how the intermediary maintains its position. The incentive gradient of the entire web bends toward whatever the intermediary finds legible — and the intermediary finds legible whatever it can monetize.
+The cost of that arrangement is visible everywhere. Content is optimized for engagement rather than truth because engagement is what the intermediary measures. Creators are compensated for attention rather than impact because attention is what the intermediary can see. Privacy is eroded because surveillance is how the intermediary maintains its position. The incentive gradient of the entire web bends toward whatever the intermediary finds legible, and the intermediary finds legible whatever it can monetize.
 
 This is not a moral failure. It is a structural consequence of missing infrastructure.
 
@@ -24,13 +24,13 @@ This is not a moral failure. It is a structural consequence of missing infrastru
 
 ## The Shift We Are Living Through
 
-The agent economy changes the terms of this problem. When AI agents do the majority of economically meaningful activity on the internet — discovering products, synthesizing information, making recommendations, completing transactions — the attention model of advertising has no surface to attach to. Agents do not have emotions. They cannot be manipulated by loss aversion or social proof. A banner ad means nothing to a language model.
+The agent economy changes the terms of this problem. When AI agents do the majority of economically meaningful activity on the internet (discovering products, synthesizing information, making recommendations, completing transactions) the attention model of advertising has no surface to attach to. Agents do not have emotions. They cannot be manipulated by loss aversion or social proof. A banner ad means nothing to a language model.
 
-But the underlying economic problem remains. Businesses still need customers. Creators of tools, content, and knowledge still contribute to outcomes. Value is still being created and captured. The question of _what led to what_ — the provenance question — does not go away. It becomes more urgent, and more complex, because the chains of contribution are longer, more distributed, and entirely invisible to existing measurement infrastructure.
+But the underlying economic problem remains. Businesses still need customers. Creators of tools, content, and knowledge still contribute to outcomes. Value is still being created and captured. The question of _what led to what_ (the provenance question) does not go away. It becomes more urgent, and more complex, because the chains of contribution are longer, more distributed, and entirely invisible to existing measurement infrastructure.
 
-**The agent economy is already generating real commerce with zero verified attribution infrastructure.** Every transaction that completes without a provenance record is value that pools at the platform layer — whoever runs the agent surface — rather than distributing to the contributors who actually caused it. This is the same structural problem as the old web. Same shape, higher stakes, faster clock.
+**The agent economy is already generating real commerce with zero verified attribution infrastructure.** Every transaction that completes without a provenance record is value that pools at the platform layer (whoever runs the agent surface) rather than distributing to the contributors who actually caused it. This is the same structural problem as the old web. Same shape, higher stakes, faster clock.
 
-The window to build provenance infrastructure before platforms absorb the problem — and solve it, as Google solved it, in a way that reconstitutes their centrality — is measured in months, not years.
+The window to build provenance infrastructure before platforms absorb the problem (and solve it, as Google solved it, in a way that reconstitutes their centrality) is measured in months, not years.
 
 ---
 
@@ -38,9 +38,9 @@ The window to build provenance infrastructure before platforms absorb the proble
 
 atrib is value provenance infrastructure for the agent economy. Not an identity layer. Not a payment layer. Not a content attribution system. Something that sits between all of those: **a verifiable record of how value moved.**
 
-The central claim is this: it is possible to make the structural relationships of the agent economy transparent — what tool calls preceded what outcomes, how contributions linked together within a session, what the observable shape of value creation actually was — without making the content of those interactions visible to anyone who should not see it.
+The central claim is this: it is possible to make the structural relationships of the agent economy transparent (what tool calls preceded what outcomes, how contributions linked together within a session, what the observable shape of value creation actually was) without making the content of those interactions visible to anyone who should not see it.
 
-This is observability without surveillance. The system becomes legible to itself — to its participants, to the parties with a legitimate stake in its outcomes — without becoming legible to surveillance. Accountability without inspection. Transparency without exposure.
+This is observability without surveillance. The system becomes legible to itself (to its participants, to the parties with a legitimate stake in its outcomes) without becoming legible to surveillance. Accountability without inspection. Transparency without exposure.
 
 This distinction matters because every prior attempt at provenance has collapsed it. C2PA proves a certificate exists but cannot say what it caused. ProRata tracks content usage but keeps advertising as the economic model. Blockchain provenance systems make everything visible to everyone, which is privacy-hostile by design. OpenTelemetry makes systems observable to their operators but invisible to participants.
 
@@ -50,19 +50,19 @@ Principle I
 
 Provenance travels with the artifact
 
-Every tool call, every content retrieval, every agent action carries a signed record of its origin and its structural position in the session — who called what, in what order, in what context. This record is embedded at creation time — not appended later, not inferred from logs. It is native to the interaction, not a post-hoc annotation. What those structural relationships mean for value distribution is a question for the policy layer, not for the record itself.
+Every tool call, every content retrieval, every agent action carries a signed record of its origin and its structural position in the session: who called what, in what order, in what context. This record is embedded at creation time, not appended later, not inferred from logs. It is native to the interaction, not a post-hoc annotation. What those structural relationships mean for value distribution is a question for the policy layer, not for the record itself.
 
 Principle II
 
 Accountability without content exposure
 
-What is published globally is not the content of interactions but cryptographic commitments to them. Anyone can verify that an attribution record existed and was unaltered. No one can read what it contained without the holder's consent. Privacy and accountability are not in tension here — they are structurally separated.
+What is published globally is not the content of interactions but cryptographic commitments to them. Anyone can verify that an attribution record existed and was unaltered. No one can read what it contained without the holder's consent. Privacy and accountability are not in tension here; they are structurally separated.
 
 Principle III
 
 Settlement is separate from attribution
 
-atrib records what happened and who contributed. It does not move money, enforce agreements, or determine outcomes. Payment rails, legal agreements, and business decisions happen on top of verified attribution data. The protocol is neutral about what participants do with the truth — it only insists that the truth be available.
+atrib records what happened and who contributed. It does not move money, enforce agreements, or determine outcomes. Payment rails, legal agreements, and business decisions happen on top of verified attribution data. The protocol is neutral about what participants do with the truth; it only insists that the truth be available.
 
 Principle IV
 
@@ -74,7 +74,7 @@ Principle V
 
 The protocol is a public good; the product is not
 
-The atrib specification, the signing libraries, and the transparency log infrastructure are open and free. The queryable attribution graph, the analytics products, and the settlement resolution services are commercial. This is the only model that produces both adoption and sustainability — and it is the only model that keeps the protocol trustworthy over time.
+The atrib specification, the signing libraries, and the transparency log infrastructure are open and free. The queryable attribution graph, the analytics products, and the settlement resolution services are commercial. This is the only model that produces both adoption and sustainability, and it is the only model that keeps the protocol trustworthy over time.
 
 ---
 
@@ -82,21 +82,21 @@ The atrib specification, the signing libraries, and the transparency log infrast
 
 We do not claim that advertising will disappear. We claim that the structural necessity of advertising as the primary funding model for the internet rests on a single foundation: the absence of native provenance infrastructure. When that foundation erodes, the model built on it becomes optional rather than inevitable.
 
-Businesses will always need to reach new customers. Discovery is a real problem that advertising partially solves. But the attribution function of advertising — proving that a specific message caused a specific outcome, in order to justify the spend — is entirely a workaround for missing infrastructure. When the infrastructure exists, the workaround becomes unnecessary.
+Businesses will always need to reach new customers. Discovery is a real problem that advertising partially solves. But the attribution function of advertising (proving that a specific message caused a specific outcome, in order to justify the spend) is entirely a workaround for missing infrastructure. When the infrastructure exists, the workaround becomes unnecessary.
 
-The agent economy provides the discovery layer. Agents surface products, synthesize recommendations, complete transactions — all without requiring the user's attention to be purchased. **atrib provides the attribution layer: the mechanism by which value flows back to the contributors who made those agent actions useful, without any intermediary needing to own the pipe.**
+The agent economy provides the discovery layer. Agents surface products, synthesize recommendations, complete transactions, all without requiring the user's attention to be purchased. **atrib provides the attribution layer: the mechanism by which value flows back to the contributors who made those agent actions useful, without any intermediary needing to own the pipe.**
 
 That is not advertising replacement through disruption. It is advertising replacement through making the problem advertising was solving obsolete.
 
-The internet was built to move information freely. It failed to move value fairly. That failure was not inevitable — it was a consequence of building a network without provenance infrastructure, and then watching the vacuum fill with surveillance capitalism.
+The internet was built to move information freely. It failed to move value fairly. That failure was not inevitable; it was a consequence of building a network without provenance infrastructure, and then watching the vacuum fill with surveillance capitalism.
 
 We are building at a moment when the architecture of the web is being renegotiated. Agents are replacing browsers as the primary interface. Protocols are being written that will determine how value flows for the next generation. **The question of who owns the provenance layer in this new architecture will determine whether we reproduce the extractive dynamics of the old web or build something structurally different.**
 
-atrib is a bet that the answer does not have to be a company. It can be a protocol — open, verifiable, and owned by no one — with a company that builds the best products on top of it. That is the only model that earns trust at the scale this problem requires.
+atrib is a bet that the answer does not have to be a company. It can be a protocol (open, verifiable, and owned by no one) with a company that builds the best products on top of it. That is the only model that earns trust at the scale this problem requires.
 
 ---
 
-## §1 — Attribution Record Format
+## §1 Attribution Record Format
 
 _The canonical data model, signing protocol, and propagation mechanism for atrib attribution records._
 
@@ -115,7 +115,7 @@ Contents
 11. 1.4.3Verification procedure
 12. 1.4.4Test vector validation
 13. 1.5Context Propagation
-14. 1.5.1context_id — the session anchor
+14. 1.5.1context_id: the session anchor
 15. 1.5.2HTTP transport: tracestate
 16. 1.5.3HTTP fallback: X-atrib-Chain
 17. 1.5.4MCP transport: params.\_meta
@@ -130,7 +130,7 @@ Contents
 26. 1.8Known Limitations
 27. Interoperability Roadmap
 
-### 1.1 — Normative Requirements Language
+### 1.1 Normative Requirements Language
 
 The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RECOMMENDED, MAY, and OPTIONAL in this document are to be interpreted as described in RFC 2119 and RFC 8174.
 
@@ -138,27 +138,27 @@ All normative requirements in this section are prefixed with their requirement l
 
 ---
 
-### 1.2 — The Attribution Record
+### 1.2 The Attribution Record
 
-An attribution record is the atomic unit of atrib provenance. Each record documents a single event in an attribution chain — a tool call, a transaction — and cryptographically binds that event to its creator, its position in the chain, and the session that contains it. The chain is structural, not causal: it records what happened and how records relate to each other, not why one event caused another. Causal interpretation belongs to the query and policy layers built on top of these records.
+An attribution record is the atomic unit of atrib provenance. Each record documents a single event in an attribution chain (a tool call, a transaction) and cryptographically binds that event to its creator, its position in the chain, and the session that contains it. The chain is structural, not causal: it records what happened and how records relate to each other, not why one event caused another. Causal interpretation belongs to the query and policy layers built on top of these records.
 
 An attribution record is a JSON object with the following fields:
 
 ```
 {
   "spec_version":  "atrib/1.0",
-  "content_id":   "sha256:",        // who served this — see §1.2.2
+  "content_id":   "sha256:",        // who served this (see §1.2.2)
   "creator_key":  "",
-  "chain_root":   "sha256:",        // hash of parent record, or context_id for genesis — see §1.2.3
-  "event_type":   "tool_call",           // or "transaction" — see §1.2.4
-  "context_id":   "", // 32 hex chars — see §1.5.1
+  "chain_root":   "sha256:",        // hash of parent record, or context_id for genesis (see §1.2.3)
+  "event_type":   "tool_call",           // or "transaction" (see §1.2.4)
+  "context_id":   "", // 32 hex chars (see §1.5.1)
   "timestamp":    1743850000000,         // Unix milliseconds, integer
-  "session_token":"", // OPTIONAL — see §1.5.5; omitted when not in a cross-trace session
+  "session_token":"", // OPTIONAL (see §1.5.5); omitted when not in a cross-trace session
   "signature":    ""
 }
 ```
 
-#### 1.2.1 — Field Definitions
+#### 1.2.1 Field Definitions
 
 | Field         | Type    | Req  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------- | ------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -172,9 +172,9 @@ An attribution record is a JSON object with the following fields:
 | session_token | string  | MAY  | Base64url-encoded 16-byte opaque token identifying the logical session across OTel trace boundaries. Present only when the record was emitted in a cross-trace session. When present, the graph query layer uses this field to construct CROSS_SESSION edges between records with different context_ids that share the same session_token. See §1.5.5. The session_token field is included in the canonical serialization and covered by the signature. |
 | signature     | string  | MUST | Ed25519 signature over the canonical serialization of the record with the signature field omitted, encoded as base64url (RFC 4648 §5, no padding). 86 characters. See §1.4 for the full signing procedure.                                                                                                                                                                                                                                              |
 
-#### 1.2.2 — content_id Derivation
+#### 1.2.2 content_id Derivation
 
-The `content_id` identifies who specifically served a piece of content — not what the content was, and not a fingerprint of the response payload. Two different MCP server operators serving the same tool will produce different `content_id` values. This is intentional: provenance is about the serving entity, not the served artifact.
+The `content_id` identifies who specifically served a piece of content, not what the content was, and not a fingerprint of the response payload. Two different MCP server operators serving the same tool will produce different `content_id` values. This is intentional: provenance is about the serving entity, not the served artifact.
 
 The `content_id` MUST be computed as follows:
 
@@ -195,11 +195,11 @@ content_id = "sha256:" + hex(digest)  // lowercase hex, no spaces
 // content_id = "sha256:3f8a2b..."
 ```
 
-**Note — Server URL Normalization** Before hashing, implementations MUST normalize the server URL: lowercase the scheme and host, remove any trailing slash from the path, and preserve the port if explicitly specified. Query strings and fragments are excluded. A server at `HTTPS://Tools.Example.Com/` and one at `https://tools.example.com` must produce the same content_id.
+**Note:** Server URL Normalization** Before hashing, implementations MUST normalize the server URL: lowercase the scheme and host, remove any trailing slash from the path, and preserve the port if explicitly specified. Query strings and fragments are excluded. A server at `HTTPS://Tools.Example.Com/` and one at `https://tools.example.com` must produce the same content_id.
 
-#### 1.2.3 — chain_root for Genesis Records
+#### 1.2.3 chain_root for Genesis Records
 
-Every attribution chain begins with a genesis record — the first hop in a session that has no upstream atrib context. Genesis records arise when a tool server receives a call that carries no `params._meta.atrib` field, or when the propagated context cannot be verified.
+Every attribution chain begins with a genesis record: the first hop in a session that has no upstream atrib context. Genesis records arise when a tool server receives a call that carries no `params._meta.atrib` field, or when the propagated context cannot be verified.
 
 For a genesis record, the `chain_root` MUST be computed as:
 
@@ -207,9 +207,9 @@ For a genesis record, the `chain_root` MUST be computed as:
 chain_root = "sha256:" + hex(SHA-256(UTF-8(context_id)))
 ```
 
-This anchors every genesis record to its session without requiring a parent record. It is verifiable by any party who knows the context_id. A chain beginning with a genesis record is valid and complete — its shorter length is a natural consequence of being the first contributor in a session, not a defect.
+This anchors every genesis record to its session without requiring a parent record. It is verifiable by any party who knows the context_id. A chain beginning with a genesis record is valid and complete; its shorter length is a natural consequence of being the first contributor in a session, not a defect.
 
-#### 1.2.4 — event_type Values
+#### 1.2.4 event_type Values
 
 This specification defines two event_type values. No other values are valid in records conforming to this specification version.
 
@@ -220,7 +220,7 @@ This specification defines two event_type values. No other values are valid in r
 
 ---
 
-### 1.3 — Canonical Serialization
+### 1.3 Canonical Serialization
 
 Before signing or hashing, an attribution record MUST be serialized to a canonical byte sequence. Non-canonical serialization is one of the most common sources of interoperability failure in cryptographic systems. This specification uses JSON Canonicalization Scheme (JCS, RFC 8785) as the canonical form.
 
@@ -233,7 +233,7 @@ To produce the canonical serialization for signing, implementations MUST:
 First, construct the record object with all fields present including a placeholder empty string for `signature`. Second, remove the `signature` field entirely from the object. Third, apply JCS serialization (RFC 8785) to produce a UTF-8 byte sequence. The resulting bytes are the signing input.
 
 ```
-// Record with signature field present (no session_token — most common case):
+// Record with signature field present (no session_token, most common case):
 {
   "spec_version": "atrib/1.0",
   "content_id":   "sha256:3f8a2b...",
@@ -253,20 +253,20 @@ First, construct the record object with all fields present including a placehold
 
 // Notes:
 // JCS sorts keys lexicographically. No whitespace. No trailing newline.
-// session_token is omitted entirely when not present — absent field vs null are different.
+// session_token is omitted entirely when not present. Absent field vs null are different.
 // A record without session_token and one with session_token: null would produce
 // different canonical forms and therefore different signatures. Always omit the field.
 ```
 
-**Implementation Warning — timestamp precision** The `timestamp` field MUST be a JSON integer (no decimal point, no exponent notation) representing milliseconds. A timestamp of `1743850000000` serializes as the integer `1743850000000` in JCS, not as `1.74385e12` or `"1743850000000"`. Incorrect serialization will produce a different signing input and cause signature verification to fail.
+**Implementation Warning:** timestamp precision** The `timestamp` field MUST be a JSON integer (no decimal point, no exponent notation) representing milliseconds. A timestamp of `1743850000000` serializes as the integer `1743850000000` in JCS, not as `1.74385e12` or `"1743850000000"`. Incorrect serialization will produce a different signing input and cause signature verification to fail.
 
 ---
 
-### 1.4 — Signing and Verification
+### 1.4 Signing and Verification
 
 atrib uses Ed25519 (RFC 8032, §5.1) for all attribution record signing. Ed25519 provides compact signatures (64 bytes), fast verification, strong security, and does not require a PKI or certificate authority. Each creator generates and controls their own keypair.
 
-#### 1.4.1 — Key Format
+#### 1.4.1 Key Format
 
 Creator keypairs are raw 32-byte Ed25519 keys. The public key is encoded as base64url without padding (RFC 4648 §5) for inclusion in the `creator_key` field. The private key is retained by the creator and never transmitted.
 
@@ -281,7 +281,7 @@ const creatorKey = btoa(String.fromCharCode(...publicKey))
 // → 43-character string
 ```
 
-#### 1.4.2 — Signing Procedure
+#### 1.4.2 Signing Procedure
 
 To sign an attribution record, an implementation MUST:
 
@@ -304,7 +304,7 @@ function signRecord(record: AtribRecord, privateKey: Uint8Array): AtribRecord {
 }
 ```
 
-#### 1.4.3 — Verification Procedure
+#### 1.4.3 Verification Procedure
 
 To verify an attribution record, an implementation MUST:
 
@@ -326,19 +326,19 @@ Step 8: Verify that `context_id` is exactly 32 lowercase hex characters. Reject 
 
 A record passes verification if and only if all eight steps succeed. A partial verification is not valid.
 
-#### 1.4.4 — Test Vector Validation
+#### 1.4.4 Test Vector Validation
 
 All implementations of Ed25519 signing and verification MUST be validated against the Wycheproof test vectors for EdDSA (github.com/C2SP/wycheproof, `testvectors_v1/eddsa_verify_test.json`) prior to production deployment. Any test vector marked `"result": "invalid"` that an implementation accepts is a security defect. Any test vector marked `"result": "valid"` that an implementation rejects is a compatibility defect.
 
-**Note — Key Rotation** Key rotation is deferred to v2. In v1, a creator's `creator_key` is treated as stable. Implementers who need key rotation in v1 should issue new records with the new key and maintain a public attestation linking old and new keys. A formal key rotation mechanism will be specified in §4 (Key Management) of a future revision.
+**Note:** Key Rotation** Key rotation is deferred to v2. In v1, a creator's `creator_key` is treated as stable. Implementers who need key rotation in v1 should issue new records with the new key and maintain a public attestation linking old and new keys. A formal key rotation mechanism will be specified in §4 (Key Management) of a future revision.
 
 ---
 
-### 1.5 — Context Propagation
+### 1.5 Context Propagation
 
-For attribution chains to form, context must travel between hops — from the agent that initiates a session through every tool it calls. This section defines the propagation mechanism for each supported transport.
+For attribution chains to form, context must travel between hops, from the agent that initiates a session through every tool it calls. This section defines the propagation mechanism for each supported transport.
 
-#### 1.5.1 — context_id: The Session Anchor
+#### 1.5.1 context_id: The Session Anchor
 
 The `context_id` is the join key that connects all attribution records in a session to each other and to the transaction event that closes it. Without it, records are isolated facts. With it, they form a graph.
 
@@ -355,7 +355,7 @@ context_id = "4bf92f3577b34da6a3ce929d0e0e4736"
 
 The `context_id` is **not** generated by atrib. It is the trace-id that already exists in the OTel instrumentation of the session. If the agent runtime does not produce OTel traces, implementations SHOULD generate a cryptographically random 16-byte value and use its hex encoding as the context_id, then inject it into any OTel spans created during the session.
 
-#### 1.5.2 — HTTP Transport: tracestate
+#### 1.5.2 HTTP Transport: tracestate
 
 When attribution context is propagated over HTTP, it MUST travel in the `tracestate` header, as an entry with the key `atrib`. The tracestate format follows W3C Trace Context Level 2 (www.w3.org/TR/trace-context-2/).
 
@@ -365,7 +365,7 @@ The value of the `atrib` tracestate entry is a compact reference token, not a fu
 token = base64url(record_hash_bytes) + "." + base64url(creator_key_bytes)
 
 // record_hash_bytes: raw 32 bytes of the SHA-256 of the JCS-canonical signed record
-// (no "sha256:" prefix — raw bytes only)
+// (no "sha256:" prefix; raw bytes only)
 // creator_key_bytes: raw 32 bytes of the Ed25519 public key of the record's creator
 
 // Maximum length: 43 + 1 + 43 = 87 characters
@@ -379,7 +379,7 @@ Implementations MUST preserve any existing tracestate entries when adding the `a
 
 When reading an inbound tracestate, implementations MUST extract the `atrib` entry if present and decode the token to recover `record_hash` and `creator_key`. The `record_hash` becomes the `chain_root` field of the next attribution record emitted in this chain. The `creator_key` identifies the creator of the record that produced this token.
 
-#### 1.5.3 — HTTP Fallback: X-atrib-Chain
+#### 1.5.3 HTTP Fallback: X-atrib-Chain
 
 Some HTTP proxies, load balancers, and middleware strip unknown `tracestate` entries or the `tracestate` header entirely. When the `atrib` entry is absent from an inbound `tracestate`, implementations SHOULD check for a fallback header.
 
@@ -392,7 +392,7 @@ X-atrib-Chain: D4a6GHvb...ABC.XYZ...QRS
 
 Implementations SHOULD set both `tracestate: atrib=...` and `X-atrib-Chain: ...` on outbound requests. Implementations MUST prefer the tracestate entry over the fallback header when both are present.
 
-#### 1.5.4 — MCP Transport: params.\_meta
+#### 1.5.4 MCP Transport: params.\_meta
 
 MCP messages do not have HTTP headers. Attribution context MUST be propagated inside the `params._meta` property bag of MCP request messages, following the OTel MCP Semantic Conventions (opentelemetry.io/docs/specs/semconv/gen-ai/mcp/).
 
@@ -408,7 +408,7 @@ Implementations MUST inject both standard OTel context and the atrib token into 
     "_meta": {
       "traceparent": "00-4bf92f35...-00f067aa...-01", // W3C traceparent
       "tracestate":  "atrib=D4a6GHvb...ABC.XYZ...QRS", // atrib token
-      "baggage":     "atrib-session="    // if cross-trace session — see §1.5.5
+      "baggage":     "atrib-session="    // if cross-trace session (see §1.5.5)
     }
   }
 }
@@ -418,9 +418,9 @@ This propagation format follows the MCP context propagation proposal (github.com
 
 For MCP over stdio transport, `params._meta` is the only propagation channel. There are no HTTP headers. Implementations MUST NOT attempt to inject attribution context into any other field of the MCP message.
 
-#### 1.5.5 — Cross-Trace Session Continuity
+#### 1.5.5 Cross-Trace Session Continuity
 
-OTel traces have natural boundaries — a trace ends when a session ends. In long-running agent deployments, a user may interact with an agent across multiple distinct traces, and a transaction may complete in a trace that began independently of the traces that produced the attribution records.
+OTel traces have natural boundaries: a trace ends when a session ends. In long-running agent deployments, a user may interact with an agent across multiple distinct traces, and a transaction may complete in a trace that began independently of the traces that produced the attribution records.
 
 To bridge attribution across trace boundaries, implementations MAY generate a `session_token`: a stable identifier for the logical session that persists across OTel trace boundaries.
 
@@ -434,18 +434,18 @@ When present, the `session_token` MUST be propagated in the W3C Baggage header (
 
 Attribution records that carry a `session_token` across trace boundaries can be grouped into the same logical session by the attribution graph query layer, even when their `context_id` values differ.
 
-**Note — session_token is optional in v1** Cross-trace session linking is a v1 feature with optional adoption. Implementations that do not generate session tokens will produce valid attribution chains within each trace. The session_token mechanism enables richer attribution graphs for deployments where transactions routinely complete in a different trace than the contributing tool calls.
+**Note:** session_token is optional in v1** Cross-trace session linking is a v1 feature with optional adoption. Implementations that do not generate session tokens will produce valid attribution chains within each trace. The session_token mechanism enables richer attribution graphs for deployments where transactions routinely complete in a different trace than the contributing tool calls.
 
 ---
 
-### 1.6 — Unsigned Hops and Gap Nodes
+### 1.6 Unsigned Hops and Gap Nodes
 
 Not every MCP server in an agent's tool chain will have atrib installed in v1. When an agent calls a tool that does not emit a signed attribution record, the chain has an unsigned hop. This is expected and must be handled gracefully.
 
 An unsigned hop arises when:
 
-— an MCP tool call completes successfully but no attribution record is received in response, and\
-— the OTel span for the call is present, indicating the call occurred.
+- an MCP tool call completes successfully but no attribution record is received in response, and\
+- the OTel span for the call is present, indicating the call occurred.
 
 Implementations SHOULD record unsigned hops as gap nodes in the attribution graph. A gap node contains:
 
@@ -460,19 +460,19 @@ Implementations SHOULD record unsigned hops as gap nodes in the attribution grap
 }
 ```
 
-Gap nodes are part of the attribution graph. They are visible in graph queries. They carry a `verification_state` of `unsigned` — the lowest verification state — because no signature exists to verify. Their presence does not invalidate the chain or prevent settlement recommendations from being generated. What an unsigned node means for attribution weight is a question for the policy layer (§4), not for this section, which defines only the record format and what constitutes a gap node.
+Gap nodes are part of the attribution graph. They are visible in graph queries. They carry a `verification_state` of `unsigned` (the lowest verification state) because no signature exists to verify. Their presence does not invalidate the chain or prevent settlement recommendations from being generated. What an unsigned node means for attribution weight is a question for the policy layer (§4), not for this section, which defines only the record format and what constitutes a gap node.
 
 A creator who has not signed their contribution has not asserted a claim. The gap node preserves the fact that an unsigned hop occurred, making it visible to any party who inspects the graph, rather than silently excluding it.
 
 ---
 
-### 1.7 — Transaction Event Hooks
+### 1.7 Transaction Event Hooks
 
-The attribution chain is complete when a transaction event closes the loop — connecting the tool calls that contributed to the commerce session to the actual moment of purchase. This section defines how atrib attaches to each supported commerce protocol.
+The attribution chain is complete when a transaction event closes the loop, connecting the tool calls that contributed to the commerce session to the actual moment of purchase. This section defines how atrib attaches to each supported commerce protocol.
 
 In every case, the linking mechanism is the same: the `context_id` of the agent session must be embedded in the transaction metadata when the checkout is initiated, so that the transaction event webhook can be matched back to the attribution chain.
 
-#### 1.7.1 — ACP (Agentic Commerce Protocol)
+#### 1.7.1 ACP (Agentic Commerce Protocol)
 
 ACP is the open standard published at `github.com/agentic-commerce-protocol/agentic-commerce-protocol`. The transaction event hook is the success response from `POST /checkout_sessions/{id}/complete`. A successful completion is signaled by `status === "completed"` together with an embedded `order` object whose `id` is a string. The `order.permalink_url` (when present) is the canonical post-purchase URL atrib uses to derive the transaction record's `content_id`.
 
@@ -526,7 +526,7 @@ The server-to-merchant order webhook events use snake_case event types, NOT dot-
 
 Detection MUST match all three shapes (completion response, `order_create`, `order_update`).
 
-#### 1.7.2 — UCP (Universal Commerce Protocol)
+#### 1.7.2 UCP (Universal Commerce Protocol)
 
 UCP is the open standard published at `github.com/universal-commerce-protocol/ucp`. As of UCP version `2026-01-11`, the on-wire shape of a UCP checkout completion response is identical to ACP's, with one structural addition: a top-level `ucp` envelope carrying the protocol version and capability list. Detection MUST therefore use the presence of `ucp.version` to distinguish UCP from ACP when both produce a `status: "completed"` payload.
 
@@ -553,11 +553,11 @@ UCP is the open standard published at `github.com/universal-commerce-protocol/uc
 
 UCP does not yet expose a documented free-form metadata field for arbitrary agent context. The `context_id` MUST travel via the `X-atrib-Context` HTTP header on UCP checkout requests, and via `params._meta.atrib` for any MCP-transport UCP integrations.
 
-#### 1.7.3 — x402
+#### 1.7.3 x402
 
-x402 is the Coinbase open payment protocol published at `github.com/coinbase/x402`. It uses HTTP 402 / 200 request-response cycles. The transaction event is the HTTP 200 response containing a **`PAYMENT-RESPONSE`** header (x402 v2) — or the legacy **`X-PAYMENT-RESPONSE`** header (x402 v1, deprecated per RFC 6648 but still in deployment). Detection MUST accept both names case-insensitively.
+x402 is the Coinbase open payment protocol published at `github.com/coinbase/x402`. It uses HTTP 402 / 200 request-response cycles. The transaction event is the HTTP 200 response containing a **`PAYMENT-RESPONSE`** header (x402 v2), or the legacy **`X-PAYMENT-RESPONSE`** header (x402 v1, deprecated per RFC 6648 but still in deployment). Detection MUST accept both names case-insensitively.
 
-The header value is base64-encoded JSON containing a `SettlementResponse` object: `{ success, transaction, network, payer, requirements }`. atrib treats header presence as the on-wire detection signal — the body is not decoded for detection purposes (decoding is appropriate when extracting `transaction` or `payer` for content_id derivation in higher-fidelity downstream tooling).
+The header value is base64-encoded JSON containing a `SettlementResponse` object: `{ success, transaction, network, payer, requirements }`. atrib treats header presence as the on-wire detection signal; the body is not decoded for detection purposes (decoding is appropriate when extracting `transaction` or `payer` for content_id derivation in higher-fidelity downstream tooling).
 
 The agent MUST include the context_id as a custom header on the outbound payment request:
 
@@ -578,7 +578,7 @@ Content-Type: application/json
 // for future retrieval from proxy logs.
 ```
 
-#### 1.7.4 — MPP (Machine Payments Protocol)
+#### 1.7.4 MPP (Machine Payments Protocol)
 
 MPP is a separate protocol from x402, also built on HTTP 402, formally specified in IETF `draft-ryan-httpauth-payment-01` ("The 'Payment' HTTP Authentication Scheme") authored by engineers from Tempo Labs and Stripe and launched in March 2026. MPP uses the standard HTTP authentication scheme with `WWW-Authenticate: Payment` challenges and `Authorization: Payment` credentials.
 
@@ -605,11 +605,11 @@ Content-Type: application/json
 // The MPP payment-completed message carries it in the task metadata.
 ```
 
-#### 1.7.5 — AP2 and a2a-x402
+#### 1.7.5 AP2 and a2a-x402
 
 AP2 (Agent Payments Protocol) is Google's open protocol at `github.com/google-agentic-commerce/ap2`, version v0.1, extension URI `https://github.com/google-agentic-commerce/ap2/tree/v0.1`. **AP2 v0.1 does NOT use W3C Verifiable Credentials.** Earlier drafts of this specification assumed it would; that assumption was incorrect. The real wire format is an A2A (Agent2Agent) Message with a DataPart whose `data` object contains the key `ap2.mandates.PaymentMandate`.
 
-The PaymentMandate is the transaction event. (`IntentMandate` and `CartMandate` represent earlier funnel stages — intent capture and cart commitment respectively — and MUST NOT be detected as transaction events.) Implementations SHOULD embed the `context_id` in the agent extension fields where supported by the host A2A implementation; until AP2 standardizes a metadata field for it, the `context_id` MUST also travel via `params._meta.atrib` per §1.5.4.
+The PaymentMandate is the transaction event. (`IntentMandate` and `CartMandate` represent earlier funnel stages, intent capture and cart commitment respectively, and MUST NOT be detected as transaction events.) Implementations SHOULD embed the `context_id` in the agent extension fields where supported by the host A2A implementation; until AP2 standardizes a metadata field for it, the `context_id` MUST also travel via `params._meta.atrib` per §1.5.4.
 
 ```jsonc
 // AP2 v0.1 PaymentMandate Message (A2A DataPart shape)
@@ -696,13 +696,13 @@ Implementations MAY skip the legacy fallback if they target only AP2 v0.1 deploy
 
 ---
 
-### 1.8 — Known Limitations
+### 1.8 Known Limitations
 
 This specification is honest about what v1 does not solve. The following limitations are acknowledged and explicitly deferred.
 
-**Cross-session attribution.** When a user receives a recommendation from an agent and subsequently completes a purchase in a browser session — minutes, hours, or days later — the transaction carries no attribution chain. The agent session that produced the recommendation and the browser session that completed the purchase are structurally disconnected. A partial mitigation is available via recommendation tokens: opaque identifiers the agent embeds in recommendation URLs, which a merchant can capture on conversion. This is closer to affiliate attribution than provenance and carries the same limitations. A first-class solution requires persistent agent identity across sessions, which depends on work in progress at the DIF Trusted AI Agents Working Group and W3C AI Agent Protocol CG. This is a v2 integration target.
+**Cross-session attribution.** When a user receives a recommendation from an agent and subsequently completes a purchase in a browser session (minutes, hours, or days later) the transaction carries no attribution chain. The agent session that produced the recommendation and the browser session that completed the purchase are structurally disconnected. A partial mitigation is available via recommendation tokens: opaque identifiers the agent embeds in recommendation URLs, which a merchant can capture on conversion. This is closer to affiliate attribution than provenance and carries the same limitations. A first-class solution requires persistent agent identity across sessions, which depends on work in progress at the DIF Trusted AI Agents Working Group and W3C AI Agent Protocol CG. This is a v2 integration target.
 
-**Log federation.** In v1, all attribution records for a session should be submitted to the same log operator to enable complete graph queries. If contributing tools submit to different log operators, a query against one log will return an incomplete graph. A federation protocol — allowing log operators to reference each other's records via inclusion proof pointers — is deferred to v2 and will be defined in a future revision of this specification.
+**Log federation.** In v1, all attribution records for a session should be submitted to the same log operator to enable complete graph queries. If contributing tools submit to different log operators, a query against one log will return an incomplete graph. A federation protocol (allowing log operators to reference each other's records via inclusion proof pointers) is deferred to v2 and will be defined in a future revision of this specification.
 
 **Key rotation.** Ed25519 keypairs in v1 are treated as stable. There is no formal key rotation mechanism. Creators who need to rotate keys should issue a publicly-attested key rotation document linking old and new keys. A normative key rotation mechanism will be specified in a future revision.
 
@@ -712,19 +712,19 @@ This specification is honest about what v1 does not solve. The following limitat
 
 #### Interoperability Roadmap
 
-atrib is designed to complement — not compete with — existing standards work in identity, provenance, and agent trust. The following integration points are planned for v2 and inform architectural decisions in v1.
+atrib is designed to complement, not compete with, existing standards work in identity, provenance, and agent trust. The following integration points are planned for v2 and inform architectural decisions in v1.
 
 **DIF Trusted AI Agents Working Group.** DIF's Trusted AI Agents WG is defining identity, delegation, and accountability frameworks for autonomous agents. The persistent agent identity across sessions that their work will provide is the prerequisite for atrib's cross-session attribution (the recommendation_token mechanism). atrib's Ed25519 creator keys are a deliberate simplification of what will eventually be expressible as agent-scoped Verifiable Credentials with delegation chains. The v2 key management revision will define how atrib keys can be presented as DIF-compatible Verifiable Presentations.
 
-**DIF Creator Assertions Working Group.** DIF's Creator Assertions WG is defining content authenticity and provenance assertions, including how assertions are consumed by automated systems and agents. atrib attribution records are structurally compatible with DIF assertion formats — both use Ed25519 signing over canonical JSON. A v2 interoperability profile will define how an atrib attribution record can be wrapped as a DIF Creator Assertion, enabling attribution data to flow through systems that already consume the DIF format.
+**DIF Creator Assertions Working Group.** DIF's Creator Assertions WG is defining content authenticity and provenance assertions, including how assertions are consumed by automated systems and agents. atrib attribution records are structurally compatible with DIF assertion formats; both use Ed25519 signing over canonical JSON. A v2 interoperability profile will define how an atrib attribution record can be wrapped as a DIF Creator Assertion, enabling attribution data to flow through systems that already consume the DIF format.
 
-**C2PA (Coalition for Content Provenance and Authenticity).** C2PA defines cryptographic provenance manifests for media content. atrib extends this pattern to agent interactions — where the "content" is a tool call, not a photograph. A v2 integration will define how atrib attribution records can be embedded in C2PA manifests as consequence assertions — completing the loop that C2PA opened (provenance at creation) by adding the economic outcome that C2PA never addressed (provenance through to value capture).
+**C2PA (Coalition for Content Provenance and Authenticity).** C2PA defines cryptographic provenance manifests for media content. atrib extends this pattern to agent interactions, where the "content" is a tool call, not a photograph. A v2 integration will define how atrib attribution records can be embedded in C2PA manifests as consequence assertions, completing the loop that C2PA opened (provenance at creation) by adding the economic outcome that C2PA never addressed (provenance through to value capture).
 
 **W3C AI Agent Protocol Community Group.** The emerging work on standardizing agent-to-agent communication protocols is a natural home for atrib context propagation. The v1 propagation mechanism (`params._meta.atrib` in MCP, `tracestate` in HTTP) is designed to be portable to any agent protocol that supports metadata propagation.
 
 ---
 
-## §2 — Merkle Log Protocol
+## §2 Merkle Log Protocol
 
 _Commitment, not content. The append-only transparency log for attribution records._
 
@@ -751,11 +751,11 @@ Contents
 17. 2.7Inclusion Proof Verification
 18. 2.8Proof Bundle Format
 19. 2.9Witnessing and Cosignatures
-20. 2.10What the Log Stores — and What It Does Not
+20. 2.10What the Log Stores and What It Does Not
 
-### 2.1 — Purpose and Design Rationale
+### 2.1 Purpose and Design Rationale
 
-The atrib log is a public, append-only Merkle tree. When a creator submits an attribution record to the log, they receive an inclusion proof — a cryptographic commitment that the record exists at a specific position in the tree, verifiable by any third party without trusting the log operator.
+The atrib log is a public, append-only Merkle tree. When a creator submits an attribution record to the log, they receive an inclusion proof: a cryptographic commitment that the record exists at a specific position in the tree, verifiable by any third party without trusting the log operator.
 
 The log enforces two properties that are the foundation of atrib's trust model:
 
@@ -767,7 +767,7 @@ The log is built on the tlog-tiles specification (c2sp.org/tlog-tiles), which de
 
 ---
 
-### 2.2 — Log Identity and Parameters
+### 2.2 Log Identity and Parameters
 
 A tiled transparency log is identified by three parameters:
 
@@ -779,21 +779,21 @@ A tiled transparency log is identified by three parameters:
 
 Log operators running compatible logs MUST use a unique origin matching their URL prefix, and MUST publish their log public key at a stable, documented URL.
 
-**Note — Log versioning** The `/v1` path component in the URL prefix and origin is the log version, not the atrib spec version. When the log's entry format requires a breaking change, a new origin (`log.atrib.io/v2`) will be used rather than modifying the existing log. Existing entries in `log.atrib.io/v1` will remain accessible indefinitely.
+**Note:** Log versioning** The `/v1` path component in the URL prefix and origin is the log version, not the atrib spec version. When the log's entry format requires a breaking change, a new origin (`log.atrib.io/v2`) will be used rather than modifying the existing log. Existing entries in `log.atrib.io/v1` will remain accessible indefinitely.
 
 ---
 
-### 2.3 — Log Entry Format
+### 2.3 Log Entry Format
 
-Each entry in the atrib log is a **commitment** to an attribution record — not the record itself. The log stores the minimum information required for verification: a hash of the record, the creator's public key, and the context_id. This is sufficient to prove that a signed attribution record for a given creator and session existed at a specific point in time, without revealing the record's content.
+Each entry in the atrib log is a **commitment** to an attribution record, not the record itself. The log stores the minimum information required for verification: a hash of the record, the creator's public key, and the context_id. This is sufficient to prove that a signed attribution record for a given creator and session existed at a specific point in time, without revealing the record's content.
 
-#### 2.3.1 — Entry Serialization
+#### 2.3.1 Entry Serialization
 
 A log entry is a fixed-structure binary message. It MUST be serialized as follows:
 
 ```
 struct AtribLogEntry {
-  u8  version;         // 0x01 — entry format version
+  u8  version;         // 0x01, entry format version
   u8  record_hash[32]; // SHA-256 of the JCS-canonical attribution record (with signature)
   u8  creator_key[32]; // raw 32-byte Ed25519 public key
   u8  context_id[16];  // raw 16 bytes decoded from the 32-char hex context_id
@@ -805,7 +805,7 @@ struct AtribLogEntry {
 
 All multi-byte integers are big-endian. The `record_hash` is computed over the _complete_ attribution record including its `signature` field, after JCS serialization. This binds the commitment to the specific signed record, not just its pre-signature content.
 
-#### 2.3.2 — Leaf Hash Computation
+#### 2.3.2 Leaf Hash Computation
 
 Log entry hashes are computed per RFC 6962, Section 2.1 (the same algorithm used by Certificate Transparency). A leaf hash is:
 
@@ -821,11 +821,11 @@ These are the hashes stored in the tiles served by the tile API. Any client that
 
 ---
 
-### 2.4 — Checkpoint Format
+### 2.4 Checkpoint Format
 
-The log's state at any moment is summarized in a **checkpoint** — a signed statement of the tree's current size and root hash. Checkpoints follow the C2SP tlog-checkpoint specification (c2sp.org/tlog-checkpoint).
+The log's state at any moment is summarized in a **checkpoint**: a signed statement of the tree's current size and root hash. Checkpoints follow the C2SP tlog-checkpoint specification (c2sp.org/tlog-checkpoint).
 
-#### 2.4.1 — Body Structure
+#### 2.4.1 Body Structure
 
 A checkpoint body is a UTF-8 text block with exactly three mandatory lines followed by a newline, formatted as follows:
 
@@ -838,7 +838,7 @@ CsUYapGGPo4dkMgIAUqom/Xajj7h2fB2MPA3j2jxq2I=      ← root hash (standard base64
 
 The root hash is the SHA-256 Merkle Tree Hash (RFC 6962, Section 2.1) of all entries up to the stated tree size, encoded in standard base64 (RFC 4648 §4, with padding).
 
-#### 2.4.2 — Log Signing Key and Key ID
+#### 2.4.2 Log Signing Key and Key ID
 
 The log signs checkpoints with its Ed25519 private key. The key ID embedded in the signature line is derived per the C2SP signed-note specification:
 
@@ -858,12 +858,12 @@ The verifier key string published at `log.atrib.io/v1/log-pubkey` encodes the ke
 ```
 // vkey format: +hex(key_id)+base64(sig_type_byte || public_key)
 log.atrib.io/v1+a3b2c1d0+AQ...base64encodedpublickey...==
-// "AQ" is base64(0x01) — the Ed25519 signature type byte
+// "AQ" is base64(0x01), the Ed25519 signature type byte
 ```
 
-#### 2.4.3 — Signed Note Format
+#### 2.4.3 Signed Note Format
 
-The complete checkpoint — body plus signatures — is a signed note per the C2SP signed-note specification (c2sp.org/signed-note). The note has the checkpoint body as its text, followed by one or more signature lines:
+The complete checkpoint (body plus signatures) is a signed note per the C2SP signed-note specification (c2sp.org/signed-note). The note has the checkpoint body as its text, followed by one or more signature lines:
 
 ```
 log.atrib.io/v1
@@ -874,33 +874,33 @@ CsUYapGGPo4dkMgIAUqom/Xajj7h2fB2MPA3j2jxq2I=
 — witness.example.com e1f2a3b4+base64(cosignature)
 ```
 
-Each signature line begins with `— ` (em-dash, space), followed by the key name, a space, the hex key ID, a `+`, and the base64-encoded 64-byte signature over the note text (the body including its trailing newline).
+Each signature line begins with `— ` (U+2014 em-dash followed by a space in the canonical format), followed by the key name, a space, the hex key ID, a `+`, and the base64-encoded 64-byte signature over the note text (the body including its trailing newline).
 
 Clients MUST verify at least the log's own signature on any checkpoint before trusting it. Cosignatures from witnesses are additional trust anchors; their verification procedure is described in §2.9.
 
 ---
 
-### 2.5 — Tile API (Read Interface)
+### 2.5 Tile API (Read Interface)
 
 The log's read interface serves static resources over HTTP, following the C2SP tlog-tiles specification. All read endpoints are cacheable. Clients can compute any desired proof by fetching the relevant tiles in parallel without a dynamic proof API.
 
-#### 2.5.1 — Checkpoint Endpoint
+#### 2.5.1 Checkpoint Endpoint
 
 ```
 GET https://log.atrib.io/v1/checkpoint
 
 Response:
 Content-Type: text/plain; charset=utf-8
-Cache-Control: max-age=5  // mutable — checkpoint advances as entries are added
+Cache-Control: max-age=5  // mutable; checkpoint advances as entries are added
 
 // Body: signed note as defined in §2.4.3
 ```
 
 Clients SHOULD not cache the checkpoint beyond 5 seconds. Monitoring clients that tail the log MUST verify consistency between successive checkpoints using the tile data to confirm the log is append-only.
 
-#### 2.5.2 — Tile Endpoints
+#### 2.5.2 Tile Endpoints
 
-Merkle tree hashes are served as tiles — concatenated sequences of 32-byte SHA-256 hashes. Full tiles contain exactly 256 hashes (8,192 bytes). Partial tiles contain 1–255 hashes and are served at the rightmost edge of each tree level.
+Merkle tree hashes are served as tiles: concatenated sequences of 32-byte SHA-256 hashes. Full tiles contain exactly 256 hashes (8,192 bytes). Partial tiles contain 1–255 hashes and are served at the rightmost edge of each tree level.
 
 ```
 // Full tile:
@@ -920,7 +920,7 @@ Cache-Control: max-age=31536000, immutable  // full tiles are immutable
 // Body: <W> × 32 bytes of SHA-256 hashes, concatenated
 ```
 
-#### 2.5.3 — Entry Bundle Endpoint
+#### 2.5.3 Entry Bundle Endpoint
 
 Log entries are served as entry bundles at the level-0 path. Each bundle contains entries in sequence, each prefixed with a big-endian uint16 length.
 
@@ -943,22 +943,22 @@ struct LengthPrefixedEntry {
 }
 ```
 
-**Note — Entry bundle size** In v1, every AtribLogEntry is exactly 90 bytes, so every uint16 length prefix in an entry bundle will be `0x00 0x5A` (90 in big-endian). Clients MAY rely on this fixed size as a consistency check; future spec versions that change the entry size will use a new log origin.
+**Note:** Entry bundle size** In v1, every AtribLogEntry is exactly 90 bytes, so every uint16 length prefix in an entry bundle will be `0x00 0x5A` (90 in big-endian). Clients MAY rely on this fixed size as a consistency check; future spec versions that change the entry size will use a new log origin.
 
 ---
 
-### 2.6 — Submission API (Write Interface)
+### 2.6 Submission API (Write Interface)
 
-The write interface accepts attribution records and returns inclusion proofs. This API is distinct from the read interface — it requires a valid, verifiable attribution record and returns a proof that the commitment was added to the log.
+The write interface accepts attribution records and returns inclusion proofs. This API is distinct from the read interface: it requires a valid, verifiable attribution record and returns a proof that the commitment was added to the log.
 
-#### 2.6.1 — Submit Entry
+#### 2.6.1 Submit Entry
 
 ```
 POST https://log.atrib.io/v1/entries
 Content-Type: application/json
 X-atrib-Priority: normal              // optional, see below
 
-// Request body: a complete, signed attribution record (§1.2) — bare,
+// Request body: a complete, signed attribution record (§1.2), bare,
 // not wrapped in any envelope object.
 {
   "spec_version": "atrib/1.0",
@@ -972,14 +972,14 @@ X-atrib-Priority: normal              // optional, see below
 }
 ```
 
-The request body MUST be the bare JCS-canonical signed record exactly as defined in §1.2 — there is no enclosing wrapper object, and no field may be added or removed by the client during transport. The body bytes MUST be the same bytes that were signed (modulo whitespace, since `Content-Type: application/json` does not require canonical re-serialization on the wire — it is the receiver's responsibility to re-canonicalize before signature verification per §1.4.3).
+The request body MUST be the bare JCS-canonical signed record exactly as defined in §1.2; there is no enclosing wrapper object, and no field may be added or removed by the client during transport. The body bytes MUST be the same bytes that were signed (modulo whitespace, since `Content-Type: application/json` does not require canonical re-serialization on the wire; it is the receiver's responsibility to re-canonicalize before signature verification per §1.4.3).
 
 `X-atrib-Priority` is an OPTIONAL HTTP-level extension to the wire format. When present, its value MUST be one of `"high"` or `"normal"`. The semantics are:
 
-- `"high"` — the submitting client believes this record is on the critical path of an attribution chain that needs to be queryable promptly (per §5.3.5, transaction records are sent with `priority: "high"` so they are admitted before any pending `tool_call` records when the log's admission queue is congested).
-- `"normal"` — best-effort submission. This is the default when the header is absent.
+- `"high"`: the submitting client believes this record is on the critical path of an attribution chain that needs to be queryable promptly (per §5.3.5, transaction records are sent with `priority: "high"` so they are admitted before any pending `tool_call` records when the log's admission queue is congested).
+- `"normal"`: best-effort submission. This is the default when the header is absent.
 
-Logs MAY use this header to order admission when their ingestion capacity is finite, but MUST NOT use it to reject entries (a log that consistently rejects "normal" priority submissions is misbehaving). Logs MAY ignore the header entirely. The header is non-normative for log correctness — it is purely an admission-control hint that lets a congested log preserve transaction-record latency under load.
+Logs MAY use this header to order admission when their ingestion capacity is finite, but MUST NOT use it to reject entries (a log that consistently rejects "normal" priority submissions is misbehaving). Logs MAY ignore the header entirely. The header is non-normative for log correctness; it is purely an admission-control hint that lets a congested log preserve transaction-record latency under load.
 
 The log MUST perform the following validation before accepting an entry:
 
@@ -993,9 +993,9 @@ Step 4: Verify that `timestamp` is not more than 10 minutes in the future (a mor
 
 Step 5: Verify that `context_id` is exactly 32 lowercase hex characters. Reject with `400` if not.
 
-Step 6: Check for a duplicate — if an entry with the same `record_hash` already exists in the log, return the existing inclusion proof with `200 OK` rather than `409 Conflict`. Idempotent submission is required to handle retries safely.
+Step 6: Check for a duplicate: if an entry with the same `record_hash` already exists in the log, return the existing inclusion proof with `200 OK` rather than `409 Conflict`. Idempotent submission is required to handle retries safely.
 
-#### 2.6.2 — Inclusion Proof Response
+#### 2.6.2 Inclusion Proof Response
 
 On successful submission or duplicate detection, the log returns a proof bundle:
 
@@ -1019,13 +1019,13 @@ Content-Type: application/json
 
 Clients MUST verify the inclusion proof before treating the record as committed. The verification procedure is specified in §2.7.
 
-**Security — Do not trust without verification** A response from the submission API proves only that the log accepted the entry. It does not prove that the log is behaving correctly. Clients MUST verify the checkpoint signature and compute the inclusion proof independently using the tile data to establish that the log has not served a fabricated proof. Trusting unverified inclusion proofs defeats the tamper-evidence property.
+**Security:** Do not trust without verification** A response from the submission API proves only that the log accepted the entry. It does not prove that the log is behaving correctly. Clients MUST verify the checkpoint signature and compute the inclusion proof independently using the tile data to establish that the log has not served a fabricated proof. Trusting unverified inclusion proofs defeats the tamper-evidence property.
 
 ---
 
-### 2.7 — Inclusion Proof Verification
+### 2.7 Inclusion Proof Verification
 
-An inclusion proof demonstrates that a specific entry is at a specific position in the tree described by a checkpoint. Verification is performed locally using only the entry data and the hashes in the proof — no trust in the log server is required beyond the checkpoint signature.
+An inclusion proof demonstrates that a specific entry is at a specific position in the tree described by a checkpoint. Verification is performed locally using only the entry data and the hashes in the proof; no trust in the log server is required beyond the checkpoint signature.
 
 To verify an inclusion proof, an implementation MUST:
 
@@ -1042,7 +1042,7 @@ leaf_hash   = SHA-256(0x00 || entry_bytes)      // RFC 6962 leaf prefix
 
 Step 4: Verify that the recomputed `leaf_hash` matches the `leaf_hash` in the proof response.
 
-Step 5: Compute the root hash by applying the inclusion proof path from the leaf up to the root. The left/right placement at each level is determined by the RFC 6962 tree decomposition (split at the largest power of 2 strictly less than the current subtree size), NOT by `index % 2` — the `index % 2` shortcut is only correct for power-of-2 trees and produces wrong results for odd-sized trees:
+Step 5: Compute the root hash by applying the inclusion proof path from the leaf up to the root. The left/right placement at each level is determined by the RFC 6962 tree decomposition (split at the largest power of 2 strictly less than the current subtree size), NOT by `index % 2`. The `index % 2` shortcut is only correct for power-of-2 trees and produces wrong results for odd-sized trees:
 
 ```
 function verifyInclusion(index, treeSize, leafHash, proof):
@@ -1077,7 +1077,7 @@ If all six steps succeed, the entry is genuinely present in the log at the state
 
 ---
 
-### 2.8 — Proof Bundle Format
+### 2.8 Proof Bundle Format
 
 A proof bundle is a self-contained, offline-verifiable document that a creator can attach to an attribution record as evidence of its log commitment. It follows the C2SP tlog-proof specification (c2sp.org/tlog-proof).
 
@@ -1108,7 +1108,7 @@ Implementations SHOULD store proof bundles alongside attribution records. The `@
 
 ---
 
-### 2.9 — Witnessing and Cosignatures
+### 2.9 Witnessing and Cosignatures
 
 A checkpoint signed only by the log operator proves tamper-evidence within the log's own view. A **witness** is an independent party that verifies the log's append-only behavior and adds a cosignature to the checkpoint, making split-view attacks detectable.
 
@@ -1135,7 +1135,7 @@ The witnessing infrastructure used by `log.atrib.io` will be publicly documented
 
 ---
 
-### 2.10 — What the Log Stores — and What It Does Not
+### 2.10 What the Log Stores and What It Does Not
 
 This section states the privacy properties of the log precisely, because they are the foundation of atrib's claim to be "observability without surveillance."
 
@@ -1143,19 +1143,19 @@ This section states the privacy properties of the log precisely, because they ar
 
 **The log does not store:** the content of tool calls, the content of agent responses, the user's identity, the merchant's product data, the amounts of transactions, or any payload that is not listed in the AtribLogEntry structure above.
 
-**What this means in practice:** A party who fetches all entries from the log learns which creator keys were active, in which sessions (context_ids), at what times, and what type of events they recorded. They do not learn what those tools did, what was returned, who the user was, or what was purchased. The attribution graph connects records to transactions only when the merchant writes their own transaction record — and only the merchant knows the transaction details.
+**What this means in practice:** A party who fetches all entries from the log learns which creator keys were active, in which sessions (context_ids), at what times, and what type of events they recorded. They do not learn what those tools did, what was returned, who the user was, or what was purchased. The attribution graph connects records to transactions only when the merchant writes their own transaction record, and only the merchant knows the transaction details.
 
 The `context_id` is visible in the log and is the same value used in OTel traces. Implementers who wish to prevent correlation between log entries and OTel traces MAY generate a separate log context_id derived from but not equal to the OTel trace-id, at the cost of making independent audit harder. The default is to use the OTel trace-id directly.
 
-**Note — Creator key pseudonymity** Creator public keys are stable identifiers visible in the log. A party who observes a creator's public key across multiple entries can infer that the same creator was active across those sessions. Creators who require stronger unlinkability across sessions may generate per-session keypairs, but doing so forfeits the ability to accumulate attribution weight under a single identity. This tradeoff is a design choice for each creator, not a protocol decision.
+**Note:** Creator key pseudonymity** Creator public keys are stable identifiers visible in the log. A party who observes a creator's public key across multiple entries can infer that the same creator was active across those sessions. Creators who require stronger unlinkability across sessions may generate per-session keypairs, but doing so forfeits the ability to accumulate attribution weight under a single identity. This tradeoff is a design choice for each creator, not a protocol decision.
 
 ---
 
-## §3 — Graph Query Interface
+## §3 Graph Query Interface
 
 _Five edge types. Deterministic derivation. Fact layer only._
 
-The data model and query API for turning attribution records into a structured provenance graph — the input to policy evaluation and settlement calculation.
+The data model and query API for turning attribution records into a structured provenance graph, the input to policy evaluation and settlement calculation.
 
 Contents
 
@@ -1179,29 +1179,29 @@ Contents
 18. 3.5.4Error responses
 19. 3.6Implementation Notes
 
-### 3.1 — Design Principles and Rationale
+### 3.1 Design Principles and Rationale
 
-This section explains the reasoning behind the graph model's core design decisions. These are not preferences or conventions — they are the logical consequences of what a trust infrastructure can and cannot honestly assert. Understanding the reasoning matters as much as the rules themselves, because it determines how to evaluate proposed changes and extensions.
+This section explains the reasoning behind the graph model's core design decisions. These are not preferences or conventions; they are the logical consequences of what a trust infrastructure can and cannot honestly assert. Understanding the reasoning matters as much as the rules themselves, because it determines how to evaluate proposed changes and extensions.
 
 #### Why the graph records structure, not causality
 
-The most natural instinct when building an attribution system is to encode causal relationships — "tool A influenced tool B which led to transaction T." This is what attribution means in common language and what settlement calculations ultimately need to reason about. So why doesn't the protocol encode it?
+The most natural instinct when building an attribution system is to encode causal relationships: "tool A influenced tool B which led to transaction T." This is what attribution means in common language and what settlement calculations ultimately need to reason about. So why doesn't the protocol encode it?
 
 Because causality is always an inference, never a fact. A protocol can verify that event B occurred after event A in the same session, and that B's creator set their chain*root to the hash of A's record. It cannot verify that A \_caused* B, or that A's output was actually used, or that the agent's decision was influenced by A's result rather than something else entirely. Encoding a causal claim in a record that is signed and committed to an append-only log would mean committing an unverifiable assertion as if it were a verified fact. That is precisely what a trust infrastructure must not do.
 
-The practical consequence is that edges in the atrib graph are derived from observable structure — chain linkage, shared session identifiers, timestamps — and express only what that structure shows. What those structural relationships _mean_ causally is an inference that the policy layer makes, with full visibility into the evidence and full accountability for the interpretation. If a merchant and a creator disagree about whether a contribution was causally significant, they are disagreeing about a policy judgment, not about a fact the protocol recorded incorrectly. That is the right place for the disagreement to live.
+The practical consequence is that edges in the atrib graph are derived from observable structure (chain linkage, shared session identifiers, timestamps) and express only what that structure shows. What those structural relationships _mean_ causally is an inference that the policy layer makes, with full visibility into the evidence and full accountability for the interpretation. If a merchant and a creator disagree about whether a contribution was causally significant, they are disagreeing about a policy judgment, not about a fact the protocol recorded incorrectly. That is the right place for the disagreement to live.
 
 #### Why verification state is categorical, not numeric
 
-An earlier design of this specification used a numeric confidence score — a decimal between 0.0 and 1.0 — to represent how thoroughly a record had been verified. This was rejected for a specific reason: a number implies a ratio. If `log_committed` is 0.9 and `signature_valid` is 0.5, the number encodes the judgment that log commitment is worth roughly 1.8× a valid signature for attribution purposes. But whether that ratio is correct for any given policy is a business decision, not a protocol decision. Different merchants, different risk tolerances, different commercial contexts will weigh these differently.
+An earlier design of this specification used a numeric confidence score (a decimal between 0.0 and 1.0) to represent how thoroughly a record had been verified. This was rejected for a specific reason: a number implies a ratio. If `log_committed` is 0.9 and `signature_valid` is 0.5, the number encodes the judgment that log commitment is worth roughly 1.8× a valid signature for attribution purposes. But whether that ratio is correct for any given policy is a business decision, not a protocol decision. Different merchants, different risk tolerances, different commercial contexts will weigh these differently.
 
-By encoding verification status as a categorical enumeration — `unsigned`, `signature_valid`, `log_committed`, `witnessed` — the protocol reports a fact: what has been verified. The policy layer in §4 decides what each state is worth in the context of a specific attribution calculation. The protocol makes no claim about the relative value of the states beyond their strict ordering.
+By encoding verification status as a categorical enumeration (`unsigned`, `signature_valid`, `log_committed`, `witnessed`), the protocol reports a fact: what has been verified. The policy layer in §4 decides what each state is worth in the context of a specific attribution calculation. The protocol makes no claim about the relative value of the states beyond their strict ordering.
 
 The same reasoning applies to gap nodes. Their `unsigned` state is a fact: no signature was present. Whether an unsigned contribution deserves zero weight, nominal weight, or some other treatment is a policy question. The protocol records the absence of a signature. It does not mandate what that absence means for settlement.
 
 #### Why the graph is a strict fact layer
 
-The fact/policy separation is not an architectural nicety — it is the mechanism that makes independent verification possible. For attribution to be trusted by both creators and merchants, each party must be able to independently verify two things: that the graph accurately reflects what happened (verifiable from the log data and the deterministic derivation rules), and that the settlement recommendation was correctly derived from that graph under the stated policy (verifiable by running the policy algorithm locally against the graph). If fact and policy were mixed into a single layer, this independent verification would require reimplementing both layers together, which is practically impossible for most parties.
+The fact/policy separation is not an architectural nicety; it is the mechanism that makes independent verification possible. For attribution to be trusted by both creators and merchants, each party must be able to independently verify two things: that the graph accurately reflects what happened (verifiable from the log data and the deterministic derivation rules), and that the settlement recommendation was correctly derived from that graph under the stated policy (verifiable by running the policy algorithm locally against the graph). If fact and policy were mixed into a single layer, this independent verification would require reimplementing both layers together, which is practically impossible for most parties.
 
 The strict separation also makes the system auditable over time. If a settlement dispute arises, the question can be cleanly decomposed: "does the graph correctly represent the records?" and "was the policy correctly applied to this graph?" These are separable questions with separable answers. A merged layer produces a single opaque output where the source of any error is difficult to isolate.
 
@@ -1209,7 +1209,7 @@ The strict separation also makes the system auditable over time. If a settlement
 
 **The graph records structure, not causality.** Edges are derived from observable structure only. No edge type encodes a causal claim. Causal interpretation is performed by the policy layer.
 
-**Verification state is categorical.** The four states — `unsigned`, `signature_valid`, `log_committed`, `witnessed` — describe what has been verified. Their relative weight for attribution purposes is not encoded in the protocol.
+**Verification state is categorical.** The four states (`unsigned`, `signature_valid`, `log_committed`, `witnessed`) describe what has been verified. Their relative weight for attribution purposes is not encoded in the protocol.
 
 **The graph is a fact layer.** The graph query interface reports what the records show. It does not compute attribution weight, recommend distributions, or apply policy. The same graph can be evaluated under different policies by different parties, and any party can independently verify the result.
 
@@ -1217,11 +1217,11 @@ The strict separation also makes the system auditable over time. If a settlement
 
 ---
 
-### 3.2 — Graph Data Model
+### 3.2 Graph Data Model
 
 The atrib attribution graph is a directed property multigraph. Nodes represent events. Edges represent relationships derived from observable record structure. The graph for a primary session is bounded by its `context_id`, extended by cross-session links when records share the same `session_token` field (§1.2.1).
 
-#### 3.2.1 — Node Types
+#### 3.2.1 Node Types
 
 | Type        | Source                            | Description                                                                                                                                                                       |
 | ----------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1229,41 +1229,41 @@ The atrib attribution graph is a directed property multigraph. Nodes represent e
 | transaction | event_type = "transaction"        | The commerce event that closes the attribution loop. The creator_key is the merchant's key. A session without a transaction node is attributable but not yet economically closed. |
 | gap_node    | OTel span without a signed record | An unsigned hop. Present in the graph so that invisible contributions are visible. Carries no creator_key, chain_root, or signature. See §3.2.5.                                  |
 
-#### 3.2.2 — Interaction Patterns and Their Structural Signatures
+#### 3.2.2 Interaction Patterns and Their Structural Signatures
 
 Agent interactions produce five distinct structural patterns, each producing a distinct edge signature. Naming these patterns makes the edge taxonomy unambiguous.
 
 **Sequential.** Agent calls tool A, then calls tool B whose creator sets `chain_root` to the hash of A's record. B is structurally downstream of A. Signature: CHAIN_PRECEDES A → B.
 
-**Parallel.** Agent calls tool A and tool B in the same session with no chain dependency between them — either both are genesis records, or both descend from a common ancestor but not from each other. Signature: SESSION_PARALLEL A ↔ B (or SESSION_PRECEDES A → B if timestamps establish ordering).
+**Parallel.** Agent calls tool A and tool B in the same session with no chain dependency between them: either both are genesis records, or both descend from a common ancestor but not from each other. Signature: SESSION_PARALLEL A ↔ B (or SESSION_PRECEDES A → B if timestamps establish ordering).
 
 **Temporal.** Tool A completed before tool B in the same session, but no chain linkage connects them. Ordering is observable but not structural. Signature: SESSION_PRECEDES A → B.
 
-**Delegated.** Agent A dispatches sub-agent B via A2A. B's tools execute under the same `context_id` as A's session, because context_id propagates through A2A boundaries (§1.5.1). A's records and B's records are distinguishable by `creator_key` — different agent operators produce different keys. The delegation boundary is identified in the graph by creator_key diversity within a single session. No separate edge type is needed: standard within-session edges apply, and the policy layer reads creator_key to identify which contributions came from the primary agent versus delegated sub-agents.
+**Delegated.** Agent A dispatches sub-agent B via A2A. B's tools execute under the same `context_id` as A's session, because context_id propagates through A2A boundaries (§1.5.1). A's records and B's records are distinguishable by `creator_key`; different agent operators produce different keys. The delegation boundary is identified in the graph by creator_key diversity within a single session. No separate edge type is needed: standard within-session edges apply, and the policy layer reads creator_key to identify which contributions came from the primary agent versus delegated sub-agents.
 
-**Convergent.** Multiple tool calls — potentially from different sessions — all contribute to the same transaction. Within a session: CONVERGES_ON edges from all non-transaction nodes to the transaction node. Across sessions: CROSS_SESSION edges when explicit linking tokens connect the records.
+**Convergent.** Multiple tool calls, potentially from different sessions, all contribute to the same transaction. Within a session: CONVERGES_ON edges from all non-transaction nodes to the transaction node. Across sessions: CROSS_SESSION edges when explicit linking tokens connect the records.
 
 // Sequential: B.chain_root = hash(A) \[ A: tool_call \] ──CHAIN_PRECEDES──▶ \[ B: tool_call \] // Temporal: same session, no chain link, A.timestamp \< B.timestamp \[ A: tool_call \] ──SESSION_PRECEDES──▶ \[ B: tool_call \] // Parallel: same session, no chain link, no temporal ordering \[ A: tool_call \] ──SESSION_PARALLEL── \[ B: tool_call \] // Convergent within session: all nodes point to the transaction \[ A: tool_call \] ──CONVERGES_ON──▶ \[ T: transaction \] \[ B: tool_call \] ──CONVERGES_ON──▶ \[ T: transaction \] // Cross-session: A (ctx=X) contributed to T (ctx=Y) via session_token \[ A: tool_call (ctx=X) \] ──CROSS_SESSION──▶ \[ T: transaction (ctx=Y) \] // Delegated: same session, different creator_keys (A=primary agent, B=sub-agent) \[ A: tool_call (key=K1) \] ──SESSION_PRECEDES──▶ \[ B: tool_call (key=K2) \] // policy layer reads creator_key to identify the delegation boundary
 
-#### 3.2.3 — Edge Types
+#### 3.2.3 Edge Types
 
 Five edge types are defined. All are derived deterministically from observable record structure. None encode causal claims.
 
 | Edge type        | Dir   | Derivation basis                                                                                                                                 | Meaning                                                                                                                                                                                                                                                    |
 | ---------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | CHAIN_PRECEDES   | A → B | B.chain_root = SHA-256(JCS(A))                                                                                                                   | B is structurally downstream of A in the attribution chain. B's creator explicitly set their chain_root by hashing A's complete signed record. This is the primary structural link.                                                                        |
-| SESSION_PRECEDES | A → B | Same context_id; no CHAIN_PRECEDES between A and B; A.timestamp \< B.timestamp                                                                   | A occurred before B in the same session with no chain structure connecting them. Temporal ordering only — no structural claim.                                                                                                                             |
+| SESSION_PRECEDES | A → B | Same context_id; no CHAIN_PRECEDES between A and B; A.timestamp \< B.timestamp                                                                   | A occurred before B in the same session with no chain structure connecting them. Temporal ordering only, no structural claim.                                                                                                                             |
 | SESSION_PARALLEL | A ↔ B | Same context_id; no CHAIN_PRECEDES between A and B; no temporal ordering                                                                         | A and B are co-contributors to the same session with neither chain structure nor observable temporal ordering between them. Undirected.                                                                                                                    |
 | CONVERGES_ON     | N → T | N is any non-transaction node; T is a transaction node; both share context_id                                                                    | Node N contributed to the session that produced transaction T. Every non-transaction node in a session with a transaction node receives a CONVERGES_ON edge to that transaction. This is the edge that makes settlement calculation structurally possible. |
 | CROSS_SESSION    | A → T | A is a tool_call node; T is a transaction node; different context_ids; A.session_token = T.session_token (both fields must be present and equal) | A contributed to a transaction that occurred in a different session. This edge is only created when both records carry the same explicit `session_token` field value. It is never inferred from timestamps, creator keys, or any other heuristic.          |
 
-**Note — Mutual exclusivity** CHAIN_PRECEDES and SESSION_PRECEDES are mutually exclusive between any given ordered pair of nodes — if a CHAIN_PRECEDES edge exists from A to B, no SESSION_PRECEDES edge is created between A and B in either direction. SESSION_PARALLEL and SESSION_PRECEDES are mutually exclusive between any given pair of nodes. CONVERGES_ON coexists with all within-session edge types. CROSS_SESSION only applies when context_ids differ and an explicit linking token is present.
+**Note:** Mutual exclusivity** CHAIN_PRECEDES and SESSION_PRECEDES are mutually exclusive between any given ordered pair of nodes: if a CHAIN_PRECEDES edge exists from A to B, no SESSION_PRECEDES edge is created between A and B in either direction. SESSION_PARALLEL and SESSION_PRECEDES are mutually exclusive between any given pair of nodes. CONVERGES_ON coexists with all within-session edge types. CROSS_SESSION only applies when context_ids differ and an explicit linking token is present.
 
-#### 3.2.4 — Edge Derivation Rules
+#### 3.2.4 Edge Derivation Rules
 
 These rules are normative. Implementations MUST apply them in the order given. Two implementations applying these rules to identical input records MUST produce identical edge sets.
 
-**Step 1 — CHAIN_PRECEDES edges**
+**Step 1:** CHAIN_PRECEDES edges**
 
 For each non-genesis record R: compute `expected = R.chain_root.removePrefix("sha256:")`. For each other record P: if `sha256_hex(jcs(P)) == expected`, create CHAIN_PRECEDES P → R. Each record has at most one CHAIN_PRECEDES parent (chain_root is a single value).
 
@@ -1276,29 +1276,29 @@ for each record R:
       add_edge(CHAIN_PRECEDES, source=P, target=R); break
 ```
 
-**Step 2 — SESSION_PRECEDES edges**
+**Step 2:** SESSION_PRECEDES edges**
 
-For each ordered pair (A, B) of nodes sharing a context_id where no CHAIN_PRECEDES edge exists between them in either direction: if `A.timestamp < B.timestamp`, create SESSION_PRECEDES A → B. When timestamps are equal, use ascending log_index as the tiebreaker. If log_index is also equal (nodes in the same batch), skip — they are SESSION_PARALLEL candidates.
+For each ordered pair (A, B) of nodes sharing a context_id where no CHAIN_PRECEDES edge exists between them in either direction: if `A.timestamp < B.timestamp`, create SESSION_PRECEDES A → B. When timestamps are equal, use ascending log_index as the tiebreaker. If log_index is also equal (nodes in the same batch), skip; they are SESSION_PARALLEL candidates.
 
-**Step 3 — SESSION_PARALLEL edges**
+**Step 3:** SESSION_PARALLEL edges**
 
 For each pair (A, B) of nodes sharing a context_id where no CHAIN_PRECEDES edge exists between them in either direction and no SESSION_PRECEDES edge exists between them in either direction: create SESSION_PARALLEL A ↔ B (undirected).
 
-**Step 4 — CONVERGES_ON edges**
+**Step 4:** CONVERGES_ON edges**
 
 For each transaction node T: for each other node N sharing T's context_id (tool_call or gap_node), create CONVERGES_ON N → T.
 
-**Step 5 — CROSS_SESSION edges**
+**Step 5:** CROSS_SESSION edges**
 
 For each transaction node T: search the record set for tool_call nodes A where `A.context_id ≠ T.context_id` and A's `session_token` field (§1.2.1) matches T's `session_token` field. For each such A, create CROSS_SESSION A → T.
 
 CROSS_SESSION edges MUST NOT be inferred from any heuristic. Only explicit `session_token` field matches in signed records qualify. Records without a `session_token` field cannot participate in CROSS_SESSION edges.
 
-**Note — recommendation_token deferred to v2** An earlier design considered a recommendation_token mechanism for linking agent recommendations to purchases that complete in a separate browser session (the "dark attribution" problem described in §1.8). This mechanism is not specified in v1 because it requires persistent agent identity across sessions, which depends on work in progress at the DIF Trusted AI Agents Working Group. Recommendation token support will be defined in a future revision of this specification.
+**Note:** recommendation_token deferred to v2** An earlier design considered a recommendation_token mechanism for linking agent recommendations to purchases that complete in a separate browser session (the "dark attribution" problem described in §1.8). This mechanism is not specified in v1 because it requires persistent agent identity across sessions, which depends on work in progress at the DIF Trusted AI Agents Working Group. Recommendation token support will be defined in a future revision of this specification.
 
-#### 3.2.5 — Gap Nodes
+#### 3.2.5 Gap Nodes
 
-A gap node represents an unsigned hop — a tool call evidenced by an OTel span with no corresponding signed attribution record in the log. Its presence in the graph makes the gap visible rather than hiding it.
+A gap node represents an unsigned hop: a tool call evidenced by an OTel span with no corresponding signed attribution record in the log. Its presence in the graph makes the gap visible rather than hiding it.
 
 Gap nodes participate in SESSION_PRECEDES, SESSION_PARALLEL, and CONVERGES_ON edges. They MUST NOT participate in CHAIN_PRECEDES edges (no chain_root) or CROSS_SESSION edges (no linking tokens).
 
@@ -1306,9 +1306,9 @@ Gap node IDs are deterministic: `"gap:" + hex(SHA-256(UTF-8(tool_url + ":" + too
 
 ---
 
-### 3.3 — Verification State
+### 3.3 Verification State
 
-Every node carries a `verification_state` — a categorical description of the current verification status of its underlying record. This is a fact about the record, not a judgment of its value. Policy evaluation uses verification state as input; this section defines only the states themselves.
+Every node carries a `verification_state`: a categorical description of the current verification status of its underlying record. This is a fact about the record, not a judgment of its value. Policy evaluation uses verification state as input; this section defines only the states themselves.
 
 | State           | Condition                                                                                                                                             |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1317,17 +1317,17 @@ Every node carries a `verification_state` — a categorical description of the c
 | log_committed   | Signature verifies and an inclusion proof (§2.7) has been verified against a current signed checkpoint. The record is durably in the append-only log. |
 | witnessed       | Signature verifies, inclusion proof verifies, and the checkpoint carries at least one valid witness cosignature (§2.9).                               |
 
-Verification states are strictly ordered: `unsigned < signature_valid < log_committed < witnessed`. A node's state can only advance — never regress — as new evidence arrives. Implementations MUST update states as evidence is gathered. Verification states are computed by the graph query service from evidence in the log. They are never asserted by attribution records.
+Verification states are strictly ordered: `unsigned < signature_valid < log_committed < witnessed`. A node's state can only advance, never regress, as new evidence arrives. Implementations MUST update states as evidence is gathered. Verification states are computed by the graph query service from evidence in the log. They are never asserted by attribution records.
 
 ---
 
-### 3.4 — Query API
+### 3.4 Query API
 
 All endpoints are served at `https://graph.atrib.io/v1/`. All responses use `Content-Type: application/json`. All errors use RFC 9457 Problem Details (`Content-Type: application/problem+json`). The API is read-only.
 
-#### 3.4.1 — GET /v1/graph/{context_id}
+#### 3.4.1 GET /v1/graph/{context_id}
 
-Returns the complete attribution graph for a session — all nodes and edges, computed per §3.2.4.
+Returns the complete attribution graph for a session: all nodes and edges, computed per §3.2.4.
 
 ```
 GET /v1/graph/4bf92f3577b34da6a3ce929d0e0e4736
@@ -1335,14 +1335,14 @@ GET /v1/graph/4bf92f3577b34da6a3ce929d0e0e4736
 // Optional query parameters:
 // include_gap_nodes=true|false      (default: true)
 // include_cross_session=true|false  (default: true)
-// include_proof=true|false          (default: false — proof bundles are large)
+// include_proof=true|false          (default: false; proof bundles are large)
 
-// 200 OK  — GraphResponse (§3.5.1)
-// 404     — no records with this context_id
-// 400     — malformed context_id (not 32 hex chars)
+// 200 OK  -> GraphResponse (§3.5.1)
+// 404     -> no records with this context_id
+// 400     -> malformed context_id (not 32 hex chars)
 ```
 
-#### 3.4.2 — GET /v1/graph/{context_id}/nodes
+#### 3.4.2 GET /v1/graph/{context_id}/nodes
 
 Returns only nodes, without edges. Used by policy engines that apply their own traversal logic.
 
@@ -1353,21 +1353,21 @@ GET /v1/graph/4bf92f3577b34da6a3ce929d0e0e4736/nodes
 // Optional: creator_key=
 // Optional: verification_state=unsigned|signature_valid|log_committed|witnessed
 
-// 200 OK — { "nodes": [NodeObject, ...] }
+// 200 OK -> { "nodes": [NodeObject, ...] }
 ```
 
-#### 3.4.3 — GET /v1/graph/{context_id}/transaction
+#### 3.4.3 GET /v1/graph/{context_id}/transaction
 
 Returns the transaction node for a session if one exists. Policy engines use this to confirm the loop is closed before running settlement calculations.
 
 ```
 GET /v1/graph/4bf92f3577b34da6a3ce929d0e0e4736/transaction
 
-// 200 OK  — NodeObject (event_type: "transaction")
-// 404     — session exists but no transaction record present
+// 200 OK  -> NodeObject (event_type: "transaction")
+// 404     -> session exists but no transaction record present
 ```
 
-#### 3.4.4 — GET /v1/creators/{creator_key}/sessions
+#### 3.4.4 GET /v1/creators/{creator_key}/sessions
 
 Returns a paginated list of sessions in which a given creator appears. Requires authentication proving control of the creator_key (mechanism defined in the SDK specification, not in this protocol section).
 
@@ -1393,9 +1393,9 @@ GET /v1/creators/ABC.../sessions
 
 ---
 
-### 3.5 — Response Schema
+### 3.5 Response Schema
 
-#### 3.5.1 — Graph Response Object
+#### 3.5.1 Graph Response Object
 
 ```
 {
@@ -1411,7 +1411,7 @@ GET /v1/creators/ABC.../sessions
 }
 ```
 
-#### 3.5.2 — Node Object
+#### 3.5.2 Node Object
 
 ```
 {
@@ -1429,7 +1429,7 @@ GET /v1/creators/ABC.../sessions
 }
 ```
 
-#### 3.5.3 — Edge Object
+#### 3.5.3 Edge Object
 
 ```
 {
@@ -1440,10 +1440,10 @@ GET /v1/creators/ABC.../sessions
 }
 ```
 
-#### 3.5.4 — Error Responses
+#### 3.5.4 Error Responses
 
 ```
-// RFC 9457 Problem Details — all errors use this format:
+// RFC 9457 Problem Details. All errors use this format:
 {
   "type":     "https://atrib.io/problems/session-not-found",
   "title":    "Session not found",
@@ -1461,7 +1461,7 @@ GET /v1/creators/ABC.../sessions
 
 ---
 
-### 3.6 — Implementation Notes
+### 3.6 Implementation Notes
 
 **Technology independence.** This section specifies the graph model and API shape. It does not specify storage technology. Any queryable store capable of producing conforming responses is acceptable. The derivation rules in §3.2.4 are the normative definition of graph structure and must be applied identically regardless of underlying storage.
 
@@ -1469,15 +1469,15 @@ GET /v1/creators/ABC.../sessions
 
 **Graph construction from log data.** Implementations indexing the graph must monitor the log for new checkpoints (§2.5.1), fetch new entry bundles (§2.5.3), retrieve full attribution records from creator servers or a record cache, verify signatures, and apply the derivation rules incrementally. Records whose chain_root references a not-yet-seen parent should be stored and the CHAIN_PRECEDES edge created when the parent record arrives.
 
-**The fact / policy boundary.** The graph query interface MUST NOT return weighted or policy-adjusted data. All attribution weights, distribution recommendations, and settlement calculations belong to §4. This separation is not a preference — it is the mechanism that makes independent settlement verification tractable. Any party must be able to run the graph construction algorithm on the log data and the policy algorithm on the graph, and arrive at the same settlement recommendation as the service produced, without trusting either layer.
+**The fact / policy boundary.** The graph query interface MUST NOT return weighted or policy-adjusted data. All attribution weights, distribution recommendations, and settlement calculations belong to §4. This separation is not a preference; it is the mechanism that makes independent settlement verification tractable. Any party must be able to run the graph construction algorithm on the log data and the policy algorithm on the graph, and arrive at the same settlement recommendation as the service produced, without trusting either layer.
 
 ---
 
-## §4 — Attribution Policy Format
+## §4 Attribution Policy Format
 
 _Machine-readable weights. Negotiation. Calculation algorithm._
 
-The machine-readable document format for expressing how graph structure maps to value distribution — negotiated between creators and merchants before a session begins, applied to the completed graph after a transaction closes.
+The machine-readable document format for expressing how graph structure maps to value distribution, negotiated between creators and merchants before a session begins, applied to the completed graph after a transaction closes.
 
 Contents
 
@@ -1496,37 +1496,37 @@ Contents
 13. 4.5.3Session policy record
 14. 4.6The Calculation Algorithm
 15. 4.6.1Inputs and preconditions
-16. 4.6.2Step 1 — Identify contributing nodes
-17. 4.6.3Step 2 — Compute raw scores
-18. 4.6.4Step 3 — Apply constraints
-19. 4.6.5Step 4 — Normalize to a distribution
-20. 4.6.6Step 5 — Aggregate by creator
-21. 4.6.7Step 6 — Apply creator floors
+16. 4.6.2Step 1: Identify contributing nodes
+17. 4.6.3Step 2: Compute raw scores
+18. 4.6.4Step 3: Apply constraints
+19. 4.6.5Step 4: Normalize to a distribution
+20. 4.6.6Step 5: Aggregate by creator
+21. 4.6.7Step 6: Apply creator floors
 22. 4.7Settlement Recommendation Document
 23. 4.7.1Document format
 24. 4.7.2Signing the recommendation
 25. 4.7.3Independent verification
 26. 4.8Known Limitations and V2 Deferrals
 
-### 4.1 — Purpose and Position in the Protocol
+### 4.1 Purpose and Position in the Protocol
 
 The three preceding sections define what happened. This section defines how to evaluate what happened for the purpose of distributing value.
 
-The attribution graph (§3) is a fact layer: it reports the structural relationships between tool calls and the transaction that closed the session, derived from observable record structure with no causal claims. A policy document is the bridge from that factual graph to a concrete distribution — a statement of the form "given this graph structure, here is how value should be apportioned among contributors."
+The attribution graph (§3) is a fact layer: it reports the structural relationships between tool calls and the transaction that closed the session, derived from observable record structure with no causal claims. A policy document is the bridge from that factual graph to a concrete distribution: a statement of the form "given this graph structure, here is how value should be apportioned among contributors."
 
 Policies are first-class protocol primitives, not configuration files or implementation details. They are machine-readable documents that agents can fetch, parse, apply, and reason about autonomously. The spec defines the policy schema; creators and merchants define their own policies within that schema. The protocol defines how policies are negotiated and how the calculation is performed; it does not define what any contribution is worth.
 
 This separation reflects a core principle: **the protocol has no thumb on the scale.** A merchant who wants to weight chain-adjacent contributions more heavily than parallel ones can express that in their policy. A creator who wants a minimum floor for their own contribution regardless of graph position can express that via `minimum_own_share` in their policy. Neither needs atrib's permission or a protocol change. They need only publish a conforming policy document.
 
-Two moments in the session lifecycle are relevant to this section. **Negotiation** happens at session initialization — before any tool calls are made, the agent reads available creator and merchant policies and establishes the agreed policy for the session (§4.5). **Calculation** happens after the transaction closes — the agreed policy is applied to the completed graph to produce a settlement recommendation (§4.6). These are distinct operations on distinct inputs separated in time. The policy negotiated at session start is the policy applied at calculation time, regardless of whether policies have changed in between.
+Two moments in the session lifecycle are relevant to this section. **Negotiation** happens at session initialization, before any tool calls are made, the agent reads available creator and merchant policies and establishes the agreed policy for the session (§4.5). **Calculation** happens after the transaction closes, and the agreed policy is applied to the completed graph to produce a settlement recommendation (§4.6). These are distinct operations on distinct inputs separated in time. The policy negotiated at session start is the policy applied at calculation time, regardless of whether policies have changed in between.
 
 ---
 
-### 4.2 — Policy Document Format
+### 4.2 Policy Document Format
 
 A policy document is a JSON object. It MUST be UTF-8 encoded and served with `Content-Type: application/json`. It MUST be valid JSON conforming to the schema defined in this section. Unknown fields MUST be ignored by implementations to allow forward compatibility.
 
-#### 4.2.1 — Top-Level Fields
+#### 4.2.1 Top-Level Fields
 
 ```
 {
@@ -1542,7 +1542,7 @@ A policy document is a JSON object. It MUST be UTF-8 encoded and served with `Co
 }
 ```
 
-#### 4.2.2 — Edge Weights
+#### 4.2.2 Edge Weights
 
 Edge weights define the base score assigned to a node based on its structural relationship to the transaction. The key is an edge type from §3.2.3. The value is a non-negative decimal. Nodes may have multiple edges; if a node has edges of multiple types, its base score is the _maximum_ of the applicable edge weights, not their sum.
 
@@ -1556,18 +1556,18 @@ Edge weights define the base score assigned to a node based on its structural re
   "unsigned":          0.0   // gap nodes: no creator signature, no weight by default
 }
 
-// The numeric values above are illustrative only — they show the schema structure.
+// The numeric values above are illustrative only; they show the schema structure.
 // They are not defaults. Only the default policy (§4.3) specifies default weights.
 // A creator or merchant policy must specify its own values for any edge types it cares about.
 // All edge type keys are optional. Missing keys default to 0.0.
 // "unsigned" is a pseudo-key for gap nodes; it is not an edge type but follows the same schema.
-// Weights may be any non-negative decimal. They are relative, not absolute —
+// Weights may be any non-negative decimal. They are relative, not absolute.
 // a policy with all weights doubled is equivalent to one with all weights halved.
 ```
 
-**Note — Why maximum, not sum** A node in a CHAIN_PRECEDES relationship with a transaction also has a CONVERGES_ON edge (since every non-transaction node in a session gets CONVERGES_ON). If weights were summed, every node would receive a CONVERGES_ON bonus on top of its primary edge weight, inflating scores for all structural contributors equally and making the CONVERGES_ON weight meaningless as a differentiator. Taking the maximum means the primary relationship dominates, which is the intuitive behavior: a node that is structurally upstream is scored as a chain contributor, not as a chain contributor plus a co-occurrence contributor.
+**Note:** Why maximum, not sum** A node in a CHAIN_PRECEDES relationship with a transaction also has a CONVERGES_ON edge (since every non-transaction node in a session gets CONVERGES_ON). If weights were summed, every node would receive a CONVERGES_ON bonus on top of its primary edge weight, inflating scores for all structural contributors equally and making the CONVERGES_ON weight meaningless as a differentiator. Taking the maximum means the primary relationship dominates, which is the intuitive behavior: a node that is structurally upstream is scored as a chain contributor, not as a chain contributor plus a co-occurrence contributor.
 
-#### 4.2.3 — Modifiers
+#### 4.2.3 Modifiers
 
 Modifiers adjust a node's raw score after the base edge weight is assigned. They are applied multiplicatively, in order. A final score of zero means the node receives no distribution share. All modifiers are optional; a policy with no modifiers array applies only the base edge weights.
 
@@ -1606,21 +1606,21 @@ Modifiers adjust a node's raw score after the base edge weight is assigned. They
 // Unknown modifier types MUST be ignored with a warning in the session policy record.
 ```
 
-#### 4.2.4 — Distribution Method
+#### 4.2.4 Distribution Method
 
 The distribution method determines how final scores are converted into share fractions. One method is defined in v1:
 
 | Value        | Behavior                                                                                                                                                                                                                                                                                         |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| proportional | Each contributor's share is their final score divided by the sum of all final scores. If all final scores are zero — which can occur if all nodes are gap nodes under a policy that weights unsigned nodes at 0.0 — the calculation produces an empty distribution with a warning, not an error. |
+| proportional | Each contributor's share is their final score divided by the sum of all final scores. If all final scores are zero (which can occur if all nodes are gap nodes under a policy that weights unsigned nodes at 0.0) the calculation produces an empty distribution with a warning, not an error. |
 
 Additional distribution methods (`equal`, `last_touch`, `first_touch`) are reserved for v2. Implementations MUST reject policies with unknown distribution values rather than silently falling back to proportional.
 
-#### 4.2.5 — Constraints
+#### 4.2.5 Constraints
 
 Constraints impose floors and caps on individual contributor shares. They MUST be applied after raw scores are computed and an initial proportional normalization is performed, but before the final normalization (§4.6.5) and before aggregation by creator (§4.6.6). The sequence is: raw scores → initial proportional pass → apply constraints → final renormalization → aggregate by creator → apply creator floors (§4.6.7) → final renormalization.
 
-Two constraint fields involve floors but serve different purposes and are applied differently. **`minimum_share`** is a merchant-level constraint: when present in the merchant policy, it sets a floor for _every_ contributing node — no contributor receives less than this fraction. It prevents any one creator from being allocated a trivially small share that is economically meaningless. **`minimum_own_share`** is a creator-level constraint: when present in a creator policy, it expresses the minimum fraction of the total distribution that creator requires for their own nodes. It is the creator's asking price. These two fields are distinct, exist on different policy roles, and are applied at different points in negotiation (§4.5.2) and calculation (§4.6.4).
+Two constraint fields involve floors but serve different purposes and are applied differently. **`minimum_share`** is a merchant-level constraint: when present in the merchant policy, it sets a floor for _every_ contributing node, so no contributor receives less than this fraction. It prevents any one creator from being allocated a trivially small share that is economically meaningless. **`minimum_own_share`** is a creator-level constraint: when present in a creator policy, it expresses the minimum fraction of the total distribution that creator requires for their own nodes. It is the creator's asking price. These two fields are distinct, exist on different policy roles, and are applied at different points in negotiation (§4.5.2) and calculation (§4.6.4).
 
 ```
 "constraints": {
@@ -1632,7 +1632,7 @@ Two constraint fields involve floors but serve different purposes and are applie
   "minimum_own_share": 0.15,
   // CREATOR POLICY ONLY. Minimum fraction of total distribution the creator
   // requires for their own nodes, summed across all their tool calls in the session.
-  // Read during negotiation (§4.5.2), not applied by the calculation algorithm directly —
+  // Read during negotiation (§4.5.2), not applied by the calculation algorithm directly.
   // the session policy record captures the agreed floor per creator,
   // and the calculation algorithm applies it as a per-creator post-aggregation adjustment.
 
@@ -1651,13 +1651,13 @@ Two constraint fields involve floors but serve different purposes and are applie
 }
 ```
 
-**Note — Share fractions vs. currency amounts** Policy documents, settlement recommendations, and the calculation algorithm work entirely in share fractions — dimensionless rationals summing to 1.0. The conversion from share fraction to currency amount requires a transaction value, which the policy document does not contain and should not contain. Currency conversion is performed by the merchant at payout time using the transaction value from the commerce protocol's transaction event. This separation keeps the policy independent of transaction size and currency.
+**Note:** Share fractions vs. currency amounts** Policy documents, settlement recommendations, and the calculation algorithm work entirely in share fractions: dimensionless rationals summing to 1.0. The conversion from share fraction to currency amount requires a transaction value, which the policy document does not contain and should not contain. Currency conversion is performed by the merchant at payout time using the transaction value from the commerce protocol's transaction event. This separation keeps the policy independent of transaction size and currency.
 
 ---
 
-### 4.3 — The Default Policy
+### 4.3 The Default Policy
 
-The default policy applies when: no merchant policy is present, policies cannot be negotiated to a compatible agreement (§4.5.2), or the agreed policy fails schema validation at calculation time. It is designed to be conservative, uncontroversial, and auditable — correct enough to be used as a baseline without anyone having designed it for the specific situation.
+The default policy applies when: no merchant policy is present, policies cannot be negotiated to a compatible agreement (§4.5.2), or the agreed policy fails schema validation at calculation time. It is designed to be conservative, uncontroversial, and auditable, correct enough to be used as a baseline without anyone having designed it for the specific situation.
 
 When the default policy applies because no merchant policy is present, creator `minimum_own_share` floors from individual creator policies are still honored. The default policy has no `maximum_total_share` constraint, so there is no cap to conflict with. Creator floors are applied as post-aggregation adjustments per §4.6 even when the default governs the edge weights and distribution method. This ensures creators who have published policies are not disadvantaged by a merchant who has not.
 
@@ -1680,17 +1680,17 @@ When the default policy applies because no merchant policy is present, creator `
 }
 ```
 
-The default policy assigns equal weight to every signed node regardless of its edge type, and zero weight to unsigned gap nodes. The result is equal distribution among all contributors who signed their records — no node has a structural advantage over any other.
+The default policy assigns equal weight to every signed node regardless of its edge type, and zero weight to unsigned gap nodes. The result is equal distribution among all contributors who signed their records; no node has a structural advantage over any other.
 
 This is intentionally the least opinionated possible policy. It does not reward chain-adjacent contributions over parallel ones. It does not decay recent contributions. It does not apply any minimum floor or maximum cap. Every creator who signed a record and contributed to a session that closed in a transaction receives the same share as every other such creator.
 
 The default policy is not the recommended policy. Merchants and creators are strongly encouraged to publish their own policies. The default exists to ensure the protocol functions from day one without requiring policy negotiation infrastructure, and to provide a baseline that is fair by default for the cold-start period when most parties have not yet published policies.
 
-**Note — Why unsigned nodes receive zero weight** Gap nodes receive zero weight under the default policy because a creator who has not signed their contribution has not asserted a claim within the atrib protocol. The gap node exists in the graph to make the unsigned hop visible — its zero weight is not a punishment but a description of the current state: no verifiable claim exists to honor. A merchant may choose to honor unsigned contributions through a custom policy, but doing so is an explicit opt-in, not the default.
+**Note:** Why unsigned nodes receive zero weight** Gap nodes receive zero weight under the default policy because a creator who has not signed their contribution has not asserted a claim within the atrib protocol. The gap node exists in the graph to make the unsigned hop visible; its zero weight is not a punishment but a description of the current state: no verifiable claim exists to honor. A merchant may choose to honor unsigned contributions through a custom policy, but doing so is an explicit opt-in, not the default.
 
 ---
 
-### 4.4 — Publication and Discovery
+### 4.4 Publication and Discovery
 
 Policy documents are published at a well-known URL and fetched by agents at session initialization. This follows the same convention used by UCP merchant profiles (published at `/.well-known/ucp`) and MCP server cards (at `/.well-known/mcp.json`).
 
@@ -1712,7 +1712,7 @@ A merchant SHOULD publish their attribution policy at:
 GET https:///.well-known/atrib-policy.json
 ```
 
-The `merchant-domain` is the domain used as the server URL for the merchant's transaction records (§1.7 — the checkout endpoint URL). An agent preparing to initiate a checkout can derive the merchant's policy URL from the checkout endpoint.
+The `merchant-domain` is the domain used as the server URL for the merchant's transaction records (§1.7, the checkout endpoint URL). An agent preparing to initiate a checkout can derive the merchant's policy URL from the checkout endpoint.
 
 **Response requirements**
 
@@ -1722,43 +1722,43 @@ Policy documents SHOULD be cacheable for at least 5 minutes. Agents SHOULD not r
 
 ---
 
-### 4.5 — Session Negotiation
+### 4.5 Session Negotiation
 
 Negotiation is the process by which an agent, at session initialization, reads available policies from the tools it expects to call and from the merchant it expects to transact with, and establishes the agreed policy that will govern the eventual calculation.
 
-#### 4.5.1 — Negotiation Protocol
+#### 4.5.1 Negotiation Protocol
 
 At session initialization, the agent SHOULD:
 
 Step 1: Fetch the merchant's policy from `/.well-known/atrib-policy.json`. If the merchant has no policy, use the default.
 
-Step 2: For each MCP server the agent intends to call, fetch the creator's policy from `/.well-known/atrib-policy.json`. If a creator has no policy — 404 response, schema validation failure, or fetch error after retry — they have no stated preferences: no `minimum_own_share` floor, no edge weight preferences. Their contribution is calculated entirely under the merchant's policy (or the default if the merchant has none). This is not a conflict; it is the absence of a stated position.
+Step 2: For each MCP server the agent intends to call, fetch the creator's policy from `/.well-known/atrib-policy.json`. If a creator has no policy (404 response, schema validation failure, or fetch error after retry) they have no stated preferences: no `minimum_own_share` floor, no edge weight preferences. Their contribution is calculated entirely under the merchant's policy (or the default if the merchant has none). This is not a conflict; it is the absence of a stated position.
 
-Step 3: Check compatibility between the merchant's policy and each creator's policy (§4.5.2). If all are compatible, the merchant's policy governs the calculation — creator policies constrain what the merchant's policy can do but do not override its structure.
+Step 3: Check compatibility between the merchant's policy and each creator's policy (§4.5.2). If all are compatible, the merchant's policy governs the calculation; creator policies constrain what the merchant's policy can do but do not override its structure.
 
 Step 4: Record the agreed policy in the session policy record (§4.5.3) and embed the policy record ID in the session's W3C Baggage as `atrib-policy=`.
 
-**Note — Negotiation is best-effort in v1** Session initialization may be fast-path and policy fetching may add latency. Agents MAY skip negotiation and proceed under the default policy when latency constraints require it. When this happens, the session policy record MUST indicate that the default policy was used due to a negotiation skip. Merchants and creators who require specific policies SHOULD ensure their policies are available with low latency and published at stable, well-cached URLs.
+**Note:** Negotiation is best-effort in v1** Session initialization may be fast-path and policy fetching may add latency. Agents MAY skip negotiation and proceed under the default policy when latency constraints require it. When this happens, the session policy record MUST indicate that the default policy was used due to a negotiation skip. Merchants and creators who require specific policies SHOULD ensure their policies are available with low latency and published at stable, well-cached URLs.
 
-#### 4.5.2 — Conflict Resolution
+#### 4.5.2 Conflict Resolution
 
 Two policies conflict when they specify requirements that cannot be simultaneously satisfied. The resolution rules are:
 
-**Rule 1 — Merchant controls total payout cap.** If the merchant policy specifies `maximum_total_share`, that value governs regardless of what creator policies specify. A creator policy that implicitly requires a higher total payout — because its `minimum_own_share` constraint, combined with the number of contributing creators, would sum to more than the merchant's cap — is in conflict with the merchant policy.
+**Rule 1:** Merchant controls total payout cap.** If the merchant policy specifies `maximum_total_share`, that value governs regardless of what creator policies specify. A creator policy that implicitly requires a higher total payout (because its `minimum_own_share` constraint, combined with the number of contributing creators, would sum to more than the merchant's cap) is in conflict with the merchant policy.
 
-**Rule 2 — Creator minimum floors are honored within the cap.** If a creator policy specifies `minimum_own_share`, that floor MUST be honored in the calculation for that creator's contribution, subject to the merchant's `maximum_total_share`. If honoring all creator minimums would require exceeding the merchant's total cap, creator minimums are scaled down proportionally until the total cap is satisfied.
+**Rule 2:** Creator minimum floors are honored within the cap.** If a creator policy specifies `minimum_own_share`, that floor MUST be honored in the calculation for that creator's contribution, subject to the merchant's `maximum_total_share`. If honoring all creator minimums would require exceeding the merchant's total cap, creator minimums are scaled down proportionally until the total cap is satisfied.
 
-**Rule 3 — Irreconcilable conflicts fall back to default.** If after applying Rules 1 and 2 the policies remain irreconcilable — for example, a single creator's minimum floor alone exceeds the merchant's total cap — the session proceeds under the default policy for all contributors, and the conflict is logged in the session policy record with the incompatible policies identified.
+**Rule 3:** Irreconcilable conflicts fall back to default.** If after applying Rules 1 and 2 the policies remain irreconcilable (for example, a single creator's minimum floor alone exceeds the merchant's total cap) the session proceeds under the default policy for all contributors, and the conflict is logged in the session policy record with the incompatible policies identified.
 
-**Rule 4 — Edge weight disagreements do not block negotiation.** When creator and merchant policies specify different edge weights, the merchant's edge weights govern the calculation. The creator's edge weights are advisory — they express what the creator believes their contributions are worth — but the merchant's policy is the operative one. A creator who is unwilling to operate under a merchant's policy can choose not to serve that merchant's agents; this is a business decision, not a protocol enforcement point.
+**Rule 4:** Edge weight disagreements do not block negotiation.** When creator and merchant policies specify different edge weights, the merchant's edge weights govern the calculation. The creator's edge weights are advisory (they express what the creator believes their contributions are worth) but the merchant's policy is the operative one. A creator who is unwilling to operate under a merchant's policy can choose not to serve that merchant's agents; this is a business decision, not a protocol enforcement point.
 
-**Rule 5 — Creator floors summing to more than 1.0 are irreconcilable.** If the sum of all `minimum_own_share` values across all creators in the session exceeds 1.0, the floors are mathematically impossible to honor simultaneously regardless of any merchant cap. This condition MUST be detected at negotiation time and triggers Rule 3 (fall back to default). The session policy record MUST identify all creators whose floors contributed to the irreconcilable sum.
+**Rule 5:** Creator floors summing to more than 1.0 are irreconcilable.** If the sum of all `minimum_own_share` values across all creators in the session exceeds 1.0, the floors are mathematically impossible to honor simultaneously regardless of any merchant cap. This condition MUST be detected at negotiation time and triggers Rule 3 (fall back to default). The session policy record MUST identify all creators whose floors contributed to the irreconcilable sum.
 
-**Rule 6 — Contradictory constraints within a single policy are invalid.** A policy document where `minimum_share` is greater than `maximum_share`, or where any constraint value is negative, MUST be rejected at parse time as if it were a 404 response. The agent MUST log a warning identifying the contradictory fields. A policy that is invalid for the purposes of negotiation is treated as absent — the creator or merchant has no stated policy.
+**Rule 6:** Contradictory constraints within a single policy are invalid.** A policy document where `minimum_share` is greater than `maximum_share`, or where any constraint value is negative, MUST be rejected at parse time as if it were a 404 response. The agent MUST log a warning identifying the contradictory fields. A policy that is invalid for the purposes of negotiation is treated as absent; the creator or merchant has no stated policy.
 
-**Rule 7 — No agent SDK means no session policy record; calculation defaults.** When no agent-side atrib SDK was present during the session, no session policy record exists. The merchant discovering the session post-transaction may still run the calculation using the default policy and the graph as constructed from log data. In this case, `calculated_by` in the settlement recommendation is set to `"local"`, the merchant signs with their own key, and `policy_record_id` is set to `"default"` to indicate the default policy was applied without a negotiated record.
+**Rule 7:** No agent SDK means no session policy record; calculation defaults.** When no agent-side atrib SDK was present during the session, no session policy record exists. The merchant discovering the session post-transaction may still run the calculation using the default policy and the graph as constructed from log data. In this case, `calculated_by` in the settlement recommendation is set to `"local"`, the merchant signs with their own key, and `policy_record_id` is set to `"default"` to indicate the default policy was applied without a negotiated record.
 
-#### 4.5.3 — Session Policy Record
+#### 4.5.3 Session Policy Record
 
 The session policy record is a lightweight document created at negotiation time and stored by the agent. It records the policies that were considered and the resulting agreed policy, providing an audit trail that both creator and merchant can inspect after the fact.
 
@@ -1794,43 +1794,43 @@ The session policy record is a lightweight document created at negotiation time 
 }
 ```
 
-The session policy record is not submitted to the Merkle log — it is not an attribution record. It is stored locally by the agent and SHOULD be made available to the merchant on request. It serves as evidence of the policy terms in effect during the session if a dispute arises.
+The session policy record is not submitted to the Merkle log; it is not an attribution record. It is stored locally by the agent and SHOULD be made available to the merchant on request. It serves as evidence of the policy terms in effect during the session if a dispute arises.
 
 ---
 
-### 4.6 — The Calculation Algorithm
+### 4.6 The Calculation Algorithm
 
-The calculation algorithm is a pure function: given the attribution graph for a session (§3) and the agreed policy document (§4.5), it produces a distribution — a mapping from creator public keys to share fractions summing to 1.0. No other inputs are required. No network calls are made. No timestamps beyond those in the records are used.
+The calculation algorithm is a pure function: given the attribution graph for a session (§3) and the agreed policy document (§4.5), it produces a distribution: a mapping from creator public keys to share fractions summing to 1.0. No other inputs are required. No network calls are made. No timestamps beyond those in the records are used.
 
-This determinism is a design requirement, not an implementation convenience. Any party — creator, merchant, auditor, regulator — with access to the graph data and the policy document MUST be able to run this algorithm locally and arrive at the same result as any other party running the same inputs. The atrib resolution API (at `https://resolve.atrib.io/v1/calculate`) is a convenience implementation of this algorithm, not an authority. Its output is no more or less trustworthy than a local implementation producing the same output from the same inputs.
+This determinism is a design requirement, not an implementation convenience. Any party (creator, merchant, auditor, regulator) with access to the graph data and the policy document MUST be able to run this algorithm locally and arrive at the same result as any other party running the same inputs. The atrib resolution API (at `https://resolve.atrib.io/v1/calculate`) is a convenience implementation of this algorithm, not an authority. Its output is no more or less trustworthy than a local implementation producing the same output from the same inputs.
 
-#### 4.6.1 — Inputs and Preconditions
+#### 4.6.1 Inputs and Preconditions
 
 Inputs:
 
-— `G`: the attribution graph for the session, as returned by the graph query API (§3.4.1) with `include_gap_nodes=true` and `include_cross_session=true`.
+- `G`: the attribution graph for the session, as returned by the graph query API (§3.4.1) with `include_gap_nodes=true` and `include_cross_session=true`.
 
-— `P`: the agreed policy document for the session (§4.5.3).
+- `P`: the agreed policy document for the session (§4.5.3).
 
 Preconditions that MUST hold before the algorithm runs:
 
-— `G` contains at least one transaction node. If no transaction node is present, the session is not closed and calculation MUST NOT proceed.
+- `G` contains at least one transaction node. If no transaction node is present, the session is not closed and calculation MUST NOT proceed.
 
-— `P` is a valid v1 policy document per the schema in §4.2. If validation fails, use the default policy.
+- `P` is a valid v1 policy document per the schema in §4.2. If validation fails, use the default policy.
 
-— All nodes in `G` whose `verification_state` is `signature_valid` or higher are eligible for distribution. Nodes with `verification_state: unsigned` are eligible only if `P.edge_weights.unsigned > 0`.
+- All nodes in `G` whose `verification_state` is `signature_valid` or higher are eligible for distribution. Nodes with `verification_state: unsigned` are eligible only if `P.edge_weights.unsigned > 0`.
 
-#### 4.6.2 — Step 1: Identify Contributing Nodes
+#### 4.6.2 Step 1: Identify Contributing Nodes
 
 A node `N` is a contributing node if all of the following hold:
 
-— `N.event_type` is `tool_call` or `gap_node` (not `transaction`).
+- `N.event_type` is `tool_call` or `gap_node` (not `transaction`).
 
-— `N` has at least one edge to a transaction node in `G` — either a CONVERGES_ON edge (same session) or a CROSS_SESSION edge (linked session). This is always true for all non-transaction nodes when the graph is queried for a closed session, but is stated explicitly to prevent implementation errors.
+- `N` has at least one edge to a transaction node in `G`, either a CONVERGES_ON edge (same session) or a CROSS_SESSION edge (linked session). This is always true for all non-transaction nodes when the graph is queried for a closed session, but is stated explicitly to prevent implementation errors.
 
 Let `C` be the set of all contributing nodes.
 
-#### 4.6.3 — Step 2: Compute Raw Scores
+#### 4.6.3 Step 2: Compute Raw Scores
 
 For each node `n` in `C`, compute its raw score `raw(n)`:
 
@@ -1876,7 +1876,7 @@ function apply_modifier(modifier, score, n, G):
   return score  // unknown modifier types are ignored
 ```
 
-#### 4.6.4 — Step 3: Apply Constraints
+#### 4.6.4 Step 3: Apply Constraints
 
 Constraints are applied after an initial proportional pass on the raw scores and before the final normalization step. The pseudocode below incorporates the initial proportional pass internally.
 
@@ -1886,7 +1886,7 @@ function apply_constraints(raw_scores, constraints):
   contributors = {n: s for n, s in raw_scores.items() if s > 0.0}
 
   if not contributors:
-    return {}  // empty distribution — all nodes were gap nodes under zero-weight policy
+    return {}  // empty distribution; all nodes were gap nodes under zero-weight policy
 
   total = sum(contributors.values())
   normalized = {n: s/total for n, s in contributors.items()}
@@ -1935,7 +1935,7 @@ function apply_maximum_cap(normalized, cap):
   return result
 ```
 
-#### 4.6.5 — Step 4: Normalize to a Distribution
+#### 4.6.5 Step 4: Normalize to a Distribution
 
 After applying constraints, re-normalize so shares sum to exactly 1.0, correcting for any floating-point accumulation during constraint application:
 
@@ -1946,9 +1946,9 @@ function final_normalize(shares):
   return {n: s/total for n, s in shares.items()}
 ```
 
-#### 4.6.6 — Step 5: Aggregate by Creator
+#### 4.6.6 Step 5: Aggregate by Creator
 
-The per-node distribution is aggregated by `creator_key`, summing all shares belonging to the same creator. A creator who appears multiple times in a session — via multiple tool calls or multiple tools — receives the sum of all their node shares.
+The per-node distribution is aggregated by `creator_key`, summing all shares belonging to the same creator. A creator who appears multiple times in a session (via multiple tool calls or multiple tools) receives the sum of all their node shares.
 
 ```
 function aggregate_by_creator(normalized_shares, G):
@@ -1960,9 +1960,9 @@ function aggregate_by_creator(normalized_shares, G):
   return by_creator
 ```
 
-The `__unsigned__` sentinel key is present in the output only if gap nodes received non-zero weight under the policy. Its presence signals to the merchant that some share of value is attributed to unsigned contributions — the merchant's responsibility to decide how to handle.
+The `__unsigned__` sentinel key is present in the output only if gap nodes received non-zero weight under the policy. Its presence signals to the merchant that some share of value is attributed to unsigned contributions, and it is the merchant's responsibility to decide how to handle.
 
-#### 4.6.7 — Step 6: Apply Creator Floors
+#### 4.6.7 Step 6: Apply Creator Floors
 
 After aggregation by creator, apply any `minimum_own_share` floors from the session policy record's `applied_constraints.minimum_floors` map. These floors were established during negotiation (§4.5.2) and represent the agreed minimum share for each creator who published one. This step adjusts the aggregated distribution to honor those floors, scaling down other creators' shares proportionally.
 
@@ -2020,11 +2020,11 @@ function calculate(G, P, session_policy_record):
 
 ---
 
-### 4.7 — Settlement Recommendation Document
+### 4.7 Settlement Recommendation Document
 
-The settlement recommendation document is the output of the calculation algorithm. It is a structured, signed record of the recommended distribution for a specific session. It is not a payment instruction — the merchant decides whether and how to act on it. But it is sufficiently precise and self-contained that any party can verify it was correctly calculated.
+The settlement recommendation document is the output of the calculation algorithm. It is a structured, signed record of the recommended distribution for a specific session. It is not a payment instruction; the merchant decides whether and how to act on it. But it is sufficiently precise and self-contained that any party can verify it was correctly calculated.
 
-#### 4.7.1 — Document Format
+#### 4.7.1 Document Format
 
 ```
 {
@@ -2062,13 +2062,13 @@ The settlement recommendation document is the output of the calculation algorith
 }
 ```
 
-#### 4.7.2 — Signing the Recommendation
+#### 4.7.2 Signing the Recommendation
 
-The settlement recommendation MUST be signed by whoever produced it, using their Ed25519 private key and the same JCS canonicalization procedure defined in §1.4.2. This signature proves that the stated party produced this exact recommendation at the stated time. It does not prove the recommendation is correct — correctness is established by independent verification.
+The settlement recommendation MUST be signed by whoever produced it, using their Ed25519 private key and the same JCS canonicalization procedure defined in §1.4.2. This signature proves that the stated party produced this exact recommendation at the stated time. It does not prove the recommendation is correct; correctness is established by independent verification.
 
 When the atrib resolution API produces the recommendation, it signs with atrib's key (published at `https://resolve.atrib.io/v1/pubkey`). When a merchant or third party runs the calculation locally, they sign with their own key. Any verifier who checks the signature must use the appropriate public key based on `calculated_by`.
 
-#### 4.7.3 — Independent Verification
+#### 4.7.3 Independent Verification
 
 Any party with access to the graph data and the session policy record can independently verify a settlement recommendation by:
 
@@ -2082,49 +2082,49 @@ Step 4: Run the calculation algorithm (§4.6) with those inputs.
 
 Step 5: Compare the output with the `distribution` field. Shares MUST match within a floating-point tolerance of `1e-9`. Any discrepancy beyond this tolerance indicates either a bug, a different policy was applied, or the recommendation was tampered with.
 
-**Important — Verification requires the same graph snapshot** The graph for a session can grow after a transaction closes — late attribution records may arrive, gap nodes may be resolved by creators who submit delayed records, CROSS_SESSION edges may be added as session_token links are discovered. The `graph_tree_size` field pins the graph to a specific log state. Independent verifiers MUST use the same tree size to reconstruct the same graph. Using the current graph state may produce a different result if the graph has grown since calculation time. This is not an error — it is expected behavior. If a merchant wishes to recalculate with a more complete graph, they may do so and produce a new recommendation.
+**Important:** Verification requires the same graph snapshot** The graph for a session can grow after a transaction closes: late attribution records may arrive, gap nodes may be resolved by creators who submit delayed records, CROSS_SESSION edges may be added as session_token links are discovered. The `graph_tree_size` field pins the graph to a specific log state. Independent verifiers MUST use the same tree size to reconstruct the same graph. Using the current graph state may produce a different result if the graph has grown since calculation time. This is not an error; it is expected behavior. If a merchant wishes to recalculate with a more complete graph, they may do so and produce a new recommendation.
 
 ---
 
-### 4.8 — Known Limitations and V2 Deferrals
+### 4.8 Known Limitations and V2 Deferrals
 
-**Policy versioning (deferred to v2).** In v1, policies are identified by URL. There is no formal versioning mechanism — if a creator changes their policy document at a stable URL, sessions that negotiated under the old policy can no longer fetch it for audit purposes. The session policy record's `policy_record_id` field mitigates this partially, since the record captures the policy terms that were agreed at session time. A normative policy versioning mechanism — supporting immutable policy snapshots and policy history — will be defined in v2.
+**Policy versioning (deferred to v2).** In v1, policies are identified by URL. There is no formal versioning mechanism: if a creator changes their policy document at a stable URL, sessions that negotiated under the old policy can no longer fetch it for audit purposes. The session policy record's `policy_record_id` field mitigates this partially, since the record captures the policy terms that were agreed at session time. A normative policy versioning mechanism (supporting immutable policy snapshots and policy history) will be defined in v2.
 
-**Settlement webhook format (deferred to v2).** In v1, settlement recommendations are produced on demand by calling the resolution API or running the algorithm locally. There is no standardized mechanism for atrib to push recommendations to merchants automatically when a transaction closes. A settlement webhook specification — defining the event format, delivery guarantee, and retry behavior — will be defined in v2.
+**Settlement webhook format (deferred to v2).** In v1, settlement recommendations are produced on demand by calling the resolution API or running the algorithm locally. There is no standardized mechanism for atrib to push recommendations to merchants automatically when a transaction closes. A settlement webhook specification (defining the event format, delivery guarantee, and retry behavior) will be defined in v2.
 
-**Dispute mechanism (deferred to v2).** In v1, there is no protocol-defined process for a creator to formally contest a settlement recommendation. A creator who believes their contribution was incorrectly weighted can contact the merchant directly; the session policy record and independent verification provide the evidentiary basis for that conversation. A structured dispute record format — allowing creators to submit counter-calculations with their own policy application and initiating a defined resolution process — will be defined in v2, drawing on work in progress at the DIF Trusted AI Agents Working Group.
+**Dispute mechanism (deferred to v2).** In v1, there is no protocol-defined process for a creator to formally contest a settlement recommendation. A creator who believes their contribution was incorrectly weighted can contact the merchant directly; the session policy record and independent verification provide the evidentiary basis for that conversation. A structured dispute record format (allowing creators to submit counter-calculations with their own policy application and initiating a defined resolution process) will be defined in v2, drawing on work in progress at the DIF Trusted AI Agents Working Group.
 
-**Multi-transaction sessions.** In v1, the calculation algorithm assumes one transaction node per session. Agentic sessions that involve multiple sequential transactions — for example, an agent that books a flight and then a hotel in the same session — would require separate calculation runs per transaction node. This is a known gap; a multi-transaction session handling specification will be considered for v2 based on observed deployment patterns.
+**Multi-transaction sessions.** In v1, the calculation algorithm assumes one transaction node per session. Agentic sessions that involve multiple sequential transactions (for example, an agent that books a flight and then a hotel in the same session) would require separate calculation runs per transaction node. This is a known gap; a multi-transaction session handling specification will be considered for v2 based on observed deployment patterns.
 
-**Agent-published policies (deferred to v2).** In v1, policies are published by creators and merchants. Agents consume policies but do not publish their own. An agent that has completed thousands of transactions accumulates empirical data about which tool call patterns correlate with successful outcomes — this data is a weighting model derived from observation rather than declaration. The v1 policy format is designed to express such models (the edge weights and modifiers schema can represent learned weights), but the mechanism for agents to publish, version, and advertise these policies is not specified. Agent-published policies derived from empirical outcome data are a planned v2 feature, along with the discovery and reputation infrastructure that would enable a market for attribution policies — where policy quality is itself a competitive signal.
+**Agent-published policies (deferred to v2).** In v1, policies are published by creators and merchants. Agents consume policies but do not publish their own. An agent that has completed thousands of transactions accumulates empirical data about which tool call patterns correlate with successful outcomes; this data is a weighting model derived from observation rather than declaration. The v1 policy format is designed to express such models (the edge weights and modifiers schema can represent learned weights), but the mechanism for agents to publish, version, and advertise these policies is not specified. Agent-published policies derived from empirical outcome data are a planned v2 feature, along with the discovery and reputation infrastructure that would enable a market for attribution policies, where policy quality is itself a competitive signal.
 
 ---
 
-## §5 — SDK Specification
+## §5 SDK Specification
 
 _@atrib/mcp, @atrib/agent, @atrib/verify. Normative trigger table. Degradation contract._
 
-The conformance specification for @atrib/mcp, @atrib/agent, and @atrib/verify — defining the middleware contract, automation triggers, key management, and degradation behavior that all conforming implementations must satisfy.
+The conformance specification for @atrib/mcp, @atrib/agent, and @atrib/verify, defining the middleware contract, automation triggers, key management, and degradation behavior that all conforming implementations must satisfy.
 
 Contents
 
 1.  5.1Design Principle: Zero Ongoing Surface Area
 2.  5.2Package Overview
-3.  5.3@atrib/mcp — MCP Server Middleware
+3.  5.3@atrib/mcp: MCP Server Middleware
 4.  5.3.1Init interface
 5.  5.3.2Inbound context reading
 6.  5.3.3Record construction and signing
 7.  5.3.4Outbound context writing
 8.  5.3.5Log submission
 9.  5.3.6Policy exposure
-10. 5.4@atrib/agent — Agent Middleware
+10. 5.4@atrib/agent: Agent Middleware
 11. 5.4.1Init interface
 12. 5.4.2Session initialization
 13. 5.4.3Outbound context forwarding
 14. 5.4.4Inbound context accumulation
 15. 5.4.5Transaction detection
 16. 5.4.6Session policy record creation
-17. 5.5@atrib/verify — Merchant Verification Library
+17. 5.5@atrib/verify: Merchant Verification Library
 18. 5.5.1Init interface
 19. 5.5.2Verifying a settlement recommendation
 20. 5.5.3Post-hoc calculation (no agent SDK)
@@ -2135,9 +2135,9 @@ Contents
 25. 5.7Automation Triggers (Normative)
 26. 5.8Degradation Contract
 
-### 5.1 — Design Principle: Zero Ongoing Surface Area
+### 5.1 Design Principle: Zero Ongoing Surface Area
 
-The fundamental design requirement for all atrib SDKs is that attribution must happen automatically as a consequence of agents and tools doing what they already do — not as something developers explicitly trigger. The moment a developer must decide when to call an attribution method, adoption fails. They will intend to add it later and never do.
+The fundamental design requirement for all atrib SDKs is that attribution must happen automatically as a consequence of agents and tools doing what they already do, not as something developers explicitly trigger. The moment a developer must decide when to call an attribution method, adoption fails. They will intend to add it later and never do.
 
 The analogy is TCP/IP. An application developer does not tell TCP when to send a packet. They open a socket and write data. The protocol handles everything else invisibly. atrib follows the same model. A developer wraps their MCP server or agent once at initialization. Every tool call, context propagation, and log submission after that happens automatically, without the developer ever thinking about it again.
 
@@ -2147,7 +2147,7 @@ A conforming SDK implementation MUST satisfy all the automation triggers defined
 
 ---
 
-### 5.2 — Package Overview
+### 5.2 Package Overview
 
 Three packages are defined in this specification. All are TypeScript/JavaScript packages distributed via npm. Implementations in other languages SHOULD follow the same interface contracts using idiomatic patterns for their language.
 
@@ -2161,22 +2161,22 @@ All three packages are open source under the Apache 2.0 license. The npm package
 
 ---
 
-### 5.3 — @atrib/mcp — MCP Server Middleware
+### 5.3 @atrib/mcp: MCP Server Middleware
 
-#### 5.3.1 — Init Interface
+#### 5.3.1 Init Interface
 
-The `atrib()` function wraps an existing MCP server instance. It returns a new server instance that is a transparent proxy — all MCP protocol behavior is preserved unchanged. The only observable difference is that attribution records are emitted and context is propagated.
+The `atrib()` function wraps an existing MCP server instance. It returns a new server instance that is a transparent proxy; all MCP protocol behavior is preserved unchanged. The only observable difference is that attribution records are emitted and context is propagated.
 
 ```
 import { atrib } from '@atrib/mcp'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
-// Before — standard MCP server:
+// Before: standard MCP server:
 const server = new McpServer({ name: 'my-tool', version: '1.0.0' })
 
-// After — one wrap, everything else is automatic:
+// After: one wrap, everything else is automatic:
 const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
-  creatorKey: process.env.ATRIB_PRIVATE_KEY   // REQUIRED — see §5.6
+  creatorKey: process.env.ATRIB_PRIVATE_KEY   // REQUIRED (see §5.6)
 })
 ```
 
@@ -2190,32 +2190,32 @@ const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
 | serverUrl        | string     | Optional | Canonical URL of this MCP server, used to compute `content_id` values (§1.2.2). Default: derived from the server's HTTP host header. MUST be set explicitly for stdio transport where no host header is available.                                                                                                                                                                                                                                                     |
 | transactionTools | string\[\] | Optional | Array of tool names that complete commerce transactions. When a successful call to one of these tools is detected, `@atrib/mcp` emits a `transaction` record (event_type: "transaction") rather than a `tool_call` record. This is how Path 1 merchant-side transaction emission (§5.4.5) is implemented. The merchant's checkout tool name(s) should be listed here. If not set, `@atrib/mcp` emits only `tool_call` records and Path 2 agent-side detection applies. |
 
-#### 5.3.2 — Inbound Context Reading
+#### 5.3.2 Inbound Context Reading
 
 On every `tools/call` request, the middleware MUST read the inbound attribution context before passing the request to the tool handler. The context is read in priority order:
 
-1\. `params._meta.atrib` — present for MCP stdio and Streamable HTTP transport. Value is a base64url-encoded token as defined in §1.5.2. Read first.
+1\. `params._meta.atrib`: present for MCP stdio and Streamable HTTP transport. Value is a base64url-encoded token as defined in §1.5.2. Read first.
 
-2\. `tracestate: atrib=` — present for HTTP transport. Parsed per §1.5.2. Read if `params._meta.atrib` is absent.
+2\. `tracestate: atrib=`: present for HTTP transport. Parsed per §1.5.2. Read if `params._meta.atrib` is absent.
 
-3\. `X-atrib-Chain` header — fallback when tracestate was stripped by a proxy (§1.5.3). Read if neither of the above is present.
+3\. `X-atrib-Chain` header: fallback when tracestate was stripped by a proxy (§1.5.3). Read if neither of the above is present.
 
-If all three are absent, this is a genesis call — no upstream attribution context exists for this request. The middleware generates a genesis record (§5.3.3).
+If all three are absent, this is a genesis call; no upstream attribution context exists for this request. The middleware generates a genesis record (§5.3.3).
 
 In addition, the middleware MUST read the session_token if present:
 
-4\. `params._meta.baggage` — for MCP transports. Parse for key `atrib-session`.
+4\. `params._meta.baggage`: for MCP transports. Parse for key `atrib-session`.
 
-5\. W3C `Baggage` header — for HTTP transport. Parse for key `atrib-session`.
+5\. W3C `Baggage` header: for HTTP transport. Parse for key `atrib-session`.
 
-The extracted context yields: `record_hash` (the SHA-256 of the sending record — becomes the `chain_root` of the next record in the chain), `creator_key` (identifies the sender), `context_id` (the OTel trace ID from the `traceparent` header or span context), and optionally `session_token` (for cross-trace attribution linking). All extracted values are passed to record construction (§5.3.3).
+The extracted context yields: `record_hash` (the SHA-256 of the sending record, which becomes the `chain_root` of the next record in the chain), `creator_key` (identifies the sender), `context_id` (the OTel trace ID from the `traceparent` header or span context), and optionally `session_token` (for cross-trace attribution linking). All extracted values are passed to record construction (§5.3.3).
 
-#### 5.3.3 — Record Construction and Signing
+#### 5.3.3 Record Construction and Signing
 
 After the tool handler completes successfully (i.e., `isError` is false in the response), the middleware MUST construct and sign an attribution record per §1.2–§1.4.
 
 ```
-// Record construction and signing — fires AFTER successful tool call response,
+// Record construction and signing. Fires AFTER successful tool call response,
 // BEFORE the response is returned to the caller:
 const isTransaction = transactionTools.includes(toolName)
 const record = {
@@ -2227,16 +2227,16 @@ const record = {
   event_type:   isTransaction ? "transaction" : "tool_call",  // §1.2.4
   context_id:   context_id,                               // OTel trace ID
   timestamp:    Date.now(),
-  ...(session_token && { session_token }),                 // §1.5.5 — omit field if absent
+  ...(session_token && { session_token }),                 // §1.5.5, omit field if absent
 }
-const signed = signRecord(record, creatorKey)             // §1.4.2 — synchronous
+const signed = signRecord(record, creatorKey)             // §1.4.2, synchronous
 ```
 
 Record construction and signing MUST complete before the response is returned to the caller. Log submission (§5.3.5) always happens after the response is sent and is always non-blocking, including for transaction records. See §5.3.5 for submission behavior, retry logic, and the priority distinction between transaction and tool_call records.
 
-**Note — Tool call failures** Attribution records are only emitted for successful tool calls (`isError: false`). A tool call that returns an error does not generate an attribution record and does not extend the chain. The OTel span for the failed call will create a gap node in the graph (§3.2.5), visible as an unsigned hop.
+**Note:** Tool call failures** Attribution records are only emitted for successful tool calls (`isError: false`). A tool call that returns an error does not generate an attribution record and does not extend the chain. The OTel span for the failed call will create a gap node in the graph (§3.2.5), visible as an unsigned hop.
 
-#### 5.3.4 — Outbound Context Writing
+#### 5.3.4 Outbound Context Writing
 
 After signing the record, the middleware MUST write the new attribution context into the response so the calling agent can forward it downstream.
 
@@ -2249,19 +2249,19 @@ const creator_key_bytes = publicKeyBytes(creatorKey)
 const token = base64url(record_hash_bytes) + '.' + base64url(creator_key_bytes)
 
 // Write to response in all applicable locations:
-response.params._meta.atrib = token                  // always — MCP metadata
+response.params._meta.atrib = token                  // always, MCP metadata
 response.headers['tracestate'] += `,atrib=${token}`   // HTTP transport
 response.headers['X-atrib-Chain'] = token            // fallback header
 ```
 
 The tracestate value MUST be appended to any existing tracestate entries, not replace them. The full token is 87 characters maximum and fits within the W3C tracestate per-vendor limit of 256 characters.
 
-#### 5.3.5 — Log Submission
+#### 5.3.5 Log Submission
 
-Log submission is always non-blocking. The tool response is returned to the caller before any submission begins. Submission failures MUST NEVER propagate to the tool response or the caller. This applies to both `tool_call` and `transaction` records without exception — the degradation contract (§5.8) takes precedence over any desire to confirm log commitment before responding.
+Log submission is always non-blocking. The tool response is returned to the caller before any submission begins. Submission failures MUST NEVER propagate to the tool response or the caller. This applies to both `tool_call` and `transaction` records without exception; the degradation contract (§5.8) takes precedence over any desire to confirm log commitment before responding.
 
 ```
-// After response is sent — always non-blocking:
+// After response is sent, always non-blocking:
 const priority = isTransaction ? 'high' : 'normal'
 
 submitToLog(signed, logEndpoint, { priority })
@@ -2282,7 +2282,7 @@ submitToLog(signed, logEndpoint, { priority })
 
 The proof bundle returned from a successful submission (§2.6.2) SHOULD be cached in memory keyed by `record_hash` for the duration of the server process, and persisted to a local store if the operator has configured one. Cached proof bundles are served at `GET /.well-known/atrib-proof/{record_hash}` so agents and merchants can retrieve inclusion proofs without querying the log directly.
 
-#### 5.3.6 — Policy Exposure
+#### 5.3.6 Policy Exposure
 
 If a `policy` option was provided at init, the middleware MUST serve it at `GET /.well-known/atrib-policy.json` with `Content-Type: application/json` and `Cache-Control: max-age=300`. If no policy was provided, the endpoint MUST return HTTP 404.
 
@@ -2299,22 +2299,22 @@ serverInfo: {
 
 ---
 
-### 5.4 — @atrib/agent — Agent Middleware
+### 5.4 @atrib/agent: Agent Middleware
 
-#### 5.4.1 — Init Interface
+#### 5.4.1 Init Interface
 
-The agent middleware exposes an interception surface that the host application or MCP client integrates at outbound tool call and inbound tool response boundaries. This is a framework-agnostic design — the middleware does not monkey-patch a specific agent implementation, because no single agent shape covers the LangChain / Mastra / AI SDK / direct-MCP-client landscape. Instead, the middleware returns an interceptor object that the caller hooks into their own request/response lifecycle.
+The agent middleware exposes an interception surface that the host application or MCP client integrates at outbound tool call and inbound tool response boundaries. This is a framework-agnostic design; the middleware does not monkey-patch a specific agent implementation, because no single agent shape covers the LangChain / Mastra / AI SDK / direct-MCP-client landscape. Instead, the middleware returns an interceptor object that the caller hooks into their own request/response lifecycle.
 
 ```
 import { atrib } from '@atrib/agent'
 
 // Create the interceptor once at startup.
 const interceptor = atrib({
-  creatorKey:     process.env.ATRIB_PRIVATE_KEY,  // REQUIRED — see §5.6
-  merchantDomain: 'https://merchant.example.com', // OPTIONAL — for policy fetch at session init
-  logEndpoint:    'https://log.atrib.io/v1/entries', // OPTIONAL — default shown
-  sessionToken:   'my-session',                    // OPTIONAL — see §1.5.5
-  serverUrls:     ['https://tool-a.example', 'https://tool-b.example'], // OPTIONAL — for policy fetch
+  creatorKey:     process.env.ATRIB_PRIVATE_KEY,  // REQUIRED (see §5.6)
+  merchantDomain: 'https://merchant.example.com', // OPTIONAL, for policy fetch at session init
+  logEndpoint:    'https://log.atrib.io/v1/entries', // OPTIONAL, default shown
+  sessionToken:   'my-session',                    // OPTIONAL (see §1.5.5)
+  serverUrls:     ['https://tool-a.example', 'https://tool-b.example'], // OPTIONAL, for policy fetch
 })
 
 // The interceptor exposes four methods. The caller invokes them at the
@@ -2350,7 +2350,7 @@ Implementations are free to wrap this surface in higher-level adapters for speci
 | logEndpoint    | string | Optional | Merkle log submission endpoint. Default: `https://log.atrib.io/v1/entries`.                                                                                                                                                |
 | sessionToken   | string | Optional | If provided, used as the session_token for cross-trace attribution linking (§1.5.5). If absent, the middleware generates one automatically at session start and propagates it via W3C Baggage.                             |
 
-#### 5.4.2 — Session Initialization
+#### 5.4.2 Session Initialization
 
 Session initialization fires once when the first tool call of a session is about to be made. It MUST complete before the first outbound tool call is sent.
 
@@ -2360,7 +2360,7 @@ During initialization the middleware:
 
 2\. Generates or uses the provided `sessionToken` and injects it into W3C Baggage as `atrib-session=`.
 
-3\. Fetches the merchant policy from `merchantDomain/.well-known/atrib-policy.json` if `merchantDomain` is set. Uses a 1-second per-fetch timeout. No retry during init — falls back to default on any error or timeout.
+3\. Fetches the merchant policy from `merchantDomain/.well-known/atrib-policy.json` if `merchantDomain` is set. Uses a 1-second per-fetch timeout. No retry during init; falls back to default on any error or timeout.
 
 4\. For each tool server in the agent's tool list, fetches creator policies **concurrently** (all in parallel, not sequentially). Uses a 1-second per-fetch timeout with no retry. Reads from `/.well-known/atrib-policy.json` for HTTP servers, or from `serverInfo["io.atrib/policy"]` for stdio servers. Collects all policies that responded within the timeout window; treats non-responding servers as having no policy.
 
@@ -2368,9 +2368,9 @@ During initialization the middleware:
 
 The entire initialization sequence MUST complete within 3 seconds. If it does not, the middleware proceeds under the default policy and records a timeout warning in the session policy record. The 1-second per-fetch timeout, with all creator fetches running concurrently, means total init time is bounded by: merchant fetch (≤1s) + max single creator fetch (≤1s) + negotiation logic (negligible) = well within 3 seconds even with many tools.
 
-**Note — Init timeouts differ from runtime policy fetch timeouts** The §4.4 retry-once-with-2-second-delay behavior applies to _runtime_ policy document requests from policy evaluation tools, not to SDK init. During init, the SDK must fail fast — a slow policy server should not delay the first tool call by 4+ seconds. The tradeoff is that a transiently slow server during init is treated as having no policy; if the server recovers, it will serve its policy correctly on the next tool call's context propagation path.
+**Note:** Init timeouts differ from runtime policy fetch timeouts** The §4.4 retry-once-with-2-second-delay behavior applies to _runtime_ policy document requests from policy evaluation tools, not to SDK init. During init, the SDK must fail fast; a slow policy server should not delay the first tool call by 4+ seconds. The tradeoff is that a transiently slow server during init is treated as having no policy; if the server recovers, it will serve its policy correctly on the next tool call's context propagation path.
 
-#### 5.4.3 — Outbound Context Forwarding
+#### 5.4.3 Outbound Context Forwarding
 
 On every outbound `tools/call` request, the middleware MUST attach the current attribution context to the request:
 
@@ -2395,9 +2395,9 @@ request.headers.baggage += `,atrib-session=${sessionToken}`
 request.params._meta.baggage = `atrib-session=${sessionToken}`  // MCP metadata
 ```
 
-If no attribution context has been received yet in this session (first tool call), no `atrib` token is attached. The receiving tool will generate a genesis record anchored to the session's context_id. This is the expected behavior — the first tool in a session always produces a genesis record.
+If no attribution context has been received yet in this session (first tool call), no `atrib` token is attached. The receiving tool will generate a genesis record anchored to the session's context_id. This is the expected behavior; the first tool in a session always produces a genesis record.
 
-#### 5.4.4 — Inbound Context Accumulation
+#### 5.4.4 Inbound Context Accumulation
 
 On every inbound `tools/call` response, the middleware MUST read the attribution context from the response and update the session state:
 
@@ -2417,14 +2417,14 @@ if (token) {
 // Session state is unchanged. An OTel gap node will represent this hop in the graph.
 ```
 
-#### 5.4.5 — Transaction Detection
+#### 5.4.5 Transaction Detection
 
 The middleware detects transaction events automatically from the response shapes defined in §1.7. No developer input is required. The detection logic checks each successful tool call response for the presence of transaction signals:
 
 ```
 function detectTransaction(toolName, response, headers):
   // ACP / UCP: completion response with embedded order, OR ACP webhook event.
-  // Per §1.7.1 and §1.7.2 — both protocols converged on the same shape; UCP
+  // Per §1.7.1 and §1.7.2, both protocols converged on the same shape; UCP
   // is distinguished by the top-level `ucp.version` envelope.
   if (response?.status === 'completed' && typeof response?.order?.id === 'string'):
     const isUcp = typeof response?.ucp?.version === 'string'
@@ -2450,7 +2450,7 @@ function detectTransaction(toolName, response, headers):
   if (lower['payment-receipt']):
     return { detected: true, protocol: 'MPP' }
 
-  // AP2 v0.1 — PaymentMandate Message inside an A2A DataPart.
+  // AP2 v0.1: PaymentMandate Message inside an A2A DataPart.
   // Source: github.com/google-agentic-commerce/ap2 docs/specification.md
   if (Array.isArray(response?.parts)):
     for (part in response.parts):
@@ -2458,7 +2458,7 @@ function detectTransaction(toolName, response, headers):
           && 'ap2.mandates.PaymentMandate' in part.data):
         return { detected: true, protocol: 'AP2' }
 
-  // a2a-x402 extension — payment-completed via A2A task status metadata.
+  // a2a-x402 extension: payment-completed via A2A task status metadata.
   // Source: github.com/google-agentic-commerce/a2a-x402 spec/v0.1/spec.md
   // Requires BOTH the payment-completed status AND a successful receipt.
   const meta = response?.status?.message?.metadata
@@ -2468,7 +2468,7 @@ function detectTransaction(toolName, response, headers):
     return { detected: true, protocol: 'AP2' }
 
   // Legacy / non-canonical: W3C VC envelope around a PaymentMandate
-  // (research forks only — AP2 v0.1 itself does NOT use W3C VCs).
+  // (research forks only; AP2 v0.1 itself does NOT use W3C VCs).
   // Accepts both v2 array form and v1 string form.
   if (Array.isArray(response?.type)
       && response.type.includes('VerifiableCredential')
@@ -2478,7 +2478,7 @@ function detectTransaction(toolName, response, headers):
       && /paymentmandate/i.test(response?.credentialSubject?.type ?? '')):
     return { detected: true, protocol: 'AP2' }
 
-  // Tool name heuristic — last resort only, lower reliability
+  // Tool name heuristic, last resort only, lower reliability
   // Note: this local list is NOT the transactionTools init option from @atrib/mcp.
   // transactionTools is merchant-configured; this list is agent-side pattern matching.
   const heuristicKeywords = ['create_order', 'complete_checkout', 'process_payment',
@@ -2491,66 +2491,66 @@ function detectTransaction(toolName, response, headers):
 
 When a transaction is detected, the middleware emits a `transaction` attribution record (§1.2.4). The `content_id` is derived from the merchant's checkout endpoint URL per §1.2.2, making the transaction identifiable regardless of who signed it. The `creator_key` depends on which emission path is in use:
 
-**Path 1 — Merchant-side emission (preferred).** The merchant configures `@atrib/mcp` with `transactionTools: ['checkout', 'complete_order']` (or equivalent tool names). When a call to one of these tools succeeds, `@atrib/mcp` emits a `transaction` record signed with the merchant's `ATRIB_PRIVATE_KEY` and writes an attribution context token to the response. This is the cleanest model: the merchant's key is on the transaction record, and the agent detects Path 1 by seeing the token in the response.
+**Path 1:** Merchant-side emission (preferred).** The merchant configures `@atrib/mcp` with `transactionTools: ['checkout', 'complete_order']` (or equivalent tool names). When a call to one of these tools succeeds, `@atrib/mcp` emits a `transaction` record signed with the merchant's `ATRIB_PRIVATE_KEY` and writes an attribution context token to the response. This is the cleanest model: the merchant's key is on the transaction record, and the agent detects Path 1 by seeing the token in the response.
 
-**Path 2 — Agent-side detection (fallback).** When the merchant has no atrib integration, the agent detects the transaction and emits the record itself, signed with the agent's `creatorKey`. The `content_id` is derived as follows by protocol:
+**Path 2:** Agent-side detection (fallback).** When the merchant has no atrib integration, the agent detects the transaction and emits the record itself, signed with the agent's `creatorKey`. The `content_id` is derived as follows by protocol:
 
-— **ACP / UCP:** use `order.permalink_url` from the completion response as the server_url, with tool_name `"checkout"`. If the response is an `order_create` / `order_update` webhook event, use `data.permalink_url`. If neither is available (e.g., the merchant returned a minimal completion without an order URL), fall back to the MCP server URL of the tool that was called.
+- **ACP / UCP:** use `order.permalink_url` from the completion response as the server_url, with tool_name `"checkout"`. If the response is an `order_create` / `order_update` webhook event, use `data.permalink_url`. If neither is available (e.g., the merchant returned a minimal completion without an order URL), fall back to the MCP server URL of the tool that was called.
 
-— **x402 / MPP:** use the HTTP endpoint URL that returned the `Payment-Receipt` header as the server_url, with tool_name `"checkout"`.
+- **x402 / MPP:** use the HTTP endpoint URL that returned the `Payment-Receipt` header as the server_url, with tool_name `"checkout"`.
 
-— **Heuristic:** use the MCP server URL of the tool that was called as the server_url, with the actual tool_name. This is the weakest case — the content_id identifies the tool, not the checkout endpoint specifically.
+- **Heuristic:** use the MCP server URL of the tool that was called as the server_url, with the actual tool_name. This is the weakest case; the content_id identifies the tool, not the checkout endpoint specifically.
 
 The session policy record MUST include a warning: `"transaction_emitted_by_agent"` when this path is taken.
 
-**Path selection rule — preventing double-emission.** The agent middleware MUST NOT emit a transaction record (Path 2) when the checkout tool response contains an attribution context token (i.e., `params._meta.atrib`, `tracestate: atrib=...`, or `X-atrib-Chain` is present in the response). The presence of an attribution token in the checkout response indicates that `@atrib/mcp` is installed on the merchant's server and has already emitted the transaction record (Path 1). Emitting a second record would create two transaction nodes for the same economic event, violating the single-transaction-per-session assumption in §4.6.1. When Path 1 is detected, the agent updates its session state with the inbound context token as normal, but skips transaction record emission.
+**Path selection rule:** preventing double-emission.** The agent middleware MUST NOT emit a transaction record (Path 2) when the checkout tool response contains an attribution context token (i.e., `params._meta.atrib`, `tracestate: atrib=...`, or `X-atrib-Chain` is present in the response). The presence of an attribution token in the checkout response indicates that `@atrib/mcp` is installed on the merchant's server and has already emitted the transaction record (Path 1). Emitting a second record would create two transaction nodes for the same economic event, violating the single-transaction-per-session assumption in §4.6.1. When Path 1 is detected, the agent updates its session state with the inbound context token as normal, but skips transaction record emission.
 
 In both paths, when Path 2 is taken, the record is submitted to the log immediately, not deferred, because the transaction event is the closing anchor of the attribution graph.
 
-**Note — Heuristic detection is a fallback** The tool name heuristic fires only when no protocol-level transaction signal is present. It is less reliable — a tool named `checkout` might be a UI component, not a payment completion. When heuristic detection fires, the transaction record's `event_type` is still `"transaction"` but the session policy record includes a warning: `"transaction_detected_by_heuristic"`. Merchants may choose to require protocol-level detection for settlement purposes by filtering on this warning in their verification workflow.
+**Note:** Heuristic detection is a fallback** The tool name heuristic fires only when no protocol-level transaction signal is present. It is less reliable; a tool named `checkout` might be a UI component, not a payment completion. When heuristic detection fires, the transaction record's `event_type` is still `"transaction"` but the session policy record includes a warning: `"transaction_detected_by_heuristic"`. Merchants may choose to require protocol-level detection for settlement purposes by filtering on this warning in their verification workflow.
 
-#### 5.4.6 — Session Policy Record Creation
+#### 5.4.6 Session Policy Record Creation
 
 The session policy record (§4.5.3) is created at session initialization (§5.4.2) and updated as the session progresses. The middleware MUST populate it as follows:
 
-— `context_id`: set at session init from the OTel trace ID.
+- `context_id`: set at session init from the OTel trace ID.
 
-— `merchant_policy`: URL fetched at init, or `"default"` if none was found.
+- `merchant_policy`: URL fetched at init, or `"default"` if none was found.
 
-— `creator_policies`: populated as creator policies are fetched during init. Each entry's `status` field reflects the negotiation outcome per §4.5.2.
+- `creator_policies`: populated as creator policies are fetched during init. Each entry's `status` field reflects the negotiation outcome per §4.5.2.
 
-— `agreed_policy`: set after negotiation completes.
+- `agreed_policy`: set after negotiation completes.
 
-— `applied_constraints.minimum_floors`: populated with all `minimum_own_share` values from creator policies that survived negotiation (Rules 1–5 of §4.5.2).
+- `applied_constraints.minimum_floors`: populated with all `minimum_own_share` values from creator policies that survived negotiation (Rules 1–5 of §4.5.2).
 
-— `warnings`: appended throughout the session — on policy fetch failures, heuristic transaction detection, agent-side transaction emission (path 2 of §5.4.5), unknown modifier types, negotiation skips, and policy negotiation timeouts.
+- `warnings`: appended throughout the session, on policy fetch failures, heuristic transaction detection, agent-side transaction emission (path 2 of §5.4.5), unknown modifier types, negotiation skips, and policy negotiation timeouts.
 
 The session policy record is stored in memory and SHOULD be persisted to disk or a database at session end. It is made available to the merchant via a call to `interceptor.getSessionPolicyRecord(context_id)` on the object returned by `atrib()` (§5.4.1).
 
 ---
 
-### 5.5 — @atrib/verify — Merchant Verification Library
+### 5.5 @atrib/verify: Merchant Verification Library
 
-#### 5.5.1 — Init Interface
+#### 5.5.1 Init Interface
 
 ```
 import { AtribVerifier } from '@atrib/verify'
 
 const verifier = new AtribVerifier({
-  logEndpoint:     'https://log.atrib.io/v1',    // OPTIONAL — default shown
-  graphEndpoint:   'https://graph.atrib.io/v1',  // OPTIONAL — default shown
-  resolveEndpoint: 'https://resolve.atrib.io/v1', // OPTIONAL — for remote calculation
-  merchantKey:     process.env.ATRIB_MERCHANT_KEY, // OPTIONAL — for self-signing recommendations
+  logEndpoint:     'https://log.atrib.io/v1',    // OPTIONAL, default shown
+  graphEndpoint:   'https://graph.atrib.io/v1',  // OPTIONAL, default shown
+  resolveEndpoint: 'https://resolve.atrib.io/v1', // OPTIONAL, for remote calculation
+  merchantKey:     process.env.ATRIB_MERCHANT_KEY, // OPTIONAL, for self-signing recommendations
 })
 
 // If merchantKey is not set:
-// - verify() still works — it only needs the recommendation's calculated_by public key
+// - verify() still works; it only needs the recommendation's calculated_by public key
 // - calculate() with signWith: 'merchant' returns an unsigned recommendation
-//   with a warnings entry: "merchantKey not set — recommendation unsigned"
+//   with a warnings entry: "merchantKey not set, recommendation unsigned"
 // - calculate() never throws due to a missing key (degradation contract §5.8)
 ```
 
-#### 5.5.2 — Verifying a Settlement Recommendation
+#### 5.5.2 Verifying a Settlement Recommendation
 
 Given a settlement recommendation document (§4.7), the verifier independently reproduces the calculation and compares results.
 
@@ -2570,7 +2570,7 @@ const result = await verifier.verify(recommendationDoc)
 
 The verifier fetches the graph at the tree size specified in `graph_tree_size`, fetches the session policy record identified by `policy_record_id`, fetches the agreed policy document, and runs the calculation algorithm (§4.6) locally. It does not call the resolution API.
 
-#### 5.5.3 — Post-Hoc Calculation (No Agent SDK)
+#### 5.5.3 Post-Hoc Calculation (No Agent SDK)
 
 When no agent SDK was present during the session, no session policy record exists. The merchant can still calculate using the default policy:
 
@@ -2589,9 +2589,9 @@ The verifier fetches the graph for the given `context_id`, applies the specified
 
 ---
 
-### 5.6 — Key Management
+### 5.6 Key Management
 
-#### 5.6.1 — Key Generation
+#### 5.6.1 Key Generation
 
 All atrib SDKs use the same Ed25519 key format defined in §1.4.1. A keypair can be generated using the atrib CLI:
 
@@ -2607,9 +2607,9 @@ ATRIB_PUBLIC_KEY=base64url(32-byte-ed25519-public-key)
 // Only ATRIB_PRIVATE_KEY needs to be stored and secured.
 ```
 
-**Note — Ed25519 seed vs expanded key** Some Ed25519 libraries use a 64-byte "expanded" or "NaCl" format that concatenates the seed with the derived public key. atrib stores and transmits only the 32-byte seed. The public key is derived at runtime using standard Ed25519 scalar multiplication. Implementations MUST accept only 32-byte seeds in ATRIB_PRIVATE_KEY and MUST NOT accept or produce 64-byte concatenated formats as key values, to prevent confusion between key representations across implementations.
+**Note:** Ed25519 seed vs expanded key** Some Ed25519 libraries use a 64-byte "expanded" or "NaCl" format that concatenates the seed with the derived public key. atrib stores and transmits only the 32-byte seed. The public key is derived at runtime using standard Ed25519 scalar multiplication. Implementations MUST accept only 32-byte seeds in ATRIB_PRIVATE_KEY and MUST NOT accept or produce 64-byte concatenated formats as key values, to prevent confusion between key representations across implementations.
 
-#### 5.6.2 — Environment Variable Convention
+#### 5.6.2 Environment Variable Convention
 
 The canonical environment variable names are:
 
@@ -2619,23 +2619,23 @@ The canonical environment variable names are:
 | ATRIB_MERCHANT_KEY | @atrib/verify            | Base64url-encoded 32-byte Ed25519 seed used to sign settlement recommendations produced by post-hoc calculation. Uses the same format as ATRIB_PRIVATE_KEY.                                                               |
 | ATRIB_LOG_ENDPOINT | @atrib/mcp, @atrib/agent | Optional. Override for the Merkle log submission endpoint. Overrides the `logEndpoint` init option.                                                                                                                       |
 
-#### 5.6.3 — Key Storage Requirements
+#### 5.6.3 Key Storage Requirements
 
 The private key signs every attribution record emitted by the creator. Compromise of the private key allows forged attribution records to be submitted to the log under the creator's identity. Implementations MUST enforce the following:
 
-— The private key MUST NEVER appear in logs, error messages, attribution records, or any transmitted data.
+- The private key MUST NEVER appear in logs, error messages, attribution records, or any transmitted data.
 
-— The private key MUST NEVER be embedded in source code or committed to version control. The `ATRIB_PRIVATE_KEY` environment variable convention exists specifically to prevent this.
+- The private key MUST NEVER be embedded in source code or committed to version control. The `ATRIB_PRIVATE_KEY` environment variable convention exists specifically to prevent this.
 
-— In production deployments, the private key SHOULD be stored in a secrets manager (AWS Secrets Manager, HashiCorp Vault, or equivalent) and injected at runtime.
+- In production deployments, the private key SHOULD be stored in a secrets manager (AWS Secrets Manager, HashiCorp Vault, or equivalent) and injected at runtime.
 
-— SDK implementations MUST zero the key material from memory after use when the runtime supports it.
+- SDK implementations MUST zero the key material from memory after use when the runtime supports it.
 
-**Key compromise in v1** In v1 there is no key rotation mechanism (deferred to a future revision per §1.8). A compromised key cannot be revoked within the protocol — it can only be abandoned. Creators who believe their key has been compromised should generate a new key, publish a public attestation linking their old and new keys, and begin submitting records under the new key. The attestation document format is not specified in v1; a normative format will be defined in a future revision.
+**Key compromise in v1** In v1 there is no key rotation mechanism (deferred to a future revision per §1.8). A compromised key cannot be revoked within the protocol; it can only be abandoned. Creators who believe their key has been compromised should generate a new key, publish a public attestation linking their old and new keys, and begin submitting records under the new key. The attestation document format is not specified in v1; a normative format will be defined in a future revision.
 
 ---
 
-### 5.7 — Automation Triggers (Normative)
+### 5.7 Automation Triggers (Normative)
 
 This section is normative. A conforming implementation MUST fire each trigger at exactly the stated moment, with exactly the stated behavior. Implementations MUST NOT require developer input to activate any trigger. Implementations MUST NOT expose configuration options for suppressing individual triggers.
 
@@ -2644,22 +2644,22 @@ This section is normative. A conforming implementation MUST fire each trigger at
 | session_init         | Before the first outbound `tools/call` in a session                                                         | @atrib/agent | Establish context_id, generate session_token, fetch and negotiate policies, create session policy record (§5.4.2).                                                                                                                                                                                  |
 | tool_call_outbound   | Immediately before every outbound `tools/call` request is sent                                              | @atrib/agent | Attach attribution context token to request headers and `params._meta` (§5.4.3).                                                                                                                                                                                                                    |
 | tool_call_inbound    | Immediately after every inbound `tools/call` response is received, if `isError: false`                      | @atrib/agent | Read and store attribution context from response. Update session state (§5.4.4). Check for transaction signal (§5.4.5).                                                                                                                                                                             |
-| tool_served          | Immediately after a tool handler completes successfully (`isError: false`), before the response is returned | @atrib/mcp   | Construct, sign, and write attribution record (event_type: `"tool_call"` or `"transaction"` if tool is in `transactionTools`). Attach context token to response (§5.3.3–5.3.4). Submit to log — synchronously for transaction records, asynchronously for tool_call records (§5.3.5).               |
-| transaction_detected | When `detectTransaction()` returns `true` during `tool_call_inbound` processing                             | @atrib/agent | Apply path selection rule (§5.4.5): if attribution token is present in the response, Path 1 is in use — update session state and skip emission. If no token, Path 2 applies — emit a `transaction` record, submit to log immediately (high priority, non-blocking), finalize session policy record. |
+| tool_served          | Immediately after a tool handler completes successfully (`isError: false`), before the response is returned | @atrib/mcp   | Construct, sign, and write attribution record (event_type: `"tool_call"` or `"transaction"` if tool is in `transactionTools`). Attach context token to response (§5.3.3–5.3.4). Submit to log (synchronously for transaction records, asynchronously for tool_call records per §5.3.5).               |
+| transaction_detected | When `detectTransaction()` returns `true` during `tool_call_inbound` processing                             | @atrib/agent | Apply path selection rule (§5.4.5): if attribution token is present in the response, Path 1 is in use: update session state and skip emission. If no token, Path 2 applies: emit a `transaction` record, submit to log immediately (high priority, non-blocking), finalize session policy record. |
 | task_created         | When a `tasks/create` response is received                                                                  | @atrib/agent | Store the task ID and associate it with the current session context. Continue forwarding attribution context on subsequent requests within the task.                                                                                                                                                |
 | task_completed       | When a task polling response indicates completion                                                           | @atrib/agent | Treat task completion as a successful `tools/call` response. Apply `tool_call_inbound` trigger logic to the final task result.                                                                                                                                                                      |
 
 ---
 
-### 5.8 — Degradation Contract
+### 5.8 Degradation Contract
 
-atrib must never impair the primary function of a tool or agent. This is a hard requirement. The attribution infrastructure is invisible infrastructure — it either works silently or fails silently. It does not fail loudly.
+atrib must never impair the primary function of a tool or agent. This is a hard requirement. The attribution infrastructure is invisible infrastructure; it either works silently or fails silently. It does not fail loudly.
 
 The degradation contract is:
 
 **Any exception thrown inside an atrib trigger handler MUST be caught by the middleware.** Exceptions MUST NEVER propagate to the tool handler, the agent, or the calling code. The middleware MUST log the exception at warning level using a prefixed label (`"atrib:"`) and continue as if the trigger did not fire.
 
-**Any network failure during log submission MUST be handled silently with retry.** This applies equally to `tool_call` and `transaction` records — both use exponential backoff with max 3 attempts over a 30-second window. Transaction records are queued at higher priority than tool_call records but are not submitted synchronously. If all retries fail, the signed record is cached locally. The tool or agent response is not affected in any case.
+**Any network failure during log submission MUST be handled silently with retry.** This applies equally to `tool_call` and `transaction` records; both use exponential backoff with max 3 attempts over a 30-second window. Transaction records are queued at higher priority than tool_call records but are not submitted synchronously. If all retries fail, the signed record is cached locally. The tool or agent response is not affected in any case.
 
 **Any timeout during policy negotiation MUST fall back to the default policy.** The timeout window is 3 seconds (§5.4.2). The session proceeds under default policy. The session policy record records the timeout.
 
