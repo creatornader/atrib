@@ -139,7 +139,7 @@ describe('token fuzz', () => {
       fc.property(fc.string({ minLength: 0, maxLength: 200 }), (str) => {
         // Most random strings are not valid tokens
         const result = decodeToken(str)
-        // Result is either null or a valid DecodedToken, never throws
+        // Result is either null or a valid DecodedToken. never throws
         if (result !== null) {
           expect(result.recordHash).toBeInstanceOf(Uint8Array)
           expect(result.creatorKey).toBeInstanceOf(Uint8Array)
@@ -236,7 +236,7 @@ describe('timestamp validation', () => {
   })
 
   it('accepts MAX_SAFE_INTEGER when within future window', () => {
-    // MAX_SAFE_INTEGER as a timestamp is year ~287,396, far future, should be rejected
+    // MAX_SAFE_INTEGER as a timestamp is year ~287,396. far future, should be rejected
     const r = validateSubmission({ ...validBase, timestamp: Number.MAX_SAFE_INTEGER })
     expect(r.ok).toBe(false)
   })

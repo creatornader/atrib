@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Edge case tests for calculate(), gaps #3, #4, #6, #7.
+ * Edge case tests for calculate(). gaps #3, #4, #6, #7.
  *
  * #3: applyMaximumCap iteration bound (ping-pong safety fallback)
  * #4: Large graph performance (1000+ nodes)

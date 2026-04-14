@@ -5,7 +5,7 @@
  *
  * Independently recomputes the Merkle root from inclusion proofs returned
  * by the log server and verifies it matches the checkpoint. This is what
- * a real verifier does, if these tests pass, the cryptography works.
+ * a real verifier does. if these tests pass, the cryptography works.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'

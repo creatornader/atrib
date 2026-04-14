@@ -61,7 +61,7 @@ describe('signRecord / verifyRecord', () => {
   it('rejects unknown spec_version', async () => {
     const signed = await makeSignedRecord(privateKey)
     const tampered = { ...signed, spec_version: 'atrib/2.0' } as unknown as AtribRecord
-    // Re-sign with the wrong spec version, signature will be valid but step 5 rejects
+    // Re-sign with the wrong spec version. signature will be valid but step 5 rejects
     const resignedTampered = await signRecord(tampered, privateKey)
     const valid = await verifyRecord(resignedTampered)
     expect(valid).toBe(false)
@@ -127,7 +127,7 @@ describe('signRecord / verifyRecord', () => {
   })
 
   it('accepts very old timestamps (no staleness check in v1)', async () => {
-    // Year 2020 timestamp, spec only rejects future timestamps, not old ones
+    // Year 2020 timestamp. spec only rejects future timestamps, not old ones
     const oldTimestamp = new Date('2020-01-01').getTime()
     const signed = await makeSignedRecord(privateKey, { timestamp: oldTimestamp })
     const valid = await verifyRecord(signed)

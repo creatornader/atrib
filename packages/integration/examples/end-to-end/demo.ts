@@ -1,5 +1,5 @@
 /**
- * atrib end-to-end demo, single-process runnable showcase.
+ * atrib end-to-end demo. single-process runnable showcase.
  *
  * Run with:
  *   ATRIB_PRIVATE_KEY=$(node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))') \
@@ -8,17 +8,17 @@
  * What this demonstrates in ~150 lines:
  *   1. @atrib/log-dev running in-process at a free port
  *   2. A fake MCP merchant tool server wrapped with @atrib/mcp's atrib()
- *      middleware, every tool call it serves emits a signed record
+ *      middleware. every tool call it serves emits a signed record
  *   3. A fake agent built on raw @modelcontextprotocol/sdk Client wrapped
- *      with @atrib/agent's wrapMcpClient, its outbound calls carry
+ *      with @atrib/agent's wrapMcpClient. its outbound calls carry
  *      attribution context and chain to each other
  *   4. A stubbed x402-style payment receipt that closes the chain via
  *      @atrib/agent's transaction detection (spec §5.4)
  *   5. A CLI visualizer that prints each record as it lands in the dev log
  *
  * The mock is limited to the surrounding environment (fake search results,
- * in-memory transport, stubbed payment header). All attribution logic,
- * signing, chaining, transaction detection, runs the production code paths.
+ * in-memory transport, stubbed payment header). All attribution logic.
+ * signing, chaining, transaction detection. runs the production code paths.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -87,7 +87,7 @@ async function main(): Promise<void> {
     logEndpoint: log.submissionEndpoint,
   })
 
-  // Register a single fake search tool. Returns hardcoded results, the
+  // Register a single fake search tool. Returns hardcoded results. the
   // value of this demo is in the attribution flow, not the search results.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ;(merchantServer as any).tool('search', async () => ({
@@ -102,7 +102,7 @@ async function main(): Promise<void> {
   // ── 3. Fake agent client ─────────────────────────────────────────────────
   info('starting agent client...')
 
-  // The agent uses a different keypair than the merchant, it's a separate
+  // The agent uses a different keypair than the merchant. it's a separate
   // attributing party. In a real deployment this would be the agent
   // operator's key, distinct from the merchant's.
   const agentKey = Buffer.from(new Uint8Array(32).map((_, i) => (i + 100) & 0xff)).toString(
@@ -122,7 +122,7 @@ async function main(): Promise<void> {
     merchantServer.connect(merchantTransport),
     (async () => {
       // The agent uses a raw @modelcontextprotocol/sdk Client wrapped with
-      // wrapMcpClient, the same pattern as any of the framework adapters.
+      // wrapMcpClient. the same pattern as any of the framework adapters.
       const rawClient = new Client({ name: 'demo-agent', version: '1.0.0' }, { capabilities: {} })
       await rawClient.connect(agentTransport)
       const client = wrapMcpClient(rawClient, agentInterceptor, {

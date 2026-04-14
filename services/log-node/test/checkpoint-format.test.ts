@@ -5,7 +5,7 @@
  *
  * §2.9 witnessing is deferred to v2, but the checkpoint format is production
  * code. These tests verify the C2SP signed-note format, key ID computation,
- * and signature structure, the foundation that witnesses will verify.
+ * and signature structure. the foundation that witnesses will verify.
  */
 
 import { describe, it, expect } from 'vitest'

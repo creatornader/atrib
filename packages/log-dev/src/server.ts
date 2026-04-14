@@ -6,13 +6,13 @@
  * Implements the spec §2.6 submission API with the minimum surface needed
  * by `@atrib/mcp`'s submission queue:
  *
- *   POST /v1/entries, submit a signed attribution record
+ *   POST /v1/entries. submit a signed attribution record
  *
  * Validation follows §2.6.1 Steps 1-6 except for the cryptographic
  * signature verification (Step 1), which the dev log skips because we
  * don't want a hard dependency on the verification path (verify lives in
  * `@atrib/verify` and would create a circular workspace dep). The dev log
- * is honest about this in its inspection API, anyone using the dev log
+ * is honest about this in its inspection API. anyone using the dev log
  * for end-to-end correctness testing should also run `@atrib/verify` on
  * the captured records separately.
  *
@@ -113,13 +113,13 @@ async function handleRequest(
   }
 
   if (typeof parsed !== 'object' || parsed === null) {
-    return reject(res, 400, 'body must be a json object, the bare attribution record per §2.6.1')
+    return reject(res, 400, 'body must be a json object. the bare attribution record per §2.6.1')
   }
 
   const record = parsed as Partial<AtribRecord>
 
   // §2.6.1 Steps 2–5 + required-field presence checks.
-  // Step 1 (signature verification) is intentionally skipped, see file header.
+  // Step 1 (signature verification) is intentionally skipped. see file header.
   // Step 6 (idempotency) is handled by the storage layer below.
   const validation = validateSubmission(record)
   if (!validation.ok) {
@@ -130,7 +130,7 @@ async function handleRequest(
   const recordHashBytes = sha256(canonicalRecord(fullRecord))
   const recordHash = hexEncode(recordHashBytes)
 
-  // Read the priority header. Defaults to 'normal' for spec compliance,
+  // Read the priority header. Defaults to 'normal' for spec compliance.
   // a real Tessera log would also default to normal when the extension
   // header is absent.
   const priorityHeader = (req.headers['x-atrib-priority'] ?? 'normal') as string
@@ -138,7 +138,7 @@ async function handleRequest(
 
   // Submit to storage. The storage layer handles idempotency (§2.6.1 Step 6)
   // and the priority queue. This await may suspend if storage is at its
-  // maxConcurrent capacity, that's the intended admission-control behavior.
+  // maxConcurrent capacity. that's the intended admission-control behavior.
   const entry = await storage.submit(fullRecord, recordHash, priority)
 
   // Build a well-formed proof bundle per §2.6.2 (placeholder hashes).
@@ -155,7 +155,7 @@ function reject(res: ServerResponse, status: number, message: string): void {
   res.end(JSON.stringify({ error: message }))
 }
 
-const MAX_BODY_BYTES = 64 * 1024 // 64 KB, an AtribRecord is always small
+const MAX_BODY_BYTES = 64 * 1024 // 64 KB. an AtribRecord is always small
 
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = []

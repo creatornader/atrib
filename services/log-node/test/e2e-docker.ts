@@ -89,7 +89,7 @@ async function main() {
   assert(cpText.includes('log.atrib'), 'checkpoint missing log.atrib origin')
   console.log('PASS')
 
-  // Test 4: Second record, tree grows
+  // Test 4: Second record. tree grows
   console.log('\n=== Test 4: Second record + tree growth ===')
   const record2 = await createSignedRecord(privateKey, creatorKey)
   const res2 = await fetch(`${LOG_URL}/v1/entries`, {

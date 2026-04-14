@@ -1,5 +1,5 @@
 /**
- * Tests for createAtribProxy(), the in-process McpServer that forwards
+ * Tests for createAtribProxy(). the in-process McpServer that forwards
  * tool calls to an upstream MCP server with attribution applied at the
  * proxy layer.
  *
@@ -13,7 +13,7 @@
  *
  *   1. Tools/list is the upstream's snapshot
  *   2. Tools/call is forwarded to the upstream and the response is unchanged
- *   3. atrib() middleware fires on the proxy side, a record is submitted
+ *   3. atrib() middleware fires on the proxy side. a record is submitted
  *      and the proxy's response carries the outbound `_meta.atrib` token
  *   4. §5.8 degradation: if the upstream throws, the proxy returns a
  *      tool error and atrib's submission queue does NOT see a record
@@ -221,7 +221,7 @@ describe('createAtribProxy', () => {
     // Spec §2.6.1: each `submissions` entry IS the bare record.
     expect(submissions.length).toBeGreaterThanOrEqual(1)
 
-    // It's a tool_call (not a transaction, 'compute' is not in transactionTools)
+    // It's a tool_call (not a transaction. 'compute' is not in transactionTools)
     expect(submissions[0]!.event_type).toBe('tool_call')
     // content_id is derived from PROXY_URL + 'compute'
     expect(submissions[0]!.content_id).toMatch(/^sha256:[0-9a-f]{64}$/)
@@ -283,7 +283,7 @@ describe('createAtribProxy', () => {
       atrib: { creatorKey: PROXY_KEY, serverUrl: PROXY_URL },
     })
 
-    // Calling close() twice must not throw, idempotency check
+    // Calling close() twice must not throw. idempotency check
     await proxy.close()
     // Second close on an already-closed Client may throw or be a no-op
     // depending on SDK version. We only require the first close to succeed

@@ -8,7 +8,7 @@
  *
  * ## Wire format (spec §2.6.1)
  *
- * The POST body is a **bare attribution record**, not a wrapper object.
+ * The POST body is a **bare attribution record**. not a wrapper object.
  * Earlier versions of this code wrapped the record as `{record, priority}`,
  * which did not match spec §2.6.1 and would have been rejected by any
  * spec-compliant log. Fixed in the same commit that introduced
@@ -17,7 +17,7 @@
  * are a non-conflicting extension to §2.6.1 and do not require a spec
  * change.
  *
- * ## On `priority`, two real consumers ship today
+ * ## On `priority`. two real consumers ship today
  *
  * `submit()` accepts a `priority` parameter (`'high'` for transaction
  * events, `'normal'` for tool calls). It is meaningful and consumed
@@ -43,7 +43,7 @@
  *
  * Both consumers have unit tests that verify priority changes
  * observable behavior. This is the radical-honesty bar for shipping a
- * field on the wire, if no consumer existed, the field would be dead
+ * field on the wire. if no consumer existed, the field would be dead
  * weight and should not exist.
  */
 
@@ -98,7 +98,7 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
   const proofCache = new Map<string, ProofBundle>()
   // Tracks records whose initial submission failed but may succeed on a
   // later flush() retry. Each entry carries its priority so flush() can
-  // drain in priority order, high before normal, which is the first of
+  // drain in priority order. high before normal. which is the first of
   // the two real consumers of priority documented in the file header.
   const pendingRecords = new Map<string, PendingEntry>()
   const pendingPromises: Promise<void>[] = []
@@ -118,7 +118,7 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
 
       try {
         // §2.6.1: POST body is a bare signed attribution record. Priority
-        // travels in the X-atrib-Priority header, a non-conflicting
+        // travels in the X-atrib-Priority header. a non-conflicting
         // extension to the spec consumed today by @atrib/log-dev's
         // admission-control queue (see file header comment for the full
         // rationale on the two real consumers).
@@ -133,7 +133,7 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
 
         if (response.ok) {
           const raw = (await response.json()) as Record<string, unknown>
-          // Validate proof bundle shape before caching, a malicious or buggy
+          // Validate proof bundle shape before caching. a malicious or buggy
           // log server returning garbage should not be cached silently.
           if (
             typeof raw.log_index === 'number' &&
@@ -150,7 +150,7 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
           return
         }
 
-        // Non-retryable status, permanent rejection. Delete from
+        // Non-retryable status. permanent rejection. Delete from
         // pendingRecords in case this is a flush-retry (the record was
         // already in the map from a prior 5xx failure). On the initial
         // submission path the record isn't in the map yet, so delete
@@ -161,7 +161,7 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
           return
         }
       } catch {
-        // Network error, retry
+        // Network error. retry
       }
 
       if (attempt < MAX_RETRIES - 1) {
@@ -170,7 +170,7 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
       }
     }
 
-    // All retries failed, cache locally with its priority preserved.
+    // All retries failed. cache locally with its priority preserved.
     console.warn('atrib: log submission failed after retries', { record_hash: hash })
     pendingRecords.set(hash, { record, priority })
   }

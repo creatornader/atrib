@@ -1,10 +1,10 @@
 /**
- * atrib + Vercel AI SDK MCP, runnable integration snippet
+ * atrib + Vercel AI SDK MCP. runnable integration snippet
  *
  * Demonstrates the atrib wiring for an `@ai-sdk/mcp` MCPClient.
  * The model invocation step (`streamText` / `generateText`) is omitted from
  * this file so the example stays focused on the atrib integration. Drop this
- * pattern into any AI SDK app that uses MCP tools, the rest of your AI SDK
+ * pattern into any AI SDK app that uses MCP tools. the rest of your AI SDK
  * code is unchanged.
  *
  * Run with:
@@ -18,7 +18,7 @@
  *   pnpm add @ai-sdk/mcp
  *
  * The integration package's tsconfig excludes `examples/` from compilation
- * for exactly this reason, examples typecheck against user-installed
+ * for exactly this reason. examples typecheck against user-installed
  * versions, not against our test build.
  */
 
@@ -45,7 +45,7 @@ async function main() {
   })
 
   try {
-    // 3. ★ ATRIB ★, patch the client's request method.
+    // 3. ★ ATRIB ★. patch the client's request method.
     //    Idempotent. Order: can be called BEFORE or AFTER mcpClient.tools()
     //    because the AI SDK builds tool execute() callbacks that read
     //    client.request at INVOCATION time, not at build time.
@@ -57,7 +57,7 @@ async function main() {
     // 4. Build the AI SDK ToolSet. Pass `tools` to streamText/generateText
     //    in your application code as you normally would. Each tool's
     //    execute() callback calls client.request() under the hood, which
-    //    is now patched, every tool call flows through the atrib
+    //    is now patched. every tool call flows through the atrib
     //    interceptor without further changes to your AI SDK wiring.
     const tools = await mcpClient.tools()
     console.log(`Loaded ${Object.keys(tools).length} tools from MCP server`)

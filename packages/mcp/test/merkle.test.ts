@@ -56,7 +56,7 @@ describe('leafHash', () => {
   })
 
   it('matches known test vector for ENTRIES[0]', () => {
-    // SHA-256(0x00 || [0x01, 0x02]), pre-computed reference value
+    // SHA-256(0x00 || [0x01, 0x02]). pre-computed reference value
     expect(hexEncode(leafHash(ENTRIES[0]))).toBe(
       'ae4b3280e56e2faf83f414a6e3dabe9d5fbe18976544c05fed121accb85b53fc',
     )

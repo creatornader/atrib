@@ -15,7 +15,7 @@
  *      so the interceptor can update its session state, detect transactions,
  *      and emit Path 2 records when the tool server has no @atrib/mcp
  *
- * The adapter is intentionally narrow, it only proxies `callTool`. All other
+ * The adapter is intentionally narrow. it only proxies `callTool`. All other
  * client methods (`listTools`, `close`, `connect`, `request`, etc.) are
  * forwarded unchanged. This means a developer can drop the adapter into any
  * existing code that uses the MCP SDK Client directly without changing
@@ -23,7 +23,7 @@
  *
  * If the MCP SDK ever changes the `callTool` signature, the adapter will
  * fail loudly because TypeScript will complain about the proxied parameters
- * shape, see the `MinimalMcpClient` interface below.
+ * shape. see the `MinimalMcpClient` interface below.
  */
 
 import type { ToolCallInterceptor } from '../middleware.js'
@@ -32,7 +32,7 @@ import type { ToolCallInterceptor } from '../middleware.js'
  * The minimal subset of `@modelcontextprotocol/sdk/client/index.js` Client
  * that this adapter depends on. We do not import the SDK type directly to
  * avoid making `@modelcontextprotocol/sdk` a hard dependency of `@atrib/agent`
- *, the SDK is only needed if you actually use this adapter, not for the
+ *. the SDK is only needed if you actually use this adapter, not for the
  * core interceptor API.
  */
 export interface MinimalMcpClient {
@@ -60,7 +60,7 @@ export interface WrapMcpClientOptions {
    * the interceptor for content_id derivation when emitting Path 2
    * transaction records (the agent fallback path described in spec §5.4.5).
    * If omitted, the interceptor will fall back to the tool's MCP server
-   * URL only when it can be derived elsewhere, for many transports
+   * URL only when it can be derived elsewhere. for many transports
    * (especially stdio) it cannot, and content_id values for transactions
    * will be less specific.
    */

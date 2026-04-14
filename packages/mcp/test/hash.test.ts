@@ -44,7 +44,7 @@ describe('hexEncode / hexDecode', () => {
   })
 
   it('hexDecode throws on odd-length string', () => {
-    // Odd-length hex is malformed, hexDecode now throws rather than silently truncating.
+    // Odd-length hex is malformed. hexDecode now throws rather than silently truncating.
     expect(() => hexDecode('abc')).toThrow('hexDecode: invalid hex string')
   })
 

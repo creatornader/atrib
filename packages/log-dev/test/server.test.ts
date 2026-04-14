@@ -3,13 +3,13 @@
  *
  * Two categories:
  *
- *   1. Wire-format conformance, verify the dev log accepts what spec
+ *   1. Wire-format conformance. verify the dev log accepts what spec
  *      §2.6.1 says it should accept and rejects what it should reject.
  *      These tests double-check the dev log against the spec, which
  *      means a regression in the dev log's validation surfaces here
  *      rather than in a customer's first deploy.
  *
- *   2. Real-consumer demonstration for `X-atrib-Priority`, verify the
+ *   2. Real-consumer demonstration for `X-atrib-Priority`. verify the
  *      priority queue actually orders submissions by priority when
  *      `maxConcurrent` is finite. This is the second of the two real
  *      consumers documented in `@atrib/mcp/src/submission.ts`'s file
@@ -44,7 +44,7 @@ async function makeSignedRecord(overrides: Partial<AtribRecord> = {}): Promise<A
   return signRecord(record, TEST_KEY)
 }
 
-describe('@atrib/log-dev, HTTP submission API', () => {
+describe('@atrib/log-dev: HTTP submission API', () => {
   let log: DevLog
 
   beforeEach(async () => {
@@ -124,7 +124,7 @@ describe('@atrib/log-dev, HTTP submission API', () => {
     })
 
     it('rejects a far-future timestamp with 400 (§2.6.1 Step 4)', async () => {
-      // 20 minutes in the future, beyond the 10-minute clock-skew tolerance
+      // 20 minutes in the future. beyond the 10-minute clock-skew tolerance
       const record = await makeSignedRecord({
         timestamp: Date.now() + 20 * 60 * 1000,
       })
@@ -171,7 +171,7 @@ describe('@atrib/log-dev, HTTP submission API', () => {
       expect(r1.status).toBe(200)
       expect(r2.status).toBe(200)
       expect(proof2.log_index).toBe(proof1.log_index)
-      // Storage size is 1, the duplicate did not double-admit.
+      // Storage size is 1. the duplicate did not double-admit.
       expect(log.size).toBe(1)
     })
 
@@ -230,7 +230,7 @@ describe('@atrib/log-dev, HTTP submission API', () => {
   })
 })
 
-describe('@atrib/log-dev, X-atrib-Priority real consumer', () => {
+describe('@atrib/log-dev: X-atrib-Priority real consumer', () => {
   it('high-priority submissions are admitted before normal under capacity pressure', async () => {
     // maxConcurrent: 1 means only one submission is in-flight at a time.
     // processingDelayMs: 30 makes the in-flight slot held long enough for
@@ -280,12 +280,12 @@ describe('@atrib/log-dev, X-atrib-Priority real consumer', () => {
       ])
 
       // The first admission is whichever submission won the race to the
-      // empty slot, it's not deterministic which of the three got there
+      // empty slot. it's not deterministic which of the three got there
       // first. But the SECOND and THIRD admissions ARE deterministic:
       // among the records that had to queue, high goes before normal.
       expect(admissionOrder.length).toBe(3)
       // The transaction record (high) MUST come before at least one of
-      // the tool_call records (normal), it cannot have been admitted last.
+      // the tool_call records (normal). it cannot have been admitted last.
       const transactionPosition = admissionOrder.indexOf('transaction')
       expect(transactionPosition).toBeLessThanOrEqual(1)
     } finally {

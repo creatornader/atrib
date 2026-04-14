@@ -391,12 +391,12 @@ describe('atrib() middleware', () => {
       })
       registerToolHandler(handler1)
 
-      // First call, genesis
+      // First call. genesis
       const wrappedHandler = getToolHandler()!
       await wrappedHandler(createToolCallRequest('tool_a'), {})
       const token1 = (result1 as any)._meta.atrib as string
 
-      // Second call, chained, carries first token
+      // Second call. chained, carries first token
       const result2 = { content: [{ type: 'text', text: 'second' }] }
       const handler2 = vi.fn().mockResolvedValue(result2)
       registerToolHandler(handler2)
@@ -413,7 +413,7 @@ describe('atrib() middleware', () => {
       const record1 = submittedRecords[0]
       const record2 = submittedRecords[1]
 
-      // Record 1 is a genesis, chain_root = sha256(context_id)
+      // Record 1 is a genesis. chain_root = sha256(context_id)
       expect(record1.chain_root).toMatch(/^sha256:[0-9a-f]{64}$/)
 
       // Record 2's chain_root should be "sha256:" + hex of the first token's record_hash
@@ -454,7 +454,7 @@ describe('atrib() middleware', () => {
 
       await handler(createToolCallRequest('search_web'), {})
 
-      // Handler must be called exactly once, never re-invoked
+      // Handler must be called exactly once. never re-invoked
       expect(callCount).toBe(1)
 
       warnSpy.mockRestore()
@@ -500,7 +500,7 @@ describe('atrib() middleware', () => {
       const handler = getToolHandler()!
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-      // Mock signRecord to throw, this forces the catch path
+      // Mock signRecord to throw. this forces the catch path
       const signSpy = vi
         .spyOn(signingModule, 'signRecord')
         .mockRejectedValue(new Error('forced signing failure'))

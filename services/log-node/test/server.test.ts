@@ -38,7 +38,7 @@ async function makeSignedRecord(overrides: Partial<AtribRecord> = {}): Promise<A
     creator_key: creatorKey,
     chain_root: chainRoot,
     content_id: 'sha256:' + hexEncode(sha256(new TextEncoder().encode('test-content'))),
-    signature: '', // placeholder, signRecord will replace
+    signature: '', // placeholder. signRecord will replace
     ...overrides,
   }
 

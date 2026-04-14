@@ -82,7 +82,7 @@ describe('serializeEntry', () => {
     expect(Buffer.from(contextId).toString('hex')).toBe(expected.toString('hex'))
   })
 
-  it('is deterministic, two calls with identical input produce identical output', () => {
+  it('is deterministic. two calls with identical input produce identical output', () => {
     const input = makeInput()
     const a = serializeEntry(input)
     const b = serializeEntry(input)

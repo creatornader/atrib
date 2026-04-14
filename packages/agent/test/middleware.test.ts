@@ -115,7 +115,7 @@ describe('atrib() agent middleware', () => {
       const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
       const token = await makeIncomingToken()
 
-      // Pass an error response, should NOT accumulate context
+      // Pass an error response. should NOT accumulate context
       interceptor.onAfterToolResponse(
         'failing_tool',
         { isError: true },
@@ -245,7 +245,7 @@ describe('atrib() agent middleware', () => {
 
       const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
 
-      // First call ever, checkout. No prior context.
+      // First call ever. checkout. No prior context.
       interceptor.onAfterToolResponse(
         'checkout',
         { data: { object: { object: 'checkout_session' } } },
@@ -255,7 +255,7 @@ describe('atrib() agent middleware', () => {
 
       const txn = submissions.find((s) => s?.event_type === 'transaction')
       expect(txn).toBeDefined()
-      // chain_root should match genesisChainRoot(context_id), sha256 prefix + 64 hex
+      // chain_root should match genesisChainRoot(context_id). sha256 prefix + 64 hex
       expect(txn.chain_root).toMatch(/^sha256:[0-9a-f]{64}$/)
       // It should NOT be all zeros
       expect(txn.chain_root).not.toBe(`sha256:${'0'.repeat(64)}`)
@@ -363,7 +363,7 @@ describe('atrib() agent middleware', () => {
     it('initializes only once across concurrent calls', async () => {
       const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
 
-      // Fire two calls in parallel, both should await the same init
+      // Fire two calls in parallel. both should await the same init
       const [meta1, meta2] = await Promise.all([
         interceptor.onBeforeToolCall('a', {}),
         interceptor.onBeforeToolCall('b', {}),

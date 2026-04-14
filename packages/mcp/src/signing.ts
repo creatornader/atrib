@@ -2,7 +2,7 @@
 
 /**
  * Ed25519 signing and verification for atrib records (§1.4).
- * Uses @noble/ed25519, pure JS, no native deps, audited.
+ * Uses @noble/ed25519. pure JS, no native deps, audited.
  */
 
 import * as ed from '@noble/ed25519'

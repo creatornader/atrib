@@ -90,7 +90,7 @@ export function buildOutboundMeta(
 ): Record<string, string> {
   const meta: Record<string, string> = {}
 
-  // §1.5.4: traceparent, only set if caller has not provided one.
+  // §1.5.4: traceparent. only set if caller has not provided one.
   // If they have one, the trace-id should already match session.contextId
   // (since the session adopted it), so we leave it untouched.
   if (typeof existing.traceparent === 'string') {

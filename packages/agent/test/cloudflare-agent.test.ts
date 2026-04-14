@@ -1,5 +1,5 @@
 /**
- * Tests for attributeCloudflareAgentMcp(), the agent-side helper that wraps
+ * Tests for attributeCloudflareAgentMcp(). the agent-side helper that wraps
  * Cloudflare Agent MCP connections after addMcpServer() runs.
  *
  * We can't import the real `agents` package here because it's a Cloudflare-
@@ -7,8 +7,8 @@
  * runtime, etc.). Instead we construct a minimal structural mock that mirrors
  * the public shape we depend on:
  *
- *   agent.mcp.mcpConnections[name].client      , @modelcontextprotocol/sdk Client
- *   agent.mcp.mcpConnections[name].url         , URL
+ *   agent.mcp.mcpConnections[name].client      . @modelcontextprotocol/sdk Client
+ *   agent.mcp.mcpConnections[name].url         . URL
  *
  * The mock client implements the MinimalMcpClient interface (just `callTool`).
  * After the helper runs, we invoke the wrapped client's callTool and verify
@@ -18,7 +18,7 @@
  *   2. The mock upstream sees the merged outbound _meta (atrib token,
  *      traceparent, etc.)
  *   3. The interceptor's onAfterToolResponse fires with the response
- *   4. The wrapped client is marked idempotent, a second call to the
+ *   4. The wrapped client is marked idempotent. a second call to the
  *      helper does not double-wrap
  *   5. Connections without a `client` field are skipped without throwing
  *   6. Mid-loop failures (e.g. a connection that throws on access) don't
@@ -71,7 +71,7 @@ function makeFakeAgent(
 
 describe('attributeCloudflareAgentMcp', () => {
   beforeEach(() => {
-    // The interceptor's submission queue uses fetch(), mock it so tests
+    // The interceptor's submission queue uses fetch(). mock it so tests
     // don't actually hit the network.
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async () => new Response('{"logIndex":1}', { status: 200 }),
@@ -123,7 +123,7 @@ describe('attributeCloudflareAgentMcp', () => {
     // call of every session (derived from session.contextId), whereas the
     // `atrib` token field is only set on the SECOND+ call (it carries the
     // chain hash from the previous response, and on the first call there's
-    // no previous response yet, see packages/agent/src/session.ts
+    // no previous response yet. see packages/agent/src/session.ts
     // buildOutboundMeta lines 117-122).
     expect(calls.length).toBe(2)
     for (const call of calls) {
@@ -139,7 +139,7 @@ describe('attributeCloudflareAgentMcp', () => {
     await interceptor.flush()
   })
 
-  it('is idempotent, second call does not double-wrap', async () => {
+  it('is idempotent. second call does not double-wrap', async () => {
     let upstreamCalls = 0
     const agent = makeFakeAgent({
       weather: {
@@ -218,7 +218,7 @@ describe('attributeCloudflareAgentMcp', () => {
           observedRequestParams = params
           return { content: [{ type: 'text', text: 'ok' }] }
         }),
-        // The connection's actual URL is staging, but we want production
+        // The connection's actual URL is staging. but we want production
         // identity in the attribution records
         url: new URL('https://staging.example.com/mcp'),
       },

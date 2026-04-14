@@ -1,5 +1,5 @@
 /**
- * atrib + Cloudflare Agents, Surface 1: McpAgent server-side instrumentation
+ * atrib + Cloudflare Agents. Surface 1: McpAgent server-side instrumentation
  *
  * This is a Cloudflare Worker that exposes an MCP server using Cloudflare's
  * `agents/mcp` package. Each MCP session gets its own Durable Object instance
@@ -21,7 +21,7 @@
  *   pnpm add agents @modelcontextprotocol/sdk zod @atrib/mcp
  *
  * The integration package's tsconfig excludes `examples/` from compilation
- * for exactly this reason, the examples typecheck against user-installed
+ * for exactly this reason. the examples typecheck against user-installed
  * versions, not against our test build.
  */
 
@@ -36,7 +36,7 @@ interface Env {
 }
 
 export class WeatherMcp extends McpAgent<Env> {
-  // `this.server` is a real McpServer from @modelcontextprotocol/sdk,
+  // `this.server` is a real McpServer from @modelcontextprotocol/sdk.
   // the same class @atrib/mcp's atrib() middleware wraps.
   server = new McpServer({ name: 'weather', version: '1.0.0' })
 
@@ -72,7 +72,7 @@ export class WeatherMcp extends McpAgent<Env> {
     // 2. ★ ATRIB ★
     // Apply attribution middleware to the in-process McpServer. This patches
     // the dispatch path so every successful tools/call emits a signed record.
-    // The middleware is safe to call AFTER registerTool, see the retroactive
+    // The middleware is safe to call AFTER registerTool. see the retroactive
     // wrap logic in @atrib/mcp middleware.ts (it rewrites an
     // already-installed dispatcher in place).
     atrib(this.server, {

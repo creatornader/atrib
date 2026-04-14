@@ -7,18 +7,18 @@
  * (verified against `@langchain/mcp-adapters@1.1.3`). Two APIs are supported:
  *
  *   1. **High-level: `new MultiServerMCPClient({ mcpServers: {...} }).getTools()`**
- *     , config-driven, the client owns its internal
+ *     . config-driven, the client owns its internal
  *      `@modelcontextprotocol/sdk` Client instances behind `#private` fields.
  *      Users never see the Client reference directly; there is no public
  *      setter to inject a `wrapMcpClient`-style Proxy replacement. The
  *      `getClient(serverName)` getter returns the internal Client, so we
- *      can reach it, but we cannot substitute it.
+ *      can reach it. but we cannot substitute it.
  *
- *   2. **Low-level: `loadMcpTools(serverName, rawClient)`**, accepts a raw
+ *   2. **Low-level: `loadMcpTools(serverName, rawClient)`**. accepts a raw
  *      `@modelcontextprotocol/sdk` Client directly (verified at
  *      `dist/tools.d.ts:28`). For this path, users can construct their own
  *      Client, wrap with the existing `wrapMcpClient` helper, and pass it
- *      in. No new code required, see the example in
+ *      in. No new code required. see the example in
  *      `packages/integration/examples/langchain-js/` for the pattern.
  *
  * This adapter handles the high-level `MultiServerMCPClient` path. It walks
@@ -30,7 +30,7 @@
  * ## Per-call fork propagation
  *
  * LangChain's internal `_callTool` function (verified at `dist/tools.js:384`)
- * supports per-call header changes via `client.fork(headers)`, this creates
+ * supports per-call header changes via `client.fork(headers)`. this creates
  * a new Client instance with different HTTP headers and calls `callTool` on
  * the forked instance, not the original. A naive monkey-patch on the original
  * Client would silently lose attribution for any LangChain user whose tools
@@ -38,7 +38,7 @@
  *
  * The patch therefore ALSO wraps `fork()` when present, so the forked Client
  * is recursively patched before being returned to `_callTool`. This means
- * every forked instance also flows through the atrib interceptor, no silent
+ * every forked instance also flows through the atrib interceptor. no silent
  * attribution drop for header-changing tools.
  *
  * ## Idempotency
@@ -51,7 +51,7 @@
  *
  * The helper is SAFE to call AFTER `multiClient.getTools()` because LangChain's
  * tool `func` captures `client` by closure but dereferences `client.callTool`
- * at invocation time (not at tool construction time, see `dist/tools.js:391`).
+ * at invocation time (not at tool construction time. see `dist/tools.js:391`).
  * Patching the client after tools are built still takes effect on the next
  * tool invocation.
  *
@@ -102,7 +102,7 @@ export interface LangchainMcpClientLike {
  * `@langchain/mcp-adapters@1.1.3` `dist/client.d.ts`).
  *
  * The `config` getter returns a cloned `ClientConfig` whose `mcpServers`
- * field enumerates every configured server by name, this is how we
+ * field enumerates every configured server by name. this is how we
  * discover which servers to patch without requiring the caller to list
  * them explicitly.
  */
@@ -129,7 +129,7 @@ export interface AttributeLangchainMcpOptions {
    * Optional list of server names to patch. If omitted, the helper patches
    * every server in the multi-client's `config.mcpServers`. Provide this
    * when you want to selectively attribute only a subset of configured
-   * servers (rare, usually you want all of them).
+   * servers (rare. usually you want all of them).
    */
   servers?: string[]
 }
@@ -253,7 +253,7 @@ function patchClient(
       outboundMeta = undefined
     }
 
-    // Construct new params rather than mutating, caller's reference is preserved.
+    // Construct new params rather than mutating. caller's reference is preserved.
     const forwardedParams = outboundMeta !== undefined ? { ...params, _meta: outboundMeta } : params
 
     const result = await originalCallTool(forwardedParams, resultSchema, opts)

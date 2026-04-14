@@ -1,9 +1,9 @@
 /**
- * Tests for attributeLangchainMcp(), the helper that patches a LangChain
+ * Tests for attributeLangchainMcp(). the helper that patches a LangChain
  * `MultiServerMCPClient`'s internal Client instances so outbound tools/call
  * requests flow through atrib's interceptor.
  *
- * We can't import the real `@langchain/mcp-adapters` package here, it pulls
+ * We can't import the real `@langchain/mcp-adapters` package here. it pulls
  * in the entire LangChain runtime (langgraph, core messages, zod, etc.) as
  * a dependency, which would inflate `@atrib/agent`'s test surface by an
  * order of magnitude. Instead we construct a minimal structural mock of a
@@ -152,7 +152,7 @@ describe('attributeLangchainMcp', () => {
     await interceptor.flush()
   })
 
-  it('is idempotent, second call returns 0 and does not re-wrap', async () => {
+  it('is idempotent. second call returns 0 and does not re-wrap', async () => {
     const searchClient = makeFakeClient({})
     const multi = makeFakeMultiClient({ search: searchClient })
     const interceptor = createInterceptor({ creatorKey: AGENT_KEY })

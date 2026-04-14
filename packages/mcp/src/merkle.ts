@@ -8,15 +8,15 @@
  * generation, and inclusion proof verification.
  *
  * Domain separation prefixes:
- *   0x00, leaf nodes (prevents second-preimage attacks)
- *   0x01, internal nodes
+ *   0x00. leaf nodes (prevents second-preimage attacks)
+ *   0x01. internal nodes
  */
 
 import { sha256 } from './hash.js'
 
 /**
  * Concatenate multiple Uint8Arrays into one.
- * Local concat for domain-separated hashing, intentionally not shared.
+ * Local concat for domain-separated hashing. intentionally not shared.
  */
 function concat(...arrays: Uint8Array[]): Uint8Array {
   const total = arrays.reduce((s, a) => s + a.length, 0)
@@ -31,7 +31,7 @@ function concat(...arrays: Uint8Array[]): Uint8Array {
 
 /**
  * Largest power of 2 strictly less than n.
- * Uses Math.clz32 to avoid bitwise overflow, safe for n up to 2^32.
+ * Uses Math.clz32 to avoid bitwise overflow. safe for n up to 2^32.
  * For n beyond 2^32, falls back to a floating-point path that is safe
  * up to Number.MAX_SAFE_INTEGER (2^53 - 1).
  */
@@ -111,7 +111,7 @@ export function computeInclusionProof(index: number, leaves: Uint8Array[]): Uint
 
 function _inclusionProof(index: number, leaves: Uint8Array[]): Uint8Array[] {
   if (leaves.length === 1) {
-    // Leaf node, no sibling at this level
+    // Leaf node. no sibling at this level
     return []
   }
   const k = largestPowerOfTwoLessThan(leaves.length)
@@ -208,10 +208,10 @@ function _verifyPath(
     const sibling = proof[i] as Uint8Array
     const k = largestPowerOfTwoLessThan(pathSz)
     if (pathIdx < k) {
-      // Target is in left subtree, current (left) combines with sibling (right)
+      // Target is in left subtree. current (left) combines with sibling (right)
       current = nodeHash(current, sibling)
     } else {
-      // Target is in right subtree, sibling (left) combines with current (right)
+      // Target is in right subtree. sibling (left) combines with current (right)
       current = nodeHash(sibling, current)
     }
   }

@@ -41,7 +41,7 @@ export interface StorageOptions {
   /**
    * Maximum number of submissions admitted concurrently. Submissions beyond
    * this cap are placed in a priority queue and admitted FIFO within their
-   * priority bucket, high-priority records jump the line. Set to
+   * priority bucket. high-priority records jump the line. Set to
    * `Infinity` (default) to disable admission control entirely; set to a
    * small number (1, 2) for tests and demos that want to observe priority
    * ordering under capacity pressure.
@@ -110,7 +110,7 @@ export function createStorage(options: StorageOptions = {}) {
   }
 
   function drainNext(): void {
-    // Always drain `high` first, this is the priority signal's whole job.
+    // Always drain `high` first. this is the priority signal's whole job.
     if (inFlight >= maxConcurrent) return
     const next = highQueue.shift() ?? normalQueue.shift()
     if (!next) return
@@ -140,7 +140,7 @@ export function createStorage(options: StorageOptions = {}) {
    * priority ordering).
    *
    * If the same `recordHash` is already stored, resolves immediately with
-   * the existing entry, idempotent per §2.6.1 Step 6.
+   * the existing entry. idempotent per §2.6.1 Step 6.
    */
   async function submit(
     record: AtribRecord,

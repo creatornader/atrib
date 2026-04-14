@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * AtribVerifier, the merchant verification class (§5.5).
+ * AtribVerifier. the merchant verification class (§5.5).
  *
  * Provides:
  *   - verify(recommendationDoc) → independently reproduces calculation (§5.5.2)
@@ -34,7 +34,7 @@ export interface AtribVerifierOptions {
   logEndpoint?: string
   graphEndpoint?: string
   resolveEndpoint?: string
-  /** Base64url Ed25519 32-byte seed. Optional, verify() works without it. */
+  /** Base64url Ed25519 32-byte seed. Optional. verify() works without it. */
   merchantKey?: string
 }
 
@@ -205,7 +205,7 @@ export class AtribVerifier {
 
     if (options.signWith === 'merchant') {
       if (!this.merchantPrivateKey) {
-        warnings.push('merchantKey not set, recommendation unsigned')
+        warnings.push('merchantKey not set. Recommendation unsigned')
         return { ...unsigned, signature: '' }
       }
       try {
@@ -221,13 +221,13 @@ export class AtribVerifier {
   /**
    * Resolve the public key for a `calculated_by` URL.
    *
-   * For v1: only "local" (returns null, caller must supply key separately or
+   * For v1: only "local" (returns null. caller must supply key separately or
    * accept signatureOk=false) and the well-known atrib resolve endpoint are
    * supported. Future revisions may add a key directory.
    */
   private async resolveCalculatedByPublicKey(calculatedBy: string): Promise<string | null> {
     if (calculatedBy === 'local') {
-      // For "local", the merchant signed it themselves, but we have no way
+      // For "local", the merchant signed it themselves. but we have no way
       // to know which merchant. Caller would need to supply the public key
       // out-of-band. Return null to surface this.
       return null

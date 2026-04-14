@@ -7,9 +7,9 @@
  *   ATRIB_LOG_KEY=<base64url-ed25519-seed> pnpm --filter @atrib/log-node start
  *
  * Environment variables:
- *   ATRIB_LOG_KEY , base64url-encoded 32-byte Ed25519 private key for checkpoint signing.
+ *   ATRIB_LOG_KEY . base64url-encoded 32-byte Ed25519 private key for checkpoint signing.
  *                    If omitted, a random key is generated (checkpoints won't survive restarts).
- *   PORT          , TCP port to bind (default: 3100)
+ *   PORT          . TCP port to bind (default: 3100)
  */
 
 import { startLogServer } from './index.js'
@@ -35,7 +35,7 @@ const server = await startLogServer(opts)
 console.log(`atrib-log listening on ${server.url}`)
 if (!process.env.ATRIB_LOG_KEY) {
   // eslint-disable-next-line no-console
-  console.warn('⚠ No ATRIB_LOG_KEY, using random keypair. Checkpoints will not survive restarts.')
+  console.warn('⚠ No ATRIB_LOG_KEY. using random keypair. Checkpoints will not survive restarts.')
 }
 
 // Graceful shutdown

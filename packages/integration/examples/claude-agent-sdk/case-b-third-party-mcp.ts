@@ -1,5 +1,5 @@
 /**
- * atrib + Claude Agent SDK, Case B: instrument a third-party MCP server
+ * atrib + Claude Agent SDK. Case B: instrument a third-party MCP server
  *
  * Your tools live in an upstream MCP server (filesystem, fetch, GitHub, etc.)
  * that you connect to via stdio or HTTP. You don't own the McpServer instance,
@@ -21,7 +21,7 @@
  *   pnpm add @anthropic-ai/claude-agent-sdk
  *
  * The example also assumes `@modelcontextprotocol/server-filesystem` is
- * available via `npx -y` (it is, npx will fetch it on first run).
+ * available via `npx -y` (it is. npx will fetch it on first run).
  */
 
 import { query } from '@anthropic-ai/claude-agent-sdk'
@@ -47,7 +47,7 @@ async function main() {
 
   try {
     // 2. Pass the proxy's in-process server to Claude Agent SDK as the SDK
-    //    transport type. Same shape as Case A, Claude Agent SDK can't tell
+    //    transport type. Same shape as Case A. Claude Agent SDK can't tell
     //    the difference.
     for await (const message of query({
       prompt: 'List the files in /tmp.',

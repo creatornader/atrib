@@ -1,7 +1,7 @@
 /**
  * End-to-end test against the REAL @modelcontextprotocol/sdk.
  *
- * the framework-adapter rollout verification, the existing end-to-end test in
+ * the framework-adapter rollout verification. the existing end-to-end test in
  * `end-to-end.test.ts` mocks the McpServer with our own test harness, which
  * is correct for unit-testing the attribution logic in isolation. But it
  * does not verify that the wire format actually works against the real MCP
@@ -77,7 +77,7 @@ describe('Real @modelcontextprotocol/sdk end-to-end', () => {
     // first .tool() / .registerTool() call. The middleware patches
     // setRequestHandler, so it must be in place before that first call.
     // (The middleware ALSO retroactively wraps an already-registered
-    // dispatcher, see the "register-then-wrap order" test below, so the
+    // dispatcher. see the "register-then-wrap order" test below. so the
     // reverse order works too. The canonical README pattern is wrap-then-
     // register and that's what we exercise here.)
     const mcpServer = new McpServer({ name: 'search-server', version: '1.0.0' })
@@ -178,7 +178,7 @@ describe('Real @modelcontextprotocol/sdk end-to-end', () => {
     const secondRecord = records[1]!
     expect(firstRecord.chain_root).toMatch(/^sha256:[0-9a-f]{64}$/)
     expect(secondRecord.chain_root).toMatch(/^sha256:[0-9a-f]{64}$/)
-    // They differ, the second is chained to the first
+    // They differ. the second is chained to the first
     expect(secondRecord.chain_root).not.toBe(firstRecord.chain_root)
 
     // The second record's chain_root should be the hex of decoded1.recordHash

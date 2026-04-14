@@ -202,7 +202,7 @@ describe('initializeSessionPolicy', () => {
         merchantDomain: 'https://merchant.example.com',
         serverUrls: ['https://a.example', 'https://b.example'],
       })
-      // Should NOT default, should scale
+      // Should NOT default. should scale
       expect(record.agreed_policy).not.toBe('default')
       const floors = record.applied_constraints.minimum_floors
       // Each scaled to 0.3 * (0.4/0.6) = 0.2

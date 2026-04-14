@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// @atrib/verify, Merchant verification library
+// @atrib/verify. Merchant verification library
 
 // Verifier (primary export)
 export { AtribVerifier } from './verifier.js'
 export type { AtribVerifierOptions, CalculateOptions } from './verifier.js'
 
-// Calculation algorithm (§4.6), pure function, exported for direct use
+// Calculation algorithm (§4.6). pure function, exported for direct use
 export { calculate, DEFAULT_POLICY, isValidPolicy } from './calculate.js'
 
 // Recommendation document signing/verification (§4.7)

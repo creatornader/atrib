@@ -94,7 +94,7 @@ describe('idempotency cache', () => {
       await post(server.url, other)
     }
 
-    // Re-submit original, should still be cached
+    // Re-submit original. should still be cached
     const resubmit = await post(server.url, target)
     expect(resubmit.log_index).toBe(firstSubmit.log_index)
     expect(resubmit.leaf_hash).toBe(firstSubmit.leaf_hash)
@@ -110,7 +110,7 @@ describe('idempotency cache', () => {
       await post(server.url, other)
     }
 
-    // Re-submit, cached proof's checkpoint was captured at earlier tree size
+    // Re-submit. cached proof's checkpoint was captured at earlier tree size
     const resubmit = await post(server.url, record)
     expect(resubmit.log_index).toBe(first.log_index)
     // The checkpoint in the cached proof reflects the tree state at first submission,

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * HTTP server for @atrib/log-node, production log with real Merkle proofs.
+ * HTTP server for @atrib/log-node. production log with real Merkle proofs.
  *
  * Endpoints:
- *   POST /v1/entries    , submit a signed attribution record
- *   GET  /v1/checkpoint , return the latest signed checkpoint as text/plain
+ *   POST /v1/entries    . submit a signed attribution record
+ *   GET  /v1/checkpoint . return the latest signed checkpoint as text/plain
  *
  * Validation follows §2.6.1 Steps 1-6.
  *
@@ -146,7 +146,7 @@ async function handleSubmit(
   }
 
   if (typeof parsed !== 'object' || parsed === null) {
-    return reject(res, 400, 'body must be a json object, the bare attribution record per §2.6.1')
+    return reject(res, 400, 'body must be a json object. the bare attribution record per §2.6.1')
   }
 
   const record = parsed as Partial<AtribRecord>
@@ -171,7 +171,7 @@ async function handleSubmit(
   const recordHashBytes = sha256(canonBytes)
   const recordHashHex = hexEncode(recordHashBytes)
 
-  // §2.6.1 Step 6: idempotency, return existing proof if already submitted
+  // §2.6.1 Step 6: idempotency. return existing proof if already submitted
   const cached = proofCache.get(recordHashHex)
   if (cached !== undefined) {
     sendJson(res, 200, cached)
@@ -195,7 +195,7 @@ async function handleSubmit(
   await lock.wait
   let proof: ProofBundle
   try {
-    // Re-check cache inside the lock, two concurrent requests for the same
+    // Re-check cache inside the lock. two concurrent requests for the same
     // record can both miss the fast-path check above, but only the first
     // should append. The second finds the proof cached by the first.
     const cachedInLock = proofCache.get(recordHashHex)
@@ -216,7 +216,7 @@ async function handleSubmit(
       leaf_hash: Buffer.from(leafHashBytes).toString('base64'),
     }
 
-    // Cache for idempotency, evict oldest entry if at capacity
+    // Cache for idempotency. evict oldest entry if at capacity
     if (proofCache.size >= MAX_PROOF_CACHE) {
       const oldest = proofCache.keys().next().value
       if (oldest !== undefined) proofCache.delete(oldest)
@@ -266,7 +266,7 @@ function reject(res: ServerResponse, status: number, message: string): void {
   sendJson(res, status, { error: message })
 }
 
-const MAX_BODY_BYTES = 64 * 1024 // 64 KB, an AtribRecord is always small
+const MAX_BODY_BYTES = 64 * 1024 // 64 KB. an AtribRecord is always small
 
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = []

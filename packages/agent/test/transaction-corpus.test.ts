@@ -15,7 +15,7 @@ import { describe, it, expect } from 'vitest'
 import { detectTransaction } from '../src/transaction.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ACP, Agentic Commerce Protocol (Stripe/OpenAI)
+// ACP. Agentic Commerce Protocol (Stripe/OpenAI)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('ACP detection corpus', () => {
@@ -66,7 +66,7 @@ describe('ACP detection corpus', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UCP, Universal Commerce Protocol (Google/Shopify)
+// UCP. Universal Commerce Protocol (Google/Shopify)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('UCP detection corpus', () => {
@@ -95,7 +95,7 @@ describe('UCP detection corpus', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// x402, Coinbase
+// x402. Coinbase
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('x402 detection corpus', () => {
@@ -132,7 +132,7 @@ describe('x402 detection corpus', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MPP, Machine Payments Protocol (IETF draft)
+// MPP. Machine Payments Protocol (IETF draft)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('MPP detection corpus', () => {
@@ -158,7 +158,7 @@ describe('MPP detection corpus', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AP2, Agent Payments Protocol (Google)
+// AP2. Agent Payments Protocol (Google)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('AP2 detection corpus', () => {
@@ -195,7 +195,7 @@ describe('AP2 detection corpus', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// a2a-x402, Google AP2 crypto path
+// a2a-x402. Google AP2 crypto path
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('a2a-x402 detection corpus', () => {

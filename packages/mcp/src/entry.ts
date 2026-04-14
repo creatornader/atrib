@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Log entry serialization, spec §2.3.1
+ * Log entry serialization. spec §2.3.1
  *
  * 90-byte binary format:
- *   [0]      version       u8  , always 0x01
- *   [1-32]   record_hash   u8[32], SHA-256 of JCS-canonical record
- *   [33-64]  creator_key   u8[32], raw Ed25519 public key
- *   [65-80]  context_id    u8[16], 16 bytes from 32 hex chars
- *   [81-88]  timestamp_ms  u64 big-endian, Unix milliseconds
- *   [89]     event_type    u8  , 0x01 = tool_call, 0x02 = transaction
+ *   [0]      version       u8  . always 0x01
+ *   [1-32]   record_hash   u8[32]. SHA-256 of JCS-canonical record
+ *   [33-64]  creator_key   u8[32]. raw Ed25519 public key
+ *   [65-80]  context_id    u8[16]. 16 bytes from 32 hex chars
+ *   [81-88]  timestamp_ms  u64 big-endian. Unix milliseconds
+ *   [89]     event_type    u8  . 0x01 = tool_call, 0x02 = transaction
  */
 
 import { hexDecode } from './hash.js'
@@ -35,7 +35,7 @@ export interface EntryInput {
 
 /**
  * Serialize an attribution record into the 90-byte binary log entry format.
- * Pure function, deterministic given identical inputs.
+ * Pure function. deterministic given identical inputs.
  */
 export function serializeEntry(input: EntryInput): Uint8Array {
   const buf = new Uint8Array(ENTRY_SIZE)
@@ -44,7 +44,7 @@ export function serializeEntry(input: EntryInput): Uint8Array {
   // [0] version
   buf[0] = ENTRY_VERSION
 
-  // [1-32] record_hash, decode 64-char hex string to 32 bytes
+  // [1-32] record_hash. decode 64-char hex string to 32 bytes
   const recordHash = hexDecode(input.record_hash_hex)
   if (recordHash.length !== 32) {
     throw new Error(
@@ -53,11 +53,11 @@ export function serializeEntry(input: EntryInput): Uint8Array {
   }
   buf.set(recordHash, 1)
 
-  // [33-64] creator_key, decode base64url to 32 bytes
+  // [33-64] creator_key. decode base64url to 32 bytes
   const creatorKey = base64urlToBytes(input.creator_key_b64url, 32)
   buf.set(creatorKey, 33)
 
-  // [65-80] context_id, decode 32-char hex string to 16 bytes
+  // [65-80] context_id. decode 32-char hex string to 16 bytes
   const contextId = hexDecode(input.context_id)
   if (contextId.length !== 16) {
     throw new Error(
@@ -66,7 +66,7 @@ export function serializeEntry(input: EntryInput): Uint8Array {
   }
   buf.set(contextId, 65)
 
-  // [81-88] timestamp_ms, big-endian u64
+  // [81-88] timestamp_ms. big-endian u64
   // DataView.setBigUint64 is available in ES2020+ / Node 12+
   view.setBigUint64(81, BigInt(input.timestamp), false /* big-endian */)
 

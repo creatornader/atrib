@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * @atrib/mcp middleware, the atrib() wrapper function (§5.3).
+ * @atrib/mcp middleware. the atrib() wrapper function (§5.3).
  *
  * Wraps an MCP server to automatically emit attribution records and
  * propagate context. Zero ongoing surface area: one init call, then
@@ -69,7 +69,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   const serverUrl = options.serverUrl ?? ''
   if (!serverUrl) {
     console.warn(
-      'atrib: no serverUrl provided, content_id values will not uniquely identify this server. ' +
+      'atrib: no serverUrl provided. content_id values will not uniquely identify this server. ' +
         'Set serverUrl explicitly, especially for stdio transport where no host header is available.',
     )
   }
@@ -108,7 +108,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   //      via `isToolsCallSchema` below so the patch survives that migration.
   //
   // We add a runtime sanity check that warns loudly if `server.server` is
-  // missing or `setRequestHandler` is not a function, this turns silent
+  // missing or `setRequestHandler` is not a function. this turns silent
   // failures on SDK upgrades into visible warnings. A regression test in
   // `packages/mcp/test/middleware-sdk-shape.test.ts` imports the real SDK
   // and asserts the shape we depend on, so an SDK upgrade that breaks
@@ -124,7 +124,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
 
   if (!underlyingServer || typeof underlyingServer.setRequestHandler !== 'function') {
     console.warn(
-      'atrib: McpServer.server.setRequestHandler is not a function, ' +
+      'atrib: McpServer.server.setRequestHandler is not a function. ' +
         'the MCP SDK shape this middleware depends on has changed. ' +
         'Operating in pass-through mode. Please file an issue at ' +
         'github.com/creatornader/atrib with your @modelcontextprotocol/sdk version.',
@@ -159,7 +159,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   ) => {
     return async (request: Record<string, unknown>, extra: unknown) => {
       // Call the original handler FIRST, outside the try block for attribution.
-      // §5.8: If the handler itself throws, that's the tool's error, let it propagate.
+      // §5.8: If the handler itself throws, that's the tool's error. let it propagate.
       const result = await handler(request, extra)
 
       try {
@@ -241,7 +241,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
 
         return result
       } catch (err) {
-        // §5.8: Degradation contract, catch attribution errors, return
+        // §5.8: Degradation contract. catch attribution errors, return
         // the already-computed result unchanged. Never re-invoke handler.
         console.warn('atrib: middleware error, passing through', err)
         return result
