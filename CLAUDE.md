@@ -33,6 +33,7 @@ atrib/
         langchain-js/          # MultiServerMCPClient + loadMcpTools example
   services/
     log/                       # FUTURE, Tessera-backed Merkle log (Go), placeholder README
+    log-node/                  # Production Node.js Merkle log with real RFC 6962 proofs (private, not published)
   spec/
     conformance/
       2.6.1/                   # Shared §2.6.1 submission API conformance corpus (consumed by @atrib/log-dev today; future Go log tomorrow)
