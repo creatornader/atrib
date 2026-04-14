@@ -131,11 +131,11 @@ Store the output as `ATRIB_PRIVATE_KEY`. The public key is derived at runtime.
 
 ## Design principles
 
-1. Provenance travels with the artifact. Embedded at creation, not inferred later.
-2. The log stores hashes, not content. Accountability without exposure.
-3. The protocol records what happened. It does not move money.
-4. Trust from math and open spec, not from trusting atrib.
-5. Spec and signing libraries are open. The queryable graph and analytics are commercial.
+1. **Provenance travels with the artifact.** Embedded at creation, not inferred later.
+2. **Accountability without content exposure.** The log stores hashes, not content.
+3. **Settlement is separate from attribution.** The protocol records what happened. It does not move money.
+4. **No central arbiter of value.** Trust from math and open spec, not from trusting atrib.
+5. **The protocol is a public good; the product is not.** Spec, signing libraries, and log infrastructure are open. The queryable graph and analytics are commercial.
 
 ## More
 
