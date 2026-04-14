@@ -8,6 +8,11 @@ import { leafHash as computeLeafHash, computeRoot, computeInclusionProof } from 
  * must NOT pass pre-hashed values to them (that would double-hash).
  *
  * Leaf hashes are cached on append for O(1) access via leafHash(index).
+ *
+ * PERFORMANCE NOTE: Root computation and proof generation are O(n) per call,
+ * recomputing the entire tree from leaf hashes. This is correct and fast
+ * enough for launch scale (<100K entries). For production scale, cache
+ * intermediate node hashes and update only the O(log n) path on append.
  */
 export interface MerkleTree {
   /** Append an entry. Returns the 0-based log index assigned to this entry. */

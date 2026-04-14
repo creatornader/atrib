@@ -49,6 +49,9 @@ export async function startLogServer(options?: LogServerOptions): Promise<LogSer
   const port = options?.port ?? 0;
 
   // Generate or use provided private key
+  // IMPORTANT: In production, provide a persistent keypair via logPrivateKey option.
+  // A random key means checkpoint signatures change on every restart, invalidating
+  // all previously issued inclusion proofs.
   let privateKey: Uint8Array;
   if (options?.logPrivateKey !== undefined) {
     privateKey = options.logPrivateKey;
