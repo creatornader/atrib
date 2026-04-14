@@ -1,6 +1,6 @@
 # atrib
 
-**Draft 0.1, April 2026**
+**Version 0.1, April 2026**
 
 Editor: Nader Helmy
 
