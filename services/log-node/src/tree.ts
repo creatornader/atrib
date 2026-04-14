@@ -6,7 +6,7 @@ import { leafHash as computeLeafHash, computeRoot, computeInclusionProof } from 
  * Append-only Merkle tree backed by RFC 6962 functions from @atrib/mcp.
  *
  * Stores raw entry bytes so they can be passed directly to computeRoot and
- * computeInclusionProof — those functions call leafHash() internally, so we
+ * computeInclusionProof. those functions call leafHash() internally, so we
  * must NOT pass pre-hashed values to them (that would double-hash).
  *
  * Leaf hashes are cached on append for O(1) access via leafHash(index).
@@ -33,9 +33,9 @@ export interface MerkleTree {
  * Factory that creates a fresh, empty MerkleTree.
  */
 export function createMerkleTree(): MerkleTree {
-  // Raw entry bytes — passed to computeRoot / computeInclusionProof.
+  // Raw entry bytes. passed to computeRoot / computeInclusionProof.
   const rawEntries: Uint8Array[] = []
-  // Cached leaf hashes — computed once on append, returned via leafHash().
+  // Cached leaf hashes. computed once on append, returned via leafHash().
   const leafHashes: Uint8Array[] = []
 
   return {

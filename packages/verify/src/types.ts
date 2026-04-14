@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Types for @atrib/verify — graph objects, policy documents,
+ * Types for @atrib/verify. graph objects, policy documents,
  * and settlement recommendation documents.
  *
  * Mirrors §3.5 (graph response schema) and §4.7 (recommendation document).
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Graph types — §3.5
+// Graph types. §3.5
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type EventType = 'tool_call' | 'transaction' | 'gap_node'
@@ -58,7 +58,7 @@ export interface GraphResponse {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Policy types — §4.2
+// Policy types. §4.2
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type DistributionMethod = 'proportional' | 'equal' | 'weighted'
@@ -96,7 +96,7 @@ export interface PolicyDocument {
   constraints?: PolicyConstraints
 }
 
-/** Session policy record (§4.5.3) — minimal shape needed for calculation. */
+/** Session policy record (§4.5.3). minimal shape needed for calculation. */
 export interface SessionPolicyRecord {
   spec_version: 'atrib/1.0'
   record_id: string
@@ -109,7 +109,7 @@ export interface SessionPolicyRecord {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Settlement recommendation document — §4.7.1
+// Settlement recommendation document. §4.7.1
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** A creator key → share fraction map. May contain "__unsigned__" sentinel. */

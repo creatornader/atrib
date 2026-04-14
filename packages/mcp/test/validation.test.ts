@@ -52,7 +52,7 @@ describe('validateSubmission (§2.6.1 Steps 2-5)', () => {
     // Semantic validation (valid base64url, valid key length) happens at signature verification.
     const result = validateSubmission({ ...valid, creator_key: '' })
     // Document current behavior: structural validation accepts empty strings
-    expect(result.ok).toBe(true) // NOT a bug — semantic validation is in verifyRecord
+    expect(result.ok).toBe(true) // NOT a bug. semantic validation is in verifyRecord
   })
 
   it('rejects non-string session_token when present', () => {

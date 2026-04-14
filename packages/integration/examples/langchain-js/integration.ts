@@ -1,11 +1,11 @@
 /**
- * atrib + LangChain JS MCP — runnable integration snippet
+ * atrib + LangChain JS MCP. runnable integration snippet
  *
  * Demonstrates the atrib wiring for a `@langchain/mcp-adapters`
  * `MultiServerMCPClient`. The agent invocation step (`createReactAgent` +
  * `agent.invoke(...)`) is omitted from this file so the example stays focused
  * on the atrib integration. Drop this pattern into any LangChain app that
- * uses MCP tools — the rest of your LangChain code is unchanged.
+ * uses MCP tools. the rest of your LangChain code is unchanged.
  *
  * Run with:
  *   ATRIB_PRIVATE_KEY=<base64url-32-bytes> \
@@ -18,7 +18,7 @@
  *   pnpm add @langchain/mcp-adapters @langchain/anthropic @langchain/langgraph
  *
  * The integration package's tsconfig excludes `examples/` from compilation
- * for exactly this reason — examples typecheck against user-installed
+ * for exactly this reason. examples typecheck against user-installed
  * versions, not against our test build.
  */
 
@@ -50,7 +50,7 @@ async function main() {
     //    reach via multi.getClient(serverName).
     await multi.initializeConnections()
 
-    // 4. ★ ATRIB ★ — patch every internal Client's callTool + fork in place.
+    // 4. ★ ATRIB ★. patch every internal Client's callTool + fork in place.
     //    Idempotent. Returns the number of newly-patched clients.
     //    Order: can be called BEFORE or AFTER multi.getTools() because
     //    LangChain dereferences client.callTool at invocation time.
@@ -65,7 +65,7 @@ async function main() {
 
     // 5. Build the LangChain tool set. Pass `tools` to your LLM / agent
     //    runtime as you normally would. Each tool's execute function calls
-    //    client.callTool() under the hood, which is now patched — every
+    //    client.callTool() under the hood, which is now patched. every
     //    tool call flows through the atrib interceptor without further
     //    changes to your LangChain wiring.
     const tools = await multi.getTools()

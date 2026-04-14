@@ -23,7 +23,7 @@ import { calculate, DEFAULT_POLICY } from '@atrib/verify'
 import { buildGraphFromRecords } from '../src/graph-builder.js'
 import { createRecordStore, createMockMcpServer, callTool } from '../src/test-harness.js'
 
-// Three creator keypairs — two tools and a merchant
+// Three creator keypairs. two tools and a merchant
 const TOOL_A_KEY = new Uint8Array(32).fill(11)
 const TOOL_B_KEY = new Uint8Array(32).fill(22)
 const MERCHANT_KEY = new Uint8Array(32).fill(33)
@@ -78,7 +78,7 @@ describe('End-to-end attribution flow', () => {
     })
 
     // ── 3. Drive the attribution chain ──────────────────────────────────
-    // Call tool A — first call, generates a genesis record
+    // Call tool A. first call, generates a genesis record
     const callA = await callTool({
       toolName: 'search',
       agent,
@@ -88,7 +88,7 @@ describe('End-to-end attribution flow', () => {
     })
     expect(callA.responseMeta?.atrib).toBeDefined()
 
-    // Call tool B — should see tool A's token in outbound _meta and chain to it
+    // Call tool B. should see tool A's token in outbound _meta and chain to it
     const callB = await callTool({
       toolName: 'summarize',
       agent,
@@ -99,7 +99,7 @@ describe('End-to-end attribution flow', () => {
     expect(callB.responseMeta?.atrib).toBeDefined()
     expect(callB.responseMeta?.atrib).not.toBe(callA.responseMeta?.atrib)
 
-    // Call merchant checkout — emits transaction record (Path 1)
+    // Call merchant checkout. emits transaction record (Path 1)
     const callC = await callTool({
       toolName: 'checkout',
       agent,
@@ -185,7 +185,7 @@ describe('End-to-end attribution flow', () => {
     expect(distribution[toolAPub]).toBeDefined()
     expect(distribution[toolBPub]).toBeDefined()
 
-    // Merchant should NOT appear in the distribution — they own the transaction
+    // Merchant should NOT appear in the distribution. they own the transaction
     // node, which is excluded from contributing nodes per §4.6.2
     const merchantPub = base64urlEncode(await getPublicKey(MERCHANT_KEY))
     expect(distribution[merchantPub]).toBeUndefined()
@@ -279,7 +279,7 @@ describe('End-to-end attribution flow', () => {
       serverUrl: TOOL_A_URL,
     })
 
-    // Unwrapped merchant — no atrib middleware
+    // Unwrapped merchant. no atrib middleware
     const unwrappedMerchant = createMockMcpServer()
     unwrappedMerchant.registerToolHandler(async () => ({
       data: {

@@ -88,7 +88,7 @@ describe('createCheckpointSigner', () => {
     const expectedBody = formatCheckpointBody(TEST_ORIGIN, TEST_TREE_SIZE, TEST_ROOT_HASH)
     expect(body).toBe(expectedBody)
 
-    // Parse the signature line: — origin keyIdHex+sigBase64\n
+    // Parse the signature line:. origin keyIdHex+sigBase64\n
     expect(sigSection).toMatch(/^— .+ .+\n$/)
     const sigLine = sigSection.trimEnd() // remove trailing newline
     // Remove em-dash and space prefix
@@ -100,7 +100,7 @@ describe('createCheckpointSigner', () => {
     expect(sigOrigin).toBe(TEST_ORIGIN)
 
     const keyIdPlusSig = rest.slice(spaceIdx + 1) as string
-    // Format: keyIdHex+sigBase64 — find the + separator
+    // Format: keyIdHex+sigBase64. find the + separator
     const plusIdx = keyIdPlusSig.indexOf('+')
     expect(plusIdx).toBeGreaterThan(0)
     const sigBase64 = keyIdPlusSig.slice(plusIdx + 1)

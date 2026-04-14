@@ -46,7 +46,7 @@ export function createRecordStore(): RecordStore {
             }
           }
         } catch {
-          // ignore — not all fetches are submissions
+          // ignore. not all fetches are submissions
         }
         return new Response(
           JSON.stringify({
@@ -111,7 +111,7 @@ export function createMockMcpServer(): MockMcpServerHandle {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Wire simulator — drives a tools/call from the agent through a wrapped server
+// Wire simulator. drives a tools/call from the agent through a wrapped server
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface WireResult {
@@ -174,7 +174,7 @@ export async function callTool(opts: {
   if (!wrappedHandler) throw new Error('no tool handler registered')
   const result = (await wrappedHandler(request, {})) as Record<string, unknown>
 
-  // 5. Extract response _meta — @atrib/mcp writes attribution context to result._meta
+  // 5. Extract response _meta. @atrib/mcp writes attribution context to result._meta
   // (see writeOutboundContext in @atrib/mcp/src/context.ts)
   const responseMeta = result._meta as Record<string, unknown> | undefined
 

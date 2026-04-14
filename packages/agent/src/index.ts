@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// @atrib/agent — Public API
+// @atrib/agent. Public API
 
 // Middleware (primary export)
 export { atrib } from './middleware.js'
@@ -22,7 +22,7 @@ export type { SessionPolicyRecord, PolicyDocument, CreatorPolicyEntry } from './
 export { wrapMcpClient } from './adapters/mcp-client.js'
 export type { MinimalMcpClient, WrapMcpClientOptions } from './adapters/mcp-client.js'
 
-// Cloudflare Agents adapter — wraps MCP connections on a Cloudflare `Agent`
+// Cloudflare Agents adapter. wraps MCP connections on a Cloudflare `Agent`
 // (or `AIChatAgent`) after `addMcpServer` so subsequent tool calls flow
 // through atrib's interceptor lifecycle.
 export { attributeCloudflareAgentMcp } from './adapters/cloudflare-agent.js'
@@ -31,7 +31,7 @@ export type {
   AttributeCloudflareAgentMcpOptions,
 } from './adapters/cloudflare-agent.js'
 
-// Vercel AI SDK MCP adapter — patches an `@ai-sdk/mcp` MCPClient's `request`
+// Vercel AI SDK MCP adapter. patches an `@ai-sdk/mcp` MCPClient's `request`
 // method so every outbound `tools/call` flows through atrib's interceptor.
 // The Vercel client has its own JSON-RPC implementation (NOT
 // `@modelcontextprotocol/sdk` Client), so `wrapMcpClient` does not apply.
@@ -41,7 +41,7 @@ export type {
   AttributeVercelAiSdkMcpOptions,
 } from './adapters/vercel-ai-sdk-mcp.js'
 
-// LangChain JS MCP adapter — patches every internal `@modelcontextprotocol/sdk`
+// LangChain JS MCP adapter. patches every internal `@modelcontextprotocol/sdk`
 // Client owned by a `@langchain/mcp-adapters` `MultiServerMCPClient` so every
 // outbound `tools/call` (and every forked client from per-call-header
 // workflows) flows through atrib's interceptor.

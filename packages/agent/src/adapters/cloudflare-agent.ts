@@ -5,14 +5,14 @@
  *
  * Cloudflare's `agents` package exposes two MCP integration surfaces:
  *
- *   1. **Server-side `McpAgent`** — you build an MCP server inside a Worker
+ *   1. **Server-side `McpAgent`**. you build an MCP server inside a Worker
  *      by extending `McpAgent` and defining tools on `this.server`. Because
  *      `this.server` is a real `McpServer` from `@modelcontextprotocol/sdk`,
- *      you wrap it directly with `atrib()` from `@atrib/mcp` — no helper
+ *      you wrap it directly with `atrib()` from `@atrib/mcp`. no helper
  *      needed. See `packages/integration/examples/cloudflare-agents/` for
  *      the runnable McpAgent example.
  *
- *   2. **Client-side `Agent.addMcpServer`** — your `Agent` (or `AIChatAgent`)
+ *   2. **Client-side `Agent.addMcpServer`**. your `Agent` (or `AIChatAgent`)
  *      connects to one or more upstream MCP servers via `this.addMcpServer(name, url)`.
  *      Cloudflare's `MCPClientManager` constructs an `@modelcontextprotocol/sdk`
  *      Client per upstream and stores it on `agent.mcp.mcpConnections[name].client`.
@@ -49,12 +49,12 @@
  *
  * If you call `addMcpServer` again later (e.g. in a message handler or after
  * an OAuth flow completes), call `attributeCloudflareAgentMcp` again. The
- * helper is idempotent — connections that are already wrapped are skipped.
+ * helper is idempotent. connections that are already wrapped are skipped.
  *
  * Per spec §5.8 (degradation contract), if any single connection fails to wrap
  * (missing `client` field, unexpected shape), the helper logs a warning with
  * the `atrib:` prefix and skips it without throwing. The agent's tool calls
- * continue to work — they just won't be attributed for that connection.
+ * continue to work. they just won't be attributed for that connection.
  */
 
 import { wrapMcpClient, type MinimalMcpClient } from './mcp-client.js'
@@ -120,7 +120,7 @@ export interface AttributeCloudflareAgentMcpOptions {
 /**
  * Wrap every currently-connected MCP client on a Cloudflare Agent with atrib
  * attribution. Returns the number of connections wrapped (excluding ones that
- * were already wrapped). Idempotent — safe to call multiple times.
+ * were already wrapped). Idempotent. safe to call multiple times.
  *
  * Call this in `onStart()` after your `addMcpServer()` calls. If you add more
  * MCP servers later (in a message handler, after OAuth, etc.), call again.
@@ -132,7 +132,7 @@ export function attributeCloudflareAgentMcp(
   const connections = agent.mcp?.mcpConnections
   if (!connections || typeof connections !== 'object') {
     console.warn(
-      'atrib: attributeCloudflareAgentMcp called on an agent with no mcp.mcpConnections — ' +
+      'atrib: attributeCloudflareAgentMcp called on an agent with no mcp.mcpConnections. ' +
         "the Cloudflare 'agents' package shape may have changed. Skipping.",
     )
     return 0

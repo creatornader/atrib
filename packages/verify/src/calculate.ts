@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * The calculation algorithm (§4.6) — pure function from
+ * The calculation algorithm (§4.6). pure function from
  * (graph, policy, sessionPolicyRecord?) → distribution.
  *
  * INVARIANT: This function is deterministic. Two runs on identical input
@@ -77,9 +77,9 @@ export const DEFAULT_POLICY: PolicyDocument = {
 /**
  * Run the full calculation pipeline (§4.6 closing pseudocode).
  *
- * @param graph — graph snapshot for the session
- * @param policy — agreed policy document
- * @param sessionPolicyRecord — optional; provides per-creator floors (§4.6.7)
+ * @param graph. graph snapshot for the session
+ * @param policy. agreed policy document
+ * @param sessionPolicyRecord. optional; provides per-creator floors (§4.6.7)
  * @returns final distribution (creator_key → share, sums to 1.0 ± 1e-9)
  */
 export function calculate(
@@ -87,7 +87,7 @@ export function calculate(
   policy: PolicyDocument,
   sessionPolicyRecord?: SessionPolicyRecord | null,
 ): Distribution {
-  // §4.6.1: precondition — must have at least one transaction node
+  // §4.6.1: precondition. must have at least one transaction node
   const txNode = graph.nodes.find((n) => n.event_type === 'transaction')
   if (!txNode) {
     return {}
@@ -124,7 +124,7 @@ export function calculate(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §4.6.2 — Step 1: identify contributing nodes
+// §4.6.2. Step 1: identify contributing nodes
 // ─────────────────────────────────────────────────────────────────────────────
 
 function identifyContributingNodes(graph: GraphResponse): GraphNode[] {
@@ -149,7 +149,7 @@ function identifyContributingNodes(graph: GraphResponse): GraphNode[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §4.6.3 — Step 2: raw scores
+// §4.6.3. Step 2: raw scores
 // ─────────────────────────────────────────────────────────────────────────────
 
 function rawScore(
@@ -334,7 +334,7 @@ function shortestChainPath(nodeId: string, graph: GraphResponse): number {
       }
     }
   }
-  // No chain path to a transaction — return a large depth to fully penalize
+  // No chain path to a transaction. return a large depth to fully penalize
   return Number.MAX_SAFE_INTEGER
 }
 
@@ -348,7 +348,7 @@ function countNodesWithSameContentId(contentId: string | null, graph: GraphRespo
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §4.6.4 — Step 3: apply constraints
+// §4.6.4. Step 3: apply constraints
 // ─────────────────────────────────────────────────────────────────────────────
 
 function applyConstraints(
@@ -442,7 +442,7 @@ function applyMaximumCap(normalized: Map<string, number>, cap: number): Map<stri
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §4.6.5 — Step 4: final normalize
+// §4.6.5. Step 4: final normalize
 // ─────────────────────────────────────────────────────────────────────────────
 
 function finalNormalize<K>(shares: Map<K, number>): Map<K, number> {
@@ -460,7 +460,7 @@ function finalNormalize<K>(shares: Map<K, number>): Map<K, number> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §4.6.6 — Step 5: aggregate by creator
+// §4.6.6. Step 5: aggregate by creator
 // ─────────────────────────────────────────────────────────────────────────────
 
 function aggregateByCreator(
@@ -482,7 +482,7 @@ function aggregateByCreator(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §4.6.7 — Step 6: apply creator floors
+// §4.6.7. Step 6: apply creator floors
 // ─────────────────────────────────────────────────────────────────────────────
 
 function applyCreatorFloors(
@@ -512,7 +512,7 @@ function applyCreatorFloors(
   for (const v of nonFloored.values()) nonFlooredTotal += v
 
   if (nonFlooredTotal <= boostNeeded) {
-    // Cannot honor — should have been caught at negotiation. Return unchanged.
+    // Cannot honor. should have been caught at negotiation. Return unchanged.
     return result
   }
 

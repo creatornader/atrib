@@ -29,7 +29,7 @@ ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
 describe('no Buffer dependency in production code paths', () => {
   // These tests work by using only Uint8Array and the package's own utilities.
   // If any production code secretly depends on Buffer, these tests would still
-  // pass in Node.js — but the test documents the contract that only standard
+  // pass in Node.js. but the test documents the contract that only standard
   // APIs are used.
 
   it('base64url round-trips a 32-byte key using only Uint8Array', () => {

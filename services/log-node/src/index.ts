@@ -68,7 +68,7 @@ export async function startLogServer(options?: LogServerOptions): Promise<LogSer
   const tree = createMerkleTree()
   const signer = createCheckpointSigner(privateKey, publicKey, LOG_ORIGIN)
   // Note: privateKey remains in memory for the signer's lifetime (the signer
-  // captures it in a closure for checkpoint signing). This is intentional —
+  // captures it in a closure for checkpoint signing). This is intentional.
   // the key must be available for the process lifetime. JavaScript does not
   // support reliable key zeroing (GC is non-deterministic). If memory-dump
   // resistance is ever required, consider a native HSM integration.

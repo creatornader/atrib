@@ -63,7 +63,7 @@ function makeGraph(): GraphResponse {
   }
 }
 
-describe('AtribVerifier — construction', () => {
+describe('AtribVerifier: construction', () => {
   beforeEach(() => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
@@ -310,7 +310,7 @@ describe('AtribVerifier.verify()', () => {
   })
 })
 
-describe('AtribVerifier.calculate() — post-hoc (§5.5.3)', () => {
+describe('AtribVerifier.calculate(): post-hoc (§5.5.3)', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
   })
@@ -350,7 +350,7 @@ describe('AtribVerifier.calculate() — post-hoc (§5.5.3)', () => {
       signWith: 'merchant',
     })
     expect(rec.signature).toBe('')
-    expect(rec.warnings).toContain('merchantKey not set — recommendation unsigned')
+    expect(rec.warnings).toContain('merchantKey not set. Recommendation unsigned')
   })
 
   it('§5.8: never throws on graph fetch failure', async () => {

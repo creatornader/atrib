@@ -77,7 +77,7 @@ describe('detectTransaction', () => {
   })
 
   describe('x402 detection', () => {
-    // Source: github.com/coinbase/x402 — v2 response header is PAYMENT-RESPONSE
+    // Source: github.com/coinbase/x402. v2 response header is PAYMENT-RESPONSE
     it('detects PAYMENT-RESPONSE header (v2, exact case from spec)', () => {
       const result = detectTransaction(
         'api_call',
@@ -113,7 +113,7 @@ describe('detectTransaction', () => {
   })
 
   describe('MPP detection', () => {
-    // Source: draft-ryan-httpauth-payment-01 §5.3 — response header is Payment-Receipt
+    // Source: draft-ryan-httpauth-payment-01 §5.3. response header is Payment-Receipt
     it('detects Payment-Receipt header (canonical case from IETF draft)', () => {
       const result = detectTransaction(
         'api_call',

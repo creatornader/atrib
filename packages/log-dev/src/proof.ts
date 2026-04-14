@@ -14,7 +14,7 @@
  *     `@atrib/mcp`'s submission queue are correctly keyed)
  *   - The dev log is honest about not being a real Merkle tree:
  *     `@atrib/verify`'s strict cryptographic verification path will
- *     fail for these proofs, which is correct — anyone running
+ *     fail for these proofs, which is correct. anyone running
  *     verification against a dev log should fail.
  *
  * If you need a proof that PASSES strict cryptographic verification, you
@@ -31,7 +31,7 @@ const LOG_ORIGIN = 'log.atrib.dev/v1'
 /**
  * Build a proof bundle for a stored entry. The bundle is well-formed per
  * §2.6.2 but its hashes are deterministic placeholders, not real Merkle
- * hashes — see file header.
+ * hashes. see file header.
  */
 export function buildProofBundle(entry: StoredEntry, totalSize: number): ProofBundle {
   const leafSeed = new TextEncoder().encode(`${entry.recordHash}:${entry.logIndex}`)
@@ -39,7 +39,7 @@ export function buildProofBundle(entry: StoredEntry, totalSize: number): ProofBu
 
   // Generate three deterministic sibling hashes so the inclusion_proof
   // array has a realistic shape (real proofs typically have a small
-  // number of sibling hashes — log2(treeSize) — so 3 is reasonable for
+  // number of sibling hashes. log2(treeSize). so 3 is reasonable for
   // a small dev log).
   const inclusionProof: string[] = []
   for (let depth = 0; depth < 3; depth++) {
@@ -47,13 +47,13 @@ export function buildProofBundle(entry: StoredEntry, totalSize: number): ProofBu
     inclusionProof.push(base64(sha256(siblingSeed)))
   }
 
-  // Checkpoint body per §2.4.1 — three lines: origin, tree size, root hash.
+  // Checkpoint body per §2.4.1. three lines: origin, tree size, root hash.
   // The root hash is a deterministic placeholder derived from the size.
   const rootHashSeed = new TextEncoder().encode(`${LOG_ORIGIN}:${totalSize}`)
   const rootHashB64 = base64(sha256(rootHashSeed))
   const checkpointBody = `${LOG_ORIGIN}\n${totalSize}\n${rootHashB64}\n`
 
-  // Signed-note checkpoint per §2.4.3. The signature is a placeholder —
+  // Signed-note checkpoint per §2.4.3. The signature is a placeholder.
   // the dev log does not have a real signing key. A real Tessera log
   // would sign the body with its Ed25519 key.
   const checkpoint = `${checkpointBody}\n— ${LOG_ORIGIN} 00000000+devLogPlaceholderSignature\n`

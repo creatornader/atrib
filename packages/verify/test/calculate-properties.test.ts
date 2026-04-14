@@ -22,7 +22,7 @@ import type {
 } from '../src/types.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Arbitraries — random generators for graphs, policies, and session records
+// Arbitraries. random generators for graphs, policies, and session records
 // ─────────────────────────────────────────────────────────────────────────────
 
 const EDGE_TYPES = [

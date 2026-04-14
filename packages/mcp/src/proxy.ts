@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * @atrib/mcp proxy — in-process McpServer that forwards tool calls to an
+ * @atrib/mcp proxy. in-process McpServer that forwards tool calls to an
  * upstream MCP server with attribution applied at the proxy layer.
  *
  * Use this when you want to attribute tool calls flowing through a third-party
@@ -12,7 +12,7 @@
  * instance: McpServer }` config: hosts that accept an in-process McpServer can
  * receive the proxy directly. For user-built tools (where the consumer
  * constructs their own `McpServer` and registers tools on it), the proxy is
- * NOT needed — apply `atrib()` to the user's `McpServer` directly. The proxy
+ * NOT needed. apply `atrib()` to the user's `McpServer` directly. The proxy
  * exists specifically for the case where the tools live in an upstream
  * process the host doesn't run itself.
  *
@@ -37,7 +37,7 @@
  * upstream so the upstream's response shape is unchanged.
  *
  * Per spec §3.1 (graph records structure, not causality), the proxy never
- * inspects upstream responses for semantic content — it forwards the response
+ * inspects upstream responses for semantic content. it forwards the response
  * unchanged after attribution. Per §5.8, any failure on the upstream side is
  * surfaced to the host as a tool error; atrib stays out of the failure path.
  */
@@ -92,7 +92,7 @@ export interface AtribProxyOptions {
   /** Server version reported via the MCP initialize handshake. Defaults to '0.0.0'. */
   version?: string
 
-  /** Upstream MCP server transport — what the proxy forwards calls to. */
+  /** Upstream MCP server transport. what the proxy forwards calls to. */
   upstream: UpstreamTransport
 
   /** atrib middleware options applied to the in-process side of the proxy. */
@@ -122,7 +122,7 @@ export interface AtribProxy {
 
   /**
    * Disconnect the upstream client cleanly. Does NOT close the in-process
-   * McpServer — the host owns that lifecycle.
+   * McpServer. the host owns that lifecycle.
    */
   close(): Promise<void>
 }
@@ -172,7 +172,7 @@ export async function createAtribProxy(options: AtribProxyOptions): Promise<Atri
   // do here).
   const wrappedServer = atrib(localServer, options.atrib)
 
-  // ── 5. Register tools/list — return the upstream's snapshot ──────────
+  // ── 5. Register tools/list. return the upstream's snapshot ──────────
   // The underlying low-level Server is McpServer.server. setRequestHandler
   // is now patched by atrib(), but the patch passes through any request
   // schema that is NOT tools/call, so this registration is safe.
@@ -181,7 +181,7 @@ export async function createAtribProxy(options: AtribProxyOptions): Promise<Atri
 
   underlying.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: upstreamTools.tools }))
 
-  // ── 6. Register tools/call — forward to upstream client ──────────────
+  // ── 6. Register tools/call. forward to upstream client ──────────────
   // atrib()'s patched setRequestHandler will wrap this handler with the
   // attribution lifecycle. Every tools/call lands here AFTER attribution
   // has run; the forwarder calls the upstream and returns the result
@@ -229,7 +229,7 @@ function createUpstreamTransport(spec: UpstreamTransport): Transport {
       // its `sessionId?: string` getter is structurally incompatible with
       // `Transport.sessionId?: string` under exactOptionalPropertyTypes (the
       // getter returns `string | undefined`, the interface expects `string`
-      // when present). Cast through `unknown` — the runtime conformance is
+      // when present). Cast through `unknown`. the runtime conformance is
       // guaranteed by `implements Transport` on the SDK side.
       return new StreamableHTTPClientTransport(new URL(spec.url), {
         ...(spec.headers ? { requestInit: { headers: spec.headers } } : {}),

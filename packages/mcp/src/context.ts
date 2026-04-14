@@ -9,9 +9,9 @@ import type { AtribRecord, DecodedToken } from './types.js'
 
 /** Extracted inbound context from an MCP request. */
 export interface InboundContext {
-  /** The record_hash from the upstream token — becomes chain_root of the next record. */
+  /** The record_hash from the upstream token. becomes chain_root of the next record. */
   recordHash: Uint8Array
-  /** The creator_key from the upstream token — identifies the sender. */
+  /** The creator_key from the upstream token. identifies the sender. */
   creatorKey: Uint8Array
   /** OTel trace-id from traceparent, if available. */
   contextId: string | undefined
@@ -100,7 +100,7 @@ export function writeOutboundContext(
   meta.atrib = token
 
   // Write/prepend atrib to tracestate. The W3C convention is "most recent
-  // vendor first" — see https://www.w3.org/TR/trace-context/#tracestate-header.
+  // vendor first". see https://www.w3.org/TR/trace-context/#tracestate-header.
   // Dedupe any existing atrib= entry first per "one entry per key is allowed".
   const existingTracestate = typeof meta.tracestate === 'string' ? meta.tracestate : ''
   meta.tracestate = mergeTracestate(`atrib=${token}`, existingTracestate)
@@ -187,13 +187,13 @@ function encodedByteLength(s: string): number {
 /**
  * Parse the `atrib=` entry from a W3C tracestate string.
  *
- * Spec: https://www.w3.org/TR/trace-context/ — list-member grammar is
+ * Spec: https://www.w3.org/TR/trace-context/. list-member grammar is
  * `key=value` separated by commas with optional whitespace (OWS) on either
  * side of the comma. Per the spec, callers SHOULD use single space or no
  * whitespace, but receivers must accept either.
  *
  * Note: tracestate values per the spec are 0-256 printable ASCII, no comma,
- * no equals sign — so the first `=` after `atrib` cleanly delimits the value.
+ * no equals sign. so the first `=` after `atrib` cleanly delimits the value.
  */
 export function parseTracestateAtrib(tracestate: string): string | null {
   for (const entry of tracestate.split(',')) {
@@ -210,7 +210,7 @@ export function parseTracestateAtrib(tracestate: string): string | null {
 /**
  * Extract 32-char trace-id from a W3C traceparent header value.
  *
- * Spec: https://www.w3.org/TR/trace-context/#traceparent-header — format is
+ * Spec: https://www.w3.org/TR/trace-context/#traceparent-header. format is
  * `version-trace_id-parent_id-trace_flags` where trace-id is 32 lowercase
  * hex characters and MUST NOT be all zeros. Receivers MUST ignore the
  * traceparent entirely if either trace-id or parent-id is invalid.
@@ -240,7 +240,7 @@ export function extractTraceId(traceparent: string): string | undefined {
 /**
  * Parse the `atrib-session=` value from a W3C Baggage string.
  *
- * Spec: https://www.w3.org/TR/baggage/ — list-member grammar is
+ * Spec: https://www.w3.org/TR/baggage/. list-member grammar is
  * `key OWS = OWS value *( OWS ; OWS property )`. The value may be followed
  * by zero or more `;property` segments which are NOT part of the value.
  * Receivers MUST strip the property suffix when extracting the value.

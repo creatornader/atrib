@@ -34,7 +34,7 @@ import {
 import { sha256 } from '@noble/hashes/sha2.js'
 
 // ---------------------------------------------------------------------------
-// Fixed inputs — change these only when you intend to invalidate the corpus.
+// Fixed inputs. change these only when you intend to invalidate the corpus.
 // ---------------------------------------------------------------------------
 
 const SEED = new Uint8Array(32).fill(7)
@@ -186,7 +186,7 @@ async function generate(): Promise<void> {
 
   // -- REJECT cases ----------------------------------------------------------
 
-  // Step 1 — bad signature. Build a valid record, then mutate the signature.
+  // Step 1. bad signature. Build a valid record, then mutate the signature.
   const badSigRecord = await makeBaseRecord()
   const mutatedSig = base64urlEncode(new Uint8Array(64).fill(1)) // 64 zeros sig is structurally valid base64url but wrong
   const badSigBody = { ...badSigRecord, signature: mutatedSig }
@@ -210,7 +210,7 @@ async function generate(): Promise<void> {
     },
   })
 
-  // Step 2 — wrong spec_version
+  // Step 2. wrong spec_version
   const wrongSpecVersion = { ...acceptToolCall, spec_version: 'atrib/0.9' }
   cases.push({
     filename: 'reject-wrong-spec-version.json',
@@ -229,7 +229,7 @@ async function generate(): Promise<void> {
     },
   })
 
-  // Step 3 — unknown event_type
+  // Step 3. unknown event_type
   const unknownEventType = { ...acceptToolCall, event_type: 'banana' }
   cases.push({
     filename: 'reject-unknown-event-type.json',
@@ -249,7 +249,7 @@ async function generate(): Promise<void> {
     },
   })
 
-  // Step 4 — far-future timestamp (20 minutes ahead of reference_time_ms)
+  // Step 4. far-future timestamp (20 minutes ahead of reference_time_ms)
   const futureTimestamp = await makeBaseRecord({
     timestamp: REFERENCE_TIME_MS + 20 * 60 * 1000,
   })
@@ -271,7 +271,7 @@ async function generate(): Promise<void> {
     },
   })
 
-  // Step 5 — malformed context_id
+  // Step 5. malformed context_id
   const malformedContext = { ...acceptToolCall, context_id: 'not-a-valid-hex-id' }
   cases.push({
     filename: 'reject-malformed-context-id.json',
@@ -291,7 +291,7 @@ async function generate(): Promise<void> {
     },
   })
 
-  // Non-JSON body — pre-Step-1 sanity check
+  // Non-JSON body. pre-Step-1 sanity check
   cases.push({
     filename: 'reject-non-json-body.json',
     data: {
@@ -313,7 +313,7 @@ async function generate(): Promise<void> {
 
   // -- SEQUENCES -------------------------------------------------------------
 
-  // Step 6 — idempotency. Submit the same record twice; both calls succeed
+  // Step 6. idempotency. Submit the same record twice; both calls succeed
   // and return the same log_index, log size stays at 1.
   const idempotentRecord = await makeBaseRecord({
     timestamp: REFERENCE_TIME_MS + 1, // distinct from accept-tool-call so the test files are isolatable
@@ -356,7 +356,7 @@ async function generate(): Promise<void> {
     spec_version: 'atrib/1.0',
     spec_section: '§2.6.1 + §2.6.2 (the submission API)',
     description:
-      'Conformance corpus for the atrib log submission API. Implementations of the atrib log (TS dev stub, Go Tessera service, etc.) MUST produce the expected response status for every case. The corpus is intentionally static — see the generator at packages/log-dev/scripts/generate-conformance-corpus.ts.',
+      'Conformance corpus for the atrib log submission API. Implementations of the atrib log (TS dev stub, Go Tessera service, etc.) MUST produce the expected response status for every case. The corpus is intentionally static. see the generator at packages/log-dev/scripts/generate-conformance-corpus.ts.',
     reference_time_ms: REFERENCE_TIME_MS,
     reference_time_iso: new Date(REFERENCE_TIME_MS).toISOString(),
     signing: {

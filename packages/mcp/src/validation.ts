@@ -5,7 +5,7 @@
  * Used by both @atrib/log-dev and log-node servers.
  *
  * Steps 2–5 of §2.6.1 plus required-field presence checks.
- * Step 1 (Ed25519 signature verification) is intentionally excluded here —
+ * Step 1 (Ed25519 signature verification) is intentionally excluded here.
  * it lives in @atrib/verify and would create a circular workspace dependency.
  * Step 6 (idempotency) is state-dependent and handled by each server's
  * proof-cache / storage layer.

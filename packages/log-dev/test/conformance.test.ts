@@ -1,5 +1,5 @@
 /**
- * Spec §2.6.1 conformance tests — drives @atrib/log-dev with the canonical
+ * Spec §2.6.1 conformance tests. drives @atrib/log-dev with the canonical
  * shared test corpus at `spec/conformance/2.6.1/`.
  *
  * The corpus is the contract that any atrib log implementation must honor:
@@ -12,11 +12,11 @@
  * timestamps so the bytes are stable across runs. Validation step 4 (timestamp
  * not more than 10 minutes in the future) only produces stable results when
  * the consumer pretends the wall clock matches the manifest's
- * reference_time_ms. We use vi.setSystemTime() for this — it's a test-only
+ * reference_time_ms. We use vi.setSystemTime() for this. it's a test-only
  * concern, not a production code change.
  *
  * Cases the dev log skips: @atrib/log-dev does not implement §2.6.1 Step 1
- * (Ed25519 signature verification — see server.ts file header for the
+ * (Ed25519 signature verification. see server.ts file header for the
  * circular-dep rationale). The single Step 1 case in the corpus
  * (`reject-bad-signature`) is in DEV_LOG_SKIPS below. The future Go service
  * is expected to honor it; the corpus is the canonical truth.
@@ -76,7 +76,7 @@ interface Manifest {
 /**
  * Cases the dev log can't honor and the test consumer must skip with a
  * console warning. Empty for the future Go service. Each entry MUST cite
- * the reason — never silently disable a case without recording why.
+ * the reason. never silently disable a case without recording why.
  */
 const DEV_LOG_SKIPS: Record<string, string> = {
   'reject-bad-signature':
@@ -154,7 +154,7 @@ describe('spec §2.6.1 conformance corpus', () => {
       const testName = `${c.name} (§${c.spec_section}${c.validation_step !== null ? ` Step ${c.validation_step}` : ''})`
 
       if (skipReason) {
-        it.skip(`${testName} — SKIPPED: ${skipReason}`, () => {})
+        it.skip(`${testName}. SKIPPED: ${skipReason}`, () => {})
         continue
       }
 

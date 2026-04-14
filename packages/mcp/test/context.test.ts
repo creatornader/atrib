@@ -73,7 +73,7 @@ describe('readInboundContext', () => {
 
   it('prefers _meta.atrib over tracestate', async () => {
     const { token } = await makeSignedRecordAndToken()
-    // Create a different token for tracestate (just use the same — but the point
+    // Create a different token for tracestate (just use the same. but the point
     // is that atrib field is checked first)
     const result = readInboundContext({
       _meta: {
@@ -234,7 +234,7 @@ describe('parseTracestateAtrib', () => {
   })
 
   it('returns the LAST atrib entry if duplicates exist (vendor MUST overwrite)', () => {
-    // W3C "one entry per key" — if duplicates exist, parseTracestateAtrib's
+    // W3C "one entry per key". if duplicates exist, parseTracestateAtrib's
     // contract is to find SOME atrib entry; since we only emit one, this
     // test documents that we accept the first match without erroring.
     const result = parseTracestateAtrib('atrib=first,vendor=other,atrib=second')
@@ -262,7 +262,7 @@ describe('mergeTracestate (W3C 32-list-member limit)', () => {
   })
 
   it('respects the W3C 32-list-member maximum, evicting from the rightmost end', () => {
-    // 32 vendor entries — adding atrib must evict 1 from the right to fit
+    // 32 vendor entries. adding atrib must evict 1 from the right to fit
     const vendors = Array.from({ length: 32 }, (_, i) => `v${i}=val${i}`).join(',')
     const result = mergeTracestate('atrib=NEW', vendors)
     const entries = result.split(',')
@@ -277,7 +277,7 @@ describe('mergeTracestate (W3C 32-list-member limit)', () => {
   })
 })
 
-describe('extractTraceId — W3C trace-id validation', () => {
+describe('extractTraceId: W3C trace-id validation', () => {
   it('accepts a valid lowercase 32-hex trace-id with non-zero parent-id', () => {
     expect(extractTraceId('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01')).toBe(
       '4bf92f3577b34da6a3ce929d0e0e4736',
@@ -324,7 +324,7 @@ describe('extractTraceId — W3C trace-id validation', () => {
   })
 })
 
-describe('extractTraceId — basic', () => {
+describe('extractTraceId: basic', () => {
   it('returns undefined for too few parts', () => {
     expect(extractTraceId('00')).toBeUndefined()
   })
@@ -410,7 +410,7 @@ describe('mergeBaggageAtribSession (W3C 64-list-member, 8192-byte limit)', () =>
   })
 
   it('respects the W3C 64-list-member maximum, evicting from the rightmost end', () => {
-    // 64 vendor entries — adding atrib-session must evict 1 from the right
+    // 64 vendor entries. adding atrib-session must evict 1 from the right
     const vendors = Array.from({ length: 64 }, (_, i) => `v${i}=val${i}`).join(',')
     const result = mergeBaggageAtribSession('tok', vendors)
     const entries = result.split(',')

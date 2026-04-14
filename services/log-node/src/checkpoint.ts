@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Checkpoint generation and Ed25519 signing — spec Section 2.4
+ * Checkpoint generation and Ed25519 signing. spec Section 2.4
  *
  * Implements the C2SP tlog-tiles checkpoint format:
  *   - formatCheckpointBody: produces the 3-line body (origin, size, rootHash)
@@ -14,7 +14,7 @@
  * Signed note format per spec Section 2.4.3:
  *   body text here\n
  *   \n
- *   — origin keyIdHex+sigBase64\n
+ *  . origin keyIdHex+sigBase64\n
  */
 
 import * as ed from '@noble/ed25519'
@@ -22,7 +22,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 
 // NOTE: ed.etc.sha512Sync must be set by the application entry point (index.ts)
 // before calling any signing functions. It is NOT set here to avoid split
-// initialization responsibility — see @noble/ed25519 docs.
+// initialization responsibility. see @noble/ed25519 docs.
 
 export interface CheckpointSigner {
   /** Sign a checkpoint and return the signed note string. */
@@ -61,7 +61,7 @@ export function parseCheckpointBody(body: string): {
   rootHash: string
 } {
   const lines = body.split('\n')
-  // lines: [origin, treeSize, rootHash, ''] — trailing newline produces empty last element
+  // lines: [origin, treeSize, rootHash, '']. trailing newline produces empty last element
   if (lines.length < 3) {
     throw new Error('parseCheckpointBody: body has fewer than 3 lines')
   }

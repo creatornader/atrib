@@ -53,7 +53,7 @@ describe('Wycheproof Ed25519 vectors', () => {
   it('fetched test data successfully', () => {
     // If we couldn't fetch, skip remaining tests but flag it
     if (!testData) {
-      console.warn('Wycheproof vectors not available — skipping')
+      console.warn('Wycheproof vectors not available. skipping')
       return
     }
     expect(testData.algorithm).toBe('EDDSA')

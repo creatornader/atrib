@@ -1,5 +1,5 @@
 /**
- * atrib + Claude Agent SDK — Case A: instrument in-process tools
+ * atrib + Claude Agent SDK. Case A: instrument in-process tools
  *
  * Your tools are defined in your own TypeScript with createSdkMcpServer().
  * Adding atrib is one extra line: call atrib() on the server's .instance.
@@ -59,7 +59,7 @@ const weatherServer = createSdkMcpServer({
 const ATRIB_KEY = process.env.ATRIB_PRIVATE_KEY
 if (!ATRIB_KEY) {
   console.warn(
-    'ATRIB_PRIVATE_KEY not set — atrib will operate in pass-through mode (no records emitted).',
+    'ATRIB_PRIVATE_KEY not set. atrib will operate in pass-through mode (no records emitted).',
   )
 }
 

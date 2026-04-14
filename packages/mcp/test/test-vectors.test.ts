@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Appendix A test vectors — exact values from the atrib specification.
+ * Appendix A test vectors. exact values from the atrib specification.
  *
  * If anyone changes the signing code, canonicalization, or hashing,
  * this test fails. Every expected value below is copied verbatim from
@@ -88,7 +88,7 @@ function makeUnsignedRecord(): AtribRecord {
     event_type: 'tool_call',
     context_id: CONTEXT_ID,
     timestamp: TIMESTAMP,
-    signature: '', // placeholder — will be replaced by signRecord
+    signature: '', // placeholder. will be replaced by signRecord
   } as AtribRecord
 }
 
@@ -96,7 +96,7 @@ function makeUnsignedRecord(): AtribRecord {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('Appendix A — test vectors', () => {
+describe('Appendix A: test vectors', () => {
   it('derives the correct public key from the private key seed', async () => {
     const pubKey = await getPublicKey(PRIVATE_KEY)
     expect(hexEncode(pubKey)).toBe(PUBLIC_KEY_HEX)

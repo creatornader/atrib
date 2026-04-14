@@ -290,7 +290,7 @@ describe('proof correctness under load', () => {
       checkpoints.push(await getCheckpoint(server.url))
     }
 
-    // Extract key IDs from the signature lines (format: — origin keyid+sig)
+    // Extract key IDs from the signature lines (format:. origin keyid+sig)
     const keyIds = checkpoints.map((cp) => {
       const sigLine = cp.split('\n').find((l) => l.startsWith('—'))!
       // Key ID is between the origin name and the + sign

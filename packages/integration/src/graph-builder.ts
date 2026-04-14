@@ -14,7 +14,7 @@ import type { AtribRecord } from '@atrib/mcp'
 import type { GraphNode, GraphEdge, GraphResponse, EdgeType } from '@atrib/verify'
 
 /**
- * Compute the record hash (sha256 of JCS canonical form) — same algorithm
+ * Compute the record hash (sha256 of JCS canonical form). same algorithm
  * @atrib/mcp uses to derive the chain_root reference and the propagation token.
  */
 export function recordHash(record: AtribRecord): Uint8Array {
@@ -77,7 +77,7 @@ export function buildGraphFromRecords(records: AtribRecord[], contextId: string)
   const has = (a: string, b: string, t: EdgeType) =>
     edges.some((e) => e.source === a && e.target === b && e.type === t)
 
-  // Step 1 — CHAIN_PRECEDES (§3.2.4 step 1)
+  // Step 1. CHAIN_PRECEDES (§3.2.4 step 1)
   // For each non-genesis record R: find P such that sha256(jcs(P)) == R.chain_root_hash
   const hashToId = new Map<string, string>()
   for (const r of allRecords) {
@@ -96,7 +96,7 @@ export function buildGraphFromRecords(records: AtribRecord[], contextId: string)
     }
   }
 
-  // Step 2 — SESSION_PRECEDES (§3.2.4 step 2)
+  // Step 2. SESSION_PRECEDES (§3.2.4 step 2)
   // For each ordered pair (A,B) sharing context_id with no CHAIN_PRECEDES edge
   // in either direction: if A.timestamp < B.timestamp → SESSION_PRECEDES A → B
   const sessionOnly = sessionRecords
@@ -114,7 +114,7 @@ export function buildGraphFromRecords(records: AtribRecord[], contextId: string)
     }
   }
 
-  // Step 3 — SESSION_PARALLEL (§3.2.4 step 3)
+  // Step 3. SESSION_PARALLEL (§3.2.4 step 3)
   // For each pair (A,B) with no CHAIN_PRECEDES and no SESSION_PRECEDES in either
   // direction: SESSION_PARALLEL A ↔ B (undirected)
   for (let i = 0; i < sessionOnly.length; i++) {
@@ -134,7 +134,7 @@ export function buildGraphFromRecords(records: AtribRecord[], contextId: string)
     }
   }
 
-  // Step 4 — CONVERGES_ON (§3.2.4 step 4)
+  // Step 4. CONVERGES_ON (§3.2.4 step 4)
   // For each transaction T: every other in-session non-tx node N gets CONVERGES_ON N → T
   const sessionTxNodes = nodes.filter(
     (n) => n.event_type === 'transaction' && n.context_id === contextId,
@@ -147,7 +147,7 @@ export function buildGraphFromRecords(records: AtribRecord[], contextId: string)
     }
   }
 
-  // Step 5 — CROSS_SESSION (§3.2.4 step 5)
+  // Step 5. CROSS_SESSION (§3.2.4 step 5)
   // For each transaction T: search for tool_call A where A.context_id ≠ T.context_id
   // AND A.session_token === T.session_token (both must be present)
   for (const tx of sessionTxNodes) {

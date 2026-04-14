@@ -63,7 +63,7 @@ describe('createSubmissionQueue', () => {
   })
 
   it('caches proof bundle on successful submission', async () => {
-    // Spec §2.6.2 — fields are snake_case on the wire
+    // Spec §2.6.2. fields are snake_case on the wire
     const proof = {
       log_index: 42,
       checkpoint: 'log.test/v1\n43\nrootHashBase64\n',
@@ -203,7 +203,7 @@ describe('createSubmissionQueue', () => {
 
     queue.submit(record, 'normal')
     await advanceUntilSettled()
-    // flush retries pending records — this time fetch succeeds
+    // flush retries pending records. this time fetch succeeds
     await queue.flush()
 
     const proof = queue.getProof(hash)
@@ -274,7 +274,7 @@ describe('createSubmissionQueue', () => {
     expect(headers['X-atrib-Priority']).toBe('normal')
   })
 
-  it('flush() drains pendingRecords in priority order — high before normal', async () => {
+  it('flush() drains pendingRecords in priority order. high before normal', async () => {
     // Three records, two normal and one high. The first 6 fetch calls fail
     // (3 retries × 2 records, since the high-priority record is submitted
     // last and shares the failure run). On flush(), the records are retried
@@ -322,7 +322,7 @@ describe('createSubmissionQueue', () => {
       return signRecord(record, TEST_KEY)
     }
 
-    // Submit normal, normal, high — in arrival order. The high one comes
+    // Submit normal, normal, high. in arrival order. The high one comes
     // last, but flush() should retry it first because of priority ordering.
     const normalA = await makeRecordAt(1743850000001)
     const normalB = await makeRecordAt(1743850000002)

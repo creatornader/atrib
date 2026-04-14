@@ -54,8 +54,8 @@ export async function signRecommendation(
 /**
  * Verify the Ed25519 signature on a recommendation document.
  *
- * @param doc — the document with `signature` populated
- * @param publicKey — base64url-encoded 32-byte public key of `calculated_by`
+ * @param doc. the document with `signature` populated
+ * @param publicKey. base64url-encoded 32-byte public key of `calculated_by`
  * @returns true iff the signature is valid
  */
 export async function verifyRecommendationSignature(
@@ -93,7 +93,7 @@ export function distributionsMatch(
     if (aKeys[i] !== bKeys[i]) return false
     const av = a[aKeys[i]!]!
     const bv = b[bKeys[i]!]!
-    // NaN never matches anything (including itself) — calculations producing
+    // NaN never matches anything (including itself). calculations producing
     // NaN are bugs and must surface as verification failures.
     if (Number.isNaN(av) || Number.isNaN(bv)) return false
     if (Math.abs(av - bv) > tolerance) return false

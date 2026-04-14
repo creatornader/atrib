@@ -56,7 +56,7 @@ describe('token encoding/decoding', () => {
   })
 
   it('decode returns null for wrong-length components', () => {
-    // Too short — 16 bytes instead of 32
+    // Too short. 16 bytes instead of 32
     const short = base64urlEncode(new Uint8Array(16))
     const full = base64urlEncode(new Uint8Array(32))
     expect(decodeToken(`${short}.${full}`)).toBeNull()

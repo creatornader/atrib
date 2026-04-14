@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Policy builder — helper for composing policy documents from templates.
+ * Policy builder. helper for composing policy documents from templates.
  *
  * Combines a base policy with overrides for edge weights, modifiers,
  * and constraints. Fields from the override replace fields in the base;

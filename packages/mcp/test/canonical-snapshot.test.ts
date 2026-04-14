@@ -14,7 +14,7 @@ import { canonicalSigningInput } from '../src/index.js'
 import type { AtribRecord } from '../src/index.js'
 
 // ---------------------------------------------------------------------------
-// Fixed record — same inputs as Appendix A test vectors
+// Fixed record. same inputs as Appendix A test vectors
 // ---------------------------------------------------------------------------
 
 const RECORD: AtribRecord = {

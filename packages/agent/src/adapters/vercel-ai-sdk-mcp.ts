@@ -5,7 +5,7 @@
  *
  * The Vercel AI SDK exposes `createMCPClient()` (and the legacy
  * `experimental_createMCPClient()`) from `@ai-sdk/mcp`. The returned client is
- * NOT a `@modelcontextprotocol/sdk` Client — it has its own JSON-RPC
+ * NOT a `@modelcontextprotocol/sdk` Client. it has its own JSON-RPC
  * implementation (verified against `@ai-sdk/mcp@1.0.35`'s `dist/index.mjs`).
  * This means our `wrapMcpClient` adapter (which expects the structural shape
  * of `@modelcontextprotocol/sdk` Client) does not apply directly.
@@ -17,7 +17,7 @@
  *      whereas `@modelcontextprotocol/sdk` Client.callTool takes
  *      `{ name, arguments, _meta }`. Different field names, and
  *      `@ai-sdk/mcp` does not pass `_meta` through to the request layer at
- *      all — it builds the request as `{ method: 'tools/call', params: { name, arguments: args } }`
+ *      all. it builds the request as `{ method: 'tools/call', params: { name, arguments: args } }`
  *      with no `_meta` field (`dist/index.mjs:1819`).
  *
  *   2. **`tools()` builds AI-SDK-shaped tool definitions whose execute()
@@ -26,7 +26,7 @@
  *      envelope (`dist/index.mjs:1989-1991`). Wrapping at the AI SDK execute
  *      layer would lose attribution data for any structured-output tool.
  *
- * The right integration point is **`MCPClient.request()`** — the JSON-RPC
+ * The right integration point is **`MCPClient.request()`**. the JSON-RPC
  * bottleneck through which every tools/call (and tools/list, resources/read,
  * etc.) flows on its way to the transport (`dist/index.mjs:1750`). Patching
  * here lets us:
@@ -140,7 +140,7 @@ export function attributeVercelAiSdkMcp<C extends VercelAiSdkMcpClientLike>(
   client: C,
   options: AttributeVercelAiSdkMcpOptions,
 ): C {
-  // Idempotency check — don't double-patch a client. Repeat calls are a no-op.
+  // Idempotency check. don't double-patch a client. Repeat calls are a no-op.
   if ((client as unknown as Record<symbol, unknown>)[ATRIB_PATCHED] === true) {
     return client
   }

@@ -4,7 +4,7 @@
  * The canonical atrib attribution record (§1.2).
  *
  * session_token is optional and MUST be omitted (not null, not undefined)
- * when absent — its presence changes the JCS canonical form and therefore
+ * when absent. its presence changes the JCS canonical form and therefore
  * the signature.
  */
 export type AtribRecord = {
@@ -18,13 +18,13 @@ export type AtribRecord = {
   signature: string
 } & ({ session_token: string } | { session_token?: never })
 
-/** An unsigned record — all fields except signature. */
+/** An unsigned record. all fields except signature. */
 export type UnsignedAtribRecord = Omit<AtribRecord, 'signature'>
 
 /** A decoded propagation token (§1.5.2). */
 export interface DecodedToken {
-  recordHash: Uint8Array // 32 bytes — SHA-256 of the JCS-canonical signed record
-  creatorKey: Uint8Array // 32 bytes — Ed25519 public key
+  recordHash: Uint8Array // 32 bytes. SHA-256 of the JCS-canonical signed record
+  creatorKey: Uint8Array // 32 bytes. Ed25519 public key
 }
 
 /** Event types recognized in atrib/1.0 (§1.2.4). */

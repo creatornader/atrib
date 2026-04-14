@@ -58,7 +58,7 @@ function sumValues(obj: Record<string, number>): number {
 
 // ─── tests ──────────────────────────────────────────────────────────────────
 
-describe('calculate() — preconditions', () => {
+describe('calculate(): preconditions', () => {
   it('returns empty distribution when no transaction node present', () => {
     const g = makeGraph([node('a', 'tool_call', 'KEY_A')], [])
     expect(calculate(g, DEFAULT_POLICY)).toEqual({})
@@ -69,7 +69,7 @@ describe('calculate() — preconditions', () => {
   })
 })
 
-describe('calculate() — default policy, equal-weight distribution', () => {
+describe('calculate(): default policy, equal-weight distribution', () => {
   it('distributes equally between two signed contributors', () => {
     const g = makeGraph(
       [
@@ -148,7 +148,7 @@ describe('calculate() — default policy, equal-weight distribution', () => {
   })
 })
 
-describe('calculate() — determinism (CLAUDE.md invariant #3)', () => {
+describe('calculate(): determinism (CLAUDE.md invariant #3)', () => {
   it('produces identical output across runs on identical input', () => {
     const g = makeGraph(
       [
@@ -188,7 +188,7 @@ describe('calculate() — determinism (CLAUDE.md invariant #3)', () => {
   })
 })
 
-describe('calculate() — edge type max() weighting (§4.2.2)', () => {
+describe('calculate(): edge type max() weighting (§4.2.2)', () => {
   it('uses max(edge_weights) when a node has multiple paths to transaction', () => {
     const policy: PolicyDocument = {
       spec_version: 'atrib/1.0',
@@ -222,7 +222,7 @@ describe('calculate() — edge type max() weighting (§4.2.2)', () => {
   })
 })
 
-describe('calculate() — modifiers (§4.6.3)', () => {
+describe('calculate(): modifiers (§4.6.3)', () => {
   it('temporal_decay halves score per half-life', () => {
     // tx at t=2000, contributor at t=1000, half_life=1000 → factor 0.5
     const policy: PolicyDocument = {
@@ -279,7 +279,7 @@ describe('calculate() — modifiers (§4.6.3)', () => {
   })
 })
 
-describe('calculate() — constraints (§4.6.4) — node-level', () => {
+describe('calculate(): constraints (§4.6.4). node-level', () => {
   // §4.6.4 minimum_share / maximum_share apply to per-NODE normalized fractions
   // BEFORE aggregation by creator. Tests use distinct creators per node so the
   // post-aggregation distribution matches the per-node distribution.
@@ -342,7 +342,7 @@ describe('calculate() — constraints (§4.6.4) — node-level', () => {
 
   it('falls back to equal distribution when floor cannot be honored', () => {
     // Three nodes all with equal weight 1 → raw 1/3 each
-    // Floor 0.5 — impossible to give all three at least 0.5 (sum 1.5 > 1.0)
+    // Floor 0.5. impossible to give all three at least 0.5 (sum 1.5 > 1.0)
     // Equal-distribution fallback: each = 1/3
     const policy: PolicyDocument = {
       spec_version: 'atrib/1.0',
@@ -369,7 +369,7 @@ describe('calculate() — constraints (§4.6.4) — node-level', () => {
   })
 })
 
-describe('calculate() — creator floors (§4.6.7)', () => {
+describe('calculate(): creator floors (§4.6.7)', () => {
   it('boosts a creator to its floor and scales others down', () => {
     const sessionPolicy: SessionPolicyRecord = {
       spec_version: 'atrib/1.0',
@@ -451,7 +451,7 @@ describe('calculate() — creator floors (§4.6.7)', () => {
   })
 })
 
-describe('calculate() — chain_depth_penalty modifier (§4.6.3)', () => {
+describe('calculate(): chain_depth_penalty modifier (§4.6.3)', () => {
   it('penalizes nodes by their chain depth from a transaction', () => {
     // Build a chain: a → b → c → t
     // Depths via CHAIN_PRECEDES from each node to t:
@@ -527,7 +527,7 @@ describe('calculate() — chain_depth_penalty modifier (§4.6.3)', () => {
   })
 })
 
-describe('calculate() — call_count_boost modifier (§4.6.3)', () => {
+describe('calculate(): call_count_boost modifier (§4.6.3)', () => {
   it('boosts nodes that share content_id with other nodes', () => {
     // Three calls to the same tool (same content_id), one to a different one.
     // multiplier_per_call=0.5, cap=10:
@@ -590,7 +590,7 @@ describe('calculate() — call_count_boost modifier (§4.6.3)', () => {
   })
 })
 
-describe('calculate() — edge cases', () => {
+describe('calculate(): edge cases', () => {
   it('returns empty distribution when all contributors are gap nodes under zero weight', () => {
     const g = makeGraph(
       [
@@ -624,7 +624,7 @@ describe('calculate() — edge cases', () => {
   })
 
   it('handles multi-transaction graph (uses first tx for modifier reference)', () => {
-    // Locks in current behavior — multi-tx is v2 deferred but we should not crash
+    // Locks in current behavior. multi-tx is v2 deferred but we should not crash
     const g = makeGraph(
       [
         node('a', 'tool_call', 'KEY_A'),
@@ -742,7 +742,7 @@ describe('isValidPolicy + §4.6.1 fall-back to default', () => {
   })
 })
 
-describe('calculate() — distribution always sums to 1.0', () => {
+describe('calculate(): distribution always sums to 1.0', () => {
   it('every output sums to 1.0 within tolerance', () => {
     const g = makeGraph(
       [

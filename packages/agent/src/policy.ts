@@ -209,7 +209,7 @@ function negotiatePolicies(
   }
 
   // Rule 3: Check if single creator floor exceeds merchant cap (BEFORE scaling)
-  // Must check before Rule 2 scaling — a single floor > cap is irreconcilable
+  // Must check before Rule 2 scaling. a single floor > cap is irreconcilable
   if (merchantCap !== undefined) {
     for (const entry of creatorEntries) {
       const floor = entry.policy?.constraints?.minimum_own_share
@@ -219,7 +219,7 @@ function negotiatePolicies(
             `falling back to default`,
         )
         // Only mark creators whose floor actually exceeds the cap as
-        // conflict_defaulted — creators with floors that fit are not at fault.
+        // conflict_defaulted. creators with floors that fit are not at fault.
         for (const e of creatorEntries) {
           const eFloor = e.policy?.constraints?.minimum_own_share
           if (e.status !== 'not_found' && eFloor !== undefined && eFloor > merchantCap) {
@@ -248,7 +248,7 @@ function negotiatePolicies(
     }
   }
 
-  // Rule 4: Edge weight disagreements — merchant governs (advisory only for creators)
+  // Rule 4: Edge weight disagreements. merchant governs (advisory only for creators)
 
   const agreedPolicy = merchantPolicyUrl !== 'default' ? merchantPolicyUrl : 'default'
   return { agreedPolicy, minimumFloors, negotiationWarnings: warnings }
@@ -282,7 +282,7 @@ function buildSessionPolicyRecord(
   }
 
   // Compute record_id = sha256 of JCS canonical form, excluding record_id
-  // and warnings (warnings are mutable — runtime warnings are appended after
+  // and warnings (warnings are mutable. runtime warnings are appended after
   // negotiation, so including them would make record_id stale).
   const { record_id: _, warnings: _w, ...forHashing } = record
   const canonical = canonicalize(forHashing)

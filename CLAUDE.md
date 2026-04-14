@@ -133,7 +133,7 @@ packages/<name>/
   tsconfig.json
 ```
 
-The `@atrib/integration` package additionally has an `examples/` directory containing one runnable example per supported framework (excluded from `tsconfig` so examples typecheck against user-installed dependency versions, not the workspace build). New framework support always ships with both a unit test in `packages/agent/test/` and a runnable example in `packages/integration/examples/`.
+The `@atrib/integration` package also has an `examples/` directory containing one runnable example per supported framework (excluded from `tsconfig` so examples typecheck against user-installed dependency versions, not the workspace build). New framework support always ships with both a unit test in `packages/agent/test/` and a runnable example in `packages/integration/examples/`.
 
 ### Framework adapter pattern (established by D018, D021, D022, D023, D024)
 

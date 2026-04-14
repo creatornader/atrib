@@ -12,7 +12,7 @@
  *   5. Verify the checkpoint Ed25519 signature with the log's public key
  *   6. Verify inclusion: extract root from checkpoint, run verifyInclusion
  *
- * ALL CHECKS MUST PASS — if any fails the system is broken.
+ * ALL CHECKS MUST PASS. if any fails the system is broken.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
@@ -53,7 +53,7 @@ async function makeSignedRecord(): Promise<{ record: AtribRecord; privateKey: Ui
     creator_key: creatorKey,
     chain_root: chainRoot,
     content_id: 'sha256:' + hexEncode(sha256(new TextEncoder().encode('verification-test'))),
-    signature: '', // placeholder — signRecord will replace
+    signature: '', // placeholder. signRecord will replace
   }
 
   // Use signRecord which correctly strips signature before signing (§1.4.3)

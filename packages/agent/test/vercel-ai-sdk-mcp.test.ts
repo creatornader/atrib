@@ -1,5 +1,5 @@
 /**
- * Tests for attributeVercelAiSdkMcp() — the helper that patches an
+ * Tests for attributeVercelAiSdkMcp(). the helper that patches an
  * `@ai-sdk/mcp` MCPClient's `request` method so outbound `tools/call`s flow
  * through atrib's interceptor.
  *
@@ -137,7 +137,7 @@ describe('attributeVercelAiSdkMcp', () => {
     const sentMeta = sentParams._meta as Record<string, unknown>
     // traceparent is the always-set W3C field on the first call of a session
     // (we assert on traceparent rather than `atrib` because the atrib token
-    // is only set on the second+ call when chaining from a prior response —
+    // is only set on the second+ call when chaining from a prior response.
     // see packages/agent/src/session.ts buildOutboundMeta lines 117-122)
     expect(typeof sentMeta.traceparent).toBe('string')
     expect(sentMeta.traceparent as string).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/)
@@ -218,7 +218,7 @@ describe('attributeVercelAiSdkMcp', () => {
     await interceptor.flush()
   })
 
-  it('is idempotent — second call to the helper is a no-op', async () => {
+  it('is idempotent. second call to the helper is a no-op', async () => {
     const client = makeFakeClient({})
     const interceptor = createInterceptor({ creatorKey: AGENT_KEY })
 

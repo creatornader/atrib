@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// @atrib/mcp — Public API
+// @atrib/mcp. Public API
 
 // Middleware (primary export)
 export { atrib } from './middleware.js'

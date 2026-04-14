@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * @atrib/agent middleware — the atrib() wrapper for agents (§5.4).
+ * @atrib/agent middleware. the atrib() wrapper for agents (§5.4).
  *
  * Wraps an agent or MCP client to automatically manage attribution
  * context across tool calls. Zero ongoing surface area.
@@ -48,7 +48,7 @@ export interface AgentAtribOptions {
 export interface ToolCallInterceptor {
   /**
    * Called before a tool call is sent. Returns modified _meta to attach.
-   * MUST be awaited — session initialization happens here on the first call.
+   * MUST be awaited. session initialization happens here on the first call.
    */
   onBeforeToolCall(
     toolName: string,
@@ -164,7 +164,7 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
         // §5.4.2: Session init MUST complete before the first outbound tool call
         await ensureInitialized()
 
-        // Build outbound _meta — passes existing so baggage/tracestate are appended,
+        // Build outbound _meta. passes existing so baggage/tracestate are appended,
         // not clobbered (§5.4.3 W3C semantics)
         const outbound = buildOutboundMeta(session, meta)
 
@@ -200,14 +200,14 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
         const detection = detectTransaction(toolName, response, callOptions?.headers)
 
         if (detection.detected) {
-          // Path 1: Merchant has @atrib/mcp — token present in response
+          // Path 1: Merchant has @atrib/mcp. token present in response
           if (hasAtribToken) {
             // Path 1: Skip emission, merchant already emitted transaction record.
             return
           }
 
-          // Path 2: No attribution token — agent emits transaction record
-          // §5.4.6: warnings are appended throughout the session — push to BOTH
+          // Path 2: No attribution token. agent emits transaction record
+          // §5.4.6: warnings are appended throughout the session. push to BOTH
           // session.warnings (for in-memory tracking) and sessionPolicyRecord.warnings
           // (so getSessionPolicyRecord() callers see them)
           addRuntimeWarning('transaction_emitted_by_agent')
@@ -332,7 +332,7 @@ async function emitTransactionRecord(
 
   const signed = await signRecord(record, privateKey)
 
-  // Submit immediately — transaction records are the closing anchor
+  // Submit immediately. transaction records are the closing anchor
   queue.submit(signed, 'high')
 }
 

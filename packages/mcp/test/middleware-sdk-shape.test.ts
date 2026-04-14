@@ -95,7 +95,7 @@ describe('atrib() end-to-end against the real MCP SDK', () => {
     // Register a real tool through the high-level API. The SDK lazily
     // installs its tools/call dispatcher on first registration; our patch
     // intercepts that registration.
-    // Use the deprecated `tool()` API with no input schema — avoids needing
+    // Use the deprecated `tool()` API with no input schema. avoids needing
     // zod as a direct dep just for the test. Both `.tool()` and
     // `.registerTool()` go through the same low-level setRequestHandler
     // path, so this exercises the same code we care about.
@@ -152,7 +152,7 @@ describe('atrib() end-to-end against the real MCP SDK', () => {
     await wrapped.flush()
 
     // An attribution record was submitted to the log. The body IS the
-    // record per §2.6.1 — no wrapper.
+    // record per §2.6.1. no wrapper.
     expect(submissions.length).toBeGreaterThan(0)
     expect(submissions[0]!.event_type).toBe('tool_call')
     expect(submissions[0]!.content_id).toMatch(/^sha256:[0-9a-f]{64}$/)
@@ -173,7 +173,7 @@ describe('atrib() end-to-end against the real MCP SDK', () => {
 
     const mcpServer = new McpServer({ name: 'test', version: '1.0.0' })
 
-    // Register the tool BEFORE wrapping — this installs the dispatcher
+    // Register the tool BEFORE wrapping. this installs the dispatcher
     // eagerly, so our setRequestHandler patch arrives too late.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(mcpServer as any).tool('echo', async () => ({

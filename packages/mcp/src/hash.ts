@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * SHA-256 hashing — Web Crypto API with Node.js crypto fallback.
+ * SHA-256 hashing. Web Crypto API with Node.js crypto fallback.
  */
 
 /**

@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * `@atrib/log-dev` — public API.
+ * `@atrib/log-dev`. public API.
  *
  * ⚠️ NOT FOR PRODUCTION USE. See README.md for the full warning.
  *
  * Single entry point: `startDevLog(options?)` returns a running dev log
  * with an HTTP submission endpoint, an inspection API for tests/demos,
  * and a `close()` method for cleanup. The package is `private: true` and
- * cannot be published to npm — it is a workspace-internal fixture only.
+ * cannot be published to npm. it is a workspace-internal fixture only.
  */
 
 import {
@@ -41,7 +41,7 @@ export interface DevLog {
   readonly url: string
 
   /**
-   * The submission endpoint URL — pass this to `@atrib/mcp`'s
+   * The submission endpoint URL. pass this to `@atrib/mcp`'s
    * `atrib({ logEndpoint: ... })` option, or to any other atrib client
    * that needs a log endpoint.
    */

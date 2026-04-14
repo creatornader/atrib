@@ -270,7 +270,7 @@ describe('merchant-capped-40pct.json', () => {
     // but individual node shares should be capped
     expect(sum(d)).toBeCloseTo(1.0, 8)
     // Small contributor should get at least minimum_share (0.05)
-    // (depends on how many nodes — with 9 nodes, each normalized to ~1/9 ≈ 0.11, all above 0.05)
+    // (depends on how many nodes. with 9 nodes, each normalized to ~1/9 ≈ 0.11, all above 0.05)
   })
 
   it('includes recency weighting (temporal_decay) with 3+ contributors', async () => {

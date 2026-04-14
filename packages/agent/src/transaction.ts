@@ -11,17 +11,17 @@
  *        rfcs/rfc.agentic_checkout.md
  * - UCP: github.com/universal-commerce-protocol/ucp
  *        docs/specification/checkout-rest.md (version 2026-01-11)
- * - AP2: github.com/google-agentic-commerce/ap2 (v0.1) — A2A Message with a
+ * - AP2: github.com/google-agentic-commerce/ap2 (v0.1). A2A Message with a
  *        DataPart containing the key `ap2.mandates.PaymentMandate`. AP2 does
  *        NOT currently use W3C Verifiable Credentials despite earlier drafts
  *        of this code and the atrib spec assuming it would.
- * - a2a-x402: github.com/google-agentic-commerce/a2a-x402 — extension that
+ * - a2a-x402: github.com/google-agentic-commerce/a2a-x402. extension that
  *        layers x402 crypto payments over A2A. Detection signal is
  *        `status.message.metadata["x402.payment.status"] === "payment-completed"`
  *        with at least one `success: true` entry in
  *        `status.message.metadata["x402.payment.receipts"]`. Both shapes are
  *        reported as `protocol: 'AP2'` since a2a-x402 IS the AP2 crypto path.
- * - x402: github.com/coinbase/x402 — response header `PAYMENT-RESPONSE` (v2)
+ * - x402: github.com/coinbase/x402. response header `PAYMENT-RESPONSE` (v2)
  *        or `X-PAYMENT-RESPONSE` (v1 legacy). Value is base64-encoded JSON
  *        with shape { success: bool, transaction, network, payer, requirements }.
  * - MPP: IETF draft-ryan-httpauth-payment-01 ("The 'Payment' HTTP Authentication
@@ -32,7 +32,7 @@
  *
  * x402 and MPP are DIFFERENT protocols that use DIFFERENT headers. Earlier
  * versions of this code conflated them on a fictitious shared `Payment-Receipt`
- * header — see DECISIONS.md D016 for the verification trail.
+ * header. see DECISIONS.md D016 for the verification trail.
  */
 
 export type TransactionProtocol = 'ACP' | 'UCP' | 'x402' | 'MPP' | 'AP2' | 'heuristic'
@@ -108,17 +108,17 @@ export function detectTransaction(
     for (const [k, v] of Object.entries(headers)) {
       if (typeof v === 'string') lower[k.toLowerCase()] = v
     }
-    // x402 — accept v2 and v1 names
+    // x402. accept v2 and v1 names
     if (lower['payment-response'] || lower['x-payment-response']) {
       return { detected: true, protocol: 'x402', checkoutUrl: null }
     }
-    // MPP — IETF draft Payment-Receipt header
+    // MPP. IETF draft Payment-Receipt header
     if (lower['payment-receipt']) {
       return { detected: true, protocol: 'MPP', checkoutUrl: null }
     }
   }
 
-  // AP2 v0.1 — PaymentMandate Message inside an A2A DataPart.
+  // AP2 v0.1. PaymentMandate Message inside an A2A DataPart.
   // Source: github.com/google-agentic-commerce/ap2 docs/specification.md
   // Shape: { ..., parts: [{ kind: "data", data: { "ap2.mandates.PaymentMandate": {...} } }, ...] }
   if (resp) {
@@ -138,7 +138,7 @@ export function detectTransaction(
       }
     }
 
-    // a2a-x402 extension — payment-completed via A2A task status metadata.
+    // a2a-x402 extension. payment-completed via A2A task status metadata.
     // Source: github.com/google-agentic-commerce/a2a-x402 spec/v0.1/spec.md
     // Shape: { kind: "task", status: { message: { metadata: { "x402.payment.status": "payment-completed", "x402.payment.receipts": [{success, transaction, ...}] } } } }
     // Guard on kind === "task" to prevent false positives from responses

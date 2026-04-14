@@ -15,7 +15,7 @@ import type { AtribRecord, DecodedToken } from './types.js'
 /**
  * Encode a propagation token from a signed record (§1.5.2).
  *
- * record_hash = SHA-256(JCS(signed_record)) — raw bytes, no "sha256:" prefix
+ * record_hash = SHA-256(JCS(signed_record)). raw bytes, no "sha256:" prefix
  * creator_key = raw 32-byte Ed25519 public key decoded from the record
  */
 export function encodeToken(record: AtribRecord): string {
