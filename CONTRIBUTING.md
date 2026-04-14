@@ -1,8 +1,6 @@
 # Contributing to Atrib
 
-Thank you for your interest in contributing to Atrib.
-
-## Development Setup
+## Development setup
 
 ```bash
 # Prerequisites

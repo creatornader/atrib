@@ -2,7 +2,7 @@
 
 Value provenance infrastructure for the agent economy.
 
-Atrib makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance. It is the missing infrastructure layer between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP/AP2).
+Atrib makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance. It sits between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP/AP2), a layer that doesn't exist yet.
 
 ## The problem
 
@@ -14,17 +14,17 @@ Advertising exists because there is no native provenance infrastructure on the i
 
 Atrib records the structural relationships in agent sessions, which tool calls happened, in what order, in what context, without recording the content of those interactions. When a transaction completes, the attribution chain is already there: signed, tamper-evident, and verifiable by any party.
 
-- **Attribution records** travel with every MCP tool call, signed by the creator (Ed25519, JCS-canonicalized)
-- **A Merkle log** provides global verifiability without exposing content (C2SP tlog-tiles, Tessera-backed)
-- **An attribution graph** connects tool calls to transaction outcomes via five deterministically-derived edge types
-- **Attribution policies** let creators and merchants express what contributions are worth
-- **Settlement recommendations** map the graph to value distribution under agreed policies
+- Attribution records travel with every MCP tool call, signed by the creator (Ed25519, JCS-canonicalized)
+- A Merkle log provides global verifiability without exposing content (C2SP tlog-tiles, Tessera-backed)
+- An attribution graph connects tool calls to transaction outcomes via five deterministically-derived edge types
+- Attribution policies let creators and merchants express what contributions are worth
+- Settlement recommendations map the graph to value distribution under agreed policies
 
 The protocol records facts. What those facts are worth is a policy judgment made by the parties involved, not by Atrib.
 
 ## Two coverage surfaces
 
-Atrib's value to a customer is defined by two things: which MCP frameworks you can drop it into, and which agent payment protocols it sits above. One install covers both axes.
+Two things determine whether Atrib works for you: which MCP framework you use, and which payment protocol your merchants are on. One install covers both.
 
 ### MCP framework adapters
 
@@ -56,7 +56,7 @@ Atrib **detects** transaction events from any of these, it does not implement pa
 
 ## Try it in one command
 
-The `@atrib/integration` package ships a runnable end-to-end demo that wires together all the moving pieces in a single process: a fake MCP merchant tool server, a fake AI agent, the production transaction-detection logic, and a development-mode Merkle log. One command, one terminal window, full attribution chain visible in real time.
+The `@atrib/integration` package has a runnable demo that wires together everything in a single process: a fake MCP merchant tool server, a fake AI agent, the production transaction-detection logic, and a dev-mode Merkle log. One command, one terminal.
 
 ```bash
 ATRIB_PRIVATE_KEY=$(node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))') \
@@ -74,7 +74,7 @@ Output (colorized in a real terminal):
 [demo] 3 records in the log (2 tool_call, 1 transaction)
 ```
 
-Every signed record, every chain hash, and every transaction detection in that output is real and uses the production code paths. The fakery is in the surrounding environment (the merchant returns hardcoded search results, the x402 payment is a stubbed header), not in the protocol layer. See [`packages/integration/examples/end-to-end/`](packages/integration/examples/end-to-end/) for the full walkthrough.
+The signed records, chain hashes, and transaction detection are all real production code paths. The fakes are the surrounding environment (hardcoded search results, stubbed x402 payment header), not the protocol. See [`packages/integration/examples/end-to-end/`](packages/integration/examples/end-to-end/) for the full walkthrough.
 
 ## Packages
 
@@ -106,7 +106,7 @@ One line. Everything else is automatic: every successful tool call emits a signe
 
 ### Agent (consumer side), pick your framework
 
-`@atrib/agent` exports one core interceptor (`atrib()`) plus adapter helpers for every supported framework. The adapter name varies because the host framework's surface varies, but the `atrib()` interceptor setup is identical across all of them. See [`packages/agent/README.md`](packages/agent/README.md) for side-by-side quick-starts for every framework. Examples for each:
+`@atrib/agent` exports one interceptor (`atrib()`) plus an adapter helper per framework. The adapter name varies because each framework's surface varies, but `atrib()` setup is the same everywhere. See [`packages/agent/README.md`](packages/agent/README.md) for side-by-side quick-starts.
 
 | Example                                                          | Path                                                                                                   |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -154,15 +154,15 @@ The complete protocol specification is in [`atrib-spec.md`](./atrib-spec.md). It
 
 ## Design principles
 
-1. **Provenance travels with the artifact.** Embedded at creation time, not inferred later.
-2. **Accountability without content exposure.** The log stores hashes, not content.
-3. **Settlement is separate from attribution.** The protocol records what happened. It does not move money.
-4. **No central arbiter of value.** Trust from math and open spec, not from trusting Atrib Inc.
-5. **The protocol is a public good; the product is not.** Spec, signing libraries, and transparency log infrastructure are open. The queryable graph and analytics are commercial.
+1. Provenance travels with the artifact. Embedded at creation time, not inferred later.
+2. Accountability without content exposure. The log stores hashes, not content.
+3. Settlement is separate from attribution. The protocol records what happened. It does not move money.
+4. No central arbiter of value. Trust from math and open spec, not from trusting Atrib Inc.
+5. The protocol is a public good; the product is not. Spec, signing libraries, and log infrastructure are open. The queryable graph and analytics are commercial.
 
 ## Architecture
 
-For a deep technical overview of how the protocol layers fit together, the trust model, and key design decisions, see [ARCHITECTURE.md](ARCHITECTURE.md).
+How the protocol layers fit together, the trust model, and why the design is the way it is: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Prior art
 
