@@ -115,7 +115,7 @@ Until the SDK serves the endpoint, you can serve the JSON from any static file h
 
 ## Spec reference
 
-- [§4.2 Policy Document Format](../atrib-spec.md#42-policy-document-format) — full schema
-- [§4.3 The Default Policy](../atrib-spec.md#43-the-default-policy) — what happens with no custom policy
-- [§4.5 Session Negotiation](../atrib-spec.md#45-session-negotiation) — how creator and merchant policies merge
-- [§4.6 The Calculation Algorithm](../atrib-spec.md#46-the-calculation-algorithm) — how the distribution is computed
+- [§4.2 Policy Document Format](../atrib-spec.md#42-policy-document-format): full schema
+- [§4.3 The Default Policy](../atrib-spec.md#43-the-default-policy): what happens with no custom policy
+- [§4.5 Session Negotiation](../atrib-spec.md#45-session-negotiation): how creator and merchant policies merge
+- [§4.6 The Calculation Algorithm](../atrib-spec.md#46-the-calculation-algorithm): how the distribution is computed
