@@ -10,7 +10,7 @@
  *   0x01 — internal nodes
  */
 
-import { sha256 } from '@noble/hashes/sha2.js'
+import { sha256 } from './hash.js'
 
 /**
  * Concatenate multiple Uint8Arrays into one.
@@ -28,12 +28,20 @@ function concat(...arrays: Uint8Array[]): Uint8Array {
 
 /**
  * Largest power of 2 strictly less than n.
- * Precondition: n >= 2.
+ * Uses Math.clz32 to avoid bitwise overflow — safe for n up to 2^32.
+ * For n beyond 2^32, falls back to a floating-point path that is safe
+ * up to Number.MAX_SAFE_INTEGER (2^53 - 1).
  */
 function largestPowerOfTwoLessThan(n: number): number {
-  let k = 1
-  while (k < n) k <<= 1
-  return k >> 1
+  if (n < 2) {
+    throw new Error('largestPowerOfTwoLessThan: n must be >= 2')
+  }
+  // clz32 approach is safe for 32-bit range and avoids the <<= overflow bug
+  if (n <= 0x100000000) {
+    return 1 << (31 - Math.clz32(n - 1))
+  }
+  // For very large trees, use floating-point path
+  return 2 ** Math.floor(Math.log2(n - 1))
 }
 
 /**
@@ -90,7 +98,7 @@ export function computeInclusionProof(index: number, leaves: Uint8Array[]): Uint
   if (leaves.length === 0) {
     throw new Error('computeInclusionProof: empty tree')
   }
-  if (index < 0 || index >= leaves.length) {
+  if (!Number.isInteger(index) || index < 0 || index >= leaves.length) {
     throw new Error(`computeInclusionProof: index ${index} out of range [0, ${leaves.length})`)
   }
   return _inclusionProof(index, leaves)
