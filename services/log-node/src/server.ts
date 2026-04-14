@@ -55,6 +55,7 @@ export async function bindServer(
 
   const server = createServer((req, res) => {
     handleRequest(req, res, tree, signer, proofCache).catch((err) => {
+      // eslint-disable-next-line no-console
       console.error('atrib-log-node: request handler crashed', err)
       if (!res.headersSent) {
         res.statusCode = 500
@@ -121,18 +122,18 @@ async function handleSubmit(
   try {
     parsed = JSON.parse(body)
   } catch {
-    return rejectWith(res, 400, 'invalid json body')
+    return reject(res, 400, 'invalid json body')
   }
 
   if (typeof parsed !== 'object' || parsed === null) {
-    return rejectWith(res, 400, 'body must be a json object — the bare attribution record per §2.6.1')
+    return reject(res, 400, 'body must be a json object — the bare attribution record per §2.6.1')
   }
 
   const record = parsed as Partial<AtribRecord>
 
   // §2.6.1 Step 2: spec_version must be 'atrib/1.0'
   if (record.spec_version !== SPEC_VERSION) {
-    return rejectWith(
+    return reject(
       res,
       400,
       `spec_version must be '${SPEC_VERSION}', got ${JSON.stringify(record.spec_version)}`,
@@ -141,7 +142,7 @@ async function handleSubmit(
 
   // §2.6.1 Step 3: event_type must be a known value
   if (typeof record.event_type !== 'string' || !VALID_EVENT_TYPES.has(record.event_type)) {
-    return rejectWith(
+    return reject(
       res,
       400,
       `event_type must be one of ${[...VALID_EVENT_TYPES].join(', ')}, got ${JSON.stringify(record.event_type)}`,
@@ -150,10 +151,10 @@ async function handleSubmit(
 
   // §2.6.1 Step 4: timestamp not more than 10 minutes in the future
   if (typeof record.timestamp !== 'number') {
-    return rejectWith(res, 400, 'timestamp must be a number (ms since epoch)')
+    return reject(res, 400, 'timestamp must be a number (ms since epoch)')
   }
   if (record.timestamp - Date.now() > MAX_FUTURE_SKEW_MS) {
-    return rejectWith(res, 400, 'timestamp is more than 10 minutes in the future')
+    return reject(res, 400, 'timestamp is more than 10 minutes in the future')
   }
 
   // §2.6.1 Step 5: context_id must be exactly 32 lowercase hex chars
@@ -161,13 +162,13 @@ async function handleSubmit(
     typeof record.context_id !== 'string' ||
     !/^[0-9a-f]{32}$/.test(record.context_id)
   ) {
-    return rejectWith(res, 400, 'context_id must be 32 lowercase hex characters')
+    return reject(res, 400, 'context_id must be 32 lowercase hex characters')
   }
 
   // Required string fields for record_hash computation
   for (const field of ['creator_key', 'chain_root', 'content_id', 'signature'] as const) {
     if (typeof record[field] !== 'string') {
-      return rejectWith(res, 400, `${field} is required and must be a string`)
+      return reject(res, 400, `${field} is required and must be a string`)
     }
   }
 
@@ -244,15 +245,23 @@ async function handleCheckpoint(
   res.end(signedCheckpoint)
 }
 
-function rejectWith(res: ServerResponse, status: number, message: string): void {
+function reject(res: ServerResponse, status: number, message: string): void {
   res.statusCode = status
   res.setHeader('content-type', 'application/json')
   res.end(JSON.stringify({ error: message }))
 }
 
+const MAX_BODY_BYTES = 64 * 1024 // 64 KB — an AtribRecord is always small
+
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = []
+  let total = 0
   for await (const chunk of req) {
+    total += (chunk as Buffer).length
+    if (total > MAX_BODY_BYTES) {
+      req.destroy()
+      throw new Error('request body too large')
+    }
     chunks.push(chunk as Buffer)
   }
   return Buffer.concat(chunks).toString('utf-8')
