@@ -13,6 +13,16 @@
   "files": [
     "dist"
   ],
+  "description": "MCP server middleware, signed receipts for every tool call. One-line integration.",
+  "author": "Atrib <hello@atrib.io>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anthropics/atrib.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://atrib.io",
+  "keywords": ["mcp", "model-context-protocol", "attribution", "verifiable", "receipts", "ed25519", "merkle", "agent", "transparency"],
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
