@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * HTTP server for @atrib/log-node, production log with real Merkle proofs.
  *

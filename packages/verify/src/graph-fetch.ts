@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * HTTP fetcher for graph snapshots and session policy records.
  * Thin wrapper used by AtribVerifier.verify() / .calculate().

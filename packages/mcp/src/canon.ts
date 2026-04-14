@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * JCS canonicalization (RFC 8785) for Atrib records.
  *

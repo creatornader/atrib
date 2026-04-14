@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Proof bundle generation for `@atrib/log-dev`.
  *

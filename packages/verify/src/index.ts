@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // @atrib/verify, Merchant verification library
 
 // Verifier (primary export)

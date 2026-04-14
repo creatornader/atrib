@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Policy negotiation and session policy record (§4.5, §5.4.2, §5.4.6).
  */

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * In-memory append-only entry log for `@atrib/log-dev`.
  *

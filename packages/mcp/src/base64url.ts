@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Base64url encoding/decoding (RFC 4648 §5, no padding).
  */

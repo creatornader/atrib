@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Adapter: wrap a raw `@modelcontextprotocol/sdk` Client with Atrib attribution.
  *

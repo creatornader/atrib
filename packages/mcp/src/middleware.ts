@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * @atrib/mcp middleware, the atrib() wrapper function (§5.3).
  *

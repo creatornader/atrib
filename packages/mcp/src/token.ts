@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Propagation token encoding/decoding (§1.5.2).
  *

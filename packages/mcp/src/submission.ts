@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Non-blocking log submission with retry (§5.3.5).
  *

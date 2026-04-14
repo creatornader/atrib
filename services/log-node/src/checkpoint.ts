@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Checkpoint generation and Ed25519 signing, spec Section 2.4
  *
