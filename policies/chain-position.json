@@ -1,0 +1,20 @@
+{
+  "spec_version": "atrib/1.0",
+  "role": "merchant",
+  "edge_weights": {
+    "CHAIN_PRECEDES": 2.0,
+    "SESSION_PRECEDES": 1.0,
+    "SESSION_PARALLEL": 0.5,
+    "CONVERGES_ON": 1.0,
+    "CROSS_SESSION": 0.5,
+    "unsigned": 0.0
+  },
+  "modifiers": [
+    {
+      "type": "chain_depth_penalty",
+      "penalty_per_level": 0.15
+    }
+  ],
+  "distribution": "proportional",
+  "constraints": {}
+}
