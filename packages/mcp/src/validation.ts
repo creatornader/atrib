@@ -14,8 +14,7 @@
  */
 
 import type { AtribRecord } from './types.js'
-
-const VALID_EVENT_TYPES = new Set(['tool_call', 'transaction'])
+import { VALID_EVENT_TYPES } from './types.js'
 const SPEC_VERSION = 'atrib/1.0'
 const MAX_FUTURE_SKEW_MS = 10 * 60 * 1000 // §2.6.1 Step 4: 10 minutes
 
@@ -46,8 +45,8 @@ export function validateSubmission(record: Partial<AtribRecord>): ValidationResu
   }
 
   // Step 4: timestamp must be present and not more than 10 minutes in the future
-  if (typeof record.timestamp !== 'number') {
-    return { ok: false, status: 400, error: 'timestamp must be a number (ms since epoch)' }
+  if (typeof record.timestamp !== 'number' || !Number.isFinite(record.timestamp)) {
+    return { ok: false, status: 400, error: 'timestamp must be a finite number' }
   }
   if (record.timestamp - Date.now() > MAX_FUTURE_SKEW_MS) {
     return { ok: false, status: 400, error: 'timestamp is more than 10 minutes in the future' }

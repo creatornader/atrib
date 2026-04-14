@@ -21,7 +21,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { canonicalRecord, validateSubmission } from '@atrib/mcp'
+import { canonicalRecord, validateSubmission, hexEncode } from '@atrib/mcp'
 import { sha256 } from '@noble/hashes/sha2.js'
 import type { AtribRecord } from '@atrib/mcp'
 import type { Storage, Priority } from './storage.js'
@@ -96,7 +96,12 @@ async function handleRequest(
     return
   }
 
-  const body = await readBody(req)
+  let body: string
+  try {
+    body = await readBody(req)
+  } catch {
+    return reject(res, 413, 'request body too large')
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(body)
@@ -120,7 +125,7 @@ async function handleRequest(
 
   const fullRecord = record as AtribRecord
   const recordHashBytes = sha256(canonicalRecord(fullRecord))
-  const recordHash = bytesToHex(recordHashBytes)
+  const recordHash = hexEncode(recordHashBytes)
 
   // Read the priority header. Defaults to 'normal' for spec compliance —
   // a real Tessera log would also default to normal when the extension
@@ -147,14 +152,18 @@ function reject(res: ServerResponse, status: number, message: string): void {
   res.end(JSON.stringify({ error: message }))
 }
 
+const MAX_BODY_BYTES = 64 * 1024 // 64 KB — an AtribRecord is always small
+
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = []
+  let total = 0
   for await (const chunk of req) {
+    total += (chunk as Buffer).length
+    if (total > MAX_BODY_BYTES) {
+      req.destroy()
+      throw new Error('request body too large')
+    }
     chunks.push(chunk as Buffer)
   }
   return Buffer.concat(chunks).toString('utf-8')
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }

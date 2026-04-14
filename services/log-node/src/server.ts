@@ -13,22 +13,11 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { canonicalRecord, validateSubmission, verifyRecord, hexEncode } from '@atrib/mcp'
+import type { AtribRecord, ProofBundle } from '@atrib/mcp'
 import { sha256 } from '@noble/hashes/sha2.js'
-import type { AtribRecord } from '@atrib/mcp'
 import { serializeEntry } from './entry.js'
 import type { MerkleTree } from './tree.js'
 import type { CheckpointSigner } from './checkpoint.js'
-
-/**
- * In-memory duplicate detection cache. Keyed by record_hash hex → serialized
- * proof bundle (so we can return the exact same proof on re-submission).
- */
-export interface ProofBundle {
-  log_index: number
-  checkpoint: string
-  inclusion_proof: string[]
-  leaf_hash: string
-}
 
 export interface ServerHandle {
   url: string
