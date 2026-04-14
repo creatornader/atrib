@@ -41,3 +41,16 @@ export type { SubmissionQueue, ProofBundle } from './submission.js'
 
 // RFC 6962 Merkle tree (for log service and @atrib/verify)
 export { leafHash, nodeHash, computeRoot, computeInclusionProof, verifyInclusion } from './merkle.js'
+
+// §2.6.1 submission validation (shared between log-dev and log-node)
+export { validateSubmission, type ValidationResult } from './validation.js'
+
+// §2.3.1 log entry serialization (shared between log-dev and log-node)
+export {
+  serializeEntry,
+  ENTRY_VERSION,
+  ENTRY_SIZE,
+  EVENT_TYPE_TOOL_CALL,
+  EVENT_TYPE_TRANSACTION,
+} from './entry.js'
+export type { EntryInput } from './entry.js'
