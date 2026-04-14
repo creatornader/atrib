@@ -6,7 +6,7 @@
 
 ## What this is
 
-`@atrib/log-node` is the production log service for the atrib value provenance protocol. It accepts signed attribution records over HTTP and returns real cryptographic inclusion proofs, Merkle path from the submitted leaf to the current signed checkpoint. Checkpoint signatures use Ed25519 (RFC 8032). The checkpoint format follows the C2SP signed-note spec. The log API follows the C2SP tlog-tiles read API.
+`@atrib/log-node` is the production log service for the atrib value provenance protocol. It accepts signed attribution records over HTTP and returns real cryptographic inclusion proofs; Merkle path from the submitted leaf to the current signed checkpoint. Checkpoint signatures use Ed25519 (RFC 8032). The checkpoint format follows the C2SP signed-note spec. The log API follows the C2SP tlog-tiles read API.
 
 This package is `private: true` and is never published to npm. It is deployed as a service at `log.atrib.dev/v1`.
 
@@ -20,14 +20,14 @@ This package is `private: true` and is never published to npm. It is deployed as
 | **Checkpoint signing**  | Stub (no real signature)               | Real Ed25519 signatures                         |
 | **Conforms to spec §2** | Wire format only                       | Full                                            |
 | **Inspection API**      | Yes (`entries`, `onSubmit`, etc.)      | No                                              |
-| **npm published**       | No                                     | No, deployed as a service                      |
+| **npm published**       | No                                     | No (deployed as a service                      )|
 
 Both services speak the same `POST /v1/entries` wire format defined in spec §2.6.1, so client code is identical for both targets. Point `ATRIB_LOG_ENDPOINT` at either URL and the `@atrib/mcp` submission queue works unchanged.
 
 ## Running locally
 
 ```bash
-# Without a persistent key (random key generated on startup, proofs won't survive restarts)
+# Without a persistent key (random key generated on startup. Proofs won't survive restarts)
 pnpm --filter @atrib/log-node start
 
 # With a persistent Ed25519 key (base64url-encoded 32-byte seed)
@@ -46,7 +46,7 @@ docker run -p 3100:3100 \
   atrib-log-node
 ```
 
-The Dockerfile copies only `packages/mcp/` and `services/log-node/` into the image, the rest of the monorepo is excluded.
+The Dockerfile copies only `packages/mcp/` and `services/log-node/` into the image; the rest of the monorepo is excluded.
 
 ## Environment variables
 
@@ -67,7 +67,7 @@ node -e "const {utils} = require('@noble/ed25519'); const k = utils.randomPrivat
 
 Submit a signed attribution record. Validates the record per spec §2.6.1 Steps 1-6, appends it to the Merkle tree, and returns an inclusion proof.
 
-**Request body**, a bare signed record (JSON, `Content-Type: application/json`):
+**Request body**; a bare signed record (JSON, `Content-Type: application/json`):
 
 ```json
 {
@@ -81,7 +81,7 @@ Submit a signed attribution record. Validates the record per spec §2.6.1 Steps 
 }
 ```
 
-**Response `200 OK`**, a proof bundle (spec §2.6.2):
+**Response `200 OK`**; a proof bundle (spec §2.6.2):
 
 ```json
 {

@@ -1,8 +1,8 @@
-# atrib, Value Provenance Protocol
+# atrib: Value Provenance Protocol
 
 ## What this is
 
-atrib is value provenance infrastructure for the agent economy. It makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance, the missing infrastructure layer between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP).
+atrib is value provenance infrastructure for the agent economy. It makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance. It is the missing infrastructure layer between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP).
 
 The complete protocol specification is in `atrib-spec.md`. The implementation guide is in `internal planning doc`. The technical architecture overview is in `ARCHITECTURE.md`. Read the spec before making any implementation decisions.
 
@@ -11,18 +11,18 @@ The complete protocol specification is in `atrib-spec.md`. The implementation gu
 ```
 atrib/
   README.md                    # Public-facing project description (customer entry point)
-  CLAUDE.md                    # THIS FILE, hub doc, conventions, invariants
+  CLAUDE.md                    # THIS FILE: hub doc, conventions, invariants
   atrib-spec.md                # The single source of truth for the protocol
   internal planning doc    # Implementation guide with build order and package details
   DECISIONS.md                 # Architectural decision log (D001-D025+)
-  ARCHITECTURE.md              # Technical architecture overview, trust model, protocol layers, design decisions
-  PRIOR-ART.md                 # Prior art & standards map, every spec/protocol atrib builds on, organized by layer
+  ARCHITECTURE.md              # Technical architecture overview: trust model, protocol layers, design decisions
+  PRIOR-ART.md                 # Prior art & standards map: every spec/protocol atrib builds on, organized by layer
   packages/
-    mcp/                       # @atrib/mcp, MCP server middleware (public)
-    agent/                     # @atrib/agent, Agent middleware + framework adapters (public)
-    verify/                    # @atrib/verify, Merchant verification library (public)
-    log-dev/                   # @atrib/log-dev, in-memory dev Merkle log stub (PRIVATE, dev only)
-    integration/               # @atrib/integration, cross-package tests + runnable framework examples (private)
+    mcp/                       # @atrib/mcp: MCP server middleware (public)
+    agent/                     # @atrib/agent: Agent middleware + framework adapters (public)
+    verify/                    # @atrib/verify: Merchant verification library (public)
+    log-dev/                   # @atrib/log-dev: in-memory dev Merkle log stub (PRIVATE, dev only)
+    integration/               # @atrib/integration: cross-package tests + runnable framework examples (private)
       examples/
         end-to-end/            # Runnable demo for customer walkthroughs (`pnpm demo`)
         claude-agent-sdk/      # Case A + Case B examples
@@ -30,7 +30,7 @@ atrib/
         vercel-ai-sdk/         # createMCPClient + AI Gateway example
         langchain-js/          # MultiServerMCPClient + loadMcpTools example
   services/
-    log/                       # FUTURE, Tessera-backed Merkle log (Go), placeholder README
+    log/                       # FUTURE: Tessera-backed Merkle log (Go), placeholder README
     log-node/                  # Production Node.js Merkle log with real RFC 6962 proofs (private, not published)
   spec/
     conformance/
@@ -47,11 +47,11 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 
 | Doc                         | Responsible for                                                                                       |
 | --------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `atrib-spec.md`             | Complete protocol specification, record format, Merkle log, graph model, policy format, SDK contract |
+| `atrib-spec.md`             | Complete protocol specification: record format, Merkle log, graph model, policy format, SDK contract |
 | `CLAUDE.md`                 | Project conventions, invariants, implementation guidance                                              |
-| `ARCHITECTURE.md`           | Technical architecture overview, trust model, protocol layers, payment integration, design decisions |
-| `internal planning doc` | Implementation guide, build order, package details, testing strategy, what not to build              |
-| `DECISIONS.md`              | Architectural decision log, what was decided, why, what alternatives were considered                 |
+| `ARCHITECTURE.md`           | Technical architecture overview: trust model, protocol layers, payment integration, design decisions |
+| `internal planning doc` | Implementation guide: build order, package details, testing strategy, what not to build              |
+| `DECISIONS.md`              | Architectural decision log: what was decided, why, what alternatives were considered                 |
 | `PRIOR-ART.md`              | Every standard and protocol atrib builds on, extends, or hooks into, organized by layer              |
 
 ## Sync triggers
@@ -59,7 +59,7 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 | Event                                 | Update                                                                                                                                                                                                           |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Protocol decision changed             | `atrib-spec.md` first, then `internal planning doc` if build guidance affected                                                                                                                               |
-| Architectural decision made           | `DECISIONS.md`, new entry with date, context, decision, alternatives                                                                                                                                            |
+| Architectural decision made           | `DECISIONS.md`: new entry with date, context, decision, alternatives                                                                                                                                            |
 | New package created                   | This file (repository structure) AND `README.md` (packages table)                                                                                                                                                |
 | New framework adapter shipped         | `packages/agent/README.md` (adapter table + side-by-side quick-starts) AND `README.md` (top-level adapter table) AND `DECISIONS.md` (a Dxxx entry with the integration shape decision and rejected alternatives) |
 | New runnable example added            | `packages/integration/README.md` AND a `README.md` inside the example directory                                                                                                                                  |
@@ -91,9 +91,9 @@ These are non-negotiable. They come from the founding conversation and are the l
 
 - **Ed25519, 32-byte seed.** Not 64-byte NaCl format. Not DIDs. Simple, fast, no PKI. See §1.4.1.
 - **JCS canonicalization (RFC 8785).** Lexicographic key ordering. No whitespace. `session_token` slots between `event_type` and `spec_version` alphabetically. See §1.3.
-- **Token format:** `base64url(sha256(jcs(signed_record))) + "." + base64url(creator_key_bytes)`, 87 chars max, fits W3C tracestate limit. See §1.5.2.
-- **Genesis chain_root:** `"sha256:" + hex(SHA-256(UTF-8(context_id)))`, not null, not random. See §1.2.3.
-- **Log entry:** 90 bytes fixed, version(1) + record_hash(32) + creator_key(32) + context_id(16) + timestamp_ms(8) + event_type(1). See §2.3.1.
+- **Token format:** `base64url(sha256(jcs(signed_record))) + "." + base64url(creator_key_bytes)`. 87 chars max, fits W3C tracestate limit. See §1.5.2.
+- **Genesis chain_root:** `"sha256:" + hex(SHA-256(UTF-8(context_id)))`. Not null, not random. See §1.2.3.
+- **Log entry:** 90 bytes fixed: version(1) + record_hash(32) + creator_key(32) + context_id(16) + timestamp_ms(8) + event_type(1). See §2.3.1.
 - **Proof bundle caching:** keyed by `record_hash`, not `context_id`. See §5.3.5.
 - **C2SP tlog-tiles ecosystem.** Checkpoints, tiles, signed notes, witnessing. Not a custom log format. See §2.
 - **Five edge types, deterministic derivation.** CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL, CONVERGES_ON, CROSS_SESSION. Two implementations on identical input must produce identical edge sets. See §3.2.4.
@@ -137,7 +137,7 @@ The `@atrib/integration` package additionally has an `examples/` directory conta
 
 ### Framework adapter pattern (established by D018, D021, D022, D023, D024)
 
-When adding support for a new MCP framework, the integration shape is determined by **source-reading the host framework first**, not by guessing from the dependency graph. Five integrations have shipped (`@modelcontextprotocol/sdk` raw client, Claude Agent SDK Cases A and B, Cloudflare Agents, Vercel AI SDK, LangChain JS) and every one had a different correct integration point that the source revealed. The general approach holds: one `atrib()` interceptor + one adapter helper per framework + identical observable behavior. The adapter helper signature varies because the host framework's surface varies, that variation is forced, not invented.
+When adding support for a new MCP framework, the integration shape is determined by **source-reading the host framework first**, not by guessing from the dependency graph. Five integrations have shipped (`@modelcontextprotocol/sdk` raw client, Claude Agent SDK Cases A and B, Cloudflare Agents, Vercel AI SDK, LangChain JS) and every one had a different correct integration point that the source revealed. The general approach holds: one `atrib()` interceptor + one adapter helper per framework + identical observable behavior. The adapter helper signature varies because the host framework's surface varies; that variation is forced, not invented.
 
 Each adapter ships with:
 
@@ -150,18 +150,18 @@ Each adapter ships with:
 
 ### Dependencies
 
-- **Ed25519:** Use `@noble/ed25519`, pure JS, no native deps, audited.
+- **Ed25519:** Use `@noble/ed25519`. Pure JS, no native deps, audited.
 - **JCS:** Use `canonicalize` npm package (RFC 8785 implementation).
-- **SHA-256:** Use `@noble/hashes/sha2.js` (`sha256` named export). The earlier convention of "Web Crypto API with Node fallback" was simplified, `@noble/hashes` works in both runtimes without a fallback path and is already a dep.
-- **MCP SDK:** `@modelcontextprotocol/sdk`, the official MCP TypeScript SDK. Note that `@ai-sdk/mcp` (Vercel) and the LangChain `MultiServerMCPClient` ship their own JSON-RPC implementations and are NOT structurally compatible with this SDK at the Client level, see D023 and D024 for the integration implications.
+- **SHA-256:** Use `@noble/hashes/sha2.js` (`sha256` named export). The earlier convention of "Web Crypto API with Node fallback" was simplified; `@noble/hashes` works in both runtimes without a fallback path and is already a dep.
+- **MCP SDK:** `@modelcontextprotocol/sdk`, the official MCP TypeScript SDK. Note that `@ai-sdk/mcp` (Vercel) and the LangChain `MultiServerMCPClient` ship their own JSON-RPC implementations and are NOT structurally compatible with this SDK at the Client level; see D023 and D024 for the integration implications.
 - **Framework dependencies (Vercel AI SDK, LangChain, Cloudflare Agents, Claude Agent SDK):** Never imported as hard dependencies of `@atrib/agent`. Adapters use structural typing against the host framework's public shape so users only pay the dependency cost of frameworks they actually use.
 
 ### Testing
 
-Every normative MUST in the spec must have a corresponding test. The spec's test vectors (§1.4.4 Wycheproof) are mandatory. The calculation algorithm (§4.6) must have determinism tests, two runs on identical input must produce identical output.
+Every normative MUST in the spec must have a corresponding test. The spec's test vectors (§1.4.4 Wycheproof) are mandatory. The calculation algorithm (§4.6) must have determinism tests: two runs on identical input must produce identical output.
 
 ### Code style
 
 - TypeScript strict mode.
-- No `any` types. The spec defines exact shapes, use them.
+- No `any` types. The spec defines exact shapes; use them.
 - Error handling follows the degradation contract (§5.8): catch everything, log with `atrib:` prefix, never throw to caller.

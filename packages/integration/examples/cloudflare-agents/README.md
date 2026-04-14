@@ -13,7 +13,7 @@ Both integrations are zero-deploy: no extra Worker, no proxy hop, no architectur
 
 ## Why this works without a Cloudflare-specific package
 
-`McpAgent` exposes `this.server` as a real `McpServer` from `@modelcontextprotocol/sdk`, the same class atrib's existing middleware wraps. When `McpAgent.serve()` routes a request to your Durable Object, the underlying call lands at `McpServer.server.setRequestHandler(CallToolRequestSchema, ...)`, which is exactly the chokepoint our middleware monkey-patches.
+`McpAgent` exposes `this.server` as a real `McpServer` from `@modelcontextprotocol/sdk`; the same class atrib's existing middleware wraps. When `McpAgent.serve()` routes a request to your Durable Object, the underlying call lands at `McpServer.server.setRequestHandler(CallToolRequestSchema, ...)`, which is exactly the chokepoint our middleware monkey-patches.
 
 `Agent.addMcpServer` uses an internal `MCPClientManager` whose `callTool({ serverId, name, arguments })` method delegates straight to `mcpConnections[serverId].client.callTool(...)` (verified at `agents@0.9.0` `dist/client-BwgM3cRz.js:1444`). The `client` field is publicly exposed on `MCPClientConnection`, so we can wrap it in place after `addMcpServer` runs and every subsequent tool call goes through atrib's interceptor.
 
@@ -21,7 +21,7 @@ See `DECISIONS.md` D022 for the full architectural rationale.
 
 ---
 
-## Surface 1, `McpAgent` (you're building an MCP server on Cloudflare)
+## Surface 1: `McpAgent` (you're building an MCP server on Cloudflare)
 
 Your Worker exposes tools that other agents can call. Add atrib in **one line** inside `init()`.
 
@@ -106,11 +106,11 @@ That's the entire integration. Each Durable Object instance (one per session) ca
 - **Before** (canonical wrap-then-register pattern): `atrib()` patches `setRequestHandler` for tools/call, then `registerTool` later installs the dispatcher through the patched method.
 - **After** (retroactive wrap, also supported): `registerTool` installs the dispatcher first, then `atrib()` reaches into the underlying server's `_requestHandlers` map and rewrites the dispatcher in place.
 
-Both work, see `packages/mcp/src/middleware.ts:258` for the retroactive-wrap implementation that was added in commit `c450672`. The example above puts `atrib()` after the tool registrations because it reads more naturally in `init()`, but you can swap the order without changing behavior.
+Both work; see `packages/mcp/src/middleware.ts:258` for the retroactive-wrap implementation that was added in commit `c450672`. The example above puts `atrib()` after the tool registrations because it reads more naturally in `init()`, but you can swap the order without changing behavior.
 
 ---
 
-## Surface 2, `Agent` connecting out to upstream MCP servers
+## Surface 2: `Agent` connecting out to upstream MCP servers
 
 Your Worker is a chat agent (or similar) that connects to one or more upstream MCP servers and calls their tools. Add atrib by calling `attributeCloudflareAgentMcp(this, { interceptor })` once after your `addMcpServer` calls.
 
@@ -144,7 +144,7 @@ export class WeatherChatAgent extends Agent<Env> {
     // 2. ★ ATRIB: one line to wrap every connected MCP client ★
     // After this call, every tool invoked via this.mcp.getAITools() goes
     // through the interceptor's onBeforeToolCall / onAfterToolResponse
-    // lifecycle. The wrap is idempotent, safe to call again if you add
+    // lifecycle. The wrap is idempotent. Safe to call again if you add
     // more servers later.
     const wrappedCount = attributeCloudflareAgentMcp(this, {
       interceptor: this.interceptor,
@@ -155,7 +155,7 @@ export class WeatherChatAgent extends Agent<Env> {
   async onConnect(_conn: Connection) {
     // If you call addMcpServer in connection handlers (per-user MCP servers,
     // OAuth-completing-late, etc.), call attributeCloudflareAgentMcp again.
-    // The wrap is idempotent, already-wrapped clients are skipped.
+    // The wrap is idempotent; already-wrapped clients are skipped.
     attributeCloudflareAgentMcp(this, { interceptor: this.interceptor })
   }
 }
@@ -185,12 +185,12 @@ The key insight is that `attributeCloudflareAgentMcp` replaces the `client` fiel
 
 ### What if I need to support a stdio upstream from a Cloudflare Agent?
 
-You can't, Cloudflare Workers don't support child processes, so `StdioClientTransport` from the MCP SDK doesn't work in the Worker runtime. Your upstream MCP server must be HTTP-accessible (`streamable-http` or the deprecated `sse` transport).
+You can't; Cloudflare Workers don't support child processes, so `StdioClientTransport` from the MCP SDK doesn't work in the Worker runtime. Your upstream MCP server must be HTTP-accessible (`streamable-http` or the deprecated `sse` transport).
 
 If your upstream is stdio-only, you have two options:
 
 1. **Run the stdio MCP server elsewhere** (a long-lived process, container, etc.) and put a Streamable HTTP front-end in front of it. The Cloudflare Agent then connects to the HTTP front-end.
-2. **Use `createAtribProxy()` on a non-Worker runtime** (Node.js process that you control) that proxies a stdio upstream out as Streamable HTTP. The Cloudflare Agent connects to that proxy URL. This is the same primitive shipped in commit `73094a9` for Claude Agent SDK Case B, see `packages/integration/examples/claude-agent-sdk/case-b-third-party-mcp.ts`.
+2. **Use `createAtribProxy()` on a non-Worker runtime** (Node.js process that you control) that proxies a stdio upstream out as Streamable HTTP. The Cloudflare Agent connects to that proxy URL. This is the same primitive shipped in commit `73094a9` for Claude Agent SDK Case B; see `packages/integration/examples/claude-agent-sdk/case-b-third-party-mcp.ts`.
 
 ---
 
@@ -198,8 +198,8 @@ If your upstream is stdio-only, you have two options:
 
 Both surfaces assume:
 
-- **`ATRIB_PRIVATE_KEY`**, base64url-encoded 32-byte Ed25519 seed. Set via `wrangler secret put ATRIB_PRIVATE_KEY`. In production, store the matching public key on the merchant verification side.
-- **`ATRIB_LOG_ENDPOINT`**, URL of your atrib Merkle log submission endpoint. Optional in development; submission queue silently buffers when unset (per spec §5.8 degradation contract).
+- **`ATRIB_PRIVATE_KEY`**: base64url-encoded 32-byte Ed25519 seed. Set via `wrangler secret put ATRIB_PRIVATE_KEY`. In production, store the matching public key on the merchant verification side.
+- **`ATRIB_LOG_ENDPOINT`**: URL of your atrib Merkle log submission endpoint. Optional in development; submission queue silently buffers when unset (per spec §5.8 degradation contract).
 
 If `ATRIB_PRIVATE_KEY` is omitted, atrib operates in pass-through mode with a console warning. No records are emitted, but tool calls (and the Cloudflare DO lifecycle) still work normally.
 
@@ -209,7 +209,7 @@ If `ATRIB_PRIVATE_KEY` is omitted, atrib operates in pass-through mode with a co
 
 After deploying either example:
 
-- **Surface 1 (McpAgent)**: every successful `tools/call` to your Worker emits a signed atrib record. Records share a `context_id` per MCP session and chain via `chain_root` references. Each Durable Object instance (per-session) constructs its own submission queue, that's per the spec's session model.
+- **Surface 1 (McpAgent)**: every successful `tools/call` to your Worker emits a signed atrib record. Records share a `context_id` per MCP session and chain via `chain_root` references. Each Durable Object instance (per-session) constructs its own submission queue; that's per the spec's session model.
 - **Surface 2 (Agent)**: every tool call your Agent makes to an upstream MCP server emits a signed atrib record on the agent side. The upstream's response is unchanged from the agent's perspective. If the upstream is also atrib-instrumented (using `@atrib/mcp`), you'll get records from both sides forming a verifiable chain.
 
 If you don't see records, check:

@@ -9,7 +9,7 @@ Real captured response shapes from the Universal Commerce Protocol (UCP).
 
 ## Files
 
-- `checkout_session_completed.json`, Success response from `POST /checkout-sessions/{id}/complete`. Detection signal: `status === "completed"` and `order.id` is a string, AND a top-level `ucp.version` envelope is present (this is what distinguishes UCP from ACP since the rest of the shape is identical). The `order.permalink_url` is the canonical "checkout URL" used for content_id derivation.
+- `checkout_session_completed.json`: Success response from `POST /checkout-sessions/{id}/complete`. Detection signal: `status === "completed"` and `order.id` is a string, AND a top-level `ucp.version` envelope is present (this is what distinguishes UCP from ACP since the rest of the shape is identical). The `order.permalink_url` is the canonical "checkout URL" used for content_id derivation.
 
 ## How UCP differs from ACP
 
@@ -28,7 +28,7 @@ The two protocols have converged on essentially the same checkout completion sha
 
 ## Redactions
 
-None, public spec example.
+None; public spec example.
 
 ## Updating these fixtures
 

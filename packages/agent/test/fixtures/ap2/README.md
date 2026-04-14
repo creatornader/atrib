@@ -38,9 +38,9 @@ IS the AP2 crypto payment path.
 
 ## Files
 
-- `payment_mandate_message.json`, Real example AP2 PaymentMandate Message
+- `payment_mandate_message.json`: Real example AP2 PaymentMandate Message
   from `docs/a2a-extension.md`. Detection signal: `parts[].data["ap2.mandates.PaymentMandate"]` exists.
-- `a2a_x402_payment_completed.json`, Real example a2a-x402 payment-completed
+- `a2a_x402_payment_completed.json`: Real example a2a-x402 payment-completed
   task message from `spec/v0.1/spec.md`. Detection signal:
   `status.message.metadata["x402.payment.status"] === "payment-completed"`
   with at least one `success: true` receipt.

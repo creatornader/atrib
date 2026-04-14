@@ -19,9 +19,9 @@ await attributeLangchainMcp(multi, { interceptor })
 const tools = await multi.getTools()
 ```
 
-`MultiServerMCPClient` owns its internal Client instances behind `#private` fields. You never touch the Client reference directly, the only way to reach it is the `getClient(serverName)` getter, and there is no corresponding setter. This rules out the `wrapMcpClient` Proxy pattern (which returns a new wrapped object) because there is nowhere to put the new reference.
+`MultiServerMCPClient` owns its internal Client instances behind `#private` fields. You never touch the Client reference directly; the only way to reach it is the `getClient(serverName)` getter, and there is no corresponding setter. This rules out the `wrapMcpClient` Proxy pattern (which returns a new wrapped object) because there is nowhere to put the new reference.
 
-The helper monkey-patches `callTool` on each internal Client in place, which is safe because LangChain's tool functions dereference `client.callTool` at invocation time (verified at `@langchain/mcp-adapters@1.1.3` `dist/tools.js:391`). It also wraps `client.fork()`, LangChain's per-call header-changing mechanism, so forked clients are recursively patched too. Without that, any tool using per-call authentication headers would silently bypass atrib.
+The helper monkey-patches `callTool` on each internal Client in place, which is safe because LangChain's tool functions dereference `client.callTool` at invocation time (verified at `@langchain/mcp-adapters@1.1.3` `dist/tools.js:391`). It also wraps `client.fork()`. LangChain's per-call header-changing mechanism; so forked clients are recursively patched too. Without that, any tool using per-call authentication headers would silently bypass atrib.
 
 ### Low-level: `loadMcpTools(name, rawClient)` → **use `wrapMcpClient`**
 
@@ -38,7 +38,7 @@ const wrapped = wrapMcpClient(rawClient, { interceptor })
 const tools = await loadMcpTools('search', wrapped)
 ```
 
-`loadMcpTools(serverName, client)` accepts a raw `@modelcontextprotocol/sdk` Client as its second argument (verified at `dist/tools.d.ts:28`), so you can construct your own Client, wrap it with the existing `wrapMcpClient` helper from `@atrib/agent`, and pass the wrapped instance directly. No new code required for this path, it's just a shape the existing wrapper already covers.
+`loadMcpTools(serverName, client)` accepts a raw `@modelcontextprotocol/sdk` Client as its second argument (verified at `dist/tools.d.ts:28`), so you can construct your own Client, wrap it with the existing `wrapMcpClient` helper from `@atrib/agent`, and pass the wrapped instance directly. No new code required for this path; it's just a shape the existing wrapper already covers.
 
 Use this path when you want explicit control over Client construction (e.g. custom transports, custom auth flows). Use `MultiServerMCPClient` + `attributeLangchainMcp` for the config-driven multi-server workflow that most LangChain apps use.
 
@@ -74,8 +74,8 @@ const multi = new MultiServerMCPClient({
 //    reach every configured server's internal Client.
 await multi.initializeConnections()
 
-// 4. ★ ATRIB ★, patch every internal Client's callTool + fork in place.
-//    Idempotent, safe to call multiple times.
+// 4. ★ ATRIB ★ Patch every internal Client's callTool + fork in place.
+//    Idempotent. Safe to call multiple times.
 //    Returns the number of newly-patched clients.
 await attributeLangchainMcp(multi, {
   interceptor,
@@ -122,13 +122,13 @@ LangChain's MCP adapters support per-call HTTP header changes via a `beforeToolC
 
 **`attributeLangchainMcp` handles this correctly.** When it patches a Client, it also wraps `fork()` so that any forked instance is recursively patched before being returned. Every forked client goes through atrib just like the original. If a tool sets per-user headers, attribution still flows.
 
-This is explicitly tested (`test/langchain-mcp.test.ts` → "fork propagation"). A naive monkey-patch that forgot to handle `fork()` would silently drop attribution for every per-user tool call, exactly the kind of invisible bug that would only surface when an auditor asked "why are our per-user calls not in the log?" a month later.
+This is explicitly tested (`test/langchain-mcp.test.ts` → "fork propagation"). A naive monkey-patch that forgot to handle `fork()` would silently drop attribution for every per-user tool call; exactly the kind of invisible bug that would only surface when an auditor asked "why are our per-user calls not in the log?" a month later.
 
 ---
 
 ## Multiple MCP servers
 
-`MultiServerMCPClient` is inherently multi-server, you list all of them in `mcpServers` and `attributeLangchainMcp` patches every one by default. Use the `serverUrls` option to give each server a canonical URL for atrib's content_id derivation:
+`MultiServerMCPClient` is inherently multi-server; you list all of them in `mcpServers` and `attributeLangchainMcp` patches every one by default. Use the `serverUrls` option to give each server a canonical URL for atrib's content_id derivation:
 
 ```ts
 await attributeLangchainMcp(multi, {
@@ -141,7 +141,7 @@ await attributeLangchainMcp(multi, {
 })
 ```
 
-To selectively patch only a subset of servers (rare, usually you want all of them), pass `servers`:
+To selectively patch only a subset of servers (rare; usually you want all of them), pass `servers`:
 
 ```ts
 await attributeLangchainMcp(multi, {
@@ -154,11 +154,11 @@ await attributeLangchainMcp(multi, {
 
 ## Environment variables
 
-- **`ATRIB_PRIVATE_KEY`**, base64url-encoded 32-byte Ed25519 seed. Generate one for development with:
+- **`ATRIB_PRIVATE_KEY`**: base64url-encoded 32-byte Ed25519 seed. Generate one for development with:
   ```bash
   node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))'
   ```
-- **`ATRIB_LOG_ENDPOINT`**, URL of your atrib Merkle log submission endpoint. Optional in development; the submission queue silently buffers when unset.
+- **`ATRIB_LOG_ENDPOINT`**: URL of your atrib Merkle log submission endpoint. Optional in development; the submission queue silently buffers when unset.
 
 If `ATRIB_PRIVATE_KEY` is omitted, atrib operates in pass-through mode with a console warning. No records are emitted, but LangChain keeps working.
 
@@ -171,8 +171,8 @@ After running with `ATRIB_LOG_ENDPOINT` pointed at your log:
 - Every successful `tools/call` from the LangChain agent emits a signed atrib record
 - Records share a `context_id` per agent session and chain via `chain_root` references
 - Failed tool calls (`isError: true` from the upstream) emit no record per spec §5.3.3
-- atrib failures (network, signing, interceptor errors) never reach LangChain's tool dispatch, they're caught and logged with the `atrib:` console prefix per §5.8
-- Per-call-header workflows (forked clients) also emit records, no silent drops
+- atrib failures (network, signing, interceptor errors) never reach LangChain's tool dispatch; they're caught and logged with the `atrib:` console prefix per §5.8
+- Per-call-header workflows (forked clients) also emit records; no silent drops
 
 If you don't see records, check:
 

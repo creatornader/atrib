@@ -29,7 +29,7 @@ The header value is base64-encoded JSON. The decoded shape is in
 
 ## Files
 
-- `payment_response_decoded.json`, Decoded SettlementResponse object that
+- `payment_response_decoded.json`: Decoded SettlementResponse object that
   the server includes in the `PAYMENT-RESPONSE` header. We do NOT decode
   this in detection (header presence is sufficient on-wire signal); the
   fixture is here so future tests can validate the shape if we ever need

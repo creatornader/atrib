@@ -42,7 +42,7 @@ Each case file has the same shape:
     "body": {
       /* the bare signed AtribRecord, ready to JSON.stringify */
     },
-    "body_is_raw_string": false, // optional, true for non-JSON-body cases
+    "body_is_raw_string": false, // optional; true for non-JSON-body cases
   },
   "expected": {
     "status": 200,
@@ -67,7 +67,7 @@ Sequences are similar but contain a `steps` array, each step having its own requ
 2. For each case in `cases/`, send the described HTTP request to your log and assert the response matches `expected`.
 3. For each sequence in `sequences/`, run the steps in order, capturing values where requested (e.g., `capture_log_index_as`) and asserting later steps match (`log_index_matches`).
 4. After each test, reset the log to a clean state (the dev log uses one fresh `startDevLog()` per test).
-5. If your implementation cannot honor a particular case (e.g., it intentionally skips a validation step), maintain a per-implementation skip list with a justification, never silently disable a case. The TS reference consumer at [`packages/log-dev/test/conformance.test.ts`](../../../packages/log-dev/test/conformance.test.ts) does this for `reject-bad-signature` because the dev log skips Step 1.
+5. If your implementation cannot honor a particular case (e.g., it intentionally skips a validation step), maintain a per-implementation skip list with a justification; never silently disable a case. The TS reference consumer at [`packages/log-dev/test/conformance.test.ts`](../../../packages/log-dev/test/conformance.test.ts) does this for `reject-bad-signature` because the dev log skips Step 1.
 
 ## Time handling
 
@@ -79,7 +79,7 @@ Test consumers MUST mock the system clock to `reference_time_ms` before sending 
 
 ## Signing keys
 
-The corpus uses a hardcoded Ed25519 seed (`0x07` repeated 32 times, see `manifest.json`'s `signing.seed_b64url`). **This seed must NEVER be used in production.** It exists solely so the corpus is byte-deterministic across regenerations and so any implementation can independently re-derive `creator_key` from the seed if it wants to verify the test signatures itself.
+The corpus uses a hardcoded Ed25519 seed (`0x07` repeated 32 times; see `manifest.json`'s `signing.seed_b64url`). **This seed must NEVER be used in production.** It exists solely so the corpus is byte-deterministic across regenerations and so any implementation can independently re-derive `creator_key` from the seed if it wants to verify the test signatures itself.
 
 The `creator_key` and `context_id` are also pinned in the manifest so consumers don't need to re-derive them at test time.
 
@@ -97,7 +97,7 @@ Regenerate when:
 - The canonical record format (§1.2) or JCS encoding changes
 - A new test case is needed (e.g., spec §2.6.1 grows a Step 7)
 
-After regenerating, review the diff carefully, the whole point of byte-determinism is that diffs in PR review are trivial to read.
+After regenerating, review the diff carefully; the whole point of byte-determinism is that diffs in PR review are trivial to read.
 
 ## Why this lives at `spec/conformance/` rather than inside a package
 
