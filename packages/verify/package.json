@@ -10,7 +10,9 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "description": "Merchant verification, independently verify attribution settlement recommendations against the Atrib spec.",
   "author": "Atrib <hello@atrib.io>",
   "license": "Apache-2.0",
@@ -20,7 +22,15 @@
     "directory": "packages/verify"
   },
   "homepage": "https://atrib.io",
-  "keywords": ["mcp", "model-context-protocol", "attribution", "verification", "settlement", "merchant", "ed25519"],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "attribution",
+    "verification",
+    "settlement",
+    "merchant",
+    "ed25519"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run",

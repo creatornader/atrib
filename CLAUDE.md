@@ -47,27 +47,27 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 
 ## Authoritative docs
 
-| Doc | Responsible for |
-|-----|----------------|
-| `atrib-spec.md` | Complete protocol specification, record format, Merkle log, graph model, policy format, SDK contract |
-| `CLAUDE.md` | Project conventions, invariants, implementation guidance |
-| `internal planning doc` | Implementation guide, build order, package details, testing strategy, what not to build |
-| `DECISIONS.md` | Architectural decision log, what was decided, why, what alternatives were considered |
+| Doc                         | Responsible for                                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `atrib-spec.md`             | Complete protocol specification, record format, Merkle log, graph model, policy format, SDK contract |
+| `CLAUDE.md`                 | Project conventions, invariants, implementation guidance                                              |
+| `internal planning doc` | Implementation guide, build order, package details, testing strategy, what not to build              |
+| `DECISIONS.md`              | Architectural decision log, what was decided, why, what alternatives were considered                 |
 
 ## Sync triggers
 
-| Event | Update |
-|-------|--------|
-| Protocol decision changed | `atrib-spec.md` first, then `internal planning doc` if build guidance affected |
-| Architectural decision made | `DECISIONS.md`, new entry with date, context, decision, alternatives |
-| New package created | This file (repository structure) AND `README.md` (packages table) |
-| New framework adapter shipped | `packages/agent/README.md` (adapter table + side-by-side quick-starts) AND `README.md` (top-level adapter table) AND `DECISIONS.md` (a Dxxx entry with the integration shape decision and rejected alternatives) |
-| New runnable example added | `packages/integration/README.md` AND a `README.md` inside the example directory |
-| Implementation convention established | This file (conventions section) |
-| Wire-format or wire-protocol change | `atrib-spec.md` (if normative), this file's "Key technical decisions" section, AND DECISIONS.md |
-| §2.6.1 validation rule changed | Regenerate `spec/conformance/2.6.1/` corpus via `pnpm --filter @atrib/log-dev corpus`, update `spec/conformance/2.6.1/README.md` if the format changed |
-| Research artifact added (e.g. external-spec briefing, prior-art notes) | Drop under `thoughts/shared/research/<YYYY-MM-DD>_<slug>.md` with YAML frontmatter, link from any handoff or `DECISIONS.md` entry that consumes it |
-| Test count changed materially | `internal planning doc` build status table |
+| Event                                                                  | Update                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Protocol decision changed                                              | `atrib-spec.md` first, then `internal planning doc` if build guidance affected                                                                                                                               |
+| Architectural decision made                                            | `DECISIONS.md`, new entry with date, context, decision, alternatives                                                                                                                                            |
+| New package created                                                    | This file (repository structure) AND `README.md` (packages table)                                                                                                                                                |
+| New framework adapter shipped                                          | `packages/agent/README.md` (adapter table + side-by-side quick-starts) AND `README.md` (top-level adapter table) AND `DECISIONS.md` (a Dxxx entry with the integration shape decision and rejected alternatives) |
+| New runnable example added                                             | `packages/integration/README.md` AND a `README.md` inside the example directory                                                                                                                                  |
+| Implementation convention established                                  | This file (conventions section)                                                                                                                                                                                  |
+| Wire-format or wire-protocol change                                    | `atrib-spec.md` (if normative), this file's "Key technical decisions" section, AND DECISIONS.md                                                                                                                  |
+| §2.6.1 validation rule changed                                         | Regenerate `spec/conformance/2.6.1/` corpus via `pnpm --filter @atrib/log-dev corpus`, update `spec/conformance/2.6.1/README.md` if the format changed                                                           |
+| Research artifact added (e.g. external-spec briefing, prior-art notes) | Drop under `thoughts/shared/research/<YYYY-MM-DD>_<slug>.md` with YAML frontmatter, link from any handoff or `DECISIONS.md` entry that consumes it                                                               |
+| Test count changed materially                                          | `internal planning doc` build status table                                                                                                                                                                   |
 
 ## Critical invariants (never violate)
 
@@ -120,6 +120,7 @@ This is a TypeScript monorepo with **five workspace packages** (three public, tw
 ### Package structure
 
 Each package under `packages/` follows:
+
 ```
 packages/<name>/
   src/
@@ -139,6 +140,7 @@ The `@atrib/integration` package additionally has an `examples/` directory conta
 When adding support for a new MCP framework, the integration shape is determined by **source-reading the host framework first**, not by guessing from the dependency graph. Five integrations have shipped (`@modelcontextprotocol/sdk` raw client, Claude Agent SDK Cases A and B, Cloudflare Agents, Vercel AI SDK, LangChain JS) and every one had a different correct integration point that the source revealed. The general approach holds: one `atrib()` interceptor + one adapter helper per framework + identical observable behavior. The adapter helper signature varies because the host framework's surface varies, that variation is forced, not invented.
 
 Each adapter ships with:
+
 1. Source file at `packages/agent/src/adapters/<framework>.ts`
 2. Test file at `packages/agent/test/<framework>.test.ts` covering at minimum: passthrough, `_meta` injection, no caller mutation, response flow, idempotency, and §5.8 degradation
 3. Runnable example at `packages/integration/examples/<framework>/` with both `README.md` and `integration.ts`

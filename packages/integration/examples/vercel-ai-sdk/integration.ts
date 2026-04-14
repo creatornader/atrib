@@ -33,9 +33,7 @@ async function main() {
     creatorKey: process.env.ATRIB_PRIVATE_KEY!,
     merchantDomain: 'https://merchant.example.com',
     serverUrls: ['https://my-tool.example.com'],
-    ...(process.env.ATRIB_LOG_ENDPOINT
-      ? { logEndpoint: process.env.ATRIB_LOG_ENDPOINT }
-      : {}),
+    ...(process.env.ATRIB_LOG_ENDPOINT ? { logEndpoint: process.env.ATRIB_LOG_ENDPOINT } : {}),
   })
 
   // 2. Create the @ai-sdk/mcp MCPClient as you normally would.

@@ -39,13 +39,9 @@ async function main() {
       args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'],
     },
     atrib: {
-      ...(process.env.ATRIB_PRIVATE_KEY
-        ? { creatorKey: process.env.ATRIB_PRIVATE_KEY }
-        : {}),
+      ...(process.env.ATRIB_PRIVATE_KEY ? { creatorKey: process.env.ATRIB_PRIVATE_KEY } : {}),
       serverUrl: 'https://example.com/fs',
-      ...(process.env.ATRIB_LOG_ENDPOINT
-        ? { logEndpoint: process.env.ATRIB_LOG_ENDPOINT }
-        : {}),
+      ...(process.env.ATRIB_LOG_ENDPOINT ? { logEndpoint: process.env.ATRIB_LOG_ENDPOINT } : {}),
     },
   })
 

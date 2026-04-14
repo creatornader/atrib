@@ -10,11 +10,7 @@
 
 import { base64urlDecode } from '@atrib/mcp'
 import { calculate, DEFAULT_POLICY } from './calculate.js'
-import {
-  fetchGraph,
-  fetchSessionPolicyRecord,
-  fetchPolicyDocument,
-} from './graph-fetch.js'
+import { fetchGraph, fetchSessionPolicyRecord, fetchPolicyDocument } from './graph-fetch.js'
 import {
   signRecommendation,
   verifyRecommendationSignature,
@@ -118,10 +114,7 @@ export class AtribVerifier {
       let policy: PolicyDocument = DEFAULT_POLICY
       if (doc.policy_record_id !== 'default') {
         try {
-          policyRecord = await fetchSessionPolicyRecord(
-            this.graphEndpoint,
-            doc.policy_record_id,
-          )
+          policyRecord = await fetchSessionPolicyRecord(this.graphEndpoint, doc.policy_record_id)
           if (policyRecord.agreed_policy && policyRecord.agreed_policy !== 'default') {
             try {
               policy = await fetchPolicyDocument(policyRecord.agreed_policy)
@@ -166,8 +159,7 @@ export class AtribVerifier {
    */
   async calculate(options: CalculateOptions): Promise<RecommendationDocument> {
     const warnings: string[] = []
-    const policy: PolicyDocument =
-      options.policy === 'default' ? DEFAULT_POLICY : options.policy
+    const policy: PolicyDocument = options.policy === 'default' ? DEFAULT_POLICY : options.policy
 
     let graphCheckpoint = this.logEndpoint
     let treeSize = options.treeSize ?? 0
@@ -179,7 +171,7 @@ export class AtribVerifier {
       const graph = await fetchGraph(this.graphEndpoint, options.context_id, options.treeSize)
       graphCheckpoint = this.logEndpoint
       treeSize = options.treeSize ?? graph.node_count
-      const txNode = graph.nodes.find(n => n.event_type === 'transaction')
+      const txNode = graph.nodes.find((n) => n.event_type === 'transaction')
       if (!txNode) {
         warnings.push('no transaction node found in graph; distribution is empty')
       } else {

@@ -25,10 +25,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js'
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { createAtribProxy } from '../src/proxy.js'
 import { base64urlEncode } from '../src/base64url.js'
 
@@ -50,9 +47,7 @@ async function makeUpstream(opts: {
   tools: Array<{
     name: string
     inputSchema?: Record<string, unknown>
-    handler: (
-      args: Record<string, unknown>,
-    ) => Promise<{ content: unknown[]; isError?: boolean }>
+    handler: (args: Record<string, unknown>) => Promise<{ content: unknown[]; isError?: boolean }>
   }>
 }) {
   const upstream = new McpServer(
@@ -84,8 +79,7 @@ async function makeUpstream(opts: {
     },
   )
 
-  const [proxySideTransport, upstreamSideTransport] =
-    InMemoryTransport.createLinkedPair()
+  const [proxySideTransport, upstreamSideTransport] = InMemoryTransport.createLinkedPair()
   await upstream.connect(upstreamSideTransport)
 
   return { upstream, proxySideTransport }
@@ -142,12 +136,8 @@ describe('createAtribProxy', () => {
     // Connect a host-side Client to the proxy's local server to drive
     // tools/list through the wire format.
     const hostClient = new Client({ name: 'host', version: '1.0.0' })
-    const [hostTransport, proxyHostTransport] =
-      InMemoryTransport.createLinkedPair()
-    await Promise.all([
-      proxy.server.connect(proxyHostTransport),
-      hostClient.connect(hostTransport),
-    ])
+    const [hostTransport, proxyHostTransport] = InMemoryTransport.createLinkedPair()
+    await Promise.all([proxy.server.connect(proxyHostTransport), hostClient.connect(hostTransport)])
 
     const tools = await hostClient.listTools()
     expect(tools.tools.map((t) => t.name)).toContain('echo')
@@ -162,9 +152,7 @@ describe('createAtribProxy', () => {
         {
           name: 'echo',
           handler: async (args) => ({
-            content: [
-              { type: 'text', text: `echo:${(args.message as string) ?? ''}` },
-            ],
+            content: [{ type: 'text', text: `echo:${(args.message as string) ?? ''}` }],
           }),
         },
       ],
@@ -177,12 +165,8 @@ describe('createAtribProxy', () => {
     })
 
     const hostClient = new Client({ name: 'host', version: '1.0.0' })
-    const [hostTransport, proxyHostTransport] =
-      InMemoryTransport.createLinkedPair()
-    await Promise.all([
-      proxy.server.connect(proxyHostTransport),
-      hostClient.connect(hostTransport),
-    ])
+    const [hostTransport, proxyHostTransport] = InMemoryTransport.createLinkedPair()
+    await Promise.all([proxy.server.connect(proxyHostTransport), hostClient.connect(hostTransport)])
 
     const result = await hostClient.callTool({
       name: 'echo',
@@ -212,12 +196,8 @@ describe('createAtribProxy', () => {
     })
 
     const hostClient = new Client({ name: 'host', version: '1.0.0' })
-    const [hostTransport, proxyHostTransport] =
-      InMemoryTransport.createLinkedPair()
-    await Promise.all([
-      proxy.server.connect(proxyHostTransport),
-      hostClient.connect(hostTransport),
-    ])
+    const [hostTransport, proxyHostTransport] = InMemoryTransport.createLinkedPair()
+    await Promise.all([proxy.server.connect(proxyHostTransport), hostClient.connect(hostTransport)])
 
     const result = await hostClient.callTool({
       name: 'compute',
@@ -271,12 +251,8 @@ describe('createAtribProxy', () => {
     })
 
     const hostClient = new Client({ name: 'host', version: '1.0.0' })
-    const [hostTransport, proxyHostTransport] =
-      InMemoryTransport.createLinkedPair()
-    await Promise.all([
-      proxy.server.connect(proxyHostTransport),
-      hostClient.connect(hostTransport),
-    ])
+    const [hostTransport, proxyHostTransport] = InMemoryTransport.createLinkedPair()
+    await Promise.all([proxy.server.connect(proxyHostTransport), hostClient.connect(hostTransport)])
 
     const result = await hostClient.callTool({
       name: 'broken',
@@ -285,9 +261,7 @@ describe('createAtribProxy', () => {
 
     // Error is surfaced to the host unchanged
     expect(result.isError).toBe(true)
-    expect(result.content).toEqual([
-      { type: 'text', text: 'upstream blew up' },
-    ])
+    expect(result.content).toEqual([{ type: 'text', text: 'upstream blew up' }])
 
     // Per §5.3.3, no record is emitted for isError: true responses.
     await proxy.server.flush()
@@ -300,9 +274,7 @@ describe('createAtribProxy', () => {
 
   it('close() disconnects the upstream client cleanly', async () => {
     const { proxySideTransport } = await makeUpstream({
-      tools: [
-        { name: 'noop', handler: async () => ({ content: [] }) },
-      ],
+      tools: [{ name: 'noop', handler: async () => ({ content: [] }) }],
     })
 
     const proxy = await createAtribProxy({

@@ -9,12 +9,7 @@
 
 import { sha256, hexEncode, canonicalRecord, base64urlEncode } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
-import type {
-  GraphNode,
-  GraphEdge,
-  GraphResponse,
-  EdgeType,
-} from '@atrib/verify'
+import type { GraphNode, GraphEdge, GraphResponse, EdgeType } from '@atrib/verify'
 
 /**
  * Compute the record hash (sha256 of JCS canonical form), same algorithm
@@ -33,20 +28,17 @@ export function recordHashHex(record: AtribRecord): string {
  * Build a graph snapshot from a set of signed attribution records, applying
  * the 5 edge derivation steps from §3.2.4 in order.
  */
-export function buildGraphFromRecords(
-  records: AtribRecord[],
-  contextId: string,
-): GraphResponse {
+export function buildGraphFromRecords(records: AtribRecord[], contextId: string): GraphResponse {
   // Filter to records belonging to this session OR linked via session_token
-  const sessionRecords = records.filter(r => r.context_id === contextId)
-  const txInSession = sessionRecords.find(r => r.event_type === 'transaction')
+  const sessionRecords = records.filter((r) => r.context_id === contextId)
+  const txInSession = sessionRecords.find((r) => r.event_type === 'transaction')
 
   // Cross-session records: tool_calls in OTHER sessions whose session_token
   // matches the in-session transaction's session_token
   let crossSessionRecords: AtribRecord[] = []
   if (txInSession && 'session_token' in txInSession && txInSession.session_token) {
     const txToken = txInSession.session_token
-    crossSessionRecords = records.filter(r => {
+    crossSessionRecords = records.filter((r) => {
       if (r.context_id === contextId) return false
       if (r.event_type !== 'tool_call') return false
       return 'session_token' in r && r.session_token === txToken
@@ -56,7 +48,7 @@ export function buildGraphFromRecords(
   const allRecords = [...sessionRecords, ...crossSessionRecords]
 
   // Build the node list
-  const nodes: GraphNode[] = allRecords.map(r => {
+  const nodes: GraphNode[] = allRecords.map((r) => {
     const id = `sha256:${recordHashHex(r)}`
     return {
       id,
@@ -68,7 +60,8 @@ export function buildGraphFromRecords(
       timestamp: r.timestamp,
       log_index: 0,
       verification_state: 'signature_valid',
-      is_genesis: r.chain_root === `sha256:${hexEncode(sha256(new TextEncoder().encode(r.context_id)))}`,
+      is_genesis:
+        r.chain_root === `sha256:${hexEncode(sha256(new TextEncoder().encode(r.context_id)))}`,
     }
   })
 
@@ -80,7 +73,7 @@ export function buildGraphFromRecords(
 
   const edges: GraphEdge[] = []
   const has = (a: string, b: string, t: EdgeType) =>
-    edges.some(e => e.source === a && e.target === b && e.type === t)
+    edges.some((e) => e.source === a && e.target === b && e.type === t)
 
   // Step 1, CHAIN_PRECEDES (§3.2.4 step 1)
   // For each non-genesis record R: find P such that sha256(jcs(P)) == R.chain_root_hash
@@ -142,7 +135,7 @@ export function buildGraphFromRecords(
   // Step 4, CONVERGES_ON (§3.2.4 step 4)
   // For each transaction T: every other in-session non-tx node N gets CONVERGES_ON N → T
   const sessionTxNodes = nodes.filter(
-    n => n.event_type === 'transaction' && n.context_id === contextId,
+    (n) => n.event_type === 'transaction' && n.context_id === contextId,
   )
   for (const tx of sessionTxNodes) {
     for (const n of nodes) {

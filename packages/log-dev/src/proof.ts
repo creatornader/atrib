@@ -41,9 +41,7 @@ export function buildProofBundle(entry: StoredEntry, totalSize: number): ProofBu
   // a small dev log).
   const inclusionProof: string[] = []
   for (let depth = 0; depth < 3; depth++) {
-    const siblingSeed = new TextEncoder().encode(
-      `${entry.recordHash}:sibling:${depth}`,
-    )
+    const siblingSeed = new TextEncoder().encode(`${entry.recordHash}:sibling:${depth}`)
     inclusionProof.push(base64(sha256(siblingSeed)))
   }
 

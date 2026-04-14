@@ -33,26 +33,29 @@ Each case file has the same shape:
 {
   "name": "accept-tool-call",
   "spec_section": "2.6.1",
-  "validation_step": null,             // null for accept cases, 0-6 for reject cases
+  "validation_step": null, // null for accept cases, 0-6 for reject cases
   "description": "...",
   "request": {
     "method": "POST",
     "path": "/v1/entries",
     "headers": { "Content-Type": "application/json" },
-    "body": { /* the bare signed AtribRecord, ready to JSON.stringify */ },
-    "body_is_raw_string": false        // optional, true for non-JSON-body cases
+    "body": {
+      /* the bare signed AtribRecord, ready to JSON.stringify */
+    },
+    "body_is_raw_string": false, // optional, true for non-JSON-body cases
   },
   "expected": {
     "status": 200,
-    "error_contains": "...",           // optional substring in body.error for reject cases
-    "response_shape": {                 // optional shape check for accept cases
+    "error_contains": "...", // optional substring in body.error for reject cases
+    "response_shape": {
+      // optional shape check for accept cases
       "log_index": "number",
       "checkpoint": "string",
       "inclusion_proof": "array",
-      "leaf_hash": "string"
-    }
+      "leaf_hash": "string",
+    },
   },
-  "notes": "..."                       // optional implementation guidance
+  "notes": "...", // optional implementation guidance
 }
 ```
 
@@ -89,6 +92,7 @@ pnpm --filter @atrib/log-dev corpus
 This runs [`packages/log-dev/scripts/generate-conformance-corpus.ts`](../../../packages/log-dev/scripts/generate-conformance-corpus.ts), which uses `signRecord` from `@atrib/mcp` (the canonical signer) to produce all fixtures. Successive runs are byte-identical unless you change the inputs at the top of the generator (`SEED`, `REFERENCE_TIME_MS`, `CONTEXT_ID`, `CONTENT_ID`).
 
 Regenerate when:
+
 - A spec §2.6.1 validation rule changes
 - The canonical record format (§1.2) or JCS encoding changes
 - A new test case is needed (e.g., spec §2.6.1 grows a Step 7)

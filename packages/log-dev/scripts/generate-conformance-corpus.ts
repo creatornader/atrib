@@ -218,8 +218,7 @@ async function generate(): Promise<void> {
       name: 'reject-wrong-spec-version',
       spec_section: '2.6.1',
       validation_step: 2,
-      description:
-        'spec_version is not "atrib/1.0". The log MUST reject with 400.',
+      description: 'spec_version is not "atrib/1.0". The log MUST reject with 400.',
       request: {
         method: 'POST',
         path: '/v1/entries',

@@ -29,6 +29,7 @@ pnpm -r typecheck
 ### Bug Reports
 
 Open a [GitHub Issue](https://github.com/atrib-dev/atrib/issues/new?template=bug_report.md) with:
+
 - Which package is affected (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`)
 - Steps to reproduce
 - Expected vs actual behavior

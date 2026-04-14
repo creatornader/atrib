@@ -98,7 +98,7 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
 
   // Derive public key at init
   let publicKeyB64: string | undefined
-  const publicKeyReady = getPublicKey(privateKey).then(pk => {
+  const publicKeyReady = getPublicKey(privateKey).then((pk) => {
     publicKeyB64 = base64urlEncode(pk)
   })
 
@@ -220,7 +220,7 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
             publicKeyReady,
             () => publicKeyB64,
             queue,
-          ).catch(err => {
+          ).catch((err) => {
             console.warn('atrib: transaction emission failed', err)
           })
           pendingEmissions.push(emission)

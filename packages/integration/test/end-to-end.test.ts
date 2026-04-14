@@ -117,33 +117,31 @@ describe('End-to-end attribution flow', () => {
     // ── 4. Drain pending submissions ────────────────────────────────────
     await agent.flush()
     // Give the mcp submission queues a tick to drain too
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50))
 
     // ── 5. Inspect the captured records ─────────────────────────────────
     expect(store.records.length).toBeGreaterThanOrEqual(3)
-    const txRecords = store.records.filter(r => r.event_type === 'transaction')
-    const toolCallRecords = store.records.filter(r => r.event_type === 'tool_call')
+    const txRecords = store.records.filter((r) => r.event_type === 'transaction')
+    const toolCallRecords = store.records.filter((r) => r.event_type === 'tool_call')
 
     // Exactly one transaction record (Path 1, signed by merchant)
     expect(txRecords.length).toBe(1)
-    expect(txRecords[0]!.creator_key).toBe(
-      base64urlEncode(await getPublicKey(MERCHANT_KEY)),
-    )
+    expect(txRecords[0]!.creator_key).toBe(base64urlEncode(await getPublicKey(MERCHANT_KEY)))
 
     // Two tool_call records (one from tool A, one from tool B)
     expect(toolCallRecords.length).toBe(2)
-    const creatorKeys = new Set(toolCallRecords.map(r => r.creator_key))
+    const creatorKeys = new Set(toolCallRecords.map((r) => r.creator_key))
     expect(creatorKeys.has(base64urlEncode(await getPublicKey(TOOL_A_KEY)))).toBe(true)
     expect(creatorKeys.has(base64urlEncode(await getPublicKey(TOOL_B_KEY)))).toBe(true)
 
     // All records share the same context_id (single session)
-    const contextIds = new Set(store.records.map(r => r.context_id))
+    const contextIds = new Set(store.records.map((r) => r.context_id))
     expect(contextIds.size).toBe(1)
     const contextId = [...contextIds][0]!
 
     // All records carry the same session_token
     const sessionTokens = new Set(
-      store.records.map(r => ('session_token' in r ? r.session_token : undefined)),
+      store.records.map((r) => ('session_token' in r ? r.session_token : undefined)),
     )
     expect(sessionTokens.size).toBe(1)
     expect([...sessionTokens][0]).toBe('integration-test-session')
@@ -154,19 +152,19 @@ describe('End-to-end attribution flow', () => {
     expect(graph.node_count).toBe(3)
 
     // §3.2.4 step 4: every non-tx node has CONVERGES_ON to the transaction
-    const convergesOnEdges = graph.edges.filter(e => e.type === 'CONVERGES_ON')
+    const convergesOnEdges = graph.edges.filter((e) => e.type === 'CONVERGES_ON')
     expect(convergesOnEdges.length).toBe(2)
 
     // §3.2.4 step 1: chain links derived from chain_root references.
     // Tool B's chain_root references Tool A's record hash → A → B
     // Merchant tx's chain_root references Tool B's record hash → B → tx
     // Expect exactly 2 CHAIN_PRECEDES edges
-    const chainEdges = graph.edges.filter(e => e.type === 'CHAIN_PRECEDES')
+    const chainEdges = graph.edges.filter((e) => e.type === 'CHAIN_PRECEDES')
     expect(chainEdges.length).toBe(2)
 
     // Verify the chain is A → B → tx by walking the edges
-    const txNode = graph.nodes.find(n => n.event_type === 'transaction')!
-    const edgeTo = (target: string) => chainEdges.find(e => e.target === target)
+    const txNode = graph.nodes.find((n) => n.event_type === 'transaction')!
+    const edgeTo = (target: string) => chainEdges.find((e) => e.target === target)
     const txParentEdge = edgeTo(txNode.id)
     expect(txParentEdge).toBeDefined()
     const toolBNodeId = txParentEdge!.source
@@ -253,7 +251,7 @@ describe('End-to-end attribution flow', () => {
           serverUrl: MERCHANT_URL,
         })
         await agent.flush()
-        await new Promise(resolve => setTimeout(resolve, 50))
+        await new Promise((resolve) => setTimeout(resolve, 50))
 
         const ctxId = localStore.records[0]!.context_id
         const graph = buildGraphFromRecords(localStore.records, ctxId)
@@ -317,14 +315,12 @@ describe('End-to-end attribution flow', () => {
     })
 
     await agent.flush()
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50))
 
     // Now we should have: tool A's record + an agent-emitted Path 2 transaction
-    const txRecords = store.records.filter(r => r.event_type === 'transaction')
+    const txRecords = store.records.filter((r) => r.event_type === 'transaction')
     expect(txRecords.length).toBe(1)
     // Transaction record signed by the AGENT, not the merchant
-    expect(txRecords[0]!.creator_key).toBe(
-      base64urlEncode(await getPublicKey(AGENT_KEY)),
-    )
+    expect(txRecords[0]!.creator_key).toBe(base64urlEncode(await getPublicKey(AGENT_KEY)))
   })
 })

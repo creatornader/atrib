@@ -501,9 +501,9 @@ describe('atrib() middleware', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       // Mock signRecord to throw, this forces the catch path
-      const signSpy = vi.spyOn(signingModule, 'signRecord').mockRejectedValue(
-        new Error('forced signing failure'),
-      )
+      const signSpy = vi
+        .spyOn(signingModule, 'signRecord')
+        .mockRejectedValue(new Error('forced signing failure'))
 
       const result = await handler(createToolCallRequest('search_web'), {})
 
@@ -527,9 +527,7 @@ describe('atrib() middleware', () => {
 
       atrib(mockServer, { creatorKey: TEST_PRIVATE_KEY_B64 })
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('no serverUrl provided'),
-      )
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('no serverUrl provided'))
       warnSpy.mockRestore()
     })
   })

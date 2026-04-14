@@ -81,7 +81,7 @@ describe('atrib() end-to-end against the real MCP SDK', () => {
     // Spec §2.6.1: the POST body is a bare signed attribution record.
     const submissions: Array<{ event_type?: string; content_id?: string }> = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
-      const body = JSON.parse(((init as { body: string })?.body) as string)
+      const body = JSON.parse((init as { body: string })?.body as string)
       submissions.push(body)
       return new Response(JSON.stringify({ log_index: 1 }), { status: 200 })
     })
@@ -110,9 +110,7 @@ describe('atrib() end-to-end against the real MCP SDK', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const underlyingServer = mcpServer.server as any
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handlers = (underlyingServer as any)._requestHandlers as
-      | Map<string, unknown>
-      | undefined
+    const handlers = (underlyingServer as any)._requestHandlers as Map<string, unknown> | undefined
     expect(handlers).toBeDefined()
     const toolsCallHandler = handlers?.get('tools/call') as
       | ((req: unknown, extra: unknown) => Promise<unknown>)
@@ -126,8 +124,7 @@ describe('atrib() end-to-end against the real MCP SDK', () => {
           name: 'echo',
           arguments: { message: 'hello' },
           _meta: {
-            traceparent:
-              '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+            traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
           },
         },
       },
@@ -169,7 +166,7 @@ describe('atrib() end-to-end against the real MCP SDK', () => {
     // _requestHandlers map and rewrite the existing entry.
     const submissions: unknown[] = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
-      const body = JSON.parse(((init as { body: string })?.body) as string)
+      const body = JSON.parse((init as { body: string })?.body as string)
       submissions.push(body)
       return new Response(JSON.stringify({ log_index: 1 }), { status: 200 })
     })
@@ -227,9 +224,7 @@ describe('atrib() end-to-end against the real MCP SDK', () => {
     // Pass-through mode: flush exists but is a no-op
     expect(wrapped.flush).toBeDefined()
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'McpServer.server.setRequestHandler is not a function',
-      ),
+      expect.stringContaining('McpServer.server.setRequestHandler is not a function'),
     )
     warnSpy.mockRestore()
   })

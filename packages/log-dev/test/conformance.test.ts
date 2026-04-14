@@ -107,13 +107,8 @@ function loadAllSequences(): SequenceFile[] {
     .map((f) => loadJson<SequenceFile>(join(dir, f)))
 }
 
-async function sendCaseRequest(
-  log: DevLog,
-  request: CaseFile['request'],
-): Promise<Response> {
-  const body = request.body_is_raw_string
-    ? (request.body as string)
-    : JSON.stringify(request.body)
+async function sendCaseRequest(log: DevLog, request: CaseFile['request']): Promise<Response> {
+  const body = request.body_is_raw_string ? (request.body as string) : JSON.stringify(request.body)
   return fetch(`${log.url}${request.path}`, {
     method: request.method,
     headers: request.headers,
@@ -159,16 +154,16 @@ describe('spec §2.6.1 conformance corpus', () => {
       const testName = `${c.name} (§${c.spec_section}${c.validation_step !== null ? ` Step ${c.validation_step}` : ''})`
 
       if (skipReason) {
-        // eslint-disable-next-line vitest/no-disabled-tests
         it.skip(`${testName}, SKIPPED: ${skipReason}`, () => {})
         continue
       }
 
       it(testName, async () => {
         const response = await sendCaseRequest(log, c.request)
-        expect(response.status, `expected ${c.expected.status}, got ${response.status}: ${c.description}`).toBe(
-          c.expected.status,
-        )
+        expect(
+          response.status,
+          `expected ${c.expected.status}, got ${response.status}: ${c.description}`,
+        ).toBe(c.expected.status)
 
         if (c.expected.error_contains) {
           const body = (await response.json()) as { error?: string }
@@ -223,7 +218,10 @@ describe('spec §2.6.1 conformance corpus', () => {
             }
             if (step.expected.log_index_matches) {
               const expected = captured[step.expected.log_index_matches]
-              expect(expected, `no captured log_index named "${step.expected.log_index_matches}"`).toBeDefined()
+              expect(
+                expected,
+                `no captured log_index named "${step.expected.log_index_matches}"`,
+              ).toBeDefined()
               expect(body.log_index).toBe(expected)
             }
           }

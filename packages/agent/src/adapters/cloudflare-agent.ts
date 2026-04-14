@@ -141,9 +141,7 @@ export function attributeCloudflareAgentMcp(
   for (const [name, conn] of Object.entries(connections)) {
     try {
       if (!conn || !isMinimalMcpClient(conn.client)) {
-        console.warn(
-          `atrib: connection '${name}' has no client field, skipping`,
-        )
+        console.warn(`atrib: connection '${name}' has no client field, skipping`)
         continue
       }
 
@@ -183,10 +181,7 @@ export function attributeCloudflareAgentMcp(
     } catch (err) {
       // §5.8 degradation contract: never let a single bad connection break
       // the whole agent. Log and continue.
-      console.warn(
-        `atrib: failed to wrap MCP connection '${name}', skipping:`,
-        err,
-      )
+      console.warn(`atrib: failed to wrap MCP connection '${name}', skipping:`, err)
     }
   }
 

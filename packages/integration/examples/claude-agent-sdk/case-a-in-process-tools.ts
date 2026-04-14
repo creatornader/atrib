@@ -40,9 +40,7 @@ const getTemperature = tool(
     )
     const data = (await r.json()) as { current: { temperature_2m: number } }
     return {
-      content: [
-        { type: 'text', text: `Temperature: ${data.current.temperature_2m}°F` },
-      ],
+      content: [{ type: 'text', text: `Temperature: ${data.current.temperature_2m}°F` }],
     }
   },
 )
@@ -68,9 +66,7 @@ if (!ATRIB_KEY) {
 atrib(weatherServer.instance, {
   ...(ATRIB_KEY ? { creatorKey: ATRIB_KEY } : {}),
   serverUrl: 'https://example.com/weather',
-  ...(process.env.ATRIB_LOG_ENDPOINT
-    ? { logEndpoint: process.env.ATRIB_LOG_ENDPOINT }
-    : {}),
+  ...(process.env.ATRIB_LOG_ENDPOINT ? { logEndpoint: process.env.ATRIB_LOG_ENDPOINT } : {}),
 })
 
 // 4. Drive the agent. From Claude's perspective there is no Atrib involvement.

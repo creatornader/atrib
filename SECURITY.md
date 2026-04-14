@@ -38,7 +38,7 @@ Instead, email **security@atrib.dev** with:
 ## Supported Versions
 
 | Version | Supported |
-|---------|-----------|
+| ------- | --------- |
 | 0.1.x   | Yes       |
 
 ## Credit
@@ -49,11 +49,11 @@ We credit security researchers in release notes (unless you prefer anonymity). L
 
 Atrib uses exclusively audited libraries implementing published standards:
 
-| Component | Standard | Library |
-|-----------|----------|---------|
-| Signing | Ed25519 (RFC 8032) | @noble/ed25519 (audited) |
-| Hashing | SHA-256 | @noble/hashes (audited) |
-| Canonicalization | JCS (RFC 8785) | canonicalize |
-| Merkle tree | RFC 6962 (Certificate Transparency) | In-house, tested against Wycheproof vectors |
+| Component        | Standard                            | Library                                     |
+| ---------------- | ----------------------------------- | ------------------------------------------- |
+| Signing          | Ed25519 (RFC 8032)                  | @noble/ed25519 (audited)                    |
+| Hashing          | SHA-256                             | @noble/hashes (audited)                     |
+| Canonicalization | JCS (RFC 8785)                      | canonicalize                                |
+| Merkle tree      | RFC 6962 (Certificate Transparency) | In-house, tested against Wycheproof vectors |
 
 Zero custom cryptographic algorithms. All cryptographic operations use audited implementations of published standards.

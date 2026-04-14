@@ -139,9 +139,7 @@ export function mergeTracestate(atribEntry: string, existing: string): string {
     cleanedExisting.pop()
   }
 
-  return cleanedExisting.length > 0
-    ? `${atribEntry},${cleanedExisting.join(',')}`
-    : atribEntry
+  return cleanedExisting.length > 0 ? `${atribEntry},${cleanedExisting.join(',')}` : atribEntry
 }
 
 /**
@@ -162,8 +160,7 @@ export function mergeBaggageAtribSession(sessionToken: string, existing: string)
     cleanedExisting.pop()
   }
 
-  let merged =
-    cleanedExisting.length > 0 ? `${newEntry},${cleanedExisting.join(',')}` : newEntry
+  let merged = cleanedExisting.length > 0 ? `${newEntry},${cleanedExisting.join(',')}` : newEntry
 
   // Enforce 8192-byte total cap. Drop entries from the right until under cap.
   // Atrib-session itself is < 60 bytes so this only fires when callers
@@ -172,8 +169,7 @@ export function mergeBaggageAtribSession(sessionToken: string, existing: string)
   if (encodedByteLength(merged) > MAX_BYTES) {
     while (cleanedExisting.length > 0 && encodedByteLength(merged) > MAX_BYTES) {
       cleanedExisting.pop()
-      merged =
-        cleanedExisting.length > 0 ? `${newEntry},${cleanedExisting.join(',')}` : newEntry
+      merged = cleanedExisting.length > 0 ? `${newEntry},${cleanedExisting.join(',')}` : newEntry
     }
   }
 

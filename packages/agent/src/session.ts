@@ -124,8 +124,7 @@ export function buildOutboundMeta(
     // leftmost (W3C "most recent vendor first" convention). mergeTracestate
     // dedupes any prior atrib entry and enforces the W3C 32-list-member
     // maximum, evicting from the rightmost end if needed.
-    const existingTracestate =
-      typeof existing.tracestate === 'string' ? existing.tracestate : ''
+    const existingTracestate = typeof existing.tracestate === 'string' ? existing.tracestate : ''
     meta.tracestate = mergeTracestate(`atrib=${token}`, existingTracestate)
   } else if (typeof existing.tracestate === 'string') {
     // Preserve caller's tracestate if no atrib token to add

@@ -151,12 +151,12 @@ The upstream `server-filesystem` process is unmodified. It sees a normal `tools/
 
 ## When to use which case
 
-| If… | Use |
-|---|---|
-| Your tools are defined in your own TypeScript with `tool()` + `createSdkMcpServer()` | **Case A** |
-| You're connecting to an existing third-party MCP server (filesystem, fetch, GitHub, etc.) | **Case B** |
-| You have multiple upstream servers | One **Case B** proxy per upstream |
-| You have a mix | Use both, Case A for your own tools and Case B for the third parties |
+| If…                                                                                       | Use                                                                   |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Your tools are defined in your own TypeScript with `tool()` + `createSdkMcpServer()`      | **Case A**                                                            |
+| You're connecting to an existing third-party MCP server (filesystem, fetch, GitHub, etc.) | **Case B**                                                            |
+| You have multiple upstream servers                                                        | One **Case B** proxy per upstream                                     |
+| You have a mix                                                                            | Use both, Case A for your own tools and Case B for the third parties |
 
 ---
 

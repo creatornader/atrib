@@ -2,7 +2,7 @@
 
 **Independent merchant-side verification of Atrib settlement recommendations. Re-runs the spec §4.6 calculation algorithm locally and checks the result against what a recommendation document claims, without trusting any intermediary.**
 
-This is the **merchant/auditor half** of the Atrib protocol. The agent and tool servers produce signed attribution records. The Merkle log stores them. This package answers the question every merchant has to answer before paying anyone: *given the graph and the policy, is this distribution actually correct?*
+This is the **merchant/auditor half** of the Atrib protocol. The agent and tool servers produce signed attribution records. The Merkle log stores them. This package answers the question every merchant has to answer before paying anyone: _given the graph and the policy, is this distribution actually correct?_
 
 ## Quick start
 
@@ -10,8 +10,8 @@ This is the **merchant/auditor half** of the Atrib protocol. The agent and tool 
 import { AtribVerifier } from '@atrib/verify'
 
 const verifier = new AtribVerifier({
-  merchantKey: process.env.ATRIB_MERCHANT_KEY,            // optional, base64url Ed25519 seed
-  graphEndpoint: 'https://graph.atrib.io/v1',             // defaults to atrib.io endpoints
+  merchantKey: process.env.ATRIB_MERCHANT_KEY, // optional, base64url Ed25519 seed
+  graphEndpoint: 'https://graph.atrib.io/v1', // defaults to atrib.io endpoints
   logEndpoint: 'https://log.atrib.io/v1',
 })
 
@@ -46,8 +46,8 @@ If the agent that drove the session was not Atrib-aware (no `@atrib/agent` middl
 ```typescript
 const recommendation = await verifier.calculate({
   context_id: 'sess_abc123...',
-  policy: 'default',           // or a full PolicyDocument
-  signWith: 'merchant',         // signs with merchantKey if present
+  policy: 'default', // or a full PolicyDocument
+  signWith: 'merchant', // signs with merchantKey if present
 })
 // → fully-shaped RecommendationDocument, ready to settle against
 ```
@@ -58,12 +58,12 @@ Per the §5.8 degradation contract, this never throws on a missing key, if `sign
 
 ### `new AtribVerifier(options)`
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `logEndpoint` | `string` | `https://log.atrib.io/v1` | The Merkle log to fetch checkpoints and proofs from. |
-| `graphEndpoint` | `string` | `https://graph.atrib.io/v1` | The graph query endpoint (spec §3). |
-| `resolveEndpoint` | `string` | `https://resolve.atrib.io/v1` | Reserved for v2 remote calculation. |
-| `merchantKey` | `string` | unset | Base64url Ed25519 32-byte seed. Optional, `verify()` works without it. |
+| Field             | Type     | Default                       | Description                                                             |
+| ----------------- | -------- | ----------------------------- | ----------------------------------------------------------------------- |
+| `logEndpoint`     | `string` | `https://log.atrib.io/v1`     | The Merkle log to fetch checkpoints and proofs from.                    |
+| `graphEndpoint`   | `string` | `https://graph.atrib.io/v1`   | The graph query endpoint (spec §3).                                     |
+| `resolveEndpoint` | `string` | `https://resolve.atrib.io/v1` | Reserved for v2 remote calculation.                                     |
+| `merchantKey`     | `string` | unset                         | Base64url Ed25519 32-byte seed. Optional, `verify()` works without it. |
 
 ### `verify(doc): Promise<VerificationResult>`
 
@@ -120,14 +120,14 @@ Run them with `pnpm --filter @atrib/verify test`.
 
 ## Spec references
 
-| Spec section | What this package implements |
-|---|---|
-| §3 | Graph query interface (client side) |
-| §4.3 | Default policy document |
-| §4.6 | Pure calculation algorithm |
-| §4.7 | Recommendation document signing/verification |
-| §5.5 | `AtribVerifier` class, `verify()` and `calculate()` |
-| §5.8 | Degradation contract, failures never break the host |
+| Spec section | What this package implements                         |
+| ------------ | ---------------------------------------------------- |
+| §3           | Graph query interface (client side)                  |
+| §4.3         | Default policy document                              |
+| §4.6         | Pure calculation algorithm                           |
+| §4.7         | Recommendation document signing/verification         |
+| §5.5         | `AtribVerifier` class, `verify()` and `calculate()` |
+| §5.8         | Degradation contract, failures never break the host |
 
 The full protocol spec is at [`atrib-spec.md`](../../atrib-spec.md).
 

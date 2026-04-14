@@ -1,4 +1,4 @@
-# `services/log/`, Atrib production Merkle log *(not yet built)*
+# `services/log/`, Atrib production Merkle log _(not yet built)_
 
 This directory is a placeholder for the production Atrib transparency log: a [Tessera](https://github.com/transparency-dev/tessera)-backed Merkle log implementing the [C2SP tlog-tiles](https://c2sp.org/tlog-tiles) specification, deployed at `log.atrib.io/v1`.
 
@@ -37,15 +37,15 @@ What's true is that the **wire format** and the **client-side SDK** can both be 
 
 ## Spec references
 
-| Spec section | What this service will implement |
-|---|---|
-| §2.3 | Log entry encoding (`AtribLogEntry`, 90-byte fixed format) |
-| §2.4 | Checkpoint format (signed-note over tlog-tiles tree head) |
-| §2.5 | Read API (checkpoint, tiles, entry retrieval) |
-| §2.6 | Submission API (POST /v1/entries with §2.6.1 wire format and §2.6.2 proof bundle) |
-| §2.7 | Inclusion proof verification (server-side, also exposed for clients to verify) |
-| §2.8 | Proof bundle format (c2sp.org/tlog-proof@v1) |
-| §2.9 | Witnessing and cosignatures |
+| Spec section | What this service will implement                                                  |
+| ------------ | --------------------------------------------------------------------------------- |
+| §2.3         | Log entry encoding (`AtribLogEntry`, 90-byte fixed format)                        |
+| §2.4         | Checkpoint format (signed-note over tlog-tiles tree head)                         |
+| §2.5         | Read API (checkpoint, tiles, entry retrieval)                                     |
+| §2.6         | Submission API (POST /v1/entries with §2.6.1 wire format and §2.6.2 proof bundle) |
+| §2.7         | Inclusion proof verification (server-side, also exposed for clients to verify)    |
+| §2.8         | Proof bundle format (c2sp.org/tlog-proof@v1)                                      |
+| §2.9         | Witnessing and cosignatures                                                       |
 
 ## See also
 

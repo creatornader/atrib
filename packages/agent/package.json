@@ -22,7 +22,18 @@
     "directory": "packages/agent"
   },
   "homepage": "https://atrib.io",
-  "keywords": ["mcp", "model-context-protocol", "attribution", "verifiable", "receipts", "agent", "claude", "vercel-ai-sdk", "langchain", "cloudflare-agents"],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "attribution",
+    "verifiable",
+    "receipts",
+    "agent",
+    "claude",
+    "vercel-ai-sdk",
+    "langchain",
+    "cloudflare-agents"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run",

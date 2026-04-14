@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest'
+import { createSession, buildOutboundMeta, accumulateInboundContext } from '../src/session.js'
 import {
-  createSession,
-  buildOutboundMeta,
-  accumulateInboundContext,
-} from '../src/session.js'
-import { base64urlEncode, encodeToken, signRecord, getPublicKey, genesisChainRoot } from '@atrib/mcp'
+  base64urlEncode,
+  encodeToken,
+  signRecord,
+  getPublicKey,
+  genesisChainRoot,
+} from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 
 const TEST_KEY = new Uint8Array(32).fill(1)

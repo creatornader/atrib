@@ -4,6 +4,7 @@ Real captured payload shapes from Google's Agent Payments Protocol (AP2)
 and the related a2a-x402 extension.
 
 **Sources:**
+
 - AP2 v0.1: https://github.com/google-agentic-commerce/ap2
   - Spec: `docs/specification.md`
   - A2A extension: `docs/a2a-extension.md`

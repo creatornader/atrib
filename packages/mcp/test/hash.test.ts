@@ -33,7 +33,7 @@ describe('hexEncode / hexDecode', () => {
   })
 
   it('produces lowercase hex', () => {
-    const bytes = new Uint8Array([0xAB, 0xCD, 0xEF])
+    const bytes = new Uint8Array([0xab, 0xcd, 0xef])
     const hex = hexEncode(bytes)
     expect(hex).toBe('abcdef')
   })

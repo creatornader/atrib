@@ -1,9 +1,7 @@
 {
   "ucp": {
     "version": "2026-01-11",
-    "capabilities": [
-      { "name": "dev.ucp.shopping.checkout", "version": "2026-01-11" }
-    ]
+    "capabilities": [{ "name": "dev.ucp.shopping.checkout", "version": "2026-01-11" }]
   },
   "id": "chk_123456789",
   "status": "completed",
@@ -33,7 +31,5 @@
     { "type": "tax", "amount": 400 },
     { "type": "total", "amount": 5400 }
   ],
-  "links": [
-    { "type": "terms_of_service", "url": "https://merchant.com/terms" }
-  ]
+  "links": [{ "type": "terms_of_service", "url": "https://merchant.com/terms" }]
 }

@@ -10,10 +10,10 @@ The integration is **one extra line**: `attributeVercelAiSdkMcp(mcpClient, { int
 
 The `@ai-sdk/mcp` MCPClient is **not** a `@modelcontextprotocol/sdk` Client. It has its own JSON-RPC implementation with two structural differences that make `wrapMcpClient` (the helper that works for raw `@modelcontextprotocol/sdk` clients) inapplicable:
 
-| `@modelcontextprotocol/sdk` Client | `@ai-sdk/mcp` MCPClient |
-|---|---|
-| `callTool({ name, arguments, _meta })` | `callTool({ name, args, options })` |
-| Accepts `_meta` field on the request | Does NOT accept `_meta`, it's stripped before the JSON-RPC request is built |
+| `@modelcontextprotocol/sdk` Client        | `@ai-sdk/mcp` MCPClient                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `callTool({ name, arguments, _meta })`    | `callTool({ name, args, options })`                                                               |
+| Accepts `_meta` field on the request      | Does NOT accept `_meta`, it's stripped before the JSON-RPC request is built                      |
 | `client.callTool()` is the public surface | `client.tools()` returns an AI-SDK ToolSet whose `execute()` calls `client.callTool()` internally |
 
 Because the `_meta` field is stripped at the AI SDK MCPClient layer, wrapping at the AI SDK execute callback level loses Atrib's outbound metadata. The right integration point is the **`request()` method**, the JSON-RPC bottleneck through which every MCP call flows on its way to the transport. Patching here lets Atrib inject `_meta` into outbound `tools/call` and read raw `_meta` from the response before AI-SDK-specific transformations like `extractStructuredContent` strip it.
@@ -97,7 +97,7 @@ If you want to be explicit about routing through the Gateway (e.g. for clarity i
 import { gateway } from '@ai-sdk/gateway'
 
 const result = await streamText({
-  model: gateway('openai/gpt-5.4'),  // explicit gateway form, same routing as the string form
+  model: gateway('openai/gpt-5.4'), // explicit gateway form, same routing as the string form
   tools,
   prompt: 'What can you do?',
 })

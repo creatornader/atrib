@@ -18,11 +18,7 @@ export type EdgeType =
   | 'CONVERGES_ON'
   | 'CROSS_SESSION'
 
-export type VerificationState =
-  | 'unsigned'
-  | 'signature_valid'
-  | 'log_committed'
-  | 'witnessed'
+export type VerificationState = 'unsigned' | 'signature_valid' | 'log_committed' | 'witnessed'
 
 /** A node in the attribution graph (§3.5.2). */
 export interface GraphNode {

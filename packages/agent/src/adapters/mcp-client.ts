@@ -141,10 +141,7 @@ export function wrapMcpClient<C extends MinimalMcpClient>(
       const responseOptions = serverUrl !== undefined ? { serverUrl } : {}
       interceptor.onAfterToolResponse(toolName, result, responseMeta, responseOptions)
     } catch (err) {
-      console.warn(
-        'atrib: wrapMcpClient onAfterToolResponse failed, passing through',
-        err,
-      )
+      console.warn('atrib: wrapMcpClient onAfterToolResponse failed, passing through', err)
     }
 
     return result

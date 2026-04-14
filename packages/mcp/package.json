@@ -22,7 +22,17 @@
     "directory": "packages/mcp"
   },
   "homepage": "https://atrib.io",
-  "keywords": ["mcp", "model-context-protocol", "attribution", "verifiable", "receipts", "ed25519", "merkle", "agent", "transparency"],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "attribution",
+    "verifiable",
+    "receipts",
+    "ed25519",
+    "merkle",
+    "agent",
+    "transparency"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run",

@@ -56,8 +56,8 @@ export async function bindServer(
   })
 
   // Protect against Slowloris and slow-request DoS attacks
-  server.headersTimeout = 5_000    // 5 seconds to receive headers
-  server.requestTimeout = 30_000   // 30 seconds for full request
+  server.headersTimeout = 5_000 // 5 seconds to receive headers
+  server.requestTimeout = 30_000 // 30 seconds for full request
 
   await new Promise<void>((resolve) => {
     server.listen(port, '127.0.0.1', resolve)
@@ -240,4 +240,3 @@ async function readBody(req: IncomingMessage): Promise<string> {
   }
   return Buffer.concat(chunks).toString('utf-8')
 }
-

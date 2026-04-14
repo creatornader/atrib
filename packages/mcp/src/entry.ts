@@ -44,7 +44,9 @@ export function serializeEntry(input: EntryInput): Uint8Array {
   // [1-32] record_hash, decode 64-char hex string to 32 bytes
   const recordHash = hexDecode(input.record_hash_hex)
   if (recordHash.length !== 32) {
-    throw new Error(`serializeEntry: record_hash_hex must be 64 hex chars, got ${input.record_hash_hex.length}`)
+    throw new Error(
+      `serializeEntry: record_hash_hex must be 64 hex chars, got ${input.record_hash_hex.length}`,
+    )
   }
   buf.set(recordHash, 1)
 
@@ -55,7 +57,9 @@ export function serializeEntry(input: EntryInput): Uint8Array {
   // [65-80] context_id, decode 32-char hex string to 16 bytes
   const contextId = hexDecode(input.context_id)
   if (contextId.length !== 16) {
-    throw new Error(`serializeEntry: context_id must be 32 hex chars, got ${input.context_id.length}`)
+    throw new Error(
+      `serializeEntry: context_id must be 32 hex chars, got ${input.context_id.length}`,
+    )
   }
   buf.set(contextId, 65)
 
@@ -78,9 +82,7 @@ function base64urlToBytes(b64url: string, expectedBytes: number): Uint8Array {
   const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/')
   const raw = Buffer.from(b64, 'base64')
   if (raw.byteLength !== expectedBytes) {
-    throw new Error(
-      `base64urlToBytes: expected ${expectedBytes} bytes, got ${raw.byteLength}`,
-    )
+    throw new Error(`base64urlToBytes: expected ${expectedBytes} bytes, got ${raw.byteLength}`)
   }
   return new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
 }

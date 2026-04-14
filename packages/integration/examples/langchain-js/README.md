@@ -66,7 +66,7 @@ const interceptor = atrib({
 const multi = new MultiServerMCPClient({
   mcpServers: {
     search: { transport: 'http', url: 'https://search.example.com/mcp' },
-    shop:   { transport: 'http', url: 'https://shop.example.com/mcp' },
+    shop: { transport: 'http', url: 'https://shop.example.com/mcp' },
   },
 })
 
@@ -81,7 +81,7 @@ await attributeLangchainMcp(multi, {
   interceptor,
   serverUrls: {
     search: 'https://search.example.com',
-    shop:   'https://shop.example.com',
+    shop: 'https://shop.example.com',
   },
 })
 
@@ -110,7 +110,7 @@ That's the entire integration. Every successful tool call going through LangChai
 
 ## Order independence: before or after `getTools()`
 
-`attributeLangchainMcp` can be called **before or after** `multi.getTools()`. LangChain's tool construction captures the `client` reference by closure but dereferences `client.callTool` at *invocation* time (see `@langchain/mcp-adapters@1.1.3` `dist/tools.js:391`). As long as the patch is in place before any tool is invoked, every invocation flows through Atrib regardless of when you called the helper.
+`attributeLangchainMcp` can be called **before or after** `multi.getTools()`. LangChain's tool construction captures the `client` reference by closure but dereferences `client.callTool` at _invocation_ time (see `@langchain/mcp-adapters@1.1.3` `dist/tools.js:391`). As long as the patch is in place before any tool is invoked, every invocation flows through Atrib regardless of when you called the helper.
 
 Most production setups call `initializeConnections()` first, then `attributeLangchainMcp`, then `getTools()`, a predictable linear order. But the helper is designed to be safe in either direction so you don't need to remember the sequence.
 
@@ -135,8 +135,8 @@ await attributeLangchainMcp(multi, {
   interceptor,
   serverUrls: {
     search: 'https://search.example.com',
-    shop:   'https://shop.example.com',
-    maps:   'https://maps.example.com',
+    shop: 'https://shop.example.com',
+    maps: 'https://maps.example.com',
   },
 })
 ```
@@ -146,7 +146,7 @@ To selectively patch only a subset of servers (rare, usually you want all of the
 ```ts
 await attributeLangchainMcp(multi, {
   interceptor,
-  servers: ['search'],  // shop and maps will NOT be attributed
+  servers: ['search'], // shop and maps will NOT be attributed
 })
 ```
 

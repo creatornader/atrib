@@ -5,39 +5,39 @@ export {
   EVENT_TYPE_TOOL_CALL,
   EVENT_TYPE_TRANSACTION,
   type EntryInput,
-} from './entry.js';
+} from './entry.js'
 
-export { createMerkleTree } from './tree.js';
-export type { MerkleTree } from './tree.js';
+export { createMerkleTree } from './tree.js'
+export type { MerkleTree } from './tree.js'
 
-export { createCheckpointSigner, formatCheckpointBody, parseCheckpointBody } from './checkpoint.js';
-export type { CheckpointSigner } from './checkpoint.js';
+export { createCheckpointSigner, formatCheckpointBody, parseCheckpointBody } from './checkpoint.js'
+export type { CheckpointSigner } from './checkpoint.js'
 
-export { bindServer } from './server.js';
-export type { ServerHandle } from './server.js';
-export type { ProofBundle } from '@atrib/mcp';
+export { bindServer } from './server.js'
+export type { ServerHandle } from './server.js'
+export type { ProofBundle } from '@atrib/mcp'
 
-import * as ed from '@noble/ed25519';
-import { sha512 } from '@noble/hashes/sha2.js';
-import { createMerkleTree } from './tree.js';
-import { createCheckpointSigner } from './checkpoint.js';
-import { bindServer } from './server.js';
+import * as ed from '@noble/ed25519'
+import { sha512 } from '@noble/hashes/sha2.js'
+import { createMerkleTree } from './tree.js'
+import { createCheckpointSigner } from './checkpoint.js'
+import { bindServer } from './server.js'
 
 // Set up sync sha512 for @noble/ed25519 (safe to call multiple times)
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
+ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
 
 export interface LogServerOptions {
-  port?: number;
-  logPrivateKey?: Uint8Array;
+  port?: number
+  logPrivateKey?: Uint8Array
 }
 
 export interface LogServer {
-  readonly url: string;
-  readonly logPublicKey: Uint8Array;
-  close(): Promise<void>;
+  readonly url: string
+  readonly logPublicKey: Uint8Array
+  close(): Promise<void>
 }
 
-const LOG_ORIGIN = 'log.atrib.io/v1';
+const LOG_ORIGIN = 'log.atrib.io/v1'
 
 /**
  * Start a production log HTTP server.
@@ -47,33 +47,37 @@ const LOG_ORIGIN = 'log.atrib.io/v1';
  * server's URL, public key, and a close() function.
  */
 export async function startLogServer(options?: LogServerOptions): Promise<LogServer> {
-  const port = options?.port ?? 0;
+  const port = options?.port ?? 0
 
   // Generate or use provided private key
   // IMPORTANT: In production, provide a persistent keypair via logPrivateKey option.
   // A random key means checkpoint signatures change on every restart, invalidating
   // all previously issued inclusion proofs.
-  let privateKey: Uint8Array;
+  let privateKey: Uint8Array
   if (options?.logPrivateKey !== undefined) {
-    privateKey = options.logPrivateKey;
+    privateKey = options.logPrivateKey
   } else {
-    privateKey = ed.utils.randomPrivateKey();
+    privateKey = ed.utils.randomPrivateKey()
   }
 
-  const publicKey = await ed.getPublicKeyAsync(privateKey);
+  const publicKey = await ed.getPublicKeyAsync(privateKey)
 
-  const tree = createMerkleTree();
-  const signer = createCheckpointSigner(privateKey, publicKey, LOG_ORIGIN);
+  const tree = createMerkleTree()
+  const signer = createCheckpointSigner(privateKey, publicKey, LOG_ORIGIN)
   // Note: privateKey remains in memory for the signer's lifetime (the signer
   // captures it in a closure for checkpoint signing). This is intentional,
   // the key must be available for the process lifetime. JavaScript does not
   // support reliable key zeroing (GC is non-deterministic). If memory-dump
   // resistance is ever required, consider a native HSM integration.
-  const handle = await bindServer(tree, signer, port);
+  const handle = await bindServer(tree, signer, port)
 
   return {
-    get url() { return handle.url; },
-    get logPublicKey() { return publicKey; },
+    get url() {
+      return handle.url
+    },
+    get logPublicKey() {
+      return publicKey
+    },
     close: handle.close.bind(handle),
-  };
+  }
 }

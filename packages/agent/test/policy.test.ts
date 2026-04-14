@@ -54,13 +54,11 @@ describe('initializeSessionPolicy', () => {
         merchantDomain: 'https://merchant.example.com',
       })
       expect(record.merchant_policy).toBe('default')
-      expect(record.warnings.some(w => w.includes('merchant policy not found'))).toBe(true)
+      expect(record.warnings.some((w) => w.includes('merchant policy not found'))).toBe(true)
     })
 
     it('uses merchant policy URL when fetch succeeds', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        policyResponse({ spec_version: 'atrib/1.0' }),
-      )
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(policyResponse({ spec_version: 'atrib/1.0' }))
       const record = await initializeSessionPolicy({
         contextId: CTX,
         merchantDomain: 'https://merchant.example.com',
@@ -152,8 +150,8 @@ describe('initializeSessionPolicy', () => {
       expect(call).toBe(2)
       expect(record.agreed_policy).toBe('default')
       expect(record.applied_constraints.minimum_floors).toEqual({})
-      expect(record.creator_policies.every(c => c.status === 'conflict_defaulted')).toBe(true)
-      expect(record.warnings.some(w => w.includes('>1.0'))).toBe(true)
+      expect(record.creator_policies.every((c) => c.status === 'conflict_defaulted')).toBe(true)
+      expect(record.warnings.some((w) => w.includes('>1.0'))).toBe(true)
     })
   })
 
@@ -179,7 +177,7 @@ describe('initializeSessionPolicy', () => {
       })
       expect(record.agreed_policy).toBe('default')
       expect(record.applied_constraints.minimum_floors).toEqual({})
-      expect(record.warnings.some(w => w.includes('exceeds merchant cap'))).toBe(true)
+      expect(record.warnings.some((w) => w.includes('exceeds merchant cap'))).toBe(true)
     })
   })
 
@@ -210,8 +208,8 @@ describe('initializeSessionPolicy', () => {
       // Each scaled to 0.3 * (0.4/0.6) = 0.2
       expect(floors['https://a.example']).toBeCloseTo(0.2, 5)
       expect(floors['https://b.example']).toBeCloseTo(0.2, 5)
-      expect(record.creator_policies.every(c => c.status === 'floor_scaled')).toBe(true)
-      expect(record.warnings.some(w => w.includes('scaled by'))).toBe(true)
+      expect(record.creator_policies.every((c) => c.status === 'floor_scaled')).toBe(true)
+      expect(record.warnings.some((w) => w.includes('scaled by'))).toBe(true)
     })
 
     it('does not scale when floor sum is within cap', async () => {
@@ -236,7 +234,7 @@ describe('initializeSessionPolicy', () => {
       const floors = record.applied_constraints.minimum_floors
       expect(floors['https://a.example']).toBe(0.3)
       expect(floors['https://b.example']).toBe(0.3)
-      expect(record.creator_policies.every(c => c.status === 'compatible')).toBe(true)
+      expect(record.creator_policies.every((c) => c.status === 'compatible')).toBe(true)
     })
   })
 
@@ -252,8 +250,8 @@ describe('initializeSessionPolicy', () => {
         contextId: CTX,
         serverUrls: ['https://a.example', 'https://b.example'],
       })
-      const aEntry = record.creator_policies.find(c => c.server_url === 'https://a.example')
-      const bEntry = record.creator_policies.find(c => c.server_url === 'https://b.example')
+      const aEntry = record.creator_policies.find((c) => c.server_url === 'https://a.example')
+      const bEntry = record.creator_policies.find((c) => c.server_url === 'https://b.example')
       expect(aEntry?.status).toBe('compatible')
       expect(bEntry?.status).toBe('not_found')
     })
