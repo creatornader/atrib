@@ -69,10 +69,11 @@ export function parseCheckpointBody(
     throw new Error('parseCheckpointBody: origin contains carriage return')
   }
 
-  const treeSize = Number(treeSizeStr)
-  if (!Number.isInteger(treeSize) || treeSize < 0) {
+  // Strict: digits only, no leading zeros (spec says "decimal, no leading zeros")
+  if (!/^\d+$/.test(treeSizeStr) || (treeSizeStr.length > 1 && treeSizeStr[0] === '0')) {
     throw new Error(`parseCheckpointBody: invalid tree size "${treeSizeStr}"`)
   }
+  const treeSize = Number(treeSizeStr)
   return { origin, treeSize, rootHash }
 }
 

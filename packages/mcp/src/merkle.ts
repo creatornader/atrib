@@ -37,8 +37,9 @@ function largestPowerOfTwoLessThan(n: number): number {
   if (n < 2) {
     throw new Error('largestPowerOfTwoLessThan: n must be >= 2')
   }
-  // clz32 approach is safe for 32-bit range and avoids the <<= overflow bug
-  if (n <= 0x100000000) {
+  // clz32 approach: safe for n <= 2^31 (so n-1 fits in 31 bits and
+  // 1 << k never reaches bit 31, avoiding signed-int overflow to negative)
+  if (n <= 0x80000000) {
     return 1 << (31 - Math.clz32(n - 1))
   }
   // For very large trees, use floating-point path

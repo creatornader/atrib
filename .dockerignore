@@ -1,0 +1,26 @@
+# Reduce Docker build context, only packages/mcp/ and services/log-node/
+# are needed by the Dockerfile. Everything else is excluded to prevent
+# accidental inclusion of secrets (.env) and to speed up builds.
+
+.git
+node_modules
+dist
+.env
+.env.*
+*.tgz
+coverage
+.turbo
+
+# Workspace packages not needed by the log service
+packages/agent
+packages/verify
+packages/integration
+packages/log-dev
+
+# Non-code directories
+services/log/
+thoughts/
+docs/
+
+# Build artifacts
+*.log

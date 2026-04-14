@@ -35,7 +35,12 @@ export async function bindServer(
   port: number,
 ): Promise<ServerHandle> {
   // Dedup cache: record_hash hex → proof bundle
-  // Bounded to MAX_PROOF_CACHE entries (~30MB at ~300 bytes/entry)
+  // Bounded to MAX_PROOF_CACHE entries (~30MB at ~300 bytes/entry).
+  // NOTE: Idempotency is best-effort. After cache eviction, re-submission
+  // of the same record will append a new entry with a different log_index
+  // and a fresh proof. Both proofs are independently valid. The spec allows
+  // this: §2.6.1 Step 6 says "return the existing inclusion proof" as a
+  // SHOULD, not a MUST, for implementations with bounded caches.
   const proofCache = new Map<string, ProofBundle>()
 
   const server = createServer((req, res) => {
@@ -89,14 +94,10 @@ async function handleRequest(
     return handleCheckpoint(res, tree, signer)
   }
 
-  res.statusCode = 404
-  res.setHeader('content-type', 'application/json')
-  res.end(
-    JSON.stringify({
-      error: 'not found',
-      hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint',
-    }),
-  )
+  sendJson(res, 404, {
+    error: 'not found',
+    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint',
+  })
 }
 
 async function handleSubmit(
@@ -148,9 +149,7 @@ async function handleSubmit(
   // §2.6.1 Step 6: idempotency, return existing proof if already submitted
   const cached = proofCache.get(recordHashHex)
   if (cached !== undefined) {
-    res.statusCode = 200
-    res.setHeader('content-type', 'application/json')
-    res.end(JSON.stringify(cached))
+    sendJson(res, 200, cached)
     return
   }
 
@@ -191,9 +190,7 @@ async function handleSubmit(
   }
   proofCache.set(recordHashHex, proof)
 
-  res.statusCode = 200
-  res.setHeader('content-type', 'application/json')
-  res.end(JSON.stringify(proof))
+  sendJson(res, 200, proof)
 }
 
 async function handleCheckpoint(
@@ -202,24 +199,30 @@ async function handleCheckpoint(
   signer: CheckpointSigner,
 ): Promise<void> {
   if (tree.size === 0) {
-    res.statusCode = 404
-    res.setHeader('content-type', 'application/json')
-    res.end(JSON.stringify({ error: 'no entries yet' }))
+    sendJson(res, 404, { error: 'no entries yet' })
     return
   }
 
   const rootHash = tree.root()
   const signedCheckpoint = await signer.sign(tree.size, rootHash)
 
+  const checkpointBytes = Buffer.byteLength(signedCheckpoint)
   res.statusCode = 200
   res.setHeader('content-type', 'text/plain')
+  res.setHeader('content-length', checkpointBytes)
   res.end(signedCheckpoint)
 }
 
-function reject(res: ServerResponse, status: number, message: string): void {
+function sendJson(res: ServerResponse, status: number, body: unknown): void {
+  const json = JSON.stringify(body)
   res.statusCode = status
   res.setHeader('content-type', 'application/json')
-  res.end(JSON.stringify({ error: message }))
+  res.setHeader('content-length', Buffer.byteLength(json))
+  res.end(json)
+}
+
+function reject(res: ServerResponse, status: number, message: string): void {
+  sendJson(res, status, { error: message })
 }
 
 const MAX_BODY_BYTES = 64 * 1024 // 64 KB, an AtribRecord is always small
