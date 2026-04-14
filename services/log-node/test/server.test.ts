@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as ed from '@noble/ed25519';
 import { sha512, sha256 } from '@noble/hashes/sha2.js';
-import { canonicalRecord, signRecord } from '@atrib/mcp';
+import { signRecord } from '@atrib/mcp';
 import type { AtribRecord } from '@atrib/mcp';
 import { startLogServer, type LogServer } from '../src/index.js';
 
@@ -34,24 +34,20 @@ async function makeSignedRecord(overrides: Partial<AtribRecord> = {}): Promise<A
   const contextId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
   const chainRoot = `sha256:${bytesToHex(sha256(new TextEncoder().encode(contextId)))}`;
 
-  const unsigned: Omit<AtribRecord, 'signature'> = {
-    spec_version: 'atrib/1.0',
-    event_type: 'tool_call',
+  const unsigned = {
+    spec_version: 'atrib/1.0' as const,
+    event_type: 'tool_call' as const,
     timestamp: Date.now(),
     context_id: contextId,
     creator_key: creatorKey,
     chain_root: chainRoot,
     content_id: 'sha256:' + bytesToHex(sha256(new TextEncoder().encode('test-content'))),
-    tool_name: 'test_tool',
+    signature: '', // placeholder, signRecord will replace
     ...overrides,
   };
 
-  // Sign: sha256 of JCS canonical bytes
-  const canonical = canonicalRecord(unsigned as AtribRecord);
-  const sigBytes = await ed.signAsync(canonical, privateKey);
-  const signature = Buffer.from(sigBytes).toString('base64url');
-
-  return { ...unsigned, signature } as AtribRecord;
+  // Use signRecord which correctly strips signature before signing (§1.4.3)
+  return signRecord(unsigned as AtribRecord, privateKey);
 }
 
 async function post(url: string, body: unknown): Promise<{ status: number; json: unknown }> {

@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as ed from '@noble/ed25519';
 import { sha512, sha256 } from '@noble/hashes/sha2.js';
-import { canonicalRecord, leafHash, verifyInclusion } from '@atrib/mcp';
+import { canonicalRecord, leafHash, verifyInclusion, signRecord } from '@atrib/mcp';
 import type { AtribRecord } from '@atrib/mcp';
 import { serializeEntry } from '../src/entry.js';
 import { parseCheckpointBody } from '../src/checkpoint.js';
@@ -51,14 +51,11 @@ async function makeSignedRecord(): Promise<{ record: AtribRecord; privateKey: Ui
     creator_key: creatorKey,
     chain_root: chainRoot,
     content_id: 'sha256:' + bytesToHex(sha256(new TextEncoder().encode('verification-test'))),
-    tool_name: 'verify_tool',
+    signature: '', // placeholder, signRecord will replace
   };
 
-  const canonical = canonicalRecord(unsigned as AtribRecord);
-  const sigBytes = await ed.signAsync(canonical, privateKey);
-  const signature = Buffer.from(sigBytes).toString('base64url');
-
-  const record = { ...unsigned, signature } as AtribRecord;
+  // Use signRecord which correctly strips signature before signing (§1.4.3)
+  const record = await signRecord(unsigned as AtribRecord, privateKey);
   return { record, privateKey };
 }
 

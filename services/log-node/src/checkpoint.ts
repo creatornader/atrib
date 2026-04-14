@@ -17,10 +17,10 @@
 
 import * as ed from '@noble/ed25519'
 import { sha256 } from '@noble/hashes/sha2.js'
-import { sha512 } from '@noble/hashes/sha2.js'
 
-// Set up sync sha512 for @noble/ed25519
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
+// NOTE: ed.etc.sha512Sync must be set by the application entry point (index.ts)
+// before calling any signing functions. It is NOT set here to avoid split
+// initialization responsibility, see @noble/ed25519 docs.
 
 export interface CheckpointSigner {
   /** Sign a checkpoint and return the signed note string. */
@@ -65,7 +65,7 @@ export function parseCheckpointBody(
   const treeSizeStr = lines[1] as string
   const rootHash = lines[2] as string
   const treeSize = parseInt(treeSizeStr, 10)
-  if (isNaN(treeSize)) {
+  if (isNaN(treeSize) || treeSize < 0) {
     throw new Error(`parseCheckpointBody: invalid tree size "${treeSizeStr}"`)
   }
   return { origin, treeSize, rootHash }
