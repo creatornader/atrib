@@ -22,7 +22,9 @@ if (process.env.ATRIB_LOG_KEY) {
   logPrivateKey = Uint8Array.from(Buffer.from(b64 + '='.repeat(pad), 'base64'))
 }
 
-const server = await startLogServer({ port, logPrivateKey })
+const server = await startLogServer(
+  logPrivateKey ? { port, logPrivateKey } : { port },
+)
 
 // eslint-disable-next-line no-console
 console.log(`atrib-log listening on ${server.url}`)
