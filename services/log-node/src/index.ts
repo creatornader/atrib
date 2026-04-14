@@ -30,6 +30,7 @@ ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
 
 export interface LogServerOptions {
   port?: number
+  host?: string
   logPrivateKey?: Uint8Array
 }
 
@@ -71,7 +72,7 @@ export async function startLogServer(options?: LogServerOptions): Promise<LogSer
   // the key must be available for the process lifetime. JavaScript does not
   // support reliable key zeroing (GC is non-deterministic). If memory-dump
   // resistance is ever required, consider a native HSM integration.
-  const handle = await bindServer(tree, signer, port)
+  const handle = await bindServer(tree, signer, port, options?.host)
 
   return {
     get url() {

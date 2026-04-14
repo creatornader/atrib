@@ -4,7 +4,7 @@ RUN corepack enable
 WORKDIR /app
 
 # Copy workspace root files
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
 
 # Copy only the packages we need (mcp + log-node)
 COPY packages/mcp/ packages/mcp/
@@ -17,5 +17,6 @@ RUN pnpm --filter @atrib/log-node build
 EXPOSE 3100
 
 ENV PORT=3100
+ENV HOST=0.0.0.0
 
 CMD ["node", "services/log-node/dist/main.js"]
