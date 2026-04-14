@@ -74,7 +74,7 @@ Principle V
 
 The protocol is a public good; the product is not
 
-The atrib specification, the signing libraries, and the transparency log infrastructure are open and free. The queryable attribution graph, the analytics products, and the settlement resolution services are commercial. This is the only model that produces both adoption and sustainability, and it is the only model that keeps the protocol trustworthy over time.
+The atrib specification, the signing libraries, and the transparency log infrastructure are open and free. The queryable attribution graph, the analytics products, and the settlement resolution services are commercial.
 
 ---
 
@@ -92,7 +92,7 @@ The internet was built to move information freely. It failed to move value fairl
 
 We are building at a moment when the architecture of the web is being renegotiated. Agents are replacing browsers as the primary interface. Protocols are being written that will determine how value flows for the next generation. **The question of who owns the provenance layer in this new architecture will determine whether we reproduce the extractive dynamics of the old web or build something structurally different.**
 
-atrib is a bet that the answer does not have to be a company. It can be a protocol (open, verifiable, and owned by no one) with a company that builds the best products on top of it. That is the only model that earns trust at the scale this problem requires.
+atrib is a bet that the answer does not have to be a company. It can be a protocol, open and verifiable, with a company that builds the best products on top of it.
 
 ---
 
