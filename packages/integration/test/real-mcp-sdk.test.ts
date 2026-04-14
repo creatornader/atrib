@@ -24,7 +24,7 @@
  *      - Calling the tool a SECOND time produces a record whose `chain_root`
  *        references the FIRST record's hash (chain linkage)
  *
- * This is the test that proves Atrib actually works against the real SDK
+ * This is the test that proves atrib actually works against the real SDK
  * end-to-end. If a future SDK upgrade silently breaks the wire-level
  * attribution flow, this test fails.
  */

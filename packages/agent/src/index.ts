@@ -24,7 +24,7 @@ export type { MinimalMcpClient, WrapMcpClientOptions } from './adapters/mcp-clie
 
 // Cloudflare Agents adapter, wraps MCP connections on a Cloudflare `Agent`
 // (or `AIChatAgent`) after `addMcpServer` so subsequent tool calls flow
-// through Atrib's interceptor lifecycle.
+// through atrib's interceptor lifecycle.
 export { attributeCloudflareAgentMcp } from './adapters/cloudflare-agent.js'
 export type {
   CloudflareAgentLike,
@@ -32,7 +32,7 @@ export type {
 } from './adapters/cloudflare-agent.js'
 
 // Vercel AI SDK MCP adapter, patches an `@ai-sdk/mcp` MCPClient's `request`
-// method so every outbound `tools/call` flows through Atrib's interceptor.
+// method so every outbound `tools/call` flows through atrib's interceptor.
 // The Vercel client has its own JSON-RPC implementation (NOT
 // `@modelcontextprotocol/sdk` Client), so `wrapMcpClient` does not apply.
 export { attributeVercelAiSdkMcp } from './adapters/vercel-ai-sdk-mcp.js'
@@ -44,7 +44,7 @@ export type {
 // LangChain JS MCP adapter, patches every internal `@modelcontextprotocol/sdk`
 // Client owned by a `@langchain/mcp-adapters` `MultiServerMCPClient` so every
 // outbound `tools/call` (and every forked client from per-call-header
-// workflows) flows through Atrib's interceptor.
+// workflows) flows through atrib's interceptor.
 export { attributeLangchainMcp } from './adapters/langchain-mcp.js'
 export type {
   LangchainMcpClientLike,

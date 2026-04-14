@@ -232,7 +232,7 @@ export class AtribVerifier {
       // out-of-band. Return null to surface this.
       return null
     }
-    // Atrib resolution service publishes its key at /pubkey.
+    // atrib resolution service publishes its key at /pubkey.
     // Validate hostname to prevent SSRF via crafted calculated_by URLs.
     try {
       const parsed = new URL(calculatedBy)

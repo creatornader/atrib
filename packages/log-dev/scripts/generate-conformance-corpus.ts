@@ -356,7 +356,7 @@ async function generate(): Promise<void> {
     spec_version: 'atrib/1.0',
     spec_section: '§2.6.1 + §2.6.2 (the submission API)',
     description:
-      'Conformance corpus for the Atrib log submission API. Implementations of the Atrib log (TS dev stub, Go Tessera service, etc.) MUST produce the expected response status for every case. The corpus is intentionally static, see the generator at packages/log-dev/scripts/generate-conformance-corpus.ts.',
+      'Conformance corpus for the atrib log submission API. Implementations of the atrib log (TS dev stub, Go Tessera service, etc.) MUST produce the expected response status for every case. The corpus is intentionally static, see the generator at packages/log-dev/scripts/generate-conformance-corpus.ts.',
     reference_time_ms: REFERENCE_TIME_MS,
     reference_time_iso: new Date(REFERENCE_TIME_MS).toISOString(),
     signing: {

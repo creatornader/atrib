@@ -1,7 +1,7 @@
 /**
  * Tests for attributeLangchainMcp(), the helper that patches a LangChain
  * `MultiServerMCPClient`'s internal Client instances so outbound tools/call
- * requests flow through Atrib's interceptor.
+ * requests flow through atrib's interceptor.
  *
  * We can't import the real `@langchain/mcp-adapters` package here, it pulls
  * in the entire LangChain runtime (langgraph, core messages, zod, etc.) as

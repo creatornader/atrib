@@ -14,7 +14,7 @@
  * - AP2: github.com/google-agentic-commerce/ap2 (v0.1), A2A Message with a
  *        DataPart containing the key `ap2.mandates.PaymentMandate`. AP2 does
  *        NOT currently use W3C Verifiable Credentials despite earlier drafts
- *        of this code and the Atrib spec assuming it would.
+ *        of this code and the atrib spec assuming it would.
  * - a2a-x402: github.com/google-agentic-commerce/a2a-x402, extension that
  *        layers x402 crypto payments over A2A. Detection signal is
  *        `status.message.metadata["x402.payment.status"] === "payment-completed"`

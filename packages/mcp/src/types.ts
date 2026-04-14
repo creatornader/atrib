@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * The canonical Atrib attribution record (§1.2).
+ * The canonical atrib attribution record (§1.2).
  *
  * session_token is optional and MUST be omitted (not null, not undefined)
  * when absent, its presence changes the JCS canonical form and therefore

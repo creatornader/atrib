@@ -1,10 +1,10 @@
 /**
- * Atrib + LangChain JS MCP, runnable integration snippet
+ * atrib + LangChain JS MCP, runnable integration snippet
  *
- * Demonstrates the Atrib wiring for a `@langchain/mcp-adapters`
+ * Demonstrates the atrib wiring for a `@langchain/mcp-adapters`
  * `MultiServerMCPClient`. The agent invocation step (`createReactAgent` +
  * `agent.invoke(...)`) is omitted from this file so the example stays focused
- * on the Atrib integration. Drop this pattern into any LangChain app that
+ * on the atrib integration. Drop this pattern into any LangChain app that
  * uses MCP tools, the rest of your LangChain code is unchanged.
  *
  * Run with:
@@ -26,7 +26,7 @@ import { MultiServerMCPClient } from '@langchain/mcp-adapters'
 import { atrib, attributeLangchainMcp } from '@atrib/agent'
 
 async function main() {
-  // 1. Construct the Atrib interceptor.
+  // 1. Construct the atrib interceptor.
   //    Handles session lifecycle, policy negotiation, W3C trace context
   //    propagation, and Path 1/2 transaction detection per spec §5.4.
   const interceptor = atrib({
@@ -66,7 +66,7 @@ async function main() {
     // 5. Build the LangChain tool set. Pass `tools` to your LLM / agent
     //    runtime as you normally would. Each tool's execute function calls
     //    client.callTool() under the hood, which is now patched, every
-    //    tool call flows through the Atrib interceptor without further
+    //    tool call flows through the atrib interceptor without further
     //    changes to your LangChain wiring.
     const tools = await multi.getTools()
     console.log(
@@ -91,7 +91,7 @@ async function main() {
   } finally {
     // 6. Cleanup. Closing the multi-client releases all transports, and
     //    flushing the interceptor drains the submission queue (any
-    //    pending Atrib records get one final POST attempt).
+    //    pending atrib records get one final POST attempt).
     await multi.close()
     await interceptor.flush()
   }

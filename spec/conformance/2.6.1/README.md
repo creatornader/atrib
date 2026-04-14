@@ -1,10 +1,10 @@
-# Atrib spec §2.6.1 conformance corpus
+# atrib spec §2.6.1 conformance corpus
 
-A canonical set of test fixtures for the Atrib log submission API. This corpus is the **shared contract** between every Atrib log implementation:
+A canonical set of test fixtures for the atrib log submission API. This corpus is the **shared contract** between every atrib log implementation:
 
 - [`@atrib/log-dev`](../../../packages/log-dev/), the in-memory TypeScript dev stub
 - [`services/log/`](../../../services/log/), the future Tessera-backed Go service (not yet built)
-- any third party that wants to run a conformant Atrib log
+- any third party that wants to run a conformant atrib log
 
 If your log implementation passes this corpus, it agrees with `@atrib/mcp`'s submission queue on the wire format defined in [`atrib-spec.md` §2.6.1](../../../atrib-spec.md). If it doesn't, the spec is the arbiter.
 

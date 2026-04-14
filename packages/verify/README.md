@@ -1,8 +1,8 @@
 # `@atrib/verify`
 
-**Independent merchant-side verification of Atrib settlement recommendations. Re-runs the spec §4.6 calculation algorithm locally and checks the result against what a recommendation document claims, without trusting any intermediary.**
+**Independent merchant-side verification of atrib settlement recommendations. Re-runs the spec §4.6 calculation algorithm locally and checks the result against what a recommendation document claims, without trusting any intermediary.**
 
-This is the **merchant/auditor half** of the Atrib protocol. The agent and tool servers produce signed attribution records. The Merkle log stores them. This package answers the question every merchant has to answer before paying anyone: _given the graph and the policy, is this distribution actually correct?_
+This is the **merchant/auditor half** of the atrib protocol. The agent and tool servers produce signed attribution records. The Merkle log stores them. This package answers the question every merchant has to answer before paying anyone: _given the graph and the policy, is this distribution actually correct?_
 
 ## Quick start
 
@@ -41,7 +41,7 @@ The key invariant per spec §4.6: any party with the same graph and the same pol
 
 ## Post-hoc calculation (§5.5.3)
 
-If the agent that drove the session was not Atrib-aware (no `@atrib/agent` middleware), the merchant can still produce a signed recommendation after the fact, as long as the tools were attributed:
+If the agent that drove the session was not atrib-aware (no `@atrib/agent` middleware), the merchant can still produce a signed recommendation after the fact, as long as the tools were attributed:
 
 ```typescript
 const recommendation = await verifier.calculate({
@@ -99,13 +99,13 @@ This is what makes verification possible: the merchant's local recalculation is 
 
 ## §5.8 degradation contract
 
-Per the absolute invariant (also enforced in `@atrib/mcp` and `@atrib/agent`), Atrib failures never break the host:
+Per the absolute invariant (also enforced in `@atrib/mcp` and `@atrib/agent`), atrib failures never break the host:
 
 - Missing or invalid `merchantKey` → constructor logs `atrib: ...` warning, `merchantPrivateKey = null`, no throw.
 - `verify()` errors during signature resolution, graph fetch, or calculation are caught and surfaced as `warnings: string[]` with `valid = false`.
 - `calculate({ signWith: 'merchant' })` with a missing key returns an unsigned document plus a warning, rather than throwing.
 
-The merchant's payment pipeline never crashes because of an Atrib problem. It just gets `valid: false` and decides what to do with that.
+The merchant's payment pipeline never crashes because of an atrib problem. It just gets `valid: false` and decides what to do with that.
 
 ## Test coverage
 

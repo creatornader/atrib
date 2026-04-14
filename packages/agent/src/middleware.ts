@@ -76,7 +76,7 @@ export interface ToolCallInterceptor {
 }
 
 /**
- * Create an Atrib agent interceptor (§5.4).
+ * Create an atrib agent interceptor (§5.4).
  *
  * Returns a ToolCallInterceptor that manages attribution context.
  * The caller is responsible for integrating this with their MCP client

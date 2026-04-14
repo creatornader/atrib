@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a bug in one of the Atrib packages
+about: Report a bug in one of the atrib packages
 labels: bug
 ---
 

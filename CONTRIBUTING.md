@@ -1,4 +1,4 @@
-# Contributing to Atrib
+# Contributing to atrib
 
 ## Development setup
 
@@ -67,7 +67,7 @@ New MCP framework adapters follow an established pattern (see `CLAUDE.md` for th
 
 These are non-negotiable. Do not submit PRs that violate them:
 
-1. **Atrib failures must never affect the primary tool call or agent response** (§5.8)
+1. **atrib failures must never affect the primary tool call or agent response** (§5.8)
 2. **The graph records structure, not causality** (§3.1)
 3. **The calculation algorithm is a pure function** (§4.6)
 4. **Transaction records are non-blocking** (§5.3.5)

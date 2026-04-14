@@ -1,9 +1,9 @@
 /**
- * Atrib + Cloudflare Agents, Surface 1: McpAgent server-side instrumentation
+ * atrib + Cloudflare Agents, Surface 1: McpAgent server-side instrumentation
  *
  * This is a Cloudflare Worker that exposes an MCP server using Cloudflare's
  * `agents/mcp` package. Each MCP session gets its own Durable Object instance
- * (a `WeatherMcp` here) and Atrib middleware is applied to that instance's
+ * (a `WeatherMcp` here) and atrib middleware is applied to that instance's
  * `this.server` in `init()`. Every successful tools/call going through that DO
  * emits a signed attribution record.
  *

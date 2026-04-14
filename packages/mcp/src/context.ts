@@ -165,7 +165,7 @@ export function mergeBaggageAtribSession(sessionToken: string, existing: string)
   let merged = cleanedExisting.length > 0 ? `${newEntry},${cleanedExisting.join(',')}` : newEntry
 
   // Enforce 8192-byte total cap. Drop entries from the right until under cap.
-  // Atrib-session itself is < 60 bytes so this only fires when callers
+  // atrib-session itself is < 60 bytes so this only fires when callers
   // bring near-cap baggage.
   const MAX_BYTES = 8192
   if (encodedByteLength(merged) > MAX_BYTES) {

@@ -13,7 +13,7 @@
  * which did not match spec §2.6.1 and would have been rejected by any
  * spec-compliant log. Fixed in the same commit that introduced
  * `@atrib/log-dev`: the body is now the bare record per §2.6.1, and
- * `priority` travels in the `X-Atrib-Priority` HTTP header. HTTP headers
+ * `priority` travels in the `X-atrib-Priority` HTTP header. HTTP headers
  * are a non-conflicting extension to §2.6.1 and do not require a spec
  * change.
  *
@@ -34,7 +34,7 @@
  *      record, so this ordering is a real safety property.
  *
  *   2. **`@atrib/log-dev` admission control under concurrency limit.**
- *      The dev log honors `X-Atrib-Priority` when its in-flight
+ *      The dev log honors `X-atrib-Priority` when its in-flight
  *      submission count is at the configured `maxConcurrent` capacity:
  *      submissions are placed in a priority queue and high-priority
  *      records are admitted first when capacity frees up. This models
@@ -118,7 +118,7 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
 
       try {
         // §2.6.1: POST body is a bare signed attribution record. Priority
-        // travels in the X-Atrib-Priority header, a non-conflicting
+        // travels in the X-atrib-Priority header, a non-conflicting
         // extension to the spec consumed today by @atrib/log-dev's
         // admission-control queue (see file header comment for the full
         // rationale on the two real consumers).
@@ -126,7 +126,7 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Atrib-Priority': priority,
+            'X-atrib-Priority': priority,
           },
           body: JSON.stringify(record),
         })

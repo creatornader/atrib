@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-Atrib is cryptographic infrastructure.
+atrib is cryptographic infrastructure.
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
@@ -47,7 +47,7 @@ We credit security researchers in release notes (unless you prefer anonymity). L
 
 ## Cryptographic Standards
 
-Atrib uses exclusively audited libraries implementing published standards:
+atrib uses exclusively audited libraries implementing published standards:
 
 | Component        | Standard                            | Library                                     |
 | ---------------- | ----------------------------------- | ------------------------------------------- |

@@ -1,6 +1,6 @@
-# Atrib, Decision Log
+# atrib, Decision Log
 
-Architectural and design decisions made during the Atrib protocol development. Each entry records what was decided, why, and what alternatives were considered.
+Architectural and design decisions made during the atrib protocol development. Each entry records what was decided, why, and what alternatives were considered.
 
 ---
 
@@ -15,7 +15,7 @@ Architectural and design decisions made during the Atrib protocol development. E
 
 **Date:** 2026-04-05
 **Context:** Agent-to-agent payments are a crowded space (Stripe, PayPal, Visa, x402, MPP, ACP, UCP). Competing on payment rails is a losing position.
-**Decision:** Atrib is payment-rail agnostic. It sits above all payment protocols and answers "who should get paid and why", not "how does money move." Settlement uses whatever rail the merchant already has.
+**Decision:** atrib is payment-rail agnostic. It sits above all payment protocols and answers "who should get paid and why", not "how does money move." Settlement uses whatever rail the merchant already has.
 **Alternatives considered:** Building a payment rail, integrating with a single rail (Stripe), issuing a token.
 
 ## D003, Ed25519, not DIDs or PKI
@@ -29,8 +29,8 @@ Architectural and design decisions made during the Atrib protocol development. E
 
 **Date:** 2026-04-05
 **Context:** Attribution records need a session identifier to form chains. Could generate a custom ID or reuse existing infrastructure.
-**Decision:** context_id IS the W3C Trace Context trace-id from OTel. Not derived from it, the same value. This means Atrib chains are automatically correlated with existing observability traces.
-**Alternatives considered:** Custom Atrib session ID (duplicates existing infrastructure), hash of trace-id (prevents correlation).
+**Decision:** context_id IS the W3C Trace Context trace-id from OTel. Not derived from it, the same value. This means atrib chains are automatically correlated with existing observability traces.
+**Alternatives considered:** Custom atrib session ID (duplicates existing infrastructure), hash of trace-id (prevents correlation).
 
 ## D005, Structure not causality in the graph
 
@@ -65,7 +65,7 @@ Architectural and design decisions made during the Atrib protocol development. E
 **Date:** 2026-04-05
 **Context:** For attribution to be trusted by both creators and merchants, each must be able to independently verify: (1) the graph accurately reflects what happened, and (2) the settlement was correctly calculated. Mixing fact and policy into one layer makes independent verification intractable.
 **Decision:** The graph (§3) is a strict fact layer. The policy (§4) is a separate evaluation layer. Graph endpoints never return weighted data. The calculation algorithm is a pure function of graph + policy. Any party can verify independently.
-**Alternatives considered:** Combined graph+policy API (simpler but unverifiable), policy enforcement in the protocol (makes Atrib an arbiter).
+**Alternatives considered:** Combined graph+policy API (simpler but unverifiable), policy enforcement in the protocol (makes atrib an arbiter).
 
 ## D010, Default policy: equal weight, zero for unsigned
 
@@ -122,16 +122,16 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - Split the protocol literal type into `'ACP' | 'UCP' | 'x402' | 'MPP' | 'AP2' | 'heuristic'` so consumers can switch on the actual protocol. The middleware's `emitTransactionRecord` switch was updated correspondingly.
 - Real captured fixtures from the published spec examples live under `packages/agent/test/fixtures/{acp,ucp}/`, with provenance README files citing the source URL and verification date.
 - Spec §1.7.1 and §1.7.2 were rewritten to match real ACP/UCP shapes. The §5.4.5 detection pseudocode was updated to match.
-- Because neither ACP nor UCP currently exposes a documented free-form metadata field on `POST /checkout_sessions/...` requests, the spec now requires `context_id` to travel via the `X-Atrib-Context` HTTP header (consistent with x402/MPP) and via `params._meta.atrib` for MCP-transport integrations. The earlier spec language describing `metadata.atrib_context_id` and `extensions["io.atrib/context_id"]` was speculative and has been removed.
+- Because neither ACP nor UCP currently exposes a documented free-form metadata field on `POST /checkout_sessions/...` requests, the spec now requires `context_id` to travel via the `X-atrib-Context` HTTP header (consistent with x402/MPP) and via `params._meta.atrib` for MCP-transport integrations. The earlier spec language describing `metadata.atrib_context_id` and `extensions["io.atrib/context_id"]` was speculative and has been removed.
   **Alternatives considered:** Keeping the joint `'ACP/UCP'` literal (loses information consumers want), making detection lenient with multiple synonymous keys (false positives), waiting for ACP/UCP to add metadata fields before fixing the spec (blocks the SDK indefinitely on upstream protocol decisions).
-  **Followup work:** §2 (x402/MPP) and §3 (AP2) verification, pending in the same internal planning doc. The MPP-vs-x402 distinction in the new code uses an optional `Payment-Protocol` response header marker; this is an Atrib convention because both protocols share the same `Payment-Receipt` header on the response side and we need a way to distinguish them when both might be in use. If a future revision of x402 or MPP standardizes a different distinguisher, update this rule.
+  **Followup work:** §2 (x402/MPP) and §3 (AP2) verification, pending in the same internal planning doc. The MPP-vs-x402 distinction in the new code uses an optional `Payment-Protocol` response header marker; this is an atrib convention because both protocols share the same `Payment-Receipt` header on the response side and we need a way to distinguish them when both might be in use. If a future revision of x402 or MPP standardizes a different distinguisher, update this rule.
 
-**Update (2026-04-06, same day):** D016 supersedes the "shared `Payment-Receipt` header" assumption above. Verification against the actual specs revealed that x402 and MPP use **different** response headers and there is no need for an Atrib-invented `Payment-Protocol` marker.
+**Update (2026-04-06, same day):** D016 supersedes the "shared `Payment-Receipt` header" assumption above. Verification against the actual specs revealed that x402 and MPP use **different** response headers and there is no need for an atrib-invented `Payment-Protocol` marker.
 
 ## D016, x402 and MPP detect on different headers, not a shared one
 
 **Date:** 2026-04-06
-**Context:** x402/MPP cross-spec verification verification. The v1 SDK and the original §1.7.3/§1.7.4 spec text both claimed x402 and MPP use a shared `Payment-Receipt` response header. D015 even introduced an Atrib-invented `Payment-Protocol` distinguisher to tell them apart. When we cross-checked against the published specs, both claims turned out to be wrong.
+**Context:** x402/MPP cross-spec verification verification. The v1 SDK and the original §1.7.3/§1.7.4 spec text both claimed x402 and MPP use a shared `Payment-Receipt` response header. D015 even introduced an atrib-invented `Payment-Protocol` distinguisher to tell them apart. When we cross-checked against the published specs, both claims turned out to be wrong.
 **What the real specs say:**
 
 - **x402** (`github.com/coinbase/x402`): the success-path response header is `PAYMENT-RESPONSE` in v2, renamed from v1's `X-PAYMENT-RESPONSE` per RFC 6648 (deprecation of the `X-` prefix). The value is base64-encoded JSON containing a `SettlementResponse` with `success`, `transaction`, `network`, `payer`, `requirements` fields.
@@ -170,7 +170,7 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 
 - a2a-x402 (`github.com/google-agentic-commerce/a2a-x402`) is the AP2 extension for crypto payments via x402, co-developed by Google with Coinbase, Ethereum Foundation, and MetaMask. It is NOT a separate protocol, it is the AP2 crypto payment path.
 - The success-path message is an A2A task with `status.message.metadata["x402.payment.status"] === "payment-completed"` AND `status.message.metadata["x402.payment.receipts"]` containing at least one entry where `success: true`. A `payment-completed` status with only `success: false` receipts represents a failed settlement and is NOT a transaction event.
-- Atrib reports a2a-x402 transactions as `protocol: 'AP2'` (not as a separate literal) because the on-wire mechanism is part of AP2.
+- atrib reports a2a-x402 transactions as `protocol: 'AP2'` (not as a separate literal) because the on-wire mechanism is part of AP2.
 
 **Decision:**
 
@@ -235,7 +235,7 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 **Decision:**
 
 - Lenient parsing (accept OWS, accept atrib in any position) but strict emission (always emit the canonical W3C-conformant form: atrib leftmost, no OWS, deduped).
-- The merge helpers are exported from `@atrib/mcp` so consumers can integrate Atrib into their own header-handling code without re-deriving the discipline. This becomes the canonical W3C-conformant API surface.
+- The merge helpers are exported from `@atrib/mcp` so consumers can integrate atrib into their own header-handling code without re-deriving the discipline. This becomes the canonical W3C-conformant API surface.
 
 **Alternatives considered:**
 
@@ -415,7 +415,7 @@ The user passes the proxy to Claude Agent SDK as `{ type: 'sdk', name, instance:
 
 **Alternatives considered:**
 
-- **A Claude-SDK-specific wrapper helper** like `wrapClaudeAgentSdkMcpServer(sdkConfig)`. Rejected: it would only repackage the one-line `atrib(sdkServer.instance, opts)` call into a less explicit form, hiding the fact that the user already owns a real `McpServer`. Worse, it would create the false impression that Atrib needs Claude-Agent-SDK-aware code, discouraging users from understanding that the same `atrib()` function works against any MCP host.
+- **A Claude-SDK-specific wrapper helper** like `wrapClaudeAgentSdkMcpServer(sdkConfig)`. Rejected: it would only repackage the one-line `atrib(sdkServer.instance, opts)` call into a less explicit form, hiding the fact that the user already owns a real `McpServer`. Worse, it would create the false impression that atrib needs Claude-Agent-SDK-aware code, discouraging users from understanding that the same `atrib()` function works against any MCP host.
 - **A JSON-Schema → Zod converter** so `createAtribProxy` could use `McpServer.registerTool()`. Rejected: `registerTool` is not the only path to register a `tools/call` handler (the low-level `setRequestHandler` is supported and more honest about what we're doing), the conversion is lossy for JSON Schema features Zod doesn't model cleanly (e.g., `oneOf`, `not`), and it adds a new failure mode for v1 with no real upside.
 - **Forwarding upstream tool definitions through `registerTool` with a permissive `z.any()` schema.** Rejected: `z.any()` schemas defeat the entire purpose of the schema validation that the SDK does at registration time; tool inputs would be passed through unchecked. The low-level approach is structurally identical without misleading about validation.
 - **Multi-upstream fan-out per proxy.** Rejected for v1 (D020 already locked this in). Each proxy maps 1:1 to an upstream; users with N upstreams create N proxies. Simpler reasoning, no namespace-collision logic, easier failure isolation per upstream.
@@ -490,7 +490,7 @@ declare abstract class McpAgent<Env, State, Props> extends Agent<Env, State, Pro
 
 The user defines `server = new McpServer({ name, version })` as a class field and registers tools in `init()`. `McpServer` here is the **exact same class** from `@modelcontextprotocol/sdk/server/mcp.js` that `@atrib/mcp` already wraps. The McpAgent base class wires up a Cloudflare-specific transport that bridges Worker requests to `McpServer.connect(transport)`, which goes through the standard SDK dispatch path.
 
-**This means the Atrib integration for McpAgent is one line, with zero new code in `@atrib/mcp`:**
+**This means the atrib integration for McpAgent is one line, with zero new code in `@atrib/mcp`:**
 
 ```ts
 export class WeatherMcp extends McpAgent<Env> {
@@ -610,9 +610,9 @@ The runnable examples (`surface-1-mcp-agent.ts`, `surface-2-agent-client.ts`) ar
 ## D023, Vercel AI SDK MCP adapter: monkey-patch `MCPClient.request`, NOT `wrapMcpClient` and NOT the `tools()` execute callbacks
 
 **Date:** 2026-04-06
-**Context:** the framework-adapter rollout, third framework adapter, after Claude Agent SDK (D021) and Cloudflare Agents (D022). The Vercel AI SDK exposes MCP integration through `createMCPClient()` in `@ai-sdk/mcp` (and the legacy `experimental_createMCPClient()` re-exported from `ai`). My initial assumption, anchored to the followup note in D022, was that this would be a `tools()`-record-wrapping job: replace each tool's `execute()` callback with one that runs through Atrib's interceptor. Source-reading `@ai-sdk/mcp@1.0.35`'s `dist/index.mjs` invalidated that plan and surfaced two structural facts that ruled out both `wrapMcpClient` and the `tools()`-wrap approach.
+**Context:** the framework-adapter rollout, third framework adapter, after Claude Agent SDK (D021) and Cloudflare Agents (D022). The Vercel AI SDK exposes MCP integration through `createMCPClient()` in `@ai-sdk/mcp` (and the legacy `experimental_createMCPClient()` re-exported from `ai`). My initial assumption, anchored to the followup note in D022, was that this would be a `tools()`-record-wrapping job: replace each tool's `execute()` callback with one that runs through atrib's interceptor. Source-reading `@ai-sdk/mcp@1.0.35`'s `dist/index.mjs` invalidated that plan and surfaced two structural facts that ruled out both `wrapMcpClient` and the `tools()`-wrap approach.
 
-**Decision:** Ship a third adapter shape, `attributeVercelAiSdkMcp(client, { interceptor, serverUrl? })`, that **monkey-patches the client's `request()` method in place**. The patch intercepts only `tools/call` JSON-RPC methods, injects Atrib's outbound `_meta` (atrib token, traceparent, tracestate, baggage, X-Atrib-Chain) into `request.params._meta`, forwards to the original `request()`, then flows the raw response (with its own `_meta` intact) through `interceptor.onAfterToolResponse`. Idempotent via `Symbol.for('atrib.vercel-ai-sdk.patched')`. Lives at `packages/agent/src/adapters/vercel-ai-sdk-mcp.ts`. Six unit tests cover the contract (passthrough, injection, no caller mutation, response flow, idempotency, §5.8 degradation).
+**Decision:** Ship a third adapter shape, `attributeVercelAiSdkMcp(client, { interceptor, serverUrl? })`, that **monkey-patches the client's `request()` method in place**. The patch intercepts only `tools/call` JSON-RPC methods, injects atrib's outbound `_meta` (atrib token, traceparent, tracestate, baggage, X-atrib-Chain) into `request.params._meta`, forwards to the original `request()`, then flows the raw response (with its own `_meta` intact) through `interceptor.onAfterToolResponse`. Idempotent via `Symbol.for('atrib.vercel-ai-sdk.patched')`. Lives at `packages/agent/src/adapters/vercel-ai-sdk-mcp.ts`. Six unit tests cover the contract (passthrough, injection, no caller mutation, response flow, idempotency, §5.8 degradation).
 
 **Two structural facts that forced this approach:**
 
@@ -669,7 +669,7 @@ A naive monkey-patch on the original Client's `callTool` would silently drop att
 1. Reads `multiClient.config.mcpServers` to enumerate configured server names (default, overridable via `options.servers`).
 2. For each server, calls `multiClient.getClient(serverName)` to reach the internal Client.
 3. Monkey-patches `callTool` on each Client in place (Vercel AI SDK adapter pattern, not `wrapMcpClient` Proxy pattern, because there's nowhere to put a Proxy replacement).
-4. **Also monkey-patches `fork()` when present**, so forked clients are recursively patched via the same `patchClient` helper before being returned to LangChain's `_callTool`. Every forked instance goes through Atrib just like the original. This closes the per-call-header attribution gap.
+4. **Also monkey-patches `fork()` when present**, so forked clients are recursively patched via the same `patchClient` helper before being returned to LangChain's `_callTool`. Every forked instance goes through atrib just like the original. This closes the per-call-header attribution gap.
 5. Idempotent via `Symbol.for('atrib.langchain-mcp.patched')` on each patched Client.
 6. Order-independent: can be called before or after `multiClient.getTools()` because LangChain dereferences `client.callTool` at invocation time (`dist/tools.js:391`), not at tool construction time.
 7. Async: returns `Promise<number>` (count of newly patched clients) because `getClient()` is async, it lazy-initializes connections if they haven't been started yet.
@@ -738,7 +738,7 @@ A fork of an already-patched client: when the patched `fork()` is invoked, it ca
 
    **Consumer #2: `@atrib/log-dev`'s admission control under capacity.** The dev log accepts a `maxConcurrent` option (default `Infinity`). When capacity is finite and the in-flight submission count is at the cap, new submissions go into a priority queue inside `storage.ts` and high-priority records are admitted first when capacity frees up. This faithfully models the admission-control behavior a real Tessera-backed log would expose under load. Verified by a new test in `log-dev/test/server.test.ts` ("high-priority submissions are admitted before normal under capacity pressure") that uses `maxConcurrent: 1` and `processingDelayMs: 30` to deterministically demonstrate the priority ordering.
 
-   The wire format is `X-Atrib-Priority: high|normal` HTTP header, a non-conflicting extension to spec §2.6.1 that does not require a spec change because HTTP headers are a standard extension mechanism.
+   The wire format is `X-atrib-Priority: high|normal` HTTP header, a non-conflicting extension to spec §2.6.1 that does not require a spec change because HTTP headers are a standard extension mechanism.
 
 4. **End-to-end demo** at `packages/integration/examples/end-to-end/demo.ts`, runnable in a single command (`pnpm --filter @atrib/integration demo`), wires together the dev log + a fake merchant tool server (wrapped with `@atrib/mcp`'s `atrib()`) + a fake agent client (wrapped with `@atrib/agent`'s `wrapMcpClient`) + a stubbed x402 payment receipt that triggers the production transaction-detection logic in `transaction.ts`. CLI visualizer subscribes to the dev log via `onSubmit()` and pretty-prints each record with colored chain hashes as it lands. Verified end-to-end: one run produces 2 tool_call records + 1 transaction record, all chained, all visible in the CLI output.
 

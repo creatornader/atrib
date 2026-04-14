@@ -247,7 +247,7 @@ describe('createSubmissionQueue', () => {
     expect(body.priority).toBeUndefined()
   })
 
-  it('sends X-Atrib-Priority header (HTTP-level extension to §2.6.1)', async () => {
+  it('sends X-atrib-Priority header (HTTP-level extension to §2.6.1)', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ log_index: 1 }), { status: 200 }))
     const queue = createSubmissionQueue('https://log.test/v1/entries')
     const record = await makeSignedRecord()
@@ -257,11 +257,11 @@ describe('createSubmissionQueue', () => {
     await queue.flush()
 
     const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>
-    expect(headers['X-Atrib-Priority']).toBe('high')
+    expect(headers['X-atrib-Priority']).toBe('high')
     expect(headers['Content-Type']).toBe('application/json')
   })
 
-  it('sends X-Atrib-Priority: normal for tool_call records', async () => {
+  it('sends X-atrib-Priority: normal for tool_call records', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ log_index: 1 }), { status: 200 }))
     const queue = createSubmissionQueue('https://log.test/v1/entries')
     const record = await makeSignedRecord()
@@ -271,7 +271,7 @@ describe('createSubmissionQueue', () => {
     await queue.flush()
 
     const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>
-    expect(headers['X-Atrib-Priority']).toBe('normal')
+    expect(headers['X-atrib-Priority']).toBe('normal')
   })
 
   it('flush() drains pendingRecords in priority order, high before normal', async () => {
@@ -288,7 +288,7 @@ describe('createSubmissionQueue', () => {
       const headers = init.headers as Record<string, string>
       const isFlushAttempt = callCount > 9 // initial 3 records × 3 attempts each = 9 calls
       if (isFlushAttempt) {
-        orderObserved.push({ priority: headers['X-Atrib-Priority']!, attempt: callCount })
+        orderObserved.push({ priority: headers['X-atrib-Priority']!, attempt: callCount })
         return new Response(
           JSON.stringify({
             log_index: callCount,

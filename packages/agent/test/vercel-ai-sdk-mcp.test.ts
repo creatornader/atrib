@@ -1,7 +1,7 @@
 /**
  * Tests for attributeVercelAiSdkMcp(), the helper that patches an
  * `@ai-sdk/mcp` MCPClient's `request` method so outbound `tools/call`s flow
- * through Atrib's interceptor.
+ * through atrib's interceptor.
  *
  * We can't import the real `@ai-sdk/mcp` package here because it pulls in
  * the entire `ai` SDK + transport infrastructure as a dependency, which
@@ -173,7 +173,7 @@ describe('attributeVercelAiSdkMcp', () => {
 
   it('flows the response through onAfterToolResponse with raw _meta', async () => {
     // Server returns a result with its own _meta containing an atrib token
-    // (simulating the Atrib server-side middleware response). The interceptor
+    // (simulating the atrib server-side middleware response). The interceptor
     // should see that token unmodified.
     const serverAtribToken = 'fake.token.from.server'
     const client = makeFakeClient({

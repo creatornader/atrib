@@ -1,4 +1,4 @@
-# Atrib, Value Provenance Protocol
+# atrib, Value Provenance Protocol
 
 **Draft 0.1, April 2026**
 
@@ -8,7 +8,7 @@
 
 _On the relationship between transparency, trust, and value in a world where agents act on our behalf._
 
-The internet has always promised portability of value. It has never delivered it. Atrib is an attempt to finally make that promise real, not by controlling how value moves, but by making visible how it flows.
+The internet has always promised portability of value. It has never delivered it. atrib is an attempt to finally make that promise real, not by controlling how value moves, but by making visible how it flows.
 
 ## The Problem We Inherit
 
@@ -36,7 +36,7 @@ The window to build provenance infrastructure before platforms absorb the proble
 
 ## What We Are Building
 
-Atrib is value provenance infrastructure for the agent economy. Not an identity layer. Not a payment layer. Not a content attribution system. Something that sits between all of those: **a verifiable record of how value moved.**
+atrib is value provenance infrastructure for the agent economy. Not an identity layer. Not a payment layer. Not a content attribution system. Something that sits between all of those: **a verifiable record of how value moved.**
 
 The central claim is this: it is possible to make the structural relationships of the agent economy transparent, what tool calls preceded what outcomes, how contributions linked together within a session, what the observable shape of value creation actually was, without making the content of those interactions visible to anyone who should not see it.
 
@@ -44,7 +44,7 @@ This is observability without surveillance. The system becomes legible to itself
 
 This distinction matters because every prior attempt at provenance has collapsed it. C2PA proves a certificate exists but cannot say what it caused. ProRata tracks content usage but keeps advertising as the economic model. Blockchain provenance systems make everything visible to everyone, which is privacy-hostile by design. OpenTelemetry makes systems observable to their operators but invisible to participants.
 
-Atrib is built on a different principle: **you can record what happened and who was present without claiming to know what caused what, and you can distribute credit fairly without trusting any single intermediary to arbitrate it.** The structure of contributions is a verifiable fact. What those contributions are worth is a policy judgment. Atrib provides the former without pretending to settle the latter.
+atrib is built on a different principle: **you can record what happened and who was present without claiming to know what caused what, and you can distribute credit fairly without trusting any single intermediary to arbitrate it.** The structure of contributions is a verifiable fact. What those contributions are worth is a policy judgment. atrib provides the former without pretending to settle the latter.
 
 Principle I
 
@@ -62,7 +62,7 @@ Principle III
 
 Settlement is separate from attribution
 
-Atrib records what happened and who contributed. It does not move money, enforce agreements, or determine outcomes. Payment rails, legal agreements, and business decisions happen on top of verified attribution data. The protocol is neutral about what participants do with the truth, it only insists that the truth be available.
+atrib records what happened and who contributed. It does not move money, enforce agreements, or determine outcomes. Payment rails, legal agreements, and business decisions happen on top of verified attribution data. The protocol is neutral about what participants do with the truth, it only insists that the truth be available.
 
 Principle IV
 
@@ -74,7 +74,7 @@ Principle V
 
 The protocol is a public good; the product is not
 
-The Atrib specification, the signing libraries, and the transparency log infrastructure are open and free. The queryable attribution graph, the analytics products, and the settlement resolution services are commercial. This is the only model that produces both adoption and sustainability, and it is the only model that keeps the protocol trustworthy over time.
+The atrib specification, the signing libraries, and the transparency log infrastructure are open and free. The queryable attribution graph, the analytics products, and the settlement resolution services are commercial. This is the only model that produces both adoption and sustainability, and it is the only model that keeps the protocol trustworthy over time.
 
 ---
 
@@ -84,7 +84,7 @@ We do not claim that advertising will disappear. We claim that the structural ne
 
 Businesses will always need to reach new customers. Discovery is a real problem that advertising partially solves. But the attribution function of advertising, proving that a specific message caused a specific outcome, in order to justify the spend, is entirely a workaround for missing infrastructure. When the infrastructure exists, the workaround becomes unnecessary.
 
-The agent economy provides the discovery layer. Agents surface products, synthesize recommendations, complete transactions, all without requiring the user's attention to be purchased. **Atrib provides the attribution layer: the mechanism by which value flows back to the contributors who made those agent actions useful, without any intermediary needing to own the pipe.**
+The agent economy provides the discovery layer. Agents surface products, synthesize recommendations, complete transactions, all without requiring the user's attention to be purchased. **atrib provides the attribution layer: the mechanism by which value flows back to the contributors who made those agent actions useful, without any intermediary needing to own the pipe.**
 
 That is not advertising replacement through disruption. It is advertising replacement through making the problem advertising was solving obsolete.
 
@@ -92,13 +92,13 @@ The internet was built to move information freely. It failed to move value fairl
 
 We are building at a moment when the architecture of the web is being renegotiated. Agents are replacing browsers as the primary interface. Protocols are being written that will determine how value flows for the next generation. **The question of who owns the provenance layer in this new architecture will determine whether we reproduce the extractive dynamics of the old web or build something structurally different.**
 
-Atrib is a bet that the answer does not have to be a company. It can be a protocol, open, verifiable, and owned by no one, with a company that builds the best products on top of it. That is the only model that earns trust at the scale this problem requires.
+atrib is a bet that the answer does not have to be a company. It can be a protocol, open, verifiable, and owned by no one, with a company that builds the best products on top of it. That is the only model that earns trust at the scale this problem requires.
 
 ---
 
 ## §1, Attribution Record Format
 
-_The canonical data model, signing protocol, and propagation mechanism for Atrib attribution records._
+_The canonical data model, signing protocol, and propagation mechanism for atrib attribution records._
 
 Contents
 
@@ -117,7 +117,7 @@ Contents
 13. 1.5Context Propagation
 14. 1.5.1context_id, the session anchor
 15. 1.5.2HTTP transport: tracestate
-16. 1.5.3HTTP fallback: X-Atrib-Chain
+16. 1.5.3HTTP fallback: X-atrib-Chain
 17. 1.5.4MCP transport: params.\_meta
 18. 1.5.5Cross-trace session continuity
 19. 1.6Unsigned Hops and Gap Nodes
@@ -140,7 +140,7 @@ All normative requirements in this section are prefixed with their requirement l
 
 ### 1.2, The Attribution Record
 
-An attribution record is the atomic unit of Atrib provenance. Each record documents a single event in an attribution chain, a tool call, a transaction, and cryptographically binds that event to its creator, its position in the chain, and the session that contains it. The chain is structural, not causal: it records what happened and how records relate to each other, not why one event caused another. Causal interpretation belongs to the query and policy layers built on top of these records.
+An attribution record is the atomic unit of atrib provenance. Each record documents a single event in an attribution chain, a tool call, a transaction, and cryptographically binds that event to its creator, its position in the chain, and the session that contains it. The chain is structural, not causal: it records what happened and how records relate to each other, not why one event caused another. Causal interpretation belongs to the query and policy layers built on top of these records.
 
 An attribution record is a JSON object with the following fields:
 
@@ -199,7 +199,7 @@ content_id = "sha256:" + hex(digest)  // lowercase hex, no spaces
 
 #### 1.2.3, chain_root for Genesis Records
 
-Every attribution chain begins with a genesis record, the first hop in a session that has no upstream Atrib context. Genesis records arise when a tool server receives a call that carries no `params._meta.atrib` field, or when the propagated context cannot be verified.
+Every attribution chain begins with a genesis record, the first hop in a session that has no upstream atrib context. Genesis records arise when a tool server receives a call that carries no `params._meta.atrib` field, or when the propagated context cannot be verified.
 
 For a genesis record, the `chain_root` MUST be computed as:
 
@@ -216,7 +216,7 @@ This specification defines two event_type values. No other values are valid in r
 | Value       | Meaning                      | When emitted                                                                                                                                                                                                                                                                       |
 | ----------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | tool_call   | A tool contribution event    | Emitted by an MCP server when it returns a successful (non-error) response to a `tools/call` request. MUST NOT be emitted when `isError: true` in the MCP result.                                                                                                                  |
-| transaction | A commerce transaction event | Emitted when a transaction completes, either by the merchant's agent writing a record, or by the Atrib SDK reading a transaction webhook. The `content_id` for a transaction record uses the merchant's checkout endpoint URL as the server_url and `"checkout"` as the tool_name. |
+| transaction | A commerce transaction event | Emitted when a transaction completes, either by the merchant's agent writing a record, or by the atrib SDK reading a transaction webhook. The `content_id` for a transaction record uses the merchant's checkout endpoint URL as the server_url and `"checkout"` as the tool_name. |
 
 ---
 
@@ -264,7 +264,7 @@ First, construct the record object with all fields present including a placehold
 
 ### 1.4, Signing and Verification
 
-Atrib uses Ed25519 (RFC 8032, §5.1) for all attribution record signing. Ed25519 provides compact signatures (64 bytes), fast verification, strong security, and does not require a PKI or certificate authority. Each creator generates and controls their own keypair.
+atrib uses Ed25519 (RFC 8032, §5.1) for all attribution record signing. Ed25519 provides compact signatures (64 bytes), fast verification, strong security, and does not require a PKI or certificate authority. Each creator generates and controls their own keypair.
 
 #### 1.4.1, Key Format
 
@@ -353,7 +353,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 context_id = "4bf92f3577b34da6a3ce929d0e0e4736"
 ```
 
-The `context_id` is **not** generated by Atrib. It is the trace-id that already exists in the OTel instrumentation of the session. If the agent runtime does not produce OTel traces, implementations SHOULD generate a cryptographically random 16-byte value and use its hex encoding as the context_id, then inject it into any OTel spans created during the session.
+The `context_id` is **not** generated by atrib. It is the trace-id that already exists in the OTel instrumentation of the session. If the agent runtime does not produce OTel traces, implementations SHOULD generate a cryptographically random 16-byte value and use its hex encoding as the context_id, then inject it into any OTel spans created during the session.
 
 #### 1.5.2, HTTP Transport: tracestate
 
@@ -379,24 +379,24 @@ Implementations MUST preserve any existing tracestate entries when adding the `a
 
 When reading an inbound tracestate, implementations MUST extract the `atrib` entry if present and decode the token to recover `record_hash` and `creator_key`. The `record_hash` becomes the `chain_root` field of the next attribution record emitted in this chain. The `creator_key` identifies the creator of the record that produced this token.
 
-#### 1.5.3, HTTP Fallback: X-Atrib-Chain
+#### 1.5.3, HTTP Fallback: X-atrib-Chain
 
 Some HTTP proxies, load balancers, and middleware strip unknown `tracestate` entries or the `tracestate` header entirely. When the `atrib` entry is absent from an inbound `tracestate`, implementations SHOULD check for a fallback header.
 
 ```
-X-Atrib-Chain:
+X-atrib-Chain:
 
 // Example:
-X-Atrib-Chain: D4a6GHvb...ABC.XYZ...QRS
+X-atrib-Chain: D4a6GHvb...ABC.XYZ...QRS
 ```
 
-Implementations SHOULD set both `tracestate: atrib=...` and `X-Atrib-Chain: ...` on outbound requests. Implementations MUST prefer the tracestate entry over the fallback header when both are present.
+Implementations SHOULD set both `tracestate: atrib=...` and `X-atrib-Chain: ...` on outbound requests. Implementations MUST prefer the tracestate entry over the fallback header when both are present.
 
 #### 1.5.4, MCP Transport: params.\_meta
 
 MCP messages do not have HTTP headers. Attribution context MUST be propagated inside the `params._meta` property bag of MCP request messages, following the OTel MCP Semantic Conventions (opentelemetry.io/docs/specs/semconv/gen-ai/mcp/).
 
-Implementations MUST inject both standard OTel context and the Atrib token into `params._meta`:
+Implementations MUST inject both standard OTel context and the atrib token into `params._meta`:
 
 ```
 {
@@ -440,7 +440,7 @@ Attribution records that carry a `session_token` across trace boundaries can be 
 
 ### 1.6, Unsigned Hops and Gap Nodes
 
-Not every MCP server in an agent's tool chain will have Atrib installed in v1. When an agent calls a tool that does not emit a signed attribution record, the chain has an unsigned hop. This is expected and must be handled gracefully.
+Not every MCP server in an agent's tool chain will have atrib installed in v1. When an agent calls a tool that does not emit a signed attribution record, the chain has an unsigned hop. This is expected and must be handled gracefully.
 
 An unsigned hop arises when:
 
@@ -468,15 +468,15 @@ A creator who has not signed their contribution has not asserted a claim. The ga
 
 ### 1.7, Transaction Event Hooks
 
-The attribution chain is complete when a transaction event closes the loop, connecting the tool calls that contributed to the commerce session to the actual moment of purchase. This section defines how Atrib attaches to each supported commerce protocol.
+The attribution chain is complete when a transaction event closes the loop, connecting the tool calls that contributed to the commerce session to the actual moment of purchase. This section defines how atrib attaches to each supported commerce protocol.
 
 In every case, the linking mechanism is the same: the `context_id` of the agent session must be embedded in the transaction metadata when the checkout is initiated, so that the transaction event webhook can be matched back to the attribution chain.
 
 #### 1.7.1, ACP (Agentic Commerce Protocol)
 
-ACP is the open standard published at `github.com/agentic-commerce-protocol/agentic-commerce-protocol`. The transaction event hook is the success response from `POST /checkout_sessions/{id}/complete`. A successful completion is signaled by `status === "completed"` together with an embedded `order` object whose `id` is a string. The `order.permalink_url` (when present) is the canonical post-purchase URL Atrib uses to derive the transaction record's `content_id`.
+ACP is the open standard published at `github.com/agentic-commerce-protocol/agentic-commerce-protocol`. The transaction event hook is the success response from `POST /checkout_sessions/{id}/complete`. A successful completion is signaled by `status === "completed"` together with an embedded `order` object whose `id` is a string. The `order.permalink_url` (when present) is the canonical post-purchase URL atrib uses to derive the transaction record's `content_id`.
 
-Because ACP `POST /checkout_sessions/...` requests do not currently expose a free-form metadata field for arbitrary extension data, the `context_id` MUST travel via the same channels used for HTTP transports (§1.5.4): the `X-Atrib-Context` HTTP header on the outbound request, and `params._meta.atrib` for MCP-transport ACP integrations.
+Because ACP `POST /checkout_sessions/...` requests do not currently expose a free-form metadata field for arbitrary extension data, the `context_id` MUST travel via the same channels used for HTTP transports (§1.5.4): the `X-atrib-Context` HTTP header on the outbound request, and `params._meta.atrib` for MCP-transport ACP integrations.
 
 ```jsonc
 // POST /checkout_sessions/{id}/complete success response
@@ -551,13 +551,13 @@ UCP is the open standard published at `github.com/universal-commerce-protocol/uc
 }
 ```
 
-UCP does not yet expose a documented free-form metadata field for arbitrary agent context. The `context_id` MUST travel via the `X-Atrib-Context` HTTP header on UCP checkout requests, and via `params._meta.atrib` for any MCP-transport UCP integrations.
+UCP does not yet expose a documented free-form metadata field for arbitrary agent context. The `context_id` MUST travel via the `X-atrib-Context` HTTP header on UCP checkout requests, and via `params._meta.atrib` for any MCP-transport UCP integrations.
 
 #### 1.7.3, x402
 
 x402 is the Coinbase open payment protocol published at `github.com/coinbase/x402`. It uses HTTP 402 / 200 request-response cycles. The transaction event is the HTTP 200 response containing a **`PAYMENT-RESPONSE`** header (x402 v2), or the legacy **`X-PAYMENT-RESPONSE`** header (x402 v1, deprecated per RFC 6648 but still in deployment). Detection MUST accept both names case-insensitively.
 
-The header value is base64-encoded JSON containing a `SettlementResponse` object: `{ success, transaction, network, payer, requirements }`. Atrib treats header presence as the on-wire detection signal, the body is not decoded for detection purposes (decoding is appropriate when extracting `transaction` or `payer` for content_id derivation in higher-fidelity downstream tooling).
+The header value is base64-encoded JSON containing a `SettlementResponse` object: `{ success, transaction, network, payer, requirements }`. atrib treats header presence as the on-wire detection signal, the body is not decoded for detection purposes (decoding is appropriate when extracting `transaction` or `payer` for content_id derivation in higher-fidelity downstream tooling).
 
 The agent MUST include the context_id as a custom header on the outbound payment request:
 
@@ -565,16 +565,16 @@ The agent MUST include the context_id as a custom header on the outbound payment
 // Outbound x402 v2 payment request:
 GET /paid-resource HTTP/1.1
 PAYMENT-SIGNATURE: <base64 JSON>     // v2 (v1 used X-PAYMENT)
-X-Atrib-Context: 4bf92f3577b34da6a3ce929d0e0e4736
+X-atrib-Context: 4bf92f3577b34da6a3ce929d0e0e4736
 
 // 200 success response with the transaction signal:
 HTTP/1.1 200 OK
 PAYMENT-RESPONSE: <base64 JSON>      // v2 detection header
 Content-Type: application/json
 
-// The receiving server reads X-Atrib-Context and includes it in the
-// transaction record it writes to the Atrib log. If the server does
-// not have Atrib installed, the context is present in the request
+// The receiving server reads X-atrib-Context and includes it in the
+// transaction record it writes to the atrib log. If the server does
+// not have atrib installed, the context is present in the request
 // for future retrieval from proxy logs.
 ```
 
@@ -586,13 +586,13 @@ The transaction event is the HTTP 200 response containing a **`Payment-Receipt`*
 
 **`PAYMENT-RESPONSE` (x402) and `Payment-Receipt` (MPP) are different headers for different protocols.** Earlier drafts of this specification incorrectly attributed `Payment-Receipt` to both protocols; this has been corrected after verification against the published x402 docs and the IETF MPP draft.
 
-The `context_id` MUST travel in the same `X-Atrib-Context` custom header used for x402:
+The `context_id` MUST travel in the same `X-atrib-Context` custom header used for x402:
 
 ```
 // MPP payment retry request (after fulfilling the WWW-Authenticate: Payment challenge):
 GET /paid-resource HTTP/1.1
 Authorization: Payment <credential>
-X-Atrib-Context: 4bf92f3577b34da6a3ce929d0e0e4736
+X-atrib-Context: 4bf92f3577b34da6a3ce929d0e0e4736
 
 // 200 success response with the MPP transaction signal:
 HTTP/1.1 200 OK
@@ -642,7 +642,7 @@ The PaymentMandate is the transaction event. (`IntentMandate` and `CartMandate` 
 }
 ```
 
-**a2a-x402** (`github.com/google-agentic-commerce/a2a-x402`) is the AP2 extension for crypto payments via x402. When the merchant agent settles a payment on-chain it returns an A2A task whose `status.message.metadata` carries `x402.payment.status: "payment-completed"` and a `x402.payment.receipts` array with at least one entry where `success: true`. Atrib reports this as `protocol: 'AP2'` because a2a-x402 IS the AP2 crypto path; it is not a separate protocol.
+**a2a-x402** (`github.com/google-agentic-commerce/a2a-x402`) is the AP2 extension for crypto payments via x402. When the merchant agent settles a payment on-chain it returns an A2A task whose `status.message.metadata` carries `x402.payment.status: "payment-completed"` and a `x402.payment.receipts` array with at least one entry where `success: true`. atrib reports this as `protocol: 'AP2'` because a2a-x402 IS the AP2 crypto path; it is not a separate protocol.
 
 ```jsonc
 // a2a-x402 payment-completed task message
@@ -675,7 +675,7 @@ The PaymentMandate is the transaction event. (`IntentMandate` and `CartMandate` 
 
 Detection MUST require BOTH the `payment-completed` status AND at least one receipt with `success: true`. A task that says "payment-completed" but contains only `success: false` receipts represents a failed settlement and is NOT a transaction event.
 
-For backward compatibility with research forks of AP2 that may have implemented Payment Mandates as W3C Verifiable Credentials (matching the obsolete spec language), Atrib's detector also accepts the legacy VC envelope shape:
+For backward compatibility with research forks of AP2 that may have implemented Payment Mandates as W3C Verifiable Credentials (matching the obsolete spec language), atrib's detector also accepts the legacy VC envelope shape:
 
 ```jsonc
 // Legacy / non-canonical: VC-wrapped PaymentMandate (research forks only)
@@ -712,15 +712,15 @@ This specification is honest about what v1 does not solve. The following limitat
 
 #### Interoperability Roadmap
 
-Atrib is designed to complement, not compete with, existing standards work in identity, provenance, and agent trust. The following integration points are planned for v2 and inform architectural decisions in v1.
+atrib is designed to complement, not compete with, existing standards work in identity, provenance, and agent trust. The following integration points are planned for v2 and inform architectural decisions in v1.
 
-**DIF Trusted AI Agents Working Group.** DIF's Trusted AI Agents WG is defining identity, delegation, and accountability frameworks for autonomous agents. The persistent agent identity across sessions that their work will provide is the prerequisite for Atrib's cross-session attribution (the recommendation_token mechanism). Atrib's Ed25519 creator keys are a deliberate simplification of what will eventually be expressible as agent-scoped Verifiable Credentials with delegation chains. The v2 key management revision will define how Atrib keys can be presented as DIF-compatible Verifiable Presentations.
+**DIF Trusted AI Agents Working Group.** DIF's Trusted AI Agents WG is defining identity, delegation, and accountability frameworks for autonomous agents. The persistent agent identity across sessions that their work will provide is the prerequisite for atrib's cross-session attribution (the recommendation_token mechanism). atrib's Ed25519 creator keys are a deliberate simplification of what will eventually be expressible as agent-scoped Verifiable Credentials with delegation chains. The v2 key management revision will define how atrib keys can be presented as DIF-compatible Verifiable Presentations.
 
-**DIF Creator Assertions Working Group.** DIF's Creator Assertions WG is defining content authenticity and provenance assertions, including how assertions are consumed by automated systems and agents. Atrib attribution records are structurally compatible with DIF assertion formats, both use Ed25519 signing over canonical JSON. A v2 interoperability profile will define how an Atrib attribution record can be wrapped as a DIF Creator Assertion, enabling attribution data to flow through systems that already consume the DIF format.
+**DIF Creator Assertions Working Group.** DIF's Creator Assertions WG is defining content authenticity and provenance assertions, including how assertions are consumed by automated systems and agents. atrib attribution records are structurally compatible with DIF assertion formats, both use Ed25519 signing over canonical JSON. A v2 interoperability profile will define how an atrib attribution record can be wrapped as a DIF Creator Assertion, enabling attribution data to flow through systems that already consume the DIF format.
 
-**C2PA (Coalition for Content Provenance and Authenticity).** C2PA defines cryptographic provenance manifests for media content. Atrib extends this pattern to agent interactions, where the "content" is a tool call, not a photograph. A v2 integration will define how Atrib attribution records can be embedded in C2PA manifests as consequence assertions, completing the loop that C2PA opened (provenance at creation) by adding the economic outcome that C2PA never addressed (provenance through to value capture).
+**C2PA (Coalition for Content Provenance and Authenticity).** C2PA defines cryptographic provenance manifests for media content. atrib extends this pattern to agent interactions, where the "content" is a tool call, not a photograph. A v2 integration will define how atrib attribution records can be embedded in C2PA manifests as consequence assertions, completing the loop that C2PA opened (provenance at creation) by adding the economic outcome that C2PA never addressed (provenance through to value capture).
 
-**W3C AI Agent Protocol Community Group.** The emerging work on standardizing agent-to-agent communication protocols is a natural home for Atrib context propagation. The v1 propagation mechanism (`params._meta.atrib` in MCP, `tracestate` in HTTP) is designed to be portable to any agent protocol that supports metadata propagation.
+**W3C AI Agent Protocol Community Group.** The emerging work on standardizing agent-to-agent communication protocols is a natural home for atrib context propagation. The v1 propagation mechanism (`params._meta.atrib` in MCP, `tracestate` in HTTP) is designed to be portable to any agent protocol that supports metadata propagation.
 
 ---
 
@@ -755,15 +755,15 @@ Contents
 
 ### 2.1, Purpose and Design Rationale
 
-The Atrib log is a public, append-only Merkle tree. When a creator submits an attribution record to the log, they receive an inclusion proof, a cryptographic commitment that the record exists at a specific position in the tree, verifiable by any third party without trusting the log operator.
+The atrib log is a public, append-only Merkle tree. When a creator submits an attribution record to the log, they receive an inclusion proof, a cryptographic commitment that the record exists at a specific position in the tree, verifiable by any third party without trusting the log operator.
 
-The log enforces two properties that are the foundation of Atrib's trust model:
+The log enforces two properties that are the foundation of atrib's trust model:
 
 **Tamper evidence.** Any modification, deletion, or reordering of a committed record would invalidate the root hash. The tree is append-only: new records may be added, but no existing record may be altered or removed. The log operator cannot secretly change history.
 
 **Accountability without content exposure.** The log stores hashes and commitments, not content. A third party can verify that a record was committed at a specific time without reading what the record contains. Privacy and auditability are structurally separated: the log proves existence and integrity; the content remains with the creator.
 
-The log is built on the tlog-tiles specification (c2sp.org/tlog-tiles), which defines an efficient HTTP-based read interface used by Certificate Transparency logs and the Tessera library (github.com/transparency-dev/tessera). `log.atrib.io` is a Tessera-based personality. Any operator may run a compatible log using Tessera; the open specification ensures that client implementations are not tied to Atrib's log infrastructure.
+The log is built on the tlog-tiles specification (c2sp.org/tlog-tiles), which defines an efficient HTTP-based read interface used by Certificate Transparency logs and the Tessera library (github.com/transparency-dev/tessera). `log.atrib.io` is a Tessera-based personality. Any operator may run a compatible log using Tessera; the open specification ensures that client implementations are not tied to atrib's log infrastructure.
 
 ---
 
@@ -779,13 +779,13 @@ A tiled transparency log is identified by three parameters:
 
 Log operators running compatible logs MUST use a unique origin matching their URL prefix, and MUST publish their log public key at a stable, documented URL.
 
-**Note, Log versioning** The `/v1` path component in the URL prefix and origin is the log version, not the Atrib spec version. When the log's entry format requires a breaking change, a new origin (`log.atrib.io/v2`) will be used rather than modifying the existing log. Existing entries in `log.atrib.io/v1` will remain accessible indefinitely.
+**Note, Log versioning** The `/v1` path component in the URL prefix and origin is the log version, not the atrib spec version. When the log's entry format requires a breaking change, a new origin (`log.atrib.io/v2`) will be used rather than modifying the existing log. Existing entries in `log.atrib.io/v1` will remain accessible indefinitely.
 
 ---
 
 ### 2.3, Log Entry Format
 
-Each entry in the Atrib log is a **commitment** to an attribution record, not the record itself. The log stores the minimum information required for verification: a hash of the record, the creator's public key, and the context_id. This is sufficient to prove that a signed attribution record for a given creator and session existed at a specific point in time, without revealing the record's content.
+Each entry in the atrib log is a **commitment** to an attribution record, not the record itself. The log stores the minimum information required for verification: a hash of the record, the creator's public key, and the context_id. This is sufficient to prove that a signed attribution record for a given creator and session existed at a specific point in time, without revealing the record's content.
 
 #### 2.3.1, Entry Serialization
 
@@ -956,7 +956,7 @@ The write interface accepts attribution records and returns inclusion proofs. Th
 ```
 POST https://log.atrib.io/v1/entries
 Content-Type: application/json
-X-Atrib-Priority: normal              // optional, see below
+X-atrib-Priority: normal              // optional, see below
 
 // Request body: a complete, signed attribution record (§1.2), bare,
 // not wrapped in any envelope object.
@@ -974,7 +974,7 @@ X-Atrib-Priority: normal              // optional, see below
 
 The request body MUST be the bare JCS-canonical signed record exactly as defined in §1.2, there is no enclosing wrapper object, and no field may be added or removed by the client during transport. The body bytes MUST be the same bytes that were signed (modulo whitespace, since `Content-Type: application/json` does not require canonical re-serialization on the wire, it is the receiver's responsibility to re-canonicalize before signature verification per §1.4.3).
 
-`X-Atrib-Priority` is an OPTIONAL HTTP-level extension to the wire format. When present, its value MUST be one of `"high"` or `"normal"`. The semantics are:
+`X-atrib-Priority` is an OPTIONAL HTTP-level extension to the wire format. When present, its value MUST be one of `"high"` or `"normal"`. The semantics are:
 
 - `"high"`, the submitting client believes this record is on the critical path of an attribution chain that needs to be queryable promptly (per §5.3.5, transaction records are sent with `priority: "high"` so they are admitted before any pending `tool_call` records when the log's admission queue is congested).
 - `"normal"`, best-effort submission. This is the default when the header is absent.
@@ -1129,7 +1129,7 @@ struct timestamped_signature {
 }
 ```
 
-Clients that require strong tamper-evidence guarantees SHOULD require at least one witness cosignature before trusting an inclusion proof. Atrib's SDK SHOULD ship with a default witness policy of one cosignature from a publicly documented witness operated independently of Atrib Inc.
+Clients that require strong tamper-evidence guarantees SHOULD require at least one witness cosignature before trusting an inclusion proof. atrib's SDK SHOULD ship with a default witness policy of one cosignature from a publicly documented witness operated independently of Atrib Inc.
 
 The witnessing infrastructure used by `log.atrib.io` will be publicly documented including witness names and public keys. Third parties are encouraged to run compatible witnesses using the transparency-dev ecosystem tooling.
 
@@ -1137,7 +1137,7 @@ The witnessing infrastructure used by `log.atrib.io` will be publicly documented
 
 ### 2.10, What the Log Stores, and What It Does Not
 
-This section states the privacy properties of the log precisely, because they are the foundation of Atrib's claim to be "observability without surveillance."
+This section states the privacy properties of the log precisely, because they are the foundation of atrib's claim to be "observability without surveillance."
 
 **The log stores:** the record hash, the creator's public key, the context_id (as raw bytes), the timestamp, and the event type. These are committed in the AtribLogEntry (§2.3.1) and are visible to any party that fetches entry bundles.
 
@@ -1189,7 +1189,7 @@ The most natural instinct when building an attribution system is to encode causa
 
 Because causality is always an inference, never a fact. A protocol can verify that event B occurred after event A in the same session, and that B's creator set their chain*root to the hash of A's record. It cannot verify that A \_caused* B, or that A's output was actually used, or that the agent's decision was influenced by A's result rather than something else entirely. Encoding a causal claim in a record that is signed and committed to an append-only log would mean committing an unverifiable assertion as if it were a verified fact. That is precisely what a trust infrastructure must not do.
 
-The practical consequence is that edges in the Atrib graph are derived from observable structure, chain linkage, shared session identifiers, timestamps, and express only what that structure shows. What those structural relationships _mean_ causally is an inference that the policy layer makes, with full visibility into the evidence and full accountability for the interpretation. If a merchant and a creator disagree about whether a contribution was causally significant, they are disagreeing about a policy judgment, not about a fact the protocol recorded incorrectly. That is the right place for the disagreement to live.
+The practical consequence is that edges in the atrib graph are derived from observable structure, chain linkage, shared session identifiers, timestamps, and express only what that structure shows. What those structural relationships _mean_ causally is an inference that the policy layer makes, with full visibility into the evidence and full accountability for the interpretation. If a merchant and a creator disagree about whether a contribution was causally significant, they are disagreeing about a policy judgment, not about a fact the protocol recorded incorrectly. That is the right place for the disagreement to live.
 
 #### Why verification state is categorical, not numeric
 
@@ -1219,7 +1219,7 @@ The strict separation also makes the system auditable over time. If a settlement
 
 ### 3.2, Graph Data Model
 
-The Atrib attribution graph is a directed property multigraph. Nodes represent events. Edges represent relationships derived from observable record structure. The graph for a primary session is bounded by its `context_id`, extended by cross-session links when records share the same `session_token` field (§1.2.1).
+The atrib attribution graph is a directed property multigraph. Nodes represent events. Edges represent relationships derived from observable record structure. The graph for a primary session is bounded by its `context_id`, extended by cross-session links when records share the same `session_token` field (§1.2.1).
 
 #### 3.2.1, Node Types
 
@@ -1686,7 +1686,7 @@ This is intentionally the least opinionated possible policy. It does not reward 
 
 The default policy is not the recommended policy. Merchants and creators are strongly encouraged to publish their own policies. The default exists to ensure the protocol functions from day one without requiring policy negotiation infrastructure, and to provide a baseline that is fair by default for the cold-start period when most parties have not yet published policies.
 
-**Note, Why unsigned nodes receive zero weight** Gap nodes receive zero weight under the default policy because a creator who has not signed their contribution has not asserted a claim within the Atrib protocol. The gap node exists in the graph to make the unsigned hop visible, its zero weight is not a punishment but a description of the current state: no verifiable claim exists to honor. A merchant may choose to honor unsigned contributions through a custom policy, but doing so is an explicit opt-in, not the default.
+**Note, Why unsigned nodes receive zero weight** Gap nodes receive zero weight under the default policy because a creator who has not signed their contribution has not asserted a claim within the atrib protocol. The gap node exists in the graph to make the unsigned hop visible, its zero weight is not a punishment but a description of the current state: no verifiable claim exists to honor. A merchant may choose to honor unsigned contributions through a custom policy, but doing so is an explicit opt-in, not the default.
 
 ---
 
@@ -1756,7 +1756,7 @@ Two policies conflict when they specify requirements that cannot be simultaneous
 
 **Rule 6, Contradictory constraints within a single policy are invalid.** A policy document where `minimum_share` is greater than `maximum_share`, or where any constraint value is negative, MUST be rejected at parse time as if it were a 404 response. The agent MUST log a warning identifying the contradictory fields. A policy that is invalid for the purposes of negotiation is treated as absent, the creator or merchant has no stated policy.
 
-**Rule 7, No agent SDK means no session policy record; calculation defaults.** When no agent-side Atrib SDK was present during the session, no session policy record exists. The merchant discovering the session post-transaction may still run the calculation using the default policy and the graph as constructed from log data. In this case, `calculated_by` in the settlement recommendation is set to `"local"`, the merchant signs with their own key, and `policy_record_id` is set to `"default"` to indicate the default policy was applied without a negotiated record.
+**Rule 7, No agent SDK means no session policy record; calculation defaults.** When no agent-side atrib SDK was present during the session, no session policy record exists. The merchant discovering the session post-transaction may still run the calculation using the default policy and the graph as constructed from log data. In this case, `calculated_by` in the settlement recommendation is set to `"local"`, the merchant signs with their own key, and `policy_record_id` is set to `"default"` to indicate the default policy was applied without a negotiated record.
 
 #### 4.5.3, Session Policy Record
 
@@ -1802,7 +1802,7 @@ The session policy record is not submitted to the Merkle log, it is not an attri
 
 The calculation algorithm is a pure function: given the attribution graph for a session (§3) and the agreed policy document (§4.5), it produces a distribution, a mapping from creator public keys to share fractions summing to 1.0. No other inputs are required. No network calls are made. No timestamps beyond those in the records are used.
 
-This determinism is a design requirement, not an implementation convenience. Any party, creator, merchant, auditor, regulator, with access to the graph data and the policy document MUST be able to run this algorithm locally and arrive at the same result as any other party running the same inputs. The Atrib resolution API (at `https://resolve.atrib.io/v1/calculate`) is a convenience implementation of this algorithm, not an authority. Its output is no more or less trustworthy than a local implementation producing the same output from the same inputs.
+This determinism is a design requirement, not an implementation convenience. Any party, creator, merchant, auditor, regulator, with access to the graph data and the policy document MUST be able to run this algorithm locally and arrive at the same result as any other party running the same inputs. The atrib resolution API (at `https://resolve.atrib.io/v1/calculate`) is a convenience implementation of this algorithm, not an authority. Its output is no more or less trustworthy than a local implementation producing the same output from the same inputs.
 
 #### 4.6.1, Inputs and Preconditions
 
@@ -2066,7 +2066,7 @@ The settlement recommendation document is the output of the calculation algorith
 
 The settlement recommendation MUST be signed by whoever produced it, using their Ed25519 private key and the same JCS canonicalization procedure defined in §1.4.2. This signature proves that the stated party produced this exact recommendation at the stated time. It does not prove the recommendation is correct, correctness is established by independent verification.
 
-When the Atrib resolution API produces the recommendation, it signs with Atrib's key (published at `https://resolve.atrib.io/v1/pubkey`). When a merchant or third party runs the calculation locally, they sign with their own key. Any verifier who checks the signature must use the appropriate public key based on `calculated_by`.
+When the atrib resolution API produces the recommendation, it signs with atrib's key (published at `https://resolve.atrib.io/v1/pubkey`). When a merchant or third party runs the calculation locally, they sign with their own key. Any verifier who checks the signature must use the appropriate public key based on `calculated_by`.
 
 #### 4.7.3, Independent Verification
 
@@ -2090,7 +2090,7 @@ Step 5: Compare the output with the `distribution` field. Shares MUST match with
 
 **Policy versioning (deferred to v2).** In v1, policies are identified by URL. There is no formal versioning mechanism, if a creator changes their policy document at a stable URL, sessions that negotiated under the old policy can no longer fetch it for audit purposes. The session policy record's `policy_record_id` field mitigates this partially, since the record captures the policy terms that were agreed at session time. A normative policy versioning mechanism, supporting immutable policy snapshots and policy history, will be defined in v2.
 
-**Settlement webhook format (deferred to v2).** In v1, settlement recommendations are produced on demand by calling the resolution API or running the algorithm locally. There is no standardized mechanism for Atrib to push recommendations to merchants automatically when a transaction closes. A settlement webhook specification, defining the event format, delivery guarantee, and retry behavior, will be defined in v2.
+**Settlement webhook format (deferred to v2).** In v1, settlement recommendations are produced on demand by calling the resolution API or running the algorithm locally. There is no standardized mechanism for atrib to push recommendations to merchants automatically when a transaction closes. A settlement webhook specification, defining the event format, delivery guarantee, and retry behavior, will be defined in v2.
 
 **Dispute mechanism (deferred to v2).** In v1, there is no protocol-defined process for a creator to formally contest a settlement recommendation. A creator who believes their contribution was incorrectly weighted can contact the merchant directly; the session policy record and independent verification provide the evidentiary basis for that conversation. A structured dispute record format, allowing creators to submit counter-calculations with their own policy application and initiating a defined resolution process, will be defined in v2, drawing on work in progress at the DIF Trusted AI Agents Working Group.
 
@@ -2137,9 +2137,9 @@ Contents
 
 ### 5.1, Design Principle: Zero Ongoing Surface Area
 
-The fundamental design requirement for all Atrib SDKs is that attribution must happen automatically as a consequence of agents and tools doing what they already do, not as something developers explicitly trigger. The moment a developer must decide when to call an attribution method, adoption fails. They will intend to add it later and never do.
+The fundamental design requirement for all atrib SDKs is that attribution must happen automatically as a consequence of agents and tools doing what they already do, not as something developers explicitly trigger. The moment a developer must decide when to call an attribution method, adoption fails. They will intend to add it later and never do.
 
-The analogy is TCP/IP. An application developer does not tell TCP when to send a packet. They open a socket and write data. The protocol handles everything else invisibly. Atrib follows the same model. A developer wraps their MCP server or agent once at initialization. Every tool call, context propagation, and log submission after that happens automatically, without the developer ever thinking about it again.
+The analogy is TCP/IP. An application developer does not tell TCP when to send a packet. They open a socket and write data. The protocol handles everything else invisibly. atrib follows the same model. A developer wraps their MCP server or agent once at initialization. Every tool call, context propagation, and log submission after that happens automatically, without the developer ever thinking about it again.
 
 This means the SDK specification defines a **middleware contract**, not an API. There are no methods for developers to call after init. There are no configuration options for when to emit. There is one function call at startup and zero ongoing surface area.
 
@@ -2198,7 +2198,7 @@ On every `tools/call` request, the middleware MUST read the inbound attribution 
 
 2\. `tracestate: atrib=`, present for HTTP transport. Parsed per §1.5.2. Read if `params._meta.atrib` is absent.
 
-3\. `X-Atrib-Chain` header, fallback when tracestate was stripped by a proxy (§1.5.3). Read if neither of the above is present.
+3\. `X-atrib-Chain` header, fallback when tracestate was stripped by a proxy (§1.5.3). Read if neither of the above is present.
 
 If all three are absent, this is a genesis call, no upstream attribution context exists for this request. The middleware generates a genesis record (§5.3.3).
 
@@ -2251,7 +2251,7 @@ const token = base64url(record_hash_bytes) + '.' + base64url(creator_key_bytes)
 // Write to response in all applicable locations:
 response.params._meta.atrib = token                  // always, MCP metadata
 response.headers['tracestate'] += `,atrib=${token}`   // HTTP transport
-response.headers['X-Atrib-Chain'] = token            // fallback header
+response.headers['X-atrib-Chain'] = token            // fallback header
 ```
 
 The tracestate value MUST be appended to any existing tracestate entries, not replace them. The full token is 87 characters maximum and fits within the W3C tracestate per-vendor limit of 256 characters.
@@ -2387,7 +2387,7 @@ const token = sessionState.latestContext
 if (token) {
   request.params._meta.atrib = token               // always
   request.headers.tracestate  += `,atrib=${token}`  // HTTP transport
-  request.headers['X-Atrib-Chain'] = token          // fallback
+  request.headers['X-atrib-Chain'] = token          // fallback
 }
 
 // Always forward session_token in Baggage regardless of whether atrib context exists:
@@ -2405,7 +2405,7 @@ On every inbound `tools/call` response, the middleware MUST read the attribution
 // On every inbound tools/call response (isError: false):
 const token = response.params?._meta?.atrib
            ?? parseTracestate(response.headers?.tracestate)?.atrib
-           ?? response.headers?.['X-Atrib-Chain']
+           ?? response.headers?.['X-atrib-Chain']
 
 if (token) {
   const { record_hash, creator_key } = decodeToken(token)  // §1.5.2
@@ -2493,7 +2493,7 @@ When a transaction is detected, the middleware emits a `transaction` attribution
 
 **Path 1, Merchant-side emission (preferred).** The merchant configures `@atrib/mcp` with `transactionTools: ['checkout', 'complete_order']` (or equivalent tool names). When a call to one of these tools succeeds, `@atrib/mcp` emits a `transaction` record signed with the merchant's `ATRIB_PRIVATE_KEY` and writes an attribution context token to the response. This is the cleanest model: the merchant's key is on the transaction record, and the agent detects Path 1 by seeing the token in the response.
 
-**Path 2, Agent-side detection (fallback).** When the merchant has no Atrib integration, the agent detects the transaction and emits the record itself, signed with the agent's `creatorKey`. The `content_id` is derived as follows by protocol:
+**Path 2, Agent-side detection (fallback).** When the merchant has no atrib integration, the agent detects the transaction and emits the record itself, signed with the agent's `creatorKey`. The `content_id` is derived as follows by protocol:
 
 — **ACP / UCP:** use `order.permalink_url` from the completion response as the server_url, with tool_name `"checkout"`. If the response is an `order_create` / `order_update` webhook event, use `data.permalink_url`. If neither is available (e.g., the merchant returned a minimal completion without an order URL), fall back to the MCP server URL of the tool that was called.
 
@@ -2503,7 +2503,7 @@ When a transaction is detected, the middleware emits a `transaction` attribution
 
 The session policy record MUST include a warning: `"transaction_emitted_by_agent"` when this path is taken.
 
-**Path selection rule, preventing double-emission.** The agent middleware MUST NOT emit a transaction record (Path 2) when the checkout tool response contains an attribution context token (i.e., `params._meta.atrib`, `tracestate: atrib=...`, or `X-Atrib-Chain` is present in the response). The presence of an attribution token in the checkout response indicates that `@atrib/mcp` is installed on the merchant's server and has already emitted the transaction record (Path 1). Emitting a second record would create two transaction nodes for the same economic event, violating the single-transaction-per-session assumption in §4.6.1. When Path 1 is detected, the agent updates its session state with the inbound context token as normal, but skips transaction record emission.
+**Path selection rule, preventing double-emission.** The agent middleware MUST NOT emit a transaction record (Path 2) when the checkout tool response contains an attribution context token (i.e., `params._meta.atrib`, `tracestate: atrib=...`, or `X-atrib-Chain` is present in the response). The presence of an attribution token in the checkout response indicates that `@atrib/mcp` is installed on the merchant's server and has already emitted the transaction record (Path 1). Emitting a second record would create two transaction nodes for the same economic event, violating the single-transaction-per-session assumption in §4.6.1. When Path 1 is detected, the agent updates its session state with the inbound context token as normal, but skips transaction record emission.
 
 In both paths, when Path 2 is taken, the record is submitted to the log immediately, not deferred, because the transaction event is the closing anchor of the attribution graph.
 
@@ -2593,7 +2593,7 @@ The verifier fetches the graph for the given `context_id`, applies the specified
 
 #### 5.6.1, Key Generation
 
-All Atrib SDKs use the same Ed25519 key format defined in §1.4.1. A keypair can be generated using the Atrib CLI:
+All atrib SDKs use the same Ed25519 key format defined in §1.4.1. A keypair can be generated using the atrib CLI:
 
 ```
 npx @atrib/cli keygen
@@ -2607,7 +2607,7 @@ ATRIB_PUBLIC_KEY=base64url(32-byte-ed25519-public-key)
 // Only ATRIB_PRIVATE_KEY needs to be stored and secured.
 ```
 
-**Note, Ed25519 seed vs expanded key** Some Ed25519 libraries use a 64-byte "expanded" or "NaCl" format that concatenates the seed with the derived public key. Atrib stores and transmits only the 32-byte seed. The public key is derived at runtime using standard Ed25519 scalar multiplication. Implementations MUST accept only 32-byte seeds in ATRIB_PRIVATE_KEY and MUST NOT accept or produce 64-byte concatenated formats as key values, to prevent confusion between key representations across implementations.
+**Note, Ed25519 seed vs expanded key** Some Ed25519 libraries use a 64-byte "expanded" or "NaCl" format that concatenates the seed with the derived public key. atrib stores and transmits only the 32-byte seed. The public key is derived at runtime using standard Ed25519 scalar multiplication. Implementations MUST accept only 32-byte seeds in ATRIB_PRIVATE_KEY and MUST NOT accept or produce 64-byte concatenated formats as key values, to prevent confusion between key representations across implementations.
 
 #### 5.6.2, Environment Variable Convention
 
@@ -2653,11 +2653,11 @@ This section is normative. A conforming implementation MUST fire each trigger at
 
 ### 5.8, Degradation Contract
 
-Atrib must never impair the primary function of a tool or agent. This is a hard requirement. The attribution infrastructure is invisible infrastructure, it either works silently or fails silently. It does not fail loudly.
+atrib must never impair the primary function of a tool or agent. This is a hard requirement. The attribution infrastructure is invisible infrastructure, it either works silently or fails silently. It does not fail loudly.
 
 The degradation contract is:
 
-**Any exception thrown inside an Atrib trigger handler MUST be caught by the middleware.** Exceptions MUST NEVER propagate to the tool handler, the agent, or the calling code. The middleware MUST log the exception at warning level using a prefixed label (`"atrib:"`) and continue as if the trigger did not fire.
+**Any exception thrown inside an atrib trigger handler MUST be caught by the middleware.** Exceptions MUST NEVER propagate to the tool handler, the agent, or the calling code. The middleware MUST log the exception at warning level using a prefixed label (`"atrib:"`) and continue as if the trigger did not fire.
 
 **Any network failure during log submission MUST be handled silently with retry.** This applies equally to `tool_call` and `transaction` records, both use exponential backoff with max 3 attempts over a 30-second window. Transaction records are queued at higher priority than tool_call records but are not submitted synchronously. If all retries fail, the signed record is cached locally. The tool or agent response is not affected in any case.
 
