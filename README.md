@@ -141,6 +141,7 @@ Store the output as `ATRIB_PRIVATE_KEY`. The public key is derived at runtime.
 
 ## More
 
+- [Policy templates and guide](policies/README.md)
 - [Architecture and trust model](ARCHITECTURE.md)
 - [Prior art and standards map](PRIOR-ART.md)
 - [Decision log](DECISIONS.md)

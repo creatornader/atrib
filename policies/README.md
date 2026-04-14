@@ -25,6 +25,31 @@ A single policy document can combine any or all of:
 
 These are all fields on one document. They compose naturally. `full-stack.json` uses all three.
 
+## Building policies in code
+
+`@atrib/verify` exports `buildPolicy` and `policyFrom` helpers for composing policies programmatically:
+
+```typescript
+import { policyFrom } from '@atrib/verify'
+
+// Start from default, add recency decay and a cap
+const policy = policyFrom({
+  modifiers: [{ type: 'temporal_decay', half_life_ms: 60000 }],
+  constraints: { maximum_share: 0.40 },
+})
+
+// Or build on top of an existing policy
+import { buildPolicy } from '@atrib/verify'
+import basePolicy from './recency-weighted.json'
+
+const customPolicy = buildPolicy(basePolicy, {
+  constraints: { minimum_share: 0.05 },
+  modifiers: [{ type: 'chain_depth_penalty', penalty_per_level: 0.1 }],
+})
+```
+
+`buildPolicy` merges edge weights and constraints (override replaces base per field) and concatenates modifiers (base modifiers first, then additions). It throws if the result is invalid.
+
 ## How creator and merchant policies interact
 
 Creators and merchants publish separate policies. The agent negotiates between them at session start (spec §4.5). The rules:

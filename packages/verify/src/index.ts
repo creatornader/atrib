@@ -17,6 +17,9 @@ export {
   distributionsMatch,
 } from './recommendation.js'
 
+// Policy builder (compose policies from templates)
+export { buildPolicy, policyFrom } from './policy-builder.js'
+
 // Graph fetch (advanced usage)
 export { fetchGraph, fetchSessionPolicyRecord, fetchPolicyDocument } from './graph-fetch.js'
 
