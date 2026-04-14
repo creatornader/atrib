@@ -2,6 +2,8 @@
 
 **Draft 0.1, April 2026**
 
+Editor: Nader Helmy
+
 This specification defines the atrib value provenance protocol. When an AI agent calls a tool, atrib creates a signed attribution record. Records are committed to an append-only Merkle log, forming an attribution graph that connects tool calls to transaction outcomes. A deterministic algorithm computes a value distribution from the graph under an agreed policy, and any party can independently verify the result. The spec covers the record format (§1), the log protocol (§2), the graph model (§3), policies and the distribution algorithm (§4), and the SDK middleware contracts (§5).
 
 ---
