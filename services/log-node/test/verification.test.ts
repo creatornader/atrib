@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as ed from '@noble/ed25519';
 import { sha512, sha256 } from '@noble/hashes/sha2.js';
-import { canonicalRecord, leafHash, verifyInclusion, signRecord, serializeEntry } from '@atrib/mcp';
+import { canonicalRecord, leafHash, verifyInclusion, signRecord, serializeEntry, hexEncode } from '@atrib/mcp';
 import type { AtribRecord } from '@atrib/mcp';
 import { parseCheckpointBody } from '../src/checkpoint.js';
 import { startLogServer, type LogServer } from '../src/index.js';
@@ -30,17 +30,13 @@ ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
 // Helpers
 // ---------------------------------------------------------------------------
 
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 async function makeSignedRecord(): Promise<{ record: AtribRecord; privateKey: Uint8Array }> {
   const privateKey = ed.utils.randomPrivateKey();
   const publicKeyBytes = await ed.getPublicKeyAsync(privateKey);
   const creatorKey = Buffer.from(publicKeyBytes).toString('base64url');
 
-  const contextId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
-  const chainRoot = `sha256:${bytesToHex(sha256(new TextEncoder().encode(contextId)))}`;
+  const contextId = hexEncode(crypto.getRandomValues(new Uint8Array(16)));
+  const chainRoot = `sha256:${hexEncode(sha256(new TextEncoder().encode(contextId)))}`;
 
   const unsigned = {
     spec_version: 'atrib/1.0' as const,
@@ -49,7 +45,7 @@ async function makeSignedRecord(): Promise<{ record: AtribRecord; privateKey: Ui
     context_id: contextId,
     creator_key: creatorKey,
     chain_root: chainRoot,
-    content_id: 'sha256:' + bytesToHex(sha256(new TextEncoder().encode('verification-test'))),
+    content_id: 'sha256:' + hexEncode(sha256(new TextEncoder().encode('verification-test'))),
     signature: '', // placeholder, signRecord will replace
   };
 
@@ -104,7 +100,7 @@ describe('end-to-end proof verification', () => {
     //   a. Compute record_hash = SHA-256(canonicalRecord(record))
     const canonBytes = canonicalRecord(record);
     const recordHashBytes = sha256(canonBytes);
-    const recordHashHex = bytesToHex(recordHashBytes);
+    const recordHashHex = hexEncode(recordHashBytes);
 
     //   b. Serialize to 90-byte entry
     const entryBytes = serializeEntry({
@@ -190,7 +186,7 @@ describe('end-to-end proof verification', () => {
       // Reconstruct leaf hash
       const canonBytes = canonicalRecord(record);
       const recordHashBytes = sha256(canonBytes);
-      const recordHashHex = bytesToHex(recordHashBytes);
+      const recordHashHex = hexEncode(recordHashBytes);
       const entryBytes = serializeEntry({
         record_hash_hex: recordHashHex,
         creator_key_b64url: record.creator_key,

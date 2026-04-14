@@ -65,5 +65,10 @@ export function validateSubmission(record: Partial<AtribRecord>): ValidationResu
     }
   }
 
+  // session_token is optional and OMITTED when absent (§1.3), but if present must be a string
+  if ('session_token' in record && typeof record.session_token !== 'string') {
+    return { ok: false, status: 400, error: 'session_token must be a string when present' }
+  }
+
   return { ok: true }
 }
