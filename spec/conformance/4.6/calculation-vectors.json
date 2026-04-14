@@ -1,0 +1,109 @@
+{
+  "spec_version": "atrib/1.0",
+  "spec_section": "§4.6 (calculation algorithm)",
+  "description": "Test vectors for the attribution calculation algorithm. Any conforming implementation MUST produce identical distribution outputs for these graph+policy inputs.",
+  "vectors": [
+    {
+      "name": "two equal contributors under default policy",
+      "input": {
+        "graph": {
+          "spec_version": "atrib/1.0",
+          "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "generated_at": 1700000000000,
+          "node_count": 3,
+          "edge_count": 2,
+          "has_transaction": true,
+          "cross_session_count": 0,
+          "nodes": [
+            { "id": "sha256:node_a", "event_type": "tool_call", "content_id": "sha256:content_a", "creator_key": "creator_alice", "chain_root": "sha256:chain_a", "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "timestamp": 1700000000000, "log_index": 0, "verification_state": "signature_valid", "is_genesis": true },
+            { "id": "sha256:node_b", "event_type": "tool_call", "content_id": "sha256:content_b", "creator_key": "creator_bob", "chain_root": "sha256:chain_b", "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "timestamp": 1700000001000, "log_index": 1, "verification_state": "signature_valid", "is_genesis": false },
+            { "id": "sha256:tx_node", "event_type": "transaction", "content_id": "sha256:tx_content", "creator_key": "creator_alice", "chain_root": "sha256:tx_chain", "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "timestamp": 1700000002000, "log_index": 2, "verification_state": "signature_valid", "is_genesis": false }
+          ],
+          "edges": [
+            { "type": "CONVERGES_ON", "source": "sha256:node_a", "target": "sha256:tx_node", "directed": true },
+            { "type": "CONVERGES_ON", "source": "sha256:node_b", "target": "sha256:tx_node", "directed": true }
+          ]
+        },
+        "policy": {
+          "spec_version": "atrib/1.0",
+          "role": "default",
+          "edge_weights": { "CHAIN_PRECEDES": 1.0, "SESSION_PRECEDES": 1.0, "SESSION_PARALLEL": 1.0, "CONVERGES_ON": 1.0, "CROSS_SESSION": 1.0, "unsigned": 0.0 },
+          "modifiers": [],
+          "distribution": "proportional",
+          "constraints": {}
+        }
+      },
+      "expected": {
+        "distribution": { "creator_alice": 0.5, "creator_bob": 0.5 },
+        "sum": 1.0,
+        "keys_sorted": true
+      }
+    },
+    {
+      "name": "three contributors with minimum_share constraint",
+      "input": {
+        "graph": {
+          "spec_version": "atrib/1.0",
+          "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "generated_at": 1700000000000,
+          "node_count": 4,
+          "edge_count": 3,
+          "has_transaction": true,
+          "cross_session_count": 0,
+          "nodes": [
+            { "id": "sha256:n1", "event_type": "tool_call", "content_id": "sha256:c1", "creator_key": "creator_1", "chain_root": "sha256:r1", "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "timestamp": 1700000000000, "log_index": 0, "verification_state": "signature_valid", "is_genesis": true },
+            { "id": "sha256:n2", "event_type": "tool_call", "content_id": "sha256:c2", "creator_key": "creator_1", "chain_root": "sha256:r2", "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "timestamp": 1700000001000, "log_index": 1, "verification_state": "signature_valid", "is_genesis": false },
+            { "id": "sha256:n3", "event_type": "tool_call", "content_id": "sha256:c3", "creator_key": "creator_2", "chain_root": "sha256:r3", "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "timestamp": 1700000002000, "log_index": 2, "verification_state": "signature_valid", "is_genesis": false },
+            { "id": "sha256:tx", "event_type": "transaction", "content_id": "sha256:tx", "creator_key": "creator_1", "chain_root": "sha256:rtx", "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "timestamp": 1700000003000, "log_index": 3, "verification_state": "signature_valid", "is_genesis": false }
+          ],
+          "edges": [
+            { "type": "CONVERGES_ON", "source": "sha256:n1", "target": "sha256:tx", "directed": true },
+            { "type": "CONVERGES_ON", "source": "sha256:n2", "target": "sha256:tx", "directed": true },
+            { "type": "CONVERGES_ON", "source": "sha256:n3", "target": "sha256:tx", "directed": true }
+          ]
+        },
+        "policy": {
+          "spec_version": "atrib/1.0",
+          "role": "merchant",
+          "edge_weights": { "CONVERGES_ON": 1.0, "unsigned": 0.0 },
+          "modifiers": [],
+          "constraints": { "minimum_share": 0.2 }
+        }
+      },
+      "expected": {
+        "distribution_properties": {
+          "creator_1_share_gte": 0.2,
+          "creator_2_share_gte": 0.2,
+          "sum_approx_1": true
+        }
+      }
+    },
+    {
+      "name": "no transaction node produces empty distribution",
+      "input": {
+        "graph": {
+          "spec_version": "atrib/1.0",
+          "context_id": "cccccccccccccccccccccccccccccccc",
+          "generated_at": 1700000000000,
+          "node_count": 1,
+          "edge_count": 0,
+          "has_transaction": false,
+          "cross_session_count": 0,
+          "nodes": [
+            { "id": "sha256:only", "event_type": "tool_call", "content_id": "sha256:c", "creator_key": "creator_x", "chain_root": "sha256:r", "context_id": "cccccccccccccccccccccccccccccccc", "timestamp": 1700000000000, "log_index": 0, "verification_state": "signature_valid", "is_genesis": true }
+          ],
+          "edges": []
+        },
+        "policy": {
+          "spec_version": "atrib/1.0",
+          "role": "default",
+          "edge_weights": { "CONVERGES_ON": 1.0 }
+        }
+      },
+      "expected": {
+        "distribution": {},
+        "sum": 0
+      }
+    }
+  ]
+}
