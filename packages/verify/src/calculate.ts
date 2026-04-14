@@ -448,9 +448,14 @@ function applyMaximumCap(normalized: Map<string, number>, cap: number): Map<stri
 function finalNormalize<K>(shares: Map<K, number>): Map<K, number> {
   let total = 0
   for (const s of shares.values()) total += s
-  if (total === 0) return new Map()
+  // Guard against zero, near-zero (denormalized), and NaN totals
+  if (!Number.isFinite(total) || total <= 0) return new Map()
   const result = new Map<K, number>()
-  for (const [k, s] of shares) result.set(k, s / total)
+  for (const [k, s] of shares) {
+    const normalized = s / total
+    // Guard against NaN/Infinity from division of very small numbers
+    result.set(k, Number.isFinite(normalized) ? normalized : 0)
+  }
   return result
 }
 
