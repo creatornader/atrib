@@ -38,3 +38,6 @@ export type { InboundContext, OutboundContextOptions } from './context.js'
 // Submission queue (for @atrib/agent and advanced usage)
 export { createSubmissionQueue } from './submission.js'
 export type { SubmissionQueue, ProofBundle } from './submission.js'
+
+// RFC 6962 Merkle tree (for log service and @atrib/verify)
+export { leafHash, nodeHash, computeRoot, computeInclusionProof, verifyInclusion } from './merkle.js'
