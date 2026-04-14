@@ -37,6 +37,8 @@ export interface AtribOptions {
 export interface AtribServer extends McpServer {
   /** Flush pending log submissions (for testing/shutdown). */
   flush(): Promise<void>
+  /** The policy document this server exposes, if any (§5.3.6). */
+  readonly policy: Record<string, unknown> | null
 }
 
 /**
@@ -52,6 +54,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   if (!options.creatorKey) {
     console.warn('atrib: no creatorKey provided, operating in pass-through mode')
     atribServer.flush = async () => {}
+    Object.defineProperty(atribServer, 'policy', { value: null, writable: false })
     return atribServer
   }
 
@@ -59,6 +62,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   if (privateKey.length !== 32) {
     console.warn('atrib: creatorKey must be 32 bytes, operating in pass-through mode')
     atribServer.flush = async () => {}
+    Object.defineProperty(atribServer, 'policy', { value: null, writable: false })
     return atribServer
   }
 
@@ -126,6 +130,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
         'github.com/creatornader/atrib with your @modelcontextprotocol/sdk version.',
     )
     atribServer.flush = async () => {}
+    Object.defineProperty(atribServer, 'policy', { value: null, writable: false })
     return atribServer
   }
 
@@ -273,6 +278,15 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   }
 
   atribServer.flush = () => queue.flush()
+
+  // §5.3.6: Expose the policy document if provided.
+  // Accessible via atribServer.policy for programmatic use.
+  // For HTTP transports, the caller should serve this at /.well-known/atrib-policy.json.
+  // For MCP stdio transports, the policy is available via this property.
+  Object.defineProperty(atribServer, 'policy', {
+    value: options.policy ?? null,
+    writable: false,
+  })
 
   return atribServer
 }
