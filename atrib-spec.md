@@ -88,7 +88,7 @@ The attribution chain is verifiable by any party with the relevant records. No s
 
 ### Principle V: The protocol is open. The product is commercial.
 
-The atrib specification, the signing libraries, and the transparency log infrastructure are open and free. The queryable attribution graph, the analytics products, and the settlement resolution services are commercial.
+The specification, the signing libraries, the calculation algorithm, and the log software are open. Anyone can run their own log, build their own graph service, and run the calculation locally. atrib operates a hosted graph service, analytics, and managed log at `atrib.io` as a commercial product built on the open protocol. Using the hosted service is a convenience, not a requirement.
 
 ---
 

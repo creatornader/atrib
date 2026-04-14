@@ -108,7 +108,9 @@ Runs a fake merchant, a fake agent, and a real Merkle log in a single process. T
 | [`@atrib/log-dev`](packages/log-dev/README.md) | Dev-only in-memory log stub. Not for production. |
 | [`@atrib/integration`](packages/integration/README.md) | Cross-package tests + runnable examples. |
 
-> 613 tests across all packages. Public packages are not yet published to npm. The production log service is at [`services/log-node/`](services/log-node/).
+> 672 tests across all packages. Public packages are not yet published to npm. The production log service is at [`services/log-node/`](services/log-node/).
+
+**Not yet implemented:** Graph Query API (spec §3.4), Tile Read API (spec §2.5), Witnessing (spec §2.9, deferred to v2).
 
 ## Key generation
 
@@ -135,7 +137,7 @@ Store the output as `ATRIB_PRIVATE_KEY`. The public key is derived at runtime.
 2. **Accountability without content exposure.** The log stores hashes, not content.
 3. **Settlement is separate from attribution.** The protocol records what happened. It does not move money.
 4. **No central arbiter of value.** Trust from math and open spec, not from trusting atrib.
-5. **The protocol is open. The product is commercial.** Spec, signing libraries, and log infrastructure are open. The queryable graph and analytics are commercial.
+5. **The protocol is open. The product is commercial.** Spec, signing libraries, calculation algorithm, and log software are open. Anyone can self-host. atrib operates a hosted service as a commercial product built on the open protocol.
 
 ## More
 
