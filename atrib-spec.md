@@ -4,6 +4,18 @@
 
 ---
 
+## Table of Contents
+
+- [§0 Foundations](#0-foundations)
+- [§1 Attribution Record Format](#1-attribution-record-format)
+- [§2 Merkle Log Protocol](#2-merkle-log-protocol)
+- [§3 Graph Query Interface](#3-graph-query-interface)
+- [§4 Attribution Policy Format](#4-attribution-policy-format)
+- [§5 SDK Specification](#5-sdk-specification)
+- [Appendix A: Test Vectors](#appendix-a-test-vectors)
+
+---
+
 ## §0 Foundations
 
 Contents
