@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Inbound/outbound attribution context handling (§5.3.2, §5.3.4).
  */

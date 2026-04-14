@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Re-export from @atrib/mcp — the 90-byte entry format is spec-defined
  * (§2.3.1) and shared between log-dev and log-node.

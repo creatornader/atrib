@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import { leafHash as computeLeafHash, computeRoot, computeInclusionProof } from '@atrib/mcp'
 
 /**

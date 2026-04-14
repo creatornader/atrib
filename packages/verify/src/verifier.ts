@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * AtribVerifier — the merchant verification class (§5.5).
  *

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * The calculation algorithm (§4.6) — pure function from
  * (graph, policy, sessionPolicyRecord?) → distribution.

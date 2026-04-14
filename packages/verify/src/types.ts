@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Types for @atrib/verify — graph objects, policy documents,
  * and settlement recommendation documents.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * @atrib/mcp proxy — in-process McpServer that forwards tool calls to an
  * upstream MCP server with attribution applied at the proxy layer.

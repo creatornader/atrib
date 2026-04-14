@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * RFC 6962 Certificate Transparency Merkle tree.
  *

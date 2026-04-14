@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Adapter: attribute MCP tool calls flowing through a Cloudflare Agent.
  *

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * The canonical Atrib attribution record (§1.2).
  *

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * @atrib/agent middleware — the atrib() wrapper for agents (§5.4).
  *

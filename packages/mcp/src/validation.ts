@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Shared §2.6.1 submission validation.
  * Used by both @atrib/log-dev and log-node servers.

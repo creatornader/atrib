@@ -1,14 +1,14 @@
-# Atrib Technical Architecture
+# Atrib architecture
 
-A deep technical overview of the Atrib value provenance protocol. This document is the middle layer between the [README](README.md) (what Atrib does) and the [spec](atrib-spec.md) (every normative detail). It is written for developers evaluating whether to build on or contribute to the protocol.
+How the protocol works, what the trust model actually guarantees, and why the design is the way it is. If you want the pitch, read the [README](README.md). If you want every normative detail, read the [spec](atrib-spec.md). This is the middle layer — enough to evaluate whether Atrib is worth building on.
 
-For architectural decisions and their rationale, see [DECISIONS.md](DECISIONS.md).
+Architectural decisions and rejected alternatives are logged in [DECISIONS.md](DECISIONS.md).
 
 ---
 
 ## System overview
 
-Atrib has three protocol layers and one SDK layer that automates them. Data flows in one direction: tool call happens, record is signed, record is committed to the log, graph is built from committed records, policy is applied to the graph, settlement recommendation is produced.
+Three protocol layers, one SDK layer that automates them. Data flows in one direction: tool call happens, record gets signed, record gets committed to the log, graph gets built, policy gets applied, settlement recommendation comes out.
 
 ```
                           ┌──────────────────────────────────────────┐
@@ -118,35 +118,35 @@ Gap nodes represent unsigned hops -- tool calls evidenced by OTel spans but lack
 
 ## Trust model
 
-Atrib's trust model is designed so that every claim the protocol makes is independently verifiable by any party. Here is exactly what is verifiable and what is trusted:
+The goal is simple: every claim the protocol makes should be independently verifiable. Here is what actually is, and what isn't:
 
 **Verifiable by anyone:**
 
-- **Record signatures.** Each attribution record is Ed25519 signed. Anyone with the creator's public key (which is embedded in the record itself) can verify the signature. No certificate authority, no PKI, no trusted third party.
+Record signatures — each record is Ed25519 signed. The public key is embedded in the record itself, so anyone can verify. No certificate authority, no PKI.
 
-- **Log inclusion.** The Merkle log returns RFC 6962 inclusion proofs. Anyone with the log's checkpoint (a signed tree head) can verify that a specific record was committed at a specific index. The proof is a hash path from the leaf to the root -- pure math, no trust required.
+Log inclusion — the Merkle log returns RFC 6962 inclusion proofs. A hash path from the leaf to the root. Pure math. If you have the checkpoint, you can verify that a record was committed at a specific index.
 
-- **Log consistency.** Consecutive checkpoints can be verified for consistency -- proving the log is append-only and no entries were modified or deleted between checkpoints. This is the standard Certificate Transparency consistency proof.
+Log consistency — consecutive checkpoints can be verified for consistency. This proves the log only grew and nothing was modified or deleted between checkpoints. Same mechanism Certificate Transparency uses.
 
-- **Graph edges.** All five edge types are deterministically derived from record fields. Given the same set of records, any implementation following the derivation rules in Section 3.2.4 must produce the same graph. You can verify the graph by rebuilding it.
+Graph edges — all five edge types are deterministically derived from record fields. Given the same records, any implementation following Section 3.2.4 must produce the same graph. You can verify by rebuilding it yourself.
 
-- **Settlement calculation.** The calculation algorithm (Section 4.6) is a pure function of graph + policy. No network calls, no randomness, no timestamps beyond those in the records. Any party with the same inputs gets the same distribution. The `@atrib/verify` package exists specifically so merchants can run this locally.
+Settlement calculation — the algorithm (Section 4.6) is a pure function. Graph + policy in, distribution out. No network calls, no randomness. Any party with the same inputs gets the same answer. `@atrib/verify` exists so merchants can run this locally and check.
 
 **Trusted (but auditable):**
 
-- **Log operator append-only behavior.** The log operator could theoretically refuse to accept entries (censorship) or attempt to present different views to different parties (equivocation). Both are detectable: censorship is observable by the submitter (they do not receive an inclusion proof), and equivocation is detectable via consistency proofs and the witnessing protocol (Section 2.9). The trust assumption is that the operator does not equivocate -- and the audit mechanism makes equivocation risky.
+The log operator's append-only behavior. The operator could theoretically refuse entries (censorship) or show different views to different parties (equivocation). Both are detectable: censorship is obvious to the submitter (no inclusion proof comes back), and equivocation is caught by consistency proofs and the witnessing protocol (Section 2.9). The trust assumption is that the operator doesn't equivocate — and the audit mechanism makes equivocation a bad bet.
 
 **Not trusted at all:**
 
-- **Atrib Inc.** The protocol is an open spec. The signing libraries are open source. The log format is a public standard. The calculation algorithm is published and locally executable. No single party -- including the company that wrote the spec -- has privileged access, override capability, or veto power over the protocol's outputs.
+Atrib Inc. The protocol is an open spec. The signing libraries are open source. The log format is a public standard. The calculation algorithm is published and locally executable. Nobody — including the company that wrote the spec — has privileged access or override capability.
 
 ---
 
 ## Why Certificate Transparency, not blockchain
 
-This is the most frequently asked architectural question. The short answer: CT Merkle logs provide the same cryptographic guarantees that matter for this use case -- append-only, tamper-evident, publicly auditable -- without tokens, gas fees, block confirmation times, or association with cryptocurrency.
+People always ask this. CT Merkle logs give you the same cryptographic guarantees — append-only, tamper-evident, publicly auditable — without tokens, gas fees, block times, or the cultural baggage of crypto.
 
-The longer answer:
+Here is why, specifically:
 
 **Same math.** Both CT logs and blockchains use Merkle trees to provide tamper evidence. An entry committed to either structure cannot be altered without invalidating the root hash. Both support inclusion proofs (proving a specific entry exists) and consistency proofs (proving the tree only grew, never mutated).
 
@@ -154,7 +154,7 @@ The longer answer:
 
 **Different performance.** CT log submission is an HTTP POST that returns an inclusion proof. There is no block time, no gas auction, no mempool. Latency is bounded by network round-trip time, not by consensus finality.
 
-**Different packaging.** Blockchains carry cultural and regulatory baggage that is irrelevant to attribution infrastructure. There are no tokens to list, no wallets to integrate, no securities questions to answer. The Tessera library that implements the log is maintained by Google's transparency team and used in production by Certificate Transparency, Go module checksums, and Sigstore. It is boring infrastructure, which is exactly what you want for a trust layer.
+**Different packaging.** No tokens to list, no wallets to integrate, no securities lawyers to retain. Tessera (the implementation) is maintained by Google's transparency team and runs in production for Certificate Transparency, Go module checksums, and Sigstore. Boring infrastructure. That's the point.
 
 The decision is documented in D006.
 
@@ -173,13 +173,13 @@ Atrib detects transaction events from six agent commerce protocols simultaneousl
 | AP2 (Google)            | A2A DataPart with `ap2.mandates.PaymentMandate`           | A2A task response            |
 | a2a-x402 (Google)       | `metadata["x402.payment.status"] === "payment-completed"` | A2A task metadata            |
 
-The design principle is **detect, not implement**. Atrib pattern-matches on tool call responses to identify when a transaction occurred. It does not initiate payments, move money, hold funds, or enforce settlement. The detection logic for all six protocols ships in `@atrib/agent`'s `transaction.ts` and runs simultaneously -- you do not choose a payment protocol at install time.
+The design principle: detect, don't implement. Atrib pattern-matches on tool call responses to identify when a transaction occurred. It doesn't initiate payments, move money, hold funds, or enforce settlement. The detection logic for all six protocols is in `@atrib/agent`'s `transaction.ts` and runs simultaneously. You don't choose a payment protocol at install time.
 
-This matters for two reasons:
+Why this matters:
 
-1. **Protocol agnosticism.** Atrib works regardless of which payment rail the merchant uses. If a seventh protocol appears tomorrow, adding detection is a pattern-matching rule, not a protocol change.
+Protocol agnosticism. Atrib works regardless of which payment rail the merchant uses. If a seventh protocol shows up tomorrow, adding detection is a pattern-matching rule, not a protocol change.
 
-2. **Separation of concerns.** Attribution and payment are orthogonal problems. Attribution answers "who contributed to this outcome?" Payment answers "how does money move?" Coupling them would mean Atrib's adoption depends on payment protocol adoption, and vice versa.
+Separation of concerns. Attribution and payment are orthogonal problems. Attribution answers "who contributed to this outcome?" Payment answers "how does money move?" Coupling them would mean each one's adoption depends on the other's.
 
 When a transaction is detected, the agent emits a `transaction` record (event_type `"transaction"`) with the same `context_id` as the session. This closes the attribution loop -- the graph now has a terminal node that all contributing tool calls converge on. See Section 1.7 for the detection rules for each protocol.
 
@@ -216,9 +216,7 @@ Each adapter ships with: source at `packages/agent/src/adapters/`, tests at `pac
 
 ## Degradation contract
 
-Section 5.8 of the spec defines the most important operational property: **Atrib failures must never affect the primary tool call or agent response.**
-
-This is not a best practice. It is a hard protocol requirement. The specific guarantees:
+Section 5.8 of the spec. Atrib failures never affect the primary tool call or agent response. Not a best practice — a hard protocol requirement. The guarantees:
 
 - **All exceptions caught.** Any exception inside an Atrib trigger handler is caught by the middleware, logged at warning level with an `atrib:` prefix, and swallowed. Exceptions never propagate to the tool handler, the agent, or calling code.
 
@@ -230,13 +228,13 @@ This is not a best practice. It is a hard protocol requirement. The specific gua
 
 - **No key = pass-through mode.** If `ATRIB_PRIVATE_KEY` is not set, the middleware logs a warning and operates as a transparent proxy. No records emitted, no context attached. The tool or agent functions as if the `atrib()` wrapper were not present.
 
-The consequence: adding `@atrib/mcp` or `@atrib/agent` to a production system has zero risk of introducing failures. Attribution either works silently or fails silently. It is never a failure mode.
+The consequence: adding `@atrib/mcp` or `@atrib/agent` to a production system cannot introduce failures. Attribution either works silently or fails silently. It is never a failure mode.
 
 ---
 
 ## Key design decisions
 
-These are the load-bearing choices. Each is documented in detail in [DECISIONS.md](DECISIONS.md).
+The load-bearing choices. Each is in [DECISIONS.md](DECISIONS.md) with full rationale and rejected alternatives.
 
 **Ed25519, 32-byte seed (D003).** Not RSA, not ECDSA, not DIDs. Ed25519 is fast, has a small key size, deterministic signatures, and no PKI dependency. The 32-byte seed (not the 64-byte NaCl expanded format) keeps key management simple. Key rotation is deferred to v2.
 
