@@ -1,0 +1,32 @@
+{
+  "spec_version": "atrib/1.0",
+  "role": "merchant",
+  "edge_weights": {
+    "CHAIN_PRECEDES": 2.0,
+    "SESSION_PRECEDES": 1.0,
+    "SESSION_PARALLEL": 0.5,
+    "CONVERGES_ON": 1.0,
+    "CROSS_SESSION": 0.3,
+    "unsigned": 0.0
+  },
+  "modifiers": [
+    {
+      "type": "temporal_decay",
+      "half_life_ms": 60000
+    },
+    {
+      "type": "chain_depth_penalty",
+      "penalty_per_level": 0.1
+    },
+    {
+      "type": "call_count_boost",
+      "multiplier_per_call": 0.2,
+      "cap": 2.0
+    }
+  ],
+  "distribution": "proportional",
+  "constraints": {
+    "minimum_share": 0.05,
+    "maximum_share": 0.50
+  }
+}
