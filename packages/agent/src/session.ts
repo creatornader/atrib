@@ -16,6 +16,7 @@ import {
   mergeBaggageAtribSession,
   type DecodedToken,
 } from '@atrib/mcp'
+import type { GapNode } from '@atrib/verify'
 
 /** The latest attribution context from the most recent tool response. */
 export interface LatestContext {
@@ -31,13 +32,15 @@ export interface SessionState {
   initialized: boolean
   /** The record_id from the session policy record, set after init. */
   policyRecordId: string | null
+  /** Task IDs from tasks/create responses (§5.7). */
+  taskIds: Set<string>
+  /** Unsigned hops recorded during this session (§1.6). */
+  gapNodes: GapNode[]
   warnings: string[]
 }
 
 /** Options for creating a session. */
 export interface SessionOptions {
-  /** Base64url-encoded Ed25519 private key (32 bytes). */
-  creatorKey: string
   /** Session token for cross-trace linking. Auto-generated if absent. */
   sessionToken?: string | undefined
 }
@@ -67,6 +70,8 @@ export function createSession(options: SessionOptions): SessionState {
     latestContext: null,
     initialized: false,
     policyRecordId: null,
+    taskIds: new Set(),
+    gapNodes: [],
     warnings: [],
   }
 }
@@ -89,6 +94,10 @@ export function buildOutboundMeta(
   existing: Record<string, unknown> = {},
 ): Record<string, string> {
   const meta: Record<string, string> = {}
+
+  // §1.5.3.1: Set X-atrib-Context on every outbound request.
+  // The value is the raw 32-char hex context_id (not the propagation token).
+  meta['X-atrib-Context'] = session.contextId
 
   // §1.5.4: traceparent. only set if caller has not provided one.
   // If they have one, the trace-id should already match session.contextId

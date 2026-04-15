@@ -109,12 +109,7 @@ The merchant's payment pipeline never crashes because of an atrib problem. It ju
 
 ## Test coverage
 
-82 tests across 4 test files:
-
-- **`calculate.test.ts`**: the §4.6 calculation algorithm: edge weight aggregation (`max()` not `sum()`), CONVERGES_ON handling, tie-breaking determinism, default policy correctness, constraint enforcement.
-- **`graph-fetch.test.ts`**: graph endpoint client, session policy record fetch, policy document fetch, error handling.
-- **`recommendation.test.ts`**: JCS canonicalization round-trips, Ed25519 signing/verification, `distributionsMatch()` floating-point tolerance, `recommendationSigningInput()` byte stability.
-- **`verifier.test.ts`**: full `verify()` and `calculate()` paths, including the §5.8 degradation cases and the `valid === false` failure modes.
+184 tests across 10 test files covering the §4.6 calculation algorithm, graph endpoint client, JCS canonicalization, Ed25519 signing, settlement recommendations, policy templates, policy builder, calculation edge cases, property-based testing with fast-check, and full `verify()` / `calculate()` paths including §5.8 degradation.
 
 Run them with `pnpm --filter @atrib/verify test`.
 
