@@ -5,13 +5,17 @@
  */
 
 import { sha256, hexEncode } from '@atrib/mcp'
+import type { CreatorPolicyEntry, SessionPolicyRecord } from '@atrib/verify'
 import canonicalize from 'canonicalize'
+
+// Re-export so existing consumers of @atrib/agent still find these types here.
+export type { CreatorPolicyEntry, SessionPolicyRecord }
 
 const POLICY_FETCH_TIMEOUT_MS = 1000
 const INIT_BUDGET_MS = 3000
 const POLICY_PATH = '/.well-known/atrib-policy.json'
 
-/** A fetched policy document (§4.2). */
+/** A fetched policy document shape for the fetch/parse layer (§4.2). */
 export interface PolicyDocument {
   spec_version: string
   edge_weights?: Record<string, number>
@@ -22,29 +26,7 @@ export interface PolicyDocument {
     minimum_own_share?: number
     maximum_total_share?: number
   }
-}
-
-/** Creator policy entry in the session policy record. */
-export interface CreatorPolicyEntry {
-  server_url: string
-  policy_url: string
-  status: 'compatible' | 'floor_scaled' | 'conflict_defaulted' | 'not_found'
-  policy?: PolicyDocument | undefined
-}
-
-/** The session policy record (§4.5.3). */
-export interface SessionPolicyRecord {
-  spec_version: 'atrib/1.0'
-  record_id: string
-  context_id: string
-  created_at: number
-  merchant_policy: string
-  creator_policies: CreatorPolicyEntry[]
-  agreed_policy: string
-  applied_constraints: {
-    minimum_floors: Record<string, number>
-  }
-  warnings: string[]
+  [key: string]: unknown
 }
 
 /**

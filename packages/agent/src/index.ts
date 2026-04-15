@@ -9,6 +9,7 @@ export type { AgentAtribOptions, ToolCallInterceptor } from './middleware.js'
 // Session state (for advanced usage)
 export { createSession, buildOutboundMeta, accumulateInboundContext } from './session.js'
 export type { SessionState, LatestContext } from './session.js'
+export type { GapNode } from '@atrib/verify'
 
 // Transaction detection
 export { detectTransaction } from './transaction.js'

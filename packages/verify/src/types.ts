@@ -13,6 +13,16 @@
 
 export type EventType = 'tool_call' | 'transaction' | 'gap_node'
 
+/** An unsigned hop: a tool call with no attribution record in response (§1.6, §3.2.5). */
+export interface GapNode {
+  type: 'gap_node'
+  tool_url: string
+  tool_name: string
+  context_id: string
+  timestamp: number
+  signed: false
+}
+
 export type EdgeType =
   | 'CHAIN_PRECEDES'
   | 'SESSION_PRECEDES'
@@ -96,11 +106,35 @@ export interface PolicyDocument {
   constraints?: PolicyConstraints
 }
 
-/** Session policy record (§4.5.3). minimal shape needed for calculation. */
+/** Minimal policy shape for creator policy entries. Accepts any spec_version. */
+export interface CreatorPolicySnapshot {
+  spec_version: string
+  constraints?: {
+    minimum_share?: number
+    maximum_share?: number
+    minimum_own_share?: number
+    maximum_total_share?: number
+  }
+  [key: string]: unknown
+}
+
+/** Creator policy entry in the session policy record (§4.5.3). */
+export interface CreatorPolicyEntry {
+  server_url: string
+  policy_url: string
+  status: 'compatible' | 'floor_scaled' | 'conflict_defaulted' | 'not_found'
+  /** The fetched policy document snapshot, if available. */
+  policy?: CreatorPolicySnapshot | undefined
+}
+
+/** Session policy record (§4.5.3). Full record as created by the agent. */
 export interface SessionPolicyRecord {
   spec_version: 'atrib/1.0'
   record_id: string
   context_id: string
+  created_at: number
+  merchant_policy: string
+  creator_policies: CreatorPolicyEntry[]
   agreed_policy: string
   applied_constraints: {
     minimum_floors: Record<string, number>

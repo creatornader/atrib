@@ -21,6 +21,7 @@ import {
 import type { AtribRecord } from '@atrib/mcp'
 import { createSession, buildOutboundMeta, accumulateInboundContext } from './session.js'
 import type { SessionState } from './session.js'
+import type { GapNode } from '@atrib/verify'
 import { detectTransaction } from './transaction.js'
 import type { TransactionDetection } from './transaction.js'
 import { initializeSessionPolicy } from './policy.js'
@@ -71,6 +72,8 @@ export interface ToolCallInterceptor {
   ): void
   /** Get the session policy record for a context_id. */
   getSessionPolicyRecord(contextId?: string): SessionPolicyRecord | null
+  /** Get gap nodes recorded during this session (§1.6). */
+  getGapNodes(): GapNode[]
   /** Flush pending log submissions. */
   flush(): Promise<void>
 }
@@ -106,7 +109,6 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
 
   // Create session state
   const session = createSession({
-    creatorKey: options.creatorKey,
     sessionToken: options.sessionToken,
   })
 
@@ -193,8 +195,41 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
       if ((response as Record<string, unknown>)?.isError === true) return
 
       try {
+        // §5.7: task_created trigger. When a tasks/create response arrives,
+        // store the task ID for the session context.
+        const responseObj = response as Record<string, unknown> | undefined
+        if (responseObj?.id && typeof responseObj.id === 'string') {
+          const method = responseMeta?.method ?? responseObj?.method
+          if (method === 'tasks/create') {
+            session.taskIds.add(responseObj.id as string)
+          }
+          // §5.7: task_completed trigger. If this is a completed task,
+          // treat it as a successful tool_call response (apply inbound logic below).
+          if (
+            session.taskIds.has(responseObj.id as string) &&
+            (responseObj.status === 'completed' || responseObj.status === 'done')
+          ) {
+            // Fall through to normal inbound processing below.
+            // The task completion is handled identically to tool_call_inbound.
+          }
+        }
+
         // §5.4.4: Accumulate inbound context
         const hasAtribToken = accumulateInboundContext(session, responseMeta)
+
+        // §1.6: If no attribution token was received, this is an unsigned hop.
+        // Record a gap node so the graph shows the contribution.
+        if (!hasAtribToken) {
+          const gapNode: GapNode = {
+            type: 'gap_node',
+            tool_url: callOptions?.serverUrl ?? '',
+            tool_name: toolName,
+            context_id: session.contextId,
+            timestamp: Date.now(),
+            signed: false,
+          }
+          session.gapNodes.push(gapNode)
+        }
 
         // §5.4.5: Transaction detection
         const detection = detectTransaction(toolName, response, callOptions?.headers)
@@ -240,6 +275,10 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
 
     getSessionPolicyRecord(_contextId?: string): SessionPolicyRecord | null {
       return sessionPolicyRecord
+    },
+
+    getGapNodes(): GapNode[] {
+      return [...session.gapNodes]
     },
 
     async flush(): Promise<void> {
@@ -345,6 +384,9 @@ function createPassthrough(): ToolCallInterceptor {
     onAfterToolResponse() {},
     getSessionPolicyRecord() {
       return null
+    },
+    getGapNodes() {
+      return []
     },
     async flush() {},
   }
