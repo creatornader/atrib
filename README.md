@@ -108,7 +108,7 @@ Runs a fake merchant, a fake agent, and a real Merkle log in a single process. T
 | [`@atrib/log-dev`](packages/log-dev/README.md) | Dev-only in-memory log stub. Not for production. |
 | [`@atrib/integration`](packages/integration/README.md) | Cross-package tests + runnable examples. |
 
-> 713 tests across all packages. Public packages are not yet published to npm. The production log service is at [`services/log-node/`](services/log-node/).
+> 714 tests across all packages (713 passing, 1 documented skip). Public packages are not yet published to npm. The production log service is at [`services/log-node/`](services/log-node/).
 
 **Not yet implemented:** Graph Query API (spec §3.4), Tile Read API (spec §2.5), Witnessing (spec §2.9, deferred to v2).
 
