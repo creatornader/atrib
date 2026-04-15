@@ -1,0 +1,20 @@
+app = 'atrib-graph'
+primary_region = 'iad'
+
+[build]
+  dockerfile = '../../services/graph-node/Dockerfile'
+
+[env]
+  PORT = '3200'
+  HOST = '0.0.0.0'
+
+[http_service]
+  internal_port = 3200
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'

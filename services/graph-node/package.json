@@ -8,7 +8,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "start": "tsx src/server.ts"
+    "start": "tsx src/main.ts"
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
