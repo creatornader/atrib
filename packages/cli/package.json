@@ -1,0 +1,35 @@
+{
+  "name": "@atrib/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "atrib": "./dist/cli.js"
+  },
+  "main": "./dist/cli.js",
+  "files": [
+    "dist"
+  ],
+  "description": "CLI tools for atrib. Key generation and utilities.",
+  "author": "Atrib <hello@atrib.dev>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/atrib-inc/atrib",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://atrib.dev",
+  "keywords": ["atrib", "cli", "ed25519", "keygen"],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@atrib/mcp": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "vitest": "^3",
+    "typescript": "^5"
+  }
+}
