@@ -57,6 +57,12 @@ export {
 // §2.6.1 submission validation (shared between log-dev and log-node)
 export { validateSubmission, type ValidationResult } from './validation.js'
 
+// §2.8 Proof bundle text format (c2sp.org/tlog-proof)
+export { formatProofBundle, parseProofBundle } from './proof-text.js'
+
+// §5.6.3 Memory zeroing for key material
+export { zeroize } from './zeroize.js'
+
 // §2.3.1 log entry serialization (shared between log-dev and log-node)
 export {
   serializeEntry,

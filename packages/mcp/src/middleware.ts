@@ -16,6 +16,7 @@ import { readInboundContext, writeOutboundContext, parseBaggageAtribSession } fr
 import { signRecord, getPublicKey } from './signing.js'
 import { hexEncode } from './hash.js'
 import { createSubmissionQueue } from './submission.js'
+import { zeroize } from './zeroize.js'
 import type { AtribRecord } from './types.js'
 import type { SubmissionQueue, ProofBundle } from './submission.js'
 
@@ -41,6 +42,12 @@ export interface AtribServer extends McpServer {
   readonly policy: Record<string, unknown> | null
   /** Retrieve a cached proof bundle by record hash (§5.3.5). */
   getProof(recordHash: string): ProofBundle | undefined
+  /**
+   * Zero the private key and prevent further signing (§5.6.3).
+   * Call on graceful shutdown. After destroy(), tool calls pass through
+   * without attribution records.
+   */
+  destroy(): void
 }
 
 /**
@@ -57,6 +64,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     console.warn('atrib: no creatorKey provided, operating in pass-through mode')
     atribServer.flush = async () => {}
     atribServer.getProof = () => undefined
+    atribServer.destroy = () => {}
     Object.defineProperty(atribServer, 'policy', { value: null, writable: false })
     return atribServer
   }
@@ -66,6 +74,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     console.warn('atrib: creatorKey must be 32 bytes, operating in pass-through mode')
     atribServer.flush = async () => {}
     atribServer.getProof = () => undefined
+    atribServer.destroy = () => {}
     Object.defineProperty(atribServer, 'policy', { value: null, writable: false })
     return atribServer
   }
@@ -79,6 +88,10 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   }
   const transactionTools = new Set(options.transactionTools ?? [])
   const queue: SubmissionQueue = createSubmissionQueue(options.logEndpoint)
+
+  // §5.6.3: Track whether destroy() has been called. After destroy, the
+  // private key is zeroed and no further signing is possible.
+  let destroyed = false
 
   // Derive the public key once at init (async, cached).
   let publicKeyB64: string | undefined
@@ -135,6 +148,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     )
     atribServer.flush = async () => {}
     atribServer.getProof = () => undefined
+    atribServer.destroy = () => {}
     Object.defineProperty(atribServer, 'policy', { value: null, writable: false })
     return atribServer
   }
@@ -168,6 +182,11 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
       const result = await handler(request, extra)
 
       try {
+        // §5.6.3: After destroy(), skip attribution entirely.
+        if (destroyed) {
+          return result
+        }
+
         await publicKeyReady
 
         // §5.3.3: Only emit for successful calls (isError: false)
@@ -284,6 +303,16 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
 
   atribServer.flush = () => queue.flush()
   atribServer.getProof = (hash: string) => queue.getProof(hash)
+
+  // §5.6.3: Zero the private key and mark as destroyed. After this call,
+  // the wrapped handler skips attribution and passes tool results through
+  // unmodified. Should be called on graceful shutdown.
+  atribServer.destroy = () => {
+    if (!destroyed) {
+      zeroize(privateKey)
+      destroyed = true
+    }
+  }
 
   // §5.3.6: Expose the policy document if provided.
   // Accessible via atribServer.policy for programmatic use.

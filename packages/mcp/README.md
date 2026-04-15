@@ -211,7 +211,7 @@ await log.close()
 
 ## Test coverage
 
-305 tests across 22 test files covering:
+326 tests across 24 test files covering:
 
 - Wire-format conformance to spec §2.6.1 + §2.6.2
 - Wycheproof Ed25519 test vectors (signing/verification)
@@ -241,6 +241,8 @@ Run them with `pnpm --filter @atrib/mcp test`.
 | §5.3.3       | No emission for `isError: true`                                            |
 | §5.3.5       | Non-blocking submission queue, proof cache, HTTP proof endpoint             |
 | §5.3.6       | Policy exposure via HTTP endpoint and stdio serverInfo                      |
+| §2.8         | Proof bundle text format (C2SP tlog-proof serialization and parsing)        |
+| §5.6.3       | Key storage: memory zeroing via `zeroize()` and `destroy()` on AtribServer |
 | §5.8         | Degradation contract; failures never break the host                       |
 
 The full protocol spec is at [`atrib-spec.md`](../../atrib-spec.md).
