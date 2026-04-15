@@ -1,3 +1,4 @@
 packages:
   - 'packages/*'
   - 'services/log-node'
+  - 'services/graph-node'
