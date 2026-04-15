@@ -17,7 +17,7 @@ import { signRecord, getPublicKey } from './signing.js'
 import { hexEncode } from './hash.js'
 import { createSubmissionQueue } from './submission.js'
 import type { AtribRecord } from './types.js'
-import type { SubmissionQueue } from './submission.js'
+import type { SubmissionQueue, ProofBundle } from './submission.js'
 
 /** Options for the atrib() middleware (§5.3.1). */
 export interface AtribOptions {
@@ -39,6 +39,8 @@ export interface AtribServer extends McpServer {
   flush(): Promise<void>
   /** The policy document this server exposes, if any (§5.3.6). */
   readonly policy: Record<string, unknown> | null
+  /** Retrieve a cached proof bundle by record hash (§5.3.5). */
+  getProof(recordHash: string): ProofBundle | undefined
 }
 
 /**
@@ -54,6 +56,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   if (!options.creatorKey) {
     console.warn('atrib: no creatorKey provided, operating in pass-through mode')
     atribServer.flush = async () => {}
+    atribServer.getProof = () => undefined
     Object.defineProperty(atribServer, 'policy', { value: null, writable: false })
     return atribServer
   }
@@ -62,6 +65,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   if (privateKey.length !== 32) {
     console.warn('atrib: creatorKey must be 32 bytes, operating in pass-through mode')
     atribServer.flush = async () => {}
+    atribServer.getProof = () => undefined
     Object.defineProperty(atribServer, 'policy', { value: null, writable: false })
     return atribServer
   }
@@ -130,6 +134,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
         'github.com/creatornader/atrib with your @modelcontextprotocol/sdk version.',
     )
     atribServer.flush = async () => {}
+    atribServer.getProof = () => undefined
     Object.defineProperty(atribServer, 'policy', { value: null, writable: false })
     return atribServer
   }
@@ -278,6 +283,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   }
 
   atribServer.flush = () => queue.flush()
+  atribServer.getProof = (hash: string) => queue.getProof(hash)
 
   // §5.3.6: Expose the policy document if provided.
   // Accessible via atribServer.policy for programmatic use.
