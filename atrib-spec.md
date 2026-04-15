@@ -148,7 +148,7 @@ Contents
   - [1.7.3 x402](#173-x402)
   - [1.7.4 MPP](#174-mpp)
   - [1.7.5 AP2 / a2a-x402](#175-ap2--a2a-x402)
-- [1.8 Known Limitations](#18-known-limitations)
+- [1.8 Scope Boundaries](#18-scope-boundaries)
 - [Interoperability Roadmap](#interoperability-roadmap)
 
 ### 1.1 Normative Requirements Language
@@ -371,7 +371,7 @@ A record passes verification if and only if all eight steps succeed. A partial v
 
 All implementations of Ed25519 signing and verification MUST be validated against the Wycheproof test vectors for EdDSA (github.com/C2SP/wycheproof, `testvectors_v1/eddsa_verify_test.json`) prior to production deployment. Any test vector marked `"result": "invalid"` that an implementation accepts is a security defect. Any test vector marked `"result": "valid"` that an implementation rejects is a compatibility defect.
 
-**Note (Key Rotation):** Key rotation is deferred to v2. In v1, a creator's `creator_key` is treated as stable. Implementers who need key rotation in v1 should issue new records with the new key and maintain a public attestation linking old and new keys. A formal key rotation mechanism will be specified in a future revision of this specification.
+**Note (Key Rotation):** This specification does not define a key rotation mechanism. A creator's `creator_key` is treated as stable. Implementers who need key rotation should issue new records under a new key and publish a public attestation linking old and new keys.
 
 ---
 
@@ -483,13 +483,13 @@ When present, the `session_token` MUST be propagated in the W3C Baggage header (
 
 Attribution records that carry a `session_token` across trace boundaries can be grouped into the same logical session by the attribution graph query layer, even when their `context_id` values differ.
 
-**Note (session_token is optional in v1):** Cross-trace session linking is a v1 feature with optional adoption. Implementations that do not generate session tokens will produce valid attribution chains within each trace. The session_token mechanism enables richer attribution graphs for deployments where transactions routinely complete in a different trace than the contributing tool calls.
+**Note (session_token is optional):** Cross-trace session linking is an optional feature. Implementations that do not generate session tokens will produce valid attribution chains within each trace. The session_token mechanism enables richer attribution graphs for deployments where transactions routinely complete in a different trace than the contributing tool calls.
 
 ---
 
 ### 1.6 Unsigned Hops and Gap Nodes
 
-Not every MCP server in an agent's tool chain will have atrib installed in v1. When an agent calls a tool that does not emit a signed attribution record, the chain has an unsigned hop. This is expected and MUST be handled gracefully.
+Not every MCP server in an agent's tool chain will have atrib installed. When an agent calls a tool that does not emit a signed attribution record, the chain has an unsigned hop. This is expected and MUST be handled gracefully.
 
 An unsigned hop arises when:
 
@@ -745,33 +745,41 @@ Implementations MAY skip the legacy fallback if they target only AP2 v0.1 deploy
 
 ---
 
-### 1.8 Known Limitations
+### 1.8 Scope Boundaries
 
 _This section is informative._
 
-The following limitations are acknowledged and explicitly deferred.
+The following topics are outside the scope of this specification. They are acknowledged here because they affect real-world deployments and inform architectural decisions.
 
-**Cross-session attribution.** When a user receives a recommendation from an agent and subsequently completes a purchase in a browser session (minutes, hours, or days later) the transaction carries no attribution chain. The agent session that produced the recommendation and the browser session that completed the purchase are structurally disconnected. A partial mitigation is available via recommendation tokens: opaque identifiers the agent embeds in recommendation URLs, which a merchant can capture on conversion. This is closer to affiliate attribution than provenance and carries the same limitations. A first-class solution requires persistent agent identity across sessions, which depends on work in progress at the DIF Trusted AI Agents Working Group and W3C AI Agent Protocol CG. This is a v2 integration target.
+**Cross-session attribution.** When a user receives a recommendation from an agent and subsequently completes a purchase in a browser session (minutes, hours, or days later), the transaction carries no attribution chain. The agent session and browser session are structurally disconnected. A partial mitigation is available via recommendation tokens: opaque identifiers the agent embeds in recommendation URLs, which a merchant can capture on conversion. A first-class solution requires persistent agent identity across sessions.
 
-**Log federation.** In v1, all attribution records for a session should be submitted to the same log operator to enable complete graph queries. If contributing tools submit to different log operators, a query against one log will return an incomplete graph. A federation protocol (allowing log operators to reference each other's records via inclusion proof pointers) is deferred to v2 and will be defined in a future revision of this specification.
+**Log federation.** All attribution records for a session should be submitted to the same log operator to enable complete graph queries. If contributing tools submit to different log operators, a query against one log will return an incomplete graph. A federation protocol (cross-log inclusion proof pointers) is a natural extension but is not defined here.
 
-**Key rotation.** Ed25519 keypairs in v1 are treated as stable. There is no formal key rotation mechanism. Creators who need to rotate keys should issue a publicly-attested key rotation document linking old and new keys. A normative key rotation mechanism will be specified in a future revision.
+**Key rotation.** Ed25519 keypairs are treated as stable by this specification. There is no formal key rotation mechanism. Creators who need to rotate keys should issue new records under a new key and publish a public attestation linking old and new keys.
 
-**Policy versioning.** Attribution policies (§3) will evolve. The rules for evaluating records under a historical policy version will be specified when the policy format is defined. In v1, policy evaluation is assumed to use the current active policy.
+**Policy versioning.** Policies are identified by URL with no formal versioning. The session policy record (§4.5.3) captures agreed terms at session time, which partially mitigates this. Policy evaluation uses the current active policy.
 
-**Dispute mechanism.** There is no formal protocol for a creator to dispute their attribution share. Disputes in v1 are handled out-of-band. A structured dispute and counter-claim mechanism will be specified in v2.
+**Dispute mechanism.** There is no protocol-defined dispute process. Creators contest recommendations by contacting merchants directly, using the session policy record as evidence.
 
-#### Interoperability Roadmap
+**Settlement webhook format.** Settlement recommendations are produced on demand only. This specification does not define a push-based delivery mechanism.
 
-atrib is designed to complement, not compete with, existing standards work in identity, provenance, and agent trust. The following integration points are planned for v2 and inform architectural decisions in v1.
+**Multi-transaction sessions.** The calculation algorithm (§4.6) assumes one transaction node per session. Multiple transactions in a single session require separate calculation runs.
 
-**DIF Trusted AI Agents Working Group.** DIF's Trusted AI Agents WG is defining identity, delegation, and accountability frameworks for autonomous agents. The persistent agent identity across sessions that their work will provide is the prerequisite for atrib's cross-session attribution (the recommendation_token mechanism). atrib's Ed25519 creator keys are a deliberate simplification of what will eventually be expressible as agent-scoped Verifiable Credentials with delegation chains. The v2 key management revision will define how atrib keys can be presented as DIF-compatible Verifiable Presentations.
+**Agent-published policies.** Agents consume policies but do not publish their own, though the policy format can express learned weights. This specification does not define agent-side policy discovery or publication.
 
-**DIF Creator Assertions Working Group.** DIF's Creator Assertions WG is defining content authenticity and provenance assertions, including how assertions are consumed by automated systems and agents. atrib attribution records are structurally compatible with DIF assertion formats; both use Ed25519 signing over canonical JSON. A v2 interoperability profile will define how an atrib attribution record can be wrapped as a DIF Creator Assertion, enabling attribution data to flow through systems that already consume the DIF format.
+#### Related Standards Work
 
-**C2PA (Coalition for Content Provenance and Authenticity).** C2PA defines cryptographic provenance manifests for media content. atrib extends this pattern to agent interactions, where the "content" is a tool call, not a photograph. A v2 integration will define how atrib attribution records can be embedded in C2PA manifests as consequence assertions, completing the loop that C2PA opened (provenance at creation) by adding the economic outcome that C2PA never addressed (provenance through to value capture).
+_This section is informative._
 
-**W3C AI Agent Protocol Community Group.** The emerging work on standardizing agent-to-agent communication protocols is a natural home for atrib context propagation. The v1 propagation mechanism (`params._meta.atrib` in MCP, `tracestate` in HTTP) is designed to be portable to any agent protocol that supports metadata propagation.
+atrib is designed to complement existing standards work in identity, provenance, and agent trust. The following integration points inform architectural decisions in this specification.
+
+**DIF Trusted AI Agents Working Group.** DIF's Trusted AI Agents WG is defining identity, delegation, and accountability frameworks for autonomous agents. The persistent agent identity their work provides is a prerequisite for cross-session attribution. atrib's Ed25519 creator keys are a deliberate simplification of what will eventually be expressible as agent-scoped Verifiable Credentials with delegation chains.
+
+**DIF Creator Assertions Working Group.** DIF's Creator Assertions WG is defining content authenticity and provenance assertions. atrib attribution records are structurally compatible with DIF assertion formats; both use Ed25519 signing over canonical JSON. An interoperability profile could define how an atrib record can be wrapped as a DIF Creator Assertion.
+
+**C2PA (Coalition for Content Provenance and Authenticity).** C2PA defines cryptographic provenance manifests for media content. atrib extends this pattern to agent interactions, where the "content" is a tool call, not a photograph. atrib records could be embedded in C2PA manifests as consequence assertions.
+
+**W3C AI Agent Protocol Community Group.** The emerging work on standardizing agent-to-agent communication protocols is a natural home for atrib context propagation. The propagation mechanism (`params._meta.atrib` in MCP, `tracestate` in HTTP) is designed to be portable to any agent protocol that supports metadata propagation.
 
 ---
 
@@ -992,11 +1000,11 @@ struct EntryBundle {
 }
 struct LengthPrefixedEntry {
   u16 length;    // big-endian, length of entry_bytes
-  u8  entry_bytes[length];  // AtribLogEntry (§2.3.1), always 90 bytes in v1
+  u8  entry_bytes[length];  // AtribLogEntry (§2.3.1), always 90 bytes
 }
 ```
 
-**Note (Entry bundle size):** In v1, every AtribLogEntry is exactly 90 bytes, so every uint16 length prefix in an entry bundle will be `0x00 0x5A` (90 in big-endian). Clients MAY rely on this fixed size as a consistency check; future spec versions that change the entry size will use a new log origin.
+**Note (Entry bundle size):** Every AtribLogEntry is exactly 90 bytes, so every uint16 length prefix in an entry bundle will be `0x00 0x5A` (90 in big-endian). Clients MAY rely on this fixed size as a consistency check. If the entry format changes in a future specification revision, a new log origin will be used.
 
 Tile API error responses:
 - 404 Not Found: the requested tile, entry bundle, or checkpoint does not exist (e.g., tile coordinates beyond the current tree)
@@ -1361,7 +1369,7 @@ For each transaction node T: search the record set for tool_call nodes A where `
 
 CROSS_SESSION edges MUST NOT be inferred from any heuristic. Only explicit `session_token` field matches in signed records qualify. Records without a `session_token` field cannot participate in CROSS_SESSION edges.
 
-**Note (recommendation_token deferred to v2):** An earlier design considered a recommendation_token mechanism for linking agent recommendations to purchases that complete in a separate browser session (the "dark attribution" problem described in §1.8). This mechanism is not specified in v1 because it requires persistent agent identity across sessions, which depends on work in progress at the DIF Trusted AI Agents Working Group. Recommendation token support will be defined in a future revision of this specification.
+**Note (recommendation_token):** An earlier design considered a recommendation_token mechanism for linking agent recommendations to purchases that complete in a separate browser session (the cross-session attribution problem described in §1.8). This mechanism is not defined by this specification because it requires persistent agent identity across sessions.
 
 #### 3.2.5 Gap Nodes
 
@@ -1575,7 +1583,7 @@ Contents
   - [4.7.1 Document format](#471-document-format)
   - [4.7.2 Signing the recommendation](#472-signing-the-recommendation)
   - [4.7.3 Independent verification](#473-independent-verification)
-- [4.8 Known Limitations and V2 Deferrals](#48-known-limitations-and-v2-deferrals)
+- [4.8 Scope Boundaries](#48-scope-boundaries) _(see §1.8)_
 
 ### 4.1 Purpose and Position in the Protocol
 
@@ -1597,7 +1605,7 @@ A policy document is a JSON object. It MUST be UTF-8 encoded and served with `Co
 
 ```
 {
-  "spec_version":  "atrib/1.0",          // REQUIRED. Must be "atrib/1.0" for v1 policies.
+  "spec_version":  "atrib/1.0",          // REQUIRED. Must be "atrib/1.0" for policies conforming to this specification.
   "policy_id":     "https://example.com/.well-known/atrib-policy.json",
                                            // REQUIRED. Stable URL where this policy is published.
                                            // Used as the canonical identifier in session policy records.
@@ -1669,19 +1677,19 @@ Modifiers adjust a node's raw score after the base edge weight is assigned. They
   }
 ]
 
-// Only these three modifier types are defined in v1.
+// Only these three modifier types are defined by this specification.
 // Unknown modifier types MUST be ignored with a warning in the session policy record.
 ```
 
 #### 4.2.4 Distribution Method
 
-The distribution method determines how final scores are converted into share fractions. One method is defined in v1:
+The distribution method determines how final scores are converted into share fractions. One method is defined by this specification:
 
 | Value        | Behavior                                                                                                                                                                                                                                                                                         |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | proportional | Each contributor's share is their final score divided by the sum of all final scores. If all final scores are zero (which can occur if all nodes are gap nodes under a policy that weights unsigned nodes at 0.0) the calculation produces an empty distribution with a warning, not an error. |
 
-Additional distribution methods (`equal`, `last_touch`, `first_touch`) are reserved for v2. Implementations MUST reject policies with unknown distribution values rather than silently falling back to proportional.
+Additional distribution methods (`equal`, `last_touch`, `first_touch`) are reserved identifiers. Their semantics are not defined by this specification. Implementations MUST reject policies with unknown distribution values rather than silently falling back to proportional.
 
 #### 4.2.5 Constraints
 
@@ -1801,7 +1809,7 @@ Step 3: Check compatibility between the merchant's policy and each creator's pol
 
 Step 4: Record the agreed policy in the session policy record (§4.5.3) and embed the policy record ID in the session's W3C Baggage as `atrib-policy=`.
 
-**Note (Negotiation is best-effort in v1):** Session initialization may be fast-path and policy fetching may add latency. Agents MAY skip negotiation and proceed under the default policy when latency constraints require it. When this happens, the session policy record MUST indicate that the default policy was used due to a negotiation skip. Merchants and creators who require specific policies SHOULD ensure their policies are available with low latency and published at stable, well-cached URLs.
+**Note (Negotiation is best-effort):** Session initialization may be fast-path and policy fetching may add latency. Agents MAY skip negotiation and proceed under the default policy when latency constraints require it. When this happens, the session policy record MUST indicate that the default policy was used due to a negotiation skip. Merchants and creators who require specific policies SHOULD ensure their policies are available with low latency and published at stable, well-cached URLs.
 
 #### 4.5.2 Conflict Resolution
 
@@ -1883,7 +1891,7 @@ Preconditions that MUST hold before the algorithm runs:
 
 - `G` contains at least one transaction node. If no transaction node is present, the session is not closed and calculation MUST NOT proceed.
 
-- `P` is a valid v1 policy document per the schema in §4.2. If validation fails, use the default policy.
+- `P` is a valid policy document per the schema in §4.2. If validation fails, use the default policy.
 
 - All nodes in `G` whose `verification_state` is `signature_valid` or higher are eligible for distribution. Nodes with `verification_state: unsigned` are eligible only if `P.edge_weights.unsigned > 0`.
 
@@ -2183,19 +2191,9 @@ Step 5: Compare the output with the `distribution` field. Shares MUST match with
 
 ---
 
-### 4.8 Known Limitations and V2 Deferrals
+### 4.8 Scope Boundaries
 
-_This section is informative._
-
-**Policy versioning (deferred to v2).** In v1, policies are identified by URL with no formal versioning; the session policy record partially mitigates this by capturing agreed terms at session time. A normative policy versioning mechanism supporting immutable snapshots and policy history will be defined in v2.
-
-**Settlement webhook format (deferred to v2).** In v1, settlement recommendations are produced on demand only. A standardized push mechanism (event format, delivery guarantees, retry behavior) will be defined in v2.
-
-**Dispute mechanism (deferred to v2).** In v1, there is no protocol-defined dispute process; creators contest recommendations by contacting merchants directly using the session policy record as evidence. A structured dispute record format will be defined in v2.
-
-**Multi-transaction sessions.** In v1, the calculation algorithm assumes one transaction node per session; multiple transactions require separate calculation runs. Multi-transaction session handling will be specified in v2.
-
-**Agent-published policies (deferred to v2).** In v1, agents consume policies but do not publish their own, though the v1 policy format can express learned weights. Agent-published policies and associated discovery infrastructure will be defined in v2.
+_See §1.8 for protocol-wide scope boundaries including policy versioning, dispute mechanism, settlement webhooks, multi-transaction sessions, and agent-published policies._
 
 ---
 
@@ -2440,7 +2438,7 @@ const record = interceptor.getSessionPolicyRecord()
 await interceptor.flush()
 ```
 
-Implementations are free to wrap this surface in higher-level adapters for specific frameworks (a LangChain callback, an AI SDK middleware, an MCP client subclass), but the protocol-level contract is the four methods above. The reference implementation in `@atrib/agent` ships only the interceptor; framework adapters are out of scope for v1.
+Implementations are free to wrap this surface in higher-level adapters for specific frameworks (a LangChain callback, an AI SDK middleware, an MCP client subclass), but the protocol-level contract is the four methods above. The reference implementation in `@atrib/agent` ships only the interceptor; framework adapters are outside the scope of this specification.
 
 **Init options**
 
@@ -2733,7 +2731,7 @@ The private key signs every attribution record emitted by the creator. Compromis
 
 - SDK implementations MUST zero the key material from memory after use when the runtime supports it.
 
-**Key compromise in v1** In v1 there is no key rotation mechanism (deferred to a future revision per §1.8). A compromised key cannot be revoked within the protocol; it can only be abandoned. Creators who believe their key has been compromised should generate a new key, publish a public attestation linking their old and new keys, and begin submitting records under the new key. The attestation document format is not specified in v1; a normative format will be defined in a future revision.
+**Key compromise.** This specification does not define a key rotation or revocation mechanism (see §1.8). A compromised key cannot be revoked within the protocol; it can only be abandoned. Creators who believe their key has been compromised should generate a new key, publish a public attestation linking their old and new keys, and begin submitting records under the new key.
 
 ---
 
