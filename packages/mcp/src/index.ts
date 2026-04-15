@@ -12,6 +12,10 @@ export type { AtribOptions, AtribServer } from './middleware.js'
 export { createAtribProxy } from './proxy.js'
 export type { AtribProxy, AtribProxyOptions, UpstreamTransport } from './proxy.js'
 
+// HTTP handler for well-known endpoints (§5.3.5, §5.3.6)
+export { createAtribHttpHandler, handleAtribRequest } from './http.js'
+export type { AtribHttpResult } from './http.js'
+
 // Types
 export type { AtribRecord, UnsignedAtribRecord, DecodedToken } from './types.js'
 export { VALID_EVENT_TYPES } from './types.js'

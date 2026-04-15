@@ -118,6 +118,68 @@ In-process surrogate `McpServer` that forwards every tool call to an upstream MC
 
 For advanced use cases (custom transports, manual signing, recommendation calculation), the package also exports the cryptographic and serialization primitives directly: `signRecord`, `verifyRecord`, `canonicalRecord`, `computeContentId`, `genesisChainRoot`, `chainRoot`, `encodeToken`, `decodeToken`, `base64urlEncode`, `base64urlDecode`, `sha256`, `hexEncode`, `hexDecode`, plus the W3C trace-context helpers (`readInboundContext`, `writeOutboundContext`, `parseTracestateAtrib`, `parseBaggageAtribSession`, `extractTraceId`, `mergeTracestate`, `mergeBaggageAtribSession`) and the submission queue itself (`createSubmissionQueue`).
 
+## Serving well-known endpoints (§5.3.5, §5.3.6)
+
+For HTTP transports, the spec requires serving the policy document at `/.well-known/atrib-policy.json` and cached inclusion proofs at `/.well-known/atrib-proof/{record_hash}`. Two helpers make this easy.
+
+### Web-standard handler (Hono, Deno, Bun, Cloudflare Workers)
+
+`createAtribHttpHandler()` returns a function that accepts a `Request` and returns a `Response` for matched routes, or `null` for unmatched routes.
+
+```typescript
+import { atrib, createAtribHttpHandler } from '@atrib/mcp'
+import { Hono } from 'hono'
+
+const mcpServer = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
+  creatorKey: process.env.ATRIB_PRIVATE_KEY!,
+  serverUrl: 'https://my-tool.example.com',
+  policy: myPolicyDocument, // optional: your attribution policy (§4.2)
+})
+
+const app = new Hono()
+const atribHandler = createAtribHttpHandler(mcpServer)
+
+// Mount before your other routes
+app.all('/.well-known/*', (c) => {
+  const response = atribHandler(c.req.raw)
+  return response ?? c.notFound()
+})
+```
+
+### Framework-agnostic handler (Express, Fastify, or custom)
+
+`handleAtribRequest()` returns a plain `{ status, headers, body }` object. Adapt it to your framework.
+
+```typescript
+import { atrib, handleAtribRequest } from '@atrib/mcp'
+import express from 'express'
+
+const mcpServer = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
+  creatorKey: process.env.ATRIB_PRIVATE_KEY!,
+  serverUrl: 'https://my-tool.example.com',
+  policy: myPolicyDocument,
+})
+
+const app = express()
+
+app.use((req, res, next) => {
+  const result = handleAtribRequest(mcpServer, req.method, req.path)
+  if (!result) return next()
+  res.status(result.status).set(result.headers).send(result.body)
+})
+```
+
+### Endpoints served
+
+| Route | Method | Behavior |
+|-------|--------|----------|
+| `GET /.well-known/atrib-policy.json` | GET, HEAD | Returns policy with `Cache-Control: max-age=300`, or 404 if no policy configured |
+| `GET /.well-known/atrib-proof/{hash}` | GET, HEAD | Returns cached inclusion proof (content-addressed, immutable), or 404 if not cached |
+
+Both handlers return `null` (or pass through) for any other path, so they compose safely with your existing routes. Non-GET/HEAD requests to matched paths return 405 with an `Allow` header.
+
+For stdio transports where no HTTP server is available, the policy is embedded in the MCP `serverInfo` field during the `initialize` handshake. No HTTP handler is needed.
+
 ## Local development with `@atrib/log-dev`
 
 Until the production Tessera-backed log at `log.atrib.dev/v1` is deployed, you can run a faithful in-memory log stub for local development:
@@ -149,7 +211,7 @@ await log.close()
 
 ## Test coverage
 
-169 tests across 13 test files covering:
+305 tests across 22 test files covering:
 
 - Wire-format conformance to spec §2.6.1 + §2.6.2
 - Wycheproof Ed25519 test vectors (signing/verification)
@@ -177,7 +239,8 @@ Run them with `pnpm --filter @atrib/mcp test`.
 | §2.6.2       | Proof bundle response shape                                                |
 | §5.3         | Server-side middleware behavior                                            |
 | §5.3.3       | No emission for `isError: true`                                            |
-| §5.3.5       | Non-blocking submission queue                                              |
+| §5.3.5       | Non-blocking submission queue, proof cache, HTTP proof endpoint             |
+| §5.3.6       | Policy exposure via HTTP endpoint and stdio serverInfo                      |
 | §5.8         | Degradation contract; failures never break the host                       |
 
 The full protocol spec is at [`atrib-spec.md`](../../atrib-spec.md).
