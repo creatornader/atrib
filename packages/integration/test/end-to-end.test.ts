@@ -1,5 +1,5 @@
 /**
- * End-to-end integration test (the integration testing chunk of internal planning doc).
+ * End-to-end integration test.
  *
  * Exercises the full attribution flow across all three SDK packages:
  *

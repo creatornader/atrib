@@ -2,7 +2,7 @@
 
 This directory is a placeholder for the production atrib transparency log: a [Tessera](https://github.com/transparency-dev/tessera)-backed Merkle log implementing the [C2SP tlog-tiles](https://c2sp.org/tlog-tiles) specification, deployed at `log.atrib.dev/v1`.
 
-**Status:** Not yet implemented. Tracked in [`DECISIONS.md`](../../DECISIONS.md) and [`internal planning doc`](../../internal planning doc). Work has not started in this directory.
+**Status:** Not yet implemented. Tracked in [`DECISIONS.md`](../../DECISIONS.md). Work has not started in this directory.
 
 Until this service ships, all local development, testing, and customer demos use the in-process [`@atrib/log-dev`](../../packages/log-dev/README.md) stub, which speaks the same spec §2.6.1 wire format but stores entries in memory and returns placeholder Merkle hashes.
 
