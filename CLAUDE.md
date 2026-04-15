@@ -29,12 +29,15 @@ atrib/
         cloudflare-agents/     # McpAgent + Agent examples
         vercel-ai-sdk/         # createMCPClient + AI Gateway example
         langchain-js/          # MultiServerMCPClient + loadMcpTools example
+  policies/                     # Attribution policy templates and guide (6 templates + README)
   services/
     log/                       # FUTURE: Tessera-backed Merkle log (Go), placeholder README
     log-node/                  # Production Node.js Merkle log with real RFC 6962 proofs (private, not published)
   spec/
     conformance/
-      2.6.1/                   # Shared §2.6.1 submission API conformance corpus (consumed by @atrib/log-dev today; future Go log tomorrow)
+      1.4/                     # Signing conformance corpus (test vectors for §1.4)
+      2.6.1/                   # Submission API conformance corpus (consumed by @atrib/log-dev and log-node)
+      4.6/                     # Calculation conformance corpus (test vectors for §4.6)
 ```
 
 Public packages are intended for npm publication. Private packages (`log-dev`, `integration`) live in the workspace as fixtures and demos and have `private: true` in their `package.json` so they cannot be accidentally published.
