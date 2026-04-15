@@ -14,10 +14,12 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { canonicalRecord, validateSubmission, verifyRecord, hexEncode } from '@atrib/mcp'
+import { canonicalRecord, validateSubmission, verifyRecord, hexEncode, nodeHash } from '@atrib/mcp'
 import type { AtribRecord, ProofBundle } from '@atrib/mcp'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { serializeEntry } from './entry.js'
+
+const TILE_SIZE = 256 // hashes per tile (C2SP tlog-tiles standard)
 import type { MerkleTree } from './tree.js'
 import type { CheckpointSigner } from './checkpoint.js'
 
@@ -118,9 +120,24 @@ async function handleRequest(
     return handleCheckpoint(res, tree, signer)
   }
 
+  // §2.5.2: Tile endpoints. GET /v1/tile/<level>/<index>
+  const tileMatch = req.url?.match(/^\/v1\/tile\/(\d+)\/(\d+)$/)
+  if (req.method === 'GET' && tileMatch) {
+    const level = parseInt(tileMatch[1]!, 10)
+    const index = parseInt(tileMatch[2]!, 10)
+    return handleTile(res, tree, level, index)
+  }
+
+  // §2.5.3: Entry bundle endpoint. GET /v1/tile/entries/<index>
+  const entryMatch = req.url?.match(/^\/v1\/tile\/entries\/(\d+)$/)
+  if (req.method === 'GET' && entryMatch) {
+    const index = parseInt(entryMatch[1]!, 10)
+    return handleEntryBundle(res, tree, index)
+  }
+
   sendJson(res, 404, {
     error: 'not found',
-    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint',
+    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>',
   })
 }
 
@@ -252,6 +269,142 @@ async function handleCheckpoint(
   res.setHeader('content-type', 'text/plain')
   res.setHeader('content-length', checkpointBytes)
   res.end(signedCheckpoint)
+}
+
+/**
+ * §2.5.2: Serve a tile of Merkle tree hashes.
+ * Level 0 = leaf hashes, higher levels = internal node hashes.
+ * Each tile contains up to TILE_SIZE (256) concatenated 32-byte hashes.
+ */
+function handleTile(
+  res: ServerResponse,
+  tree: MerkleTree,
+  level: number,
+  index: number,
+): void {
+  if (tree.size === 0) {
+    sendJson(res, 404, { error: 'no entries yet' })
+    return
+  }
+
+  if (level === 0) {
+    // Level 0: leaf hashes
+    const start = index * TILE_SIZE
+    const end = Math.min(start + TILE_SIZE, tree.size)
+    if (start >= tree.size) {
+      sendJson(res, 404, { error: 'tile index out of range' })
+      return
+    }
+    const hashes: Uint8Array[] = []
+    for (let i = start; i < end; i++) {
+      hashes.push(tree.leafHash(i))
+    }
+    const data = concatBytes(hashes)
+    const isFull = (end - start) === TILE_SIZE
+    sendBinary(res, data, isFull)
+    return
+  }
+
+  // Higher levels: compute internal node hashes from the level below.
+  // Level L tile N contains hashes for nodes at positions [N*256, (N+1)*256) at level L.
+  // Each node at level L is nodeHash(left, right) of two nodes at level L-1.
+  const leafCount = tree.size
+  // Number of nodes at the requested level
+  const nodesAtLevel = Math.ceil(leafCount / Math.pow(2, level))
+  const start = index * TILE_SIZE
+  const end = Math.min(start + TILE_SIZE, nodesAtLevel)
+
+  if (start >= nodesAtLevel) {
+    sendJson(res, 404, { error: 'tile index out of range' })
+    return
+  }
+
+  // Build up from leaf hashes
+  let currentLevel: Uint8Array[] = []
+  for (let i = 0; i < leafCount; i++) {
+    currentLevel.push(tree.leafHash(i))
+  }
+  for (let l = 0; l < level; l++) {
+    const nextLevel: Uint8Array[] = []
+    for (let i = 0; i < currentLevel.length; i += 2) {
+      if (i + 1 < currentLevel.length) {
+        nextLevel.push(nodeHash(currentLevel[i]!, currentLevel[i + 1]!))
+      } else {
+        nextLevel.push(currentLevel[i]!)
+      }
+    }
+    currentLevel = nextLevel
+  }
+
+  const hashes = currentLevel.slice(start, end)
+  const data = concatBytes(hashes)
+  const isFull = (end - start) === TILE_SIZE
+  sendBinary(res, data, isFull)
+}
+
+/**
+ * §2.5.3: Serve an entry bundle (raw entry bytes with uint16 length prefixes).
+ * Bundle N contains entries at positions [N*256, (N+1)*256).
+ */
+function handleEntryBundle(
+  res: ServerResponse,
+  tree: MerkleTree,
+  index: number,
+): void {
+  if (tree.size === 0) {
+    sendJson(res, 404, { error: 'no entries yet' })
+    return
+  }
+
+  const start = index * TILE_SIZE
+  const end = Math.min(start + TILE_SIZE, tree.size)
+  if (start >= tree.size) {
+    sendJson(res, 404, { error: 'entry bundle index out of range' })
+    return
+  }
+
+  // Build length-prefixed entry bundle
+  const chunks: Uint8Array[] = []
+  for (let i = start; i < end; i++) {
+    const entry = tree.entryBytes(i)
+    // uint16 big-endian length prefix
+    const lenBuf = new Uint8Array(2)
+    const dv = new DataView(lenBuf.buffer)
+    dv.setUint16(0, entry.length, false) // big-endian
+    chunks.push(lenBuf)
+    chunks.push(entry)
+  }
+
+  const data = concatBytes(chunks)
+  const isFull = (end - start) === TILE_SIZE
+  sendBinary(res, data, isFull)
+}
+
+/** Concatenate Uint8Arrays into a single buffer. */
+function concatBytes(arrays: Uint8Array[]): Uint8Array {
+  let totalLen = 0
+  for (const a of arrays) totalLen += a.length
+  const result = new Uint8Array(totalLen)
+  let offset = 0
+  for (const a of arrays) {
+    result.set(a, offset)
+    offset += a.length
+  }
+  return result
+}
+
+/** Send binary response with appropriate cache headers. */
+function sendBinary(res: ServerResponse, data: Uint8Array, isFull: boolean): void {
+  res.statusCode = 200
+  res.setHeader('content-type', 'application/octet-stream')
+  res.setHeader('content-length', data.length)
+  // Full tiles are immutable. partial tiles (at the edge) may grow.
+  if (isFull) {
+    res.setHeader('cache-control', 'public, max-age=31536000, immutable')
+  } else {
+    res.setHeader('cache-control', 'public, max-age=60')
+  }
+  res.end(Buffer.from(data))
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {

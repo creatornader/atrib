@@ -27,6 +27,8 @@ export interface MerkleTree {
   inclusionProof(index: number): Uint8Array[]
   /** Return the cached leaf hash (SHA-256(0x00 || entry)) for the entry at index. */
   leafHash(index: number): Uint8Array
+  /** Return the raw entry bytes for the entry at index. */
+  entryBytes(index: number): Uint8Array
 }
 
 /**
@@ -76,6 +78,15 @@ export function createMerkleTree(): MerkleTree {
         )
       }
       return leafHashes[index] as Uint8Array
+    },
+
+    entryBytes(index: number): Uint8Array {
+      if (!Number.isInteger(index) || index < 0 || index >= rawEntries.length) {
+        throw new Error(
+          `MerkleTree.entryBytes: index ${index} out of range [0, ${rawEntries.length})`,
+        )
+      }
+      return rawEntries[index] as Uint8Array
     },
   }
 }
