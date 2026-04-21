@@ -149,6 +149,18 @@ Each adapter ships with:
 5. A `Dxxx` entry in `DECISIONS.md` documenting the integration-shape choice and the alternatives rejected
 6. Adapter export from `packages/agent/src/index.ts`
 
+### Protocol adapter pattern (established by D027)
+
+Distinct from — and orthogonal to — framework adapters. Framework adapters hook atrib INTO a host agent framework at runtime (`@atrib/agent` + host). Protocol adapters provide observability FOR a specific payment protocol's ecosystem, independent of any single agent session.
+
+Each protocol adapter has three canonical layers: **registry** (versioned source of truth for the protocol's on-chain actors), **scanner** (ecosystem-level volume aggregation via Dune / HyperSync / RPC), and **attribution** (maps scanned senders to registry actors, surfaces unattributed residual). The spec stays protocol-agnostic; protocol-specific attribution rationale lives in the adapter's docs per §3.6 fact/policy separation.
+
+Two observation surfaces compose cleanly per protocol: runtime (via `@atrib/agent` + framework adapter) and retrospective (via protocol adapter scanner). A complete per-protocol artifact demonstrates both — Path A (retrospective, exercises §3 + §4) plus Path B (a reference agent using `@atrib/agent` to make real payments with signed receipts flowing through the log to merchant-side verify, exercises §1, §2.6.1, §5).
+
+Protocol-adapter implementations do not live in this repo yet. The first (`x402`) is being validated outside the public tree and will move to `packages/x402/` or `services/x402-scanner/` on public release. See ARCHITECTURE.md "Protocol adapters" section and D027 for the architectural rationale.
+
+Future protocol adapters (ACP, UCP, AP2, MPP) follow the same template.
+
 ### Dependencies
 
 - **Ed25519:** Use `@noble/ed25519`. Pure JS, no native deps, audited.

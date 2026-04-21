@@ -214,6 +214,31 @@ Each adapter ships with: source at `packages/agent/src/adapters/`, tests at `pac
 
 ---
 
+## Protocol adapters
+
+Framework adapters hook atrib INTO a host agent framework at runtime. **Protocol adapters** are the parallel pattern: they provide observability FOR a specific payment protocol's ecosystem. See D027 for the full rationale.
+
+A protocol adapter has three canonical layers:
+
+1. **Registry** — a versioned source of truth for the protocol's on-chain actors (facilitators, relayers, merchants). Combines the protocol's canonical registry if one exists, facilitator self-declaration endpoints (e.g., x402's `/supported`), and an overlay for absent or undisclosed entries.
+2. **Scanner** — ecosystem-level aggregators that measure volume and activity. Methodology is protocol-specific (wallet-first, contract-first, event-pattern), but every adapter outputs `sender → {tx_count, value}` or equivalent.
+3. **Attribution** — maps scanned observations to the registry, surfacing an unattributed residual for forensic follow-up. Techniques are protocol-specific: witness calldata decoding (where binding exists), sender-pattern clustering, payTo correlation.
+
+Two observation surfaces exist per protocol and compose cleanly:
+
+| Surface | Where | What it observes |
+|---|---|---|
+| Runtime | `@atrib/agent` + framework adapter | Payment events during a single agent session |
+| Retrospective | Protocol adapter (scanner + registry + attribution) | All protocol activity across the ecosystem, independent of any single session |
+
+A complete per-protocol artifact demonstrates both paths: **Path A** (retrospective scanner + attribution, exercising §3 graph and §4 calculation) plus **Path B** (a reference agent using `@atrib/agent` to make real payments, with signed receipts flowing into the log and merchant-side verification via `@atrib/verify`, exercising §1, §2.6.1, §5).
+
+The spec stays protocol-agnostic. Protocol-specific attribution rationale lives in the adapter's documentation, not in the spec body. This preserves §3.6's fact/policy separation.
+
+First protocol adapter: x402. Others (ACP, UCP, AP2, MPP) follow the same template.
+
+---
+
 ## Degradation contract
 
 Section 5.8 of the spec. atrib failures never affect the primary tool call or agent response. Not a best practice; a hard protocol requirement. The guarantees:
