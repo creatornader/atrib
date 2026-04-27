@@ -1,10 +1,18 @@
-# atrib: Value Provenance Protocol
+# atrib: the protocol for verifiable agent actions
 
 ## What this is
 
-atrib is value provenance infrastructure for the agent economy. It makes the economic relationships between AI agents, tools, content creators, and merchants verifiable without surveillance. It is the missing infrastructure layer between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP).
+atrib makes the actions an AI agent takes provable. Every MCP tool call becomes a signed, chain-linked record committed to a public Merkle log; downstream consumers (the agent itself, merchants, auditors, other agents) can independently verify what happened without trusting any operator. The substrate enables several use cases: provable recall by the agent, independent audit by third parties, settlement when commerce closes a chain, and verifiable causality across agent handoffs. atrib is the layer between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP), but more fundamentally, it's the layer that makes any post-hoc claim about agent activity provable.
 
-The complete protocol specification is in `atrib-spec.md`. The technical architecture overview is in `ARCHITECTURE.md`. Read the spec before making any implementation decisions.
+The canonical positioning used across the README, spec abstract, and per-package READMEs:
+
+- **Headline:** Verifiable agent actions.
+- **Sub-line:** Every tool call becomes signed context for the next.
+- **Tagline:** Agents that reason from a past they can prove.
+
+Use this language in any new docs or commit messages that need a one-line description of the project. Don't reword it without an accompanying change to the README and spec.
+
+The complete protocol specification is in `atrib-spec.md` (§0-§6). The technical architecture overview is in `ARCHITECTURE.md`. Read the spec before making any implementation decisions.
 
 ## Repository structure
 
@@ -13,7 +21,7 @@ atrib/
   README.md                    # Public-facing project description (customer entry point)
   CLAUDE.md                    # THIS FILE: hub doc, conventions, invariants
   atrib-spec.md                # The single source of truth for the protocol
-  DECISIONS.md                 # Architectural decision log (D001-D032+)
+  DECISIONS.md                 # Architectural decision log (D001-D034+)
   ARCHITECTURE.md              # Technical architecture overview: trust model, protocol layers, design decisions
   PRIOR-ART.md                 # Prior art & standards map: every spec/protocol atrib builds on, organized by layer
   METRICS.md                   # Tiered metrics framework + lifecycle states + quarterly evolution review for the dogfood experiment
@@ -21,7 +29,8 @@ atrib/
   packages/
     mcp/                       # @atrib/mcp: MCP server middleware (public)
     agent/                     # @atrib/agent: Agent middleware + framework adapters (public)
-    verify/                    # @atrib/verify: Merchant verification library (public)
+    verify/                    # @atrib/verify: Verifier library (record verification, §4.6 calc, settlement) (public)
+    cli/                       # @atrib/cli: keygen + Keychain key management (public)
     log-dev/                   # @atrib/log-dev: in-memory dev Merkle log stub (PRIVATE, dev only)
     integration/               # @atrib/integration: cross-package tests + runnable framework examples (private)
       examples/
@@ -38,8 +47,10 @@ atrib/
   spec/
     conformance/
       1.4/                     # Signing conformance corpus (test vectors for §1.4)
+      1.9/                     # Key rotation/revocation conformance corpus (test vectors for §1.9, D033). Skeleton; fixtures land in Phase 3 of the gap-closure plan.
       2.6.1/                   # Submission API conformance corpus (consumed by @atrib/log-dev and log-node)
       4.6/                     # Calculation conformance corpus (test vectors for §4.6)
+      6/                       # Public-key directory conformance corpus (test vectors for §6, D034). Skeleton; fixtures land in Phase 3.
 ```
 
 Public packages are intended for npm publication. Private packages (`log-dev`, `integration`) live in the workspace as fixtures and demos and have `private: true` in their `package.json` so they cannot be accidentally published.
@@ -71,9 +82,12 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 | Implementation convention established | This file (conventions section)                                                                                                                                                                                  |
 | Wire-format or wire-protocol change   | `atrib-spec.md` (if normative), this file's "Key technical decisions" section, AND DECISIONS.md                                                                                                                  |
 | §2.6.1 validation rule changed        | Regenerate `spec/conformance/2.6.1/` corpus via `pnpm --filter @atrib/log-dev corpus`, update `spec/conformance/2.6.1/README.md` if the format changed                                                           |
+| §1.9 rotation/revocation logic touched | Update `spec/conformance/1.9/` corpus if generated, update `spec/conformance/1.9/README.md` case list if added/removed, regression-test in `@atrib/verify` and `services/graph-node`                              |
+| §6 directory operation added           | Update `spec/conformance/6/` corpus if generated, update `spec/conformance/6/README.md` case list, ensure unblinded mode (atrib's primary use) still passes, refresh `@atrib/directory` SDK docs                  |
+| Positioning / framing change           | The canonical positioning at the top of this file is the reference. If it changes, update the top of `README.md`, the abstract of `atrib-spec.md`, the lead paragraph of every per-package README, and the GitHub repo description in lockstep. |
 | Prior art landscape changed           | Update `PRIOR-ART.md` with new entries                                                                                                                                                                           |
 | Test count changed materially         | `README.md` and `CONTRIBUTING.md` test count references                                                                                                                                                          |
-| Metric added/removed/promoted/demoted | `METRICS.md` (table entry + lifecycle status) AND `services/log-node/scripts/metrics.mjs` (`METRICS` array — `name`, `tier`, `status`, `decisionSupported`, `run`). Both must agree.                              |
+| Metric added/removed/promoted/demoted | `METRICS.md` (table entry + lifecycle status) AND `services/log-node/scripts/metrics.mjs` (`METRICS` array: `name`, `tier`, `status`, `decisionSupported`, `run`). Both must agree.                              |
 | New deployed service                  | This file (repository structure) AND `README.md` (deployed-service URL note) AND `ARCHITECTURE.md` (operator footprint) AND `services/<name>/fly.toml` if Fly-deployed                                            |
 
 ## Critical invariants (never violate)
@@ -157,11 +171,11 @@ Each adapter ships with:
 
 ### Protocol adapter pattern (established by D027)
 
-Distinct from — and orthogonal to — framework adapters. Framework adapters hook atrib INTO a host agent framework at runtime (`@atrib/agent` + host). Protocol adapters provide observability FOR a specific payment protocol's ecosystem, independent of any single agent session.
+Distinct from (and orthogonal to) framework adapters. Framework adapters hook atrib INTO a host agent framework at runtime (`@atrib/agent` + host). Protocol adapters provide observability FOR a specific payment protocol's ecosystem, independent of any single agent session.
 
 Each protocol adapter has three canonical layers: **registry** (versioned source of truth for the protocol's on-chain actors), **scanner** (ecosystem-level volume aggregation via Dune / HyperSync / RPC), and **attribution** (maps scanned senders to registry actors, surfaces unattributed residual). The spec stays protocol-agnostic; protocol-specific attribution rationale lives in the adapter's docs per §3.6 fact/policy separation.
 
-Two observation surfaces compose cleanly per protocol: runtime (via `@atrib/agent` + framework adapter) and retrospective (via protocol adapter scanner). A complete per-protocol artifact demonstrates both — Path A (retrospective, exercises §3 + §4) plus Path B (a reference agent using `@atrib/agent` to make real payments with signed receipts flowing through the log to merchant-side verify, exercises §1, §2.6.1, §5).
+Two observation surfaces compose cleanly per protocol: runtime (via `@atrib/agent` + framework adapter) and retrospective (via protocol adapter scanner). A complete per-protocol artifact demonstrates both: Path A (retrospective, exercises §3 + §4) plus Path B (a reference agent using `@atrib/agent` to make real payments with signed receipts flowing through the log to merchant-side verify, exercises §1, §2.6.1, §5).
 
 Protocol-adapter implementations do not live in this repo yet. The first (`x402`) is being validated outside the public tree and will move to `packages/x402/` or `services/x402-scanner/` on public release. See ARCHITECTURE.md "Protocol adapters" section and D027 for the architectural rationale.
 

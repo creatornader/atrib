@@ -1,6 +1,6 @@
 # `@atrib/integration` _(private)_
 
-**Cross-package end-to-end tests and runnable framework examples for the atrib value provenance protocol. Not published to npm.**
+**Cross-package end-to-end tests and runnable framework examples for the atrib protocol. Not published to npm.**
 
 This package exists for two purposes:
 

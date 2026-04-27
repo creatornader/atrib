@@ -1,10 +1,10 @@
 # `@atrib/agent`
 
-**Attribution for agent-side tool calls. Works with every major MCP framework. Sits above every major agent payment protocol.**
+**Verifiable agent actions, client side. Every outbound MCP tool call gets signed at the moment of dispatch, carries provable context to the receiver, and chains into the next action. Works with every major MCP framework. Sits above every major agent payment protocol so commerce-closing settlement is bundled in.**
 
-`@atrib/agent` is the client-side half of the [atrib value provenance protocol](../../atrib-spec.md). It turns the MCP tool calls flowing out of your agent into signed, chainable attribution records, so the creators, tools, and data sources that contributed to an outcome can be identified and paid without any centralized intermediary seeing what happened inside the call.
+`@atrib/agent` is the client-side half of the [atrib protocol](../../atrib-spec.md). Each outbound MCP tool call becomes a signed, chainable record so anyone (the agent itself, downstream auditors, merchants closing a transaction, future agents picking up the work) can verify what happened without trusting any intermediary.
 
-You set up one `atrib()` interceptor, plug it into your framework's adapter, and every outbound `tools/call` from that point on carries W3C trace context, an attribution chain token, and the full atrib session lifecycle. When a payment completes (through any of the supported commerce protocols), a transaction record closes the chain and links contributions to the purchase.
+You set up one `atrib()` interceptor, plug it into your framework's adapter, and every outbound `tools/call` from that point on carries W3C trace context, an atrib chain token, and the full atrib session lifecycle. When a payment completes (through any of the supported commerce protocols), a transaction record closes the chain and the substrate produces a signed settlement document anyone can recompute. When commerce never closes the chain, the substrate still serves recall, audit, and cross-agent provenance.
 
 Two coverage surfaces define what you get:
 
@@ -282,7 +282,7 @@ Once the adapter is wired in, every successful `tools/call` from your agent:
 3. **Emits a signed attribution record** to the submission queue asynchronously, zero blocking on the hot path (§5.3.5).
 4. **Updates session state** with the response's own `_meta.atrib` token, so the next call chains correctly from the current response.
 5. **Detects transaction events** in the response via the `transaction.ts` detector, across all six payment protocols in coverage matrix 2. When a transaction is detected, a transaction record is emitted linking the session `context_id` to the transaction.
-6. **Fails silent**: if any atrib step (signing, submission, interceptor logic) throws, the error is caught, logged with the `atrib:` prefix, and the tool call proceeds normally per spec §5.8.
+6. **Fails silent**: if any internal atrib step (signing, submission, interceptor logic) throws, the error is caught, logged with the `atrib:` prefix, and the tool call proceeds normally per spec §5.8.
 
 ---
 

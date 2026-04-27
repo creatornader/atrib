@@ -150,7 +150,7 @@ After running with `ATRIB_LOG_ENDPOINT` pointed at your log:
 - Every successful `tools/call` from the AI SDK emits a signed atrib record
 - Records share a `context_id` per agent session and chain via `chain_root` references
 - Failed tool calls (`isError: true` from the upstream) emit no record per spec §5.3.3
-- atrib failures (network, signing, interceptor errors) never reach the AI SDK's tool dispatch; they're caught and logged with the `atrib:` console prefix per §5.8
+- internal atrib failures (network, signing, interceptor errors) never reach the AI SDK's tool dispatch; they're caught and logged with the `atrib:` console prefix per §5.8
 
 If you don't see records, check:
 

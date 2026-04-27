@@ -4,18 +4,19 @@
 
 Editor: Nader Helmy
 
-This specification defines the atrib value provenance protocol. When an AI agent calls a tool, atrib creates a signed attribution record. Records are committed to an append-only Merkle log, forming an attribution graph that connects tool calls to transaction outcomes. A deterministic algorithm computes a value distribution from the graph under an agreed policy, and any party can independently verify the result. The spec covers the record format (§1), the log protocol (§2), the graph model (§3), policies and the distribution algorithm (§4), and the SDK middleware contracts (§5).
+This specification defines the atrib protocol for verifiable agent actions. When an AI agent calls a tool, atrib creates a signed record at the moment of action, chains it forward into the next call, and commits it to an append-only Merkle log. Any party can independently verify what an agent did, in what order, with what causal structure. When tool calls converge on a transaction, a deterministic algorithm computes a value distribution from the resulting graph under an agreed policy, producing a settlement document anyone can recompute. The spec covers the record format (§1) including key rotation (§1.9), the log protocol (§2), the graph model (§3), policies and the distribution algorithm (§4), the SDK middleware contracts (§5), and the public-key directory (§6).
 
 ---
 
 ## Table of Contents
 
 - [§0 Foundations](#0-foundations)
-- [§1 Attribution Record Format](#1-attribution-record-format)
+- [§1 Attribution Record Format](#1-attribution-record-format) (incl. §1.9 Key Rotation and Revocation)
 - [§2 Merkle Log Protocol](#2-merkle-log-protocol)
 - [§3 Graph Query Interface](#3-graph-query-interface)
 - [§4 Attribution Policy Format](#4-attribution-policy-format)
 - [§5 SDK Specification](#5-sdk-specification)
+- [§6 Key Directory](#6-key-directory)
 - [Appendix A: Test Vectors](#appendix-a-test-vectors)
 
 ---
@@ -34,7 +35,11 @@ Contents
 - [Principle III: Settlement is separate from attribution](#principle-iii-settlement-is-separate-from-attribution)
 - [Principle IV: No central arbiter of value](#principle-iv-no-central-arbiter-of-value)
 - [Principle V: The protocol is open. The product is commercial.](#principle-v-the-protocol-is-open-the-product-is-commercial)
-- [The Claim About Advertising](#the-claim-about-advertising)
+- [What the Substrate Unlocks](#what-the-substrate-unlocks)
+  - [I. Provable cognition (recall)](#i-provable-cognition-recall)
+  - [II. Independent audit and compliance](#ii-independent-audit-and-compliance)
+  - [III. Cross-agent provenance and handoffs](#iii-cross-agent-provenance-and-handoffs)
+  - [IV. Settlement, attribution, and the post-advertising web](#iv-settlement-attribution-and-the-post-advertising-web)
 
 _On the relationship between transparency, trust, and value in a world where agents act on our behalf._
 
@@ -58,17 +63,17 @@ The agent economy changes the terms of this problem. When AI agents do the major
 
 But the underlying economic problem remains. Businesses still need customers. Creators of tools, content, and knowledge still contribute to outcomes. Value is still being created and captured. The question of _what led to what_ (the provenance question) does not go away. It becomes more urgent, and more complex, because the chains of contribution are longer, more distributed, and entirely invisible to existing measurement infrastructure.
 
-**The agent economy is already generating real commerce with zero verified attribution infrastructure.** Every transaction that completes without a provenance record is value that pools at the platform layer (whoever runs the agent surface) rather than distributing to the contributors who actually caused it. This is the same structural problem as the old web. Same shape, higher stakes, faster clock.
+**The agent economy is already generating real activity with zero verifiable record of it.** Every tool call that completes without a signed record is invisible to anyone but the platform that ran it. Transactions that close on top of that activity inherit the same gap (value pools at the platform layer rather than distributing to the contributors who caused it), but the missing substrate is not only an economic problem. It is also a cognitive one. Agents that cannot verify their own past behave like amnesiacs every conversation, deferring to the platform's memory rather than reasoning from their own. The gap is in observability, accountability, and cognition simultaneously. Same shape as the old web. Higher stakes. Faster clock.
 
-The window to build provenance infrastructure before platforms absorb the problem (and solve it, as Google solved it, in a way that reconstitutes their centrality) is measured in months, not years.
+The window to build this substrate before platforms absorb the problem (and solve it, as Google solved it, in a way that reconstitutes their centrality) is measured in months, not years.
 
 ---
 
 ## What We Are Building
 
-atrib is value provenance infrastructure for the agent economy. Not an identity layer. Not a payment layer. Not a content attribution system. Something that sits between all of those: **a verifiable record of how value moved.**
+atrib is the substrate that makes agent actions verifiable. Every tool call becomes signed context for the next, anchored in a Merkle log, independently verifiable by anyone. Not an identity layer. Not a payment layer. Not a content attribution system. The thing that sits underneath all of those: **a substrate where agents reason from a past they can prove, and downstream consumers (merchants, auditors, other agents) verify that past without trusting any operator.**
 
-The central claim is this: it is possible to make the structural relationships of the agent economy transparent (what tool calls preceded what outcomes, how contributions linked together within a session, what the observable shape of value creation actually was) without making the content of those interactions visible to anyone who should not see it.
+The central claim is this: it is possible to make the structural relationships of agent activity transparent (what tool calls preceded what outcomes, how contributions linked together within a session, what the observable shape of an agent's reasoning trail actually was) without making the content of those interactions visible to anyone who should not see it. Several distinct uses follow from this substrate: provable recall by the agent itself, independent audit by third parties, settlement when commerce closes a chain, and verifiable causality across handoffs between agents.
 
 This is observability without surveillance. The system becomes legible to itself (to its participants, to the parties with a legitimate stake in its outcomes) without becoming legible to surveillance. Accountability without inspection. Transparency without exposure.
 
@@ -98,21 +103,51 @@ The specification, the signing libraries, the calculation algorithm, and the log
 
 ---
 
-## The Claim About Advertising
+## What the Substrate Unlocks
 
-We do not claim that advertising will disappear. We claim that the structural necessity of advertising as the primary funding model for the internet rests on a single foundation: the absence of native provenance infrastructure. When that foundation erodes, the model built on it becomes optional rather than inevitable.
+The five principles above describe a substrate. What the substrate enables is a set of distinct uses, each of which collapses without it. None of them is the central claim. atrib is not "for" any single one. The claim is that the substrate is a precondition for all of them, and that no other piece of infrastructure today provides it.
+
+The four uses below are ordered by how directly each relies on the substrate's load-bearing property: that an agent's actions are signed at the moment they happen and remain independently verifiable thereafter.
+
+### I. Provable cognition (recall)
+
+An agent that can verify its own past has a kind of memory the agent ecosystem has not previously had. Every prior tool call is a signed claim the agent itself can re-verify locally; every chain is a structured artifact the agent can reason from; every transaction it participated in is anchored in a public log it cannot be gaslit about. This is the loop the locked positioning points at: _agents that reason from a past they can prove._
+
+The cognitive consequence is concrete. An agent restoring context from its own atrib records (rather than from platform-controlled memory) cannot be quietly amended. It cannot have actions silently retroactively added or removed. It cannot inherit a falsified history if its harness is replaced. The substrate is the only mechanism by which an agent's continuity of self survives platform changes, model changes, or harness changes, because the cryptography is independent of all of them.
+
+This is the use case the dogfood loop tests: real agents (Claude Code, Cursor, custom harnesses) consuming the substrate they themselves produce. If the substrate works, the agent is more capable. If the substrate is broken, the agent is no worse off than today.
+
+### II. Independent audit and compliance
+
+Once an agent's actions are signed and committed to a public log, third parties can audit them without trusting the agent or the platform. A user can prove what an agent did on their behalf. A regulator can query "what did this agent do at time T?" and get a cryptographic answer. A merchant disputing a transaction can verify the chain that led to it. None of this requires the agent operator to cooperate, share data, or even be online.
+
+This is the property that compliance-coded products (audit trail, SOC 2 reporting, AI governance tooling) approximate without the underlying substrate. The substrate does it correctly: not by collecting more data centrally but by making the data anyone already had cryptographically verifiable.
+
+### III. Cross-agent provenance and handoffs
+
+Agents that hand off work to other agents (a delegation flow, a multi-agent system, a marketplace of specialized agents) face the same provenance problem at higher complexity. A signed action by agent A passing context to agent B carries verifiable causality across the handoff: B can prove A actually requested this, A can prove B actually completed it, and any later observer can reconstruct the path.
+
+Without the substrate, multi-agent flows reduce to "trust whoever is closest to the platform." With it, the chain is the trust.
+
+### IV. Settlement, attribution, and the post-advertising web
+
+The substrate produces a useful side effect: when commerce closes a chain (an agent purchases something, a tool is invoked in service of a transaction), the same signed record set is what a settlement document is computed from. The §4.6 algorithm runs deterministically over the graph and produces a value distribution any merchant or auditor can recompute. This is the attribution-economy use case, and it is genuinely real, but it is one consequence of the substrate, not the reason for it.
+
+The deeper claim about advertising follows from this. We do not claim that advertising will disappear. We claim that the structural necessity of advertising as the primary funding model for the internet rests on a single foundation: the absence of native provenance infrastructure. When that foundation erodes, the model built on it becomes optional rather than inevitable.
 
 Businesses will always need to reach new customers. Discovery is a real problem that advertising partially solves. But the attribution function of advertising (proving that a specific message caused a specific outcome, in order to justify the spend) is entirely a workaround for missing infrastructure. When the infrastructure exists, the workaround becomes unnecessary.
 
-The agent economy provides the discovery layer. Agents surface products, synthesize recommendations, complete transactions, all without requiring the user's attention to be purchased. **atrib provides the attribution layer: the mechanism by which value flows back to the contributors who made those agent actions useful, without any intermediary needing to own the pipe.**
-
-That is not advertising replacement through disruption. It is advertising replacement through making the problem advertising was solving obsolete.
+The agent economy provides the discovery layer. Agents surface products, synthesize recommendations, complete transactions, all without requiring the user's attention to be purchased. The substrate underneath that discovery layer means every action is signed at the moment it happens, every chain is independently verifiable, and credit follows contribution without any intermediary needing to own the pipe. **That is not advertising replacement through disruption. It is advertising replacement through making the problem advertising was solving obsolete.**
 
 The internet was built to move information freely. It failed to move value fairly. That failure was not inevitable; it was a consequence of building a network without provenance infrastructure, and then watching the vacuum fill with surveillance capitalism.
 
-We are building at a moment when the architecture of the web is being renegotiated. Agents are replacing browsers as the primary interface. Protocols are being written that will determine how value flows for the next generation. **The question of who owns the provenance layer in this new architecture will determine whether we reproduce the extractive dynamics of the old web or build something structurally different.**
+We are building at a moment when the architecture of the web is being renegotiated. Agents are replacing browsers as the primary interface. Protocols are being written that will determine how value flows for the next generation. **The question of who owns the substrate in this new architecture will determine whether we reproduce the extractive dynamics of the old web or build something structurally different.**
 
 atrib is a bet that the answer does not have to be a company. It can be a protocol, open and verifiable, with a company that builds the best products on top of it.
+
+---
+
+A note on consumers of the substrate: atrib is the layer that signs, chains, logs, and verifies. The ergonomic interfaces an agent uses to consume it (what we'd call agent harnesses or runtimes) are downstream. A harness might surface the agent's atrib history at session start, expose a recall tool the agent can call, or persist signed records to a local mirror. These are all consumer-side concerns. atrib does not prescribe a harness. The substrate is independently useful to any harness that wants to give its agent the contextual awareness verifiable history makes possible.
 
 ---
 
@@ -755,7 +790,7 @@ The following topics are outside the scope of this specification. They are ackno
 
 **Log federation.** All attribution records for a session should be submitted to the same log operator to enable complete graph queries. If contributing tools submit to different log operators, a query against one log will return an incomplete graph. A federation protocol (cross-log inclusion proof pointers) is a natural extension but is not defined here.
 
-**Key rotation.** Ed25519 keypairs are treated as stable by this specification. There is no formal key rotation mechanism. Creators who need to rotate keys should issue new records under a new key and publish a public attestation linking old and new keys.
+**Key rotation.** Key rotation and revocation are normatively specified in §1.9. Creators rotate keys by submitting a `key_revocation` record with `revocation_reason: 'rotation'` and a `successor_key`; verifiers update accordingly. The directory (§6) tracks the active key per identity claim.
 
 **Policy versioning.** Policies are identified by URL with no formal versioning. The session policy record (§4.5.3) captures agreed terms at session time, which partially mitigates this. Policy evaluation uses the current active policy.
 
@@ -780,6 +815,66 @@ atrib is designed to complement existing standards work in identity, provenance,
 **C2PA (Coalition for Content Provenance and Authenticity).** C2PA defines cryptographic provenance manifests for media content. atrib extends this pattern to agent interactions, where the "content" is a tool call, not a photograph. atrib records could be embedded in C2PA manifests as consequence assertions.
 
 **W3C AI Agent Protocol Community Group.** The emerging work on standardizing agent-to-agent communication protocols is a natural home for atrib context propagation. The propagation mechanism (`params._meta.atrib` in MCP, `tracestate` in HTTP) is designed to be portable to any agent protocol that supports metadata propagation.
+
+---
+
+### 1.9 Key Rotation and Revocation
+
+_This section is normative. Per D033._
+
+Ed25519 creator keys can be retired in three ways: routine `rotation` (new key replaces old), `retirement` (creator winds down, no successor), and `compromise` (key leaked or stolen). All three use the same record format. Past records signed by the retired key remain valid up to the moment of revocation; subsequent records do not.
+
+#### 1.9.1 Revocation Record Format
+
+A revocation is an attribution record with `event_type: 'key_revocation'` and the following extra fields, in addition to the standard fields from §1.2:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `revoked_key` | string | Yes | Base64url-encoded 32-byte Ed25519 public key being retired. |
+| `revocation_reason` | enum | Yes | One of `'rotation'`, `'retirement'`, `'compromise'`. |
+| `successor_key` | string | When `revocation_reason='rotation'` | Base64url-encoded 32-byte Ed25519 public key of the rotation target. |
+| `emergency_signed_by` | string | When `revocation_reason='compromise'` AND signature is by an emergency key | Base64url-encoded 32-byte public key of the emergency key (registered in the directory at the time of compromise). |
+
+Canonical serialization (JCS, §1.3) places `emergency_signed_by` after `creator_key` and before `revoked_key` in lexicographic order. `revoked_key`, `revocation_reason`, and `successor_key` follow alphabetically.
+
+#### 1.9.2 Signing Rules
+
+A `key_revocation` record MUST be signed by one of:
+
+1. **The key being retired.** The `creator_key` field equals `revoked_key`. This is the standard path for `rotation` and `retirement`. The signing proves the legitimate owner authorized the retirement.
+
+2. **A pre-registered emergency key.** Permitted ONLY when `revocation_reason='compromise'`. The `creator_key` field is the emergency key's public key; `emergency_signed_by` MUST equal `creator_key`. The emergency key MUST have been registered in the directory (§6) under the same identity claim as `revoked_key` BEFORE the revocation timestamp. This is the only path that survives the case where the legitimate owner has lost access to `revoked_key`.
+
+A revocation signed by any other key is invalid and MUST be rejected by verifiers as `'unsigned'`.
+
+#### 1.9.3 Verifier Semantics
+
+When a verifier sees a valid `key_revocation` record at log index `R` retiring `revoked_key`:
+
+- Records with `creator_key === revoked_key` AND `log_index >= R` are flagged `verification_state: 'revoked_after_revocation'`. They MUST NOT contribute to attribution calculations (§4.6).
+- Records with `creator_key === revoked_key` AND `log_index < R` retain their original `verification_state`. Past attribution remains valid.
+- When `successor_key` is present, the directory's active key for the identity claim MUST be updated to `successor_key`. Records signed by the successor inherit the identity claim that was active at the moment of rotation.
+
+The verifier MUST scan for `key_revocation` records when evaluating any record signed by a key that has been retired. The directory (§6) MAY index revocations for fast lookup but the log itself is the source of truth.
+
+#### 1.9.4 Conformance
+
+Implementations MUST pass all vectors in `spec/conformance/1.9/`:
+
+- `valid-rotation`: revocation signed by retired key, with successor.
+- `valid-retirement`: revocation signed by retired key, no successor.
+- `valid-compromise-emergency`: revocation signed by emergency key registered before the revocation timestamp.
+- `invalid-wrong-signer`: revocation signed by an unrelated key (rejected).
+- `invalid-emergency-not-registered`: emergency key not in directory before revocation (rejected).
+- `invalid-emergency-for-non-compromise`: emergency-key signing attempted with `revocation_reason='rotation'` (rejected).
+- `post-revocation-record`: a record signed by the retired key after the revocation log index (flagged `'revoked_after_revocation'`).
+- `pre-revocation-record`: a record signed by the retired key before the revocation log index (still `'signature_valid'`).
+
+#### 1.9.5 What This DOES NOT Cover
+
+Forward secrecy of past records: an attacker who compromised `revoked_key` on day 100 can produce records that look legitimate under that key for the entire pre-revocation window. The verifier sees `'revoked_after_revocation'` only post-revocation. A "compromise window" annotation that retroactively flags pre-revocation records is V2 work.
+
+Operator/log-key rotation: see §2 for the log signing key. Rotating the log key invalidates all prior inclusion proofs' signatures and is a separate ADR (deferred to V2).
 
 ---
 
@@ -2864,6 +2959,199 @@ The degradation contract is:
 **If `ATRIB_PRIVATE_KEY` is not set at init, the middleware MUST log a warning and operate in pass-through mode.** Pass-through mode: all requests and responses are forwarded without modification, no attribution records are emitted, no context is attached. The tool or agent operates as if the `atrib()` wrapper were not present.
 
 The degradation contract means a developer can add `@atrib/mcp` or `@atrib/agent` to a production system with zero risk of introducing failures.
+
+---
+
+## §6 Key Directory
+
+_Per D034._
+
+The key directory maps `creator_key` to a public identity claim. Without it, attribution is purely cryptographic. Verifiers see opaque public keys with no way to learn whose key it is. The directory is the missing semantic layer between "this record was signed by key K" and "K belongs to identity I."
+
+The directory is built on top of an Auditable Key Directory (AKD) primitive. AKD provides authenticated label-indexed lookup, non-membership proofs, per-label append-only version chains, and operator-independent verifiability. Two configurations of the same primitive are deployed for two distinct privacy models:
+
+- **Unblinded mode** (this section): plaintext labels. Lookups are observable to the directory operator. Suitable for atrib because `creator_key` is already public on the log.
+- **VRF-blinded mode** (separate spec, intended for downstream consumers): VRF-blinded labels. Lookups are hidden from the directory operator. Required for use cases where label-to-value lookup is itself sensitive (for example, end-to-end-encrypted messaging where `user_id → key` lookup must not leak interest in a specific user).
+
+Both modes share the AKD library and the witness model from §2.9.
+
+### 6.1 Identity Claim Format
+
+An identity claim is the directory's leaf payload:
+
+```json
+{
+  "spec_version": "atrib/1.0",
+  "claim_type": "creator_identity",
+  "creator_key": "<base64url 32-byte Ed25519 public key>",
+  "claim": {
+    "subject": "<freeform identity, e.g. 'tools.openai.com', 'did:web:example.com', 'mailto:nader@atrib.dev'>",
+    "method": "self_attested" | "domain_verified" | "did_resolved",
+    "registered_at": <unix-ms>,
+    "expires_at": <unix-ms> | null,
+    "metadata": { ... }
+  },
+  "signature": "<base64url 64-byte Ed25519 signature>"
+}
+```
+
+#### 6.1.1 Field Semantics
+
+- **`creator_key`**: the public key whose identity this claim describes. The same key value used in attribution records' `creator_key` field.
+- **`claim.subject`**: a freeform identity string. Common forms: domain name (`tools.openai.com`), DID (`did:web:example.com`, `did:key:...`), email (`mailto:nader@atrib.dev`), or service URL (`https://my-tool.example.com`). The protocol does not enforce the format; verifiers apply their own policy.
+- **`claim.method`**: how the subject was verified.
+  - `self_attested`: the claim is signed by `creator_key`. No external proof. Verifiers MUST treat this as "the key holder asserts this identity, with no third-party validation."
+  - `domain_verified`: the claim subject is a domain name and the claim's metadata includes a `txt_record` proof (`atrib-creator=<creator_key>` published as a TXT record on the subject domain). Verifiers MAY confirm the TXT record at lookup time.
+  - `did_resolved`: the subject is a DID; the claim's metadata includes a `did_document` reference. Verifiers MAY resolve the DID and confirm `creator_key` is listed as a `verificationMethod`.
+- **`claim.registered_at` / `claim.expires_at`**: unix milliseconds. Claims with `expires_at < now` are treated as expired and not returned by lookup unless explicitly requested with `include_expired=true`.
+- **`claim.metadata`**: extensible. Contains method-specific verification data (TXT proof, DID document URL) and optional human-readable info (display name, logo URL, contact). The metadata MUST NOT contain anything that would distinguish active claims from honeypot claims by structure alone. Verifiers should make trust decisions on the verification method, not on metadata richness.
+- **`signature`**: Ed25519 signature over the JCS-canonical serialization of the claim with `signature: ""`. Signed by `creator_key` itself (self-attestation) regardless of `method`.
+
+### 6.2 Directory Operations
+
+The directory exposes four normative operations.
+
+#### 6.2.1 Publish
+
+```
+POST /v6/publish
+Content-Type: application/json
+
+<IdentityClaim>
+```
+
+Inserts an identity claim under label `creator_key`. If a claim already exists for this key, the new claim replaces it (forming a per-label version chain; old claims remain queryable via `history`, new claim is the active version). The directory operator validates:
+
+- Signature verifies under `creator_key`.
+- `method`-specific proof (TXT record, DID document) succeeds when `method !== 'self_attested'`. Operators MAY defer verification or batch it.
+- The claim is not contradicted by an unexpired `key_revocation` record on the log.
+
+On success, the directory returns:
+
+```json
+{
+  "label": "<base64url creator_key>",
+  "version": <integer>,
+  "directory_root": "<base64url root commitment>",
+  "directory_tree_size": <integer>,
+  "publish_proof": "<base64url proof of inclusion>"
+}
+```
+
+#### 6.2.2 Lookup
+
+```
+GET /v6/lookup/<base64url-creator-key>?at=<directory_tree_size>
+```
+
+Returns the active claim for the key at the specified directory tree size (or the latest if `at` is omitted), with an authenticated proof. Response:
+
+```json
+{
+  "found": true,
+  "claim": <IdentityClaim>,
+  "label": "<base64url creator_key>",
+  "version": <integer>,
+  "lookup_proof": "<base64url AKD lookup proof>",
+  "directory_root": "<base64url root commitment>",
+  "directory_tree_size": <integer>
+}
+```
+
+If no claim exists, the response is a non-membership proof:
+
+```json
+{
+  "found": false,
+  "label": "<base64url creator_key>",
+  "absence_proof": "<base64url AKD non-membership proof>",
+  "directory_root": "<base64url root commitment>",
+  "directory_tree_size": <integer>
+}
+```
+
+A verifier MUST validate the proof against `directory_root`. The directory operator cannot return "no entry" without a cryptographic proof of absence.
+
+#### 6.2.3 History
+
+```
+GET /v6/history/<base64url-creator-key>
+```
+
+Returns the full version chain for the label. Used to reconstruct rotation events and to detect inconsistencies between rotation announcements (in the log) and directory updates.
+
+#### 6.2.4 Anchor (Cross-Reference Into the Tessera Log)
+
+The directory's root commitment is periodically posted to the Tessera log (§2) as a `directory_anchor` record, allowing a verifier consulting the log to detect a forked or split-view directory:
+
+```json
+{
+  "spec_version": "atrib/1.0",
+  "event_type": "directory_anchor",
+  "context_id": "<directory operator's reserved context_id>",
+  "creator_key": "<directory operator's pubkey>",
+  "chain_root": "<previous directory_anchor's record_hash, or genesis>",
+  "content_id": "<sha256 of canonical directory_root>",
+  "timestamp": <unix-ms>,
+  "metadata": {
+    "directory_root": "<base64url AKD root>",
+    "directory_tree_size": <integer>,
+    "directory_origin": "<directory's signed-note origin>"
+  },
+  "signature": "<base64url 64-byte Ed25519 signature>"
+}
+```
+
+Anchoring frequency is operator policy; SHOULD be at least daily.
+
+### 6.3 Verifier Consultation Algorithm
+
+A verifier validating an attribution record `R` with `creator_key = K` and `timestamp = T`:
+
+1. Look up `K` in the directory at the directory tree size committed in the latest `directory_anchor` record on the Tessera log with `timestamp <= T`. (If no anchor exists, use the latest available directory state and warn that the lookup is not log-anchored.)
+2. Validate the AKD lookup proof against the anchored `directory_root`.
+3. Apply revocation logic from §1.9: if `K` was revoked at log index `R'` and `R.log_index >= R'`, mark the record `'revoked_after_revocation'` and decline to resolve identity.
+4. Otherwise, return the claim alongside the record:
+
+```json
+{
+  "record": <AtribRecord>,
+  "verification_state": "signature_valid",
+  "identity_resolved": <ClaimObject> | null,
+  "identity_resolution_method": "directory_lookup" | "no_anchor_available" | "no_claim_registered"
+}
+```
+
+The verifier MUST NOT use the directory's claim if the AKD lookup proof does not validate. A directory operator returning unprovable claims is a fault; verifiers are responsible for catching it.
+
+### 6.4 Witness Model
+
+The directory's checkpoints are witnessed using the same C2SP cosignature pattern from §2.9. A directory operator publishes its checkpoints under origin `directory.<service>.<tld>/v6` (distinct from the Tessera log's origin). Witnesses cosign directory checkpoints exactly as they cosign log checkpoints. Verifiers configure trusted witness vkeys for the directory the same way they do for the log.
+
+The directory and the log SHOULD share witnesses where possible, since witness independence is the load-bearing security property. A witness witnessing both gives verifiers correlated evidence at lower cost.
+
+### 6.5 Conformance
+
+Implementations MUST pass all vectors in `spec/conformance/6/`:
+
+- `valid-self-attested-claim`: insert and look up a self-attested claim; lookup proof verifies.
+- `valid-domain-verified-claim`: insert with TXT record proof; verifier can re-confirm against DNS at lookup time.
+- `valid-history`: insert two versions for one label; history returns both in chronological order.
+- `valid-non-membership`: lookup of an unregistered key returns a non-membership proof that verifies.
+- `valid-anchor-coherence`: a `directory_anchor` record on the Tessera log matches the directory's actual root at that tree size.
+- `invalid-anchor-mismatch`: anchor's root differs from directory's actual root → verifier rejects.
+- `invalid-lookup-proof`: tampered lookup proof → verifier rejects.
+- `revocation-applies`: lookup returns the active claim; if revoked, the verifier respects revocation per §1.9.
+
+### 6.6 What This DOES NOT Cover
+
+**Identity verification beyond signature.** The protocol records claims but does not enforce that subjects are who they say they are. Trust comes from the underlying mechanism (DNS for `domain_verified`, the DID method for `did_resolved`), not from atrib.
+
+**Privacy of unblinded mode.** Atrib's directory is public by design. Anyone can enumerate registered creator_keys and their claims. This matches the public log model. The VRF-blinded variant of AKD is available for downstream consumers (separate spec) where label-to-value lookup must be hidden from the directory operator.
+
+**Directory-key rotation.** The directory operator's signing key has the same rotation problem as the log key. Same V2 deferral.
+
+**Cross-directory federation.** Multiple directories operated by different parties cannot today produce consistent answers about the same creator_key. Federation is a V2 concern.
 
 ---
 
