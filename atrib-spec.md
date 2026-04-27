@@ -1194,28 +1194,106 @@ Implementations SHOULD store proof bundles alongside attribution records. The `@
 
 ### 2.9 Witnessing and Cosignatures
 
-A checkpoint signed only by the log operator proves tamper-evidence within the log's own view. A **witness** is an independent party that verifies the log's append-only behavior and adds a cosignature to the checkpoint, making split-view attacks detectable.
+#### 2.9.1 Threat Model and Purpose
 
-Witnesses follow the C2SP tlog-witness specification (c2sp.org/tlog-witness). When the log produces a new checkpoint, it submits it to its configured witnesses with a consistency proof from the previous checkpoint. Each witness verifies consistency and returns a timestamped cosignature (C2SP tlog-cosignature spec).
+A checkpoint signed only by the log operator (§2.4) commits the operator to one (size, root) pair, but proves nothing about the operator's behavior over time. Four threats remain:
 
-A cosignature is a statement by the witness that, as of the given time, the log has been correctly append-only up to the stated tree size. It is an Ed25519 signature over a structured message that includes the checkpoint body and a timestamp:
+1. **Split-view.** A dishonest operator presents one checkpoint to verifier A and a different one to verifier B at the same tree size, then later reconciles which version is "real."
+2. **Operator compromise.** An attacker who steals the operator's signing key can produce valid-looking checkpoints that fork the log; verifiers using only the operator's signature have no way to detect the fork.
+3. **Infrastructure compromise.** An attacker controlling the operator's hosting provider, DNS, TLS termination, or network path can serve forged checkpoints to specific verifiers without ever touching the operator's signing key. Witnessing addresses this *only when the witnesses run on infrastructure independent from the operator's*; witnesses colocated with the log inherit the same compromise. Witness diversity across hosting providers, network paths, and TLS authorities is what makes this threat expensive to exploit.
+4. **Compelled removal.** Legal pressure on a single operator can force removal or rewriting of historical records, with no record of the prior state outside the operator's control. Witnesses in different jurisdictions retain proof of the prior state even if the operator is compelled to drop it.
+
+A **witness** is an independent party that periodically reads the log's checkpoints, verifies that each new checkpoint consistency-extends the previous one (RFC 6962 §2.1.4), and publishes a cosignature attesting to that fact. A verifier requiring N witness cosignatures forces an attacker to compromise the operator AND N witnesses simultaneously to produce a coherent forged history. The strength of the guarantee scales with witness diversity along three axes: distinct *signers* (defends against threats 1 and 2), distinct *infrastructure* (defends against threat 3), and distinct *jurisdictions* (defends against threat 4). A verifier configuring witnesses that share any of these dimensions with each other or with the operator gets weaker guarantees than the cosignature count alone suggests.
+
+#### 2.9.2 Cosignature Format (normative)
+
+A cosignature reuses the C2SP signed-note line shape (§2.4.3) but encodes a 76-byte payload instead of 68. Per c2sp.org/tlog-cosignature:
 
 ```
-// Cosignature signed message:
-cosignature/v1\n
-time \n
-\n    // the full three-line checkpoint body
-
-// The signature is a 72-byte struct:
-struct timestamped_signature {
-  u64 timestamp;     // POSIX seconds (big-endian)
-  u8  signature[64]; // Ed25519 signature over the message above
-}
+— <witness_name> <base64(keyHash[4B] || timestamp[8B] || sig[64B])>
 ```
 
-Clients that require strong tamper-evidence guarantees SHOULD require at least one witness cosignature before trusting an inclusion proof. atrib's SDK SHOULD ship with a default witness policy of one cosignature from a publicly documented witness operated independently of atrib.
+Where:
+- `keyHash[4B]` is the witness's 4-byte key hash, computed identically to §2.4.2 using the witness's name and public key.
+- `timestamp[8B]` is a big-endian uint64 of POSIX seconds at which the witness performed verification.
+- `sig[64B]` is the Ed25519 signature over the *cosignature signing input* (below).
 
-The witnessing infrastructure used by `log.atrib.dev` will be publicly documented including witness names and public keys. Third parties are encouraged to run compatible witnesses using the transparency-dev ecosystem tooling.
+The cosignature signing input is the checkpoint body with a timestamp preamble:
+
+```
+cosignature/v1
+<decimal seconds, no leading zeros>
+
+<exact bytes of the §2.4.1 checkpoint body, including its trailing newline>
+```
+
+Note the second line is the same `<seconds>` value encoded into the timestamp field, in decimal text form. The blank line is mandatory. A verifier reconstructs this input bytewise from the timestamp it extracted from the cosignature line and the checkpoint body it is verifying.
+
+A signature line whose base64 token decodes to 68 bytes is an operator signature (§2.4.3); 76 bytes is a witness cosignature. Verifiers MUST distinguish on decoded length.
+
+#### 2.9.3 Witness Behavior (normative)
+
+A witness MUST:
+
+1. Periodically fetch the log's `/v1/checkpoint` (§2.5.1) and verify the operator's signature per §2.4.3.
+2. For each new checkpoint whose tree size exceeds the most recent checkpoint the witness has cosigned, fetch enough tile data (§2.5.2) to verify a consistency proof from the witness's prior view to the new checkpoint. If the consistency proof fails, the witness MUST NOT cosign and SHOULD log the inconsistency for operator and downstream consumers.
+3. Sign the cosignature input (§2.9.2) with its Ed25519 signing key, producing a 76-byte payload.
+4. Publish the resulting cosignature line at the URL defined in §2.9.4.
+5. Publish its public key in both C2SP vkey form and JSON form, mirroring the log's `/v1/log-pubkey` and `/v1/pubkey` endpoints (§2.4.2). Verifiers configure trusted witness vkeys the same way they configure the trusted log vkey.
+
+Witness signing keys SHOULD be independent of the log's signing key. Compromise of one MUST NOT compromise the other.
+
+#### 2.9.4 Cosignature Delivery (normative)
+
+Cosignatures are **witness-published**. Each witness exposes its own HTTP endpoint:
+
+```
+GET https://<witness_origin>/v1/cosig/<log_origin_pct_encoded>/<root_hash_b64url>
+
+Response:
+Content-Type: text/plain; charset=utf-8
+Cache-Control: public, max-age=31536000, immutable
+
+// Body: a single C2SP signed-note signature line as defined in §2.9.2,
+// terminated by \n. 404 if this witness has not cosigned the named checkpoint.
+```
+
+The log operator does NOT aggregate or republish cosignatures. A verifier wanting to apply a witness threshold fetches from each trusted witness's endpoint directly and concatenates the returned lines into the checkpoint's signature block.
+
+This delivery model is chosen specifically to defeat threat 2 (operator compromise). If cosignatures lived only on `log.atrib.dev`, an attacker controlling the log could suppress cosigs from a forged checkpoint and present it as uncosigned-but-genuine. Witness-published delivery removes the operator from the cosignature path entirely.
+
+#### 2.9.5 Verifier Behavior and Thresholds (informational)
+
+The atrib protocol does NOT mandate a minimum cosignature threshold. Per CLAUDE.md invariant 7 ("the protocol has no thumb on the scale"), verifier policy is verifier-local. A verifier with no witness keys configured trusts the operator's signature alone, which is the V1 default and remains valid behavior for low-stakes verification.
+
+Verifiers wishing to apply witness checks SHOULD:
+
+1. Maintain a list of trusted witness vkeys.
+2. For each checkpoint they want to verify, fetch cosignatures from each trusted witness's `/v1/cosig/...` endpoint.
+3. Verify each fetched cosignature line per §2.9.2 with the corresponding witness public key.
+4. Apply a verifier-chosen threshold. Examples: "at least 2 cosigs," "at least 1 cosig from a witness in a different jurisdiction than the operator," "all configured witnesses MUST have cosigned recently."
+
+A verifier SHOULD reject a checkpoint whose cosignature timestamp is implausibly old or in the future relative to the verifier's clock. Suggested staleness bound: 24 hours, configurable.
+
+#### 2.9.6 Witness Discovery (out of scope for V1)
+
+V1 of atrib does not specify a witness registry, witness coordination protocol, or witness reputation system. Verifiers configure trusted witness keys out-of-band, the same way they configure trusted log keys. A future revision MAY specify an open registry analogous to Sigsum's witness ecosystem, but doing so prematurely would lock in a discovery mechanism before atrib has any non-operator verifiers to consult on what shape they actually need.
+
+#### 2.9.7 Example: Cosigned Checkpoint
+
+A verifier that has fetched cosignatures from two witnesses concatenates the lines into the operator's signed checkpoint to produce:
+
+```
+log.atrib.dev/v1
+4821937
+CsUYapGGPo4dkMgIAUqom/Xajj7h2fB2MPA3j2jxq2I=
+
+— log.atrib.dev/v1 base64(operator_keyHash[4B] || operator_sig[64B])
+— witness1.example.com base64(witness1_keyHash[4B] || timestamp1[8B] || witness1_sig[64B])
+— witness2.example.org base64(witness2_keyHash[4B] || timestamp2[8B] || witness2_sig[64B])
+```
+
+The operator's line decodes to 68 bytes; each cosignature line decodes to 76 bytes. The verifier independently verifies each line per the appropriate format (§2.4.3 for the operator, §2.9.2 for cosigs), then applies its threshold to the count and identity of valid cosignatures.
 
 ---
 
