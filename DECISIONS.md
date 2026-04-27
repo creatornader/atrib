@@ -871,7 +871,7 @@ Two observation surfaces exist per protocol: **runtime** (via `@atrib/agent` fra
 
 **Context.** A C2SP signed-note checkpoint commits the log to a (size, root) pair under an Ed25519 signature. To verify the signature, a third party needs the log's public key. Before this decision the only way to acquire that key was out-of-band, the operator had to publish it via a website, a known directory, or person-to-person. The signed-note signature line carries a 4-byte key_id (SHA-256(origin‖0x0A‖0x01‖pubkey)[:4]) but that's a one-way commitment, not a key.
 
-This was discovered while building a reproducible end-to-end verifier (`services/atrib-wrapper/scripts/verify-loop.mjs`): the verifier could prove tree integrity (locally re-derived root == checkpoint root) but had to SKIP the checkpoint-signature gate because no key was reachable.
+This was discovered while building a reproducible end-to-end verifier (the `verify-loop.mjs` script that ships in this repo): the verifier could prove tree integrity (locally re-derived root == checkpoint root) but had to SKIP the checkpoint-signature gate because no key was reachable.
 
 **Decision.** Add a single endpoint to log-node:
 
@@ -934,7 +934,7 @@ interface AtribOptions {
 
 The hook is fired post-sign (so the `signature` field is present), pre-submit (so persistence happens before any network attempt), and wrapped in try/catch with promise-rejection capture. The §5.8 degradation contract is preserved: a `onRecord` observer that throws or rejects does not block the tool call, the attribution token in `_meta`, or the log submission.
 
-The first consumer is `services/atrib-wrapper`, which uses `onRecord` to append records as one JSON per line at `~/.atrib/records/atrib-wrapper-<agent>.jsonl`.
+The first consumer is an MCP wrapper service (kept outside this repo during pre-launch validation) that uses `onRecord` to append records as one JSON per line at a local jsonl mirror under `~/.atrib/records/`.
 
 **Alternatives considered.**
 
@@ -1147,9 +1147,9 @@ The divergence was present from the initial commit of `checkpoint.ts`. A round-t
 ## D033: Key rotation and revocation
 
 **Date:** 2026-04-27
-**Status:** Accepted; spec §1.9 drafted, implementation deferred to prior implementation work
+**Status:** Accepted; spec §1.9 drafted, implementation deferred to an upcoming implementation phase
 
-**Context.** D028 explicitly deferred key rotation. The substrate has been live for several weeks signing under the initial creator key, and during the post-B+C audit that key was discovered to have leaked into Claude Code conversation transcripts (transcripts have 600 perms but the key is "burned"; anyone with a copy of those transcripts has the key forever). stop-the-bleeding cleanup of manual rotation rotated the seed manually but the substrate still has no protocol-level revocation: every record signed by the leaked key continues to verify under that pubkey forever, with no signal to a verifier that the key was retired.
+**Context.** D028 explicitly deferred key rotation. The substrate has been live for several weeks signing under the initial creator key, and during the post-B+C audit that key was discovered to have leaked into Claude Code conversation transcripts (transcripts have 600 perms but the key is "burned"; anyone with a copy of those transcripts has the key forever). An The seed was manually rotated but the substrate still has no protocol-level revocation: every record signed by the leaked key continues to verify under that pubkey forever, with no signal to a verifier that the key was retired.
 
 A second motivation: scheduled 90-day rotation is not viable today. If a creator wanted to rotate, every existing record would still verify under the old pubkey but with no way to prove the rotation was authorized rather than a key-loss event.
 
@@ -1196,14 +1196,14 @@ A second motivation: scheduled 90-day rotation is not viable today. If a creator
 - *Forward-secret rotation.* Successor key inherits identity but the attacker who has the old key can still produce records that look legitimate under the old pubkey for the pre-revocation window. True forward secrecy would require a key-evolution scheme (e.g., HORS, hash chains). Out of scope.
 - *Operator key rotation.* The log's signing key has the same problem as creator keys, plus an additional one: rotating the log key invalidates every prior inclusion proof's signature. Log-key rotation is its own ADR (deferred to V2).
 
-**Implementation sequencing.** prior implementation work implements revocation + the directory together because they share data structures and verifier logic.
+**Implementation sequencing.** an upcoming implementation phase implements revocation + the directory together because they share data structures and verifier logic.
 
 ---
 
 ## D034: Public-key directory architecture (AKD unblinded; VRF-blinded mode available for downstream consumers)
 
 **Date:** 2026-04-27
-**Status:** Accepted; spec §6 drafted, implementation in prior implementation work
+**Status:** Accepted; spec §6 drafted, implementation in an upcoming implementation phase
 
 **Context.** Atrib records carry `creator_key` as opaque base64url bytes. A verifier seeing such a record has no way to learn "who is this?" There is no canonical mapping from `creator_key` to identity. The post-B+C audit identified this as the most consequential infrastructure gap: without a directory, attribution is purely cryptographic and not semantically meaningful to anyone except the original signer.
 
@@ -1271,6 +1271,6 @@ A decision was needed on three questions: (1) AKD vs roll-our-own simpler struct
 - *AKD's own implementation correctness.* atrib trusts the AKD crate. If AKD has a bug, atrib has the bug. Mitigation: pin the version, follow upstream advisories, run AKD's own conformance suite as part of CI.
 - *Directory-key rotation.* The directory-signing key has the same rotation problem as the log-signing key. Same V2 deferral.
 
-**Implementation sequencing.** prior implementation work: AKD WASM/NAPI bridge → @atrib/directory package → wire into @atrib/verify → wire into recall.
+**Implementation sequencing.** an upcoming implementation phase: AKD WASM/NAPI bridge → @atrib/directory package → wire into @atrib/verify → wire into recall.
 
 **Cross-project ramification.** (removed)

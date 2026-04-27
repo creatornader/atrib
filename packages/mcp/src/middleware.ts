@@ -72,7 +72,7 @@ export interface AtribOptions {
    * semantic, the agent observed every prior call's result before making
    * the next one.
    *
-   * Set via the `ATRIB_AUTO_CHAIN=1` env var in atrib-wrapper.
+   * Hosts that wrap atrib over an upstream MCP server typically expose this via an env var (e.g. `ATRIB_AUTO_CHAIN`).
    */
   autoChain?: boolean
   /**

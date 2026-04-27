@@ -32,7 +32,7 @@ Is the substrate being used in non-trivial ways, or is it sitting idle on a serv
 | Distinct creator_keys | scan `/v1/tile/entries/*` for unique creator_key bytes | growing slowly toward >1 | More than one signer means an actual ecosystem, not just the operator |
 | Chain depth distribution (median, p95, max) | persisted record JSONLs grouped by context_id | median > 1 means chains form | The "agents reason from a past" claim is empirical |
 | `tool_call` vs `transaction` ratio | scan entries for `event_type` byte | non-zero transactions | Economic events flow through, not just chatter |
-| Active wrappers | count `atrib-wrapper-*.jsonl` files in `~/.atrib/records/` (operator-local) | growing toward >1 | More than one consumer is wired to atrib at any time |
+| Active wrappers | count atrib-wrapped MCP-client jsonl mirror files (operator-local convention; default `~/.atrib/records/*.jsonl`) | growing toward >1 | More than one consumer is wired to atrib at any time |
 | Active framework adapters in use | grep wrapper logs by adapter name | growing toward >1 of the 5 adapters from D018-D024 | Cross-framework dogfood, not just one |
 
 Cadence: review every Sunday. Hand-collected for now (`pnpm verify-log` then look at the printed entries). When this set stabilizes, automate via a `pnpm metrics` script that emits a JSON dashboard.
