@@ -1,0 +1,75 @@
+{
+  "schema_version": "atrib-metrics/1",
+  "ts": "2026-04-27T09:43:51.207Z",
+  "log": {
+    "endpoint": "https://log.atrib.dev/v1",
+    "root_hash_b64": "QDx+4jCNM8L24mHnN5R0j7L7mfUURddQfEjrb3YBEJ8="
+  },
+  "metrics": {
+    "tree_size": 4,
+    "distinct_creator_keys": 2,
+    "distinct_context_ids": 2,
+    "chain_depth": {
+      "median": 3,
+      "p95": 3,
+      "max": 3,
+      "n": 2,
+      "distribution_buckets": {
+        "<=1": 1,
+        "<=2": 0,
+        "<=3": 1,
+        "<=5": 0,
+        "<=10": 0,
+        "<=25": 0,
+        "<=100": 0,
+        ">100": 0
+      }
+    },
+    "event_type_ratio": {
+      "tool_call": 4,
+      "transaction": 0,
+      "total": 4,
+      "transaction_pct": 0
+    },
+    "log_age_days": 0.03,
+    "top_creator_share": 75
+  },
+  "metrics_meta": {
+    "tree_size": {
+      "tier": 1,
+      "status": "load-bearing",
+      "decision_supported": "is the substrate in use at all"
+    },
+    "distinct_creator_keys": {
+      "tier": 1,
+      "status": "load-bearing",
+      "decision_supported": "is more than one party signing records (multi-agent ecosystem)"
+    },
+    "distinct_context_ids": {
+      "tier": 1,
+      "status": "tracked",
+      "decision_supported": "how many distinct sessions/traces use the log"
+    },
+    "chain_depth": {
+      "tier": 1,
+      "status": "load-bearing",
+      "decision_supported": "do chains form (the thesis), or is each call standalone"
+    },
+    "event_type_ratio": {
+      "tier": 1,
+      "status": "load-bearing",
+      "decision_supported": "are real economic events flowing, or is it all chatter"
+    },
+    "log_age_days": {
+      "tier": 1,
+      "status": "provisional",
+      "decision_supported": "is the log surviving across redeploys (covered by Tier 0 too; useful for sanity)"
+    },
+    "top_creator_share": {
+      "tier": 1,
+      "status": "provisional",
+      "decision_supported": "is one signer dominating, or is contribution distributed"
+    }
+  },
+  "deltas": null
+}
