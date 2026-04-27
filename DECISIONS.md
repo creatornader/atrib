@@ -906,3 +906,53 @@ A test verifies that the published `key_id` exactly matches the prefix in the li
 
 **What this DOESN'T solve.** Key rotation. If the log's signing key changes, `/v1/pubkey` returns the new key, and historical checkpoints signed under the old key become unverifiable from this endpoint alone. A future ADR will specify either (a) a rotation log of `(key_id, public_key)` pairs returned by `/v1/pubkey`, or (b) a separate `/v1/keys` endpoint listing all keys ever used. Out of scope for V1.
 
+---
+
+## D029: `AtribOptions.onRecord(record)` observer hook on the middleware
+
+**Date:** 2026-04-27
+**Status:** Accepted; shipped in `@atrib/mcp` middleware
+
+**Context.** The atrib log stores commitments only, `record_hash`, `creator_key`, `context_id`, `timestamp`, `event_type`, not the original signed record JSON. This is intentional (§3.6 fact/policy separation; the log is observability, not storage). But it leaves a verification gap: third parties have no way to prove "this record_hash is the hash of a record signed by that creator_key" without the original record bytes. The bytes exist transiently inside the middleware between sign and submit; once the submit returns, they're gone.
+
+For the dogfood loop's verification story this gap was load-bearing: gate F (`record.sig` Ed25519 replay against `creator_key`) had to SKIP because the wrapper had no way to retain the records the middleware was producing.
+
+**Decision.** Add an optional observer to `AtribOptions`:
+
+```ts
+interface AtribOptions {
+  // ... existing fields ...
+  /**
+   * Observer invoked once per signed record AFTER signing and BEFORE log
+   * submission. Lets the host persist or audit the record locally.
+   * Errors thrown from the observer are caught and logged; they do not
+   * block submission or affect the tool response (§5.8).
+   */
+  onRecord?: (record: AtribRecord) => void | Promise<void>
+}
+```
+
+The hook is fired post-sign (so the `signature` field is present), pre-submit (so persistence happens before any network attempt), and wrapped in try/catch with promise-rejection capture. The §5.8 degradation contract is preserved: a `onRecord` observer that throws or rejects does not block the tool call, the attribution token in `_meta`, or the log submission.
+
+The first consumer is `services/atrib-wrapper`, which uses `onRecord` to append records as one JSON per line at `~/.atrib/records/atrib-wrapper-<agent>.jsonl`.
+
+**Alternatives considered.**
+
+1. *Return signed records from a side-channel API like `getRecord(hash)`.* Rejected because it requires the middleware to retain records in memory indefinitely (memory leak in long-running processes) or expose a query endpoint (new attack surface, new failure mode).
+
+2. *Make the wrapper sign records itself instead of going through the middleware.* Rejected because it duplicates §1.4 signing logic outside `@atrib/mcp` (drift risk: future signing-format changes would have to land in N places). Keep one signer, expose one observer.
+
+3. *Add a "tee" mode where the middleware writes records to a file path passed via `AtribOptions`.* Rejected because file paths are a host concern (sandboxing, permissions, log rotation, format) and embedding them in `@atrib/mcp` couples the protocol middleware to filesystem semantics. The hook lets each host decide how to persist.
+
+4. *Make persistence on-by-default with a sensible path.* Rejected because most consumers of `@atrib/mcp` are server-side or browser-side and have no business writing to a default filesystem location. Opt-in via callback is the right default.
+
+**Consequences.**
+
+- The dogfood verifier's GATE F (`record.sig` Ed25519 replay) becomes runnable once any consumer wires `onRecord` to disk. This closes the previously-named "GAP 2".
+- Other consumers (e.g. `@atrib/agent` framework adapters) can use the same hook for their own observability needs, auditing, metrics, replay debugging, without anything specific to the dogfood case being baked in.
+- Two new tests in `packages/mcp/test/middleware.test.ts`: (a) records are observed post-sign with the right shape, (b) observer throws don't break tool calls (the §5.8 invariant). All 328 mcp tests continue to pass.
+
+**What this DOESN'T solve.**
+
+- A canonical persistence format. The wrapper writes JSON-per-line; an SDK consumer might write protobuf, ndjson with extra metadata, etc. There's no spec section for "the local audit log format" because that's a host concern.
+- Replay protection. If a consumer's `onRecord` is slow or async-unbounded, records can pile up faster than they're persisted. The wrapper today writes synchronously per call, which is fine for a per-tool-call cadence but would need rethinking for high-throughput agent stacks. Out of scope for this ADR.
