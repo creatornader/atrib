@@ -5,6 +5,7 @@
  * Indexes records by context_id and creator_key for fast lookups.
  */
 
+import { canonicalRecord, sha256, hexEncode } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import type { GapNode } from './graph-builder.js'
 
@@ -29,9 +30,18 @@ export function createRecordStore(): RecordStore {
   const byContext = new Map<string, AtribRecord[]>()
   const gapsByContext = new Map<string, GapNode[]>()
   const byCreator = new Map<string, Set<string>>() // creator_key -> Set<context_id>
+  // Dedup index: SHA-256 hex of the JCS-canonical signed record. Re-ingest of
+  // the same record (same record_hash) is a no-op. Without this, /v1/ingest
+  // duplicates compound: every retry/replay/double-post produces a phantom
+  // node in the graph, which §3.2.4 derivation then connects with extra edges.
+  const seenRecordHashes = new Set<string>()
 
   return {
     addRecord(record: AtribRecord): void {
+      const recordHash = hexEncode(sha256(canonicalRecord(record)))
+      if (seenRecordHashes.has(recordHash)) return
+      seenRecordHashes.add(recordHash)
+
       const list = byContext.get(record.context_id) ?? []
       list.push(record)
       byContext.set(record.context_id, list)
