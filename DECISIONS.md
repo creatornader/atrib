@@ -1272,5 +1272,3 @@ A decision was needed on three questions: (1) AKD vs roll-our-own simpler struct
 - *Directory-key rotation.* The directory-signing key has the same rotation problem as the log-signing key. Same V2 deferral.
 
 **Implementation sequencing.** an upcoming implementation phase: AKD WASM/NAPI bridge → @atrib/directory package → wire into @atrib/verify → wire into recall.
-
-**Cross-project ramification.** (removed)
