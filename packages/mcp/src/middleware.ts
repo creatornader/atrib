@@ -32,6 +32,17 @@ export interface AtribOptions {
   serverUrl?: string
   /** Tool names that complete commerce transactions (§5.4.5 Path 1). */
   transactionTools?: string[]
+  /**
+   * Observer invoked once per signed record AFTER signing and BEFORE log
+   * submission. Lets the host persist or audit the record locally — without
+   * this hook the original signed JSON is unrecoverable (the log stores only
+   * commitments). Errors thrown from the observer are caught and logged; they
+   * do not block submission or affect the tool response (§5.8).
+   *
+   * Use cases: dogfood verification (replay verifyRecord against creator_key),
+   * local audit trail, debugging "what exactly did we sign?".
+   */
+  onRecord?: (record: AtribRecord) => void | Promise<void>
 }
 
 /** Extended McpServer with atrib-specific methods. */
@@ -252,6 +263,21 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
 
         // §1.4.2: Sign the record
         const signed = await signRecord(record, privateKey)
+
+        // Optional onRecord observer (post-sign, pre-submit). Errors are
+        // swallowed per §5.8 — observation must never affect the tool call.
+        if (options.onRecord) {
+          try {
+            const r = options.onRecord(signed)
+            if (r && typeof (r as Promise<void>).then === 'function') {
+              ;(r as Promise<void>).catch((e) =>
+                console.warn('atrib: onRecord observer rejected', e),
+              )
+            }
+          } catch (e) {
+            console.warn('atrib: onRecord observer threw', e)
+          }
+        }
 
         // §5.3.4: Write outbound context (includes traceparent, baggage, X-Atrib-Chain)
         writeOutboundContext(resultObj, signed, {

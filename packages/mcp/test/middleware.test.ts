@@ -177,6 +177,54 @@ describe('atrib() middleware', () => {
       expect((result as any)._meta?.atrib).toBeUndefined()
     })
 
+    it('invokes onRecord with the signed record after signing', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const resultObj = { content: [{ type: 'text', text: 'result' }] }
+      const originalHandler = vi.fn().mockResolvedValue(resultObj)
+
+      const observed: unknown[] = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        onRecord: (rec) => { observed.push(rec) },
+      })
+      registerToolHandler(originalHandler)
+
+      const handler = getToolHandler()!
+      await handler(createToolCallRequest('search_web'), {})
+
+      expect(observed).toHaveLength(1)
+      const rec = observed[0] as Record<string, unknown>
+      expect(rec.spec_version).toBe('atrib/1.0')
+      expect(rec.event_type).toBe('tool_call')
+      expect(rec.signature).toBeTruthy() // signed AFTER, not BEFORE
+      const expectedPubKey = await getPublicKey(TEST_PRIVATE_KEY)
+      const { base64urlEncode: enc } = await import('../src/base64url.js')
+      expect(rec.creator_key).toBe(enc(expectedPubKey))
+    })
+
+    it('onRecord errors do not break tool calls or block submission (§5.8)', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const resultObj = { content: [{ type: 'text', text: 'result' }] }
+      const originalHandler = vi.fn().mockResolvedValue(resultObj)
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        onRecord: () => { throw new Error('disk full') },
+      })
+      registerToolHandler(originalHandler)
+
+      const handler = getToolHandler()!
+      const result = await handler(createToolCallRequest('search_web'), {})
+
+      // Tool call still succeeds and gets attribution token in _meta
+      expect((result as any)._meta?.atrib).toBeDefined()
+      expect(warnSpy).toHaveBeenCalledWith('atrib: onRecord observer threw', expect.any(Error))
+      warnSpy.mockRestore()
+    })
+
     it('emits transaction record for transactionTools', async () => {
       const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
       const resultObj = { content: [{ type: 'text', text: 'checkout done' }] }
