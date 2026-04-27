@@ -75,6 +75,19 @@ export interface AtribOptions {
    * Set via the `ATRIB_AUTO_CHAIN=1` env var in atrib-wrapper.
    */
   autoChain?: boolean
+  /**
+   * Seed records used to populate the in-memory `lastRecordHashByContext`
+   * map on startup. Without this, autoChain breaks across process restarts:
+   * the first call after a wrapper restart becomes a fresh genesis even
+   * though prior records exist. Pass the on-disk record mirror's most-recent
+   * record per context_id (or just all records — the middleware will pick
+   * the most-recent per context_id).
+   *
+   * Only consulted when `autoChain: true`. Records are not verified here;
+   * the caller is expected to filter to records they trust (e.g. their own
+   * signed-record mirror persisted by `onRecord`).
+   */
+  autoChainSeed?: AtribRecord[]
 }
 
 /** Extended McpServer with atrib-specific methods. */
@@ -140,6 +153,38 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   const autoChain = options.autoChain === true
   let stableContextId: string | undefined
   const lastRecordHashByContext = new Map<string, string>()
+
+  // Seed lastRecordHashByContext from the caller-provided record set so
+  // autoChain survives process restarts. For each context_id, find the
+  // most-recent record (by timestamp) and store its record_hash. The next
+  // call in that context_id will chain to it instead of starting genesis.
+  if (autoChain && options.autoChainSeed && options.autoChainSeed.length > 0) {
+    const newestByContext = new Map<string, AtribRecord>()
+    for (const r of options.autoChainSeed) {
+      const existing = newestByContext.get(r.context_id)
+      if (!existing || r.timestamp > existing.timestamp) {
+        newestByContext.set(r.context_id, r)
+      }
+    }
+    for (const [ctx, r] of newestByContext) {
+      const hash = hexEncode(sha256(canonicalRecord(r)))
+      lastRecordHashByContext.set(ctx, hash)
+    }
+    // If the seed records all share a single context_id and no traceparent
+    // is set later, reuse that context_id rather than minting a new one.
+    // Picks the context_id with the most-recent record.
+    if (newestByContext.size > 0) {
+      let bestCtx: string | undefined
+      let bestTs = -Infinity
+      for (const [ctx, r] of newestByContext) {
+        if (r.timestamp > bestTs) {
+          bestTs = r.timestamp
+          bestCtx = ctx
+        }
+      }
+      stableContextId = bestCtx
+    }
+  }
 
   // §5.6.3: Track whether destroy() has been called. After destroy, the
   // private key is zeroed and no further signing is possible.
