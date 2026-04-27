@@ -861,3 +861,48 @@ Two observation surfaces exist per protocol: **runtime** (via `@atrib/agent` fra
 - Unified cross-adapter attribution calculation. Each adapter today computes its own distribution against its own policy. A multi-protocol attribution (e.g., a session that spans x402 + ACP) is future work, tied to §3's graph derivation extending across adapters.
 
 **First implementation:** the x402 adapter (2026-04-21). Registry (45 facilitators resolved, 92 attributed addresses, `/supported` enrichment), scanner (Dune contract-first query producing $5.4M Base 30d), attribution (baseline mapping + unknown-sender residual). Path A (retrospective surface) exercises §3 + §4; Path B (runtime reference agent using `@atrib/agent`) provides the second observation surface, exercising §1, §2.6.1, §5.
+
+---
+
+## D028: Log exposes its signing pubkey at `GET /v1/pubkey` for self-contained verification
+
+**Date:** 2026-04-27
+**Status:** Accepted; deployed to `log.atrib.dev` (image `01KQ6KWYDAC4ZNA6A6BY3BC0ZK`)
+
+**Context.** A C2SP signed-note checkpoint commits the log to a (size, root) pair under an Ed25519 signature. To verify the signature, a third party needs the log's public key. Before this decision the only way to acquire that key was out-of-band, the operator had to publish it via a website, a known directory, or person-to-person. The signed-note signature line carries a 4-byte key_id (SHA-256(origin‖0x0A‖0x01‖pubkey)[:4]) but that's a one-way commitment, not a key.
+
+This was discovered while building a reproducible end-to-end verifier (`services/atrib-wrapper/scripts/verify-loop.mjs`): the verifier could prove tree integrity (locally re-derived root == checkpoint root) but had to SKIP the checkpoint-signature gate because no key was reachable.
+
+**Decision.** Add a single endpoint to log-node:
+
+```
+GET /v1/pubkey
+→ 200 application/json
+{
+  "origin": "log.atrib.dev/v1",
+  "public_key": "<base64url 32B>",
+  "key_id": "<hex 4B>",
+  "algorithm": "Ed25519"
+}
+```
+
+The endpoint reads from the `CheckpointSigner` interface at runtime (no separate config); the seed never leaves the process. The `CheckpointSigner` interface gained an `origin` accessor so the handler doesn't need to import a constant from another file.
+
+A test verifies that the published `key_id` exactly matches the prefix in the live checkpoint signature line, AND that running `ed.verifyAsync(sig, body, public_key)` against the published pubkey succeeds, meaning the endpoint is real-cryptography-load-bearing and not just a status surface.
+
+**Alternatives considered.**
+
+1. *Publish the pubkey to a static `.well-known` file.* Rejected because it requires a second hosting surface and decouples the published key from the running signer. With `/v1/pubkey` reading from the live signer, the pubkey can never drift out of sync with the actual signature being produced.
+
+2. *Embed the pubkey in every checkpoint body* (e.g. as a 4th line). Rejected because it changes the wire format of `/v1/checkpoint`, a breaking change to a published spec section (§2.4.1) for a problem that's solved cleanly with an additive endpoint.
+
+3. *Require verifiers to derive the pubkey from the seed via a separate "trust root" service.* Rejected because it introduces a second trust dependency for what is fundamentally one log's accountability surface.
+
+**Consequences.**
+
+- Verifiers (third parties + dogfood scripts) can now run `Ed25519.verify(sig, body, pubkey)` against the checkpoint without out-of-band key acquisition. This closes the previously-named "GAP 1" in the dogfood verification loop.
+- The endpoint adds zero attack surface: the public key is by design exposable; exposing it is what makes the checkpoint signature meaningful to anyone other than the operator.
+- A future witnessing protocol (multiple signatures on one checkpoint) gets a per-witness `/v1/pubkey` analog for free, since the shape generalizes (each signer publishes its own).
+
+**What this DOESN'T solve.** Key rotation. If the log's signing key changes, `/v1/pubkey` returns the new key, and historical checkpoints signed under the old key become unverifiable from this endpoint alone. A future ADR will specify either (a) a rotation log of `(key_id, public_key)` pairs returned by `/v1/pubkey`, or (b) a separate `/v1/keys` endpoint listing all keys ever used. Out of scope for V1.
+

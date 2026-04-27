@@ -132,3 +132,72 @@ describe('GET /v1/checkpoint', () => {
     expect(text).toContain('\u2014')
   })
 })
+
+describe('GET /v1/pubkey', () => {
+  it('returns the log Ed25519 public key + key_id', async () => {
+    const res = await fetch(`${server.url}/v1/pubkey`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toMatch(/json/)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(body.origin).toBe('log.atrib.dev/v1')
+    expect(body.algorithm).toBe('Ed25519')
+    expect(typeof body.public_key).toBe('string')
+    expect(typeof body.key_id).toBe('string')
+    // 32-byte Ed25519 pubkey base64url-encodes to 43 chars (no padding)
+    expect((body.public_key as string).length).toBe(43)
+    // 4-byte key_id hex-encodes to 8 chars
+    expect((body.key_id as string)).toMatch(/^[0-9a-f]{8}$/)
+  })
+
+  it('published key_id matches the prefix used in checkpoint signatures', async () => {
+    // Ensure the tree has at least one entry so /checkpoint returns 200
+    const record = await makeSignedRecord()
+    await post(server.url, record)
+
+    const [pubkeyRes, cpRes] = await Promise.all([
+      fetch(`${server.url}/v1/pubkey`),
+      fetch(`${server.url}/v1/checkpoint`),
+    ])
+    const pubkey = (await pubkeyRes.json()) as { key_id: string }
+    const cpText = await cpRes.text()
+    // Signed-note signature line: "\u2014 origin <keyIdHex>+<sigB64>"
+    const sigMatch = cpText.match(/\u2014 \S+ ([0-9a-f]{8})\+/)
+    expect(sigMatch).not.toBeNull()
+    expect(sigMatch![1]).toBe(pubkey.key_id)
+  })
+
+  it('signed checkpoint verifies under the published pubkey', async () => {
+    const record = await makeSignedRecord()
+    await post(server.url, record)
+
+    const [pubkeyRes, cpRes] = await Promise.all([
+      fetch(`${server.url}/v1/pubkey`),
+      fetch(`${server.url}/v1/checkpoint`),
+    ])
+    const pubkey = (await pubkeyRes.json()) as { public_key: string }
+    const cpText = await cpRes.text()
+
+    // Split body|signatures on the blank line.
+    const idx = cpText.indexOf('\n\n')
+    expect(idx).toBeGreaterThan(0)
+    const body = cpText.slice(0, idx + 1) // body keeps trailing \n
+    const sigBlock = cpText.slice(idx + 2)
+
+    const sigLine = sigBlock.split('\n').find((l) => l.startsWith('\u2014'))
+    expect(sigLine).toBeDefined()
+    const m = sigLine!.match(/^\u2014 \S+ [0-9a-f]{8}\+(\S+)$/)
+    expect(m).not.toBeNull()
+    const sigB64 = m![1]
+    const sigBytes = new Uint8Array(Buffer.from(sigB64, 'base64'))
+
+    const pkBytes = new Uint8Array(
+      Buffer.from(
+        (pubkey.public_key as string).replace(/-/g, '+').replace(/_/g, '/'),
+        'base64',
+      ),
+    )
+
+    const ok = await ed.verifyAsync(sigBytes, new TextEncoder().encode(body), pkBytes)
+    expect(ok).toBe(true)
+  })
+})
