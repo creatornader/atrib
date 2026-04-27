@@ -20,9 +20,20 @@
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import * as ed from '@noble/ed25519'
+import { sha256, sha512 } from '@noble/hashes/sha2.js'
 import type { AtribRecord } from '@atrib/mcp'
-import { buildGraphFromRecords } from '../src/graph-builder.js'
-import { calculate, DEFAULT_POLICY } from '@atrib/verify'
+import { buildGraphFromRecords, recordHashHex } from '../src/graph-builder.js'
+import {
+  calculate,
+  DEFAULT_POLICY,
+  signRecommendation,
+  verifyRecommendationSignature,
+  distributionsMatch,
+  type RecommendationDocument,
+} from '@atrib/verify'
+
+ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
 
 function pickMostRecentRecordFile(): string {
   const dir = join(homedir(), '.atrib', 'records')
@@ -61,7 +72,7 @@ function distributionsEqual(a: Record<string, number>, b: Record<string, number>
   return true
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const recordFile = process.env.RECORD_FILE ?? pickMostRecentRecordFile()
   console.log(`calc-demo: record_file=${recordFile}`)
 
@@ -121,6 +132,95 @@ function main(): void {
   const total = Object.values(dist1).reduce((s, v) => s + v, 0)
   const sumOk = Math.abs(total - 1) < 1e-9
   console.log(`sum-to-one: ${sumOk ? 'PASS' : 'FAIL'}, total=${total}`)
+
+  // §4.7: build, sign, and verify a settlement recommendation document.
+  await emitSettlementRecommendation(graph, dist1, sessionRecords, contextId)
 }
 
-main()
+async function emitSettlementRecommendation(
+  graph: ReturnType<typeof buildGraphFromRecords>,
+  distribution: Record<string, number>,
+  sessionRecords: AtribRecord[],
+  contextId: string,
+): Promise<void> {
+  console.log()
+  console.log('--- §4.7 settlement recommendation ---')
+
+  const txRecord = sessionRecords.find((r) => r.event_type === 'transaction')
+  if (!txRecord) throw new Error('no transaction record in session')
+  const transactionId = recordHashHex(txRecord)
+
+  // For the demo, use an ephemeral merchant key to sign the recommendation.
+  // In production this would be a known merchant key registered via §5.5.
+  const merchantSeed = ed.utils.randomPrivateKey()
+  const merchantPub = await ed.getPublicKeyAsync(merchantSeed)
+  const merchantKey = Buffer.from(merchantPub).toString('base64url')
+
+  // policy_record_id for the default policy: SHA-256 of a deterministic
+  // serialization of DEFAULT_POLICY. In production this would be the
+  // record_hash of an on-chain policy record. For the demo, key-sorted
+  // JSON.stringify is enough to give a stable identifier.
+  const sortedKeys = (obj: unknown): string => {
+    if (obj === null || typeof obj !== 'object') return JSON.stringify(obj)
+    if (Array.isArray(obj)) return '[' + obj.map(sortedKeys).join(',') + ']'
+    const entries = Object.entries(obj as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => JSON.stringify(k) + ':' + sortedKeys(v))
+    return '{' + entries.join(',') + '}'
+  }
+  const policyRecordId = Buffer.from(
+    sha256(new TextEncoder().encode(sortedKeys(DEFAULT_POLICY))),
+  ).toString('hex')
+
+  // graph_checkpoint + graph_tree_size: snapshot of the log at calc time.
+  const cpRes = await fetch('https://log.atrib.dev/v1/checkpoint')
+  const cpText = cpRes.ok ? await cpRes.text() : ''
+  const cpLines = cpText.split('\n')
+  const graphTreeSize = Number(cpLines[1] ?? '0')
+  const graphCheckpoint = cpLines[2] ?? ''
+
+  const unsigned: Omit<RecommendationDocument, 'signature'> = {
+    spec_version: 'atrib/1.0',
+    document_type: 'settlement_recommendation',
+    context_id: contextId,
+    transaction_id: transactionId,
+    policy_record_id: policyRecordId,
+    graph_checkpoint: graphCheckpoint,
+    graph_tree_size: graphTreeSize,
+    calculated_at: Date.now(),
+    calculated_by: merchantKey,
+    distribution,
+    maximum_total_share: null,
+    warnings: [],
+  }
+
+  const signed = await signRecommendation(unsigned, merchantSeed)
+  const sigOk = await verifyRecommendationSignature(signed, merchantKey)
+  console.log(`merchant_key: ${merchantKey}`)
+  console.log(`transaction_id: ${transactionId}`)
+  console.log(`graph_checkpoint: ${graphCheckpoint.slice(0, 24)}…  tree_size=${graphTreeSize}`)
+  console.log(`signature: ${sigOk ? 'PASS' : 'FAIL'} (Ed25519 verify under calculated_by)`)
+
+  // §4.7.3 distributionsMatch: confirm a freshly-recomputed dist matches.
+  const dist2 = calculate(graph, DEFAULT_POLICY)
+  const matches = distributionsMatch(distribution, dist2)
+  console.log(`distributionsMatch: ${matches ? 'PASS' : 'FAIL'}`)
+
+  console.log()
+  console.log('signed recommendation document (excerpt):')
+  console.log(JSON.stringify({
+    document_type: signed.document_type,
+    context_id: signed.context_id.slice(0, 16) + '…',
+    transaction_id: signed.transaction_id.slice(0, 16) + '…',
+    policy_record_id: signed.policy_record_id.slice(0, 16) + '…',
+    graph_tree_size: signed.graph_tree_size,
+    calculated_by: signed.calculated_by,
+    distribution: signed.distribution,
+    signature: signed.signature.slice(0, 16) + '…',
+  }, null, 2))
+}
+
+main().catch((err) => {
+  console.error('calc-demo: fatal', err)
+  process.exit(1)
+})
