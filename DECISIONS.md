@@ -1002,3 +1002,50 @@ The spec was updated in §2.4.2 to document both endpoints, with normative MUSTs
 - Witness key publication. If/when third parties cosign checkpoints, each witness will publish its own vkey from its own service. The atrib spec describes the format the log uses; witness operators apply the same shape to their own infrastructure.
 
 **Acknowledged process failure.** D028 was drafted and shipped without grepping the spec for an existing key-publication contract. The §2.4.2 line was always there. A spec-sync pass should be part of "the ADR is done" rather than an after-the-fact cleanup. Recording this so the lesson outlives the moment.
+
+---
+
+## D032: Witnessing posture for V1 — spec defined, no implementation
+
+**Date:** 2026-04-27
+**Status:** Accepted; spec §2.9 rewritten, no code work for V1
+
+**Context.** Spec §2.9 was a stub with conflicting prose: it gestured at C2SP tlog-witness, mentioned a SHOULD-require threshold, and described an operator-pushes-to-witnesses delivery model. Three of those choices contradicted invariants stated elsewhere in the spec or in CLAUDE.md. With the C2SP signed-note alignment in D031 finally landed (commit `096c8a5`), witnessing became approachable rather than aspirational, but it also became the next thing where contradictions would compound. Resolving §2.9 needed concrete answers on five questions before any code could land.
+
+**Decision.** Five concrete choices, captured normatively where format interop demands it and informationally where verifier policy varies:
+
+1. **Threat model:** four threats, witnesses partially mitigate each. Operator dishonesty (split-view), operator key compromise, infrastructure compromise (DNS/TLS/host hijacking), and compelled removal. Threat 3 is mitigated only when witnesses run on infrastructure independent from the operator's; the spec calls this out explicitly so a reader doesn't run all witnesses on Fly and think they've covered the threat model.
+
+2. **Cosignature delivery:** witness-published, not operator-aggregated. Each witness exposes `GET /v1/cosig/<log_origin>/<root_hash>`. Verifiers fetch directly from witnesses and concatenate cosigs into the operator's signed checkpoint. This pattern (matching Sigsum) is the only one that survives operator key compromise: a compromised operator cannot suppress cosigs that live on independent witness infrastructure.
+
+3. **Threshold:** verifier's choice. The protocol does not mandate a minimum cosignature count. Per CLAUDE.md invariant 7 ("the protocol has no thumb on the scale"), verifier policy is verifier-local. A verifier with no witness keys configured trusts the operator's signature alone, which is the V1 default.
+
+4. **Witness registry:** out of scope for V1. No coordination protocol, no reputation system, no first-party-published list. Verifiers configure trusted witness vkeys out of band the same way they configure the trusted log vkey. A future revision MAY add an open registry analogous to Sigsum, but only after atrib has non-operator verifiers to consult on what shape that registry should take.
+
+5. **Cosignature format:** C2SP tlog-cosignature. Same outer line shape as the operator signature but the base64 token decodes to 76 bytes (4-byte keyHash + 8-byte timestamp + 64-byte sig) rather than 68. Witnesses sign over a cosignature signing input that prepends `cosignature/v1\n<seconds>\n\n` to the checkpoint body. Verifiers MUST distinguish operator from witness signature lines by decoded length.
+
+**Alternatives considered.**
+
+1. *Mandate a minimum threshold in the spec.* Rejected because it violates the no-thumb-on-the-scale invariant. Different consumers (a hobbyist project, a payments protocol, a regulator) genuinely need different thresholds; the protocol shouldn't pre-pick.
+
+2. *Operator-aggregated cosignature delivery (Sigstore Rekor pattern).* Rejected because it does not survive threat 2. A compromised operator with the operator's signing key can hide unfavorable cosigs from `/v1/checkpoint` and present a forged checkpoint as uncosigned-but-genuine. Witness-published delivery moves the cosignature path off the operator entirely.
+
+3. *Define a witness registry now.* Rejected because we have no witnesses and no non-operator verifiers. Different ecosystems pick different registry shapes (Sigsum: open; Sigstore: curated; sumdb: directory). Locking in one before knowing the first witness operator's actual needs would be a wrong abstraction.
+
+4. *Implement a first-party witness service for log.atrib.dev.* Rejected because a witness operated by the same party as the log is structurally useless against threats 1, 2, and 3. Self-witnessing only matters once there is a second atrib log to cross-witness or a non-operator party with an incentive to witness. Neither exists today.
+
+**Consequences.**
+
+- §2.9 is now complete: normative format and delivery, informational verifier behavior, explicit V1 scope boundary on registry/discovery.
+- A future witness operator can implement against the spec without further atrib coordination. The core code (fetch checkpoint, verify operator sig, verify consistency proof, sign cosig input, publish at `/v1/cosig/...`) parallels what `services/log-node/` already does and is ~200 lines of Node.
+- The dogfood verifier does NOT yet check cosignatures. When a witness exists, adding the gate is mechanical: signature lines whose decoded payload is 76 bytes are cosigs; look up witness keyHash → trusted vkey; verify per §2.9.2; apply threshold.
+- The Sigsum-pattern choice means atrib will not drop-in to ecosystems that assume operator-aggregated delivery (Rekor). The trade-off is honest: those ecosystems implicitly accept threat 2 in exchange for simpler verifier configuration. atrib chooses the harder configuration in exchange for surviving operator compromise.
+
+**What this DOESN'T solve.**
+
+- *Witness bootstrapping.* The first witness will exist when atrib has a second-party verifier that wants one. The spec describes the contract; the spec does not solve the social problem of recruiting witnesses.
+- *Witness staleness and liveness.* A verifier checking cosig timestamps can detect an obviously dead witness, but a witness that goes dark for months is harder. V2 may add liveness expectations.
+- *Witness key rotation.* Same gap as the log key rotation deferred from D028. Witnesses will need rotation when atrib does.
+- *Cosignature retention windows.* How long must a witness keep its cosigs queryable? Verifiers may want historical cosigs to verify old settlement documents. V2.
+
+**Acknowledged process failure.** The prior §2.9 prose contradicted three of the five decisions documented here. SHOULD-require-cosignature contradicted invariant 7; operator-pushes-to-witnesses contradicted threat-2 mitigation; the gestured-at "witnessing infrastructure used by log.atrib.dev" implied a registry that doesn't exist. These were aspirational drift, not deliberate choices. Same failure mode as D030's note: spec text added without checking conflicts with the rest of the spec or with CLAUDE.md invariants. Recording the pattern again so the lesson is concrete, not theoretical.
