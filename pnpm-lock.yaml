@@ -229,6 +229,9 @@ importers:
       '@types/node':
         specifier: ^25.5.2
         version: 25.5.2
+      canonicalize:
+        specifier: ^2.0.0
+        version: 2.1.0
       fast-check:
         specifier: ^4.6.0
         version: 4.6.0
