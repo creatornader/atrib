@@ -11,6 +11,7 @@ import { sha512, sha256 } from '@noble/hashes/sha2.js'
 import { signRecord, hexEncode } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import { startLogServer, type LogServer } from '../src/index.js'
+import { parseSignatureLine } from '../src/checkpoint.js'
 
 // Set up sync sha512 for @noble/ed25519
 ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
@@ -149,7 +150,7 @@ describe('GET /v1/pubkey', () => {
     expect((body.key_id as string)).toMatch(/^[0-9a-f]{8}$/)
   })
 
-  it('published key_id matches the prefix used in checkpoint signatures', async () => {
+  it('published key_id matches the keyHash embedded in checkpoint signatures', async () => {
     // Ensure the tree has at least one entry so /checkpoint returns 200
     const record = await makeSignedRecord()
     await post(server.url, record)
@@ -160,10 +161,12 @@ describe('GET /v1/pubkey', () => {
     ])
     const pubkey = (await pubkeyRes.json()) as { key_id: string }
     const cpText = await cpRes.text()
-    // Signed-note signature line: "\u2014 origin <keyIdHex>+<sigB64>"
-    const sigMatch = cpText.match(/\u2014 \S+ ([0-9a-f]{8})\+/)
-    expect(sigMatch).not.toBeNull()
-    expect(sigMatch![1]).toBe(pubkey.key_id)
+    // C2SP signed-note: keyHash is the first 4 bytes of base64(keyHash || sig)
+    const sigBlock = cpText.split('\n\n')[1]!
+    const sigLine = sigBlock.split('\n').find((l) => l.startsWith('\u2014'))!
+    const parsed = parseSignatureLine(sigLine.trim())
+    expect(parsed).not.toBeNull()
+    expect(Buffer.from(parsed!.keyId).toString('hex')).toBe(pubkey.key_id)
   })
 
   it('signed checkpoint verifies under the published pubkey', async () => {
@@ -185,10 +188,8 @@ describe('GET /v1/pubkey', () => {
 
     const sigLine = sigBlock.split('\n').find((l) => l.startsWith('\u2014'))
     expect(sigLine).toBeDefined()
-    const m = sigLine!.match(/^\u2014 \S+ [0-9a-f]{8}\+(\S+)$/)
-    expect(m).not.toBeNull()
-    const sigB64 = m![1]
-    const sigBytes = new Uint8Array(Buffer.from(sigB64, 'base64'))
+    const parsed = parseSignatureLine(sigLine!.trim())
+    expect(parsed).not.toBeNull()
 
     const pkBytes = new Uint8Array(
       Buffer.from(
@@ -197,7 +198,7 @@ describe('GET /v1/pubkey', () => {
       ),
     )
 
-    const ok = await ed.verifyAsync(sigBytes, new TextEncoder().encode(body), pkBytes)
+    const ok = await ed.verifyAsync(parsed!.signature, new TextEncoder().encode(body), pkBytes)
     expect(ok).toBe(true)
   })
 })
@@ -235,7 +236,10 @@ describe('GET /v1/log-pubkey', () => {
     const vkey = await vkeyRes.text()
     const json = (await jsonRes.json()) as { public_key: string }
 
-    const payloadB64 = vkey.split('+').pop()!
+    // vkey is <origin>+<hex8>+<base64>. Base64 itself may contain '+', so
+    // re-join everything after the first two '+' separators rather than
+    // .pop()ing the last segment.
+    const payloadB64 = vkey.split('+').slice(2).join('+')
     const payload = new Uint8Array(Buffer.from(payloadB64, 'base64'))
     expect(payload.length).toBe(33) // 0x01 type byte + 32-byte Ed25519 pubkey
     expect(payload[0]).toBe(0x01)
@@ -258,7 +262,10 @@ describe('GET /v1/log-pubkey', () => {
     const vkey = await vkeyRes.text()
     const cpText = await cpRes.text()
 
-    const payloadB64 = vkey.split('+').pop()!
+    // vkey is <origin>+<hex8>+<base64>. Base64 itself may contain '+', so
+    // re-join everything after the first two '+' separators rather than
+    // .pop()ing the last segment.
+    const payloadB64 = vkey.split('+').slice(2).join('+')
     const payload = new Uint8Array(Buffer.from(payloadB64, 'base64'))
     const pkBytes = payload.slice(1)
 
@@ -266,10 +273,9 @@ describe('GET /v1/log-pubkey', () => {
     const body = cpText.slice(0, idx + 1)
     const sigBlock = cpText.slice(idx + 2)
     const sigLine = sigBlock.split('\n').find((l) => l.startsWith('\u2014'))!
-    const sigB64 = sigLine.match(/^\u2014 \S+ [0-9a-f]{8}\+(\S+)$/)![1]
-    const sigBytes = new Uint8Array(Buffer.from(sigB64, 'base64'))
+    const parsed = parseSignatureLine(sigLine.trim())!
 
-    const ok = await ed.verifyAsync(sigBytes, new TextEncoder().encode(body), pkBytes)
+    const ok = await ed.verifyAsync(parsed.signature, new TextEncoder().encode(body), pkBytes)
     expect(ok).toBe(true)
   })
 })

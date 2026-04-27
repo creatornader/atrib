@@ -217,22 +217,20 @@ function parseCheckpoint(text) {
   const rootB64 = lines[2]
   const rootHash = new Uint8Array(Buffer.from(rootB64, 'base64'))
 
-  // Parse signature lines per atrib spec §2.4.3:
-  //   "— <origin> <hexKeyId>+<sigBase64>\n"
-  //
-  // Note this is NOT identical to C2SP signed-note's "— <name> <base64(keyHash||sig)>"
-  // form; atrib uses an explicit hex/base64 split with a literal '+' delimiter.
-  // sumdb/note verifiers won't parse this without an adapter (separate finding,
-  // worth a follow-up ADR — but the implementation is what it is and the
-  // verifier matches what the log produces).
+  // Parse signature lines per atrib spec §2.4.3 (post-D031):
+  //   "— <origin> <base64(keyHash[4B] || sig[64B])>\n"
+  // C2SP signed-note canonical encoding. Parses cleanly via
+  // golang.org/x/mod/sumdb/note.NewVerifier without a custom adapter.
   const sigs = []
   for (const line of sigBlock.split('\n')) {
     if (!line.trim()) continue
-    const m = line.match(/^[—\-] (\S+) ([0-9a-f]{8})\+(\S+)$/)
+    const m = line.match(/^[—\-] (\S+) (\S+)\s*$/)
     if (!m) continue
     const sigOrigin = m[1]
-    const keyId = new Uint8Array(Buffer.from(m[2], 'hex'))
-    const signature = new Uint8Array(Buffer.from(m[3], 'base64'))
+    const decoded = new Uint8Array(Buffer.from(m[2], 'base64'))
+    if (decoded.length !== 4 + 64) continue
+    const keyId = decoded.slice(0, 4)
+    const signature = decoded.slice(4)
     sigs.push({ sigOrigin, keyId, signature })
   }
 

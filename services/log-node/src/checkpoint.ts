@@ -36,6 +36,46 @@ export interface CheckpointSigner {
 }
 
 /**
+ * Parsed C2SP signed-note signature line per spec §2.4.3.
+ */
+export interface ParsedSignatureLine {
+  origin: string
+  keyId: Uint8Array
+  signature: Uint8Array
+}
+
+/**
+ * Parse a single signature line from a C2SP signed-note (one line of the
+ * post-blank-line signature block):
+ *
+ *   "— <key_name> <base64(keyHash[4B] || sig[64B])>"
+ *
+ * Returns null if the line doesn't conform (wrong shape, wrong byte count,
+ * or undecodable base64). Used by tests, the live dogfood verifier, and
+ * any third-party verifier that wants to parse atrib checkpoints.
+ */
+export function parseSignatureLine(line: string): ParsedSignatureLine | null {
+  // Em-dash U+2014, then space, then key name, then space, then base64 token.
+  // Accept ASCII hyphen as a fallback for tooling that strips wide chars.
+  const m = line.match(/^[—\-] (\S+) (\S+)\s*$/)
+  if (!m) return null
+  const origin = m[1] as string
+  const sigToken = m[2] as string
+  let decoded: Uint8Array
+  try {
+    decoded = new Uint8Array(Buffer.from(sigToken, 'base64'))
+  } catch {
+    return null
+  }
+  if (decoded.length !== 4 + 64) return null
+  return {
+    origin,
+    keyId: decoded.slice(0, 4),
+    signature: decoded.slice(4),
+  }
+}
+
+/**
  * Format a verifier key string per the C2SP signed-note vkey format
  * (c2sp.org/signed-note). Output:
  *
@@ -143,7 +183,6 @@ export function createCheckpointSigner(
   origin: string,
 ): CheckpointSigner {
   const keyId = computeKeyId(origin, publicKey)
-  const keyIdHex = Buffer.from(keyId).toString('hex')
 
   return {
     get publicKey(): Uint8Array {
@@ -162,14 +201,19 @@ export function createCheckpointSigner(
       const body = formatCheckpointBody(origin, treeSize, rootHash)
       const bodyBytes = new TextEncoder().encode(body)
       const sigBytes = await ed.signAsync(bodyBytes, privateKey)
-      const sigBase64 = Buffer.from(sigBytes).toString('base64')
+      // C2SP signed-note canonical encoding: base64(keyHash[4B] || sig[64B]).
+      // Per spec §2.4.3 (post-D031). Parsed by golang.org/x/mod/sumdb/note.
+      const combined = new Uint8Array(keyId.length + sigBytes.length)
+      combined.set(keyId, 0)
+      combined.set(sigBytes, keyId.length)
+      const sigToken = Buffer.from(combined).toString('base64')
       // The signed-note format uses em-dash (U+2014), not ASCII hyphen-minus.
       // This follows the Go note.Signature format (golang.org/x/mod/sumdb/note)
       // which is the reference implementation for C2SP signed-notes.
       //
       // Signed note format per spec Section 2.4.3:
       //   body\n\n— origin keyIdHex+sigBase64\n
-      return `${body}\n\u2014 ${origin} ${keyIdHex}+${sigBase64}\n`
+      return `${body}\n\u2014 ${origin} ${sigToken}\n`
     },
   }
 }

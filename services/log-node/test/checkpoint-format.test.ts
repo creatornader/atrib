@@ -15,6 +15,7 @@ import {
   formatCheckpointBody,
   parseCheckpointBody,
   createCheckpointSigner,
+  parseSignatureLine,
 } from '../src/checkpoint.js'
 
 ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
@@ -76,7 +77,12 @@ describe('checkpoint signer', () => {
     // Structure: body\n\n— origin keyid+sig\n
     expect(note).toContain('log.test.io')
     expect(note).toContain('\n\n\u2014 ') // em-dash separator
-    expect(note).toContain('+') // keyid+sig separator
+    // C2SP signed-note: signature line parses as base64 of (keyHash || sig).
+    const sigLine = note.split('\n\n')[1]!.trim()
+    const parsed = parseSignatureLine(sigLine)
+    expect(parsed).not.toBeNull()
+    expect(parsed!.keyId.byteLength).toBe(4)
+    expect(parsed!.signature.byteLength).toBe(64)
   })
 
   it('key ID is deterministic for same key and origin', async () => {
@@ -115,16 +121,15 @@ describe('checkpoint signer', () => {
     const root = new Uint8Array(32).fill(0xdd)
     const note = await signer.sign(10, root)
 
-    // Parse the note
+    // Parse the note (C2SP signed-note canonical encoding, spec §2.4.3).
     const parts = note.split('\n\n')
     const body = parts[0]! + '\n'
     const sigLine = parts[1]!.trim()
-    const plusIdx = sigLine.indexOf('+')
-    const sigBase64 = sigLine.slice(plusIdx + 1)
-    const sigBytes = Buffer.from(sigBase64, 'base64')
+    const parsed = parseSignatureLine(sigLine)
+    expect(parsed).not.toBeNull()
 
     const bodyBytes = new TextEncoder().encode(body)
-    const valid = await ed.verifyAsync(new Uint8Array(sigBytes), bodyBytes, publicKey)
+    const valid = await ed.verifyAsync(parsed!.signature, bodyBytes, publicKey)
     expect(valid).toBe(true)
   })
 

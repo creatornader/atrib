@@ -12,8 +12,14 @@ export {
 export { createMerkleTree } from './tree.js'
 export type { MerkleTree } from './tree.js'
 
-export { createCheckpointSigner, formatCheckpointBody, parseCheckpointBody } from './checkpoint.js'
-export type { CheckpointSigner } from './checkpoint.js'
+export {
+  createCheckpointSigner,
+  formatCheckpointBody,
+  parseCheckpointBody,
+  parseSignatureLine,
+  formatVkey,
+} from './checkpoint.js'
+export type { CheckpointSigner, ParsedSignatureLine } from './checkpoint.js'
 
 export { bindServer } from './server.js'
 export type { ServerHandle } from './server.js'
