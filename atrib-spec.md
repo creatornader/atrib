@@ -914,13 +914,28 @@ key_id = SHA-256(
 key_name = "log.atrib.dev/v1"
 ```
 
-The verifier key string published at `log.atrib.dev/v1/log-pubkey` encodes the key name, key ID, and public key in the C2SP vkey format:
+The log MUST publish its public key at two endpoints, both serving the same key:
 
-```
-// vkey format: +hex(key_id)+base64(sig_type_byte || public_key)
-log.atrib.dev/v1+a3b2c1d0+AQ...base64encodedpublickey...==
-// "AQ" is base64(0x01), the Ed25519 signature type byte
-```
+1. **`GET /v1/log-pubkey`** returns the verifier key string in the C2SP signed-note vkey format as `text/plain`. This is the canonical key-publication format expected by C2SP-conformant tooling (e.g. `golang.org/x/mod/sumdb/note.NewVerifier`):
+
+   ```
+   // vkey format: <origin>+hex(key_id)+base64(sig_type_byte || public_key)
+   log.atrib.dev/v1+a3b2c1d0+AQ...base64encodedpublickey...==
+   // "AQ" is base64(0x01), the Ed25519 signature type byte
+   ```
+
+2. **`GET /v1/pubkey`** returns the same key as `application/json` for hand-rolled verifiers and dogfood scripts that prefer structured access:
+
+   ```json
+   {
+     "origin":     "log.atrib.dev/v1",
+     "public_key": "<base64url 32B>",
+     "key_id":     "<hex 4B>",
+     "algorithm":  "Ed25519"
+   }
+   ```
+
+Both endpoints MUST be served from the same signing key, MUST agree on `origin` and `key_id`, and MUST decode to the same 32-byte Ed25519 public key. A verifier MAY use either endpoint. The `key_id` published at either endpoint MUST equal the 4-byte hex prefix on every signature line of `/v1/checkpoint` (§2.4.3).
 
 #### 2.4.3 Signed Note Format
 
@@ -2288,6 +2303,7 @@ const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
 | policy           | object     | Optional | Inline attribution policy document (§4.2). If provided, served at `/.well-known/atrib-policy.json`. If absent, a 404 is served at that path (default policy applies for callers).                                                                                                                                                                                                                                                                                      |
 | serverUrl        | string     | Optional | Canonical URL of this MCP server, used to compute `content_id` values (§1.2.2). Default: derived from the server's HTTP host header. MUST be set explicitly for stdio transport where no host header is available.                                                                                                                                                                                                                                                     |
 | transactionTools | string\[\] | Optional | Array of tool names that complete commerce transactions. When a successful call to one of these tools is detected, `@atrib/mcp` emits a `transaction` record (event_type: "transaction") rather than a `tool_call` record. This is how Path 1 merchant-side transaction emission (§5.4.5) is implemented. The merchant's checkout tool name(s) should be listed here. If not set, `@atrib/mcp` emits only `tool_call` records and Path 2 agent-side detection applies. |
+| onRecord         | function   | Optional | `(record: AtribRecord) => void \| Promise<void>`. Observer invoked once per signed record AFTER signing and BEFORE log submission. Lets a host persist or audit the record locally; without this hook the original signed JSON is unrecoverable because the log stores only commitments (§2.10). Errors thrown or promises rejected by the observer are caught and warned via `console.warn`; they MUST NOT block submission, MUST NOT affect the attribution token in `_meta`, and MUST NOT affect the tool response, preserving the §5.8 degradation contract. Typical uses: dogfood verification (replay `verifyRecord` against `creator_key`), local audit trail, replay debugging.                                                                                  |
 
 #### 5.3.2 Inbound Context Reading
 
@@ -2332,6 +2348,8 @@ const signed = signRecord(record, creatorKey)             // §1.4.2, synchronou
 ```
 
 Record construction and signing MUST complete before the response is returned to the caller. Log submission (§5.3.5) MUST happen after the response is sent and is always non-blocking, including for transaction records. See §5.3.5 for submission behavior, retry logic, and the priority distinction between transaction and tool_call records.
+
+**Optional observer hook.** If an `onRecord` callback was provided at init (§5.3.1), the middleware MUST invoke it with the signed record after signing completes and before log submission begins. This is the only point at which the original signed JSON is observable to the host, because the log itself stores only commitments (§2.10). The observer is invoked synchronously from the middleware's perspective: a returned Promise is not awaited, but rejections are captured and logged. Errors thrown or promises rejected by the observer MUST NOT propagate to the tool response, MUST NOT prevent log submission, and MUST NOT affect the attribution token written in §5.3.4. This preserves the §5.8 degradation contract.
 
 **Note (Tool call failures):** Attribution records are only emitted for successful tool calls (`isError: false`). A tool call that returns an error does not generate an attribution record and does not extend the chain. The OTel span for the failed call will create a gap node in the graph (§3.2.5), visible as an unsigned hop.
 
