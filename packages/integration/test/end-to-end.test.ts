@@ -147,7 +147,7 @@ describe('End-to-end attribution flow', () => {
     expect([...sessionTokens][0]).toBe('integration-test-session')
 
     // ── 6. Build the graph ──────────────────────────────────────────────
-    const graph = buildGraphFromRecords(store.records, contextId)
+    const graph = await buildGraphFromRecords(store.records, contextId)
     expect(graph.has_transaction).toBe(true)
     expect(graph.node_count).toBe(3)
 
@@ -254,7 +254,7 @@ describe('End-to-end attribution flow', () => {
         await new Promise((resolve) => setTimeout(resolve, 50))
 
         const ctxId = localStore.records[0]!.context_id
-        const graph = buildGraphFromRecords(localStore.records, ctxId)
+        const graph = await buildGraphFromRecords(localStore.records, ctxId)
         return calculate(graph, DEFAULT_POLICY)
       } finally {
         localStore.restore()

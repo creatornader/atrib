@@ -14,7 +14,8 @@ import { computeContentId } from './content-id.js'
 import { genesisChainRoot } from './chain-root.js'
 import { readInboundContext, writeOutboundContext, parseBaggageAtribSession } from './context.js'
 import { signRecord, getPublicKey } from './signing.js'
-import { hexEncode } from './hash.js'
+import { hexEncode, sha256 } from './hash.js'
+import { canonicalRecord } from './canon.js'
 import { createSubmissionQueue } from './submission.js'
 import { zeroize } from './zeroize.js'
 import type { AtribRecord } from './types.js'
@@ -43,6 +44,30 @@ export interface AtribOptions {
    * local audit trail, debugging "what exactly did we sign?".
    */
   onRecord?: (record: AtribRecord) => void | Promise<void>
+  /**
+   * Opt-in: synthesize chain context within a single middleware instance when
+   * the calling agent does not propagate atrib's outbound `_meta.atrib` token
+   * back into subsequent requests. Default false.
+   *
+   * When true:
+   *   - If a request arrives with no inbound atrib chain context AND no
+   *     `_meta.traceparent`, the middleware uses a stable process-lifetime
+   *     context_id so successive calls share a trace.
+   *   - Within each context_id, the middleware remembers the most recent
+   *     signed record's hash and uses it as `chain_root` for the next call,
+   *     forming `CHAIN_PRECEDES` edges between successive tool calls.
+   *
+   * Why opt-in: spec-conformant behavior is "chain reflects propagated agent
+   * context." For agents that DO propagate, autoChain would clobber explicit
+   * intent. For agents that don't (Claude Code, Cursor, generic stdio hosts),
+   * autoChain turns "every call is a genesis" into "every call links to its
+   * predecessor in this process," which is the dogfood-loop's intended
+   * semantic — the agent observed every prior call's result before making
+   * the next one.
+   *
+   * Set via the `ATRIB_AUTO_CHAIN=1` env var in atrib-wrapper.
+   */
+  autoChain?: boolean
 }
 
 /** Extended McpServer with atrib-specific methods. */
@@ -99,6 +124,13 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   }
   const transactionTools = new Set(options.transactionTools ?? [])
   const queue: SubmissionQueue = createSubmissionQueue(options.logEndpoint)
+
+  // autoChain bookkeeping (process-lifetime, opt-in via options.autoChain).
+  // Stable context_id for sessions where the caller never sets traceparent;
+  // and per-context_id last-signed-record-hash for chain synthesis.
+  const autoChain = options.autoChain === true
+  let stableContextId: string | undefined
+  const lastRecordHashByContext = new Map<string, string>()
 
   // §5.6.3: Track whether destroy() has been called. After destroy, the
   // private key is zeroed and no further signing is possible.
@@ -221,9 +253,21 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
           }
         }
         if (!contextId) {
-          const bytes = new Uint8Array(16)
-          crypto.getRandomValues(bytes)
-          contextId = hexEncode(bytes)
+          if (autoChain) {
+            // Stable across the wrapper process's lifetime so successive
+            // calls share a trace. Without this, autoChain has no effect
+            // because every call would land in its own context_id bucket.
+            if (!stableContextId) {
+              const bytes = new Uint8Array(16)
+              crypto.getRandomValues(bytes)
+              stableContextId = hexEncode(bytes)
+            }
+            contextId = stableContextId
+          } else {
+            const bytes = new Uint8Array(16)
+            crypto.getRandomValues(bytes)
+            contextId = hexEncode(bytes)
+          }
         }
 
         // session_token can come from inbound context or directly from baggage
@@ -235,10 +279,17 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
         // Forward traceparent to outbound _meta (§1.5.4)
         const inboundTraceparent = meta?.traceparent
 
-        // Determine chain_root
+        // Determine chain_root.
+        // 1. Prefer explicit inbound atrib propagation (the spec-canonical path).
+        // 2. With autoChain on, fall back to the most recent record this
+        //    middleware instance signed for this context_id. This synthesizes
+        //    chains for hosts that don't propagate atrib's outbound token.
+        // 3. Otherwise, genesis.
         let chainRootValue: string
         if (inbound) {
           chainRootValue = `sha256:${hexEncode(inbound.recordHash)}`
+        } else if (autoChain && lastRecordHashByContext.has(contextId)) {
+          chainRootValue = `sha256:${lastRecordHashByContext.get(contextId)!}`
         } else {
           chainRootValue = genesisChainRoot(contextId)
         }
@@ -263,6 +314,14 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
 
         // §1.4.2: Sign the record
         const signed = await signRecord(record, privateKey)
+
+        // autoChain bookkeeping: remember this record's hash so the next
+        // call in the same context_id chains to it. Computed AFTER signing
+        // so the hash matches what the log will see.
+        if (autoChain) {
+          const newHash = hexEncode(sha256(canonicalRecord(signed)))
+          lastRecordHashByContext.set(contextId, newHash)
+        }
 
         // Optional onRecord observer (post-sign, pre-submit). Errors are
         // swallowed per §5.8 — observation must never affect the tool call.

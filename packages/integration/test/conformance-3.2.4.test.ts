@@ -88,13 +88,23 @@ function assertGraphsAgree(a: GraphResponse, b: GraphResponse): void {
   expect(aEdges).toEqual(bEdges)
 
   expect(a.has_transaction).toBe(b.has_transaction)
+
+  // verification_state per node must match — both impls must mark a tampered
+  // record the same way, otherwise downstream policy filters disagree.
+  const aStates = a.nodes
+    .map((n) => `${n.id}:${n.verification_state}`)
+    .sort()
+  const bStates = b.nodes
+    .map((n) => `${n.id}:${n.verification_state}`)
+    .sort()
+  expect(aStates).toEqual(bStates)
 }
 
 describe('§3.2.4 cross-implementation conformance', () => {
   it('agrees on a single genesis record', async () => {
     const r = await makeRecord()
     const gnGraph = await buildGraph([r])
-    const intGraph = buildGraphFromRecords([r], CTX_1)
+    const intGraph = await buildGraphFromRecords([r], CTX_1)
     assertGraphsAgree(gnGraph, intGraph)
   })
 
@@ -107,7 +117,7 @@ describe('§3.2.4 cross-implementation conformance', () => {
       content_id: `sha256:${'d'.repeat(64)}`,
     })
     const gnGraph = await buildGraph([r1, r2])
-    const intGraph = buildGraphFromRecords([r1, r2], CTX_1)
+    const intGraph = await buildGraphFromRecords([r1, r2], CTX_1)
     assertGraphsAgree(gnGraph, intGraph)
     expect(gnGraph.edges.filter((e: GraphEdge) => e.type === 'CHAIN_PRECEDES')).toHaveLength(1)
   })
@@ -116,7 +126,7 @@ describe('§3.2.4 cross-implementation conformance', () => {
     const r1 = await makeRecord({ timestamp: 1000, content_id: `sha256:${'e'.repeat(64)}` })
     const r2 = await makeRecord({ timestamp: 1000, content_id: `sha256:${'f'.repeat(64)}` })
     const gnGraph = await buildGraph([r1, r2])
-    const intGraph = buildGraphFromRecords([r1, r2], CTX_1)
+    const intGraph = await buildGraphFromRecords([r1, r2], CTX_1)
     assertGraphsAgree(gnGraph, intGraph)
   })
 
@@ -129,7 +139,7 @@ describe('§3.2.4 cross-implementation conformance', () => {
       content_id: `sha256:${'3'.repeat(64)}`,
     })
     const gnGraph = await buildGraph([r1, r2, tx])
-    const intGraph = buildGraphFromRecords([r1, r2, tx], CTX_1)
+    const intGraph = await buildGraphFromRecords([r1, r2, tx], CTX_1)
     assertGraphsAgree(gnGraph, intGraph)
     expect(gnGraph.edges.filter((e: GraphEdge) => e.type === 'CONVERGES_ON')).toHaveLength(2)
   })
@@ -167,11 +177,52 @@ describe('§3.2.4 cross-implementation conformance', () => {
     // buildGraphFromRecords filters to a contextId; pass the transaction
     // session's contextId so cross-session walks back into CTX_1.
     const gnGraph = await buildGraph(all)
-    const intGraph = buildGraphFromRecords(all, CTX_2)
+    const intGraph = await buildGraphFromRecords(all, CTX_2)
 
     assertGraphsAgree(gnGraph, intGraph)
     const crossEdges = gnGraph.edges.filter((e: GraphEdge) => e.type === 'CROSS_SESSION')
     expect(crossEdges).toHaveLength(1)
+  })
+
+  it('agrees on a tampered record (verification_state divergence regression)', async () => {
+    // Sign a record, then corrupt one byte of its payload AFTER signing. Both
+    // implementations must mark the resulting node as 'unsigned'. Without
+    // signature verification in buildGraphFromRecords this test fails because
+    // the integration impl would hardcode 'signature_valid' on the tampered
+    // record while graph-node correctly flags it.
+    const r = await makeRecord({ timestamp: 5000 })
+    const tampered = { ...r, content_id: `sha256:${'9'.repeat(64)}` }
+
+    const gnGraph = await buildGraph([tampered])
+    const intGraph = await buildGraphFromRecords([tampered], CTX_1)
+    assertGraphsAgree(gnGraph, intGraph)
+
+    // Both impls must concretely flag the node as not-valid, not silently
+    // accept it.
+    expect(gnGraph.nodes[0]!.verification_state).not.toBe('signature_valid')
+    expect(intGraph.nodes[0]!.verification_state).not.toBe('signature_valid')
+  })
+
+  it('agrees on multiple transactions in the same session', async () => {
+    // §3.2.4 step 4: each transaction emits CONVERGES_ON edges from every
+    // non-tx node. Two transactions on two non-tx tool calls = 2 * 2 = 4 edges.
+    const r1 = await makeRecord({ timestamp: 1000, content_id: `sha256:${'4'.repeat(64)}` })
+    const r2 = await makeRecord({ timestamp: 2000, content_id: `sha256:${'5'.repeat(64)}` })
+    const tx1 = await makeRecord({
+      event_type: 'transaction',
+      timestamp: 3000,
+      content_id: `sha256:${'6'.repeat(64)}`,
+    })
+    const tx2 = await makeRecord({
+      event_type: 'transaction',
+      timestamp: 4000,
+      content_id: `sha256:${'7'.repeat(64)}`,
+    })
+    const gnGraph = await buildGraph([r1, r2, tx1, tx2])
+    const intGraph = await buildGraphFromRecords([r1, r2, tx1, tx2], CTX_1)
+    assertGraphsAgree(gnGraph, intGraph)
+    const converges = gnGraph.edges.filter((e: GraphEdge) => e.type === 'CONVERGES_ON')
+    expect(converges).toHaveLength(4)
   })
 
   it('agrees under reverse input ordering (deterministic)', async () => {
@@ -188,7 +239,7 @@ describe('§3.2.4 cross-implementation conformance', () => {
     expect(normalizeEdges(fwd.edges)).toEqual(normalizeEdges(rev.edges))
 
     // And both reorderings agree with the integration impl
-    const intFwd = buildGraphFromRecords([r1, r2, tx], CTX_1)
+    const intFwd = await buildGraphFromRecords([r1, r2, tx], CTX_1)
     assertGraphsAgree(fwd, intFwd)
     assertGraphsAgree(rev, intFwd)
   })
