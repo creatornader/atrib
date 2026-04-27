@@ -81,13 +81,13 @@ async function makeAgent(label) {
   return { label, privateKey, publicKey, creatorKey: b64url(publicKey) }
 }
 
-async function emitRecord(agent, contextId, toolName, chainRoot) {
+async function emitRecord(agent, contextId, toolName, chainRoot, eventType = 'tool_call') {
   const unsigned = {
     spec_version: 'atrib/1.0',
     content_id: computeContentId('demo://multi-agent.atrib.dev', toolName),
     creator_key: agent.creatorKey,
     chain_root: chainRoot,
-    event_type: 'tool_call',
+    event_type: eventType,
     context_id: contextId,
     timestamp: Date.now(),
     signature: '',
@@ -120,15 +120,23 @@ async function main() {
   let priorRecordHash = null
   let stepIndex = 0
 
+  // Agent B's final record is a transaction (event_type 0x02). This gives the
+  // calculation algorithm (§4.6) a settlement event to attribute against,
+  // and exercises §1.7 / §5.4.5 transaction emission inside a multi-agent
+  // chain.
+  const totalSteps = PER_AGENT * 2
   for (const agent of [agentA, agentB]) {
     for (let i = 0; i < PER_AGENT; i++) {
       const chainRoot = priorRecordHash
         ? `sha256:${priorRecordHash}`
         : genesisChainRoot(contextId)
       const toolName = `agent-${agent.label.toLowerCase()}/step-${i}`
-      const { recordHash, proof } = await emitRecord(agent, contextId, toolName, chainRoot)
+      const isFinal = stepIndex === totalSteps - 1
+      const eventType = isFinal ? 'transaction' : 'tool_call'
+      const { recordHash, proof } = await emitRecord(agent, contextId, toolName, chainRoot, eventType)
+      const evMark = eventType === 'transaction' ? ' [tx]' : ''
       console.log(
-        `[${String(stepIndex).padStart(2)}]   ${agent.label}      ${chainRoot.slice(7, 23)}…  ${recordHash.slice(0, 16)}…  ${String(proof.log_index).padStart(9)}`,
+        `[${String(stepIndex).padStart(2)}]   ${agent.label}      ${chainRoot.slice(7, 23)}…  ${recordHash.slice(0, 16)}…  ${String(proof.log_index).padStart(9)}${evMark}`,
       )
       priorRecordHash = recordHash
       stepIndex++
