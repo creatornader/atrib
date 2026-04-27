@@ -12,7 +12,8 @@
     "clean": "rm -rf dist",
     "start": "tsx src/main.ts",
     "verify-log": "node scripts/verify-loop.mjs",
-    "chain-demo": "node scripts/chain-demo.mjs"
+    "chain-demo": "node scripts/chain-demo.mjs",
+    "metrics": "node scripts/metrics.mjs"
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
