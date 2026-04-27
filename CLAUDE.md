@@ -13,9 +13,11 @@ atrib/
   README.md                    # Public-facing project description (customer entry point)
   CLAUDE.md                    # THIS FILE: hub doc, conventions, invariants
   atrib-spec.md                # The single source of truth for the protocol
-  DECISIONS.md                 # Architectural decision log (D001-D025+)
+  DECISIONS.md                 # Architectural decision log (D001-D032+)
   ARCHITECTURE.md              # Technical architecture overview: trust model, protocol layers, design decisions
   PRIOR-ART.md                 # Prior art & standards map: every spec/protocol atrib builds on, organized by layer
+  METRICS.md                   # Tiered metrics framework + lifecycle states + quarterly evolution review for the dogfood experiment
+  metrics/                     # Dated JSON snapshots from `pnpm --filter @atrib/log-node metrics`
   packages/
     mcp/                       # @atrib/mcp: MCP server middleware (public)
     agent/                     # @atrib/agent: Agent middleware + framework adapters (public)
@@ -31,7 +33,8 @@ atrib/
   policies/                     # Attribution policy templates and guide (6 templates + README)
   services/
     log/                       # FUTURE: Tessera-backed Merkle log (Go), placeholder README
-    log-node/                  # Production Node.js Merkle log with real RFC 6962 proofs (private, not published)
+    log-node/                  # Production Node.js Merkle log with real RFC 6962 proofs. Deployed at https://log.atrib.dev/v1 with persistent Fly volume + C2SP-canonical signed-note checkpoints. Includes scripts/verify-loop.mjs (13-gate dogfood verifier), scripts/chain-demo.mjs, scripts/multi-agent-demo.mjs, scripts/metrics.mjs.
+    graph-node/                # Production Node.js graph query service. Implements §3.2.4 derivation. Deployed at https://graph.atrib.dev/v1.
   spec/
     conformance/
       1.4/                     # Signing conformance corpus (test vectors for §1.4)
@@ -54,6 +57,7 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 | `ARCHITECTURE.md`           | Technical architecture overview: trust model, protocol layers, payment integration, design decisions |
 | `DECISIONS.md`              | Architectural decision log: what was decided, why, what alternatives were considered                 |
 | `PRIOR-ART.md`              | Every standard and protocol atrib builds on, extends, or hooks into, organized by layer              |
+| `METRICS.md`                | Tiered metrics framework, metric lifecycle states, quarterly evolution review process, annual meta-review for the dogfood experiment |
 
 ## Sync triggers
 
@@ -69,6 +73,8 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 | §2.6.1 validation rule changed        | Regenerate `spec/conformance/2.6.1/` corpus via `pnpm --filter @atrib/log-dev corpus`, update `spec/conformance/2.6.1/README.md` if the format changed                                                           |
 | Prior art landscape changed           | Update `PRIOR-ART.md` with new entries                                                                                                                                                                           |
 | Test count changed materially         | `README.md` and `CONTRIBUTING.md` test count references                                                                                                                                                          |
+| Metric added/removed/promoted/demoted | `METRICS.md` (table entry + lifecycle status) AND `services/log-node/scripts/metrics.mjs` (`METRICS` array, `name`, `tier`, `status`, `decisionSupported`, `run`). Both must agree.                              |
+| New deployed service                  | This file (repository structure) AND `README.md` (deployed-service URL note) AND `ARCHITECTURE.md` (operator footprint) AND `services/<name>/fly.toml` if Fly-deployed                                            |
 
 ## Critical invariants (never violate)
 
