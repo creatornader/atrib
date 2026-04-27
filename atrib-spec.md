@@ -4,7 +4,7 @@
 
 Editor: Nader Helmy
 
-This specification defines the atrib protocol for verifiable agent actions. When an AI agent calls a tool, atrib creates a signed record at the moment of action, chains it forward into the next call, and commits it to an append-only Merkle log. Any party can independently verify what an agent did, in what order, with what causal structure. When tool calls converge on a transaction, a deterministic algorithm computes a value distribution from the resulting graph under an agreed policy, producing a settlement document anyone can recompute. The spec covers the record format (§1) including key rotation (§1.9), the log protocol (§2), the graph model (§3), policies and the distribution algorithm (§4), the SDK middleware contracts (§5), and the public-key directory (§6).
+This specification defines the atrib protocol for verifiable agent actions. When an AI agent calls a tool, atrib creates a signed record at the moment of action, chains it forward into the next call, and commits it to an append-only Merkle log. Any party can independently verify what an agent did, in what order, with what causal structure. When tool calls converge on a transaction, a deterministic algorithm computes a value distribution from the resulting graph under an agreed policy, producing a settlement document anyone can recompute. The spec covers the record format (§1) including key rotation (§1.9), the log protocol (§2), the graph model (§3), policies and the distribution algorithm (§4), the SDK middleware contracts (§5), the public-key directory (§6), and informative integration patterns for agent harnesses (§7).
 
 ---
 
@@ -17,6 +17,7 @@ This specification defines the atrib protocol for verifiable agent actions. When
 - [§4 Attribution Policy Format](#4-attribution-policy-format)
 - [§5 SDK Specification](#5-sdk-specification)
 - [§6 Key Directory](#6-key-directory)
+- [§7 Harness Integration Patterns](#7-harness-integration-patterns) (informative)
 - [Appendix A: Test Vectors](#appendix-a-test-vectors)
 
 ---
@@ -3152,6 +3153,54 @@ Implementations MUST pass all vectors in `spec/conformance/6/`:
 **Directory-key rotation.** The directory operator's signing key has the same rotation problem as the log key. Same V2 deferral.
 
 **Cross-directory federation.** Multiple directories operated by different parties cannot today produce consistent answers about the same creator_key. Federation is a V2 concern.
+
+---
+
+## §7 Harness Integration Patterns
+
+_This section is informative._
+
+atrib is a substrate. Agent harnesses (also called runtimes: Claude Code, Cursor, in-house agent products, custom MCP hosts) are the surfaces an end-user actually interacts with. The substrate's value is mostly invisible without a harness that surfaces signed history back to the agent.
+
+This section documents three patterns for consuming the substrate from a harness. **None is prescribed.** Harnesses with different ergonomic constraints (interactive vs batch, single-agent vs multi-agent, cloud-hosted vs local) will pick different patterns. The patterns are documented so harness builders have a starting point, not so atrib has a canonical harness shape.
+
+### 7.1 The Session-Start surfacing pattern
+
+A harness exposes the agent's recent atrib history at the start of every session as additional context. The agent reads "you have N signed prior actions across M traces, root sha256:..., verify at log..." and, when prior actions are relevant to the current task, reaches for them via a tool call.
+
+**Why this pattern.** Cheap (constant ~200 tokens per session), accurate (cryptographic root in-context means the agent treats history as provable rather than vibes-based), and harness-agnostic (any host that can inject session-start context can adopt it).
+
+**Where it falls short.** Stateless across turns within a session: the agent only sees the summary at start, not after each tool call. For agents whose work shape changes mid-session, a per-turn surfacing is needed (pattern 7.3).
+
+### 7.2 The recall-tool pattern
+
+A harness exposes a tool (typically MCP) like `recall_my_attribution_history` that the agent calls on-demand. The tool reads a local mirror of signed records, verifies signatures, and returns paginated records. Filters by trace, event type, and time window are useful.
+
+**Why this pattern.** Lazy: the agent pays the token cost only when it actively wants to consult its past. Composes cleanly with the session-start pattern (the start surface tells the agent the tool exists; the tool serves the content).
+
+**Where it falls short.** The agent has to know to call it. Some agents won't unless explicitly nudged.
+
+### 7.3 The persisted-mirror pattern
+
+A harness writes every signed record to a local jsonl mirror as the wrapper produces it (via `onRecord` from §5.3). The mirror is durable across sessions and harness restarts. Other consumers (the recall tool from 7.2, an offline replay verifier, a compliance audit pipeline) read from the mirror.
+
+**Why this pattern.** Closes the gap between "the log stores commitments only" and "the original signed bytes are recoverable for re-verification." Without this, a verifier replaying signatures has no source for the canonical record bytes other than transient memory inside the wrapper.
+
+**Where it falls short.** The mirror is operator-local. Multiple agents running on different machines with the same creator key produce divergent mirrors that don't reconcile automatically. Cross-host reconciliation is a V2 concern.
+
+### 7.4 Composing the patterns
+
+A complete harness integration usually combines all three: the wrapper persists records to a mirror as it signs them (7.3); a session-start hook reads the mirror to surface a shape-only summary (7.1); a tool wired into the agent surface returns content from the mirror on demand (7.2). The recall tool can also verify signatures locally before returning, so the agent's read of its own past is independently re-verifiable, not "trust the mirror."
+
+The reference implementation atrib ships under this pattern is `@atrib/recall` (a single-tool MCP server consuming the mirror). It is one shape among many; harness builders are encouraged to adapt rather than copy.
+
+### 7.5 What the patterns DO NOT do
+
+**They do not validate log inclusion.** Local signature verification proves "this record was signed by that creator_key." It does not prove "this record was committed to log.atrib.dev." A harness that needs the inclusion guarantee fetches an inclusion proof from the log per §2.
+
+**They do not enforce identity claims.** A harness can resolve `creator_key` to an identity claim via the directory (§6) but does not enforce trust in any particular claim. Trust policy is consumer-side.
+
+**They do not prescribe agent behavior.** atrib makes the past provable. What the agent does with that past — whether it reasons more carefully, defers to its prior commitments, recommends past actions to itself — is agent-level concern, not substrate-level concern.
 
 ---
 

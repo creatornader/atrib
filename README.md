@@ -143,6 +143,7 @@ Store the output as `ATRIB_PRIVATE_KEY`. The public key is derived at runtime.
 - **§4:** Policy format, negotiation, calculation algorithm
 - **§5:** SDK contract, automation, degradation guarantees
 - **§6:** Public-key directory (AKD-based; D034)
+- **§7:** Harness integration patterns (informative)
 
 ## Design principles
 
