@@ -1005,6 +1005,98 @@ The spec was updated in §2.4.2 to document both endpoints, with normative MUSTs
 
 ---
 
+## D031: Reconcile §2.4.3 signed-note divergence from C2SP
+
+**Date:** 2026-04-27
+**Status:** Accepted; implemented in commit `096c8a5`
+
+**Context.**
+
+atrib spec §2.4.3 opens with:
+
+> "The complete checkpoint (body plus signatures) is a signed note per the C2SP signed-note specification (c2sp.org/signed-note)."
+
+The paragraph that followed then documented the signature line format as:
+
+```
+— log.atrib.dev/v1 a3b2c1d0+base64(Ed25519-signature-over-body)
+```
+
+where `a3b2c1d0` is the lowercase hex-encoded 4-byte key ID and the base64 token is the 64-byte Ed25519 signature alone, separated from the key ID by a literal `+`. The spec body, in other words, documented a format that differs from C2SP while the spec preamble claimed C2SP conformance. These two statements could not both be true.
+
+The C2SP signed-note specification and its Go reference implementation (`golang.org/x/mod/sumdb/note`) define the signature token as a single base64-encoded 68-byte blob: the 4-byte key hash concatenated with the 64-byte signature. No delimiter. Passing atrib's `hexKeyId+base64Sig` token to `note.NewVerifier` failed; the parser expects one undelimited base64 token, not two fields joined by `+`.
+
+The live log at `log.atrib.dev` produced atrib's format. An example from the dogfood log:
+
+```
+— log.atrib.dev/v1 e5ac1d6d+KK3JiYceLG6YOjyt7DiDGopQ7Kqwes+lAKZztX2OzhC3oeIsSZP2XHjMRjFqtoE8/UUeTV9DZ34nnj4LgUMZBA==
+```
+
+The divergence was discovered while dogfooding `services/log-node/scripts/verify-loop.mjs`. The verifier's original parser assumed C2SP and got the keyId wrong because it was treating hex chars as base64.
+
+**Options.**
+
+**Option A, Align implementation with C2SP (proposed and adopted).**
+
+Change `createCheckpointSigner.sign` in `checkpoint.ts` to produce the C2SP encoding: concatenate the 4-byte key ID and 64-byte signature, base64-encode the resulting 68-byte blob, omit the `+` delimiter. Update spec §2.4.3 to replace the hex+base64 description with the correct C2SP encoding. Update the `parseCheckpoint` function in `verify-loop.mjs` to decode the token as one base64 string and split at byte offset 4.
+
+Consequences:
+- `note.NewVerifier` and every C2SP-conformant tool (tlog-witness, sigsum, cosign tooling) parses atrib checkpoints without adapters.
+- The witness/cosignature work in §2.9 uses standard C2SP tooling with no custom parsers. C2SP conformance for signed notes is a prerequisite for §2.9 implementation; this resolves that blocker.
+- The production log requires a redeploy. Any consumer that parses the current signature format must update its parser.
+- Existing tests that assert the old format string require one-time updates.
+
+**Option B, Amend spec to own the divergence.**
+
+Remove the "per the C2SP signed-note specification" claim from §2.4.3. Replace it with an explicit definition of atrib's hex+base64 form as the protocol's own checkpoint signature format. No code change.
+
+Consequences:
+- No operational risk.
+- atrib checkpoint signatures cannot be parsed by `note.NewVerifier` or any C2SP-conformant tool without a custom adapter. Every integrator who expected C2SP tooling to work needs that adapter explained.
+- Witness/cosignature work (§2.9) requires custom parsers in every participant's toolchain. Ongoing cost, not one-time transition.
+- The C2SP tlog-tiles ecosystem claim in CLAUDE.md becomes inaccurate for the "signed notes" and "witnessing" clauses.
+
+**Option C, Serve both formats.**
+
+Keep the current hex+base64 line and add a second, C2SP-encoded line on the same checkpoint, or serve a parallel `/v1/checkpoint.c2sp` endpoint.
+
+Consequences:
+- Two signature lines from the same signer on the same checkpoint body is unusual in the tlog ecosystem. Witnesses and cosigners add additional lines; the primary signer does not normally sign twice. Verifiers that enforce "exactly one log signature" would reject the checkpoint.
+- Unlike D030's dual key publication (two read-only representations of the same 32 bytes, each around 15 lines of code), two checkpoint signature formats require separate parse paths in every verifier indefinitely.
+- The `+` delimiter in the current format is a parsing ambiguity: base64 standard uses `+` as a base-64 alphabet character. Option C preserves that fragility.
+
+**Decision.**
+
+Option A: align the implementation with C2SP.
+
+The dogfood log at `log.atrib.dev` is in an early phase. The only documented consumer of the checkpoint signature line is `verify-loop.mjs`, and its parser was written to match what the implementation produced rather than what C2SP specifies. Updating that parser was a one-line regex change. No outside tooling is known to have parsed the current format.
+
+The benefit is concrete and durable: every C2SP-conformant verifier, witness client, and cosignature tool works against atrib checkpoints without an adapter. D030 kept both key-publication endpoints because two audiences genuinely needed two formats. There is no analogous argument here: C2SP is the right one for ecosystem reasons, and the current format existed only because the implementation was written before the spec claim was checked against the reference implementation.
+
+**Implementation (commit `096c8a5`).**
+
+Three files changed:
+
+1. `services/log-node/src/checkpoint.ts` `sign()`: concatenate `keyId[4B] || sigBytes[64B]`, base64-encode the 68-byte blob, remove the `+` delimiter. A new `parseSignatureLine` helper was added in the same file and exported from `services/log-node/src/index.ts` for use by tests and verifiers.
+
+2. `atrib-spec.md` §2.4.3 replaced the hex+base64 description with the canonical C2SP encoding. §2.4.2 cross-reference updated from "4-byte hex prefix" to "4 leading bytes of the base64-decoded signature token."
+
+3. `services/log-node/scripts/verify-loop.mjs` `parseCheckpoint` updated to use the C2SP encoding. Six test files (`checkpoint.test.ts`, `checkpoint-format.test.ts`, `verification.test.ts`, `proof-verification.test.ts`, `server.test.ts`, plus the existing tree tests) migrated to `parseSignatureLine`. 83/83 log-node tests pass under the new format.
+
+The deployed log at `log.atrib.dev` was redeployed at 2026-04-27 ~04:00 UTC with the new format. Verified live: `cp.sig.vkey PASS` and 13/13 dogfood verifier gates pass against the persisted tree.
+
+**What this DOESN'T solve.**
+
+- The 4-byte key hash is a truncated SHA-256 prefix. Collision resistance at 4 bytes is weak; atrib follows the C2SP convention rather than widening it. The tlog ecosystem has not moved to longer key identifiers; a future ADR can address this if it does.
+- Key rotation. Unresolved since D028.
+- Witnessing implementation (§2.9). C2SP conformance here is a prerequisite. D032 captures the §2.9 design decisions but does not ship code.
+
+**Acknowledged process failure.**
+
+The divergence was present from the initial commit of `checkpoint.ts`. A round-trip interop test that signs a checkpoint body with the local key and then verifies it with `golang.org/x/mod/sumdb/note.NewVerifier` would have caught the format mismatch before the first deployment. The `verify-loop.mjs` parser was written to match what the implementation produced, so it did not surface the issue during D028 or D029 development. Adding such an interop test to `services/log-node/test/` is a follow-on; it would catch any future regression.
+
+---
+
 ## D032: Witnessing posture for V1, spec defined, no implementation
 
 **Date:** 2026-04-27
