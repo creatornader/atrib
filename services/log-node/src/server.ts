@@ -22,6 +22,7 @@ import { serializeEntry } from './entry.js'
 const TILE_SIZE = 256 // hashes per tile (C2SP tlog-tiles standard)
 import type { MerkleTree } from './tree.js'
 import type { CheckpointSigner } from './checkpoint.js'
+import { formatVkey } from './checkpoint.js'
 
 export interface ServerHandle {
   url: string
@@ -128,6 +129,14 @@ async function handleRequest(
     return handlePubkey(res, signer)
   }
 
+  // GET /v1/log-pubkey — same key as /v1/pubkey but in C2SP signed-note vkey
+  // format (text/plain). Spec §2.4.2 commits to this path; tools like
+  // golang.org/x/mod/sumdb/note.NewVerifier consume vkey strings directly,
+  // so we serve it canonically rather than forcing those tools to JSON-parse.
+  if (req.method === 'GET' && req.url === '/v1/log-pubkey') {
+    return handleLogPubkey(res, signer)
+  }
+
   // §2.5.2: Tile endpoints. GET /v1/tile/<level>/<index>
   const tileMatch = req.url?.match(/^\/v1\/tile\/(\d+)\/(\d+)$/)
   if (req.method === 'GET' && tileMatch) {
@@ -145,7 +154,7 @@ async function handleRequest(
 
   sendJson(res, 404, {
     error: 'not found',
-    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>',
+    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>',
   })
 }
 
@@ -174,6 +183,23 @@ function handlePubkey(res: ServerResponse, signer: CheckpointSigner): void {
     key_id: keyIdHex,
     algorithm: 'Ed25519',
   })
+}
+
+/**
+ * GET /v1/log-pubkey — expose the log's Ed25519 public key in the C2SP
+ * signed-note vkey format (c2sp.org/signed-note). This is the canonical
+ * key-publication format expected by tlog/witness tooling. Spec §2.4.2.
+ *
+ * Returns the same key as /v1/pubkey, just text-encoded:
+ *   <origin>+<hex(key_id)>+<base64(0x01 || public_key)>
+ */
+function handleLogPubkey(res: ServerResponse, signer: CheckpointSigner): void {
+  const vkey = formatVkey(signer.origin, signer.keyId, signer.publicKey)
+  res.statusCode = 200
+  res.setHeader('content-type', 'text/plain; charset=utf-8')
+  res.setHeader('content-length', Buffer.byteLength(vkey))
+  res.setHeader('cache-control', 'public, max-age=300')
+  res.end(vkey)
 }
 
 async function handleSubmit(

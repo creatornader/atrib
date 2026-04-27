@@ -201,3 +201,75 @@ describe('GET /v1/pubkey', () => {
     expect(ok).toBe(true)
   })
 })
+
+describe('GET /v1/log-pubkey', () => {
+  it('returns the C2SP vkey string as text/plain', async () => {
+    const res = await fetch(`${server.url}/v1/log-pubkey`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toMatch(/text\/plain/)
+    const text = await res.text()
+    // Format: <origin>+<hex 8 chars>+<base64 of 33 bytes = 44 chars with padding>
+    const m = text.match(/^(\S+)\+([0-9a-f]{8})\+([A-Za-z0-9+/]+=*)$/)
+    expect(m).not.toBeNull()
+    expect(m![1]).toBe('log.atrib.dev/v1')
+  })
+
+  it('vkey origin and key_id agree with the JSON /v1/pubkey endpoint', async () => {
+    const [vkeyRes, jsonRes] = await Promise.all([
+      fetch(`${server.url}/v1/log-pubkey`),
+      fetch(`${server.url}/v1/pubkey`),
+    ])
+    const vkey = await vkeyRes.text()
+    const json = (await jsonRes.json()) as { origin: string; key_id: string }
+    const m = vkey.match(/^(\S+)\+([0-9a-f]{8})\+/)
+    expect(m).not.toBeNull()
+    expect(m![1]).toBe(json.origin)
+    expect(m![2]).toBe(json.key_id)
+  })
+
+  it('vkey payload decodes to 0x01 + the published public key', async () => {
+    const [vkeyRes, jsonRes] = await Promise.all([
+      fetch(`${server.url}/v1/log-pubkey`),
+      fetch(`${server.url}/v1/pubkey`),
+    ])
+    const vkey = await vkeyRes.text()
+    const json = (await jsonRes.json()) as { public_key: string }
+
+    const payloadB64 = vkey.split('+').pop()!
+    const payload = new Uint8Array(Buffer.from(payloadB64, 'base64'))
+    expect(payload.length).toBe(33) // 0x01 type byte + 32-byte Ed25519 pubkey
+    expect(payload[0]).toBe(0x01)
+
+    const pkFromVkey = payload.slice(1)
+    const pkFromJson = new Uint8Array(
+      Buffer.from(json.public_key.replace(/-/g, '+').replace(/_/g, '/'), 'base64'),
+    )
+    expect(Buffer.from(pkFromVkey).equals(Buffer.from(pkFromJson))).toBe(true)
+  })
+
+  it('pubkey extracted from vkey verifies the checkpoint signature', async () => {
+    const record = await makeSignedRecord()
+    await post(server.url, record)
+
+    const [vkeyRes, cpRes] = await Promise.all([
+      fetch(`${server.url}/v1/log-pubkey`),
+      fetch(`${server.url}/v1/checkpoint`),
+    ])
+    const vkey = await vkeyRes.text()
+    const cpText = await cpRes.text()
+
+    const payloadB64 = vkey.split('+').pop()!
+    const payload = new Uint8Array(Buffer.from(payloadB64, 'base64'))
+    const pkBytes = payload.slice(1)
+
+    const idx = cpText.indexOf('\n\n')
+    const body = cpText.slice(0, idx + 1)
+    const sigBlock = cpText.slice(idx + 2)
+    const sigLine = sigBlock.split('\n').find((l) => l.startsWith('\u2014'))!
+    const sigB64 = sigLine.match(/^\u2014 \S+ [0-9a-f]{8}\+(\S+)$/)![1]
+    const sigBytes = new Uint8Array(Buffer.from(sigB64, 'base64'))
+
+    const ok = await ed.verifyAsync(sigBytes, new TextEncoder().encode(body), pkBytes)
+    expect(ok).toBe(true)
+  })
+})
