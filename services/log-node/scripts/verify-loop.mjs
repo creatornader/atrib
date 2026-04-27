@@ -63,6 +63,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
 import canonicalize from 'canonicalize'
@@ -688,7 +689,32 @@ async function main() {
   process.exit(ok ? 0 : 1)
 }
 
-main().catch(err => {
-  console.error('verify-loop: fatal', err)
-  process.exit(2)
-})
+// Only execute when invoked as a script. Vitest imports this file for unit
+// tests of the pure helpers exported below; in that mode main() must not run.
+const isMain = process.argv[1] === fileURLToPath(import.meta.url)
+if (isMain) {
+  main().catch(err => {
+    console.error('verify-loop: fatal', err)
+    process.exit(2)
+  })
+}
+
+// Pure helpers exposed for unit testing (services/log-node/test/verify-loop-helpers.test.ts).
+// These are the building blocks the daily CI verifier depends on; if any of
+// them is wrong, the verifier silently passes against bad data. Test them in
+// isolation against synthetic fixtures.
+export {
+  sha256,
+  leafHash,
+  nodeHash,
+  largestPowerOfTwoLessThan,
+  computeRoot,
+  computeInclusionProof,
+  verifyInclusion,
+  bytesEqual,
+  parseCheckpoint,
+  parseEntryBundle,
+  parseEntry,
+  b64urlDecode,
+  b64urlEncode,
+}
