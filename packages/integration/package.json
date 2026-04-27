@@ -7,7 +7,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
-    "demo": "tsx examples/end-to-end/demo.ts"
+    "demo": "tsx examples/end-to-end/demo.ts",
+    "calc-demo": "tsx scripts/calc-demo.ts"
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
