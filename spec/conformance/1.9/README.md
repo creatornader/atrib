@@ -10,7 +10,7 @@ any third-party implementation that consumes atrib records.
 ## Status
 
 **Skeleton.** The cases are enumerated below; the JSON fixtures will be
-generated alongside the rotation implementation in Phase 3 of the gap-closure
+generated alongside the rotation implementation in an upcoming phase
 plan. The skeleton exists so external implementers reading the spec know the
 exact set of cases that will arrive.
 

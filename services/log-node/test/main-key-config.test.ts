@@ -2,7 +2,7 @@
 
 /**
  * Tests for decideKeyConfig — the production fail-fast guard introduced in
- * production-environment fail-fast guard of the comprehensive gap-closure plan. Without this, log-node
+ * Production-environment fail-fast guard. Without this, log-node
  * starts with a random checkpoint key in production, silently invalidating
  * every prior inclusion proof on the next restart.
  */
