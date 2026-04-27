@@ -345,4 +345,99 @@ describe('createSubmissionQueue', () => {
 
     warnSpy.mockRestore()
   })
+
+  describe('maxQueueDepth (queue capacity controls, outage memory protection)', () => {
+    // Real timers for these tests, we test eviction, not retry-backoff
+    // timing. Real timers + a synchronous-rejecting fetch mock makes each
+    // submitWithRetry resolve in <1ms total instead of waiting on fake
+    // timer advancement.
+    beforeEach(() => {
+      vi.useRealTimers()
+    })
+
+    /**
+     * Make N distinct signed records by varying timestamp + content_id so
+     * each gets a unique record_hash.
+     */
+    async function makeBatch(n: number, startTs: number = 1743850000000): Promise<AtribRecord[]> {
+      const out: AtribRecord[] = []
+      const pubKey = await getPublicKey(TEST_KEY)
+      for (let i = 0; i < n; i++) {
+        const record: AtribRecord = {
+          spec_version: 'atrib/1.0',
+          content_id: `sha256:${i.toString(16).padStart(64, '0')}`,
+          creator_key: base64urlEncode(pubKey),
+          chain_root: genesisChainRoot('4bf92f3577b34da6a3ce929d0e0e4736'),
+          event_type: 'tool_call',
+          context_id: '4bf92f3577b34da6a3ce929d0e0e4736',
+          timestamp: startTs + i,
+          signature: '',
+        } as AtribRecord
+        out.push(await signRecord(record, TEST_KEY))
+      }
+      return out
+    }
+
+    it('caps pendingRecords at maxQueueDepth during a sustained outage', async () => {
+      // Synchronously rejecting fetch so each submitWithRetry exhausts its
+      // 3 retries quickly and lands in pendingRecords without waiting.
+      fetchMock.mockRejectedValue(new Error('connection refused'))
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      const queue = createSubmissionQueue('https://test.example.com/v1/entries', {
+        maxQueueDepth: 5,
+      })
+
+      const records = await makeBatch(20)
+      for (const r of records) queue.submit(r, 'normal')
+      await queue.flush()
+
+      const evictionWarnings = warnSpy.mock.calls.filter((c) =>
+        typeof c[0] === 'string' && c[0].includes('queue at cap'),
+      )
+      expect(evictionWarnings.length).toBeGreaterThan(0)
+      warnSpy.mockRestore()
+    }, 30_000)
+
+    it('evicts normal-priority entries before high-priority entries', async () => {
+      fetchMock.mockRejectedValue(new Error('connection refused'))
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      const queue = createSubmissionQueue('https://test.example.com/v1/entries', {
+        maxQueueDepth: 2,
+      })
+
+      const records = await makeBatch(5)
+      queue.submit(records[0]!, 'high')
+      queue.submit(records[1]!, 'high')
+      for (let i = 2; i < 5; i++) queue.submit(records[i]!, 'normal')
+
+      await queue.flush()
+
+      const evictionWarnings = warnSpy.mock.calls.filter((c) =>
+        typeof c[0] === 'string' && c[0].includes('queue at cap'),
+      )
+      expect(evictionWarnings.length).toBeGreaterThan(0)
+      warnSpy.mockRestore()
+    }, 30_000)
+
+    it('does not evict when below cap', async () => {
+      fetchMock.mockRejectedValue(new Error('connection refused'))
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      const queue = createSubmissionQueue('https://test.example.com/v1/entries', {
+        maxQueueDepth: 100,
+      })
+
+      const records = await makeBatch(3)
+      for (const r of records) queue.submit(r, 'normal')
+      await queue.flush()
+
+      const evictionWarnings = warnSpy.mock.calls.filter((c) =>
+        typeof c[0] === 'string' && c[0].includes('queue at cap'),
+      )
+      expect(evictionWarnings).toHaveLength(0)
+      warnSpy.mockRestore()
+    }, 30_000)
+  })
 })

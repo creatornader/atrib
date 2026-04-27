@@ -108,7 +108,7 @@ Runs a fake merchant, a fake agent, and a real Merkle log in a single process. T
 | [`@atrib/log-dev`](packages/log-dev/README.md) | Dev-only in-memory log stub. Not for production. |
 | [`@atrib/integration`](packages/integration/README.md) | Cross-package tests + runnable examples. |
 
-> 878 tests across all packages (877 passing, 1 documented skip). Public packages are not yet published to npm. The production log service is at [`services/log-node/`](services/log-node/) (deployed at `https://log.atrib.dev/v1`); the graph query service is at [`services/graph-node/`](services/graph-node/) (deployed at `https://graph.atrib.dev/v1`). A reproducible end-to-end verifier with 13 cryptographic gates ships at `services/log-node/scripts/verify-loop.mjs` and runs daily in CI against the deployed log.
+> 887 tests across all packages (886 passing, 1 documented skip). Public packages are not yet published to npm. The production log service is at [`services/log-node/`](services/log-node/) (deployed at `https://log.atrib.dev/v1`); the graph query service is at [`services/graph-node/`](services/graph-node/) (deployed at `https://graph.atrib.dev/v1`). A reproducible end-to-end verifier with 13 cryptographic gates ships at `services/log-node/scripts/verify-loop.mjs` and runs daily in CI against the deployed log.
 
 **Implemented and deployed:** Record signing (§1), transparency log (§2) with persistent storage and C2SP-canonical signed-note checkpoints (D031), graph query interface (§3) with §3.2.4 derivation, calculation algorithm (§4.6) with deterministic distribution and §4.7 settlement document signing.
 
