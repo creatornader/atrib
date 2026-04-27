@@ -6,6 +6,7 @@ import * as signingModule from '../src/signing.js'
 import { decodeToken } from '../src/token.js'
 import { hexEncode } from '../src/hash.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { AtribRecord } from '../src/types.js'
 
 // Deterministic test key
 const TEST_PRIVATE_KEY = new Uint8Array(32).fill(42)
@@ -577,6 +578,132 @@ describe('atrib() middleware', () => {
 
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('no serverUrl provided'))
       warnSpy.mockRestore()
+    })
+  })
+
+  describe('autoChain (opt-in chain synthesis for non-propagating hosts)', () => {
+    /** Build a request without traceparent so the middleware must derive context_id itself. */
+    function bareToolCallRequest(toolName: string) {
+      return { method: 'tools/call', params: { name: toolName, arguments: {} } }
+    }
+
+    it('default off: no traceparent → each call gets a random context_id and a genesis chain_root', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: AtribRecord[] = []
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        onRecord: (r) => { captured.push(r) },
+      })
+      registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
+
+      const handler = getToolHandler()!
+      await handler(bareToolCallRequest('a'), {})
+      await handler(bareToolCallRequest('b'), {})
+      await handler(bareToolCallRequest('c'), {})
+
+      expect(captured).toHaveLength(3)
+      const contextIds = new Set(captured.map((r) => r.context_id))
+      // No traceparent → each call gets its own random context_id (genesis on each).
+      expect(contextIds.size).toBe(3)
+      // Every chain_root must equal the genesis root for its own context_id.
+      const { canonicalRecord: canon } = await import('../src/canon.js')
+      const { sha256: hash, hexEncode: hex } = await import('../src/hash.js')
+      void canon; void hash; void hex
+      const { genesisChainRoot: genesis } = await import('../src/chain-root.js')
+      for (const r of captured) {
+        expect(r.chain_root).toBe(genesis(r.context_id))
+      }
+    })
+
+    it('autoChain on: no traceparent → all calls share a stable context_id and chain to predecessor', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: AtribRecord[] = []
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        autoChain: true,
+        onRecord: (r) => { captured.push(r) },
+      })
+      registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
+
+      const handler = getToolHandler()!
+      await handler(bareToolCallRequest('a'), {})
+      await handler(bareToolCallRequest('b'), {})
+      await handler(bareToolCallRequest('c'), {})
+
+      expect(captured).toHaveLength(3)
+
+      // All three records share a single stable context_id.
+      const contextIds = new Set(captured.map((r) => r.context_id))
+      expect(contextIds.size).toBe(1)
+
+      // First record is genesis; each subsequent record's chain_root references
+      // the previous record's hash → CHAIN_PRECEDES edges form.
+      const { canonicalRecord: canon } = await import('../src/canon.js')
+      const { sha256: hash, hexEncode: hex } = await import('../src/hash.js')
+      const { genesisChainRoot: genesis } = await import('../src/chain-root.js')
+
+      expect(captured[0]!.chain_root).toBe(genesis(captured[0]!.context_id))
+
+      for (let i = 1; i < captured.length; i++) {
+        const prevHashHex = hex(hash(canon(captured[i - 1]!)))
+        expect(captured[i]!.chain_root).toBe(`sha256:${prevHashHex}`)
+      }
+    })
+
+    it('autoChain on but inbound atrib propagation present: explicit chain wins over synthesized', async () => {
+      // Same middleware instance used for two calls; second call carries a
+      // valid inbound atrib token. The middleware must honor it instead of
+      // chaining via lastRecordHashByContext.
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: AtribRecord[] = []
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        autoChain: true,
+        onRecord: (r) => { captured.push(r) },
+      })
+      registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
+
+      const handler = getToolHandler()!
+      await handler(bareToolCallRequest('a'), {}) // genesis under the stable contextId
+      const first = captured[0]!
+      const { canonicalRecord: canon } = await import('../src/canon.js')
+      const { sha256: hash, hexEncode: hex } = await import('../src/hash.js')
+
+      // Build an explicit atrib token referencing a DIFFERENT (hand-crafted) record.
+      const fakePriorHash = new Uint8Array(32).fill(7)
+      const tokenPayload = `${Buffer.from(fakePriorHash).toString('base64url')}.${captured[0]!.creator_key}`
+      const result2 = { content: [{ type: 'text', text: 'ok' }] }
+      const handler2 = vi.fn().mockResolvedValue(result2)
+      // re-register with new handler
+      registerToolHandler(handler2)
+      const newHandler = getToolHandler()!
+
+      await newHandler(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'b',
+            arguments: {},
+            _meta: {
+              atrib: tokenPayload,
+              traceparent: `00-${first.context_id}-0000000000000000-01`,
+            },
+          },
+        },
+        {},
+      )
+      const second = captured[1]!
+      // Spec wins: chain_root MUST be the inbound (fake prior) hash, not the
+      // autoChain'd hash of `first`.
+      expect(second.chain_root).toBe(`sha256:${hex(fakePriorHash)}`)
+      // Sanity: it is NOT the autoChain candidate.
+      expect(second.chain_root).not.toBe(`sha256:${hex(hash(canon(first)))}`)
     })
   })
 })

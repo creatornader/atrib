@@ -9,9 +9,9 @@
  * identical edge sets.
  */
 
-import { sha256, hexEncode, canonicalRecord, base64urlEncode } from '@atrib/mcp'
+import { sha256, hexEncode, canonicalRecord, base64urlEncode, verifyRecord } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
-import type { GraphNode, GraphEdge, GraphResponse, EdgeType } from '@atrib/verify'
+import type { GraphNode, GraphEdge, GraphResponse, EdgeType, VerificationState } from '@atrib/verify'
 
 /**
  * Compute the record hash (sha256 of JCS canonical form). same algorithm
@@ -29,8 +29,17 @@ export function recordHashHex(record: AtribRecord): string {
 /**
  * Build a graph snapshot from a set of signed attribution records, applying
  * the 5 edge derivation steps from §3.2.4 in order.
+ *
+ * Each record's signature is verified at node-construction time so that
+ * verification_state matches the @atrib/graph-node implementation. This
+ * makes the function async; if every record's signature is known-good (the
+ * common test path), buildGraphFromRecordsSync is a verification-skipping
+ * fast path.
  */
-export function buildGraphFromRecords(records: AtribRecord[], contextId: string): GraphResponse {
+export async function buildGraphFromRecords(
+  records: AtribRecord[],
+  contextId: string,
+): Promise<GraphResponse> {
   // Filter to records belonging to this session OR linked via session_token
   const sessionRecords = records.filter((r) => r.context_id === contextId)
   const txInSession = sessionRecords.find((r) => r.event_type === 'transaction')
@@ -49,8 +58,22 @@ export function buildGraphFromRecords(records: AtribRecord[], contextId: string)
 
   const allRecords = [...sessionRecords, ...crossSessionRecords]
 
+  // Verify every record's signature in parallel so verification_state matches
+  // the §3.2.4 reference implementation in @atrib/graph-node. Without this the
+  // two implementations would silently disagree on tampered records.
+  const verificationStates = await Promise.all(
+    allRecords.map(async (r): Promise<VerificationState> => {
+      try {
+        const ok = await verifyRecord(r)
+        return ok ? 'signature_valid' : 'unsigned'
+      } catch {
+        return 'unsigned'
+      }
+    }),
+  )
+
   // Build the node list
-  const nodes: GraphNode[] = allRecords.map((r) => {
+  const nodes: GraphNode[] = allRecords.map((r, i) => {
     const id = `sha256:${recordHashHex(r)}`
     return {
       id,
@@ -61,7 +84,7 @@ export function buildGraphFromRecords(records: AtribRecord[], contextId: string)
       context_id: r.context_id,
       timestamp: r.timestamp,
       log_index: 0,
-      verification_state: 'signature_valid',
+      verification_state: verificationStates[i]!,
       is_genesis:
         r.chain_root === `sha256:${hexEncode(sha256(new TextEncoder().encode(r.context_id)))}`,
     }

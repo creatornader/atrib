@@ -100,7 +100,7 @@ async function main(): Promise<void> {
   console.log(`calc-demo: context_id=${contextId} session_records=${sessionRecords.length}`)
   console.log()
 
-  const graph = buildGraphFromRecords(sessionRecords, contextId)
+  const graph = await buildGraphFromRecords(sessionRecords, contextId)
   console.log(`graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`)
   for (const e of graph.edges) {
     const fromShort = e.source.slice(0, 8)
@@ -138,7 +138,7 @@ async function main(): Promise<void> {
 }
 
 async function emitSettlementRecommendation(
-  graph: ReturnType<typeof buildGraphFromRecords>,
+  graph: Awaited<ReturnType<typeof buildGraphFromRecords>>,
   distribution: Record<string, number>,
   sessionRecords: AtribRecord[],
   contextId: string,
