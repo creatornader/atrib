@@ -27,7 +27,7 @@ import {
   hexEncode,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
-import { parseCheckpointBody } from '../src/checkpoint.js'
+import { parseCheckpointBody, parseSignatureLine } from '../src/checkpoint.js'
 import { startLogServer, type LogServer } from '../src/index.js'
 
 // Set up sync sha512 for @noble/ed25519
@@ -142,11 +142,11 @@ describe('end-to-end proof verification', () => {
     // Parse the signature line: "— origin keyIdHex+sigBase64\n"
     const sigLine = signaturesSection.trim()
     // em-dash (U+2014) followed by a space, then origin, then a space, then keyIdHex+sigBase64
-    const sigLineMatch = sigLine.match(/^\u2014 \S+ ([0-9a-f]+)\+(.+)$/)
-    expect(sigLineMatch).not.toBeNull()
-
-    const sigBase64 = sigLineMatch![2] as string
-    const sigBytes = Buffer.from(sigBase64, 'base64')
+    // C2SP signed-note canonical encoding (spec \u00a72.4.3 post-D031):
+    //   "\u2014 <origin> <base64(keyHash[4B] || sig[64B])>"
+    const parsedSig = parseSignatureLine(sigLine)
+    expect(parsedSig).not.toBeNull()
+    const sigBytes = parsedSig!.signature
     const bodyBytes = new TextEncoder().encode(checkpointBody)
 
     // Verify with the log's public key
@@ -210,11 +210,9 @@ describe('end-to-end proof verification', () => {
       const checkpointBody = proof.checkpoint.slice(0, blankLineIdx + 1)
       const signaturesSection = proof.checkpoint.slice(blankLineIdx + 2)
       const sigLine = signaturesSection.trim()
-      const sigLineMatch = sigLine.match(/^\u2014 \S+ ([0-9a-f]+)\+(.+)$/)
-      expect(sigLineMatch).not.toBeNull()
-
-      const sigBase64 = sigLineMatch![2] as string
-      const sigBytes = Buffer.from(sigBase64, 'base64')
+      const parsedSig = parseSignatureLine(sigLine)
+      expect(parsedSig).not.toBeNull()
+      const sigBytes = parsedSig!.signature
       const bodyBytes = new TextEncoder().encode(checkpointBody)
       const isValidSig = await ed.verifyAsync(sigBytes, bodyBytes, server.logPublicKey)
       expect(isValidSig).toBe(true)

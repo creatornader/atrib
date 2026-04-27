@@ -18,7 +18,7 @@ import {
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import { startLogServer, type LogServer } from '../src/index.js'
-import { parseCheckpointBody } from '../src/checkpoint.js'
+import { parseCheckpointBody, parseSignatureLine } from '../src/checkpoint.js'
 import crypto from 'crypto'
 
 ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
@@ -149,19 +149,17 @@ describe('independent proof verification', () => {
     const record = await makeSignedRecord(privateKey, creatorKey, 'sig-check')
     const proof = await submit(server.url, record)
 
-    // Parse signed note: body\n\n— origin keyid+sig\n
+    // C2SP signed-note (spec §2.4.3): body\n\n— origin <base64(keyHash||sig)>\n
     const parts = proof.checkpoint.split('\n\n')
     const body = parts[0]! + '\n'
     const sigLine = parts[1]!.trim()
 
-    // Extract signature: "— origin keyid+base64sig"
-    const plusIdx = sigLine.indexOf('+')
-    const sigBase64 = sigLine.slice(plusIdx + 1)
-    const sigBytes = new Uint8Array(Buffer.from(sigBase64, 'base64'))
+    const parsed = parseSignatureLine(sigLine)
+    expect(parsed).not.toBeNull()
 
     // Verify Ed25519 signature over the body
     const bodyBytes = new TextEncoder().encode(body)
-    const valid = await ed.verifyAsync(sigBytes, bodyBytes, serverPublicKey)
+    const valid = await ed.verifyAsync(parsed!.signature, bodyBytes, serverPublicKey)
     expect(valid).toBe(true)
   })
 

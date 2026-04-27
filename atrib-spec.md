@@ -935,7 +935,7 @@ The log MUST publish its public key at two endpoints, both serving the same key:
    }
    ```
 
-Both endpoints MUST be served from the same signing key, MUST agree on `origin` and `key_id`, and MUST decode to the same 32-byte Ed25519 public key. A verifier MAY use either endpoint. The `key_id` published at either endpoint MUST equal the 4-byte hex prefix on every signature line of `/v1/checkpoint` (§2.4.3).
+Both endpoints MUST be served from the same signing key, MUST agree on `origin` and `key_id`, and MUST decode to the same 32-byte Ed25519 public key. A verifier MAY use either endpoint. The `key_id` published at either endpoint MUST equal the 4 leading bytes of the base64-decoded signature token on every signature line of `/v1/checkpoint` (§2.4.3).
 
 #### 2.4.3 Signed Note Format
 
@@ -946,11 +946,11 @@ log.atrib.dev/v1
 4821937
 CsUYapGGPo4dkMgIAUqom/Xajj7h2fB2MPA3j2jxq2I=
 
-— log.atrib.dev/v1 a3b2c1d0+base64(Ed25519-signature-over-body)
-— witness.example.com e1f2a3b4+base64(cosignature)
+— log.atrib.dev/v1 base64(keyHash[4B] || Ed25519-signature[64B])
+— witness.example.com base64(witness-keyHash[4B] || cosignature[64B])
 ```
 
-Each signature line begins with `— ` (U+2014 em-dash followed by a space in the canonical format), followed by the key name, a space, the hex key ID, a `+`, and the base64-encoded 64-byte signature over the note text (the body including its trailing newline).
+Each signature line begins with `— ` (U+2014 em-dash followed by a space in the canonical format), followed by the key name, a single space, and one base64-encoded token. The token decodes to exactly 68 bytes: the 4-byte key hash defined in §2.4.2 (matches the `key_id`) concatenated with the 64-byte Ed25519 signature over the note text (the body including its trailing newline). This is the canonical C2SP signed-note encoding; verifiers using `golang.org/x/mod/sumdb/note.NewVerifier` or compatible tooling parse it directly without an adapter.
 
 Clients MUST verify at least the log's own signature on any checkpoint before trusting it. Cosignatures from witnesses are additional trust anchors; their verification procedure is described in §2.9.
 

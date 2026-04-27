@@ -10,6 +10,7 @@ import {
   formatCheckpointBody,
   parseCheckpointBody,
   createCheckpointSigner,
+  parseSignatureLine,
 } from '../src/checkpoint.js'
 
 const TEST_ORIGIN = 'log.atrib.dev/v1'
@@ -76,40 +77,26 @@ describe('createCheckpointSigner', () => {
     const signer = createCheckpointSigner(privateKey, publicKey, TEST_ORIGIN)
     const note = await signer.sign(TEST_TREE_SIZE, TEST_ROOT_HASH)
 
-    // Signed note format: body\n\n— origin keyIdHex+sigBase64\n
-    // Split into body and signature sections at the blank line
+    // C2SP signed-note format (spec §2.4.3 post-D031):
+    //   body\n\n— <key_name> <base64(keyHash[4B] || sig[64B])>\n
     const blankLineIdx = note.indexOf('\n\n')
     expect(blankLineIdx).toBeGreaterThan(0)
 
     const body = note.slice(0, blankLineIdx + 1) // body ends with \n
     const sigSection = note.slice(blankLineIdx + 2) // after the blank line
 
-    // Verify body matches expected checkpoint body
     const expectedBody = formatCheckpointBody(TEST_ORIGIN, TEST_TREE_SIZE, TEST_ROOT_HASH)
     expect(body).toBe(expectedBody)
 
-    // Parse the signature line:. origin keyIdHex+sigBase64\n
-    expect(sigSection).toMatch(/^— .+ .+\n$/)
-    const sigLine = sigSection.trimEnd() // remove trailing newline
-    // Remove em-dash and space prefix
-    const rest = sigLine.slice('— '.length)
-    // rest = "origin keyIdHex+sigBase64"
-    const spaceIdx = rest.indexOf(' ')
-    expect(spaceIdx).toBeGreaterThan(0)
-    const sigOrigin = rest.slice(0, spaceIdx)
-    expect(sigOrigin).toBe(TEST_ORIGIN)
+    const sigLine = sigSection.trimEnd()
+    const parsed = parseSignatureLine(sigLine)
+    expect(parsed).not.toBeNull()
+    expect(parsed!.origin).toBe(TEST_ORIGIN)
+    expect(parsed!.keyId.byteLength).toBe(4)
+    expect(parsed!.signature.byteLength).toBe(64)
 
-    const keyIdPlusSig = rest.slice(spaceIdx + 1) as string
-    // Format: keyIdHex+sigBase64. find the + separator
-    const plusIdx = keyIdPlusSig.indexOf('+')
-    expect(plusIdx).toBeGreaterThan(0)
-    const sigBase64 = keyIdPlusSig.slice(plusIdx + 1)
-    const sigBytes = Buffer.from(sigBase64, 'base64')
-    expect(sigBytes.byteLength).toBe(64)
-
-    // Verify the signature over the body bytes
     const bodyBytes = new TextEncoder().encode(body)
-    const valid = await ed.verifyAsync(new Uint8Array(sigBytes), bodyBytes, publicKey)
+    const valid = await ed.verifyAsync(parsed!.signature, bodyBytes, publicKey)
     expect(valid).toBe(true)
   })
 
@@ -138,18 +125,16 @@ describe('createCheckpointSigner', () => {
     expect(signer.publicKey).toEqual(publicKey)
   })
 
-  it('signed note embeds the key ID in hex before the + separator', async () => {
+  it('signed note embeds the key ID in the first 4 bytes of the base64 token', async () => {
     const { privateKey, publicKey } = await makeKeys()
     const signer = createCheckpointSigner(privateKey, publicKey, TEST_ORIGIN)
     const note = await signer.sign(TEST_TREE_SIZE, TEST_ROOT_HASH)
 
     const sigLine = note.split('\n\n')[1]!.trimEnd()
-    const rest = sigLine.slice('— '.length)
-    const keyIdPlusSig = rest.split(' ')[1] as string
-    const keyIdHex = keyIdPlusSig.split('+')[0] as string
-
-    // Should be 8 hex chars (4 bytes)
-    expect(keyIdHex).toHaveLength(8)
-    expect(keyIdHex).toBe(Buffer.from(signer.keyId).toString('hex'))
+    const parsed = parseSignatureLine(sigLine)
+    expect(parsed).not.toBeNull()
+    // C2SP signed-note: keyHash is the first 4 bytes of the base64-decoded
+    // signature token. Must equal the signer's keyId.
+    expect(Array.from(parsed!.keyId)).toEqual(Array.from(signer.keyId))
   })
 })
