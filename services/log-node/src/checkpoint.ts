@@ -36,6 +36,32 @@ export interface CheckpointSigner {
 }
 
 /**
+ * Format a verifier key string per the C2SP signed-note vkey format
+ * (c2sp.org/signed-note). Output:
+ *
+ *   <origin>+<hex(keyId)>+<base64(0x01 || publicKey)>
+ *
+ * The single 0x01 byte is the Ed25519 signature type, concatenated with
+ * the raw 32-byte public key to form a 33-byte payload that's
+ * standard-base64-encoded (RFC 4648 §4, with padding). This is what
+ * `golang.org/x/mod/sumdb/note.NewVerifier` and other C2SP-conformant
+ * tooling parses; it is the canonical "key publication" format and is
+ * served at GET /v1/log-pubkey alongside the JSON /v1/pubkey form.
+ */
+export function formatVkey(
+  origin: string,
+  keyId: Uint8Array,
+  publicKey: Uint8Array,
+): string {
+  const keyIdHex = Buffer.from(keyId).toString('hex')
+  const payload = new Uint8Array(1 + publicKey.length)
+  payload[0] = 0x01
+  payload.set(publicKey, 1)
+  const payloadB64 = Buffer.from(payload).toString('base64')
+  return `${origin}+${keyIdHex}+${payloadB64}`
+}
+
+/**
  * Format a checkpoint body per spec Section 2.4.1.
  *
  * Output:
