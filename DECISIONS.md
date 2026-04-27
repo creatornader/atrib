@@ -956,3 +956,49 @@ The first consumer is `services/atrib-wrapper`, which uses `onRecord` to append 
 
 - A canonical persistence format. The wrapper writes JSON-per-line; an SDK consumer might write protobuf, ndjson with extra metadata, etc. There's no spec section for "the local audit log format" because that's a host concern.
 - Replay protection. If a consumer's `onRecord` is slow or async-unbounded, records can pile up faster than they're persisted. The wrapper today writes synchronously per call, which is fine for a per-tool-call cadence but would need rethinking for high-throughput agent stacks. Out of scope for this ADR.
+
+---
+
+## D030: Log key publication serves both C2SP vkey and JSON, at distinct endpoints
+
+**Date:** 2026-04-27
+**Status:** Accepted; deployed alongside D028
+
+**Context.** D028 shipped `GET /v1/pubkey` returning JSON `{origin, public_key, key_id, algorithm}` to close the dogfood verifier's checkpoint-signature gap. During the post-D028 spec sync (atrib-spec.md §2.4.2), an existing spec line surfaced that the D028 ADR had not acknowledged:
+
+> "The verifier key string published at `log.atrib.dev/v1/log-pubkey` encodes the key name, key ID, and public key in the C2SP vkey format"
+
+So the spec already committed the log to publishing its key, but at a different path (`/v1/log-pubkey`) and in a different format (a single C2SP vkey string, `<origin>+<hex(keyid)>+<base64(0x01||pubkey)>`, served as `text/plain`). The D028 implementation diverged from this without amending the spec. The two formats serve different audiences:
+
+- The C2SP vkey form is parsed directly by `golang.org/x/mod/sumdb/note.NewVerifier`, sigsum, tlog-witness, and other tlog ecosystem tooling. These tools expect a key string they can read from a file or URL and pass to a verifier constructor.
+- The JSON form is friendlier for hand-rolled verifiers (the dogfood loop, browser-based verify scripts, future graph-side audit code) that benefit from structured access.
+
+**Decision.** Keep both endpoints, both serving the same key:
+
+- `GET /v1/log-pubkey` returns the C2SP vkey string as `text/plain; charset=utf-8`, per the existing spec line.
+- `GET /v1/pubkey` returns JSON as defined by D028.
+
+Both MUST be backed by the same `CheckpointSigner` (same key bytes, same `key_id`, same `origin`). A new test verifies that the vkey-extracted public key bytes equal the bytes returned by the JSON endpoint, and that the vkey-extracted key actually verifies a real `/v1/checkpoint` signature. A new helper `formatVkey(origin, keyId, publicKey)` lives next to `formatCheckpointBody` in `services/log-node/src/checkpoint.ts`; both produce C2SP-formatted artifacts so they cohabit.
+
+The spec was updated in §2.4.2 to document both endpoints, with normative MUSTs that they agree on `origin`, `key_id`, and the underlying public key, and that the published `key_id` equal the 4-byte hex prefix on every `/v1/checkpoint` signature line.
+
+**Alternatives considered.**
+
+1. *Rename `/v1/pubkey` to `/v1/log-pubkey` and switch its response to vkey text format (impl follows spec).* Rejected because the deployed JSON endpoint already has at least one consumer (the dogfood verifier) and changing both path and content type is observable. More importantly, the JSON form is genuinely useful for consumers that don't speak C2SP, converting it to vkey-only would force every such consumer to write a custom parser.
+
+2. *Update §2.4.2 to drop the C2SP vkey reference and document JSON-only at `/v1/pubkey` (spec follows impl).* Rejected because dropping vkey breaks compatibility with existing C2SP-conformant tooling. Witness software, sumdb/note verifiers, and any future cosignature work expect to point at a URL and parse the response as a vkey string. JSON-only forces adapters everywhere.
+
+3. *Single hybrid endpoint at `/v1/pubkey` returning JSON that includes the vkey as a string field.* Rejected because tools like `note.NewVerifier` expect to fetch a vkey directly, not extract one from JSON. Even if such a tool's plumbing could be wrapped to do the extraction, the friction is exactly the kind of "everyone has to write a custom adapter" that C2SP was designed to avoid. The fact that two endpoints cost ~30 lines of code and are both load-bearing for their respective audiences makes the duplication cheap.
+
+**Consequences.**
+
+- Adds a `formatVkey` helper and a `handleLogPubkey` handler. ~30 lines of code, four new tests covering format correctness and end-to-end signature verification under the vkey-extracted key.
+- The dogfood verifier (D028 / D029 motivation) will exercise both endpoints to confirm they agree on the key bytes, a small additional gate that catches any future drift between the two surfaces.
+- Future witness/cosignature work (planned for V2) gets the canonical vkey URL it needs without any new spec writing; the path was already committed in §2.4.2.
+
+**What this DOESN'T solve.**
+
+- Key rotation, still. D028 explicitly punted that to a future ADR; this resolution doesn't change that. When rotation is implemented, both endpoints will need to grow a versioned representation (likely an array of `{key_id, public_key, valid_from, valid_to}` for `/v1/pubkey` and a multi-line vkey list for `/v1/log-pubkey`). Out of scope.
+- Witness key publication. If/when third parties cosign checkpoints, each witness will publish its own vkey from its own service. The atrib spec describes the format the log uses; witness operators apply the same shape to their own infrastructure.
+
+**Acknowledged process failure.** D028 was drafted and shipped without grepping the spec for an existing key-publication contract. The §2.4.2 line was always there. A spec-sync pass should be part of "the ADR is done" rather than an after-the-fact cleanup. Recording this so the lesson outlives the moment.
