@@ -120,6 +120,14 @@ async function handleRequest(
     return handleCheckpoint(res, tree, signer)
   }
 
+  // GET /v1/pubkey — return the log's Ed25519 public key + key_id so verifiers
+  // can check the C2SP signed-note signature on /v1/checkpoint without an
+  // out-of-band trust root. Without this endpoint, third parties have no way
+  // to verify the checkpoint signature and must trust the log on the root.
+  if (req.method === 'GET' && req.url === '/v1/pubkey') {
+    return handlePubkey(res, signer)
+  }
+
   // §2.5.2: Tile endpoints. GET /v1/tile/<level>/<index>
   const tileMatch = req.url?.match(/^\/v1\/tile\/(\d+)\/(\d+)$/)
   if (req.method === 'GET' && tileMatch) {
@@ -137,7 +145,34 @@ async function handleRequest(
 
   sendJson(res, 404, {
     error: 'not found',
-    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>',
+    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>',
+  })
+}
+
+/**
+ * GET /v1/pubkey — expose the log's Ed25519 public key and 4-byte key_id.
+ *
+ * Returned shape:
+ *   {
+ *     "origin": "log.atrib.dev/v1",
+ *     "public_key": "<base64url 32B>",   // raw Ed25519 public key
+ *     "key_id": "<hex 4B>",              // SHA-256(origin || 0x0A || 0x01 || pubkey)[:4]
+ *     "algorithm": "Ed25519"
+ *   }
+ *
+ * The key_id is what appears as the leading hex prefix in the signed-note
+ * signature line, allowing a verifier to confirm "the signature was made by
+ * the same key whose pubkey is published here" before doing the full
+ * Ed25519 verify.
+ */
+function handlePubkey(res: ServerResponse, signer: CheckpointSigner): void {
+  const publicKeyB64Url = Buffer.from(signer.publicKey).toString('base64url')
+  const keyIdHex = Buffer.from(signer.keyId).toString('hex')
+  sendJson(res, 200, {
+    origin: signer.origin,
+    public_key: publicKeyB64Url,
+    key_id: keyIdHex,
+    algorithm: 'Ed25519',
   })
 }
 

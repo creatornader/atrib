@@ -31,6 +31,8 @@ export interface CheckpointSigner {
   readonly publicKey: Uint8Array
   /** The 4-byte key ID derived from SHA-256(key_name || 0x0A || 0x01 || pubkey)[:4]. */
   readonly keyId: Uint8Array
+  /** The log origin string (e.g. "log.atrib.dev/v1"); needed by /v1/pubkey. */
+  readonly origin: string
 }
 
 /**
@@ -124,6 +126,10 @@ export function createCheckpointSigner(
 
     get keyId(): Uint8Array {
       return keyId
+    },
+
+    get origin(): string {
+      return origin
     },
 
     async sign(treeSize: number, rootHash: Uint8Array): Promise<string> {
