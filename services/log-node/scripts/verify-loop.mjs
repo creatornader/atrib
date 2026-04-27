@@ -5,7 +5,7 @@
  * verify-loop.mjs, reproducible end-to-end verifier for the dogfood log.
  *
  * Usage:
- *   ATRIB_PUBLIC_KEY=<base64url-32B> \
+ *   ATRIB_PUBLIC_KEYS=<base64url-32B>[,<base64url-32B>...] \
  *   LOG_ENDPOINT=https://log.atrib.dev/v1 \
  *   [RECORD_FILE=~/.atrib/records/records.jsonl] \
  *   node scripts/verify-loop.mjs
@@ -19,13 +19,15 @@
  *     and verify an RFC 6962 inclusion proof against the checkpoint root.
  *     If A passes, the log has not lied about which leaves are committed.
  *
- *   GATE B, Same-signer property:
- *     All entries share one creator_key. Structural check.
+ *   GATE B, Distinct-signer count (signer.distinct):
+ *     The log has at most ATRIB_PUBLIC_KEYS.length distinct creator_keys
+ *     (default 1 when no keys provided, the dogfood-loop case).
  *
- *   GATE C, Attribution to a known pubkey:
- *     creator_key in every entry equals the ATRIB_PUBLIC_KEY env var.
- *     String comparison; trust comes from how the caller obtained the pubkey
- *     (derived from their own seed via @atrib/cli keygen).
+ *   GATE C, Attribution to known pubkey(s):
+ *     Every entry's creator_key is in the ATRIB_PUBLIC_KEYS set.
+ *     For backwards-compat ATRIB_PUBLIC_KEY (singular) is also accepted.
+ *     Trust comes from how the caller obtained the keys (derived from their
+ *     own seed(s) via @atrib/cli keygen).
  *
  *   GATE D, Format conformance (§2.3.1):
  *     Each 90-byte entry parses; version=0x01; event_type ∈ {0x01, 0x02};
@@ -69,7 +71,15 @@ import canonicalize from 'canonicalize'
 ed.etc.sha512Sync = (...m) => sha512(ed.etc.concatBytes(...m))
 
 const LOG_ENDPOINT = (process.env.LOG_ENDPOINT ?? 'https://log.atrib.dev/v1').replace(/\/$/, '')
-const ATRIB_PUBLIC_KEY = process.env.ATRIB_PUBLIC_KEY ?? ''
+// ATRIB_PUBLIC_KEY (singular) and ATRIB_PUBLIC_KEYS (comma-separated, plural)
+// are both accepted. Singular form is backwards-compatible for the dogfood-loop
+// case where one wrapper signs everything. Plural is for cross-agent flows
+// where multiple keypairs legitimately appear on the log (chain-demo + wrapper,
+// multi-agent-demo, etc.). Trailing whitespace per entry is stripped.
+const ATRIB_PUBLIC_KEYS = (process.env.ATRIB_PUBLIC_KEYS ?? process.env.ATRIB_PUBLIC_KEY ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
 const RECORD_FILE = process.env.RECORD_FILE ?? join(
   homedir(), '.atrib', 'records', 'records.jsonl',
 )
@@ -334,7 +344,7 @@ async function main() {
   const r = new Report()
 
   console.log(`verify-loop: log=${LOG_ENDPOINT}`)
-  console.log(`verify-loop: ATRIB_PUBLIC_KEY=${ATRIB_PUBLIC_KEY ? '<set>' : '<unset>'}`)
+  console.log(`verify-loop: ATRIB_PUBLIC_KEYS=${ATRIB_PUBLIC_KEYS.length ? `<${ATRIB_PUBLIC_KEYS.length} set>` : '<unset>'}`)
 
   // 1. Checkpoint
   let cpText
@@ -473,24 +483,70 @@ async function main() {
     )
   }
 
-  // 3. GATE B: same-signer
-  const firstKey = entries[0].creatorKey
-  const sameSigner = entries.every(e => bytesEqual(e.creatorKey, firstKey))
-  if (sameSigner) r.pass('signer.same', `1 distinct creator_key across ${entries.length} entries`)
-  else r.fail('signer.same', 'multiple creator_keys')
+  // 3+4. GATEs B,C: signer scope. When RECORD_FILE is provided and parses,
+  // restrict signer.distinct and signer.attribution to "our entries" (those
+  // whose record_hash matches a hash from RECORD_FILE). This lets a multi-key
+  // demo run alongside other traffic on the same log without false-failing
+  // these gates. When no records are supplied the gates fall back to all
+  // entries (the dogfood-monitoring default).
+  let signerScopeEntries = entries
+  let signerScopeNote = `all ${entries.length} log entries`
+  if (existsSync(RECORD_FILE)) {
+    try {
+      const ourHashes = new Set()
+      const recordLines = readFileSync(RECORD_FILE, 'utf8')
+        .split('\n')
+        .map(l => l.trim())
+        .filter(Boolean)
+      for (const line of recordLines) {
+        try {
+          const rec = JSON.parse(line)
+          const h = toHex(sha256(new TextEncoder().encode(canonicalize(rec))))
+          ourHashes.add(h)
+        } catch { /* skip malformed */ }
+      }
+      if (ourHashes.size > 0) {
+        const filtered = entries.filter(e => ourHashes.has(toHex(e.recordHash)))
+        if (filtered.length > 0) {
+          signerScopeEntries = filtered
+          signerScopeNote = `${filtered.length} record-file-scoped entries (of ${entries.length} on log)`
+        }
+      }
+    } catch { /* fall through to all-entries scope */ }
+  }
 
-  // 4. GATE C: attribution to user-provided pubkey
-  if (!ATRIB_PUBLIC_KEY) {
-    r.skip('signer.attribution', 'ATRIB_PUBLIC_KEY env not set')
+  // 3. GATE B: distinct-signer count within the scoped entry set.
+  const distinctSet = new Set(signerScopeEntries.map(e => b64urlEncode(e.creatorKey)))
+  const expectedSignerCount = ATRIB_PUBLIC_KEYS.length || 1
+  if (distinctSet.size <= expectedSignerCount) {
+    r.pass('signer.distinct', `${distinctSet.size} distinct creator_key(s) across ${signerScopeNote} (expected <= ${expectedSignerCount})`)
   } else {
-    let claimed
-    try { claimed = b64urlDecode(ATRIB_PUBLIC_KEY) } catch { claimed = null }
-    if (!claimed || claimed.length !== 32) {
-      r.fail('signer.attribution', `ATRIB_PUBLIC_KEY did not decode to 32 bytes`)
+    r.fail('signer.distinct', `${distinctSet.size} distinct creator_keys across ${signerScopeNote} but only ${expectedSignerCount} expected`)
+  }
+
+  // 4. GATE C: attribution to one of the user-provided pubkey(s) within scope.
+  if (ATRIB_PUBLIC_KEYS.length === 0) {
+    r.skip('signer.attribution', 'ATRIB_PUBLIC_KEYS env not set')
+  } else {
+    const decodedKeys = []
+    let badDecode = false
+    for (const k of ATRIB_PUBLIC_KEYS) {
+      try {
+        const bytes = b64urlDecode(k)
+        if (bytes.length !== 32) { badDecode = true; break }
+        decodedKeys.push(bytes)
+      } catch { badDecode = true; break }
+    }
+    if (badDecode) {
+      r.fail('signer.attribution', `one of ATRIB_PUBLIC_KEYS did not decode to 32 bytes`)
     } else {
-      const allMatch = entries.every(e => bytesEqual(e.creatorKey, claimed))
-      if (allMatch) r.pass('signer.attribution', `creator_key == ATRIB_PUBLIC_KEY for all ${entries.length}`)
-      else r.fail('signer.attribution', `creator_key != ATRIB_PUBLIC_KEY`)
+      const allAttributed = signerScopeEntries.every(e => decodedKeys.some(k => bytesEqual(e.creatorKey, k)))
+      if (allAttributed) {
+        r.pass('signer.attribution', `every creator_key matches one of ${decodedKeys.length} provided pubkey(s) across ${signerScopeNote}`)
+      } else {
+        const unattributed = signerScopeEntries.filter(e => !decodedKeys.some(k => bytesEqual(e.creatorKey, k))).length
+        r.fail('signer.attribution', `${unattributed}/${signerScopeEntries.length} entries in ${signerScopeNote} have a creator_key NOT in ATRIB_PUBLIC_KEYS`)
+      }
     }
   }
 
