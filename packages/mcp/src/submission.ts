@@ -52,9 +52,47 @@ import { sha256, hexEncode } from './hash.js'
 import type { AtribRecord } from './types.js'
 
 const DEFAULT_LOG_ENDPOINT = 'https://log.atrib.dev/v1/entries'
+const SUBMISSION_PATH = '/v1/entries'
 const MAX_RETRIES = 3
 const INITIAL_BACKOFF_MS = 1000
 const MAX_WINDOW_MS = 30_000
+
+/**
+ * Normalize a caller-supplied log endpoint to ensure it includes the
+ * submission path. Avoids the silent-failure footgun where a caller passes
+ * `'https://log.example.com'` and the middleware POSTs to the bare host
+ * which 404s. If the path is missing, append it; if a different path is
+ * already specified, leave it alone (callers may use custom log servers
+ * with non-standard paths).
+ *
+ * Treated as missing: empty path, '/', or paths that don't end in
+ * '/v1/entries'. Treated as present: any path that ends in '/v1/entries'
+ * (allowing prefixes like /api/v1/entries for proxy deployments).
+ *
+ * Errors on invalid URLs rather than silently passing them through.
+ */
+function normalizeLogEndpoint(raw: string): string {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    throw new Error(
+      `atrib: log endpoint '${raw}' is not a valid URL. Expected something like 'https://log.example.com/v1/entries'.`,
+    )
+  }
+  if (url.pathname === '' || url.pathname === '/') {
+    url.pathname = SUBMISSION_PATH
+    return url.toString()
+  }
+  if (url.pathname.endsWith(SUBMISSION_PATH)) {
+    return raw
+  }
+  // Path is set but doesn't end in /v1/entries. Could be a custom proxy
+  // path. Trust the caller; don't rewrite. The caller may know they're
+  // hitting a non-standard path. If they got it wrong, the submission
+  // will 404 and the file-log/stderr will surface the response status.
+  return raw
+}
 
 /**
  * Inclusion proof bundle returned by the log's submission API per spec §2.6.2.
@@ -94,7 +132,7 @@ interface PendingEntry {
 }
 
 export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
-  const endpoint = logEndpoint ?? DEFAULT_LOG_ENDPOINT
+  const endpoint = normalizeLogEndpoint(logEndpoint ?? DEFAULT_LOG_ENDPOINT)
   const proofCache = new Map<string, ProofBundle>()
   // Tracks records whose initial submission failed but may succeed on a
   // later flush() retry. Each entry carries its priority so flush() can
