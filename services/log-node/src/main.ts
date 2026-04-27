@@ -7,9 +7,15 @@
  *   ATRIB_LOG_KEY=<base64url-ed25519-seed> pnpm --filter @atrib/log-node start
  *
  * Environment variables:
- *   ATRIB_LOG_KEY . base64url-encoded 32-byte Ed25519 private key for checkpoint signing.
- *                    If omitted, a random key is generated (checkpoints won't survive restarts).
- *   PORT          . TCP port to bind (default: 3100)
+ *   ATRIB_LOG_KEY        . base64url-encoded 32-byte Ed25519 private key for
+ *                          checkpoint signing. If omitted, a random key is
+ *                          generated (checkpoints won't survive restarts).
+ *   ATRIB_LOG_PERSIST    . Path to an append-only entries file. When set,
+ *                          the tree restores from this file on startup and
+ *                          persists each new entry to it before responding.
+ *                          Critical for Fly redeploys; without it, the tree
+ *                          resets to size 0 on every process start.
+ *   PORT                 . TCP port to bind (default: 3100)
  */
 
 import { startLogServer } from './index.js'
@@ -28,6 +34,7 @@ const opts = {
   port,
   ...(logPrivateKey ? { logPrivateKey } : {}),
   ...(process.env.HOST ? { host: process.env.HOST } : {}),
+  ...(process.env.ATRIB_LOG_PERSIST ? { persistencePath: process.env.ATRIB_LOG_PERSIST } : {}),
 }
 const server = await startLogServer(opts)
 

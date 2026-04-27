@@ -7,6 +7,11 @@ primary_region = 'iad'
 [env]
   PORT = '3100'
   HOST = '0.0.0.0'
+  ATRIB_LOG_PERSIST = '/data/entries.bin'
+
+[[mounts]]
+  source = 'atrib_log_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 3100
@@ -27,4 +32,8 @@ primary_region = 'iad'
     timeout = '2s'
     grace_period = '5s'
     method = 'GET'
-    path = '/v1/checkpoint'
+    # /v1/pubkey always returns 200 (even with an empty tree); /v1/checkpoint
+    # returns 404 until the first entry lands. With persistence in place a
+    # restart now restores the tree, so /v1/checkpoint would also work, but
+    # /v1/pubkey is robust against the cold-start case too.
+    path = '/v1/pubkey'

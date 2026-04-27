@@ -32,6 +32,13 @@ export interface LogServerOptions {
   port?: number
   host?: string
   logPrivateKey?: Uint8Array
+  /**
+   * Path to an append-only entries file. When set, the tree restores from
+   * this file on startup and persists every append to it. Critical for
+   * surviving Fly redeploys. Without this, the tree resets to size 0 every
+   * time the process starts.
+   */
+  persistencePath?: string
 }
 
 export interface LogServer {
@@ -65,7 +72,10 @@ export async function startLogServer(options?: LogServerOptions): Promise<LogSer
 
   const publicKey = await ed.getPublicKeyAsync(privateKey)
 
-  const tree = createMerkleTree()
+  const treeOptions = options?.persistencePath
+    ? { persistencePath: options.persistencePath }
+    : undefined
+  const tree = createMerkleTree(treeOptions)
   const signer = createCheckpointSigner(privateKey, publicKey, LOG_ORIGIN)
   // Note: privateKey remains in memory for the signer's lifetime (the signer
   // captures it in a closure for checkpoint signing). This is intentional.
