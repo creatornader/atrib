@@ -12,7 +12,7 @@ The canonical positioning used across the README, spec abstract, and per-package
 
 Use this language in any new docs or commit messages that need a one-line description of the project. Don't reword it without an accompanying change to the README and spec.
 
-The complete protocol specification is in `atrib-spec.md` (§0-§6). The technical architecture overview is in `ARCHITECTURE.md`. Read the spec before making any implementation decisions.
+The complete protocol specification is in `atrib-spec.md` (§0-§7). The technical architecture overview is in `ARCHITECTURE.md`. Read the spec before making any implementation decisions.
 
 ## Repository structure
 
