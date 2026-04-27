@@ -261,7 +261,7 @@ The consequence: adding `@atrib/mcp` or `@atrib/agent` to a production system ca
 
 The load-bearing choices. Each is in [DECISIONS.md](DECISIONS.md) with full rationale and rejected alternatives.
 
-**Ed25519, 32-byte seed (D003).** Not RSA, not ECDSA, not DIDs. Ed25519 is fast, has a small key size, deterministic signatures, and no PKI dependency. The 32-byte seed (not the 64-byte NaCl expanded format) keeps key management simple. Key rotation is deferred to v2.
+**Ed25519, 32-byte seed (D003).** Not RSA, not ECDSA, not DIDs. Ed25519 is fast, has a small key size, deterministic signatures, and no PKI dependency. The 32-byte seed (not the 64-byte NaCl expanded format) keeps key management simple. Key rotation and revocation are normatively specified in §1.9 (D033); see also §6 (D034) for the AKD-based public-key directory that resolves `creator_key → identity claim`.
 
 **JCS canonicalization, not JWS/COSE (D003, Section 1.3).** RFC 8785 JSON Canonicalization Scheme gives deterministic serialization: lexicographic key ordering, no whitespace. This means any party can independently compute the same canonical bytes from the same record, which is necessary for signature verification and hash chain integrity. JWS wrapping was rejected because it adds envelope complexity without adding security properties atrib needs.
 
@@ -305,7 +305,7 @@ Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hash
 
 ## Further reading
 
-- [atrib-spec.md](atrib-spec.md) -- the complete protocol specification (Sections 0-5)
-- [DECISIONS.md](DECISIONS.md) -- architectural decision log (D001-D025+)
+- [atrib-spec.md](atrib-spec.md), the complete protocol specification (§0-§6)
+- [DECISIONS.md](DECISIONS.md), architectural decision log (D001-D034+)
 - [packages/agent/README.md](packages/agent/README.md) -- adapter table with quick-start snippets for every framework
 - [spec/conformance/2.6.1/](spec/conformance/2.6.1/) -- shared conformance corpus for the submission API

@@ -178,7 +178,7 @@ After running either example with `ATRIB_LOG_ENDPOINT` pointed at your log:
 - A signed atrib record per successful tool call (Case A: per `weather` call; Case B: per forwarded filesystem call)
 - The records share a `context_id` per Claude session and chain via `chain_root` references (verifiable with `@atrib/verify`)
 - Failed calls (`isError: true` from the tool) emit no record per spec §5.3.3
-- atrib failures (network, signing) never reach Claude Agent SDK's tool dispatch; they're caught and logged with the `atrib:` console prefix per §5.8
+- internal atrib failures (network, signing) never reach Claude Agent SDK's tool dispatch; they're caught and logged with the `atrib:` console prefix per §5.8
 
 If you don't see records, check:
 

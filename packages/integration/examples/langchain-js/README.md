@@ -171,7 +171,7 @@ After running with `ATRIB_LOG_ENDPOINT` pointed at your log:
 - Every successful `tools/call` from the LangChain agent emits a signed atrib record
 - Records share a `context_id` per agent session and chain via `chain_root` references
 - Failed tool calls (`isError: true` from the upstream) emit no record per spec §5.3.3
-- atrib failures (network, signing, interceptor errors) never reach LangChain's tool dispatch; they're caught and logged with the `atrib:` console prefix per §5.8
+- internal atrib failures (network, signing, interceptor errors) never reach LangChain's tool dispatch; they're caught and logged with the `atrib:` console prefix per §5.8
 - Per-call-header workflows (forked clients) also emit records; no silent drops
 
 If you don't see records, check:

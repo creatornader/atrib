@@ -1141,3 +1141,136 @@ The divergence was present from the initial commit of `checkpoint.ts`. A round-t
 - *Cosignature retention windows.* How long must a witness keep its cosigs queryable? Verifiers may want historical cosigs to verify old settlement documents. V2.
 
 **Acknowledged process failure.** The prior §2.9 prose contradicted three of the five decisions documented here. SHOULD-require-cosignature contradicted invariant 7; operator-pushes-to-witnesses contradicted threat-2 mitigation; the gestured-at "witnessing infrastructure used by log.atrib.dev" implied a registry that doesn't exist. These were aspirational drift, not deliberate choices. Same failure mode as D030's note: spec text added without checking conflicts with the rest of the spec or with CLAUDE.md invariants. Recording the pattern again so the lesson is concrete, not theoretical.
+
+---
+
+## D033: Key rotation and revocation
+
+**Date:** 2026-04-27
+**Status:** Accepted; spec §1.9 drafted, implementation deferred to prior implementation work
+
+**Context.** D028 explicitly deferred key rotation. The substrate has been live for several weeks signing under the initial creator key, and during the post-B+C audit that key was discovered to have leaked into Claude Code conversation transcripts (transcripts have 600 perms but the key is "burned"; anyone with a copy of those transcripts has the key forever). stop-the-bleeding cleanup of manual rotation rotated the seed manually but the substrate still has no protocol-level revocation: every record signed by the leaked key continues to verify under that pubkey forever, with no signal to a verifier that the key was retired.
+
+A second motivation: scheduled 90-day rotation is not viable today. If a creator wanted to rotate, every existing record would still verify under the old pubkey but with no way to prove the rotation was authorized rather than a key-loss event.
+
+**Decision.** Key rotation is implemented via a new spec §1.9 with three normative pieces.
+
+1. **Revocation record format.** A new `event_type: 'key_revocation'` record. Fields:
+   - All existing record fields (`spec_version`, `event_type='key_revocation'`, `timestamp`, `context_id`, `creator_key`, `chain_root`, `content_id`, `signature`).
+   - `revoked_key`: the base64url-encoded 32-byte public key being retired.
+   - `revocation_reason`: enum `'compromise' | 'rotation' | 'retirement'`.
+   - `successor_key`: optional, base64url-encoded 32-byte public key of the rotation target. Present only when `revocation_reason='rotation'`. The semantics: signed records produced by `successor_key` MAY be considered as continuing the trust scope of `revoked_key` for the purposes of the directory (D034).
+
+   The revocation MUST be signed by `revoked_key` itself when `revocation_reason='rotation'` or `'retirement'`. When `revocation_reason='compromise'`, the revocation MAY instead be signed by a designated emergency key registered in the directory (see D034). This is the only case where a revocation can be signed by something other than the key being retired, because compromise means the legitimate owner may not have access to the key anymore.
+
+2. **Verifier semantics.** When a verifier sees a revocation record at log index `R`:
+   - All records with `creator_key === revoked_key` AND `log_index >= R` are treated as `verification_state: 'revoked_after_revocation'`. They no longer count toward attribution calculations.
+   - All records with `creator_key === revoked_key` AND `log_index < R` retain their original `verification_state`. Past attribution remains valid up to the moment of revocation. This is essential. Otherwise revocation becomes a destructive operation that erases history.
+   - When `successor_key` is present, the directory (D034) updates the identity claim's active key to `successor_key`. Records signed by the successor inherit the revoked key's identity.
+
+3. **Discovery.** Revocations are discovered the same way records are: by reading the log. A verifier MUST scan for `event_type: 'key_revocation'` records when validating any record signed by `creator_key === revoked_key`. The directory (D034) MAY index this for efficiency but the log itself is the source of truth.
+
+**Alternatives considered.**
+
+1. *External CRL (certificate revocation list) maintained by the operator.* Rejected because it puts the operator in the trust path of revocation. A compromised operator could refuse to publish a creator's revocation. Putting revocation in the log inherits the log's tamper-evidence properties.
+
+2. *Bound time-windows on creator keys (90-day expiry).* Rejected as overly prescriptive. Different creators have different operational realities. A managed-service creator may rotate weekly; a hobbyist may go years. The protocol should not impose a global rotation schedule. Operators can adopt one as policy without needing protocol enforcement.
+
+3. *Treat all post-revocation records as silently invalid (drop verification_state to `'unsigned'`).* Rejected because it loses information. Distinguishing `'revoked_after_revocation'` from `'unsigned'` lets a verifier or auditor see that the record was technically signed correctly but post-revocation, which is meaningfully different from an unsigned record (no signature ever existed).
+
+4. *Allow revocation by any party who can produce the public key.* Rejected because it creates a denial-of-service vector: anyone could revoke any creator's key. Requiring the revocation to be signed by the key being retired (or by an emergency key the creator registered up-front) prevents this.
+
+5. *Mandate `successor_key` always.* Rejected because some revocations are terminal (creator going out of business, project deprecated). Forcing `successor_key` would force ceremonial bridging.
+
+**Consequences.**
+
+- Spec gains §1.9 with the format and semantics. Conformance corpus at `spec/conformance/1.9/` covers: valid rotation, valid retirement, valid compromise (signed by emergency key), invalid revocation signed by wrong key, post-revocation record correctly flagged.
+- `@atrib/verify` and `services/graph-node` gain logic to detect and apply revocation records during graph construction. `verification_state` enum extends with `'revoked_after_revocation'`.
+- `@atrib/cli` gains `atrib revoke --keychain --reason ROTATION --successor PUBKEY` for operator-driven rotation.
+- `services/log-node` does not need changes: revocation records flow through the same submission path as any other record.
+- Directory (D034) consults revocations to update the active key for an identity claim.
+
+**What this DOESN'T solve.**
+
+- *Past records signed by a key compromised but used legitimately.* If a key was compromised on day 100 but used legitimately on days 0-99 and maliciously on days 100-150 before the revocation lands, days 100-150 still verify under the original key with no signal of compromise. The verifier sees `'revoked_after_revocation'` only post-150. A "compromise window" annotation is V2 work.
+- *Forward-secret rotation.* Successor key inherits identity but the attacker who has the old key can still produce records that look legitimate under the old pubkey for the pre-revocation window. True forward secrecy would require a key-evolution scheme (e.g., HORS, hash chains). Out of scope.
+- *Operator key rotation.* The log's signing key has the same problem as creator keys, plus an additional one: rotating the log key invalidates every prior inclusion proof's signature. Log-key rotation is its own ADR (deferred to V2).
+
+**Implementation sequencing.** prior implementation work implements revocation + the directory together because they share data structures and verifier logic.
+
+---
+
+## D034: Public-key directory architecture (AKD unblinded; VRF-blinded mode available for downstream consumers)
+
+**Date:** 2026-04-27
+**Status:** Accepted; spec §6 drafted, implementation in prior implementation work
+
+**Context.** Atrib records carry `creator_key` as opaque base64url bytes. A verifier seeing such a record has no way to learn "who is this?" There is no canonical mapping from `creator_key` to identity. The post-B+C audit identified this as the most consequential infrastructure gap: without a directory, attribution is purely cryptographic and not semantically meaningful to anyone except the original signer.
+
+A neighbouring class of use cases has the same problem at a higher privacy bar: any directory whose `label → value` lookup is itself sensitive (for example, end-to-end-encrypted messaging where asking "what's user X's key?" would leak interest in user X to the directory operator).
+
+The two problem shapes share the same primitive (a verifiable, append-only, per-label-history-chained directory) but differ on privacy. After surveying the landscape, Meta's open-source `akd` (Auditable Key Directory) Rust crate implements the right abstraction: it supports both unblinded labels (cheap public lookups) and VRF-blinded labels (privacy-preserving lookups) under a single data structure. atrib needs unblinded; downstream consumers in the privacy-sensitive class need VRF-blinded; both can share the same library.
+
+A decision was needed on three questions: (1) AKD vs roll-our-own simpler structure, (2) unblinded-only for atrib vs flag-configurable, (3) where the directory's data is hosted relative to the existing Tessera log.
+
+**Decision.**
+
+1. **AKD as the underlying primitive.** A plain append-only Merkle log misses 17 of the 20 properties a production-trustworthy directory needs (efficient label-indexed lookup, non-membership proofs, authenticated latest-version proofs, per-label append-only semantics, operator-independent verification, plus VRF blinding when the consumer requires privacy-preserving lookup). The "roll a simple version on the existing log" path was undersold; for atrib's actual needs (verifier resolves `creator_key` to identity claim cheaply, with cryptographic guarantees against operator forgery), AKD is the correct primitive. atrib uses AKD with unblinded labels. Downstream consumers requiring privacy-preserving lookup use AKD with VRF-blinded labels via the same library.
+
+2. **Hosted as a sibling service** (`services/directory-node/` in the atrib repo). The directory is its own append-only structure, separate from the Tessera log. Its checkpoints are signed by an independent key (not the log key) and witnessed independently. Periodically, the directory's root commitment is posted to the Tessera log as a `directory_anchor` record so a verifier consulting the log can detect a forked directory.
+
+3. **Identity claim format** (atrib mode):
+   ```
+   {
+     "spec_version": "atrib/1.0",
+     "claim_type": "creator_identity",
+     "creator_key": "<base64url 32-byte ed25519 pubkey>",
+     "claim": {
+       "subject": "<freeform identity, e.g. 'tools.openai.com', 'did:web:example.com', 'mailto:nader@atrib.dev'>",
+       "method": "self_attested" | "domain_verified" | "did_resolved",
+       "registered_at": <unix-ms>,
+       "expires_at": <unix-ms> | null,
+       "metadata": { ... }   // freeform extension
+     }
+   }
+   ```
+   The claim is signed by `creator_key` itself (self-attestation). Optional verification methods (`domain_verified`, `did_resolved`) extend the trust model. A domain-verified claim includes a TXT-record proof that the domain owner endorses the claim. The protocol does not enforce verification; verifiers consume the claim and apply their own policy.
+
+4. **VRF-blinded adapter (downstream).** Consumers with privacy requirements wrap the same AKD library but bind labels via VRF so the directory operator cannot enumerate keys or observe lookups. The blinded mode's specifics (label binding, VRF key management) live in the consuming spec rather than the atrib spec, since atrib does not deploy this mode.
+
+5. **Consultation contract for verifiers.** A verifier seeing a record `R` with `creator_key = K` and timestamp `T`:
+   - Looks up `K` in the directory at version `<= T` (most-recent claim active at the record's timestamp).
+   - Combines with §1.9 revocation: if `K` was revoked at log index `R'` and the record is at log index `>= R'`, the claim no longer applies (record is `'revoked_after_revocation'`).
+   - Returns `identity_resolved: ClaimObject | null` alongside the record.
+
+**Alternatives considered.**
+
+1. *Roll an append-only registry on the existing Tessera log.* Rejected after the 80/20 analysis: the missing 20% (efficient lookup, non-membership proofs, latest-version proofs, per-label append-only semantics, operator-independent index correctness) is exactly the trustworthy-directory part. AKD provides all of these. Rolling our own would be partial and would need to be replaced anyway.
+
+2. *Build a custom directory protocol.* Rejected because AKD is mature, audited, and reused by Meta in production for WhatsApp key transparency. Reinventing it is unjustified scope.
+
+3. *Atrib uses unblinded forever; downstream privacy-preserving consumers fork to a different library.* Rejected because the two configurations share a substantive amount of operational infrastructure (witness model, append-only proof, rotation handling). Forking would mean maintaining two implementations of the same Merkle structure.
+
+4. *Host the directory in the same Tessera log.* Rejected because directory entries form a different per-label append-only structure than tlog-tiles' entry-indexed structure. Conflating them would force one of them into the wrong abstraction. They share the witness pattern but not the data model.
+
+5. *Defer directory until V2.* Rejected because the post-B+C audit identified it as load-bearing for the dogfood thesis. Without it, "agents reason from a past they can prove" is a cryptographic statement about bytes, not a semantic statement about identity.
+
+**Consequences.**
+
+- New service `services/directory-node/` (TypeScript wrapper around AKD via WASM or NAPI; choice deferred to  after benchmarking).
+- New package `@atrib/directory` exposing `publish`, `lookup`, `history`, `proveAbsence` SDK methods.
+- `@atrib/verify` consumes the directory and annotates verification results with `identity_resolved`.
+- The recall tool (an MCP server consumed by the host agent) annotates returned records with the resolved identity claim per record.
+- Spec §6 covers: claim format, AKD operations, witness model parity with §2.9, verifier consultation algorithm.
+- Downstream consumers requiring VRF-blinded lookup adopt the same AKD library configured for that mode, in their own service. Their configuration spec references D034.
+
+**What this DOESN'T solve.**
+
+- *Identity verification beyond self-attestation.* The protocol records claims but does not enforce that claim subjects are who they say they are. Domain verification and DID resolution are spec'd but the trust comes from the underlying mechanism (DNS, DID method), not from atrib.
+- *Privacy of unblinded mode.* atrib's directory is public by design. Anyone can enumerate registered creator_keys and their claims. This is correct for attribution (where keys appear on a public log anyway). It would be wrong for privacy-sensitive consumers, which is why AKD also offers VRF-blinded mode for them.
+- *AKD's own implementation correctness.* atrib trusts the AKD crate. If AKD has a bug, atrib has the bug. Mitigation: pin the version, follow upstream advisories, run AKD's own conformance suite as part of CI.
+- *Directory-key rotation.* The directory-signing key has the same rotation problem as the log-signing key. Same V2 deferral.
+
+**Implementation sequencing.** prior implementation work: AKD WASM/NAPI bridge → @atrib/directory package → wire into @atrib/verify → wire into recall.
+
+**Cross-project ramification.** (removed)

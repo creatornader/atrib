@@ -1,20 +1,29 @@
 # atrib
 
-Signed receipts for every MCP tool call. Ed25519 signatures, JCS canonicalization, RFC 6962 Merkle proofs. One line of code to integrate.
+**Verifiable agent actions.** Every tool call becomes signed context for the next.
 
-## The problem
+atrib is the substrate behind agents that reason from a past they can prove. Every MCP tool call gets an Ed25519-signed record at the moment of action, committed to a public Merkle log, chained into the next call, independently verifiable by anyone. The agent gains a provable history; downstream consumers (merchants, auditors, other agents) gain a verifiable trail. One line of code to integrate.
 
-When an AI agent calls a tool and that leads to a purchase, nobody can prove which tools contributed. There's no receipt, no chain of custody, no way for the tool creator to get paid for their part. The platform sees everything; the creators see nothing.
+## What this enables
 
-## What atrib does
+The substrate is the load-bearing piece. The four uses below are downstream consequences, ordered by how directly each depends on the substrate's core property: signed-at-the-moment, verifiable-thereafter.
 
-atrib adds a signed attribution record to every MCP tool call. The record travels with the call, gets appended to a Merkle log, and forms an independently verifiable chain from tool call to transaction.
+- **Provable cognition.** An agent reads its own prior records and reasons from them. Each record is a signed claim that re-verifies locally; the agent's continuity of self survives platform changes, model changes, and harness changes because the cryptography is independent of all of them. This is the dogfood thesis: agents that reason from a past they can prove.
+- **Independent audit.** Any third party can verify what an agent did, in what order, with what causal structure. No trust in the agent operator, the platform, or any intermediary required. Compliance-coded products (audit trail, SOC 2, AI governance tooling) approximate this without the substrate; the substrate does it correctly.
+- **Cross-agent provenance.** Tool calls chain forward through W3C trace context. Agents that hand off work to other agents carry verifiable causality across the handoff. The chain is the trust.
+- **Settlement when commerce closes a chain.** A side effect of the substrate: the same signed record set is what a settlement document is computed from. The §4.6 algorithm runs deterministically; any merchant or auditor can recompute and verify. This is real attribution-economy infrastructure, and it follows from the substrate rather than being its purpose.
 
-- Each record is signed by the creator's Ed25519 key and JCS-canonicalized
-- A Merkle log stores commitments (hashes, not content) with RFC 6962 inclusion proofs
-- Five edge types connect tool calls into an attribution graph
-- Policies let creators and merchants define what contributions are worth
-- A pure-function calculation maps graph + policy to value distribution
+## Substrate vs harness
+
+atrib is the substrate. Consuming it well (surfacing an agent's history at session start, exposing recall tools the agent can call, persisting signed records locally for replay) is the job of an agent harness or runtime. atrib does not prescribe a harness. The substrate is independently useful to any harness (Claude Code, Cursor, custom agent products, in-house agent runtimes) that wants to give its agent the contextual awareness verifiable history makes possible.
+
+## How it works
+
+- Each record is signed by the actor's Ed25519 key and JCS-canonicalized
+- A Merkle log stores commitments (hashes, not content) with RFC 6962 inclusion proofs and C2SP-canonical signed-note checkpoints
+- Five edge types connect actions into a graph (chain, session, parallel, convergence, cross-session)
+- A pure-function calculation maps graph + policy to value distribution when commerce closes
+- A public-key directory (§6) resolves opaque keys to identity claims; rotation and revocation are normative (§1.9)
 
 No custom cryptography. No content exposure. No trust required.
 
@@ -108,11 +117,11 @@ Runs a fake merchant, a fake agent, and a real Merkle log in a single process. T
 | [`@atrib/log-dev`](packages/log-dev/README.md) | Dev-only in-memory log stub. Not for production. |
 | [`@atrib/integration`](packages/integration/README.md) | Cross-package tests + runnable examples. |
 
-> 898 tests across all packages (897 passing, 1 documented skip). Public packages are not yet published to npm. The production log service is at [`services/log-node/`](services/log-node/) (deployed at `https://log.atrib.dev/v1`); the graph query service is at [`services/graph-node/`](services/graph-node/) (deployed at `https://graph.atrib.dev/v1`). A reproducible end-to-end verifier with 13 cryptographic gates ships at `services/log-node/scripts/verify-loop.mjs` and runs daily in CI against the deployed log.
+> 898 tests across all packages (897 passing, 1 documented skip). Public packages are not yet published to npm. The production log service is at [`services/log-node/`](services/log-node/) (deployed at `https://log.atrib.dev/v1`); the graph query service is at [`services/graph-node/`](services/graph-node/) (deployed at `https://graph.atrib.dev/v1`). A reproducible end-to-end verifier with 13 gate assertions across 8 named categories (tree integrity, format conformance, checkpoint signature, pubkey-publication agreement, signer scope, attribution, record signature replay, chain integrity) ships at `services/log-node/scripts/verify-loop.mjs` and runs daily in CI against the deployed log.
 
-**Implemented and deployed:** Record signing (§1), transparency log (§2) with persistent storage and C2SP-canonical signed-note checkpoints (D031), graph query interface (§3) with §3.2.4 derivation, calculation algorithm (§4.6) with deterministic distribution and §4.7 settlement document signing.
+**Implemented and deployed:** Record signing (§1), transparency log (§2) with persistent storage and C2SP-canonical signed-note checkpoints (D031), graph query interface (§3) with §3.2.4 derivation, calculation algorithm (§4.6) with deterministic distribution and §4.7 settlement document signing, opt-in autoChain for hosts that don't propagate atrib's outbound token (D033 sequencing).
 
-**Spec-defined but not implemented:** Witnessing (spec §2.9, design fixed in D032; first implementation deferred until a non-operator verifier exists).
+**Spec-defined but not implemented:** Witnessing (§2.9, D032; first implementation deferred until a non-operator verifier exists). Key rotation and revocation (§1.9, D033; implementation in prior implementation work). Public-key directory (§6, D034; same AKD-based, unblinded mode for atrib and a VRF-blinded mode available for downstream consumers requiring privacy-preserving lookup).
 
 ## Key generation
 
@@ -128,10 +137,12 @@ Store the output as `ATRIB_PRIVATE_KEY`. The public key is derived at runtime.
 
 - **§0:** Foundations
 - **§1:** Attribution record format, signing, propagation, payment protocol hooks
+- **§1.9:** Key rotation and revocation (D033)
 - **§2:** Merkle log protocol (C2SP tlog-tiles, proofs, witnessing)
 - **§3:** Graph query interface (five edge types)
 - **§4:** Policy format, negotiation, calculation algorithm
 - **§5:** SDK contract, automation, degradation guarantees
+- **§6:** Public-key directory (AKD-based; D034)
 
 ## Design principles
 

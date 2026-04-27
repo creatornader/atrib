@@ -4,7 +4,7 @@
 >
 > This is an in-memory development log stub for local testing, examples, and CI fixtures. It does **not** implement the C2SP tlog-tiles specification, does **not** persist entries beyond process lifetime, does **not** produce real Merkle inclusion proofs, and is **not** witnessed.
 >
-> The production atrib log lives at `log.atrib.dev/v1` and is Tessera-backed per spec §2. Anything you submit to this stub is discarded when the process exits. Inclusion proofs returned by this stub are well-formed (correct field shapes per §2.6.2) but their hashes are deterministic placeholders, not real Merkle hashes; they will not pass `@atrib/verify`'s strict verification path.
+> The production atrib log lives at `log.atrib.dev/v1` (currently served by `services/log-node/`; Go-backed `services/log/` planned). Anything you submit to this stub is discarded when the process exits. Inclusion proofs returned by this stub are well-formed (correct field shapes per §2.6.2) but their hashes are deterministic placeholders, not real Merkle hashes; they will not pass `@atrib/verify`'s strict verification path.
 
 ## What this package is for
 
