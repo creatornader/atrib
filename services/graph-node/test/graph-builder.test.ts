@@ -90,6 +90,84 @@ describe('buildGraph (section 3.2.4)', () => {
     expect(graph.has_transaction).toBe(true)
   })
 
+  it('creates SESSION_PARALLEL for same-context records with identical timestamps', async () => {
+    // Same context_id, same timestamp, no chain link. §3.2.4 step 2 places
+    // SESSION_PRECEDES only when one timestamp strictly precedes the other.
+    // When timestamps are equal, the pair must remain unordered → SESSION_PARALLEL.
+    const r1 = await makeRecord({ timestamp: 5000, content_id: `sha256:${'p'.repeat(64)}` })
+    const r2 = await makeRecord({ timestamp: 5000, content_id: `sha256:${'q'.repeat(64)}` })
+
+    const graph = await buildGraph([r1, r2])
+    expect(graph.node_count).toBe(2)
+
+    const sessionPrecedes = graph.edges.filter((e) => e.type === 'SESSION_PRECEDES')
+    expect(sessionPrecedes).toHaveLength(0)
+
+    const parallels = graph.edges.filter((e) => e.type === 'SESSION_PARALLEL')
+    expect(parallels).toHaveLength(1)
+    expect(parallels[0]!.directed).toBe(false)
+  })
+
+  it('creates CROSS_SESSION edge when transaction session_token matches a tool_call in another context', async () => {
+    // Two distinct sessions linked by recommendation_token. CTX_1 has a tool
+    // call carrying session_token; CTX_2 has the matching transaction. §3.2.4
+    // step 5 must emit a directed CROSS_SESSION edge from the foreign tool
+    // call to the transaction.
+    const TOKEN = 'cross-session-token-test'
+    const FOREIGN_CTX = 'b'.repeat(32)
+
+    const foreignCall = await makeRecord({
+      context_id: FOREIGN_CTX,
+      timestamp: 1000,
+      session_token: TOKEN,
+      content_id: `sha256:${'r'.repeat(64)}`,
+    })
+    const localCall = await makeRecord({
+      context_id: CONTEXT_ID,
+      timestamp: 2000,
+      session_token: TOKEN,
+      content_id: `sha256:${'s'.repeat(64)}`,
+    })
+    const tx = await makeRecord({
+      context_id: CONTEXT_ID,
+      event_type: 'transaction',
+      timestamp: 3000,
+      session_token: TOKEN,
+      content_id: `sha256:${'t'.repeat(64)}`,
+    })
+
+    const graph = await buildGraph([foreignCall, localCall, tx])
+    const crossEdges = graph.edges.filter((e) => e.type === 'CROSS_SESSION')
+    expect(crossEdges).toHaveLength(1)
+    expect(crossEdges[0]!.directed).toBe(true)
+
+    // Source must be the foreign-context tool_call; target must be the
+    // in-context transaction.
+    const txHash = hexEncode(sha256(canonicalRecord(tx)))
+    const foreignHash = hexEncode(sha256(canonicalRecord(foreignCall)))
+    expect(crossEdges[0]!.source).toBe(`sha256:${foreignHash}`)
+    expect(crossEdges[0]!.target).toBe(`sha256:${txHash}`)
+  })
+
+  it('omits CROSS_SESSION when includeCrossSession is false', async () => {
+    const TOKEN = 'token-skipped'
+    const FOREIGN_CTX = 'c'.repeat(32)
+    const foreign = await makeRecord({
+      context_id: FOREIGN_CTX,
+      timestamp: 1000,
+      session_token: TOKEN,
+      content_id: `sha256:${'u'.repeat(64)}`,
+    })
+    const tx = await makeRecord({
+      event_type: 'transaction',
+      timestamp: 2000,
+      session_token: TOKEN,
+      content_id: `sha256:${'v'.repeat(64)}`,
+    })
+    const graph = await buildGraph([foreign, tx], [], { includeCrossSession: false })
+    expect(graph.edges.filter((e) => e.type === 'CROSS_SESSION')).toHaveLength(0)
+  })
+
   it('includes gap nodes when requested', async () => {
     const record = await makeRecord()
     const gapNode = {

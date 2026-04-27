@@ -15,7 +15,8 @@
     "@atrib/agent": "workspace:*",
     "@atrib/verify": "workspace:*",
     "@atrib/log-dev": "workspace:*",
-    "@atrib/log-node": "workspace:*"
+    "@atrib/log-node": "workspace:*",
+    "@atrib/graph-node": "workspace:*"
   },
   "devDependencies": {
     "@noble/ed25519": "^2.2.0",

@@ -31,6 +31,9 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+// Track whether this module is being executed as a script or imported by tests.
+const IS_MAIN_MODULE = process.argv[1] === fileURLToPath(import.meta.url)
+
 const LOG_ENDPOINT = (process.env.LOG_ENDPOINT ?? 'https://log.atrib.dev/v1').replace(/\/$/, '')
 
 // METRICS_DIR defaults to <repo-root>/metrics so the script behaves the same
@@ -355,7 +358,20 @@ async function main() {
   printSummary(snapshot)
 }
 
-main().catch((err) => {
-  console.error('metrics: fatal', err)
-  process.exit(1)
-})
+if (IS_MAIN_MODULE) {
+  main().catch((err) => {
+    console.error('metrics: fatal', err)
+    process.exit(1)
+  })
+}
+
+// Pure helpers / data exposed for unit testing
+// (services/log-node/test/metrics-helpers.test.ts).
+export {
+  METRICS,
+  bucketize,
+  parseCheckpointBody,
+  parseEntryBundle,
+  parseEntry,
+  computeDeltas,
+}
