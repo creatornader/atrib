@@ -180,10 +180,14 @@ describe('full-chain integration (real log, real crypto)', () => {
     expect(inclusionValid).toBe(true)
 
     // ── 7. Verify the checkpoint signature (Ed25519) ──────────────────
+    // C2SP signed-note canonical encoding (spec §2.4.3 post-D031):
+    //   "— <origin> <base64(keyHash[4B] || sig[64B])>"
     const sigLine = proofCpParts[1]!.trim()
-    const plusIdx = sigLine.indexOf('+')
-    const sigBase64 = sigLine.slice(plusIdx + 1)
-    const sigBytes = new Uint8Array(Buffer.from(sigBase64, 'base64'))
+    const m = sigLine.match(/^[—\-] \S+ (\S+)\s*$/)
+    expect(m).not.toBeNull()
+    const decoded = new Uint8Array(Buffer.from(m![1]!, 'base64'))
+    expect(decoded.length).toBe(68)
+    const sigBytes = decoded.slice(4) // skip 4-byte keyHash
 
     const bodyBytes = new TextEncoder().encode(proofCpBody)
     const sigValid = await ed.verifyAsync(sigBytes, bodyBytes, logServer.logPublicKey)
