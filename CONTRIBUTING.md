@@ -15,7 +15,7 @@ pnpm install
 # Build all packages
 pnpm -r build
 
-# Run all tests (expect 887 total, 886 passing, 1 documented skip)
+# Run all tests (expect 898 total, 897 passing, 1 documented skip)
 pnpm -r test
 
 # Typecheck

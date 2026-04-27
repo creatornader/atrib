@@ -654,6 +654,52 @@ describe('atrib() middleware', () => {
       }
     })
 
+    it('autoChainSeed restores chain across simulated wrapper restart', async () => {
+      // First "wrapper instance", produce 2 records. autoChain on, no seed.
+      const first: AtribRecord[] = []
+      {
+        const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+        atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://test.example.com',
+          autoChain: true,
+          onRecord: (r) => { first.push(r) },
+        })
+        registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
+        const handler = getToolHandler()!
+        await handler(bareToolCallRequest('a'), {})
+        await handler(bareToolCallRequest('b'), {})
+      }
+      expect(first).toHaveLength(2)
+      const sharedContext = first[0]!.context_id
+      expect(first[1]!.context_id).toBe(sharedContext)
+
+      // Second "wrapper instance", fresh middleware, seeded with first[1].
+      // The next call MUST chain to first[1], using the SAME context_id.
+      const { canonicalRecord: canon } = await import('../src/canon.js')
+      const { sha256: hash, hexEncode: hex } = await import('../src/hash.js')
+
+      const second: AtribRecord[] = []
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        autoChain: true,
+        autoChainSeed: first, // simulate reading the local jsonl mirror on boot
+        onRecord: (r) => { second.push(r) },
+      })
+      registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
+      const handler = getToolHandler()!
+      await handler(bareToolCallRequest('c'), {})
+
+      expect(second).toHaveLength(1)
+      // Same context_id as the first instance, chain continues, doesn't fork.
+      expect(second[0]!.context_id).toBe(sharedContext)
+      // chain_root references first[1]'s record_hash, NOT genesis.
+      const expectedPrev = `sha256:${hex(hash(canon(first[1]!)))}`
+      expect(second[0]!.chain_root).toBe(expectedPrev)
+    })
+
     it('autoChain on but inbound atrib propagation present: explicit chain wins over synthesized', async () => {
       // Same middleware instance used for two calls; second call carries a
       // valid inbound atrib token. The middleware must honor it instead of
