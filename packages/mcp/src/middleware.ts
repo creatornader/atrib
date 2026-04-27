@@ -45,6 +45,13 @@ export interface AtribOptions {
    */
   onRecord?: (record: AtribRecord) => void | Promise<void>
   /**
+   * Maximum number of records held in the in-memory submission queue while
+   * the log is unreachable. When this cap is hit, the queue evicts the
+   * oldest 'normal'-priority entry first (then 'high'-priority if needed).
+   * Defaults to 10000. Forwarded to createSubmissionQueue.
+   */
+  maxQueueDepth?: number
+  /**
    * Opt-in: synthesize chain context within a single middleware instance when
    * the calling agent does not propagate atrib's outbound `_meta.atrib` token
    * back into subsequent requests. Default false.
@@ -123,7 +130,9 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     )
   }
   const transactionTools = new Set(options.transactionTools ?? [])
-  const queue: SubmissionQueue = createSubmissionQueue(options.logEndpoint)
+  const queue: SubmissionQueue = createSubmissionQueue(options.logEndpoint, {
+    ...(options.maxQueueDepth !== undefined ? { maxQueueDepth: options.maxQueueDepth } : {}),
+  })
 
   // autoChain bookkeeping (process-lifetime, opt-in via options.autoChain).
   // Stable context_id for sessions where the caller never sets traceparent;

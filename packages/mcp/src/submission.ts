@@ -56,6 +56,16 @@ const SUBMISSION_PATH = '/v1/entries'
 const MAX_RETRIES = 3
 const INITIAL_BACKOFF_MS = 1000
 const MAX_WINDOW_MS = 30_000
+/**
+ * Default cap on the number of unsubmitted records held in memory while the
+ * log is unreachable. Without this cap, a multi-hour log outage in a hot
+ * wrapper process is unbounded memory growth: every successful tool call
+ * lands in pendingRecords, none drains until the log returns. At 1KB per
+ * record + retry metadata, 10000 entries ≈ 15MB resident — annoying but
+ * survivable. Set higher via createSubmissionQueue's maxQueueDepth option
+ * for high-throughput services that have observed actual queue depths.
+ */
+const DEFAULT_MAX_QUEUE_DEPTH = 10_000
 
 /**
  * Normalize a caller-supplied log endpoint to ensure it includes the
@@ -131,8 +141,27 @@ interface PendingEntry {
   priority: Priority
 }
 
-export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
+export interface SubmissionQueueOptions {
+  /**
+   * Maximum number of records held in `pendingRecords` while the log is
+   * unreachable. When this cap would be exceeded, the queue evicts the
+   * oldest 'normal'-priority entry; if only 'high'-priority entries
+   * remain, it evicts the oldest 'high'-priority entry. Eviction is
+   * preferable to unbounded memory growth — the spec requires non-blocking
+   * submission, and an OOM-killed wrapper drops EVERYTHING.
+   *
+   * Defaults to {@link DEFAULT_MAX_QUEUE_DEPTH}. Set to `Infinity` to
+   * disable (only safe for tests and short-lived processes).
+   */
+  maxQueueDepth?: number
+}
+
+export function createSubmissionQueue(
+  logEndpoint?: string,
+  options: SubmissionQueueOptions = {},
+): SubmissionQueue {
   const endpoint = normalizeLogEndpoint(logEndpoint ?? DEFAULT_LOG_ENDPOINT)
+  const maxQueueDepth = options.maxQueueDepth ?? DEFAULT_MAX_QUEUE_DEPTH
   const proofCache = new Map<string, ProofBundle>()
   // Tracks records whose initial submission failed but may succeed on a
   // later flush() retry. Each entry carries its priority so flush() can
@@ -140,6 +169,40 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
   // the two real consumers of priority documented in the file header.
   const pendingRecords = new Map<string, PendingEntry>()
   const pendingPromises: Promise<void>[] = []
+  // Counts evictions due to maxQueueDepth so an operator can detect a
+  // sustained outage without tailing logs. Reset to 0 on every successful
+  // drain (i.e. when pendingRecords briefly empties).
+  let totalEvictions = 0
+
+  /**
+   * Evict the oldest entry to make room. JS Map iteration order is insertion
+   * order, so the first key is the oldest. Prefer evicting 'normal' priority
+   * over 'high' to preserve transaction-receipt durability.
+   */
+  function evictOneOldest(): void {
+    let firstNormalKey: string | undefined
+    let firstAnyKey: string | undefined
+    for (const [k, entry] of pendingRecords) {
+      if (firstAnyKey === undefined) firstAnyKey = k
+      if (entry.priority === 'normal') {
+        firstNormalKey = k
+        break
+      }
+    }
+    const victim = firstNormalKey ?? firstAnyKey
+    if (victim !== undefined) {
+      pendingRecords.delete(victim)
+      totalEvictions++
+      // Log only the first and every-100th eviction to avoid log spam during
+      // a sustained outage.
+      if (totalEvictions === 1 || totalEvictions % 100 === 0) {
+        console.warn(
+          `atrib: pendingRecords queue at cap (${maxQueueDepth}); evicted oldest record`,
+          { evictions_so_far: totalEvictions, record_hash: victim },
+        )
+      }
+    }
+  }
 
   function recordHash(record: AtribRecord): string {
     const canonical = canonicalRecord(record)
@@ -208,8 +271,12 @@ export function createSubmissionQueue(logEndpoint?: string): SubmissionQueue {
       }
     }
 
-    // All retries failed. cache locally with its priority preserved.
+    // All retries failed. cache locally with its priority preserved. Enforce
+    // the queue cap before insert so a long outage cannot grow unbounded.
     console.warn('atrib: log submission failed after retries', { record_hash: hash })
+    while (pendingRecords.size >= maxQueueDepth) {
+      evictOneOldest()
+    }
     pendingRecords.set(hash, { record, priority })
   }
 
