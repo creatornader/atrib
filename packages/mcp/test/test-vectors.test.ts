@@ -54,25 +54,25 @@ const GENESIS_CHAIN_ROOT =
 const TIMESTAMP = 1700000000000
 
 const SHA256_SIGNING_INPUT =
-  '78046879d2a762e9a1a65ab1ef284ca65f77384db8050069eaa2cb5cbf9ca8f1'
+  'e2ad8c62656a32b381c9b4c6b55fb13529e8843ffcdd0f03a80bb1afb87a9676'
 
 const SIGNATURE_B64URL =
-  'PrhhwDFrAcDwbfHVzQWG0y58SwGP3FWZdSKyxMeKVSA5EQOZQJYXbqwEZJC1MkFj6W1M0_17o22cGyzKEtSVDg'
+  'ZMjtGaUFxp3N4ZA2Vw05NBg8KiymOdNRL3uRB_QJ-zMK7MVOBBqtOA1xLo-DMmeLZfjWjfBFwrHtQemoxXXMBg'
 
 const RECORD_HASH_HEX =
-  'ab30b97e78ce078da518536f43929429a0eab164cd4d8896548215ccea50faba'
+  'ea6fb413c524ab5767520516ffb8ae38a74391f7892177e0236f5f2de523b9c1'
 
 const PROPAGATION_TOKEN =
-  'qzC5fnjOB42lGFNvQ5KUKaDqsWTNTYiWVIIVzOpQ-ro.iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w'
+  '6m-0E8Ukq1dnUgUW_7iuOKdDkfeJIXfgI29fLeUjucE.iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w'
 
 const NEXT_CHAIN_ROOT =
-  'sha256:ab30b97e78ce078da518536f43929429a0eab164cd4d8896548215ccea50faba'
+  'sha256:ea6fb413c524ab5767520516ffb8ae38a74391f7892177e0236f5f2de523b9c1'
 
 const ENTRY_HEX =
-  '01ab30b97e78ce078da518536f43929429a0eab164cd4d8896548215ccea50faba8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5caaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0000018bcfe5680001'
+  '01ea6fb413c524ab5767520516ffb8ae38a74391f7892177e0236f5f2de523b9c18a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5caaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0000018bcfe5680001'
 
 const LEAF_HASH_HEX =
-  '1f0bd2c5ad2518265eff0e13a65167f1f2ce990bd0de19af8fd8ec285bee03ab'
+  '424c202b46c2468a9a62958c841c38884b53454341cd0c326296dd2cdc31037f'
 
 
 // ---------------------------------------------------------------------------
@@ -85,7 +85,7 @@ function makeUnsignedRecord(): AtribRecord {
     content_id: CONTENT_ID,
     creator_key: PUBLIC_KEY_B64URL,
     chain_root: GENESIS_CHAIN_ROOT,
-    event_type: 'tool_call',
+    event_type: 'https://atrib.dev/v1/types/tool_call',
     context_id: CONTEXT_ID,
     timestamp: TIMESTAMP,
     signature: '', // placeholder. will be replaced by signRecord

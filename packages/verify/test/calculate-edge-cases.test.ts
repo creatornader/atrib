@@ -39,7 +39,7 @@ function buildGraph(
     const creatorIdx = i % creatorCount
     nodes.push({
       id: `sha256:tc_${i.toString().padStart(6, '0')}`,
-      event_type: 'tool_call',
+      event_type: 'tool_call', event_type_uri: 'https://atrib.dev/v1/types/tool_call',
       content_id: `sha256:content_${i}`,
       creator_key: `creator_${creatorIdx.toString().padStart(3, '0')}`,
       chain_root: `sha256:chain_${i}`,
@@ -54,7 +54,7 @@ function buildGraph(
   for (let i = 0; i < gapNodes; i++) {
     nodes.push({
       id: `gap:${i}`,
-      event_type: 'gap_node',
+      event_type: 'gap_node', event_type_uri: null,
       content_id: null,
       creator_key: null,
       chain_root: null,
@@ -68,7 +68,7 @@ function buildGraph(
 
   const txNode: GraphNode = {
     id: 'sha256:tx_node',
-    event_type: 'transaction',
+    event_type: 'transaction', event_type_uri: 'https://atrib.dev/v1/types/transaction',
     content_id: 'sha256:tx_content',
     creator_key: 'creator_000',
     chain_root: 'sha256:tx_chain',

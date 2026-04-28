@@ -91,12 +91,12 @@ Architectural and design decisions made during the atrib protocol development. E
 ## D013: "Observability without surveillance" is delivered across three layers, not one
 
 **Date:** 2026-04-05
-**Context:** During Phase 1 implementation, we examined whether the core primitives alone deliver the spec's central privacy claim ("observability without surveillance," §0). The answer is that the claim requires three layers working together, and it's important to track which layers are built and which aren't.
+**Context:** The spec's central privacy claim ("observability without surveillance," §0) is not delivered by any single primitive in isolation. The claim requires three layers working together, and the spec needs to be explicit about which layer enforces what.
 **Decision:** The privacy architecture is:
 
-- **Layer 1 (record format):** The `AtribRecord` type captures structural metadata only: no tool call arguments, no response content, no user queries, no transaction amounts. Content never enters the hashing pipeline. This is implemented in Phase 1.
-- **Layer 2 (log commitments):** The Merkle log stores 90-byte entries (record_hash, creator_key, context_id, timestamp, event_type): commitments, not records. Full records stay with the parties. This is implemented via log submission in Phase 2.
-- **Layer 3 (middleware discipline):** The degradation contract (§5.8) ensures errors, retries, and failure modes don't leak content through logs or error messages. Proof bundles serve inclusion proofs, not records. This is implemented in Phase 2.
+- **Layer 1 (record format):** The `AtribRecord` type captures structural metadata only: no tool call arguments, no response content, no user queries, no transaction amounts. Content never enters the hashing pipeline.
+- **Layer 2 (log commitments):** The Merkle log stores 90-byte entries (record_hash, creator_key, context_id, timestamp, event_type): commitments, not records. Full records stay with the parties.
+- **Layer 3 (middleware discipline):** The degradation contract (§5.8) ensures errors, retries, and failure modes don't leak content through logs or error messages. Proof bundles serve inclusion proofs, not records.
 
 All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 
@@ -915,7 +915,7 @@ A test verifies that the published `key_id` exactly matches the prefix in the li
 
 **Context.** The atrib log stores commitments only — `record_hash`, `creator_key`, `context_id`, `timestamp`, `event_type` — not the original signed record JSON. This is intentional (§3.6 fact/policy separation; the log is observability, not storage). But it leaves a verification gap: third parties have no way to prove "this record_hash is the hash of a record signed by that creator_key" without the original record bytes. The bytes exist transiently inside the middleware between sign and submit; once the submit returns, they're gone.
 
-For the dogfood loop's verification story this gap was load-bearing: gate F (`record.sig` Ed25519 replay against `creator_key`) had to SKIP because the wrapper had no way to retain the records the middleware was producing.
+A reproducible end-to-end verifier hits this gap directly: the gate that replays the record's Ed25519 signature against `creator_key` cannot run without access to the original signed record bytes. Without retention, that verification path is unreachable.
 
 **Decision.** Add an optional observer to `AtribOptions`:
 
@@ -971,7 +971,7 @@ The first consumer is an MCP wrapper service (kept outside this repo during pre-
 So the spec already committed the log to publishing its key — but at a different path (`/v1/log-pubkey`) and in a different format (a single C2SP vkey string, `<origin>+<hex(keyid)>+<base64(0x01||pubkey)>`, served as `text/plain`). The D028 implementation diverged from this without amending the spec. The two formats serve different audiences:
 
 - The C2SP vkey form is parsed directly by `golang.org/x/mod/sumdb/note.NewVerifier`, sigsum, tlog-witness, and other tlog ecosystem tooling. These tools expect a key string they can read from a file or URL and pass to a verifier constructor.
-- The JSON form is friendlier for hand-rolled verifiers (the dogfood loop, browser-based verify scripts, future graph-side audit code) that benefit from structured access.
+- The JSON form is friendlier for hand-rolled verifiers (browser-based verify scripts, end-to-end verification harnesses, future graph-side audit code) that benefit from structured access.
 
 **Decision.** Keep both endpoints, both serving the same key:
 
@@ -1257,7 +1257,7 @@ A decision was needed on three questions: (1) AKD vs roll-our-own simpler struct
 
 **Consequences.**
 
-- New service `services/directory-node/` (TypeScript wrapper around AKD via WASM or NAPI; choice deferred to Phase 3.1 after benchmarking).
+- New service `services/directory-node/` (TypeScript wrapper around AKD via WASM or NAPI; runtime-bridge choice deferred until benchmarking).
 - New package `@atrib/directory` exposing `publish`, `lookup`, `history`, `proveAbsence` SDK methods.
 - `@atrib/verify` consumes the directory and annotates verification results with `identity_resolved`.
 - The recall tool (an MCP server consumed by the host agent) annotates returned records with the resolved identity claim per record.
@@ -1276,117 +1276,109 @@ A decision was needed on three questions: (1) AKD vs roll-our-own simpler struct
 ## D035: Extensible event_type vocabulary via URI typing
 
 **Date:** 2026-04-28
-**Status:** Accepted; spec §1.3 + §2.3.1 updates pending; v1 normative set canonicalized
+**Status:** Accepted
 
-**Context.** atrib's `event_type` field has carried a closed enum since v1: `tool_call` and `transaction`. The first concrete pressure to extend it surfaced during the dogfood loop, when a downstream cognitive-substrate consumer surfaced a need for primitives the closed enum couldn't express (passive perception, derived structural annotation, declared intention, applied state mutation). The natural reflex was to add four normative event types covering those primitives. Working through the request exposed two structural problems with that approach.
+**Context.** A signed-attestation protocol that targets a heterogeneous set of agent architectures (tool-using agents, multi-agent orchestration, autonomous research, coding agents, regulated-AI shops, memory products, cognitive-substrate / personal-agent harnesses) cannot use a closed `event_type` enum without picking one architecture's worldview as canonical. Each architecture has native primitives the others do not need: multi-agent platforms want `delegate` / `handoff` / `vote`, memory products want `recall` / `forget` / `consolidate`, research agents want `hypothesis` / `experiment` / `result`, cognitive-substrate systems want `observation` / `annotation` / `proposal` / `apply`. Adding every consumer's primitives to a closed enum produces sprawl and makes the spec a bottleneck for protocol evolution. Restricting the enum to one or two types makes the protocol unable to express what consumers actually do.
 
-First, treating the first-mover's vocabulary as canonical biases the protocol toward one architecture's worldview. atrib's intended consumer base spans tool-using agents, multi-agent orchestration, autonomous research, coding agents, regulated-AI shops, memory products, and personal cognitive substrates. Each architecture has its own native primitives. Multi-agent platforms want `delegate`/`handoff`/`vote`. Memory products want `recall`/`forget`/`consolidate`. Research agents want `hypothesis`/`experiment`/`result`. If atrib accepts every consumer's primitives as it encounters them, the canonical enum sprawls and atrib becomes the bottleneck for protocol evolution.
+Open signed-attestation protocols solve this with URI-typed vocabularies plus a small normative core. W3C Verifiable Credentials uses URI-typed `@type`. ActivityStreams 2.0 uses URI-typed `type` with a normative core vocabulary plus open extension. Sigstore in-toto attestations use URI-typed `predicateType` (e.g., `https://slsa.dev/provenance/v1`) where anyone publishes a predicate URI and tooling resolves what it understands. Signature integrity is type-independent; consumers parse what they recognize.
 
-Second, the closed-enum shape forces consumers to wait for spec acceptance before they can dogfood atrib at all. A new agent system that wants to emit verifiable receipts but doesn't fit the existing enum has to either misuse `tool_call` for everything (substrate-blindness anti-pattern) or block on atrib spec process. Both are bad.
-
-The right shape is well-precedented in open protocols. W3C Verifiable Credentials uses URI-typed `@type`. ActivityStreams 2.0 uses URI-typed `type` with a normative core vocabulary plus open extension via URIs. Sigstore in-toto attestations use URI-typed `predicateType` (e.g., `https://slsa.dev/provenance/v1`) where anyone can publish a predicate URI and tooling resolves what it understands. The pattern is: signed-attestation protocols treat semantic vocabulary as URI-namespaced rather than enum-fixed, accepting that signature integrity is type-independent and that consumers parse what they recognize.
-
-A decision was needed on three questions: (1) wire-format shape (full URI typing vs hybrid string-with-extension-allowance vs subtype field), (2) the v1 normative set, (3) compatibility strategy for the wire-format change.
+A decision was needed on (1) wire-format shape (full URI typing vs hybrid string-with-extension-allowance vs subtype field) and (2) the normative set atrib publishes alongside the extension mechanism.
 
 **Decision.**
 
-1. **`event_type` becomes a URI.** The record-level `event_type` field carries an absolute URI rather than a short token. Atrib publishes a small canonical core vocabulary under `https://atrib.dev/v1/types/<name>`. Anyone may mint extension URIs in their own namespace; atrib does not gate, register, or approve them.
+1. **`event_type` is a URI.** The record-level `event_type` field carries an absolute URI rather than a short token. atrib publishes a canonical core vocabulary under `https://atrib.dev/v1/types/<name>`. Anyone MAY mint extension URIs in their own namespace; atrib does not gate, register, or approve them.
 
-2. **v1 normative set: three URIs.**
+2. **Normative set: three URIs.**
    - `https://atrib.dev/v1/types/tool_call`: agent invoked a tool with input(s) and received a result. Default for any active operation against external state.
    - `https://atrib.dev/v1/types/transaction`: commerce-protocol-detected closing event (ACP / UCP / x402 / MPP / AP2 / a2a-x402). Triggers §4.6 calculation. Distinct from `tool_call` because §4 calculation is normatively gated on this URI.
    - `https://atrib.dev/v1/types/observation`: passive perception captured by an ambient watcher or input source. The agent did not invoke a tool to produce this record; the record captures something the agent received from its environment. Has no caller-supplied input and no return value to attest to.
 
-   No other types are normative in v1. `assertion`, `intent`, `proposal`, `apply`, `delegation`, `revision`, and similar primitives belong in extension namespaces under their respective consumer projects' URIs.
+   `assertion`, `intent`, `proposal`, `apply`, `annotation`, `delegation`, `revision`, and similar primitives belong in extension namespaces. The bar for promoting an extension URI to atrib's normative set is in D036.
 
-3. **Binary log entry maps URI to byte (§2.3.1).** The 1-byte `event_type` slot in the 90-byte log entry remains, repurposed as a fast-path filter:
+3. **Binary log entry maps URI to byte (§2.3.1).** The 1-byte `event_type` slot in the 90-byte log entry is a fast-path filter:
    - `0x01`: `tool_call` URI (atrib normative)
    - `0x02`: `transaction` URI (atrib normative)
-   - `0x03`: `observation` URI (atrib normative; new in v1.1)
+   - `0x03`: `observation` URI (atrib normative)
    - `0xFF`: extension URI (verifier reads URI from record content)
    - `0x00`, `0x04`–`0xFE`: reserved for future atrib normative additions
 
-   Verifiers wanting fine-grained filtering of extension URIs fetch the record. Verifiers filtering atrib normative types use the byte directly. The byte is an indexing convenience, not a semantic source of truth; the URI in the record content is authoritative.
+   Verifiers filtering by atrib normative types use the byte directly. Verifiers wanting finer-grained filtering of extension URIs fetch the record. The byte is an indexing convenience; the URI in the record content is authoritative.
 
-4. **Spec version bumps to `atrib/1.1`.** The wire-format change (event_type goes from short token to URI) is a non-trivial canonicalization difference: `JCS({event_type: "tool_call", ...})` and `JCS({event_type: "https://atrib.dev/v1/types/tool_call", ...})` produce different signed bytes. Records signed under `atrib/1.0` (with the short-token form) remain valid under `atrib/1.0` semantics; new records sign under `atrib/1.1` using the URI form. Verifiers accept both; emitters target `atrib/1.1` going forward. Since atrib is pre-public and has very limited record history, dual acceptance is a low-cost migration.
-
-5. **Verifier semantics for unrecognized URIs.** A verifier seeing a record with an extension URI it does not recognize:
+4. **Verifier semantics for unrecognized URIs.** A verifier seeing a record with an extension URI it does not recognize:
    - Verifies the signature normally (cryptographic integrity is type-independent).
    - Treats the URI as opaque; surfaces it in verification output verbatim.
    - Optionally attempts URI resolution to fetch a schema document (lazy / opt-in / no protocol-level requirement).
    - Records pass §1 validation regardless of URI recognition. The URI MUST be a syntactically-valid absolute URI; that is the only enforced constraint.
 
-6. **Extension URIs MUST be absolute.** Relative paths or bare tokens are invalid. URIs SHOULD identify a stable owner (a domain the consumer controls, or a `urn:` namespace they registered). atrib does not validate ownership; this is a discipline guideline, not a normative requirement.
+5. **Extension URIs MUST be absolute.** Relative paths or bare tokens are invalid. URIs SHOULD identify a stable owner (a domain the consumer controls, or a `urn:` namespace they registered). atrib does not validate ownership; this is a discipline guideline, not a normative requirement.
 
-7. **Future normative additions go through D036.** The bar for promoting an extension URI to atrib's normative set is defined separately in D036 (this ADR establishes the structural mechanism; D036 establishes the promotion policy).
+6. **Future normative additions go through D036.** The bar for promoting an extension URI to atrib's normative set is defined separately in D036 (this ADR establishes the structural mechanism; D036 establishes the promotion policy).
 
 **Alternatives considered.**
 
-1. *Add the four types a downstream consumer proposed (`observation`, `annotation`, `proposal`, `apply`) directly to the closed enum.* Rejected. Solves one consumer's case at the cost of biasing the enum toward one architecture. Postpones the structural problem rather than addressing it. Other consumers (memory products, multi-agent platforms, research agents) would each propose their own four-to-six types, leading to either chronic spec churn or an enum sprawl that picks winners among architectures.
+1. *Closed enum with periodic additions per consumer request.* Solves no consumer's case fully and biases the enum toward whichever architectures arrive first. Each subsequent architecture either fits the existing types poorly (substrate-blindness pattern: misusing `tool_call` for non-tool primitives) or proposes its own additions, producing chronic spec churn.
 
-2. *Keep the closed enum, allow non-normative string values without canonicalization.* Spec says: "atrib's normative set is X, Y, Z; consumers MAY use other strings." Rejected because string-typed event_types lack namespacing; two consumers can mint the same string with conflicting semantics. The collision risk grows with adoption. URI typing solves this with no downside beyond field length.
+2. *Closed enum, allow non-normative string values without canonicalization.* Spec says: "atrib's normative set is X, Y, Z; consumers MAY use other strings." Rejected because string-typed event_types lack namespacing; two consumers can mint the same string with conflicting semantics. The collision risk grows with adoption. URI typing solves this with no downside beyond field length.
 
 3. *Add an optional `event_subtype` string field; keep `event_type` as the closed enum.* Rejected as a hybrid that has the worst of both. The split between normative `event_type` and freeform `event_subtype` creates an awkward indirection (verifiers always need to look at both); the subtype namespace still has the collision-risk problem of option 2; the closed `event_type` enum still becomes a bottleneck for any genuinely new top-level primitive.
 
 4. *Drop `event_type` entirely; classification lives in content.* Rejected because the 1-byte log entry slot is genuinely useful for fast-path filtering at the log-byte level (regulators querying "all transactions" don't want to fetch every record). Removing it forces all type-based queries through content fetch. The byte stays; the question is what its values mean.
 
-5. *URI-type but use a namespaced-token form (e.g., `atrib:v1:tool_call`, `a downstream consumer:observation`) instead of full URIs.* Rejected because the URI form is more standard, supports natural resolution to a schema document if the consumer provides one, and matches W3C VC / Sigstore in-toto / ActivityStreams precedent. The verbosity cost is negligible (~30-80 bytes per record).
+5. *URI-type but use a namespaced-token form (e.g., `atrib:v1:tool_call`, `vendor:observation`) instead of full URIs.* Rejected because the URI form is more standard, supports natural resolution to a schema document if the consumer provides one, and matches W3C VC / Sigstore in-toto / ActivityStreams precedent. The verbosity cost is negligible (~30-80 bytes per record).
 
-6. *Defer the structural change; ship the four types as `0x03`–`0x06` and revisit later.* Rejected because adding normative types to the closed enum and then later moving to URI typing produces a hybrid that all subsequent code must handle (some records have short-token event_types; others have URIs; both must be valid). Cleaner to make the structural change once.
+6. *Add a fixed set of new normative types (e.g., `0x03`–`0x06`) for cognitive primitives now and revisit later.* Rejected because adding fixed normative types and later moving to URI typing produces a hybrid that all subsequent code must handle (some records have short-token event_types; others have URIs; both must be valid). Cleaner to make the structural change once.
 
 **Consequences.**
 
-- *Spec.* §1.3 (record format) updated: `event_type` is an absolute URI. §2.3.1 (binary entry) updated: byte `0x03` reserved for `observation`, `0xFF` for extension. §2 normatively defines the byte→URI mapping for atrib's canonical set. §1.7 (payment-protocol detection) unchanged: still emits `transaction` URI on detection. New §1.4.5 added: URI validation requirements. Spec version bumps to `atrib/1.1`.
-- *`@atrib/mcp`.* `types.ts` `EventType` becomes `string` (URI-typed) with a constant block exporting the three normative URIs. `signing.ts` `verifyRecord` checks URI is syntactically valid; rejects empty / relative URIs; accepts both `atrib/1.0` (short tokens) and `atrib/1.1` (URIs) on input. `entry.ts` adds the `0x03` and `0xFF` byte mappings. Existing emitters default to URI form on `atrib/1.1`.
+- *Spec.* §1.3 (record format) updated: `event_type` is an absolute URI. §2.3.1 (binary entry) updated: byte `0x03` reserved for `observation`, `0xFF` for extension. §2 normatively defines the byte→URI mapping for atrib's canonical set. §1.7 (payment-protocol detection) unchanged: still emits `transaction` URI on detection. New §1.4.5 added: URI validation requirements.
+- *`@atrib/mcp`.* `types.ts` `EventType` becomes `string` (URI-typed) with a constant block exporting the three normative URIs. `signing.ts` `verifyRecord` checks URI is syntactically valid; rejects empty / relative URIs. `entry.ts` adds the `0x03` and `0xFF` byte mappings. Emitters default to URI form.
 - *`@atrib/agent`.* All adapters automatically emit `tool_call` URI; transaction-detection logic emits `transaction` URI. No adapter API change.
 - *`@atrib/verify`.* Verification output gains an `event_type_uri` field (always populated) and a `event_type_recognized` boolean (true iff URI is in atrib's normative set or a registered consumer set the verifier was configured with). Recognition is informational, not a verification-pass criterion.
 - *log-node / log-dev.* `validateSubmission` updates: accepts URI-typed `event_type`; maps to byte for entry encoding (atrib normative URIs to `0x01`/`0x02`/`0x03`; everything else to `0xFF`). Rejects records with syntactically-invalid URIs.
-- *Conformance.* `spec/conformance/1.4/` corpus regenerated with v1.1 URI-typed examples. New `spec/conformance/1.4-extension/` corpus with sample extension-namespace URIs. `spec/conformance/2.6.1/` validated against URI-typed submissions. v1.0-format records remain in the corpus tagged `legacy_v1_0` so backward-acceptance is testable.
-- *recall (Phase 3.5).* Filters by URI (atrib normative or extension); UI surfaces the URI verbatim if not recognized; maps `0x03` byte filter to "all observations" for log-side fast-path query.
-- *Downstream consumers.* a downstream consumer mints its own URIs under its namespace (`https://a downstream consumer.example/types/observation` if it wants to be more specific than atrib's `observation`, OR uses atrib's `observation` for that primitive and mints only the truly-non-atrib ones like `annotation`, `proposal`, `apply`). The choice is theirs; atrib does not prescribe.
+- *Conformance.* `spec/conformance/1.4/` corpus contains URI-typed examples. New `spec/conformance/1.4-extension/` corpus with sample extension-namespace URIs. `spec/conformance/2.6.1/` validated against URI-typed submissions.
+- *Downstream consumers.* Consumers needing primitives beyond atrib's normative set mint URIs in their own namespaces (e.g., a cognitive-substrate consumer might mint `https://example.com/v1/types/annotation`, `proposal`, `apply` under a domain it controls). The choice is theirs; atrib does not prescribe.
 
 **What this DOESN'T solve.**
 
 - *Cross-consumer semantic alignment.* Two consumers minting URIs for similar concepts (e.g., one's `assertion` vs another's `claim`) get no automatic alignment. Verifiers treating both as equivalent need their own mapping table. This is the same situation as MIME types or VC `@type`: namespacing prevents collision but doesn't enforce convergence.
-- *Schema discovery.* Atrib does not require URIs to resolve to a schema document. A consumer that wants schema-aware verification publishes their own schema and configures their verifier; atrib provides no resolution infrastructure.
-- *Spec-version negotiation between agent and log.* Older log nodes that haven't been upgraded to atrib/1.1 will reject URI-typed records with "invalid event_type." Operators of older log nodes upgrade alongside emitters, or run side-by-side endpoints. Within atrib's own infrastructure, upgrade is coordinated.
-- *Migration of historical records.* Records signed under `atrib/1.0` (short tokens) remain valid forever as `atrib/1.0` records. Verifiers that want to treat them as equivalent to `atrib/1.1` URI form apply their own mapping. atrib does not rewrite or re-sign existing records.
+- *Schema discovery.* atrib does not require URIs to resolve to a schema document. A consumer that wants schema-aware verification publishes their own schema and configures their verifier; atrib provides no resolution infrastructure.
+- *Wire-format compatibility across implementations at a single point in time.* Implementations that have not yet adopted URI-typed `event_type` will reject these records as malformed. Cross-implementation upgrade is coordinated by the implementations involved.
 
-**Implementation sequencing.** D035 unblocks D036 (next). Spec §1.3 + §2.3.1 + §1.4.5 update → `@atrib/mcp` types + signing + entry update → `@atrib/agent` smoke test that all five adapters still produce valid v1.1 records → log-node + log-dev validation update → conformance corpus regeneration → `@atrib/verify` URI-aware verification output → unit tests across the matrix. Lands as one coherent commit (or commit chain) tagged `feat(spec): atrib/1.1 URI-typed event vocabulary`.
+**Implementation sequencing.** Spec §1.3 + §2.3.1 + §1.4.5 update → `@atrib/mcp` types + signing + entry update → `@atrib/agent` smoke test that adapters produce valid records → log-node + log-dev validation update → conformance corpus regeneration → `@atrib/verify` URI-aware verification output → unit tests across the matrix.
 
 ## D036: Bar for promoting an extension URI to atrib's normative event_type vocabulary
 
 **Date:** 2026-04-28
-**Status:** Accepted; governance principle; revisit only if pattern fails to produce coherent decisions
+**Status:** Accepted
 
-**Context.** D035 established that anyone can mint extension `event_type` URIs. atrib's normative vocabulary remains open to additions, but the criteria for adding an extension URI to atrib's canonical core need to be defined now, before the first promotion request arrives. A poorly-defined bar produces either spec sprawl (every consumer's preferred primitive ends up canonical) or capture (the first one or two consumers' worldview gets picked as canonical and locks subsequent architectures into mismatched primitives).
+**Context.** D035 established that anyone can mint extension `event_type` URIs. atrib's normative vocabulary remains open to additions, but the criteria for adding an extension URI to atrib's canonical core need to be defined explicitly. A poorly-defined bar produces either spec sprawl (every consumer's preferred primitive ends up canonical) or capture (one or two consumers' worldview gets picked as canonical and locks subsequent architectures into mismatched primitives).
 
-The goal is a bar that's robust enough to produce coherent decisions over years without requiring re-litigation, while being permissive enough that genuine convergence isn't blocked by procedural friction. Rigid numerical thresholds (e.g., "exactly 3 consumers must request it") fail the latter: real consensus rarely arrives in clean numerical form. Vague principles fail the former: future maintainers have nothing to anchor decisions to.
+The goal is a bar that produces coherent decisions over time without requiring re-litigation, while being permissive enough that genuine convergence is not blocked by procedural friction. Rigid numerical thresholds (e.g., "exactly 3 consumers must request it") fail the latter: real consensus rarely arrives in clean numerical form. Vague principles fail the former: future maintainers have nothing to anchor decisions to.
 
-The chosen frame: principled criteria that depend on observation rather than petition. Atrib promotes a URI to normative when the conditions described below are observably true, not when a consumer asks for promotion. Extension URIs do not require atrib's blessing to be valid; they are valid the moment they are minted. Promotion to atrib's namespace is purely a downstream tooling convenience.
+The chosen frame: principled criteria that depend on observation rather than petition. atrib promotes a URI to normative when the conditions described below are observably true, not when a consumer asks for promotion. Extension URIs do not require atrib's blessing to be valid; they are valid the moment they are minted. Promotion to atrib's namespace is purely a downstream tooling convenience.
 
 **Decision.**
 
 A type is eligible for promotion to atrib's normative URI namespace when the following indicators hold *together*. None is individually sufficient; they form a posture, not a checklist.
 
-1. **Architecture-agnostic in practice.** The primitive appears across multiple independent consumer categories already in use, not within a single architectural lineage. Three or more functionally-distinct categories (e.g., memory products + multi-agent orchestration + regulated AI) is a strong signal; one category with three implementations is not. The point is breadth across worldviews, not depth within one.
+1. **Architecture-agnostic in practice.** The primitive appears across multiple independent consumer categories already in use, not within a single architectural lineage. Functional distinctness across categories (e.g., memory products + multi-agent orchestration + regulated AI) is the relevant signal; multiple implementations within a single category is not. The point is breadth across worldviews, not depth within one.
 
 2. **Structurally distinct from existing normative types.** The primitive is not a special case of `tool_call` with metadata, not a status variant of `transaction`, not a sub-event of `observation`. If a careful read can model the primitive as one of the existing normative URIs plus a content field, it stays in extension namespace. Genuinely new structure is the bar; richer content is not.
 
 3. **Filterable benefit at the log-byte level.** Verifiers running real queries gain meaningfully more from byte-level filtering than from content fetch + parse. A primitive that's queried frequently across the consumer base (e.g., regulators querying for "transactions") clears this; a primitive of interest mainly to one consumer's tooling does not.
 
-4. **Atrib protocol load-bearing OR observably canonical in extension form.** Either atrib's own §3 graph derivation or §4 calculation depends on distinguishing this primitive (load-bearing), or the same extension URI has been independently adopted by multiple consumer categories with consistent semantics across them (observably canonical). The first is rare and decisive; the second is the more common path and depends on multi-quarter observation.
+4. **Atrib protocol load-bearing OR observably canonical in extension form.** Either atrib's own §3 graph derivation or §4 calculation depends on distinguishing this primitive (load-bearing), or the same extension URI has been independently adopted by multiple consumer categories with consistent semantics across them (observably canonical). The first is rare and decisive; the second is the more common path.
 
-5. **Promotion is non-disruptive.** The primitive's wire and graph behavior under its extension URI is consistent with what its normative URI would be. Consumers using the extension URI before promotion can swap to the normative URI without changing their semantics. If promotion would change behavior in a way existing extension users have to migrate around, the bar isn't met (or the change isn't a promotion, it's a redesign).
+5. **Promotion is non-disruptive.** The primitive's wire and graph behavior under its extension URI is consistent with what its normative URI would be. Consumers using the extension URI before promotion can swap to the normative URI without changing their semantics. If promotion would change behavior in a way existing extension users have to migrate around, the bar is not met (or the change is not a promotion, it is a redesign).
 
-The rule is *additive*. Atrib does not retire normative URIs in v1.x; once promoted, they stay. The cost of promotion is therefore long-lived; this asymmetry is intentional and is what motivates the conservative posture.
+The rule is *additive*. atrib does not retire normative URIs; once promoted, they stay. The cost of promotion is therefore long-lived; this asymmetry is intentional and is what motivates the conservative posture.
 
 **Posture and judgment.**
 
 The five indicators describe a structural condition the protocol has reached, not steps a consumer has performed. Maintainers evaluating a candidate ask: do the indicators hold? not: did the consumer file the right paperwork? Accordingly:
 
 - *No formal request process.* Anyone can write an issue or PR proposing promotion of an extension URI. The maintainers' response is an evaluation of the indicators, not a procedural pass/fail. A request is welcome but not required for consideration; observation is enough.
-- *No fixed cadence.* Promotions happen when warranted, not on a schedule. atrib does not commit to "review extensions quarterly" or similar. Most quarters will produce no promotion.
+- *No fixed cadence.* Promotions happen when warranted, not on a schedule. atrib does not commit to "review extensions quarterly" or similar.
 - *No tier system.* atrib does not maintain "candidate," "experimental," or "deprecated" sub-states for extension URIs. URIs are either in atrib's normative set (consequence: atrib protocol may treat them specially) or they are not (consequence: they are valid extension URIs, no special protocol behavior). Binary.
 - *Promotion is reversible only via deprecation, not removal.* A normative URI deemed in retrospect unwise becomes deprecated (verifiers warn but accept) but never invalidated. Removing it would break records signed under it.
 
@@ -1395,45 +1387,44 @@ The five indicators describe a structural condition the protocol has reached, no
 The decision should be NOT to promote when any of these observations hold, even if some of the five inclusion indicators do:
 
 - The primitive is contested across consumer categories (e.g., one category's `proposal` semantics conflict with another's). atrib's promotion would lock one interpretation; let consumers maintain their own URIs until usage converges.
-- The primitive is internal-tooling-shaped (e.g., a metric atrib's verify-loop emits internally). Internal tooling can use atrib namespace URIs without those being part of the spec's normative vocabulary; these belong in `https://atrib.dev/v1/types/internal/<name>` as a convention but not in the normative core.
-- The maintainers cannot point to operational queries verifiers would run against this byte-level type that they couldn't run efficiently with content parse. "Could be useful" is not the same as "is being used."
+- The maintainers cannot point to operational queries verifiers would run against this byte-level type that they could not run efficiently with content parse. "Could be useful" is not the same as "is being used."
 - A clean refactor of an existing normative type would obviate the new one. Sometimes the right move is to relax constraints on `tool_call` rather than add a new sibling.
 
-**Worked example: applying the bar to a downstream consumer's request.**
+**Worked example: applying the bar to a hypothetical 4-type proposal.**
 
-Of the four types proposed (`observation`, `annotation`, `proposal`, `apply`):
+Suppose a proposal arrives to add four types covering a recursive-learning loop: `observation`, `annotation`, `proposal`, `apply`. Applying the indicators:
 
-- `observation`: indicators 1 (multiple categories: monitoring, multi-agent, personal, regulated-AI input loggers), 2 (no caller-supplied input + no return value to attest to is structurally distinct from tool_call), 3 (regulators auditing perception), 4 (plausible §3 future use), 5 (yes). **Promoted in v1**, becomes `https://atrib.dev/v1/types/observation`.
-- `annotation`: indicator 2 fails (special case of tool_call where the agent invoked a classify-tool; its derivation linkage is content metadata, not a structural distinction). **Stays in extension namespace.**
-- `proposal`: indicator 1 borderline (multi-agent + approval-workflow yes; most agents act rather than propose). Indicator 4 fails for now (no atrib protocol behavior depends on it; usage is single-consumer). **Stays in extension namespace; revisit if multiple consumer categories independently adopt similar URIs.**
-- `apply`: indicator 2 fails (tool_call with `parent_proposal_record_hash` linkage covers it; the linkage is content, not structure). **Stays in extension namespace.**
+- `observation`: indicator 1 holds (multiple categories: monitoring, multi-agent, personal, regulated-AI input loggers), indicator 2 holds (no caller-supplied input + no return value to attest to is structurally distinct from tool_call), indicator 3 holds (regulators auditing perception), indicator 4 plausible (potential §3 future use), indicator 5 holds. **Promoted**, becomes `https://atrib.dev/v1/types/observation`.
+- `annotation`: indicator 2 fails (special case of tool_call where an agent invoked a classify-tool; the derivation linkage is content metadata, not a structural distinction). **Extension namespace.**
+- `proposal`: indicator 1 borderline (multi-agent + approval-workflow yes; most agents act rather than propose). Indicator 4 fails initially (no atrib protocol behavior depends on it; usage may be single-category). **Extension namespace; revisit if multiple consumer categories independently adopt similar URIs.**
+- `apply`: indicator 2 fails (tool_call with a `parent_proposal_record_hash` linkage covers it; the linkage is content, not structure). **Extension namespace.**
 
-The result of applying the bar: one promotion (`observation`), three correct-rejections (with welcome status as extension URIs). atrib's normative core grows by one; a downstream consumer's full vocabulary is unblocked under its own namespace.
+Result: one promotion (`observation`), three correct-rejections that remain valid as extension URIs.
 
 **Alternatives considered.**
 
-1. *Numerical threshold ("≥3 independent consumers requesting promotion").* Rejected because real adoption rarely surfaces in petition form. A primitive could be in heavy use across five categories without anyone "requesting" anything; another could have three petitions from a single architectural lineage. The threshold rewards bureaucracy over signal. Also: "consumer" is hard to count; what is one consumer with five product surfaces?
+1. *Numerical threshold ("≥N independent consumers requesting promotion").* Rejected because real adoption rarely surfaces in petition form. A primitive could be in heavy use across many categories without anyone "requesting" anything; another could have many petitions from a single architectural lineage. The threshold rewards bureaucracy over signal.
 
-2. *Committee / RFC process.* Rejected as premature. atrib has one operator and a small set of close downstream consumers. A formal RFC process is overhead that doesn't produce better decisions at this scale. If atrib reaches an ecosystem size where a process is warranted, this ADR is replaced by a successor that defines one.
+2. *Formal RFC process.* Rejected as overhead that does not produce better decisions at the protocol's current scale. If atrib reaches an ecosystem size where a process is warranted, this ADR is replaced by a successor that defines one.
 
-3. *Tier system (candidate / experimental / promoted / deprecated).* Rejected because it adds protocol-level state that downstream tooling has to handle. URIs are either normative or extension; atrib does not maintain a tier-tracking surface. Tier-like distinctions can exist informally in a wiki or registry document outside the spec.
+3. *Tier system (candidate / experimental / promoted / deprecated).* Rejected because it adds protocol-level state that downstream tooling has to handle. URIs are either normative or extension; atrib does not maintain a tier-tracking surface. Tier-like distinctions can exist informally in a registry document outside the spec.
 
-4. *Fixed cadence ("evaluate extensions quarterly").* Rejected because most quarters there will be nothing to promote. Forcing a cadence biases toward false-positive promotions ("let's add something just because the meeting was scheduled").
+4. *Fixed cadence ("evaluate extensions quarterly").* Rejected because most periods there will be nothing to promote. Forcing a cadence biases toward false-positive promotions.
 
 5. *Anyone can promote their own URI by following a procedure.* Rejected because that's the same as having no normative core: if every consumer's URI is normative, the distinction collapses and atrib's vocabulary becomes the union of every downstream's vocabulary. Promotion has to be a deliberate act by atrib, with criteria observable from outside the consumer that benefits from it.
 
 **Consequences.**
 
-- atrib publishes its normative URI set in spec §1.3 with promotion history. Each entry includes: the URI, the date promoted, the byte mapping (if any), a one-sentence semantic statement, and a pointer to the ADR that promoted it.
+- atrib publishes its normative URI set in spec §1.2.4 with promotion history. Each entry includes: the URI, the date promoted, the byte mapping (if any), a one-sentence semantic statement, and a pointer to the ADR that promoted it.
 - Promotion of a URI to atrib normative status requires a new ADR (or an amendment to D035) referencing this bar, with an evaluation against the five indicators recorded inline.
 - The ADR referencing this bar serves as the historical record of the decision; future maintainers can re-evaluate whether the bar produced the right outcome by reading both the ADR and the subsequent observation period.
 - Consumers proposing promotion get a transparent answer (the indicators above) without atrib needing to maintain a process.
-- Maintainers facing a promotion proposal apply the bar in one document and either promote (new ADR + spec update) or explain (issue comment + close). No long debate cycles.
+- Maintainers facing a promotion proposal apply the bar in one document and either promote (new ADR + spec update) or explain (issue comment + close).
 
 **What this DOESN'T solve.**
 
-- *Disagreement between maintainers about whether an indicator holds.* The bar is interpretive; reasonable people can read the same evidence differently. The mitigation is: write down the evidence in the proposal, write down the maintainer's read in the response, and let the historical record show which judgments aged well. atrib's small operator footprint means most disagreements resolve in conversation; if disagreement scales beyond that, this ADR is replaced by a successor that adds process.
+- *Disagreement between maintainers about whether an indicator holds.* The bar is interpretive; reasonable people can read the same evidence differently. The mitigation is: write down the evidence in the proposal, write down the maintainer's read in the response, and let the historical record show which judgments aged well.
 - *Drift between extension URIs and atrib's normative set.* If atrib promotes `observation` but a consumer has been using `https://example.com/observation` with subtly different semantics, their existing records remain under their URI; their new records may target atrib's URI; verifiers comparing the two need their own mapping. atrib does not enforce migration.
-- *Silent adoption.* Atrib only knows about promotions when extension URIs become observable. Closed-source consumers using atrib in production may have URIs that should be promoted but aren't visible to atrib's maintainers. The mitigation is: encourage consumers to publish their URI choices in their own docs / READMEs, but not as a normative requirement.
+- *Silent adoption.* atrib only knows about promotions when extension URIs become observable. Closed-source consumers using atrib in production may have URIs that should be promoted but are not visible to atrib's maintainers. The mitigation is: encourage consumers to publish their URI choices in their own documentation, but not as a normative requirement.
 
-**Implementation sequencing.** D036 has no implementation. It is a governance ADR. The first test of the bar is the v1 normative set defined in D035: `tool_call`, `transaction`, `observation`. The next test will be whoever proposes the next promotion.
+**Implementation sequencing.** D036 has no implementation. It is a governance ADR. The first application of the bar is the normative set defined in D035: `tool_call`, `transaction`, `observation`. The next application will be whoever proposes the next promotion.

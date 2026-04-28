@@ -121,8 +121,12 @@ describe('End-to-end attribution flow', () => {
 
     // ── 5. Inspect the captured records ─────────────────────────────────
     expect(store.records.length).toBeGreaterThanOrEqual(3)
-    const txRecords = store.records.filter((r) => r.event_type === 'transaction')
-    const toolCallRecords = store.records.filter((r) => r.event_type === 'tool_call')
+    const txRecords = store.records.filter(
+      (r) => r.event_type === 'https://atrib.dev/v1/types/transaction',
+    )
+    const toolCallRecords = store.records.filter(
+      (r) => r.event_type === 'https://atrib.dev/v1/types/tool_call',
+    )
 
     // Exactly one transaction record (Path 1, signed by merchant)
     expect(txRecords.length).toBe(1)

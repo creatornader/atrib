@@ -24,10 +24,10 @@ const RECORD: AtribRecord = {
   creator_key: 'iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w',
   chain_root:
     'sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547',
-  event_type: 'tool_call',
+  event_type: 'https://atrib.dev/v1/types/tool_call',
   context_id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   timestamp: 1700000000000,
-  signature: 'PrhhwDFrAcDwbfHVzQWG0y58SwGP3FWZdSKyxMeKVSA5EQOZQJYXbqwEZJC1MkFj6W1M0_17o22cGyzKEtSVDg',
+  signature: 'ZMjtGaUFxp3N4ZA2Vw05NBg8KiymOdNRL3uRB_QJ-zMK7MVOBBqtOA1xLo-DMmeLZfjWjfBFwrHtQemoxXXMBg',
 }
 
 // ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ const EXPECTED_CANONICAL =
   '"content_id":"sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e",' +
   '"context_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",' +
   '"creator_key":"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",' +
-  '"event_type":"tool_call",' +
+  '"event_type":"https://atrib.dev/v1/types/tool_call",' +
   '"spec_version":"atrib/1.0",' +
   '"timestamp":1700000000000}'
 

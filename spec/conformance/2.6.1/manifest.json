@@ -27,6 +27,13 @@
       "expected_status": 200
     },
     {
+      "file": "cases/accept-observation.json",
+      "name": "accept-observation",
+      "spec_section": "2.6.1",
+      "validation_step": null,
+      "expected_status": 200
+    },
+    {
       "file": "cases/reject-bad-signature.json",
       "name": "reject-bad-signature",
       "spec_section": "2.6.1",
@@ -46,6 +53,13 @@
       "spec_section": "2.6.1",
       "validation_step": 3,
       "expected_status": 400
+    },
+    {
+      "file": "cases/accept-extension-event-type.json",
+      "name": "accept-extension-event-type",
+      "spec_section": "2.6.1",
+      "validation_step": null,
+      "expected_status": 200
     },
     {
       "file": "cases/reject-future-timestamp.json",
@@ -78,8 +92,10 @@
     }
   ],
   "record_hash_index": {
-    "accept-tool-call": "648a2ebc0d64c9eb9a852a3f60d01d7c4db55293341adf63067edb482a03221c",
-    "accept-transaction": "845e2951d15eab7c575f832a4c9196c7587df76a7d65ec209605d7f7220985dc",
-    "idempotent-resubmission": "4f14a7f1ae3bd20677d21ac2267793b3d89eb6b204a29990cabeb8f8be664e3a"
+    "accept-tool-call": "0d1b406d806c03c2a71a173ae8d2febe3e3acc7b7f448af127bdaf53e197a61c",
+    "accept-transaction": "20a89ad921e9980562d061532aaa723922be392012d08c1d851b6760896ba654",
+    "accept-observation": "8fdd40a7df359adee5ca5858f0baab097bc93bea2a7840a5078255eb34b720c8",
+    "accept-extension-event-type": "d6517dd4cd3db00bcf9607159546856430b7d6c09d85bedd7940bb7ca25018ef",
+    "idempotent-resubmission": "0f9b1c595127ec09ee60ec1c48ce0d7364c561bad753136d447b52c400923647"
   }
 }

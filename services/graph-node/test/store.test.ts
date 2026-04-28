@@ -20,7 +20,7 @@ async function makeRecord(overrides: { content_id?: string; timestamp?: number }
     content_id: overrides.content_id ?? `sha256:${'c'.repeat(64)}`,
     creator_key: base64urlEncode(pk),
     chain_root: genesisChainRoot(CTX),
-    event_type: 'tool_call' as const,
+    event_type: 'https://atrib.dev/v1/types/tool_call' as const,
     context_id: CTX,
     timestamp: overrides.timestamp ?? 1_700_000_000_000,
     signature: '',

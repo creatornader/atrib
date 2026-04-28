@@ -128,9 +128,9 @@ describe('policyFrom', () => {
 
     const g = makeGraph(
       [
-        { id: 'a', event_type: 'tool_call', content_id: 'sha256:a', creator_key: 'Alice', chain_root: 'sha256:r', context_id: CTX, timestamp: 1000, log_index: 0, verification_state: 'signature_valid', is_genesis: true },
-        { id: 'b', event_type: 'tool_call', content_id: 'sha256:b', creator_key: 'Bob', chain_root: 'sha256:r', context_id: CTX, timestamp: 1001, log_index: 1, verification_state: 'signature_valid', is_genesis: false },
-        { id: 'tx', event_type: 'transaction', content_id: 'sha256:tx', creator_key: 'M', chain_root: 'sha256:r', context_id: CTX, timestamp: 2000, log_index: 2, verification_state: 'signature_valid', is_genesis: false },
+        { id: 'a', event_type: 'tool_call', event_type_uri: 'https://atrib.dev/v1/types/tool_call', content_id: 'sha256:a', creator_key: 'Alice', chain_root: 'sha256:r', context_id: CTX, timestamp: 1000, log_index: 0, verification_state: 'signature_valid', is_genesis: true },
+        { id: 'b', event_type: 'tool_call', event_type_uri: 'https://atrib.dev/v1/types/tool_call', content_id: 'sha256:b', creator_key: 'Bob', chain_root: 'sha256:r', context_id: CTX, timestamp: 1001, log_index: 1, verification_state: 'signature_valid', is_genesis: false },
+        { id: 'tx', event_type: 'transaction', event_type_uri: 'https://atrib.dev/v1/types/transaction', content_id: 'sha256:tx', creator_key: 'M', chain_root: 'sha256:r', context_id: CTX, timestamp: 2000, log_index: 2, verification_state: 'signature_valid', is_genesis: false },
       ],
       [
         { type: 'CONVERGES_ON', source: 'a', target: 'tx', directed: true },

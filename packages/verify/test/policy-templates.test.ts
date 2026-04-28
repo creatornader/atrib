@@ -21,7 +21,7 @@ const CTX = 'a'.repeat(32)
 function node(id: string, creatorKey: string, ts: number, opts?: Partial<GraphNode>): GraphNode {
   return {
     id,
-    event_type: 'tool_call',
+    event_type: 'tool_call', event_type_uri: 'https://atrib.dev/v1/types/tool_call',
     content_id: `sha256:${id}`,
     creator_key: creatorKey,
     chain_root: `sha256:chain_${id}`,
@@ -37,7 +37,7 @@ function node(id: string, creatorKey: string, ts: number, opts?: Partial<GraphNo
 function txNode(ts: number): GraphNode {
   return {
     id: 'tx',
-    event_type: 'transaction',
+    event_type: 'transaction', event_type_uri: 'https://atrib.dev/v1/types/transaction',
     content_id: 'sha256:tx',
     creator_key: 'merchant',
     chain_root: 'sha256:tx_chain',

@@ -2,7 +2,7 @@
   "name": "reject-unknown-event-type",
   "spec_section": "2.6.1",
   "validation_step": 3,
-  "description": "event_type is neither \"tool_call\" nor \"transaction\". The log MUST reject with 400.",
+  "description": "event_type is not a syntactically-valid absolute URI per spec §1.4.5 (bare token, no scheme). The log MUST reject with 400. NOTE: The case filename is preserved for backward compatibility; \"unknown\" here means structurally malformed, not \"URI not in atrib normative set\" — extension URIs that are syntactically valid are accepted (see accept-extension-event-type.json).",
   "request": {
     "method": "POST",
     "path": "/v1/entries",
@@ -17,7 +17,7 @@
       "event_type": "banana",
       "context_id": "4bf92f3577b34da6a3ce929d0e0e4736",
       "timestamp": 1767225600000,
-      "signature": "r9YUUgqjmSQdFBmdKqhNjKpfHrFR4BLRoPgJi5osxhWsFxJeasTlYrA04-IbJG6L97J4LCTK0QKrIB9GZfC6AQ"
+      "signature": "eCJkwMFIO13fFMoNCIgMWszLS052NyfgrvclDg33u3h_EO08i01Wf_Ieaj8zYRY8Osy80jb-YC1odJoA9sWNDQ"
     }
   },
   "expected": {

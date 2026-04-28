@@ -40,7 +40,7 @@ interface RecordOverrides {
   privateKey?: Uint8Array
   context_id?: string
   chain_root?: string
-  event_type?: 'tool_call' | 'transaction'
+  event_type?: string
   timestamp?: number
   session_token?: string
   content_id?: string
@@ -55,7 +55,7 @@ async function makeRecord(overrides: RecordOverrides = {}): Promise<AtribRecord>
     content_id: overrides.content_id ?? `sha256:${'c'.repeat(64)}`,
     creator_key: base64urlEncode(pub),
     chain_root: overrides.chain_root ?? genesisChainRoot(ctx),
-    event_type: overrides.event_type ?? 'tool_call',
+    event_type: overrides.event_type ?? 'https://atrib.dev/v1/types/tool_call',
     context_id: ctx,
     timestamp: overrides.timestamp ?? 1000,
     signature: '',
@@ -134,7 +134,7 @@ describe('§3.2.4 cross-implementation conformance', () => {
     const r1 = await makeRecord({ timestamp: 1000, content_id: `sha256:${'1'.repeat(64)}` })
     const r2 = await makeRecord({ timestamp: 2000, content_id: `sha256:${'2'.repeat(64)}` })
     const tx = await makeRecord({
-      event_type: 'transaction',
+      event_type: 'https://atrib.dev/v1/types/transaction',
       timestamp: 3000,
       content_id: `sha256:${'3'.repeat(64)}`,
     })
@@ -165,7 +165,7 @@ describe('§3.2.4 cross-implementation conformance', () => {
     const sess2Tx = await makeRecord({
       privateKey: KEY_B,
       context_id: CTX_2,
-      event_type: 'transaction',
+      event_type: 'https://atrib.dev/v1/types/transaction',
       timestamp: 3000,
       session_token: TOKEN,
       content_id: `sha256:${'9'.repeat(64)}`,
@@ -209,12 +209,12 @@ describe('§3.2.4 cross-implementation conformance', () => {
     const r1 = await makeRecord({ timestamp: 1000, content_id: `sha256:${'4'.repeat(64)}` })
     const r2 = await makeRecord({ timestamp: 2000, content_id: `sha256:${'5'.repeat(64)}` })
     const tx1 = await makeRecord({
-      event_type: 'transaction',
+      event_type: 'https://atrib.dev/v1/types/transaction',
       timestamp: 3000,
       content_id: `sha256:${'6'.repeat(64)}`,
     })
     const tx2 = await makeRecord({
-      event_type: 'transaction',
+      event_type: 'https://atrib.dev/v1/types/transaction',
       timestamp: 4000,
       content_id: `sha256:${'7'.repeat(64)}`,
     })
@@ -229,7 +229,7 @@ describe('§3.2.4 cross-implementation conformance', () => {
     const r1 = await makeRecord({ timestamp: 1000, content_id: `sha256:${'a'.repeat(64)}` })
     const r2 = await makeRecord({ timestamp: 2000, content_id: `sha256:${'b'.repeat(64)}` })
     const tx = await makeRecord({
-      event_type: 'transaction',
+      event_type: 'https://atrib.dev/v1/types/transaction',
       timestamp: 3000,
       content_id: `sha256:${'c'.repeat(64)}`,
     })

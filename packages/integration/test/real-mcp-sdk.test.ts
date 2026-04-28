@@ -158,7 +158,7 @@ describe('Real @modelcontextprotocol/sdk end-to-end', () => {
     // Both records are tool_call (not transaction) since 'search' is not in
     // transactionTools
     for (const r of records) {
-      expect(r.event_type).toBe('tool_call')
+      expect(r.event_type).toBe('https://atrib.dev/v1/types/tool_call')
     }
 
     // Both records have a content_id derived from serverUrl + 'search'

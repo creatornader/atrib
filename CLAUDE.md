@@ -50,7 +50,7 @@ atrib/
       1.9/                     # Key rotation/revocation conformance corpus (test vectors for §1.9, D033). Skeleton; fixtures land in an upcoming implementation phase.
       2.6.1/                   # Submission API conformance corpus (consumed by @atrib/log-dev and log-node)
       4.6/                     # Calculation conformance corpus (test vectors for §4.6)
-      6/                       # Public-key directory conformance corpus (test vectors for §6, D034). Skeleton; fixtures land in Phase 3.
+      6/                       # Public-key directory conformance corpus (test vectors for §6, D034). Skeleton; fixtures land alongside the directory implementation.
 ```
 
 Public packages are intended for npm publication. Private packages (`log-dev`, `integration`) live in the workspace as fixtures and demos and have `private: true` in their `package.json` so they cannot be accidentally published.

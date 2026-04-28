@@ -58,7 +58,7 @@ async function makeBaseRecord(overrides: Partial<AtribRecord> = {}): Promise<Atr
     content_id: CONTENT_ID,
     creator_key: base64urlEncode(pubKey),
     chain_root: genesisChainRoot(CONTEXT_ID),
-    event_type: 'tool_call',
+    event_type: 'https://atrib.dev/v1/types/tool_call',
     context_id: CONTEXT_ID,
     timestamp: REFERENCE_TIME_MS,
     signature: '',
@@ -157,7 +157,9 @@ async function generate(): Promise<void> {
     },
   })
 
-  const acceptTransaction = await makeBaseRecord({ event_type: 'transaction' })
+  const acceptTransaction = await makeBaseRecord({
+    event_type: 'https://atrib.dev/v1/types/transaction',
+  })
   cases.push({
     filename: 'accept-transaction.json',
     data: {
@@ -171,6 +173,35 @@ async function generate(): Promise<void> {
         path: '/v1/entries',
         headers: standardHeaders,
         body: acceptTransaction,
+      },
+      expected: {
+        status: 200,
+        response_shape: {
+          log_index: 'number',
+          checkpoint: 'string',
+          inclusion_proof: 'array',
+          leaf_hash: 'string',
+        },
+      },
+    },
+  })
+
+  const acceptObservation = await makeBaseRecord({
+    event_type: 'https://atrib.dev/v1/types/observation',
+  })
+  cases.push({
+    filename: 'accept-observation.json',
+    data: {
+      name: 'accept-observation',
+      spec_section: '2.6.1',
+      validation_step: null,
+      description:
+        'A well-formed signed observation record. The log MUST accept it (200). Observation records carry the third atrib normative event_type URI per §1.2.4 and map to log entry byte 0x03 per §2.3.1.',
+      request: {
+        method: 'POST',
+        path: '/v1/entries',
+        headers: standardHeaders,
+        body: acceptObservation,
       },
       expected: {
         status: 200,
@@ -229,8 +260,8 @@ async function generate(): Promise<void> {
     },
   })
 
-  // Step 3. unknown event_type
-  const unknownEventType = { ...acceptToolCall, event_type: 'banana' }
+  // Step 3. malformed event_type (not a syntactically-valid absolute URI)
+  const malformedEventType = { ...acceptToolCall, event_type: 'banana' }
   cases.push({
     filename: 'reject-unknown-event-type.json',
     data: {
@@ -238,14 +269,46 @@ async function generate(): Promise<void> {
       spec_section: '2.6.1',
       validation_step: 3,
       description:
-        'event_type is neither "tool_call" nor "transaction". The log MUST reject with 400.',
+        'event_type is not a syntactically-valid absolute URI per spec §1.4.5 (bare token, no scheme). The log MUST reject with 400. NOTE: The case filename is preserved for backward compatibility; "unknown" here means structurally malformed, not "URI not in atrib normative set" — extension URIs that are syntactically valid are accepted (see accept-extension-event-type.json).',
       request: {
         method: 'POST',
         path: '/v1/entries',
         headers: standardHeaders,
-        body: unknownEventType,
+        body: malformedEventType,
       },
       expected: { status: 400, error_contains: 'event_type' },
+    },
+  })
+
+  // Step 3 (companion). extension event_type URI in a non-atrib namespace
+  // is a SYNTACTICALLY-VALID absolute URI; the log MUST accept it. This
+  // case exercises §1.4.5 + §1.2.4 acceptance for extension URIs.
+  const acceptExtensionEventType = await makeBaseRecord({
+    event_type: 'https://example.com/v1/types/observation_subtype',
+  })
+  cases.push({
+    filename: 'accept-extension-event-type.json',
+    data: {
+      name: 'accept-extension-event-type',
+      spec_section: '2.6.1',
+      validation_step: null,
+      description:
+        'event_type is an extension URI in a non-atrib.dev namespace. Per spec §1.2.4 + §1.4.5, this is structurally valid (any syntactically-valid absolute URI is accepted; recognition is informational only). The log MUST accept the record (200).',
+      request: {
+        method: 'POST',
+        path: '/v1/entries',
+        headers: standardHeaders,
+        body: acceptExtensionEventType,
+      },
+      expected: {
+        status: 200,
+        response_shape: {
+          log_index: 'number',
+          checkpoint: 'string',
+          inclusion_proof: 'array',
+          leaf_hash: 'string',
+        },
+      },
     },
   })
 
@@ -384,6 +447,8 @@ async function generate(): Promise<void> {
     record_hash_index: {
       'accept-tool-call': recordHashHex(acceptToolCall),
       'accept-transaction': recordHashHex(acceptTransaction),
+      'accept-observation': recordHashHex(acceptObservation),
+      'accept-extension-event-type': recordHashHex(acceptExtensionEventType),
       'idempotent-resubmission': recordHashHex(idempotentRecord),
     },
   }

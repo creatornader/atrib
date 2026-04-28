@@ -29,7 +29,7 @@ async function makeRecord(overrides: Partial<{
     content_id: overrides.content_id ?? `sha256:${'c'.repeat(64)}`,
     creator_key: base64urlEncode(pk),
     chain_root: overrides.chain_root ?? genesisChainRoot(overrides.context_id ?? CONTEXT_ID),
-    event_type: (overrides.event_type ?? 'tool_call') as 'tool_call' | 'transaction',
+    event_type: overrides.event_type ?? 'https://atrib.dev/v1/types/tool_call',
     context_id: overrides.context_id ?? CONTEXT_ID,
     timestamp: overrides.timestamp ?? Date.now(),
     signature: '',
@@ -79,7 +79,7 @@ describe('buildGraph (section 3.2.4)', () => {
   it('creates CONVERGES_ON edges to transaction nodes', async () => {
     const r1 = await makeRecord({ timestamp: 1000, content_id: `sha256:${'e'.repeat(64)}` })
     const tx = await makeRecord({
-      event_type: 'transaction',
+      event_type: 'https://atrib.dev/v1/types/transaction',
       timestamp: 3000,
       content_id: `sha256:${'g'.repeat(64)}`,
     })
@@ -130,7 +130,7 @@ describe('buildGraph (section 3.2.4)', () => {
     })
     const tx = await makeRecord({
       context_id: CONTEXT_ID,
-      event_type: 'transaction',
+      event_type: 'https://atrib.dev/v1/types/transaction',
       timestamp: 3000,
       session_token: TOKEN,
       content_id: `sha256:${'t'.repeat(64)}`,
@@ -159,7 +159,7 @@ describe('buildGraph (section 3.2.4)', () => {
       content_id: `sha256:${'u'.repeat(64)}`,
     })
     const tx = await makeRecord({
-      event_type: 'transaction',
+      event_type: 'https://atrib.dev/v1/types/transaction',
       timestamp: 2000,
       session_token: TOKEN,
       content_id: `sha256:${'v'.repeat(64)}`,

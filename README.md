@@ -121,7 +121,7 @@ Runs a fake merchant, a fake agent, and a real Merkle log in a single process. T
 
 **Implemented and deployed:** Record signing (§1), transparency log (§2) with persistent storage and C2SP-canonical signed-note checkpoints (D031), graph query interface (§3) with §3.2.4 derivation, calculation algorithm (§4.6) with deterministic distribution and §4.7 settlement document signing, opt-in autoChain for hosts that don't propagate atrib's outbound token (D033 sequencing).
 
-**Spec-defined but not implemented:** Witnessing (§2.9, D032; first implementation deferred until a non-operator verifier exists). Key rotation and revocation (§1.9, D033; implementation in an upcoming implementation phase). Public-key directory (§6, D034; same Phase 3, AKD-based, unblinded mode for atrib and a VRF-blinded mode available for downstream consumers requiring privacy-preserving lookup).
+**Spec-defined but not implemented:** Witnessing (§2.9, D032; first implementation deferred until an independent verifier exists). Key rotation and revocation (§1.9, D033; implementation forthcoming). Public-key directory (§6, D034; AKD-based, unblinded mode for atrib and a VRF-blinded mode available for downstream consumers requiring privacy-preserving lookup; implementation forthcoming).
 
 ## Key generation
 

@@ -11,7 +11,38 @@
 // Graph types. §3.5
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type EventType = 'tool_call' | 'transaction' | 'gap_node'
+/**
+ * Graph-layer event_type. Short labels for the three primitives the v1
+ * graph + calculation algorithm operate on, plus the catch-all `extension`
+ * for records carrying an event_type URI not in atrib normative set
+ * (extension URIs are graph nodes but are NOT participants in §3.2.4 edge
+ * derivation in v1; see spec §3.2.1).
+ *
+ * Records arriving at the graph builder carry an absolute URI in
+ * `record.event_type` per §1.2.4. The builder normalizes URIs to these
+ * short labels via `graphLabelFromEventTypeUri()`. Extension URIs are
+ * preserved verbatim on `GraphNode.event_type_uri` for graph clients that
+ * want the original URI.
+ */
+export type EventType = 'tool_call' | 'transaction' | 'observation' | 'gap_node' | 'extension'
+
+/**
+ * Map an attribution record's event_type URI to a graph-layer short label.
+ * Atrib normative URIs map to their canonical short label; everything else
+ * collapses to `'extension'` (the graph-layer opaque-typed category).
+ */
+export function graphLabelFromEventTypeUri(uri: string): EventType {
+  switch (uri) {
+    case 'https://atrib.dev/v1/types/tool_call':
+      return 'tool_call'
+    case 'https://atrib.dev/v1/types/transaction':
+      return 'transaction'
+    case 'https://atrib.dev/v1/types/observation':
+      return 'observation'
+    default:
+      return 'extension'
+  }
+}
 
 /** An unsigned hop: a tool call with no attribution record in response (§1.6, §3.2.5). */
 export interface GapNode {
@@ -36,6 +67,14 @@ export type VerificationState = 'unsigned' | 'signature_valid' | 'log_committed'
 export interface GraphNode {
   id: string
   event_type: EventType
+  /**
+   * The original event_type URI from the underlying record (§1.2.4), or
+   * null for synthetic nodes (gap_node). Atrib normative URIs are present
+   * as their canonical strings; extension URIs are preserved verbatim.
+   * Graph clients that need to filter by URI rather than short label use
+   * this field.
+   */
+  event_type_uri: string | null
   content_id: string | null
   creator_key: string | null
   chain_root: string | null

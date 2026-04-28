@@ -25,6 +25,7 @@ import type {
   GapNode,
   VerificationState,
 } from '@atrib/verify'
+import { graphLabelFromEventTypeUri } from '@atrib/verify'
 
 // GapNode is re-exported for use by store.ts and callers.
 export type { GapNode }
@@ -71,7 +72,8 @@ export async function buildGraph(
 
     const node: GraphNode = {
       id: nodeId,
-      event_type: record.event_type as 'tool_call' | 'transaction',
+      event_type: graphLabelFromEventTypeUri(record.event_type),
+      event_type_uri: record.event_type,
       content_id: record.content_id,
       creator_key: record.creator_key,
       chain_root: record.chain_root,
@@ -98,6 +100,7 @@ export async function buildGraph(
       const node: GraphNode = {
         id: nodeId,
         event_type: 'gap_node',
+        event_type_uri: null,
         content_id: null,
         creator_key: null,
         chain_root: null,

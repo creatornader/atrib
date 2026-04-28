@@ -18,7 +18,14 @@ export type { AtribHttpResult } from './http.js'
 
 // Types
 export type { AtribRecord, UnsignedAtribRecord, DecodedToken } from './types.js'
-export { VALID_EVENT_TYPES } from './types.js'
+export {
+  EVENT_TYPE_TOOL_CALL_URI,
+  EVENT_TYPE_TRANSACTION_URI,
+  EVENT_TYPE_OBSERVATION_URI,
+  NORMATIVE_EVENT_TYPE_URIS,
+  isValidEventTypeUri,
+  isNormativeEventTypeUri,
+} from './types.js'
 
 // Core primitives
 export { base64urlEncode, base64urlDecode } from './base64url.js'
@@ -66,9 +73,12 @@ export { zeroize } from './zeroize.js'
 // §2.3.1 log entry serialization (shared between log-dev and log-node)
 export {
   serializeEntry,
+  eventTypeUriToByte,
   ENTRY_VERSION,
   ENTRY_SIZE,
   EVENT_TYPE_TOOL_CALL,
   EVENT_TYPE_TRANSACTION,
+  EVENT_TYPE_OBSERVATION,
+  EVENT_TYPE_EXTENSION,
 } from './entry.js'
 export type { EntryInput } from './entry.js'

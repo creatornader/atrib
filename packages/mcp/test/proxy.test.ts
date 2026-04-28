@@ -222,7 +222,7 @@ describe('createAtribProxy', () => {
     expect(submissions.length).toBeGreaterThanOrEqual(1)
 
     // It's a tool_call (not a transaction. 'compute' is not in transactionTools)
-    expect(submissions[0]!.event_type).toBe('tool_call')
+    expect(submissions[0]!.event_type).toBe('https://atrib.dev/v1/types/tool_call')
     // content_id is derived from PROXY_URL + 'compute'
     expect(submissions[0]!.content_id).toMatch(/^sha256:[0-9a-f]{64}$/)
 

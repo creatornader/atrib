@@ -68,7 +68,7 @@ const arbGraph = fc
         const creatorKey = creatorKeys[i % creatorKeys.length]!
         nodes.push({
           id: hexId('sha256', i),
-          event_type: 'tool_call',
+          event_type: 'tool_call', event_type_uri: 'https://atrib.dev/v1/types/tool_call',
           content_id: `sha256:content_${i}`,
           creator_key: creatorKey,
           chain_root: `sha256:chain_${i}`,
@@ -85,7 +85,7 @@ const arbGraph = fc
         const idx = toolCallCount + i
         nodes.push({
           id: hexId('gap', i),
-          event_type: 'gap_node',
+          event_type: 'gap_node', event_type_uri: null,
           content_id: null,
           creator_key: null,
           chain_root: null,
@@ -101,7 +101,7 @@ const arbGraph = fc
       const txTimestamp = baseTimestamp + 60_001
       const txNode: GraphNode = {
         id: hexId('sha256', 999),
-        event_type: 'transaction',
+        event_type: 'transaction', event_type_uri: 'https://atrib.dev/v1/types/transaction',
         content_id: `sha256:tx_content`,
         creator_key: creatorKeys[0]!,
         chain_root: `sha256:tx_chain`,

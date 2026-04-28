@@ -4,6 +4,8 @@ import {
   ENTRY_VERSION,
   EVENT_TYPE_TOOL_CALL,
   EVENT_TYPE_TRANSACTION,
+  EVENT_TYPE_OBSERVATION,
+  EVENT_TYPE_EXTENSION,
   type EntryInput,
 } from '@atrib/mcp'
 
@@ -21,7 +23,7 @@ function makeInput(overrides: Partial<EntryInput> = {}): EntryInput {
     creator_key_b64url: CREATOR_KEY_B64URL,
     context_id: CONTEXT_ID,
     timestamp: TIMESTAMP,
-    event_type: 'tool_call',
+    event_type: 'https://atrib.dev/v1/types/tool_call',
     ...overrides,
   }
 }
@@ -39,15 +41,29 @@ describe('serializeEntry', () => {
   })
 
   it('encodes event_type 0x01 for tool_call', () => {
-    const entry = serializeEntry(makeInput({ event_type: 'tool_call' }))
+    const entry = serializeEntry(makeInput({ event_type: 'https://atrib.dev/v1/types/tool_call' }))
     expect(entry[89]).toBe(EVENT_TYPE_TOOL_CALL)
     expect(entry[89]).toBe(0x01)
   })
 
   it('encodes event_type 0x02 for transaction', () => {
-    const entry = serializeEntry(makeInput({ event_type: 'transaction' }))
+    const entry = serializeEntry(makeInput({ event_type: 'https://atrib.dev/v1/types/transaction' }))
     expect(entry[89]).toBe(EVENT_TYPE_TRANSACTION)
     expect(entry[89]).toBe(0x02)
+  })
+
+  it('encodes event_type 0x03 for observation', () => {
+    const entry = serializeEntry(makeInput({ event_type: 'https://atrib.dev/v1/types/observation' }))
+    expect(entry[89]).toBe(EVENT_TYPE_OBSERVATION)
+    expect(entry[89]).toBe(0x03)
+  })
+
+  it('encodes event_type 0xFF for extension URI (non-atrib namespace)', () => {
+    const entry = serializeEntry(
+      makeInput({ event_type: 'https://example.com/v1/types/observation_subtype' }),
+    )
+    expect(entry[89]).toBe(EVENT_TYPE_EXTENSION)
+    expect(entry[89]).toBe(0xff)
   })
 
   it('encodes timestamp as big-endian u64 at bytes 81-88', () => {

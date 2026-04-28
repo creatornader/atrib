@@ -175,7 +175,7 @@ describe('token fuzz', () => {
 describe('timestamp validation', () => {
   const validBase = {
     spec_version: 'atrib/1.0' as const,
-    event_type: 'tool_call' as const,
+    event_type: 'https://atrib.dev/v1/types/tool_call' as const,
     context_id: 'a'.repeat(32),
     creator_key: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
     chain_root: 'sha256:' + 'b'.repeat(64),
@@ -259,7 +259,7 @@ describe('verifyRecord edge cases', () => {
     const contextId = 'a'.repeat(32)
     const record: AtribRecord = {
       spec_version: 'atrib/1.0',
-      event_type: 'tool_call',
+      event_type: 'https://atrib.dev/v1/types/tool_call',
       timestamp: Date.now(),
       context_id: contextId,
       creator_key: creatorKey,
@@ -285,7 +285,7 @@ describe('verifyRecord edge cases', () => {
     const contextId = 'a'.repeat(32)
     const record: AtribRecord = {
       spec_version: 'atrib/1.0',
-      event_type: 'tool_call',
+      event_type: 'https://atrib.dev/v1/types/tool_call',
       timestamp: Date.now(),
       context_id: contextId,
       creator_key: Buffer.from(otherPublic).toString('base64url'),
@@ -304,7 +304,7 @@ describe('verifyRecord edge cases', () => {
     const contextId = 'a'.repeat(32)
     const record: AtribRecord = {
       spec_version: 'atrib/1.0',
-      event_type: 'tool_call',
+      event_type: 'https://atrib.dev/v1/types/tool_call',
       timestamp: Date.now(),
       context_id: contextId,
       creator_key: creatorKey,
@@ -320,7 +320,7 @@ describe('verifyRecord edge cases', () => {
     // verifyRecord should return false, not throw
     const garbage = {
       spec_version: 'atrib/1.0',
-      event_type: 'tool_call',
+      event_type: 'https://atrib.dev/v1/types/tool_call',
       timestamp: Date.now(),
       context_id: 'x'.repeat(32),
       creator_key: 'not_valid_base64url!@#',

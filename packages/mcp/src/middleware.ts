@@ -18,6 +18,10 @@ import { hexEncode, sha256 } from './hash.js'
 import { canonicalRecord } from './canon.js'
 import { createSubmissionQueue } from './submission.js'
 import { zeroize } from './zeroize.js'
+import {
+  EVENT_TYPE_TOOL_CALL_URI,
+  EVENT_TYPE_TRANSACTION_URI,
+} from './types.js'
 import type { AtribRecord } from './types.js'
 import type { SubmissionQueue, ProofBundle } from './submission.js'
 
@@ -348,9 +352,11 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
           chainRootValue = genesisChainRoot(contextId)
         }
 
-        // Determine event_type
+        // Determine event_type URI (spec 1.2.4)
         const toolName = (params.name as string) ?? ''
-        const eventType = transactionTools.has(toolName) ? 'transaction' : ('tool_call' as const)
+        const eventType = transactionTools.has(toolName)
+          ? EVENT_TYPE_TRANSACTION_URI
+          : EVENT_TYPE_TOOL_CALL_URI
 
         // Construct the record
         const contentId = computeContentId(serverUrl, toolName)
@@ -398,8 +404,10 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
           sessionToken,
         })
 
-        // §5.3.5: Non-blocking log submission
-        const priority = eventType === 'transaction' ? 'high' : ('normal' as const)
+        // 5.3.5: Non-blocking log submission. Transaction records (1.7 commerce hooks)
+        // are admitted at high priority so they are not delayed behind tool_call backlog.
+        const priority: 'high' | 'normal' =
+          eventType === EVENT_TYPE_TRANSACTION_URI ? 'high' : 'normal'
         queue.submit(signed, priority)
 
         return result
