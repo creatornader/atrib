@@ -24,7 +24,7 @@ async function makeRecord(overrides: Partial<{
     content_id: overrides.content_id ?? `sha256:${'c'.repeat(64)}`,
     creator_key: base64urlEncode(pk),
     chain_root: genesisChainRoot(overrides.context_id ?? CONTEXT_ID),
-    event_type: (overrides.event_type ?? 'tool_call') as 'tool_call' | 'transaction',
+    event_type: overrides.event_type ?? 'https://atrib.dev/v1/types/tool_call',
     context_id: overrides.context_id ?? CONTEXT_ID,
     timestamp: overrides.timestamp ?? Date.now(),
     signature: '',

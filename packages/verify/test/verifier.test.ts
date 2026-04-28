@@ -21,7 +21,7 @@ function makeGraph(): GraphResponse {
     nodes: [
       {
         id: 'a',
-        event_type: 'tool_call',
+        event_type: 'tool_call', event_type_uri: 'https://atrib.dev/v1/types/tool_call',
         content_id: 'sha256:a',
         creator_key: 'KEY_A',
         chain_root: `sha256:${'0'.repeat(64)}`,
@@ -33,7 +33,7 @@ function makeGraph(): GraphResponse {
       },
       {
         id: 'b',
-        event_type: 'tool_call',
+        event_type: 'tool_call', event_type_uri: 'https://atrib.dev/v1/types/tool_call',
         content_id: 'sha256:b',
         creator_key: 'KEY_B',
         chain_root: `sha256:${'0'.repeat(64)}`,
@@ -45,7 +45,7 @@ function makeGraph(): GraphResponse {
       },
       {
         id: 't',
-        event_type: 'transaction',
+        event_type: 'transaction', event_type_uri: 'https://atrib.dev/v1/types/transaction',
         content_id: 'sha256:t',
         creator_key: 'KEY_M',
         chain_root: `sha256:${'0'.repeat(64)}`,

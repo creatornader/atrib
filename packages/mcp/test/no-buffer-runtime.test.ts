@@ -37,7 +37,7 @@ describe('production code without global Buffer', () => {
     const { canonicalSigningInput } = await import('../src/canon.js')
     const record = {
       spec_version: 'atrib/1.0' as const,
-      event_type: 'tool_call' as const,
+      event_type: 'https://atrib.dev/v1/types/tool_call' as const,
       timestamp: 1700000000000,
       context_id: 'a'.repeat(32),
       creator_key: 'A'.repeat(43),
@@ -62,7 +62,7 @@ describe('production code without global Buffer', () => {
       creator_key_b64url: base64urlEncode(new Uint8Array(32)),
       context_id: 'bb'.repeat(16),
       timestamp: 1700000000000,
-      event_type: 'tool_call',
+      event_type: 'https://atrib.dev/v1/types/tool_call',
     })
     expect(result.constructor.name).toBe('Uint8Array')
     expect(result.length).toBe(90)

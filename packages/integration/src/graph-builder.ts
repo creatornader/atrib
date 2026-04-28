@@ -12,6 +12,7 @@
 import { sha256, hexEncode, canonicalRecord, base64urlEncode, verifyRecord } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import type { GraphNode, GraphEdge, GraphResponse, EdgeType, VerificationState } from '@atrib/verify'
+import { graphLabelFromEventTypeUri } from '@atrib/verify'
 
 /**
  * Compute the record hash (sha256 of JCS canonical form). same algorithm
@@ -41,8 +42,11 @@ export async function buildGraphFromRecords(
   contextId: string,
 ): Promise<GraphResponse> {
   // Filter to records belonging to this session OR linked via session_token
+  const TOOL_CALL_URI = 'https://atrib.dev/v1/types/tool_call'
+  const TRANSACTION_URI = 'https://atrib.dev/v1/types/transaction'
+
   const sessionRecords = records.filter((r) => r.context_id === contextId)
-  const txInSession = sessionRecords.find((r) => r.event_type === 'transaction')
+  const txInSession = sessionRecords.find((r) => r.event_type === TRANSACTION_URI)
 
   // Cross-session records: tool_calls in OTHER sessions whose session_token
   // matches the in-session transaction's session_token
@@ -51,7 +55,7 @@ export async function buildGraphFromRecords(
     const txToken = txInSession.session_token
     crossSessionRecords = records.filter((r) => {
       if (r.context_id === contextId) return false
-      if (r.event_type !== 'tool_call') return false
+      if (r.event_type !== TOOL_CALL_URI) return false
       return 'session_token' in r && r.session_token === txToken
     })
   }
@@ -77,7 +81,8 @@ export async function buildGraphFromRecords(
     const id = `sha256:${recordHashHex(r)}`
     return {
       id,
-      event_type: r.event_type,
+      event_type: graphLabelFromEventTypeUri(r.event_type),
+      event_type_uri: r.event_type,
       content_id: r.content_id,
       creator_key: r.creator_key,
       chain_root: r.chain_root,
@@ -178,7 +183,7 @@ export async function buildGraphFromRecords(
     const txToken = 'session_token' in txRecord ? txRecord.session_token : undefined
     if (!txToken) continue
     for (const r of allRecords) {
-      if (r.event_type !== 'tool_call') continue
+      if (r.event_type !== TOOL_CALL_URI) continue
       if (r.context_id === tx.context_id) continue
       if (!('session_token' in r) || r.session_token !== txToken) continue
       edges.push({

@@ -1,8 +1,8 @@
 {
-  "name": "accept-tool-call",
+  "name": "accept-observation",
   "spec_section": "2.6.1",
   "validation_step": null,
-  "description": "A well-formed signed tool_call record at the reference time. The log MUST accept it (200) and return a §2.6.2 proof bundle.",
+  "description": "A well-formed signed observation record. The log MUST accept it (200). Observation records carry the third atrib normative event_type URI per §1.2.4 and map to log entry byte 0x03 per §2.3.1.",
   "request": {
     "method": "POST",
     "path": "/v1/entries",
@@ -14,10 +14,10 @@
       "content_id": "sha256:3f8a2b00000000000000000000000000000000000000000000000000000000ff",
       "creator_key": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw",
       "chain_root": "sha256:398acaee65c4e533cea249865ab1cee576445dc23178f8b39d5efdcedd57a829",
-      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "event_type": "https://atrib.dev/v1/types/observation",
       "context_id": "4bf92f3577b34da6a3ce929d0e0e4736",
       "timestamp": 1767225600000,
-      "signature": "eCJkwMFIO13fFMoNCIgMWszLS052NyfgrvclDg33u3h_EO08i01Wf_Ieaj8zYRY8Osy80jb-YC1odJoA9sWNDQ"
+      "signature": "V10cXV-mQgyMbBobTET1MYZkIuELo42QlZkr8-C_q3xbTapTXie79kY2jq4F0NnOeo70RE8jqeoWeG5YEhCGCg"
     }
   },
   "expected": {

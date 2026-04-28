@@ -128,8 +128,11 @@ export function calculate(
 // ─────────────────────────────────────────────────────────────────────────────
 
 function identifyContributingNodes(graph: GraphResponse): GraphNode[] {
-  // A contributing node is non-transaction (tool_call or gap_node) AND has
-  // an edge to a transaction node (CONVERGES_ON or CROSS_SESSION).
+  // A contributing node is `tool_call` or `gap_node` (NOT transaction,
+  // observation, or extension) AND has an edge to a transaction node
+  // (CONVERGES_ON or CROSS_SESSION). observation and extension records
+  // are graph nodes but are NOT participants in §4.6 calculation in v1
+  // (spec §3.2.1, §4.6.2).
   const txNodeIds = new Set(
     graph.nodes.filter((n) => n.event_type === 'transaction').map((n) => n.id),
   )
@@ -144,7 +147,11 @@ function identifyContributingNodes(graph: GraphResponse): GraphNode[] {
   }
   // Sort by id for deterministic iteration
   return graph.nodes
-    .filter((n) => n.event_type !== 'transaction' && hasEdgeToTx.has(n.id))
+    .filter(
+      (n) =>
+        (n.event_type === 'tool_call' || n.event_type === 'gap_node') &&
+        hasEdgeToTx.has(n.id),
+    )
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
 }
 

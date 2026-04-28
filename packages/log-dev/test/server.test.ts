@@ -35,7 +35,7 @@ async function makeSignedRecord(overrides: Partial<AtribRecord> = {}): Promise<A
     content_id: 'sha256:3f8a2b0000000000000000000000000000000000000000000000000000000000',
     creator_key: base64urlEncode(pubKey),
     chain_root: genesisChainRoot(TEST_CONTEXT),
-    event_type: 'tool_call',
+    event_type: 'https://atrib.dev/v1/types/tool_call',
     context_id: TEST_CONTEXT,
     timestamp: Date.now(),
     signature: '',
@@ -197,7 +197,7 @@ describe('@atrib/log-dev: HTTP submission API', () => {
       const r1 = await makeSignedRecord({ timestamp: Date.now() })
       const r2 = await makeSignedRecord({
         timestamp: Date.now() + 1,
-        event_type: 'transaction',
+        event_type: 'https://atrib.dev/v1/types/transaction',
       })
 
       await fetch(log.submissionEndpoint, {
@@ -211,7 +211,10 @@ describe('@atrib/log-dev: HTTP submission API', () => {
         body: JSON.stringify(r2),
       })
 
-      expect(observed).toEqual(['tool_call', 'transaction'])
+      expect(observed).toEqual([
+        'https://atrib.dev/v1/types/tool_call',
+        'https://atrib.dev/v1/types/transaction',
+      ])
     })
 
     it('clear() resets the log to empty', async () => {
@@ -248,7 +251,7 @@ describe('@atrib/log-dev: X-atrib-Priority real consumer', () => {
       const normalB = await makeSignedRecord({ timestamp: Date.now() + 1 })
       const highX = await makeSignedRecord({
         timestamp: Date.now() + 2,
-        event_type: 'transaction',
+        event_type: 'https://atrib.dev/v1/types/transaction',
       })
 
       // Track admission order via the onSubmit listener.

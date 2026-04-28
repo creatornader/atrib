@@ -44,3 +44,4 @@ export type {
   RecommendationDocument,
   VerificationResult,
 } from './types.js'
+export { graphLabelFromEventTypeUri } from './types.js'

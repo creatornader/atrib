@@ -4,7 +4,7 @@
 
 Editor: Nader Helmy
 
-This specification defines the atrib protocol for verifiable agent actions. When an AI agent calls a tool, atrib creates a signed record at the moment of action, chains it forward into the next call, and commits it to an append-only Merkle log. Any party can independently verify what an agent did, in what order, with what causal structure. When tool calls converge on a transaction, a deterministic algorithm computes a value distribution from the resulting graph under an agreed policy, producing a settlement document anyone can recompute. The spec covers the record format (§1) including key rotation (§1.9), the log protocol (§2), the graph model (§3), policies and the distribution algorithm (§4), the SDK middleware contracts (§5), the public-key directory (§6), and informative integration patterns for agent harnesses (§7).
+This specification defines the atrib protocol for verifiable agent actions. When an AI agent calls a tool, atrib creates a signed record at the moment of action, chains it forward into the next call, and commits it to an append-only Merkle log. Any party can independently verify what an agent did, in what order, with what causal structure. When tool calls converge on a transaction, a deterministic algorithm computes a value distribution from the resulting graph under an agreed policy, producing a settlement document anyone can recompute. The spec covers the record format (§1) including key rotation (§1.9) and URI-typed event vocabulary (§1.2.4, §1.4.5), the log protocol (§2), the graph model (§3), policies and the distribution algorithm (§4), the SDK middleware contracts (§5), the public-key directory (§6), and informative integration patterns for agent harnesses (§7).
 
 ---
 
@@ -116,7 +116,7 @@ An agent that can verify its own past has a kind of memory the agent ecosystem h
 
 The cognitive consequence is concrete. An agent restoring context from its own atrib records (rather than from platform-controlled memory) cannot be quietly amended. It cannot have actions silently retroactively added or removed. It cannot inherit a falsified history if its harness is replaced. The substrate is the only mechanism by which an agent's continuity of self survives platform changes, model changes, or harness changes, because the cryptography is independent of all of them.
 
-This is the use case the dogfood loop tests: real agents (Claude Code, Cursor, custom harnesses) consuming the substrate they themselves produce. If the substrate works, the agent is more capable. If the substrate is broken, the agent is no worse off than today.
+This is the use case the protocol's recall pattern (§7) tests in practice: real agents (Claude Code, Cursor, custom harnesses) consuming the substrate they themselves produce. If the substrate works, the agent is more capable. If the substrate is broken, the agent is no worse off than today.
 
 ### II. Independent audit and compliance
 
@@ -170,6 +170,7 @@ Contents
   - [1.4.2 Signing procedure](#142-signing-procedure)
   - [1.4.3 Verification procedure](#143-verification-procedure)
   - [1.4.4 Test vector validation](#144-test-vector-validation)
+  - [1.4.5 event_type URI validation](#145-event_type-uri-validation)
 - [1.5 Context Propagation](#15-context-propagation)
   - [1.5.1 context_id: the session anchor](#151-context_id-the-session-anchor)
   - [1.5.2 HTTP transport: tracestate](#152-http-transport-tracestate)
@@ -218,7 +219,7 @@ An attribution record is a JSON object with the following fields:
   "content_id":   "sha256:",        // who served this (see §1.2.2)
   "creator_key":  "",
   "chain_root":   "sha256:",        // hash of parent record, or context_id for genesis (see §1.2.3)
-  "event_type":   "tool_call",           // or "transaction" (see §1.2.4)
+  "event_type":   "https://atrib.dev/v1/types/tool_call", // absolute URI; see §1.2.4
   "context_id":   "", // 32 hex chars (see §1.5.1)
   "timestamp":    1743850000000,         // Unix milliseconds, integer
   "session_token":"", // OPTIONAL (see §1.5.5); omitted when not in a cross-trace session
@@ -234,7 +235,7 @@ An attribution record is a JSON object with the following fields:
 | content_id    | string  | MUST | A prefixed hex-encoded SHA-256 digest identifying the specific creator and tool that produced this record. See §1.2.2 for derivation. Format: `"sha256:"` followed by 64 lowercase hex characters.                                                                                                                                                                                                                                                      |
 | creator_key   | string  | MUST | The creator's Ed25519 public key, encoded as base64url (RFC 4648 §5, no padding). 43 characters. This is the stable identity of the creator across all their records. It is not an ephemeral session key.                                                                                                                                                                                                                                               |
 | chain_root    | string  | MUST | A prefixed hex-encoded SHA-256 digest anchoring this record in the chain. For non-genesis records: the hash of the parent attribution record's canonical serialization (see §1.3). For genesis records: the hash of the context_id string. See §1.2.3.                                                                                                                                                                                                  |
-| event_type    | string  | MUST | The type of event this record documents. See §1.2.4 for the defined values. Implementations MUST reject records with unrecognized event_type values.                                                                                                                                                                                                                                                                                                    |
+| event_type    | string  | MUST | An absolute URI identifying the type of event this record documents. atrib's normative URI set is defined in §1.2.4; consumers MAY mint extension URIs in their own namespaces. URI form is validated per §1.4.5. atrib does not require URI recognition for verification; an unrecognized but syntactically-valid extension URI does not block signature verification.                                                                                                                                                                                                                                                                                                    |
 | context_id    | string  | MUST | The W3C Trace Context trace-id of the OTel trace containing this event. 32 lowercase hex characters. This is the join key that connects attribution records to each other and to transaction events. See §1.5.1.                                                                                                                                                                                                                                        |
 | timestamp     | integer | MUST | Unix time in milliseconds as a JSON integer. MUST NOT be a string, float, or ISO 8601 date. MUST NOT be in the future. Implementations SHOULD reject records with timestamps more than 5 minutes in the future relative to local clock.                                                                                                                                                                                                                 |
 | session_token | string  | MAY  | Base64url-encoded 16-byte opaque token identifying the logical session across OTel trace boundaries. Present only when the record was emitted in a cross-trace session. When present, the graph query layer uses this field to construct CROSS_SESSION edges between records with different context_ids that share the same session_token. See §1.5.5. The session_token field is included in the canonical serialization and covered by the signature. |
@@ -288,12 +289,17 @@ A receiving implementation that decodes a propagation token and needs to set `ch
 
 #### 1.2.4 event_type Values
 
-This specification defines two event_type values. No other values are valid in records conforming to this specification version.
+`event_type` is an absolute URI. atrib publishes a small canonical core vocabulary; consumers MAY mint their own extension URIs in any namespace they control. atrib does not gate, register, or approve extension URIs; D035 establishes the URI-typing mechanism, and D036 defines the bar for promoting an extension URI to atrib's normative set.
 
-| Value       | Meaning                      | When emitted                                                                                                                                                                                                                                                                       |
-| ----------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| tool_call   | A tool contribution event    | Emitted by an MCP server when it returns a successful (non-error) response to a `tools/call` request. MUST NOT be emitted when `isError: true` in the MCP result.                                                                                                                  |
-| transaction | A commerce transaction event | Emitted when a transaction completes, either by the merchant's agent writing a record, or by the atrib SDK reading a transaction webhook. The `content_id` for a transaction record uses the merchant's checkout endpoint URL as the server_url and `"checkout"` as the tool_name. |
+**Normative URI set:**
+
+| URI                                                | Binary | Meaning                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `https://atrib.dev/v1/types/tool_call`             | `0x01` | An agent invoked a tool with input(s) and received a result. Emitted by an MCP server when it returns a successful (non-error) response to a `tools/call` request. MUST NOT be emitted when `isError: true` in the MCP result. Default for any active operation against external state.                                                                                |
+| `https://atrib.dev/v1/types/transaction`           | `0x02` | A commerce-protocol-detected closing event (ACP / UCP / x402 / MPP / AP2 / a2a-x402; see §1.7). Emitted when a transaction completes, either by the merchant's agent writing a record, or by the atrib SDK reading a transaction webhook. The `content_id` for a transaction record uses the merchant's checkout endpoint URL as the server_url and `"checkout"` as the tool_name. §4.6 calculation is normatively gated on this URI. |
+| `https://atrib.dev/v1/types/observation`           | `0x03` | A passive perception captured by an ambient watcher or input source. The agent did not invoke a tool to produce this record; the record captures something the agent received from its environment. Has no caller-supplied input and no return value to attest to. Distinct from `tool_call` in that there is no agent-chosen action.                                  |
+
+**Extension URIs:** Any absolute URI in a non-`atrib.dev` namespace is a valid extension URI. The 1-byte log entry slot (§2.3.1) maps such URIs to the byte `0xFF` (extension type); verifiers wanting to filter by the URI itself read the URI from the record. Extension URIs SHOULD identify a stable owner (a domain the consumer controls or a `urn:` namespace they registered); atrib does not enforce ownership.
 
 ---
 
@@ -316,17 +322,17 @@ First, construct the record object with all fields present including a placehold
   "content_id":   "sha256:3f8a2b...",
   "creator_key":  "ABC...",
   "chain_root":   "sha256:7e1f4a...",
-  "event_type":   "tool_call",
+  "event_type":   "https://atrib.dev/v1/types/tool_call",
   "context_id":   "4bf92f3577b34da6a3ce929d0e0e4736",
   "timestamp":    1743850000000,
   "signature":    "XYZ..."
 }
 
 // Remove signature field, apply JCS → signing input (lexicographic key order):
-{"chain_root":"sha256:7e1f4a...","content_id":"sha256:3f8a2b...","context_id":"4bf92f3577b34da6a3ce929d0e0e4736","creator_key":"ABC...","event_type":"tool_call","spec_version":"atrib/1.0","timestamp":1743850000000}
+{"chain_root":"sha256:7e1f4a...","content_id":"sha256:3f8a2b...","context_id":"4bf92f3577b34da6a3ce929d0e0e4736","creator_key":"ABC...","event_type":"https://atrib.dev/v1/types/tool_call","spec_version":"atrib/1.0","timestamp":1743850000000}
 
 // Record with session_token present (cross-trace sessions only):
-{"chain_root":"sha256:7e1f4a...","content_id":"sha256:3f8a2b...","context_id":"4bf92f3577b34da6a3ce929d0e0e4736","creator_key":"ABC...","event_type":"tool_call","session_token":"base64url16bytes","spec_version":"atrib/1.0","timestamp":1743850000000}
+{"chain_root":"sha256:7e1f4a...","content_id":"sha256:3f8a2b...","context_id":"4bf92f3577b34da6a3ce929d0e0e4736","creator_key":"ABC...","event_type":"https://atrib.dev/v1/types/tool_call","session_token":"base64url16bytes","spec_version":"atrib/1.0","timestamp":1743850000000}
 
 // Notes:
 // JCS sorts keys lexicographically. No whitespace. No trailing newline.
@@ -395,7 +401,7 @@ Step 4: Verify the signature against the verification input bytes using the deco
 
 Step 5: Verify that `spec_version` is `"atrib/1.0"`. Reject if not.
 
-Step 6: Verify that `event_type` is a known value per §1.2.4. Reject if not.
+Step 6: Verify that `event_type` is a syntactically-valid absolute URI per §1.4.5. Reject if not. The URI need not be in atrib's normative set; an extension URI passes this check. Recognition (whether the URI is in atrib's normative set or in a known extension namespace) is informational and does not gate verification.
 
 Step 7: Verify that `timestamp` is not more than 5 minutes in the future. Reject if so.
 
@@ -407,7 +413,45 @@ A record passes verification if and only if all eight steps succeed. A partial v
 
 All implementations of Ed25519 signing and verification MUST be validated against the Wycheproof test vectors for EdDSA (github.com/C2SP/wycheproof, `testvectors_v1/eddsa_verify_test.json`) prior to production deployment. Any test vector marked `"result": "invalid"` that an implementation accepts is a security defect. Any test vector marked `"result": "valid"` that an implementation rejects is a compatibility defect.
 
-**Note (Key Rotation):** This specification does not define a key rotation mechanism. A creator's `creator_key` is treated as stable. Implementers who need key rotation should issue new records under a new key and publish a public attestation linking old and new keys.
+**Note (Key Rotation):** Key rotation is normatively defined in §1.9 (D033).
+
+#### 1.4.5 event_type URI Validation
+
+This section defines the syntactic and structural validation that the `event_type` URI MUST satisfy. The validation is independent of whether the URI is in atrib's normative set or a consumer extension namespace; both must satisfy these rules.
+
+**Required form.** The `event_type` value MUST be an absolute URI per RFC 3986 §4.3:
+
+```
+absolute-URI = scheme ":" hier-part [ "?" query ]
+```
+
+In practice this means:
+
+1. The value MUST contain a scheme (e.g., `https`, `urn`) followed by `:`. Relative references (`/types/tool_call`), bare tokens (`tool_call`), and empty strings are invalid.
+2. The scheme MUST consist of letters, digits, `+`, `-`, or `.` and MUST start with a letter, per RFC 3986 §3.1.
+3. For the `https` scheme (the form atrib normative URIs use), the URI MUST have a non-empty authority component (host).
+4. The URI MUST NOT contain a fragment (`#...`). Fragments are reserved for future use; including one invalidates the record.
+5. The URI MUST be at most 256 octets in its UTF-8 encoding. Longer URIs are rejected. This bound is a defense against pathological inputs and is well above any reasonable URI length.
+
+**Recommended discipline (not enforced).** Consumers minting extension URIs SHOULD:
+
+1. Use a domain or `urn:` namespace they own, so the URI identifies a stable owner. Atrib does not validate ownership.
+2. Use a versioned path (e.g., `https://example.com/atrib/v1/types/observation`) so the URI's semantics can evolve under new versions without breaking earlier records.
+3. Publish a human-readable schema document at the URI (or at a related URL) so verifiers that want to interpret the type's content can resolve it. Atrib does not require resolution to succeed; resolution is opt-in.
+4. Treat URIs as opaque identifiers. Two URIs that differ in any byte (including trailing slashes, case, or query parameters) are distinct types. Atrib does not normalize URIs before comparison.
+
+**Validation procedure.** Given a candidate URI string `U`:
+
+1. Decode `U` as UTF-8. If decoding fails, reject.
+2. Verify `U.length <= 256` octets. If not, reject.
+3. Verify `U` contains a `:` separating a non-empty scheme from a non-empty hier-part. If not, reject.
+4. Verify the scheme matches the production `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`. If not, reject.
+5. If the scheme is `http` or `https`, verify the URI contains a non-empty host (between the `//` and the next `/`, `?`, or end of string). If not, reject.
+6. Verify `U` does not contain `#`. If it does, reject.
+
+A URI passing all six steps is syntactically valid for use as `event_type`. Atrib normative URIs all pass these checks; conformance fixtures (§spec/conformance/1.4-extension/) include both passing and failing examples for verifier testing.
+
+**Recognition versus validation.** Validation per this section determines whether a record is structurally well-formed and signature-verifiable. Recognition (whether the URI is in atrib's normative set, in a known extension namespace, or completely unknown) is a separate concern handled at the application layer. Verifiers MAY surface recognition as informational metadata in their output (`event_type_recognized`, `event_type_namespace`, etc.) but MUST NOT use recognition to gate verification.
 
 ---
 
@@ -955,12 +999,25 @@ struct AtribLogEntry {
   u8  creator_key[32]; // raw 32-byte Ed25519 public key
   u8  context_id[16];  // raw 16 bytes decoded from the 32-char hex context_id
   u64 timestamp_ms;    // big-endian Unix milliseconds, matching the record's timestamp field
-  u8  event_type;      // 0x01 = tool_call, 0x02 = transaction
+  u8  event_type;      // see byte mapping below
 }
 // Total: 1 + 32 + 32 + 16 + 8 + 1 = 90 bytes
 ```
 
 All multi-byte integers are big-endian. The `record_hash` is computed over the _complete_ attribution record including its `signature` field, after JCS serialization. This binds the commitment to the specific signed record, not just its pre-signature content.
+
+**event_type byte mapping.** The 1-byte slot is a fast-path filter; the authoritative type is the URI in the record content (§1.2.4). Verifiers MAY filter by byte for atrib normative URIs and MUST fetch the record to read the URI for extension types.
+
+| Byte         | URI                                          | Notes                                                  |
+| ------------ | -------------------------------------------- | ------------------------------------------------------ |
+| `0x01`       | `https://atrib.dev/v1/types/tool_call`       | atrib normative                                        |
+| `0x02`       | `https://atrib.dev/v1/types/transaction`     | atrib normative                                        |
+| `0x03`       | `https://atrib.dev/v1/types/observation`     | atrib normative                                        |
+| `0x04`–`0xFE`| reserved                                     | reserved for future atrib normative additions per D036 |
+| `0xFF`       | extension URI                                | URI is in a non-`atrib.dev` namespace; read content    |
+| `0x00`       | reserved                                     | MUST NOT be emitted                                    |
+
+The byte mapping is normative for log operators encoding entries and for verifiers building byte-level filters. The mapping is informative for emitters (which write URIs into records, not bytes); the log operator is responsible for the URI-to-byte mapping at submission time. A log operator receiving a record with a URI not in the atrib normative set MUST encode the entry with `event_type = 0xFF` and preserve the URI verbatim in the stored record content.
 
 #### 2.3.2 Leaf Hash Computation
 
@@ -1141,7 +1198,7 @@ X-atrib-Priority: normal              // optional, see below
   "content_id":   "sha256:3f8a2b...",
   "creator_key":  "ABC...",
   "chain_root":   "sha256:7e1f4a...",
-  "event_type":   "tool_call",
+  "event_type":   "https://atrib.dev/v1/types/tool_call",
   "context_id":   "4bf92f3577b34da6a3ce929d0e0e4736",
   "timestamp":    1743850000000,
   "signature":    "XYZ..."
@@ -1163,7 +1220,7 @@ Step 1: Verify the attribution record's Ed25519 signature per §1.4.3. Reject if
 
 Step 2: Verify that `spec_version` is `"atrib/1.0"`. Reject with `400` if not.
 
-Step 3: Verify that `event_type` is a known value. Reject with `400` if not.
+Step 3: Verify that `event_type` is a syntactically-valid absolute URI per §1.4.5; the URI need not be in atrib's normative set. Reject with `400` if not.
 
 Step 4: Verify that `timestamp` is not more than 10 minutes in the future (a more permissive window than client-side verification to account for clock skew). Reject with `400` if so.
 
@@ -1485,11 +1542,13 @@ The atrib attribution graph is a directed property multigraph. Nodes represent e
 
 #### 3.2.1 Node Types
 
-| Type        | Source                            | Description                                                                                                                                                                       |
-| ----------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| tool_call   | event_type = "tool_call"          | A creator's contribution to the session. Carries creator identity, tool identity, chain position, and timestamp. The primary subject of attribution.                              |
-| transaction | event_type = "transaction"        | The commerce event that closes the attribution loop. The creator_key is the merchant's key. A session without a transaction node is attributable but not yet economically closed. |
-| gap_node    | OTel span without a signed record | An unsigned hop. Present in the graph so that invisible contributions are visible. Carries no creator_key, chain_root, or signature. See §3.2.5.                                  |
+| Type        | Source                                                | Description                                                                                                                                                                       |
+| ----------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tool_call   | event_type = `https://atrib.dev/v1/types/tool_call`   | A creator's contribution to the session. Carries creator identity, tool identity, chain position, and timestamp. The primary subject of attribution.                              |
+| transaction | event_type = `https://atrib.dev/v1/types/transaction` | The commerce event that closes the attribution loop. The creator_key is the merchant's key. A session without a transaction node is attributable but not yet economically closed. |
+| gap_node    | OTel span without a signed record                     | An unsigned hop. Present in the graph so that invisible contributions are visible. Carries no creator_key, chain_root, or signature. See §3.2.5.                                  |
+
+Records with extension `event_type` URIs (any URI not in atrib's normative set) are stored in the graph as nodes with `event_type` preserved verbatim from the record but DO NOT participate in §3.2.4 edge derivation; they are queryable via the graph API as opaque-typed nodes. Future spec revisions MAY define edge derivation rules involving extension types if a normative use case emerges per D036; until then, graphs derive edges only from `tool_call` and `transaction` records (and `gap_node` derived nodes). `observation` records are queryable but are not participants in CHAIN_PRECEDES, SESSION_PRECEDES, or CONVERGES_ON (they have no chain_root semantics analogous to a tool_call). This intentionally narrow scope avoids picking semantics for observation linkage before usage establishes them.
 
 #### 3.2.2 Interaction Patterns and Their Structural Signatures
 
@@ -1613,7 +1672,11 @@ Returns only nodes, without edges. Used by policy engines that apply their own t
 ```
 GET /v1/graph/4bf92f3577b34da6a3ce929d0e0e4736/nodes
 
-// Optional: event_type=tool_call|transaction|gap_node
+// Optional: event_type=<URI>  (e.g. https://atrib.dev/v1/types/tool_call,
+//                              https://atrib.dev/v1/types/transaction,
+//                              https://atrib.dev/v1/types/observation,
+//                              or an extension URI)
+// Optional: event_type=gap_node              (synthetic node type per §3.2.5)
 // Optional: creator_key=
 // Optional: verification_state=unsigned|signature_valid|log_committed|witnessed
 
@@ -1627,7 +1690,7 @@ Returns the transaction node for a session if one exists. Policy engines use thi
 ```
 GET /v1/graph/4bf92f3577b34da6a3ce929d0e0e4736/transaction
 
-// 200 OK  -> NodeObject (event_type: "transaction")
+// 200 OK  -> NodeObject (event_type matches the transaction URI per §1.2.4 / atrib/1.0 short token)
 // 404     -> session exists but no transaction record present
 ```
 
@@ -1680,7 +1743,7 @@ GET /v1/creators/ABC.../sessions
 ```
 {
   "id":                  "sha256:3f8a2b...",  // record_hash from log; "gap:..." for gap nodes
-  "event_type":          "tool_call",         // "tool_call" | "transaction" | "gap_node"
+  "event_type":          "https://atrib.dev/v1/types/tool_call", // absolute URI; "gap_node" for synthetic gap nodes
   "content_id":          "sha256:7e1f...",    // null for gap_node
   "creator_key":         "ABC...",            // null for gap_node
   "chain_root":          "sha256:9a3c...",    // null for gap_node
@@ -2090,6 +2153,8 @@ A node `N` is a contributing node if all of the following hold:
 
 - `N.event_type` is `tool_call` or `gap_node` (not `transaction`).
 
+  **Note (event_type matching).** Throughout §4.6, the short labels `tool_call`, `transaction`, and `gap_node` refer to the corresponding atrib normative URIs (`https://atrib.dev/v1/types/tool_call`, `https://atrib.dev/v1/types/transaction`) plus the synthetic graph-layer type `gap_node`. Records with extension URIs (any URI not in atrib's normative set) are NOT contributing nodes; they are treated as opaque-typed nodes per §3.2.1 and skipped during contribution selection. Future spec revisions may extend §4.6 to include extension types if a normative use case emerges.
+
 - `N` has at least one edge to a transaction node in `G`, either a CONVERGES_ON edge (same session) or a CROSS_SESSION edge (linked session). This is always true for all non-transaction nodes when the graph is queried for a closed session, but is stated explicitly to prevent implementation errors.
 
 Let `C` be the set of all contributing nodes.
@@ -2106,7 +2171,7 @@ function raw_score(n, G, P):
   else:
     // collect all edge types connecting n to any transaction node
     edge_types = {e.type for e in G.edges where e.source == n.id
-                  and G.nodes[e.target].event_type == "transaction"}
+                  and G.nodes[e.target].event_type == "https://atrib.dev/v1/types/transaction"}
     // also include CHAIN_PRECEDES and SESSION_* edges between non-transaction nodes
     // that form a path leading to a transaction node
     edge_types |= {e.type for e in all_edges_on_paths_to_transaction(n, G)}
@@ -2476,7 +2541,7 @@ const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
 | logEndpoint      | string     | Optional | URL of the Merkle log submission endpoint. Default: `https://log.atrib.dev/v1/entries`. Override for private log deployments.                                                                                                                                                                                                                                                                                                                                           |
 | policy           | object     | Optional | Inline attribution policy document (§4.2). If provided, served at `/.well-known/atrib-policy.json`. If absent, a 404 is served at that path (default policy applies for callers).                                                                                                                                                                                                                                                                                      |
 | serverUrl        | string     | Optional | Canonical URL of this MCP server, used to compute `content_id` values (§1.2.2). Default: derived from the server's HTTP host header. MUST be set explicitly for stdio transport where no host header is available.                                                                                                                                                                                                                                                     |
-| transactionTools | string\[\] | Optional | Array of tool names that complete commerce transactions. When a successful call to one of these tools is detected, `@atrib/mcp` emits a `transaction` record (event_type: "transaction") rather than a `tool_call` record. This is how Path 1 merchant-side transaction emission (§5.4.5) is implemented. The merchant's checkout tool name(s) should be listed here. If not set, `@atrib/mcp` emits only `tool_call` records and Path 2 agent-side detection applies. |
+| transactionTools | string\[\] | Optional | Array of tool names that complete commerce transactions. When a successful call to one of these tools is detected, `@atrib/mcp` emits a record with `event_type: "https://atrib.dev/v1/types/transaction"` rather than `"https://atrib.dev/v1/types/tool_call"`. This is how Path 1 merchant-side transaction emission (§5.4.5) is implemented. The merchant's checkout tool name(s) should be listed here. If not set, `@atrib/mcp` emits only `tool_call` records and Path 2 agent-side detection applies. |
 | onRecord         | function   | Optional | `(record: AtribRecord) => void \| Promise<void>`. Observer invoked once per signed record AFTER signing and BEFORE log submission. Lets a host persist or audit the record locally; without this hook the original signed JSON is unrecoverable because the log stores only commitments (§2.10). Errors thrown or promises rejected by the observer are caught and warned via `console.warn`; they MUST NOT block submission, MUST NOT affect the attribution token in `_meta`, and MUST NOT affect the tool response, preserving the §5.8 degradation contract. Typical uses: dogfood verification (replay `verifyRecord` against `creator_key`), local audit trail, replay debugging.                                                                                  |
 
 #### 5.3.2 Inbound Context Reading
@@ -2513,7 +2578,10 @@ const record = {
   creator_key:  publicKeyFromPrivate(creatorKey),          // base64url Ed25519 pubkey
   chain_root:   inboundContext?.record_hash            // record_hash from §5.3.2 becomes this record's chain_root
                   ?? genesisChainRoot(context_id),       // §1.2.3 if no upstream
-  event_type:   isTransaction ? "transaction" : "tool_call",  // §1.2.4
+  event_type:   isTransaction
+    ? "https://atrib.dev/v1/types/transaction"
+    : "https://atrib.dev/v1/types/tool_call",                  // §1.2.4
+
   context_id:   context_id,                               // OTel trace ID
   timestamp:    Date.now(),
   ...(session_token && { session_token }),                 // §1.5.5, omit field if absent
@@ -2799,7 +2867,7 @@ The session policy record MUST include a warning: `"transaction_emitted_by_agent
 
 In both paths, when Path 2 is taken, the record MUST be submitted to the log immediately, because the transaction event is the closing anchor of the attribution graph.
 
-**Note (Heuristic detection is a fallback):** The tool name heuristic fires only when no protocol-level transaction signal is present. It is less reliable; a tool named `checkout` might be a UI component, not a payment completion. When heuristic detection fires, the transaction record's `event_type` is still `"transaction"` but the session policy record includes a warning: `"transaction_detected_by_heuristic"`. Merchants may choose to require protocol-level detection for settlement purposes by filtering on this warning in their verification workflow.
+**Note (Heuristic detection is a fallback):** The tool name heuristic fires only when no protocol-level transaction signal is present. It is less reliable; a tool named `checkout` might be a UI component, not a payment completion. When heuristic detection fires, the transaction record's `event_type` is still `https://atrib.dev/v1/types/transaction` but the session policy record includes a warning: `"transaction_detected_by_heuristic"`. Merchants may choose to require protocol-level detection for settlement purposes by filtering on this warning in their verification workflow.
 
 #### 5.4.6 Session Policy Record Creation
 
@@ -2936,7 +3004,7 @@ This section is normative. A conforming implementation MUST fire each trigger at
 | session_init         | Before the first outbound `tools/call` in a session                                                         | @atrib/agent | Establish context_id, generate session_token, fetch and negotiate policies, create session policy record (§5.4.2).                                                                                                                                                                                  |
 | tool_call_outbound   | Immediately before every outbound `tools/call` request is sent                                              | @atrib/agent | Attach attribution context token to request headers and `params._meta` (§5.4.3).                                                                                                                                                                                                                    |
 | tool_call_inbound    | Immediately after every inbound `tools/call` response is received, if `isError: false`                      | @atrib/agent | Read and store attribution context from response. Update session state (§5.4.4). Check for transaction signal (§5.4.5).                                                                                                                                                                             |
-| tool_served          | Immediately after a tool handler completes successfully (`isError: false`), before the response is returned | @atrib/mcp   | Construct, sign, and write attribution record (event_type: `"tool_call"` or `"transaction"` if tool is in `transactionTools`). Attach context token to response (§5.3.3–5.3.4). Submit to log (synchronously for transaction records, asynchronously for tool_call records per §5.3.5).               |
+| tool_served          | Immediately after a tool handler completes successfully (`isError: false`), before the response is returned | @atrib/mcp   | Construct, sign, and write attribution record (event_type: `tool_call` URI, or `transaction` URI if tool is in `transactionTools`; see §1.2.4). Attach context token to response (§5.3.3–5.3.4). Submit to log (synchronously for transaction records, asynchronously for tool_call records per §5.3.5).               |
 | transaction_detected | When `detectTransaction()` returns `true` during `tool_call_inbound` processing                             | @atrib/agent | Apply path selection rule (§5.4.5): if attribution token is present in the response, Path 1 is in use: update session state and skip emission. If no token, Path 2 applies: emit a `transaction` record, submit to log immediately (high priority, non-blocking), finalize session policy record. |
 | task_created         | When a `tasks/create` response is received                                                                  | @atrib/agent | Store the task ID and associate it with the current session context. Continue forwarding attribution context on subsequent requests within the task.                                                                                                                                                |
 | task_completed       | When a task polling response indicates completion                                                           | @atrib/agent | Treat task completion as a successful `tools/call` response. Apply `tool_call_inbound` trigger logic to the final task result.                                                                                                                                                                      |
@@ -3225,7 +3293,7 @@ This appendix is normative. A conforming implementation MUST produce outputs ide
 | Field | Value |
 | --- | --- |
 | spec_version | `atrib/1.0` |
-| event_type | `tool_call` |
+| event_type | `https://atrib.dev/v1/types/tool_call` |
 | timestamp | `1700000000000` |
 | context_id | `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` |
 | creator_key | `iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w` |
@@ -3237,17 +3305,17 @@ This appendix is normative. A conforming implementation MUST produce outputs ide
 The signing input is `JCS(record without signature)`:
 
 ```
-{"chain_root":"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547","content_id":"sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e","context_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","creator_key":"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w","event_type":"tool_call","spec_version":"atrib/1.0","timestamp":1700000000000}
+{"chain_root":"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547","content_id":"sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e","context_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","creator_key":"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w","event_type":"https://atrib.dev/v1/types/tool_call","spec_version":"atrib/1.0","timestamp":1700000000000}
 ```
 
-SHA-256 of signing input (hex): `78046879d2a762e9a1a65ab1ef284ca65f77384db8050069eaa2cb5cbf9ca8f1`
+SHA-256 of signing input (hex): `e2ad8c62656a32b381c9b4c6b55fb13529e8843ffcdd0f03a80bb1afb87a9676`
 
 ### A.4 Signature (§1.4)
 
 | Field | Value |
 | --- | --- |
-| Signature (base64url) | `PrhhwDFrAcDwbfHVzQWG0y58SwGP3FWZdSKyxMeKVSA5EQOZQJYXbqwEZJC1MkFj6W1M0_17o22cGyzKEtSVDg` |
-| Signature (hex) | `3eb861c0316b01c0f06df1d5cd0586d32e7c4b018fdc55997522b2c4c78a5520391103994096176eac046490b5324163e96d4cd3fd7ba36d9c1b2cca12d4950e` |
+| Signature (base64url) | `ZMjtGaUFxp3N4ZA2Vw05NBg8KiymOdNRL3uRB_QJ-zMK7MVOBBqtOA1xLo-DMmeLZfjWjfBFwrHtQemoxXXMBg` |
+| Signature (hex) | `64c8ed19a505c69dcde19036570d3934183c2a2ca639d3512f7b9107f409fb330aecc54e041aad380d712e8f8332678b65f8d68df045c2b1ed41e9a8c575cc06` |
 | Verification passes | `true` |
 
 ### A.5 Canonical Record and Record Hash
@@ -3255,26 +3323,26 @@ SHA-256 of signing input (hex): `78046879d2a762e9a1a65ab1ef284ca65f77384db805006
 The canonical record is `JCS(complete record with signature)`:
 
 ```
-{"chain_root":"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547","content_id":"sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e","context_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","creator_key":"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w","event_type":"tool_call","signature":"PrhhwDFrAcDwbfHVzQWG0y58SwGP3FWZdSKyxMeKVSA5EQOZQJYXbqwEZJC1MkFj6W1M0_17o22cGyzKEtSVDg","spec_version":"atrib/1.0","timestamp":1700000000000}
+{"chain_root":"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547","content_id":"sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e","context_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","creator_key":"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w","event_type":"https://atrib.dev/v1/types/tool_call","signature":"ZMjtGaUFxp3N4ZA2Vw05NBg8KiymOdNRL3uRB_QJ-zMK7MVOBBqtOA1xLo-DMmeLZfjWjfBFwrHtQemoxXXMBg","spec_version":"atrib/1.0","timestamp":1700000000000}
 ```
 
 | Field | Value |
 | --- | --- |
-| Record hash (hex) | `ab30b97e78ce078da518536f43929429a0eab164cd4d8896548215ccea50faba` |
-| Record hash (base64url) | `qzC5fnjOB42lGFNvQ5KUKaDqsWTNTYiWVIIVzOpQ-ro` |
+| Record hash (hex) | `ea6fb413c524ab5767520516ffb8ae38a74391f7892177e0236f5f2de523b9c1` |
+| Record hash (base64url) | `6m-0E8Ukq1dnUgUW_7iuOKdDkfeJIXfgI29fLeUjucE` |
 
 ### A.6 Propagation Token (§1.5.2)
 
 | Field | Value |
 | --- | --- |
-| Token | `qzC5fnjOB42lGFNvQ5KUKaDqsWTNTYiWVIIVzOpQ-ro.iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w` |
+| Token | `6m-0E8Ukq1dnUgUW_7iuOKdDkfeJIXfgI29fLeUjucE.iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w` |
 | Format | `base64url(record_hash) + "." + base64url(creator_key)` |
 
 ### A.7 Chain Root for Next Record
 
 | Field | Value |
 | --- | --- |
-| chain_root | `sha256:ab30b97e78ce078da518536f43929429a0eab164cd4d8896548215ccea50faba` |
+| chain_root | `sha256:ea6fb413c524ab5767520516ffb8ae38a74391f7892177e0236f5f2de523b9c1` |
 | Format | `"sha256:" + hex(record_hash)` |
 | Matches record_hash from A.5 | `true` |
 
@@ -3282,7 +3350,7 @@ The canonical record is `JCS(complete record with signature)`:
 
 | Field | Value |
 | --- | --- |
-| Entry (hex, 90 bytes) | `01ab30b97e78ce078da518536f43929429a0eab164cd4d8896548215ccea50faba8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5caaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0000018bcfe5680001` |
+| Entry (hex, 90 bytes) | `01ea6fb413c524ab5767520516ffb8ae38a74391f7892177e0236f5f2de523b9c18a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5caaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0000018bcfe5680001` |
 | Entry length | `90` |
 
 Byte layout:
@@ -3291,7 +3359,7 @@ Byte layout:
 - Bytes 33-64: creator_key (32 bytes)
 - Bytes 65-80: context_id (16 bytes)
 - Bytes 81-88: timestamp_ms (uint64 big-endian)
-- Byte 89: event_type (`0x01` = tool_call)
+- Byte 89: event_type (`0x01` = `https://atrib.dev/v1/types/tool_call`)
 
 ### A.9 Merkle Tree (§2.3.2, §2.7)
 
@@ -3299,9 +3367,9 @@ Byte layout:
 
 | Field | Value |
 | --- | --- |
-| Leaf hash | `1f0bd2c5ad2518265eff0e13a65167f1f2ce990bd0de19af8fd8ec285bee03ab` |
-| Leaf hash (base64) | `HwvSxa0lGCZe/w4TplFn8fLOmQvQ3hmvj9jsKFvuA6s=` |
-| Root (= leaf hash for size 1) | `1f0bd2c5ad2518265eff0e13a65167f1f2ce990bd0de19af8fd8ec285bee03ab` |
+| Leaf hash | `424c202b46c2468a9a62958c841c38884b53454341cd0c326296dd2cdc31037f` |
+| Leaf hash (base64) | `QkwgK0bCRoqaYpWMhBw4iEtTRUNBzQwyYpbdLNwxA38=` |
+| Root (= leaf hash for size 1) | `424c202b46c2468a9a62958c841c38884b53454341cd0c326296dd2cdc31037f` |
 | Inclusion proof | `[]` (empty for single-entry tree) |
 | Verification passes | `true` |
 
@@ -3309,11 +3377,11 @@ Byte layout:
 
 | Field | Value |
 | --- | --- |
-| Leaf 0 hash | `1f0bd2c5ad2518265eff0e13a65167f1f2ce990bd0de19af8fd8ec285bee03ab` |
+| Leaf 0 hash | `424c202b46c2468a9a62958c841c38884b53454341cd0c326296dd2cdc31037f` |
 | Leaf 1 hash | `5133c40d0435ff1b7db13abebf7a417c03dbe86309ca8ed9121e04cf1d728866` |
-| Root | `a09fe35042ae854ac848f33b02e78b5c8340de5272b87717d2b03fa331aa5744` |
+| Root | `bfec13ffa5af1f27d9c878c6557aaf480686a34789b2c8b8630ce0c644817398` |
 | Inclusion proof for index 0 | `["UTPEDQQ1/xt9sTq+v3pBfAPb6GMJyo7ZEh4Ezx1yiGY="]` |
-| Inclusion proof for index 1 | `["HwvSxa0lGCZe/w4TplFn8fLOmQvQ3hmvj9jsKFvuA6s="]` |
+| Inclusion proof for index 1 | `["QkwgK0bCRoqaYpWMhBw4iEtTRUNBzQwyYpbdLNwxA38="]` |
 
 Leaf hash computation: `SHA-256(0x00 || entry_bytes)`
 Internal node hash: `SHA-256(0x01 || left || right)`

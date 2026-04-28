@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Log entry serialization. spec §2.3.1
+ * Log entry serialization. spec 2.3.1
  *
  * 90-byte binary format:
  *   [0]      version       u8  . always 0x01
@@ -9,15 +9,30 @@
  *   [33-64]  creator_key   u8[32]. raw Ed25519 public key
  *   [65-80]  context_id    u8[16]. 16 bytes from 32 hex chars
  *   [81-88]  timestamp_ms  u64 big-endian. Unix milliseconds
- *   [89]     event_type    u8  . 0x01 = tool_call, 0x02 = transaction
+ *   [89]     event_type    u8  . see byte mapping below
+ *
+ * event_type byte mapping (spec 1.2.4 + 2.3.1):
+ *   0x01 = https://atrib.dev/v1/types/tool_call    (atrib normative)
+ *   0x02 = https://atrib.dev/v1/types/transaction  (atrib normative)
+ *   0x03 = https://atrib.dev/v1/types/observation  (atrib normative)
+ *   0x04-0xFE reserved for future atrib normative additions per D036
+ *   0xFF = extension URI (URI is in a non-atrib.dev namespace; read content)
+ *   0x00 reserved; MUST NOT be emitted
  */
 
 import { hexDecode } from './hash.js'
 import { base64urlDecode } from './base64url.js'
+import {
+  EVENT_TYPE_TOOL_CALL_URI,
+  EVENT_TYPE_TRANSACTION_URI,
+  EVENT_TYPE_OBSERVATION_URI,
+} from './types.js'
 
 export const ENTRY_VERSION = 0x01 as const
 export const EVENT_TYPE_TOOL_CALL = 0x01 as const
 export const EVENT_TYPE_TRANSACTION = 0x02 as const
+export const EVENT_TYPE_OBSERVATION = 0x03 as const
+export const EVENT_TYPE_EXTENSION = 0xff as const
 
 export const ENTRY_SIZE = 90 as const
 
@@ -30,7 +45,25 @@ export interface EntryInput {
   context_id: string
   /** Unix timestamp in milliseconds */
   timestamp: number
-  event_type: 'tool_call' | 'transaction'
+  /** event_type URI from the record (spec 1.2.4) */
+  event_type: string
+}
+
+/**
+ * Map an event_type URI to the byte slot used by the binary log entry (spec 2.3.1).
+ * Atrib normative URIs map to dedicated bytes; everything else maps to 0xFF (extension).
+ */
+export function eventTypeUriToByte(uri: string): number {
+  switch (uri) {
+    case EVENT_TYPE_TOOL_CALL_URI:
+      return EVENT_TYPE_TOOL_CALL
+    case EVENT_TYPE_TRANSACTION_URI:
+      return EVENT_TYPE_TRANSACTION
+    case EVENT_TYPE_OBSERVATION_URI:
+      return EVENT_TYPE_OBSERVATION
+    default:
+      return EVENT_TYPE_EXTENSION
+  }
 }
 
 /**
@@ -70,8 +103,8 @@ export function serializeEntry(input: EntryInput): Uint8Array {
   // DataView.setBigUint64 is available in ES2020+ / Node 12+
   view.setBigUint64(81, BigInt(input.timestamp), false /* big-endian */)
 
-  // [89] event_type
-  buf[89] = input.event_type === 'tool_call' ? EVENT_TYPE_TOOL_CALL : EVENT_TYPE_TRANSACTION
+  // [89] event_type byte (mapped from URI per spec 1.2.4)
+  buf[89] = eventTypeUriToByte(input.event_type)
 
   return buf
 }

@@ -4,8 +4,8 @@ import { validateSubmission } from '../src/validation.js'
 describe('validateSubmission (§2.6.1 Steps 2-5)', () => {
   // Helper for a valid record shape
   const valid = {
-    spec_version: 'atrib/1.0',
-    event_type: 'tool_call',
+    spec_version: 'atrib/1.0' as const,
+    event_type: 'https://atrib.dev/v1/types/tool_call',
     timestamp: Date.now(),
     context_id: '00112233445566778899aabbccddeeff',
     creator_key: 'somekey',
@@ -22,8 +22,38 @@ describe('validateSubmission (§2.6.1 Steps 2-5)', () => {
     expect(validateSubmission({ ...valid, spec_version: 'wrong' as any }).ok).toBe(false)
   })
 
-  it('rejects unknown event_type', () => {
+  it('rejects malformed event_type (bare token, not absolute URI)', () => {
     expect(validateSubmission({ ...valid, event_type: 'unknown' as any }).ok).toBe(false)
+  })
+
+  it('accepts atrib normative tool_call URI', () => {
+    expect(
+      validateSubmission({ ...valid, event_type: 'https://atrib.dev/v1/types/tool_call' }).ok,
+    ).toBe(true)
+  })
+
+  it('accepts atrib normative transaction URI', () => {
+    expect(
+      validateSubmission({ ...valid, event_type: 'https://atrib.dev/v1/types/transaction' }).ok,
+    ).toBe(true)
+  })
+
+  it('accepts atrib normative observation URI', () => {
+    expect(
+      validateSubmission({ ...valid, event_type: 'https://atrib.dev/v1/types/observation' }).ok,
+    ).toBe(true)
+  })
+
+  it('accepts extension URI in non-atrib namespace (recognition is informational)', () => {
+    expect(
+      validateSubmission({ ...valid, event_type: 'https://example.com/v1/types/custom' }).ok,
+    ).toBe(true)
+  })
+
+  it('rejects relative paths and bare tokens', () => {
+    for (const bad of ['', 'tool_call', '/types/tool_call', '://no-scheme', 'http://#fragment']) {
+      expect(validateSubmission({ ...valid, event_type: bad as any }).ok).toBe(false)
+    }
   })
 
   it('rejects timestamp NaN', () => {

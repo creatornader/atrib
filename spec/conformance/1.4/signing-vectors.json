@@ -1,15 +1,15 @@
 {
   "spec_version": "atrib/1.0",
   "spec_section": "§1.4 (signing and verification)",
-  "description": "Test vectors for the atrib signing pipeline. Any conforming implementation MUST produce identical outputs for these inputs.",
+  "description": "Test vectors for the atrib signing pipeline. Any conforming implementation MUST produce identical outputs for these inputs. event_type is an absolute URI per §1.2.4 and §1.4.5; all three atrib normative URIs (tool_call, transaction, observation) plus an extension URI are exercised.",
   "vectors": [
     {
-      "name": "canonical signing, signature, and verification",
+      "name": "canonical signing, signature, and verification (atrib normative tool_call)",
       "input": {
         "private_key_seed_hex": "0101010101010101010101010101010101010101010101010101010101010101",
         "record": {
           "spec_version": "atrib/1.0",
-          "event_type": "tool_call",
+          "event_type": "https://atrib.dev/v1/types/tool_call",
           "timestamp": 1700000000000,
           "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "creator_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
@@ -20,13 +20,100 @@
       },
       "expected": {
         "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-        "canonical_signing_input": "{\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w\",\"event_type\":\"tool_call\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1700000000000}",
-        "signing_input_sha256_hex": "78046879d2a762e9a1a65ab1ef284ca65f77384db8050069eaa2cb5cbf9ca8f1",
-        "signature_base64url": "PrhhwDFrAcDwbfHVzQWG0y58SwGP3FWZdSKyxMeKVSA5EQOZQJYXbqwEZJC1MkFj6W1M0_17o22cGyzKEtSVDg",
-        "record_hash_hex": "ab30b97e78ce078da518536f43929429a0eab164cd4d8896548215ccea50faba",
-        "propagation_token": "qzC5fnjOB42lGFNvQ5KUKaDqsWTNTYiWVIIVzOpQ-ro.iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
-        "next_chain_root": "sha256:ab30b97e78ce078da518536f43929429a0eab164cd4d8896548215ccea50faba",
-        "verification_passes": true
+        "canonical_signing_input": "{\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w\",\"event_type\":\"https://atrib.dev/v1/types/tool_call\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1700000000000}",
+        "signing_input_sha256_hex": "e2ad8c62656a32b381c9b4c6b55fb13529e8843ffcdd0f03a80bb1afb87a9676",
+        "signature_base64url": "ZMjtGaUFxp3N4ZA2Vw05NBg8KiymOdNRL3uRB_QJ-zMK7MVOBBqtOA1xLo-DMmeLZfjWjfBFwrHtQemoxXXMBg",
+        "record_hash_hex": "ea6fb413c524ab5767520516ffb8ae38a74391f7892177e0236f5f2de523b9c1",
+        "propagation_token": "6m-0E8Ukq1dnUgUW_7iuOKdDkfeJIXfgI29fLeUjucE.iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "next_chain_root": "sha256:ea6fb413c524ab5767520516ffb8ae38a74391f7892177e0236f5f2de523b9c1",
+        "verification_passes": true,
+        "is_normative_event_type": true,
+        "log_entry_byte": "0x01"
+      }
+    },
+    {
+      "name": "atrib normative transaction URI",
+      "input": {
+        "private_key_seed_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+        "record": {
+          "spec_version": "atrib/1.0",
+          "event_type": "https://atrib.dev/v1/types/transaction",
+          "timestamp": 1700000000000,
+          "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "creator_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+          "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+          "content_id": "sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e",
+          "signature": ""
+        }
+      },
+      "expected": {
+        "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+        "canonical_signing_input": "{\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w\",\"event_type\":\"https://atrib.dev/v1/types/transaction\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1700000000000}",
+        "signing_input_sha256_hex": "6ee47777277fac171f013129b58c4020108b365291e339f6b5e4dcbc706e98f0",
+        "signature_base64url": "FcrlzHXObnWNE4zhnpDgUUDhItBABMg848OjTrLfj7w1ETFzu0pCOIsKT1QG4DTAAOko-CayQd_AMD8ua0CRBA",
+        "record_hash_hex": "1f81165a3da5aefa553bc45b2f56314e9311842e5e3abff7e194eb0bc1081c0a",
+        "propagation_token": "H4EWWj2lrvpVO8RbL1YxTpMRhC5eOr_34ZTrC8EIHAo.iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "next_chain_root": "sha256:1f81165a3da5aefa553bc45b2f56314e9311842e5e3abff7e194eb0bc1081c0a",
+        "verification_passes": true,
+        "is_normative_event_type": true,
+        "log_entry_byte": "0x02"
+      }
+    },
+    {
+      "name": "atrib normative observation URI",
+      "input": {
+        "private_key_seed_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+        "record": {
+          "spec_version": "atrib/1.0",
+          "event_type": "https://atrib.dev/v1/types/observation",
+          "timestamp": 1700000000000,
+          "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "creator_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+          "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+          "content_id": "sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e",
+          "signature": ""
+        }
+      },
+      "expected": {
+        "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+        "canonical_signing_input": "{\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w\",\"event_type\":\"https://atrib.dev/v1/types/observation\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1700000000000}",
+        "signing_input_sha256_hex": "950da6aa831f6c2f9db1533cf4f95542c8307a69d54714e6621a816936f7ac80",
+        "signature_base64url": "9wRGuha2MdE2cqUBqz3dJtbt-e7lkUN1WRZBEVnWrDemD534yRPQdmaLeJhFTF1kBuUWngUEZ9mY-MLS00ECBw",
+        "record_hash_hex": "dd88773237ad47f3df9f3b90c5efc974cd9c6b5dc7746934a7cf2049b8cb996a",
+        "propagation_token": "3Yh3MjetR_PfnzuQxe_JdM2ca13HdGk0p88gSbjLmWo.iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "next_chain_root": "sha256:dd88773237ad47f3df9f3b90c5efc974cd9c6b5dc7746934a7cf2049b8cb996a",
+        "verification_passes": true,
+        "is_normative_event_type": true,
+        "log_entry_byte": "0x03"
+      }
+    },
+    {
+      "name": "extension URI (syntax-validates, not in normative set)",
+      "input": {
+        "private_key_seed_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+        "record": {
+          "spec_version": "atrib/1.0",
+          "event_type": "https://example.com/v1/types/observation_subtype",
+          "timestamp": 1700000000000,
+          "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "creator_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+          "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+          "content_id": "sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e",
+          "signature": ""
+        }
+      },
+      "expected": {
+        "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+        "canonical_signing_input": "{\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w\",\"event_type\":\"https://example.com/v1/types/observation_subtype\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1700000000000}",
+        "signing_input_sha256_hex": "ad2a133cd309bbdc4b4ad4422f2ee3f89d06f4d055eea27c42f65204f72290d2",
+        "signature_base64url": "4nlkrMV0H1Xjo74m5mO9g6-Ylk5ntahL8AG8klYH5zZVWKlFBdpT3lEZmDI9LBebWoL8reB4ZgpYRqetQ9RNDg",
+        "record_hash_hex": "58c89a3031bf9b934f2eece0cb71756c61305e742c0a2108743e397141f74843",
+        "propagation_token": "WMiaMDG_m5NPLuzgy3F1bGEwXnQsCiEIdD45cUH3SEM.iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "next_chain_root": "sha256:58c89a3031bf9b934f2eece0cb71756c61305e742c0a2108743e397141f74843",
+        "verification_passes": true,
+        "is_normative_event_type": false,
+        "log_entry_byte": "0xFF",
+        "comment": "extension URIs (any URI not in atrib normative set) are syntactically valid and verify; their byte-level filter is 0xFF (extension) per §2.3.1"
       }
     }
   ]

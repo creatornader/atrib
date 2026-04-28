@@ -14,10 +14,10 @@
       "content_id": "sha256:3f8a2b00000000000000000000000000000000000000000000000000000000ff",
       "creator_key": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw",
       "chain_root": "sha256:398acaee65c4e533cea249865ab1cee576445dc23178f8b39d5efdcedd57a829",
-      "event_type": "tool_call",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
       "context_id": "4bf92f3577b34da6a3ce929d0e0e4736",
       "timestamp": 1767225600000,
-      "signature": "r9YUUgqjmSQdFBmdKqhNjKpfHrFR4BLRoPgJi5osxhWsFxJeasTlYrA04-IbJG6L97J4LCTK0QKrIB9GZfC6AQ"
+      "signature": "eCJkwMFIO13fFMoNCIgMWszLS052NyfgrvclDg33u3h_EO08i01Wf_Ieaj8zYRY8Osy80jb-YC1odJoA9sWNDQ"
     }
   },
   "expected": {

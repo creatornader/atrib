@@ -66,7 +66,7 @@ describe('no Buffer dependency in production code paths', () => {
       creator_key_b64url: creatorKey,
       context_id: contextId,
       timestamp: 1700000000000,
-      event_type: 'tool_call',
+      event_type: 'https://atrib.dev/v1/types/tool_call',
     }
 
     const entry = serializeEntry(input)
@@ -83,7 +83,7 @@ describe('no Buffer dependency in production code paths', () => {
 
     const record: AtribRecord = {
       spec_version: 'atrib/1.0',
-      event_type: 'tool_call',
+      event_type: 'https://atrib.dev/v1/types/tool_call',
       timestamp: Date.now(),
       context_id: contextId,
       creator_key: creatorKey,
@@ -108,7 +108,7 @@ describe('no Buffer dependency in production code paths', () => {
 
     const record: AtribRecord = {
       spec_version: 'atrib/1.0',
-      event_type: 'tool_call',
+      event_type: 'https://atrib.dev/v1/types/tool_call',
       timestamp: Date.now(),
       context_id: contextId,
       creator_key: creatorKey,

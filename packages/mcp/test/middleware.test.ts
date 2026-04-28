@@ -197,7 +197,7 @@ describe('atrib() middleware', () => {
       expect(observed).toHaveLength(1)
       const rec = observed[0] as Record<string, unknown>
       expect(rec.spec_version).toBe('atrib/1.0')
-      expect(rec.event_type).toBe('tool_call')
+      expect(rec.event_type).toBe('https://atrib.dev/v1/types/tool_call')
       expect(rec.signature).toBeTruthy() // signed AFTER, not BEFORE
       const expectedPubKey = await getPublicKey(TEST_PRIVATE_KEY)
       const { base64urlEncode: enc } = await import('../src/base64url.js')

@@ -16,9 +16,9 @@
  */
 
 import type { AtribRecord } from './types.js'
-import { VALID_EVENT_TYPES } from './types.js'
+import { isValidEventTypeUri } from './types.js'
 const SPEC_VERSION = 'atrib/1.0'
-const MAX_FUTURE_SKEW_MS = 10 * 60 * 1000 // §2.6.1 Step 4: 10 minutes
+const MAX_FUTURE_SKEW_MS = 10 * 60 * 1000 // spec 2.6.1 Step 4: 10 minutes
 
 export interface ValidationResult {
   ok: boolean
@@ -42,12 +42,13 @@ export function validateSubmission(record: Partial<AtribRecord>): ValidationResu
     return { ok: false, status: 400, error: `spec_version must be '${SPEC_VERSION}'` }
   }
 
-  // Step 3: event_type must be a known value
-  if (typeof record.event_type !== 'string' || !VALID_EVENT_TYPES.has(record.event_type)) {
+  // Step 3: event_type must be a syntactically-valid absolute URI per spec 1.4.5.
+  // Recognition (whether the URI is in atrib normative set) is informational only.
+  if (!isValidEventTypeUri(record.event_type)) {
     return {
       ok: false,
       status: 400,
-      error: `event_type must be one of ${[...VALID_EVENT_TYPES].join(', ')}`,
+      error: 'event_type must be a syntactically-valid absolute URI',
     }
   }
 

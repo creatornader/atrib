@@ -146,7 +146,20 @@ async function handleNodes(
 
   const eventTypeFilter = params.get('event_type')
   if (eventTypeFilter) {
-    nodes = nodes.filter((n) => n.event_type === eventTypeFilter)
+    // Accept both atrib normative URI form and the short-label form for
+    // backward-compatible queries. Anything else is treated as an opaque URI
+    // and matched against the node's event_type_uri (extension-typed nodes).
+    const normalized =
+      eventTypeFilter === 'https://atrib.dev/v1/types/tool_call'
+        ? 'tool_call'
+        : eventTypeFilter === 'https://atrib.dev/v1/types/transaction'
+          ? 'transaction'
+          : eventTypeFilter === 'https://atrib.dev/v1/types/observation'
+            ? 'observation'
+            : eventTypeFilter
+    nodes = nodes.filter(
+      (n) => n.event_type === normalized || n.event_type_uri === eventTypeFilter,
+    )
   }
   const creatorKeyFilter = params.get('creator_key')
   if (creatorKeyFilter) {

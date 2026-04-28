@@ -13,7 +13,7 @@ async function makeSignedRecord(
     content_id: 'sha256:3f8a2b0000000000000000000000000000000000000000000000000000000000',
     creator_key: base64urlEncode(publicKey),
     chain_root: 'sha256:7e1f4a0000000000000000000000000000000000000000000000000000000000',
-    event_type: 'tool_call',
+    event_type: 'https://atrib.dev/v1/types/tool_call',
     context_id: '4bf92f3577b34da6a3ce929d0e0e4736',
     timestamp: 1743850000000,
     signature: '',
@@ -121,7 +121,7 @@ describe('signRecord / verifyRecord', () => {
   })
 
   it('transaction event_type is valid', async () => {
-    const signed = await makeSignedRecord(privateKey, { event_type: 'transaction' })
+    const signed = await makeSignedRecord(privateKey, { event_type: 'https://atrib.dev/v1/types/transaction' })
     const valid = await verifyRecord(signed)
     expect(valid).toBe(true)
   })

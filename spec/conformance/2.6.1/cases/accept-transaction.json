@@ -14,10 +14,10 @@
       "content_id": "sha256:3f8a2b00000000000000000000000000000000000000000000000000000000ff",
       "creator_key": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw",
       "chain_root": "sha256:398acaee65c4e533cea249865ab1cee576445dc23178f8b39d5efdcedd57a829",
-      "event_type": "transaction",
+      "event_type": "https://atrib.dev/v1/types/transaction",
       "context_id": "4bf92f3577b34da6a3ce929d0e0e4736",
       "timestamp": 1767225600000,
-      "signature": "ziFDwdaNXXRqaZmlovQZGKqDLRvb_d_BLHIYpY18KH_L6aS0S1UEumL_Hn2mCRmRZBjVAA0XAGzkNEh8s88tBA"
+      "signature": "aIeofzxdJF9sbxvJXrgn7s_n85w3YBrT8kaCEHG_c4W3ouTRaftM8HySD2ZT4asQgyF74yUjHAoBb_710qB_AQ"
     }
   },
   "expected": {

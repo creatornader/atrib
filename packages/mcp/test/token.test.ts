@@ -15,7 +15,7 @@ describe('token encoding/decoding', () => {
       content_id: 'sha256:3f8a2b0000000000000000000000000000000000000000000000000000000000',
       creator_key: base64urlEncode(publicKey),
       chain_root: genesisChainRoot('4bf92f3577b34da6a3ce929d0e0e4736'),
-      event_type: 'tool_call',
+      event_type: 'https://atrib.dev/v1/types/tool_call',
       context_id: '4bf92f3577b34da6a3ce929d0e0e4736',
       timestamp: 1743850000000,
       signature: '',

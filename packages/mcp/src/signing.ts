@@ -9,7 +9,7 @@ import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
 import { base64urlEncode, base64urlDecode } from './base64url.js'
 import { canonicalSigningInput } from './canon.js'
-import { VALID_EVENT_TYPES } from './types.js'
+import { isValidEventTypeUri } from './types.js'
 import type { AtribRecord } from './types.js'
 
 // @noble/ed25519 v2 requires setting the sha512 sync function
@@ -69,8 +69,10 @@ export async function verifyRecord(record: AtribRecord): Promise<boolean> {
     // Step 5: spec_version must be "atrib/1.0"
     if (record.spec_version !== 'atrib/1.0') return false
 
-    // Step 6: event_type must be known
-    if (!VALID_EVENT_TYPES.has(record.event_type)) return false
+    // Step 6: event_type must be a syntactically-valid absolute URI per spec 1.4.5.
+    // Recognition (whether the URI is in atrib normative set) is informational
+    // and does NOT gate verification; an extension URI passes this check.
+    if (!isValidEventTypeUri(record.event_type)) return false
 
     // Step 7: timestamp must be a finite number and not >5 min in the future.
     // NaN, Infinity, negative values are all invalid.

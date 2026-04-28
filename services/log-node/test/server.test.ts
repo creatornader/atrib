@@ -33,7 +33,7 @@ async function makeSignedRecord(overrides: Partial<AtribRecord> = {}): Promise<A
 
   const unsigned = {
     spec_version: 'atrib/1.0' as const,
-    event_type: 'tool_call' as const,
+    event_type: 'https://atrib.dev/v1/types/tool_call' as const,
     timestamp: Date.now(),
     context_id: contextId,
     creator_key: creatorKey,

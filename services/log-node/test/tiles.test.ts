@@ -16,7 +16,7 @@ async function makeSignedRecord(contextId: string, idx: number) {
     content_id: `sha256:${'a'.repeat(64)}`,
     creator_key: base64urlEncode(pk),
     chain_root: `sha256:${'b'.repeat(64)}`,
-    event_type: 'tool_call' as const,
+    event_type: 'https://atrib.dev/v1/types/tool_call' as const,
     context_id: contextId,
     timestamp: Date.now() + idx,
     signature: '',

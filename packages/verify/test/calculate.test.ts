@@ -19,9 +19,16 @@ function node(
   ts = 1_000,
   extra: Partial<GraphNode> = {},
 ): GraphNode {
+  const event_type_uri =
+    event_type === 'gap_node'
+      ? null
+      : event_type === 'extension'
+        ? 'https://example.com/v1/types/custom'
+        : `https://atrib.dev/v1/types/${event_type}`
   return {
     id,
     event_type,
+    event_type_uri,
     content_id: event_type === 'gap_node' ? null : `sha256:${id}`,
     creator_key,
     chain_root: event_type === 'gap_node' ? null : `sha256:${'0'.repeat(64)}`,
@@ -66,6 +73,39 @@ describe('calculate(): preconditions', () => {
 
   it('returns empty distribution for empty graph', () => {
     expect(calculate(makeGraph([], []), DEFAULT_POLICY)).toEqual({})
+  })
+})
+
+describe('calculate(): observation and extension nodes are NOT contributing', () => {
+  it('observation records are present in the graph but skipped during contribution selection', () => {
+    const g = makeGraph(
+      [
+        node('a', 'tool_call', 'KEY_A'),
+        node('o', 'observation', 'KEY_O'),
+        node('t', 'transaction', 'KEY_M'),
+      ],
+      [
+        edge('CONVERGES_ON', 'a', 't'),
+        edge('CONVERGES_ON', 'o', 't'), // graph would never emit this in v1, but even if it did, observation is skipped
+      ],
+    )
+    const dist = calculate(g, DEFAULT_POLICY)
+    expect(dist['KEY_A']).toBeCloseTo(1.0, 9)
+    expect(dist['KEY_O']).toBeUndefined()
+  })
+
+  it('extension-typed records are skipped during contribution selection', () => {
+    const g = makeGraph(
+      [
+        node('a', 'tool_call', 'KEY_A'),
+        node('x', 'extension', 'KEY_X'),
+        node('t', 'transaction', 'KEY_M'),
+      ],
+      [edge('CONVERGES_ON', 'a', 't'), edge('CONVERGES_ON', 'x', 't')],
+    )
+    const dist = calculate(g, DEFAULT_POLICY)
+    expect(dist['KEY_A']).toBeCloseTo(1.0, 9)
+    expect(dist['KEY_X']).toBeUndefined()
   })
 })
 
