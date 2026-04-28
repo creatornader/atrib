@@ -306,6 +306,6 @@ Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hash
 ## Further reading
 
 - [atrib-spec.md](atrib-spec.md) — the complete protocol specification (§0-§7)
-- [DECISIONS.md](DECISIONS.md) — architectural decision log (D001-D034+)
+- [DECISIONS.md](DECISIONS.md) — architectural decision log (D001-D036+)
 - [packages/agent/README.md](packages/agent/README.md) -- adapter table with quick-start snippets for every framework
 - [spec/conformance/2.6.1/](spec/conformance/2.6.1/) -- shared conformance corpus for the submission API
