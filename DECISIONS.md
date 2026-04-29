@@ -106,7 +106,7 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 ## D014: Cross-package integration tests live in a private workspace package and re-derive primitives
 
 **Date:** 2026-04-06
-**Context:** The end-to-end test plan calls for an end-to-end test exercising the full attribution flow across all three SDK packages. The question was where this test should live and what it should import. Two options: (a) put it inside an existing package (e.g., `@atrib/verify/test/integration.test.ts`), reusing existing imports; (b) create a separate private workspace package that depends on all three SDK packages and re-derives shared primitives independently.
+**Context:** An end-to-end test exercising the full attribution flow across all three SDK packages needs a home. The question was where this test should live and what it should import. Two options: (a) put it inside an existing package (e.g., `@atrib/verify/test/integration.test.ts`), reusing existing imports; (b) create a separate private workspace package that depends on all three SDK packages and re-derives shared primitives independently.
 **Decision:** Created `@atrib/integration` as a private workspace package (`"private": true`, no `dist/`, only test runner). It depends on `@atrib/mcp`, `@atrib/agent`, and `@atrib/verify` as peers. Critically, its `graph-builder.ts` re-implements `recordHash()` from primitives (`sha256(canonicalRecord(...))`) rather than importing a hash function from `@atrib/mcp`. This mirrors what a real graph indexing service (`graph.atrib.dev`) would do: index records arriving from arbitrary creators across the open log, without depending on the SDK that produced them.
 **Why this matters:** The §4.6 calculation algorithm's correctness rests on the claim that "any party with the same inputs gets the same result." If integration tests reused the SDK's hash function, two implementations could silently agree because they share code. By re-deriving in the test, we validate that JCS canonicalization + SHA-256 produce identical output across two independent code paths. The end-to-end test passing demonstrates that the chain reconstructs (`A → B → tx`) precisely because `chain_root` references match record hashes derived independently.
 **Alternatives considered:** Test inside `@atrib/verify` (would hide the boundary), test at the repo root (no package isolation), publish `@atrib/integration` as a public package (no value to consumers, only to the project).
@@ -114,7 +114,7 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 ## D015: ACP and UCP detect on a unified completion shape, distinguished by the `ucp` envelope
 
 **Date:** 2026-04-06
-**Context:** cross-spec verification. The v1 SDK shipped with synthetic ACP/UCP detection rules (`response.data.object.object === 'checkout_session'`, `type === 'order.created'`, `event_type === 'ORDER_CREATED'`) that came from imagined Stripe-event-envelope shapes. We never cross-checked them against the real ACP and UCP specs. When we did the verification (via the `/agentic-commerce-protocol/agentic-commerce-protocol` and `/universal-commerce-protocol/ucp` repos), it turned out that (a) neither protocol uses any of those shapes, (b) ACP and UCP have converged on essentially the same checkout completion response, and (c) the `TransactionDetection.protocol` literal `'ACP/UCP'` was hiding a distinction that consumers actually care about.
+**Context:** The initial SDK shipped with synthetic ACP/UCP detection rules (`response.data.object.object === 'checkout_session'`, `type === 'order.created'`, `event_type === 'ORDER_CREATED'`) that came from imagined Stripe-event-envelope shapes — a guess at the protocol surface, never cross-checked against the real ACP and UCP specs. When the rules were verified against the actual specs (via the `/agentic-commerce-protocol/agentic-commerce-protocol` and `/universal-commerce-protocol/ucp` repos), it turned out that (a) neither protocol uses any of those shapes, (b) ACP and UCP have converged on essentially the same checkout completion response, and (c) the `TransactionDetection.protocol` literal `'ACP/UCP'` was hiding a distinction that consumers actually care about.
 **Decision:**
 
 - Detection signal for both protocols is `status === 'completed'` AND `order.id` is a string. Webhook events `order_create` / `order_update` (snake_case, NOT `order.created`) are also accepted as ACP transaction events.
@@ -124,14 +124,14 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - Spec §1.7.1 and §1.7.2 were rewritten to match real ACP/UCP shapes. The §5.4.5 detection pseudocode was updated to match.
 - Because neither ACP nor UCP currently exposes a documented free-form metadata field on `POST /checkout_sessions/...` requests, the spec now requires `context_id` to travel via the `X-atrib-Context` HTTP header (consistent with x402/MPP) and via `params._meta.atrib` for MCP-transport integrations. The earlier spec language describing `metadata.atrib_context_id` and `extensions["io.atrib/context_id"]` was speculative and has been removed.
   **Alternatives considered:** Keeping the joint `'ACP/UCP'` literal (loses information consumers want), making detection lenient with multiple synonymous keys (false positives), waiting for ACP/UCP to add metadata fields before fixing the spec (blocks the SDK indefinitely on upstream protocol decisions).
-  **Followup work:** §2 (x402/MPP) and §3 (AP2) verification, pending in the same internal planning doc. The MPP-vs-x402 distinction in the new code uses an optional `Payment-Protocol` response header marker; this is an atrib convention because both protocols share the same `Payment-Receipt` header on the response side and we need a way to distinguish them when both might be in use. If a future revision of x402 or MPP standardizes a different distinguisher, update this rule.
+  **Followup work:** §2 (x402/MPP) and §3 (AP2) cross-spec verification, pending. The MPP-vs-x402 distinction in the new code uses an optional `Payment-Protocol` response header marker; this is an atrib convention because both protocols share the same `Payment-Receipt` header on the response side and we need a way to distinguish them when both might be in use. If a future revision of x402 or MPP standardizes a different distinguisher, update this rule.
 
 **Update (2026-04-06, same day):** D016 supersedes the "shared `Payment-Receipt` header" assumption above. Verification against the actual specs revealed that x402 and MPP use **different** response headers and there is no need for an atrib-invented `Payment-Protocol` marker.
 
 ## D016: x402 and MPP detect on different headers, not a shared one
 
 **Date:** 2026-04-06
-**Context:** x402/MPP cross-spec verification verification. The v1 SDK and the original §1.7.3/§1.7.4 spec text both claimed x402 and MPP use a shared `Payment-Receipt` response header. D015 even introduced an atrib-invented `Payment-Protocol` distinguisher to tell them apart. When we cross-checked against the published specs, both claims turned out to be wrong.
+**Context:** Cross-spec verification for x402 and MPP. The original SDK and the original §1.7.3/§1.7.4 spec text both claimed x402 and MPP use a shared `Payment-Receipt` response header. D015 even introduced an atrib-invented `Payment-Protocol` distinguisher to tell them apart. When the claims were checked against the published specs, both turned out to be wrong.
 **What the real specs say:**
 
 - **x402** (`github.com/coinbase/x402`): the success-path response header is `PAYMENT-RESPONSE` in v2, renamed from v1's `X-PAYMENT-RESPONSE` per RFC 6648 (deprecation of the `X-` prefix). The value is base64-encoded JSON containing a `SettlementResponse` with `success`, `transaction`, `network`, `payer`, `requirements` fields.
@@ -153,12 +153,12 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - Treating `Payment-Receipt` as a synonym for `PAYMENT-RESPONSE` (rejected; they are different protocols with different wire formats and tooling, and the SDK consumer needs to know which one fired)
 - Adding a single combined `'x402-or-mpp'` literal back to the protocol type (rejected for the same reason as the joint `'ACP/UCP'` literal in D015; it hides information consumers care about)
 
-**Followup:** §3 (AP2 / W3C VC) verification, then §4 (W3C Trace Context conformance) and §5 (MCP SDK extension API) per the internal planning doc.
+**Followup:** AP2 / W3C VC verification next, then W3C Trace Context conformance and MCP SDK extension API.
 
 ## D017: AP2 v0.1 uses A2A DataParts, not W3C Verifiable Credentials
 
 **Date:** 2026-04-06
-**Context:** AP2 cross-spec verification verification. The v1 SDK and the original spec §1.7.5 both assumed Google's AP2 (Agent Payments Protocol) would use W3C Verifiable Credentials with `type === 'VerifiableCredential'` and `credentialSubject.type === 'PaymentMandate'` to express a Payment Mandate. When verified against the actual AP2 v0.1 specification at `github.com/google-agentic-commerce/ap2`, this turned out to be wrong. AP2 v0.1 does not use W3C VCs at all.
+**Context:** Cross-spec verification for AP2 (Google Agent Payments Protocol). The original SDK and the original spec §1.7.5 both assumed AP2 would use W3C Verifiable Credentials with `type === 'VerifiableCredential'` and `credentialSubject.type === 'PaymentMandate'` to express a Payment Mandate. When verified against the actual AP2 v0.1 specification at `github.com/google-agentic-commerce/ap2`, this turned out to be wrong. AP2 v0.1 does not use W3C VCs at all.
 **What the real AP2 spec says:**
 
 - AP2 is built on top of A2A (Agent2Agent). The wire format for a Payment Mandate is an A2A `Message` containing one or more `parts`, where the `kind: "data"` part has a `data` object with the key `ap2.mandates.PaymentMandate` and the AP2 PaymentMandate schema as its value.
@@ -188,12 +188,12 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - Decoding and validating the cart_mandate hash chain in the PaymentMandate (rejected; that's verification work belonging in `@atrib/verify`, not on the agent middleware critical path)
 - Removing the legacy W3C VC fallback entirely (rejected; costs nothing to keep, costs developer trust to silently break a research-fork integration)
 
-**Followup:** §4 (W3C Trace Context conformance) and §5 (MCP SDK extension API) per the internal planning doc. The handoff also calls out that this verification would touch `emitTransactionRecord` for AP2 content_id derivation; in the end no change was needed there because AP2 still uses the MCP server URL fallback (the PaymentMandate carries useful identifiers like `payment_request_id` but extracting them per-protocol is not required for v1; see future v2 work in the open questions section of the handoff).
+**Followup:** W3C Trace Context conformance and MCP SDK extension API verification next. The AP2 work was expected to touch `emitTransactionRecord` for AP2 content_id derivation; in the end no change was needed there because AP2 still uses the MCP server URL fallback (the PaymentMandate carries useful identifiers like `payment_request_id` but extracting them per-protocol is not required at this stage).
 
 ## D018: W3C Trace Context and Baggage conformance: leftmost atrib, lenient parse, evict-from-end on overflow
 
 **Date:** 2026-04-06
-**Context:** W3C Trace Context conformance verification verification. The v1 SDK emitted W3C tracestate and baggage but had three classes of bugs against the W3C specs (`https://www.w3.org/TR/trace-context/` and `https://www.w3.org/TR/baggage/`), all flagged in the internal planning doc §4 success criteria.
+**Context:** W3C Trace Context + Baggage conformance verification. The initial SDK emitted W3C tracestate and baggage but had three classes of bugs against the W3C specs (`https://www.w3.org/TR/trace-context/` and `https://www.w3.org/TR/baggage/`).
 
 **What the real specs say:**
 
@@ -243,12 +243,12 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - Using a separate W3C trace-context library (rejected; adds a dependency for a small amount of straightforward parsing; we own the discipline and can keep it pinned to spec)
 - Adding a runtime warning when truncation occurs (deferred; would require a logger plumbed through to the merge helpers; future-work item if observed in practice)
 
-**Followup:** §5 (MCP SDK extension API) and §6 (framework adapters) per the internal planning doc.
+**Followup:** MCP SDK extension API and framework adapters next.
 
 ## D019: MCP SDK monkey-patch is documented and shape-tested against the real SDK
 
 **Date:** 2026-04-06
-**Context:** MCP SDK extension API verification verification. The v1 SDK monkey-patches `McpServer.server.setRequestHandler` and detects the tools/call request via Zod schema introspection (`schema.shape.method.value === 'tools/call'`). Both are internal implementation details of `@modelcontextprotocol/sdk` that could change between versions. The internal planning doc §5 success criteria asked for either (a) refactoring to a documented extension API, or (b) clear documentation plus a regression test that catches SDK upgrade breakage.
+**Context:** MCP SDK extension API durability check. The middleware monkey-patches `McpServer.server.setRequestHandler` and detects the tools/call request via Zod schema introspection (`schema.shape.method.value === 'tools/call'`). Both are internal implementation details of `@modelcontextprotocol/sdk` that could change between versions. The question was whether to (a) refactor to a documented extension API, or (b) document the dependency and ship a regression test that catches SDK upgrade breakage.
 
 **What the SDK actually exposes** (verified against `@modelcontextprotocol/sdk@^1.29.0` with `context7` and direct inspection of `node_modules/.pnpm/@modelcontextprotocol+sdk@1.29.0_zod@4.3.6/.../server/index.d.ts` and `server/mcp.d.ts`):
 
@@ -286,19 +286,19 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - End-to-end: real SDK + atrib() + tool registration + dispatch + attribution record submission
 - Graceful degradation: fake McpServer with missing `.server` triggers warning + pass-through
 
-**Followup:** §6 (framework adapters) per the internal planning doc. After §6, the handoff also lists §7 (developer integration documentation) and §8 (TypeDoc API reference) as the remaining work.
+**Followup:** framework adapters next, then developer integration documentation and TypeDoc API reference.
 
-## D020: the framework-adapter rollout framework adapter targets: Claude Agent SDK, Cloudflare Agents, Vercel AI SDK (re-ranked from incomplete prior decision)
+## D020: Framework adapter targets: Claude Agent SDK, Cloudflare Agents, Vercel AI SDK (re-ranked from an incomplete prior decision)
 
 **Date:** 2026-04-06
-**Context:** The internal planning doc doc and an earlier in-session "final decision" (an earlier ranking pass, recorded earlier in development) listed the §6 framework adapter targets as **Vercel AI SDK → Mastra → LangChain JS** with OpenAI Agents and Claude Agent SDK as tier-2 and Cloudflare Agents deferred. That decision was written **before** several rounds of GitHub code search results arrived, and its conclusions were never updated against the complete data. After a after a data refresh, the relevant searches were re-run with the refreshed data and the gap on OpenAI Agents (which had no GitHub data at all in the prior pass) was filled. The integrated picture changes the right answer materially.
+**Context:** An earlier ranking of framework adapter targets had listed **Vercel AI SDK → Mastra → LangChain JS** with OpenAI Agents and Claude Agent SDK as tier-2 and Cloudflare Agents deferred. That ranking was based on npm download counts alone; authenticated GitHub code search results that arrived shortly after were not folded back into the conclusion. When those searches were re-run with the full data set (including OpenAI Agents, which had been blocked by missing auth in the earlier pass), the right answer changed materially.
 
-**Methodology corrections to the prior decision:**
+**Methodology corrections to the prior ranking:**
 
-- The earlier in development "final decision" weighted purely on **npm package downloads of MCP-specific subpackages** (`@ai-sdk/mcp` 509K/wk, `@langchain/mcp-adapters` 261K/wk, `@mastra/mcp` 169K/wk). It explicitly noted "GitHub code search for framework-specific import patterns was blocked by authentication; no code search counts available."
-- 5 minutes after the decision was recorded, GitHub CLI auth was confirmed working in the local environment and three batches of authenticated code searches ran (a later research pass–#28597, 3:26–later in development). The decision was not revisited against that data before the was paused.
-- Two additional bugs in the prior search batches were also caught and fixed during the data-refresh pass: quoted-string queries in `gh search code` were returning `0` due to encoding issues (e.g. Cloudflare `from "agents/mcp"` returned 0 quoted, **892** unquoted), and the OpenAI Agents queries were never run at all because the a prior search batch had been auth-blocked and an earlier search pass only ran the Cloudflare/Anthropic/Vercel/Mastra/LangChain ones before stopping.
-- The data-refresh pass re-ran the complete set authenticated against `gh api search/code` (which returns total counts directly via `total_count`), filling the OpenAI Agents gap and confirming all alternate-name queries.
+- The earlier ranking weighted purely on **npm package downloads of MCP-specific subpackages** (`@ai-sdk/mcp` 509K/wk, `@langchain/mcp-adapters` 261K/wk, `@mastra/mcp` 169K/wk). Authenticated GitHub code search counts were unavailable when the ranking was made.
+- Authenticated GitHub code search subsequently filled in framework-specific import patterns. The earlier ranking was never revisited against that data.
+- Two additional methodological bugs in the earlier search batches: quoted-string queries in `gh search code` were returning `0` due to encoding issues (e.g. Cloudflare `from "agents/mcp"` returned 0 quoted, **892** unquoted), and the OpenAI Agents queries had never run at all (auth-blocked in the original pass).
+- The complete query set was re-run authenticated against `gh api search/code` (which returns total counts directly via `total_count`), filling the OpenAI Agents gap and confirming all alternate-name queries.
 
 **Complete GitHub real-usage data (TypeScript files, fetched 2026-04-06):**
 
@@ -340,12 +340,12 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - The proxy server pattern requires new code: a thin wrapper in `packages/mcp/` that constructs an `McpServer`, calls `atrib()` on it, registers handlers that fan out to one or more upstream MCP servers (via `Client` from `@modelcontextprotocol/sdk`), and propagates results back. This is reusable across both the Claude SDK and Cloudflare adapters and possibly more in the future.
 - The Vercel AI SDK adapter is the smallest change: a single function in `packages/agent/` that takes the result of `createMCPClient` and wraps the `tools()` record's `execute` callbacks with the existing interceptor lifecycle.
 
-**Followup:** Build the proxy server primitive, then the Claude Agent SDK adapter on top of it, then the Cloudflare Agents adapter on the same primitive, then the Vercel AI SDK `tools()` wrap. The handoff doc `thoughts/shared/handoffs/general/2026-04-06_01-00-00_internal-planning.md` §6 framework list should be updated to match this decision in a follow-up commit.
+**Followup:** Build the proxy server primitive, then the Claude Agent SDK adapter on top of it, then the Cloudflare Agents adapter on the same primitive, then the Vercel AI SDK `tools()` wrap.
 
 ## D021: Claude Agent SDK Case A is zero-new-code; Case B uses createAtribProxy() in-process forwarder
 
 **Date:** 2026-04-06
-**Context:** D020 set the the framework-adapter rollout build order as Claude Agent SDK → Cloudflare Agents → Vercel AI SDK and described the Claude Agent SDK adapter as "an in-process proxy MCP server living in `packages/mcp/`". Before writing code, the actual `@anthropic-ai/claude-agent-sdk` source was inspected (npm pack of v0.2.92) to verify how the SDK accepts and invokes user-provided MCP servers. The finding materially refines D020's plan: the Claude Agent SDK adapter splits cleanly into two cases, and the first case requires zero new code in `@atrib/mcp`.
+**Context:** D020 set the framework-adapter build order as Claude Agent SDK → Cloudflare Agents → Vercel AI SDK and described the Claude Agent SDK adapter as "an in-process proxy MCP server living in `packages/mcp/`". Before writing code, the actual `@anthropic-ai/claude-agent-sdk` source was inspected (npm pack of v0.2.92) to verify how the SDK accepts and invokes user-provided MCP servers. The finding materially refines D020's plan: the Claude Agent SDK adapter splits cleanly into two cases, and the first case requires zero new code in `@atrib/mcp`.
 
 **What the SDK actually does (verified against `@anthropic-ai/claude-agent-sdk@0.2.92`):**
 
@@ -464,12 +464,12 @@ export function createAtribProxy(options: AtribProxyOptions): Promise<AtribProxy
 - The MCP SDK's `SSEClientTransport` is marked `@deprecated` as of `@modelcontextprotocol/sdk@1.29.0` in favor of Streamable HTTP. We do **not** add a `type: 'sse'` upstream option to avoid baking a deprecated transport into our public API. Users with a legacy SSE upstream construct their own `SSEClientTransport` and pass it via `{ type: 'inMemory', transport: theirSseTransport }`; that path works and isolates the deprecation concern in user code rather than our package API.
 - The `StreamableHTTPClientTransport` returned by `createUpstreamTransport` requires a structural cast through `unknown` because its `sessionId?: string` getter is structurally incompatible with the `Transport` interface's `sessionId?: string` declaration under `exactOptionalPropertyTypes: true` (the getter returns `string | undefined`, the interface expects `string` when present). Runtime conformance is guaranteed by `implements Transport` on the SDK's class declaration.
 
-**Followup:** Build the runnable Claude Agent SDK example (Case A and Case B side-by-side), update `README.md` with a "Use with Claude Agent SDK" section pointing at the example, then start the Cloudflare Agents adapter on the same `createAtribProxy` primitive. The handoff doc §6 framework list still needs to be synced to D020/D021 in a follow-up commit.
+**Followup:** Build the runnable Claude Agent SDK example (Case A and Case B side-by-side), update `README.md` with a "Use with Claude Agent SDK" section pointing at the example, then start the Cloudflare Agents adapter on the same `createAtribProxy` primitive.
 
 ## D022: Cloudflare Agents adapter: McpAgent server-side is zero-code; Agent client-side uses attributeCloudflareAgentMcp() (NOT createAtribProxy)
 
 **Date:** 2026-04-06
-**Context:** D020 set the the framework-adapter rollout build order as Claude Agent SDK → Cloudflare Agents → Vercel AI SDK and described the Cloudflare adapter as "the same proxy server pattern as Claude Agent SDK", i.e. expected to reuse the `createAtribProxy()` primitive shipped in D021. Before writing code, the actual `agents@0.9.0` source was inspected (npm pack + grep on `dist/index-BtHngIIG.d.ts` and `dist/client-BwgM3cRz.js`). The findings make the right architecture noticeably different from D020's prediction in two ways: the proxy isn't needed for either of Cloudflare's two MCP surfaces, and the client-side surface is even smaller than expected.
+**Context:** D020 set the framework-adapter build order as Claude Agent SDK → Cloudflare Agents → Vercel AI SDK and described the Cloudflare adapter as "the same proxy server pattern as Claude Agent SDK", i.e. expected to reuse the `createAtribProxy()` primitive shipped in D021. Before writing code, the actual `agents@0.9.0` source was inspected (npm pack + grep on `dist/index-BtHngIIG.d.ts` and `dist/client-BwgM3cRz.js`). The findings make the right architecture noticeably different from D020's prediction in two ways: the proxy isn't needed for either of Cloudflare's two MCP surfaces, and the client-side surface is even smaller than expected.
 
 **What Cloudflare Agents actually exposes (verified against `agents@0.9.0`):**
 
@@ -610,7 +610,7 @@ The runnable examples (`surface-1-mcp-agent.ts`, `surface-2-agent-client.ts`) ar
 ## D023: Vercel AI SDK MCP adapter: monkey-patch `MCPClient.request`, NOT `wrapMcpClient` and NOT the `tools()` execute callbacks
 
 **Date:** 2026-04-06
-**Context:** the framework-adapter rollout, third framework adapter, after Claude Agent SDK (D021) and Cloudflare Agents (D022). The Vercel AI SDK exposes MCP integration through `createMCPClient()` in `@ai-sdk/mcp` (and the legacy `experimental_createMCPClient()` re-exported from `ai`). My initial assumption (anchored to the followup note in D022) was that this would be a `tools()`-record-wrapping job: replace each tool's `execute()` callback with one that runs through atrib's interceptor. Source-reading `@ai-sdk/mcp@1.0.35`'s `dist/index.mjs` invalidated that plan and surfaced two structural facts that ruled out both `wrapMcpClient` and the `tools()`-wrap approach.
+**Context:** Third framework adapter in the build order, after Claude Agent SDK (D021) and Cloudflare Agents (D022). The Vercel AI SDK exposes MCP integration through `createMCPClient()` in `@ai-sdk/mcp` (and the legacy `experimental_createMCPClient()` re-exported from `ai`). The initial assumption (anchored to the followup note in D022) was that this would be a `tools()`-record-wrapping job: replace each tool's `execute()` callback with one that runs through atrib's interceptor. Source-reading `@ai-sdk/mcp@1.0.35`'s `dist/index.mjs` invalidated that plan and surfaced two structural facts that ruled out both `wrapMcpClient` and the `tools()`-wrap approach.
 
 **Decision:** Ship a third adapter shape, `attributeVercelAiSdkMcp(client, { interceptor, serverUrl? })`, which **monkey-patches the client's `request()` method in place**. The patch intercepts only `tools/call` JSON-RPC methods, injects atrib's outbound `_meta` (atrib token, traceparent, tracestate, baggage, X-atrib-Chain) into `request.params._meta`, forwards to the original `request()`, then flows the raw response (with its own `_meta` intact) through `interceptor.onAfterToolResponse`. Idempotent via `Symbol.for('atrib.vercel-ai-sdk.patched')`. Lives at `packages/agent/src/adapters/vercel-ai-sdk-mcp.ts`. Six unit tests cover the contract (passthrough, injection, no caller mutation, response flow, idempotency, §5.8 degradation).
 
@@ -641,7 +641,7 @@ The runnable examples (`surface-1-mcp-agent.ts`, `surface-2-agent-client.ts`) ar
 
 **Test results:** 366 tests passing across all 4 packages (was 360; +6 vercel-ai-sdk-mcp unit tests). No regressions in mcp, verify, or integration.
 
-**Followup:** With three framework adapters shipped (Claude Agent SDK, Cloudflare Agents, Vercel AI SDK), the framework-adapter rollout is substantially complete. Remaining §6 work: decide whether to add OpenAI Agents SDK and/or Mastra adapters based on the GitHub usage data from the prior research session. Then §7 (developer integration documentation) and §8 (TypeDoc API reference). A pattern is emerging across D018/D021/D022/D023: each adapter required source-reading the host framework before deciding the integration shape, and in every case my initial guess from D020 was wrong in the specifics. The general approach (interceptor lifecycle + structural-shape adapters) holds, but the integration point varies per framework: server-side `setRequestHandler` patch (@atrib/mcp), in-process `McpServer` proxy (Claude Agent SDK Case B), in-place `client` field replacement (Cloudflare Agent), and `request()` monkey-patch (Vercel AI SDK).
+**Followup:** With three framework adapters shipped (Claude Agent SDK, Cloudflare Agents, Vercel AI SDK), the framework-adapter rollout is substantially complete. Remaining work: decide whether to add OpenAI Agents SDK and/or Mastra adapters based on the GitHub usage data from earlier research, then developer integration documentation and TypeDoc API reference. A pattern is emerging across D018/D021/D022/D023: each adapter required source-reading the host framework before deciding the integration shape, and in every case the initial guess from D020 was wrong in the specifics. The general approach (interceptor lifecycle + structural-shape adapters) holds, but the integration point varies per framework: server-side `setRequestHandler` patch (@atrib/mcp), in-process `McpServer` proxy (Claude Agent SDK Case B), in-place `client` field replacement (Cloudflare Agent), and `request()` monkey-patch (Vercel AI SDK).
 
 ---
 
@@ -713,14 +713,14 @@ A fork of an already-patched client: when the patched `fork()` is invoked, it ca
 
 **Test results:** 375 tests passing across all 4 packages (was 366; +9 langchain-mcp). No regressions.
 
-**Followup:** Four framework adapters shipped (Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS). With the unified `packages/agent/README.md` (shipped in this change) now documenting all adapters side-by-side under two coverage matrices (framework adapters + payment protocols), the "one interceptor, any framework" story is concrete and demonstrable. Remaining §6 work: OpenAI Agents SDK (deferred per D020; meaningfully different architecture, custom transports) and Mastra (deferred; smaller footprint, needs source verification). Next priority is §7 developer integration docs, including the local log stub and end-to-end demo that unblocks customer conversations (per an earlier strategic sanity-check).
+**Followup:** Four framework adapters shipped (Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS). The unified `packages/agent/README.md` documents all adapters side-by-side under two coverage matrices (framework adapters + payment protocols), making the "one interceptor, any framework" story concrete and demonstrable. Remaining adapter work: OpenAI Agents SDK (deferred per D020; meaningfully different architecture, custom transports) and Mastra (deferred; smaller footprint, needs source verification). Next priority is developer integration docs, including the local log stub and end-to-end demo.
 
 ---
 
 ## D025: `@atrib/log-dev` + spec/code drift fix in submission wire format + `priority` wired to two real consumers
 
 **Date:** 2026-04-06
-**Context:** Strategic sanity-check session concluded that the highest-leverage next chunk was a runnable end-to-end demo a customer can watch in 15 minutes, and that the demo required a local Merkle log stub because the production Tessera-backed log at `log.atrib.dev/v1` doesn't exist yet. While preparing to build that stub against spec §2.6, source-reading `@atrib/mcp/src/submission.ts` surfaced two real wire-format bugs that would have caused every submission from the existing client to be rejected by any spec-compliant log:
+**Context:** A runnable end-to-end demo for developer onboarding required a local Merkle log stub. While preparing to build that stub against spec §2.6, source-reading `@atrib/mcp/src/submission.ts` surfaced two real wire-format bugs that would have caused every submission from the existing client to be rejected by any spec-compliant log:
 
 **Discrepancy 1: Request body shape was wrong.** Spec §2.6.1 specifies the POST body as a bare attribution record. The existing `submitWithRetry` was wrapping it as `{record, priority}`. The wrapping pattern was even codified in `packages/mcp/test/submission.test.ts` ("sends record and priority in request body"), meaning the test was written against the buggy code rather than against the spec.
 
@@ -730,9 +730,9 @@ A fork of an already-patched client: when the patched `fork()` is invoked, it ca
 
 1. **Wire format fix in `submission.ts`:** POST body is now a bare signed record per §2.6.1. The `ProofBundle` interface uses snake_case to match §2.6.2 exactly. Updated all consuming tests across `@atrib/mcp`, `@atrib/agent`, and `@atrib/integration` (test-harness mocked the wrong shape too; fixed there as well).
 
-2. **`@atrib/log-dev`**: new private workspace package at `packages/log-dev/` (option A from the "where should the log stub live?" sanity check, after feedback indicated on "this seems more proper"). Implements `POST /v1/entries` with full §2.6.1 validation (Steps 2-6, skipping Step 1 cryptographic signature verification to avoid a circular dep on `@atrib/verify`), returns spec §2.6.2-shaped proof bundles with deterministic placeholder hashes, and exposes an inspection API (`entries`, `onSubmit`, `clear`) for tests and demos. Marked `private: true` so it cannot be `pnpm publish`'d to npm. README has a prominent ⚠️ NOT FOR PRODUCTION warning at the top.
+2. **`@atrib/log-dev`**: new private workspace package at `packages/log-dev/`. Implements `POST /v1/entries` with full §2.6.1 validation (Steps 2-6, skipping Step 1 cryptographic signature verification to avoid a circular dep on `@atrib/verify`), returns spec §2.6.2-shaped proof bundles with deterministic placeholder hashes, and exposes an inspection API (`entries`, `onSubmit`, `clear`) for tests and demos. Marked `private: true` so it cannot be `pnpm publish`'d to npm. README has a prominent ⚠️ NOT FOR PRODUCTION warning at the top.
 
-3. **`priority` wired to two real consumers**: this was the most impactful direction-correction in the session. My initial plan was to drop `priority` from the wire entirely after recognizing that the in-memory dev log can't meaningfully consume it. Direction was reconsidered: "can you find a real consumer today? Just do it all properly." Re-thinking, I found two real consumers that ship in this change:
+3. **`priority` wired to two real consumers**: an early sketch dropped `priority` from the wire entirely after recognizing that the in-memory dev log cannot meaningfully consume it. That sketch was wrong: the field has two real consumers that justify keeping it on the wire:
 
    **Consumer #1: `flush()` retry ordering in `@atrib/mcp/src/submission.ts`.** When the process is shutting down and `pendingRecords` contains records whose initial submission failed, `flush()` now drains them in priority order: high (transactions) before normal (tool calls). If the process is killed mid-flush (container restart, OOM, deploy rollover), high-priority records have already had their final retry and are more likely to make it to the log. Losing a transaction record (the receipt of money moving) is meaningfully worse than losing a tool-call record, so this ordering is a real safety property. `pendingRecords` was changed from `Map<string, AtribRecord>` to `Map<string, {record, priority}>` to track priority across the failure→flush boundary. Verified by a new test in `submission.test.ts` ("flush() drains pendingRecords in priority order").
 
@@ -744,7 +744,7 @@ A fork of an already-patched client: when the patched `fork()` is invoked, it ca
 
 **Why this matters strategically:**
 
-The end-to-end demo is the answer to "what can I hand a customer in 15 minutes?", the question we identified in the strategic sanity-check earlier in development. Before this commit, the protocol was implemented but a customer couldn't watch it work without standing up Tessera first (which doesn't exist). After this commit, `pnpm demo` produces a complete attribution chain visible in real time, with real signatures and real transaction detection, against a real (but in-memory) spec-compliant log. The fakery is in the surrounding environment: the merchant returns hardcoded search results, the agent issues hardcoded tool calls, the x402 payment is a stubbed header, but the protocol layer is real.
+The end-to-end demo answers "what can a developer hand a customer in 15 minutes?" Before this work, the protocol was implemented but a customer couldn't watch it work without standing up Tessera first (which doesn't exist). With the demo, `pnpm demo` produces a complete attribution chain visible in real time, with real signatures and real transaction detection, against a real (but in-memory) spec-compliant log. The fakery is in the surrounding environment: the merchant returns hardcoded search results, the agent issues hardcoded tool calls, the x402 payment is a stubbed header, but the protocol layer is real.
 
 The spec/code drift fix is the kind of thing that only gets caught when you build a real reference implementation. Mocking `globalThis.fetch` in unit tests doesn't catch wire-format bugs because the mocks don't validate the request shape against the spec. The dev log is a real server that validates per §2.6.1; it caught the wrong wire format on the first integration attempt. This is a strong argument for keeping `@atrib/log-dev` in the test infrastructure permanently rather than treating it as a one-off demo helper.
 
@@ -766,7 +766,7 @@ The spec/code drift fix is the kind of thing that only gets caught when you buil
 
 Plus the demo runs end-to-end and produces the expected output (verified manually before commit).
 
-**Followup:** With the spec/code drift fixed and the dev log in place, the next layer of customer-readiness work is (a) the `services/log/` Tessera-backed Go service for production deployments, and (b) publishing `@atrib/mcp`, `@atrib/agent`, and `@atrib/verify` to npm so customers can actually `pnpm add` them. Both are out of scope for this chunk but are the next logical steps after this commit. The unified `packages/agent/README.md` is ready to be the customer-facing entry point once packages are published.
+**Followup:** With the spec/code drift fixed and the dev log in place, the next layer of customer-readiness work is (a) the `services/log/` Tessera-backed Go service for production deployments, and (b) publishing `@atrib/mcp`, `@atrib/agent`, and `@atrib/verify` to npm so customers can actually `pnpm add` them. The unified `packages/agent/README.md` is ready to be the customer-facing entry point once packages are published.
 
 ---
 
