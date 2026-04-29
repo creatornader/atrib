@@ -1,0 +1,31 @@
+{
+  "name": "@atrib/directory-node",
+  "version": "0.1.0",
+  "description": "atrib spec §6 AKD-backed identity-claim directory HTTP service",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "atrib-directory-node": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "start": "node dist/main.js",
+    "dev": "tsx src/main.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@atrib/directory": "workspace:*",
+    "@atrib/mcp": "workspace:*",
+    "@noble/ed25519": "^2.1.0",
+    "@noble/hashes": "^1.4.0",
+    "canonicalize": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.5.4",
+    "vitest": "^3.2.4"
+  }
+}

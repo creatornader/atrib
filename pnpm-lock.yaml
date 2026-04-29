@@ -217,6 +217,37 @@ importers:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@25.5.2)(tsx@4.21.0)
 
+  services/directory-node:
+    dependencies:
+      '@atrib/directory':
+        specifier: workspace:*
+        version: link:../../packages/directory
+      '@atrib/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
+      '@noble/ed25519':
+        specifier: ^2.1.0
+        version: 2.3.0
+      '@noble/hashes':
+        specifier: ^1.4.0
+        version: 1.8.0
+      canonicalize:
+        specifier: ^2.0.0
+        version: 2.1.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+      tsx:
+        specifier: ^4.20.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
+
   services/graph-node:
     dependencies:
       '@atrib/mcp':
