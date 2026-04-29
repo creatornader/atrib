@@ -3453,46 +3453,91 @@ The directory's root commitment is periodically posted to the Tessera log (§2) 
 }
 ```
 
-Anchoring frequency is operator policy; SHOULD be at least daily.
+**Anchoring cadence: per-operation (normative default).** Every successful directory operation (publish, update, revoke) MUST produce a new directory checkpoint AND emit a `directory_anchor` record to the Tessera log immediately. This is the most robust position: the equivocation window is bounded by the log round-trip (sub-second under normal operation), not by an inter-anchor delay. Per-operation anchoring also gives every directory state change the same witness-cosignature coverage as ordinary log entries.
+
+**Batching escape hatch (operator opt-in).** Operators serving high-throughput directories MAY batch multiple directory operations into a single anchor by declaring a batching policy in their directory metadata. The policy MUST specify (a) the maximum batch interval, (b) the maximum number of operations per batch, and (c) the consumer-facing implication: queries against a batched directory state MAY observe an unanchored window of up to the batching policy's max interval. Verifiers consuming a batched directory MUST surface `directory_batching_window_ms: <value>` so consumers can apply policy. atrib's reference directory implementation is per-operation; batching is for downstream operators with throughput requirements that exceed per-operation limits.
 
 ### 6.3 Verifier Consultation Algorithm
 
-A verifier validating an attribution record `R` with `creator_key = K` and `timestamp = T`:
+_This section is normative._
 
-1. Look up `K` in the directory at the directory tree size committed in the latest `directory_anchor` record on the Tessera log with `timestamp <= T`. (If no anchor exists, use the latest available directory state and warn that the lookup is not log-anchored.)
-2. Validate the AKD lookup proof against the anchored `directory_root`.
-3. Apply revocation logic from §1.9: if `K` was revoked at log index `R'` and `R.log_index >= R'`, mark the record `'revoked_after_revocation'` and decline to resolve identity.
-4. Otherwise, return the claim alongside the record:
+A verifier resolving identity for an attribution record `R` with `creator_key = K` and `timestamp = T` against directory `D` MUST execute the following nine steps in order. Each step's failure produces a warning surfaced in the output; the verifier never throws (per [§5.8](#58-degradation-contract) degradation contract).
 
-```json
+**Step 1: Fetch latest anchor.** Query the Tessera log for the most recent `directory_anchor` entry where `directory_origin = D.origin` and `timestamp <= T + tolerance` (tolerance = consumer-configurable; default 0). If no anchor exists, surface `directory_unanchored: true` and proceed with the directory's current state, BUT mark `identity_resolution_method: "no_anchor_available"`. If an anchor exists, capture its checkpoint root, version, and witnesses.
+
+**Step 2: Verify anchor freshness.** Compute `anchor_age_ms = T - anchor.timestamp`. Compare against the consumer's freshness threshold (default: no threshold; consumer policy specifies). If above threshold, surface `directory_anchor_stale: true`.
+
+**Step 3: Verify anchor witness coverage.** Confirm the anchor's underlying log checkpoint carries cosignatures from at least the consumer's configured witness threshold (per [§2.9](#29-witnessing-and-cosignatures)). If below threshold, surface `directory_witness_insufficient: { required, actual }`.
+
+**Step 4: Verify directory checkpoint signature.** Confirm the directory's checkpoint signature against the directory's published key. If invalid, surface `directory_checkpoint_invalid: true` AND reject the entire query (do NOT proceed). A directory operator returning an invalidly-signed checkpoint is a fault, not a soft signal.
+
+**Step 5: Verify append-only consistency.** For the chain of `directory_anchor` records between the previous anchor the verifier consulted and the current one, confirm the directory's checkpoint chain is consistent: each successive checkpoint extends the previous root via standard AKD consistency proof. If broken, surface `directory_append_only_violation: true` AND reject all queries against this directory until the operator resolves the inconsistency.
+
+**Step 6: AKD lookup.** Query the directory for `K` at the anchor's checkpoint version. The directory returns either `(claim, version, lookup_proof)` for membership or `(null, lookup_proof)` for non-membership. Both forms include a verifiable proof.
+
+**Step 7: Verify AKD proof.** Validate the lookup_proof against the anchored checkpoint root. If invalid, surface `directory_proof_invalid: true` AND reject the result. Membership and non-membership are distinguished outputs, both REQUIRE valid proofs.
+
+**Step 8: Resolve identity claim.** Parse the claim object per [§6.1](#61-identity-claim-format). If malformed, surface `claim_malformed: true`. The claim is a SIGNED CLAIM by the operator, not a fact; verifier surfaces it without judging truthfulness (per [§3.1](#31-design-principles-and-rationale) and [§8.7.1](#871-the-fundamental-limit)).
+
+**Step 9: Check revocation.** Query the directory for `key_revocation` records targeting `K` (per [§1.9](#19-key-rotation-and-revocation)). For each:
+- If revocation timestamp ≤ R.timestamp: surface `key_revocation_status: { reason, revoked_at, since_revocation: false }` (record was signed before revocation; remains valid signature, flagged retroactively as suspect)
+- If revocation timestamp > R.timestamp: surface `key_revocation_status: { reason, revoked_at, since_revocation: true }` (record was signed after revocation; mark with `'revoked_after_revocation'` verification flag)
+
+If `K`'s claim carries `capabilities` per [§6.7](#67-capability-declarations), surface the active envelope at `R.timestamp` for the consumer's [§6.7.2](#672-verifier-semantics) capability check.
+
+**Output schema.** The verifier returns an `identity_resolution` object per record:
+
+```jsonc
 {
-  "record": <AtribRecord>,
-  "verification_state": "signature_valid",
-  "identity_resolved": <ClaimObject> | null,
-  "identity_resolution_method": "directory_lookup" | "no_anchor_available" | "no_claim_registered"
+  "identity_resolved":    ClaimObject | null,    // null for verified non-membership; null + warnings for failures
+  "identity_resolution_method": "directory_lookup" | "no_anchor_available" | "no_claim_registered" | "rejected",
+  "anchor": {
+    "anchor_record_hash": "sha256:...",
+    "checkpoint_version": 12345,
+    "anchor_timestamp":   1743850000000,
+    "anchor_age_ms":      50000,
+    "anchor_witness_count": 3,
+    "anchor_freshness_ok": true
+  } | null,
+  "lookup_proof_valid":           true,
+  "append_only_consistent":       true,
+  "key_revocation_status":        null | { "reason": "...", "revoked_at": ..., "since_revocation": bool },
+  "capability_envelope":          CapabilityEnvelope | null,
+  "directory_batching_window_ms": 0 | <ms>,
+  "warnings": [string, ...]
 }
 ```
 
-The verifier MUST NOT use the directory's claim if the AKD lookup proof does not validate. A directory operator returning unprovable claims is a fault; verifiers are responsible for catching it.
+**Failure semantics.** Steps 4, 5, and 7 are HARD failures (verifier rejects the result). All other failures are SOFT signals (verifier surfaces and proceeds). Consumer policy decides what to do with soft signals; the protocol does not block records on identity-layer signals because identity is one input to the [§8.7.2](#872-layered-trust-assessment) trust assessment, not a gate.
 
 ### 6.4 Witness Model
 
-The directory's checkpoints are witnessed using the same C2SP cosignature pattern from §2.9. A directory operator publishes its checkpoints under origin `directory.<service>.<tld>/v6` (distinct from the Tessera log's origin). Witnesses cosign directory checkpoints exactly as they cosign log checkpoints. Verifiers configure trusted witness vkeys for the directory the same way they do for the log.
+The directory's checkpoints are witnessed using the same C2SP cosignature pattern from [§2.9](#29-witnessing-and-cosignatures). A directory operator publishes its checkpoints under origin `directory.<service>.<tld>/v6` (distinct from the Tessera log's origin). Witnesses cosign directory checkpoints exactly as they cosign log checkpoints. Verifiers configure trusted witness vkeys for the directory the same way they do for the log.
 
 The directory and the log SHOULD share witnesses where possible, since witness independence is the load-bearing security property. A witness witnessing both gives verifiers correlated evidence at lower cost.
 
+Per [§6.2.4](#624-anchor-cross-reference-into-the-tessera-log) per-operation anchoring, every directory checkpoint produces a `directory_anchor` log entry; the witness coverage on each anchor's underlying log checkpoint applies transitively to the directory state at that version. Verifiers in [§6.3](#63-verifier-consultation-algorithm) step 3 use this transitively-applied witness coverage as the directory-side trust signal.
+
 ### 6.5 Conformance
 
-Implementations MUST pass all vectors in `spec/conformance/6/`:
+Implementations MUST pass all vectors in [`spec/conformance/6/`](spec/conformance/6/):
 
 - `valid-self-attested-claim`: insert and look up a self-attested claim; lookup proof verifies.
 - `valid-domain-verified-claim`: insert with TXT record proof; verifier can re-confirm against DNS at lookup time.
 - `valid-history`: insert two versions for one label; history returns both in chronological order.
 - `valid-non-membership`: lookup of an unregistered key returns a non-membership proof that verifies.
 - `valid-anchor-coherence`: a `directory_anchor` record on the Tessera log matches the directory's actual root at that tree size.
-- `invalid-anchor-mismatch`: anchor's root differs from directory's actual root → verifier rejects.
-- `invalid-lookup-proof`: tampered lookup proof → verifier rejects.
-- `revocation-applies`: lookup returns the active claim; if revoked, the verifier respects revocation per §1.9.
+- `valid-per-operation-anchoring`: insert N consecutive operations; verifier observes N anchor records in the log, one per operation, in order.
+- `valid-append-only-consistency`: anchored checkpoints (V, V+1, V+2) verifier confirms each successive checkpoint extends the previous via AKD consistency proof.
+- `invalid-anchor-mismatch`: anchor's root differs from directory's actual root → verifier rejects (hard failure per [§6.3](#63-verifier-consultation-algorithm) step 4).
+- `invalid-append-only-violation`: directory rolls back state between two anchored checkpoints → verifier rejects all queries until resolved (hard failure per [§6.3](#63-verifier-consultation-algorithm) step 5).
+- `invalid-lookup-proof`: tampered lookup proof → verifier rejects (hard failure per [§6.3](#63-verifier-consultation-algorithm) step 7).
+- `valid-anchor-stale-soft-signal`: anchor is older than consumer freshness threshold → verifier surfaces `directory_anchor_stale: true` but does not reject (soft signal).
+- `valid-witness-insufficient-soft-signal`: anchor's underlying log checkpoint has fewer cosignatures than consumer threshold → verifier surfaces `directory_witness_insufficient` but does not reject (soft signal).
+- `valid-non-membership-honored`: lookup of unregistered key returns `identity_resolved: null` with a verified non-membership proof; this is a positive verifier output, distinct from a query failure.
+- `revocation-applies-pre-revocation-soft`: record signed before revocation timestamp → verifier surfaces `since_revocation: false` (record remains valid signature; flagged retroactively as suspect).
+- `revocation-applies-post-revocation-flagged`: record signed after revocation timestamp → verifier surfaces `since_revocation: true` and marks `'revoked_after_revocation'`.
+- `valid-batched-directory-window`: directory operator declares batching policy; verifier surfaces `directory_batching_window_ms: <value>` so consumer can apply policy.
 
 ### 6.6 What This DOES NOT Cover
 
@@ -3503,6 +3548,10 @@ Implementations MUST pass all vectors in `spec/conformance/6/`:
 **Directory-key rotation.** The directory operator's signing key has the same rotation problem as the log key. Same V2 deferral.
 
 **Cross-directory federation.** Multiple directories operated by different parties cannot today produce consistent answers about the same creator_key. Federation is a V2 concern.
+
+**Anchor freshness and witness threshold are consumer policy, not protocol.** §6.3 describes how a verifier consumes consumer-configured thresholds; it does not prescribe specific values. A consumer expecting near-real-time identity guarantees configures a low freshness threshold (e.g., 60 seconds) and high witness threshold (e.g., ≥3 cosignatures). A consumer doing batch settlement reconciliation configures a high freshness threshold (e.g., 24 hours) and accepts lower witness counts. The protocol surfaces the signals; the policy lives in the consumer.
+
+**Anchor-window equivocation in batched directories.** If a directory operator opts into batching per §6.2.4, queries within the batch interval observe directory state that has not yet been anchored. Verifiers surface `directory_batching_window_ms`; consumers wanting per-operation guarantees configure their trusted-directory list to include only per-operation operators.
 
 ---
 
