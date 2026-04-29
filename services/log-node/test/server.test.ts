@@ -338,3 +338,22 @@ describe('CORS (D054)', () => {
     expect(res.headers.get('access-control-allow-origin')).toBe('*')
   })
 })
+
+// D054: explorer served inline at /dashboard
+describe('GET /dashboard', () => {
+  it('serves text/html with the explorer HTML', async () => {
+    const res = await fetch(`${server.url}/dashboard`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/html')
+    const body = await res.text()
+    expect(body).toMatch(/<!doctype html>/i)
+    expect(body).toMatch(/atrib/i)
+  })
+
+  it('aliases /dashboard.html and /dashboard/', async () => {
+    const a = await fetch(`${server.url}/dashboard.html`)
+    const b = await fetch(`${server.url}/dashboard/`)
+    expect(a.status).toBe(200)
+    expect(b.status).toBe(200)
+  })
+})

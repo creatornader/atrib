@@ -14,6 +14,9 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { readFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { canonicalRecord, validateSubmission, verifyRecord, hexEncode, nodeHash } from '@atrib/mcp'
 import type { AtribRecord, ProofBundle } from '@atrib/mcp'
 import { sha256 } from '@noble/hashes/sha2.js'
@@ -170,9 +173,19 @@ async function handleRequest(
     return handleEntryBundle(res, tree, index)
   }
 
+  // D054: serve the public explorer (option 1) inline. The HTML lives at
+  // apps/dashboard/index.html in the repo and is bundled into the image by
+  // the Dockerfile. /dashboard, /dashboard/, /dashboard.html all alias.
+  if (
+    req.method === 'GET' &&
+    (req.url === '/dashboard' || req.url === '/dashboard/' || req.url === '/dashboard.html')
+  ) {
+    return handleDashboard(res)
+  }
+
   sendJson(res, 404, {
     error: 'not found',
-    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>',
+    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>, GET /dashboard',
   })
 }
 
@@ -246,6 +259,44 @@ function handleLogPubkey(res: ServerResponse, signer: CheckpointSigner): void {
  * For very large logs the operator should expect a slower response; cache
  * is set to a short TTL so repeated polls are cheap.
  */
+// D054 dashboard loader. Resolves apps/dashboard/index.html relative to this
+// module so it works in src/ (tsx), dist/ (built), and the Docker image where
+// `apps/dashboard/` is COPYed into /app. Cached after first read.
+const DASHBOARD_PATH = (() => {
+  const here = dirname(fileURLToPath(import.meta.url))
+  // here = .../services/log-node/{src,dist}/  →  ../../../apps/dashboard/index.html
+  const envOverride = process.env.ATRIB_DASHBOARD_PATH
+  if (envOverride) return envOverride
+  return join(here, '..', '..', '..', 'apps', 'dashboard', 'index.html')
+})()
+let dashboardCache: Buffer | null = null
+async function loadDashboard(): Promise<Buffer | null> {
+  if (dashboardCache) return dashboardCache
+  try {
+    dashboardCache = await readFile(DASHBOARD_PATH)
+    return dashboardCache
+  } catch {
+    return null
+  }
+}
+
+async function handleDashboard(res: ServerResponse): Promise<void> {
+  const html = await loadDashboard()
+  if (!html) {
+    res.statusCode = 503
+    res.setHeader('content-type', 'text/plain; charset=utf-8')
+    res.end(`atrib explorer: dashboard not bundled (looked at ${DASHBOARD_PATH})\n`)
+    return
+  }
+  res.statusCode = 200
+  res.setHeader('content-type', 'text/html; charset=utf-8')
+  res.setHeader('content-length', html.length)
+  // Short cache so the operator can ship dashboard tweaks without a long stale
+  // window, but long enough to make repeated visits cheap.
+  res.setHeader('cache-control', 'public, max-age=60')
+  res.end(html)
+}
+
 function handleStats(res: ServerResponse, tree: MerkleTree): void {
   const size = tree.size
   const signers = new Set<string>()
