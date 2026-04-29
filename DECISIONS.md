@@ -2121,3 +2121,62 @@ A new optional field `inclusion_proof_refs: [{ log_id, record_hash, checkpoint_r
 **Implementation sequencing.** None for now. When formally written: spec subsection (likely §2.12) → record format extension → verifier-side cross-checking → conformance corpus → operator guidance.
 
 **Caveat on this entry.** Because this ADR is a placeholder, anything described above is a sketch, not a commitment. The formal ADR (when authored) will follow the standard format and may diverge from this placeholder in any technical detail. Cross-references to [D053](#d053-inclusion-proof-aggregation-flagged-for-follow-up) from other ADRs or the spec MUST treat the substance as forward-looking, not normative.
+
+## D054: Unified public explorer (vs per-service admin UIs)
+
+**Date:** 2026-04-29
+**Status:** Accepted
+
+**Context.** atrib's read-side data lives across three deployed services: log-node (entries + checkpoints + inclusion proofs), graph-node (graph queries derived from log entries), directory-node (identity claims + AKD proofs). All three serve public data per spec [§0](atrib-spec.md#0-foundations) ("anyone can verify"). None of them ships a human-readable inspection UI; the only interaction surface is JSON-over-HTTP designed for machine consumers (verifiers, agents, libraries).
+
+The natural impulse is to add an admin/inspection UI to each service: a small HTML page on log-node, another on graph-node, another on directory-node. Each would let a human paste a record_hash / context_id / creator_key and see what the service knows about it.
+
+This is the wrong shape. It produces three disconnected admin pages instead of solving the underlying "where do I look to see what's happening" problem. Humans understanding atrib activity care about the JOIN across the three services: "this record_hash was signed by THIS identity (directory) at THIS chain position (log) producing THESE graph edges (graph)." Three separate UIs force humans to do that join manually.
+
+The right shape is a unified explorer that composes from the three services. This is the same pattern Certificate Transparency (crt.sh), Sigstore (rekor.sigstore.dev), and Ethereum (Etherscan) use: individual logs/services don't ship UIs; one explorer composes from all of them.
+
+**Decision.**
+
+1. **No per-service inspection UIs.** log-node, graph-node, and directory-node MUST NOT ship inline admin/dashboard HTML. Their interfaces stay JSON-over-HTTP for machine consumers.
+
+2. **A unified explorer ships separately.** A standalone surface composes from all three services' read APIs and presents the joined views humans actually want. The five primary views: identity (anchored on `creator_key`), session (anchored on `context_id`), action (anchored on `record_hash`), anchoring (recent log checkpoints + directory anchors), and search (free-text resolving to identity / context / record).
+
+3. **Read-only and unauthenticated.** The explorer reads only public data. Adding an auth wall would (a) break the spec [§0](atrib-spec.md#0-foundations) "verifiable by anyone" promise, (b) be security theater (the underlying APIs are public anyway), and (c) create false-restriction perception. Read views stay open forever.
+
+4. **Public explorer, not personal dashboard.** Visiting the explorer URL shows aggregate public data with search-by-anything. There is no concept of "logged-in user" in the explorer. A SEPARATE PRODUCT (a personal dashboard, auth-gated by signature-challenge proving control of a creator_key) may be added later for users actively managing their own atrib presence; that product is out of scope for this ADR and lives at a different URL.
+
+5. **Three-stage build sequence.** Option 1: minimal single-page HTML (no build step, no framework, ~1d effort) hosted at a TBD URL. Option 2: Vite/Next.js minimal SPA (~2-3d) with proper routing + components. Option 3: full block-explorer-grade surface (~1-2 weeks) with search indexing, real-time updates, embedded chain visualizations. Option 1 ships now; Option 2 ships when the dogfood metrics start producing useful results to display; Option 3 ships after gap-closure plan completion (Phases 3.5 through 7 of the plan).
+
+6. **CORS allowed on all three services' read endpoints.** `Access-Control-Allow-Origin: *` is set on log-node, graph-node, directory-node so a browser-based explorer hosted from any origin can read the public APIs. The data is already public; CORS just makes browser-based composition possible.
+
+7. **Future write actions require per-action auth.** If the explorer ever gains write actions (e.g., "publish an identity claim from the UI" instead of CLI), THOSE specific actions get authenticated per action — the read views stay open. This boundary is preserved through future iterations.
+
+**Alternatives considered.**
+
+1. *Per-service admin UIs.* Rejected as enumerated above. Three disconnected pages forces users to manually join across services. Conflates inspection (human surface) with API serving (machine surface) at the wrong layer.
+
+2. *No inspection UI; just curl + scripts.* Rejected because the operator (and future users) need visibility into the system to debug and demo. Without a UI, the brand promise of "verifiable by anyone" is theoretical: humans see only JSON outputs, no holistic view. Block-explorer surfaces are the natural materialization of verifiability for human consumers.
+
+3. *Build the personal dashboard now and skip the public explorer.* Rejected because public verifiability is structurally upstream of personal management. A personal dashboard without the explorer would mean users can manage their own data but external auditors/regulators/curious-parties have nothing to point at. The explorer comes first.
+
+4. *Embed the explorer in the spec/docs site.* Rejected because they're different surfaces with different scopes. The docs site (operator intent, separate memory entry) is documentation. The explorer is operational data. Embedding either in the other creates conflation pressure as both grow.
+
+**Consequences.**
+
+- *Spec.* No spec changes for D054 itself; the explorer reads from the existing §2.5 / §3.4 / §6.2 read APIs. CORS clarification can land in those sections as a normative note (`Access-Control-Allow-Origin: *` is the canonical setting for the read endpoints).
+- *log-node, graph-node, directory-node.* All three gain `Access-Control-Allow-Origin: *` headers on read endpoints (and OPTIONS preflight handling). Tests confirm headers present.
+- *Repo.* New `apps/dashboard/` directory ships the explorer source. Option 1 is a single HTML file with embedded CSS + vanilla JS (no build step). Options 2 and 3 will introduce a framework + build step when they're built.
+- *Hosting.* Final hosting URL TBD. Options: (a) GitHub Pages on the public repo (zero infrastructure), (b) Cloudflare Pages site, (c) Fly.io static-serving alongside log-node, (d) `atrib.dev/dashboard` if/when atrib.dev becomes a hosted site. Option 1 ships in-repo and can be served from any of these.
+- *CLAUDE.md.* New sync trigger: "Explorer view changes" → update apps/dashboard/ + verify CORS unchanged on the underlying services.
+
+**What this DOESN'T solve.**
+
+- *Personal dashboard.* Out of scope. Tracked separately as a future product item; needed before public outreach to users (not before).
+- *Real-time updates.* Option 1 + 2 are pull-on-load; option 3 may add WebSocket or SSE for live updates.
+- *Search indexing at scale.* Option 1 + 2 do client-side filtering against API responses. Option 3 may need a server-side search index when the log volume makes client-side impractical.
+- *Internationalization.* Out of scope for option 1. Option 2/3 may add when the user base warrants.
+- *Mobile responsiveness.* Option 1 is desktop-first (best-effort viewport). Option 2/3 should be properly responsive.
+
+**Implementation sequencing.**
+
+Option 1 (now): single HTML file at `apps/dashboard/index.html`; CORS added to all three services; explorer loads against production (`log.atrib.dev`, `graph.atrib.dev`, `directory.atrib.dev`) by default with overridable endpoints. Option 2 (when dogfood metrics are producing measurable signal): Vite/Next.js refactor of option 1's view components into a proper SPA; deploys to chosen hosting platform. Option 3 (after gap-closure plan completion): full block-explorer-grade surface; search indexing, real-time updates, visualization. Personal dashboard tracks separately.
