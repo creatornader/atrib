@@ -30,7 +30,7 @@
  *     own seed(s) via @atrib/cli keygen).
  *
  *   GATE D — Format conformance (§2.3.1):
- *     Each 90-byte entry parses; version=0x01; event_type ∈ {0x01, 0x02};
+ *     Each 90-byte entry parses; version=0x01; event_type ∈ {0x01, 0x02, 0x03, 0xFF};
  *     timestamp_ms decodes to a sane Date.
  *
  *   GATE E — Checkpoint signature (requires /v1/pubkey):
@@ -457,7 +457,11 @@ async function main() {
     try {
       const e = parseEntry(entryBytes[i])
       if (e.version !== 0x01) { formatOk = false; r.fail(`entry[${i}].version`, `0x${e.version.toString(16)}`); }
-      if (e.eventType !== 0x01 && e.eventType !== 0x02) {
+      // Valid event_type bytes per spec 1.2.4 + 2.3.1:
+      //   0x01 tool_call, 0x02 transaction, 0x03 observation (atrib normative)
+      //   0xFF extension URI (consumer-minted, non-atrib namespace)
+      const validEventTypes = new Set([0x01, 0x02, 0x03, 0xff])
+      if (!validEventTypes.has(e.eventType)) {
         formatOk = false; r.fail(`entry[${i}].eventType`, `0x${e.eventType.toString(16)}`);
       }
       entries.push(e)
