@@ -82,6 +82,10 @@ This distinction matters because every prior attempt at provenance has collapsed
 
 atrib is built on a different principle: **you can record what happened and who was present without claiming to know what caused what, and you can distribute credit fairly without trusting any single intermediary to arbitrate it.** The structure of contributions is a verifiable fact. What those contributions are worth is a policy judgment. atrib provides the former without pretending to settle the latter.
 
+### What atrib certifies, what it does not
+
+Per D046, the spec adopts an explicit positioning lock to prevent brand mismatch. atrib certifies five structural axes: who acted (identity), what they did (event_type), when (timestamp), in what order (chain_root + ordering edges), and what the agent claims informed each action (informed_by + provenance_token). atrib does NOT certify that the agent's reasoning is truthful, that prior records actually influenced subsequent decisions, or that tool responses were real absent tool-side attestation. The substrate is content-preserving (hashes, not content) and disclosure-configurable (privacy postures per §8). See §3 "What atrib chains, what it does not" for the structural-axis enumeration; see §7.6 for the outcome-verification patterns that close the tool-response gap when needed.
+
 ### Principle I: Provenance travels with the artifact
 
 Every tool call, every content retrieval, every agent action carries a signed record of its origin and its structural position in the session: who called what, in what order, in what context. This record is embedded at creation time, not appended later, not inferred from logs. It is native to the interaction, not a post-hoc annotation. What those structural relationships mean for value distribution is a question for the policy layer, not for the record itself.
@@ -215,15 +219,17 @@ An attribution record is a JSON object with the following fields:
 
 ```
 {
-  "spec_version":  "atrib/1.0",
-  "content_id":   "sha256:",        // who served this (see §1.2.2)
-  "creator_key":  "",
-  "chain_root":   "sha256:",        // hash of parent record, or context_id for genesis (see §1.2.3)
-  "event_type":   "https://atrib.dev/v1/types/tool_call", // absolute URI; see §1.2.4
-  "context_id":   "", // 32 hex chars (see §1.5.1)
-  "timestamp":    1743850000000,         // Unix milliseconds, integer
-  "session_token":"", // OPTIONAL (see §1.5.5); omitted when not in a cross-trace session
-  "signature":    ""
+  "spec_version":     "atrib/1.0",
+  "content_id":       "sha256:",        // who served this (see §1.2.2)
+  "creator_key":      "",
+  "chain_root":       "sha256:",        // hash of parent record, or context_id for genesis (see §1.2.3)
+  "event_type":       "https://atrib.dev/v1/types/tool_call", // absolute URI; see §1.2.4
+  "context_id":       "", // 32 hex chars (see §1.5.1)
+  "timestamp":        1743850000000,         // Unix milliseconds, integer
+  "informed_by":      ["sha256:"], // OPTIONAL (see §1.2.5); agent's claimed reasoning context
+  "provenance_token": "", // OPTIONAL (see §1.2.6); cross-session causal anchor (D044)
+  "session_token":    "", // OPTIONAL (see §1.5.5); omitted when not in a cross-trace session
+  "signature":        ""
 }
 ```
 
@@ -237,9 +243,11 @@ An attribution record is a JSON object with the following fields:
 | chain_root    | string  | MUST | A prefixed hex-encoded SHA-256 digest anchoring this record in the chain. For non-genesis records: the hash of the parent attribution record's canonical serialization (see §1.3). For genesis records: the hash of the context_id string. See §1.2.3.                                                                                                                                                                                                  |
 | event_type    | string  | MUST | An absolute URI identifying the type of event this record documents. atrib's normative URI set is defined in §1.2.4; consumers MAY mint extension URIs in their own namespaces. URI form is validated per §1.4.5. atrib does not require URI recognition for verification; an unrecognized but syntactically-valid extension URI does not block signature verification.                                                                                                                                                                                                                                                                                                    |
 | context_id    | string  | MUST | The W3C Trace Context trace-id of the OTel trace containing this event. 32 lowercase hex characters. This is the join key that connects attribution records to each other and to transaction events. See §1.5.1.                                                                                                                                                                                                                                        |
-| timestamp     | integer | MUST | Unix time in milliseconds as a JSON integer. MUST NOT be a string, float, or ISO 8601 date. MUST NOT be in the future. Implementations SHOULD reject records with timestamps more than 5 minutes in the future relative to local clock.                                                                                                                                                                                                                 |
-| session_token | string  | MAY  | Base64url-encoded 16-byte opaque token identifying the logical session across OTel trace boundaries. Present only when the record was emitted in a cross-trace session. When present, the graph query layer uses this field to construct CROSS_SESSION edges between records with different context_ids that share the same session_token. See §1.5.5. The session_token field is included in the canonical serialization and covered by the signature. |
-| signature     | string  | MUST | Ed25519 signature over the canonical serialization of the record with the signature field omitted, encoded as base64url (RFC 4648 §5, no padding). 86 characters. See §1.4 for the full signing procedure.                                                                                                                                                                                                                                              |
+| timestamp        | integer | MUST | Unix time in milliseconds as a JSON integer. MUST NOT be a string, float, or ISO 8601 date. MUST NOT be in the future. Implementations SHOULD reject records with timestamps more than 5 minutes in the future relative to local clock. Allowed granularities (D045): millisecond (default), second (×1000), minute (×60000), hour (×3600000), day (×86400000); the value's trailing-zero pattern indicates granularity. |
+| informed_by      | array   | MAY  | Array of `"sha256:" + hex(record_hash)` strings identifying records the agent claims informed this action. Hashes MUST be sorted lexicographically by the hex string (deterministic ordering). Empty or absent when the record makes no provenance claim. The graph layer derives INFORMED_BY edges from this field (§3.2.3). atrib does not validate truthfulness of the claim. See §1.2.5 and D041. |
+| provenance_token | string  | MAY  | Base64url-encoded 16-byte opaque token for cross-session causal anchoring. Distinct from session_token: provenance_token says "this action descends from that anchor" (causal); session_token says "this is the same logical session" (continuation). Present when the record either declares anchorability (upstream) or claims provenance (downstream). The graph layer derives PROVENANCE_OF edges from token co-occurrence (§3.2.3). See §1.2.6 and D044. |
+| session_token    | string  | MAY  | Base64url-encoded 16-byte opaque token identifying the logical session across OTel trace boundaries. Present only when the record was emitted in a cross-trace session. When present, the graph query layer uses this field to construct CROSS_SESSION edges between records with different context_ids that share the same session_token. See §1.5.5. The session_token field is included in the canonical serialization and covered by the signature. |
+| signature        | string  | MUST | Ed25519 signature over the canonical serialization of the record with the signature field omitted, encoded as base64url (RFC 4648 §5, no padding). 86 characters. See §1.4 for the full signing procedure.                                                                                                                                                                                                                                              |
 
 #### 1.2.2 content_id Derivation
 
@@ -300,6 +308,28 @@ A receiving implementation that decodes a propagation token and needs to set `ch
 | `https://atrib.dev/v1/types/observation`           | `0x03` | A passive perception captured by an ambient watcher or input source. The agent did not invoke a tool to produce this record; the record captures something the agent received from its environment. Has no caller-supplied input and no return value to attest to. Distinct from `tool_call` in that there is no agent-chosen action.                                  |
 
 **Extension URIs:** Any absolute URI in a non-`atrib.dev` namespace is a valid extension URI. The 1-byte log entry slot (§2.3.1) maps such URIs to the byte `0xFF` (extension type); verifiers wanting to filter by the URI itself read the URI from the record. Extension URIs SHOULD identify a stable owner (a domain the consumer controls or a `urn:` namespace they registered); atrib does not enforce ownership.
+
+#### 1.2.5 informed_by
+
+The `informed_by` field carries the agent's claimed reasoning context: an array of `"sha256:" + hex(record_hash)` strings identifying records the agent claims informed this action. The field is OPTIONAL (per D041); records without it make no provenance claim.
+
+**Format.** Each entry is a `"sha256:"` prefix followed by 64 lowercase hex characters, matching the `chain_root` format. The array MUST be sorted lexicographically by the hex string. Sorting is required for canonical serialization stability: an agent-side ordering choice would otherwise affect signatures.
+
+**Semantics.** A record with `informed_by: ["sha256:abc...", "sha256:def..."]` claims the agent consulted those two referenced records before deciding to emit this record. The references MAY point at records in the same session, a different session of the same `creator_key`, or a session of a different `creator_key`. There is no requirement that the referenced records actually exist in any particular log; the verifier resolves what it can and surfaces dangling references (§3.2.3 INFORMED_BY edge with `dangling: true`).
+
+**Trust posture.** atrib certifies that the holder of the `creator_key` signed a record carrying these claims. atrib does NOT certify that the referenced records actually informed the agent's decision. Truthfulness verification (cross-checking referenced content against the action) is a downstream concern.
+
+#### 1.2.6 provenance_token
+
+The `provenance_token` field carries an opaque token used for cross-session causal anchoring (per D044). It is OPTIONAL; records without it neither declare anchorability nor claim provenance.
+
+**Format.** Base64url-encoded 16 bytes (RFC 4648 §5, no padding). 22 characters.
+
+**Derivation (upstream side).** When an agent emits a record intended to be referenced by downstream sessions, the middleware computes `provenance_token = base64url(record_hash[:16])` from the upstream record's hash. The first 16 bytes of the SHA-256 record hash provide adequate collision resistance for the cross-session anchor space (2^128).
+
+**Use (downstream side).** When a downstream session's record claims provenance from an upstream anchor, it carries the same `provenance_token` value. The graph layer derives PROVENANCE_OF edges (§3.2.3) from token co-occurrence across `context_id` boundaries.
+
+**Distinction from session_token.** session_token (§1.5.5) means *same logical session across OTel trace boundaries* (continuation of one task). provenance_token means *different session, causally anchored* (one session's action descends from another's record). They MAY coexist on the same record.
 
 ---
 
@@ -1470,9 +1500,27 @@ The `context_id` is visible in the log and is the same value used in OTel traces
 
 ## §3 Graph Query Interface
 
-_Five edge types. Deterministic derivation. Fact layer only._
+_Seven edge types. Deterministic derivation. Fact layer only._
 
 The data model and query API for turning attribution records into a structured provenance graph, the input to policy evaluation and settlement calculation.
+
+### What atrib chains, what it does not
+
+atrib's graph certifies five structural axes of agent activity:
+
+1. **Identity-of-record** (signature): the holder of a `creator_key` signed this record.
+2. **Per-session ordering** (chain_root + prev_record_hash): this record came after that one in the same session, and no records were inserted or removed between them.
+3. **Cross-session sameness** (session_token via CROSS_SESSION): these records belong to the same logical session across OTel trace boundaries.
+4. **Cross-session causal anchoring** (provenance_token via PROVENANCE_OF): this record's action descends from that upstream anchor (D044).
+5. **Agent-claimed reasoning composition** (informed_by via INFORMED_BY): the agent claims these specific prior records informed this action (D041).
+
+atrib does NOT certify:
+
+- That a referenced record's *content* actually influenced the agent's decision. The chain proves precedence; the agent could have ignored the referenced record entirely.
+- That the agent's reasoning is truthful. A signed `informed_by` claim proves the agent committed to the claim; it does not prove the agent reasoned this way.
+- That a tool's response was real, absent tool-side attestation. `result_hash` is the agent's claim about what the tool returned; tool-side response signing closes this gap when needed (§7.6).
+
+These limits are load-bearing. The substrate's value comes from being honest about what it certifies and what it does not. Reasoning chains and outcome verification are layered on top using the existing primitives (extension URIs + `informed_by` per D047, tool-side attestation + observation witnessing per §7.6).
 
 Contents
 
@@ -1542,13 +1590,25 @@ The atrib attribution graph is a directed property multigraph. Nodes represent e
 
 #### 3.2.1 Node Types
 
-| Type        | Source                                                | Description                                                                                                                                                                       |
-| ----------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| tool_call   | event_type = `https://atrib.dev/v1/types/tool_call`   | A creator's contribution to the session. Carries creator identity, tool identity, chain position, and timestamp. The primary subject of attribution.                              |
-| transaction | event_type = `https://atrib.dev/v1/types/transaction` | The commerce event that closes the attribution loop. The creator_key is the merchant's key. A session without a transaction node is attributable but not yet economically closed. |
-| gap_node    | OTel span without a signed record                     | An unsigned hop. Present in the graph so that invisible contributions are visible. Carries no creator_key, chain_root, or signature. See §3.2.5.                                  |
+| Type            | Source                                                | Description                                                                                                                                                                       |
+| --------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tool_call       | event_type = `https://atrib.dev/v1/types/tool_call`   | A creator's contribution to the session. Carries creator identity, tool identity, chain position, and timestamp. The primary subject of attribution.                              |
+| transaction     | event_type = `https://atrib.dev/v1/types/transaction` | The commerce event that closes the attribution loop. The creator_key is the merchant's key. A session without a transaction node is attributable but not yet economically closed. |
+| observation     | event_type = `https://atrib.dev/v1/types/observation` | A passive perception captured by the agent. Witness, not action. Participates in chain ordering but not in §4.6 attribution calculation. See D042. |
+| gap_node        | OTel span without a signed record                     | An unsigned hop. Present in the graph so that invisible contributions are visible. Carries no creator_key, chain_root, or signature. See §3.2.5.                                  |
+| extension       | event_type = any URI outside atrib's normative set    | A consumer-namespace record. event_type URI preserved verbatim. Participates in chain ordering (D043) but not in CONVERGES_ON or §4.6 calculation.                                |
 
-Records with extension `event_type` URIs (any URI not in atrib's normative set) are stored in the graph as nodes with `event_type` preserved verbatim from the record but DO NOT participate in §3.2.4 edge derivation; they are queryable via the graph API as opaque-typed nodes. Future spec revisions MAY define edge derivation rules involving extension types if a normative use case emerges per D036; until then, graphs derive edges only from `tool_call` and `transaction` records (and `gap_node` derived nodes). `observation` records are queryable but are not participants in CHAIN_PRECEDES, SESSION_PRECEDES, or CONVERGES_ON (they have no chain_root semantics analogous to a tool_call). This intentionally narrow scope avoids picking semantics for observation linkage before usage establishes them.
+**Per-event-type graph participation matrix:**
+
+| Node type    | CHAIN_PRECEDES | SESSION_PRECEDES | SESSION_PARALLEL | CONVERGES_ON | CROSS_SESSION | INFORMED_BY (D041) | PROVENANCE_OF (D044) | §4.6 attribution |
+| ------------ | -------------- | ---------------- | ---------------- | ------------ | ------------- | ------------------ | -------------------- | ---------------- |
+| tool_call    | ✅              | ✅                | ✅                | ✅            | ✅             | ✅ source/target    | ✅ source/target      | ✅ contributing   |
+| transaction  | ✅              | ✅                | ✅                | ✅ (target)   | ✅ (target)    | ✅ source/target    | ✅ source/target      | ✅ receiver       |
+| observation  | ✅              | ✅                | ✅                | ❌            | ❌             | ✅ source/target    | ✅ source/target      | ❌ skipped        |
+| extension    | ✅              | ✅                | ✅                | ❌            | ❌             | ✅ source/target    | ✅ source/target      | ❌ skipped        |
+| gap_node     | ❌              | ✅                | ✅                | ✅            | ❌             | ❌                  | ❌                    | ✅ contributing   |
+
+Observations and extension records DO participate in temporal chain edges (CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL) so the graph spine is complete. They DO NOT participate in CONVERGES_ON (which is the structural prerequisite for §4.6 attribution; observations are witnesses, not contributors; extension URIs are consumer-namespace and atrib does not bless their attribution claims by default). Promotion of an extension URI to atrib's normative contributing set requires D036's bar.
 
 #### 3.2.2 Interaction Patterns and Their Structural Signatures
 
@@ -1568,17 +1628,19 @@ Agent interactions produce five distinct structural patterns, each producing a d
 
 #### 3.2.3 Edge Types
 
-Five edge types are defined. All are derived deterministically from observable record structure. None encode causal claims.
+Seven edge types are defined. All are derived deterministically from observable record structure. None encode inferred causal claims; INFORMED_BY and PROVENANCE_OF encode explicit *agent-claimed* causation, which is structurally derived from declared fields rather than inferred from content.
 
 | Edge type        | Dir   | Derivation basis                                                                                                                                 | Meaning                                                                                                                                                                                                                                                    |
 | ---------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | CHAIN_PRECEDES   | A → B | B.chain_root = SHA-256(JCS(A))                                                                                                                   | B is structurally downstream of A in the attribution chain. B's creator explicitly set their chain_root by hashing A's complete signed record. This is the primary structural link.                                                                        |
 | SESSION_PRECEDES | A → B | Same context_id; no CHAIN_PRECEDES between A and B; A.timestamp \< B.timestamp                                                                   | A occurred before B in the same session with no chain structure connecting them. Temporal ordering only, no structural claim.                                                                                                                             |
 | SESSION_PARALLEL | A ↔ B | Same context_id; no CHAIN_PRECEDES between A and B; no temporal ordering                                                                         | A and B are co-contributors to the same session with neither chain structure nor observable temporal ordering between them. Undirected.                                                                                                                    |
-| CONVERGES_ON     | N → T | N is any non-transaction node; T is a transaction node; both share context_id                                                                    | Node N contributed to the session that produced transaction T. Every non-transaction node in a session with a transaction node receives a CONVERGES_ON edge to that transaction. This is the edge that makes settlement calculation structurally possible. |
-| CROSS_SESSION    | A → T | A is a tool_call node; T is a transaction node; different context_ids; A.session_token = T.session_token (both fields must be present and equal) | A contributed to a transaction that occurred in a different session. This edge is only created when both records carry the same explicit `session_token` field value. It is never inferred from timestamps, creator keys, or any other heuristic.          |
+| CONVERGES_ON     | N → T | N is a tool_call or gap_node; T is a transaction node; both share context_id                                                                     | Node N contributed to the session that produced transaction T. Every contributing node in a session with a transaction node receives a CONVERGES_ON edge to that transaction. This is the edge that makes settlement calculation structurally possible. observation and extension nodes do NOT receive CONVERGES_ON edges (D042, D043). |
+| CROSS_SESSION    | A → T | A is a tool_call node; T is a transaction node; different context_ids; A.session_token = T.session_token (both fields must be present and equal) | A contributed to a transaction that occurred in a different session of the *same logical session*. This edge is only created when both records carry the same explicit `session_token` field value. It is never inferred from timestamps, creator keys, or any other heuristic.          |
+| INFORMED_BY      | A → B | A's `informed_by` array contains `"sha256:" + hex(record_hash(B))`                                                                               | A's creator claims B was a record that informed A's action. Structural derivation from a declared field; atrib certifies the claim was signed, not its truthfulness. May be intra-session or cross-session (B may be in any context_id). When B is not in the resolved record set, the edge is created against a synthetic dangling node with `dangling: true`. See D041. |
+| PROVENANCE_OF    | D → U | D and U both carry `provenance_token` with the same value; D.context_id ≠ U.context_id; U's record_hash matches the token's source              | D's action is causally anchored on U's upstream record. This is *cross-session causal anchoring* distinct from CROSS_SESSION's "same logical session" semantics. The token derivation (`base64url(record_hash[:16])`) makes U identifiable as the anchor source. See D044. |
 
-**Note (Mutual exclusivity):** CHAIN_PRECEDES and SESSION_PRECEDES are mutually exclusive between any given ordered pair of nodes: if a CHAIN_PRECEDES edge exists from A to B, no SESSION_PRECEDES edge is created between A and B in either direction. SESSION_PARALLEL and SESSION_PRECEDES are mutually exclusive between any given pair of nodes. CONVERGES_ON coexists with all within-session edge types. CROSS_SESSION only applies when context_ids differ and an explicit linking token is present.
+**Note (Mutual exclusivity):** CHAIN_PRECEDES and SESSION_PRECEDES are mutually exclusive between any given ordered pair of nodes: if a CHAIN_PRECEDES edge exists from A to B, no SESSION_PRECEDES edge is created between A and B in either direction. SESSION_PARALLEL and SESSION_PRECEDES are mutually exclusive between any given pair of nodes. CONVERGES_ON coexists with all within-session edge types. CROSS_SESSION only applies when context_ids differ and a session_token match is present. INFORMED_BY and PROVENANCE_OF coexist with all other edge types; they are agent-declared causal anchors and may overlap with the structural edges.
 
 #### 3.2.4 Edge Derivation Rules
 
@@ -1617,7 +1679,19 @@ For each transaction node T: search the record set for tool_call nodes A where `
 
 CROSS_SESSION edges MUST NOT be inferred from any heuristic. Only explicit `session_token` field matches in signed records qualify. Records without a `session_token` field cannot participate in CROSS_SESSION edges.
 
-**Note (recommendation_token):** An earlier design considered a recommendation_token mechanism for linking agent recommendations to purchases that complete in a separate browser session (the cross-session attribution problem described in §1.8). This mechanism is not defined by this specification because it requires persistent agent identity across sessions.
+**Step 6:** INFORMED_BY edges**
+
+For each record A carrying a non-empty `informed_by` array: for each entry `e` in the array (where `e` matches `"sha256:" + hex(record_hash)`): search the resolved record set for a record B with `sha256_hex(jcs(B)) == e[7:]`. If B is found, create INFORMED_BY A → B. If B is not found, create INFORMED_BY A → synthetic_dangling_node(e) and mark the edge `dangling: true`.
+
+INFORMED_BY edges MAY be intra-session or cross-session. Source and target may be of any node type (tool_call, transaction, observation, extension). The agent's claim is authoritative for the edge derivation; atrib does not validate that the referenced records actually informed the action.
+
+**Step 7:** PROVENANCE_OF edges**
+
+For each record D carrying a non-empty `provenance_token` field of value T: search the record set for any record U where U's `provenance_token` field also equals T AND `base64url(sha256(jcs(U))[:16]) == T` (i.e., U is the source from which the token was derived). For each such U where `D.context_id ≠ U.context_id`, create PROVENANCE_OF D → U.
+
+If multiple records carry the same token but none satisfies the derivation predicate (`base64url(sha256(jcs(U))[:16]) == T`), all records carrying that token point at a synthetic dangling source node with `dangling: true` and `reason: "no_token_source_in_record_set"`. This makes the dangling case visible rather than silently dropping the edges.
+
+PROVENANCE_OF expresses cross-session *causal anchoring* (D044), distinct from CROSS_SESSION's *same logical session* semantics. The two edge types may coexist on the same pair of records when both session_token and provenance_token are present and applicable.
 
 #### 3.2.5 Gap Nodes
 
@@ -2153,7 +2227,7 @@ A node `N` is a contributing node if all of the following hold:
 
 - `N.event_type` is `tool_call` or `gap_node` (not `transaction`).
 
-  **Note (event_type matching).** Throughout §4.6, the short labels `tool_call`, `transaction`, and `gap_node` refer to the corresponding atrib normative URIs (`https://atrib.dev/v1/types/tool_call`, `https://atrib.dev/v1/types/transaction`) plus the synthetic graph-layer type `gap_node`. Records with extension URIs (any URI not in atrib's normative set) are NOT contributing nodes; they are treated as opaque-typed nodes per §3.2.1 and skipped during contribution selection. Future spec revisions may extend §4.6 to include extension types if a normative use case emerges.
+  **Note (event_type matching).** Throughout §4.6, the short labels `tool_call`, `transaction`, and `gap_node` refer to the corresponding atrib normative URIs (`https://atrib.dev/v1/types/tool_call`, `https://atrib.dev/v1/types/transaction`) plus the synthetic graph-layer type `gap_node`. The other normative URI `https://atrib.dev/v1/types/observation` (D042) and any extension URI (D043) are NOT contributing nodes. observations are witnesses (the agent did not invoke a tool to produce them) and are skipped from contribution selection. Extension URIs are consumer-namespace and atrib does not bless their attribution claims by default; consumers wanting their extension URIs to count for attribution express it in their own §4 policy document, not via §4.6 default. Promotion of an extension URI to atrib's normative contributing set requires D036's bar.
 
 - `N` has at least one edge to a transaction node in `G`, either a CONVERGES_ON edge (same session) or a CROSS_SESSION edge (linked session). This is always true for all non-transaction nodes when the graph is queried for a closed session, but is stated explicitly to prevent implementation errors.
 
@@ -3262,13 +3336,150 @@ A complete harness integration usually combines all three: the wrapper persists 
 
 The reference implementation atrib ships under this pattern is `@atrib/recall` (a single-tool MCP server consuming the mirror). It is one shape among many; harness builders are encouraged to adapt rather than copy.
 
-### 7.5 What the patterns DO NOT do
+### 7.5 Harness-side reasoning chains
+
+Agents reason between actions. atrib does not standardize what reasoning *is* (D036 indicator 4: reasoning shapes vary too much across harnesses to pick a canonical predicate). Per D047, harnesses that want to capture deliberation as part of the verifiable record do so via extension URIs in their own namespace, linked to surrounding actions via `informed_by` (D041).
+
+**The pattern.**
+
+The harness mints an extension URI in a namespace it controls (e.g., `https://example.com/v1/types/reasoning_step`). Between tool_call records, the harness emits records carrying that URI with the agent's reasoning content (or a hash/commitment of it, depending on privacy posture). When the agent emits a subsequent tool_call, the harness includes the reasoning record's hash in the tool_call's `informed_by` field.
+
+A verifier reading the chain sees the reasoning records inline (D043: extension URIs participate in CHAIN_PRECEDES), the explicit linkage from tool_calls to reasoning records (D041: INFORMED_BY edges), and the temporal ordering. The verifier can independently audit the agent's claimed reasoning chain.
+
+**Worked example.**
+
+```
+R1 (tool_call):     {tool_name: "read_email", args_hash: "...", ...}
+R2 (extension):     {event_type: "https://example.com/v1/types/reasoning_step",
+                     content_hash: H_reasoning_2, ...}
+R3 (extension):     {event_type: "https://example.com/v1/types/reasoning_step",
+                     content_hash: H_reasoning_3,
+                     informed_by: ["sha256:" + hex(record_hash(R1)),
+                                   "sha256:" + hex(record_hash(R2))], ...}
+R4 (tool_call):     {tool_name: "send_reply",
+                     informed_by: ["sha256:" + hex(record_hash(R1)),
+                                   "sha256:" + hex(record_hash(R3))], ...}
+```
+
+The verifier can prove: "agent read an email (R1), reasoned in two steps (R2, R3), then replied based on the email content and the second reasoning step." The chain is structurally complete; the agent's own claims are explicit.
+
+**Trust boundary statement.**
+
+Reasoning records live OUTSIDE atrib's normative trust boundary. They prove the harness emitted these bytes signed under the creator_key. They do NOT prove the LLM actually reasoned this way. An adversary controlling the harness could emit any reasoning record they wanted to commit to. The cryptographic anchor is on the harness's claim, not the LLM's deliberation.
+
+This trust posture is the right one for the substrate: atrib is the protocol that proves what was signed, not what was thought. Consumers wanting verifiable LLM reasoning need a different layer (model-side attestation, hardware-rooted execution, etc.) outside this spec's scope.
+
+### 7.6 Outcome verification patterns
+
+A `tool_call` record commits to `args_hash` (the agent's claim about what was sent) and `result_hash` (the agent's claim about what came back). The chain proves the agent emitted these claims; it does NOT prove the tool actually returned what `result_hash` says. Two patterns close this gap when needed; both are opt-in and informative.
+
+**Pattern A: tool-side response signing.**
+
+Tools that want their responses to be verifiable sign the response. Specifically: the tool returns its content along with a signature over a canonical serialization, using a key the verifier can resolve (via DNS, the §6 directory, or a tool-specific PKI). The agent sets `result_hash` to the SHA-256 of the tool's signed response (or to the signature itself, depending on commitment scheme).
+
+A verifier with access to the tool's pubkey fetches the signed response (when available out-of-band) and confirms the agent's `result_hash` commitment matches what the tool actually signed. The trust now flows from the tool, not the agent.
+
+This pattern requires tool cooperation. It does not change atrib's spec; the `result_hash` field already accommodates any 32-byte commitment. Tools that adopt this pattern publish their pubkey discovery method out-of-band.
+
+**Pattern B: external witness records.**
+
+For high-stakes outcomes (transactions especially), a downstream observation record carries an external proof: a chain transaction ID, an exchange settlement ID, an HTTPS Signed Exchange, etc. The verifier follows the external proof out-of-band and cross-checks against the agent's claimed outcome.
+
+Example: an x402 payment tool_call is followed by an observation record committing to the on-chain transaction hash. The verifier can independently query the chain for the transaction and confirm it matches.
+
+This pattern uses existing primitives (observation records per D042 + chain ordering) and requires no spec changes.
+
+**What both patterns share.**
+
+The verifier's trust shifts from "agent says the tool returned X" to "the tool itself attests it returned X" (Pattern A) or "the world independently confirms the outcome occurred" (Pattern B). Neither is normative; both are documented patterns consumers adopt as their threat model requires.
+
+### 7.7 What the patterns DO NOT do
 
 **They do not validate log inclusion.** Local signature verification proves "this record was signed by that creator_key." It does not prove "this record was committed to log.atrib.dev." A harness that needs the inclusion guarantee fetches an inclusion proof from the log per §2.
 
 **They do not enforce identity claims.** A harness can resolve `creator_key` to an identity claim via the directory (§6) but does not enforce trust in any particular claim. Trust policy is consumer-side.
 
-**They do not prescribe agent behavior.** atrib makes the past provable. What the agent does with that past, whether it reasons more carefully, defers to its prior commitments, recommends past actions to itself, is agent-level concern, not substrate-level concern.
+**They do not prescribe agent behavior.** atrib makes the past provable. What the agent does with that past, whether it reasons more carefully, defers to its prior commitments, or recommends past actions to itself, is agent-level concern, not substrate-level concern.
+
+---
+
+## §8 Privacy Postures
+
+_This section is normative._
+
+atrib's substrate is public by design. Disclosure within that substrate is configurable: harnesses choose how much each record reveals about the underlying action, on a per-field basis. The choice is encoded in each record's structural shape, so verifiers detect the posture from record bytes without out-of-band metadata.
+
+This section defines four normative postures. Each may be combined with the others freely; combinations compose without interaction.
+
+### 8.1 Default posture
+
+The default behavior preserved from v1: plain SHA-256 hashes for `args_hash` and `result_hash`, millisecond timestamps, verbatim `tool_name` strings. Maximum auditability. Records that do not opt into other postures are assumed to use the default.
+
+### 8.2 Opaque-name posture
+
+`tool_name` MAY be one of:
+
+- **Verbatim** (default): a human-readable string identifying the tool (e.g., `book_flight`, `transfer_usdc`). Maximum disclosure of intent.
+- **Opaque label**: a string matching `[a-z0-9_-]{1,64}` with no required mapping to a real tool name (e.g., `tool_a7f3`, `op_42`). Hides what the tool does without breaking record format.
+- **Hashed**: a string matching `sha256:<64 lowercase hex>` representing the SHA-256 of the verbatim name. Verifiers configured with a name-mapping can resolve; others see only the hash.
+
+Verifiers indicate the detected form: `tool_name_form: "verbatim" | "opaque" | "hashed"`. Detection is structural (form pattern matching against the value).
+
+### 8.3 Salted-commitment posture
+
+`args_hash` and `result_hash` MAY use salted commitments to defeat pre-image enumeration and equality leakage. Two schemes are defined:
+
+**`salted-sha256`:** `H = SHA-256(salt ‖ canonical_bytes)` where `salt` is a per-record random value of at least 16 bytes. The salt is revealed in a sibling field (`args_salt`, `result_salt`) so the verifier can re-compute and confirm the commitment. This pattern hides content from anyone who does not have the canonical bytes; once revealed, the commitment is verifiable.
+
+**`hmac-sha256`:** `H = HMAC(key, canonical_bytes)` where `key` is private to the issuer. The verifier cannot re-compute without the key; the issuer reveals selectively (e.g., to specific auditors via authenticated channel). This pattern hides content from all parties without explicit key access.
+
+Verifiers detect the scheme from record shape: presence of `args_salt` indicates `salted-sha256`; absence of both salt and verifiable plain hash indicates `hmac-sha256`. Verifiers indicate `args_commitment_form: "plain-sha256" | "salted-sha256" | "hmac-sha256"`.
+
+### 8.4 Coarsened-timing posture
+
+`timestamp_ms` MAY be rounded to one of five granularities:
+
+| Granularity | Multiple of (ms) | Example |
+| --- | --- | --- |
+| millisecond (default) | 1 | `1743850123456` |
+| second | 1000 | `1743850123000` |
+| minute | 60000 | `1743850080000` |
+| hour | 3600000 | `1743847200000` |
+| day | 86400000 | `1743811200000` |
+
+Granularity is encoded by the value's trailing-zero pattern. Verifiers indicate `timestamp_granularity: "ms" | "s" | "min" | "h" | "d"` derived from value structure.
+
+Coarsening trades auditability for reduced operational fingerprinting. Day-granularity timestamps prevent reconstruction of working hours, reaction times, and batch patterns; millisecond timestamps preserve full forensic precision.
+
+### 8.5 Combined postures
+
+The postures compose without interaction:
+
+| tool_name | args_hash | timestamp | Disclosure |
+| --- | --- | --- | --- |
+| verbatim | plain-sha256 | ms | Default; maximum auditability. Full forensic trail. |
+| opaque | salted-sha256 | min | Action kind hidden, args content protected from pre-image enum, working-hour pattern blurred. |
+| hashed | hmac-sha256 | day | Action visible only to verifiers with name-mapping, args fully protected from non-key-holders, only date-level timing observable. |
+
+A consumer chooses the combination that matches their threat model. atrib does not prescribe any particular combination; the postures are independent dials.
+
+### 8.6 Threat model
+
+This subsection enumerates what an adversary observing the public log learns under each posture combination.
+
+**Default posture (verbatim + plain-sha256 + ms):**
+- The adversary learns: the agent's identity (creator_key), the kind of every action (`tool_name`), structural relationships (chain, session, cross-session, informed_by, provenance), exact timing of every action, and (via pre-image attacks on low-entropy args) the actual args of any low-entropy tool call.
+- The adversary does NOT learn: high-entropy args content, response content, reasoning content (unless committed via extension URIs).
+
+**Opaque + salted + minute posture:**
+- The adversary learns: the agent's identity, structural relationships, minute-resolution timing, and that some action of opaque kind happened.
+- The adversary does NOT learn: what kind of action (opaque label hides), args content (salt prevents pre-image attacks), response content, exact second of action, reasoning content.
+
+**Hashed + hmac + day posture:**
+- The adversary learns: the agent's identity, structural relationships, day-resolution timing, and that some action commitment happened.
+- The adversary does NOT learn: anything about action kind (hash unresolvable without mapping), args (HMAC unverifiable without key), response (same), exact intra-day timing, reasoning.
+
+In all postures the agent's identity (`creator_key`) and the structural graph remain observable. Identity privacy requires a different mechanism (D033 key rotation, deferred D038 per-conversation key derivation). Structural privacy requires a different layer (anonymous credentials, mix nets) outside this spec.
 
 ---
 
