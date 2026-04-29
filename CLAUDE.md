@@ -94,7 +94,12 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 | Privacy posture spec section §8 changed (D045) | Update `spec/conformance/8/` corpus per posture, refresh `@atrib/verify` posture detection logic, update §7.5 posture-selection guidance |
 | Edge type added/removed (§3.2.3 + §3.2.4)     | Update §3 lead-in count, update §3.2.1 participation matrix, update CLAUDE.md "Key technical decisions" edge type list, update `services/graph-node` derivation, update `@atrib/verify` calculation if contributing-set affected |
 | Adapter conformance contract changed (D048) | Refresh `packages/agent/test/conformance.test.ts`, update `packages/agent/README.md` adapter table, update `packages/agent/CONTRIBUTING.md` adapter authoring guide |
-| Layered leak defense updated (D049)            | Update `the operator-side prose style guide` (internal), refresh `scripts/check-leaks.mjs` and `scripts/check-leaks-semantic.mjs`, update cloud audit routine with new patterns |
+| Layered leak defense updated (D049)            | Update operator-side prose style guide, refresh `scripts/check-leaks.mjs` and `scripts/check-leaks-semantic.mjs`, update cloud audit routine with new patterns |
+| Cross-log replication semantics changed (D050, §2.11) | Update `spec/conformance/2.11/` corpus, refresh `@atrib/verify` cross-log proof verification, update §2.8 proof bundle format if multi-log shape changes, ensure backwards compatibility with single-log bundles |
+| Capability declarations changed (D051, §6.7)  | Update `spec/conformance/6.7/` corpus, refresh `@atrib/cli publish-claim` to support `--capabilities`, update `@atrib/verify` envelope-check output, update directory-node to serve capabilities in lookup |
+| Cross-attestation requirement changed (D052, §1.7.6) | Update `spec/conformance/1.7.6/` corpus, refresh `@atrib/mcp` transaction signing path to emit `signers` array, update payment-protocol adapters in `@atrib/agent` to coordinate counterparty signature collection, update `@atrib/verify` multi-signature path |
+| Adversarial threat model changed (§8.7) | Update §8.7 trust-assessment stack table, refresh README + ARCHITECTURE positioning if framing changes, update `@atrib/verify` to surface new annotations from any new trust layer |
+| Inclusion-proof aggregation formally added (D053 → real ADR) | The placeholder D053 entry is informative; once a formal ADR is written, replace D053 with the new ADR (preserving the number for cross-reference history), update §2.11 or new §2.12 with normative content, write conformance corpus, refresh `@atrib/verify` |
 
 ## Critical invariants (never violate)
 
@@ -124,6 +129,11 @@ These are non-negotiable. They come from the founding conversation and are the l
 - **Proof bundle caching:** keyed by `record_hash`, not `context_id`. See §5.3.5.
 - **C2SP tlog-tiles ecosystem.** Checkpoints, tiles, signed notes, witnessing. Not a custom log format. See §2.
 - **Seven edge types, deterministic derivation.** CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL, CONVERGES_ON, CROSS_SESSION, INFORMED_BY (D041), PROVENANCE_OF (D044). Two implementations on identical input must produce identical edge sets. See §3.2.4.
+- **Provenance_token is the genesis-record-only stricter subset of informed_by.** Single-valued, scoped to session ancestry, truncated to 16 bytes for cross-session API ergonomics. Multi-valued / per-record consultation references use informed_by with full hashes. See D044 + §1.2.6.
+- **Transaction records require ≥2 signers (D052, §1.7.6).** The `signers` array carries both agent and counterparty signatures over the same canonical bytes. Single-signer transaction records are flagged `cross_attestation_missing: true` by D052-aware verifiers.
+- **Cross-log replication is OPTIONAL (D050, §2.11).** Single-log bundles remain valid; multi-log bundles use the `log_proofs` array form. Verifier threshold M ≥ 2 with a trusted set of independent logs gives equivocation-detection.
+- **Capability declarations are OPTIONAL (D051, §6.7).** Identity claims gain a `capabilities` field; verifiers flag out-of-envelope records with `in_envelope: false` but do not invalidate them (signal not block).
+- **Adversarial threat model lives at §8.7.** atrib does NOT certify truth, only signing. Trust assessment is a 10-layer stack (signature, identity, capability, revocation, cross-attestation, tool-side attestation, external evidence, witnessing, cross-log replication, structural anomaly detection). See §8.7 for the full enumeration.
 - **Edge weight uses max(), not sum().** Because every node has CONVERGES_ON plus its primary edge. Sum would inflate all structural contributors equally. See §4.2.2.
 
 ## V2 deferrals (do not implement)
