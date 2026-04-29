@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>atrib explorer</title>
+<style>
+  :root {
+    --bg: #0c0d10;
+    --fg: #e6e6e6;
+    --fg-dim: #888;
+    --accent: #7dd3fc;
+    --accent-dim: #386881;
+    --warn: #fbbf24;
+    --err: #ef4444;
+    --ok: #4ade80;
+    --border: #1f2126;
+    --panel: #131418;
+    --code-bg: #07080a;
+    --link: #7dd3fc;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 -apple-system, "SF Pro", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font: 12px/1.4 "SF Mono", Menlo, Monaco, "Courier New", monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; word-break: break-all; }
+  pre { font: 12px/1.5 "SF Mono", Menlo, Monaco, "Courier New", monospace; background: var(--code-bg); padding: 12px; border-radius: 4px; overflow-x: auto; max-height: 400px; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--panel); position: sticky; top: 0; z-index: 10; }
+  header h1 { font: 600 16px/1 monospace; margin: 0; }
+  header h1 a { color: var(--fg); }
+  header nav { display: flex; gap: 18px; font-size: 13px; }
+  main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+  .panel h2 { margin: 0 0 12px; font: 600 14px/1 -apple-system, system-ui, sans-serif; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; }
+  .panel h3 { margin: 16px 0 8px; font: 600 13px/1 -apple-system, system-ui, sans-serif; color: var(--fg); }
+  .grid { display: grid; gap: 12px; grid-template-columns: 180px 1fr; }
+  .grid > div:nth-child(odd) { color: var(--fg-dim); font-size: 12px; }
+  .row { display: flex; gap: 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .row:last-child { border-bottom: none; }
+  .row .label { color: var(--fg-dim); font-size: 12px; min-width: 110px; }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+  .badge.ok { background: rgba(74, 222, 128, 0.15); color: var(--ok); }
+  .badge.warn { background: rgba(251, 191, 36, 0.15); color: var(--warn); }
+  .badge.err { background: rgba(239, 68, 68, 0.15); color: var(--err); }
+  .badge.dim { background: rgba(136, 136, 136, 0.15); color: var(--fg-dim); }
+  input[type=text], input[type=search] { background: var(--code-bg); border: 1px solid var(--border); color: var(--fg); padding: 8px 12px; border-radius: 4px; font: 13px monospace; width: 100%; }
+  input[type=text]:focus, input[type=search]:focus { outline: none; border-color: var(--accent); }
+  button { background: var(--accent-dim); color: var(--fg); border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font: 600 13px -apple-system, system-ui, sans-serif; }
+  button:hover { background: var(--accent); color: var(--bg); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+  th { color: var(--fg-dim); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.num { font-family: monospace; }
+  td.shrink { white-space: nowrap; width: 1%; }
+  .endpoints { font-size: 11px; color: var(--fg-dim); padding: 8px 24px; border-bottom: 1px solid var(--border); display: flex; gap: 18px; flex-wrap: wrap; }
+  .endpoints code { font-size: 11px; }
+  .empty { color: var(--fg-dim); font-style: italic; padding: 12px 0; }
+  .err-banner { background: rgba(239, 68, 68, 0.1); border: 1px solid var(--err); color: var(--err); padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><a href="#/">atrib explorer</a></h1>
+  <nav>
+    <a href="#/">overview</a>
+    <a href="#/anchoring">anchoring</a>
+    <a href="#/about">about</a>
+  </nav>
+</header>
+<div class="endpoints" id="endpoints"></div>
+<main id="app">loading…</main>
+
+<script type="module">
+// atrib explorer, option 1 minimal vanilla-JS public surface (D054).
+// Read-only. No auth. Composes from log.atrib.dev + graph.atrib.dev + directory.atrib.dev.
+//
+// Hash routing:
+//   #/                              overview (recent activity + search)
+//   #/identity/<creator_key>        identity view (claim + history + recent records)
+//   #/session/<context_id>          session view (graph + records)
+//   #/action/<record_hash>          action view (record + chain position + verification)
+//   #/anchoring                     recent log checkpoints + directory anchors
+//   #/about                         what this is
+//
+// Endpoints can be overridden via ?log=, ?graph=, ?directory= URL params.
+
+const DEFAULTS = {
+  log:       'https://log.atrib.dev/v1',
+  graph:     'https://graph.atrib.dev/v1',
+  directory: 'https://directory.atrib.dev/v6',
+}
+
+function endpoints() {
+  const q = new URLSearchParams(location.search)
+  return {
+    log:       q.get('log')       || DEFAULTS.log,
+    graph:     q.get('graph')     || DEFAULTS.graph,
+    directory: q.get('directory') || DEFAULTS.directory,
+  }
+}
+
+function el(tag, attrs = {}, ...children) {
+  const e = document.createElement(tag)
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v
+    else if (k === 'style') e.style.cssText = v
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v)
+    else e.setAttribute(k, v)
+  }
+  for (const c of children) {
+    if (c == null || c === false) continue
+    if (Array.isArray(c)) for (const i of c) e.append(i instanceof Node ? i : document.createTextNode(String(i)))
+    else e.append(c instanceof Node ? c : document.createTextNode(String(c)))
+  }
+  return e
+}
+
+function shorten(s, head = 8, tail = 6) {
+  if (!s || s.length < head + tail + 3) return s
+  return `${s.slice(0, head)}…${s.slice(-tail)}`
+}
+
+async function fetchJson(url) {
+  const r = await fetch(url, { headers: { accept: 'application/json' } })
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText} for ${url}`)
+  return r.json()
+}
+
+async function fetchMaybe(url) {
+  try { return await fetchJson(url) }
+  catch (e) { return { _error: e.message } }
+}
+
+function renderEndpoints() {
+  const ep = endpoints()
+  document.getElementById('endpoints').replaceChildren(
+    el('span', {}, 'log: ', el('code', {}, ep.log)),
+    el('span', {}, 'graph: ', el('code', {}, ep.graph)),
+    el('span', {}, 'directory: ', el('code', {}, ep.directory)),
+  )
+}
+
+// ─── Overview view ────────────────────────────────────────────────────────────
+
+async function renderOverview() {
+  const ep = endpoints()
+  const root = el('div')
+
+  // Search
+  root.append(el('section', { class: 'panel' },
+    el('h2', {}, 'search'),
+    el('p', { style: 'color: var(--fg-dim); font-size: 13px;' },
+      'Paste any of: a creator_key (43 chars base64url), a context_id (32 hex chars), or a record_hash (sha256:… or 64 hex chars). The explorer routes you to the right view.'),
+    el('div', { style: 'display: flex; gap: 8px;' },
+      el('input', {
+        type: 'search',
+        id: 'search',
+        placeholder: 'creator_key  /  context_id  /  record_hash',
+        onkeydown: (e) => { if (e.key === 'Enter') doSearch() },
+      }),
+      el('button', { onclick: doSearch }, 'go'),
+    ),
+  ))
+
+  // Stats
+  const stats = await fetchMaybe(`${ep.log}/stats`)
+  if (stats._error) {
+    root.append(el('div', { class: 'err-banner' }, `log /stats error: ${stats._error}`))
+  } else {
+    const eventBreakdown = stats.entries_by_event_type || {}
+    root.append(el('section', { class: 'panel' },
+      el('h2', {}, 'log status'),
+      el('div', { class: 'grid' },
+        el('div', {}, 'tree size'),     el('div', {}, el('code', {}, String(stats.tree_size))),
+        el('div', {}, 'distinct signers'), el('div', {}, String(stats.distinct_signers)),
+        el('div', {}, 'oldest entry'),  el('div', {}, stats.oldest_timestamp_ms ? new Date(stats.oldest_timestamp_ms).toISOString() : '—'),
+        el('div', {}, 'newest entry'),  el('div', {}, stats.newest_timestamp_ms ? new Date(stats.newest_timestamp_ms).toISOString() : '—'),
+      ),
+      el('h3', {}, 'entries by event_type'),
+      el('table', {},
+        el('thead', {}, el('tr', {},
+          el('th', {}, 'event_type'),
+          el('th', {}, 'count'),
+          el('th', {}, '%'),
+        )),
+        el('tbody', {},
+          ...Object.entries(eventBreakdown).map(([type, count]) => {
+            const total = Object.values(eventBreakdown).reduce((a, b) => a + b, 0)
+            const pct = total ? ((count / total) * 100).toFixed(1) : '0.0'
+            return el('tr', {},
+              el('td', {}, type),
+              el('td', { class: 'num' }, String(count)),
+              el('td', { class: 'num' }, `${pct}%`),
+            )
+          }),
+        ),
+      ),
+    ))
+  }
+
+  // Latest checkpoint
+  const checkpoint = await fetchCheckpointMaybe(ep.log)
+  root.append(el('section', { class: 'panel' },
+    el('h2', {}, 'latest log checkpoint'),
+    checkpoint._error
+      ? el('div', { class: 'err-banner' }, `checkpoint error: ${checkpoint._error}`)
+      : el('pre', {}, checkpoint.text || '(no checkpoint)'),
+    el('p', { style: 'font-size: 12px; color: var(--fg-dim); margin: 8px 0 0;' },
+      'C2SP-canonical signed-note format per spec §2.4. Signature lines below the body verify against the log operator key + witness keys.'),
+  ))
+
+  document.getElementById('app').replaceChildren(root)
+}
+
+async function fetchCheckpointMaybe(logEndpoint) {
+  try {
+    const r = await fetch(`${logEndpoint}/checkpoint`)
+    if (!r.ok) return { _error: `${r.status} ${r.statusText}` }
+    return { text: await r.text() }
+  } catch (e) { return { _error: e.message } }
+}
+
+// ─── Search routing ───────────────────────────────────────────────────────────
+
+function doSearch() {
+  const q = document.getElementById('search').value.trim()
+  if (!q) return
+  // Heuristic routing. Users can also navigate via the URL hash directly.
+  if (/^[A-Za-z0-9_-]{43}$/.test(q))                location.hash = `#/identity/${q}`
+  else if (/^[0-9a-f]{32}$/.test(q))                location.hash = `#/session/${q}`
+  else if (/^sha256:[0-9a-f]{64}$/.test(q))         location.hash = `#/action/${q}`
+  else if (/^[0-9a-f]{64}$/.test(q))                location.hash = `#/action/sha256:${q}`
+  else alert('not a recognized format. expected: 43-char base64url creator_key, 32-hex context_id, or 64-hex / sha256:-prefixed record_hash')
+}
+
+// ─── Identity view ────────────────────────────────────────────────────────────
+
+async function renderIdentity(creatorKey) {
+  const ep = endpoints()
+  const root = el('div')
+  root.append(el('section', { class: 'panel' },
+    el('h2', {}, 'identity'),
+    el('div', { class: 'grid' },
+      el('div', {}, 'creator_key'), el('div', {}, el('code', {}, creatorKey)),
+    ),
+  ))
+
+  // Directory lookup
+  const lookup = await fetchMaybe(`${ep.directory}/lookup/${creatorKey}`)
+  const claimPanel = el('section', { class: 'panel' }, el('h2', {}, 'directory claim'))
+  if (lookup._error) {
+    claimPanel.append(el('div', { class: 'err-banner' }, `directory error: ${lookup._error}`))
+  } else if (!lookup.found) {
+    claimPanel.append(el('p', { class: 'empty' },
+      'no identity claim registered for this key. Per spec §6.1, signers MAY register a claim with the directory but are not required to. Records signed by this key remain cryptographically valid; identity attestation is a separate trust layer (see §8.7 layered trust assessment).'))
+  } else {
+    const c = lookup.claim
+    claimPanel.append(
+      el('div', { class: 'grid' },
+        el('div', {}, 'claim_type'),    el('div', {}, c.claim_type || '—'),
+        el('div', {}, 'claim_method'),  el('div', {}, el('code', {}, c.claim_method || '—')),
+        el('div', {}, 'version'),       el('div', {}, String(lookup.version)),
+        el('div', {}, 'directory epoch'), el('div', {}, String(lookup.epoch)),
+      ),
+      el('h3', {}, 'claim_subject'),
+      el('pre', {}, JSON.stringify(c.claim_subject, null, 2)),
+      c.capabilities ? el('h3', {}, 'capabilities (§6.7)') : null,
+      c.capabilities ? el('pre', {}, JSON.stringify(c.capabilities, null, 2)) : null,
+    )
+  }
+  root.append(claimPanel)
+
+  // History
+  const history = await fetchMaybe(`${ep.directory}/history/${creatorKey}`)
+  if (!history._error && history.versions && history.versions.length > 0) {
+    root.append(el('section', { class: 'panel' },
+      el('h2', {}, `claim history (${history.versions.length} versions)`),
+      el('table', {},
+        el('thead', {}, el('tr', {},
+          el('th', {}, 'version'), el('th', {}, 'epoch'), el('th', {}, 'claim_type'),
+        )),
+        el('tbody', {},
+          ...history.versions.map(v => el('tr', {},
+            el('td', { class: 'num' }, String(v.version)),
+            el('td', { class: 'num' }, String(v.epoch)),
+            el('td', {}, v.claim?.claim_type || '—'),
+          )),
+        ),
+      ),
+    ))
+  }
+
+  document.getElementById('app').replaceChildren(root)
+}
+
+// ─── Session view ─────────────────────────────────────────────────────────────
+
+async function renderSession(contextId) {
+  const ep = endpoints()
+  const root = el('div')
+  root.append(el('section', { class: 'panel' },
+    el('h2', {}, 'session'),
+    el('div', { class: 'grid' },
+      el('div', {}, 'context_id'), el('div', {}, el('code', {}, contextId)),
+    ),
+  ))
+
+  const graph = await fetchMaybe(`${ep.graph}/graph/${contextId}`)
+  const graphPanel = el('section', { class: 'panel' }, el('h2', {}, 'graph'))
+  if (graph._error) {
+    graphPanel.append(el('div', { class: 'err-banner' }, `graph error: ${graph._error}`))
+  } else {
+    graphPanel.append(
+      el('div', { class: 'grid' },
+        el('div', {}, 'node_count'),  el('div', {}, String(graph.node_count ?? '—')),
+        el('div', {}, 'edge_count'),  el('div', {}, String(graph.edge_count ?? '—')),
+        el('div', {}, 'has transaction'), el('div', {}, graph.has_transaction ? el('span', { class: 'badge ok' }, 'yes') : el('span', { class: 'badge dim' }, 'no')),
+      ),
+      el('h3', {}, `nodes (${graph.nodes?.length ?? 0})`),
+      graph.nodes && graph.nodes.length > 0
+        ? el('table', {},
+            el('thead', {}, el('tr', {},
+              el('th', {}, 'event_type'),
+              el('th', {}, 'creator'),
+              el('th', {}, 'verification'),
+              el('th', {}, 'timestamp'),
+              el('th', {}, 'id'),
+            )),
+            el('tbody', {},
+              ...graph.nodes.map(n => el('tr', {},
+                el('td', {}, n.event_type_kind || n.event_type || '—'),
+                el('td', {}, n.creator_key ? el('a', { href: `#/identity/${n.creator_key}` }, shorten(n.creator_key)) : '—'),
+                el('td', {}, badgeForState(n.verification_state)),
+                el('td', { class: 'shrink' }, n.timestamp ? new Date(n.timestamp).toISOString() : '—'),
+                el('td', {}, el('a', { href: `#/action/${n.id}` }, shorten(n.id))),
+              )),
+            ),
+          )
+        : el('div', { class: 'empty' }, 'no nodes (session may not exist or context_id is unknown)'),
+      graph.edges && graph.edges.length > 0 ? el('h3', {}, `edges (${graph.edges.length})`) : null,
+      graph.edges && graph.edges.length > 0
+        ? el('table', {},
+            el('thead', {}, el('tr', {}, el('th', {}, 'type'), el('th', {}, 'source → target'))),
+            el('tbody', {},
+              ...graph.edges.map(e => el('tr', {},
+                el('td', {}, el('code', {}, e.type)),
+                el('td', {}, shorten(e.source), ' → ', shorten(e.target)),
+              )),
+            ),
+          )
+        : null,
+    )
+  }
+  root.append(graphPanel)
+
+  document.getElementById('app').replaceChildren(root)
+}
+
+function badgeForState(state) {
+  const map = {
+    unsigned:        ['warn', 'unsigned'],
+    signature_valid: ['ok',   'signed'],
+    log_committed:   ['ok',   'log-committed'],
+    witnessed:       ['ok',   'witnessed'],
+  }
+  const [cls, txt] = map[state] || ['dim', state || '—']
+  return el('span', { class: `badge ${cls}` }, txt)
+}
+
+// ─── Action view ──────────────────────────────────────────────────────────────
+
+async function renderAction(recordHash) {
+  const ep = endpoints()
+  const root = el('div')
+  const hashHex = recordHash.startsWith('sha256:') ? recordHash.slice(7) : recordHash
+
+  root.append(el('section', { class: 'panel' },
+    el('h2', {}, 'action'),
+    el('div', { class: 'grid' },
+      el('div', {}, 'record_hash'), el('div', {}, el('code', {}, recordHash)),
+    ),
+  ))
+
+  // Lookup by hash
+  const entry = await fetchMaybe(`${ep.log}/lookup/${hashHex}`)
+  const panel = el('section', { class: 'panel' }, el('h2', {}, 'log entry'))
+  if (entry._error) {
+    panel.append(el('div', { class: 'err-banner' }, `log lookup error: ${entry._error}`))
+  } else {
+    panel.append(
+      el('div', { class: 'grid' },
+        el('div', {}, 'log_index'),    el('div', { }, el('code', {}, String(entry.log_index ?? '—'))),
+        el('div', {}, 'creator_key'),  el('div', {}, entry.creator_key ? el('a', { href: `#/identity/${entry.creator_key}` }, entry.creator_key) : '—'),
+        el('div', {}, 'context_id'),   el('div', {}, entry.context_id ? el('a', { href: `#/session/${entry.context_id}` }, entry.context_id) : '—'),
+        el('div', {}, 'event_type'),   el('div', {}, el('code', {}, entry.event_type || '—')),
+        el('div', {}, 'timestamp'),    el('div', {}, entry.timestamp_ms ? new Date(entry.timestamp_ms).toISOString() : '—'),
+      ),
+      el('h3', {}, 'raw log entry'),
+      el('pre', {}, JSON.stringify(entry, null, 2)),
+    )
+  }
+  root.append(panel)
+
+  document.getElementById('app').replaceChildren(root)
+}
+
+// ─── Anchoring view ───────────────────────────────────────────────────────────
+
+async function renderAnchoring() {
+  const ep = endpoints()
+  const root = el('div')
+
+  const stats = await fetchMaybe(`${ep.log}/stats`)
+  const checkpoint = await fetchCheckpointMaybe(ep.log)
+  const dirAnchor = await fetchMaybe(`${ep.directory}/anchor`)
+
+  root.append(el('section', { class: 'panel' },
+    el('h2', {}, 'log checkpoint'),
+    checkpoint._error
+      ? el('div', { class: 'err-banner' }, `checkpoint error: ${checkpoint._error}`)
+      : el('pre', {}, checkpoint.text),
+    !stats._error
+      ? el('div', { class: 'grid' },
+          el('div', {}, 'tree size'), el('div', {}, String(stats.tree_size)),
+          el('div', {}, 'distinct signers'), el('div', {}, String(stats.distinct_signers)),
+        )
+      : null,
+  ))
+
+  root.append(el('section', { class: 'panel' },
+    el('h2', {}, 'directory anchor (latest)'),
+    dirAnchor._error
+      ? el('div', { class: 'err-banner' }, `directory anchor error: ${dirAnchor._error}`)
+      : el('div', { class: 'grid' },
+          el('div', {}, 'epoch'),            el('div', {}, String(dirAnchor.epoch)),
+          el('div', {}, 'root_hash'),        el('div', {}, el('code', {}, dirAnchor.root_hash || '—')),
+          el('div', {}, 'directory_origin'), el('div', {}, el('code', {}, dirAnchor.directory_origin || '—')),
+        ),
+    el('p', { style: 'font-size: 12px; color: var(--fg-dim); margin: 12px 0 0;' },
+      'Per spec §6.2.4 per-operation anchoring: every directory state change emits a directory_anchor record to the log immediately. Verifiers cross-reference the directory state at the anchored checkpoint root.'),
+  ))
+
+  document.getElementById('app').replaceChildren(root)
+}
+
+// ─── About view ───────────────────────────────────────────────────────────────
+
+function renderAbout() {
+  const root = el('div')
+  root.append(el('section', { class: 'panel' },
+    el('h2', {}, 'about'),
+    el('p', {},
+      'atrib explorer is a public, read-only inspection surface over atrib\'s deployed services. It composes data from the public log (',
+      el('code', {}, 'log.atrib.dev'),
+      '), graph query service (',
+      el('code', {}, 'graph.atrib.dev'),
+      '), and identity-claim directory (',
+      el('code', {}, 'directory.atrib.dev'),
+      '). All data is public per spec §0.',
+    ),
+    el('p', {},
+      'No authentication is required. There is no concept of "your account" here; this is a block-explorer-style surface where you search by ',
+      el('code', {}, 'creator_key'), ', ',
+      el('code', {}, 'context_id'), ', or ',
+      el('code', {}, 'record_hash'),
+      ' to inspect that thing.',
+    ),
+    el('h3', {}, 'D054 status'),
+    el('p', {},
+      'This is option 1 of a three-stage build per ',
+      el('a', { href: 'https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d054-unified-public-explorer-vs-per-service-admin-uis' }, 'D054'),
+      ': minimal single-page HTML, no build step, no framework. Option 2 (Vite/Next.js SPA) ships when dogfood metrics produce useful signal. Option 3 (block-explorer-grade with search indexing + real-time updates) ships after the implementation work is complete.',
+    ),
+    el('h3', {}, 'override endpoints'),
+    el('p', {},
+      'Append URL params to point at different services: ',
+      el('code', {}, '?log=https://localhost:3100/v1&graph=...&directory=...'),
+    ),
+  ))
+  document.getElementById('app').replaceChildren(root)
+}
+
+// ─── Router ───────────────────────────────────────────────────────────────────
+
+async function route() {
+  renderEndpoints()
+  document.getElementById('app').replaceChildren(el('div', { class: 'empty' }, 'loading…'))
+  const hash = location.hash.replace(/^#/, '')
+  if (!hash || hash === '/' || hash === '/overview') return renderOverview()
+  if (hash.startsWith('/identity/'))  return renderIdentity(hash.slice('/identity/'.length))
+  if (hash.startsWith('/session/'))   return renderSession(hash.slice('/session/'.length))
+  if (hash.startsWith('/action/'))    return renderAction(hash.slice('/action/'.length))
+  if (hash === '/anchoring')          return renderAnchoring()
+  if (hash === '/about')              return renderAbout()
+  // Unknown route
+  document.getElementById('app').replaceChildren(el('div', { class: 'panel' },
+    el('h2', {}, 'unknown route'),
+    el('p', {}, 'Try ', el('a', { href: '#/' }, 'overview'), '.'),
+  ))
+}
+
+window.addEventListener('hashchange', route)
+window.addEventListener('DOMContentLoaded', route)
+</script>
+</body>
+</html>
