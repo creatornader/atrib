@@ -10,6 +10,9 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
 COPY packages/mcp/ packages/mcp/
 COPY services/log-node/ services/log-node/
 
+# D054: bundle the public-explorer HTML so log-node can serve it at /dashboard.
+COPY apps/dashboard/ apps/dashboard/
+
 RUN pnpm install --frozen-lockfile --filter @atrib/log-node...
 RUN pnpm --filter @atrib/mcp build
 RUN pnpm --filter @atrib/log-node build

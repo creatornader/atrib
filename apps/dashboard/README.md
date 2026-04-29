@@ -27,14 +27,13 @@ The defaults point at the production endpoints (`log.atrib.dev`, `graph.atrib.de
 
 ## Hosting
 
-Final hosting URL TBD. Options:
+Live at **https://log.atrib.dev/dashboard** (also `/dashboard.html` and `/dashboard/`).
 
-1. **GitHub Pages** on the public repo — zero infrastructure, served from `https://creatornader.github.io/atrib/dashboard/`.
-2. **Cloudflare Pages** site at `dashboard.atrib.dev` or `atrib.dev/dashboard`.
-3. **Fly.io static-serving** alongside log-node.
-4. **Inline serve from log-node** at `https://log.atrib.dev/dashboard.html` (technically possible since CORS already allows browser cross-origin reads, but conflates concerns; not the right long-term shape).
+log-node serves it inline. The Dockerfile copies `apps/dashboard/index.html` into the image at build time and the server reads it once at startup, caches it in memory, and returns it with `Cache-Control: public, max-age=60`. No separate hosting infrastructure for option 1.
 
-CORS is already configured on log-node, graph-node, and directory-node (`Access-Control-Allow-Origin: *` on all read endpoints) so the explorer works from any origin.
+When option 2 (Vite/Next.js SPA) lands, it gets its own hosting (likely Cloudflare Pages at `dashboard.atrib.dev` or `atrib.dev/dashboard`); at that point, the inline log-node route either redirects there or stays as a backup view. Until then, `log.atrib.dev/dashboard` is the canonical URL.
+
+CORS is configured on log-node, graph-node, and directory-node (`Access-Control-Allow-Origin: *` on all read endpoints) so the explorer can also be loaded from any other origin during local development.
 
 ## What this is NOT
 
