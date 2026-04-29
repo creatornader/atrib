@@ -1548,7 +1548,7 @@ The introduction of `informed_by` (D041) makes the cost concrete: observations a
 
 **Context.** D035 established URI-typed event_type with extension URIs in consumer namespaces (byte 0xFF in §2.3.1). The initial v1 rule excluded extension records from edge derivation: "queryable as opaque-typed nodes but DO NOT participate in §3.2.4 edge derivation."
 
-This rule has the same shape as the observation exclusion (D042) and the same cost: the temporal graph spine has gaps where extension records belong. For the additive-design refactor to work (informative §7 harness-side reasoning chains using extension URIs), the extension records must appear in the chain spine alongside tool_calls and observations. Otherwise verifiers querying the graph cannot see the deliberation records the harness emitted.
+This rule has the same shape as the observation exclusion (D042) and the same cost: the temporal graph spine has gaps where extension records belong. For the §7.5 harness-side reasoning chains pattern (D047) to work using extension URIs, the extension records must appear in the chain spine alongside tool_calls and observations. Otherwise verifiers querying the graph cannot see the deliberation records the harness emitted.
 
 The trust posture for extension URIs differs from atrib's normative URIs: atrib does not bless their semantics. Including them in the chain spine must not be mistaken for blessing.
 
@@ -1709,7 +1709,7 @@ Mitigations exist (opaque tool labels, salted commitments, coarsened timing) but
 
 3. *Mandatory privacy by default; downgrade opt-in.* Rejected because changing v1 default breaks existing tooling and corpus. Additive posture options preserve the default and allow opt-in.
 
-4. *Defer privacy postures to a v1.1 spec.* Rejected because the gap is concrete now. the additive-design refactor's brand promise depends on configurable disclosure being a substrate property. Pre-public, additive optional changes are essentially free.
+4. *Defer privacy postures to a v1.1 spec.* Rejected because the gap is concrete now. The substrate's brand promise depends on configurable disclosure being a normative property. Pre-public, additive optional changes are essentially free.
 
 5. *Use zero-knowledge commitments (Pedersen, KZG) for args/result.* Rejected as v1 spec material. ZK schemes have meaningful complexity and ecosystem dependency. They MAY be added as additional commitment schemes in §8.3 in future revisions; the spec defines the extensibility shape now.
 
@@ -1897,7 +1897,7 @@ A layered defense replaces the ad-hoc catch-up cycle with structural prevention.
 
 3. *Regex check only; no LLM check.* Rejected because regex catches known shapes; LLM catches new categories. The combination handles both.
 
-4. *Use Anthropic API for the LLM check (consistent with Claude Code's primary provider).* Rejected per cost. NVIDIA NIM is free for the another internal project integration; reuse the same path here. The check is run frequently (every push), so cost accumulates.
+4. *Use Anthropic API for the LLM check (consistent with Claude Code's primary provider).* Rejected per cost. A free-tier hosted LLM is available via the operator's existing model-provider configuration; reuse the same path here. The check is run frequently (every push), so cost accumulates.
 
 5. *Mandatory hook installation; no opt-out.* Rejected because emergency overrides are sometimes needed (e.g., fixing a hook itself). Documented overrides with audit-log entry.
 
