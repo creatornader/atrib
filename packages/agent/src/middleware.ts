@@ -362,7 +362,7 @@ async function emitTransactionRecord(
     content_id: contentId,
     creator_key: publicKeyB64,
     chain_root: chainRoot,
-    event_type: 'transaction',
+    event_type: 'https://atrib.dev/v1/types/transaction',
     context_id: session.contextId,
     timestamp: Date.now(),
     signature: '',

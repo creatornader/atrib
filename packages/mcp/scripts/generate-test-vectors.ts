@@ -36,7 +36,7 @@ async function main() {
 
   const record: AtribRecord = {
     spec_version: 'atrib/1.0',
-    event_type: 'tool_call',
+    event_type: 'https://atrib.dev/v1/types/tool_call',
     timestamp: 1700000000000,
     context_id: contextId,
     creator_key: creatorKeyB64,
@@ -69,7 +69,7 @@ async function main() {
     creator_key_b64url: creatorKeyB64,
     context_id: contextId,
     timestamp: 1700000000000,
-    event_type: 'tool_call',
+    event_type: 'https://atrib.dev/v1/types/tool_call',
   }
   const entry = serializeEntry(entryInput)
 
@@ -91,7 +91,7 @@ async function main() {
   // Second record for 2-entry tree
   const record2: AtribRecord = {
     spec_version: 'atrib/1.0',
-    event_type: 'tool_call',
+    event_type: 'https://atrib.dev/v1/types/tool_call',
     timestamp: 1700000001000,
     context_id: contextId,
     creator_key: creatorKeyB64,
@@ -107,7 +107,7 @@ async function main() {
     creator_key_b64url: creatorKeyB64,
     context_id: contextId,
     timestamp: 1700000001000,
-    event_type: 'tool_call',
+    event_type: 'https://atrib.dev/v1/types/tool_call',
   }
   const entry2 = serializeEntry(entry2Input)
   const leaf2 = leafHash(entry2)

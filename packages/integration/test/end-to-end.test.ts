@@ -322,7 +322,9 @@ describe('End-to-end attribution flow', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
 
     // Now we should have: tool A's record + an agent-emitted Path 2 transaction
-    const txRecords = store.records.filter((r) => r.event_type === 'transaction')
+    const txRecords = store.records.filter(
+      (r) => r.event_type === 'https://atrib.dev/v1/types/transaction',
+    )
     expect(txRecords.length).toBe(1)
     // Transaction record signed by the AGENT, not the merchant
     expect(txRecords[0]!.creator_key).toBe(base64urlEncode(await getPublicKey(AGENT_KEY)))

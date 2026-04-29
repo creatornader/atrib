@@ -41,9 +41,11 @@ ed.etc.sha512Sync = (...m) => sha512(ed.etc.concatBytes(...m))
 const LOG_ENDPOINT = (process.env.LOG_ENDPOINT ?? 'https://log.atrib.dev/v1').replace(/\/$/, '')
 const CHAIN_LENGTH = Number(process.env.CHAIN_LENGTH ?? 5)
 const DEMO_SERVER_URL = process.env.DEMO_SERVER_URL ?? 'demo://chain-demo.atrib.dev'
-// Comma-separated list of 0-indexed step numbers that should emit
-// event_type "transaction" instead of "tool_call". Spec §1.7. The 90-byte
-// log entry encodes event_type as 0x01 for tool_call, 0x02 for transaction.
+// Comma-separated list of 0-indexed step numbers that should emit a
+// transaction record (event_type URI https://atrib.dev/v1/types/transaction)
+// instead of a tool_call record. Spec §1.7. The 90-byte log entry encodes
+// the URI as a byte (§2.3.1): 0x01=tool_call, 0x02=transaction,
+// 0x03=observation, 0xFF=extension URI in a non-atrib namespace.
 const TRANSACTION_AT_STEPS = new Set(
   (process.env.TRANSACTION_AT_STEPS ?? '')
     .split(',')
@@ -132,7 +134,9 @@ async function main() {
       ? `sha256:${priorRecordHash}`
       : genesisChainRoot(contextId)
 
-    const eventType = TRANSACTION_AT_STEPS.has(i) ? 'transaction' : 'tool_call'
+    const eventType = TRANSACTION_AT_STEPS.has(i)
+      ? 'https://atrib.dev/v1/types/transaction'
+      : 'https://atrib.dev/v1/types/tool_call'
     const unsigned = {
       spec_version: 'atrib/1.0',
       content_id: computeContentId(DEMO_SERVER_URL, `step-${i}`),
@@ -150,7 +154,8 @@ async function main() {
 
     const proof = await submitRecord(signed)
     const treeSize = proof.checkpoint.split('\n')[1]
-    const evMark = eventType === 'transaction' ? ' [tx]' : ''
+    const evMark =
+      eventType === 'https://atrib.dev/v1/types/transaction' ? ' [tx]' : ''
     console.log(
       `[${i}]   ${chainRoot.slice(7, 23)}…  ${recordHash.slice(0, 16)}…  ${String(proof.log_index).padStart(9)}  ${String(treeSize).padStart(9)}${evMark}`,
     )

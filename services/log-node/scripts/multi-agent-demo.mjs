@@ -81,7 +81,13 @@ async function makeAgent(label) {
   return { label, privateKey, publicKey, creatorKey: b64url(publicKey) }
 }
 
-async function emitRecord(agent, contextId, toolName, chainRoot, eventType = 'tool_call') {
+async function emitRecord(
+  agent,
+  contextId,
+  toolName,
+  chainRoot,
+  eventType = 'https://atrib.dev/v1/types/tool_call',
+) {
   const unsigned = {
     spec_version: 'atrib/1.0',
     content_id: computeContentId('demo://multi-agent.atrib.dev', toolName),
@@ -132,9 +138,12 @@ async function main() {
         : genesisChainRoot(contextId)
       const toolName = `agent-${agent.label.toLowerCase()}/step-${i}`
       const isFinal = stepIndex === totalSteps - 1
-      const eventType = isFinal ? 'transaction' : 'tool_call'
+      const eventType = isFinal
+        ? 'https://atrib.dev/v1/types/transaction'
+        : 'https://atrib.dev/v1/types/tool_call'
       const { recordHash, proof } = await emitRecord(agent, contextId, toolName, chainRoot, eventType)
-      const evMark = eventType === 'transaction' ? ' [tx]' : ''
+      const evMark =
+        eventType === 'https://atrib.dev/v1/types/transaction' ? ' [tx]' : ''
       console.log(
         `[${String(stepIndex).padStart(2)}]   ${agent.label}      ${chainRoot.slice(7, 23)}…  ${recordHash.slice(0, 16)}…  ${String(proof.log_index).padStart(9)}${evMark}`,
       )

@@ -67,7 +67,7 @@ X-atrib-Priority: high
   "content_id":   "sha256:...",
   "creator_key":  "...",
   "chain_root":   "sha256:...",
-  "event_type":   "tool_call",
+  "event_type":   "https://atrib.dev/v1/types/tool_call",
   "context_id":   "...",
   "timestamp":    1743850000000,
   "signature":    "..."
@@ -103,7 +103,7 @@ Wraps an `McpServer` instance in place. The wrapper is idempotent and can be cal
 | `serverUrl`        | `string`         | recommended             | Canonical URL for `content_id` derivation per §1.2.2. Required for stdio transports where no host header is available.                                           |
 | `logEndpoint`      | `string`         | optional in dev         | Where to POST signed records. Defaults to `https://log.atrib.dev/v1/entries`. Use `@atrib/log-dev`'s submission endpoint for local development.                   |
 | `policy`           | `PolicyDocument` | optional                | Policy document to serve at `/.well-known/atrib-policy.json` (for HTTP transports) and embed in `serverInfo` (for stdio).                                        |
-| `transactionTools` | `string[]`       | optional                | Tool names that should emit `event_type: 'transaction'` records instead of `tool_call`. Defaults to a built-in heuristic for common checkout/payment tool names. |
+| `transactionTools` | `string[]`       | optional                | Tool names that should emit a transaction record (`event_type: https://atrib.dev/v1/types/transaction`) instead of a tool_call record. The middleware emits one of three atrib normative `event_type` URIs (tool_call, transaction, observation) per §1.2.4; consumers may also mint extension URIs in their own namespaces. Defaults to a built-in heuristic for common checkout/payment tool names. |
 
 Returns a `SubmissionQueue`-aware wrapper exposing:
 

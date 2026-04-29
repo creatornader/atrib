@@ -71,12 +71,13 @@ Submit a signed attribution record. Validates the record per spec §2.6.1 Steps 
 
 ```json
 {
-  "spec_version": "1.0",
-  "event_type": "tool_call",
-  "context_id": "<uuid-v4>",
+  "spec_version": "atrib/1.0",
+  "event_type": "https://atrib.dev/v1/types/tool_call",
+  "context_id": "<32-char hex trace-id>",
   "creator_key": "<base64url-ed25519-pubkey>",
   "chain_root": "sha256:<hex>",
-  "record_hash": "<base64url-sha256>",
+  "content_id": "sha256:<hex>",
+  "timestamp": 1743850000000,
   "signature": "<base64url-ed25519-signature>"
 }
 ```

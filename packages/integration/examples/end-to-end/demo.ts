@@ -67,7 +67,11 @@ async function main(): Promise<void> {
   // Subscribe to the dev log so we can pretty-print every admitted record.
   log.onSubmit((entry) => {
     const evt =
-      entry.record.event_type === 'transaction' ? magenta('+transaction') : green('+tool_call  ')
+      entry.record.event_type === 'https://atrib.dev/v1/types/transaction'
+        ? magenta('+transaction')
+        : entry.record.event_type === 'https://atrib.dev/v1/types/observation'
+          ? cyan('+observation')
+          : green('+tool_call  ')
     const ctx = yellow(entry.record.context_id.slice(0, 8) + '…')
     const chain = entry.record.chain_root
       ? cyan(entry.record.chain_root.slice(0, 16) + '…')
@@ -193,8 +197,12 @@ async function main(): Promise<void> {
 
   step('final state')
   const total = log.size
-  const toolCalls = log.entries.filter((e) => e.record.event_type === 'tool_call').length
-  const transactions = log.entries.filter((e) => e.record.event_type === 'transaction').length
+  const toolCalls = log.entries.filter(
+    (e) => e.record.event_type === 'https://atrib.dev/v1/types/tool_call',
+  ).length
+  const transactions = log.entries.filter(
+    (e) => e.record.event_type === 'https://atrib.dev/v1/types/transaction',
+  ).length
   info(`${bold(String(total))} records in the log`)
   info(`  ${green(String(toolCalls))} tool_call records`)
   info(`  ${magenta(String(transactions))} transaction record${transactions === 1 ? '' : 's'}`)

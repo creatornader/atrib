@@ -140,18 +140,23 @@ describe('metric: chain_depth', () => {
 describe('metric: event_type_ratio', () => {
   const m = (METRICS as MetricEntry[]).find((x) => x.name === 'event_type_ratio')!
 
-  it('counts tool_calls, transactions, and computes percentage', () => {
+  it('counts tool_calls, transactions, observations, extensions, and computes percentage', () => {
     const entries = [
       makeEntry({ eventType: 0x01 }),
       makeEntry({ eventType: 0x01 }),
       makeEntry({ eventType: 0x01 }),
       makeEntry({ eventType: 0x02 }),
+      makeEntry({ eventType: 0x03 }),
+      makeEntry({ eventType: 0xff }),
     ]
     const out = m.run({ entries })
     expect(out.tool_call).toBe(3)
     expect(out.transaction).toBe(1)
-    expect(out.total).toBe(4)
-    expect(out.transaction_pct).toBe(25)
+    expect(out.observation).toBe(1)
+    expect(out.extension).toBe(1)
+    expect(out.total).toBe(6)
+    // 1 transaction out of 6 total = 16.67%
+    expect(out.transaction_pct).toBeCloseTo(16.67, 1)
   })
 
   it('handles empty corpus without divide-by-zero', () => {
