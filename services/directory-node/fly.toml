@@ -1,0 +1,27 @@
+app = 'atrib-directory'
+primary_region = 'iad'
+
+[build]
+  dockerfile = '../../services/directory-node/Dockerfile'
+
+[env]
+  PORT = '3300'
+  HOST = '0.0.0.0'
+  ATRIB_DIRECTORY_ORIGIN = 'directory.atrib.dev/v6'
+  ATRIB_LOG_ENDPOINT = 'https://log.atrib.dev/v1'
+
+[http_service]
+  internal_port = 3300
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'
+
+[checks]
+  [checks.health]
+    port = 3300
+    type = 'http'
