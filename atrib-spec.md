@@ -84,7 +84,11 @@ atrib is built on a different principle: **you can record what happened and who 
 
 ### What atrib certifies, what it does not
 
-Per D046, the spec adopts an explicit positioning lock to prevent brand mismatch. atrib certifies five structural axes: who acted (identity), what they did (event_type), when (timestamp), in what order (chain_root + ordering edges), and what the agent claims informed each action (informed_by + provenance_token). atrib does NOT certify that the agent's reasoning is truthful, that prior records actually influenced subsequent decisions, or that tool responses were real absent tool-side attestation. The substrate is content-preserving (hashes, not content) and disclosure-configurable (privacy postures per §8). See §3 "What atrib chains, what it does not" for the structural-axis enumeration; see §7.6 for the outcome-verification patterns that close the tool-response gap when needed.
+atrib certifies five structural axes of agent activity: who acted (identity, via signature), what they did (event_type), when (timestamp), in what order (chain_root and the ordering edges of §3), and what the agent claims informed each action (the `informed_by` and `provenance_token` fields, surfaced as INFORMED_BY and PROVENANCE_OF edges in §3).
+
+atrib does NOT certify that the agent's reasoning is truthful, that prior records actually influenced subsequent decisions, or that tool responses were real absent tool-side attestation. The substrate is content-preserving (commitments, not content) and disclosure-configurable (the privacy postures of §8 let the harness pick how much each record reveals).
+
+This positioning is load-bearing. Brand promises that exceed what the substrate certifies create the same trust mismatch atrib was built to fix. §3 "What atrib chains, what it does not" gives the detailed structural-axis enumeration; §7.6 documents the outcome-verification patterns that close the tool-response gap when consumers need it.
 
 ### Principle I: Provenance travels with the artifact
 
@@ -321,15 +325,31 @@ The `informed_by` field carries the agent's claimed reasoning context: an array 
 
 #### 1.2.6 provenance_token
 
-The `provenance_token` field carries an opaque token used for cross-session causal anchoring (per D044). It is OPTIONAL; records without it neither declare anchorability nor claim provenance.
+The `provenance_token` field carries an opaque token used for cross-session causal anchoring. It is OPTIONAL; records without it make no ancestry claim.
 
 **Format.** Base64url-encoded 16 bytes (RFC 4648 §5, no padding). 22 characters.
 
-**Derivation (upstream side).** When an agent emits a record intended to be referenced by downstream sessions, the middleware computes `provenance_token = base64url(record_hash[:16])` from the upstream record's hash. The first 16 bytes of the SHA-256 record hash provide adequate collision resistance for the cross-session anchor space (2^128).
+**Scope constraint.** `provenance_token` MUST appear ONLY on the genesis record of a session (the first record in a `context_id`). A session's ancestry is a session-level property; the genesis record is the natural place to declare it. Subsequent records in the session inherit ancestry implicitly via session membership. Validators MUST reject records carrying `provenance_token` when they are not the session's genesis record.
 
-**Use (downstream side).** When a downstream session's record claims provenance from an upstream anchor, it carries the same `provenance_token` value. The graph layer derives PROVENANCE_OF edges (§3.2.3) from token co-occurrence across `context_id` boundaries.
+**Derivation.** A session-genesis record claiming ancestry from upstream record U carries `provenance_token = base64url(SHA-256(JCS(U))[:16])` where U is the complete signed record (including its signature). The first 16 bytes of the SHA-256 record hash provide 2^128 collision resistance, sufficient for the cross-session anchor space.
 
-**Distinction from session_token.** session_token (§1.5.5) means *same logical session across OTel trace boundaries* (continuation of one task). provenance_token means *different session, causally anchored* (one session's action descends from another's record). They MAY coexist on the same record.
+**Upstream records carry no special field.** Any signed record in the log is implicitly anchorable. Downstream records reference it by truncated hash. The token is a downstream-side claim only; upstream records do not need to declare anchorability.
+
+**Graph derivation.** The graph layer derives PROVENANCE_OF edges (§3.2.3) by searching for any record U whose first 16 bytes of `SHA-256(JCS(U))` match the token, with `U.context_id ≠ D.context_id`. Dangling references (token claimed but no matching upstream in the resolved set) are flagged with `dangling: true`.
+
+**Distinction from session_token.** session_token (§1.5.5) means *same logical session across OTel trace boundaries* (continuation of one task). provenance_token means *different session, causally anchored* (one session's first record descends from another's). They MAY coexist on the same genesis record (a session may both belong to a multi-trace logical session AND descend from a prior anchor).
+
+**Relationship to `informed_by`.** provenance_token is a stricter, ergonomically-specialized subset of `informed_by` (§1.2.5):
+
+| Property | `informed_by` | `provenance_token` |
+|---|---|---|
+| Cardinality | Multi-valued array | Single value |
+| Scope | Per-record (any record may carry it) | Per-session (genesis record only) |
+| Hash form | Full record_hash with prefix (~71 chars per entry) | Truncated 16 bytes (22 chars base64url) |
+| Use case | Records this action consulted | This session's ancestry anchor |
+| Cross-session API ergonomics | Not optimized for env-var / header passing | Designed for env-var / header / URL-param passing |
+
+A consumer wanting full-precision multi-anchor cross-session references uses `informed_by` (which can include record_hashes from any session). provenance_token is the ergonomic shorthand for declaring a single ancestral anchor that can be passed across session boundaries via short tokens.
 
 ---
 
@@ -852,6 +872,41 @@ For backward compatibility with research forks of AP2 that may have implemented 
 ```
 
 Implementations MAY skip the legacy fallback if they target only AP2 v0.1 deployments.
+
+#### 1.7.6 Cross-attestation requirement for transaction records
+
+_This subsection is normative._
+
+Transaction records (`event_type = https://atrib.dev/v1/types/transaction`) are the highest-stakes record type in this specification. §4.6 calculation is normatively gated on this URI; settlement decisions follow from the records' content. To prevent a single compromised key from fabricating arbitrary transactions, transaction records MUST carry signatures from at least two independent parties.
+
+**Required field on transaction records.** Transaction records MUST carry a `signers` field. Format:
+
+```jsonc
+"signers": [
+  {
+    "creator_key": "agent-key-base64url",
+    "signature":   "Ed25519-sig-base64url"
+  },
+  {
+    "creator_key": "counterparty-key-base64url",
+    "signature":   "Ed25519-sig-base64url"
+  }
+]
+```
+
+The legacy top-level `signature` field is OPTIONAL on transaction records and SHOULD be omitted when `signers` is present. When both are present, the top-level signature is informational and MUST NOT be double-counted toward the cross-attestation minimum.
+
+**Signature canonical bytes.** Each signature in `signers` covers the JCS-canonical serialization of the complete record with the `signers` array set to `[]` (empty) and the top-level `signature` field omitted. All signers sign over the same bytes; verifiers confirm each signature against its corresponding `creator_key`.
+
+**Minimum required signers.** atrib's normative minimum is 2: typically the agent that initiated the transaction and the counterparty (the merchant or settlement party). Records with fewer than 2 verified signers MUST be flagged by verifiers with `cross_attestation_missing: true`.
+
+**Counterparty key discovery.** Counterparty keys are discovered out-of-band: via the §6 directory lookup of the merchant's published identity, via payment-protocol-specific channels (x402 facilitator metadata, ACP order envelope, AP2 PaymentMandate signer field, and so on), or via consumer-arranged key exchange. atrib does not specify the discovery mechanism; the spec only requires the keys be present in the record.
+
+**Backwards compatibility.** Transaction records signed prior to the introduction of this requirement (with only the top-level `signature` field, no `signers` array) remain cryptographically valid but are flagged `cross_attestation_missing: true` by D052-aware verifiers. Strict consumer policies MAY reject them; the default flagged-not-rejected behavior preserves the historical record set.
+
+**Other event types unaffected.** This requirement applies only to `transaction`. tool_call, observation, and extension records continue to use single-signer signatures via the top-level `signature` field.
+
+See D052 for the design rationale and the alternatives considered.
 
 ---
 
@@ -1498,6 +1553,71 @@ The `context_id` is visible in the log and is the same value used in OTel traces
 
 ---
 
+### 2.11 Cross-log Replication
+
+_This section is normative; the replication itself is OPTIONAL._
+
+§2.9 (witnessing) defends against single-log-operator equivocation at the checkpoint level by requiring multiple operator-independent witnesses to cosign each checkpoint. Witnessing secures the root, not the records the root commits to. A log operator can still selectively censor records (refuse to commit them while returning success), equivocate at the record level when colluding with witnesses, or lose data after commitment.
+
+The strongest defense against operator-level threats is independent replication: the same record committed to multiple operator-independent logs, with verifiers consulting more than one. This is how Certificate Transparency works in practice. atrib has the same threat model and benefits from the same defense.
+
+#### 2.11.1 Replication is optional
+
+Records MAY be replicated to multiple atrib-conformant logs. There is no protocol-level mandate. Single-log deployments remain valid and produce conforming records. Cross-log replication is a robustness enhancement consumers adopt as their threat model requires.
+
+#### 2.11.2 Submission produces independent inclusion proofs
+
+Logs do not coordinate. Each log treats a replicated submission as a fresh entry and returns its own checkpoint and inclusion proof. The submitter collects the proofs from all logs they replicated to.
+
+#### 2.11.3 Proof bundle format extension
+
+The proof bundle (§2.8) MAY carry a list of `(log_id, checkpoint, inclusion_proof)` tuples instead of a single tuple. Format:
+
+```jsonc
+{
+  "record_hash": "sha256:...",
+  "log_proofs": [
+    {
+      "log_id":          "log.atrib.dev",     // §2.4 origin string
+      "checkpoint":      "...",                // C2SP-canonical signed note
+      "inclusion_proof": ["sha256:...", "..."] // RFC 6962 inclusion proof
+    },
+    {
+      "log_id":          "log.example.com",
+      "checkpoint":      "...",
+      "inclusion_proof": ["sha256:...", "..."]
+    }
+  ]
+}
+```
+
+A bundle with a single `log_proofs` entry is equivalent to the legacy single-log bundle format; the array form is the canonical form when multiple logs are involved.
+
+#### 2.11.4 Verifier-side threshold and equivocation detection
+
+A verifier configured with a list of trusted log operators (the "trusted set") and a threshold M (the minimum number of trusted-set proofs required) MUST:
+
+1. Validate each `(log_id, checkpoint, inclusion_proof)` tuple in the bundle independently against §2.7.
+2. Count the number of tuples whose `log_id` appears in the trusted set AND whose proof verifies. Call this V.
+3. If V < M, reject the record with `cross_log_threshold_not_met: true`.
+4. If multiple logs returned valid proofs but the proofs commit to different records (i.e., the same `record_hash` resolves to different content across logs), reject the record with `cross_log_equivocation_detected: true` and surface which logs disagreed.
+
+The default M=1 preserves single-log behavior. Consumers wanting cross-log confidence configure M ≥ 2 and a trusted set of independently-operated logs.
+
+#### 2.11.5 Log identity
+
+Each log publishes a stable `log_id` derived from its origin string per §2.4. Verifiers cross-reference the identifier against their trust configuration. Adding a log to the trusted set is an out-of-band consumer policy decision; atrib does not maintain a central registry of trusted logs.
+
+#### 2.11.6 What replication does and does not defend against
+
+**Defends against:** single-log-operator censorship, single-log-operator equivocation (when at least one cooperative log retains the record), single-log data loss, single-log compromise.
+
+**Does NOT defend against:** collusion across all logs in the trusted set (consumer is responsible for picking logs operated by independent parties with different incentives); submission-time censorship by some logs (threshold M handles this gracefully); record-level retroactive removal across all logs (no defense if all logs comply).
+
+See D050 for the design rationale and the alternatives considered.
+
+---
+
 ## §3 Graph Query Interface
 
 _Seven edge types. Deterministic derivation. Fact layer only._
@@ -1509,7 +1629,7 @@ The data model and query API for turning attribution records into a structured p
 atrib's graph certifies five structural axes of agent activity:
 
 1. **Identity-of-record** (signature): the holder of a `creator_key` signed this record.
-2. **Per-session ordering** (chain_root + prev_record_hash): this record came after that one in the same session, and no records were inserted or removed between them.
+2. **Per-session ordering** (chain_root pointing at the parent record's hash): this record came after that one in the same session, and no records were inserted or removed between them.
 3. **Cross-session sameness** (session_token via CROSS_SESSION): these records belong to the same logical session across OTel trace boundaries.
 4. **Cross-session causal anchoring** (provenance_token via PROVENANCE_OF): this record's action descends from that upstream anchor (D044).
 5. **Agent-claimed reasoning composition** (informed_by via INFORMED_BY): the agent claims these specific prior records informed this action (D041).
@@ -1581,6 +1701,8 @@ The strict separation also makes the system auditable over time. If a settlement
 **The graph is a fact layer.** The graph query interface reports what the records show. It does not compute attribution weight, recommend distributions, or apply policy. The same graph can be evaluated under different policies by different parties, and any party can independently verify the result.
 
 **Edge derivation is deterministic and normative.** Given the same set of attribution records, two independent implementations MUST produce identical graphs. The derivation rules in §3.2.4 are the normative definition. Any deviation is a nonconformance.
+
+**Adversarial trust posture.** The fact/policy separation is one part of the substrate's trust posture. A complementary part covers what the protocol does and does not certify under adversarial conditions: signatures prove who said what, never whether what was said is true. §8.7 enumerates the adversarial threat model, the layered trust assessment stack atrib provides (signature, identity, capability, revocation, cross-attestation, tool-side attestation, external evidence, witnessing, cross-log replication, structural anomaly detection), and the asymmetric properties the substrate produces despite the fundamental limit. The graph's deterministic derivation is one input to that assessment, not a substitute for it.
 
 ---
 
@@ -1687,11 +1809,13 @@ INFORMED_BY edges MAY be intra-session or cross-session. Source and target may b
 
 **Step 7:** PROVENANCE_OF edges**
 
-For each record D carrying a non-empty `provenance_token` field of value T: search the record set for any record U where U's `provenance_token` field also equals T AND `base64url(sha256(jcs(U))[:16]) == T` (i.e., U is the source from which the token was derived). For each such U where `D.context_id ≠ U.context_id`, create PROVENANCE_OF D → U.
+For each session-genesis record D carrying a non-empty `provenance_token` field of value T: search the record set for any record U where `base64url(SHA-256(JCS(U))[:16]) == T` and `U.context_id ≠ D.context_id`. If found, create PROVENANCE_OF D → U. The direction reads as "D's session descends from U's anchor."
 
-If multiple records carry the same token but none satisfies the derivation predicate (`base64url(sha256(jcs(U))[:16]) == T`), all records carrying that token point at a synthetic dangling source node with `dangling: true` and `reason: "no_token_source_in_record_set"`. This makes the dangling case visible rather than silently dropping the edges.
+If no record U in the resolved set satisfies the derivation predicate, create PROVENANCE_OF D → synthetic_dangling_node(T) with `dangling: true` and `reason: "no_token_source_in_record_set"`. This makes the dangling case visible rather than silently dropping the edge.
 
-PROVENANCE_OF expresses cross-session *causal anchoring* (D044), distinct from CROSS_SESSION's *same logical session* semantics. The two edge types may coexist on the same pair of records when both session_token and provenance_token are present and applicable.
+Validators MUST reject any non-genesis record carrying `provenance_token` (per §1.2.6 scope constraint); such records do not participate in PROVENANCE_OF derivation because they are malformed.
+
+PROVENANCE_OF expresses cross-session *causal anchoring*, distinct from CROSS_SESSION's *same logical session* semantics. The two edge types may coexist when a session both belongs to a multi-trace logical session (session_token) AND descends from a prior session's anchor (provenance_token).
 
 #### 3.2.5 Gap Nodes
 
@@ -1816,28 +1940,47 @@ GET /v1/creators/ABC.../sessions
 
 ```
 {
-  "id":                  "sha256:3f8a2b...",  // record_hash from log; "gap:..." for gap nodes
-  "event_type":          "https://atrib.dev/v1/types/tool_call", // absolute URI; "gap_node" for synthetic gap nodes
-  "content_id":          "sha256:7e1f...",    // null for gap_node
-  "creator_key":         "ABC...",            // null for gap_node
-  "chain_root":          "sha256:9a3c...",    // null for gap_node
-  "context_id":          "4bf92f35...",
-  "timestamp":           1743850010000,
-  "log_index":           4821936,            // null for gap_node
-  "verification_state":  "log_committed",    // see §3.3
-  "is_genesis":          false,              // true if chain_root = SHA-256(context_id)
-  "proof":               null               // inclusion proof bundle (§2.8); null unless requested
+  "id":                       "sha256:3f8a2b...",  // record_hash from log; "gap:..." for gap nodes; "dangling:..." for synthetic dangling nodes
+  "event_type":               "https://atrib.dev/v1/types/tool_call", // absolute URI; "gap_node" for synthetic gap nodes
+  "event_type_kind":          "tool_call",         // one of: tool_call | transaction | observation | extension | gap_node
+  "content_id":               "sha256:7e1f...",    // null for gap_node
+  "creator_key":              "ABC...",            // null for gap_node
+  "chain_root":               "sha256:9a3c...",    // null for gap_node
+  "context_id":               "4bf92f35...",
+  "timestamp":                1743850010000,
+  "timestamp_granularity":    "ms",                // §8.4 disclosure posture
+  "log_index":                4821936,            // null for gap_node
+  "verification_state":       "log_committed",    // see §3.3
+  "is_genesis":               false,              // true if chain_root = SHA-256(context_id)
+  "proof":                    null,               // inclusion proof bundle (§2.8); null unless requested
+
+  // D041 informed_by surfacing
+  "informed_by_count":        2,                  // number of references in the field; 0 if absent
+  "informed_by_resolution":   {                   // null if informed_by absent
+    "resolved":  ["sha256:abc...", "sha256:def..."],   // record_hashes successfully resolved in the response set
+    "dangling":  []                                    // record_hashes that did not resolve
+  },
+
+  // D044 provenance_token surfacing (genesis records only)
+  "provenance":               {                   // null when no provenance_token claimed
+    "token":               "abc123...xyz",       // 22-char base64url
+    "upstream_record_hash": "sha256:abc...",     // resolved upstream hash; null if dangling
+    "upstream_resolved":   { /* ResolvedRecord | null */ }
+  }
 }
 ```
+
+The `event_type_kind` field is a derived convenience: it maps the URI to one of the five graph node-type labels (tool_call, transaction, observation, extension, gap_node) for client-side type discrimination without URI parsing. The full URI remains authoritative.
 
 #### 3.5.3 Edge Object
 
 ```
 {
-  "type":     "CHAIN_PRECEDES",    // one of the five defined types
+  "type":     "CHAIN_PRECEDES",    // one of the seven defined types (§3.2.3)
   "source":   "sha256:3f8a2b...",  // source node id
   "target":   "sha256:8b2f1c...",  // target node id
-  "directed": true                // false only for SESSION_PARALLEL
+  "directed": true,                // false only for SESSION_PARALLEL
+  "dangling": false                // true when target is a synthetic dangling node (INFORMED_BY or PROVENANCE_OF only)
 }
 ```
 
@@ -3298,6 +3441,79 @@ Implementations MUST pass all vectors in `spec/conformance/6/`:
 
 ---
 
+### 6.7 Capability Declarations
+
+_This section is normative; the declaration itself is OPTIONAL._
+
+§6.1 (identity claim format) resolves a `creator_key` to an identity ("this key belongs to Acme Corp's official agent"). Identity attestation answers WHO; it does not answer WHAT THE KEY IS ALLOWED TO DO. Without a capability framework, a compromised but legitimately-attested key can sign records of any kind — a customer-service agent's key suddenly signing million-dollar transactions verifies cryptographically the same as a normal action.
+
+Capability declarations turn the static identity claim into a dynamic policy claim: the directory publishes the key's declared capability envelope. Verifiers check records against the envelope; out-of-envelope records are flagged.
+
+#### 6.7.1 Identity claim extension
+
+The §6.1 identity claim format gains an OPTIONAL `capabilities` field:
+
+```jsonc
+{
+  "creator_key":   "...",
+  "claim_type":    "domain_verified",
+  "claim_method":  "...",
+  "claim_subject": { /* identity content per §6.1 */ },
+  "capabilities":  {
+    "tool_names":     ["search", "browse", "read_email"],   // optional allowlist; absent = no constraint
+    "max_amount":     {                                     // optional cap on transaction amounts
+      "currency": "USD",
+      "value":    1000
+    },
+    "counterparties": ["acme.com", "verified.example"],     // optional allowlist of transaction counterparties
+    "event_types":    [                                     // optional allowlist of event_type URIs
+      "https://atrib.dev/v1/types/tool_call",
+      "https://atrib.dev/v1/types/observation"
+    ],
+    "expires_at":     1761000000000                         // optional; envelope rotates with the identity claim
+  }
+}
+```
+
+All capability sub-fields are individually optional. A claim with `capabilities: {}` declares no scope (equivalent to omitting the field). A claim with some sub-fields and not others applies only the present constraints.
+
+#### 6.7.2 Verifier semantics
+
+A verifier that has resolved a record's `creator_key` to an identity claim with a `capabilities` field MUST:
+
+1. Determine the active envelope at the record's `timestamp`. The active envelope is the most recent identity claim published in §6.2 history at or before the record's timestamp. If no envelope was active at that time, the record is treated as having no envelope constraint.
+2. Check the record's content against the envelope:
+   - If `tool_names` is present, the record's `tool_name` MUST be in the list (for tool_call records).
+   - If `event_types` is present, the record's `event_type` URI MUST be in the list.
+   - For transaction records: if `max_amount` is present, the transaction amount MUST NOT exceed it; if `counterparties` is present, the transaction counterparty MUST be in the list.
+   - If `expires_at` is present and the record's timestamp is after it, the envelope is expired (treated as having no constraint and flagged separately).
+3. Surface the result as `capability_check: { envelope: CapabilityEnvelope | null, in_envelope: bool, mismatches: string[] }` on the verification output.
+
+#### 6.7.3 Out-of-envelope is a signal, not invalidation
+
+Records that fall outside the declared envelope remain cryptographically valid. The signature verifies, log inclusion verifies, the chain is structurally sound. The envelope check produces a SIGNAL (`in_envelope: false` plus a list of mismatches) that consumers use in trust assessment.
+
+Defaulting to invalidation would break common cases:
+- Envelope updates lag behind operational changes (operator adds a new tool but hasn't updated the envelope yet)
+- Tool renames during migrations
+- Operator error in publishing the envelope
+
+Strict consumer policies MAY treat `in_envelope: false` as rejection. The default flagged-not-rejected behavior preserves operational flexibility while making the discrepancy auditable.
+
+#### 6.7.4 Envelope rotation
+
+When a key's capabilities change, the operator publishes a new identity claim with the updated envelope. The §6.2 directory history preserves prior envelopes; verifiers checking historical records use the envelope active at the record's timestamp.
+
+The publication channel for identity claims SHOULD be on a different operational footing than agent operation (e.g., manual re-publication on a hardware-isolated key) to avoid the case where compromising the agent key is sufficient to also publish an attacker-controlled envelope.
+
+#### 6.7.5 No protocol-level enforcement at signing time
+
+atrib does not block out-of-envelope submissions or refuse to commit them. Enforcement is consumer policy at the verification layer. Consumers wanting signing-time enforcement build it into their middleware (e.g., the `@atrib/agent` adapter could refuse to sign records that violate a locally-cached envelope).
+
+See D051 for the design rationale and the alternatives considered.
+
+---
+
 ## §7 Harness Integration Patterns
 
 _This section is informative._
@@ -3338,7 +3554,7 @@ The reference implementation atrib ships under this pattern is `@atrib/recall` (
 
 ### 7.5 Harness-side reasoning chains
 
-Agents reason between actions. atrib does not standardize what reasoning *is* (D036 indicator 4: reasoning shapes vary too much across harnesses to pick a canonical predicate). Per D047, harnesses that want to capture deliberation as part of the verifiable record do so via extension URIs in their own namespace, linked to surrounding actions via `informed_by` (D041).
+Agents reason between actions. atrib does not standardize what reasoning *is*: reasoning shapes vary too much across harnesses (ReAct, chain-of-thought, scratchpad, multi-agent debate, plan-and-execute) for any single shape to be observably canonical. Harnesses that want to capture deliberation as part of the verifiable record do so via extension URIs in their own namespace, linked to surrounding actions via the `informed_by` field defined in §1.2.5.
 
 **The pattern.**
 
@@ -3427,17 +3643,27 @@ Verifiers indicate the detected form: `tool_name_form: "verbatim" | "opaque" | "
 
 ### 8.3 Salted-commitment posture
 
-`args_hash` and `result_hash` MAY use salted commitments to defeat pre-image enumeration and equality leakage. Two schemes are defined:
+`args_hash` and `result_hash` MAY use salted commitments. Two schemes are defined; they have meaningfully different privacy properties and consumers MUST pick the one that matches their threat model.
 
-**`salted-sha256`:** `H = SHA-256(salt ‖ canonical_bytes)` where `salt` is a per-record random value of at least 16 bytes. The salt is revealed in a sibling field (`args_salt`, `result_salt`) so the verifier can re-compute and confirm the commitment. This pattern hides content from anyone who does not have the canonical bytes; once revealed, the commitment is verifiable.
+**`salted-sha256`:** `H = SHA-256(salt ‖ canonical_bytes)` where `salt` is a per-record random value of at least 16 bytes. The salt is revealed in a sibling field (`args_salt`, `result_salt`) so any verifier with the canonical bytes can re-compute and confirm the commitment.
 
-**`hmac-sha256`:** `H = HMAC(key, canonical_bytes)` where `key` is private to the issuer. The verifier cannot re-compute without the key; the issuer reveals selectively (e.g., to specific auditors via authenticated channel). This pattern hides content from all parties without explicit key access.
+**What this scheme defeats:** pre-computed rainbow-table attacks (an attacker cannot pre-build a table for all possible inputs because the salt is per-record).
+
+**What this scheme does NOT defeat:** pre-image enumeration once the record is observed. The salt is in the record; an attacker who suspects the args fall into a small space (e.g., `flight_id ∈ [1..99999]`) computes `H(salt ‖ guess)` for each candidate and matches against the commitment. The protection is against pre-computation, not against targeted enumeration after the record is published.
+
+**`hmac-sha256`:** `H = HMAC(key, canonical_bytes)` where `key` is private to the issuer and is NOT included in the record. The verifier cannot re-compute without the key; the issuer reveals selectively (e.g., to specific auditors via an authenticated out-of-band channel).
+
+**What this scheme defeats:** both pre-computed and targeted enumeration. An attacker without the key cannot test candidate inputs; the HMAC is a pseudo-random function from the attacker's perspective.
+
+**What this scheme does NOT defeat:** verifiability without key sharing. Verifiers who do not have the key can only confirm the record's structure and signature, not the content commitment. Trust in the content claim is gated on the issuer's selective disclosure to specific verifiers.
+
+**Picking the scheme.** Use `salted-sha256` when verifiability without key sharing matters and the input space is high-entropy enough that targeted enumeration is infeasible (e.g., text content, large structured payloads). Use `hmac-sha256` when the input space is low-entropy and content privacy from non-key-holders matters more than universal verifiability (e.g., enumerable identifiers, small structured args).
 
 Verifiers detect the scheme from record shape: presence of `args_salt` indicates `salted-sha256`; absence of both salt and verifiable plain hash indicates `hmac-sha256`. Verifiers indicate `args_commitment_form: "plain-sha256" | "salted-sha256" | "hmac-sha256"`.
 
 ### 8.4 Coarsened-timing posture
 
-`timestamp_ms` MAY be rounded to one of five granularities:
+The `timestamp` field MAY be rounded to one of five granularities:
 
 | Granularity | Multiple of (ms) | Example |
 | --- | --- | --- |
@@ -3447,9 +3673,18 @@ Verifiers detect the scheme from record shape: presence of `args_salt` indicates
 | hour | 3600000 | `1743847200000` |
 | day | 86400000 | `1743811200000` |
 
-Granularity is encoded by the value's trailing-zero pattern. Verifiers indicate `timestamp_granularity: "ms" | "s" | "min" | "h" | "d"` derived from value structure.
+Granularity MUST be declared explicitly via the `timestamp_granularity` field, NOT inferred from trailing-zero patterns. A millisecond-precise timestamp that happens to land on a second boundary (e.g., `1743850000000`) is structurally indistinguishable from a second-rounded one; an explicit field removes the ambiguity. The field is OPTIONAL and defaults to `"ms"` when absent (preserving backwards compatibility with default-posture records).
+
+```
+"timestamp":             1743850080000,
+"timestamp_granularity": "min"
+```
+
+Allowed values: `"ms" | "s" | "min" | "h" | "d"`. Verifiers MUST reject records where the declared granularity does not match the value's trailing-zero pattern (e.g., `timestamp_granularity: "min"` requires `timestamp % 60000 == 0`).
 
 Coarsening trades auditability for reduced operational fingerprinting. Day-granularity timestamps prevent reconstruction of working hours, reaction times, and batch patterns; millisecond timestamps preserve full forensic precision.
+
+The `timestamp_granularity` field slots immediately after `timestamp` lexicographically (`timestamp` is a prefix of `timestamp_granularity`, so the shorter string sorts first per JCS / RFC 8785 ordering). Presence/absence affects the JCS canonical form and therefore the signature.
 
 ### 8.5 Combined postures
 
@@ -3480,6 +3715,74 @@ This subsection enumerates what an adversary observing the public log learns und
 - The adversary does NOT learn: anything about action kind (hash unresolvable without mapping), args (HMAC unverifiable without key), response (same), exact intra-day timing, reasoning.
 
 In all postures the agent's identity (`creator_key`) and the structural graph remain observable. Identity privacy requires a different mechanism (D033 key rotation, deferred D038 per-conversation key derivation). Structural privacy requires a different layer (anonymous credentials, mix nets) outside this spec.
+
+### 8.7 Adversarial threat model
+
+_This section is normative._
+
+§8.1 through §8.6 specify privacy postures: how a record's structural shape configures disclosure to a passive observer of the public log. This subsection covers a different threat model: an active adversary who can produce or influence atrib records. Examples include an attacker who compromises a creator_key and signs malicious records, an agent operator who knowingly signs false claims about tool calls or transactions, a tool operator who returns falsified responses, and a log operator who attempts to censor or equivocate. The substrate's response to these threats is shaped by what cryptographic signatures fundamentally CAN and CANNOT prove.
+
+#### 8.7.1 The fundamental limit
+
+A signature proves "the holder of this key signed these bytes." It cannot prove the bytes are true. This is a property of cryptographic signatures, not a limitation specific to atrib. Certificate Transparency has the same property: CT proves a certificate was issued and committed to the log; it does not prove the certificate's claims are accurate or that the issuing CA was uncompromised. atrib inherits this trust model.
+
+A poisoned atrib record (one carrying false claims, signed by a compromised key, or emitted by a malicious actor) verifies cryptographically the same as a legitimate one. Both have valid signatures, both chain correctly, both appear in the log. The substrate certifies what was signed, not whether the signed claim is true.
+
+This limit is intrinsic to any signed-attestation system. A spec or product that claims to defeat it is overpromising.
+
+#### 8.7.2 Layered trust assessment
+
+Truth assessment is layered above the signature primitive. atrib provides several mechanisms that contribute to a verifier's confidence assessment of any individual record:
+
+| Layer | Mechanism | What it adds | What it does NOT rule out |
+|---|---|---|---|
+| 1 | Signature + log inclusion (§1.4 + §2.7) | Forgery, alteration, deletion, equivocation about whether the record exists | Compromised key; signer knowingly false content; signer malicious |
+| 2 | Identity attestation (§6) | Anonymous actors hiding behind opaque keys | Identities making false claims; identities whose operational security is compromised |
+| 3 | Capability declarations (§6.7) | Out-of-scope claims by an otherwise-attested identity | Coordinated compromise of both the signing key AND the publication channel for identity claims |
+| 4 | Key revocation (§1.9) | Silent compromise; verifier sees the revocation reason and tags subsequent records | Past records being false (only flagged retroactively as suspect, not invalidated) |
+| 5 | Cross-attestation for transactions (§1.7.6) | Single-key compromise fabricating transactions | Collusion between agent and counterparty; both parties' keys compromised |
+| 6 | Tool-side response signing (§7.6 Pattern A) | Agent fabricating tool results | Collusion between agent and tool operator; tool operator compromised |
+| 7 | External evidence (§7.6 Pattern B) | Agent claiming outcomes that did not occur in the world | External system itself being compromised |
+| 8 | Witnessing (§2.9) | Log operator equivocation at the checkpoint level; selective censorship of checkpoints | Compromise of individual signing keys; record-level censorship by the log operator |
+| 9 | Cross-log replication (§2.11) | Single-log-operator censorship, equivocation, data loss; record-level discrepancies between logs | Collusion across all logs in the trusted set |
+| 10 | Structural anomaly detection (consumer-side) | Implausible patterns: bursts, dangling references, contradictory claims, statistical oddities in hash distributions | Subtle attacks that evade pattern detection |
+
+No single layer is dispositive. A verifier's confidence assessment combines them; the substrate provides the structure, the assessment is consumer-side policy.
+
+#### 8.7.3 Asymmetric properties despite the limit
+
+Even under the assumption that any individual record may be poisoned, the substrate provides properties that the status quo (no records at all) does not:
+
+1. **Non-repudiation.** A poisoned record IS a signed claim. The signer cannot later deny making it. The asymmetry favors the auditor: poisoning produces permanent, publicly-visible evidence.
+2. **Common evidence base.** Multiple parties (creator, merchant, regulator, downstream agents) see the same chain. Disputes happen on top of shared evidence rather than divergent private logs.
+3. **Forensic depth.** When something goes wrong, `informed_by` and `chain_root` linkages let an investigator trace back through the chain to find what record (legitimate or poisoned) was the source. Root-cause analysis becomes structural rather than heuristic.
+4. **Reputation accumulation.** A creator_key with consistent honest behavior over time accrues trust. A key exhibiting poisoning patterns can be flagged. There is no accumulating reputation surface for agent identities outside the substrate today.
+5. **Asymmetric attacker cost.** To poison records, an attacker must compromise a real signing key, and the resulting records are permanent and publicly visible. The cost-benefit shifts against the attacker compared to the unattested baseline.
+
+#### 8.7.4 The honest framing
+
+"Verifiable agent actions" is honest under this threat model because:
+
+- The actions ARE verifiable: they happened, they are signed, they are logged, the signer cannot deny them.
+- "Verifiable" means non-repudiable, inspectable, cross-checkable. It does NOT mean "true."
+- A signed false claim remains verifiable as a claim; the verifier sees what was claimed and assesses it against the available trust layers.
+
+What "verifiable agent actions" does NOT promise:
+
+- That the agent is uncompromised (model alignment is a different layer; out of scope for an attestation protocol).
+- That every action is intended by the user (intent verification is a different layer).
+- That tools are honest (capability restriction is a different layer).
+- That signed claims are true (truth assessment requires the layered stack above; the protocol provides the structure, not the assessment).
+
+These honesty boundaries are what make the substrate trustworthy. Consumers know exactly what the substrate provides and what other layers their threat model requires.
+
+#### 8.7.5 Future work: inclusion-proof aggregation
+
+A complementary mechanism queued for follow-up (D053): records cite the inclusion proofs of prior records, creating a web of mutual confirmation. If a log operator later removes or alters a referenced record, citing records still point at proof of the prior state. This would defend at the record level, complementing §2.9 (checkpoint-level witnessing) and §2.11 (cross-log replication).
+
+The mechanism is queued rather than specified because the design needs careful work on sequencing (chicken-and-egg with checkpoint witnessing), interaction with cross-log replication (which proofs to cite), storage growth (every record gains another reference list), and failure modes. D053 documents the intent and known design questions; the formal ADR will follow when the mechanism is added to the spec.
+
+**Important:** D053 is a placeholder, not a normative commitment. The eventual specification of inclusion-proof aggregation MAY differ from D053's sketch in any technical detail. Cross-references to it MUST treat the substance as forward-looking.
 
 ---
 
