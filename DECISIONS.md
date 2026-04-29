@@ -774,7 +774,7 @@ Plus the demo runs end-to-end and produces the expected output (verified manuall
 
 **Date:** 2026-04-06
 
-**Context:** During the docs sync that followed D025, the question raised was what gaps remained that a docs sync couldn't fix. One was that `@atrib/log-dev` and the future `services/log/` Tessera-backed Go service had no shared agreement on §2.6.1 behavior beyond the prose in the spec. Two implementations of "what does §2.6.1 reject" derived independently from the spec text would inevitably drift in subtle ways. Direction was to shipping the corpus immediately even though the Go consumer doesn't yet exist: "is that something you can do now or do you need to wait?"
+**Context:** After D025 landed, a remaining gap surfaced: `@atrib/log-dev` and the future `services/log/` Tessera-backed Go service had no shared agreement on §2.6.1 behavior beyond the prose in the spec. Two implementations of "what does §2.6.1 reject" derived independently from the spec text would inevitably drift in subtle ways. The right move was to ship a conformance corpus immediately, even though the Go consumer doesn't yet exist, so when it arrives it has a fixed reference set to validate against.
 
 **Decision:** Build a static, shared, language-neutral conformance corpus at `spec/conformance/2.6.1/` consisting of one JSON file per test case plus a manifest. Each case is a fully self-contained `{request, expected}` pair: the `request.body` is the bare signed `AtribRecord` ready to JSON.stringify, and `expected.status` is the canonical accept/reject outcome. A reference TypeScript consumer ships in `@atrib/log-dev`'s test suite today; the future Go service will consume the same files when it ships.
 

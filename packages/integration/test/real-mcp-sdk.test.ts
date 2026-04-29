@@ -1,8 +1,8 @@
 /**
  * End-to-end test against the REAL @modelcontextprotocol/sdk.
  *
- * the framework-adapter rollout verification. the existing end-to-end test in
- * `end-to-end.test.ts` mocks the McpServer with our own test harness, which
+ * The existing end-to-end test in `end-to-end.test.ts` mocks the McpServer
+ * with a custom test harness, which
  * is correct for unit-testing the attribution logic in isolation. But it
  * does not verify that the wire format actually works against the real MCP
  * SDK over a real transport.

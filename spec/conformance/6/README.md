@@ -10,8 +10,8 @@ privacy properties of the blinded path.
 
 ## Status
 
-**Skeleton.** The cases are enumerated below. JSON fixtures land in 
-alongside the directory implementation.
+**Skeleton.** The cases are enumerated below. JSON fixtures land alongside
+the directory implementation.
 
 ## What will be in the corpus
 
