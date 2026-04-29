@@ -31,6 +31,8 @@ atrib/
     agent/                     # @atrib/agent: Agent middleware + framework adapters (public)
     verify/                    # @atrib/verify: Verifier library (record verification, §4.6 calc, settlement) (public)
     cli/                       # @atrib/cli: keygen + Keychain key management (public)
+    directory/                 # @atrib/directory: AKD-backed identity-claim directory SDK (public). Bundles wasm/ artifacts built from packages/directory-bridge.
+    directory-bridge/          # atrib-directory-bridge: Rust crate wrapping facebook/akd via wasm-bindgen. Source-only; build artifacts ship inside @atrib/directory.
     log-dev/                   # @atrib/log-dev: in-memory dev Merkle log stub (PRIVATE, dev only)
     integration/               # @atrib/integration: cross-package tests + runnable framework examples (private)
       examples/
@@ -44,6 +46,7 @@ atrib/
     log/                       # FUTURE: Tessera-backed Merkle log (Go), placeholder README
     log-node/                  # Production Node.js Merkle log with real RFC 6962 proofs. Deployed at https://log.atrib.dev/v1 with persistent Fly volume + C2SP-canonical signed-note checkpoints. Includes scripts/verify-loop.mjs (13-gate dogfood verifier), scripts/chain-demo.mjs, scripts/multi-agent-demo.mjs, scripts/metrics.mjs.
     graph-node/                # Production Node.js graph query service. Implements §3.2.4 derivation. Deployed at https://graph.atrib.dev/v1.
+    directory-node/            # Production Node.js AKD-backed identity-claim directory service per §6.2. Per-operation anchoring (§6.2.4) emits directory_anchor records to log-node automatically.
   spec/
     conformance/
       1.4/                     # Signing conformance corpus (test vectors for §1.4)
@@ -53,7 +56,7 @@ atrib/
       6/                       # Public-key directory conformance corpus (test vectors for §6, D034). Skeleton; fixtures land alongside the directory implementation.
 ```
 
-Public packages are intended for npm publication. Private packages (`log-dev`, `integration`) live in the workspace as fixtures and demos and have `private: true` in their `package.json` so they cannot be accidentally published.
+Public packages are intended for npm publication. Private packages (`log-dev`, `integration`) live in the workspace as fixtures and demos and have `private: true` in their `package.json` so they cannot be accidentally published. The `directory-bridge` Rust crate is source-only, its WASM build artifacts ship inside `@atrib/directory` (see [`packages/directory-bridge/README.md`](packages/directory-bridge/README.md) for the build procedure).
 
 ## Hub doc
 
@@ -86,6 +89,8 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 | [§6](atrib-spec.md#6-key-directory) directory operation added           | Update `spec/conformance/6/` corpus if generated, update `spec/conformance/6/README.md` case list, ensure unblinded mode (atrib's primary use) still passes, refresh `@atrib/directory` SDK docs                  |
 | Anchoring cadence changed ([§6.2.4](atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log)) | Update [§6.5](atrib-spec.md#65-conformance) conformance vectors covering per-operation anchoring + batched-directory window, update `services/directory-node` to emit `directory_anchor` per operation, update `@atrib/verify` to honor `directory_batching_window_ms` signal |
 | Verifier consultation algorithm changed ([§6.3](atrib-spec.md#63-verifier-consultation-algorithm)) | Update [§6.5](atrib-spec.md#65-conformance) conformance vectors per failure-class (hard vs soft signals), update `@atrib/verify` `identity_resolution` output schema, update [§6.7.2](atrib-spec.md#672-verifier-semantics) capability check to consume the resolved envelope from [§6.3](atrib-spec.md#63-verifier-consultation-algorithm) step 9 |
+| `packages/directory-bridge/src/lib.rs` modified | Re-run `wasm-pack build --target nodejs --release` from `packages/directory-bridge/`, copy `pkg/atrib_directory_bridge.{js,d.ts}` and `pkg/atrib_directory_bridge_bg.wasm` into `packages/directory/wasm/`, then run `pnpm --filter @atrib/directory test` to confirm the SDK still passes against the new WASM. The WASM artifacts in `packages/directory/wasm/` ARE checked into git so the SDK ships the bridge inline. |
+| New AKD operation exposed via the bridge | Add the operation to `packages/directory-bridge/src/lib.rs`, expose via the `@atrib/directory` SDK in `packages/directory/src/index.ts`, surface in `services/directory-node/src/server.ts` HTTP API per [§6.2](atrib-spec.md#62-directory-operations), update spec [§6.2](atrib-spec.md#62-directory-operations) if normative |
 | Positioning / framing change           | The canonical positioning at the top of this file is the reference. If it changes, update the top of `README.md`, the abstract of `atrib-spec.md`, the lead paragraph of every per-package README, and the GitHub repo description in lockstep. |
 | Prior art landscape changed           | Update `PRIOR-ART.md` with new entries                                                                                                                                                                           |
 | Test count changed materially         | `README.md` and `CONTRIBUTING.md` test count references                                                                                                                                                          |
@@ -154,7 +159,7 @@ These are non-negotiable. They come from the founding conversation and are the l
 
 ### Monorepo
 
-This is a TypeScript monorepo with **five workspace packages** (three public, two private). Uses pnpm workspaces and turborepo for builds.
+This is a TypeScript monorepo with **seven workspace packages** (five public: `@atrib/mcp`, `@atrib/agent`, `@atrib/verify`, `@atrib/cli`, `@atrib/directory`; two private: `@atrib/log-dev`, `@atrib/integration`) plus a Rust crate (`atrib-directory-bridge`, source-only; built artifacts ship inside `@atrib/directory`). Uses pnpm workspaces and turborepo for the TypeScript builds; the Rust bridge is built once via `wasm-pack` and the resulting WASM artifacts are checked into `packages/directory/wasm/`. Three deployable services: `services/log-node`, `services/graph-node`, `services/directory-node`.
 
 ### Package structure
 
