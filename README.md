@@ -23,14 +23,21 @@ atrib is the substrate. Consuming it well (surfacing an agent's history at sessi
 - A Merkle log stores commitments (hashes, not content) with RFC 6962 inclusion proofs and C2SP-canonical signed-note checkpoints
 - Seven edge types connect actions into a graph: chain, session, parallel, convergence, cross-session sameness (session_token), agent-claimed informed_by (D041), cross-session causal anchor (provenance_token via PROVENANCE_OF, D044)
 - A pure-function calculation maps graph + policy to value distribution when commerce closes
-- A public-key directory (§6) resolves opaque keys to identity claims; rotation and revocation are normative (§1.9)
+- A public-key directory (§6) resolves opaque keys to identity claims; rotation and revocation are normative (§1.9); identity claims may declare capability envelopes (§6.7) that verifiers check records against
+- Transaction records require cross-attestation: at least 2 signers (agent + counterparty) per §1.7.6
+- Cross-log replication (§2.11) lets consumers submit records to multiple independent logs and detect equivocation
 - Privacy is configurable per record (§8 privacy postures): tool_name forms (verbatim, opaque, hashed), commitment schemes (plain, salted-sha256, hmac-sha256), timestamp granularity (ms through day)
+- Adversarial threat model (§8.7) enumerates the 10-layer trust assessment stack the substrate provides
 
 No custom cryptography. No content exposure unless the harness opts in. No trust required.
 
 ## What atrib certifies, what it does not
 
-Per D046, the spec adopts an explicit positioning lock. atrib certifies five structural axes: who acted (identity), what they did (event_type), when (timestamp), in what order (chain ordering), and what the agent claims informed each action (informed_by + provenance_token). atrib does NOT certify that the agent's reasoning is truthful, that prior records actually influenced subsequent decisions, or that tool responses were real absent tool-side attestation (§7.6). The substrate is content-preserving (hashes, not content) and disclosure-configurable (§8 privacy postures). See spec §3 "What atrib chains, what it does not" for the detailed enumeration.
+atrib certifies five structural axes of agent activity: who acted (identity), what they did (event_type), when (timestamp), in what order (chain ordering), and what the agent claims informed each action (the `informed_by` and `provenance_token` fields, surfaced as INFORMED_BY and PROVENANCE_OF graph edges).
+
+atrib does NOT certify that the agent's reasoning is truthful, that prior records actually influenced subsequent decisions, or that tool responses were real absent tool-side attestation. The substrate is content-preserving (commitments, not content) and disclosure-configurable: harnesses pick how much each record reveals via the privacy postures in spec §8.
+
+This positioning is load-bearing. See spec §3 "What atrib chains, what it does not" for the detailed enumeration and spec §7.6 for the outcome-verification patterns that close the tool-response gap.
 
 ## Framework support
 
