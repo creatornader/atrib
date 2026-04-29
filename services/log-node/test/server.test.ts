@@ -203,6 +203,49 @@ describe('GET /v1/pubkey', () => {
   })
 })
 
+describe('GET /v1/stats', () => {
+  it('returns aggregate counters over the current tree', async () => {
+    // Submit one of each normative event_type plus an extension URI.
+    // The fixture log persists across the whole test file, so prior tests
+    // contribute records too; we assert minimum counts, not exact ones.
+    const tc = await makeSignedRecord({ event_type: 'https://atrib.dev/v1/types/tool_call' })
+    const tx = await makeSignedRecord({ event_type: 'https://atrib.dev/v1/types/transaction' })
+    const ob = await makeSignedRecord({ event_type: 'https://atrib.dev/v1/types/observation' })
+    const ext = await makeSignedRecord({ event_type: 'https://example.com/v1/types/custom' })
+    await post(server.url, tc)
+    await post(server.url, tx)
+    await post(server.url, ob)
+    await post(server.url, ext)
+
+    const res = await fetch(`${server.url}/v1/stats`)
+    expect(res.status).toBe(200)
+    const stats = (await res.json()) as {
+      tree_size: number
+      distinct_signers: number
+      oldest_timestamp_ms: number | null
+      newest_timestamp_ms: number | null
+      entries_by_event_type: {
+        tool_call: number
+        transaction: number
+        observation: number
+        extension: number
+        reserved: number
+      }
+    }
+
+    expect(stats.tree_size).toBeGreaterThanOrEqual(4)
+    expect(stats.distinct_signers).toBeGreaterThanOrEqual(4)
+    expect(stats.oldest_timestamp_ms).toBeGreaterThan(0)
+    expect(stats.newest_timestamp_ms).toBeGreaterThan(0)
+    expect(stats.newest_timestamp_ms!).toBeGreaterThanOrEqual(stats.oldest_timestamp_ms!)
+    expect(stats.entries_by_event_type.tool_call).toBeGreaterThanOrEqual(1)
+    expect(stats.entries_by_event_type.transaction).toBeGreaterThanOrEqual(1)
+    expect(stats.entries_by_event_type.observation).toBeGreaterThanOrEqual(1)
+    expect(stats.entries_by_event_type.extension).toBeGreaterThanOrEqual(1)
+    expect(stats.entries_by_event_type.reserved).toBe(0)
+  })
+})
+
 describe('GET /v1/log-pubkey', () => {
   it('returns the C2SP vkey string as text/plain', async () => {
     const res = await fetch(`${server.url}/v1/log-pubkey`)

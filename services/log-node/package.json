@@ -13,7 +13,8 @@
     "start": "tsx src/main.ts",
     "verify-log": "node scripts/verify-loop.mjs",
     "chain-demo": "node scripts/chain-demo.mjs",
-    "metrics": "node scripts/metrics.mjs"
+    "metrics": "node scripts/metrics.mjs",
+    "log:stats": "node scripts/log-stats.mjs"
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",

@@ -137,6 +137,14 @@ async function handleRequest(
     return handleLogPubkey(res, signer)
   }
 
+  // GET /v1/stats, aggregate counters over the current tree. Non-normative
+  // operator-visibility convenience: tree size, distinct creator_keys,
+  // timestamp range, and a count by event_type byte. Reads existing tree
+  // state in a single pass; not part of spec §2.5.
+  if (req.method === 'GET' && req.url === '/v1/stats') {
+    return handleStats(res, tree)
+  }
+
   // §2.5.2: Tile endpoints. GET /v1/tile/<level>/<index>
   const tileMatch = req.url?.match(/^\/v1\/tile\/(\d+)\/(\d+)$/)
   if (req.method === 'GET' && tileMatch) {
@@ -154,7 +162,7 @@ async function handleRequest(
 
   sendJson(res, 404, {
     error: 'not found',
-    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>',
+    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>',
   })
 }
 
@@ -200,6 +208,71 @@ function handleLogPubkey(res: ServerResponse, signer: CheckpointSigner): void {
   res.setHeader('content-length', Buffer.byteLength(vkey))
   res.setHeader('cache-control', 'public, max-age=300')
   res.end(vkey)
+}
+
+/**
+ * GET /v1/stats, aggregate counters over the current tree.
+ *
+ * Non-normative; spec §2.5 does not require this endpoint. Useful for
+ * operators who want a one-call summary of the log's state without
+ * fetching tile entries and parsing 90-byte records by hand.
+ *
+ * Response shape:
+ *   {
+ *     "tree_size": <int>,
+ *     "distinct_signers": <int>,
+ *     "oldest_timestamp_ms": <int> | null,
+ *     "newest_timestamp_ms": <int> | null,
+ *     "entries_by_event_type": {
+ *       "tool_call": <int>,            // byte 0x01
+ *       "transaction": <int>,          // byte 0x02
+ *       "observation": <int>,          // byte 0x03
+ *       "extension": <int>,            // byte 0xFF
+ *       "reserved": <int>              // any other byte (should be 0)
+ *     }
+ *   }
+ *
+ * Reads tree state in a single linear pass over entries. O(n) in tree size.
+ * For very large logs the operator should expect a slower response; cache
+ * is set to a short TTL so repeated polls are cheap.
+ */
+function handleStats(res: ServerResponse, tree: MerkleTree): void {
+  const size = tree.size
+  const signers = new Set<string>()
+  let oldestTs: number | null = null
+  let newestTs: number | null = null
+  const eventTypeCounts = { tool_call: 0, transaction: 0, observation: 0, extension: 0, reserved: 0 }
+
+  for (let i = 0; i < size; i++) {
+    const e = tree.entryBytes(i)
+    // Layout per spec §2.3.1:
+    //   [33-64]  creator_key (32 bytes)
+    //   [81-88]  timestamp_ms (u64 big-endian)
+    //   [89]     event_type byte
+    const creatorKeyHex = hexEncode(e.subarray(33, 65))
+    signers.add(creatorKeyHex)
+
+    const view = new DataView(e.buffer, e.byteOffset, e.byteLength)
+    const ts = Number(view.getBigUint64(81, false))
+    if (oldestTs === null || ts < oldestTs) oldestTs = ts
+    if (newestTs === null || ts > newestTs) newestTs = ts
+
+    const eventType = e[89]!
+    if (eventType === 0x01) eventTypeCounts.tool_call += 1
+    else if (eventType === 0x02) eventTypeCounts.transaction += 1
+    else if (eventType === 0x03) eventTypeCounts.observation += 1
+    else if (eventType === 0xff) eventTypeCounts.extension += 1
+    else eventTypeCounts.reserved += 1
+  }
+
+  res.setHeader('cache-control', 'public, max-age=10')
+  sendJson(res, 200, {
+    tree_size: size,
+    distinct_signers: signers.size,
+    oldest_timestamp_ms: oldestTs,
+    newest_timestamp_ms: newestTs,
+    entries_by_event_type: eventTypeCounts,
+  })
 }
 
 async function handleSubmit(
