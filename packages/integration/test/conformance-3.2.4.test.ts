@@ -9,11 +9,11 @@
  * buildGraphFromRecords — against the same record corpora and asserts the
  * normalized edge sets match.
  *
- * Earlier in development we shipped a graph-node dedup fix on the back of
- * an apparent edge-count divergence (26 vs 20). The actual cause was input
- * duplication, not algorithmic mismatch — but a conformance test like this
- * one would have surfaced the real issue immediately. This is the missing
- * regression boundary.
+ * Background: a graph-node dedup fix was originally motivated by an apparent
+ * edge-count divergence (26 vs 20). The actual cause was input duplication,
+ * not algorithmic mismatch — but a conformance test like this one would have
+ * surfaced the real issue immediately. This is the missing regression
+ * boundary.
  */
 
 import { describe, it, expect } from 'vitest'

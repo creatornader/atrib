@@ -14,8 +14,7 @@
  *
  * Linux/Windows are NOT supported in this initial cut. Linux users can
  * shell out to `secret-tool` (libsecret) via a similar wrapper; see
- * `loadFromSecretTool` for the planned shape. Windows is out of scope for
- * Phase 1.
+ * `loadFromSecretTool` for the planned shape. Windows is out of scope.
  *
  * Service name convention:
  *   atrib-creator              default for the agent's primary creator key
@@ -85,7 +84,7 @@ export function resolveServiceAccount(options: KeychainOptions = {}): {
  * is passed via the `-w` flag, which goes through argv and is therefore
  * visible to other processes on the machine for the brief lifetime of the
  * `security` invocation. This is acceptable on a single-user laptop; for
- * stricter environments use `storeSeedFromStdin` (added in cross-spec verification).
+ * stricter environments use `storeSeedFromStdin` for argv-free entry.
  */
 export function storeSeed(seedB64: string, options: KeychainOptions = {}): void {
   assertMacos()

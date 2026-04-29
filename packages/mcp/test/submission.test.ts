@@ -346,7 +346,7 @@ describe('createSubmissionQueue', () => {
     warnSpy.mockRestore()
   })
 
-  describe('maxQueueDepth (queue capacity controls — outage memory protection)', () => {
+  describe('maxQueueDepth (outage memory protection)', () => {
     // Real timers for these tests — we test eviction, not retry-backoff
     // timing. Real timers + a synchronous-rejecting fetch mock makes each
     // submitWithRetry resolve in <1ms total instead of waiting on fake
