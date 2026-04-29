@@ -64,7 +64,7 @@ Architectural and design decisions made during the atrib protocol development. E
 
 **Date:** 2026-04-05
 **Context:** For attribution to be trusted by both creators and merchants, each must be able to independently verify: (1) the graph accurately reflects what happened, and (2) the settlement was correctly calculated. Mixing fact and policy into one layer makes independent verification intractable.
-**Decision:** The graph (§3) is a strict fact layer. The policy (§4) is a separate evaluation layer. Graph endpoints never return weighted data. The calculation algorithm is a pure function of graph + policy. Any party can verify independently.
+**Decision:** The graph ([§3](atrib-spec.md#3-graph-query-interface)) is a strict fact layer. The policy ([§4](atrib-spec.md#4-attribution-policy-format)) is a separate evaluation layer. Graph endpoints never return weighted data. The calculation algorithm is a pure function of graph + policy. Any party can verify independently.
 **Alternatives considered:** Combined graph+policy API (simpler but unverifiable), policy enforcement in the protocol (makes atrib an arbiter).
 
 ## D010: Default policy: equal weight, zero for unsigned
@@ -91,24 +91,24 @@ Architectural and design decisions made during the atrib protocol development. E
 ## D013: "Observability without surveillance" is delivered across three layers, not one
 
 **Date:** 2026-04-05
-**Context:** The spec's central privacy claim ("observability without surveillance," §0) is not delivered by any single primitive in isolation. The claim requires three layers working together, and the spec needs to be explicit about which layer enforces what.
+**Context:** The spec's central privacy claim ("observability without surveillance," [§0](atrib-spec.md#0-foundations)) is not delivered by any single primitive in isolation. The claim requires three layers working together, and the spec needs to be explicit about which layer enforces what.
 **Decision:** The privacy architecture is:
 
 - **Layer 1 (record format):** The `AtribRecord` type captures structural metadata only: no tool call arguments, no response content, no user queries, no transaction amounts. Content never enters the hashing pipeline.
 - **Layer 2 (log commitments):** The Merkle log stores 90-byte entries (record_hash, creator_key, context_id, timestamp, event_type): commitments, not records. Full records stay with the parties.
-- **Layer 3 (middleware discipline):** The degradation contract (§5.8) ensures errors, retries, and failure modes don't leak content through logs or error messages. Proof bundles serve inclusion proofs, not records.
+- **Layer 3 (middleware discipline):** The degradation contract ([§5.8](atrib-spec.md#58-degradation-contract)) ensures errors, retries, and failure modes don't leak content through logs or error messages. Proof bundles serve inclusion proofs, not records.
 
 All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 
 **Known tension:** `content_id = sha256(serverUrl + ":" + toolName)` reveals _which tool at which server_ was called. The spec treats this as acceptable structural metadata (tool existence is public via MCP `tools/list`, same information exists in OTel spans), but it is the closest the protocol gets to the surveillance line. A future revision could explore blinded content_ids if this proves problematic.
-**Alternatives considered:** Salting/blinding content_ids (would break independent reproducibility required by §4.6), encrypting log entries (adds key management complexity, deferred).
+**Alternatives considered:** Salting/blinding content_ids (would break independent reproducibility required by [§4.6](atrib-spec.md#46-the-calculation-algorithm)), encrypting log entries (adds key management complexity, deferred).
 
 ## D014: Cross-package integration tests live in a private workspace package and re-derive primitives
 
 **Date:** 2026-04-06
 **Context:** An end-to-end test exercising the full attribution flow across all three SDK packages needs a home. The question was where this test should live and what it should import. Two options: (a) put it inside an existing package (e.g., `@atrib/verify/test/integration.test.ts`), reusing existing imports; (b) create a separate private workspace package that depends on all three SDK packages and re-derives shared primitives independently.
 **Decision:** Created `@atrib/integration` as a private workspace package (`"private": true`, no `dist/`, only test runner). It depends on `@atrib/mcp`, `@atrib/agent`, and `@atrib/verify` as peers. Critically, its `graph-builder.ts` re-implements `recordHash()` from primitives (`sha256(canonicalRecord(...))`) rather than importing a hash function from `@atrib/mcp`. This mirrors what a real graph indexing service (`graph.atrib.dev`) would do: index records arriving from arbitrary creators across the open log, without depending on the SDK that produced them.
-**Why this matters:** The §4.6 calculation algorithm's correctness rests on the claim that "any party with the same inputs gets the same result." If integration tests reused the SDK's hash function, two implementations could silently agree because they share code. By re-deriving in the test, we validate that JCS canonicalization + SHA-256 produce identical output across two independent code paths. The end-to-end test passing demonstrates that the chain reconstructs (`A → B → tx`) precisely because `chain_root` references match record hashes derived independently.
+**Why this matters:** The [§4.6](atrib-spec.md#46-the-calculation-algorithm) calculation algorithm's correctness rests on the claim that "any party with the same inputs gets the same result." If integration tests reused the SDK's hash function, two implementations could silently agree because they share code. By re-deriving in the test, we validate that JCS canonicalization + SHA-256 produce identical output across two independent code paths. The end-to-end test passing demonstrates that the chain reconstructs (`A → B → tx`) precisely because `chain_root` references match record hashes derived independently.
 **Alternatives considered:** Test inside `@atrib/verify` (would hide the boundary), test at the repo root (no package isolation), publish `@atrib/integration` as a public package (no value to consumers, only to the project).
 
 ## D015: ACP and UCP detect on a unified completion shape, distinguished by the `ucp` envelope
@@ -121,17 +121,17 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - UCP is distinguished from ACP by the presence of a top-level `ucp.version` envelope on the completion response.
 - Split the protocol literal type into `'ACP' | 'UCP' | 'x402' | 'MPP' | 'AP2' | 'heuristic'` so consumers can switch on the actual protocol. The middleware's `emitTransactionRecord` switch was updated correspondingly.
 - Real captured fixtures from the published spec examples live under `packages/agent/test/fixtures/{acp,ucp}/`, with provenance README files citing the source URL and verification date.
-- Spec §1.7.1 and §1.7.2 were rewritten to match real ACP/UCP shapes. The §5.4.5 detection pseudocode was updated to match.
+- Spec [§1.7.1](atrib-spec.md#171-acp-agentic-commerce-protocol) and [§1.7.2](atrib-spec.md#172-ucp-universal-commerce-protocol) were rewritten to match real ACP/UCP shapes. The [§5.4.5](atrib-spec.md#545-transaction-detection) detection pseudocode was updated to match.
 - Because neither ACP nor UCP currently exposes a documented free-form metadata field on `POST /checkout_sessions/...` requests, the spec now requires `context_id` to travel via the `X-atrib-Context` HTTP header (consistent with x402/MPP) and via `params._meta.atrib` for MCP-transport integrations. The earlier spec language describing `metadata.atrib_context_id` and `extensions["io.atrib/context_id"]` was speculative and has been removed.
   **Alternatives considered:** Keeping the joint `'ACP/UCP'` literal (loses information consumers want), making detection lenient with multiple synonymous keys (false positives), waiting for ACP/UCP to add metadata fields before fixing the spec (blocks the SDK indefinitely on upstream protocol decisions).
-  **Followup work:** §2 (x402/MPP) and §3 (AP2) cross-spec verification, pending. The MPP-vs-x402 distinction in the new code uses an optional `Payment-Protocol` response header marker; this is an atrib convention because both protocols share the same `Payment-Receipt` header on the response side and we need a way to distinguish them when both might be in use. If a future revision of x402 or MPP standardizes a different distinguisher, update this rule.
+  **Followup work:** [§2](atrib-spec.md#2-merkle-log-protocol) (x402/MPP) and [§3](atrib-spec.md#3-graph-query-interface) (AP2) cross-spec verification, pending. The MPP-vs-x402 distinction in the new code uses an optional `Payment-Protocol` response header marker; this is an atrib convention because both protocols share the same `Payment-Receipt` header on the response side and we need a way to distinguish them when both might be in use. If a future revision of x402 or MPP standardizes a different distinguisher, update this rule.
 
-**Update (2026-04-06, same day):** D016 supersedes the "shared `Payment-Receipt` header" assumption above. Verification against the actual specs revealed that x402 and MPP use **different** response headers and there is no need for an atrib-invented `Payment-Protocol` marker.
+**Update (2026-04-06, same day):** [D016](#d016-x402-and-mpp-detect-on-different-headers-not-a-shared-one) supersedes the "shared `Payment-Receipt` header" assumption above. Verification against the actual specs revealed that x402 and MPP use **different** response headers and there is no need for an atrib-invented `Payment-Protocol` marker.
 
 ## D016: x402 and MPP detect on different headers, not a shared one
 
 **Date:** 2026-04-06
-**Context:** Cross-spec verification for x402 and MPP. The original SDK and the original §1.7.3/§1.7.4 spec text both claimed x402 and MPP use a shared `Payment-Receipt` response header. D015 even introduced an atrib-invented `Payment-Protocol` distinguisher to tell them apart. When the claims were checked against the published specs, both turned out to be wrong.
+**Context:** Cross-spec verification for x402 and MPP. The original SDK and the original [§1.7.3](atrib-spec.md#173-x402)/[§1.7.4](atrib-spec.md#174-mpp-machine-payments-protocol) spec text both claimed x402 and MPP use a shared `Payment-Receipt` response header. [D015](#d015-acp-and-ucp-detect-on-a-unified-completion-shape-distinguished-by-the-ucp-envelope) even introduced an atrib-invented `Payment-Protocol` distinguisher to tell them apart. When the claims were checked against the published specs, both turned out to be wrong.
 **What the real specs say:**
 
 - **x402** (`github.com/coinbase/x402`): the success-path response header is `PAYMENT-RESPONSE` in v2, renamed from v1's `X-PAYMENT-RESPONSE` per RFC 6648 (deprecation of the `X-` prefix). The value is base64-encoded JSON containing a `SettlementResponse` with `success`, `transaction`, `network`, `payer`, `requirements` fields.
@@ -141,24 +141,24 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 **Decision:**
 
 - Detection now checks `PAYMENT-RESPONSE` (or v1 legacy `X-PAYMENT-RESPONSE`) for x402 and `Payment-Receipt` for MPP, all matched case-insensitively per RFC 7230.
-- The fictional `Payment-Protocol` marker introduced in D015's footnote was removed.
+- The fictional `Payment-Protocol` marker introduced in [D015](#d015-acp-and-ucp-detect-on-a-unified-completion-shape-distinguished-by-the-ucp-envelope)'s footnote was removed.
 - Precedence rule when both headers are somehow present: x402 wins. This is documented in tests.
-- Spec §1.7.3 and §1.7.4 rewritten to cite the real headers and source documents. The §5.4.5 detection pseudocode was updated to match. A note was added flagging the prior conflation as an error so future readers don't reintroduce it.
+- Spec [§1.7.3](atrib-spec.md#173-x402) and [§1.7.4](atrib-spec.md#174-mpp-machine-payments-protocol) rewritten to cite the real headers and source documents. The [§5.4.5](atrib-spec.md#545-transaction-detection) detection pseudocode was updated to match. A note was added flagging the prior conflation as an error so future readers don't reintroduce it.
 - Real captured payload shapes (decoded JSON for both `PAYMENT-RESPONSE` and `Payment-Receipt`) live under `packages/agent/test/fixtures/{x402,mpp}/` with provenance README files citing the canonical sources.
-- Detection uses **header presence** as the on-wire signal. Decoding the base64 body to validate `success: true` (x402) or `status: "success"` (MPP) is not done in v1. The spec language for both protocols treats the header as the authoritative signal, and the degradation contract (§5.8) means false positives from a misconfigured server are preferable to false negatives caused by overly strict shape matching. Higher-fidelity downstream tooling that needs to extract the transaction hash for content_id derivation can decode the body itself.
+- Detection uses **header presence** as the on-wire signal. Decoding the base64 body to validate `success: true` (x402) or `status: "success"` (MPP) is not done in v1. The spec language for both protocols treats the header as the authoritative signal, and the degradation contract ([§5.8](atrib-spec.md#58-degradation-contract)) means false positives from a misconfigured server are preferable to false negatives caused by overly strict shape matching. Higher-fidelity downstream tooling that needs to extract the transaction hash for content_id derivation can decode the body itself.
 
 **Alternatives considered:**
 
 - Decoding the header value and validating `success: true` / `status: "success"` (rejected; tightens detection at the cost of robustness; the degradation contract favors silent passes over silent fails)
 - Treating `Payment-Receipt` as a synonym for `PAYMENT-RESPONSE` (rejected; they are different protocols with different wire formats and tooling, and the SDK consumer needs to know which one fired)
-- Adding a single combined `'x402-or-mpp'` literal back to the protocol type (rejected for the same reason as the joint `'ACP/UCP'` literal in D015; it hides information consumers care about)
+- Adding a single combined `'x402-or-mpp'` literal back to the protocol type (rejected for the same reason as the joint `'ACP/UCP'` literal in [D015](#d015-acp-and-ucp-detect-on-a-unified-completion-shape-distinguished-by-the-ucp-envelope); it hides information consumers care about)
 
 **Followup:** AP2 / W3C VC verification next, then W3C Trace Context conformance and MCP SDK extension API.
 
 ## D017: AP2 v0.1 uses A2A DataParts, not W3C Verifiable Credentials
 
 **Date:** 2026-04-06
-**Context:** Cross-spec verification for AP2 (Google Agent Payments Protocol). The original SDK and the original spec §1.7.5 both assumed AP2 would use W3C Verifiable Credentials with `type === 'VerifiableCredential'` and `credentialSubject.type === 'PaymentMandate'` to express a Payment Mandate. When verified against the actual AP2 v0.1 specification at `github.com/google-agentic-commerce/ap2`, this turned out to be wrong. AP2 v0.1 does not use W3C VCs at all.
+**Context:** Cross-spec verification for AP2 (Google Agent Payments Protocol). The original SDK and the original spec [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402) both assumed AP2 would use W3C Verifiable Credentials with `type === 'VerifiableCredential'` and `credentialSubject.type === 'PaymentMandate'` to express a Payment Mandate. When verified against the actual AP2 v0.1 specification at `github.com/google-agentic-commerce/ap2`, this turned out to be wrong. AP2 v0.1 does not use W3C VCs at all.
 **What the real AP2 spec says:**
 
 - AP2 is built on top of A2A (Agent2Agent). The wire format for a Payment Mandate is an A2A `Message` containing one or more `parts`, where the `kind: "data"` part has a `data` object with the key `ap2.mandates.PaymentMandate` and the AP2 PaymentMandate schema as its value.
@@ -175,15 +175,15 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 **Decision:**
 
 - Detection now checks two real AP2 paths: (1) `parts[].data["ap2.mandates.PaymentMandate"]` for the standard AP2 v0.1 shape, (2) the a2a-x402 task metadata shape requiring BOTH `payment-completed` status AND a successful receipt.
-- Both paths report `protocol: 'AP2'`. We do not introduce a separate `'a2a-x402'` literal for the same reason D015 split joint literals: extra distinctions only when consumers care, and a2a-x402 IS AP2.
+- Both paths report `protocol: 'AP2'`. We do not introduce a separate `'a2a-x402'` literal for the same reason [D015](#d015-acp-and-ucp-detect-on-a-unified-completion-shape-distinguished-by-the-ucp-envelope) split joint literals: extra distinctions only when consumers care, and a2a-x402 IS AP2.
 - The legacy W3C VC envelope check is kept as a fallback for research forks that may have implemented Payment Mandates as VCs (matching the obsolete spec language), but the canonical detection path is the A2A DataPart shape. The fallback accepts both VC v2 array form and v1 string form.
 - IntentMandate and CartMandate are explicitly tested as non-transaction events to lock in the correct funnel semantics.
 - Real captured fixtures from the published spec examples live under `packages/agent/test/fixtures/ap2/` with a provenance README citing both the AP2 v0.1 spec and the a2a-x402 v0.1 spec.
-- Spec §1.7.5 was rewritten to match real AP2 / a2a-x402 shapes with a clear note that the prior W3C VC assumption was wrong. The §5.4.5 detection pseudocode was updated correspondingly.
+- Spec [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402) was rewritten to match real AP2 / a2a-x402 shapes with a clear note that the prior W3C VC assumption was wrong. The [§5.4.5](atrib-spec.md#545-transaction-detection) detection pseudocode was updated correspondingly.
 
 **Alternatives considered:**
 
-- Detecting all three mandate types (Intent, Cart, Payment) as transaction events (rejected; would falsely close attribution chains on intent-capture or cart-commit events, violating §3.1's structure-not-causality rule)
+- Detecting all three mandate types (Intent, Cart, Payment) as transaction events (rejected; would falsely close attribution chains on intent-capture or cart-commit events, violating [§3.1](atrib-spec.md#31-design-principles-and-rationale)'s structure-not-causality rule)
 - Treating a2a-x402 as a separate `'a2a-x402'` protocol literal (rejected; it is the AP2 crypto payment path; consumers care about AP2-vs-not-AP2, not AP2-card-vs-AP2-crypto)
 - Decoding and validating the cart_mandate hash chain in the PaymentMandate (rejected; that's verification work belonging in `@atrib/verify`, not on the agent middleware critical path)
 - Removing the legacy W3C VC fallback entirely (rejected; costs nothing to keep, costs developer trust to silently break a research-fork integration)
@@ -261,7 +261,7 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 **Decision:** Take option (b): keep the monkey-patch, but make it survivable across SDK changes:
 
 1. **Robust schema detection**: a new `isToolsCallSchema(schema)` helper accepts FOUR known forms: `schema === 'tools/call'` (v2 string form), `schema.shape.method.value === 'tools/call'` (1.x Zod literal), `schema.shape.method._def.value === 'tools/call'` (deeper Zod traversal), and `schema.method === 'tools/call'` (pre-parsed). The patch survives both the v2 migration AND any of several common Zod-version variations without code change.
-2. **Runtime sanity check at init time**: the middleware now checks that `server.server` exists and `server.server.setRequestHandler` is a function. If not, it logs a loud warning identifying the SDK shape change and degrades to pass-through mode (per §5.8) instead of throwing or silently doing nothing.
+2. **Runtime sanity check at init time**: the middleware now checks that `server.server` exists and `server.server.setRequestHandler` is a function. If not, it logs a loud warning identifying the SDK shape change and degrades to pass-through mode (per [§5.8](atrib-spec.md#58-degradation-contract)) instead of throwing or silently doing nothing.
 3. **Real-SDK regression test** in `packages/mcp/test/middleware-sdk-shape.test.ts` that imports the actual `@modelcontextprotocol/sdk` package and asserts:
    - `McpServer.server` exists
    - `McpServer.server.setRequestHandler` is a function
@@ -312,7 +312,7 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 | LangChain         | `MultiServerMCPClient`                        | **442**    | `loadMcpTools` 408; pkg `@langchain/mcp-adapters` 374                                                                                 |
 | (substrate)       | `@modelcontextprotocol/sdk/client`            | 2,224      | already covered by `wrapMcpClient` in commit `c450672`                                                                                |
 
-**Decision:** Replace the prior tier list. The new §6 build order is:
+**Decision:** Replace the prior tier list. The new [§6](atrib-spec.md#6-key-directory) build order is:
 
 1. **Claude Agent SDK**: highest GitHub footprint (1,680 files), bundles `@modelcontextprotocol/sdk` directly (an earlier dependency analysis confirmed dependency analysis), and the architecturally cleanest interception path. Because the SDK fully encapsulates MCP server setup from the consumer (users pass `mcpServers: {...}` config, never touch the Client themselves), the right interception point is **not** an agent-side wrapper; it is an **in-process proxy MCP server** that lives in `packages/mcp/` and re-uses the existing `atrib()` middleware. The user configures their Claude Agent SDK to point at the proxy, the proxy forwards to the real upstream MCP servers, and attribution records are emitted at the proxy layer. Zero changes to `packages/agent/` for this adapter.
 2. **Cloudflare Agents**: second highest (~1,050 client-side files), also bundles `@modelcontextprotocol/sdk` directly. Same proxy architecture as Claude Agent SDK applies. The 892 figure was hidden from the prior decision by a quoted-query encoding bug; without that bug, Cloudflare would have ranked second from the start instead of being deferred.
@@ -336,7 +336,7 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 
 **What this means architecturally:**
 
-- The §6 work is **not** purely a `packages/agent/` problem. Two of the three top adapters (Claude Agent SDK and Cloudflare Agents) are _server-side proxy_ plays that live in `packages/mcp/`. The §6 success criteria need to be expanded accordingly; "framework adapters" was a misleading shorthand.
+- The [§6](atrib-spec.md#6-key-directory) work is **not** purely a `packages/agent/` problem. Two of the three top adapters (Claude Agent SDK and Cloudflare Agents) are _server-side proxy_ plays that live in `packages/mcp/`. The [§6](atrib-spec.md#6-key-directory) success criteria need to be expanded accordingly; "framework adapters" was a misleading shorthand.
 - The proxy server pattern requires new code: a thin wrapper in `packages/mcp/` that constructs an `McpServer`, calls `atrib()` on it, registers handlers that fan out to one or more upstream MCP servers (via `Client` from `@modelcontextprotocol/sdk`), and propagates results back. This is reusable across both the Claude SDK and Cloudflare adapters and possibly more in the future.
 - The Vercel AI SDK adapter is the smallest change: a single function in `packages/agent/` that takes the result of `createMCPClient` and wraps the `tools()` record's `execute` callbacks with the existing interceptor lifecycle.
 
@@ -345,7 +345,7 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 ## D021: Claude Agent SDK Case A is zero-new-code; Case B uses createAtribProxy() in-process forwarder
 
 **Date:** 2026-04-06
-**Context:** D020 set the framework-adapter build order as Claude Agent SDK → Cloudflare Agents → Vercel AI SDK and described the Claude Agent SDK adapter as "an in-process proxy MCP server living in `packages/mcp/`". Before writing code, the actual `@anthropic-ai/claude-agent-sdk` source was inspected (npm pack of v0.2.92) to verify how the SDK accepts and invokes user-provided MCP servers. The finding materially refines D020's plan: the Claude Agent SDK adapter splits cleanly into two cases, and the first case requires zero new code in `@atrib/mcp`.
+**Context:** [D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision) set the framework-adapter build order as Claude Agent SDK → Cloudflare Agents → Vercel AI SDK and described the Claude Agent SDK adapter as "an in-process proxy MCP server living in `packages/mcp/`". Before writing code, the actual `@anthropic-ai/claude-agent-sdk` source was inspected (npm pack of v0.2.92) to verify how the SDK accepts and invokes user-provided MCP servers. The finding materially refines [D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision)'s plan: the Claude Agent SDK adapter splits cleanly into two cases, and the first case requires zero new code in `@atrib/mcp`.
 
 **What the SDK actually does (verified against `@anthropic-ai/claude-agent-sdk@0.2.92`):**
 
@@ -926,7 +926,7 @@ interface AtribOptions {
    * Observer invoked once per signed record AFTER signing and BEFORE log
    * submission. Lets the host persist or audit the record locally.
    * Errors thrown from the observer are caught and logged; they do not
-   * block submission or affect the tool response (§5.8).
+   * block submission or affect the tool response ([§5.8](atrib-spec.md#58-degradation-contract)).
    */
   onRecord?: (record: AtribRecord) => void | Promise<void>
 }
@@ -1038,22 +1038,22 @@ The divergence was discovered while dogfooding `services/log-node/scripts/verify
 
 **Option A, Align implementation with C2SP (proposed and adopted).**
 
-Change `createCheckpointSigner.sign` in `checkpoint.ts` to produce the C2SP encoding: concatenate the 4-byte key ID and 64-byte signature, base64-encode the resulting 68-byte blob, omit the `+` delimiter. Update spec §2.4.3 to replace the hex+base64 description with the correct C2SP encoding. Update the `parseCheckpoint` function in `verify-loop.mjs` to decode the token as one base64 string and split at byte offset 4.
+Change `createCheckpointSigner.sign` in `checkpoint.ts` to produce the C2SP encoding: concatenate the 4-byte key ID and 64-byte signature, base64-encode the resulting 68-byte blob, omit the `+` delimiter. Update spec [§2.4.3](atrib-spec.md#243-signed-note-format) to replace the hex+base64 description with the correct C2SP encoding. Update the `parseCheckpoint` function in `verify-loop.mjs` to decode the token as one base64 string and split at byte offset 4.
 
 Consequences:
 - `note.NewVerifier` and every C2SP-conformant tool (tlog-witness, sigsum, cosign tooling) parses atrib checkpoints without adapters.
-- The witness/cosignature work in §2.9 uses standard C2SP tooling with no custom parsers. C2SP conformance for signed notes is a prerequisite for §2.9 implementation; this resolves that blocker.
+- The witness/cosignature work in [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) uses standard C2SP tooling with no custom parsers. C2SP conformance for signed notes is a prerequisite for [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) implementation; this resolves that blocker.
 - The production log requires a redeploy. Any consumer that parses the current signature format must update its parser.
 - Existing tests that assert the old format string require one-time updates.
 
 **Option B, Amend spec to own the divergence.**
 
-Remove the "per the C2SP signed-note specification" claim from §2.4.3. Replace it with an explicit definition of atrib's hex+base64 form as the protocol's own checkpoint signature format. No code change.
+Remove the "per the C2SP signed-note specification" claim from [§2.4.3](atrib-spec.md#243-signed-note-format). Replace it with an explicit definition of atrib's hex+base64 form as the protocol's own checkpoint signature format. No code change.
 
 Consequences:
 - No operational risk.
 - atrib checkpoint signatures cannot be parsed by `note.NewVerifier` or any C2SP-conformant tool without a custom adapter. Every integrator who expected C2SP tooling to work needs that adapter explained.
-- Witness/cosignature work (§2.9) requires custom parsers in every participant's toolchain. Ongoing cost, not one-time transition.
+- Witness/cosignature work ([§2.9](atrib-spec.md#29-witnessing-and-cosignatures)) requires custom parsers in every participant's toolchain. Ongoing cost, not one-time transition.
 - The C2SP tlog-tiles ecosystem claim in CLAUDE.md becomes inaccurate for the "signed notes" and "witnessing" clauses.
 
 **Option C, Serve both formats.**
@@ -1062,7 +1062,7 @@ Keep the current hex+base64 line and add a second, C2SP-encoded line on the same
 
 Consequences:
 - Two signature lines from the same signer on the same checkpoint body is unusual in the tlog ecosystem. Witnesses and cosigners add additional lines; the primary signer does not normally sign twice. Verifiers that enforce "exactly one log signature" would reject the checkpoint.
-- Unlike D030's dual key publication (two read-only representations of the same 32 bytes, each around 15 lines of code), two checkpoint signature formats require separate parse paths in every verifier indefinitely.
+- Unlike [D030](#d030-log-key-publication-serves-both-c2sp-vkey-and-json-at-distinct-endpoints)'s dual key publication (two read-only representations of the same 32 bytes, each around 15 lines of code), two checkpoint signature formats require separate parse paths in every verifier indefinitely.
 - The `+` delimiter in the current format is a parsing ambiguity: base64 standard uses `+` as a base-64 alphabet character. Option C preserves that fragility.
 
 **Decision.**
@@ -1071,7 +1071,7 @@ Option A: align the implementation with C2SP.
 
 The dogfood log at `log.atrib.dev` is in an early phase. The only documented consumer of the checkpoint signature line is `verify-loop.mjs`, and its parser was written to match what the implementation produced rather than what C2SP specifies. Updating that parser was a one-line regex change. No outside tooling is known to have parsed the current format.
 
-The benefit is concrete and durable: every C2SP-conformant verifier, witness client, and cosignature tool works against atrib checkpoints without an adapter. D030 kept both key-publication endpoints because two audiences genuinely needed two formats. There is no analogous argument here: C2SP is the right one for ecosystem reasons, and the current format existed only because the implementation was written before the spec claim was checked against the reference implementation.
+The benefit is concrete and durable: every C2SP-conformant verifier, witness client, and cosignature tool works against atrib checkpoints without an adapter. [D030](#d030-log-key-publication-serves-both-c2sp-vkey-and-json-at-distinct-endpoints) kept both key-publication endpoints because two audiences genuinely needed two formats. There is no analogous argument here: C2SP is the right one for ecosystem reasons, and the current format existed only because the implementation was written before the spec claim was checked against the reference implementation.
 
 **Implementation (commit `096c8a5`).**
 
@@ -1079,7 +1079,7 @@ Three files changed:
 
 1. `services/log-node/src/checkpoint.ts` `sign()`: concatenate `keyId[4B] || sigBytes[64B]`, base64-encode the 68-byte blob, remove the `+` delimiter. A new `parseSignatureLine` helper was added in the same file and exported from `services/log-node/src/index.ts` for use by tests and verifiers.
 
-2. `atrib-spec.md` §2.4.3 replaced the hex+base64 description with the canonical C2SP encoding. §2.4.2 cross-reference updated from "4-byte hex prefix" to "4 leading bytes of the base64-decoded signature token."
+2. `atrib-spec.md` [§2.4.3](atrib-spec.md#243-signed-note-format) replaced the hex+base64 description with the canonical C2SP encoding. [§2.4.2](atrib-spec.md#242-log-signing-key-and-key-id) cross-reference updated from "4-byte hex prefix" to "4 leading bytes of the base64-decoded signature token."
 
 3. `services/log-node/scripts/verify-loop.mjs` `parseCheckpoint` updated to use the C2SP encoding. Six test files (`checkpoint.test.ts`, `checkpoint-format.test.ts`, `verification.test.ts`, `proof-verification.test.ts`, `server.test.ts`, plus the existing tree tests) migrated to `parseSignatureLine`. 83/83 log-node tests pass under the new format.
 
@@ -1088,21 +1088,21 @@ The deployed log at `log.atrib.dev` was redeployed at 2026-04-27 ~04:00 UTC with
 **What this DOESN'T solve.**
 
 - The 4-byte key hash is a truncated SHA-256 prefix. Collision resistance at 4 bytes is weak; atrib follows the C2SP convention rather than widening it. The tlog ecosystem has not moved to longer key identifiers; a future ADR can address this if it does.
-- Key rotation. Unresolved since D028.
-- Witnessing implementation (§2.9). C2SP conformance here is a prerequisite. D032 captures the §2.9 design decisions but does not ship code.
+- Key rotation. Unresolved since [D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification).
+- Witnessing implementation ([§2.9](atrib-spec.md#29-witnessing-and-cosignatures)). C2SP conformance here is a prerequisite. [D032](#d032-witnessing-posture-for-v1-spec-defined-no-implementation) captures the [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) design decisions but does not ship code.
 
 **Acknowledged process failure.**
 
-The divergence was present from the initial commit of `checkpoint.ts`. A round-trip interop test that signs a checkpoint body with the local key and then verifies it with `golang.org/x/mod/sumdb/note.NewVerifier` would have caught the format mismatch before the first deployment. The `verify-loop.mjs` parser was written to match what the implementation produced, so it did not surface the issue during D028 or D029 development. Adding such an interop test to `services/log-node/test/` is a follow-on; it would catch any future regression.
+The divergence was present from the initial commit of `checkpoint.ts`. A round-trip interop test that signs a checkpoint body with the local key and then verifies it with `golang.org/x/mod/sumdb/note.NewVerifier` would have caught the format mismatch before the first deployment. The `verify-loop.mjs` parser was written to match what the implementation produced, so it did not surface the issue during [D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification) or [D029](#d029-atriboptionsonrecordrecord-observer-hook-on-the-middleware) development. Adding such an interop test to `services/log-node/test/` is a follow-on; it would catch any future regression.
 
 ---
 
 ## D032: Witnessing posture for V1, spec defined, no implementation
 
 **Date:** 2026-04-27
-**Status:** Accepted; spec §2.9 rewritten, no code work for V1
+**Status:** Accepted; spec [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) rewritten, no code work for V1
 
-**Context.** Spec §2.9 was a stub with conflicting prose: it gestured at C2SP tlog-witness, mentioned a SHOULD-require threshold, and described an operator-pushes-to-witnesses delivery model. Three of those choices contradicted invariants stated elsewhere in the spec or in CLAUDE.md. With the C2SP signed-note alignment in D031 finally landed (commit `096c8a5`), witnessing became approachable rather than aspirational, but it also became the next thing where contradictions would compound. Resolving §2.9 needed concrete answers on five questions before any code could land.
+**Context.** Spec [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) was a stub with conflicting prose: it gestured at C2SP tlog-witness, mentioned a SHOULD-require threshold, and described an operator-pushes-to-witnesses delivery model. Three of those choices contradicted invariants stated elsewhere in the spec or in CLAUDE.md. With the C2SP signed-note alignment in [D031](#d031-reconcile-243-signed-note-divergence-from-c2sp) finally landed (commit `096c8a5`), witnessing became approachable rather than aspirational, but it also became the next thing where contradictions would compound. Resolving [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) needed concrete answers on five questions before any code could land.
 
 **Decision.** Five concrete choices, captured normatively where format interop demands it and informationally where verifier policy varies:
 
@@ -1128,47 +1128,47 @@ The divergence was present from the initial commit of `checkpoint.ts`. A round-t
 
 **Consequences.**
 
-- §2.9 is now complete: normative format and delivery, informational verifier behavior, explicit V1 scope boundary on registry/discovery.
+- [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) is now complete: normative format and delivery, informational verifier behavior, explicit V1 scope boundary on registry/discovery.
 - A future witness operator can implement against the spec without further atrib coordination. The core code (fetch checkpoint, verify operator sig, verify consistency proof, sign cosig input, publish at `/v1/cosig/...`) parallels what `services/log-node/` already does and is ~200 lines of Node.
-- The dogfood verifier does NOT yet check cosignatures. When a witness exists, adding the gate is mechanical: signature lines whose decoded payload is 76 bytes are cosigs; look up witness keyHash → trusted vkey; verify per §2.9.2; apply threshold.
+- The dogfood verifier does NOT yet check cosignatures. When a witness exists, adding the gate is mechanical: signature lines whose decoded payload is 76 bytes are cosigs; look up witness keyHash → trusted vkey; verify per [§2.9.2](atrib-spec.md#292-cosignature-format-normative); apply threshold.
 - The Sigsum-pattern choice means atrib will not drop-in to ecosystems that assume operator-aggregated delivery (Rekor). The trade-off is honest: those ecosystems implicitly accept threat 2 in exchange for simpler verifier configuration. atrib chooses the harder configuration in exchange for surviving operator compromise.
 
 **What this DOESN'T solve.**
 
 - *Witness bootstrapping.* The first witness will exist when atrib has a second-party verifier that wants one. The spec describes the contract; the spec does not solve the social problem of recruiting witnesses.
 - *Witness staleness and liveness.* A verifier checking cosig timestamps can detect an obviously dead witness, but a witness that goes dark for months is harder. V2 may add liveness expectations.
-- *Witness key rotation.* Same gap as the log key rotation deferred from D028. Witnesses will need rotation when atrib does.
+- *Witness key rotation.* Same gap as the log key rotation deferred from [D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification). Witnesses will need rotation when atrib does.
 - *Cosignature retention windows.* How long must a witness keep its cosigs queryable? Verifiers may want historical cosigs to verify old settlement documents. V2.
 
-**Acknowledged process failure.** The prior §2.9 prose contradicted three of the five decisions documented here. SHOULD-require-cosignature contradicted invariant 7; operator-pushes-to-witnesses contradicted threat-2 mitigation; the gestured-at "witnessing infrastructure used by log.atrib.dev" implied a registry that doesn't exist. These were aspirational drift, not deliberate choices. Same failure mode as D030's note: spec text added without checking conflicts with the rest of the spec or with CLAUDE.md invariants. Recording the pattern again so the lesson is concrete, not theoretical.
+**Acknowledged process failure.** The prior [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) prose contradicted three of the five decisions documented here. SHOULD-require-cosignature contradicted invariant 7; operator-pushes-to-witnesses contradicted threat-2 mitigation; the gestured-at "witnessing infrastructure used by log.atrib.dev" implied a registry that doesn't exist. These were aspirational drift, not deliberate choices. Same failure mode as [D030](#d030-log-key-publication-serves-both-c2sp-vkey-and-json-at-distinct-endpoints)'s note: spec text added without checking conflicts with the rest of the spec or with CLAUDE.md invariants. Recording the pattern again so the lesson is concrete, not theoretical.
 
 ---
 
 ## D033: Key rotation and revocation
 
 **Date:** 2026-04-27
-**Status:** Accepted; spec §1.9 drafted, implementation deferred to an upcoming implementation phase
+**Status:** Accepted; spec [§1.9](atrib-spec.md#19-key-rotation-and-revocation) drafted, implementation deferred to an upcoming implementation phase
 
-**Context.** D028 explicitly deferred key rotation. The substrate has been live for several weeks signing under the initial creator key, and during the post-B+C audit that key was discovered to have leaked into Claude Code conversation transcripts (transcripts have 600 perms but the key is "burned"; anyone with a copy of those transcripts has the key forever). An The seed was manually rotated but the substrate still has no protocol-level revocation: every record signed by the leaked key continues to verify under that pubkey forever, with no signal to a verifier that the key was retired.
+**Context.** [D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification) explicitly deferred key rotation. The substrate has been live for several weeks signing under the initial creator key, and during the post-B+C audit that key was discovered to have leaked into Claude Code conversation transcripts (transcripts have 600 perms but the key is "burned"; anyone with a copy of those transcripts has the key forever). An The seed was manually rotated but the substrate still has no protocol-level revocation: every record signed by the leaked key continues to verify under that pubkey forever, with no signal to a verifier that the key was retired.
 
 A second motivation: scheduled 90-day rotation is not viable today. If a creator wanted to rotate, every existing record would still verify under the old pubkey but with no way to prove the rotation was authorized rather than a key-loss event.
 
-**Decision.** Key rotation is implemented via a new spec §1.9 with three normative pieces.
+**Decision.** Key rotation is implemented via a new spec [§1.9](atrib-spec.md#19-key-rotation-and-revocation) with three normative pieces.
 
 1. **Revocation record format.** A new `event_type: 'key_revocation'` record. Fields:
    - All existing record fields (`spec_version`, `event_type='key_revocation'`, `timestamp`, `context_id`, `creator_key`, `chain_root`, `content_id`, `signature`).
    - `revoked_key`: the base64url-encoded 32-byte public key being retired.
    - `revocation_reason`: enum `'compromise' | 'rotation' | 'retirement'`.
-   - `successor_key`: optional, base64url-encoded 32-byte public key of the rotation target. Present only when `revocation_reason='rotation'`. The semantics: signed records produced by `successor_key` MAY be considered as continuing the trust scope of `revoked_key` for the purposes of the directory (D034).
+   - `successor_key`: optional, base64url-encoded 32-byte public key of the rotation target. Present only when `revocation_reason='rotation'`. The semantics: signed records produced by `successor_key` MAY be considered as continuing the trust scope of `revoked_key` for the purposes of the directory ([D034](#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers)).
 
-   The revocation MUST be signed by `revoked_key` itself when `revocation_reason='rotation'` or `'retirement'`. When `revocation_reason='compromise'`, the revocation MAY instead be signed by a designated emergency key registered in the directory (see D034). This is the only case where a revocation can be signed by something other than the key being retired, because compromise means the legitimate owner may not have access to the key anymore.
+   The revocation MUST be signed by `revoked_key` itself when `revocation_reason='rotation'` or `'retirement'`. When `revocation_reason='compromise'`, the revocation MAY instead be signed by a designated emergency key registered in the directory (see [D034](#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers)). This is the only case where a revocation can be signed by something other than the key being retired, because compromise means the legitimate owner may not have access to the key anymore.
 
 2. **Verifier semantics.** When a verifier sees a revocation record at log index `R`:
    - All records with `creator_key === revoked_key` AND `log_index >= R` are treated as `verification_state: 'revoked_after_revocation'`. They no longer count toward attribution calculations.
    - All records with `creator_key === revoked_key` AND `log_index < R` retain their original `verification_state`. Past attribution remains valid up to the moment of revocation. This is essential. Otherwise revocation becomes a destructive operation that erases history.
-   - When `successor_key` is present, the directory (D034) updates the identity claim's active key to `successor_key`. Records signed by the successor inherit the revoked key's identity.
+   - When `successor_key` is present, the directory ([D034](#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers)) updates the identity claim's active key to `successor_key`. Records signed by the successor inherit the revoked key's identity.
 
-3. **Discovery.** Revocations are discovered the same way records are: by reading the log. A verifier MUST scan for `event_type: 'key_revocation'` records when validating any record signed by `creator_key === revoked_key`. The directory (D034) MAY index this for efficiency but the log itself is the source of truth.
+3. **Discovery.** Revocations are discovered the same way records are: by reading the log. A verifier MUST scan for `event_type: 'key_revocation'` records when validating any record signed by `creator_key === revoked_key`. The directory ([D034](#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers)) MAY index this for efficiency but the log itself is the source of truth.
 
 **Alternatives considered.**
 
@@ -1184,11 +1184,11 @@ A second motivation: scheduled 90-day rotation is not viable today. If a creator
 
 **Consequences.**
 
-- Spec gains §1.9 with the format and semantics. Conformance corpus at `spec/conformance/1.9/` covers: valid rotation, valid retirement, valid compromise (signed by emergency key), invalid revocation signed by wrong key, post-revocation record correctly flagged.
+- Spec gains [§1.9](atrib-spec.md#19-key-rotation-and-revocation) with the format and semantics. Conformance corpus at `spec/conformance/1.9/` covers: valid rotation, valid retirement, valid compromise (signed by emergency key), invalid revocation signed by wrong key, post-revocation record correctly flagged.
 - `@atrib/verify` and `services/graph-node` gain logic to detect and apply revocation records during graph construction. `verification_state` enum extends with `'revoked_after_revocation'`.
 - `@atrib/cli` gains `atrib revoke --keychain --reason ROTATION --successor PUBKEY` for operator-driven rotation.
 - `services/log-node` does not need changes: revocation records flow through the same submission path as any other record.
-- Directory (D034) consults revocations to update the active key for an identity claim.
+- Directory ([D034](#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers)) consults revocations to update the active key for an identity claim.
 
 **What this DOESN'T solve.**
 
@@ -1203,7 +1203,7 @@ A second motivation: scheduled 90-day rotation is not viable today. If a creator
 ## D034: Public-key directory architecture (AKD unblinded; VRF-blinded mode available for downstream consumers)
 
 **Date:** 2026-04-27
-**Status:** Accepted; spec §6 drafted, implementation in an upcoming implementation phase
+**Status:** Accepted; spec [§6](atrib-spec.md#6-key-directory) drafted, implementation in an upcoming implementation phase
 
 **Context.** Atrib records carry `creator_key` as opaque base64url bytes. A verifier seeing such a record has no way to learn "who is this?" There is no canonical mapping from `creator_key` to identity. The post-B+C audit identified this as the most consequential infrastructure gap: without a directory, attribution is purely cryptographic and not semantically meaningful to anyone except the original signer.
 
@@ -1240,7 +1240,7 @@ A decision was needed on three questions: (1) AKD vs roll-our-own simpler struct
 
 5. **Consultation contract for verifiers.** A verifier seeing a record `R` with `creator_key = K` and timestamp `T`:
    - Looks up `K` in the directory at version `<= T` (most-recent claim active at the record's timestamp).
-   - Combines with §1.9 revocation: if `K` was revoked at log index `R'` and the record is at log index `>= R'`, the claim no longer applies (record is `'revoked_after_revocation'`).
+   - Combines with [§1.9](atrib-spec.md#19-key-rotation-and-revocation) revocation: if `K` was revoked at log index `R'` and the record is at log index `>= R'`, the claim no longer applies (record is `'revoked_after_revocation'`).
    - Returns `identity_resolved: ClaimObject | null` alongside the record.
 
 **Alternatives considered.**
@@ -1261,8 +1261,8 @@ A decision was needed on three questions: (1) AKD vs roll-our-own simpler struct
 - New package `@atrib/directory` exposing `publish`, `lookup`, `history`, `proveAbsence` SDK methods.
 - `@atrib/verify` consumes the directory and annotates verification results with `identity_resolved`.
 - The recall tool (an MCP server consumed by the host agent) annotates returned records with the resolved identity claim per record.
-- Spec §6 covers: claim format, AKD operations, witness model parity with §2.9, verifier consultation algorithm.
-- Downstream consumers requiring VRF-blinded lookup adopt the same AKD library configured for that mode, in their own service. Their configuration spec references D034.
+- Spec [§6](atrib-spec.md#6-key-directory) covers: claim format, AKD operations, witness model parity with [§2.9](atrib-spec.md#29-witnessing-and-cosignatures), verifier consultation algorithm.
+- Downstream consumers requiring VRF-blinded lookup adopt the same AKD library configured for that mode, in their own service. Their configuration spec references [D034](#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers).
 
 **What this DOESN'T solve.**
 
@@ -1290,12 +1290,12 @@ A decision was needed on (1) wire-format shape (full URI typing vs hybrid string
 
 2. **Normative set: three URIs.**
    - `https://atrib.dev/v1/types/tool_call`: agent invoked a tool with input(s) and received a result. Default for any active operation against external state.
-   - `https://atrib.dev/v1/types/transaction`: commerce-protocol-detected closing event (ACP / UCP / x402 / MPP / AP2 / a2a-x402). Triggers §4.6 calculation. Distinct from `tool_call` because §4 calculation is normatively gated on this URI.
+   - `https://atrib.dev/v1/types/transaction`: commerce-protocol-detected closing event (ACP / UCP / x402 / MPP / AP2 / a2a-x402). Triggers [§4.6](atrib-spec.md#46-the-calculation-algorithm) calculation. Distinct from `tool_call` because [§4](atrib-spec.md#4-attribution-policy-format) calculation is normatively gated on this URI.
    - `https://atrib.dev/v1/types/observation`: passive perception captured by an ambient watcher or input source. The agent did not invoke a tool to produce this record; the record captures something the agent received from its environment. Has no caller-supplied input and no return value to attest to.
 
-   `assertion`, `intent`, `proposal`, `apply`, `annotation`, `delegation`, `revision`, and similar primitives belong in extension namespaces. The bar for promoting an extension URI to atrib's normative set is in D036.
+   `assertion`, `intent`, `proposal`, `apply`, `annotation`, `delegation`, `revision`, and similar primitives belong in extension namespaces. The bar for promoting an extension URI to atrib's normative set is in [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary).
 
-3. **Binary log entry maps URI to byte (§2.3.1).** The 1-byte `event_type` slot in the 90-byte log entry is a fast-path filter:
+3. **Binary log entry maps URI to byte ([§2.3.1](atrib-spec.md#231-entry-serialization)).** The 1-byte `event_type` slot in the 90-byte log entry is a fast-path filter:
    - `0x01`: `tool_call` URI (atrib normative)
    - `0x02`: `transaction` URI (atrib normative)
    - `0x03`: `observation` URI (atrib normative)
@@ -1308,11 +1308,11 @@ A decision was needed on (1) wire-format shape (full URI typing vs hybrid string
    - Verifies the signature normally (cryptographic integrity is type-independent).
    - Treats the URI as opaque; surfaces it in verification output verbatim.
    - Optionally attempts URI resolution to fetch a schema document (lazy / opt-in / no protocol-level requirement).
-   - Records pass §1 validation regardless of URI recognition. The URI MUST be a syntactically-valid absolute URI; that is the only enforced constraint.
+   - Records pass [§1](atrib-spec.md#1-attribution-record-format) validation regardless of URI recognition. The URI MUST be a syntactically-valid absolute URI; that is the only enforced constraint.
 
 5. **Extension URIs MUST be absolute.** Relative paths or bare tokens are invalid. URIs SHOULD identify a stable owner (a domain the consumer controls, or a `urn:` namespace they registered). atrib does not validate ownership; this is a discipline guideline, not a normative requirement.
 
-6. **Future normative additions go through D036.** The bar for promoting an extension URI to atrib's normative set is defined separately in D036 (this ADR establishes the structural mechanism; D036 establishes the promotion policy).
+6. **Future normative additions go through [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary).** The bar for promoting an extension URI to atrib's normative set is defined separately in [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) (this ADR establishes the structural mechanism; [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) establishes the promotion policy).
 
 **Alternatives considered.**
 
@@ -1330,7 +1330,7 @@ A decision was needed on (1) wire-format shape (full URI typing vs hybrid string
 
 **Consequences.**
 
-- *Spec.* §1.3 (record format) updated: `event_type` is an absolute URI. §2.3.1 (binary entry) updated: byte `0x03` reserved for `observation`, `0xFF` for extension. §2 normatively defines the byte→URI mapping for atrib's canonical set. §1.7 (payment-protocol detection) unchanged: still emits `transaction` URI on detection. New §1.4.5 added: URI validation requirements.
+- *Spec.* [§1.3](atrib-spec.md#13-canonical-serialization) (record format) updated: `event_type` is an absolute URI. [§2.3.1](atrib-spec.md#231-entry-serialization) (binary entry) updated: byte `0x03` reserved for `observation`, `0xFF` for extension. [§2](atrib-spec.md#2-merkle-log-protocol) normatively defines the byte→URI mapping for atrib's canonical set. [§1.7](atrib-spec.md#17-transaction-event-hooks) (payment-protocol detection) unchanged: still emits `transaction` URI on detection. New [§1.4.5](atrib-spec.md#145-event_type-uri-validation) added: URI validation requirements.
 - *`@atrib/mcp`.* `types.ts` `EventType` becomes `string` (URI-typed) with a constant block exporting the three normative URIs. `signing.ts` `verifyRecord` checks URI is syntactically valid; rejects empty / relative URIs. `entry.ts` adds the `0x03` and `0xFF` byte mappings. Emitters default to URI form.
 - *`@atrib/agent`.* All adapters automatically emit `tool_call` URI; transaction-detection logic emits `transaction` URI. No adapter API change.
 - *`@atrib/verify`.* Verification output gains an `event_type_uri` field (always populated) and a `event_type_recognized` boolean (true iff URI is in atrib's normative set or a registered consumer set the verifier was configured with). Recognition is informational, not a verification-pass criterion.
@@ -1344,14 +1344,14 @@ A decision was needed on (1) wire-format shape (full URI typing vs hybrid string
 - *Schema discovery.* atrib does not require URIs to resolve to a schema document. A consumer that wants schema-aware verification publishes their own schema and configures their verifier; atrib provides no resolution infrastructure.
 - *Wire-format compatibility across implementations at a single point in time.* Implementations that have not yet adopted URI-typed `event_type` will reject these records as malformed. Cross-implementation upgrade is coordinated by the implementations involved.
 
-**Implementation sequencing.** Spec §1.3 + §2.3.1 + §1.4.5 update → `@atrib/mcp` types + signing + entry update → `@atrib/agent` smoke test that adapters produce valid records → log-node + log-dev validation update → conformance corpus regeneration → `@atrib/verify` URI-aware verification output → unit tests across the matrix.
+**Implementation sequencing.** Spec [§1.3](atrib-spec.md#13-canonical-serialization) + [§2.3.1](atrib-spec.md#231-entry-serialization) + [§1.4.5](atrib-spec.md#145-event_type-uri-validation) update → `@atrib/mcp` types + signing + entry update → `@atrib/agent` smoke test that adapters produce valid records → log-node + log-dev validation update → conformance corpus regeneration → `@atrib/verify` URI-aware verification output → unit tests across the matrix.
 
 ## D036: Bar for promoting an extension URI to atrib's normative event_type vocabulary
 
 **Date:** 2026-04-28
 **Status:** Accepted
 
-**Context.** D035 established that anyone can mint extension `event_type` URIs. atrib's normative vocabulary remains open to additions, but the criteria for adding an extension URI to atrib's canonical core need to be defined explicitly. A poorly-defined bar produces either spec sprawl (every consumer's preferred primitive ends up canonical) or capture (one or two consumers' worldview gets picked as canonical and locks subsequent architectures into mismatched primitives).
+**Context.** [D035](#d035-extensible-event_type-vocabulary-via-uri-typing) established that anyone can mint extension `event_type` URIs. atrib's normative vocabulary remains open to additions, but the criteria for adding an extension URI to atrib's canonical core need to be defined explicitly. A poorly-defined bar produces either spec sprawl (every consumer's preferred primitive ends up canonical) or capture (one or two consumers' worldview gets picked as canonical and locks subsequent architectures into mismatched primitives).
 
 The goal is a bar that produces coherent decisions over time without requiring re-litigation, while being permissive enough that genuine convergence is not blocked by procedural friction. Rigid numerical thresholds (e.g., "exactly 3 consumers must request it") fail the latter: real consensus rarely arrives in clean numerical form. Vague principles fail the former: future maintainers have nothing to anchor decisions to.
 
@@ -1367,7 +1367,7 @@ A type is eligible for promotion to atrib's normative URI namespace when the fol
 
 3. **Filterable benefit at the log-byte level.** Verifiers running real queries gain meaningfully more from byte-level filtering than from content fetch + parse. A primitive that's queried frequently across the consumer base (e.g., regulators querying for "transactions") clears this; a primitive of interest mainly to one consumer's tooling does not.
 
-4. **Atrib protocol load-bearing OR observably canonical in extension form.** Either atrib's own §3 graph derivation or §4 calculation depends on distinguishing this primitive (load-bearing), or the same extension URI has been independently adopted by multiple consumer categories with consistent semantics across them (observably canonical). The first is rare and decisive; the second is the more common path.
+4. **Atrib protocol load-bearing OR observably canonical in extension form.** Either atrib's own [§3](atrib-spec.md#3-graph-query-interface) graph derivation or [§4](atrib-spec.md#4-attribution-policy-format) calculation depends on distinguishing this primitive (load-bearing), or the same extension URI has been independently adopted by multiple consumer categories with consistent semantics across them (observably canonical). The first is rare and decisive; the second is the more common path.
 
 5. **Promotion is non-disruptive.** The primitive's wire and graph behavior under its extension URI is consistent with what its normative URI would be. Consumers using the extension URI before promotion can swap to the normative URI without changing their semantics. If promotion would change behavior in a way existing extension users have to migrate around, the bar is not met (or the change is not a promotion, it is a redesign).
 
@@ -1394,7 +1394,7 @@ The decision should be NOT to promote when any of these observations hold, even 
 
 Suppose a proposal arrives to add four types covering a recursive-learning loop: `observation`, `annotation`, `proposal`, `apply`. Applying the indicators:
 
-- `observation`: indicator 1 holds (multiple categories: monitoring, multi-agent, personal, regulated-AI input loggers), indicator 2 holds (no caller-supplied input + no return value to attest to is structurally distinct from tool_call), indicator 3 holds (regulators auditing perception), indicator 4 plausible (potential §3 future use), indicator 5 holds. **Promoted**, becomes `https://atrib.dev/v1/types/observation`.
+- `observation`: indicator 1 holds (multiple categories: monitoring, multi-agent, personal, regulated-AI input loggers), indicator 2 holds (no caller-supplied input + no return value to attest to is structurally distinct from tool_call), indicator 3 holds (regulators auditing perception), indicator 4 plausible (potential [§3](atrib-spec.md#3-graph-query-interface) future use), indicator 5 holds. **Promoted**, becomes `https://atrib.dev/v1/types/observation`.
 - `annotation`: indicator 2 fails (special case of tool_call where an agent invoked a classify-tool; the derivation linkage is content metadata, not a structural distinction). **Extension namespace.**
 - `proposal`: indicator 1 borderline (multi-agent + approval-workflow yes; most agents act rather than propose). Indicator 4 fails initially (no atrib protocol behavior depends on it; usage may be single-category). **Extension namespace; revisit if multiple consumer categories independently adopt similar URIs.**
 - `apply`: indicator 2 fails (tool_call with a `parent_proposal_record_hash` linkage covers it; the linkage is content, not structure). **Extension namespace.**
@@ -1415,8 +1415,8 @@ Result: one promotion (`observation`), three correct-rejections that remain vali
 
 **Consequences.**
 
-- atrib publishes its normative URI set in spec §1.2.4 with promotion history. Each entry includes: the URI, the date promoted, the byte mapping (if any), a one-sentence semantic statement, and a pointer to the ADR that promoted it.
-- Promotion of a URI to atrib normative status requires a new ADR (or an amendment to D035) referencing this bar, with an evaluation against the five indicators recorded inline.
+- atrib publishes its normative URI set in spec [§1.2.4](atrib-spec.md#124-event_type-values) with promotion history. Each entry includes: the URI, the date promoted, the byte mapping (if any), a one-sentence semantic statement, and a pointer to the ADR that promoted it.
+- Promotion of a URI to atrib normative status requires a new ADR (or an amendment to [D035](#d035-extensible-event_type-vocabulary-via-uri-typing)) referencing this bar, with an evaluation against the five indicators recorded inline.
 - The ADR referencing this bar serves as the historical record of the decision; future maintainers can re-evaluate whether the bar produced the right outcome by reading both the ADR and the subsequent observation period.
 - Consumers proposing promotion get a transparent answer (the indicators above) without atrib needing to maintain a process.
 - Maintainers facing a promotion proposal apply the bar in one document and either promote (new ADR + spec update) or explain (issue comment + close).
@@ -1427,11 +1427,11 @@ Result: one promotion (`observation`), three correct-rejections that remain vali
 - *Drift between extension URIs and atrib's normative set.* If atrib promotes `observation` but a consumer has been using `https://example.com/observation` with subtly different semantics, their existing records remain under their URI; their new records may target atrib's URI; verifiers comparing the two need their own mapping. atrib does not enforce migration.
 - *Silent adoption.* atrib only knows about promotions when extension URIs become observable. Closed-source consumers using atrib in production may have URIs that should be promoted but are not visible to atrib's maintainers. The mitigation is: encourage consumers to publish their URI choices in their own documentation, but not as a normative requirement.
 
-**Implementation sequencing.** D036 has no implementation. It is a governance ADR. The first application of the bar is the normative set defined in D035: `tool_call`, `transaction`, `observation`. The next application will be whoever proposes the next promotion.
+**Implementation sequencing.** [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) has no implementation. It is a governance ADR. The first application of the bar is the normative set defined in [D035](#d035-extensible-event_type-vocabulary-via-uri-typing): `tool_call`, `transaction`, `observation`. The next application will be whoever proposes the next promotion.
 
 ## D037-D040: Reserved
 
-D037 through D040 are reserved for future ADRs queued at the time the D041-D049 series was authored. The reserved scopes are:
+D037 through D040 are reserved for future ADRs queued at the time the [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type)-D049 series was authored. The reserved scopes are:
 
 - **D037**: HSM/KMS operator profile (hardware-backed signing; `keystore: 'callback'` mode)
 - **D038**: per-conversation key derivation (HKDF from master seed; spec-only, deferred implementation)
@@ -1479,8 +1479,8 @@ Without such a primitive, every consumer wanting reasoning-chain auditability ei
 
 **Consequences.**
 
-- *Spec.* §1.2 (record format) gains `informed_by` field definition. §1.3 (canonical serialization) updates JCS field-order example. §3.2.3 + §3.2.4 add INFORMED_BY edge type and derivation rule. §3.2.1 records that any node type may be the source or target of an INFORMED_BY edge.
-- *`@atrib/mcp`.* Record type gains optional `informed_by: string[]`. Signing/verification updates JCS canonicalization to include the field when present. New helper `recordOptions.informedBy: string[]` to allow agent override of middleware auto-tracking (D048).
+- *Spec.* [§1.2](atrib-spec.md#12-the-attribution-record) (record format) gains `informed_by` field definition. [§1.3](atrib-spec.md#13-canonical-serialization) (canonical serialization) updates JCS field-order example. [§3.2.3](atrib-spec.md#323-edge-types) + [§3.2.4](atrib-spec.md#324-edge-derivation-rules) add INFORMED_BY edge type and derivation rule. [§3.2.1](atrib-spec.md#321-node-types) records that any node type may be the source or target of an INFORMED_BY edge.
+- *`@atrib/mcp`.* Record type gains optional `informed_by: string[]`. Signing/verification updates JCS canonicalization to include the field when present. New helper `recordOptions.informedBy: string[]` to allow agent override of middleware auto-tracking ([D048](#d048-plug-and-play-enforcement-contract-for-adapters)).
 - *`@atrib/agent`.* Adapters gain a context tracker that records hashes of records the agent has consumed via tool results, observations, and inbound provenance. Auto-populates `informed_by` on subsequent emissions. Agent override available via `recordOptions.informedBy`.
 - *`@atrib/verify`.* Verification output gains `informed_by_resolution: { resolved: ResolvedRecord[], dangling: string[] }` per record. Dangling references are flagged but do not fail verification (the claim was signed; the referent's absence is a different question).
 - *services/graph-node.* Edge derivation gains step 6 (INFORMED_BY). Node response includes `informed_by_count` for browseability.
@@ -1489,66 +1489,66 @@ Without such a primitive, every consumer wanting reasoning-chain auditability ei
 **What this DOESN'T solve.**
 
 - *Truthfulness of the claim.* atrib does not prove the listed records actually informed the action. A malicious or careless agent can claim records that did not inform, or omit records that did. Truthfulness verification is a downstream concern: cross-check content (when revealed) against the claimed action.
-- *Reasoning between records.* `informed_by` says "these records informed me." It does not say what the agent reasoned about between them. Reasoning auditability is the harness-side pattern in D047.
-- *Privacy of the linkage itself.* Listing record_hashes discloses the agent's claimed reasoning composition. This is the structural disclosure that makes auditability work; consumers wanting finer control commit to a hash of the sorted list (`informed_by_commitment`) and reveal selectively. The commitment-and-reveal pattern is harness-layer; D045 documents it as a privacy posture option.
+- *Reasoning between records.* `informed_by` says "these records informed me." It does not say what the agent reasoned about between them. Reasoning auditability is the harness-side pattern in [D047](#d047-harness-side-reasoning-chains-as-informative-7-pattern).
+- *Privacy of the linkage itself.* Listing record_hashes discloses the agent's claimed reasoning composition. This is the structural disclosure that makes auditability work; consumers wanting finer control commit to a hash of the sorted list (`informed_by_commitment`) and reveal selectively. The commitment-and-reveal pattern is harness-layer; [D045](#d045-privacy-postures-normative-spec-section) documents it as a privacy posture option.
 
-**Implementation sequencing.** Spec §1.2 + §1.3 + §3.2.3 + §3.2.4 update → `@atrib/mcp` types + signing + canonicalization → `@atrib/agent` context tracker → `@atrib/verify` resolution output → `services/graph-node` edge derivation → conformance corpus generation → unit tests across the matrix.
+**Implementation sequencing.** Spec [§1.2](atrib-spec.md#12-the-attribution-record) + [§1.3](atrib-spec.md#13-canonical-serialization) + [§3.2.3](atrib-spec.md#323-edge-types) + [§3.2.4](atrib-spec.md#324-edge-derivation-rules) update → `@atrib/mcp` types + signing + canonicalization → `@atrib/agent` context tracker → `@atrib/verify` resolution output → `services/graph-node` edge derivation → conformance corpus generation → unit tests across the matrix.
 
 ## D042: Lift observation graph participation restriction
 
 **Date:** 2026-04-28
 **Status:** Accepted
 
-**Context.** D035 promoted `observation` to atrib's normative event_type set. The initial graph derivation rules (§3.2.1, §3.2.4) excluded observation records from CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL, and CONVERGES_ON edges. This was a conservative v1 choice: observation semantics were new, and the spec preferred to defer linkage rules until usage established what they should be.
+**Context.** [D035](#d035-extensible-event_type-vocabulary-via-uri-typing) promoted `observation` to atrib's normative event_type set. The initial graph derivation rules ([§3.2.1](atrib-spec.md#321-node-types), [§3.2.4](atrib-spec.md#324-edge-derivation-rules)) excluded observation records from CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL, and CONVERGES_ON edges. This was a conservative v1 choice: observation semantics were new, and the spec preferred to defer linkage rules until usage established what they should be.
 
 The conservative posture has a cost. The most natural use of observation records is as context for subsequent actions: agent observes user preferences, then acts on them; agent observes a market signal, then trades on it; agent observes a tool result, then chains a follow-up. Excluding observation from chain participation means the temporal graph spine has gaps where observations belong. Verifiers querying the graph see tool_calls and transactions but not the observations that contextualize them, even when those observations are signed and chained at the record-format level (every record has chain_root since v1).
 
-The introduction of `informed_by` (D041) makes the cost concrete: observations are the canonical context records that subsequent tool_calls would reference. If observations are missing from the graph spine, INFORMED_BY edges pointing at them dangle by construction.
+The introduction of `informed_by` ([D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type)) makes the cost concrete: observations are the canonical context records that subsequent tool_calls would reference. If observations are missing from the graph spine, INFORMED_BY edges pointing at them dangle by construction.
 
 **Decision.**
 
 1. **Observations participate in CHAIN_PRECEDES, SESSION_PRECEDES, and SESSION_PARALLEL** like any other record type. No special-case logic. The chain spine becomes the temporal ordering of all signed records in a session, regardless of event_type.
 
-2. **Observations DO NOT participate in §4.6 attribution calculation.** The contributing set remains `tool_call` and `gap_node`. Observations are witness records, not actions: the agent did not invoke a tool to produce them. They contextualize attribution but do not contribute to value distribution.
+2. **Observations DO NOT participate in [§4.6](atrib-spec.md#46-the-calculation-algorithm) attribution calculation.** The contributing set remains `tool_call` and `gap_node`. Observations are witness records, not actions: the agent did not invoke a tool to produce them. They contextualize attribution but do not contribute to value distribution.
 
 3. **Observations DO NOT participate in CONVERGES_ON.** The CONVERGES_ON edge says "this node contributed to the transaction in this session." Observations did not contribute; they witnessed. Excluding them from CONVERGES_ON keeps the attribution graph honest.
 
-4. **Observations MAY be the source or target of INFORMED_BY edges.** A tool_call may declare it was informed by an observation (`informed_by: [hash(observation_record)]`). An observation may declare it was informed by prior observations or tool_calls. The edge derivation is content-agnostic per D041.
+4. **Observations MAY be the source or target of INFORMED_BY edges.** A tool_call may declare it was informed by an observation (`informed_by: [hash(observation_record)]`). An observation may declare it was informed by prior observations or tool_calls. The edge derivation is content-agnostic per [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type).
 
 5. **No backfill.** Records signed before this ADR remain valid. The graph builder that processes them simply produces edges per the new rule when re-running.
 
 **Alternatives considered.**
 
-1. *Keep observation excluded.* Rejected because the cost is concrete: INFORMED_BY edges pointing at observations would dangle, and the chain spine would have gaps where the natural context records belong. The original conservative choice was reasonable for v1 in isolation; D041 changes the calculus.
+1. *Keep observation excluded.* Rejected because the cost is concrete: INFORMED_BY edges pointing at observations would dangle, and the chain spine would have gaps where the natural context records belong. The original conservative choice was reasonable for v1 in isolation; [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type) changes the calculus.
 
-2. *Promote observation to the §4.6 contributing set.* Rejected because observations are witnesses, not actions. Including them in attribution would inflate claimed contributions for any agent that records its own observations. The fact/policy boundary requires observations to be queryable but not weighted by default.
+2. *Promote observation to the [§4.6](atrib-spec.md#46-the-calculation-algorithm) contributing set.* Rejected because observations are witnesses, not actions. Including them in attribution would inflate claimed contributions for any agent that records its own observations. The fact/policy boundary requires observations to be queryable but not weighted by default.
 
-3. *Add observation to CONVERGES_ON.* Rejected for the same reason as #2: CONVERGES_ON is the structural prerequisite for §4.6 calculation. If observations carry CONVERGES_ON edges, attribution policies that count CONVERGES_ON would over-count.
+3. *Add observation to CONVERGES_ON.* Rejected for the same reason as #2: CONVERGES_ON is the structural prerequisite for [§4.6](atrib-spec.md#46-the-calculation-algorithm) calculation. If observations carry CONVERGES_ON edges, attribution policies that count CONVERGES_ON would over-count.
 
 4. *Define a separate "OBSERVATION_PRECEDES" edge type.* Rejected as artificial taxonomy growth. The temporal/chain semantics are identical for tool_calls and observations; introducing a parallel edge type for one event_type is structural duplication without benefit.
 
 **Consequences.**
 
-- *Spec.* §3.2.1 node types entry for observation is updated: observation participates in CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL; does not participate in CONVERGES_ON or §4.6 calculation; may be source or target of INFORMED_BY (D041). §3.2.4 derivation steps add the inclusion clarification.
-- *`@atrib/verify`.* §4.6 implementation explicitly excludes observation from contributing set (was implicit; becomes explicit per the rule above).
+- *Spec.* [§3.2.1](atrib-spec.md#321-node-types) node types entry for observation is updated: observation participates in CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL; does not participate in CONVERGES_ON or [§4.6](atrib-spec.md#46-the-calculation-algorithm) calculation; may be source or target of INFORMED_BY ([D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type)). [§3.2.4](atrib-spec.md#324-edge-derivation-rules) derivation steps add the inclusion clarification.
+- *`@atrib/verify`.* [§4.6](atrib-spec.md#46-the-calculation-algorithm) implementation explicitly excludes observation from contributing set (was implicit; becomes explicit per the rule above).
 - *services/graph-node.* Edge derivation includes observations in steps 1-3 (chain, session_precedes, session_parallel) but excludes from step 4 (CONVERGES_ON). Step 5 (CROSS_SESSION) already excluded observations because session_token semantics describe agent continuation, not witness continuation.
-- *Conformance.* New `spec/conformance/3.2.4/observation-chained/` corpus exercises observation-in-chain derivation. New negative case: observation MUST NOT appear in §4.6 contribution sets.
+- *Conformance.* New `spec/conformance/3.2.4/observation-chained/` corpus exercises observation-in-chain derivation. New negative case: observation MUST NOT appear in [§4.6](atrib-spec.md#46-the-calculation-algorithm) contribution sets.
 
 **What this DOESN'T solve.**
 
-- *Whether observations should ever count for attribution.* Some consumers may want observation contributions (e.g., a research-credit policy that values reading prior work). Such consumers express the policy in their §4 policy document; atrib's §4.6 default stays clean. This is the fact/policy separation working as intended.
-- *Cross-session observation linkage.* Observations do not carry session_token (typically) and so do not participate in CROSS_SESSION. If an observation needs to anchor cross-session work, the carrier is `provenance_token` (D044) or `informed_by` (D041), not session_token.
+- *Whether observations should ever count for attribution.* Some consumers may want observation contributions (e.g., a research-credit policy that values reading prior work). Such consumers express the policy in their [§4](atrib-spec.md#4-attribution-policy-format) policy document; atrib's [§4.6](atrib-spec.md#46-the-calculation-algorithm) default stays clean. This is the fact/policy separation working as intended.
+- *Cross-session observation linkage.* Observations do not carry session_token (typically) and so do not participate in CROSS_SESSION. If an observation needs to anchor cross-session work, the carrier is `provenance_token` ([D044](#d044-provenance_token-field-for-cross-session-causal-anchoring)) or `informed_by` ([D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type)), not session_token.
 
-**Implementation sequencing.** Spec §3.2.1 + §3.2.4 update → `services/graph-node` derivation update → `@atrib/verify` calculation: explicit exclusion → conformance corpus gains observation-in-chain cases → integration test with mixed event types.
+**Implementation sequencing.** Spec [§3.2.1](atrib-spec.md#321-node-types) + [§3.2.4](atrib-spec.md#324-edge-derivation-rules) update → `services/graph-node` derivation update → `@atrib/verify` calculation: explicit exclusion → conformance corpus gains observation-in-chain cases → integration test with mixed event types.
 
 ## D043: Extension URI participation in graph derivation
 
 **Date:** 2026-04-28
 **Status:** Accepted
 
-**Context.** D035 established URI-typed event_type with extension URIs in consumer namespaces (byte 0xFF in §2.3.1). The initial v1 rule excluded extension records from edge derivation: "queryable as opaque-typed nodes but DO NOT participate in §3.2.4 edge derivation."
+**Context.** [D035](#d035-extensible-event_type-vocabulary-via-uri-typing) established URI-typed event_type with extension URIs in consumer namespaces (byte 0xFF in [§2.3.1](atrib-spec.md#231-entry-serialization)). The initial v1 rule excluded extension records from edge derivation: "queryable as opaque-typed nodes but DO NOT participate in [§3.2.4](atrib-spec.md#324-edge-derivation-rules) edge derivation."
 
-This rule has the same shape as the observation exclusion (D042) and the same cost: the temporal graph spine has gaps where extension records belong. For the §7.5 harness-side reasoning chains pattern (D047) to work using extension URIs, the extension records must appear in the chain spine alongside tool_calls and observations. Otherwise verifiers querying the graph cannot see the deliberation records the harness emitted.
+This rule has the same shape as the observation exclusion ([D042](#d042-lift-observation-graph-participation-restriction)) and the same cost: the temporal graph spine has gaps where extension records belong. For the [§7.5](atrib-spec.md#75-harness-side-reasoning-chains) harness-side reasoning chains pattern ([D047](#d047-harness-side-reasoning-chains-as-informative-7-pattern)) to work using extension URIs, the extension records must appear in the chain spine alongside tool_calls and observations. Otherwise verifiers querying the graph cannot see the deliberation records the harness emitted.
 
 The trust posture for extension URIs differs from atrib's normative URIs: atrib does not bless their semantics. Including them in the chain spine must not be mistaken for blessing.
 
@@ -1558,15 +1558,15 @@ The trust posture for extension URIs differs from atrib's normative URIs: atrib 
 
 2. **Extension URI records DO NOT participate in CONVERGES_ON by default.** CONVERGES_ON implies contribution toward a transaction, which is an attribution claim atrib makes about its normative types. Extension URIs are consumer-namespace; default semantics conservatively exclude.
 
-3. **Extension URI records MAY participate in PROVENANCE_OF (D044) and INFORMED_BY (D041).** Both edge types are content-agnostic structural primitives. An extension record may carry `provenance_token` and `informed_by`; the derivation honors the field, not the URI.
+3. **Extension URI records MAY participate in PROVENANCE_OF ([D044](#d044-provenance_token-field-for-cross-session-causal-anchoring)) and INFORMED_BY ([D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type)).** Both edge types are content-agnostic structural primitives. An extension record may carry `provenance_token` and `informed_by`; the derivation honors the field, not the URI.
 
-4. **Extension URI records DO NOT participate in §4.6 attribution calculation by default.** Promotion to the contributing set requires D036's bar. Consumer policies (§4 policy documents distinct from §4.6 default algorithm) MAY include extension URIs in their own attribution; the protocol stays clean.
+4. **Extension URI records DO NOT participate in [§4.6](atrib-spec.md#46-the-calculation-algorithm) attribution calculation by default.** Promotion to the contributing set requires [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)'s bar. Consumer policies ([§4](atrib-spec.md#4-attribution-policy-format) policy documents distinct from [§4.6](atrib-spec.md#46-the-calculation-algorithm) default algorithm) MAY include extension URIs in their own attribution; the protocol stays clean.
 
 5. **Verifier surfaces the URI verbatim.** Graph response includes the full URI string for extension nodes. Verifiers wanting to filter by namespace do so client-side.
 
 **Alternatives considered.**
 
-1. *Continue excluding extension URIs from all graph edges.* Rejected because §7 harness-side patterns (D047) need extension records in the chain spine. Excluding produces gaps where reasoning records belong.
+1. *Continue excluding extension URIs from all graph edges.* Rejected because [§7](atrib-spec.md#7-harness-integration-patterns) harness-side patterns ([D047](#d047-harness-side-reasoning-chains-as-informative-7-pattern)) need extension records in the chain spine. Excluding produces gaps where reasoning records belong.
 
 2. *Include extension URIs in CONVERGES_ON.* Rejected because atrib does not bless extension semantics. Including extension records as contributors would imply atrib certifies their attribution claim.
 
@@ -1576,24 +1576,24 @@ The trust posture for extension URIs differs from atrib's normative URIs: atrib 
 
 **Consequences.**
 
-- *Spec.* §3.2.1 node types section gains an "Extension URI nodes" subsection clarifying participation. §3.2.4 derivation steps add the inclusion clarification.
+- *Spec.* [§3.2.1](atrib-spec.md#321-node-types) node types section gains an "Extension URI nodes" subsection clarifying participation. [§3.2.4](atrib-spec.md#324-edge-derivation-rules) derivation steps add the inclusion clarification.
 - *services/graph-node.* Edge derivation includes extension records in chain steps. Already excluded from CONVERGES_ON since v1; no change.
-- *`@atrib/verify`.* §4.6 implementation explicitly excludes extension URIs from contributing set (matches existing behavior; becomes explicit).
+- *`@atrib/verify`.* [§4.6](atrib-spec.md#46-the-calculation-algorithm) implementation explicitly excludes extension URIs from contributing set (matches existing behavior; becomes explicit).
 - *Conformance.* New `spec/conformance/3.2.4/extension-chained/` cases exercise extension-record-in-chain derivation.
 
 **What this DOESN'T solve.**
 
 - *Cross-namespace alignment.* Two consumers minting different URIs for similar concepts (e.g., `https://a.example/proposal` vs `https://b.example/proposal`) appear as distinct node types in the graph. Verifiers wanting to treat them as equivalent maintain their own mapping. This matches MIME types and W3C VC `@type`.
-- *Default §4.6 participation for extension URIs that should arguably contribute.* If a consumer mints an "action" URI structurally identical to `tool_call`, atrib's §4.6 still excludes it. The consumer's own policy may include it; atrib normative behavior does not change without a D036 promotion.
+- *Default [§4.6](atrib-spec.md#46-the-calculation-algorithm) participation for extension URIs that should arguably contribute.* If a consumer mints an "action" URI structurally identical to `tool_call`, atrib's [§4.6](atrib-spec.md#46-the-calculation-algorithm) still excludes it. The consumer's own policy may include it; atrib normative behavior does not change without a [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion.
 
-**Implementation sequencing.** Spec §3.2.1 + §3.2.4 update → `services/graph-node` derivation includes extensions in chain steps → conformance corpus gains extension-in-chain cases → integration test with extension records carrying informed_by + provenance_token.
+**Implementation sequencing.** Spec [§3.2.1](atrib-spec.md#321-node-types) + [§3.2.4](atrib-spec.md#324-edge-derivation-rules) update → `services/graph-node` derivation includes extensions in chain steps → conformance corpus gains extension-in-chain cases → integration test with extension records carrying informed_by + provenance_token.
 
 ## D044: provenance_token field for cross-session causal anchoring
 
 **Date:** 2026-04-28
 **Status:** Accepted (refactored from initial draft to resolve circular derivation)
 
-**Context.** atrib v1 has one cross-session linkage mechanism: `session_token`, defined in §1.2.1 as "Base64url-encoded 16-byte opaque token identifying the logical session across OTel trace boundaries." session_token expresses *same logical session* across trace boundaries: an agent doing one continuous task that happens to span multiple OTel context_ids.
+**Context.** atrib v1 has one cross-session linkage mechanism: `session_token`, defined in [§1.2.1](atrib-spec.md#121-field-definitions) as "Base64url-encoded 16-byte opaque token identifying the logical session across OTel trace boundaries." session_token expresses *same logical session* across trace boundaries: an agent doing one continuous task that happens to span multiple OTel context_ids.
 
 Several real cross-session patterns are NOT same-logical-session and need a different mechanism:
 
@@ -1601,9 +1601,9 @@ Several real cross-session patterns are NOT same-logical-session and need a diff
 - **Tool-result consumption across sessions:** agent A writes to a queue, agent B reads it later. Different agents, different times, causal dependency.
 - **Webhook/event-driven:** agent A emits an event, agent B reacts later. Different agents, different times, causal dependency.
 
-In all three patterns the downstream session is *causally anchored* on an upstream record but is not the *same logical session*. session_token does not fit. An earlier design considered `recommendation_token` for this purpose; it was discussed in spec §3.2.4 notes as a deferred mechanism but never normatively specified. The name overcommits to one specific use case (recommendations); the actual mechanic is broader.
+In all three patterns the downstream session is *causally anchored* on an upstream record but is not the *same logical session*. session_token does not fit. An earlier design considered `recommendation_token` for this purpose; it was discussed in spec [§3.2.4](atrib-spec.md#324-edge-derivation-rules) notes as a deferred mechanism but never normatively specified. The name overcommits to one specific use case (recommendations); the actual mechanic is broader.
 
-D041 introduced `informed_by` as the general "agent's claimed reasoning context" primitive. provenance_token is best understood as a stricter, ergonomically-specialized subset of informed_by: restricted to a single value, scoped to the session-genesis record only, and truncated for cross-session API ergonomics. The two coexist; provenance_token does not replace informed_by.
+[D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type) introduced `informed_by` as the general "agent's claimed reasoning context" primitive. provenance_token is best understood as a stricter, ergonomically-specialized subset of informed_by: restricted to a single value, scoped to the session-genesis record only, and truncated for cross-session API ergonomics. The two coexist; provenance_token does not replace informed_by.
 
 **Decision.**
 
@@ -1617,7 +1617,7 @@ D041 introduced `informed_by` as the general "agent's claimed reasoning context"
 
 5. **provenance_token as a stricter subset of informed_by.** Both fields express agent-claimed causal references. The distinctions:
 
-   | Property | `informed_by` (D041) | `provenance_token` (this ADR) |
+   | Property | `informed_by` ([D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type)) | `provenance_token` (this ADR) |
    |---|---|---|
    | Cardinality | Multi-valued (array) | Single-valued |
    | Scope | Per-record (any record may carry it) | Per-session (genesis record only) |
@@ -1633,7 +1633,7 @@ D041 introduced `informed_by` as the general "agent's claimed reasoning context"
 
 8. **session_token semantics unchanged.** session_token continues to mean *same logical session across traces* and continues to drive CROSS_SESSION edges. provenance_token is a distinct field with distinct semantics; the two MAY coexist on the same record (a session-genesis record may both belong to a multi-trace logical session AND descend from a prior session's anchor).
 
-9. **Distinct from `recommendation_token`.** The `recommendation_token` mention in §3.2.4 (originally a deferred design note) is removed from the spec. This ADR formally supersedes it.
+9. **Distinct from `recommendation_token`.** The `recommendation_token` mention in [§3.2.4](atrib-spec.md#324-edge-derivation-rules) (originally a deferred design note) is removed from the spec. This ADR formally supersedes it.
 
 **Alternatives considered.**
 
@@ -1653,9 +1653,9 @@ D041 introduced `informed_by` as the general "agent's claimed reasoning context"
 
 **Consequences.**
 
-- *Spec.* §1.2 (record format) gains `provenance_token` field definition. §1.2.6 gives the full semantics including the genesis-record constraint. §1.3 updates JCS field-order example. §3.2.3 gains PROVENANCE_OF edge type. §3.2.4 gains derivation step 7 (PROVENANCE_OF) after the existing 5 steps and the new INFORMED_BY step (D041). §3.2.4 note about "recommendation_token" is removed.
+- *Spec.* [§1.2](atrib-spec.md#12-the-attribution-record) (record format) gains `provenance_token` field definition. [§1.2.6](atrib-spec.md#126-provenance_token) gives the full semantics including the genesis-record constraint. [§1.3](atrib-spec.md#13-canonical-serialization) updates JCS field-order example. [§3.2.3](atrib-spec.md#323-edge-types) gains PROVENANCE_OF edge type. [§3.2.4](atrib-spec.md#324-edge-derivation-rules) gains derivation step 7 (PROVENANCE_OF) after the existing 5 steps and the new INFORMED_BY step ([D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type)). [§3.2.4](atrib-spec.md#324-edge-derivation-rules) note about "recommendation_token" is removed.
 - *`@atrib/mcp`.* Record type gains optional `provenance_token: string`. Helper `recordOptions.provenanceToken: string` lets a session's genesis record claim a known anchor token. Validation: middleware MUST reject `provenance_token` on non-genesis records.
-- *`@atrib/agent`.* Adapters auto-derive provenance_token from inbound cross-session API state when the agent uses canonical subagent-spawn or workflow-handoff APIs (D048). Other patterns require explicit opt-in via `recordOptions`.
+- *`@atrib/agent`.* Adapters auto-derive provenance_token from inbound cross-session API state when the agent uses canonical subagent-spawn or workflow-handoff APIs ([D048](#d048-plug-and-play-enforcement-contract-for-adapters)). Other patterns require explicit opt-in via `recordOptions`.
 - *`@atrib/verify`.* Verification output gains `provenance: { token, upstream_record_hash, upstream_resolved: ResolvedRecord | null }` for the genesis record carrying the token. Dangling references (token claimed but upstream record not in resolved set) are flagged.
 - *services/graph-node.* Edge derivation gains step 7 (PROVENANCE_OF). Cross-session query semantics extended.
 - *Conformance.* `spec/conformance/1.4/` corpus gains vectors with provenance_token on genesis records. New `spec/conformance/3.2.4/provenance/` corpus exercises derivation across context_ids. New negative case: provenance_token on non-genesis record MUST be rejected.
@@ -1666,7 +1666,7 @@ D041 introduced `informed_by` as the general "agent's claimed reasoning context"
 - *Multi-anchor cross-session causation.* A session may genuinely descend from multiple upstream sessions (e.g., merging two task threads). provenance_token is single-valued; informed_by handles the multi-valued case (full hashes, any record can carry it).
 - *Forward inference.* PROVENANCE_OF edges only exist when downstream genesis records explicitly claim a token. atrib does not infer provenance from content overlap or behavioral similarity.
 
-**Implementation sequencing.** Spec §1.2 + §1.2.6 + §1.3 + §3.2.3 + §3.2.4 update → `@atrib/mcp` types + signing + canonicalization + genesis-record validation → `@atrib/agent` auto-derivation for canonical patterns → `@atrib/verify` provenance resolution → `services/graph-node` step 7 derivation → conformance corpus generation → integration test for handoff and webhook patterns.
+**Implementation sequencing.** Spec [§1.2](atrib-spec.md#12-the-attribution-record) + [§1.2.6](atrib-spec.md#126-provenance_token) + [§1.3](atrib-spec.md#13-canonical-serialization) + [§3.2.3](atrib-spec.md#323-edge-types) + [§3.2.4](atrib-spec.md#324-edge-derivation-rules) update → `@atrib/mcp` types + signing + canonicalization + genesis-record validation → `@atrib/agent` auto-derivation for canonical patterns → `@atrib/verify` provenance resolution → `services/graph-node` step 7 derivation → conformance corpus generation → integration test for handoff and webhook patterns.
 
 ## D045: Privacy postures normative spec section
 
@@ -1685,21 +1685,21 @@ Mitigations exist (opaque tool labels, salted commitments, coarsened timing) but
 
 **Decision.**
 
-1. **Spec gains a new §8 "Privacy postures" section** establishing four normative postures. A record's posture is encoded in the record's structural shape (presence/absence of optional fields, choice of commitment scheme); verifiers detect the posture from the record's bytes.
+1. **Spec gains a new [§8](atrib-spec.md#8-privacy-postures) "Privacy postures" section** establishing four normative postures. A record's posture is encoded in the record's structural shape (presence/absence of optional fields, choice of commitment scheme); verifiers detect the posture from the record's bytes.
 
-2. **§8.1 Default posture.** Plain SHA-256 hashes for args/result, millisecond timestamps, verbatim tool_name strings. Maximum auditability. The current v1 default. No record changes.
+2. **[§8.1](atrib-spec.md#81-default-posture) Default posture.** Plain SHA-256 hashes for args/result, millisecond timestamps, verbatim tool_name strings. Maximum auditability. The current v1 default. No record changes.
 
-3. **§8.2 Opaque-name posture.** `tool_name` MAY be an opaque label or a hash. Allowed forms: (a) `sha256:<hex>` to indicate a hashed name (verifier knows mapping if configured), (b) opaque labels matching `[a-z0-9_-]{1,64}` with no required mapping. Verifier surfaces the form verbatim and indicates `tool_name_form: "opaque" | "hashed" | "verbatim"`.
+3. **[§8.2](atrib-spec.md#82-opaque-name-posture) Opaque-name posture.** `tool_name` MAY be an opaque label or a hash. Allowed forms: (a) `sha256:<hex>` to indicate a hashed name (verifier knows mapping if configured), (b) opaque labels matching `[a-z0-9_-]{1,64}` with no required mapping. Verifier surfaces the form verbatim and indicates `tool_name_form: "opaque" | "hashed" | "verbatim"`.
 
-4. **§8.3 Salted-commitment posture.** `args_hash` and `result_hash` MAY use salted commitments. Salt is per-record random (≥16 bytes). Two commitment schemes defined: `salted-sha256` (`H(salt ‖ canonical_bytes)` with salt revealed in a sibling field `args_salt` / `result_salt`), and `hmac-sha256` (`HMAC(key, canonical_bytes)` with key kept private). Verifier indicates `args_commitment_form: "plain-sha256" | "salted-sha256" | "hmac-sha256"`.
+4. **[§8.3](atrib-spec.md#83-salted-commitment-posture) Salted-commitment posture.** `args_hash` and `result_hash` MAY use salted commitments. Salt is per-record random (≥16 bytes). Two commitment schemes defined: `salted-sha256` (`H(salt ‖ canonical_bytes)` with salt revealed in a sibling field `args_salt` / `result_salt`), and `hmac-sha256` (`HMAC(key, canonical_bytes)` with key kept private). Verifier indicates `args_commitment_form: "plain-sha256" | "salted-sha256" | "hmac-sha256"`.
 
-5. **§8.4 Coarsened-timing posture.** `timestamp_ms` MAY be rounded. Allowed granularities: millisecond (default), second (×1000), minute (×60000), hour (×3600000), day (×86400000). Granularity is encoded by the timestamp value itself; a value of 1743850000000 is millisecond-precise; a value of 1743849600000 (rounded to minute) is minute-precise. Verifier indicates `timestamp_granularity: "ms" | "s" | "min" | "h" | "d"` derived from value structure (trailing-zero analysis).
+5. **[§8.4](atrib-spec.md#84-coarsened-timing-posture) Coarsened-timing posture.** `timestamp_ms` MAY be rounded. Allowed granularities: millisecond (default), second (×1000), minute (×60000), hour (×3600000), day (×86400000). Granularity is encoded by the timestamp value itself; a value of 1743850000000 is millisecond-precise; a value of 1743849600000 (rounded to minute) is minute-precise. Verifier indicates `timestamp_granularity: "ms" | "s" | "min" | "h" | "d"` derived from value structure (trailing-zero analysis).
 
-6. **§8.5 Combined postures.** Harnesses MAY combine postures freely. A record may use opaque tool_name with salted commitments and minute-granularity timestamps. The verifier reads each posture independently; they compose without interaction.
+6. **[§8.5](atrib-spec.md#85-combined-postures) Combined postures.** Harnesses MAY combine postures freely. A record may use opaque tool_name with salted commitments and minute-granularity timestamps. The verifier reads each posture independently; they compose without interaction.
 
-7. **§8.6 Threat model.** A normative subsection enumerates what an adversary learns under each posture combination. Includes worked examples (default posture: full content fingerprintable; opaque + salted + minute: only structural and identity claims observable).
+7. **[§8.6](atrib-spec.md#86-threat-model) Threat model.** A normative subsection enumerates what an adversary learns under each posture combination. Includes worked examples (default posture: full content fingerprintable; opaque + salted + minute: only structural and identity claims observable).
 
-8. **Posture selection is a harness concern.** §7 (Harness Integration Patterns) gains a "Privacy posture selection" subsection explaining how to pick a posture for a given consumer (high-audit B2B → defaults; consumer-facing app → opaque + salted + minute; etc.).
+8. **Posture selection is a harness concern.** [§7](atrib-spec.md#7-harness-integration-patterns) (Harness Integration Patterns) gains a "Privacy posture selection" subsection explaining how to pick a posture for a given consumer (high-audit B2B → defaults; consumer-facing app → opaque + salted + minute; etc.).
 
 **Alternatives considered.**
 
@@ -1711,22 +1711,22 @@ Mitigations exist (opaque tool labels, salted commitments, coarsened timing) but
 
 4. *Defer privacy postures to a v1.1 spec.* Rejected because the gap is concrete now. The substrate's brand promise depends on configurable disclosure being a normative property. Pre-public, additive optional changes are essentially free.
 
-5. *Use zero-knowledge commitments (Pedersen, KZG) for args/result.* Rejected as v1 spec material. ZK schemes have meaningful complexity and ecosystem dependency. They MAY be added as additional commitment schemes in §8.3 in future revisions; the spec defines the extensibility shape now.
+5. *Use zero-knowledge commitments (Pedersen, KZG) for args/result.* Rejected as v1 spec material. ZK schemes have meaningful complexity and ecosystem dependency. They MAY be added as additional commitment schemes in [§8.3](atrib-spec.md#83-salted-commitment-posture) in future revisions; the spec defines the extensibility shape now.
 
 **Consequences.**
 
-- *Spec.* New §8 section with five subsections defining the postures and threat model. §1.2 field definitions updated to allow the alternate forms (tool_name forms, optional salt/key fields). §7 gains posture-selection subsection.
+- *Spec.* New [§8](atrib-spec.md#8-privacy-postures) section with five subsections defining the postures and threat model. [§1.2](atrib-spec.md#12-the-attribution-record) field definitions updated to allow the alternate forms (tool_name forms, optional salt/key fields). [§7](atrib-spec.md#7-harness-integration-patterns) gains posture-selection subsection.
 - *`@atrib/mcp`.* Record type gains optional `args_salt`, `result_salt` fields. Signing/verification updates to detect commitment scheme from record shape. Helpers for each posture: `recordOptions.toolNameForm: "verbatim" | "opaque" | "hashed"`, `recordOptions.commitmentScheme: "plain-sha256" | "salted-sha256" | "hmac-sha256"`, `recordOptions.timestampGranularity: "ms" | "s" | "min" | "h" | "d"`.
 - *`@atrib/verify`.* Verification output indicates the posture detected per record. Threat-model implications surfaced as informational warnings (not verification failures).
 - *Conformance.* `spec/conformance/8/` corpus exercises each posture combination. Verifier MUST correctly detect posture from record bytes.
 
 **What this DOESN'T solve.**
 
-- *Identity privacy.* `creator_key` is required and discloses the agent's stable identity. The §6 directory may resolve creator_key to a real-world identity claim. Identity privacy requires a different mechanism (key rotation, per-conversation derivation) addressed in D033 and the deferred D038.
-- *Linkage privacy.* `informed_by` and `provenance_token` disclose the agent's claimed reasoning composition. This is the structural disclosure that makes auditability work. Harness-layer mitigations (commitment-and-reveal patterns) are documented in §7.
-- *Metadata privacy of the log itself.* The log entry (§2.3.1) discloses creator_key, context_id, timestamp, event_type byte even when the record content uses high-privacy postures. Mitigating this requires log-level changes outside this ADR's scope.
+- *Identity privacy.* `creator_key` is required and discloses the agent's stable identity. The [§6](atrib-spec.md#6-key-directory) directory may resolve creator_key to a real-world identity claim. Identity privacy requires a different mechanism (key rotation, per-conversation derivation) addressed in [D033](#d033-key-rotation-and-revocation) and the deferred D038.
+- *Linkage privacy.* `informed_by` and `provenance_token` disclose the agent's claimed reasoning composition. This is the structural disclosure that makes auditability work. Harness-layer mitigations (commitment-and-reveal patterns) are documented in [§7](atrib-spec.md#7-harness-integration-patterns).
+- *Metadata privacy of the log itself.* The log entry ([§2.3.1](atrib-spec.md#231-entry-serialization)) discloses creator_key, context_id, timestamp, event_type byte even when the record content uses high-privacy postures. Mitigating this requires log-level changes outside this ADR's scope.
 
-**Implementation sequencing.** Spec §8 drafted → §1.2 field definitions updated → `@atrib/mcp` posture detection + helpers → `@atrib/verify` posture surfacing → conformance corpus generation → §7 posture-selection subsection.
+**Implementation sequencing.** Spec [§8](atrib-spec.md#8-privacy-postures) drafted → [§1.2](atrib-spec.md#12-the-attribution-record) field definitions updated → `@atrib/mcp` posture detection + helpers → `@atrib/verify` posture surfacing → conformance corpus generation → [§7](atrib-spec.md#7-harness-integration-patterns) posture-selection subsection.
 
 ## D046: Positioning lock for what atrib chains and does not chain
 
@@ -1739,9 +1739,9 @@ The positioning needs to be visible in the spec, README, and per-package READMEs
 
 **Decision.**
 
-1. **New spec subsection in §3 (Graph Query Interface)** titled "What atrib chains, what it does not." Lists the structural axes atrib certifies (identity, per-session ordering, cross-session sameness via session_token, cross-session causal anchoring via provenance_token, agent-claimed reasoning composition via informed_by) and the gaps atrib does NOT certify (causation that prior records influenced subsequent decisions; truthfulness of the agent's reasoning claims; reality of tool responses absent tool-side attestation).
+1. **New spec subsection in [§3](atrib-spec.md#3-graph-query-interface) (Graph Query Interface)** titled "What atrib chains, what it does not." Lists the structural axes atrib certifies (identity, per-session ordering, cross-session sameness via session_token, cross-session causal anchoring via provenance_token, agent-claimed reasoning composition via informed_by) and the gaps atrib does NOT certify (causation that prior records influenced subsequent decisions; truthfulness of the agent's reasoning claims; reality of tool responses absent tool-side attestation).
 
-2. **Spec §0 abstract update** to use the locked positioning. Headline stays "Verifiable agent actions." Sub-line stays "Every tool call becomes signed context for the next." Tagline stays "Agents that reason from a past they can prove." A new sentence in the abstract clarifies: "atrib certifies who acted, what they did, when, in what order, and what the agent claims informed each action. atrib does not certify the agent's reasoning is truthful or that prior records influenced subsequent decisions; only that the claims were signed."
+2. **Spec [§0](atrib-spec.md#0-foundations) abstract update** to use the locked positioning. Headline stays "Verifiable agent actions." Sub-line stays "Every tool call becomes signed context for the next." Tagline stays "Agents that reason from a past they can prove." A new sentence in the abstract clarifies: "atrib certifies who acted, what they did, when, in what order, and what the agent claims informed each action. atrib does not certify the agent's reasoning is truthful or that prior records influenced subsequent decisions; only that the claims were signed."
 
 3. **README and per-package README updates.** Each surface gets a one-paragraph "What atrib chains, what it does not" block (or link to the spec subsection) so consumers reading any entry point see the same posture.
 
@@ -1757,7 +1757,7 @@ The positioning needs to be visible in the spec, README, and per-package READMEs
 
 **Consequences.**
 
-- *Spec.* §0 abstract update. New §3 subsection (positioning lock). Cross-references from §1.1 (normative requirements language) to the positioning subsection.
+- *Spec.* [§0](atrib-spec.md#0-foundations) abstract update. New [§3](atrib-spec.md#3-graph-query-interface) subsection (positioning lock). Cross-references from [§1.1](atrib-spec.md#11-normative-requirements-language) (normative requirements language) to the positioning subsection.
 - *README.md.* New section after the introductory paragraph: "What atrib chains, what it does not" mirroring the spec subsection.
 - *Per-package READMEs.* `packages/mcp/README.md`, `packages/agent/README.md`, `packages/verify/README.md`, `packages/cli/README.md`, `services/log-node/README.md`, `services/graph-node/README.md` all gain the positioning block (or a link to the spec subsection).
 - *ARCHITECTURE.md.* Trust model section gains explicit limit statement.
@@ -1765,54 +1765,54 @@ The positioning needs to be visible in the spec, README, and per-package READMEs
 **What this DOESN'T solve.**
 
 - *Future consumer misreadings.* Positioning lock prevents the most common misreadings; it does not prevent all of them. Continued consumer-facing communication is a brand discipline, not a spec property.
-- *Drift across surfaces.* Doc propagation requires discipline. CLAUDE.md sync triggers (D047 in cross-reference, also: this ADR triggers a positioning-block sync trigger) catch drift on subsequent edits.
+- *Drift across surfaces.* Doc propagation requires discipline. CLAUDE.md sync triggers ([D047](#d047-harness-side-reasoning-chains-as-informative-7-pattern) in cross-reference, also: this ADR triggers a positioning-block sync trigger) catch drift on subsequent edits.
 
-**Implementation sequencing.** Spec §0 abstract + new §3 positioning subsection → README block → per-package README blocks → ARCHITECTURE.md trust model update → CLAUDE.md sync trigger registration.
+**Implementation sequencing.** Spec [§0](atrib-spec.md#0-foundations) abstract + new [§3](atrib-spec.md#3-graph-query-interface) positioning subsection → README block → per-package README blocks → ARCHITECTURE.md trust model update → CLAUDE.md sync trigger registration.
 
 ## D047: Harness-side reasoning chains as informative §7 pattern
 
 **Date:** 2026-04-28
 **Status:** Accepted
 
-**Context.** D045's "verifiable agent actions in proper context" framing requires reasoning auditability for the brand promise to be substantively honest. Promoting a `reasoning_step` URI to atrib normative (Path 2 from prior session discussion) fails D036's indicator 4: reasoning shapes vary too much across harnesses (ReAct, CoT, scratchpad, multi-agent debate, plan-and-execute) for any single shape to be observably canonical.
+**Context.** [D045](#d045-privacy-postures-normative-spec-section)'s "verifiable agent actions in proper context" framing requires reasoning auditability for the brand promise to be substantively honest. Promoting a `reasoning_step` URI to atrib normative (Path 2 from prior session discussion) fails [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)'s indicator 4: reasoning shapes vary too much across harnesses (ReAct, CoT, scratchpad, multi-agent debate, plan-and-execute) for any single shape to be observably canonical.
 
-The right layer for reasoning chains is the harness, not the protocol. Consumers mint extension URIs in their own namespaces (e.g., `https://example.com/v1/types/reasoning_step`) and link them via `informed_by` (D041). atrib's substrate makes this possible without standardizing what reasoning *is*.
+The right layer for reasoning chains is the harness, not the protocol. Consumers mint extension URIs in their own namespaces (e.g., `https://example.com/v1/types/reasoning_step`) and link them via `informed_by` ([D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type)). atrib's substrate makes this possible without standardizing what reasoning *is*.
 
-§7 (Harness Integration Patterns) already exists in the spec as informative material. Adding a "Harness-side reasoning chains" subsection demonstrates the pattern concretely without elevating it to normative.
+[§7](atrib-spec.md#7-harness-integration-patterns) (Harness Integration Patterns) already exists in the spec as informative material. Adding a "Harness-side reasoning chains" subsection demonstrates the pattern concretely without elevating it to normative.
 
 **Decision.**
 
-1. **New §7 subsection titled "Harness-side reasoning chains."** Informative content showing how a harness mints an extension URI (e.g., `https://example.com/v1/types/reasoning_step`), emits records carrying the URI alongside `tool_call` records, links them via `informed_by`, and exposes them through recall-style consumer surfaces.
+1. **New [§7](atrib-spec.md#7-harness-integration-patterns) subsection titled "Harness-side reasoning chains."** Informative content showing how a harness mints an extension URI (e.g., `https://example.com/v1/types/reasoning_step`), emits records carrying the URI alongside `tool_call` records, links them via `informed_by`, and exposes them through recall-style consumer surfaces.
 
 2. **Trust boundary statement is mandatory.** The subsection states plainly: "reasoning records live outside atrib's normative trust boundary. They prove the harness emitted these bytes. They do NOT prove the LLM actually reasoned this way." This sentence is load-bearing and MUST NOT be removed in subsequent edits without a successor ADR.
 
 3. **No normative claims.** The pattern is illustrative. atrib does not bless any specific reasoning predicate. Consumers may adopt the pattern, vary it, or replace it with their own.
 
-4. **Cross-reference to D041 + D043.** The pattern depends on `informed_by` (linking primitive) and extension URI graph participation (D043). The subsection cross-references both.
+4. **Cross-reference to [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type) + [D043](#d043-extension-uri-participation-in-graph-derivation).** The pattern depends on `informed_by` (linking primitive) and extension URI graph participation ([D043](#d043-extension-uri-participation-in-graph-derivation)). The subsection cross-references both.
 
-5. **Companion §7 subsection: "Outcome verification patterns."** Documents two opt-in patterns for closing the outcome-linkage gap: (a) tool-side response signing (the tool signs responses; the agent records signed-response-hash in `result_hash`), (b) external witness records (downstream observation references external proof such as a chain transaction ID). Same informative-not-normative posture.
+5. **Companion [§7](atrib-spec.md#7-harness-integration-patterns) subsection: "Outcome verification patterns."** Documents two opt-in patterns for closing the outcome-linkage gap: (a) tool-side response signing (the tool signs responses; the agent records signed-response-hash in `result_hash`), (b) external witness records (downstream observation references external proof such as a chain transaction ID). Same informative-not-normative posture.
 
 **Alternatives considered.**
 
-1. *Promote `reasoning_step` to atrib normative URI.* Rejected per D036 indicator 4 (not observably canonical) and privacy concerns (prompt/response hash fingerprinting).
+1. *Promote `reasoning_step` to atrib normative URI.* Rejected per [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) indicator 4 (not observably canonical) and privacy concerns (prompt/response hash fingerprinting).
 
-2. *Document the pattern in a separate guide outside the spec.* Rejected because §7 is the right place: it already exists as informative-pattern content, and consumers reading the spec find the pattern in context.
+2. *Document the pattern in a separate guide outside the spec.* Rejected because [§7](atrib-spec.md#7-harness-integration-patterns) is the right place: it already exists as informative-pattern content, and consumers reading the spec find the pattern in context.
 
 3. *No documentation; let consumers discover the pattern.* Rejected because discoverability is poor and the trust boundary statement is critical to get right. Spec-level documentation prevents misuse.
 
 **Consequences.**
 
-- *Spec.* §7 gains "Harness-side reasoning chains" subsection (§7.5) and "Outcome verification patterns" subsection (§7.6). Both informative.
+- *Spec.* [§7](atrib-spec.md#7-harness-integration-patterns) gains "Harness-side reasoning chains" subsection ([§7.5](atrib-spec.md#75-harness-side-reasoning-chains)) and "Outcome verification patterns" subsection ([§7.6](atrib-spec.md#76-outcome-verification-patterns)). Both informative.
 - *`@atrib/agent`.* No code change. Adapters already support extension URIs; the documented pattern uses existing primitives.
 - *`packages/recall` (when the package ships).* Reference implementation includes a reasoning-chain example in `packages/integration/examples/recall-with-reasoning/` to make the pattern concrete.
 
 **What this DOESN'T solve.**
 
-- *Cross-consumer reasoning predicate convergence.* Multiple consumers minting different reasoning URIs do not auto-converge. If usage establishes convergence over time, D036 may promote to atrib normative; until then, each consumer's URI is its own.
+- *Cross-consumer reasoning predicate convergence.* Multiple consumers minting different reasoning URIs do not auto-converge. If usage establishes convergence over time, [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) may promote to atrib normative; until then, each consumer's URI is its own.
 - *Trust of the LLM's reasoning.* The pattern proves the harness emitted reasoning bytes signed under a key. It does not prove the LLM's reasoning was truthful or coherent. That is a different evaluation layer.
-- *Privacy of reasoning content.* Reasoning records may carry hashes of prompts/responses, which leak fingerprints. Consumers wanting privacy use the salted-commitment posture (D045) on reasoning record hashes.
+- *Privacy of reasoning content.* Reasoning records may carry hashes of prompts/responses, which leak fingerprints. Consumers wanting privacy use the salted-commitment posture ([D045](#d045-privacy-postures-normative-spec-section)) on reasoning record hashes.
 
-**Implementation sequencing.** Spec §7.5 + §7.6 written → reference example added when the recall package ships.
+**Implementation sequencing.** Spec [§7.5](atrib-spec.md#75-harness-side-reasoning-chains) + [§7.6](atrib-spec.md#76-outcome-verification-patterns) written → reference example added when the recall package ships.
 
 ## D048: Plug-and-play enforcement contract for adapters
 
@@ -1821,7 +1821,7 @@ The right layer for reasoning chains is the harness, not the protocol. Consumers
 
 **Context.** atrib's value proposition depends on minimal agent involvement. An agent author should not need to remember which fields to populate, which event types to emit, which tokens to propagate, or how to derive edges. The substrate should be plug-and-play across all event types, all edge types, and all framework adapters (Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain, raw MCP SDK, future frameworks).
 
-The introduction of `informed_by` (D041), `provenance_token` (D044), observation graph participation (D042), and extension URI participation (D043) expands what middleware can and should automate. The contract for what's automatic vs. agent-explicit needs to be specified so adapter implementations stay consistent across frameworks.
+The introduction of `informed_by` ([D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type)), `provenance_token` ([D044](#d044-provenance_token-field-for-cross-session-causal-anchoring)), observation graph participation ([D042](#d042-lift-observation-graph-participation-restriction)), and extension URI participation ([D043](#d043-extension-uri-participation-in-graph-derivation)) expands what middleware can and should automate. The contract for what's automatic vs. agent-explicit needs to be specified so adapter implementations stay consistent across frameworks.
 
 **Decision.**
 
@@ -1833,13 +1833,13 @@ The introduction of `informed_by` (D041), `provenance_token` (D044), observation
    - **(C5)** Auto-track inbound records consumed by the agent (tool results, observations, inbound provenance) in a context tracker.
    - **(C6)** Auto-populate `informed_by` on subsequent record emissions from the context tracker, with deterministic ordering.
    - **(C7)** Auto-emit `provenance_token` on canonical subagent-spawn patterns (host framework's subagent-creation API).
-   - **(C8)** Accept agent-provided overrides via `recordOptions` for `informedBy`, `provenanceToken`, `publishProvenance`, posture options (D045), and other fields.
-   - **(C9)** Validate URI format for extension event_types per §1.4.5.
-   - **(C10)** Honor degradation contract per §5.8 (catch all failures; never throw to caller).
+   - **(C8)** Accept agent-provided overrides via `recordOptions` for `informedBy`, `provenanceToken`, `publishProvenance`, posture options ([D045](#d045-privacy-postures-normative-spec-section)), and other fields.
+   - **(C9)** Validate URI format for extension event_types per [§1.4.5](atrib-spec.md#145-event_type-uri-validation).
+   - **(C10)** Honor degradation contract per [§5.8](atrib-spec.md#58-degradation-contract) (catch all failures; never throw to caller).
 
 2. **Patterns the adapter MAY auto-handle but is not required to.** Workflow handoff, webhook reception, async event chains. These require application-level intent that the middleware cannot infer reliably; explicit opt-in via `recordOptions` is the documented path.
 
-3. **Patterns the agent MUST handle explicitly.** Recording observations (the agent decides what to witness), choosing extension URIs (consumer namespace by design), choosing privacy posture per record (D045), claiming `informed_by` overrides for records consumed via side channels.
+3. **Patterns the agent MUST handle explicitly.** Recording observations (the agent decides what to witness), choosing extension URIs (consumer namespace by design), choosing privacy posture per record ([D045](#d045-privacy-postures-normative-spec-section)), claiming `informed_by` overrides for records consumed via side channels.
 
 4. **Adapter conformance test suite.** A new `packages/agent/test/conformance.test.ts` exercises each contract item. New adapters MUST pass the conformance suite before being added to the supported-frameworks table.
 
@@ -1856,7 +1856,7 @@ The introduction of `informed_by` (D041), `provenance_token` (D044), observation
 **Consequences.**
 
 - *`@atrib/agent`.* Existing adapters audited against the contract; gaps closed in subsequent work. New context tracker (C5, C6) added to the middleware. New test file for conformance.
-- *Spec.* §5.4 (adapter section) updated to reference the contract. §5.7 (Automation Triggers) extended with the new auto-emissions.
+- *Spec.* [§5.4](atrib-spec.md#54-atribagent-agent-middleware) (adapter section) updated to reference the contract. [§5.7](atrib-spec.md#57-automation-triggers-normative) (Automation Triggers) extended with the new auto-emissions.
 - *Documentation.* Contract published in `packages/agent/README.md` adapter table. Adapter authoring guide added.
 
 **What this DOESN'T solve.**
@@ -1864,7 +1864,7 @@ The introduction of `informed_by` (D041), `provenance_token` (D044), observation
 - *Adapters built by third parties.* atrib does not control third-party adapter quality. The conformance test suite is published; users of third-party adapters can run it.
 - *Frameworks that don't expose a tool-call interception point.* For frameworks where wrapping the tool path is impossible, the adapter cannot satisfy C3. Such frameworks fall back to manual emission with reduced auto-tracking.
 
-**Implementation sequencing.** Contract documented in §5.4 + §5.7 → test suite skeleton in `packages/agent/test/conformance.test.ts` → existing adapters audited and gaps closed → CONTRIBUTING guide → conformance results table added to README.
+**Implementation sequencing.** Contract documented in [§5.4](atrib-spec.md#54-atribagent-agent-middleware) + [§5.7](atrib-spec.md#57-automation-triggers-normative) → test suite skeleton in `packages/agent/test/conformance.test.ts` → existing adapters audited and gaps closed → CONTRIBUTING guide → conformance results table added to README.
 
 ## D049: Layered leak defense (regex + LLM-semantic + cloud audit + style guide)
 
@@ -1920,7 +1920,7 @@ A layered defense replaces the ad-hoc catch-up cycle with structural prevention.
 **Date:** 2026-04-28
 **Status:** Accepted
 
-**Context.** atrib's §2.9 witnessing protocol distributes trust in checkpoints across multiple operator-independent witnesses. A single log operator cannot equivocate (publish different checkpoint roots to different parties) without witnesses noticing. But §2.9 is a CHECKPOINT-LEVEL defense: it secures the root, not the records the root commits to. A log operator can still:
+**Context.** atrib's [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) witnessing protocol distributes trust in checkpoints across multiple operator-independent witnesses. A single log operator cannot equivocate (publish different checkpoint roots to different parties) without witnesses noticing. But [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) is a CHECKPOINT-LEVEL defense: it secures the root, not the records the root commits to. A log operator can still:
 
 - Selectively censor records (refuse to commit them while returning success to the submitter)
 - Equivocate at the record level (commit a record to position N for one viewer and a different record to position N for another) when collusion with witnesses is possible
@@ -1932,13 +1932,13 @@ The strongest defense against operator-level threats is independent replication:
 
 1. **Records MAY be replicated to multiple atrib-conformant logs.** No protocol-level mandate; consumers wanting cross-log confidence opt in by submitting to N logs.
 
-2. **Each replication produces an independent inclusion proof.** Logs do not coordinate; each treats the submission as a fresh entry. The record's bundle (§2.8) carries a list of `(log_id, checkpoint, inclusion_proof)` tuples instead of a single tuple.
+2. **Each replication produces an independent inclusion proof.** Logs do not coordinate; each treats the submission as a fresh entry. The record's bundle ([§2.8](atrib-spec.md#28-proof-bundle-format)) carries a list of `(log_id, checkpoint, inclusion_proof)` tuples instead of a single tuple.
 
 3. **Verifier consults the configured threshold.** A verifier configured with a list of trusted log operators requires inclusion proofs from at least M of N expected logs (M is consumer policy; default M=1 means single-log behavior preserved). Inclusion proofs from logs not in the trusted list are surfaced but do not count toward M.
 
 4. **Equivocation detection.** If a record bundle carries proofs from multiple logs, and the logs return different content for the same record_hash, the verifier MUST reject the record and flag the discrepancy. This is the equivocation signal.
 
-5. **Log identity.** Each log publishes a stable identifier (`log_id`) derived from its origin string per §2.4. The proof bundle entries reference this identifier. Verifiers cross-reference the identifier against a trust configuration.
+5. **Log identity.** Each log publishes a stable identifier (`log_id`) derived from its origin string per [§2.4](atrib-spec.md#24-checkpoint-format). The proof bundle entries reference this identifier. Verifiers cross-reference the identifier against a trust configuration.
 
 6. **Cross-log replication is OPTIONAL.** Default-posture submissions to a single log remain valid. Cross-log replication is a robustness enhancement consumers adopt as their threat model requires.
 
@@ -1952,7 +1952,7 @@ The strongest defense against operator-level threats is independent replication:
 
 **Consequences.**
 
-- *Spec.* New §2.11 "Cross-log replication" subsection. §2.8 (proof bundle format) extended to allow a list of `(log_id, checkpoint, inclusion_proof)` tuples instead of a single tuple. §2.4 (checkpoint format) gains a normative `log_id` field referenced by replication.
+- *Spec.* New [§2.11](atrib-spec.md#211-cross-log-replication) "Cross-log replication" subsection. [§2.8](atrib-spec.md#28-proof-bundle-format) (proof bundle format) extended to allow a list of `(log_id, checkpoint, inclusion_proof)` tuples instead of a single tuple. [§2.4](atrib-spec.md#24-checkpoint-format) (checkpoint format) gains a normative `log_id` field referenced by replication.
 - *`@atrib/mcp`.* Submission API gains `submitToLogs: LogConfig[]` option. Default behavior unchanged.
 - *`@atrib/verify`.* Verification gains `cross_log_proof_count` and `cross_log_threshold_met` outputs. Equivocation detection MUST reject records when cross-log discrepancies are observed.
 - *services/log-node.* No log-side changes; logs are oblivious to replication. Verifier-side does the work.
@@ -1962,22 +1962,22 @@ The strongest defense against operator-level threats is independent replication:
 
 - *Collusion across logs.* If all N logs collude, replication does not help. Trust diversity is the consumer's responsibility (pick logs operated by independent parties with different incentives).
 - *Submission-time censorship.* If the submitter is denied service by some logs, the bundle has fewer proofs but is not detectable as malicious. Threshold M handles this gracefully (require fewer than total).
-- *Record-level retroactive removal.* If a log removes a previously-committed record, verifiers consulting the log later see "record not found" but cannot prove the log is lying about its history. Witnessing (§2.9) and cross-log replication together address this when at least one cooperative log retains the record.
+- *Record-level retroactive removal.* If a log removes a previously-committed record, verifiers consulting the log later see "record not found" but cannot prove the log is lying about its history. Witnessing ([§2.9](atrib-spec.md#29-witnessing-and-cosignatures)) and cross-log replication together address this when at least one cooperative log retains the record.
 
-**Implementation sequencing.** Spec §2.11 + §2.8 + §2.4 update → `@atrib/mcp` submission API extension → `@atrib/verify` cross-log proof verification → operator documentation on running multi-log deployments → conformance corpus.
+**Implementation sequencing.** Spec [§2.11](atrib-spec.md#211-cross-log-replication) + [§2.8](atrib-spec.md#28-proof-bundle-format) + [§2.4](atrib-spec.md#24-checkpoint-format) update → `@atrib/mcp` submission API extension → `@atrib/verify` cross-log proof verification → operator documentation on running multi-log deployments → conformance corpus.
 
 ## D051: Capability-scoped records via directory-published envelopes
 
 **Date:** 2026-04-28
 **Status:** Accepted
 
-**Context.** §6 (key directory) resolves an opaque `creator_key` to an identity claim ("this key belongs to Acme Corp's official agent, attested by domain DNS"). Identity attestation answers "WHO is this?" but not "WHAT IS THIS KEY ALLOWED TO DO?" A compromised but legitimately-attested key can sign any record; verifiers see a valid identity and have no static framework for spotting out-of-scope claims (e.g., a customer-service agent's key suddenly signing million-dollar transactions).
+**Context.** [§6](atrib-spec.md#6-key-directory) (key directory) resolves an opaque `creator_key` to an identity claim ("this key belongs to Acme Corp's official agent, attested by domain DNS"). Identity attestation answers "WHO is this?" but not "WHAT IS THIS KEY ALLOWED TO DO?" A compromised but legitimately-attested key can sign any record; verifiers see a valid identity and have no static framework for spotting out-of-scope claims (e.g., a customer-service agent's key suddenly signing million-dollar transactions).
 
 Capability scoping turns the static identity claim into a dynamic policy claim: the directory publishes the key's declared capability envelope (which tools, dollar amounts, counterparties, action types). Records can be checked against the envelope; out-of-envelope records are flagged as suspect. This is structurally analogous to how OAuth scopes constrain what a token can do, applied at the signed-record level.
 
 **Decision.**
 
-1. **Identity claim format (§6) gains an OPTIONAL `capabilities` field.** Format:
+1. **Identity claim format ([§6](atrib-spec.md#6-key-directory)) gains an OPTIONAL `capabilities` field.** Format:
 
    ```
    {
@@ -1999,11 +1999,11 @@ Capability scoping turns the static identity claim into a dynamic policy claim: 
 
 2. **All capability fields are optional.** An identity claim without `capabilities` declares no scope; this is equivalent to "any action this key signs is in-envelope." Adding the field narrows the scope.
 
-3. **Verifier checks records against the active capability envelope at signing time.** The active envelope is the most recent identity claim published before the record's `timestamp` (§6 directory history is timestamped). Records signed under a key whose declared `tool_names` does not include the record's tool_name are flagged with `out_of_capability_envelope: true`.
+3. **Verifier checks records against the active capability envelope at signing time.** The active envelope is the most recent identity claim published before the record's `timestamp` ([§6](atrib-spec.md#6-key-directory) directory history is timestamped). Records signed under a key whose declared `tool_names` does not include the record's tool_name are flagged with `out_of_capability_envelope: true`.
 
 4. **Out-of-envelope is a SIGNAL, not invalidation.** Records remain cryptographically valid (signature verifies, log inclusion verifies). The envelope-check output is a verifier annotation that consumers use in their trust assessment. Defaulting to invalidation would break common cases (envelope updates, tool-rename migrations) and is the wrong layer for enforcement.
 
-5. **Envelope rotation follows identity-claim publication.** When a key's capabilities change, the operator publishes a new identity claim with the updated envelope. The directory history (§6.2) preserves prior envelopes; verifiers checking historical records use the envelope active at the record's timestamp.
+5. **Envelope rotation follows identity-claim publication.** When a key's capabilities change, the operator publishes a new identity claim with the updated envelope. The directory history ([§6.2](atrib-spec.md#62-directory-operations)) preserves prior envelopes; verifiers checking historical records use the envelope active at the record's timestamp.
 
 6. **No protocol-level enforcement.** atrib does not block out-of-envelope submissions or refuse to commit them. Enforcement is consumer policy at the verification layer.
 
@@ -2019,7 +2019,7 @@ Capability scoping turns the static identity claim into a dynamic policy claim: 
 
 **Consequences.**
 
-- *Spec.* New §6.7 "Capability declarations" subsection. §6.1 (identity claim format) extended with optional `capabilities` field.
+- *Spec.* New [§6.7](atrib-spec.md#67-capability-declarations) "Capability declarations" subsection. [§6.1](atrib-spec.md#61-identity-claim-format) (identity claim format) extended with optional `capabilities` field.
 - *`@atrib/cli`.* `atrib publish-claim --capabilities <file.json>` lets operators declare envelopes when publishing.
 - *`@atrib/verify`.* Verification output gains `capability_check: { envelope: CapabilityEnvelope | null, in_envelope: bool, mismatches: string[] }` per record.
 - *services/directory-node.* Directory publishes capability fields in identity claims; lookup returns them. No new endpoints required.
@@ -2031,14 +2031,14 @@ Capability scoping turns the static identity claim into a dynamic policy claim: 
 - *Capability enforcement at signing time.* atrib does not refuse to sign out-of-envelope records; the envelope is a verifier-side annotation. Consumers wanting signing-time enforcement build it into their middleware.
 - *Granular field-level constraints.* The envelope schema is intentionally narrow (tool_names, max_amount, counterparties, event_types). More granular constraints (e.g., "only between 9-5 PM UTC") are out of scope; consumers needing them publish a separate policy document and check externally.
 
-**Implementation sequencing.** Spec §6.7 + §6.1 update → `@atrib/cli` envelope publication command → `@atrib/verify` envelope check → directory-node serves capabilities in lookup → conformance corpus → integration test exercising envelope rotation.
+**Implementation sequencing.** Spec [§6.7](atrib-spec.md#67-capability-declarations) + [§6.1](atrib-spec.md#61-identity-claim-format) update → `@atrib/cli` envelope publication command → `@atrib/verify` envelope check → directory-node serves capabilities in lookup → conformance corpus → integration test exercising envelope rotation.
 
 ## D052: Cross-attestation requirement for transaction records
 
 **Date:** 2026-04-28
 **Status:** Accepted
 
-**Context.** Transaction records (`event_type = https://atrib.dev/v1/types/transaction`) are the highest-stakes record type in atrib: they are the record the §4.6 calculation is normatively gated on. A single agent unilaterally signing a transaction record makes a cryptographically valid claim that "this transaction occurred for this amount with this counterparty", without independent corroboration. An attacker who compromises one signing key can fabricate transactions out of thin air.
+**Context.** Transaction records (`event_type = https://atrib.dev/v1/types/transaction`) are the highest-stakes record type in atrib: they are the record the [§4.6](atrib-spec.md#46-the-calculation-algorithm) calculation is normatively gated on. A single agent unilaterally signing a transaction record makes a cryptographically valid claim that "this transaction occurred for this amount with this counterparty", without independent corroboration. An attacker who compromises one signing key can fabricate transactions out of thin air.
 
 Other record types tolerate single-signer claims more gracefully because their downstream consequences are smaller (a tool_call's claim affects only attribution shares; a transaction's claim affects actual settlement). For the highest-consequence type, requiring more than one signer is structurally appropriate.
 
@@ -2059,17 +2059,17 @@ Other record types tolerate single-signer claims more gracefully because their d
 
 3. **Each signer's signature covers the same canonical bytes.** All signatures in `signers` cover the same JCS-canonical record (with the `signers` array empty for the canonicalization). The verifier confirms each signature against the corresponding public key.
 
-4. **Counterparty discovery and key exchange.** Counterparty keys are discovered out-of-band: via the directory (§6) lookup of the merchant's published identity, via payment-protocol-specific channels (x402 facilitator metadata, ACP order envelope, etc.), or via consumer-arranged key exchange. atrib does not specify the discovery mechanism; the spec only requires the keys be present in the record.
+4. **Counterparty discovery and key exchange.** Counterparty keys are discovered out-of-band: via the directory ([§6](atrib-spec.md#6-key-directory)) lookup of the merchant's published identity, via payment-protocol-specific channels (x402 facilitator metadata, ACP order envelope, etc.), or via consumer-arranged key exchange. atrib does not specify the discovery mechanism; the spec only requires the keys be present in the record.
 
-5. **Backwards compatibility.** Existing transaction records signed pre-D052 (with only the top-level `signature` field, no `signers` array) remain cryptographically valid but are flagged `cross_attestation_missing: true` by D052-aware verifiers. Migration is consumer-paced.
+5. **Backwards compatibility.** Existing transaction records signed pre-D052 (with only the top-level `signature` field, no `signers` array) remain cryptographically valid but are flagged `cross_attestation_missing: true` by [D052](#d052-cross-attestation-requirement-for-transaction-records)-aware verifiers. Migration is consumer-paced.
 
-6. **Other event types unaffected.** tool_call, observation, and extension records continue to use single-signer signatures via the top-level `signature` field. D052 applies only to `transaction`.
+6. **Other event types unaffected.** tool_call, observation, and extension records continue to use single-signer signatures via the top-level `signature` field. [D052](#d052-cross-attestation-requirement-for-transaction-records) applies only to `transaction`.
 
 **Alternatives considered.**
 
 1. *Threshold signatures (M-of-N) for transactions.* Considered. The simpler 2-signer model covers the highest-frequency case (agent + merchant). M-of-N adds complexity (threshold key management, partial-signature aggregation) without proportionate gain at this stage. May revisit if usage establishes a multi-party need.
 
-2. *Make cross-attestation OPTIONAL for transactions.* Rejected. Transactions are the §4.6-gated record type; the substrate's strongest robustness commitment belongs here. Optional weakens the guarantee.
+2. *Make cross-attestation OPTIONAL for transactions.* Rejected. Transactions are the [§4.6](atrib-spec.md#46-the-calculation-algorithm)-gated record type; the substrate's strongest robustness commitment belongs here. Optional weakens the guarantee.
 
 3. *Apply cross-attestation to all record types.* Rejected as overhead for non-transaction records. The robustness gain is concentrated at the transaction layer.
 
@@ -2077,19 +2077,19 @@ Other record types tolerate single-signer claims more gracefully because their d
 
 **Consequences.**
 
-- *Spec.* New §1.7.6 "Cross-attestation requirement for transaction records" subsection. §1.2 record format note extended to clarify that transaction records use `signers` array. §4.6.2 contributing-set check extended to flag cross-attestation status.
+- *Spec.* New [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) "Cross-attestation requirement for transaction records" subsection. [§1.2](atrib-spec.md#12-the-attribution-record) record format note extended to clarify that transaction records use `signers` array. [§4.6.2](atrib-spec.md#462-step-1-identify-contributing-nodes) contributing-set check extended to flag cross-attestation status.
 - *`@atrib/mcp`.* Transaction record signing path emits `signers` array. Counterparty signature is collected via `recordOptions.counterpartySignature: { creator_key, signature }` (the application supplies the counterparty's signature obtained out-of-band).
-- *`@atrib/agent`.* Payment-protocol adapters (§1.7) extended to coordinate counterparty signature collection from their respective protocols' settlement responses.
+- *`@atrib/agent`.* Payment-protocol adapters ([§1.7](atrib-spec.md#17-transaction-event-hooks)) extended to coordinate counterparty signature collection from their respective protocols' settlement responses.
 - *`@atrib/verify`.* Verification of transaction records extended to verify each signer's signature and to surface `cross_attestation: { signer_count, all_verified, missing_required }`.
 - *Conformance.* `spec/conformance/1.7.6/` corpus exercises 2-signer transaction records, single-signer flagging, signer mismatch detection.
 
 **What this DOESN'T solve.**
 
-- *Counterparty collusion.* If the agent and merchant collude to fabricate a transaction, both sign and the cross-attestation passes. Cross-log replication (D050) and external evidence (§7.6 Pattern B) help here.
-- *Counterparty key compromise.* If the merchant's signing key is compromised, the attacker can sign as the merchant. Identity attestation (§6) and key revocation (§1.9) help.
+- *Counterparty collusion.* If the agent and merchant collude to fabricate a transaction, both sign and the cross-attestation passes. Cross-log replication ([D050](#d050-cross-log-replication-for-equivocation-defense)) and external evidence ([§7.6](atrib-spec.md#76-outcome-verification-patterns) Pattern B) help here.
+- *Counterparty key compromise.* If the merchant's signing key is compromised, the attacker can sign as the merchant. Identity attestation ([§6](atrib-spec.md#6-key-directory)) and key revocation ([§1.9](atrib-spec.md#19-key-rotation-and-revocation)) help.
 - *Pre-D052 historical records.* Existing single-signer transaction records remain valid but are flagged. Verifiers configured strictly may reject them; the default flagged-not-rejected behavior preserves backwards compatibility.
 
-**Implementation sequencing.** Spec §1.7.6 + §1.2 + §4.6.2 update → `@atrib/mcp` transaction signing path extension → `@atrib/agent` payment-protocol adapter coordination → `@atrib/verify` multi-signature verification → conformance corpus → migration guidance for pre-D052 records.
+**Implementation sequencing.** Spec [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) + [§1.2](atrib-spec.md#12-the-attribution-record) + [§4.6.2](atrib-spec.md#462-step-1-identify-contributing-nodes) update → `@atrib/mcp` transaction signing path extension → `@atrib/agent` payment-protocol adapter coordination → `@atrib/verify` multi-signature verification → conformance corpus → migration guidance for pre-D052 records.
 
 ## D053: Inclusion-proof aggregation (flagged for follow-up)
 
@@ -2098,7 +2098,7 @@ Other record types tolerate single-signer claims more gracefully because their d
 
 This ADR is a placeholder. It records that inclusion-proof aggregation has been considered and queued for future work, without committing to specific design details. When this ADR is formally written and the mechanism is implemented, the details below MAY change in any way; this entry documents the intent and the known-design-questions, not the final spec.
 
-**Context.** D050 (cross-log replication) and §2.9 (witnessing) defend against log-operator equivocation and selective censorship at the checkpoint level. A complementary mechanism, inclusion-proof aggregation, would defend at the record level: subsequent records cite the inclusion proofs of prior records, creating a web of mutual confirmation. If a log operator later removes or alters a referenced record, citing records still point at proof of the prior state.
+**Context.** [D050](#d050-cross-log-replication-for-equivocation-defense) (cross-log replication) and [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) (witnessing) defend against log-operator equivocation and selective censorship at the checkpoint level. A complementary mechanism, inclusion-proof aggregation, would defend at the record level: subsequent records cite the inclusion proofs of prior records, creating a web of mutual confirmation. If a log operator later removes or alters a referenced record, citing records still point at proof of the prior state.
 
 **Sketch (subject to change).**
 
@@ -2106,11 +2106,11 @@ A new optional field `inclusion_proof_refs: [{ log_id, record_hash, checkpoint_r
 
 **Why deferred.**
 
-- The marginal robustness gain over D050 (cross-log replication) plus §2.9 (witnessing) is real but smaller than the gain from those mechanisms individually.
+- The marginal robustness gain over [D050](#d050-cross-log-replication-for-equivocation-defense) (cross-log replication) plus [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) (witnessing) is real but smaller than the gain from those mechanisms individually.
 - Sequencing is non-trivial: a record citing its parent's inclusion proof needs the parent to have been committed AND for a checkpoint covering it to have been published AND for that checkpoint to have been witnessed (depending on consumer policy). The chicken-and-egg patterns need careful design.
-- Cross-log replication (D050) introduces multiple proofs per record; the citation field needs to specify which log(s) to cite.
+- Cross-log replication ([D050](#d050-cross-log-replication-for-equivocation-defense)) introduces multiple proofs per record; the citation field needs to specify which log(s) to cite.
 - Field bloat: each record gains another reference list; storage and proof verification work scale.
-- Adding a fourth robustness mechanism in the same session as D050-D052 increases interaction surface beyond what careful design supports.
+- Adding a fourth robustness mechanism in the same session as [D050](#d050-cross-log-replication-for-equivocation-defense)-D052 increases interaction surface beyond what careful design supports.
 
 **Known design questions for the formal ADR.**
 
@@ -2122,4 +2122,4 @@ A new optional field `inclusion_proof_refs: [{ log_id, record_hash, checkpoint_r
 
 **Implementation sequencing.** None for now. When formally written: spec subsection (likely §2.12) → record format extension → verifier-side cross-checking → conformance corpus → operator guidance.
 
-**Caveat on this entry.** Because this ADR is a placeholder, anything described above is a sketch, not a commitment. The formal ADR (when authored) will follow the standard format and may diverge from this placeholder in any technical detail. Cross-references to D053 from other ADRs or the spec MUST treat the substance as forward-looking, not normative.
+**Caveat on this entry.** Because this ADR is a placeholder, anything described above is a sketch, not a commitment. The formal ADR (when authored) will follow the standard format and may diverge from this placeholder in any technical detail. Cross-references to [D053](#d053-inclusion-proof-aggregation-flagged-for-follow-up) from other ADRs or the spec MUST treat the substance as forward-looking, not normative.

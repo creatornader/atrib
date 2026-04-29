@@ -4,7 +4,7 @@ This directory is a placeholder for the production atrib transparency log: a [Te
 
 **Status:** Not yet implemented. Tracked in [`DECISIONS.md`](../../DECISIONS.md). Work has not started in this directory.
 
-Until this service ships, all local development, testing, and customer demos use the in-process [`@atrib/log-dev`](../../packages/log-dev/README.md) stub, which speaks the same spec §2.6.1 wire format but stores entries in memory and returns placeholder Merkle hashes.
+Until this service ships, all local development, testing, and customer demos use the in-process [`@atrib/log-dev`](../../packages/log-dev/README.md) stub, which speaks the same spec [§2.6.1](../../atrib-spec.md#261-submit-entry) wire format but stores entries in memory and returns placeholder Merkle hashes.
 
 ## Why this lives outside the TypeScript monorepo
 
@@ -16,12 +16,12 @@ Tessera is a Go library, so this service is Go. Mixing a Go service into a TypeS
 
 When implemented, this service will:
 
-1. **Implement the spec §2 endpoints in full**, including the ones that `@atrib/log-dev` deliberately stubs out:
-   - `POST /v1/entries` (§2.6.1), submit a signed attribution record. Validate signature, enforce idempotency by `record_hash`, return inclusion proof.
-   - `GET /v1/checkpoint` (§2.5.1), current checkpoint, signed-note format per c2sp.org/signed-note.
-   - `GET /v1/tile/{level}/{index}` (§2.5.2), tile data per c2sp.org/tlog-tiles.
+1. **Implement the spec [§2](../../atrib-spec.md#2-merkle-log-protocol) endpoints in full**, including the ones that `@atrib/log-dev` deliberately stubs out:
+   - `POST /v1/entries` ([§2.6.1](../../atrib-spec.md#261-submit-entry)), submit a signed attribution record. Validate signature, enforce idempotency by `record_hash`, return inclusion proof.
+   - `GET /v1/checkpoint` ([§2.5.1](../../atrib-spec.md#251-checkpoint-endpoint)), current checkpoint, signed-note format per c2sp.org/signed-note.
+   - `GET /v1/tile/{level}/{index}` ([§2.5.2](../../atrib-spec.md#252-tile-endpoints)), tile data per c2sp.org/tlog-tiles.
    - `GET /v1/entries/{index}`: retrieve a stored entry by log index.
-   - Witnessing endpoints per §2.9 (cosignature collection from third-party witnesses).
+   - Witnessing endpoints per [§2.9](../../atrib-spec.md#29-witnessing-and-cosignatures) (cosignature collection from third-party witnesses).
 
 2. **Honor the `X-atrib-Priority` admission header** so transaction records are admitted ahead of pending tool_call records during ingestion congestion (matches what `@atrib/log-dev` already does, see [`packages/log-dev/src/storage.ts`](../../packages/log-dev/src/storage.ts)).
 
@@ -39,13 +39,13 @@ What's true is that the **wire format** and the **client-side SDK** can both be 
 
 | Spec section | What this service will implement                                                  |
 | ------------ | --------------------------------------------------------------------------------- |
-| §2.3         | Log entry encoding (`AtribLogEntry`, 90-byte fixed format)                        |
-| §2.4         | Checkpoint format (signed-note over tlog-tiles tree head)                         |
-| §2.5         | Read API (checkpoint, tiles, entry retrieval)                                     |
-| §2.6         | Submission API (POST /v1/entries with §2.6.1 wire format and §2.6.2 proof bundle) |
-| §2.7         | Inclusion proof verification (server-side, also exposed for clients to verify)    |
-| §2.8         | Proof bundle format (c2sp.org/tlog-proof@v1)                                      |
-| §2.9         | Witnessing and cosignatures                                                       |
+| [§2.3](../../atrib-spec.md#23-log-entry-format)         | Log entry encoding (`AtribLogEntry`, 90-byte fixed format)                        |
+| [§2.4](../../atrib-spec.md#24-checkpoint-format)         | Checkpoint format (signed-note over tlog-tiles tree head)                         |
+| [§2.5](../../atrib-spec.md#25-tile-api-read-interface)         | Read API (checkpoint, tiles, entry retrieval)                                     |
+| [§2.6](../../atrib-spec.md#26-submission-api-write-interface)         | Submission API (POST /v1/entries with [§2.6.1](../../atrib-spec.md#261-submit-entry) wire format and [§2.6.2](../../atrib-spec.md#262-inclusion-proof-response) proof bundle) |
+| [§2.7](../../atrib-spec.md#27-inclusion-proof-verification)         | Inclusion proof verification (server-side, also exposed for clients to verify)    |
+| [§2.8](../../atrib-spec.md#28-proof-bundle-format)         | Proof bundle format (c2sp.org/tlog-proof@v1)                                      |
+| [§2.9](../../atrib-spec.md#29-witnessing-and-cosignatures)         | Witnessing and cosignatures                                                       |
 
 ## See also
 

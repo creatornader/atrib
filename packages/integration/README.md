@@ -48,7 +48,7 @@ Every example has a `README.md` next to it explaining what's wired up and which 
 Run with `pnpm --filter @atrib/integration test`. Currently 5 tests across 2 files:
 
 - **`test/end-to-end.test.ts`** (3 tests), full attribution chain across the public packages: agent calls a tool, server emits a signed record, the record's chain hash links to the previous step, the verifier re-runs the calculation against the resulting graph.
-- **`test/real-mcp-sdk.test.ts`** (2 tests), exercises both the wrapped MCP client and wrapped MCP server against a real `@modelcontextprotocol/sdk@1.29.0` transport, including the §6 retroactive dispatcher wrap path and the `wrapMcpClient` adapter.
+- **`test/real-mcp-sdk.test.ts`** (2 tests), exercises both the wrapped MCP client and wrapped MCP server against a real `@modelcontextprotocol/sdk@1.29.0` transport, including the [§6](../../atrib-spec.md#6-key-directory) retroactive dispatcher wrap path and the `wrapMcpClient` adapter.
 
 These tests are deliberately small in number; most behavior is covered by the per-package unit tests (391 total across the workspace). The integration tests are the **cross-package contract** layer: they catch the kind of bug that happens when one package's wire format quietly drifts from another's expectations.
 
@@ -70,7 +70,7 @@ When a prospective customer (Exa, Firecrawl, Browserbase, a checkout-tool builde
 2. Watch the colored chain hashes scroll past.
 3. Walk them through which lines of code they'd add on the merchant side (~3 lines: import, wrap, set log endpoint) and on the agent side (~2 lines: import, wrap with `wrapMcpClient` or the framework adapter).
 4. Open the example matching their stack and show them the integration point.
-5. Switch to the production answer: "the dev log is for local development; the production log is `log.atrib.dev/v1`, Tessera-backed per spec §2; same wire format, no client changes needed when it ships."
+5. Switch to the production answer: "the dev log is for local development; the production log is `log.atrib.dev/v1`, Tessera-backed per spec [§2](../../atrib-spec.md#2-merkle-log-protocol); same wire format, no client changes needed when it ships."
 
 The examples make the abstract protocol concrete in a way that the spec and the package READMEs cannot.
 

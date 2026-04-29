@@ -107,16 +107,16 @@ The graph is a directed property multigraph with five node types (`tool_call`, `
 | `CHAIN_PRECEDES`   | A -> B    | B's `chain_root` = SHA-256(JCS(A)). Explicit hash chain link.           |
 | `SESSION_PRECEDES` | A -> B    | Same `context_id`, no chain link, A's timestamp < B's timestamp.        |
 | `SESSION_PARALLEL` | A <-> B   | Same `context_id`, no chain link, no temporal ordering.                 |
-| `CONVERGES_ON`     | N -> T    | N is a tool_call or gap_node, T is the transaction node, same session. observation and extension nodes do NOT participate (D042, D043). |
+| `CONVERGES_ON`     | N -> T    | N is a tool_call or gap_node, T is the transaction node, same session. observation and extension nodes do NOT participate ([D042](DECISIONS.md#d042-lift-observation-graph-participation-restriction), [D043](DECISIONS.md#d043-extension-uri-participation-in-graph-derivation)). |
 | `CROSS_SESSION`    | A -> T    | Different `context_id`, same explicit `session_token`. Same logical session across traces. Never inferred.  |
-| `INFORMED_BY`      | A -> B    | A's `informed_by` array contains the record_hash of B. Agent-declared reasoning context (D041). Intra- or cross-session. Source/target may be any node type. |
-| `PROVENANCE_OF`    | D -> U    | D and U both carry the same `provenance_token` value, different `context_ids`, U is the token's source record. Cross-session causal anchoring (D044). |
+| `INFORMED_BY`      | A -> B    | A's `informed_by` array contains the record_hash of B. Agent-declared reasoning context ([D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type)). Intra- or cross-session. Source/target may be any node type. |
+| `PROVENANCE_OF`    | D -> U    | D and U both carry the same `provenance_token` value, different `context_ids`, U is the token's source record. Cross-session causal anchoring ([D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring)). |
 
 The derivation rules are normative (Section 3.2.4). Two implementations processing identical records must produce identical edge sets. This is what makes independent verification possible: you do not need to trust the graph service, because you can rebuild the graph yourself and check.
 
 Gap nodes represent unsigned hops, tool calls evidenced by OTel spans but lacking a signed attribution record. They make the absence of attribution visible rather than hiding it. Gap nodes participate in temporal and convergence edges but not chain or cross-session edges.
 
-`INFORMED_BY` and `PROVENANCE_OF` are agent-declared causal anchors (the agent's claim, structurally derived from declared fields). atrib certifies the claim was signed; it does not certify the truthfulness of the claim. This preserves the §3.1 invariant (the graph records structure, not inferred causality) while letting consumers express the reasoning chains the brand promise of "verifiable agent actions in proper context" requires.
+`INFORMED_BY` and `PROVENANCE_OF` are agent-declared causal anchors (the agent's claim, structurally derived from declared fields). atrib certifies the claim was signed; it does not certify the truthfulness of the claim. This preserves the [§3.1](atrib-spec.md#31-design-principles-and-rationale) invariant (the graph records structure, not inferred causality) while letting consumers express the reasoning chains the brand promise of "verifiable agent actions in proper context" requires.
 
 ---
 
@@ -160,7 +160,7 @@ Here is why, specifically:
 
 **Different packaging.** No tokens to list, no wallets to integrate, no securities lawyers to retain. Tessera (the implementation) is maintained by Google's transparency team and runs in production for Certificate Transparency, Go module checksums, and Sigstore. Boring infrastructure. That's the point.
 
-The decision is documented in D006.
+The decision is documented in [D006](DECISIONS.md#d006-merkle-log-c2sp-tlog-tiles-not-blockchain).
 
 ---
 
@@ -187,7 +187,7 @@ Separation of concerns. Attribution and payment are orthogonal problems. Attribu
 
 When a transaction is detected, the agent emits a `transaction` record (event_type `"transaction"`) with the same `context_id` as the session. This closes the attribution loop -- the graph now has a terminal node that all contributing tool calls converge on. See Section 1.7 for the detection rules for each protocol.
 
-There are two emission paths for transaction records (Section 5.4.5, D011). Path 1: the merchant has `@atrib/mcp` installed and emits the transaction record directly. Path 2: the merchant does not have atrib, so the agent detects the transaction from the response and emits it. Anti-double-emission logic prevents both from firing: the agent checks whether the response already contains an attribution token, and suppresses Path 2 if it does.
+There are two emission paths for transaction records (Section 5.4.5, [D011](DECISIONS.md#d011-dual-transaction-emission-paths-with-anti-double-emission)). Path 1: the merchant has `@atrib/mcp` installed and emits the transaction record directly. Path 2: the merchant does not have atrib, so the agent detects the transaction from the response and emits it. Anti-double-emission logic prevents both from firing: the agent checks whether the response already contains an attribution token, and suppresses Path 2 if it does.
 
 ---
 
@@ -199,7 +199,7 @@ The SDK ships one core interceptor (`atrib()`) and one adapter helper per suppor
 
 Every MCP framework has a different integration surface. The Claude Agent SDK exposes an `McpServer` instance you can wrap directly. Cloudflare Agents has an `McpAgent` class with lifecycle hooks. Vercel AI SDK's `@ai-sdk/mcp` ships its own JSON-RPC implementation that is structurally incompatible with the standard `@modelcontextprotocol/sdk` Client. LangChain's `MultiServerMCPClient` wraps multiple connections and needs a different hook point.
 
-The project established a "source-read-first" principle early (D018): before writing an adapter, read the host framework's source code to find the correct integration point. All six shipped adapters were built this way, and every one had a different correct answer. The adapter helper signature varies because the host framework's surface varies -- that variation is forced by the host, not invented by atrib.
+The project established a "source-read-first" principle early ([D018](DECISIONS.md#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow)): before writing an adapter, read the host framework's source code to find the correct integration point. All six shipped adapters were built this way, and every one had a different correct answer. The adapter helper signature varies because the host framework's surface varies -- that variation is forced by the host, not invented by atrib.
 
 ### Shipped adapters
 
@@ -220,7 +220,7 @@ Each adapter ships with: source at `packages/agent/src/adapters/`, tests at `pac
 
 ## Protocol adapters
 
-Framework adapters hook atrib INTO a host agent framework at runtime. **Protocol adapters** are the parallel pattern: they provide observability FOR a specific payment protocol's ecosystem. See D027 for the full rationale.
+Framework adapters hook atrib INTO a host agent framework at runtime. **Protocol adapters** are the parallel pattern: they provide observability FOR a specific payment protocol's ecosystem. See [D027](DECISIONS.md#d027-protocol-adapters-as-a-parallel-integration-surface-to-framework-adapters) for the full rationale.
 
 A protocol adapter has three canonical layers:
 
@@ -235,9 +235,9 @@ Two observation surfaces exist per protocol and compose cleanly:
 | Runtime | `@atrib/agent` + framework adapter | Payment events during a single agent session |
 | Retrospective | Protocol adapter (scanner + registry + attribution) | All protocol activity across the ecosystem, independent of any single session |
 
-A complete per-protocol artifact demonstrates both paths: **Path A** (retrospective scanner + attribution, exercising §3 graph and §4 calculation) plus **Path B** (a reference agent using `@atrib/agent` to make real payments, with signed receipts flowing into the log and merchant-side verification via `@atrib/verify`, exercising §1, §2.6.1, §5).
+A complete per-protocol artifact demonstrates both paths: **Path A** (retrospective scanner + attribution, exercising [§3](atrib-spec.md#3-graph-query-interface) graph and [§4](atrib-spec.md#4-attribution-policy-format) calculation) plus **Path B** (a reference agent using `@atrib/agent` to make real payments, with signed receipts flowing into the log and merchant-side verification via `@atrib/verify`, exercising [§1](atrib-spec.md#1-attribution-record-format), [§2.6.1](atrib-spec.md#261-submit-entry), [§5](atrib-spec.md#5-sdk-specification)).
 
-The spec stays protocol-agnostic. Protocol-specific attribution rationale lives in the adapter's documentation, not in the spec body. This preserves §3.6's fact/policy separation.
+The spec stays protocol-agnostic. Protocol-specific attribution rationale lives in the adapter's documentation, not in the spec body. This preserves [§3.6](atrib-spec.md#36-implementation-notes)'s fact/policy separation.
 
 First protocol adapter: x402. Others (ACP, UCP, AP2, MPP) follow the same template.
 
@@ -265,23 +265,23 @@ The consequence: adding `@atrib/mcp` or `@atrib/agent` to a production system ca
 
 The load-bearing choices. Each is in [DECISIONS.md](DECISIONS.md) with full rationale and rejected alternatives.
 
-**Ed25519, 32-byte seed (D003).** Not RSA, not ECDSA, not DIDs. Ed25519 is fast, has a small key size, deterministic signatures, and no PKI dependency. The 32-byte seed (not the 64-byte NaCl expanded format) keeps key management simple. Key rotation and revocation are normatively specified in §1.9 (D033); see also §6 (D034) for the AKD-based public-key directory that resolves `creator_key → identity claim`.
+**Ed25519, 32-byte seed ([D003](DECISIONS.md#d003-ed25519-not-dids-or-pki)).** Not RSA, not ECDSA, not DIDs. Ed25519 is fast, has a small key size, deterministic signatures, and no PKI dependency. The 32-byte seed (not the 64-byte NaCl expanded format) keeps key management simple. Key rotation and revocation are normatively specified in [§1.9](atrib-spec.md#19-key-rotation-and-revocation) ([D033](DECISIONS.md#d033-key-rotation-and-revocation)); see also [§6](atrib-spec.md#6-key-directory) ([D034](DECISIONS.md#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers)) for the AKD-based public-key directory that resolves `creator_key → identity claim`.
 
-**JCS canonicalization, not JWS/COSE (D003, Section 1.3).** RFC 8785 JSON Canonicalization Scheme gives deterministic serialization: lexicographic key ordering, no whitespace. This means any party can independently compute the same canonical bytes from the same record, which is necessary for signature verification and hash chain integrity. JWS wrapping was rejected because it adds envelope complexity without adding security properties atrib needs.
+**JCS canonicalization, not JWS/COSE ([D003](DECISIONS.md#d003-ed25519-not-dids-or-pki), Section 1.3).** RFC 8785 JSON Canonicalization Scheme gives deterministic serialization: lexicographic key ordering, no whitespace. This means any party can independently compute the same canonical bytes from the same record, which is necessary for signature verification and hash chain integrity. JWS wrapping was rejected because it adds envelope complexity without adding security properties atrib needs.
 
-**tlog-tiles, not a custom log format (D006).** The C2SP tlog-tiles spec defines an HTTP-based read interface for tiled Merkle trees. It is used by Certificate Transparency, Go module checksums, and Sigstore. Using a standard format means existing tooling (Tessera, witnesses, monitors) works out of the box.
+**tlog-tiles, not a custom log format ([D006](DECISIONS.md#d006-merkle-log-c2sp-tlog-tiles-not-blockchain)).** The C2SP tlog-tiles spec defines an HTTP-based read interface for tiled Merkle trees. It is used by Certificate Transparency, Go module checksums, and Sigstore. Using a standard format means existing tooling (Tessera, witnesses, monitors) works out of the box.
 
-**Seven edge types, deterministic derivation (D005, D041, D044, Section 3.2.4).** The graph records observable structure plus agent-declared causation (INFORMED_BY, PROVENANCE_OF). No edge encodes inferred causation; the agent-declared edges are derived from explicit fields the agent signed. Causal interpretation of those declarations remains the policy layer's job. The derivation rules are ordered and deterministic: two implementations on identical input must produce identical graphs.
+**Seven edge types, deterministic derivation ([D005](DECISIONS.md#d005-structure-not-causality-in-the-graph), [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), Section 3.2.4).** The graph records observable structure plus agent-declared causation (INFORMED_BY, PROVENANCE_OF). No edge encodes inferred causation; the agent-declared edges are derived from explicit fields the agent signed. Causal interpretation of those declarations remains the policy layer's job. The derivation rules are ordered and deterministic: two implementations on identical input must produce identical graphs.
 
-**Robustness layers (D050-D052, Sections 1.7.6, 2.11, 6.7).** Transaction records require ≥2 signatures (agent + counterparty per §1.7.6). Records may be cross-replicated to multiple independent logs and verifiers detect equivocation across them (§2.11). Identity claims may declare capability envelopes that verifiers check records against; out-of-envelope records are flagged as a signal (§6.7). These are additive defenses; single-signer transactions, single-log submissions, and capability-less identity claims remain conforming.
+**Robustness layers ([D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense)-D052, Sections 1.7.6, 2.11, 6.7).** Transaction records require ≥2 signatures (agent + counterparty per [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)). Records may be cross-replicated to multiple independent logs and verifiers detect equivocation across them ([§2.11](atrib-spec.md#211-cross-log-replication)). Identity claims may declare capability envelopes that verifiers check records against; out-of-envelope records are flagged as a signal ([§6.7](atrib-spec.md#67-capability-declarations)). These are additive defenses; single-signer transactions, single-log submissions, and capability-less identity claims remain conforming.
 
 **Adversarial threat model (Section 8.7).** atrib certifies what was signed, not whether the signed claim is true. A 10-layer trust assessment stack (signature, identity attestation, capability declaration, key revocation, transaction cross-attestation, tool-side response signing, external evidence, witnessing, cross-log replication, structural anomaly detection) lets verifiers build confidence in any individual record. No single layer is dispositive. The substrate provides structure for assessment, not guaranteed truth.
 
-**`workspace:*` for shared packages (D014).** Cross-package integration tests re-derive primitives independently rather than importing shared code. This validates that JCS + SHA-256 produce identical output across independent code paths, which is the core reproducibility property the protocol depends on.
+**`workspace:*` for shared packages ([D014](DECISIONS.md#d014-cross-package-integration-tests-live-in-a-private-workspace-package-and-re-derive-primitives)).** Cross-package integration tests re-derive primitives independently rather than importing shared code. This validates that JCS + SHA-256 produce identical output across independent code paths, which is the core reproducibility property the protocol depends on.
 
 **Edge weight uses `max()`, not `sum()` (Section 4.2.2).** Every non-transaction node has both a primary edge (CHAIN_PRECEDES, SESSION_PRECEDES, etc.) and a CONVERGES_ON edge. Summing would add a CONVERGES_ON bonus to every node, inflating all structural contributors equally. Taking the maximum means the primary structural relationship dominates.
 
-**Middleware pattern, not method calls (D008).** One `atrib()` call at init. Zero ongoing surface area. No methods for developers to call. This is modeled on TCP/IP: you open a socket and write data, the protocol handles the rest.
+**Middleware pattern, not method calls ([D008](DECISIONS.md#d008-middleware-pattern-not-method-calls)).** One `atrib()` call at init. Zero ongoing surface area. No methods for developers to call. This is modeled on TCP/IP: you open a socket and write data, the protocol handles the rest.
 
 ---
 
@@ -313,7 +313,7 @@ Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hash
 
 ## Further reading
 
-- [atrib-spec.md](atrib-spec.md), the complete protocol specification (§0-§7)
-- [DECISIONS.md](DECISIONS.md), architectural decision log (D001-D036+)
+- [atrib-spec.md](atrib-spec.md), the complete protocol specification ([§0](atrib-spec.md#0-foundations)-[§7](atrib-spec.md#7-harness-integration-patterns))
+- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-D036+)
 - [packages/agent/README.md](packages/agent/README.md) -- adapter table with quick-start snippets for every framework
 - [spec/conformance/2.6.1/](spec/conformance/2.6.1/) -- shared conformance corpus for the submission API
