@@ -32,12 +32,12 @@ All detection logic lives in `packages/agent/src/transaction.ts` and runs agains
 
 | Protocol                              | Sponsor / origin                                            | Detection signal                                                                                                              | Spec reference                       |
 | ------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| **ACP**. Agentic Commerce Protocol   | Stripe / OpenAI; `github.com/agentic-commerce-protocol`    | `status === "completed"` + embedded `order` on `/checkout_sessions/{id}/complete`, or `order_create` / `order_update` webhook | §1.7.1                               |
-| **UCP**. Universal Commerce Protocol | `github.com/universal-commerce-protocol/ucp`                | Same shape as ACP + top-level `ucp.version` envelope                                                                          | §1.7.2                               |
-| **x402**                              | Coinbase. `github.com/coinbase/x402`                       | HTTP `PAYMENT-RESPONSE` header (v2) or legacy `X-PAYMENT-RESPONSE` (v1) on the 200 response                                   | §1.7.3                               |
-| **MPP**. Machine Payments Protocol   | Tempo Labs / Stripe; IETF `draft-ryan-httpauth-payment-01` | HTTP `Payment-Receipt` header on 200 success response                                                                         | §1.7.4                               |
-| **AP2**. Agent Payments Protocol     | Google; `github.com/google-agentic-commerce/ap2`           | A2A Message with DataPart containing `ap2.mandates.PaymentMandate`                                                            | §1.7.5                               |
-| **a2a-x402**                          | Google. `github.com/google-agentic-commerce/a2a-x402`      | A2A task `status.message.metadata["x402.payment.status"] === "payment-completed"` + `receipts[].success === true`             | §1.7.5 (reported as AP2 crypto path) |
+| **ACP**. Agentic Commerce Protocol   | Stripe / OpenAI; `github.com/agentic-commerce-protocol`    | `status === "completed"` + embedded `order` on `/checkout_sessions/{id}/complete`, or `order_create` / `order_update` webhook | [§1.7.1](../../atrib-spec.md#171-acp-agentic-commerce-protocol)                               |
+| **UCP**. Universal Commerce Protocol | `github.com/universal-commerce-protocol/ucp`                | Same shape as ACP + top-level `ucp.version` envelope                                                                          | [§1.7.2](../../atrib-spec.md#172-ucp-universal-commerce-protocol)                               |
+| **x402**                              | Coinbase. `github.com/coinbase/x402`                       | HTTP `PAYMENT-RESPONSE` header (v2) or legacy `X-PAYMENT-RESPONSE` (v1) on the 200 response                                   | [§1.7.3](../../atrib-spec.md#173-x402)                               |
+| **MPP**. Machine Payments Protocol   | Tempo Labs / Stripe; IETF `draft-ryan-httpauth-payment-01` | HTTP `Payment-Receipt` header on 200 success response                                                                         | [§1.7.4](../../atrib-spec.md#174-mpp-machine-payments-protocol)                               |
+| **AP2**. Agent Payments Protocol     | Google; `github.com/google-agentic-commerce/ap2`           | A2A Message with DataPart containing `ap2.mandates.PaymentMandate`                                                            | [§1.7.5](../../atrib-spec.md#175-ap2-and-a2a-x402)                               |
+| **a2a-x402**                          | Google. `github.com/google-agentic-commerce/a2a-x402`      | A2A task `status.message.metadata["x402.payment.status"] === "payment-completed"` + `receipts[].success === true`             | [§1.7.5](../../atrib-spec.md#175-ap2-and-a2a-x402) (reported as AP2 crypto path) |
 
 **The linking mechanism is the same across all six:** the session `context_id` (16-byte anchor, equal to the W3C OTel trace-id by default) travels with the outbound payment request; via `X-atrib-Context` HTTP header for protocols that don't expose a free-form metadata field, or via `params._meta.atrib` for any payment protocol running over MCP transport. When the merchant's side sees the payment-completed signal, atrib writes a transaction record with that `context_id`, and the attribution graph can reconstruct the full chain from contributing tool calls → transaction → settlement.
 
@@ -49,7 +49,7 @@ These are the exact shapes the production `detectTransaction()` function in [`pa
 
 #### ACP: Stripe / OpenAI Agentic Commerce Protocol
 
-Detected on the success response of `POST /checkout_sessions/{id}/complete`. Required fields: top-level `status: "completed"` plus an `order` object with a string `id`. The optional `order.permalink_url` becomes the `checkoutUrl` for Path 2 `content_id` derivation per spec §5.4.5.
+Detected on the success response of `POST /checkout_sessions/{id}/complete`. Required fields: top-level `status: "completed"` plus an `order` object with a string `id`. The optional `order.permalink_url` becomes the `checkoutUrl` for Path 2 `content_id` derivation per spec [§5.4.5](../../atrib-spec.md#545-transaction-detection).
 
 ```json
 {
@@ -90,7 +90,7 @@ The header value is base64-encoded JSON `{success, transaction, network, payer, 
 
 #### MPP: IETF draft `draft-ryan-httpauth-payment-01`
 
-Also header-based, but a **different** header from x402 (the two were conflated in earlier drafts of this code; see [`DECISIONS.md` D016](../../DECISIONS.md)). MPP uses `Payment-Receipt` per §5.3 of the IETF draft. Both headers may not co-exist on a real response, but if they do, x402 wins (deterministic precedence documented in the test suite).
+Also header-based, but a **different** header from x402 (the two were conflated in earlier drafts of this code; see [`DECISIONS.md` D016](../../DECISIONS.md)). MPP uses `Payment-Receipt` per [§5.3](../../atrib-spec.md#53-atribmcp-mcp-server-middleware) of the IETF draft. Both headers may not co-exist on a real response, but if they do, x402 wins (deterministic precedence documented in the test suite).
 
 ```http
 HTTP/1.1 200 OK
@@ -278,11 +278,11 @@ const tools = await multi.getTools()
 Once the adapter is wired in, every successful `tools/call` from your agent:
 
 1. **Carries W3C trace context** (`traceparent`, `tracestate`, `baggage`) in `params._meta`, so downstream servers can correlate calls with your OTel traces.
-2. **Carries an attribution chain token** in `params._meta.atrib`, a ~87-char base64url token identifying the prior call in the chain (§1.5.2).
-3. **Emits a signed attribution record** to the submission queue asynchronously, zero blocking on the hot path (§5.3.5).
+2. **Carries an attribution chain token** in `params._meta.atrib`, a ~87-char base64url token identifying the prior call in the chain ([§1.5.2](../../atrib-spec.md#152-http-transport-tracestate)).
+3. **Emits a signed attribution record** to the submission queue asynchronously, zero blocking on the hot path ([§5.3.5](../../atrib-spec.md#535-log-submission)).
 4. **Updates session state** with the response's own `_meta.atrib` token, so the next call chains correctly from the current response.
 5. **Detects transaction events** in the response via the `transaction.ts` detector, across all six payment protocols in coverage matrix 2. When a transaction is detected, a transaction record is emitted linking the session `context_id` to the transaction.
-6. **Fails silent**: if any internal atrib step (signing, submission, interceptor logic) throws, the error is caught, logged with the `atrib:` prefix, and the tool call proceeds normally per spec §5.8.
+6. **Fails silent**: if any internal atrib step (signing, submission, interceptor logic) throws, the error is caught, logged with the `atrib:` prefix, and the tool call proceeds normally per spec [§5.8](../../atrib-spec.md#58-degradation-contract).
 
 ---
 
@@ -315,15 +315,15 @@ The entire atrib integration is wrapped in defensive error handling at every ada
 
 | Spec section | What it defines                                              |
 | ------------ | ------------------------------------------------------------ |
-| §1.3         | JCS canonical serialization of records                       |
-| §1.4         | Ed25519 signing and verification                             |
-| §1.5         | Context propagation via `params._meta` and W3C trace context |
-| §1.7         | Transaction event hooks for all 6 payment protocols          |
-| §2           | Merkle log protocol (Tessera-backed, tlog-tiles spec)        |
-| §3           | Graph query interface (fact layer only)                      |
-| §4           | Policy format (merchant-side value distribution)             |
-| §5.3         | Agent-side middleware behavior                               |
-| §5.4         | Path 1 / Path 2 transaction detection                        |
-| §5.8         | Degradation contract; silent failure never breaks the host  |
+| [§1.3](../../atrib-spec.md#13-canonical-serialization)         | JCS canonical serialization of records                       |
+| [§1.4](../../atrib-spec.md#14-signing-and-verification)         | Ed25519 signing and verification                             |
+| [§1.5](../../atrib-spec.md#15-context-propagation)         | Context propagation via `params._meta` and W3C trace context |
+| [§1.7](../../atrib-spec.md#17-transaction-event-hooks)         | Transaction event hooks for all 6 payment protocols          |
+| [§2](../../atrib-spec.md#2-merkle-log-protocol)           | Merkle log protocol (Tessera-backed, tlog-tiles spec)        |
+| [§3](../../atrib-spec.md#3-graph-query-interface)           | Graph query interface (fact layer only)                      |
+| [§4](../../atrib-spec.md#4-attribution-policy-format)           | Policy format (merchant-side value distribution)             |
+| [§5.3](../../atrib-spec.md#53-atribmcp-mcp-server-middleware)         | Agent-side middleware behavior                               |
+| [§5.4](../../atrib-spec.md#54-atribagent-agent-middleware)         | Path 1 / Path 2 transaction detection                        |
+| [§5.8](../../atrib-spec.md#58-degradation-contract)         | Degradation contract; silent failure never breaks the host  |
 
 The full protocol spec is at [`atrib-spec.md`](../../atrib-spec.md).

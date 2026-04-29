@@ -33,7 +33,7 @@ Is the substrate being used in non-trivial ways, or is it sitting idle on a serv
 | Chain depth distribution (median, p95, max) | persisted record JSONLs grouped by context_id | median > 1 means chains form | The "agents reason from a past" claim is empirical |
 | `tool_call` vs `transaction` ratio | scan entries for `event_type` byte | non-zero transactions | Economic events flow through, not just chatter |
 | Active wrappers | count atrib-wrapped MCP-client jsonl mirror files (operator-local convention; default `~/.atrib/records/*.jsonl`) | growing toward >1 | More than one consumer is wired to atrib at any time |
-| Active framework adapters in use | grep wrapper logs by adapter name | growing toward >1 of the 5 adapters from D018-D024 | Cross-framework dogfood, not just one |
+| Active framework adapters in use | grep wrapper logs by adapter name | growing toward >1 of the 5 adapters from [D018](DECISIONS.md#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow)-D024 | Cross-framework dogfood, not just one |
 
 Cadence: review every Sunday. Hand-collected for now (`pnpm verify-log` then look at the printed entries). When this set stabilizes, automate via a `pnpm metrics` script that emits a JSON dashboard.
 
@@ -63,10 +63,10 @@ Has the protocol produced anything irreversible — a real attribution payment, 
 
 | Metric | Source | Direction | Notes |
 |---|---|---|---|
-| Witnesses cosigning `log.atrib.dev` checkpoints | parse `/v1/checkpoint` for additional `—` lines | toward ≥1 | First witness is the moment §2.9 stops being theoretical |
-| Witness diversity (signers, infra, jurisdictions) | manual; track per-witness metadata | three axes (D032) | Single-axis diversity is weaker than spec acknowledges |
+| Witnesses cosigning `log.atrib.dev` checkpoints | parse `/v1/checkpoint` for additional `—` lines | toward ≥1 | First witness is the moment [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) stops being theoretical |
+| Witness diversity (signers, infra, jurisdictions) | manual; track per-witness metadata | three axes ([D032](DECISIONS.md#d032-witnessing-posture-for-v1-spec-defined-no-implementation)) | Single-axis diversity is weaker than spec acknowledges |
 | Non-operator verifiers running `verify-loop` against the live log | server-access logs filtered by user-agent / IP, with operator privacy in mind | toward >0 | Are people actually checking? |
-| Settlement documents (§4.7) generated for real economic events | manual; survey | toward >0 | The point of the protocol |
+| Settlement documents ([§4.7](atrib-spec.md#47-settlement-recommendation-document)) generated for real economic events | manual; survey | toward >0 | The point of the protocol |
 | Total economic value attributed | sum of transaction record amounts × distribution share | toward >$0 | Calc-algorithm output meets reality |
 | First commercial integration | survey | named or unnamed | The thesis converts to demand |
 

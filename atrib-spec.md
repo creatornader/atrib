@@ -4,14 +4,14 @@
 
 Editor: Nader Helmy
 
-This specification defines the atrib protocol for verifiable agent actions. When an AI agent calls a tool, atrib creates a signed record at the moment of action, chains it forward into the next call, and commits it to an append-only Merkle log. Any party can independently verify what an agent did, in what order, with what causal structure. When tool calls converge on a transaction, a deterministic algorithm computes a value distribution from the resulting graph under an agreed policy, producing a settlement document anyone can recompute. The spec covers the record format (§1) including key rotation (§1.9) and URI-typed event vocabulary (§1.2.4, §1.4.5), the log protocol (§2), the graph model (§3), policies and the distribution algorithm (§4), the SDK middleware contracts (§5), the public-key directory (§6), and informative integration patterns for agent harnesses (§7).
+This specification defines the atrib protocol for verifiable agent actions. When an AI agent calls a tool, atrib creates a signed record at the moment of action, chains it forward into the next call, and commits it to an append-only Merkle log. Any party can independently verify what an agent did, in what order, with what causal structure. When tool calls converge on a transaction, a deterministic algorithm computes a value distribution from the resulting graph under an agreed policy, producing a settlement document anyone can recompute. The spec covers the record format ([§1](#1-attribution-record-format)) including key rotation ([§1.9](#19-key-rotation-and-revocation)) and URI-typed event vocabulary ([§1.2.4](#124-event_type-values), [§1.4.5](#145-event_type-uri-validation)), the log protocol ([§2](#2-merkle-log-protocol)), the graph model ([§3](#3-graph-query-interface)), policies and the distribution algorithm ([§4](#4-attribution-policy-format)), the SDK middleware contracts ([§5](#5-sdk-specification)), the public-key directory ([§6](#6-key-directory)), and informative integration patterns for agent harnesses ([§7](#7-harness-integration-patterns)).
 
 ---
 
 ## Table of Contents
 
 - [§0 Foundations](#0-foundations)
-- [§1 Attribution Record Format](#1-attribution-record-format) (incl. §1.9 Key Rotation and Revocation)
+- [§1 Attribution Record Format](#1-attribution-record-format) (incl. [§1.9](#19-key-rotation-and-revocation) Key Rotation and Revocation)
 - [§2 Merkle Log Protocol](#2-merkle-log-protocol)
 - [§3 Graph Query Interface](#3-graph-query-interface)
 - [§4 Attribution Policy Format](#4-attribution-policy-format)
@@ -84,11 +84,11 @@ atrib is built on a different principle: **you can record what happened and who 
 
 ### What atrib certifies, what it does not
 
-atrib certifies five structural axes of agent activity: who acted (identity, via signature), what they did (event_type), when (timestamp), in what order (chain_root and the ordering edges of §3), and what the agent claims informed each action (the `informed_by` and `provenance_token` fields, surfaced as INFORMED_BY and PROVENANCE_OF edges in §3).
+atrib certifies five structural axes of agent activity: who acted (identity, via signature), what they did (event_type), when (timestamp), in what order (chain_root and the ordering edges of [§3](#3-graph-query-interface)), and what the agent claims informed each action (the `informed_by` and `provenance_token` fields, surfaced as INFORMED_BY and PROVENANCE_OF edges in [§3](#3-graph-query-interface)).
 
-atrib does NOT certify that the agent's reasoning is truthful, that prior records actually influenced subsequent decisions, or that tool responses were real absent tool-side attestation. The substrate is content-preserving (commitments, not content) and disclosure-configurable (the privacy postures of §8 let the harness pick how much each record reveals).
+atrib does NOT certify that the agent's reasoning is truthful, that prior records actually influenced subsequent decisions, or that tool responses were real absent tool-side attestation. The substrate is content-preserving (commitments, not content) and disclosure-configurable (the privacy postures of [§8](#8-privacy-postures) let the harness pick how much each record reveals).
 
-This positioning is load-bearing. Brand promises that exceed what the substrate certifies create the same trust mismatch atrib was built to fix. §3 "What atrib chains, what it does not" gives the detailed structural-axis enumeration; §7.6 documents the outcome-verification patterns that close the tool-response gap when consumers need it.
+This positioning is load-bearing. Brand promises that exceed what the substrate certifies create the same trust mismatch atrib was built to fix. [§3](#3-graph-query-interface) "What atrib chains, what it does not" gives the detailed structural-axis enumeration; [§7.6](#76-outcome-verification-patterns) documents the outcome-verification patterns that close the tool-response gap when consumers need it.
 
 ### Principle I: Provenance travels with the artifact
 
@@ -124,7 +124,7 @@ An agent that can verify its own past has a kind of memory the agent ecosystem h
 
 The cognitive consequence is concrete. An agent restoring context from its own atrib records (rather than from platform-controlled memory) cannot be quietly amended. It cannot have actions silently retroactively added or removed. It cannot inherit a falsified history if its harness is replaced. The substrate is the only mechanism by which an agent's continuity of self survives platform changes, model changes, or harness changes, because the cryptography is independent of all of them.
 
-This is the use case the protocol's recall pattern (§7) tests in practice: real agents (Claude Code, Cursor, custom harnesses) consuming the substrate they themselves produce. If the substrate works, the agent is more capable. If the substrate is broken, the agent is no worse off than today.
+This is the use case the protocol's recall pattern ([§7](#7-harness-integration-patterns)) tests in practice: real agents (Claude Code, Cursor, custom harnesses) consuming the substrate they themselves produce. If the substrate works, the agent is more capable. If the substrate is broken, the agent is no worse off than today.
 
 ### II. Independent audit and compliance
 
@@ -140,7 +140,7 @@ Without the substrate, multi-agent flows reduce to "trust whoever is closest to 
 
 ### IV. Settlement, attribution, and the post-advertising web
 
-The substrate produces a useful side effect: when commerce closes a chain (an agent purchases something, a tool is invoked in service of a transaction), the same signed record set is what a settlement document is computed from. The §4.6 algorithm runs deterministically over the graph and produces a value distribution any merchant or auditor can recompute. This is the attribution-economy use case, and it is genuinely real, but it is one consequence of the substrate, not the reason for it.
+The substrate produces a useful side effect: when commerce closes a chain (an agent purchases something, a tool is invoked in service of a transaction), the same signed record set is what a settlement document is computed from. The [§4.6](#46-the-calculation-algorithm) algorithm runs deterministically over the graph and produces a value distribution any merchant or auditor can recompute. This is the attribution-economy use case, and it is genuinely real, but it is one consequence of the substrate, not the reason for it.
 
 The deeper claim about advertising follows from this. We do not claim that advertising will disappear. We claim that the structural necessity of advertising as the primary funding model for the internet rests on a single foundation: the absence of native provenance infrastructure. When that foundation erodes, the model built on it becomes optional rather than inevitable.
 
@@ -204,12 +204,12 @@ The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RE
 
 This specification defines requirements for four conformance targets:
 
-- **MCP server middleware**: satisfies all MUST requirements in §1.2-§1.5, §2.3, §2.6, and §5.3.
-- **Agent middleware**: satisfies all MUST requirements in §1.5, §1.7, §4.5, and §5.4.
-- **Log operator**: satisfies all MUST requirements in §2.
-- **Verification library**: satisfies all MUST requirements in §4.6, §4.7, and §5.5.
+- **MCP server middleware**: satisfies all MUST requirements in [§1.2](#12-the-attribution-record)-[§1.5](#15-context-propagation), [§2.3](#23-log-entry-format), [§2.6](#26-submission-api-write-interface), and [§5.3](#53-atribmcp-mcp-server-middleware).
+- **Agent middleware**: satisfies all MUST requirements in [§1.5](#15-context-propagation), [§1.7](#17-transaction-event-hooks), [§4.5](#45-session-negotiation), and [§5.4](#54-atribagent-agent-middleware).
+- **Log operator**: satisfies all MUST requirements in [§2](#2-merkle-log-protocol).
+- **Verification library**: satisfies all MUST requirements in [§4.6](#46-the-calculation-algorithm), [§4.7](#47-settlement-recommendation-document), and [§5.5](#55-atribverify-merchant-verification-library).
 
-A graph query service, when implemented, must satisfy all MUST requirements in §3. A witness, when implemented, must satisfy all MUST requirements in §2.9.
+A graph query service, when implemented, must satisfy all MUST requirements in [§3](#3-graph-query-interface). A witness, when implemented, must satisfy all MUST requirements in [§2.9](#29-witnessing-and-cosignatures).
 
 All normative requirements in this section are prefixed with their requirement level. A conforming implementation satisfies all MUST requirements and is RECOMMENDED to satisfy all SHOULD requirements.
 
@@ -242,16 +242,16 @@ An attribution record is a JSON object with the following fields:
 | Field         | Type    | Req  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------- | ------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | spec_version  | string  | MUST | Always the literal string `"atrib/1.0"` for records conforming to this specification. Implementations MUST reject records with unknown spec_version values rather than attempting to process them.                                                                                                                                                                                                                                                      |
-| content_id    | string  | MUST | A prefixed hex-encoded SHA-256 digest identifying the specific creator and tool that produced this record. See §1.2.2 for derivation. Format: `"sha256:"` followed by 64 lowercase hex characters.                                                                                                                                                                                                                                                      |
-| creator_key   | string  | MUST | The creator's Ed25519 public key, encoded as base64url (RFC 4648 §5, no padding). 43 characters. This is the stable identity of the creator across all their records. It is not an ephemeral session key.                                                                                                                                                                                                                                               |
-| chain_root    | string  | MUST | A prefixed hex-encoded SHA-256 digest anchoring this record in the chain. For non-genesis records: the hash of the parent attribution record's canonical serialization (see §1.3). For genesis records: the hash of the context_id string. See §1.2.3.                                                                                                                                                                                                  |
-| event_type    | string  | MUST | An absolute URI identifying the type of event this record documents. atrib's normative URI set is defined in §1.2.4; consumers MAY mint extension URIs in their own namespaces. URI form is validated per §1.4.5. atrib does not require URI recognition for verification; an unrecognized but syntactically-valid extension URI does not block signature verification.                                                                                                                                                                                                                                                                                                    |
-| context_id    | string  | MUST | The W3C Trace Context trace-id of the OTel trace containing this event. 32 lowercase hex characters. This is the join key that connects attribution records to each other and to transaction events. See §1.5.1.                                                                                                                                                                                                                                        |
-| timestamp        | integer | MUST | Unix time in milliseconds as a JSON integer. MUST NOT be a string, float, or ISO 8601 date. MUST NOT be in the future. Implementations SHOULD reject records with timestamps more than 5 minutes in the future relative to local clock. Allowed granularities (D045): millisecond (default), second (×1000), minute (×60000), hour (×3600000), day (×86400000); the value's trailing-zero pattern indicates granularity. |
-| informed_by      | array   | MAY  | Array of `"sha256:" + hex(record_hash)` strings identifying records the agent claims informed this action. Hashes MUST be sorted lexicographically by the hex string (deterministic ordering). Empty or absent when the record makes no provenance claim. The graph layer derives INFORMED_BY edges from this field (§3.2.3). atrib does not validate truthfulness of the claim. See §1.2.5 and D041. |
-| provenance_token | string  | MAY  | Base64url-encoded 16-byte opaque token for cross-session causal anchoring. Distinct from session_token: provenance_token says "this action descends from that anchor" (causal); session_token says "this is the same logical session" (continuation). Present when the record either declares anchorability (upstream) or claims provenance (downstream). The graph layer derives PROVENANCE_OF edges from token co-occurrence (§3.2.3). See §1.2.6 and D044. |
-| session_token    | string  | MAY  | Base64url-encoded 16-byte opaque token identifying the logical session across OTel trace boundaries. Present only when the record was emitted in a cross-trace session. When present, the graph query layer uses this field to construct CROSS_SESSION edges between records with different context_ids that share the same session_token. See §1.5.5. The session_token field is included in the canonical serialization and covered by the signature. |
-| signature        | string  | MUST | Ed25519 signature over the canonical serialization of the record with the signature field omitted, encoded as base64url (RFC 4648 §5, no padding). 86 characters. See §1.4 for the full signing procedure.                                                                                                                                                                                                                                              |
+| content_id    | string  | MUST | A prefixed hex-encoded SHA-256 digest identifying the specific creator and tool that produced this record. See [§1.2.2](#122-content_id-derivation) for derivation. Format: `"sha256:"` followed by 64 lowercase hex characters.                                                                                                                                                                                                                                                      |
+| creator_key   | string  | MUST | The creator's Ed25519 public key, encoded as base64url (RFC 4648 [§5](#5-sdk-specification), no padding). 43 characters. This is the stable identity of the creator across all their records. It is not an ephemeral session key.                                                                                                                                                                                                                                               |
+| chain_root    | string  | MUST | A prefixed hex-encoded SHA-256 digest anchoring this record in the chain. For non-genesis records: the hash of the parent attribution record's canonical serialization (see [§1.3](#13-canonical-serialization)). For genesis records: the hash of the context_id string. See [§1.2.3](#123-chain_root-for-genesis-records).                                                                                                                                                                                                  |
+| event_type    | string  | MUST | An absolute URI identifying the type of event this record documents. atrib's normative URI set is defined in [§1.2.4](#124-event_type-values); consumers MAY mint extension URIs in their own namespaces. URI form is validated per [§1.4.5](#145-event_type-uri-validation). atrib does not require URI recognition for verification; an unrecognized but syntactically-valid extension URI does not block signature verification.                                                                                                                                                                                                                                                                                                    |
+| context_id    | string  | MUST | The W3C Trace Context trace-id of the OTel trace containing this event. 32 lowercase hex characters. This is the join key that connects attribution records to each other and to transaction events. See [§1.5.1](#151-context_id-the-session-anchor).                                                                                                                                                                                                                                        |
+| timestamp        | integer | MUST | Unix time in milliseconds as a JSON integer. MUST NOT be a string, float, or ISO 8601 date. MUST NOT be in the future. Implementations SHOULD reject records with timestamps more than 5 minutes in the future relative to local clock. Allowed granularities ([D045](DECISIONS.md#d045-privacy-postures-normative-spec-section)): millisecond (default), second (×1000), minute (×60000), hour (×3600000), day (×86400000); the value's trailing-zero pattern indicates granularity. |
+| informed_by      | array   | MAY  | Array of `"sha256:" + hex(record_hash)` strings identifying records the agent claims informed this action. Hashes MUST be sorted lexicographically by the hex string (deterministic ordering). Empty or absent when the record makes no provenance claim. The graph layer derives INFORMED_BY edges from this field ([§3.2.3](#323-edge-types)). atrib does not validate truthfulness of the claim. See [§1.2.5](#125-informed_by) and [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type). |
+| provenance_token | string  | MAY  | Base64url-encoded 16-byte opaque token for cross-session causal anchoring. Distinct from session_token: provenance_token says "this action descends from that anchor" (causal); session_token says "this is the same logical session" (continuation). Present when the record either declares anchorability (upstream) or claims provenance (downstream). The graph layer derives PROVENANCE_OF edges from token co-occurrence ([§3.2.3](#323-edge-types)). See [§1.2.6](#126-provenance_token) and [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring). |
+| session_token    | string  | MAY  | Base64url-encoded 16-byte opaque token identifying the logical session across OTel trace boundaries. Present only when the record was emitted in a cross-trace session. When present, the graph query layer uses this field to construct CROSS_SESSION edges between records with different context_ids that share the same session_token. See [§1.5.5](#155-cross-trace-session-continuity). The session_token field is included in the canonical serialization and covered by the signature. |
+| signature        | string  | MUST | Ed25519 signature over the canonical serialization of the record with the signature field omitted, encoded as base64url (RFC 4648 [§5](#5-sdk-specification), no padding). 86 characters. See [§1.4](#14-signing-and-verification) for the full signing procedure.                                                                                                                                                                                                                                              |
 
 #### 1.2.2 content_id Derivation
 
@@ -280,7 +280,7 @@ content_id = "sha256:" + hex(digest)  // lowercase hex, no spaces
 
 #### 1.2.3 chain_root for Genesis Records
 
-Every attribution chain begins with a genesis record: the first hop in a session that has no upstream atrib context. A record is a genesis record when the inbound context contains no `atrib` token (no `params._meta.atrib`, no `tracestate` atrib entry, no `X-Atrib-Chain` header), OR when the token is present but malformed (cannot be decoded by the procedure in §1.5.2). In both cases, `chain_root` is computed as the genesis chain root per the formula below.
+Every attribution chain begins with a genesis record: the first hop in a session that has no upstream atrib context. A record is a genesis record when the inbound context contains no `atrib` token (no `params._meta.atrib`, no `tracestate` atrib entry, no `X-Atrib-Chain` header), OR when the token is present but malformed (cannot be decoded by the procedure in [§1.5.2](#152-http-transport-tracestate)). In both cases, `chain_root` is computed as the genesis chain root per the formula below.
 
 For a genesis record, the `chain_root` MUST be computed as:
 
@@ -290,7 +290,7 @@ chain_root = "sha256:" + hex(SHA-256(UTF-8(context_id)))
 
 This anchors every genesis record to its session without requiring a parent record. It is verifiable by any party who knows the context_id.
 
-**Normative clarification:** Both `chain_root` and the propagation token's `record_hash` component are computed over the JCS canonicalization of the COMPLETE signed record, INCLUDING the `signature` field. This differs from the signing input (§1.3), which EXCLUDES the `signature` field. Specifically:
+**Normative clarification:** Both `chain_root` and the propagation token's `record_hash` component are computed over the JCS canonicalization of the COMPLETE signed record, INCLUDING the `signature` field. This differs from the signing input ([§1.3](#13-canonical-serialization)), which EXCLUDES the `signature` field. Specifically:
 
 - Signing input: `JCS(record without signature)` -- used for Ed25519 sign/verify
 - Record hash: `SHA-256(JCS(complete record with signature))` -- used for `chain_root` and propagation token
@@ -301,25 +301,25 @@ A receiving implementation that decodes a propagation token and needs to set `ch
 
 #### 1.2.4 event_type Values
 
-`event_type` is an absolute URI. atrib publishes a small canonical core vocabulary; consumers MAY mint their own extension URIs in any namespace they control. atrib does not gate, register, or approve extension URIs; D035 establishes the URI-typing mechanism, and D036 defines the bar for promoting an extension URI to atrib's normative set.
+`event_type` is an absolute URI. atrib publishes a small canonical core vocabulary; consumers MAY mint their own extension URIs in any namespace they control. atrib does not gate, register, or approve extension URIs; [D035](DECISIONS.md#d035-extensible-event_type-vocabulary-via-uri-typing) establishes the URI-typing mechanism, and [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) defines the bar for promoting an extension URI to atrib's normative set.
 
 **Normative URI set:**
 
 | URI                                                | Binary | Meaning                                                                                                                                                                                                                                                                                                                                                                |
 | -------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `https://atrib.dev/v1/types/tool_call`             | `0x01` | An agent invoked a tool with input(s) and received a result. Emitted by an MCP server when it returns a successful (non-error) response to a `tools/call` request. MUST NOT be emitted when `isError: true` in the MCP result. Default for any active operation against external state.                                                                                |
-| `https://atrib.dev/v1/types/transaction`           | `0x02` | A commerce-protocol-detected closing event (ACP / UCP / x402 / MPP / AP2 / a2a-x402; see §1.7). Emitted when a transaction completes, either by the merchant's agent writing a record, or by the atrib SDK reading a transaction webhook. The `content_id` for a transaction record uses the merchant's checkout endpoint URL as the server_url and `"checkout"` as the tool_name. §4.6 calculation is normatively gated on this URI. |
+| `https://atrib.dev/v1/types/transaction`           | `0x02` | A commerce-protocol-detected closing event (ACP / UCP / x402 / MPP / AP2 / a2a-x402; see [§1.7](#17-transaction-event-hooks)). Emitted when a transaction completes, either by the merchant's agent writing a record, or by the atrib SDK reading a transaction webhook. The `content_id` for a transaction record uses the merchant's checkout endpoint URL as the server_url and `"checkout"` as the tool_name. [§4.6](#46-the-calculation-algorithm) calculation is normatively gated on this URI. |
 | `https://atrib.dev/v1/types/observation`           | `0x03` | A passive perception captured by an ambient watcher or input source. The agent did not invoke a tool to produce this record; the record captures something the agent received from its environment. Has no caller-supplied input and no return value to attest to. Distinct from `tool_call` in that there is no agent-chosen action.                                  |
 
-**Extension URIs:** Any absolute URI in a non-`atrib.dev` namespace is a valid extension URI. The 1-byte log entry slot (§2.3.1) maps such URIs to the byte `0xFF` (extension type); verifiers wanting to filter by the URI itself read the URI from the record. Extension URIs SHOULD identify a stable owner (a domain the consumer controls or a `urn:` namespace they registered); atrib does not enforce ownership.
+**Extension URIs:** Any absolute URI in a non-`atrib.dev` namespace is a valid extension URI. The 1-byte log entry slot ([§2.3.1](#231-entry-serialization)) maps such URIs to the byte `0xFF` (extension type); verifiers wanting to filter by the URI itself read the URI from the record. Extension URIs SHOULD identify a stable owner (a domain the consumer controls or a `urn:` namespace they registered); atrib does not enforce ownership.
 
 #### 1.2.5 informed_by
 
-The `informed_by` field carries the agent's claimed reasoning context: an array of `"sha256:" + hex(record_hash)` strings identifying records the agent claims informed this action. The field is OPTIONAL (per D041); records without it make no provenance claim.
+The `informed_by` field carries the agent's claimed reasoning context: an array of `"sha256:" + hex(record_hash)` strings identifying records the agent claims informed this action. The field is OPTIONAL (per [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type)); records without it make no provenance claim.
 
 **Format.** Each entry is a `"sha256:"` prefix followed by 64 lowercase hex characters, matching the `chain_root` format. The array MUST be sorted lexicographically by the hex string. Sorting is required for canonical serialization stability: an agent-side ordering choice would otherwise affect signatures.
 
-**Semantics.** A record with `informed_by: ["sha256:abc...", "sha256:def..."]` claims the agent consulted those two referenced records before deciding to emit this record. The references MAY point at records in the same session, a different session of the same `creator_key`, or a session of a different `creator_key`. There is no requirement that the referenced records actually exist in any particular log; the verifier resolves what it can and surfaces dangling references (§3.2.3 INFORMED_BY edge with `dangling: true`).
+**Semantics.** A record with `informed_by: ["sha256:abc...", "sha256:def..."]` claims the agent consulted those two referenced records before deciding to emit this record. The references MAY point at records in the same session, a different session of the same `creator_key`, or a session of a different `creator_key`. There is no requirement that the referenced records actually exist in any particular log; the verifier resolves what it can and surfaces dangling references ([§3.2.3](#323-edge-types) INFORMED_BY edge with `dangling: true`).
 
 **Trust posture.** atrib certifies that the holder of the `creator_key` signed a record carrying these claims. atrib does NOT certify that the referenced records actually informed the agent's decision. Truthfulness verification (cross-checking referenced content against the action) is a downstream concern.
 
@@ -327,7 +327,7 @@ The `informed_by` field carries the agent's claimed reasoning context: an array 
 
 The `provenance_token` field carries an opaque token used for cross-session causal anchoring. It is OPTIONAL; records without it make no ancestry claim.
 
-**Format.** Base64url-encoded 16 bytes (RFC 4648 §5, no padding). 22 characters.
+**Format.** Base64url-encoded 16 bytes (RFC 4648 [§5](#5-sdk-specification), no padding). 22 characters.
 
 **Scope constraint.** `provenance_token` MUST appear ONLY on the genesis record of a session (the first record in a `context_id`). A session's ancestry is a session-level property; the genesis record is the natural place to declare it. Subsequent records in the session inherit ancestry implicitly via session membership. Validators MUST reject records carrying `provenance_token` when they are not the session's genesis record.
 
@@ -335,11 +335,11 @@ The `provenance_token` field carries an opaque token used for cross-session caus
 
 **Upstream records carry no special field.** Any signed record in the log is implicitly anchorable. Downstream records reference it by truncated hash. The token is a downstream-side claim only; upstream records do not need to declare anchorability.
 
-**Graph derivation.** The graph layer derives PROVENANCE_OF edges (§3.2.3) by searching for any record U whose first 16 bytes of `SHA-256(JCS(U))` match the token, with `U.context_id ≠ D.context_id`. Dangling references (token claimed but no matching upstream in the resolved set) are flagged with `dangling: true`.
+**Graph derivation.** The graph layer derives PROVENANCE_OF edges ([§3.2.3](#323-edge-types)) by searching for any record U whose first 16 bytes of `SHA-256(JCS(U))` match the token, with `U.context_id ≠ D.context_id`. Dangling references (token claimed but no matching upstream in the resolved set) are flagged with `dangling: true`.
 
-**Distinction from session_token.** session_token (§1.5.5) means *same logical session across OTel trace boundaries* (continuation of one task). provenance_token means *different session, causally anchored* (one session's first record descends from another's). They MAY coexist on the same genesis record (a session may both belong to a multi-trace logical session AND descend from a prior anchor).
+**Distinction from session_token.** session_token ([§1.5.5](#155-cross-trace-session-continuity)) means *same logical session across OTel trace boundaries* (continuation of one task). provenance_token means *different session, causally anchored* (one session's first record descends from another's). They MAY coexist on the same genesis record (a session may both belong to a multi-trace logical session AND descend from a prior anchor).
 
-**Relationship to `informed_by`.** provenance_token is a stricter, ergonomically-specialized subset of `informed_by` (§1.2.5):
+**Relationship to `informed_by`.** provenance_token is a stricter, ergonomically-specialized subset of `informed_by` ([§1.2.5](#125-informed_by)):
 
 | Property | `informed_by` | `provenance_token` |
 |---|---|---|
@@ -397,11 +397,11 @@ First, construct the record object with all fields present including a placehold
 
 ### 1.4 Signing and Verification
 
-atrib uses Ed25519 (RFC 8032, §5.1) for all attribution record signing. Ed25519 provides compact signatures (64 bytes), fast verification, strong security, and does not require a PKI or certificate authority. Each creator generates and controls their own keypair.
+atrib uses Ed25519 (RFC 8032, [§5.1](#51-design-principle-zero-ongoing-surface-area)) for all attribution record signing. Ed25519 provides compact signatures (64 bytes), fast verification, strong security, and does not require a PKI or certificate authority. Each creator generates and controls their own keypair.
 
 #### 1.4.1 Key Format
 
-Creator keypairs are raw 32-byte Ed25519 keys. The public key is encoded as base64url without padding (RFC 4648 §5) for inclusion in the `creator_key` field. The private key is retained by the creator and never transmitted.
+Creator keypairs are raw 32-byte Ed25519 keys. The public key is encoded as base64url without padding (RFC 4648 [§5](#5-sdk-specification)) for inclusion in the `creator_key` field. The private key is retained by the creator and never transmitted.
 
 ```
 // TypeScript key generation (using @noble/ed25519 or Web Crypto API):
@@ -420,7 +420,7 @@ To sign an attribution record, an implementation MUST:
 
 Step 1: Construct the attribution record with all fields populated except `signature`.
 
-Step 2: Remove the `signature` field and apply JCS serialization (§1.3) to obtain the signing input bytes.
+Step 2: Remove the `signature` field and apply JCS serialization ([§1.3](#13-canonical-serialization)) to obtain the signing input bytes.
 
 Step 3: Compute the Ed25519 signature over the signing input bytes using the creator's private key, following RFC 8032 §5.1.6 (Pure EdDSA, no prehashing).
 
@@ -451,7 +451,7 @@ Step 4: Verify the signature against the verification input bytes using the deco
 
 Step 5: Verify that `spec_version` is `"atrib/1.0"`. Reject if not.
 
-Step 6: Verify that `event_type` is a syntactically-valid absolute URI per §1.4.5. Reject if not. The URI need not be in atrib's normative set; an extension URI passes this check. Recognition (whether the URI is in atrib's normative set or in a known extension namespace) is informational and does not gate verification.
+Step 6: Verify that `event_type` is a syntactically-valid absolute URI per [§1.4.5](#145-event_type-uri-validation). Reject if not. The URI need not be in atrib's normative set; an extension URI passes this check. Recognition (whether the URI is in atrib's normative set or in a known extension namespace) is informational and does not gate verification.
 
 Step 7: Verify that `timestamp` is not more than 5 minutes in the future. Reject if so.
 
@@ -463,13 +463,13 @@ A record passes verification if and only if all eight steps succeed. A partial v
 
 All implementations of Ed25519 signing and verification MUST be validated against the Wycheproof test vectors for EdDSA (github.com/C2SP/wycheproof, `testvectors_v1/eddsa_verify_test.json`) prior to production deployment. Any test vector marked `"result": "invalid"` that an implementation accepts is a security defect. Any test vector marked `"result": "valid"` that an implementation rejects is a compatibility defect.
 
-**Note (Key Rotation):** Key rotation is normatively defined in §1.9 (D033).
+**Note (Key Rotation):** Key rotation is normatively defined in [§1.9](#19-key-rotation-and-revocation) ([D033](DECISIONS.md#d033-key-rotation-and-revocation)).
 
 #### 1.4.5 event_type URI Validation
 
 This section defines the syntactic and structural validation that the `event_type` URI MUST satisfy. The validation is independent of whether the URI is in atrib's normative set or a consumer extension namespace; both must satisfy these rules.
 
-**Required form.** The `event_type` value MUST be an absolute URI per RFC 3986 §4.3:
+**Required form.** The `event_type` value MUST be an absolute URI per RFC 3986 [§4.3](#43-the-default-policy):
 
 ```
 absolute-URI = scheme ":" hier-part [ "?" query ]
@@ -478,7 +478,7 @@ absolute-URI = scheme ":" hier-part [ "?" query ]
 In practice this means:
 
 1. The value MUST contain a scheme (e.g., `https`, `urn`) followed by `:`. Relative references (`/types/tool_call`), bare tokens (`tool_call`), and empty strings are invalid.
-2. The scheme MUST consist of letters, digits, `+`, `-`, or `.` and MUST start with a letter, per RFC 3986 §3.1.
+2. The scheme MUST consist of letters, digits, `+`, `-`, or `.` and MUST start with a letter, per RFC 3986 [§3.1](#31-design-principles-and-rationale).
 3. For the `https` scheme (the form atrib normative URIs use), the URI MUST have a non-empty authority component (host).
 4. The URI MUST NOT contain a fragment (`#...`). Fragments are reserved for future use; including one invalidates the record.
 5. The URI MUST be at most 256 octets in its UTF-8 encoding. Longer URIs are rejected. This bound is a defense against pathological inputs and is well above any reasonable URI length.
@@ -565,7 +565,7 @@ Implementations SHOULD set both `tracestate: atrib=...` and `X-atrib-Chain: ...`
 
 #### 1.5.3.1 Context ID Header: X-atrib-Context
 
-For HTTP-transport payment protocol integrations (§1.7), the agent MUST propagate the session's `context_id` as the `X-atrib-Context` HTTP header on outbound requests that may trigger transaction events. The header value is the raw 32-character lowercase hexadecimal context_id, not the propagation token.
+For HTTP-transport payment protocol integrations ([§1.7](#17-transaction-event-hooks)), the agent MUST propagate the session's `context_id` as the `X-atrib-Context` HTTP header on outbound requests that may trigger transaction events. The header value is the raw 32-character lowercase hexadecimal context_id, not the propagation token.
 
 This header is distinct from `X-atrib-Chain` (which carries the propagation token) and serves a different purpose: it embeds the session anchor in HTTP requests so that transaction events (ACP checkout, x402 payment, MPP receipt) can be linked back to the attribution session.
 
@@ -639,7 +639,7 @@ Implementations SHOULD record unsigned hops as gap nodes in the attribution grap
 }
 ```
 
-Gap nodes are part of the attribution graph. They are visible in graph queries. They carry a `verification_state` of `unsigned` (the lowest verification state) because no signature exists to verify. Their presence does not invalidate the chain or prevent settlement recommendations from being generated. What an unsigned node means for attribution weight is a question for the policy layer (§4), not for this section, which defines only the record format and what constitutes a gap node.
+Gap nodes are part of the attribution graph. They are visible in graph queries. They carry a `verification_state` of `unsigned` (the lowest verification state) because no signature exists to verify. Their presence does not invalidate the chain or prevent settlement recommendations from being generated. What an unsigned node means for attribution weight is a question for the policy layer ([§4](#4-attribution-policy-format)), not for this section, which defines only the record format and what constitutes a gap node.
 
 A creator who has not signed their contribution has not asserted a claim. The gap node preserves the fact that an unsigned hop occurred, making it visible to any party who inspects the graph, rather than silently excluding it.
 
@@ -655,7 +655,7 @@ In every case, the linking mechanism is the same: the `context_id` of the agent 
 
 ACP is the open standard published at `github.com/agentic-commerce-protocol/agentic-commerce-protocol`. The transaction event hook is the success response from `POST /checkout_sessions/{id}/complete`. A successful completion is signaled by `status === "completed"` together with an embedded `order` object whose `id` is a string. The `order.permalink_url` (when present) is the canonical post-purchase URL atrib uses to derive the transaction record's `content_id`.
 
-Because ACP `POST /checkout_sessions/...` requests do not currently expose a free-form metadata field for arbitrary extension data, the `context_id` MUST travel via the same channels used for HTTP transports (per §1.5.2, §1.5.3, and §1.5.3.1): the `X-atrib-Context` HTTP header on the outbound request, and `params._meta.atrib` for MCP-transport ACP integrations.
+Because ACP `POST /checkout_sessions/...` requests do not currently expose a free-form metadata field for arbitrary extension data, the `context_id` MUST travel via the same channels used for HTTP transports (per [§1.5.2](#152-http-transport-tracestate), [§1.5.3](#153-http-fallback-x-atrib-chain), and [§1.5.3.1](#1531-context-id-header-x-atrib-context)): the `X-atrib-Context` HTTP header on the outbound request, and `params._meta.atrib` for MCP-transport ACP integrations.
 
 ```jsonc
 // POST /checkout_sessions/{id}/complete success response
@@ -761,7 +761,7 @@ Content-Type: application/json
 
 MPP is a separate protocol from x402, also built on HTTP 402, formally specified in IETF `draft-ryan-httpauth-payment-01` ("The 'Payment' HTTP Authentication Scheme") authored by engineers from Tempo Labs and Stripe and launched in March 2026. MPP uses the standard HTTP authentication scheme with `WWW-Authenticate: Payment` challenges and `Authorization: Payment` credentials.
 
-The transaction event is the HTTP 200 response containing a **`Payment-Receipt`** header (per draft §5.3). The header value is base64url-nopad JSON with the required fields `{ status: "success", method, timestamp, reference }`. The draft specifies: _"Servers MUST NOT return a Payment-Receipt header on error responses,"_ so header presence is a reliable detection signal.
+The transaction event is the HTTP 200 response containing a **`Payment-Receipt`** header (per draft [§5.3](#53-atribmcp-mcp-server-middleware)). The header value is base64url-nopad JSON with the required fields `{ status: "success", method, timestamp, reference }`. The draft specifies: _"Servers MUST NOT return a Payment-Receipt header on error responses,"_ so header presence is a reliable detection signal.
 
 **`PAYMENT-RESPONSE` (x402) and `Payment-Receipt` (MPP) are different headers for different protocols.** Earlier drafts of this specification incorrectly attributed `Payment-Receipt` to both protocols; this has been corrected after verification against the published x402 docs and the IETF MPP draft.
 
@@ -788,7 +788,7 @@ Content-Type: application/json
 
 AP2 (Agent Payments Protocol) is Google's open protocol at `github.com/google-agentic-commerce/ap2`, version v0.1, extension URI `https://github.com/google-agentic-commerce/ap2/tree/v0.1`. **AP2 v0.1 does NOT use W3C Verifiable Credentials.** Earlier drafts of this specification assumed it would; that assumption was incorrect. The real wire format is an A2A (Agent2Agent) Message with a DataPart whose `data` object contains the key `ap2.mandates.PaymentMandate`.
 
-The PaymentMandate is the transaction event. (`IntentMandate` and `CartMandate` represent earlier funnel stages, intent capture and cart commitment respectively, and MUST NOT be detected as transaction events.) Implementations SHOULD embed the `context_id` in the agent extension fields where supported by the host A2A implementation; until AP2 standardizes a metadata field for it, the `context_id` MUST also travel via `params._meta.atrib` per §1.5.2, §1.5.3, and §1.5.3.1.
+The PaymentMandate is the transaction event. (`IntentMandate` and `CartMandate` represent earlier funnel stages, intent capture and cart commitment respectively, and MUST NOT be detected as transaction events.) Implementations SHOULD embed the `context_id` in the agent extension fields where supported by the host A2A implementation; until AP2 standardizes a metadata field for it, the `context_id` MUST also travel via `params._meta.atrib` per [§1.5.2](#152-http-transport-tracestate), [§1.5.3](#153-http-fallback-x-atrib-chain), and [§1.5.3.1](#1531-context-id-header-x-atrib-context).
 
 ```jsonc
 // AP2 v0.1 PaymentMandate Message (A2A DataPart shape)
@@ -877,7 +877,7 @@ Implementations MAY skip the legacy fallback if they target only AP2 v0.1 deploy
 
 _This subsection is normative._
 
-Transaction records (`event_type = https://atrib.dev/v1/types/transaction`) are the highest-stakes record type in this specification. §4.6 calculation is normatively gated on this URI; settlement decisions follow from the records' content. To prevent a single compromised key from fabricating arbitrary transactions, transaction records MUST carry signatures from at least two independent parties.
+Transaction records (`event_type = https://atrib.dev/v1/types/transaction`) are the highest-stakes record type in this specification. [§4.6](#46-the-calculation-algorithm) calculation is normatively gated on this URI; settlement decisions follow from the records' content. To prevent a single compromised key from fabricating arbitrary transactions, transaction records MUST carry signatures from at least two independent parties.
 
 **Required field on transaction records.** Transaction records MUST carry a `signers` field. Format:
 
@@ -900,13 +900,13 @@ The legacy top-level `signature` field is OPTIONAL on transaction records and SH
 
 **Minimum required signers.** atrib's normative minimum is 2: typically the agent that initiated the transaction and the counterparty (the merchant or settlement party). Records with fewer than 2 verified signers MUST be flagged by verifiers with `cross_attestation_missing: true`.
 
-**Counterparty key discovery.** Counterparty keys are discovered out-of-band: via the §6 directory lookup of the merchant's published identity, via payment-protocol-specific channels (x402 facilitator metadata, ACP order envelope, AP2 PaymentMandate signer field, and so on), or via consumer-arranged key exchange. atrib does not specify the discovery mechanism; the spec only requires the keys be present in the record.
+**Counterparty key discovery.** Counterparty keys are discovered out-of-band: via the [§6](#6-key-directory) directory lookup of the merchant's published identity, via payment-protocol-specific channels (x402 facilitator metadata, ACP order envelope, AP2 PaymentMandate signer field, and so on), or via consumer-arranged key exchange. atrib does not specify the discovery mechanism; the spec only requires the keys be present in the record.
 
-**Backwards compatibility.** Transaction records signed prior to the introduction of this requirement (with only the top-level `signature` field, no `signers` array) remain cryptographically valid but are flagged `cross_attestation_missing: true` by D052-aware verifiers. Strict consumer policies MAY reject them; the default flagged-not-rejected behavior preserves the historical record set.
+**Backwards compatibility.** Transaction records signed prior to the introduction of this requirement (with only the top-level `signature` field, no `signers` array) remain cryptographically valid but are flagged `cross_attestation_missing: true` by [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)-aware verifiers. Strict consumer policies MAY reject them; the default flagged-not-rejected behavior preserves the historical record set.
 
 **Other event types unaffected.** This requirement applies only to `transaction`. tool_call, observation, and extension records continue to use single-signer signatures via the top-level `signature` field.
 
-See D052 for the design rationale and the alternatives considered.
+See [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) for the design rationale and the alternatives considered.
 
 ---
 
@@ -920,15 +920,15 @@ The following topics are outside the scope of this specification. They are ackno
 
 **Log federation.** All attribution records for a session should be submitted to the same log operator to enable complete graph queries. If contributing tools submit to different log operators, a query against one log will return an incomplete graph. A federation protocol (cross-log inclusion proof pointers) is a natural extension but is not defined here.
 
-**Key rotation.** Key rotation and revocation are normatively specified in §1.9. Creators rotate keys by submitting a `key_revocation` record with `revocation_reason: 'rotation'` and a `successor_key`; verifiers update accordingly. The directory (§6) tracks the active key per identity claim.
+**Key rotation.** Key rotation and revocation are normatively specified in [§1.9](#19-key-rotation-and-revocation). Creators rotate keys by submitting a `key_revocation` record with `revocation_reason: 'rotation'` and a `successor_key`; verifiers update accordingly. The directory ([§6](#6-key-directory)) tracks the active key per identity claim.
 
-**Policy versioning.** Policies are identified by URL with no formal versioning. The session policy record (§4.5.3) captures agreed terms at session time, which partially mitigates this. Policy evaluation uses the current active policy.
+**Policy versioning.** Policies are identified by URL with no formal versioning. The session policy record ([§4.5.3](#453-session-policy-record)) captures agreed terms at session time, which partially mitigates this. Policy evaluation uses the current active policy.
 
 **Dispute mechanism.** There is no protocol-defined dispute process. Creators contest recommendations by contacting merchants directly, using the session policy record as evidence.
 
 **Settlement webhook format.** Settlement recommendations are produced on demand only. This specification does not define a push-based delivery mechanism.
 
-**Multi-transaction sessions.** The calculation algorithm (§4.6) assumes one transaction node per session. Multiple transactions in a single session require separate calculation runs.
+**Multi-transaction sessions.** The calculation algorithm ([§4.6](#46-the-calculation-algorithm)) assumes one transaction node per session. Multiple transactions in a single session require separate calculation runs.
 
 **Agent-published policies.** Agents consume policies but do not publish their own, though the policy format can express learned weights. This specification does not define agent-side policy discovery or publication.
 
@@ -950,13 +950,13 @@ atrib is designed to complement existing standards work in identity, provenance,
 
 ### 1.9 Key Rotation and Revocation
 
-_This section is normative. Per D033._
+_This section is normative. Per [D033](DECISIONS.md#d033-key-rotation-and-revocation)._
 
 Ed25519 creator keys can be retired in three ways: routine `rotation` (new key replaces old), `retirement` (creator winds down, no successor), and `compromise` (key leaked or stolen). All three use the same record format. Past records signed by the retired key remain valid up to the moment of revocation; subsequent records do not.
 
 #### 1.9.1 Revocation Record Format
 
-A revocation is an attribution record with `event_type: 'key_revocation'` and the following extra fields, in addition to the standard fields from §1.2:
+A revocation is an attribution record with `event_type: 'key_revocation'` and the following extra fields, in addition to the standard fields from [§1.2](#12-the-attribution-record):
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -965,7 +965,7 @@ A revocation is an attribution record with `event_type: 'key_revocation'` and th
 | `successor_key` | string | When `revocation_reason='rotation'` | Base64url-encoded 32-byte Ed25519 public key of the rotation target. |
 | `emergency_signed_by` | string | When `revocation_reason='compromise'` AND signature is by an emergency key | Base64url-encoded 32-byte public key of the emergency key (registered in the directory at the time of compromise). |
 
-Canonical serialization (JCS, §1.3) places `emergency_signed_by` after `creator_key` and before `revoked_key` in lexicographic order. `revoked_key`, `revocation_reason`, and `successor_key` follow alphabetically.
+Canonical serialization (JCS, [§1.3](#13-canonical-serialization)) places `emergency_signed_by` after `creator_key` and before `revoked_key` in lexicographic order. `revoked_key`, `revocation_reason`, and `successor_key` follow alphabetically.
 
 #### 1.9.2 Signing Rules
 
@@ -973,7 +973,7 @@ A `key_revocation` record MUST be signed by one of:
 
 1. **The key being retired.** The `creator_key` field equals `revoked_key`. This is the standard path for `rotation` and `retirement`. The signing proves the legitimate owner authorized the retirement.
 
-2. **A pre-registered emergency key.** Permitted ONLY when `revocation_reason='compromise'`. The `creator_key` field is the emergency key's public key; `emergency_signed_by` MUST equal `creator_key`. The emergency key MUST have been registered in the directory (§6) under the same identity claim as `revoked_key` BEFORE the revocation timestamp. This is the only path that survives the case where the legitimate owner has lost access to `revoked_key`.
+2. **A pre-registered emergency key.** Permitted ONLY when `revocation_reason='compromise'`. The `creator_key` field is the emergency key's public key; `emergency_signed_by` MUST equal `creator_key`. The emergency key MUST have been registered in the directory ([§6](#6-key-directory)) under the same identity claim as `revoked_key` BEFORE the revocation timestamp. This is the only path that survives the case where the legitimate owner has lost access to `revoked_key`.
 
 A revocation signed by any other key is invalid and MUST be rejected by verifiers as `'unsigned'`.
 
@@ -981,11 +981,11 @@ A revocation signed by any other key is invalid and MUST be rejected by verifier
 
 When a verifier sees a valid `key_revocation` record at log index `R` retiring `revoked_key`:
 
-- Records with `creator_key === revoked_key` AND `log_index >= R` are flagged `verification_state: 'revoked_after_revocation'`. They MUST NOT contribute to attribution calculations (§4.6).
+- Records with `creator_key === revoked_key` AND `log_index >= R` are flagged `verification_state: 'revoked_after_revocation'`. They MUST NOT contribute to attribution calculations ([§4.6](#46-the-calculation-algorithm)).
 - Records with `creator_key === revoked_key` AND `log_index < R` retain their original `verification_state`. Past attribution remains valid.
 - When `successor_key` is present, the directory's active key for the identity claim MUST be updated to `successor_key`. Records signed by the successor inherit the identity claim that was active at the moment of rotation.
 
-The verifier MUST scan for `key_revocation` records when evaluating any record signed by a key that has been retired. The directory (§6) MAY index revocations for fast lookup but the log itself is the source of truth.
+The verifier MUST scan for `key_revocation` records when evaluating any record signed by a key that has been retired. The directory ([§6](#6-key-directory)) MAY index revocations for fast lookup but the log itself is the source of truth.
 
 #### 1.9.4 Conformance
 
@@ -1004,7 +1004,7 @@ Implementations MUST pass all vectors in `spec/conformance/1.9/`:
 
 Forward secrecy of past records: an attacker who compromised `revoked_key` on day 100 can produce records that look legitimate under that key for the entire pre-revocation window. The verifier sees `'revoked_after_revocation'` only post-revocation. A "compromise window" annotation that retroactively flags pre-revocation records is V2 work.
 
-Operator/log-key rotation: see §2 for the log signing key. Rotating the log key invalidates all prior inclusion proofs' signatures and is a separate ADR (deferred to V2).
+Operator/log-key rotation: see [§2](#2-merkle-log-protocol) for the log signing key. Rotating the log key invalidates all prior inclusion proofs' signatures and is a separate ADR (deferred to V2).
 
 ---
 
@@ -1091,14 +1091,14 @@ struct AtribLogEntry {
 
 All multi-byte integers are big-endian. The `record_hash` is computed over the _complete_ attribution record including its `signature` field, after JCS serialization. This binds the commitment to the specific signed record, not just its pre-signature content.
 
-**event_type byte mapping.** The 1-byte slot is a fast-path filter; the authoritative type is the URI in the record content (§1.2.4). Verifiers MAY filter by byte for atrib normative URIs and MUST fetch the record to read the URI for extension types.
+**event_type byte mapping.** The 1-byte slot is a fast-path filter; the authoritative type is the URI in the record content ([§1.2.4](#124-event_type-values)). Verifiers MAY filter by byte for atrib normative URIs and MUST fetch the record to read the URI for extension types.
 
 | Byte         | URI                                          | Notes                                                  |
 | ------------ | -------------------------------------------- | ------------------------------------------------------ |
 | `0x01`       | `https://atrib.dev/v1/types/tool_call`       | atrib normative                                        |
 | `0x02`       | `https://atrib.dev/v1/types/transaction`     | atrib normative                                        |
 | `0x03`       | `https://atrib.dev/v1/types/observation`     | atrib normative                                        |
-| `0x04`–`0xFE`| reserved                                     | reserved for future atrib normative additions per D036 |
+| `0x04`–`0xFE`| reserved                                     | reserved for future atrib normative additions per [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) |
 | `0xFF`       | extension URI                                | URI is in a non-`atrib.dev` namespace; read content    |
 | `0x00`       | reserved                                     | MUST NOT be emitted                                    |
 
@@ -1135,7 +1135,7 @@ CsUYapGGPo4dkMgIAUqom/Xajj7h2fB2MPA3j2jxq2I=      ← root hash (standard base64
                                                     ← mandatory trailing newline
 ```
 
-The root hash is the SHA-256 Merkle Tree Hash (RFC 6962, Section 2.1) of all entries up to the stated tree size, encoded in standard base64 (RFC 4648 §4, with padding).
+The root hash is the SHA-256 Merkle Tree Hash (RFC 6962, Section 2.1) of all entries up to the stated tree size, encoded in standard base64 (RFC 4648 [§4](#4-attribution-policy-format), with padding).
 
 #### 2.4.2 Log Signing Key and Key ID
 
@@ -1207,7 +1207,7 @@ Response:
 Content-Type: text/plain; charset=utf-8
 Cache-Control: max-age=5  // mutable; checkpoint advances as entries are added
 
-// Body: signed note as defined in §2.4.3
+// Body: signed note as defined in [§2.4.3](#243-signed-note-format)
 ```
 
 Clients SHOULD not cache the checkpoint beyond 5 seconds. Monitoring clients that tail the log MUST verify consistency between successive checkpoints using the tile data to confirm the log is append-only.
@@ -1253,7 +1253,7 @@ struct EntryBundle {
 }
 struct LengthPrefixedEntry {
   u16 length;    // big-endian, length of entry_bytes
-  u8  entry_bytes[length];  // AtribLogEntry (§2.3.1), always 90 bytes
+  u8  entry_bytes[length];  // AtribLogEntry ([§2.3.1](#231-entry-serialization)), always 90 bytes
 }
 ```
 
@@ -1276,7 +1276,7 @@ POST https://log.atrib.dev/v1/entries
 Content-Type: application/json
 X-atrib-Priority: normal              // optional, see below
 
-// Request body: a complete, signed attribution record (§1.2), bare,
+// Request body: a complete, signed attribution record ([§1.2](#12-the-attribution-record)), bare,
 // not wrapped in any envelope object.
 {
   "spec_version": "atrib/1.0",
@@ -1334,7 +1334,7 @@ Content-Type: application/json
   "leaf_hash":       "AHCioX9nLjsrse6Y..."   // SHA-256(0x00 || entry_bytes)
 }
 
-// All hashes are standard base64 (RFC 4648 §4, with padding).
+// All hashes are standard base64 (RFC 4648 [§4](#4-attribution-policy-format), with padding).
 ```
 
 The log MUST NOT return 200 until the entry is included in a signed checkpoint. The response is synchronous: the proof bundle in the response body reflects the entry's committed position. There is no asynchronous or polling model.
@@ -1358,7 +1358,7 @@ Step 2: Verify that the checkpoint's tree size is greater than the claimed `log_
 Step 3: Recompute the leaf hash from the local entry data:
 
 ```
-entry_bytes = serialize(AtribLogEntry)          // §2.3.1
+entry_bytes = serialize(AtribLogEntry)          // [§2.3.1](#231-entry-serialization)
 leaf_hash   = SHA-256(0x00 || entry_bytes)      // RFC 6962 leaf prefix
 ```
 
@@ -1462,7 +1462,7 @@ The cosignature signing input is the checkpoint body with a timestamp preamble:
 cosignature/v1
 <decimal seconds, no leading zeros>
 
-<exact bytes of the §2.4.1 checkpoint body, including its trailing newline>
+<exact bytes of the [§2.4.1](#241-body-structure) checkpoint body, including its trailing newline>
 ```
 
 Note the second line is the same `<seconds>` value encoded into the timestamp field, in decimal text form. The blank line is mandatory. A verifier reconstructs this input bytewise from the timestamp it extracted from the cosignature line and the checkpoint body it is verifying.
@@ -1492,7 +1492,7 @@ Response:
 Content-Type: text/plain; charset=utf-8
 Cache-Control: public, max-age=31536000, immutable
 
-// Body: a single C2SP signed-note signature line as defined in §2.9.2,
+// Body: a single C2SP signed-note signature line as defined in [§2.9.2](#292-cosignature-format-normative),
 // terminated by \n. 404 if this witness has not cosigned the named checkpoint.
 ```
 
@@ -1578,7 +1578,7 @@ The proof bundle (§2.8) MAY carry a list of `(log_id, checkpoint, inclusion_pro
   "record_hash": "sha256:...",
   "log_proofs": [
     {
-      "log_id":          "log.atrib.dev",     // §2.4 origin string
+      "log_id":          "log.atrib.dev",     // [§2.4](#24-checkpoint-format) origin string
       "checkpoint":      "...",                // C2SP-canonical signed note
       "inclusion_proof": ["sha256:...", "..."] // RFC 6962 inclusion proof
     },
@@ -1858,7 +1858,7 @@ GET /v1/graph/4bf92f3577b34da6a3ce929d0e0e4736
 // include_cross_session=true|false  (default: true)
 // include_proof=true|false          (default: false; proof bundles are large)
 
-// 200 OK  -> GraphResponse (§3.5.1)
+// 200 OK  -> GraphResponse ([§3.5.1](#351-graph-response-object))
 // 404     -> no records with this context_id
 // 400     -> malformed context_id (not 32 hex chars)
 ```
@@ -1874,7 +1874,7 @@ GET /v1/graph/4bf92f3577b34da6a3ce929d0e0e4736/nodes
 //                              https://atrib.dev/v1/types/transaction,
 //                              https://atrib.dev/v1/types/observation,
 //                              or an extension URI)
-// Optional: event_type=gap_node              (synthetic node type per §3.2.5)
+// Optional: event_type=gap_node              (synthetic node type per [§3.2.5](#325-gap-nodes))
 // Optional: creator_key=
 // Optional: verification_state=unsigned|signature_valid|log_committed|witnessed
 
@@ -1888,7 +1888,7 @@ Returns the transaction node for a session if one exists. Policy engines use thi
 ```
 GET /v1/graph/4bf92f3577b34da6a3ce929d0e0e4736/transaction
 
-// 200 OK  -> NodeObject (event_type matches the transaction URI per §1.2.4 / atrib/1.0 short token)
+// 200 OK  -> NodeObject (event_type matches the transaction URI per [§1.2.4](#124-event_type-values) / atrib/1.0 short token)
 // 404     -> session exists but no transaction record present
 ```
 
@@ -1948,20 +1948,20 @@ GET /v1/creators/ABC.../sessions
   "chain_root":               "sha256:9a3c...",    // null for gap_node
   "context_id":               "4bf92f35...",
   "timestamp":                1743850010000,
-  "timestamp_granularity":    "ms",                // §8.4 disclosure posture
+  "timestamp_granularity":    "ms",                // [§8.4](#84-coarsened-timing-posture) disclosure posture
   "log_index":                4821936,            // null for gap_node
-  "verification_state":       "log_committed",    // see §3.3
+  "verification_state":       "log_committed",    // see [§3.3](#33-verification-state)
   "is_genesis":               false,              // true if chain_root = SHA-256(context_id)
-  "proof":                    null,               // inclusion proof bundle (§2.8); null unless requested
+  "proof":                    null,               // inclusion proof bundle ([§2.8](#28-proof-bundle-format)); null unless requested
 
-  // D041 informed_by surfacing
+  // [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type) informed_by surfacing
   "informed_by_count":        2,                  // number of references in the field; 0 if absent
   "informed_by_resolution":   {                   // null if informed_by absent
     "resolved":  ["sha256:abc...", "sha256:def..."],   // record_hashes successfully resolved in the response set
     "dangling":  []                                    // record_hashes that did not resolve
   },
 
-  // D044 provenance_token surfacing (genesis records only)
+  // [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) provenance_token surfacing (genesis records only)
   "provenance":               {                   // null when no provenance_token claimed
     "token":               "abc123...xyz",       // 22-char base64url
     "upstream_record_hash": "sha256:abc...",     // resolved upstream hash; null if dangling
@@ -1976,7 +1976,7 @@ The `event_type_kind` field is a derived convenience: it maps the URI to one of 
 
 ```
 {
-  "type":     "CHAIN_PRECEDES",    // one of the seven defined types (§3.2.3)
+  "type":     "CHAIN_PRECEDES",    // one of the seven defined types ([§3.2.3](#323-edge-types))
   "source":   "sha256:3f8a2b...",  // source node id
   "target":   "sha256:8b2f1c...",  // target node id
   "directed": true,                // false only for SESSION_PARALLEL
@@ -2079,10 +2079,10 @@ A policy document is a JSON object. It MUST be UTF-8 encoded and served with `Co
                                            // REQUIRED. Stable URL where this policy is published.
                                            // Used as the canonical identifier in session policy records.
   "role":          "creator",            // REQUIRED. "creator", "merchant", or "default".
-  "edge_weights":  { /* §4.2.2 */ },     // REQUIRED.
-  "modifiers":     [ /* §4.2.3 */ ],     // OPTIONAL. Default: no modifiers.
-  "distribution":  "proportional",      // REQUIRED. See §4.2.4.
-  "constraints":   { /* §4.2.5 */ }      // OPTIONAL. Default: no constraints.
+  "edge_weights":  { /* [§4.2.2](#422-edge-weights) */ },     // REQUIRED.
+  "modifiers":     [ /* [§4.2.3](#423-modifiers) */ ],     // OPTIONAL. Default: no modifiers.
+  "distribution":  "proportional",      // REQUIRED. See [§4.2.4](#424-distribution-method).
+  "constraints":   { /* [§4.2.5](#425-constraints) */ }      // OPTIONAL. Default: no constraints.
 }
 ```
 
@@ -2101,7 +2101,7 @@ Edge weights define the base score assigned to a node based on its structural re
 }
 
 // The numeric values above are illustrative only; they show the schema structure.
-// They are not defaults. Only the default policy (§4.3) specifies default weights.
+// They are not defaults. Only the default policy ([§4.3](#43-the-default-policy)) specifies default weights.
 // A creator or merchant policy must specify its own values for any edge types it cares about.
 // All edge type keys are optional. Missing keys default to 0.0.
 // "unsigned" is a pseudo-key for gap nodes; it is not an edge type but follows the same schema.
@@ -2176,7 +2176,7 @@ Two constraint fields involve floors but serve different purposes and are applie
   "minimum_own_share": 0.15,
   // CREATOR POLICY ONLY. Minimum fraction of total distribution the creator
   // requires for their own nodes, summed across all their tool calls in the session.
-  // Read during negotiation (§4.5.2), not applied by the calculation algorithm directly.
+  // Read during negotiation ([§4.5.2](#452-conflict-resolution)), not applied by the calculation algorithm directly.
   // the session policy record captures the agreed floor per creator,
   // and the calculation algorithm applies it as a per-creator post-aggregation adjustment.
 
@@ -2191,7 +2191,7 @@ Two constraint fields involve floors but serve different purposes and are applie
   // This constraint does not affect the distribution fractions (which sum to 1.0);
   // it is applied at payout time to the currency amount.
   // If both merchant and creator policies specify maximum_total_share,
-  // the merchant's value takes precedence (§4.5.2).
+  // the merchant's value takes precedence ([§4.5.2](#452-conflict-resolution)).
 }
 ```
 
@@ -2608,7 +2608,7 @@ The settlement recommendation document is the output of the calculation algorith
   "document_type":   "settlement_recommendation",
   "context_id":      "4bf92f3577b34da6a3ce929d0e0e4736",
   "transaction_id":  "sha256:8b2f1c...",     // record_hash of the transaction node
-  "policy_record_id":"sha256:3f8a2b...",    // record_id of the session policy record (§4.5.3)
+  "policy_record_id":"sha256:3f8a2b...",    // record_id of the session policy record ([§4.5.3](#453-session-policy-record))
   "graph_checkpoint":"log.atrib.dev/v1",   // log origin used for graph data
   "graph_tree_size": 4821937,              // log tree size at calculation time
   "calculated_at":   1743860000000,
@@ -2746,7 +2746,7 @@ const server = new McpServer({ name: 'my-tool', version: '1.0.0' })
 
 // After: one wrap, everything else is automatic:
 const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
-  creatorKey: process.env.ATRIB_PRIVATE_KEY   // REQUIRED (see §5.6)
+  creatorKey: process.env.ATRIB_PRIVATE_KEY   // REQUIRED (see [§5.6](#56-key-management))
 })
 ```
 
@@ -2791,19 +2791,19 @@ After the tool handler completes successfully (i.e., `isError` is false in the r
 const isTransaction = transactionTools.includes(toolName)
 const record = {
   spec_version: "atrib/1.0",
-  content_id:   computeContentId(serverUrl, toolName),    // §1.2.2
+  content_id:   computeContentId(serverUrl, toolName),    // [§1.2.2](#122-content_id-derivation)
   creator_key:  publicKeyFromPrivate(creatorKey),          // base64url Ed25519 pubkey
-  chain_root:   inboundContext?.record_hash            // record_hash from §5.3.2 becomes this record's chain_root
-                  ?? genesisChainRoot(context_id),       // §1.2.3 if no upstream
+  chain_root:   inboundContext?.record_hash            // record_hash from [§5.3.2](#532-inbound-context-reading) becomes this record's chain_root
+                  ?? genesisChainRoot(context_id),       // [§1.2.3](#123-chain_root-for-genesis-records) if no upstream
   event_type:   isTransaction
     ? "https://atrib.dev/v1/types/transaction"
-    : "https://atrib.dev/v1/types/tool_call",                  // §1.2.4
+    : "https://atrib.dev/v1/types/tool_call",                  // [§1.2.4](#124-event_type-values)
 
   context_id:   context_id,                               // OTel trace ID
   timestamp:    Date.now(),
-  ...(session_token && { session_token }),                 // §1.5.5, omit field if absent
+  ...(session_token && { session_token }),                 // [§1.5.5](#155-cross-trace-session-continuity), omit field if absent
 }
-const signed = signRecord(record, creatorKey)             // §1.4.2, synchronous
+const signed = signRecord(record, creatorKey)             // [§1.4.2](#142-signing-procedure), synchronous
 ```
 
 Record construction and signing MUST complete before the response is returned to the caller. Log submission (§5.3.5) MUST happen after the response is sent and is always non-blocking, including for transaction records. See §5.3.5 for submission behavior, retry logic, and the priority distinction between transaction and tool_call records.
@@ -2817,7 +2817,7 @@ Record construction and signing MUST complete before the response is returned to
 After signing the record, the middleware MUST write the new attribution context into the response so the calling agent can forward it downstream.
 
 ```
-// Compute the propagation token (§1.5.2):
+// Compute the propagation token ([§1.5.2](#152-http-transport-tracestate)):
 // record_hash = SHA-256 of the full JCS-canonical signed record just emitted
 // This becomes the chain_root field in the NEXT record that extends this chain.
 const record_hash_bytes = sha256(jcs(signed))
@@ -2886,10 +2886,10 @@ import { atrib } from '@atrib/agent'
 
 // Create the interceptor once at startup.
 const interceptor = atrib({
-  creatorKey:     process.env.ATRIB_PRIVATE_KEY,  // REQUIRED (see §5.6)
+  creatorKey:     process.env.ATRIB_PRIVATE_KEY,  // REQUIRED (see [§5.6](#56-key-management))
   merchantDomain: 'https://merchant.example.com', // OPTIONAL, for policy fetch at session init
   logEndpoint:    'https://log.atrib.dev/v1/entries', // OPTIONAL, default shown
-  sessionToken:   'my-session',                    // OPTIONAL (see §1.5.5)
+  sessionToken:   'my-session',                    // OPTIONAL (see [§1.5.5](#155-cross-trace-session-continuity))
   serverUrls:     ['https://tool-a.example', 'https://tool-b.example'], // OPTIONAL, for policy fetch
 })
 
@@ -2899,7 +2899,7 @@ const interceptor = atrib({
 // 1. Before sending a tools/call request:
 const meta = await interceptor.onBeforeToolCall(toolName, existingMeta)
 // `meta` is the merged _meta object to attach to the outbound request.
-// Init runs lazily on the first call (§5.4.2).
+// Init runs lazily on the first call ([§5.4.2](#542-session-initialization)).
 //
 // 2. After receiving a tools/call response:
 interceptor.onAfterToolResponse(toolName, response, response._meta, {
@@ -2953,7 +2953,7 @@ On every outbound `tools/call` request, the middleware MUST attach the current a
 
 ```
 // On every outbound tools/call:
-// Token format per §1.5.2: base64url(record_hash) + '.' + base64url(creator_key)
+// Token format per [§1.5.2](#152-http-transport-tracestate): base64url(record_hash) + '.' + base64url(creator_key)
 // record_hash = SHA-256 of the JCS-canonical signed record received in the last response
 // creator_key = full 32-byte Ed25519 public key of the creator who signed that record
 const token = sessionState.latestContext
@@ -2985,7 +2985,7 @@ const token = response.params?._meta?.atrib
            ?? response.headers?.['X-atrib-Chain']
 
 if (token) {
-  const { record_hash, creator_key } = decodeToken(token)  // §1.5.2
+  const { record_hash, creator_key } = decodeToken(token)  // [§1.5.2](#152-http-transport-tracestate)
   // record_hash becomes the chain_root for the NEXT record in this session.
   // creator_key identifies who produced the record we just received.
   sessionState.latestContext = { record_hash, creator_key }
@@ -3001,7 +3001,7 @@ The middleware detects transaction events automatically from the response shapes
 ```
 function detectTransaction(toolName, response, headers):
   // ACP / UCP: completion response with embedded order, OR ACP webhook event.
-  // Per §1.7.1 and §1.7.2, both protocols converged on the same shape; UCP
+  // Per [§1.7.1](#171-acp-agentic-commerce-protocol) and [§1.7.2](#172-ucp-universal-commerce-protocol), both protocols converged on the same shape; UCP
   // is distinguished by the top-level `ucp.version` envelope.
   if (response?.status === 'completed' && typeof response?.order?.id === 'string'):
     const isUcp = typeof response?.ucp?.version === 'string'
@@ -3020,7 +3020,7 @@ function detectTransaction(toolName, response, headers):
   // x402 and MPP: distinct protocols, distinct headers (case-insensitive
   // per RFC 7230). x402 takes precedence if both are present.
   //   x402 v2 → PAYMENT-RESPONSE      (renamed from v1 X-PAYMENT-RESPONSE)
-  //   MPP     → Payment-Receipt       (per draft-ryan-httpauth-payment-01 §5.3)
+  //   MPP     → Payment-Receipt       (per draft-ryan-httpauth-payment-01 [§5.3](#53-atribmcp-mcp-server-middleware))
   const lower = lowercaseKeys(headers)
   if (lower['payment-response'] || lower['x-payment-response']):
     return { detected: true, protocol: 'x402' }
@@ -3124,7 +3124,7 @@ const verifier = new AtribVerifier({
 // - verify() still works; it only needs the recommendation's calculated_by public key
 // - calculate() with signWith: 'merchant' returns an unsigned recommendation
 //   with a warnings entry: "merchantKey not set, recommendation unsigned"
-// - calculate() never throws due to a missing key (degradation contract §5.8)
+// - calculate() never throws due to a missing key (degradation contract [§5.8](#58-degradation-contract))
 ```
 
 #### 5.5.2 Verifying a Settlement Recommendation
@@ -3158,7 +3158,7 @@ const recommendation = await verifier.calculate({
   signWith:     'merchant',                 // signs with merchantKey from init
 })
 
-// recommendation is a signed settlement recommendation document (§4.7)
+// recommendation is a signed settlement recommendation document ([§4.7](#47-settlement-recommendation-document))
 // with policy_record_id: "default" and calculated_by: "local"
 ```
 
@@ -3458,7 +3458,7 @@ The §6.1 identity claim format gains an OPTIONAL `capabilities` field:
   "creator_key":   "...",
   "claim_type":    "domain_verified",
   "claim_method":  "...",
-  "claim_subject": { /* identity content per §6.1 */ },
+  "claim_subject": { /* identity content per [§6.1](#61-identity-claim-format) */ },
   "capabilities":  {
     "tool_names":     ["search", "browse", "read_email"],   // optional allowlist; absent = no constraint
     "max_amount":     {                                     // optional cap on transaction amounts

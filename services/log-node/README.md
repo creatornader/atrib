@@ -18,11 +18,11 @@ This package is `private: true` and is never published to npm. It is deployed as
 | **Inclusion proofs**    | Well-formed shapes, placeholder hashes | Real Merkle proofs                              |
 | **Persistence**         | In-process memory only                 | Persistent across restarts (if key is provided) |
 | **Checkpoint signing**  | Stub (no real signature)               | Real Ed25519 signatures                         |
-| **Conforms to spec §2** | Wire format only                       | Full                                            |
+| **Conforms to spec [§2](../../atrib-spec.md#2-merkle-log-protocol)** | Wire format only                       | Full                                            |
 | **Inspection API**      | Yes (`entries`, `onSubmit`, etc.)      | No                                              |
 | **npm published**       | No                                     | No (deployed as a service                      )|
 
-Both services speak the same `POST /v1/entries` wire format defined in spec §2.6.1, so client code is identical for both targets. Point `ATRIB_LOG_ENDPOINT` at either URL and the `@atrib/mcp` submission queue works unchanged.
+Both services speak the same `POST /v1/entries` wire format defined in spec [§2.6.1](../../atrib-spec.md#261-submit-entry), so client code is identical for both targets. Point `ATRIB_LOG_ENDPOINT` at either URL and the `@atrib/mcp` submission queue works unchanged.
 
 ## Running locally
 
@@ -65,7 +65,7 @@ node -e "const {utils} = require('@noble/ed25519'); const k = utils.randomPrivat
 
 ### `POST /v1/entries`
 
-Submit a signed attribution record. Validates the record per spec §2.6.1 Steps 1-6, appends it to the Merkle tree, and returns an inclusion proof.
+Submit a signed attribution record. Validates the record per spec [§2.6.1](../../atrib-spec.md#261-submit-entry) Steps 1-6, appends it to the Merkle tree, and returns an inclusion proof.
 
 **Request body**; a bare signed record (JSON, `Content-Type: application/json`):
 
@@ -82,7 +82,7 @@ Submit a signed attribution record. Validates the record per spec §2.6.1 Steps 
 }
 ```
 
-**Response `200 OK`**; a proof bundle (spec §2.6.2):
+**Response `200 OK`**; a proof bundle (spec [§2.6.2](../../atrib-spec.md#262-inclusion-proof-response)):
 
 ```json
 {
@@ -93,7 +93,7 @@ Submit a signed attribution record. Validates the record per spec §2.6.1 Steps 
 }
 ```
 
-All hashes in the response are standard base64 (RFC 4648 §4, with padding), matching the tlog-tiles checkpoint format.
+All hashes in the response are standard base64 (RFC 4648 [§4](../../atrib-spec.md#4-attribution-policy-format), with padding), matching the tlog-tiles checkpoint format.
 
 **Error responses** use RFC 9457 `application/problem+json`.
 
