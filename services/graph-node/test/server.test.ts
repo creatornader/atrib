@@ -118,4 +118,17 @@ describe('graph-node server (section 3.4)', () => {
     })
     expect(res.status).toBe(400)
   })
+
+  // D054: browser-based explorer reads
+  it('OPTIONS preflight returns CORS headers (D054)', async () => {
+    const res = await fetch(`${url}/v1/graph/${CONTEXT_ID}`, { method: 'OPTIONS' })
+    expect(res.status).toBe(204)
+    expect(res.headers.get('access-control-allow-origin')).toBe('*')
+    expect(res.headers.get('access-control-allow-methods')).toContain('GET')
+  })
+
+  it('GET responses include access-control-allow-origin (D054)', async () => {
+    const res = await fetch(`${url}/v1/graph/${CONTEXT_ID}`)
+    expect(res.headers.get('access-control-allow-origin')).toBe('*')
+  })
 })

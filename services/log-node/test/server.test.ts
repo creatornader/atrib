@@ -322,3 +322,19 @@ describe('GET /v1/log-pubkey', () => {
     expect(ok).toBe(true)
   })
 })
+
+// D054: browser-based explorer reads
+describe('CORS (D054)', () => {
+  it('OPTIONS preflight returns 204 with CORS headers', async () => {
+    const res = await fetch(`${server.url}/v1/checkpoint`, { method: 'OPTIONS' })
+    expect(res.status).toBe(204)
+    expect(res.headers.get('access-control-allow-origin')).toBe('*')
+    expect(res.headers.get('access-control-allow-methods')).toContain('GET')
+    expect(res.headers.get('access-control-allow-headers')).toContain('x-atrib-priority')
+  })
+
+  it('GET /v1/checkpoint includes access-control-allow-origin', async () => {
+    const res = await fetch(`${server.url}/v1/checkpoint`)
+    expect(res.headers.get('access-control-allow-origin')).toBe('*')
+  })
+})

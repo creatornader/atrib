@@ -180,4 +180,17 @@ describe('directory-node HTTP', () => {
     const r = await fetch(`${handle.url}/v6/unknown`)
     expect(r.status).toBe(404)
   })
+
+  // D054: browser-based explorer reads
+  it('OPTIONS preflight returns CORS headers (D054)', async () => {
+    const r = await fetch(`${handle.url}/v6/audit-proof?from=1&to=2`, { method: 'OPTIONS' })
+    expect(r.status).toBe(204)
+    expect(r.headers.get('access-control-allow-origin')).toBe('*')
+    expect(r.headers.get('access-control-allow-methods')).toContain('GET')
+  })
+
+  it('GET responses include access-control-allow-origin (D054)', async () => {
+    const r = await fetch(`${handle.url}/v6/audit-proof?from=1&to=3`)
+    expect(r.headers.get('access-control-allow-origin')).toBe('*')
+  })
 })

@@ -67,6 +67,16 @@ export async function bindServer(
   }
 
   const server = createServer((req, res) => {
+    // CORS for browser-based dashboards (D054). All log read endpoints serve public data
+    // per spec §0; browser cross-origin reads are explicitly permitted.
+    res.setHeader('access-control-allow-origin', '*')
+    res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS')
+    res.setHeader('access-control-allow-headers', 'content-type, x-atrib-priority')
+    if (req.method === 'OPTIONS') {
+      res.statusCode = 204
+      res.end()
+      return
+    }
     handleRequest(req, res, tree, signer, proofCache, acquireSubmitLock).catch((err) => {
       // eslint-disable-next-line no-console
       console.error('atrib-log-node: request handler crashed', err)
