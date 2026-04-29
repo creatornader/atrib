@@ -615,6 +615,8 @@ Attribution records that carry a `session_token` across trace boundaries can be 
 
 **Note (session_token is optional):** Cross-trace session linking is an optional feature. Implementations that do not generate session tokens will produce valid attribution chains within each trace. The session_token mechanism enables richer attribution graphs for deployments where transactions routinely complete in a different trace than the contributing tool calls.
 
+**Note (relationship to provenance_token):** session_token expresses *same logical session across trace boundaries* (continuation of one task across multiple OTel context_ids). For *cross-session causal anchoring* (a new session that descends from a different upstream session, e.g., agent handoff, workflow continuation, webhook reaction), see [§1.2.6](#126-provenance_token) `provenance_token`. The two fields have distinct semantics and MAY coexist on the same genesis record.
+
 ---
 
 ### 1.6 Unsigned Hops and Gap Nodes

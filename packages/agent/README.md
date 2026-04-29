@@ -26,7 +26,7 @@ Two coverage surfaces define what you get:
 
 ## Coverage Matrix 2: Agent Payment Protocols
 
-`@atrib/agent` sits **above** every major agent payment protocol. It does not implement payments, move money, or enforce transactions; it detects transaction events in the response flow of whichever payment protocol your agent is using, and writes a signed transaction record that closes the attribution chain. **You do not choose a payment protocol at install time**; the detection logic for all five runs simultaneously and fires on whichever one your tool responses happen to carry.
+`@atrib/agent` sits **above** every major agent payment protocol. It does not implement payments, move money, or enforce transactions; it detects transaction events in the response flow of whichever payment protocol your agent is using, and writes a signed transaction record that closes the attribution chain. **You do not choose a payment protocol at install time**; the detection logic for all six (ACP, UCP, x402, MPP, AP2, a2a-x402) runs simultaneously and fires on whichever one your tool responses happen to carry. Transaction records emitted by `@atrib/agent` carry the `signers` array per spec [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records); the counterparty signature is collected via the payment protocol's settlement response.
 
 All detection logic lives in `packages/agent/src/transaction.ts` and runs against unit tests for each protocol's published spec.
 

@@ -89,7 +89,7 @@ struct AtribLogEntry {
   u8  creator_key[32]; // raw Ed25519 public key
   u8  context_id[16];  // raw bytes from 32-char hex context_id
   u64 timestamp_ms;    // big-endian Unix milliseconds
-  u8  event_type;      // 0x01 = tool_call, 0x02 = transaction
+  u8  event_type;      // 0x01 tool_call, 0x02 transaction, 0x03 observation, 0xFF extension URI
 }
 // Total: 90 bytes
 ```
@@ -314,6 +314,6 @@ Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hash
 ## Further reading
 
 - [atrib-spec.md](atrib-spec.md) — the complete protocol specification ([§0](atrib-spec.md#0-foundations)-[§7](atrib-spec.md#7-harness-integration-patterns))
-- [DECISIONS.md](DECISIONS.md) — architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-D036+)
+- [DECISIONS.md](DECISIONS.md) — architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-D053; D037-D040 reserved for upcoming work)
 - [packages/agent/README.md](packages/agent/README.md) -- adapter table with quick-start snippets for every framework
 - [spec/conformance/2.6.1/](spec/conformance/2.6.1/) -- shared conformance corpus for the submission API

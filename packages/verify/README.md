@@ -69,6 +69,15 @@ Per the [§5.8](../../atrib-spec.md#58-degradation-contract) degradation contrac
 
 Independently re-runs the [§4.6](../../atrib-spec.md#46-the-calculation-algorithm) calculation and verifies the document signature. Always returns a result object; never throws. Inspect `valid`, `signatureOk`, `calcMatch`, and `warnings` to understand the outcome.
 
+The result object surfaces per-record annotations introduced by [D041](../../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D044](../../DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), [D045](../../DECISIONS.md#d045-privacy-postures-normative-spec-section), [D051](../../DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes), and [D052](../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records):
+
+- `informed_by_resolution`: `{ resolved: string[], dangling: string[] }` per record carrying `informed_by`. Dangling references are flagged but do not fail verification.
+- `provenance`: `{ token, upstream_record_hash, upstream_resolved }` per session-genesis record carrying `provenance_token`.
+- `capability_check`: `{ envelope, in_envelope, mismatches }` when the signing key has a published [§6.7](../../atrib-spec.md#67-capability-declarations) capability envelope; out-of-envelope records are flagged as a signal, not invalidated.
+- `cross_attestation`: `{ signer_count, all_verified, missing_required }` for transaction records per [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records); records with fewer than 2 verified signers are flagged as `cross_attestation_missing: true`.
+- `cross_log_proof_count` + `cross_log_threshold_met` + `cross_log_equivocation_detected` for records with multi-log proof bundles per [§2.11](../../atrib-spec.md#211-cross-log-replication).
+- Posture detection per [§8](../../atrib-spec.md#8-privacy-postures): `tool_name_form`, `args_commitment_form`, `timestamp_granularity` derived from record bytes.
+
 ### `calculate(options): Promise<RecommendationDocument>`
 
 Post-hoc calculation when no agent SDK was present. Always returns a fully-shaped document, unsigned with a warning if the merchant key is missing.
