@@ -1773,7 +1773,7 @@ The right layer for reasoning chains is the harness, not the protocol. Consumers
 
 - *Spec.* §7 gains "Harness-side reasoning chains" subsection (§7.5) and "Outcome verification patterns" subsection (§7.6). Both informative.
 - *`@atrib/agent`.* No code change. Adapters already support extension URIs; the documented pattern uses existing primitives.
-- *`packages/recall` (when shipped per ).* Reference implementation includes a reasoning-chain example in `packages/integration/examples/recall-with-reasoning/` to make the pattern concrete.
+- *`packages/recall` (when the package ships).* Reference implementation includes a reasoning-chain example in `packages/integration/examples/recall-with-reasoning/` to make the pattern concrete.
 
 **What this DOESN'T solve.**
 
@@ -1781,7 +1781,7 @@ The right layer for reasoning chains is the harness, not the protocol. Consumers
 - *Trust of the LLM's reasoning.* The pattern proves the harness emitted reasoning bytes signed under a key. It does not prove the LLM's reasoning was truthful or coherent. That is a different evaluation layer.
 - *Privacy of reasoning content.* Reasoning records may carry hashes of prompts/responses, which leak fingerprints. Consumers wanting privacy use the salted-commitment posture (D045) on reasoning record hashes.
 
-**Implementation sequencing.** Spec §7.5 + §7.6 written → reference example added in subsequent work.
+**Implementation sequencing.** Spec §7.5 + §7.6 written → reference example added when the recall package ships.
 
 ## D048: Plug-and-play enforcement contract for adapters
 
@@ -1840,29 +1840,21 @@ The introduction of `informed_by` (D041), `provenance_token` (D044), observation
 **Date:** 2026-04-28
 **Status:** Accepted
 
-**Context.** Public repo cleanup of operator-state framing has required multiple filter-repo waves to date. Each wave found leak classes the previous wave missed, including substitution-introduced phrases (an earlier cleanup wave's `internal` → `a private development repo` substitution itself became a leak class in a subsequent cleanup wave). Term-list audits are fundamentally upper-bounded by the auditor's imagination; the cloud audit routine `the weekly cloud audit` covers 23 terms across 3 surfaces but cannot anticipate new substitution patterns.
+**Context.** Maintaining operator-state framing out of public protocol docs is a recurring class of cleanup work. Term-list audits are fundamentally upper-bounded by the auditor's imagination; a fixed-term cloud audit cannot anticipate new substitution patterns introduced by previous cleanup passes themselves. The recursion converges only when the audit becomes structural rather than literal.
 
-A layered defense replaces the ad-hoc per-wave catch-up with structural prevention. Four layers, each catching what the layer above misses, with a positive style guide as the source of truth that all layers reference.
+A layered defense replaces the ad-hoc catch-up cycle with structural prevention. Four layers, each catching what the layer above misses, with a positive style guide as the source of truth that all layers reference.
 
 **Decision.**
 
-1. **Style guide as source of truth.** A new `the prose style guide` (in internal; not a public document) defines the *positive* spec for what public prose may contain: present-tense decisions and rationale; no operator-state framing (phase numbers, time-of-day, "direction was", commit/session self-reference, planning-doc references); cross-references to other ADRs by number, spec by section, code by file path only. The denylist becomes derivative; the style guide is primary.
+1. **Style guide as source of truth.** An prose style guide defines the *positive* spec for what public prose may contain: present-tense decisions and rationale; no operator-state framing (numeric ordinals tied to internal plans, timestamps with hour-of-day precision, narrative attributions to specific actors, commit/session self-reference, references to private planning artifacts); cross-references to other ADRs by number, spec by section, code by file path only. The denylist becomes derivative; the style guide is primary.
 
-2. **Layer A: Pre-commit regex check.** Local git hook running on `git commit`. Pattern-based regex catches generic shapes:
-   - `(Phase|Wave|Pass|Round)\s+\d+` (phase numbering)
-   - `\b(this|earlier|in this)\s+(commit|session|pass|batch)\b` (self-reference)
-   - `\b\d{1,2}:\d{2}\s*(AM|PM)\b|tonight|last night` (time-of-day)
-   - `(the user|operator) (pushed|asked|said|wanted)` (user-narration)
-   - `(prior planning artifact|prior observation|memory #\d+)` (planning-doc + memory IDs)
-   - `(the primary instance|prior batch|prior batch)` (subagent-process framing)
-   - The 23 literal terms from the existing cloud audit list.
-   Hook blocks commit on flag; can be bypassed with `--no-verify` for emergency override.
+2. **Layer A: Pre-commit regex check.** Local git hook running on `git commit`. Pattern-based regex catches generic shapes (numeric ordinals tied to plans; self-referential commit/session/pass language; time-of-day patterns; actor-narration patterns; references to private planning artifact and memory-store identifiers; references to subagent-process framing). Hook blocks commit on flag; can be bypassed with `--no-verify` for emergency override.
 
-3. **Layer B: Pre-push LLM-semantic audit.** Local git hook running on `git push`. Sends the diff to NVIDIA NIM API (`https://the configured LLM provider`; same provider used by another internal project) using a free-tier model with a prompt that asks "does this prose contain operator state, internal-process framing, or anything that doesn't belong in a public protocol spec?" Reads NIM API key from `the operator's model-provider configuration` `models.providers.nvidia.apiKey`. Blocks push on flag; can be bypassed with explicit override flag.
+3. **Layer B: Pre-push LLM-semantic audit.** Local git hook running on `git push`. Sends the diff to a hosted LLM API (free-tier model) with a prompt that asks "does this prose contain operator state, internal-process framing, or anything that doesn't belong in a public protocol spec?" Reads API credentials from local configuration. Blocks push on flag; can be bypassed with explicit override flag.
 
-4. **Layer C: Cloud audit backstop.** The existing weekly cloud routine `the weekly cloud audit` runs Sundays 09:00 UTC. Updated to include the regex patterns from Layer A + the LLM-semantic check from Layer B. Catches drift, regression after history rewrites, anything missed locally.
+4. **Layer C: Cloud audit backstop.** A weekly remote audit runs against the public repo and includes the regex patterns from Layer A plus the LLM-semantic check from Layer B. Catches drift, regression after history rewrites, anything missed locally.
 
-5. **Layer D: Documentation in internal.** `the leak-class catalog` cross-references the four layers and is updated as new leak classes are discovered. The style guide and this document together form the prevention reference.
+5. **Layer D: Local documentation.** A leak-class catalog and audit-procedure document cross-references the four layers and is updated as new leak classes are discovered. The style guide and this document together form the prevention reference.
 
 6. **Implementation sequencing.** Style guide drafted first (defines what the regex/LLM check against). Then Layer A (regex hook; cheap, fast, catches the common shapes). Then Layer B (LLM hook; catches the spirit). Then Layer C update (cloud audit gains the new patterns). Each layer is independently useful; the combination is what makes the defense robust.
 
@@ -1880,14 +1872,14 @@ A layered defense replaces the ad-hoc per-wave catch-up with structural preventi
 
 **Consequences.**
 
-- *internal.* New `the prose style guide`. Updated `the leak-class catalog` with the four-layer defense.
+- *Documentation artifacts.* New prose style guide. Updated leak-class catalog with the four-layer defense.
 - *atrib (public repo).* New `.git-hooks/pre-commit` and `.git-hooks/pre-push` scripts (committed for transparency; users opt in via `git config core.hooksPath .git-hooks`). New `scripts/check-leaks.mjs` (regex check) and `scripts/check-leaks-semantic.mjs` (LLM check).
-- *Cloud routine.* `the weekly cloud audit` updated with new regex patterns and LLM-check step.
+- *Cloud routine.* The weekly audit gains the new regex patterns and LLM-check step.
 
 **What this DOESN'T solve.**
 
 - *Operator override misuse.* `--no-verify` bypasses the hooks. The override is logged but not enforced. Discipline is required.
-- *NVIDIA NIM availability.* If the API is unavailable, Layer B fails open (push proceeds). The cloud audit (Layer C) catches what Layer B missed.
+- *Hosted LLM availability.* If the API is unavailable, Layer B fails open (push proceeds). The cloud audit (Layer C) catches what Layer B missed.
 - *Style guide drift.* The style guide itself can grow stale. Quarterly review (manual) checks alignment.
 
-**Implementation sequencing.** Style guide drafted in internal → regex check script + pre-commit hook → LLM check script + pre-push hook → cloud audit update → documentation cross-reference.
+**Implementation sequencing.** Style guide drafted → regex check script + pre-commit hook → LLM check script + pre-push hook → cloud audit update → documentation cross-reference.
