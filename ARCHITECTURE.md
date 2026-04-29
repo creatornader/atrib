@@ -48,8 +48,8 @@ Three protocol layers, one SDK layer that automates them. Data flows in one dire
                 ┌─────────────────────────────────────────────────────┐
                 │  Layer 3: Attribution Graph (§3)                     │
                 │                                                     │
-                │  5 edge types, deterministic derivation              │
-                │  Structure only, no causal claims                    │
+                │  7 edge types, deterministic derivation              │
+                │  Structure + agent-claimed causation, no inferred    │
                 └────────────────────────┬────────────────────────────┘
                                          │
                               graph + policy
@@ -100,19 +100,23 @@ The reference implementation uses [Tessera](https://github.com/transparency-dev/
 
 ### Layer 3: Attribution graph (Section 3)
 
-The graph is a directed property multigraph with three node types (`tool_call`, `transaction`, `gap_node`) and five edge types, all derived deterministically from record structure:
+The graph is a directed property multigraph with five node types (`tool_call`, `transaction`, `observation`, `extension`, `gap_node`) and seven edge types, all derived deterministically from record structure:
 
 | Edge type          | Direction | Derivation                                                              |
 | ------------------ | --------- | ----------------------------------------------------------------------- |
 | `CHAIN_PRECEDES`   | A -> B    | B's `chain_root` = SHA-256(JCS(A)). Explicit hash chain link.           |
 | `SESSION_PRECEDES` | A -> B    | Same `context_id`, no chain link, A's timestamp < B's timestamp.        |
 | `SESSION_PARALLEL` | A <-> B   | Same `context_id`, no chain link, no temporal ordering.                 |
-| `CONVERGES_ON`     | N -> T    | N is any non-transaction node, T is the transaction node, same session. |
-| `CROSS_SESSION`    | A -> T    | Different `context_id`, same explicit `session_token`. Never inferred.  |
+| `CONVERGES_ON`     | N -> T    | N is a tool_call or gap_node, T is the transaction node, same session. observation and extension nodes do NOT participate (D042, D043). |
+| `CROSS_SESSION`    | A -> T    | Different `context_id`, same explicit `session_token`. Same logical session across traces. Never inferred.  |
+| `INFORMED_BY`      | A -> B    | A's `informed_by` array contains the record_hash of B. Agent-declared reasoning context (D041). Intra- or cross-session. Source/target may be any node type. |
+| `PROVENANCE_OF`    | D -> U    | D and U both carry the same `provenance_token` value, different `context_ids`, U is the token's source record. Cross-session causal anchoring (D044). |
 
 The derivation rules are normative (Section 3.2.4). Two implementations processing identical records must produce identical edge sets. This is what makes independent verification possible: you do not need to trust the graph service, because you can rebuild the graph yourself and check.
 
-Gap nodes represent unsigned hops -- tool calls evidenced by OTel spans but lacking a signed attribution record. They make the absence of attribution visible rather than hiding it. Gap nodes participate in temporal and convergence edges but not chain or cross-session edges.
+Gap nodes represent unsigned hops, tool calls evidenced by OTel spans but lacking a signed attribution record. They make the absence of attribution visible rather than hiding it. Gap nodes participate in temporal and convergence edges but not chain or cross-session edges.
+
+`INFORMED_BY` and `PROVENANCE_OF` are agent-declared causal anchors (the agent's claim, structurally derived from declared fields). atrib certifies the claim was signed; it does not certify the truthfulness of the claim. This preserves the §3.1 invariant (the graph records structure, not inferred causality) while letting consumers express the reasoning chains the brand promise of "verifiable agent actions in proper context" requires.
 
 ---
 
@@ -128,7 +132,7 @@ Log inclusion: the Merkle log returns RFC 6962 inclusion proofs. A hash path fro
 
 Log consistency: consecutive checkpoints can be verified for consistency. This proves the log only grew and nothing was modified or deleted between checkpoints. Same mechanism Certificate Transparency uses.
 
-Graph edges: all five edge types are deterministically derived from record fields. Given the same records, any implementation following Section 3.2.4 must produce the same graph. You can verify by rebuilding it yourself.
+Graph edges: all seven edge types are deterministically derived from record fields. Given the same records, any implementation following Section 3.2.4 must produce the same graph. You can verify by rebuilding it yourself.
 
 Settlement calculation: the algorithm (Section 4.6) is a pure function. Graph + policy in, distribution out. No network calls, no randomness. Any party with the same inputs gets the same answer. `@atrib/verify` exists so merchants can run this locally and check.
 
@@ -267,7 +271,7 @@ The load-bearing choices. Each is in [DECISIONS.md](DECISIONS.md) with full rati
 
 **tlog-tiles, not a custom log format (D006).** The C2SP tlog-tiles spec defines an HTTP-based read interface for tiled Merkle trees. It is used by Certificate Transparency, Go module checksums, and Sigstore. Using a standard format means existing tooling (Tessera, witnesses, monitors) works out of the box.
 
-**Five edge types, deterministic derivation (D005, Section 3.2.4).** The graph records observable structure only. No edge encodes a causal claim. Causal interpretation is the policy layer's job. The derivation rules are ordered and deterministic: two implementations on identical input must produce identical graphs.
+**Seven edge types, deterministic derivation (D005, D041, D044, Section 3.2.4).** The graph records observable structure plus agent-declared causation (INFORMED_BY, PROVENANCE_OF). No edge encodes inferred causation; the agent-declared edges are derived from explicit fields the agent signed. Causal interpretation of those declarations remains the policy layer's job. The derivation rules are ordered and deterministic: two implementations on identical input must produce identical graphs.
 
 **`workspace:*` for shared packages (D014).** Cross-package integration tests re-derive primitives independently rather than importing shared code. This validates that JCS + SHA-256 produce identical output across independent code paths, which is the core reproducibility property the protocol depends on.
 
