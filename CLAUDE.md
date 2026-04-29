@@ -89,6 +89,12 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 | Test count changed materially         | `README.md` and `CONTRIBUTING.md` test count references                                                                                                                                                          |
 | Metric added/removed/promoted/demoted | `METRICS.md` (table entry + lifecycle status) AND `services/log-node/scripts/metrics.mjs` (`METRICS` array: `name`, `tier`, `status`, `decisionSupported`, `run`). Both must agree.                              |
 | New deployed service                  | This file (repository structure) AND `README.md` (deployed-service URL note) AND `ARCHITECTURE.md` (operator footprint) AND `services/<name>/fly.toml` if Fly-deployed                                            |
+| `informed_by` field semantics changed (D041) | Update `spec/conformance/3.2.4/informed-by/` corpus, regenerate INFORMED_BY edge derivation tests, refresh `@atrib/verify` informed_by_resolution surfacing                                                  |
+| `provenance_token` field semantics changed (D044) | Update `spec/conformance/3.2.4/provenance/` corpus, regenerate PROVENANCE_OF edge derivation tests, refresh `@atrib/verify` provenance_chain surfacing, audit the `provenance_token` derivation invariant (`base64url(sha256(jcs(U))[:16]) == T`) |
+| Privacy posture spec section §8 changed (D045) | Update `spec/conformance/8/` corpus per posture, refresh `@atrib/verify` posture detection logic, update §7.5 posture-selection guidance |
+| Edge type added/removed (§3.2.3 + §3.2.4)     | Update §3 lead-in count, update §3.2.1 participation matrix, update CLAUDE.md "Key technical decisions" edge type list, update `services/graph-node` derivation, update `@atrib/verify` calculation if contributing-set affected |
+| Adapter conformance contract changed (D048) | Refresh `packages/agent/test/conformance.test.ts`, update `packages/agent/README.md` adapter table, update `packages/agent/CONTRIBUTING.md` adapter authoring guide |
+| Layered leak defense updated (D049)            | Update `the prose style guide` (internal), refresh `scripts/check-leaks.mjs` and `scripts/check-leaks-semantic.mjs`, update cloud audit routine with new patterns |
 
 ## Critical invariants (never violate)
 
@@ -111,26 +117,26 @@ These are non-negotiable. They come from the founding conversation and are the l
 ## Key technical decisions (preserve exactly)
 
 - **Ed25519, 32-byte seed.** Not 64-byte NaCl format. Not DIDs. Simple, fast, no PKI. See §1.4.1.
-- **JCS canonicalization (RFC 8785).** Lexicographic key ordering. No whitespace. `session_token` slots between `event_type` and `spec_version` alphabetically. See §1.3.
+- **JCS canonicalization (RFC 8785).** Lexicographic key ordering. No whitespace. New optional fields slot lexicographically: `informed_by` after `event_type` (i > e), `provenance_token` after `informed_by` (p > i) and before `session_token` (p < s). Presence/absence of any optional field affects the signature. See §1.3 + D041 + D044.
 - **Token format:** `base64url(sha256(jcs(signed_record))) + "." + base64url(creator_key_bytes)`. 87 chars max, fits W3C tracestate limit. See §1.5.2.
 - **Genesis chain_root:** `"sha256:" + hex(SHA-256(UTF-8(context_id)))`. Not null, not random. See §1.2.3.
 - **Log entry:** 90 bytes fixed: version(1) + record_hash(32) + creator_key(32) + context_id(16) + timestamp_ms(8) + event_type(1). See §2.3.1.
 - **Proof bundle caching:** keyed by `record_hash`, not `context_id`. See §5.3.5.
 - **C2SP tlog-tiles ecosystem.** Checkpoints, tiles, signed notes, witnessing. Not a custom log format. See §2.
-- **Five edge types, deterministic derivation.** CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL, CONVERGES_ON, CROSS_SESSION. Two implementations on identical input must produce identical edge sets. See §3.2.4.
+- **Seven edge types, deterministic derivation.** CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL, CONVERGES_ON, CROSS_SESSION, INFORMED_BY (D041), PROVENANCE_OF (D044). Two implementations on identical input must produce identical edge sets. See §3.2.4.
 - **Edge weight uses max(), not sum().** Because every node has CONVERGES_ON plus its primary edge. Sum would inflate all structural contributors equally. See §4.2.2.
 
 ## V2 deferrals (do not implement)
 
-- Key rotation mechanism
+- Per-conversation key derivation (deferred D038)
 - Policy versioning (immutable snapshots)
-- Cross-session attribution via recommendation_token
 - Log federation across operators
 - Settlement webhook format
 - Dispute mechanism
 - Multi-transaction session handling
 - Agent-published policies (empirical weighting models)
 - DIF/C2PA interoperability profiles (see §1.8 Interoperability Roadmap)
+- Zero-knowledge commitment schemes for args/result (Pedersen, KZG; D045 leaves the §8.3 extensibility shape open)
 
 ## Implementation conventions
 
