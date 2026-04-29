@@ -62,6 +62,17 @@ export async function bindDirectoryServer(
   const directory = await AtribDirectory.create(config.operatorPrivateKey)
 
   const server = createServer((req, res) => {
+    // CORS for browser-based dashboards (D054). Read endpoints serve public data per spec §6;
+    // browser cross-origin reads are explicitly permitted. Write endpoints (POST /v6/publish)
+    // also accept cross-origin since the operator-key signature on the claim is the only auth.
+    res.setHeader('access-control-allow-origin', '*')
+    res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS')
+    res.setHeader('access-control-allow-headers', 'content-type')
+    if (req.method === 'OPTIONS') {
+      res.statusCode = 204
+      res.end()
+      return
+    }
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     void handle(req, res, url, directory, config).catch((e) => {
       problemResponse(res, 500, 'internal-error', 'Internal Server Error', String(e))

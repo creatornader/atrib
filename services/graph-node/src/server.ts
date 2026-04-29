@@ -32,6 +32,16 @@ export async function bindGraphServer(
   const store = createRecordStore()
 
   const server = createServer((req, res) => {
+    // CORS for browser-based dashboards (D054). Read endpoints serve public data per spec §3;
+    // browser cross-origin reads are explicitly permitted.
+    res.setHeader('access-control-allow-origin', '*')
+    res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS')
+    res.setHeader('access-control-allow-headers', 'content-type')
+    if (req.method === 'OPTIONS') {
+      res.statusCode = 204
+      res.end()
+      return
+    }
     handleRequest(req, res, store).catch((err) => {
       console.error('graph-node: request handler crashed', err)
       if (!res.headersSent) {
