@@ -1257,7 +1257,7 @@ A decision was needed on three questions: (1) AKD vs roll-our-own simpler struct
 
 **Consequences.**
 
-- New service `services/directory-node/` (TypeScript wrapper around AKD via WASM or NAPI; runtime-bridge choice deferred until benchmarking).
+- New service `services/directory-node/` (TypeScript wrapper around AKD via WASM bridge per the §3.1 benchmark dated 2026-04-29; rust-wasm via wasm-pack chosen).
 - New package `@atrib/directory` exposing `publish`, `lookup`, `history`, `proveAbsence` SDK methods.
 - `@atrib/verify` consumes the directory and annotates verification results with `identity_resolved`.
 - The recall tool (an MCP server consumed by the host agent) annotates returned records with the resolved identity claim per record.
@@ -1271,7 +1271,7 @@ A decision was needed on three questions: (1) AKD vs roll-our-own simpler struct
 - *AKD's own implementation correctness.* atrib trusts the AKD crate. If AKD has a bug, atrib has the bug. Mitigation: pin the version, follow upstream advisories, run AKD's own conformance suite as part of CI.
 - *Directory-key rotation.* The directory-signing key has the same rotation problem as the log-signing key. Same V2 deferral.
 
-**Implementation sequencing.** an upcoming implementation phase: AKD WASM/NAPI bridge → @atrib/directory package → wire into @atrib/verify → wire into recall.
+**Implementation sequencing.** Bridge benchmark (2026-04-29): WASM lookup at 100K labels measured at 1.8ms p95, comfortably under the 50ms threshold from §3.1. Decision: ship WASM via wasm-pack + wasm-bindgen. NAPI would be ~5x faster (typical native vs WASM ratio for crypto-heavy code) but the distribution simplicity (single .wasm artifact vs per-platform .node binaries), sandbox property, and zero-toolchain install requirement make WASM the right tradeoff. AKD parallelism is gated to `disabled()` in the WASM target because WASM runtimes lack a Tokio executor; insert throughput drops to ~6.3K labels/sec single-threaded, which is comfortably above the per-operation anchoring cadence (§6.2.4). Sequence: AKD WASM bridge crate → @atrib/directory package → services/directory-node service → wire into @atrib/verify → wire into recall.
 
 ## D035: Extensible event_type vocabulary via URI typing
 
