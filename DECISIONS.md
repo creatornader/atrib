@@ -2061,9 +2061,7 @@ Other record types tolerate single-signer claims more gracefully because their d
 
 4. **Counterparty discovery and key exchange.** Counterparty keys are discovered out-of-band: via the directory ([§6](atrib-spec.md#6-key-directory)) lookup of the merchant's published identity, via payment-protocol-specific channels (x402 facilitator metadata, ACP order envelope, etc.), or via consumer-arranged key exchange. atrib does not specify the discovery mechanism; the spec only requires the keys be present in the record.
 
-5. **Backwards compatibility.** Existing transaction records signed pre-D052 (with only the top-level `signature` field, no `signers` array) remain cryptographically valid but are flagged `cross_attestation_missing: true` by [D052](#d052-cross-attestation-requirement-for-transaction-records)-aware verifiers. Migration is consumer-paced.
-
-6. **Other event types unaffected.** tool_call, observation, and extension records continue to use single-signer signatures via the top-level `signature` field. [D052](#d052-cross-attestation-requirement-for-transaction-records) applies only to `transaction`.
+5. **Other event types unaffected.** tool_call, observation, and extension records continue to use single-signer signatures via the top-level `signature` field. [D052](#d052-cross-attestation-requirement-for-transaction-records) applies only to `transaction`.
 
 **Alternatives considered.**
 
@@ -2074,6 +2072,8 @@ Other record types tolerate single-signer claims more gracefully because their d
 3. *Apply cross-attestation to all record types.* Rejected as overhead for non-transaction records. The robustness gain is concentrated at the transaction layer.
 
 4. *Use multi-signature schemes (Schnorr aggregation, BLS) instead of an explicit signers array.* Rejected as cryptographic complexity. The explicit-array form is auditable, debugable, and uses the same Ed25519 primitive as everywhere else in the spec.
+
+5. *Canonicalize signing input by omitting `signers` entirely (rather than setting it to `[]`).* Considered. Both forms are unambiguous and reproducible. The explicit `signers: []` form was chosen because it makes the canonical-input shape uniform regardless of whether the record carries the `signers` field or not (every transaction record produces the same signing-input shape: `signers:[]`, signature omitted). The omit-entirely alternative would create two canonical-input shapes (one for transaction records, one for everything else) that implementations would need to branch on. The explicit-empty form simplifies signing/verification logic without changing the security properties.
 
 **Consequences.**
 
@@ -2087,9 +2087,7 @@ Other record types tolerate single-signer claims more gracefully because their d
 
 - *Counterparty collusion.* If the agent and merchant collude to fabricate a transaction, both sign and the cross-attestation passes. Cross-log replication ([D050](#d050-cross-log-replication-for-equivocation-defense)) and external evidence ([§7.6](atrib-spec.md#76-outcome-verification-patterns) Pattern B) help here.
 - *Counterparty key compromise.* If the merchant's signing key is compromised, the attacker can sign as the merchant. Identity attestation ([§6](atrib-spec.md#6-key-directory)) and key revocation ([§1.9](atrib-spec.md#19-key-rotation-and-revocation)) help.
-- *Pre-D052 historical records.* Existing single-signer transaction records remain valid but are flagged. Verifiers configured strictly may reject them; the default flagged-not-rejected behavior preserves backwards compatibility.
-
-**Implementation sequencing.** Spec [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) + [§1.2](atrib-spec.md#12-the-attribution-record) + [§4.6.2](atrib-spec.md#462-step-1-identify-contributing-nodes) update → `@atrib/mcp` transaction signing path extension → `@atrib/agent` payment-protocol adapter coordination → `@atrib/verify` multi-signature verification → conformance corpus → migration guidance for pre-D052 records.
+**Implementation sequencing.** Spec [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) + [§1.2](atrib-spec.md#12-the-attribution-record) + [§4.6.2](atrib-spec.md#462-step-1-identify-contributing-nodes) update → `@atrib/mcp` transaction signing path extension → `@atrib/agent` payment-protocol adapter coordination → `@atrib/verify` multi-signature verification → conformance corpus.
 
 ## D053: Inclusion-proof aggregation (flagged for follow-up)
 

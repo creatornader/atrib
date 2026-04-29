@@ -93,7 +93,7 @@ Submit a signed attribution record. Validates the record per spec [§2.6.1](../.
 }
 ```
 
-All hashes in the response are standard base64 (RFC 4648 [§4](../../atrib-spec.md#4-attribution-policy-format), with padding), matching the tlog-tiles checkpoint format.
+All hashes in the response are standard base64 (RFC 4648 §4, with padding), matching the tlog-tiles checkpoint format.
 
 **Error responses** use RFC 9457 `application/problem+json`.
 

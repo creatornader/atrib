@@ -213,27 +213,63 @@ A graph query service, when implemented, must satisfy all MUST requirements in [
 
 All normative requirements in this section are prefixed with their requirement level. A conforming implementation satisfies all MUST requirements and is RECOMMENDED to satisfy all SHOULD requirements.
 
+#### 1.1.2 Roles: validator vs verifier
+
+This specification uses two role terms with distinct meanings:
+
+- **Validator** (log-side admission): the log operator's submission pipeline that decides whether to accept an incoming record into the log. Validators apply [§2.6.1](#261-submit-entry) checks (record format, signature, chain integrity, scope constraints like the genesis-record-only rule for `provenance_token` per [§1.2.6](#126-provenance_token)). A validator's output is binary: admit or reject.
+- **Verifier** (consumer-side audit): a downstream consumer that reads records and assesses trust. Verifiers apply [§4.6](#46-the-calculation-algorithm) calculation, [§6.7](#67-capability-declarations) capability checks, [§2.11](#211-cross-log-replication) cross-log threshold and equivocation detection, and the [§8.7](#87-adversarial-threat-model) trust assessment stack. A verifier's output is rich (validity flags, signals, annotations); the verifier never modifies records.
+
+Spec text uses "validator" when describing log-admission behavior and "verifier" when describing consumer-side assessment. When both roles can perform the same check (e.g., signature verification), the spec specifies which role MUST perform it.
+
 ---
 
 ### 1.2 The Attribution Record
 
 An attribution record is the atomic unit of atrib provenance. Each record documents a single event in an attribution chain (a tool call, a transaction) and cryptographically binds that event to its creator, its position in the chain, and the session that contains it. The chain is structural, not causal: it records what happened and how records relate to each other, not why one event caused another. Causal interpretation belongs to the query and policy layers built on top of these records.
 
-An attribution record is a JSON object with the following fields:
+An attribution record is a JSON object. Two shapes exist depending on `event_type`: the standard shape (used by `tool_call`, `observation`, and extension records) carries a single top-level `signature`; the transaction shape (used by `transaction` records) carries a `signers` array per [§1.7.6](#176-cross-attestation-requirement-for-transaction-records) instead. Both shapes share the same field set otherwise.
+
+**Standard shape (tool_call, observation, extension):**
 
 ```
 {
-  "spec_version":     "atrib/1.0",
-  "content_id":       "sha256:",        // who served this (see §1.2.2)
-  "creator_key":      "",
-  "chain_root":       "sha256:",        // hash of parent record, or context_id for genesis (see §1.2.3)
-  "event_type":       "https://atrib.dev/v1/types/tool_call", // absolute URI; see §1.2.4
-  "context_id":       "", // 32 hex chars (see §1.5.1)
-  "timestamp":        1743850000000,         // Unix milliseconds, integer
-  "informed_by":      ["sha256:"], // OPTIONAL (see §1.2.5); agent's claimed reasoning context
-  "provenance_token": "", // OPTIONAL (see §1.2.6); cross-session causal anchor (D044)
-  "session_token":    "", // OPTIONAL (see §1.5.5); omitted when not in a cross-trace session
-  "signature":        ""
+  "spec_version":          "atrib/1.0",
+  "content_id":            "sha256:",        // who served this (see §1.2.2)
+  "creator_key":           "",
+  "chain_root":            "sha256:",        // hash of parent record, or context_id for genesis (see §1.2.3)
+  "event_type":            "https://atrib.dev/v1/types/tool_call", // absolute URI; see §1.2.4
+  "context_id":            "",               // 32 hex chars (see §1.5.1)
+  "timestamp":             1743850000000,    // Unix milliseconds, integer
+  "timestamp_granularity": "ms",             // OPTIONAL (see §8.4); default "ms" when absent
+  "informed_by":           ["sha256:"],      // OPTIONAL (see §1.2.5); agent's claimed reasoning context
+  "provenance_token":      "",               // OPTIONAL (see §1.2.6); genesis-record-only; cross-session anchor
+  "args_salt":             "",               // OPTIONAL (see §8.3); reveals salt for salted-sha256 args_hash
+  "result_salt":           "",               // OPTIONAL (see §8.3); reveals salt for salted-sha256 result_hash
+  "session_token":         "",               // OPTIONAL (see §1.5.5); omitted when not in a cross-trace session
+  "signature":             ""
+}
+```
+
+**Transaction shape:**
+
+```
+{
+  "spec_version":          "atrib/1.0",
+  "content_id":            "sha256:",        // merchant's checkout endpoint URL + ":checkout"
+  "creator_key":           "",               // primary signer's key (typically the agent's)
+  "chain_root":            "sha256:",
+  "event_type":            "https://atrib.dev/v1/types/transaction",
+  "context_id":            "",
+  "timestamp":             1743850000000,
+  "timestamp_granularity": "ms",             // OPTIONAL
+  "informed_by":           ["sha256:"],      // OPTIONAL
+  "provenance_token":      "",               // OPTIONAL; genesis-record-only
+  "session_token":         "",               // OPTIONAL
+  "signers": [                               // REQUIRED for transaction records (§1.7.6)
+    { "creator_key": "agent-key",        "signature": "..." },
+    { "creator_key": "counterparty-key", "signature": "..." }
+  ]
 }
 ```
 
@@ -243,15 +279,19 @@ An attribution record is a JSON object with the following fields:
 | ------------- | ------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | spec_version  | string  | MUST | Always the literal string `"atrib/1.0"` for records conforming to this specification. Implementations MUST reject records with unknown spec_version values rather than attempting to process them.                                                                                                                                                                                                                                                      |
 | content_id    | string  | MUST | A prefixed hex-encoded SHA-256 digest identifying the specific creator and tool that produced this record. See [§1.2.2](#122-content_id-derivation) for derivation. Format: `"sha256:"` followed by 64 lowercase hex characters.                                                                                                                                                                                                                                                      |
-| creator_key   | string  | MUST | The creator's Ed25519 public key, encoded as base64url (RFC 4648 [§5](#5-sdk-specification), no padding). 43 characters. This is the stable identity of the creator across all their records. It is not an ephemeral session key.                                                                                                                                                                                                                                               |
+| creator_key   | string  | MUST | The creator's Ed25519 public key, encoded as base64url (RFC 4648 §5, no padding). 43 characters. This is the stable identity of the creator across all their records. It is not an ephemeral session key.                                                                                                                                                                                                                                               |
 | chain_root    | string  | MUST | A prefixed hex-encoded SHA-256 digest anchoring this record in the chain. For non-genesis records: the hash of the parent attribution record's canonical serialization (see [§1.3](#13-canonical-serialization)). For genesis records: the hash of the context_id string. See [§1.2.3](#123-chain_root-for-genesis-records).                                                                                                                                                                                                  |
 | event_type    | string  | MUST | An absolute URI identifying the type of event this record documents. atrib's normative URI set is defined in [§1.2.4](#124-event_type-values); consumers MAY mint extension URIs in their own namespaces. URI form is validated per [§1.4.5](#145-event_type-uri-validation). atrib does not require URI recognition for verification; an unrecognized but syntactically-valid extension URI does not block signature verification.                                                                                                                                                                                                                                                                                                    |
 | context_id    | string  | MUST | The W3C Trace Context trace-id of the OTel trace containing this event. 32 lowercase hex characters. This is the join key that connects attribution records to each other and to transaction events. See [§1.5.1](#151-context_id-the-session-anchor).                                                                                                                                                                                                                                        |
-| timestamp        | integer | MUST | Unix time in milliseconds as a JSON integer. MUST NOT be a string, float, or ISO 8601 date. MUST NOT be in the future. Implementations SHOULD reject records with timestamps more than 5 minutes in the future relative to local clock. Allowed granularities ([D045](DECISIONS.md#d045-privacy-postures-normative-spec-section)): millisecond (default), second (×1000), minute (×60000), hour (×3600000), day (×86400000); the value's trailing-zero pattern indicates granularity. |
+| timestamp        | integer | MUST | Unix time in milliseconds as a JSON integer. MUST NOT be a string, float, or ISO 8601 date. MUST NOT be in the future. Implementations SHOULD reject records with timestamps more than 5 minutes in the future relative to local clock. The value MAY be coarsened (rounded to second/minute/hour/day boundaries) per the [§8.4](#84-coarsened-timing-posture) timing posture; when coarsened, the granularity MUST be declared explicitly via the `timestamp_granularity` field. |
 | informed_by      | array   | MAY  | Array of `"sha256:" + hex(record_hash)` strings identifying records the agent claims informed this action. Hashes MUST be sorted lexicographically by the hex string (deterministic ordering). Empty or absent when the record makes no provenance claim. The graph layer derives INFORMED_BY edges from this field ([§3.2.3](#323-edge-types)). atrib does not validate truthfulness of the claim. See [§1.2.5](#125-informed_by) and [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type). |
-| provenance_token | string  | MAY  | Base64url-encoded 16-byte opaque token for cross-session causal anchoring. Distinct from session_token: provenance_token says "this action descends from that anchor" (causal); session_token says "this is the same logical session" (continuation). Present when the record either declares anchorability (upstream) or claims provenance (downstream). The graph layer derives PROVENANCE_OF edges from token co-occurrence ([§3.2.3](#323-edge-types)). See [§1.2.6](#126-provenance_token) and [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring). |
+| provenance_token | string  | MAY  | Base64url-encoded 16-byte opaque token for cross-session causal anchoring. Distinct from session_token: provenance_token says "this session descends from that anchor" (causal); session_token says "this is the same logical session" (continuation). Carried ONLY by the genesis record of a session that claims an upstream anchor; non-genesis records MUST NOT carry it. Derived as the first 16 bytes of the upstream record's hash; upstream records carry no special field to be anchorable. The graph layer derives PROVENANCE_OF edges from this field ([§3.2.3](#323-edge-types)). See [§1.2.6](#126-provenance_token) and [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring). |
 | session_token    | string  | MAY  | Base64url-encoded 16-byte opaque token identifying the logical session across OTel trace boundaries. Present only when the record was emitted in a cross-trace session. When present, the graph query layer uses this field to construct CROSS_SESSION edges between records with different context_ids that share the same session_token. See [§1.5.5](#155-cross-trace-session-continuity). The session_token field is included in the canonical serialization and covered by the signature. |
-| signature        | string  | MUST | Ed25519 signature over the canonical serialization of the record with the signature field omitted, encoded as base64url (RFC 4648 [§5](#5-sdk-specification), no padding). 86 characters. See [§1.4](#14-signing-and-verification) for the full signing procedure.                                                                                                                                                                                                                                              |
+| signature        | string  | MUST for non-transaction records | Ed25519 signature over the canonical serialization of the record with the signature field omitted, encoded as base64url (RFC 4648 §5, no padding). 86 characters. See [§1.4](#14-signing-and-verification) for the full signing procedure. Transaction records (`event_type = transaction`) carry the `signers` array per [§1.7.6](#176-cross-attestation-requirement-for-transaction-records) instead of (or in addition to) this top-level field. |
+| signers          | array   | MUST for transaction records, MUST NOT for others | Array of `{ creator_key, signature }` objects, one per cross-attestation party. Required on transaction records ([§1.7.6](#176-cross-attestation-requirement-for-transaction-records)); MUST NOT appear on tool_call, observation, or extension records. Minimum 2 entries (typically agent + counterparty). All signers cover the same canonical bytes: the JCS serialization of the record with `signers: []` and `signature` omitted. |
+| timestamp_granularity | string | MAY  | Declares the coarsening granularity of `timestamp` per the [§8.4](#84-coarsened-timing-posture) timing posture. Allowed values: `"ms"` (default when absent), `"s"`, `"min"`, `"h"`, `"d"`. Verifiers MUST reject records where the declared granularity does not match the value's trailing-zero pattern (e.g., `timestamp_granularity: "min"` requires `timestamp % 60000 == 0`). |
+| args_salt        | string  | MAY  | Base64url-encoded random salt (≥16 bytes) revealing the salt used to compute a `salted-sha256` `args_hash` per [§8.3](#83-salted-commitment-posture). Presence indicates the salted-commitment posture for args; absence with no `args_salt` and a verifiable plain hash indicates default posture. |
+| result_salt      | string  | MAY  | Base64url-encoded random salt (≥16 bytes) revealing the salt used to compute a `salted-sha256` `result_hash` per [§8.3](#83-salted-commitment-posture). Same posture-detection semantics as `args_salt`. |
 
 #### 1.2.2 content_id Derivation
 
@@ -327,9 +367,9 @@ The `informed_by` field carries the agent's claimed reasoning context: an array 
 
 The `provenance_token` field carries an opaque token used for cross-session causal anchoring. It is OPTIONAL; records without it make no ancestry claim.
 
-**Format.** Base64url-encoded 16 bytes (RFC 4648 [§5](#5-sdk-specification), no padding). 22 characters.
+**Format.** Base64url-encoded 16 bytes (RFC 4648 §5, no padding). 22 characters.
 
-**Scope constraint.** `provenance_token` MUST appear ONLY on the genesis record of a session (the first record in a `context_id`). A session's ancestry is a session-level property; the genesis record is the natural place to declare it. Subsequent records in the session inherit ancestry implicitly via session membership. Validators MUST reject records carrying `provenance_token` when they are not the session's genesis record.
+**Scope constraint.** `provenance_token` MUST appear ONLY on the genesis record of a session (the first record in a `context_id`). A session's ancestry is a session-level property; the genesis record is the natural place to declare it. Subsequent records in the session inherit ancestry implicitly via session membership. Both validators ([§1.1.2](#112-roles-validator-vs-verifier), log-side admission) AND verifiers ([§1.1.2](#112-roles-validator-vs-verifier), consumer-side audit) MUST reject records carrying `provenance_token` when they are not the session's genesis record. Middleware ([§5.3](#53-atribmcp-mcp-server-middleware), [§5.4](#54-atribagent-agent-middleware)) SHOULD refuse to sign such records to prevent malformed submissions reaching the log.
 
 **Derivation.** A session-genesis record claiming ancestry from upstream record U carries `provenance_token = base64url(SHA-256(JCS(U))[:16])` where U is the complete signed record (including its signature). The first 16 bytes of the SHA-256 record hash provide 2^128 collision resistance, sufficient for the cross-session anchor space.
 
@@ -384,11 +424,34 @@ First, construct the record object with all fields present including a placehold
 // Record with session_token present (cross-trace sessions only):
 {"chain_root":"sha256:7e1f4a...","content_id":"sha256:3f8a2b...","context_id":"4bf92f3577b34da6a3ce929d0e0e4736","creator_key":"ABC...","event_type":"https://atrib.dev/v1/types/tool_call","session_token":"base64url16bytes","spec_version":"atrib/1.0","timestamp":1743850000000}
 
+// Record with informed_by present (agent claims reasoning context):
+{"chain_root":"sha256:7e1f4a...","content_id":"sha256:3f8a2b...","context_id":"4bf92f3577b34da6a3ce929d0e0e4736","creator_key":"ABC...","event_type":"https://atrib.dev/v1/types/tool_call","informed_by":["sha256:abc...","sha256:def..."],"spec_version":"atrib/1.0","timestamp":1743850000000}
+
+// Record with provenance_token (genesis-record-only):
+{"chain_root":"sha256:7e1f4a...","content_id":"sha256:3f8a2b...","context_id":"4bf92f3577b34da6a3ce929d0e0e4736","creator_key":"ABC...","event_type":"https://atrib.dev/v1/types/tool_call","provenance_token":"22-char-base64url","spec_version":"atrib/1.0","timestamp":1743850000000}
+
+// Record with timestamp_granularity (coarsened-timing posture):
+{"chain_root":"sha256:7e1f4a...","content_id":"sha256:3f8a2b...","context_id":"4bf92f3577b34da6a3ce929d0e0e4736","creator_key":"ABC...","event_type":"https://atrib.dev/v1/types/tool_call","spec_version":"atrib/1.0","timestamp":1743850080000,"timestamp_granularity":"min"}
+
+// Record with salted-commitment posture (args_salt + result_salt revealed):
+{"args_salt":"base64url16+bytes","chain_root":"sha256:7e1f4a...","content_id":"sha256:3f8a2b...","context_id":"4bf92f3577b34da6a3ce929d0e0e4736","creator_key":"ABC...","event_type":"https://atrib.dev/v1/types/tool_call","result_salt":"base64url16+bytes","spec_version":"atrib/1.0","timestamp":1743850000000}
+
+// Transaction record signing input (signers array set to []; signature omitted):
+{"chain_root":"sha256:7e1f4a...","content_id":"sha256:3f8a2b...","context_id":"4bf92f3577b34da6a3ce929d0e0e4736","creator_key":"ABC...","event_type":"https://atrib.dev/v1/types/transaction","signers":[],"spec_version":"atrib/1.0","timestamp":1743850000000}
+
 // Notes:
-// JCS sorts keys lexicographically. No whitespace. No trailing newline.
-// session_token is omitted entirely when not present. Absent field vs null are different.
-// A record without session_token and one with session_token: null would produce
-// different canonical forms and therefore different signatures. Always omit the field.
+// JCS sorts keys lexicographically (UTF-8 code-point order). No whitespace. No trailing newline.
+// Absent field vs explicit empty value are different: a record without informed_by and one
+// with "informed_by":[] produce different canonical forms and therefore different signatures.
+// Always omit optional fields when not present.
+// JCS field-order positions for the new optional fields (verify against your implementation):
+//   args_salt, chain_root, content_id, context_id, creator_key, event_type, informed_by,
+//   provenance_token, result_salt, session_token, signers, signature, spec_version,
+//   timestamp, timestamp_granularity
+// The informed_by array contents MUST be sorted lexicographically by hex string per §1.2.5;
+// agent-side ordering would otherwise destabilize signatures.
+// For transaction records, all signers in the signers array sign over identical bytes:
+// the JCS form with signers:[] (empty array) and the top-level signature field omitted.
 ```
 
 **Implementation Warning:** timestamp precision** The `timestamp` field MUST be a JSON integer (no decimal point, no exponent notation) representing milliseconds. A timestamp of `1743850000000` serializes as the integer `1743850000000` in JCS, not as `1.74385e12` or `"1743850000000"`. Incorrect serialization will produce a different signing input and cause signature verification to fail.
@@ -401,7 +464,7 @@ atrib uses Ed25519 (RFC 8032, [§5.1](#51-design-principle-zero-ongoing-surface-
 
 #### 1.4.1 Key Format
 
-Creator keypairs are raw 32-byte Ed25519 keys. The public key is encoded as base64url without padding (RFC 4648 [§5](#5-sdk-specification)) for inclusion in the `creator_key` field. The private key is retained by the creator and never transmitted.
+Creator keypairs are raw 32-byte Ed25519 keys. The public key is encoded as base64url without padding (RFC 4648 §5) for inclusion in the `creator_key` field. The private key is retained by the creator and never transmitted.
 
 ```
 // TypeScript key generation (using @noble/ed25519 or Web Crypto API):
@@ -469,7 +532,7 @@ All implementations of Ed25519 signing and verification MUST be validated agains
 
 This section defines the syntactic and structural validation that the `event_type` URI MUST satisfy. The validation is independent of whether the URI is in atrib's normative set or a consumer extension namespace; both must satisfy these rules.
 
-**Required form.** The `event_type` value MUST be an absolute URI per RFC 3986 [§4.3](#43-the-default-policy):
+**Required form.** The `event_type` value MUST be an absolute URI per RFC 3986 §4.3:
 
 ```
 absolute-URI = scheme ":" hier-part [ "?" query ]
@@ -478,7 +541,7 @@ absolute-URI = scheme ":" hier-part [ "?" query ]
 In practice this means:
 
 1. The value MUST contain a scheme (e.g., `https`, `urn`) followed by `:`. Relative references (`/types/tool_call`), bare tokens (`tool_call`), and empty strings are invalid.
-2. The scheme MUST consist of letters, digits, `+`, `-`, or `.` and MUST start with a letter, per RFC 3986 [§3.1](#31-design-principles-and-rationale).
+2. The scheme MUST consist of letters, digits, `+`, `-`, or `.` and MUST start with a letter, per RFC 3986 §3.1.
 3. For the `https` scheme (the form atrib normative URIs use), the URI MUST have a non-empty authority component (host).
 4. The URI MUST NOT contain a fragment (`#...`). Fragments are reserved for future use; including one invalidates the record.
 5. The URI MUST be at most 256 octets in its UTF-8 encoding. Longer URIs are rejected. This bound is a defense against pathological inputs and is well above any reasonable URI length.
@@ -904,8 +967,6 @@ The legacy top-level `signature` field is OPTIONAL on transaction records and SH
 
 **Counterparty key discovery.** Counterparty keys are discovered out-of-band: via the [§6](#6-key-directory) directory lookup of the merchant's published identity, via payment-protocol-specific channels (x402 facilitator metadata, ACP order envelope, AP2 PaymentMandate signer field, and so on), or via consumer-arranged key exchange. atrib does not specify the discovery mechanism; the spec only requires the keys be present in the record.
 
-**Backwards compatibility.** Transaction records signed prior to the introduction of this requirement (with only the top-level `signature` field, no `signers` array) remain cryptographically valid but are flagged `cross_attestation_missing: true` by [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)-aware verifiers. Strict consumer policies MAY reject them; the default flagged-not-rejected behavior preserves the historical record set.
-
 **Other event types unaffected.** This requirement applies only to `transaction`. tool_call, observation, and extension records continue to use single-signer signatures via the top-level `signature` field.
 
 See [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) for the design rationale and the alternatives considered.
@@ -1137,7 +1198,7 @@ CsUYapGGPo4dkMgIAUqom/Xajj7h2fB2MPA3j2jxq2I=      ← root hash (standard base64
                                                     ← mandatory trailing newline
 ```
 
-The root hash is the SHA-256 Merkle Tree Hash (RFC 6962, Section 2.1) of all entries up to the stated tree size, encoded in standard base64 (RFC 4648 [§4](#4-attribution-policy-format), with padding).
+The root hash is the SHA-256 Merkle Tree Hash (RFC 6962, Section 2.1) of all entries up to the stated tree size, encoded in standard base64 (RFC 4648 §4, with padding).
 
 #### 2.4.2 Log Signing Key and Key ID
 
@@ -1336,7 +1397,7 @@ Content-Type: application/json
   "leaf_hash":       "AHCioX9nLjsrse6Y..."   // SHA-256(0x00 || entry_bytes)
 }
 
-// All hashes are standard base64 (RFC 4648 [§4](#4-attribution-policy-format), with padding).
+// All hashes are standard base64 (RFC 4648 §4, with padding).
 ```
 
 The log MUST NOT return 200 until the entry is included in a signed checkpoint. The response is synchronous: the proof bundle in the response body reflects the entry's committed position. There is no asynchronous or polling model.
@@ -1599,10 +1660,10 @@ A bundle with a single `log_proofs` entry is equivalent to the legacy single-log
 
 A verifier configured with a list of trusted log operators (the "trusted set") and a threshold M (the minimum number of trusted-set proofs required) MUST:
 
-1. Validate each `(log_id, checkpoint, inclusion_proof)` tuple in the bundle independently against §2.7.
+1. Validate each `(log_id, checkpoint, inclusion_proof)` tuple in the bundle independently against [§2.7](#27-inclusion-proof-verification). For each tuple: confirm the `log_id` matches the issuing log's published origin, verify the checkpoint signature, and verify the inclusion proof against the checkpoint root for the bundle's `record_hash`.
 2. Count the number of tuples whose `log_id` appears in the trusted set AND whose proof verifies. Call this V.
 3. If V < M, reject the record with `cross_log_threshold_not_met: true`.
-4. If multiple logs returned valid proofs but the proofs commit to different records (i.e., the same `record_hash` resolves to different content across logs), reject the record with `cross_log_equivocation_detected: true` and surface which logs disagreed.
+4. **Equivocation detection.** For each pair of distinct logs (A, B) in the trusted set that returned proofs in this bundle: compare the leaf bytes the inclusion proof was computed against. The leaf bytes are deterministic from the record_hash per [§2.3](#23-log-entry-format) (90-byte AtribLogEntry containing record_hash, creator_key, context_id, timestamp_ms, event_type byte). If logs A and B return different leaf bytes for the same `record_hash`, the verifier MUST reject the record with `cross_log_equivocation_detected: true` and surface `(log_id_A, leaf_bytes_A, log_id_B, leaf_bytes_B)` for each disagreeing pair. Equivocation can ALSO be detected when one log returns a valid proof and another returns a "record not found" response within the bundle's epoch window: this is censorship-shaped equivocation and MUST be flagged as `cross_log_censorship_suspected: true` with the silent log identified.
 
 The default M=1 preserves single-log behavior. Consumers wanting cross-log confidence configure M ≥ 2 and a trusted set of independently-operated logs.
 
@@ -2373,6 +2434,8 @@ A node `N` is a contributing node if all of the following hold:
 - `N.event_type` is `tool_call` or `gap_node` (not `transaction`).
 
   **Note (event_type matching).** Throughout §4.6, the short labels `tool_call`, `transaction`, and `gap_node` refer to the corresponding atrib normative URIs (`https://atrib.dev/v1/types/tool_call`, `https://atrib.dev/v1/types/transaction`) plus the synthetic graph-layer type `gap_node`. The other normative URI `https://atrib.dev/v1/types/observation` (D042) and any extension URI (D043) are NOT contributing nodes. observations are witnesses (the agent did not invoke a tool to produce them) and are skipped from contribution selection. Extension URIs are consumer-namespace and atrib does not bless their attribution claims by default; consumers wanting their extension URIs to count for attribution express it in their own §4 policy document, not via §4.6 default. Promotion of an extension URI to atrib's normative contributing set requires D036's bar.
+
+  **Note (transaction record cross-attestation per [§1.7.6](#176-cross-attestation-requirement-for-transaction-records)).** For a transaction node `T` to serve as the §4.6 receiver, `T`'s `signers` array MUST contain at least 2 verified signatures (cross-attestation requirement). Verification of each signature follows §1.4. If `T` carries fewer than 2 verified signers (or only the legacy top-level `signature` field with no `signers` array), the verifier MUST set `T.cross_attestation_missing = true` on the verification output. Strict consumer policies MAY reject §4.6 calculation entirely when `cross_attestation_missing: true`; the default behavior is to compute the calculation, return it, and surface the flag. The receiver-vs-contributor distinction does NOT relax cross-attestation: the substrate's strongest robustness commitment lives at the transaction layer, and the calculation algorithm is one of the consumers that benefits from it.
 
 - `N` has at least one edge to a transaction node in `G`, either a CONVERGES_ON edge (same session) or a CROSS_SESSION edge (linked session). This is always true for all non-transaction nodes when the graph is queried for a closed session, but is stated explicitly to prevent implementation errors.
 
@@ -3487,9 +3550,9 @@ A verifier that has resolved a record's `creator_key` to an identity claim with 
 2. Check the record's content against the envelope:
    - If `tool_names` is present, the record's `tool_name` MUST be in the list (for tool_call records).
    - If `event_types` is present, the record's `event_type` URI MUST be in the list.
-   - For transaction records: if `max_amount` is present, the transaction amount MUST NOT exceed it; if `counterparties` is present, the transaction counterparty MUST be in the list.
+   - For transaction records, if `max_amount` and/or `counterparties` are present, the verifier MUST resolve the transaction amount and counterparty from the protocol-specific transaction event the record commits to (per §1.7's payment-protocol definitions: ACP order envelope, UCP envelope, x402 PAYMENT-RESPONSE header, MPP Payment-Receipt, AP2 PaymentMandate, a2a-x402 receipts). The resolved amount MUST NOT exceed `max_amount`; the resolved counterparty MUST be in the `counterparties` allowlist. When the protocol-specific event is not available out-of-band, the verifier MUST flag the check as `unresolvable: true` rather than passing or failing silently.
    - If `expires_at` is present and the record's timestamp is after it, the envelope is expired (treated as having no constraint and flagged separately).
-3. Surface the result as `capability_check: { envelope: CapabilityEnvelope | null, in_envelope: bool, mismatches: string[] }` on the verification output.
+3. Surface the result as `capability_check: { envelope: CapabilityEnvelope | null, in_envelope: bool, mismatches: string[], unresolvable: bool }` on the verification output.
 
 #### 6.7.3 Out-of-envelope is a signal, not invalidation
 
@@ -3506,7 +3569,9 @@ Strict consumer policies MAY treat `in_envelope: false` as rejection. The defaul
 
 When a key's capabilities change, the operator publishes a new identity claim with the updated envelope. The §6.2 directory history preserves prior envelopes; verifiers checking historical records use the envelope active at the record's timestamp.
 
-The publication channel for identity claims SHOULD be on a different operational footing than agent operation (e.g., manual re-publication on a hardware-isolated key) to avoid the case where compromising the agent key is sufficient to also publish an attacker-controlled envelope.
+**Operational separation of publication and signing.** The envelope check's security depends on the publication channel for identity claims being on a different operational footing than agent operation. If an attacker compromises the agent's signing key AND can publish identity claims for that key, they can backdate or expand the envelope to retroactively legitimize forged actions. Operators MUST keep these channels separated; co-location collapses the envelope check to "agent-key-equivalent" trust and provides no additional security beyond what §6 identity attestation alone provides. Operators that combine the channels MUST document the reduced trust posture in their consumer-facing documentation; verifiers MAY refuse capability-check enforcement for keys whose identity-claim publication channel is not separately attested.
+
+**Time-of-check vs time-of-use.** The envelope active at the record's `timestamp` (per §6.7.2 step 1) is the verifier's reference. An attacker who compromises both the signing key and the publication channel can backdate envelope publications. §1.9 key revocation provides the recovery path: when compromise is discovered, the operator publishes a `key_revocation` record with `reason: compromise`, and verifiers tag all subsequent records under that key as `revoked_after_revocation`. Records signed before revocation are flagged as suspect retroactively but not invalidated. Cross-witnessing (§2.9) of the directory's checkpoints raises the bar against silent envelope-publication tampering: a backdated publication that was not previously witnessed is detectable.
 
 #### 6.7.5 No protocol-level enforcement at signing time
 
@@ -3701,6 +3766,8 @@ The postures compose without interaction:
 A consumer chooses the combination that matches their threat model. atrib does not prescribe any particular combination; the postures are independent dials.
 
 ### 8.6 Threat model
+
+_This subsection is informative._ The standalone-posture descriptions (§8.1-§8.5) are normative; the combined-posture outcomes below are reasoned consequences of composing the standalone postures. They are listed as illustrative threat-modeling guidance, not as additional normative claims that implementations must independently validate.
 
 This subsection enumerates what an adversary observing the public log learns under each posture combination.
 
@@ -3902,6 +3969,30 @@ Byte layout:
 Leaf hash computation: `SHA-256(0x00 || entry_bytes)`
 Internal node hash: `SHA-256(0x01 || left || right)`
 Root of 2-entry tree: `SHA-256(0x01 || leaf_hash_0 || leaf_hash_1)`
+
+### A.10 Vector Cases for Optional Fields and Postures
+
+The vectors in §A.1 through §A.9 cover the minimal record shape (default posture, no optional fields). The conformance corpus at [`spec/conformance/1.4/`](spec/conformance/1.4/) extends these with byte-level vectors covering each optional field and posture combination introduced in [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), [D045](DECISIONS.md#d045-privacy-postures-normative-spec-section), [D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense), and [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records). Implementations MUST produce outputs identical to the corpus vectors for the inputs the corpus specifies.
+
+The corpus enumerates (each as a separate vector with full input → canonical bytes → record_hash → signature output):
+
+1. **informed_by single-entry**: record carries `informed_by: ["sha256:<hash>"]` (one referent). Validates JCS placement of the field (between `event_type` and `provenance_token`, lex-sorted).
+2. **informed_by multi-entry sorted**: record carries `informed_by: [hash_a, hash_b, hash_c]` where the entries are pre-sorted lex. Validates that the canonical form is stable.
+3. **informed_by ordering rejection**: record submitted with unsorted `informed_by` MUST be rejected by validators per [§1.2.5](#125-informed_by) ordering requirement.
+4. **provenance_token on genesis**: genesis record (chain_root = SHA-256(context_id)) carries `provenance_token` with derivation `base64url(SHA-256(JCS(upstream_record))[:16])`. Validates derivation correctness.
+5. **provenance_token rejection on non-genesis**: non-genesis record carrying `provenance_token` MUST be rejected by validators AND verifiers per [§1.2.6](#126-provenance_token).
+6. **timestamp_granularity declared**: record carries `timestamp: 1743850080000, timestamp_granularity: "min"`. Validates trailing-zero match enforcement.
+7. **timestamp_granularity mismatch rejection**: record carries `timestamp: 1743850123456, timestamp_granularity: "min"` (mismatch). MUST be rejected by verifiers.
+8. **salted-sha256 args/result**: record carries `args_salt`, `result_salt`, with `args_hash = SHA-256(salt || canonical_args_bytes)`. Validates posture detection from sibling-field presence.
+9. **opaque tool_name**: record carries `tool_name: "tool_a7f3"` (matches `[a-z0-9_-]{1,64}` opaque-form pattern). Validates posture detection.
+10. **hashed tool_name**: record carries `tool_name: "sha256:<hex>"`. Validates posture detection.
+11. **transaction with 2-signer signers**: transaction record carries `signers: [{creator_key_A, sig_A}, {creator_key_B, sig_B}]` where both signatures cover canonical bytes with `signers: []` and top-level `signature` omitted. Validates per-signer verification and the canonical-input rule from [§1.7.6](#176-cross-attestation-requirement-for-transaction-records).
+12. **transaction with single-signer rejection**: transaction record with only 1 signer flagged as `cross_attestation_missing: true`.
+13. **combined posture**: record carries opaque tool_name + salted commitments + minute timestamp + informed_by. Validates that postures compose without interaction.
+14. **multi-log proof bundle**: record bundle carries proofs from 2 logs in `log_proofs` array per [§2.11.3](#2113-proof-bundle-format-extension). Validates verifier-side threshold and equivocation detection.
+15. **PROVENANCE_OF derivation**: pair of records where downstream's `provenance_token` derives from upstream's hash; derivation produces correct PROVENANCE_OF graph edge per [§3.2.4](#324-edge-derivation-rules) step 7.
+
+The corpus is generated from the reference implementation; a conforming implementation produces identical bytes for the inputs in `inputs.json` of each vector directory. The Appendix A vectors above and the corpus vectors are jointly normative.
 
 ---
 
