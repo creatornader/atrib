@@ -1429,12 +1429,23 @@ Result: one promotion (`observation`), three correct-rejections that remain vali
 
 **Implementation sequencing.** D036 has no implementation. It is a governance ADR. The first application of the bar is the normative set defined in D035: `tool_call`, `transaction`, `observation`. The next application will be whoever proposes the next promotion.
 
+## D037-D040: Reserved
+
+D037 through D040 are reserved for future ADRs queued at the time the D041-D049 series was authored. The reserved scopes are:
+
+- **D037**: HSM/KMS operator profile (hardware-backed signing; `keystore: 'callback'` mode)
+- **D038**: per-conversation key derivation (HKDF from master seed; spec-only, deferred implementation)
+- **D039**: audit log for key access (every load/use writes a local audit line)
+- **D040**: reference harness package scope and informative-not-normative status
+
+These ADRs will be authored when their respective work happens. Numbering preserved to avoid disturbing pre-allocated cross-references in earlier planning artifacts.
+
 ## D041: informed_by linking primitive and INFORMED_BY edge type
 
 **Date:** 2026-04-28
 **Status:** Accepted
 
-**Context.** atrib v1 chains records along three observable axes: identity (signature), per-session ordering (chain_root + prev_record_hash), and cross-session sameness (session_token via CROSS_SESSION). Verifiers can prove who acted, when, and in what order. They cannot prove which prior records the agent actually consulted before each action.
+**Context.** atrib v1 chains records along three observable axes: identity (signature), per-session ordering (chain_root pointing at the parent record's hash), and cross-session sameness (session_token via CROSS_SESSION). Verifiers can prove who acted, when, and in what order. They cannot prove which prior records the agent actually consulted before each action.
 
 The chain order says "B came after A in this session." It does not say "the agent read A's output before deciding to call B." For the brand promise of "verifiable agent actions in proper context" to be substantively honest, the substrate needs a way to express the agent's claimed reasoning composition: the specific records the agent says informed each action, including by exclusion (records that came before but did not inform).
 
@@ -1450,7 +1461,7 @@ Without such a primitive, every consumer wanting reasoning-chain auditability ei
 
 4. **No semantic interpretation by the protocol.** atrib does not validate that the listed records actually informed the action. The agent claims; atrib certifies the claim was signed. Truthfulness is a downstream verification concern (cross-checking content of referenced records against the action they purport to inform).
 
-5. **JCS canonical position.** `informed_by` slots between `event_type` and `prev_record_hash` lexicographically (e=0x65, i=0x69, p=0x70). Presence/absence affects the signature.
+5. **JCS canonical position.** `informed_by` slots between `event_type` and `provenance_token` lexicographically (e < i < p). Presence/absence affects the signature.
 
 6. **Field MUST be deterministically ordered when present.** Hashes in the array MUST be sorted lexicographically by the hex string. This avoids signature instability from agent-side ordering choices.
 
@@ -1580,7 +1591,7 @@ The trust posture for extension URIs differs from atrib's normative URIs: atrib 
 ## D044: provenance_token field for cross-session causal anchoring
 
 **Date:** 2026-04-28
-**Status:** Accepted
+**Status:** Accepted (refactored from initial draft to resolve circular derivation)
 
 **Context.** atrib v1 has one cross-session linkage mechanism: `session_token`, defined in §1.2.1 as "Base64url-encoded 16-byte opaque token identifying the logical session across OTel trace boundaries." session_token expresses *same logical session* across trace boundaries: an agent doing one continuous task that happens to span multiple OTel context_ids.
 
@@ -1592,50 +1603,70 @@ Several real cross-session patterns are NOT same-logical-session and need a diff
 
 In all three patterns the downstream session is *causally anchored* on an upstream record but is not the *same logical session*. session_token does not fit. An earlier design considered `recommendation_token` for this purpose; it was discussed in spec §3.2.4 notes as a deferred mechanism but never normatively specified. The name overcommits to one specific use case (recommendations); the actual mechanic is broader.
 
+D041 introduced `informed_by` as the general "agent's claimed reasoning context" primitive. provenance_token is best understood as a stricter, ergonomically-specialized subset of informed_by: restricted to a single value, scoped to the session-genesis record only, and truncated for cross-session API ergonomics. The two coexist; provenance_token does not replace informed_by.
+
 **Decision.**
 
-1. **New optional field `provenance_token`** in the attribution record format. Carries a base64url-encoded 16-byte opaque token. The token is symmetric: the upstream agent's record carries it to declare anchorability; downstream agents' records carry the same token to claim provenance from the upstream record.
+1. **New optional field `provenance_token`** in the attribution record format. Carries a base64url-encoded 16-byte opaque token. The token is the truncated hash of an upstream record that the downstream session claims as its causal anchor.
 
-2. **Token derivation.** When an upstream agent emits an anchorable record, the middleware computes `provenance_token = base64url(record_hash[:16])` from the upstream record's hash. The first 16 bytes of the SHA-256 record hash provide adequate collision resistance for the cross-session anchor space.
+2. **Token derivation (downstream-side only).** A downstream record carries `provenance_token = base64url(SHA-256(JCS(upstream_record))[:16])` where `upstream_record` is the complete signed record (including its signature) the downstream session anchors on. The first 16 bytes of the SHA-256 record hash provide 2^128 collision resistance, sufficient for the cross-session anchor space.
 
-3. **Field is optional in both directions.** Upstream records that do not need to be anchorable omit the field. Downstream records that do not claim provenance omit the field. Records may carry one provenance_token; multi-anchor scenarios use `informed_by` (D041) for the additional links.
+3. **Upstream records carry no special field to be anchorable.** Any signed record in the log can be referenced as an anchor by truncating its hash. The earlier draft of this ADR specified that upstream records carry their own `provenance_token` to "declare anchorability"; this would have been circular (the record's hash depends on the token field, which depends on the hash). The cleaner model: upstream is implicitly anchorable; only downstream records carry the token claim.
 
-4. **New graph edge type PROVENANCE_OF** derived from token co-occurrence. For each record D with `provenance_token: T`, for each other record U with `provenance_token: T`, where D.context_id ≠ U.context_id and U's record_hash matches the token's source (i.e., D's token was derived from U), create PROVENANCE_OF D → U. The direction reads as "D's action descends from U's anchor."
+4. **Field MUST appear only on the genesis record of a session.** A session's ancestry is a session-level property. The genesis record is the natural place to declare it. Subsequent records in the session inherit ancestry implicitly via session membership (same context_id). Non-genesis records carrying `provenance_token` MUST be rejected as malformed; this constraint avoids ambiguity about which token represents the session's true ancestry.
 
-5. **JCS canonical position.** `provenance_token` slots after `prev_record_hash` and before `session_token` lexicographically (p-r-e < p-r-o < s-e-s). Presence/absence affects the signature.
+5. **provenance_token as a stricter subset of informed_by.** Both fields express agent-claimed causal references. The distinctions:
 
-6. **session_token semantics unchanged.** session_token continues to mean *same logical session across traces* and continues to drive CROSS_SESSION edges. provenance_token is a distinct field with distinct semantics; the two MAY coexist on the same record.
+   | Property | `informed_by` (D041) | `provenance_token` (this ADR) |
+   |---|---|---|
+   | Cardinality | Multi-valued (array) | Single-valued |
+   | Scope | Per-record (any record may carry it) | Per-session (genesis record only) |
+   | Hash form | Full record_hash (43 chars + prefix = ~71 chars per entry) | Truncated 16 bytes (22 chars base64url) |
+   | Use case | "Records this action consulted" | "This session's ancestry anchor" |
+   | Cross-session API ergonomics | Not optimized for env-var / header passing | Designed for env-var / header / URL-param passing |
 
-7. **Distinct from `recommendation_token`.** The `recommendation_token` mention in §3.2.4 (originally a deferred design note) is removed from the spec. This ADR formally supersedes it.
+   A consumer wanting full-precision cross-session references with multiple anchors uses `informed_by` (which can include record_hashes from any session). provenance_token is the ergonomic shorthand for the special case of declaring a session's single ancestral anchor, designed to be passed across session boundaries via environment variables, HTTP headers, or URL parameters.
+
+6. **New graph edge type PROVENANCE_OF** derived from the field. For each genesis record D with `provenance_token: T`, search the record set for any record U where `base64url(SHA-256(JCS(U))[:16]) == T` and `U.context_id ≠ D.context_id`. If found, create PROVENANCE_OF D → U. If not found, create PROVENANCE_OF D → synthetic_dangling_node(T) with `dangling: true`. The direction reads as "D's session descends from U's anchor."
+
+7. **JCS canonical position.** `provenance_token` slots after `informed_by` and before `session_token` lexicographically (i < p < s). Presence/absence affects the signature.
+
+8. **session_token semantics unchanged.** session_token continues to mean *same logical session across traces* and continues to drive CROSS_SESSION edges. provenance_token is a distinct field with distinct semantics; the two MAY coexist on the same record (a session-genesis record may both belong to a multi-trace logical session AND descend from a prior session's anchor).
+
+9. **Distinct from `recommendation_token`.** The `recommendation_token` mention in §3.2.4 (originally a deferred design note) is removed from the spec. This ADR formally supersedes it.
 
 **Alternatives considered.**
 
 1. *Reuse session_token for both same-session and cross-session-causal patterns.* Rejected because the semantics differ. session_token says "this is the same logical session"; the new mechanism says "this is a different session with causal dependency." Conflating them would force verifiers to disambiguate from context, defeating the point of explicit fields.
 
-2. *Use `informed_by` exclusively (no separate provenance_token).* Rejected because `informed_by` is a *pull* primitive: the downstream agent must know upstream record_hashes. provenance_token is a *push* primitive: the upstream agent broadcasts a token, and any downstream session can claim it without needing the upstream record itself. Both push and pull patterns exist in real ecosystems; both need protocol support.
+2. *Use `informed_by` exclusively (no separate provenance_token).* Rejected because the ergonomic case for a short, single-valued ancestry token is real: cross-session APIs (env vars, HTTP headers, URL parameters) have length limits and benefit from a 22-char anchor over a 71-char full-hash array entry. provenance_token is the specialized ergonomic form; informed_by remains the general-purpose primitive.
 
-3. *Keep `recommendation_token` name.* Rejected because the name describes one use case (recommendations) when the mechanic is general. `provenance_token` is accurate across all the cross-session causal patterns.
+3. *Keep upstream-side broadcast (initial draft of this ADR).* Rejected because the derivation was circular: upstream record's hash depends on the token field, which depends on the hash. The downstream-only model is structurally clean; any signed record is implicitly anchorable.
 
-4. *32-byte token (full record_hash) instead of 16-byte truncation.* Rejected as overhead for the cross-session anchor space. 16 bytes give 2^128 collision resistance, which is sufficient for the global cross-session token space.
+4. *Allow provenance_token on any record, not just genesis.* Rejected because session ancestry is a session-level property. Allowing arbitrary records to carry different ancestry tokens within a single session would create ambiguity about which token represents the session's true origin. Constraining to genesis records keeps the semantic clean.
 
-5. *Cryptographic signing of the token by the upstream agent.* Rejected because the token is already derived from a signed record. Anyone can verify a downstream claim by fetching the upstream record (if accessible) and confirming the hash prefix matches.
+5. *Keep `recommendation_token` name.* Rejected because the name describes one use case (recommendations) when the mechanic is general. `provenance_token` is accurate across all the cross-session causal patterns.
+
+6. *32-byte token (full record_hash) instead of 16-byte truncation.* Rejected as defeating the ergonomic purpose. The truncation is the whole point. 16 bytes give 2^128 collision resistance, which is sufficient for the global cross-session token space.
+
+7. *Cryptographic signing of the token by the upstream agent.* Rejected as redundant. The token is derived from an already-signed record; anyone fetching the referenced upstream record can verify the hash matches. No additional signature on the token itself adds value.
 
 **Consequences.**
 
-- *Spec.* §1.2 (record format) gains `provenance_token` field definition. §1.3 updates JCS field-order example. §3.2.3 gains PROVENANCE_OF edge type. §3.2.4 gains derivation step 7 (PROVENANCE_OF) after the existing 5 steps and the new INFORMED_BY step (D041). §3.2.4 note about "recommendation_token" is removed.
-- *`@atrib/mcp`.* Record type gains optional `provenance_token: string`. Helper `recordOptions.publishProvenance: true` triggers middleware to compute and emit the token. Helper `recordOptions.provenanceToken: string` lets downstream records claim a known token.
-- *`@atrib/agent`.* Adapters auto-emit `provenance_token` when the agent uses canonical subagent-spawn APIs (D048). Other patterns (workflow handoff, webhook) require explicit opt-in.
-- *`@atrib/verify`.* Verification output gains `provenance_chain: { upstream_record_hash, upstream_resolved: ResolvedRecord | null }` per record carrying the token. Dangling references (token claimed but upstream record not in resolved set) are flagged.
+- *Spec.* §1.2 (record format) gains `provenance_token` field definition. §1.2.6 gives the full semantics including the genesis-record constraint. §1.3 updates JCS field-order example. §3.2.3 gains PROVENANCE_OF edge type. §3.2.4 gains derivation step 7 (PROVENANCE_OF) after the existing 5 steps and the new INFORMED_BY step (D041). §3.2.4 note about "recommendation_token" is removed.
+- *`@atrib/mcp`.* Record type gains optional `provenance_token: string`. Helper `recordOptions.provenanceToken: string` lets a session's genesis record claim a known anchor token. Validation: middleware MUST reject `provenance_token` on non-genesis records.
+- *`@atrib/agent`.* Adapters auto-derive provenance_token from inbound cross-session API state when the agent uses canonical subagent-spawn or workflow-handoff APIs (D048). Other patterns require explicit opt-in via `recordOptions`.
+- *`@atrib/verify`.* Verification output gains `provenance: { token, upstream_record_hash, upstream_resolved: ResolvedRecord | null }` for the genesis record carrying the token. Dangling references (token claimed but upstream record not in resolved set) are flagged.
 - *services/graph-node.* Edge derivation gains step 7 (PROVENANCE_OF). Cross-session query semantics extended.
-- *Conformance.* `spec/conformance/1.4/` corpus gains vectors with provenance_token. New `spec/conformance/3.2.4/provenance/` corpus exercises derivation across context_ids.
+- *Conformance.* `spec/conformance/1.4/` corpus gains vectors with provenance_token on genesis records. New `spec/conformance/3.2.4/provenance/` corpus exercises derivation across context_ids. New negative case: provenance_token on non-genesis record MUST be rejected.
 
 **What this DOESN'T solve.**
 
-- *Truthfulness of the claim.* atrib certifies that downstream record D was signed and carries token T. atrib does not certify D's action was actually caused by U. Verifiers cross-check content (when revealed) against the claimed anchor.
-- *Token reuse.* Nothing prevents an agent from claiming the same provenance_token across many unrelated records. The graph derives PROVENANCE_OF edges as the field directs; semantic interpretation is downstream.
-- *Backwards compatibility with the (never-implemented) recommendation_token concept.* There is none to maintain; the original was a deferred design note. New name, new field, fresh start.
+- *Truthfulness of the claim.* atrib certifies that downstream record D was signed and carries token T. atrib does not certify D's session was actually caused by U. Verifiers cross-check content (when revealed) against the claimed anchor.
+- *Multi-anchor cross-session causation.* A session may genuinely descend from multiple upstream sessions (e.g., merging two task threads). provenance_token is single-valued; informed_by handles the multi-valued case (full hashes, any record can carry it).
+- *Forward inference.* PROVENANCE_OF edges only exist when downstream genesis records explicitly claim a token. atrib does not infer provenance from content overlap or behavioral similarity.
 
-**Implementation sequencing.** Spec §1.2 + §1.3 + §3.2.3 + §3.2.4 update → `@atrib/mcp` types + signing + canonicalization → `@atrib/agent` auto-emission for canonical patterns → `@atrib/verify` provenance resolution → `services/graph-node` step 7 derivation → conformance corpus generation → integration test for handoff and webhook patterns.
+**Implementation sequencing.** Spec §1.2 + §1.2.6 + §1.3 + §3.2.3 + §3.2.4 update → `@atrib/mcp` types + signing + canonicalization + genesis-record validation → `@atrib/agent` auto-derivation for canonical patterns → `@atrib/verify` provenance resolution → `services/graph-node` step 7 derivation → conformance corpus generation → integration test for handoff and webhook patterns.
 
 ## D045: Privacy postures normative spec section
 
@@ -1796,7 +1827,7 @@ The introduction of `informed_by` (D041), `provenance_token` (D044), observation
 
 1. **Adapter conformance contract.** A conformant atrib adapter MUST:
    - **(C1)** Auto-sign every record with the configured creator_key.
-   - **(C2)** Auto-populate `chain_root` and `prev_record_hash` from internal autoChain state.
+   - **(C2)** Auto-populate `chain_root` from internal autoChain state (parent record's hash).
    - **(C3)** Auto-emit `tool_call` records on tool invocation through the host framework's tool-call path.
    - **(C4)** Auto-emit `transaction` records when canonical payment patterns (x402, ACP, UCP, AP2, MPP) are detected by the protocol adapter.
    - **(C5)** Auto-track inbound records consumed by the agent (tool results, observations, inbound provenance) in a context tracker.
@@ -1883,3 +1914,212 @@ A layered defense replaces the ad-hoc catch-up cycle with structural prevention.
 - *Style guide drift.* The style guide itself can grow stale. Quarterly review (manual) checks alignment.
 
 **Implementation sequencing.** Style guide drafted → regex check script + pre-commit hook → LLM check script + pre-push hook → cloud audit update → documentation cross-reference.
+
+## D050: Cross-log replication for equivocation defense
+
+**Date:** 2026-04-28
+**Status:** Accepted
+
+**Context.** atrib's §2.9 witnessing protocol distributes trust in checkpoints across multiple operator-independent witnesses. A single log operator cannot equivocate (publish different checkpoint roots to different parties) without witnesses noticing. But §2.9 is a CHECKPOINT-LEVEL defense: it secures the root, not the records the root commits to. A log operator can still:
+
+- Selectively censor records (refuse to commit them while returning success to the submitter)
+- Equivocate at the record level (commit a record to position N for one viewer and a different record to position N for another) when collusion with witnesses is possible
+- Lose data after commitment (operator failure or attack)
+
+The strongest defense against operator-level threats is independent replication: the same record committed to multiple operator-independent logs, with verifiers consulting more than one. This is how Certificate Transparency works in practice (browsers require SCTs from multiple CT logs for EV certificates). atrib has the same threat model and benefits from the same defense.
+
+**Decision.**
+
+1. **Records MAY be replicated to multiple atrib-conformant logs.** No protocol-level mandate; consumers wanting cross-log confidence opt in by submitting to N logs.
+
+2. **Each replication produces an independent inclusion proof.** Logs do not coordinate; each treats the submission as a fresh entry. The record's bundle (§2.8) carries a list of `(log_id, checkpoint, inclusion_proof)` tuples instead of a single tuple.
+
+3. **Verifier consults the configured threshold.** A verifier configured with a list of trusted log operators requires inclusion proofs from at least M of N expected logs (M is consumer policy; default M=1 means single-log behavior preserved). Inclusion proofs from logs not in the trusted list are surfaced but do not count toward M.
+
+4. **Equivocation detection.** If a record bundle carries proofs from multiple logs, and the logs return different content for the same record_hash, the verifier MUST reject the record and flag the discrepancy. This is the equivocation signal.
+
+5. **Log identity.** Each log publishes a stable identifier (`log_id`) derived from its origin string per §2.4. The proof bundle entries reference this identifier. Verifiers cross-reference the identifier against a trust configuration.
+
+6. **Cross-log replication is OPTIONAL.** Default-posture submissions to a single log remain valid. Cross-log replication is a robustness enhancement consumers adopt as their threat model requires.
+
+**Alternatives considered.**
+
+1. *Mandate cross-log replication for all records.* Rejected as adoption barrier. Single-log deployments are valuable; the mandate would block them.
+
+2. *In-protocol cross-log gossip.* Rejected as protocol surface bloat. Logs do not coordinate at the protocol level; replication is consumer-side.
+
+3. *Witnessing alone is sufficient.* Rejected because witnessing secures the checkpoint root, not record-level censorship by the operator. Cross-log replication addresses a strictly broader threat.
+
+**Consequences.**
+
+- *Spec.* New §2.11 "Cross-log replication" subsection. §2.8 (proof bundle format) extended to allow a list of `(log_id, checkpoint, inclusion_proof)` tuples instead of a single tuple. §2.4 (checkpoint format) gains a normative `log_id` field referenced by replication.
+- *`@atrib/mcp`.* Submission API gains `submitToLogs: LogConfig[]` option. Default behavior unchanged.
+- *`@atrib/verify`.* Verification gains `cross_log_proof_count` and `cross_log_threshold_met` outputs. Equivocation detection MUST reject records when cross-log discrepancies are observed.
+- *services/log-node.* No log-side changes; logs are oblivious to replication. Verifier-side does the work.
+- *Conformance.* `spec/conformance/2.11/` corpus exercises cross-log proof bundles, threshold checks, and equivocation detection.
+
+**What this DOESN'T solve.**
+
+- *Collusion across logs.* If all N logs collude, replication does not help. Trust diversity is the consumer's responsibility (pick logs operated by independent parties with different incentives).
+- *Submission-time censorship.* If the submitter is denied service by some logs, the bundle has fewer proofs but is not detectable as malicious. Threshold M handles this gracefully (require fewer than total).
+- *Record-level retroactive removal.* If a log removes a previously-committed record, verifiers consulting the log later see "record not found" but cannot prove the log is lying about its history. Witnessing (§2.9) and cross-log replication together address this when at least one cooperative log retains the record.
+
+**Implementation sequencing.** Spec §2.11 + §2.8 + §2.4 update → `@atrib/mcp` submission API extension → `@atrib/verify` cross-log proof verification → operator documentation on running multi-log deployments → conformance corpus.
+
+## D051: Capability-scoped records via directory-published envelopes
+
+**Date:** 2026-04-28
+**Status:** Accepted
+
+**Context.** §6 (key directory) resolves an opaque `creator_key` to an identity claim ("this key belongs to Acme Corp's official agent, attested by domain DNS"). Identity attestation answers "WHO is this?" but not "WHAT IS THIS KEY ALLOWED TO DO?" A compromised but legitimately-attested key can sign any record; verifiers see a valid identity and have no static framework for spotting out-of-scope claims (e.g., a customer-service agent's key suddenly signing million-dollar transactions).
+
+Capability scoping turns the static identity claim into a dynamic policy claim: the directory publishes the key's declared capability envelope (which tools, dollar amounts, counterparties, action types). Records can be checked against the envelope; out-of-envelope records are flagged as suspect. This is structurally analogous to how OAuth scopes constrain what a token can do, applied at the signed-record level.
+
+**Decision.**
+
+1. **Identity claim format (§6) gains an OPTIONAL `capabilities` field.** Format:
+
+   ```
+   {
+     "creator_key":    "...",
+     "claim_type":     "domain_verified",
+     "claim_method":   "...",
+     "capabilities":   {
+       "tool_names":    ["search", "browse", "read_email"],   // optional allowlist; absent = no constraint
+       "max_amount":    { "currency": "USD", "value": 1000 }, // optional cap on transaction amounts
+       "counterparties": ["acme.com", "verified.example"],   // optional allowlist of transaction counterparties
+       "event_types":   [                                     // optional allowlist of event_type URIs
+         "https://atrib.dev/v1/types/tool_call",
+         "https://atrib.dev/v1/types/observation"
+       ],
+       "expires_at":    1761000000000                         // optional; envelope rotates with the identity claim
+     }
+   }
+   ```
+
+2. **All capability fields are optional.** An identity claim without `capabilities` declares no scope; this is equivalent to "any action this key signs is in-envelope." Adding the field narrows the scope.
+
+3. **Verifier checks records against the active capability envelope at signing time.** The active envelope is the most recent identity claim published before the record's `timestamp` (§6 directory history is timestamped). Records signed under a key whose declared `tool_names` does not include the record's tool_name are flagged with `out_of_capability_envelope: true`.
+
+4. **Out-of-envelope is a SIGNAL, not invalidation.** Records remain cryptographically valid (signature verifies, log inclusion verifies). The envelope-check output is a verifier annotation that consumers use in their trust assessment. Defaulting to invalidation would break common cases (envelope updates, tool-rename migrations) and is the wrong layer for enforcement.
+
+5. **Envelope rotation follows identity-claim publication.** When a key's capabilities change, the operator publishes a new identity claim with the updated envelope. The directory history (§6.2) preserves prior envelopes; verifiers checking historical records use the envelope active at the record's timestamp.
+
+6. **No protocol-level enforcement.** atrib does not block out-of-envelope submissions or refuse to commit them. Enforcement is consumer policy at the verification layer.
+
+**Alternatives considered.**
+
+1. *Per-record `declared_capability` field instead of per-key envelope.* Rejected as field bloat and as harder for verifiers to validate (each record's declaration would be self-asserted; the envelope-as-published model lets a separate publication channel constrain claims).
+
+2. *Mandatory envelopes for all identity claims.* Rejected as adoption barrier. Capability declaration is optional; consumers wanting it adopt it.
+
+3. *Hard rejection of out-of-envelope records.* Rejected as too brittle for real-world envelope evolution and operator error. Signal-not-block is the right granularity.
+
+4. *Envelope encoded in the record itself rather than the directory claim.* Rejected because envelope-in-record is self-asserted (the key author writes their own constraints); envelope-in-directory ties the constraint to the identity claim's separate publication channel, which is harder for an attacker compromising the key alone to forge.
+
+**Consequences.**
+
+- *Spec.* New §6.7 "Capability declarations" subsection. §6.1 (identity claim format) extended with optional `capabilities` field.
+- *`@atrib/cli`.* `atrib publish-claim --capabilities <file.json>` lets operators declare envelopes when publishing.
+- *`@atrib/verify`.* Verification output gains `capability_check: { envelope: CapabilityEnvelope | null, in_envelope: bool, mismatches: string[] }` per record.
+- *services/directory-node.* Directory publishes capability fields in identity claims; lookup returns them. No new endpoints required.
+- *Conformance.* `spec/conformance/6.7/` corpus exercises capability declaration, envelope rotation, and out-of-envelope detection.
+
+**What this DOESN'T solve.**
+
+- *Coordinated compromise.* An attacker who compromises both the signing key AND the publication channel for identity claims can publish an updated envelope that whitelists the attacker's intended actions. Mitigation: identity-claim publication should be on a different operational footing than agent operation (e.g., manual re-publication on a hardware-isolated key).
+- *Capability enforcement at signing time.* atrib does not refuse to sign out-of-envelope records; the envelope is a verifier-side annotation. Consumers wanting signing-time enforcement build it into their middleware.
+- *Granular field-level constraints.* The envelope schema is intentionally narrow (tool_names, max_amount, counterparties, event_types). More granular constraints (e.g., "only between 9-5 PM UTC") are out of scope; consumers needing them publish a separate policy document and check externally.
+
+**Implementation sequencing.** Spec §6.7 + §6.1 update → `@atrib/cli` envelope publication command → `@atrib/verify` envelope check → directory-node serves capabilities in lookup → conformance corpus → integration test exercising envelope rotation.
+
+## D052: Cross-attestation requirement for transaction records
+
+**Date:** 2026-04-28
+**Status:** Accepted
+
+**Context.** Transaction records (`event_type = https://atrib.dev/v1/types/transaction`) are the highest-stakes record type in atrib: they are the record the §4.6 calculation is normatively gated on. A single agent unilaterally signing a transaction record makes a cryptographically valid claim that "this transaction occurred for this amount with this counterparty", without independent corroboration. An attacker who compromises one signing key can fabricate transactions out of thin air.
+
+Other record types tolerate single-signer claims more gracefully because their downstream consequences are smaller (a tool_call's claim affects only attribution shares; a transaction's claim affects actual settlement). For the highest-consequence type, requiring more than one signer is structurally appropriate.
+
+**Decision.**
+
+1. **Transaction records MUST carry a `signers` field listing the public keys of all attesting parties.** Format:
+
+   ```
+   "signers": [
+     { "creator_key": "agent-key-base64url",        "signature": "..." },
+     { "creator_key": "counterparty-key-base64url", "signature": "..." }
+   ]
+   ```
+
+   The legacy `signature` field at the top level is OPTIONAL on transaction records and SHOULD be omitted when `signers` is present. When `signature` IS present alongside `signers`, the top-level signature is treated as an additional signer entry from the same `creator_key` (informational; not double-counted).
+
+2. **Minimum signer requirement: 2.** The atrib normative minimum for transaction records is 2 signers: the agent that initiated the transaction AND the counterparty (typically the merchant or settlement party). Records with fewer signers are flagged as `cross_attestation_missing: true`.
+
+3. **Each signer's signature covers the same canonical bytes.** All signatures in `signers` cover the same JCS-canonical record (with the `signers` array empty for the canonicalization). The verifier confirms each signature against the corresponding public key.
+
+4. **Counterparty discovery and key exchange.** Counterparty keys are discovered out-of-band: via the directory (§6) lookup of the merchant's published identity, via payment-protocol-specific channels (x402 facilitator metadata, ACP order envelope, etc.), or via consumer-arranged key exchange. atrib does not specify the discovery mechanism; the spec only requires the keys be present in the record.
+
+5. **Backwards compatibility.** Existing transaction records signed pre-D052 (with only the top-level `signature` field, no `signers` array) remain cryptographically valid but are flagged `cross_attestation_missing: true` by D052-aware verifiers. Migration is consumer-paced.
+
+6. **Other event types unaffected.** tool_call, observation, and extension records continue to use single-signer signatures via the top-level `signature` field. D052 applies only to `transaction`.
+
+**Alternatives considered.**
+
+1. *Threshold signatures (M-of-N) for transactions.* Considered. The simpler 2-signer model covers the highest-frequency case (agent + merchant). M-of-N adds complexity (threshold key management, partial-signature aggregation) without proportionate gain at this stage. May revisit if usage establishes a multi-party need.
+
+2. *Make cross-attestation OPTIONAL for transactions.* Rejected. Transactions are the §4.6-gated record type; the substrate's strongest robustness commitment belongs here. Optional weakens the guarantee.
+
+3. *Apply cross-attestation to all record types.* Rejected as overhead for non-transaction records. The robustness gain is concentrated at the transaction layer.
+
+4. *Use multi-signature schemes (Schnorr aggregation, BLS) instead of an explicit signers array.* Rejected as cryptographic complexity. The explicit-array form is auditable, debugable, and uses the same Ed25519 primitive as everywhere else in the spec.
+
+**Consequences.**
+
+- *Spec.* New §1.7.6 "Cross-attestation requirement for transaction records" subsection. §1.2 record format note extended to clarify that transaction records use `signers` array. §4.6.2 contributing-set check extended to flag cross-attestation status.
+- *`@atrib/mcp`.* Transaction record signing path emits `signers` array. Counterparty signature is collected via `recordOptions.counterpartySignature: { creator_key, signature }` (the application supplies the counterparty's signature obtained out-of-band).
+- *`@atrib/agent`.* Payment-protocol adapters (§1.7) extended to coordinate counterparty signature collection from their respective protocols' settlement responses.
+- *`@atrib/verify`.* Verification of transaction records extended to verify each signer's signature and to surface `cross_attestation: { signer_count, all_verified, missing_required }`.
+- *Conformance.* `spec/conformance/1.7.6/` corpus exercises 2-signer transaction records, single-signer flagging, signer mismatch detection.
+
+**What this DOESN'T solve.**
+
+- *Counterparty collusion.* If the agent and merchant collude to fabricate a transaction, both sign and the cross-attestation passes. Cross-log replication (D050) and external evidence (§7.6 Pattern B) help here.
+- *Counterparty key compromise.* If the merchant's signing key is compromised, the attacker can sign as the merchant. Identity attestation (§6) and key revocation (§1.9) help.
+- *Pre-D052 historical records.* Existing single-signer transaction records remain valid but are flagged. Verifiers configured strictly may reject them; the default flagged-not-rejected behavior preserves backwards compatibility.
+
+**Implementation sequencing.** Spec §1.7.6 + §1.2 + §4.6.2 update → `@atrib/mcp` transaction signing path extension → `@atrib/agent` payment-protocol adapter coordination → `@atrib/verify` multi-signature verification → conformance corpus → migration guidance for pre-D052 records.
+
+## D053: Inclusion-proof aggregation (flagged for follow-up)
+
+**Date:** 2026-04-28
+**Status:** Flagged for follow-up; design subject to change
+
+This ADR is a placeholder. It records that inclusion-proof aggregation has been considered and queued for future work, without committing to specific design details. When this ADR is formally written and the mechanism is implemented, the details below MAY change in any way; this entry documents the intent and the known-design-questions, not the final spec.
+
+**Context.** D050 (cross-log replication) and §2.9 (witnessing) defend against log-operator equivocation and selective censorship at the checkpoint level. A complementary mechanism, inclusion-proof aggregation, would defend at the record level: subsequent records cite the inclusion proofs of prior records, creating a web of mutual confirmation. If a log operator later removes or alters a referenced record, citing records still point at proof of the prior state.
+
+**Sketch (subject to change).**
+
+A new optional field `inclusion_proof_refs: [{ log_id, record_hash, checkpoint_root }, ...]` on records. Subsequent records cite the inclusion proofs of records they reference (via `informed_by` or `provenance_token` or chain). Verifiers MAY require that cited proofs resolve to records in the log; resolution failures are flagged.
+
+**Why deferred.**
+
+- The marginal robustness gain over D050 (cross-log replication) plus §2.9 (witnessing) is real but smaller than the gain from those mechanisms individually.
+- Sequencing is non-trivial: a record citing its parent's inclusion proof needs the parent to have been committed AND for a checkpoint covering it to have been published AND for that checkpoint to have been witnessed (depending on consumer policy). The chicken-and-egg patterns need careful design.
+- Cross-log replication (D050) introduces multiple proofs per record; the citation field needs to specify which log(s) to cite.
+- Field bloat: each record gains another reference list; storage and proof verification work scale.
+- Adding a fourth robustness mechanism in the same session as D050-D052 increases interaction surface beyond what careful design supports.
+
+**Known design questions for the formal ADR.**
+
+1. Which proofs MUST be cited (parent only? all `informed_by` referents? all cross-session anchors?) versus MAY be cited.
+2. How to handle cross-log replication: cite all logs' proofs, the trusted-set logs' proofs, or a single canonical log per record?
+3. Sequencing: do citing records wait for witnessing, or accept un-witnessed checkpoint citations?
+4. Storage and verification cost trade-offs at high record volumes.
+5. Failure modes: how does a verifier surface "cited proof exists but doesn't verify against current checkpoint state"?
+
+**Implementation sequencing.** None for now. When formally written: spec subsection (likely §2.12) → record format extension → verifier-side cross-checking → conformance corpus → operator guidance.
+
+**Caveat on this entry.** Because this ADR is a placeholder, anything described above is a sketch, not a commitment. The formal ADR (when authored) will follow the standard format and may diverge from this placeholder in any technical detail. Cross-references to D053 from other ADRs or the spec MUST treat the substance as forward-looking, not normative.
