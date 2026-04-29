@@ -1428,3 +1428,466 @@ Result: one promotion (`observation`), three correct-rejections that remain vali
 - *Silent adoption.* atrib only knows about promotions when extension URIs become observable. Closed-source consumers using atrib in production may have URIs that should be promoted but are not visible to atrib's maintainers. The mitigation is: encourage consumers to publish their URI choices in their own documentation, but not as a normative requirement.
 
 **Implementation sequencing.** D036 has no implementation. It is a governance ADR. The first application of the bar is the normative set defined in D035: `tool_call`, `transaction`, `observation`. The next application will be whoever proposes the next promotion.
+
+## D041: informed_by linking primitive and INFORMED_BY edge type
+
+**Date:** 2026-04-28
+**Status:** Accepted
+
+**Context.** atrib v1 chains records along three observable axes: identity (signature), per-session ordering (chain_root + prev_record_hash), and cross-session sameness (session_token via CROSS_SESSION). Verifiers can prove who acted, when, and in what order. They cannot prove which prior records the agent actually consulted before each action.
+
+The chain order says "B came after A in this session." It does not say "the agent read A's output before deciding to call B." For the brand promise of "verifiable agent actions in proper context" to be substantively honest, the substrate needs a way to express the agent's claimed reasoning composition: the specific records the agent says informed each action, including by exclusion (records that came before but did not inform).
+
+Without such a primitive, every consumer wanting reasoning-chain auditability either rolls their own out-of-band linkage (incompatible across consumers) or re-derives causation by content analysis (loses the cryptographic anchor).
+
+**Decision.**
+
+1. **New optional field `informed_by`** in the attribution record format. Carries an array of record_hash values (each the SHA-256 of the JCS canonicalization of a complete signed record, hex-encoded with `sha256:` prefix, matching `chain_root` format). Empty or absent when the record makes no provenance claim.
+
+2. **Field is optional.** Records without `informed_by` are valid. Records with `informed_by` may list zero or more record_hashes. The hashes may reference records in the same session, a different session of the same creator_key, or a session of a different creator_key.
+
+3. **New graph edge type INFORMED_BY** derived deterministically from the field. For each record A with `informed_by: [h1, h2, ...]`, for each record B in the record set where `sha256(jcs(B)) == hi`, create INFORMED_BY edge A → B. If the referenced record is not in the resolved set, a placeholder edge to a synthetic dangling node is created with `dangling: true`. The verifier surfaces this; atrib does not infer the edge away.
+
+4. **No semantic interpretation by the protocol.** atrib does not validate that the listed records actually informed the action. The agent claims; atrib certifies the claim was signed. Truthfulness is a downstream verification concern (cross-checking content of referenced records against the action they purport to inform).
+
+5. **JCS canonical position.** `informed_by` slots between `event_type` and `prev_record_hash` lexicographically (e=0x65, i=0x69, p=0x70). Presence/absence affects the signature.
+
+6. **Field MUST be deterministically ordered when present.** Hashes in the array MUST be sorted lexicographically by the hex string. This avoids signature instability from agent-side ordering choices.
+
+**Alternatives considered.**
+
+1. *No primitive; consumers build out-of-band linkage.* Rejected because every consumer reinvents the same shape with different semantics. Verifiers cannot compose. Cross-consumer reasoning audit becomes impossible.
+
+2. *Implicit derivation from chain order.* Rejected because chain order proves precedence, not consultation. Two records in chain order need not have informed each other; the agent may have ignored A entirely when deciding B.
+
+3. *New normative event_type for "informed_by" claims.* Rejected because it shifts the question to a different layer without solving it. INFORMED_BY needs to be a structural property of any record, not a separate record type.
+
+4. *Inline content references rather than record_hash.* Rejected because content references re-leak whatever the referenced records leak. Hash references say "this record informed me" without re-disclosing content.
+
+5. *Auto-tracking only; no field.* Rejected because middleware can only track what flows through it. Records the agent reads via side channels (its own memory, external state) cannot be auto-tracked. The field is the only way to express the agent's complete claim.
+
+**Consequences.**
+
+- *Spec.* §1.2 (record format) gains `informed_by` field definition. §1.3 (canonical serialization) updates JCS field-order example. §3.2.3 + §3.2.4 add INFORMED_BY edge type and derivation rule. §3.2.1 records that any node type may be the source or target of an INFORMED_BY edge.
+- *`@atrib/mcp`.* Record type gains optional `informed_by: string[]`. Signing/verification updates JCS canonicalization to include the field when present. New helper `recordOptions.informedBy: string[]` to allow agent override of middleware auto-tracking (D048).
+- *`@atrib/agent`.* Adapters gain a context tracker that records hashes of records the agent has consumed via tool results, observations, and inbound provenance. Auto-populates `informed_by` on subsequent emissions. Agent override available via `recordOptions.informedBy`.
+- *`@atrib/verify`.* Verification output gains `informed_by_resolution: { resolved: ResolvedRecord[], dangling: string[] }` per record. Dangling references are flagged but do not fail verification (the claim was signed; the referent's absence is a different question).
+- *services/graph-node.* Edge derivation gains step 6 (INFORMED_BY). Node response includes `informed_by_count` for browseability.
+- *Conformance.* `spec/conformance/1.4/` corpus gains vectors with and without `informed_by`. New `spec/conformance/3.2.4/informed-by/` corpus exercises the derivation rule.
+
+**What this DOESN'T solve.**
+
+- *Truthfulness of the claim.* atrib does not prove the listed records actually informed the action. A malicious or careless agent can claim records that did not inform, or omit records that did. Truthfulness verification is a downstream concern: cross-check content (when revealed) against the claimed action.
+- *Reasoning between records.* `informed_by` says "these records informed me." It does not say what the agent reasoned about between them. Reasoning auditability is the harness-side pattern in D047.
+- *Privacy of the linkage itself.* Listing record_hashes discloses the agent's claimed reasoning composition. This is the structural disclosure that makes auditability work; consumers wanting finer control commit to a hash of the sorted list (`informed_by_commitment`) and reveal selectively. The commitment-and-reveal pattern is harness-layer; D045 documents it as a privacy posture option.
+
+**Implementation sequencing.** Spec §1.2 + §1.3 + §3.2.3 + §3.2.4 update → `@atrib/mcp` types + signing + canonicalization → `@atrib/agent` context tracker → `@atrib/verify` resolution output → `services/graph-node` edge derivation → conformance corpus generation → unit tests across the matrix.
+
+## D042: Lift observation graph participation restriction
+
+**Date:** 2026-04-28
+**Status:** Accepted
+
+**Context.** D035 promoted `observation` to atrib's normative event_type set. The initial graph derivation rules (§3.2.1, §3.2.4) excluded observation records from CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL, and CONVERGES_ON edges. This was a conservative v1 choice: observation semantics were new, and the spec preferred to defer linkage rules until usage established what they should be.
+
+The conservative posture has a cost. The most natural use of observation records is as context for subsequent actions: agent observes user preferences, then acts on them; agent observes a market signal, then trades on it; agent observes a tool result, then chains a follow-up. Excluding observation from chain participation means the temporal graph spine has gaps where observations belong. Verifiers querying the graph see tool_calls and transactions but not the observations that contextualize them, even when those observations are signed and chained at the record-format level (every record has chain_root since v1).
+
+The introduction of `informed_by` (D041) makes the cost concrete: observations are the canonical context records that subsequent tool_calls would reference. If observations are missing from the graph spine, INFORMED_BY edges pointing at them dangle by construction.
+
+**Decision.**
+
+1. **Observations participate in CHAIN_PRECEDES, SESSION_PRECEDES, and SESSION_PARALLEL** like any other record type. No special-case logic. The chain spine becomes the temporal ordering of all signed records in a session, regardless of event_type.
+
+2. **Observations DO NOT participate in §4.6 attribution calculation.** The contributing set remains `tool_call` and `gap_node`. Observations are witness records, not actions: the agent did not invoke a tool to produce them. They contextualize attribution but do not contribute to value distribution.
+
+3. **Observations DO NOT participate in CONVERGES_ON.** The CONVERGES_ON edge says "this node contributed to the transaction in this session." Observations did not contribute; they witnessed. Excluding them from CONVERGES_ON keeps the attribution graph honest.
+
+4. **Observations MAY be the source or target of INFORMED_BY edges.** A tool_call may declare it was informed by an observation (`informed_by: [hash(observation_record)]`). An observation may declare it was informed by prior observations or tool_calls. The edge derivation is content-agnostic per D041.
+
+5. **No backfill.** Records signed before this ADR remain valid. The graph builder that processes them simply produces edges per the new rule when re-running.
+
+**Alternatives considered.**
+
+1. *Keep observation excluded.* Rejected because the cost is concrete: INFORMED_BY edges pointing at observations would dangle, and the chain spine would have gaps where the natural context records belong. The original conservative choice was reasonable for v1 in isolation; D041 changes the calculus.
+
+2. *Promote observation to the §4.6 contributing set.* Rejected because observations are witnesses, not actions. Including them in attribution would inflate claimed contributions for any agent that records its own observations. The fact/policy boundary requires observations to be queryable but not weighted by default.
+
+3. *Add observation to CONVERGES_ON.* Rejected for the same reason as #2: CONVERGES_ON is the structural prerequisite for §4.6 calculation. If observations carry CONVERGES_ON edges, attribution policies that count CONVERGES_ON would over-count.
+
+4. *Define a separate "OBSERVATION_PRECEDES" edge type.* Rejected as artificial taxonomy growth. The temporal/chain semantics are identical for tool_calls and observations; introducing a parallel edge type for one event_type is structural duplication without benefit.
+
+**Consequences.**
+
+- *Spec.* §3.2.1 node types entry for observation is updated: observation participates in CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL; does not participate in CONVERGES_ON or §4.6 calculation; may be source or target of INFORMED_BY (D041). §3.2.4 derivation steps add the inclusion clarification.
+- *`@atrib/verify`.* §4.6 implementation explicitly excludes observation from contributing set (was implicit; becomes explicit per the rule above).
+- *services/graph-node.* Edge derivation includes observations in steps 1-3 (chain, session_precedes, session_parallel) but excludes from step 4 (CONVERGES_ON). Step 5 (CROSS_SESSION) already excluded observations because session_token semantics describe agent continuation, not witness continuation.
+- *Conformance.* New `spec/conformance/3.2.4/observation-chained/` corpus exercises observation-in-chain derivation. New negative case: observation MUST NOT appear in §4.6 contribution sets.
+
+**What this DOESN'T solve.**
+
+- *Whether observations should ever count for attribution.* Some consumers may want observation contributions (e.g., a research-credit policy that values reading prior work). Such consumers express the policy in their §4 policy document; atrib's §4.6 default stays clean. This is the fact/policy separation working as intended.
+- *Cross-session observation linkage.* Observations do not carry session_token (typically) and so do not participate in CROSS_SESSION. If an observation needs to anchor cross-session work, the carrier is `provenance_token` (D044) or `informed_by` (D041), not session_token.
+
+**Implementation sequencing.** Spec §3.2.1 + §3.2.4 update → `services/graph-node` derivation update → `@atrib/verify` calculation: explicit exclusion → conformance corpus gains observation-in-chain cases → integration test with mixed event types.
+
+## D043: Extension URI participation in graph derivation
+
+**Date:** 2026-04-28
+**Status:** Accepted
+
+**Context.** D035 established URI-typed event_type with extension URIs in consumer namespaces (byte 0xFF in §2.3.1). The initial v1 rule excluded extension records from edge derivation: "queryable as opaque-typed nodes but DO NOT participate in §3.2.4 edge derivation."
+
+This rule has the same shape as the observation exclusion (D042) and the same cost: the temporal graph spine has gaps where extension records belong. For the additive-design refactor to work (informative §7 harness-side reasoning chains using extension URIs), the extension records must appear in the chain spine alongside tool_calls and observations. Otherwise verifiers querying the graph cannot see the deliberation records the harness emitted.
+
+The trust posture for extension URIs differs from atrib's normative URIs: atrib does not bless their semantics. Including them in the chain spine must not be mistaken for blessing.
+
+**Decision.**
+
+1. **Extension URI records participate in CHAIN_PRECEDES, SESSION_PRECEDES, and SESSION_PARALLEL** the same as normative records. Chain ordering is structural; it depends on chain_root linkage and timestamps, not on event_type semantics.
+
+2. **Extension URI records DO NOT participate in CONVERGES_ON by default.** CONVERGES_ON implies contribution toward a transaction, which is an attribution claim atrib makes about its normative types. Extension URIs are consumer-namespace; default semantics conservatively exclude.
+
+3. **Extension URI records MAY participate in PROVENANCE_OF (D044) and INFORMED_BY (D041).** Both edge types are content-agnostic structural primitives. An extension record may carry `provenance_token` and `informed_by`; the derivation honors the field, not the URI.
+
+4. **Extension URI records DO NOT participate in §4.6 attribution calculation by default.** Promotion to the contributing set requires D036's bar. Consumer policies (§4 policy documents distinct from §4.6 default algorithm) MAY include extension URIs in their own attribution; the protocol stays clean.
+
+5. **Verifier surfaces the URI verbatim.** Graph response includes the full URI string for extension nodes. Verifiers wanting to filter by namespace do so client-side.
+
+**Alternatives considered.**
+
+1. *Continue excluding extension URIs from all graph edges.* Rejected because §7 harness-side patterns (D047) need extension records in the chain spine. Excluding produces gaps where reasoning records belong.
+
+2. *Include extension URIs in CONVERGES_ON.* Rejected because atrib does not bless extension semantics. Including extension records as contributors would imply atrib certifies their attribution claim.
+
+3. *Require consumer to opt extension URIs into graph participation via a flag in the record.* Rejected as protocol overhead without clear benefit. The default-include-in-chain, default-exclude-from-contribution split is the right default for the substrate.
+
+4. *Define a separate "extension chain" parallel to the main graph.* Rejected as taxonomy duplication. The chain spine is a structural property; semantics layer over it.
+
+**Consequences.**
+
+- *Spec.* §3.2.1 node types section gains an "Extension URI nodes" subsection clarifying participation. §3.2.4 derivation steps add the inclusion clarification.
+- *services/graph-node.* Edge derivation includes extension records in chain steps. Already excluded from CONVERGES_ON since v1; no change.
+- *`@atrib/verify`.* §4.6 implementation explicitly excludes extension URIs from contributing set (matches existing behavior; becomes explicit).
+- *Conformance.* New `spec/conformance/3.2.4/extension-chained/` cases exercise extension-record-in-chain derivation.
+
+**What this DOESN'T solve.**
+
+- *Cross-namespace alignment.* Two consumers minting different URIs for similar concepts (e.g., `https://a.example/proposal` vs `https://b.example/proposal`) appear as distinct node types in the graph. Verifiers wanting to treat them as equivalent maintain their own mapping. This matches MIME types and W3C VC `@type`.
+- *Default §4.6 participation for extension URIs that should arguably contribute.* If a consumer mints an "action" URI structurally identical to `tool_call`, atrib's §4.6 still excludes it. The consumer's own policy may include it; atrib normative behavior does not change without a D036 promotion.
+
+**Implementation sequencing.** Spec §3.2.1 + §3.2.4 update → `services/graph-node` derivation includes extensions in chain steps → conformance corpus gains extension-in-chain cases → integration test with extension records carrying informed_by + provenance_token.
+
+## D044: provenance_token field for cross-session causal anchoring
+
+**Date:** 2026-04-28
+**Status:** Accepted
+
+**Context.** atrib v1 has one cross-session linkage mechanism: `session_token`, defined in §1.2.1 as "Base64url-encoded 16-byte opaque token identifying the logical session across OTel trace boundaries." session_token expresses *same logical session* across trace boundaries: an agent doing one continuous task that happens to span multiple OTel context_ids.
+
+Several real cross-session patterns are NOT same-logical-session and need a different mechanism:
+
+- **Workflow handoff:** agent A finishes phase 1, hands off to agent B for phase 2. Different agents, different sessions, causal dependency.
+- **Tool-result consumption across sessions:** agent A writes to a queue, agent B reads it later. Different agents, different times, causal dependency.
+- **Webhook/event-driven:** agent A emits an event, agent B reacts later. Different agents, different times, causal dependency.
+
+In all three patterns the downstream session is *causally anchored* on an upstream record but is not the *same logical session*. session_token does not fit. An earlier design considered `recommendation_token` for this purpose; it was discussed in spec §3.2.4 notes as a deferred mechanism but never normatively specified. The name overcommits to one specific use case (recommendations); the actual mechanic is broader.
+
+**Decision.**
+
+1. **New optional field `provenance_token`** in the attribution record format. Carries a base64url-encoded 16-byte opaque token. The token is symmetric: the upstream agent's record carries it to declare anchorability; downstream agents' records carry the same token to claim provenance from the upstream record.
+
+2. **Token derivation.** When an upstream agent emits an anchorable record, the middleware computes `provenance_token = base64url(record_hash[:16])` from the upstream record's hash. The first 16 bytes of the SHA-256 record hash provide adequate collision resistance for the cross-session anchor space.
+
+3. **Field is optional in both directions.** Upstream records that do not need to be anchorable omit the field. Downstream records that do not claim provenance omit the field. Records may carry one provenance_token; multi-anchor scenarios use `informed_by` (D041) for the additional links.
+
+4. **New graph edge type PROVENANCE_OF** derived from token co-occurrence. For each record D with `provenance_token: T`, for each other record U with `provenance_token: T`, where D.context_id ≠ U.context_id and U's record_hash matches the token's source (i.e., D's token was derived from U), create PROVENANCE_OF D → U. The direction reads as "D's action descends from U's anchor."
+
+5. **JCS canonical position.** `provenance_token` slots after `prev_record_hash` and before `session_token` lexicographically (p-r-e < p-r-o < s-e-s). Presence/absence affects the signature.
+
+6. **session_token semantics unchanged.** session_token continues to mean *same logical session across traces* and continues to drive CROSS_SESSION edges. provenance_token is a distinct field with distinct semantics; the two MAY coexist on the same record.
+
+7. **Distinct from `recommendation_token`.** The `recommendation_token` mention in §3.2.4 (originally a deferred design note) is removed from the spec. This ADR formally supersedes it.
+
+**Alternatives considered.**
+
+1. *Reuse session_token for both same-session and cross-session-causal patterns.* Rejected because the semantics differ. session_token says "this is the same logical session"; the new mechanism says "this is a different session with causal dependency." Conflating them would force verifiers to disambiguate from context, defeating the point of explicit fields.
+
+2. *Use `informed_by` exclusively (no separate provenance_token).* Rejected because `informed_by` is a *pull* primitive: the downstream agent must know upstream record_hashes. provenance_token is a *push* primitive: the upstream agent broadcasts a token, and any downstream session can claim it without needing the upstream record itself. Both push and pull patterns exist in real ecosystems; both need protocol support.
+
+3. *Keep `recommendation_token` name.* Rejected because the name describes one use case (recommendations) when the mechanic is general. `provenance_token` is accurate across all the cross-session causal patterns.
+
+4. *32-byte token (full record_hash) instead of 16-byte truncation.* Rejected as overhead for the cross-session anchor space. 16 bytes give 2^128 collision resistance, which is sufficient for the global cross-session token space.
+
+5. *Cryptographic signing of the token by the upstream agent.* Rejected because the token is already derived from a signed record. Anyone can verify a downstream claim by fetching the upstream record (if accessible) and confirming the hash prefix matches.
+
+**Consequences.**
+
+- *Spec.* §1.2 (record format) gains `provenance_token` field definition. §1.3 updates JCS field-order example. §3.2.3 gains PROVENANCE_OF edge type. §3.2.4 gains derivation step 7 (PROVENANCE_OF) after the existing 5 steps and the new INFORMED_BY step (D041). §3.2.4 note about "recommendation_token" is removed.
+- *`@atrib/mcp`.* Record type gains optional `provenance_token: string`. Helper `recordOptions.publishProvenance: true` triggers middleware to compute and emit the token. Helper `recordOptions.provenanceToken: string` lets downstream records claim a known token.
+- *`@atrib/agent`.* Adapters auto-emit `provenance_token` when the agent uses canonical subagent-spawn APIs (D048). Other patterns (workflow handoff, webhook) require explicit opt-in.
+- *`@atrib/verify`.* Verification output gains `provenance_chain: { upstream_record_hash, upstream_resolved: ResolvedRecord | null }` per record carrying the token. Dangling references (token claimed but upstream record not in resolved set) are flagged.
+- *services/graph-node.* Edge derivation gains step 7 (PROVENANCE_OF). Cross-session query semantics extended.
+- *Conformance.* `spec/conformance/1.4/` corpus gains vectors with provenance_token. New `spec/conformance/3.2.4/provenance/` corpus exercises derivation across context_ids.
+
+**What this DOESN'T solve.**
+
+- *Truthfulness of the claim.* atrib certifies that downstream record D was signed and carries token T. atrib does not certify D's action was actually caused by U. Verifiers cross-check content (when revealed) against the claimed anchor.
+- *Token reuse.* Nothing prevents an agent from claiming the same provenance_token across many unrelated records. The graph derives PROVENANCE_OF edges as the field directs; semantic interpretation is downstream.
+- *Backwards compatibility with the (never-implemented) recommendation_token concept.* There is none to maintain; the original was a deferred design note. New name, new field, fresh start.
+
+**Implementation sequencing.** Spec §1.2 + §1.3 + §3.2.3 + §3.2.4 update → `@atrib/mcp` types + signing + canonicalization → `@atrib/agent` auto-emission for canonical patterns → `@atrib/verify` provenance resolution → `services/graph-node` step 7 derivation → conformance corpus generation → integration test for handoff and webhook patterns.
+
+## D045: Privacy postures normative spec section
+
+**Date:** 2026-04-28
+**Status:** Accepted
+
+**Context.** atrib's substrate is public by design: the log is public-readable, records carry verifiable signatures, and the graph layer derives structure from observable record content. The disclosure surface of any record includes: `creator_key` (public identity), `tool_name` (verbatim string), `args_hash` and `result_hash` (SHA-256 commitments), `timestamp_ms` (millisecond precision), `event_type` URI (consumer namespace for extensions), and any optional fields like `informed_by` and `provenance_token`.
+
+Three of these are required by the current spec and pose real privacy concerns under default settings:
+
+- **`tool_name`** verbatim discloses the kind of action (`book_flight`, `transfer_usdc`).
+- **`args_hash`** / **`result_hash`** enable pre-image attacks on low-entropy args (e.g., `flight_id` from a known set) and equality leakage (same args → same hash).
+- **`timestamp_ms`** discloses operational fingerprints (working hours, reaction times, batch patterns).
+
+Mitigations exist (opaque tool labels, salted commitments, coarsened timing) but require spec-level support to be a normative property of the substrate rather than an ad-hoc harness choice. Without normative privacy postures, the brand promise of "verifiable and privacy-configurable" is not honestly true: harnesses that need privacy must build it themselves and lose interoperability.
+
+**Decision.**
+
+1. **Spec gains a new §8 "Privacy postures" section** establishing four normative postures. A record's posture is encoded in the record's structural shape (presence/absence of optional fields, choice of commitment scheme); verifiers detect the posture from the record's bytes.
+
+2. **§8.1 Default posture.** Plain SHA-256 hashes for args/result, millisecond timestamps, verbatim tool_name strings. Maximum auditability. The current v1 default. No record changes.
+
+3. **§8.2 Opaque-name posture.** `tool_name` MAY be an opaque label or a hash. Allowed forms: (a) `sha256:<hex>` to indicate a hashed name (verifier knows mapping if configured), (b) opaque labels matching `[a-z0-9_-]{1,64}` with no required mapping. Verifier surfaces the form verbatim and indicates `tool_name_form: "opaque" | "hashed" | "verbatim"`.
+
+4. **§8.3 Salted-commitment posture.** `args_hash` and `result_hash` MAY use salted commitments. Salt is per-record random (≥16 bytes). Two commitment schemes defined: `salted-sha256` (`H(salt ‖ canonical_bytes)` with salt revealed in a sibling field `args_salt` / `result_salt`), and `hmac-sha256` (`HMAC(key, canonical_bytes)` with key kept private). Verifier indicates `args_commitment_form: "plain-sha256" | "salted-sha256" | "hmac-sha256"`.
+
+5. **§8.4 Coarsened-timing posture.** `timestamp_ms` MAY be rounded. Allowed granularities: millisecond (default), second (×1000), minute (×60000), hour (×3600000), day (×86400000). Granularity is encoded by the timestamp value itself; a value of 1743850000000 is millisecond-precise; a value of 1743849600000 (rounded to minute) is minute-precise. Verifier indicates `timestamp_granularity: "ms" | "s" | "min" | "h" | "d"` derived from value structure (trailing-zero analysis).
+
+6. **§8.5 Combined postures.** Harnesses MAY combine postures freely. A record may use opaque tool_name with salted commitments and minute-granularity timestamps. The verifier reads each posture independently; they compose without interaction.
+
+7. **§8.6 Threat model.** A normative subsection enumerates what an adversary learns under each posture combination. Includes worked examples (default posture: full content fingerprintable; opaque + salted + minute: only structural and identity claims observable).
+
+8. **Posture selection is a harness concern.** §7 (Harness Integration Patterns) gains a "Privacy posture selection" subsection explaining how to pick a posture for a given consumer (high-audit B2B → defaults; consumer-facing app → opaque + salted + minute; etc.).
+
+**Alternatives considered.**
+
+1. *Keep all privacy mitigations harness-only; no spec changes.* Rejected because three of the leaky fields are required by current spec. Harnesses cannot mitigate without breaking spec compliance. Privacy must be a normative concept.
+
+2. *Single configurable "privacy mode" enum on each record.* Rejected because privacy postures are independent (tool_name, commitments, timing). A single enum forces bundles that may not match consumer needs. Independent posture fields compose better.
+
+3. *Mandatory privacy by default; downgrade opt-in.* Rejected because changing v1 default breaks existing tooling and corpus. Additive posture options preserve the default and allow opt-in.
+
+4. *Defer privacy postures to a v1.1 spec.* Rejected because the gap is concrete now. the additive-design refactor's brand promise depends on configurable disclosure being a substrate property. Pre-public, additive optional changes are essentially free.
+
+5. *Use zero-knowledge commitments (Pedersen, KZG) for args/result.* Rejected as v1 spec material. ZK schemes have meaningful complexity and ecosystem dependency. They MAY be added as additional commitment schemes in §8.3 in future revisions; the spec defines the extensibility shape now.
+
+**Consequences.**
+
+- *Spec.* New §8 section with five subsections defining the postures and threat model. §1.2 field definitions updated to allow the alternate forms (tool_name forms, optional salt/key fields). §7 gains posture-selection subsection.
+- *`@atrib/mcp`.* Record type gains optional `args_salt`, `result_salt` fields. Signing/verification updates to detect commitment scheme from record shape. Helpers for each posture: `recordOptions.toolNameForm: "verbatim" | "opaque" | "hashed"`, `recordOptions.commitmentScheme: "plain-sha256" | "salted-sha256" | "hmac-sha256"`, `recordOptions.timestampGranularity: "ms" | "s" | "min" | "h" | "d"`.
+- *`@atrib/verify`.* Verification output indicates the posture detected per record. Threat-model implications surfaced as informational warnings (not verification failures).
+- *Conformance.* `spec/conformance/8/` corpus exercises each posture combination. Verifier MUST correctly detect posture from record bytes.
+
+**What this DOESN'T solve.**
+
+- *Identity privacy.* `creator_key` is required and discloses the agent's stable identity. The §6 directory may resolve creator_key to a real-world identity claim. Identity privacy requires a different mechanism (key rotation, per-conversation derivation) addressed in D033 and the deferred D038.
+- *Linkage privacy.* `informed_by` and `provenance_token` disclose the agent's claimed reasoning composition. This is the structural disclosure that makes auditability work. Harness-layer mitigations (commitment-and-reveal patterns) are documented in §7.
+- *Metadata privacy of the log itself.* The log entry (§2.3.1) discloses creator_key, context_id, timestamp, event_type byte even when the record content uses high-privacy postures. Mitigating this requires log-level changes outside this ADR's scope.
+
+**Implementation sequencing.** Spec §8 drafted → §1.2 field definitions updated → `@atrib/mcp` posture detection + helpers → `@atrib/verify` posture surfacing → conformance corpus generation → §7 posture-selection subsection.
+
+## D046: Positioning lock for what atrib chains and does not chain
+
+**Date:** 2026-04-28
+**Status:** Accepted
+
+**Context.** "Verifiable agent actions" implies the substrate certifies a complete picture of what an agent did. atrib's actual claims are narrower: identity, ordering, structural causation. Without explicit positioning, consumers may infer atrib certifies things it does not (causation that A's output influenced B's input; truthfulness of the agent's reasoning; reality of the tool's response).
+
+The positioning needs to be visible in the spec, README, and per-package READMEs in lockstep. Pre-public, this is essentially free work that prevents brand mismatch.
+
+**Decision.**
+
+1. **New spec subsection in §3 (Graph Query Interface)** titled "What atrib chains, what it does not." Lists the structural axes atrib certifies (identity, per-session ordering, cross-session sameness via session_token, cross-session causal anchoring via provenance_token, agent-claimed reasoning composition via informed_by) and the gaps atrib does NOT certify (causation that prior records influenced subsequent decisions; truthfulness of the agent's reasoning claims; reality of tool responses absent tool-side attestation).
+
+2. **Spec §0 abstract update** to use the locked positioning. Headline stays "Verifiable agent actions." Sub-line stays "Every tool call becomes signed context for the next." Tagline stays "Agents that reason from a past they can prove." A new sentence in the abstract clarifies: "atrib certifies who acted, what they did, when, in what order, and what the agent claims informed each action. atrib does not certify the agent's reasoning is truthful or that prior records influenced subsequent decisions; only that the claims were signed."
+
+3. **README and per-package README updates.** Each surface gets a one-paragraph "What atrib chains, what it does not" block (or link to the spec subsection) so consumers reading any entry point see the same posture.
+
+4. **No protocol or code changes.** This ADR is a documentation-only decision.
+
+**Alternatives considered.**
+
+1. *Leave positioning ambient and let consumers infer from the spec body.* Rejected because the spec body uses precise language that consumers may not parse fully. Explicit positioning is cheap and removes ambiguity.
+
+2. *State the limits in the README only.* Rejected because the spec is the authoritative reference; positioning belongs there too. README-only would create drift risk.
+
+3. *Add a separate "Limitations" document.* Rejected because the limitations are not a separate concern; they are part of the substrate's positive definition. Splitting them invites readers to skip the limitations doc.
+
+**Consequences.**
+
+- *Spec.* §0 abstract update. New §3 subsection (positioning lock). Cross-references from §1.1 (normative requirements language) to the positioning subsection.
+- *README.md.* New section after the introductory paragraph: "What atrib chains, what it does not" mirroring the spec subsection.
+- *Per-package READMEs.* `packages/mcp/README.md`, `packages/agent/README.md`, `packages/verify/README.md`, `packages/cli/README.md`, `services/log-node/README.md`, `services/graph-node/README.md` all gain the positioning block (or a link to the spec subsection).
+- *ARCHITECTURE.md.* Trust model section gains explicit limit statement.
+
+**What this DOESN'T solve.**
+
+- *Future consumer misreadings.* Positioning lock prevents the most common misreadings; it does not prevent all of them. Continued consumer-facing communication is a brand discipline, not a spec property.
+- *Drift across surfaces.* Doc propagation requires discipline. CLAUDE.md sync triggers (D047 in cross-reference, also: this ADR triggers a positioning-block sync trigger) catch drift on subsequent edits.
+
+**Implementation sequencing.** Spec §0 abstract + new §3 positioning subsection → README block → per-package README blocks → ARCHITECTURE.md trust model update → CLAUDE.md sync trigger registration.
+
+## D047: Harness-side reasoning chains as informative §7 pattern
+
+**Date:** 2026-04-28
+**Status:** Accepted
+
+**Context.** D045's "verifiable agent actions in proper context" framing requires reasoning auditability for the brand promise to be substantively honest. Promoting a `reasoning_step` URI to atrib normative (Path 2 from prior session discussion) fails D036's indicator 4: reasoning shapes vary too much across harnesses (ReAct, CoT, scratchpad, multi-agent debate, plan-and-execute) for any single shape to be observably canonical.
+
+The right layer for reasoning chains is the harness, not the protocol. Consumers mint extension URIs in their own namespaces (e.g., `https://example.com/v1/types/reasoning_step`) and link them via `informed_by` (D041). atrib's substrate makes this possible without standardizing what reasoning *is*.
+
+§7 (Harness Integration Patterns) already exists in the spec as informative material. Adding a "Harness-side reasoning chains" subsection demonstrates the pattern concretely without elevating it to normative.
+
+**Decision.**
+
+1. **New §7 subsection titled "Harness-side reasoning chains."** Informative content showing how a harness mints an extension URI (e.g., `https://example.com/v1/types/reasoning_step`), emits records carrying the URI alongside `tool_call` records, links them via `informed_by`, and exposes them through recall-style consumer surfaces.
+
+2. **Trust boundary statement is mandatory.** The subsection states plainly: "reasoning records live outside atrib's normative trust boundary. They prove the harness emitted these bytes. They do NOT prove the LLM actually reasoned this way." This sentence is load-bearing and MUST NOT be removed in subsequent edits without a successor ADR.
+
+3. **No normative claims.** The pattern is illustrative. atrib does not bless any specific reasoning predicate. Consumers may adopt the pattern, vary it, or replace it with their own.
+
+4. **Cross-reference to D041 + D043.** The pattern depends on `informed_by` (linking primitive) and extension URI graph participation (D043). The subsection cross-references both.
+
+5. **Companion §7 subsection: "Outcome verification patterns."** Documents two opt-in patterns for closing the outcome-linkage gap: (a) tool-side response signing (the tool signs responses; the agent records signed-response-hash in `result_hash`), (b) external witness records (downstream observation references external proof such as a chain transaction ID). Same informative-not-normative posture.
+
+**Alternatives considered.**
+
+1. *Promote `reasoning_step` to atrib normative URI.* Rejected per D036 indicator 4 (not observably canonical) and privacy concerns (prompt/response hash fingerprinting).
+
+2. *Document the pattern in a separate guide outside the spec.* Rejected because §7 is the right place: it already exists as informative-pattern content, and consumers reading the spec find the pattern in context.
+
+3. *No documentation; let consumers discover the pattern.* Rejected because discoverability is poor and the trust boundary statement is critical to get right. Spec-level documentation prevents misuse.
+
+**Consequences.**
+
+- *Spec.* §7 gains "Harness-side reasoning chains" subsection (§7.5) and "Outcome verification patterns" subsection (§7.6). Both informative.
+- *`@atrib/agent`.* No code change. Adapters already support extension URIs; the documented pattern uses existing primitives.
+- *`packages/recall` (when shipped per Phase 3.5.6).* Reference implementation includes a reasoning-chain example in `packages/integration/examples/recall-with-reasoning/` to make the pattern concrete.
+
+**What this DOESN'T solve.**
+
+- *Cross-consumer reasoning predicate convergence.* Multiple consumers minting different reasoning URIs do not auto-converge. If usage establishes convergence over time, D036 may promote to atrib normative; until then, each consumer's URI is its own.
+- *Trust of the LLM's reasoning.* The pattern proves the harness emitted reasoning bytes signed under a key. It does not prove the LLM's reasoning was truthful or coherent. That is a different evaluation layer.
+- *Privacy of reasoning content.* Reasoning records may carry hashes of prompts/responses, which leak fingerprints. Consumers wanting privacy use the salted-commitment posture (D045) on reasoning record hashes.
+
+**Implementation sequencing.** Spec §7.5 + §7.6 written → reference example added in next session's Phase 3.5.6 work.
+
+## D048: Plug-and-play enforcement contract for adapters
+
+**Date:** 2026-04-28
+**Status:** Accepted
+
+**Context.** atrib's value proposition depends on minimal agent involvement. An agent author should not need to remember which fields to populate, which event types to emit, which tokens to propagate, or how to derive edges. The substrate should be plug-and-play across all event types, all edge types, and all framework adapters (Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain, raw MCP SDK, future frameworks).
+
+The introduction of `informed_by` (D041), `provenance_token` (D044), observation graph participation (D042), and extension URI participation (D043) expands what middleware can and should automate. The contract for what's automatic vs. agent-explicit needs to be specified so adapter implementations stay consistent across frameworks.
+
+**Decision.**
+
+1. **Adapter conformance contract.** A conformant atrib adapter MUST:
+   - **(C1)** Auto-sign every record with the configured creator_key.
+   - **(C2)** Auto-populate `chain_root` and `prev_record_hash` from internal autoChain state.
+   - **(C3)** Auto-emit `tool_call` records on tool invocation through the host framework's tool-call path.
+   - **(C4)** Auto-emit `transaction` records when canonical payment patterns (x402, ACP, UCP, AP2, MPP) are detected by the protocol adapter.
+   - **(C5)** Auto-track inbound records consumed by the agent (tool results, observations, inbound provenance) in a context tracker.
+   - **(C6)** Auto-populate `informed_by` on subsequent record emissions from the context tracker, with deterministic ordering.
+   - **(C7)** Auto-emit `provenance_token` on canonical subagent-spawn patterns (host framework's subagent-creation API).
+   - **(C8)** Accept agent-provided overrides via `recordOptions` for `informedBy`, `provenanceToken`, `publishProvenance`, posture options (D045), and other fields.
+   - **(C9)** Validate URI format for extension event_types per §1.4.5.
+   - **(C10)** Honor degradation contract per §5.8 (catch all failures; never throw to caller).
+
+2. **Patterns the adapter MAY auto-handle but is not required to.** Workflow handoff, webhook reception, async event chains. These require application-level intent that the middleware cannot infer reliably; explicit opt-in via `recordOptions` is the documented path.
+
+3. **Patterns the agent MUST handle explicitly.** Recording observations (the agent decides what to witness), choosing extension URIs (consumer namespace by design), choosing privacy posture per record (D045), claiming `informed_by` overrides for records consumed via side channels.
+
+4. **Adapter conformance test suite.** A new `packages/agent/test/conformance.test.ts` exercises each contract item. New adapters MUST pass the conformance suite before being added to the supported-frameworks table.
+
+5. **Adapter authoring guide.** `packages/agent/CONTRIBUTING.md` (or equivalent) documents the contract and provides a template implementation. Future adapters follow the template.
+
+**Alternatives considered.**
+
+1. *No formal contract; document each adapter individually.* Rejected because consistency matters. A consumer using two different framework adapters expects the same observable behavior; a per-adapter contract drifts.
+
+2. *Make every contract item the agent's responsibility.* Rejected because plug-and-play is the value proposition. Pushing fields and edge derivation to the agent defeats the substrate's purpose.
+
+3. *Make every pattern auto-handled (including handoff, webhook).* Rejected because the middleware cannot reliably infer application intent. False auto-emissions are worse than missing ones (they create incorrect graph edges).
+
+**Consequences.**
+
+- *`@atrib/agent`.* Existing adapters audited against the contract; gaps closed in next session's work. New context tracker (C5, C6) added to the middleware. New test file for conformance.
+- *Spec.* §5.4 (adapter section) updated to reference the contract. §5.7 (Automation Triggers) extended with the new auto-emissions.
+- *Documentation.* Contract published in `packages/agent/README.md` adapter table. Adapter authoring guide added.
+
+**What this DOESN'T solve.**
+
+- *Adapters built by third parties.* atrib does not control third-party adapter quality. The conformance test suite is published; users of third-party adapters can run it.
+- *Frameworks that don't expose a tool-call interception point.* For frameworks where wrapping the tool path is impossible, the adapter cannot satisfy C3. Such frameworks fall back to manual emission with reduced auto-tracking.
+
+**Implementation sequencing.** Contract documented in §5.4 + §5.7 → test suite skeleton in `packages/agent/test/conformance.test.ts` → existing adapters audited and gaps closed → CONTRIBUTING guide → conformance results table added to README.
+
+## D049: Layered leak defense (regex + LLM-semantic + cloud audit + style guide)
+
+**Date:** 2026-04-28
+**Status:** Accepted
+
+**Context.** Public repo cleanup of operator-state framing has required multiple filter-repo waves to date. Each wave found leak classes the previous wave missed, including substitution-introduced phrases (an earlier cleanup wave's `internal` → `a private staging repo` substitution itself became a leak class in a subsequent cleanup wave). Term-list audits are fundamentally upper-bounded by the auditor's imagination; the cloud audit routine `the weekly cloud audit` covers 23 terms across 3 surfaces but cannot anticipate new substitution patterns.
+
+A layered defense replaces the ad-hoc per-wave catch-up with structural prevention. Four layers, each catching what the layer above misses, with a positive style guide as the source of truth that all layers reference.
+
+**Decision.**
+
+1. **Style guide as source of truth.** A new `the operator-side prose style guide` (in internal; not a public document) defines the *positive* spec for what public prose may contain: present-tense decisions and rationale; no operator-state framing (phase numbers, time-of-day, "direction was", commit/session self-reference, planning-doc references); cross-references to other ADRs by number, spec by section, code by file path only. The denylist becomes derivative; the style guide is primary.
+
+2. **Layer A: Pre-commit regex check.** Local git hook running on `git commit`. Pattern-based regex catches generic shapes:
+   - `(Phase|Wave|Pass|Round)\s+\d+` (phase numbering)
+   - `\b(this|earlier|in this)\s+(commit|session|pass|batch)\b` (self-reference)
+   - `\b\d{1,2}:\d{2}\s*(AM|PM)\b|tonight|last night` (time-of-day)
+   - `(the user|operator) (pushed|asked|said|wanted)` (user-narration)
+   - `(prior planning artifact|prior observation|memory #\d+)` (planning-doc + memory IDs)
+   - `(the primary instance|prior batch|prior batch)` (subagent-process framing)
+   - The 23 literal terms from the existing cloud audit list.
+   Hook blocks commit on flag; can be bypassed with `--no-verify` for emergency override.
+
+3. **Layer B: Pre-push LLM-semantic audit.** Local git hook running on `git push`. Sends the diff to NVIDIA NIM API (`https://the configured LLM provider`; same provider used by another internal project) using a free-tier model with a prompt that asks "does this prose contain operator state, internal-process framing, or anything that doesn't belong in a public protocol spec?" Reads NIM API key from `the operator's model-provider configuration` `models.providers.nvidia.apiKey`. Blocks push on flag; can be bypassed with explicit override flag.
+
+4. **Layer C: Cloud audit backstop.** The existing weekly cloud routine `the weekly cloud audit` runs Sundays 09:00 UTC. Updated to include the regex patterns from Layer A + the LLM-semantic check from Layer B. Catches drift, regression after history rewrites, anything missed locally.
+
+5. **Layer D: Documentation in internal.** `the leak-class catalog` cross-references the four layers and is updated as new leak classes are discovered. The style guide and this document together form the prevention reference.
+
+6. **Implementation sequencing.** Style guide drafted first (defines what the regex/LLM check against). Then Layer A (regex hook; cheap, fast, catches the common shapes). Then Layer B (LLM hook; catches the spirit). Then Layer C update (cloud audit gains the new patterns). Each layer is independently useful; the combination is what makes the defense robust.
+
+**Alternatives considered.**
+
+1. *Continue per-wave term-list expansion.* Rejected because each wave introduces new substitution patterns that future waves must catch. The recursion converges only when the audit becomes structural rather than literal.
+
+2. *LLM-semantic check at the cloud audit only (no local hooks).* Rejected because catching leaks after they've been live in main for a week is much worse than catching them before push. Local hooks give immediate feedback.
+
+3. *Regex check only; no LLM check.* Rejected because regex catches known shapes; LLM catches new categories. The combination handles both.
+
+4. *Use Anthropic API for the LLM check (consistent with Claude Code's primary provider).* Rejected per cost. NVIDIA NIM is free for the another internal project integration; reuse the same path here. The check is run frequently (every push), so cost accumulates.
+
+5. *Mandatory hook installation; no opt-out.* Rejected because emergency overrides are sometimes needed (e.g., fixing a hook itself). Documented overrides with audit-log entry.
+
+**Consequences.**
+
+- *internal.* New `the operator-side prose style guide`. Updated `the leak-class catalog` with the four-layer defense.
+- *atrib (public repo).* New `.git-hooks/pre-commit` and `.git-hooks/pre-push` scripts (committed for transparency; users opt in via `git config core.hooksPath .git-hooks`). New `scripts/check-leaks.mjs` (regex check) and `scripts/check-leaks-semantic.mjs` (LLM check).
+- *Cloud routine.* `the weekly cloud audit` updated with new regex patterns and LLM-check step.
+
+**What this DOESN'T solve.**
+
+- *Operator override misuse.* `--no-verify` bypasses the hooks. The override is logged but not enforced. Discipline is required.
+- *NVIDIA NIM availability.* If the API is unavailable, Layer B fails open (push proceeds). The cloud audit (Layer C) catches what Layer B missed.
+- *Style guide drift.* The style guide itself can grow stale. Quarterly review (manual) checks alignment.
+
+**Implementation sequencing.** Style guide drafted in internal → regex check script + pre-commit hook → LLM check script + pre-push hook → cloud audit update → documentation cross-reference.
