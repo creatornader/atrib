@@ -168,11 +168,18 @@ const METRICS = [
     run: (ctx) => {
       const tc = ctx.entries.filter((e) => e.eventType === 0x01).length
       const tx = ctx.entries.filter((e) => e.eventType === 0x02).length
+      const ob = ctx.entries.filter((e) => e.eventType === 0x03).length
+      const ext = ctx.entries.filter((e) => e.eventType === 0xff).length
       return {
         tool_call: tc,
         transaction: tx,
+        observation: ob,
+        extension: ext,
         total: ctx.entries.length,
-        transaction_pct: ctx.entries.length === 0 ? 0 : Math.round((tx / ctx.entries.length) * 10000) / 100,
+        transaction_pct:
+          ctx.entries.length === 0
+            ? 0
+            : Math.round((tx / ctx.entries.length) * 10000) / 100,
       }
     },
   },
@@ -303,7 +310,9 @@ function printSummary(snapshot) {
   }
   if (m.event_type_ratio) {
     const er = m.event_type_ratio
-    console.log(`  event_type_ratio:       ${er.tool_call} tool_call / ${er.transaction} transaction (${er.transaction_pct}% tx)`)
+    console.log(
+      `  event_type_ratio:       ${er.tool_call} tool_call / ${er.transaction} transaction / ${er.observation ?? 0} observation / ${er.extension ?? 0} extension (${er.transaction_pct}% tx)`,
+    )
   }
   if (m.log_age_days !== null && m.log_age_days !== undefined) {
     console.log(`  log_age_days:           ${m.log_age_days}`)

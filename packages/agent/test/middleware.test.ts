@@ -159,7 +159,7 @@ describe('atrib() agent middleware', () => {
 
       // No transaction record should have been submitted (Path 2 suppressed).
       // Spec §2.6.1: each `submissions` entry IS the bare record.
-      const txnSubmissions = submissions.filter((s: any) => s?.event_type === 'transaction')
+      const txnSubmissions = submissions.filter((s: any) => s?.event_type === 'https://atrib.dev/v1/types/transaction')
       expect(txnSubmissions.length).toBe(0)
     })
 
@@ -189,9 +189,9 @@ describe('atrib() agent middleware', () => {
 
       await interceptor.flush()
 
-      const txnSubmissions = submissions.filter((s) => s?.event_type === 'transaction')
+      const txnSubmissions = submissions.filter((s) => s?.event_type === 'https://atrib.dev/v1/types/transaction')
       expect(txnSubmissions.length).toBeGreaterThanOrEqual(1)
-      expect(txnSubmissions[0].event_type).toBe('transaction')
+      expect(txnSubmissions[0].event_type).toBe('https://atrib.dev/v1/types/transaction')
     })
 
     it('Path 2 transaction record has session_token (cross-trace)', async () => {
@@ -222,7 +222,7 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find((s) => s?.event_type === 'transaction')
+      const txn = submissions.find((s) => s?.event_type === 'https://atrib.dev/v1/types/transaction')
       expect(txn).toBeDefined()
       expect(txn.session_token).toBe('my_session')
     })
@@ -253,7 +253,7 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find((s) => s?.event_type === 'transaction')
+      const txn = submissions.find((s) => s?.event_type === 'https://atrib.dev/v1/types/transaction')
       expect(txn).toBeDefined()
       // chain_root should match genesisChainRoot(context_id). sha256 prefix + 64 hex
       expect(txn.chain_root).toMatch(/^sha256:[0-9a-f]{64}$/)
@@ -300,7 +300,7 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find((s) => s?.event_type === 'transaction')
+      const txn = submissions.find((s) => s?.event_type === 'https://atrib.dev/v1/types/transaction')
       expect(txn.content_id).toBe(expectedContentId)
     })
 
@@ -333,7 +333,7 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find((s) => s?.event_type === 'transaction')
+      const txn = submissions.find((s) => s?.event_type === 'https://atrib.dev/v1/types/transaction')
       expect(txn).toBeDefined()
       expect(txn.content_id).toBe(expectedContentId)
     })
