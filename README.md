@@ -151,7 +151,7 @@ Store the output as `ATRIB_PRIVATE_KEY`. The public key is derived at runtime.
 - **[§1](atrib-spec.md#1-attribution-record-format):** Attribution record format, signing, propagation, payment protocol hooks
 - **[§1.9](atrib-spec.md#19-key-rotation-and-revocation):** Key rotation and revocation ([D033](DECISIONS.md#d033-key-rotation-and-revocation))
 - **[§2](atrib-spec.md#2-merkle-log-protocol):** Merkle log protocol (C2SP tlog-tiles, proofs, witnessing)
-- **[§3](atrib-spec.md#3-graph-query-interface):** Graph query interface (five edge types)
+- **[§3](atrib-spec.md#3-graph-query-interface):** Graph query interface (seven edge types)
 - **[§4](atrib-spec.md#4-attribution-policy-format):** Policy format, negotiation, calculation algorithm
 - **[§5](atrib-spec.md#5-sdk-specification):** SDK contract, automation, degradation guarantees
 - **[§6](atrib-spec.md#6-key-directory):** Public-key directory (AKD-based; [D034](DECISIONS.md#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers))

@@ -74,7 +74,7 @@ X-atrib-Priority: high
 }
 ```
 
-The body is the bare record per spec [§2.6.1](../../atrib-spec.md#261-submit-entry); there is no wrapper object. The `X-atrib-Priority` header is a non-conflicting HTTP-level extension to the spec used by the dev log's admission queue and by the `flush()` retry ordering inside this package. See the `submission.ts` file header for the full rationale on the two real consumers of priority.
+The body is the bare record per spec [§2.6.1](../../atrib-spec.md#261-submit-entry); there is no wrapper object. The example above shows the minimal required fields; records MAY also carry optional fields per spec [§1.2](../../atrib-spec.md#12-the-attribution-record): `session_token` ([§1.5.5](../../atrib-spec.md#155-cross-trace-session-continuity)), `informed_by` ([§1.2.5](../../atrib-spec.md#125-informed_by)), `provenance_token` ([§1.2.6](../../atrib-spec.md#126-provenance_token)), `timestamp_granularity` ([§8.4](../../atrib-spec.md#84-coarsened-timing-posture)), and `signers` array on transaction records ([§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)). The `X-atrib-Priority` header is a non-conflicting HTTP-level extension to the spec used by the dev log's admission queue and by the `flush()` retry ordering inside this package. See the `submission.ts` file header for the full rationale on the two real consumers of priority.
 
 The expected response is a proof bundle per [§2.6.2](../../atrib-spec.md#262-inclusion-proof-response) (snake_case fields):
 
