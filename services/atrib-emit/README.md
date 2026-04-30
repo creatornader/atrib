@@ -93,10 +93,20 @@ Three files do the work:
 
 Per §5.8 degradation contract: nothing in `atrib-emit` throws to the agent. Missing key → warning in the response. Sign failure → warning. Network failure → submission queued for retry.
 
+## autoChain inheritance from the wrapper
+
+When `context_id` is omitted, atrib-emit reads the wrapper's local mirror (default `~/.atrib/records/wrapper-mirror.jsonl`, override with `ATRIB_MIRROR_FILE`) and inherits the most-recent record's `context_id`, chaining its own emit on top of that record's hash. This is the cognitive-feedback-loop convention: explicit observations, annotations, and revisions chain seamlessly with the agent's mechanical tool calls in the same session, and a verifier sees one coherent chain per `context_id`.
+
+Resolution order:
+1. Caller-supplied `context_id` → genesis chain_root for that id (fresh chain).
+2. Wrapper mirror present → inherit its most-recent record's `context_id`, chain on top.
+3. No mirror → fresh genesis with random 16-byte context_id.
+
+Both line shapes are accepted at read time: bare `AtribRecord` (the wrapper's convention) and `{record, proof, written_at}` envelope (atrib-emit's storage convention). When inheritance fires, the response's `warnings` array carries `inherited context_id from wrapper mirror: <id>` so the agent can confirm the session it landed in.
+
 ## What v1 does NOT do
 
 - **No semantic validation of `content`.** Caller passes any shape; the verifier eventually derives edges based on the spec for normative event types. v2 could add per-event-type schemas.
-- **No autoChain integration with the wrapper's context.** Emits default to fresh genesis records. Inheriting the wrapper's `context_id` (so emits chain with the agent's mechanical tool calls in the same session) is design-question #2 in the scope doc; needs a JSONL handshake convention first.
 - **No annotation-specific tool.** v1 has one `emit` tool that handles all event types. v2 will add `atrib-annotate` with annotation-specific affordances (importance picker, automatic `annotates` linkage to most recent action).
 - **No batch mode.** One emit per call. v2 if a high-volume producer needs it.
 
