@@ -63,7 +63,9 @@ async function main(): Promise<void> {
  * the claim record + anchoring side-effects are identical (per-operation
  * anchoring per §6.2.4 emits a directory_anchor record to log-node).
  *
- * Idempotent: lookup first, only publish if absent.
+ * Idempotent on shape, not just presence: skips when an up-to-date claim
+ * (display_name + organization + url) already exists, but publishes a new
+ * version when the existing claim is missing canonical fields.
  */
 async function ensureSelfClaim(
   baseUrl: string,
@@ -71,11 +73,15 @@ async function ensureSelfClaim(
   privateKey: Buffer,
 ): Promise<void> {
   const lookup = await fetch(`${baseUrl}/v6/lookup/${encodeURIComponent(pubKey)}`).then((r) => r.json()).catch(() => null) as
-    | { claim: unknown | null }
+    | { claim: { claim_subject?: { url?: unknown } } | null }
     | null
-  if (lookup && lookup.claim) {
-    console.log(`  self-claim already published for ${pubKey}`)
+  const existingUrl = lookup?.claim?.claim_subject?.url
+  if (lookup?.claim && typeof existingUrl === 'string') {
+    console.log(`  self-claim already published for ${pubKey} (with url)`)
     return
+  }
+  if (lookup?.claim) {
+    console.log(`  self-claim missing url; publishing upgraded version for ${pubKey}`)
   }
 
   // Build + sign a service-identity claim for this directory.
@@ -88,6 +94,7 @@ async function ensureSelfClaim(
       claim_subject: {
         display_name: `directory.atrib.dev (service identity)`,
         organization: 'atrib reference directory — signs §6.2.4 directory_anchor records',
+        url: 'https://directory.atrib.dev',
       },
     },
     new Uint8Array(privateKey),
