@@ -59,7 +59,10 @@ Same chain as the wrapper, in order:
 | `ATRIB_KEY_FILE` | three | path to a 0600 file containing the seed |
 | (Keychain) | | macOS only; falls back here last |
 | `ATRIB_LOG_ENDPOINT` | optional | log submission endpoint; defaults to `https://log.atrib.dev/v1/entries` |
-| `ATRIB_MIRROR_FILE` | optional | JSONL path for local content mirror; if unset, mirroring is skipped |
+| `ATRIB_MIRROR_FILE` | optional | JSONL path emit WRITES its own envelope mirror to; if unset, mirroring is skipped |
+| `ATRIB_AUTOCHAIN_SOURCE` | optional | JSONL path emit READS to inherit the wrapper's session context_id; defaults to `~/.atrib/records/wrapper-mirror.jsonl`. Splitting read/write paths lets emit write its own envelope mirror while still inheriting the wrapper's chain |
+| `ATRIB_AGENT` | optional | agent name for the agent-scoped Keychain service `atrib-creator-<agent>`; defaults to `claude-code` |
+| `ATRIB_KEYCHAIN_ACCOUNT` | optional | Keychain account; defaults to `userInfo().username` |
 
 ## Installation in an MCP host
 
