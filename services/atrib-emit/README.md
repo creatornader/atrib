@@ -43,13 +43,18 @@ Returns:
 
 ## Key resolution
 
-Same chain as the wrapper, in order:
+Same chain as the wrapper for the first three sources, plus a 1Password fallback for recovery:
 
 1. `ATRIB_PRIVATE_KEY` env var (legacy / dev path)
 2. `ATRIB_KEY_FILE` env var → file path containing the base64url-encoded 32-byte seed
-3. macOS Keychain (`atrib-creator` service; override account name with `ATRIB_KEYCHAIN_ACCOUNT`)
+3. macOS Keychain — services tried in order:
+   - `atrib-creator-<ATRIB_AGENT>` (agent-scoped; matches wrapper, defaults `ATRIB_AGENT=claude-code`)
+   - `atrib-creator` (generic fallback)
+4. 1Password CLI recovery (off by default) — set `ATRIB_OP_REFERENCE=op://<vault>/<item>/<field>` to enable. Optional `ATRIB_OP_ACCOUNT=<email-or-uuid>` pins a specific account for multi-account operators. Activated only when Keychain has nothing; designed to recover from a wiped Keychain. The operator must be signed in (`op signin`) and the read may prompt for biometric/master-password approval.
 
 `atrib-emit` signs records under the **agent's** identity — the same key as the wrapper. There's no separate "emit identity"; skills don't have identities, the agent always signs as itself.
+
+If a 1Password item stores the seed with a `ATRIB_PRIVATE_KEY=<value>` label prefix (the convention used by the existing `Atrib key (current — haoZK4D1AXmy)` item), the prefix is stripped before decoding so both shapes work.
 
 ## Configuration
 
