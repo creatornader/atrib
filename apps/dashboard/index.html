@@ -971,23 +971,26 @@ function renderFeed(entries, withAnimation) {
 function populateQuickLinks(entries) {
   const wrap = document.getElementById('quick-links')
   if (!wrap || entries.length === 0) return
-  const recent = entries[0]
-  const txn = entries.find(e => e.event_type === 'transaction') || recent
+  // Pick the freshest entry that has all three IDs populated (some
+  // records, e.g. directory_anchor extension entries, omit creator_key
+  // in the entry projection).
+  const linkable = entries.find(
+    (e) => e && e.record_hash && e.context_id && e.creator_key,
+  ) ?? entries[0]
+  const txn = entries.find((e) => e.event_type === 'transaction')
   wrap.replaceChildren(
-    el('a', { href: `#/action/${recent.record_hash}` },
+    el('a', { href: `#/action/${linkable.record_hash}` },
       'See a recent action ', el('span', { class: 'arrow' }, '→'),
     ),
-    el('a', { href: `#/session/${recent.context_id}` },
+    linkable.context_id ? el('a', { href: `#/session/${linkable.context_id}` },
       'Browse a recent session ', el('span', { class: 'arrow' }, '→'),
-    ),
-    el('a', { href: `#/identity/${recent.creator_key}` },
+    ) : null,
+    linkable.creator_key ? el('a', { href: `#/identity/${linkable.creator_key}` },
       'Inspect an identity ', el('span', { class: 'arrow' }, '→'),
-    ),
-    txn.event_type === 'transaction'
-      ? el('a', { href: `#/action/${txn.record_hash}` },
-          'See a transaction ', el('span', { class: 'arrow' }, '→'),
-        )
-      : null,
+    ) : null,
+    txn ? el('a', { href: `#/action/${txn.record_hash}` },
+        'See a transaction ', el('span', { class: 'arrow' }, '→'),
+      ) : null,
   )
 }
 
