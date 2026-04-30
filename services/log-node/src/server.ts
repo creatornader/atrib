@@ -253,9 +253,27 @@ async function handleRequest(
     return handleDashboard(res)
   }
 
+  // D054: dashboard static assets, favicon, apple-touch-icon, og image.
+  // Bundled by the Dockerfile from apps/dashboard/static/. Served from both
+  // explore.atrib.dev and log.atrib.dev so the HTML's <link> tags resolve
+  // regardless of which hostname loads the explorer.
+  if (req.method === 'GET' && req.url === '/favicon.ico') {
+    return handleStaticAsset(res, 'icon.svg', 'image/svg+xml')
+  }
+  const staticMatch = req.url?.match(/^\/static\/([A-Za-z0-9._-]+)$/)
+  if (req.method === 'GET' && staticMatch) {
+    const name = staticMatch[1]!
+    const contentType =
+      name.endsWith('.svg') ? 'image/svg+xml' :
+      name.endsWith('.png') ? 'image/png' :
+      name.endsWith('.ico') ? 'image/x-icon' :
+      'application/octet-stream'
+    return handleStaticAsset(res, name, contentType)
+  }
+
   sendJson(res, 404, {
     error: 'not found',
-    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/recent, GET /v1/lookup/<hex>, GET /v1/by-context/<hex>, GET /v1/by-creator/<base64url>, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>, GET /dashboard',
+    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/recent, GET /v1/lookup/<hex>, GET /v1/by-context/<hex>, GET /v1/by-creator/<base64url>, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>, GET /dashboard, GET /static/<name>, GET /favicon.ico',
   })
 }
 
@@ -365,6 +383,38 @@ async function handleDashboard(res: ServerResponse): Promise<void> {
   // window, but long enough to make repeated visits cheap.
   res.setHeader('cache-control', 'public, max-age=60')
   res.end(html)
+}
+
+// Static-asset cache: small set of files (favicon, apple-touch-icon, etc.),
+// resolved relative to apps/dashboard/static/. Read once per file at first
+// request, cached for process lifetime, they ship with the image and don't
+// change between deploys.
+const STATIC_DIR = (() => {
+  const here = dirname(fileURLToPath(import.meta.url))
+  const envOverride = process.env.ATRIB_DASHBOARD_STATIC_PATH
+  if (envOverride) return envOverride
+  return join(here, '..', '..', '..', 'apps', 'dashboard', 'static')
+})()
+const staticCache = new Map<string, Buffer>()
+async function handleStaticAsset(res: ServerResponse, name: string, contentType: string): Promise<void> {
+  let bytes = staticCache.get(name)
+  if (!bytes) {
+    try {
+      bytes = await readFile(join(STATIC_DIR, name))
+      staticCache.set(name, bytes)
+    } catch {
+      res.statusCode = 404
+      res.setHeader('content-type', 'text/plain; charset=utf-8')
+      res.end(`asset not found: ${name}\n`)
+      return
+    }
+  }
+  res.statusCode = 200
+  res.setHeader('content-type', contentType)
+  res.setHeader('content-length', bytes.length)
+  // Long cache: static assets ship with the image; new versions deploy with new image.
+  res.setHeader('cache-control', 'public, max-age=86400, immutable')
+  res.end(bytes)
 }
 
 // Decode entry layout per spec §2.3.1:

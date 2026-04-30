@@ -5,6 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>atrib explorer · the public log of signed AI agent actions</title>
 <meta name="description" content="A live feed of AI agent actions. Each one is signed by the agent's Ed25519 key and committed to a public Merkle log. You can verify any of it yourself." />
+
+<!-- Favicon + app icons. Source SVG is shared with atrib-web. -->
+<link rel="icon" type="image/svg+xml" href="/static/icon.svg" />
+<link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png" />
+
+<!-- Theme color matches the dashboard's --bg token (#0a0b0e). -->
+<meta name="theme-color" content="#0a0b0e" />
+<meta name="color-scheme" content="dark" />
+
+<!-- Open Graph / social previews. -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="atrib" />
+<meta property="og:title" content="atrib explorer · the public log of signed AI agent actions" />
+<meta property="og:description" content="A live feed of AI agent actions. Each one is signed by the agent's Ed25519 key and committed to a public Merkle log. You can verify any of it yourself." />
+<meta property="og:url" content="https://explore.atrib.dev/" />
+<meta property="og:image" content="https://explore.atrib.dev/static/apple-touch-icon.png" />
+
+<!-- Twitter / X card. -->
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="atrib explorer" />
+<meta name="twitter:description" content="A live feed of AI agent actions, cryptographically signed and publicly verifiable." />
+<meta name="twitter:image" content="https://explore.atrib.dev/static/apple-touch-icon.png" />
+
+<!-- Canonical: the explorer is hosted at explore.atrib.dev (production); the
+     /dashboard path on log.atrib.dev serves the same file as a fallback. -->
+<link rel="canonical" href="https://explore.atrib.dev/" />
 <style>
   /*
    * atrib explorer, design system
