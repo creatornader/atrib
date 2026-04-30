@@ -87,6 +87,12 @@
     --et-extension: var(--muted);
     --et-extension-subtle: var(--muted-subtle);
     --et-extension-border: rgba(156, 163, 175, 0.25);
+    /* Atrib-system event types (e.g. directory_anchor, byte 0x04 per D056).
+       Falls back to this style for any future atrib-namespace URI that ships
+       before its own byte allocation lands (renderEventChip safety net). */
+    --et-system: #38bdf8;
+    --et-system-subtle: rgba(56, 189, 248, 0.12);
+    --et-system-border: rgba(56, 189, 248, 0.3);
 
     /* Type */
     --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, Roboto, sans-serif;
@@ -448,8 +454,10 @@
   .chip.event-tool_call    { background: var(--et-tool-call-subtle);    color: var(--et-tool-call);    border-color: var(--et-tool-call-border); }
   .chip.event-transaction  { background: var(--et-transaction-subtle);  color: var(--et-transaction);  border-color: var(--et-transaction-border); }
   .chip.event-observation  { background: var(--et-observation-subtle);  color: var(--et-observation);  border-color: var(--et-observation-border); }
-  .chip.event-extension    { background: var(--et-extension-subtle);    color: var(--et-extension);    border-color: var(--et-extension-border); }
-  .chip.event-reserved     { background: var(--err-subtle);             color: var(--err);             border-color: var(--err-border); }
+  .chip.event-extension        { background: var(--et-extension-subtle); color: var(--et-extension); border-color: var(--et-extension-border); }
+  .chip.event-directory_anchor { background: var(--et-system-subtle);    color: var(--et-system);    border-color: var(--et-system-border); }
+  .chip.event-system           { background: var(--et-system-subtle);    color: var(--et-system);    border-color: var(--et-system-border); }
+  .chip.event-reserved         { background: var(--err-subtle);          color: var(--err);          border-color: var(--err-border); }
 
   .badge {
     display: inline-flex; align-items: center; gap: 4px;
@@ -788,6 +796,60 @@ function renderIdentityLabel(creatorKey, opts = {}) {
     : inner
 }
 
+// ─── Event-type chip ─────────────────────────────────────────────────────
+// The 90-byte log entry (§2.3.1) only carries one byte for event_type, so any
+// URI not in {tool_call, transaction, observation} arrives here as 'extension'.
+// But the spec reserves 0x04-0xFE for future atrib normative additions per
+// D036, and we already emit at least one such type today (directory_anchor,
+// §6.2.4). When an "extension" row is signed by an atrib-system identity
+// (claim URL in the atrib.dev namespace), relabel the chip "atrib system"
+// rather than implying it's an external/non-normative type.
+function atribSystemSignerKind(creatorKey) {
+  const lookup = identityCache.get(creatorKey)
+  if (!lookup || !lookup.found) return null
+  const url = lookup.claim?.claim_subject?.url
+  if (typeof url !== 'string') return null
+  let host
+  try { host = new URL(url).host } catch { return null }
+  if (host === 'directory.atrib.dev') return 'directory_anchor'
+  if (host === 'atrib.dev' || host.endsWith('.atrib.dev')) return 'system'
+  return null
+}
+
+function renderEventChip(eventType, creatorKey, eventTypeUri = null) {
+  if (eventType === 'extension') {
+    // Prefer the URI when graph-node served it: shows the actual leaf
+    // segment (e.g. "directory_anchor") rather than collapsing every
+    // non-byte-slotted type to one label.
+    if (typeof eventTypeUri === 'string' && eventTypeUri.startsWith('https://atrib.dev/v1/types/')) {
+      const leaf = eventTypeUri.slice('https://atrib.dev/v1/types/'.length)
+      return el('span', {
+        class: `chip event-${leaf}`,
+        title: `${eventTypeUri} (atrib normative type; pre-D056 records encoded as 0xFF)`,
+      }, leaf)
+    }
+    // /v1/recent only carries the byte. Use the signer's directory claim
+    // to recover the specific atrib-system type, falling back to a generic
+    // "atrib system" label for unknown atrib-namespace signers.
+    if (creatorKey) {
+      const kind = atribSystemSignerKind(creatorKey)
+      if (kind === 'directory_anchor') {
+        return el('span', {
+          class: 'chip event-directory_anchor',
+          title: 'directory_anchor record (§6.2.4). Pre-D056 record encoded with byte 0xFF; post-D056 records use byte 0x04.',
+        }, 'directory_anchor')
+      }
+      if (kind === 'system') {
+        return el('span', {
+          class: 'chip event-system',
+          title: 'atrib-namespace event_type without a dedicated byte slot in the log entry (§2.3.1 reserves 0x05-0xFE for future atrib normative additions). Open the record for the full URI.',
+        }, 'atrib system')
+      }
+    }
+  }
+  return el('span', { class: `chip event-${eventType || 'extension'}` }, eventType || 'extension')
+}
+
 // ─── Verification badges ─────────────────────────────────────────────────
 // For each entry surfaced in the feed:
 //   sig:      always OK (log only accepts sig-validated submissions)
@@ -1009,7 +1071,7 @@ function renderFeed(entries, withAnimation, treeSize = null) {
       ...entries.map((e, idx) => {
         const isNew = withAnimation && lastFeedTopHash !== null && idx === 0 && e.record_hash !== lastFeedTopHash
         return el('tr', { class: isNew ? 'new' : '' },
-          el('td', {}, el('span', { class: `chip event-${e.event_type}` }, e.event_type)),
+          el('td', {}, renderEventChip(e.event_type, e.creator_key)),
           el('td', {}, el('a', { href: `#/action/${e.record_hash}` },
             el('span', { class: 'mono' }, shorten(e.record_hash, 13, 4)),
           )),
@@ -1065,9 +1127,11 @@ window.loadOlder = loadOlder
 function populateQuickLinks(entries) {
   const wrap = document.getElementById('quick-links')
   if (!wrap || entries.length === 0) return
-  // Pick the freshest entry that has all three IDs populated (some
-  // records, e.g. directory_anchor extension entries, omit creator_key
-  // in the entry projection).
+  // Pick the freshest entry that has all three IDs populated. Defensive:
+  // every well-formed entry projection populates all three (record_hash +
+  // context_id + creator_key are required by §2.3.1 binary entry layout),
+  // but the filter guards against any future projection that drops a field
+  // from listing payloads.
   const linkable = entries.find(
     (e) => e && e.record_hash && e.context_id && e.creator_key,
   ) ?? entries[0]
@@ -1395,7 +1459,7 @@ async function renderSession(contextId) {
         )),
         el('tbody', {},
           ...graph.nodes.map(n => el('tr', {},
-            el('td', {}, el('span', { class: `chip event-${n.event_type || 'extension'}` }, n.event_type || 'extension')),
+            el('td', {}, renderEventChip(n.event_type, n.creator_key, n.event_type_uri)),
             el('td', {}, el('a', { href: `#/action/${n.id}` },
               el('span', { class: 'mono' }, shorten(n.id, 13, 4)),
             )),
@@ -1501,7 +1565,7 @@ async function renderAction(recordHash) {
     el('div', { class: 'panel-body' },
       el('dl', { class: 'kv' },
         el('dt', {}, 'event_type'),
-        el('dd', {}, el('span', { class: `chip event-${entry.event_type || 'extension'}` }, entry.event_type || '—')),
+        el('dd', {}, renderEventChip(entry.event_type, entry.creator_key)),
         el('dt', {}, 'identity'),
         el('dd', {}, entry.creator_key ? renderIdentityLabel(entry.creator_key, { short: false }) : '—'),
         el('dt', {}, 'session'),

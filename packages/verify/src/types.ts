@@ -24,7 +24,7 @@
  * preserved verbatim on `GraphNode.event_type_uri` for graph clients that
  * want the original URI.
  */
-export type EventType = 'tool_call' | 'transaction' | 'observation' | 'gap_node' | 'extension'
+export type EventType = 'tool_call' | 'transaction' | 'observation' | 'directory_anchor' | 'gap_node' | 'extension'
 
 /**
  * Map an attribution record's event_type URI to a graph-layer short label.
@@ -39,6 +39,8 @@ export function graphLabelFromEventTypeUri(uri: string): EventType {
       return 'transaction'
     case 'https://atrib.dev/v1/types/observation':
       return 'observation'
+    case 'https://atrib.dev/v1/types/directory_anchor':
+      return 'directory_anchor'
     default:
       return 'extension'
   }

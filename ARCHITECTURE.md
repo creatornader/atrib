@@ -89,7 +89,7 @@ struct AtribLogEntry {
   u8  creator_key[32]; // raw Ed25519 public key
   u8  context_id[16];  // raw bytes from 32-char hex context_id
   u64 timestamp_ms;    // big-endian Unix milliseconds
-  u8  event_type;      // 0x01 tool_call, 0x02 transaction, 0x03 observation, 0xFF extension URI
+  u8  event_type;      // 0x01 tool_call, 0x02 transaction, 0x03 observation, 0x04 directory_anchor (D056), 0xFF extension URI
 }
 // Total: 90 bytes
 ```

@@ -46,12 +46,15 @@ export interface DecodedToken {
 export const EVENT_TYPE_TOOL_CALL_URI = 'https://atrib.dev/v1/types/tool_call'
 export const EVENT_TYPE_TRANSACTION_URI = 'https://atrib.dev/v1/types/transaction'
 export const EVENT_TYPE_OBSERVATION_URI = 'https://atrib.dev/v1/types/observation'
+// Promoted by D056 (2026-04-30); emitted by directory operators per spec 6.2.4.
+export const EVENT_TYPE_DIRECTORY_ANCHOR_URI = 'https://atrib.dev/v1/types/directory_anchor'
 
 /** Atrib normative event_type URI set (spec 1.2.4). */
 export const NORMATIVE_EVENT_TYPE_URIS = new Set([
   EVENT_TYPE_TOOL_CALL_URI,
   EVENT_TYPE_TRANSACTION_URI,
   EVENT_TYPE_OBSERVATION_URI,
+  EVENT_TYPE_DIRECTORY_ANCHOR_URI,
 ] as const)
 
 /**

@@ -2381,6 +2381,59 @@ The URI migration ([D035](#d035-extensible-event_type-vocabulary-via-uri-typing)
 
 ---
 
+## D056: Promote `directory_anchor` to atrib-normative event_type (byte `0x04`)
+
+**Date:** 2026-04-30
+**Status:** Accepted
+
+**Context.** [§6.2.4](atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log) requires the directory operator to emit a `directory_anchor` record into the tlog after each operation, committing the directory's current root for downstream verifier consultation per [§6.3](atrib-spec.md#63-verifier-consultation-algorithm). The reference directory at `directory.atrib.dev` does this today: it signs records with `event_type: "https://atrib.dev/v1/types/directory_anchor"`. Until [D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04), the URI was not in the normative set, so [§2.3.1](atrib-spec.md#231-entry-serialization) required encoding it with `event_type = 0xFF` (extension). The explorer ([D054](#d054-unified-public-explorer-vs-per-service-admin-uis)) consequently labels these rows "extension," which is misleading: `directory_anchor` is atrib-system substrate behavior defined in the spec, not a third-party extension.
+
+This labeling artifact is symptomatic of a real spec gap: the URI is normatively defined and its emission is normatively required, but it lacked a byte slot. Verifiers running [§6.3](atrib-spec.md#63-verifier-consultation-algorithm) step 7 (AKD anchor consistency check) need to find directory_anchor records efficiently; without a byte slot, they have to read every extension record's content to decide whether it's a directory_anchor or some other extension URI.
+
+**Decision.** Promote `https://atrib.dev/v1/types/directory_anchor` to atrib's normative event_type vocabulary. Allocate byte `0x04` in the [§2.3.1](atrib-spec.md#231-entry-serialization) log entry encoding. Reserved range narrows from `0x04`–`0xFE` to `0x05`–`0xFE`.
+
+**Evaluation against [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary).**
+
+1. **Architecture-agnostic in practice.** Does NOT clear under the cross-category-adoption reading. Today the only emitter is atrib's own reference directory. This is the indicator that's weakest, but the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) text on indicator 4 explicitly admits "Atrib protocol load-bearing" as an alternative path, "rare and decisive." `directory_anchor` is the canonical example of that path.
+
+2. **Structurally distinct from existing normative types.** Holds. `directory_anchor` is not a `tool_call` (no caller-supplied arguments, no MCP tool invocation). Not a `transaction` (no commerce protocol detection). Not an `observation` (the directory is not "perceiving its environment"; it is committing its own state). The closest neighbor is `observation`, but `observation` carries "the agent received this from outside"; `directory_anchor` carries "this service committed its internal state at this moment." Different semantic shape.
+
+3. **Filterable benefit at the log-byte level.** Holds. [§6.3](atrib-spec.md#63-verifier-consultation-algorithm) step 7 (AKD consistency check) is a real verifier query that needs all directory_anchor records for a given directory key. Without a byte slot, verifiers fetch the content of every `0xFF` entry from the directory's `creator_key` and parse the URI. With a byte slot, the same query is a byte filter on the binary entry.
+
+4. **Atrib protocol load-bearing.** Holds, decisively. [§6.2.4](atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log) requires the emission. [§6.3](atrib-spec.md#63-verifier-consultation-algorithm) step 7 requires consumption. [§3.2.4](atrib-spec.md#324-edge-derivation-rules) graph derivation excludes `directory_anchor` from session edges (system commitments are not session participants). Three normative spec sections distinguish the type today.
+
+5. **Promotion is non-disruptive.** Holds. The URI does not change. Existing directory_anchor records (signed before the byte allocation, encoded as `0xFF`) remain valid: the URI in the record content is the authoritative type per [§2.3.1](atrib-spec.md#231-entry-serialization)'s "byte mapping is a fast-path filter; the authoritative type is the URI." New records get the new byte. Verifiers wanting complete directory_anchor queries during the transition window filter by URI (always works) rather than by byte (works only for post-promotion records). Once the pre-promotion records age out of operational interest, byte filtering suffices.
+
+Four of five indicators clear. Indicator 1 fails the literal cross-category reading but is moot because indicator 4's load-bearing branch holds, and [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) explicitly contemplates this case.
+
+**Alternatives considered.**
+
+1. *Leave as `0xFF` extension forever.* Rejected. The URI is in the atrib namespace and its emission is normatively required; encoding it identically to third-party extension URIs misrepresents the type and produces the misleading "extension" labeling in the explorer. Verifier filtering remains inefficient.
+
+2. *Fix the explorer label only, no spec change.* Rejected as the standalone fix. The explorer fix lands separately ([D054](#d054-unified-public-explorer-vs-per-service-admin-uis) update) and is correct on its own, but it papers over the underlying byte-encoding misclassification rather than fixing it. Both fixes ship together.
+
+3. *Promote in a batch with future system types (e.g., reserve `0x04`–`0x07` for "atrib system" types).* Rejected. [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) explicitly rejects pre-allocation and tier systems. Each promotion gets its own ADR; the next system type that needs a byte gets the next byte (`0x05`) when its own load-bearing case clears.
+
+4. *Re-encode pre-promotion records to update the byte from `0xFF` to `0x04`.* Rejected. The log is append-only; rewriting historical entries breaks immutability and inclusion proofs. The spec is explicit that the URI is the source of truth; transition-window mismatches are tolerable.
+
+**Consequences.**
+
+- *Spec ([§1.2.4](atrib-spec.md#124-event_type-values)).* Add `https://atrib.dev/v1/types/directory_anchor` to the normative URI table with byte `0x04` and a one-sentence semantic.
+- *Spec ([§2.3.1](atrib-spec.md#231-entry-serialization)).* Add row `0x04 = https://atrib.dev/v1/types/directory_anchor`. Narrow reserved range to `0x05`–`0xFE`.
+- *`packages/mcp/src/types.ts`.* Add `EVENT_TYPE_DIRECTORY_ANCHOR_URI` constant; include it in `NORMATIVE_EVENT_TYPE_URIS`.
+- *`packages/mcp/src/entry.ts`.* Add `EVENT_TYPE_DIRECTORY_ANCHOR = 0x04`; update `eventTypeUriToByte` mapping; update doc comment.
+- *`packages/verify/src/types.ts`.* Extend `EventType` union with `'directory_anchor'`; add case in `graphLabelFromEventTypeUri`. Graph nodes for directory_anchor records get the new short label.
+- *`services/log-node/src/server.ts`.* Decoder labels byte `0x04` as `'directory_anchor'`. `/v1/stats` `entries_by_event_type` gains a `directory_anchor` count.
+- *`services/graph-node`.* No code change required; the URI-to-label mapping flows through `@atrib/verify`'s helper.
+- *`services/directory-node`.* No code change. Already emits the URI.
+- *`apps/dashboard`.* Chip color and label flow naturally from the new short-label string. The `renderEventChip` "atrib system" fallback (added under [D054](#d054-unified-public-explorer-vs-per-service-admin-uis)) becomes redundant for directory_anchor records but stays as the safety net for any future atrib-system URI that lands before its own byte allocation.
+- *Existing records.* Pre-promotion directory_anchor records (encoded `0xFF`) remain valid. Verifiers wanting complete queries filter by URI rather than byte for the transition window.
+- *Conformance.* No `spec/conformance/2.3.1/` corpus exists yet. The spec change is small enough that the implementation tests in `packages/mcp/test/entry.test.ts` (existing) cover the regression risk; a corpus is a follow-up task if/when 2.3.1 gets formal vectors.
+
+**Reopening criteria.** None. Promotion is irreversible (per [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary): "atrib does not retire normative URIs; once promoted, they stay"). If the URI is later deemed unwise, it becomes deprecated (verifiers warn, accept) but never invalidated.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
