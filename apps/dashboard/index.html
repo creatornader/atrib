@@ -1000,7 +1000,7 @@ function renderLoadMore() {
   const remaining = feedTreeSize - feedEntries.length
   const btn = el('button', {
     class: 'load-more',
-    onclick: 'loadOlder()',
+    onclick: loadOlder,
   }, `load older (${remaining.toLocaleString()} more)`)
   wrap.replaceChildren(btn)
 }
