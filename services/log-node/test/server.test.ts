@@ -476,6 +476,22 @@ describe('GET /v1/recent', () => {
     const bigBody = await tooBig.json() as { entries: unknown[] }
     expect(bigBody.entries.length).toBeLessThanOrEqual(100)
   })
+
+  it('paginates older entries via offset', async () => {
+    for (let i = 0; i < 6; i++) await post(server.url, await makeSignedRecord())
+    const page1 = await fetch(`${server.url}/v1/recent?limit=3&offset=0`).then(r => r.json()) as {
+      tree_size: number; offset: number; entries: Array<{ index: number }>
+    }
+    const page2 = await fetch(`${server.url}/v1/recent?limit=3&offset=3`).then(r => r.json()) as {
+      tree_size: number; offset: number; entries: Array<{ index: number }>
+    }
+    expect(page1.offset).toBe(0)
+    expect(page2.offset).toBe(3)
+    expect(page1.entries.length).toBe(3)
+    expect(page2.entries.length).toBeGreaterThanOrEqual(1)
+    // page2's newest index must be older than page1's oldest index
+    expect(page2.entries[0]!.index).toBeLessThan(page1.entries.at(-1)!.index)
+  })
 })
 
 describe('GET /v1/lookup/<hex>', () => {
