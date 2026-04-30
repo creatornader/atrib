@@ -1017,7 +1017,7 @@ function renderFeed(entries, withAnimation, treeSize = null) {
           el('td', {}, el('a', { href: `#/session/${e.context_id}` },
             el('span', { class: 'mono' }, shorten(e.context_id, 8, 4)),
           )),
-          el('td', { class: 'shrink', title: isoTime(e.timestamp_ms) }, timeAgo(e.timestamp_ms)),
+          el('td', { class: 'shrink', title: isoTime(e.timestamp_ms), 'data-ts': String(e.timestamp_ms) }, timeAgo(e.timestamp_ms)),
           el('td', {}, renderVerifyBadges(e.creator_key)),
         )
       }),
@@ -1131,8 +1131,24 @@ function stopPolling() {
   if (pollHandle) { clearInterval(pollHandle); pollHandle = null }
 }
 
+// Independent ticker that re-renders any cell tagged with data-ts so
+// "Xs ago" labels don't go stale between polls. Runs every 10s globally
+// (cheap; just a querySelectorAll + textContent set per cell).
+// Independent of polling because rows stay in the DOM across polls.
+function tickRelativeTimes() {
+  const cells = document.querySelectorAll('[data-ts]')
+  cells.forEach((cell) => {
+    const ts = parseInt(cell.dataset.ts, 10)
+    if (Number.isFinite(ts)) cell.textContent = timeAgo(ts)
+  })
+}
+setInterval(tickRelativeTimes, 10000)
+
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && isOverviewRoute() && !pollHandle) startPolling()
+  // Also tick immediately when the tab becomes visible so the first
+  // glance shows fresh times rather than "5s ago" from minutes prior.
+  if (!document.hidden) tickRelativeTimes()
 })
 
 // ─── View header (per-view onboarding chrome) ────────────────────────────
@@ -1245,7 +1261,8 @@ async function renderIdentity(creatorKey) {
                   ? el('span', { class: 'badge ok' }, '✓')
                   : el('span', { class: 'badge dim' }, '—'),
               ),
-              el('td', { class: 'shrink' }, s.first_seen_ms ? timeAgo(s.first_seen_ms) : '—'),
+              el('td', { class: 'shrink', ...(s.first_seen_ms ? { 'data-ts': String(s.first_seen_ms) } : {}) },
+                s.first_seen_ms ? timeAgo(s.first_seen_ms) : '—'),
             )),
           ),
         ),
@@ -1383,8 +1400,14 @@ async function renderSession(contextId) {
               el('span', { class: 'mono' }, shorten(n.id, 13, 4)),
             )),
             el('td', {}, n.creator_key ? renderIdentityLabel(n.creator_key) : '—'),
-            el('td', { class: 'shrink', title: n.timestamp ? new Date(n.timestamp).toISOString() : '' },
-              n.timestamp ? timeAgo(typeof n.timestamp === 'number' ? n.timestamp : Date.parse(n.timestamp)) : '—'),
+            (() => {
+              const tsMs = n.timestamp ? (typeof n.timestamp === 'number' ? n.timestamp : Date.parse(n.timestamp)) : null
+              return el('td', {
+                class: 'shrink',
+                title: tsMs ? new Date(tsMs).toISOString() : '',
+                ...(tsMs ? { 'data-ts': String(tsMs) } : {}),
+              }, tsMs ? timeAgo(tsMs) : '—')
+            })(),
             el('td', {}, badgeForState(n.verification_state)),
           )),
         ),
