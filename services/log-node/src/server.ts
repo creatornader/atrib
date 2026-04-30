@@ -600,18 +600,23 @@ async function handleSubmit(
   // post-commit record bytes so any tampering between log and graph would
   // change the record_hash and be rejected by graph's verifyRecord step.
   if (graphFanoutEndpoint) {
-    fanoutToGraph(graphFanoutEndpoint, fullRecord, recordHashHex)
+    fanoutToGraph(graphFanoutEndpoint, fullRecord, recordHashHex, proof.log_index)
   }
 }
 
 const FANOUT_TIMEOUT_MS = 5000
 
-function fanoutToGraph(endpoint: string, record: AtribRecord, recordHashHex: string): void {
+function fanoutToGraph(endpoint: string, record: AtribRecord, recordHashHex: string, logIndex: number): void {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), FANOUT_TIMEOUT_MS)
   fetch(endpoint, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      // Carry the log_index so graph-node can apply revocation logic per §1.9.3.
+      // graph-node treats this header as advisory; missing = log_index null.
+      'x-atrib-log-index': String(logIndex),
+    },
     body: JSON.stringify(record),
     signal: ctrl.signal,
   }).then((r) => {

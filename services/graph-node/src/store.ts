@@ -10,12 +10,26 @@ import type { AtribRecord } from '@atrib/mcp'
 import type { GapNode } from './graph-builder.js'
 
 export interface RecordStore {
-  addRecord(record: AtribRecord): void
+  /**
+   * Add a record. logIndex is optional; when supplied (typically by
+   * log-node fanout via the x-atrib-log-index header), revocation
+   * semantics per §1.9.3 require it. When omitted, revocation cannot
+   * be applied to records signed by this creator_key.
+   */
+  addRecord(record: AtribRecord, logIndex?: number): void
   addGapNode(gapNode: GapNode): void
   getRecordsByContextId(contextId: string): AtribRecord[]
   getGapNodesByContextId(contextId: string): GapNode[]
   getSessionsByCreatorKey(creatorKey: string): SessionSummary[]
   hasContext(contextId: string): boolean
+  /**
+   * All records ingested across all contexts. Used to build the
+   * revocation registry (§1.9): key_revocation records can affect
+   * any session, so the registry must scan globally.
+   */
+  getAllRecords(): { record: AtribRecord; log_index: number | null }[]
+  /** log_index for a specific record_hash, or null if unknown. */
+  getLogIndex(recordHashHex: string): number | null
 }
 
 export interface SessionSummary {
@@ -35,12 +49,25 @@ export function createRecordStore(): RecordStore {
   // duplicates compound: every retry/replay/double-post produces a phantom
   // node in the graph, which §3.2.4 derivation then connects with extra edges.
   const seenRecordHashes = new Set<string>()
+  const logIndexByHash = new Map<string, number>()
+  // Insertion order is the iteration order; flat list mirrors what the log
+  // would return. Enables global scans (e.g. for the revocation registry).
+  const allRecords: { record: AtribRecord; recordHash: string }[] = []
 
   return {
-    addRecord(record: AtribRecord): void {
+    addRecord(record: AtribRecord, logIndex?: number): void {
       const recordHash = hexEncode(sha256(canonicalRecord(record)))
-      if (seenRecordHashes.has(recordHash)) return
+      if (seenRecordHashes.has(recordHash)) {
+        // If the record was previously ingested without a log_index but is
+        // now being re-ingested WITH one (e.g., backfill), record the index.
+        if (typeof logIndex === 'number' && !logIndexByHash.has(recordHash)) {
+          logIndexByHash.set(recordHash, logIndex)
+        }
+        return
+      }
       seenRecordHashes.add(recordHash)
+      if (typeof logIndex === 'number') logIndexByHash.set(recordHash, logIndex)
+      allRecords.push({ record, recordHash })
 
       const list = byContext.get(record.context_id) ?? []
       list.push(record)
@@ -89,6 +116,17 @@ export function createRecordStore(): RecordStore {
 
     hasContext(contextId: string): boolean {
       return byContext.has(contextId) || gapsByContext.has(contextId)
+    },
+
+    getAllRecords(): { record: AtribRecord; log_index: number | null }[] {
+      return allRecords.map(({ record, recordHash }) => ({
+        record,
+        log_index: logIndexByHash.get(recordHash) ?? null,
+      }))
+    },
+
+    getLogIndex(recordHashHex: string): number | null {
+      return logIndexByHash.get(recordHashHex) ?? null
     },
   }
 }

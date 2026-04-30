@@ -29,7 +29,9 @@ import { keygen, printKeypair } from './keygen.js'
 import { base64urlDecode, getPublicKey, base64urlEncode } from '@atrib/mcp'
 import { signClaim } from '@atrib/directory'
 import type { IdentityClaim, CapabilityEnvelope } from '@atrib/directory'
+import { signRecord, genesisChainRoot, sha256, hexEncode, canonicalRecord } from '@atrib/mcp'
 import { readFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
 
 const VERSION = '0.2.0'
 
@@ -46,6 +48,13 @@ Usage:
 
   atrib delete-key --keychain [--service NAME]
       Remove a Keychain entry.
+
+  atrib revoke {--keychain [--service NAME] | --key-file PATH} --reason {rotation|retirement|compromise} [--successor PUBKEY] [--log URL] [--context-id HEX] [--dry-run]
+      Submit a §1.9 key_revocation record signed by the key being retired.
+      --reason rotation requires --successor (the new active key).
+      The retired key remains valid for any record with log_index < the
+      revocation's log_index; later records signed by it are flagged
+      'revoked_after_revocation' by §1.9.3-aware verifiers.
 
   atrib publish-claim {--keychain [--service NAME] | --key-file PATH} [options]
       Publish an IdentityClaim (§6.1) to a directory, optionally with a
@@ -87,6 +96,12 @@ interface Flags {
   keyFile?: string
   // publish-claim flags
   displayName?: string
+  // revoke flags
+  reason?: string
+  successor?: string
+  log?: string
+  contextId?: string
+  // publish-claim flags continued
   organization?: string
   email?: string
   url?: string
@@ -107,6 +122,10 @@ function parseFlags(args: string[]): Flags {
   const stringFlags: Array<{ flag: string; key: keyof Flags }> = [
     { flag: '--service', key: 'service' },
     { flag: '--key-file', key: 'keyFile' },
+    { flag: '--reason', key: 'reason' },
+    { flag: '--successor', key: 'successor' },
+    { flag: '--log', key: 'log' },
+    { flag: '--context-id', key: 'contextId' },
     { flag: '--display-name', key: 'displayName' },
     { flag: '--organization', key: 'organization' },
     { flag: '--email', key: 'email' },
@@ -246,6 +265,78 @@ async function loadSigningSeed(flags: Flags): Promise<Uint8Array> {
   throw new Error('publish-claim needs --keychain (with optional --service NAME) or --key-file PATH.')
 }
 
+async function runRevoke(flags: Flags): Promise<void> {
+  const reason = flags.reason
+  if (reason !== 'rotation' && reason !== 'retirement' && reason !== 'compromise') {
+    throw new Error('--reason must be one of: rotation, retirement, compromise')
+  }
+  if (reason === 'rotation' && !flags.successor) {
+    throw new Error('--reason rotation requires --successor PUBKEY (43-char base64url)')
+  }
+  if (flags.successor && !/^[A-Za-z0-9_-]{43}$/.test(flags.successor)) {
+    throw new Error('--successor must be a 43-char base64url Ed25519 pubkey')
+  }
+  const seedBytes = await loadSigningSeed(flags)
+  const pub = await getPublicKey(seedBytes)
+  const creatorKey = base64urlEncode(pub)
+
+  // Per §1.9.2: standard revocation is signed by the key being retired.
+  // creator_key === revoked_key in that case. Compromise + emergency-key
+  // path is V2 — not exposed here.
+  const revokedKey = creatorKey
+
+  // Use the supplied --context-id or generate a fresh one. Revocation
+  // records form their own session for traceability per §1.9.
+  const contextId = flags.contextId ?? randomBytes(16).toString('hex')
+  if (!/^[0-9a-f]{32}$/.test(contextId)) {
+    throw new Error('--context-id must be 32 hex chars')
+  }
+
+  const unsigned = {
+    spec_version: 'atrib/1.0' as const,
+    content_id: 'sha256:' + hexEncode(sha256(Buffer.from(`revoke:${revokedKey}:${reason}:${Date.now()}`))),
+    creator_key: creatorKey,
+    chain_root: genesisChainRoot(contextId),
+    event_type: 'https://atrib.dev/v1/types/key_revocation',
+    context_id: contextId,
+    timestamp: Date.now(),
+    revoked_key: revokedKey,
+    revocation_reason: reason,
+    ...(flags.successor ? { successor_key: flags.successor } : {}),
+    signature: '',
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const signed = await signRecord(unsigned as any, seedBytes)
+  seedBytes.fill(0)
+
+  const recordHash = 'sha256:' + hexEncode(sha256(canonicalRecord(signed)))
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if ((flags as any).dryRun) {
+    console.log(JSON.stringify(signed, null, 2))
+    return
+  }
+
+  const logEndpoint = flags.log ?? 'https://log.atrib.dev/v1'
+  const submitUrl = `${logEndpoint.replace(/\/$/, '')}/entries`
+  const res = await fetch(submitUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(signed),
+  })
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  if (!res.ok) {
+    throw new Error(`log submit failed (${res.status}): ${JSON.stringify(body)}`)
+  }
+  console.log(`# Revoked key ${revokedKey}`)
+  console.log(`# reason: ${reason}${flags.successor ? `, successor: ${flags.successor}` : ''}`)
+  console.log(`# log_index: ${String(body.log_index)}`)
+  console.log(`# record_hash: ${recordHash}`)
+  console.log(`# context_id: ${contextId}`)
+  console.log(`# Records signed by ${revokedKey} with log_index >= ${String(body.log_index)} are now`)
+  console.log(`# flagged 'revoked_after_revocation' by §1.9.3-aware verifiers.`)
+}
+
 async function runPublishClaim(flags: Flags): Promise<void> {
   const seedBytes = await loadSigningSeed(flags)
   const pub = await getPublicKey(seedBytes)
@@ -347,6 +438,10 @@ async function main(): Promise<void> {
     }
     if (command === 'publish-claim') {
       await runPublishClaim(flags)
+      return
+    }
+    if (command === 'revoke') {
+      await runRevoke(flags)
       return
     }
   } catch (err) {

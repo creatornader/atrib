@@ -8,6 +8,7 @@ import {
   getPublicKey,
   genesisChainRoot,
 } from '@atrib/mcp'
+import type { AtribRecord } from '@atrib/mcp'
 
 const TEST_KEY = new Uint8Array(32).fill(42)
 const CONTEXT_ID = 'b'.repeat(32)
@@ -117,6 +118,65 @@ describe('graph-node server (section 3.4)', () => {
       body: JSON.stringify({ not: 'a record' }),
     })
     expect(res.status).toBe(400)
+  })
+
+  // §1.9: revocation flips post-revocation records to revoked_after_revocation
+  it('flags post-revocation records via /v1/graph (Phase 3.4)', async () => {
+    // Submit two records by Alice with explicit log_index headers, then a
+    // key_revocation by Alice retiring her own key, then another record by
+    // Alice. The post-revocation record should be flagged.
+    const aliceCtx = 'd'.repeat(32)
+    async function postWithIndex(record: AtribRecord, idx: number) {
+      const r = await fetch(`${url}/v1/ingest`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-atrib-log-index': String(idx) },
+        body: JSON.stringify(record),
+      })
+      if (!r.ok) {
+        const text = await r.text()
+        throw new Error(`ingest failed (${r.status}) for idx=${idx}: ${text}`)
+      }
+    }
+    await postWithIndex(await makeRecord({ context_id: aliceCtx, timestamp: 1000, content_id: `sha256:${'1'.repeat(64)}` }), 100)
+    await postWithIndex(await makeRecord({ context_id: aliceCtx, timestamp: 2000, content_id: `sha256:${'2'.repeat(64)}` }), 101)
+
+    // Synthesize a key_revocation record. The extra fields (revoked_key,
+    // revocation_reason) must be present BEFORE signing so the canonical
+    // bytes include them; otherwise the signature won't verify.
+    const pk = await getPublicKey(TEST_KEY)
+    const revocationUnsigned = {
+      spec_version: 'atrib/1.0' as const,
+      content_id: `sha256:${'r'.repeat(64)}`,
+      creator_key: base64urlEncode(pk),
+      chain_root: genesisChainRoot(aliceCtx),
+      event_type: 'https://atrib.dev/v1/types/key_revocation',
+      context_id: aliceCtx,
+      timestamp: 3000,
+      // §1.9.1 fields placed at lex order: r > c (creator_key), r > e (event_type),
+      // r > i (informed_by), r < s (signature). canonicalRecord (JCS) sorts.
+      revoked_key: base64urlEncode(pk),
+      revocation_reason: 'rotation',
+      signature: '',
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const revocation = await signRecord(revocationUnsigned as any, TEST_KEY)
+    await postWithIndex(revocation as AtribRecord, 102)
+
+    // A post-revocation record by Alice
+    await postWithIndex(await makeRecord({ context_id: aliceCtx, timestamp: 4000, content_id: `sha256:${'4'.repeat(64)}` }), 103)
+
+    const res = await fetch(`${url}/v1/graph/${aliceCtx}`)
+    expect(res.ok).toBe(true)
+    const body = (await res.json()) as { nodes: Array<{ log_index: number | null; verification_state: string; event_type: string }> }
+    const postRevoc = body.nodes.find((n) => n.log_index === 103)!
+    const preRevoc1 = body.nodes.find((n) => n.log_index === 100)!
+    const preRevoc2 = body.nodes.find((n) => n.log_index === 101)!
+    const revocNode = body.nodes.find((n) => n.log_index === 102)!
+    expect(postRevoc.verification_state).toBe('revoked_after_revocation')
+    expect(preRevoc1.verification_state).toBe('signature_valid')
+    expect(preRevoc2.verification_state).toBe('signature_valid')
+    // The revocation record itself doesn't flag itself
+    expect(revocNode.verification_state).toBe('signature_valid')
   })
 
   // D054: browser-based explorer reads

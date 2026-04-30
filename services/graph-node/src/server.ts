@@ -16,6 +16,8 @@ import { validateSubmission, verifyRecord } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import { buildGraph } from './graph-builder.js'
 import { createRecordStore, type RecordStore } from './store.js'
+import { buildRevocationRegistry } from '@atrib/verify'
+import type { MinimalRecord } from '@atrib/verify'
 
 export interface GraphServerHandle {
   url: string
@@ -36,7 +38,7 @@ export async function bindGraphServer(
     // browser cross-origin reads are explicitly permitted.
     res.setHeader('access-control-allow-origin', '*')
     res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS')
-    res.setHeader('access-control-allow-headers', 'content-type')
+    res.setHeader('access-control-allow-headers', 'content-type, x-atrib-log-index')
     if (req.method === 'OPTIONS') {
       res.statusCode = 204
       res.end()
@@ -118,6 +120,37 @@ async function handleRequest(
   sendJson(res, 404, { error: 'not found' })
 }
 
+/**
+ * Build a §1.9 revocation registry from every record the store has seen.
+ * key_revocation records can affect any session (a key revoked in one
+ * session retires it for ALL sessions), so the scan must be global.
+ */
+function buildRegistry(store: RecordStore): ReturnType<typeof buildRevocationRegistry> {
+  const all = store.getAllRecords()
+  // The store holds AtribRecord objects, but key_revocation records
+  // carry extra fields (revoked_key, revocation_reason, successor_key,
+  // emergency_signed_by) that aren't on the standard AtribRecord type.
+  // Cast to MinimalRecord shape for registry building.
+  const minimal: MinimalRecord[] = all.map(({ record, log_index }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = record as any
+    return {
+      event_type_uri: r.event_type ?? null,
+      creator_key: r.creator_key ?? null,
+      log_index,
+      revoked_key: r.revoked_key,
+      revocation_reason: r.revocation_reason,
+      successor_key: r.successor_key,
+      emergency_signed_by: r.emergency_signed_by,
+    }
+  })
+  return buildRevocationRegistry(minimal)
+}
+
+function logIndexLookup(store: RecordStore): (hashHex: string) => number | null {
+  return (hashHex: string) => store.getLogIndex(hashHex)
+}
+
 async function handleGraph(
   res: ServerResponse,
   store: RecordStore,
@@ -133,6 +166,8 @@ async function handleGraph(
   const graph = await buildGraph(records, gapNodes, {
     includeGapNodes: params.get('include_gap_nodes') !== 'false',
     includeCrossSession: params.get('include_cross_session') !== 'false',
+    revocations: buildRegistry(store),
+    logIndexLookup: logIndexLookup(store),
   })
 
   sendJson(res, 200, graph)
@@ -150,7 +185,10 @@ async function handleNodes(
 
   const records = store.getRecordsByContextId(contextId)
   const gapNodes = store.getGapNodesByContextId(contextId)
-  const graph = await buildGraph(records, gapNodes)
+  const graph = await buildGraph(records, gapNodes, {
+    revocations: buildRegistry(store),
+    logIndexLookup: logIndexLookup(store),
+  })
 
   let nodes = graph.nodes
 
@@ -193,7 +231,10 @@ async function handleTransaction(
   }
 
   const records = store.getRecordsByContextId(contextId)
-  const graph = await buildGraph(records, [])
+  const graph = await buildGraph(records, [], {
+    revocations: buildRegistry(store),
+    logIndexLookup: logIndexLookup(store),
+  })
   const txNode = graph.nodes.find((n) => n.event_type === 'transaction')
 
   if (!txNode) {
@@ -259,7 +300,17 @@ async function handleIngest(
     return sendProblem(res, 400, 'signature-invalid', 'Ed25519 signature verification failed', '/v1/ingest')
   }
 
-  store.addRecord(record)
+  // x-atrib-log-index: optional, advisory. log-node sends it on fanout
+  // (POST /v1/ingest). When present, graph-node uses it to apply
+  // revocation logic per §1.9.3. When absent, the record's log_index
+  // is null and revocation cannot be applied to records signed by
+  // this creator_key.
+  const headerIdx = req.headers['x-atrib-log-index']
+  let logIndex: number | undefined
+  if (typeof headerIdx === 'string' && /^\d+$/.test(headerIdx)) {
+    logIndex = parseInt(headerIdx, 10)
+  }
+  store.addRecord(record, logIndex)
   sendJson(res, 200, { ok: true })
 }
 

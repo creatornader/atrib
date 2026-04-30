@@ -61,7 +61,20 @@ export type EdgeType =
   | 'CONVERGES_ON'
   | 'CROSS_SESSION'
 
-export type VerificationState = 'unsigned' | 'signature_valid' | 'log_committed' | 'witnessed'
+export type VerificationState =
+  | 'unsigned'
+  | 'signature_valid'
+  | 'log_committed'
+  | 'witnessed'
+  /**
+   * Per spec §1.9.3: a record signed by a key that was retired before
+   * the record's log_index. The signature is still cryptographically
+   * valid, but the key was revoked at the moment of signing, so the
+   * record MUST NOT contribute to attribution calculations (§4.6).
+   * Verifiers carrying a revocation registry annotate records with this
+   * state when (creator_key, log_index) falls after a key_revocation.
+   */
+  | 'revoked_after_revocation'
 
 /** A node in the attribution graph (§3.5.2). */
 export interface GraphNode {
