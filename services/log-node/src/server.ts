@@ -193,10 +193,13 @@ async function handleRequest(
   // GET /v1/recent — newest N decoded entries (default 20, max 100). Powers
   // the public explorer's activity feed. Non-normative operator-visibility
   // helper, parallel to /v1/stats; not part of spec §2.5.
+  // ?offset=N skips the N most-recent entries — lets the dashboard paginate
+  // backward via repeated calls without re-shaping the API.
   if (req.method === 'GET' && req.url?.startsWith('/v1/recent')) {
     const params = new URL(req.url, 'http://localhost').searchParams
     const limit = Math.min(Math.max(parseInt(params.get('limit') ?? '20', 10) || 20, 1), 100)
-    return handleRecent(res, tree, limit)
+    const offset = Math.max(parseInt(params.get('offset') ?? '0', 10) || 0, 0)
+    return handleRecent(res, tree, limit, offset)
   }
 
   // GET /v1/lookup/<hex> — find an entry by its record_hash (32 bytes hex).
@@ -452,17 +455,19 @@ function handleByCreator(res: ServerResponse, tree: MerkleTree, creatorKey: stri
   sendJson(res, 200, { creator_key: creatorKey, count: list.length, sessions: list })
 }
 
-function handleRecent(res: ServerResponse, tree: MerkleTree, limit: number): void {
+function handleRecent(res: ServerResponse, tree: MerkleTree, limit: number, offset: number = 0): void {
   const size = tree.size
-  const start = Math.max(0, size - limit)
+  // Newest-first window: skip the `offset` most-recent entries, then take `limit`.
+  const end = Math.max(0, size - offset)
+  const start = Math.max(0, end - limit)
   const entries: ReturnType<typeof decodeEntry>[] = []
-  // Iterate newest-first by walking from size-1 down to start.
-  for (let i = size - 1; i >= start; i--) {
+  for (let i = end - 1; i >= start; i--) {
     entries.push(decodeEntry(tree.entryBytes(i), i))
   }
   res.setHeader('cache-control', 'public, max-age=10')
   sendJson(res, 200, {
     tree_size: size,
+    offset,
     returned: entries.length,
     entries,
   })

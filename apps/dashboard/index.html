@@ -328,6 +328,19 @@
 
   /* ─── Activity feed ──────────────────────────────────────────────────── */
 
+  .load-more {
+    background: var(--surface-2);
+    color: var(--text-2);
+    border: 1px solid var(--border);
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font: 500 12px/1 var(--font-sans);
+    letter-spacing: 0.02em;
+    transition: all 120ms ease;
+  }
+  .load-more:hover { background: var(--surface-hover); color: var(--text); border-color: var(--accent); }
+
   .feed-wrap { background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius); overflow: hidden; }
   .feed-head {
     padding: 14px 20px;
@@ -859,6 +872,7 @@ async function renderOverview() {
     el('div', { id: 'feed-body' },
       el('div', { class: 'empty' }, 'loading recent activity…'),
     ),
+    el('div', { id: 'feed-loadmore', style: 'margin-top: 12px; text-align: center;' }),
   ))
 
   clearAndRender(root)
@@ -889,7 +903,7 @@ async function renderOverview() {
     document.getElementById('feed-meta').textContent = 'empty'
   } else {
     await resolveIdentities(recent.entries.map(e => e.creator_key))
-    renderFeed(recent.entries, false)
+    renderFeed(recent.entries, false, recent.tree_size ?? null)
     populateQuickLinks(recent.entries)
   }
 
@@ -931,11 +945,20 @@ function updatePulseStrip(stats, checkpoint) {
   )
 }
 
-function renderFeed(entries, withAnimation) {
+// Module-level state so renderFeed + load-more can compose without re-fetching.
+let feedEntries = []
+let feedTreeSize = 0
+
+function renderFeed(entries, withAnimation, treeSize = null) {
   const body = document.getElementById('feed-body')
   if (!body) return
+  feedEntries = entries
+  if (treeSize !== null) feedTreeSize = treeSize
   const meta = document.getElementById('feed-meta')
-  if (meta) meta.textContent = `${entries.length} most recent`
+  if (meta) {
+    const totalSuffix = feedTreeSize > 0 ? ` of ${feedTreeSize.toLocaleString()}` : ''
+    meta.textContent = `showing ${entries.length}${totalSuffix} signed actions, newest first`
+  }
 
   const tbl = el('table', { class: 'feed' },
     el('thead', {}, el('tr', {},
@@ -966,7 +989,42 @@ function renderFeed(entries, withAnimation) {
   )
   body.replaceChildren(tbl)
   if (entries.length > 0) lastFeedTopHash = entries[0].record_hash
+  renderLoadMore()
 }
+
+function renderLoadMore() {
+  const wrap = document.getElementById('feed-loadmore')
+  if (!wrap) return
+  const haveMore = feedTreeSize > feedEntries.length
+  if (!haveMore) { wrap.replaceChildren(); return }
+  const remaining = feedTreeSize - feedEntries.length
+  const btn = el('button', {
+    class: 'load-more',
+    onclick: 'loadOlder()',
+  }, `load older (${remaining.toLocaleString()} more)`)
+  wrap.replaceChildren(btn)
+}
+
+async function loadOlder() {
+  const wrap = document.getElementById('feed-loadmore')
+  if (wrap) wrap.replaceChildren(el('span', { class: 'meta' }, 'loading…'))
+  const ep = endpoints()
+  // Pause polling while we paginate so the live tail doesn't race with our offset window.
+  stopPolling()
+  const offset = feedEntries.length
+  const more = await fetchMaybe(`${ep.log}/recent?limit=50&offset=${offset}`)
+  if (more._error || !more.entries || more.entries.length === 0) {
+    if (wrap) wrap.replaceChildren(
+      el('span', { class: 'meta' }, more._error || 'no more entries'),
+    )
+    if (isOverviewRoute()) startPolling()
+    return
+  }
+  await resolveIdentities(more.entries.map(e => e.creator_key))
+  renderFeed([...feedEntries, ...more.entries], false, more.tree_size ?? feedTreeSize)
+  if (isOverviewRoute()) startPolling()
+}
+window.loadOlder = loadOlder
 
 function populateQuickLinks(entries) {
   const wrap = document.getElementById('quick-links')
@@ -1015,13 +1073,18 @@ function startPolling() {
     updatePulseStrip(stats, checkpoint)
     if (recent._error || !recent.entries) return
     if (recent.entries.length === 0) return
-    if (recent.entries[0].record_hash === lastFeedTopHash) {
-      const meta = document.getElementById('feed-meta')
-      if (meta) meta.textContent = `${recent.entries.length} most recent · synced just now`
-      return
+    if (recent.entries[0].record_hash === lastFeedTopHash) return
+    // Prepend any newly-arrived entries (those above lastFeedTopHash) instead
+    // of replacing the whole feed — preserves the user's loaded-older state.
+    const knownTop = lastFeedTopHash
+    const newOnes = []
+    for (const e of recent.entries) {
+      if (e.record_hash === knownTop) break
+      newOnes.push(e)
     }
-    await resolveIdentities(recent.entries.map(e => e.creator_key))
-    renderFeed(recent.entries, true)
+    if (newOnes.length === 0) return
+    await resolveIdentities(newOnes.map(e => e.creator_key))
+    renderFeed([...newOnes, ...feedEntries], true, recent.tree_size ?? feedTreeSize)
   }, POLL_INTERVAL_MS)
 }
 
