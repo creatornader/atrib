@@ -9,8 +9,9 @@ describe('validateSubmission (§2.6.1 Steps 2-5)', () => {
     timestamp: Date.now(),
     context_id: '00112233445566778899aabbccddeeff',
     creator_key: 'somekey',
-    chain_root: 'sha256:abc',
-    content_id: 'sha256:def',
+    // Both fields must match sha256:<64-hex> per §1.2.3 + §1.2.5.
+    chain_root: 'sha256:' + 'a'.repeat(64),
+    content_id: 'sha256:' + 'b'.repeat(64),
     signature: 'somesig',
   }
 
@@ -20,6 +21,34 @@ describe('validateSubmission (§2.6.1 Steps 2-5)', () => {
 
   it('rejects wrong spec_version', () => {
     expect(validateSubmission({ ...valid, spec_version: 'wrong' as any }).ok).toBe(false)
+  })
+
+  // T13 (Phase 5): malformed chain_root per spec §1.2.3
+  it('rejects empty chain_root', () => {
+    const r = validateSubmission({ ...valid, chain_root: '' })
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/chain_root/)
+  })
+
+  it('rejects chain_root without sha256: prefix', () => {
+    const r = validateSubmission({ ...valid, chain_root: 'a'.repeat(64) })
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/chain_root/)
+  })
+
+  it('rejects chain_root with wrong digest length', () => {
+    expect(validateSubmission({ ...valid, chain_root: 'sha256:abc' }).ok).toBe(false)
+    expect(validateSubmission({ ...valid, chain_root: 'sha256:' + 'a'.repeat(63) }).ok).toBe(false)
+    expect(validateSubmission({ ...valid, chain_root: 'sha256:' + 'a'.repeat(65) }).ok).toBe(false)
+  })
+
+  it('rejects chain_root with uppercase hex (canonical is lowercase)', () => {
+    expect(validateSubmission({ ...valid, chain_root: 'sha256:' + 'A'.repeat(64) }).ok).toBe(false)
+  })
+
+  it('rejects content_id with the same family of malformations', () => {
+    expect(validateSubmission({ ...valid, content_id: 'sha256:abc' }).ok).toBe(false)
+    expect(validateSubmission({ ...valid, content_id: 'wrongprefix:' + 'a'.repeat(64) }).ok).toBe(false)
   })
 
   it('rejects malformed event_type (bare token, not absolute URI)', () => {
