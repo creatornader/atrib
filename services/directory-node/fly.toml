@@ -34,3 +34,8 @@ primary_region = 'iad'
   [checks.health]
     port = 3300
     type = 'http'
+    method = 'GET'
+    path = '/v6/anchor'
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '15s'
