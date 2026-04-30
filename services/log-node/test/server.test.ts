@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { request as httpRequest, type IncomingMessage } from 'node:http'
 import * as ed from '@noble/ed25519'
 import { sha512, sha256 } from '@noble/hashes/sha2.js'
 import { signRecord, hexEncode } from '@atrib/mcp'
@@ -443,5 +444,45 @@ describe('GET /dashboard', () => {
     const b = await fetch(`${server.url}/dashboard/`)
     expect(a.status).toBe(200)
     expect(b.status).toBe(200)
+  })
+
+  it('serves dashboard at root when Host=explore.atrib.dev (D054)', async () => {
+    // Node fetch silently drops the Host header; use node:http to set it.
+    const u = new URL(server.url)
+    const got = await new Promise<{ status: number; ct: string; body: string }>((resolve, reject) => {
+      const req = httpRequest({
+        method: 'GET', hostname: u.hostname, port: u.port, path: '/',
+        headers: { host: 'explore.atrib.dev' },
+      }, (res: IncomingMessage) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => resolve({
+          status: res.statusCode ?? 0,
+          ct: res.headers['content-type'] ?? '',
+          body: Buffer.concat(chunks).toString('utf-8'),
+        }))
+      })
+      req.on('error', reject)
+      req.end()
+    })
+    expect(got.status).toBe(200)
+    expect(got.ct).toContain('text/html')
+    expect(got.body).toMatch(/<!doctype html>/i)
+  })
+
+  it('returns API 404 at root when Host=log.atrib.dev', async () => {
+    const u = new URL(server.url)
+    const got = await new Promise<number>((resolve, reject) => {
+      const req = httpRequest({
+        method: 'GET', hostname: u.hostname, port: u.port, path: '/',
+        headers: { host: 'log.atrib.dev' },
+      }, (res: IncomingMessage) => {
+        res.resume()
+        resolve(res.statusCode ?? 0)
+      })
+      req.on('error', reject)
+      req.end()
+    })
+    expect(got).toBe(404)
   })
 })
