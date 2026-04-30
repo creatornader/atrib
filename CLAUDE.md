@@ -21,7 +21,7 @@ atrib/
   README.md                    # Public-facing project description (customer entry point)
   CLAUDE.md                    # THIS FILE: hub doc, conventions, invariants
   atrib-spec.md                # The single source of truth for the protocol
-  DECISIONS.md                 # Architectural decision log (D001-D055; D040 reserved for the @atrib/recall harness ADR).
+  DECISIONS.md                 # Architectural decision log (D001-D055; D040 reserved for the @atrib/recall harness ADR). A "Pending decisions" section at the end (forward-looking pattern) tracks forward-looking decisions awaiting action (P002+).
   ARCHITECTURE.md              # Technical architecture overview: trust model, protocol layers, design decisions
   PRIOR-ART.md                 # Prior art & standards map: every spec/protocol atrib builds on, organized by layer
   METRICS.md                   # Tiered metrics framework + lifecycle states + quarterly evolution review for the dogfood experiment
@@ -42,6 +42,8 @@ atrib/
         vercel-ai-sdk/         # createMCPClient + AI Gateway example
         langchain-js/          # MultiServerMCPClient + loadMcpTools example
   policies/                     # Attribution policy templates and guide (6 templates + README)
+  skills/
+    atrib/SKILL.md             # The atrib practice doc, agent-facing guidance for using atrib from the inside out (memory, reasoning, getting smarter over time). Source of truth; symlinked to ~/.claude/skills/atrib/SKILL.md so any Claude Code session anywhere on the operator's machine discovers it.
   apps/
     dashboard/                  # Public explorer (D054 option 1): single-file HTML/CSS/JS, no build step. Composes log + graph + directory read APIs into 5 views (overview, identity, session, action, anchoring). Defaults to https://log.atrib.dev / graph.atrib.dev / directory.atrib.dev; URL params override for local services.
   services/
