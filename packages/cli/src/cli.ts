@@ -6,16 +6,14 @@
  *
  * Subcommands:
  *   keygen [--keychain] [--service NAME]    Generate an Ed25519 keypair.
- *                                            Prints ATRIB_PRIVATE_KEY +
- *                                            ATRIB_PUBLIC_KEY by default.
- *                                            With --keychain, stores the seed
- *                                            in macOS Keychain and prints
- *                                            only the public key.
- *   export-pubkey --keychain [--service NAME]
- *                                            Read the seed from Keychain and
- *                                            print only the derived public
- *                                            key.
+ *   export-pubkey --keychain [--service NAME]   Print the pubkey for a Keychain entry.
  *   delete-key --keychain [--service NAME]   Remove a Keychain entry.
+ *   publish-claim --keychain [--service NAME] [--display-name NAME] [--organization ORG] [--email EMAIL] [--url URL]
+ *                  [--directory URL] [--capabilities-file PATH] [--tool-names CSV] [--event-types CSV]
+ *                  [--max-amount-currency USD --max-amount-value 100] [--counterparties CSV] [--expires-at ISO8601]
+ *                                            Publish an IdentityClaim (§6.1) to the
+ *                                            directory, optionally with a §6.7 capability
+ *                                            envelope. Reads the seed from Keychain.
  */
 
 import {
@@ -29,6 +27,9 @@ import {
 } from './keychain.js'
 import { keygen, printKeypair } from './keygen.js'
 import { base64urlDecode, getPublicKey, base64urlEncode } from '@atrib/mcp'
+import { signClaim } from '@atrib/directory'
+import type { IdentityClaim, CapabilityEnvelope } from '@atrib/directory'
+import { readFileSync } from 'node:fs'
 
 const VERSION = '0.2.0'
 
@@ -46,6 +47,27 @@ Usage:
   atrib delete-key --keychain [--service NAME]
       Remove a Keychain entry.
 
+  atrib publish-claim {--keychain [--service NAME] | --key-file PATH} [options]
+      Publish an IdentityClaim (§6.1) to a directory, optionally with a
+      §6.7 capability envelope (D051). Reads the signing seed from
+      Keychain or a base64url-encoded file. Subject options:
+          --display-name NAME      Human-readable name (most common)
+          --organization ORG       Organization name
+          --email EMAIL            Contact email
+          --url URL                Homepage URL
+          --handle HANDLE          Social handle (e.g., @atrib)
+      Capability envelope options (all optional):
+          --capabilities-file PATH JSON file with the full envelope
+          --tool-names CSV         Comma-separated allowed tool names
+          --event-types CSV        Comma-separated allowed event types
+          --counterparties CSV     Comma-separated counterparty keys
+          --max-amount-currency C  Currency code (e.g., USD)
+          --max-amount-value N     Numeric amount (requires --max-amount-currency)
+          --expires-at ISO8601     Capability expiration (e.g., 2027-01-01T00:00:00Z)
+      Where to publish:
+          --directory URL          Default: https://directory.atrib.dev/v6
+          --dry-run                Print the signed claim without POSTing
+
   atrib help                  Show this help message
   atrib --version             Show version
 
@@ -62,21 +84,61 @@ Notes:
 interface Flags {
   keychain: boolean
   service?: string
+  keyFile?: string
+  // publish-claim flags
+  displayName?: string
+  organization?: string
+  email?: string
+  url?: string
+  handle?: string
+  directory?: string
+  capabilitiesFile?: string
+  toolNames?: string
+  eventTypes?: string
+  counterparties?: string
+  maxAmountCurrency?: string
+  maxAmountValue?: string
+  expiresAt?: string
+  dryRun?: boolean
 }
 
 function parseFlags(args: string[]): Flags {
   const flags: Flags = { keychain: false }
+  const stringFlags: Array<{ flag: string; key: keyof Flags }> = [
+    { flag: '--service', key: 'service' },
+    { flag: '--key-file', key: 'keyFile' },
+    { flag: '--display-name', key: 'displayName' },
+    { flag: '--organization', key: 'organization' },
+    { flag: '--email', key: 'email' },
+    { flag: '--url', key: 'url' },
+    { flag: '--handle', key: 'handle' },
+    { flag: '--directory', key: 'directory' },
+    { flag: '--capabilities-file', key: 'capabilitiesFile' },
+    { flag: '--tool-names', key: 'toolNames' },
+    { flag: '--event-types', key: 'eventTypes' },
+    { flag: '--counterparties', key: 'counterparties' },
+    { flag: '--max-amount-currency', key: 'maxAmountCurrency' },
+    { flag: '--max-amount-value', key: 'maxAmountValue' },
+    { flag: '--expires-at', key: 'expiresAt' },
+  ]
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
     if (arg === '--keychain') {
       flags.keychain = true
-    } else if (arg === '--service') {
+      continue
+    }
+    if (arg === '--dry-run') {
+      flags.dryRun = true
+      continue
+    }
+    const sf = stringFlags.find((s) => s.flag === arg)
+    if (sf) {
       const value = args[i + 1]
-      if (!value) {
-        throw new Error('--service requires a value')
-      }
-      flags.service = value
+      if (!value) throw new Error(`${arg} requires a value`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(flags as any)[sf.key] = value
       i++
+      continue
     }
   }
   return flags
@@ -123,6 +185,112 @@ async function runExportPubkey(flags: Flags): Promise<void> {
   console.log(`ATRIB_PUBLIC_KEY=${base64urlEncode(pub)}`)
   // Zero the seed bytes after use.
   seedBytes.fill(0)
+}
+
+function buildClaimSubject(flags: Flags): Record<string, unknown> {
+  const subject: Record<string, unknown> = {}
+  if (flags.displayName) subject.display_name = flags.displayName
+  if (flags.organization) subject.organization = flags.organization
+  if (flags.email) subject.email = flags.email
+  if (flags.url) subject.url = flags.url
+  if (flags.handle) subject.handle = flags.handle
+  if (Object.keys(subject).length === 0) {
+    throw new Error('publish-claim needs at least one of: --display-name, --organization, --email, --url, --handle')
+  }
+  return subject
+}
+
+function buildCapabilities(flags: Flags): CapabilityEnvelope | undefined {
+  // File takes precedence and replaces all other capability flags.
+  if (flags.capabilitiesFile) {
+    const raw = readFileSync(flags.capabilitiesFile, 'utf-8')
+    return JSON.parse(raw) as CapabilityEnvelope
+  }
+  const env: CapabilityEnvelope = {}
+  if (flags.toolNames) env.tool_names = flags.toolNames.split(',').map((s) => s.trim()).filter(Boolean)
+  if (flags.eventTypes) env.event_types = flags.eventTypes.split(',').map((s) => s.trim()).filter(Boolean)
+  if (flags.counterparties) env.counterparties = flags.counterparties.split(',').map((s) => s.trim()).filter(Boolean)
+  if (flags.maxAmountCurrency || flags.maxAmountValue) {
+    if (!flags.maxAmountCurrency || !flags.maxAmountValue) {
+      throw new Error('--max-amount-currency and --max-amount-value must be set together')
+    }
+    const value = Number(flags.maxAmountValue)
+    if (!Number.isFinite(value)) throw new Error(`--max-amount-value not a number: ${flags.maxAmountValue}`)
+    env.max_amount = { currency: flags.maxAmountCurrency, value }
+  }
+  if (flags.expiresAt) {
+    const ts = Date.parse(flags.expiresAt)
+    if (Number.isNaN(ts)) throw new Error(`--expires-at not a valid ISO8601 timestamp: ${flags.expiresAt}`)
+    env.expires_at = ts
+  }
+  return Object.keys(env).length > 0 ? env : undefined
+}
+
+async function loadSigningSeed(flags: Flags): Promise<Uint8Array> {
+  if (flags.keychain) {
+    const seed = loadSeed(flags.service ? { service: flags.service } : {})
+    if (!seed) {
+      const { service, account } = resolveServiceAccount(flags.service ? { service: flags.service } : {})
+      throw new Error(`No Keychain entry for service=${service} account=${account}.`)
+    }
+    const bytes = base64urlDecode(seed)
+    if (bytes.length !== 32) throw new Error(`Stored seed is not 32 bytes (got ${bytes.length}).`)
+    return bytes
+  }
+  if (flags.keyFile) {
+    const raw = readFileSync(flags.keyFile, 'utf-8').trim()
+    const bytes = base64urlDecode(raw)
+    if (bytes.length !== 32) throw new Error(`Key file ${flags.keyFile} did not decode to 32 bytes (got ${bytes.length}).`)
+    return bytes
+  }
+  throw new Error('publish-claim needs --keychain (with optional --service NAME) or --key-file PATH.')
+}
+
+async function runPublishClaim(flags: Flags): Promise<void> {
+  const seedBytes = await loadSigningSeed(flags)
+  const pub = await getPublicKey(seedBytes)
+  const creatorKey = base64urlEncode(pub)
+
+  const subject = buildClaimSubject(flags)
+  const capabilities = buildCapabilities(flags)
+
+  const unsigned: Omit<IdentityClaim, 'signature'> = {
+    creator_key: creatorKey,
+    claim_type: 'self_attested',
+    claim_method: 'self',
+    claim_subject: subject,
+    ...(capabilities ? { capabilities } : {}),
+  }
+
+  const claim = await signClaim(unsigned, seedBytes)
+  // Zero seed bytes after signing
+  seedBytes.fill(0)
+
+  if (flags.dryRun) {
+    console.log(JSON.stringify(claim, null, 2))
+    return
+  }
+
+  const directory = flags.directory ?? 'https://directory.atrib.dev/v6'
+  const endpoint = `${directory.replace(/\/$/, '')}/publish`
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(claim),
+  })
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  if (!res.ok) {
+    throw new Error(`directory publish failed (${res.status}): ${JSON.stringify(body)}`)
+  }
+  console.log(`# Published identity claim for ${creatorKey}`)
+  console.log(`# directory: ${directory}`)
+  console.log(`# epoch: ${String(body.epoch)}`)
+  console.log(`# root_hash: ${String(body.root_hash)}`)
+  if (body.anchor && typeof body.anchor === 'object') {
+    const a = body.anchor as Record<string, unknown>
+    if (a.submitted) console.log(`# anchored: record_hash=${String(a.record_hash)}`)
+    else if (a.error) console.log(`# anchor error: ${String(a.error)}`)
+  }
 }
 
 function runDeleteKey(flags: Flags): void {
@@ -175,6 +343,10 @@ async function main(): Promise<void> {
     }
     if (command === 'delete-key') {
       runDeleteKey(flags)
+      return
+    }
+    if (command === 'publish-claim') {
+      await runPublishClaim(flags)
       return
     }
   } catch (err) {

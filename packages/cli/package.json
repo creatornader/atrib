@@ -25,7 +25,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@atrib/mcp": "workspace:*"
+    "@atrib/mcp": "workspace:*",
+    "@atrib/directory": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22",

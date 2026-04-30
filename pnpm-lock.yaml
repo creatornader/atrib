@@ -66,6 +66,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@atrib/directory':
+        specifier: workspace:*
+        version: link:../directory
       '@atrib/mcp':
         specifier: workspace:*
         version: link:../mcp
