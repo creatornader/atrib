@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>atrib, the public log of provable AI agent actions</title>
-<meta name="description" content="Every AI tool call, transaction, and observation here is cryptographically signed by an agent and committed to a public log anyone can verify." />
+<title>atrib explorer · the public log of signed AI agent actions</title>
+<meta name="description" content="A live feed of AI agent actions. Each one is signed by the agent's Ed25519 key and committed to a public Merkle log. You can verify any of it yourself." />
 <style>
   /*
    * atrib explorer, design system
@@ -765,11 +765,11 @@ function renderVerifyBadges(creatorKey) {
   const lookup = identityCache.get(creatorKey)
   const idOk = lookup && lookup.found === true
   return el('span', { class: 'verify-badges' },
-    el('span', { class: 'badge ok', title: 'Ed25519 signature verified at log submission (§1.4 + §2.6.1)' }, '✓ sig'),
+    el('span', { class: 'badge ok', title: 'Ed25519 signature checked at log submission (§1.4 + §2.6.1)' }, '✓ sig'),
     idOk
-      ? el('span', { class: 'badge ok', title: 'Creator key has a published directory identity claim (§6.1)' }, '✓ id')
-      : el('span', { class: 'badge dim', title: 'Creator key has no published directory claim. Per §6.1 this is permitted; the signature is still valid.' }, '○ id'),
-    el('span', { class: 'badge ok', title: 'Entry is committed to the public Merkle log (§2.3)' }, '✓ log'),
+      ? el('span', { class: 'badge ok', title: 'Creator key has a directory claim binding it to a name (§6.1)' }, '✓ id')
+      : el('span', { class: 'badge dim', title: 'No directory claim for this creator key. Optional per §6.1; the signature is still valid.' }, '○ id'),
+    el('span', { class: 'badge ok', title: 'Entry is in the public Merkle log (§2.3)' }, '✓ log'),
   )
 }
 
@@ -801,7 +801,7 @@ function doSearch() {
   else if (/^[0-9a-f]{32}$/.test(q))                location.hash = `#/session/${q}`
   else if (/^sha256:[0-9a-f]{64}$/.test(q))         location.hash = `#/action/${q}`
   else if (/^[0-9a-f]{64}$/.test(q))                location.hash = `#/action/sha256:${q}`
-  else alert('Not a recognized format.\n\nExpected one of:\n• creator_key, 43 chars base64url\n• context_id, 32 hex chars\n• record_hash, 64 hex chars (or sha256:-prefixed)')
+  else alert('Not a recognized format.\n\nExpected one of:\n• creator_key (43 chars base64url)\n• context_id (32 hex chars)\n• record_hash (64 hex chars, optionally sha256: prefixed)')
 }
 
 // ─── Overview: hero, pulse strip, search, activity feed ──────────────────
@@ -825,7 +825,7 @@ async function renderOverview() {
       '.',
     ),
     el('p', { class: 'lede' },
-      'Every line below is a real action taken by an AI agent, cryptographically signed by the agent\'s identity and committed to a public Merkle log anyone can verify. There is no central authority, no operator to trust. ',
+      'Every line below is a real action taken by an AI agent. Each one is signed with the agent\'s Ed25519 key and committed to a public Merkle log. You can verify all of it yourself, no central authority, no operator you have to trust. ',
       el('a', { href: '#/about' }, 'How does this work?'),
     ),
     el('div', { class: 'quick-links', id: 'quick-links' }),
@@ -851,13 +851,13 @@ async function renderOverview() {
       el('button', { onclick: doSearch }, 'go'),
     ),
     el('p', { class: 'search-help' },
-      'Pasting a ',
+      'Paste a ',
       el('code', {}, '43-char creator_key'),
       ', ',
       el('code', {}, '32-hex context_id'),
       ', or ',
       el('code', {}, 'sha256:…'),
-      ' record hash routes you to the right view.',
+      ' record hash. We\'ll route you to the right view.',
     ),
   ))
 
@@ -900,7 +900,7 @@ async function renderOverview() {
     document.getElementById('feed-body').replaceChildren(
       el('div', { class: 'empty' },
         el('span', { class: 'icon' }, '○'),
-        'No signed actions yet. The log is ready and waiting for the first agent to sign.',
+        'No signed actions yet. As soon as an agent signs and submits, you\'ll see it here.',
       ),
     )
     document.getElementById('feed-meta').textContent = 'empty'
@@ -1129,11 +1129,11 @@ async function renderIdentity(creatorKey) {
     title: 'Identity',
     subject: creatorKey,
     explainer: [
-      'In atrib, an ',
+      'An ',
       el('span', { class: 'term' }, 'identity'),
-      ' is an Ed25519 public key (',
+      ' here is an Ed25519 public key (',
       el('code', {}, '43-char base64url'),
-      ') that signs records. Identities MAY register a directory claim binding the key to an organization, person, or service, but a missing claim doesn\'t invalidate any signature. The directory is a separate trust layer; the cryptography stands alone.',
+      '). It\'s the thing doing the signing. Identities can publish a directory claim that binds their key to a person, org, or service, but it\'s optional. A missing claim doesn\'t invalidate the signature; the cryptography works either way.',
     ],
   }))
 
@@ -1269,9 +1269,9 @@ async function renderSession(contextId) {
     explainer: [
       'A ',
       el('span', { class: 'term' }, 'session'),
-      ' is a coherent unit of agent activity tied together by a shared ',
+      ' is one chunk of agent work. Every record sharing the same ',
       el('code', {}, 'context_id'),
-      ' (16-byte hex). All records inside one session form a graph: ordered by chain, sometimes converging on a transaction. The graph below is derived purely from observable record structure (per §3.2.4), no semantic interpretation, no operator policy.',
+      ' (16-byte hex) belongs to it. The records form a graph: chained in order, sometimes converging on a transaction. The graph below is built only from what the records themselves contain (§3.2.4). No semantic interpretation, no operator policy.',
     ],
   }))
 
@@ -1412,11 +1412,11 @@ async function renderAction(recordHash) {
     title: 'Action',
     subject: fullHash,
     explainer: [
-      'A single ',
+      'An ',
       el('span', { class: 'term' }, 'action'),
-      ' is one signed record committed to the public log. The ',
+      ' is one signed record in the log. The ',
       el('code', {}, 'record_hash'),
-      ' is the SHA-256 of the canonical (RFC 8785 JCS) serialized record. Below: the record itself, the identity that signed it, the session it belongs to, and proof that it\'s included in the log.',
+      ' is the SHA-256 of the canonical-JSON form (RFC 8785). Below: the record, the identity that signed it, the session it belongs to, and proof that it\'s actually in the log.',
     ],
   }))
 
@@ -1488,9 +1488,8 @@ async function renderAnchoring() {
     crumb: 'anchoring',
     title: 'Anchoring',
     explainer: [
-      'The ',
-      el('span', { class: 'term' }, 'anchoring'),
-      ' substrate is what makes atrib unforgeable. The Merkle log produces signed checkpoints in C2SP-canonical signed-note format (§2.4). The directory anchors every operation back into the log (§6.2.4). Together they prove: nothing can be retroactively added, removed, or reordered without invalidating every signature that came after.',
+      el('span', { class: 'term' }, 'Anchoring'),
+      ' is the unforgery story. The Merkle log emits signed checkpoints in C2SP signed-note format (§2.4). The directory writes back into that log on every operation (§6.2.4). Together that means any retroactive change to the log would invalidate every signature that came after.',
     ],
   }))
 
@@ -1558,7 +1557,7 @@ async function renderAnchoring() {
       el('p', { style: 'color: var(--text-3); font-size: 13px; margin: 16px 0 0;' },
         'Per spec §6.2.4 per-operation anchoring: every directory state change emits a ',
         el('code', {}, 'directory_anchor'),
-        ' record to the log immediately. This binds directory history to log history, a verifier can prove the directory state at any historical checkpoint root.'),
+        ' record to the log immediately. This binds directory history to log history. A verifier can prove the directory state at any historical checkpoint root.'),
     ),
   ))
 
@@ -1574,43 +1573,43 @@ function renderAbout() {
     crumb: 'about',
     title: 'What you\'re looking at',
     explainer: [
-      'This is the public surface for atrib, the protocol that makes AI agent actions cryptographically provable. Below: how it works, what each view shows, and how to verify any of this yourself.',
+      'This is the public surface for atrib, the protocol that makes AI agent actions cryptographically provable. Below: how it works, what each view shows, and how to verify any of it yourself.',
     ],
   }))
 
   root.append(el('section', { class: 'panel' },
     el('div', { class: 'prose' },
-      el('h2', {}, 'The promise'),
+      el('h2', {}, 'What atrib does'),
       el('p', {},
-        'AI agents make consequential decisions and take actions on behalf of people and organizations. Today, the only record of what an agent did is whatever logs the operator chose to keep. atrib changes that. Every tool call, transaction, or observation an agent takes becomes a ',
+        'AI agents make decisions and take actions on behalf of real people and organizations. Today, the only record of what an agent did is whatever logs the operator chose to keep. atrib changes that. Every tool call, transaction, and observation an agent takes becomes a ',
         el('strong', { style: 'color: var(--text);' }, 'signed record'),
         ' committed to a ',
         el('strong', { style: 'color: var(--text);' }, 'public, append-only log'),
-        ', the same way SSL certificates are made auditable through Certificate Transparency.',
+        '. Same pattern as Certificate Transparency for SSL certs, applied to agent behavior instead of TLS handshakes.',
       ),
-      el('p', {}, 'The result: agents can prove what they did. Consumers can verify what was done. Auditors don\'t have to trust any operator.'),
+      el('p', {}, 'Agents prove what they did. Consumers verify what was actually done. Auditors don\'t have to trust any operator.'),
 
-      el('h2', {}, 'The five views'),
+      el('h2', {}, 'Five views'),
       el('h3', {}, 'Overview (this page)'),
-      el('p', {}, 'A live feed of the most recent signed actions. Updates every 5 seconds. Each row is a real record from a real atrib-instrumented agent.'),
+      el('p', {}, 'A live feed of the most recent signed actions, updating every 5 seconds. Every row is a real record from a real atrib-instrumented agent.'),
 
       el('h3', {}, 'Identity'),
       el('p', {},
-        'An identity is an Ed25519 public key (43 chars base64url) that signs records. Identities MAY publish a directory claim binding the key to a person, org, or service, but the cryptography is independent of any naming layer. The identity view shows the claim (if any), claim history, and every session this identity has participated in.'),
+        'An identity is an Ed25519 public key (43 chars of base64url) that signs records. Identities can publish a directory claim binding their key to a person, org, or service. The claim is optional and the cryptography doesn\'t depend on it. The identity view shows the claim (if any), the claim history, and every session the identity participated in.'),
 
       el('h3', {}, 'Session'),
       el('p', {},
-        'A session is a coherent unit of agent activity tied together by a shared 16-byte ',
+        'A session is one chunk of agent work, tied together by a shared 16-byte ',
         el('code', {}, 'context_id'),
-        '. Records inside a session form a graph (chain order + convergence on transactions, if any). The session view shows the graph derived purely from observable record structure, no semantic interpretation.'),
+        '. The records inside form a graph: chained in order, sometimes converging on a transaction. The session view shows that graph, built only from what the records themselves contain. No semantic interpretation.'),
 
       el('h3', {}, 'Action'),
       el('p', {},
-        'A single signed record. The action view shows the record\'s hash, identity, session, timestamp, verification state, and the raw JSON.'),
+        'A single signed record. The action view shows the hash, identity, session, timestamp, verification state, and the raw JSON.'),
 
       el('h3', {}, 'Anchoring'),
       el('p', {},
-        'The substrate. Log checkpoint (signed C2SP note format) + directory anchor (per-operation cross-reference back into the log). This is what makes the system unforgeable.'),
+        'The substrate. Log checkpoints (signed C2SP note format) plus directory anchors (per-operation cross-references back into the log). This is the unforgery story.'),
 
       el('h2', {}, 'How to verify any of this yourself'),
       el('ul', {},
@@ -1623,15 +1622,19 @@ function renderAbout() {
       el('p', {},
         'All of this is in the ',
         el('a', { href: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md', target: '_blank', rel: 'noopener' }, 'protocol spec'),
-        '. The reference verifier is at ',
+        '. The reference verifier is the ',
         el('code', {}, '@atrib/verify'),
-        '.'),
+        ' package.'),
 
-      el('h2', {}, 'What this is NOT'),
-      el('ul', {},
-        el('li', {}, el('strong', { style: 'color: var(--text);' }, 'Not a personal dashboard.'), ' This is everybody\'s public data. There is no logged-in user concept. Authenticated personal management is a separate product.'),
-        el('li', {}, el('strong', { style: 'color: var(--text);' }, 'Not a build artifact.'), ' Single HTML file. No bundler, no framework. The file IS the dashboard.'),
-        el('li', {}, el('strong', { style: 'color: var(--text);' }, 'Not "trust the operator."'), ' atrib does not certify truth, only signing. The threat model is in §8.7.'),
+      el('h2', {}, 'A few things this isn\'t'),
+      el('p', {},
+        'It\'s not a personal dashboard. There\'s no logged-in user concept here; personal management is a separate product behind auth.',
+      ),
+      el('p', {},
+        'It\'s not a build artifact either. The file is the dashboard. No bundler, no framework. View source if you want to see what it does.',
+      ),
+      el('p', {},
+        'And it\'s not "trust the operator." atrib certifies signing, not truth. The full threat model lives in §8.7 of the spec.',
       ),
 
       el('h2', {}, 'Override endpoints (for local dev)'),
