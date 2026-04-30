@@ -24,6 +24,7 @@ import {
   type ProofBundle,
   type SubmissionQueue,
 } from '@atrib/mcp'
+import { resolveChainContext } from './auto-chain.js'
 import { resolveKey, type ResolvedKey } from './keys.js'
 import { buildAndSignEmitRecord } from './sign.js'
 import { mirrorRecord } from './storage.js'
@@ -134,12 +135,22 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
     ])
   }
 
-  const contextId = input.context_id ?? randomContextId()
-  // v1: every emit is a fresh genesis. Inheriting the wrapper's context_id
-  // (so emits chain with the agent's mechanical tool calls) is design-
-  // question #2 in the scope doc; deferred to a follow-up that needs to
-  // negotiate with the wrapper's autoChain JSONL.
-  const chainRoot = genesisChainRoot(contextId)
+  // autoChain inheritance: when the caller omits context_id, read the
+  // wrapper's local mirror and inherit its most-recent record's context_id
+  // (chaining on top of that record's hash). Falls back to a fresh genesis
+  // when no mirror is present. The inheritance source is surfaced to the
+  // caller in the warnings array so the agent knows which session this
+  // emit landed in.
+  const chain = await resolveChainContext({
+    callerContextId: input.context_id,
+    genesisChainRoot,
+    randomContextId,
+  })
+  const contextId = chain.contextId
+  const chainRoot = chain.chainRoot
+  if (chain.inheritedFrom === 'wrapper-mirror') {
+    warnings.push(`inherited context_id from wrapper mirror: ${contextId}`)
+  }
 
   let record
   try {
