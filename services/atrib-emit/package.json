@@ -1,0 +1,31 @@
+{
+  "name": "@atrib/atrib-emit",
+  "version": "0.1.0",
+  "description": "MCP server exposing the explicit emit tool, the producer-side cognitive primitive that lets an agent sign observations, annotations, and revisions beyond what the wrapper auto-signs",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "atrib-emit": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "start": "node dist/main.js",
+    "dev": "tsx src/main.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@atrib/mcp": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@noble/ed25519": "^2.1.0",
+    "@noble/hashes": "^1.4.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.5.4",
+    "vitest": "^3.2.4"
+  }
+}
