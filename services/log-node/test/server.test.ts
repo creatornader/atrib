@@ -340,6 +340,64 @@ describe('CORS (D054)', () => {
   })
 })
 
+describe('graph fanout', () => {
+  it('POSTs the full record to graphFanoutEndpoint after a successful submit', async () => {
+    const { createServer } = await import('node:http')
+    const received: { headers: Record<string, string | string[] | undefined>; body: string }[] = []
+    const mockServer = createServer((req, res) => {
+      let body = ''
+      req.on('data', (c: Buffer) => { body += c.toString('utf-8') })
+      req.on('end', () => {
+        received.push({ headers: { ...req.headers }, body })
+        res.statusCode = 200
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify({ ok: true }))
+      })
+    })
+    await new Promise<void>((r) => mockServer.listen(0, '127.0.0.1', r))
+    const addr = mockServer.address()
+    if (!addr || typeof addr === 'string') throw new Error('mock addr')
+    const fanoutUrl = `http://127.0.0.1:${addr.port}/ingest`
+
+    const { startLogServer } = await import('../src/index.js')
+    const fanoutSrv = await startLogServer({ port: 0, graphFanoutEndpoint: fanoutUrl })
+
+    const record = await makeSignedRecord()
+    const submitRes = await fetch(`${fanoutSrv.url}/v1/entries`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(record),
+    })
+    expect(submitRes.status).toBe(200)
+
+    // Fanout is fire-and-forget; wait for it to land on the mock.
+    const deadline = Date.now() + 2000
+    while (received.length === 0 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    expect(received.length).toBe(1)
+    const forwarded = JSON.parse(received[0]!.body) as { creator_key: string; signature: string }
+    expect(forwarded.creator_key).toBe(record.creator_key)
+    expect(forwarded.signature).toBe(record.signature)
+
+    await fanoutSrv.close()
+    await new Promise<void>((r) => mockServer.close(() => r()))
+  })
+
+  it('still responds 200 to submit when fanout endpoint is unreachable', async () => {
+    const { startLogServer } = await import('../src/index.js')
+    const srv = await startLogServer({ port: 0, graphFanoutEndpoint: 'http://127.0.0.1:1/unreachable' })
+    const record = await makeSignedRecord()
+    const res = await fetch(`${srv.url}/v1/entries`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(record),
+    })
+    expect(res.status).toBe(200)
+    await srv.close()
+  })
+})
+
 describe('GET /v1/recent', () => {
   it('returns latest entries newest-first with decoded fields', async () => {
     // Submit 3 records so /v1/recent has something to return

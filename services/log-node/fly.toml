@@ -8,6 +8,10 @@ primary_region = 'iad'
   PORT = '3100'
   HOST = '0.0.0.0'
   ATRIB_LOG_PERSIST = '/data/entries.bin'
+  # Fan out every successful submission to graph-node so the derived graph
+  # stays in sync with the source-of-truth log. Fire-and-forget; failures
+  # don't affect the submit response. Not a secret — just a URL.
+  ATRIB_GRAPH_FANOUT_ENDPOINT = 'https://graph.atrib.dev/v1/ingest'
 
 [[mounts]]
   source = 'atrib_log_data'
