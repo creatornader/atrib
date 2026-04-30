@@ -1036,20 +1036,23 @@ function populateQuickLinks(entries) {
     (e) => e && e.record_hash && e.context_id && e.creator_key,
   ) ?? entries[0]
   const txn = entries.find((e) => e.event_type === 'transaction')
-  wrap.replaceChildren(
+  // replaceChildren coerces non-Node args via String(), so passing JS null
+  // renders the literal text "null". Filter optional links explicitly.
+  const links = [
     el('a', { href: `#/action/${linkable.record_hash}` },
       'See a recent action ', el('span', { class: 'arrow' }, '→'),
     ),
-    linkable.context_id ? el('a', { href: `#/session/${linkable.context_id}` },
+    linkable.context_id && el('a', { href: `#/session/${linkable.context_id}` },
       'Browse a recent session ', el('span', { class: 'arrow' }, '→'),
-    ) : null,
-    linkable.creator_key ? el('a', { href: `#/identity/${linkable.creator_key}` },
+    ),
+    linkable.creator_key && el('a', { href: `#/identity/${linkable.creator_key}` },
       'Inspect an identity ', el('span', { class: 'arrow' }, '→'),
-    ) : null,
-    txn ? el('a', { href: `#/action/${txn.record_hash}` },
+    ),
+    txn && el('a', { href: `#/action/${txn.record_hash}` },
         'See a transaction ', el('span', { class: 'arrow' }, '→'),
-      ) : null,
-  )
+      ),
+  ].filter(Boolean)
+  wrap.replaceChildren(...links)
 }
 
 // ─── Polling ─────────────────────────────────────────────────────────────
