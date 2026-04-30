@@ -23,6 +23,10 @@ export { buildPolicy, policyFrom } from './policy-builder.js'
 // Graph fetch (advanced usage)
 export { fetchGraph, fetchSessionPolicyRecord, fetchPolicyDocument } from './graph-fetch.js'
 
+// Revocation registry (§1.9)
+export { buildRevocationRegistry, applyRevocation } from './revocations.js'
+export type { RevocationEntry, RevocationReason, MinimalRecord } from './revocations.js'
+
 // Types
 export type {
   GraphNode,

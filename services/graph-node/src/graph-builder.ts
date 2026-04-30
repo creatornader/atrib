@@ -25,16 +25,35 @@ import type {
   GapNode,
   VerificationState,
 } from '@atrib/verify'
-import { graphLabelFromEventTypeUri } from '@atrib/verify'
+import { graphLabelFromEventTypeUri, applyRevocation } from '@atrib/verify'
+import type { RevocationEntry } from '@atrib/verify'
 
 // GapNode is re-exported for use by store.ts and callers.
 export type { GapNode }
+
+export interface BuildGraphOptions {
+  includeGapNodes?: boolean
+  includeCrossSession?: boolean
+  /**
+   * Revocation registry from @atrib/verify (built by scanning all records
+   * for key_revocation events). When provided, nodes whose creator_key
+   * was retired before their log_index get verification_state set to
+   * 'revoked_after_revocation' per spec §1.9.3.
+   */
+  revocations?: Map<string, RevocationEntry>
+  /**
+   * Lookup function: record_hash hex (without 'sha256:' prefix) → log_index.
+   * Required for revocation logic to work; without it nodes have null
+   * log_index and revocation cannot be applied.
+   */
+  logIndexLookup?: (recordHashHex: string) => number | null
+}
 
 /** Build an attribution graph from records and gap nodes. */
 export async function buildGraph(
   records: AtribRecord[],
   gapNodes: GapNode[] = [],
-  options: { includeGapNodes?: boolean; includeCrossSession?: boolean } = {},
+  options: BuildGraphOptions = {},
 ): Promise<GraphResponse> {
   const includeGapNodes = options.includeGapNodes ?? true
   const includeCrossSession = options.includeCrossSession ?? true
@@ -70,6 +89,7 @@ export async function buildGraph(
     const isGenesis = record.chain_root.startsWith('sha256:') &&
       record.chain_root === genesisChainRoot(record.context_id)
 
+    const logIndex = options.logIndexLookup ? options.logIndexLookup(hash) : null
     const node: GraphNode = {
       id: nodeId,
       event_type: graphLabelFromEventTypeUri(record.event_type),
@@ -79,9 +99,12 @@ export async function buildGraph(
       chain_root: record.chain_root,
       context_id: record.context_id,
       timestamp: record.timestamp,
-      log_index: null, // set by caller if known
+      log_index: logIndex,
       verification_state: verificationState,
       is_genesis: isGenesis,
+    }
+    if (options.revocations) {
+      node.verification_state = applyRevocation(node, options.revocations)
     }
 
     nodes.push(node)
