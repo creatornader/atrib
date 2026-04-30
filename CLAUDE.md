@@ -51,6 +51,7 @@ atrib/
     log-node/                  # Production Node.js Merkle log with real RFC 6962 proofs. Deployed at https://log.atrib.dev/v1 with persistent Fly volume + C2SP-canonical signed-note checkpoints. Includes scripts/verify-loop.mjs (13-gate dogfood verifier), scripts/chain-demo.mjs, scripts/multi-agent-demo.mjs, scripts/metrics.mjs.
     graph-node/                # Production Node.js graph query service. Implements §3.2.4 derivation. Deployed at https://graph.atrib.dev/v1.
     directory-node/            # Production Node.js AKD-backed identity-claim directory service per §6.2. Per-operation anchoring (§6.2.4) emits directory_anchor records to log-node automatically.
+    atrib-emit/                # MCP server exposing the explicit `emit` tool. Producer-side cognitive primitive for observations/annotations/revisions the @atrib/mcp wrapper doesn't auto-sign. Records are byte-identical to wrapper-signed records; same key (the agent's). Standalone stdio binary; runs in the agent's process alongside other MCP servers.
   spec/
     conformance/
       1.4/                     # Signing conformance corpus (test vectors for §1.4)
