@@ -338,6 +338,7 @@ function handleLogPubkey(res: ServerResponse, signer: CheckpointSigner): void {
  *       "tool_call": <int>,            // byte 0x01
  *       "transaction": <int>,          // byte 0x02
  *       "observation": <int>,          // byte 0x03
+ *       "directory_anchor": <int>,     // byte 0x04 (D056)
  *       "extension": <int>,            // byte 0xFF
  *       "reserved": <int>              // any other byte (should be 0)
  *     }
@@ -439,6 +440,7 @@ function decodeEntry(bytes: Uint8Array, index: number): {
     eventByte === 0x01 ? 'tool_call' :
     eventByte === 0x02 ? 'transaction' :
     eventByte === 0x03 ? 'observation' :
+    eventByte === 0x04 ? 'directory_anchor' :
     eventByte === 0xff ? 'extension' :
     'reserved'
   return {
@@ -528,7 +530,7 @@ function handleStats(res: ServerResponse, tree: MerkleTree): void {
   const signers = new Set<string>()
   let oldestTs: number | null = null
   let newestTs: number | null = null
-  const eventTypeCounts = { tool_call: 0, transaction: 0, observation: 0, extension: 0, reserved: 0 }
+  const eventTypeCounts = { tool_call: 0, transaction: 0, observation: 0, directory_anchor: 0, extension: 0, reserved: 0 }
 
   for (let i = 0; i < size; i++) {
     const e = tree.entryBytes(i)
@@ -548,6 +550,7 @@ function handleStats(res: ServerResponse, tree: MerkleTree): void {
     if (eventType === 0x01) eventTypeCounts.tool_call += 1
     else if (eventType === 0x02) eventTypeCounts.transaction += 1
     else if (eventType === 0x03) eventTypeCounts.observation += 1
+    else if (eventType === 0x04) eventTypeCounts.directory_anchor += 1
     else if (eventType === 0xff) eventTypeCounts.extension += 1
     else eventTypeCounts.reserved += 1
   }
