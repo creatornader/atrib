@@ -65,7 +65,17 @@ export async function resolveChainContext(opts: {
     }
   }
 
-  const path = opts.mirrorPath ?? process.env['ATRIB_MIRROR_FILE'] ?? DEFAULT_MIRROR
+  // Reads from ATRIB_AUTOCHAIN_SOURCE first, falling back to the wrapper's
+  // mirror path (NOT emit's own mirror — they serve different concerns).
+  // ATRIB_MIRROR_FILE controls where emit writes; ATRIB_AUTOCHAIN_SOURCE
+  // controls what emit reads to inherit context. In a typical setup they
+  // point at different files: emit writes its own mirror, but inherits the
+  // wrapper's session context.
+  const path =
+    opts.mirrorPath ??
+    process.env['ATRIB_AUTOCHAIN_SOURCE'] ??
+    process.env['ATRIB_MIRROR_FILE'] ??
+    DEFAULT_MIRROR
   const inherited = await readMostRecentRecord(path)
   if (inherited) {
     const recordHashHex = hexEncode(sha256(canonicalRecord(inherited)))
