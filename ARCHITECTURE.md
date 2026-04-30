@@ -305,6 +305,22 @@ The load-bearing choices. Each is in [DECISIONS.md](DECISIONS.md) with full rati
   └── Re-derives primitives independently to validate reproducibility
 ```
 
+Standalone services (under `services/`):
+
+```
+services/log-node     Production tlog (Tessera-style, Node.js)
+services/graph-node   Production graph derivation service
+services/directory-node  Production AKD-backed identity directory (per §6.2)
+services/atrib-emit   MCP server exposing the explicit `emit` tool
+  └── Producer-side cognitive primitive — agent invokes when it wants to
+      sign observations / annotations / revisions the wrapper doesn't
+      auto-capture (built-in tool calls, reasoning steps). Records are
+      byte-identical to wrapper-signed records (verifier MUST NOT
+      distinguish). Inherits the wrapper's session via local mirror
+      autoChain so explicit emits chain seamlessly with mechanical tool
+      calls in the same session.
+```
+
 The three public packages (`mcp`, `agent`, `verify`) are intended for npm publication. The two private packages (`log-dev`, `integration`) are workspace fixtures. All five are TypeScript strict mode, no `any` types, with error handling following the degradation contract.
 
 Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hashes` for SHA-256, `canonicalize` for JCS. Framework dependencies are structural-typed, never hard-imported.
