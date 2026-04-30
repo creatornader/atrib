@@ -126,6 +126,18 @@ async function handleRequest(
   proofCache: Map<string, ProofBundle>,
   acquireLock: AcquireLock,
 ): Promise<void> {
+  // D054: when accessed via the explore.atrib.dev hostname, serve the
+  // dashboard HTML at the root path. log.atrib.dev keeps API behavior at /;
+  // explore.atrib.dev gets the explorer at / so the URL is just the bare host.
+  // Both hostnames still expose /dashboard for direct access.
+  if (
+    req.method === 'GET' &&
+    (req.url === '/' || req.url === '') &&
+    req.headers.host?.startsWith('explore.atrib.dev')
+  ) {
+    return handleDashboard(res)
+  }
+
   if (req.method === 'POST' && req.url === '/v1/entries') {
     return handleSubmit(req, res, tree, signer, proofCache, acquireLock)
   }

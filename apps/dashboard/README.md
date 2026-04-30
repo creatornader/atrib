@@ -27,11 +27,13 @@ The defaults point at the production endpoints (`log.atrib.dev`, `graph.atrib.de
 
 ## Hosting
 
-Live at **https://log.atrib.dev/dashboard** (also `/dashboard.html` and `/dashboard/`).
+Live at **https://explore.atrib.dev/**.
 
-log-node serves it inline. The Dockerfile copies `apps/dashboard/index.html` into the image at build time and the server reads it once at startup, caches it in memory, and returns it with `Cache-Control: public, max-age=60`. No separate hosting infrastructure for option 1.
+log-node serves the dashboard inline. The Dockerfile copies `apps/dashboard/index.html` into the image at build time; the server reads it once at startup, caches in memory, and returns it with `Cache-Control: public, max-age=60`. When the request hostname is `explore.atrib.dev`, log-node returns the dashboard at `/`; for any other hostname (e.g. `log.atrib.dev`) it preserves API behavior at `/v1/*` and returns a JSON 404 hint at `/`. The dashboard is also accessible at `https://log.atrib.dev/dashboard` as a fallback.
 
-When option 2 (Vite/Next.js SPA) lands, it gets its own hosting (likely Cloudflare Pages at `dashboard.atrib.dev` or `atrib.dev/dashboard`); at that point, the inline log-node route either redirects there or stays as a backup view. Until then, `log.atrib.dev/dashboard` is the canonical URL.
+`explore.atrib.dev` (not `dashboard.atrib.dev`) is intentional: `explore` reads as block-explorer; `dashboard.atrib.dev` is reserved for the auth-gated personal dashboard product that ships separately.
+
+When option 2 (Vite/Next.js SPA) lands, it gets its own hosting (likely Cloudflare Pages); the inline log-node route stays as a fallback.
 
 CORS is configured on log-node, graph-node, and directory-node (`Access-Control-Allow-Origin: *` on all read endpoints) so the explorer can also be loaded from any other origin during local development.
 
