@@ -27,6 +27,17 @@ export { fetchGraph, fetchSessionPolicyRecord, fetchPolicyDocument } from './gra
 export { buildRevocationRegistry, applyRevocation } from './revocations.js'
 export type { RevocationEntry, RevocationReason, MinimalRecord } from './revocations.js'
 
+// Identity resolution (§6.3 9-step verifier consultation)
+export { resolveIdentity } from './resolve-identity.js'
+export type {
+  IdentityResolution,
+  IdentityResolutionMethod,
+  KeyRevocationStatus,
+  ResolveIdentityOptions,
+  IdentityClaim,
+  CapabilityEnvelope,
+} from './resolve-identity.js'
+
 // Types
 export type {
   GraphNode,

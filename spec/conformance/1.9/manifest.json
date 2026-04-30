@@ -1,0 +1,19 @@
+{
+  "spec_section": "1.9",
+  "generated_at": 1767225600000,
+  "cases": [
+    {
+      "file": "cases/pre-revocation-record.json",
+      "name": "pre-revocation-record"
+    },
+    {
+      "file": "cases/post-revocation-record.json",
+      "name": "post-revocation-record"
+    }
+  ],
+  "keys": {
+    "alice_pubkey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+    "successor_pubkey": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA"
+  },
+  "note": "pre-revocation-record and post-revocation-record share an identical input sequence; they exist as two named cases so an implementation can identify which expected verification_state contract it failed to satisfy. Other cases enumerated in README.md (valid-rotation, valid-retirement, valid-compromise-emergency, invalid-* signers) will be generated when the live directory + revocation handling matures past the initial implementation."
+}

@@ -9,10 +9,25 @@ any third-party implementation that consumes atrib records.
 
 ## Status
 
-**Skeleton.** The cases are enumerated below; the JSON fixtures will be
-generated alongside the rotation implementation in an upcoming phase
-plan. The skeleton exists so external implementers reading the spec know the
-exact set of cases that will arrive.
+**Initial subset shipped.** The two load-bearing cases are committed:
+`pre-revocation-record.json` and `post-revocation-record.json`. They
+share an input sequence (4 entries: 2 pre-revocation, the revocation
+itself, 1 post-revocation) and assert the `verification_state` contract
+that flips records signed by the retired key after the revocation's
+`log_index`.
+
+Both files are byte-identical regenerations of
+`packages/log-dev/scripts/generate-conformance-1.9.ts` (run with
+`pnpm --filter @atrib/log-dev exec tsx scripts/generate-conformance-1.9.ts`).
+
+The reference implementation (`packages/verify/test/conformance-1.9.test.ts`)
+loads each fixture, builds a revocation registry, and asserts every
+expected verification_state matches.
+
+The remaining cases enumerated below (compromise + emergency key,
+malformed-signer rejections) generate when the live emergency-key path
+matures. They're not blocking initial verifier conformance, verifiers
+passing the two shipped cases prove the central contract.
 
 ## What will be in the corpus
 

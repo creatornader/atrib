@@ -1,0 +1,22 @@
+{
+  "name": "valid-non-membership",
+  "spec_section": "6",
+  "description": "Lookup of a creator_key with no published claim returns found:false. resolveIdentity surfaces identity_resolved=null and identity_resolution_method = \"no_claim_registered\".",
+  "input": {
+    "lookup_for_key": "REREREREREREREREREREREREREREREREREREREREREQ"
+  },
+  "expected": {
+    "directory_response": {
+      "status": 404,
+      "body": {
+        "found": false
+      }
+    },
+    "verifier_output": {
+      "identity_resolved": null,
+      "identity_resolution_method": "no_claim_registered",
+      "capability_envelope": null,
+      "key_revocation_status": null
+    }
+  }
+}

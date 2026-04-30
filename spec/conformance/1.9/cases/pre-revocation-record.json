@@ -1,0 +1,85 @@
+{
+  "name": "pre-revocation-record",
+  "spec_section": "1.9",
+  "description": "A record signed by the retired key with log_index < revocation log_index retains its original verification_state. Past attribution remains valid after revocation.",
+  "input": {
+    "log_entries": [
+      {
+        "log_index": 0,
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+          "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+          "chain_root": "sha256:8a83665f3798727f14f92ad0e6c99fdab08ee731d6cd644c131223fd2f4fed2a",
+          "event_type": "https://atrib.dev/v1/types/tool_call",
+          "context_id": "11111111111111111111111111111111",
+          "timestamp": 1767225601000,
+          "signature": "PBc8ySeFprDLRyPjc22Bu7wkvyTlXisxpjTzumIJwzifsP_ZWX3sP5Tk9vKI0I6kGGR2ndOyU1GzYQ3MoYZFBQ"
+        },
+        "comment": "pre-revocation tool_call by Alice"
+      },
+      {
+        "log_index": 1,
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+          "chain_root": "sha256:8a83665f3798727f14f92ad0e6c99fdab08ee731d6cd644c131223fd2f4fed2a",
+          "event_type": "https://atrib.dev/v1/types/tool_call",
+          "context_id": "11111111111111111111111111111111",
+          "timestamp": 1767225602000,
+          "signature": "Y8TPGCIYoJf2StFgIgLaNqh-p1bIkvgNyJ7QfOYjyjbDrORrdgW8zXfzr7wLHn2ZlndBYxf7rFEM6VYZ_zWcAw"
+        },
+        "comment": "pre-revocation tool_call by Alice"
+      },
+      {
+        "log_index": 2,
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0",
+          "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+          "chain_root": "sha256:8a83665f3798727f14f92ad0e6c99fdab08ee731d6cd644c131223fd2f4fed2a",
+          "event_type": "https://atrib.dev/v1/types/key_revocation",
+          "context_id": "11111111111111111111111111111111",
+          "timestamp": 1767225603000,
+          "revoked_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+          "revocation_reason": "rotation",
+          "successor_key": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA",
+          "signature": "k1FJ8ME_8cShzf8zeM1sCIw-770NXbd6cZdUNc_VeIF1dnmtnujJ4Er1Eac5OpkUdBFA1ar1durax3M8OokVCg"
+        },
+        "comment": "key_revocation by Alice (rotation)"
+      },
+      {
+        "log_index": 3,
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+          "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+          "chain_root": "sha256:8a83665f3798727f14f92ad0e6c99fdab08ee731d6cd644c131223fd2f4fed2a",
+          "event_type": "https://atrib.dev/v1/types/tool_call",
+          "context_id": "11111111111111111111111111111111",
+          "timestamp": 1767225604000,
+          "signature": "TbI_WuEcFcYAL6nQ2ruFIZE9YrN3f2pMNNO89Wta4MbqCU91vpAZP2sX5O0Ni0blifIfdrAMNcBCW_ybDEMlCw"
+        },
+        "comment": "post-revocation tool_call by Alice"
+      }
+    ],
+    "directory_state": {
+      "note": "directory not consulted for this verification step"
+    }
+  },
+  "expected": {
+    "record_hashes": {
+      "0": "sha256:b2033a6f11e16b3c1e96c2abdc33abf580b062605e9c2ee9cf59577b8a579a2e",
+      "1": "sha256:6f26ac63310167923421148eedfaecc0bcbd3369b2cdb6a0bea56879413626de",
+      "2": "sha256:dbbd822ac5d0213b143d1a5a6606a0f9d353d9d7217ecc06add30a0c2aa35f87",
+      "3": "sha256:f6bd5a1df87410e6ea7fb0041efc0d20d8eb0f96da0425a8eedd4bc684930927"
+    },
+    "verification_states": {
+      "0": "signature_valid",
+      "1": "signature_valid",
+      "2": "signature_valid",
+      "3": "revoked_after_revocation"
+    }
+  }
+}

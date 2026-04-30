@@ -19,10 +19,13 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "corpus": "tsx scripts/generate-conformance-corpus.ts"
+    "corpus": "tsx scripts/generate-conformance-corpus.ts",
+    "corpus:1.9": "tsx scripts/generate-conformance-1.9.ts",
+    "corpus:6": "tsx scripts/generate-conformance-6.ts"
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
+    "@atrib/directory": "workspace:*",
     "@noble/hashes": "^2.0.1"
   },
   "devDependencies": {

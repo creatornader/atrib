@@ -1,0 +1,52 @@
+{
+  "name": "valid-self-attested-claim",
+  "spec_section": "6",
+  "description": "A self-attested IdentityClaim is published to the directory; lookup for the creator_key returns the claim. resolveIdentity surfaces identity_resolved with the parsed claim and identity_resolution_method = \"directory_lookup\".",
+  "input": {
+    "published_claim": {
+      "creator_key": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4",
+      "claim_type": "self_attested",
+      "claim_method": "self",
+      "claim_subject": {
+        "display_name": "Conformance Test Subject",
+        "organization": "atrib"
+      },
+      "signature": "y90ABapkXiupbuc2h9X2eUsqtsu1e6ZDmLA6CWYpEf8CGGnI6GZHleYsh91OKCu0RWKpuuzsG8uOsfqqhDqgBg"
+    },
+    "lookup_for_key": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4"
+  },
+  "expected": {
+    "directory_response": {
+      "status": 200,
+      "body": {
+        "found": true,
+        "claim": {
+          "creator_key": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4",
+          "claim_type": "self_attested",
+          "claim_method": "self",
+          "claim_subject": {
+            "display_name": "Conformance Test Subject",
+            "organization": "atrib"
+          },
+          "signature": "y90ABapkXiupbuc2h9X2eUsqtsu1e6ZDmLA6CWYpEf8CGGnI6GZHleYsh91OKCu0RWKpuuzsG8uOsfqqhDqgBg"
+        },
+        "version": 1
+      }
+    },
+    "verifier_output": {
+      "identity_resolved": {
+        "creator_key": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4",
+        "claim_type": "self_attested",
+        "claim_method": "self",
+        "claim_subject": {
+          "display_name": "Conformance Test Subject",
+          "organization": "atrib"
+        },
+        "signature": "y90ABapkXiupbuc2h9X2eUsqtsu1e6ZDmLA6CWYpEf8CGGnI6GZHleYsh91OKCu0RWKpuuzsG8uOsfqqhDqgBg"
+      },
+      "identity_resolution_method": "directory_lookup",
+      "capability_envelope": null,
+      "key_revocation_status": null
+    }
+  }
+}

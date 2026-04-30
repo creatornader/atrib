@@ -1,0 +1,19 @@
+{
+  "spec_section": "6",
+  "generated_at": 1767225600000,
+  "cases": [
+    {
+      "file": "cases/valid-self-attested-claim.json",
+      "name": "valid-self-attested-claim"
+    },
+    {
+      "file": "cases/valid-non-membership.json",
+      "name": "valid-non-membership"
+    }
+  ],
+  "keys": {
+    "subject_pubkey": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4",
+    "unregistered_pubkey": "REREREREREREREREREREREREREREREREREREREREREQ"
+  },
+  "note": "These two cases cover the membership / non-membership branches in resolveIdentity (§6.3 step 6 + 8). Cases enumerated in README.md that require live AKD proofs (anchor-coherence, append-only-consistency, AKD proof validation, witness coverage) generate once a corpus runner exercises the live directory-node + log-node pair against fixtures."
+}

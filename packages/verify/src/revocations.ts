@@ -52,7 +52,12 @@ export interface MinimalRecord {
 const KEY_REVOCATION_URI = 'https://atrib.dev/v1/types/key_revocation'
 
 function isRevocationRecord(r: MinimalRecord): boolean {
+  // The record may carry the type as either the short label ('key_revocation'),
+  // the canonical URI ('https://atrib.dev/v1/types/key_revocation'), or via
+  // a separate event_type_uri field (e.g., when the source surfaces both
+  // a short label in event_type and the full URI alongside).
   if (r.event_type === 'key_revocation') return true
+  if (r.event_type === KEY_REVOCATION_URI) return true
   if (r.event_type_uri === KEY_REVOCATION_URI) return true
   return false
 }
