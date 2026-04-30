@@ -398,6 +398,43 @@ describe('graph fanout', () => {
   })
 })
 
+// T8: the log is append-only; DELETE is rejected with 405.
+describe('append-only design (T8)', () => {
+  it('DELETE /v1/entries returns 405 with Allow header', async () => {
+    const u = new URL(server.url)
+    const got = await new Promise<{ status: number; allow: string; body: string }>((resolve, reject) => {
+      const req = httpRequest({
+        method: 'DELETE', hostname: u.hostname, port: u.port, path: '/v1/entries',
+      }, (res: IncomingMessage) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => resolve({
+          status: res.statusCode ?? 0,
+          allow: String(res.headers['allow'] ?? ''),
+          body: Buffer.concat(chunks).toString('utf-8'),
+        }))
+      })
+      req.on('error', reject)
+      req.end()
+    })
+    expect(got.status).toBe(405)
+    expect(got.allow).toBe('POST')
+    expect(got.body).toMatch(/append-only/i)
+  })
+
+  it('DELETE /v1/entries/<index> returns 405', async () => {
+    const u = new URL(server.url)
+    const got = await new Promise<number>((resolve, reject) => {
+      const req = httpRequest({
+        method: 'DELETE', hostname: u.hostname, port: u.port, path: '/v1/entries/0',
+      }, (res: IncomingMessage) => { res.resume(); resolve(res.statusCode ?? 0) })
+      req.on('error', reject)
+      req.end()
+    })
+    expect(got).toBe(405)
+  })
+})
+
 describe('GET /v1/recent', () => {
   it('returns latest entries newest-first with decoded fields', async () => {
     // Submit 3 records so /v1/recent has something to return

@@ -1429,16 +1429,180 @@ Result: one promotion (`observation`), three correct-rejections that remain vali
 
 **Implementation sequencing.** [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) has no implementation. It is a governance ADR. The first application of the bar is the normative set defined in [D035](#d035-extensible-event_type-vocabulary-via-uri-typing): `tool_call`, `transaction`, `observation`. The next application will be whoever proposes the next promotion.
 
-## D037-D040: Reserved
+## D037: HSM/KMS operator profile
 
-D037 through D040 are reserved for future ADRs queued at the time the [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type)-D049 series was authored. The reserved scopes are:
+**Date:** 2026-04-30
+**Status:** Accepted (design only; implementation gated)
 
-- **D037**: HSM/KMS operator profile (hardware-backed signing; `keystore: 'callback'` mode)
-- **D038**: per-conversation key derivation (HKDF from master seed; spec-only, deferred implementation)
-- **D039**: audit log for key access (every load/use writes a local audit line)
-- **D040**: reference harness package scope and informative-not-normative status
+**Context.** Today the `creator_key` Ed25519 seed lives as 32 raw bytes, in env variables, in `~/.atrib/keys/`, or in macOS Keychain (per [D033](#d033-key-rotation-and-revocation) + prior implementation work). For development loops this is acceptable: the threat model is single-machine compromise (covered by Keychain + per-process file-mode 0600). For organizations using atrib in production, key material must never appear in process memory at all. The standard operator profile is HSM-backed signing: the seed lives inside a Cloud KMS, Vault Transit engine, or hardware YubiHSM; the wrapper requests a signature for each canonical record and never holds the bytes.
 
-These ADRs will be authored when their respective work happens. Numbering preserved to avoid disturbing pre-allocated cross-references in earlier planning artifacts.
+The `keystore: 'callback'` mode designed in  (and merged but not yet wired end-to-end) provides the wrapper-side hook. This ADR records the operator profile that closes the loop.
+
+**Decision.**
+
+1. **Three reference profiles.** atrib documents three operator profiles for HSM-backed signing, all using the same `keystore: 'callback'` middleware option:
+   - **AWS KMS**, `Sign` API call against a `KEY_USAGE: SIGN_VERIFY` key with `KEY_SPEC: ECC_NIST_P256` initially (deferring Ed25519 KMS support, which AWS announced in 2023 but staged region-by-region; this profile lists Ed25519 as the long-term target). Latency: ~30-50ms per sign. Cost: ~$0.03 per 10K signs.
+   - **HashiCorp Vault Transit**, `transit/sign/<key>` endpoint with `key_type: ed25519`. Latency: ~5-15ms when Vault is co-located. Cost: license-dependent; effectively free if Vault is already deployed.
+   - **YubiHSM 2**, local-network HSM with PKCS#11 binding via `pkcs11js`. Latency: ~10ms. Cost: hardware capex (~$650 per unit) + zero ongoing.
+
+2. **Wrapper contract.** The `keystore: 'callback'` mode passes the canonical signing input (the bytes that would be signed by `signRecord`) and the public key (already known to the wrapper from prior bootstrapping) to the operator-supplied function:
+   ```ts
+   keystore: {
+     mode: 'callback',
+     publicKey: 'base64url-43-chars',
+     sign: async (canonicalBytes: Uint8Array): Promise<Uint8Array> => {
+       // operator: HSM call returning 64-byte Ed25519 signature
+     },
+   }
+   ```
+   The middleware never sees the seed. If the callback throws or returns invalid bytes, the record submission fails per [§5.8](atrib-spec.md#58-degradation-contract) (warning, not user-visible error).
+
+3. **No coupling between profile and protocol.** atrib does not specify which HSM operators must use. Any backend that can produce a 64-byte Ed25519 signature over a 32+ byte canonical input qualifies. Non-Ed25519 HSMs (RSA-only, ECDSA-only) are not supported by atrib v1, the Ed25519 choice ([§1.4.1](atrib-spec.md#141-key-format)) is normative.
+
+4. **Where this lives in the spec.** [§7.6](atrib-spec.md#76-hsm-operator-profile) (new subsection) documents the callback contract and the three reference profiles. The profile section is informative; the callback signature is normative.
+
+**Alternatives considered.**
+
+1. *Operator-managed RFC 7468 PEM file with passphrase-encrypted seed.* Rejected, passphrase has the same memory-residency problem as the bare seed once decrypted, and adds a UX layer (passphrase prompt) that breaks unattended deployments.
+
+2. *Atrib bundles its own HSM client per backend.* Rejected, proliferates dependencies and makes atrib responsible for HSM SDK upgrade cycles. The callback mode lets operators bring their own client.
+
+3. *Bootstrap from cloud-provider IMDS.* Rejected as the default path because it ties atrib to specific cloud environments. Documented as "additional pattern: AWS Lambda may use IMDSv2 to fetch a session-scoped KMS key" but not the headline.
+
+**Consequences.**
+
+- *Spec.* New [§7.6](atrib-spec.md#76-hsm-operator-profile) subsection (informative profiles + normative callback contract).
+- *Wrapper.* `keystore: 'callback'` is the load-bearing change, already designed, validation against a mock HSM signer closes the implementation gap.
+- *Documentation.* Each profile gets a 1-2 page operator runbook in `docs/operator/hsm-<profile>.md` (private first; promoted to public at first non-operator user).
+- *No breaking changes.* The `keystore: 'env' | 'file' | 'keychain'` modes remain available for solo operators / dev. Callback mode is additive.
+
+**What this DOES NOT solve.**
+
+- *Key escrow.* HSMs prevent extraction; they don't address "we lost access to the HSM and need our records to keep working." Per [§1.9.2](atrib-spec.md#192-signing-rules), the emergency-key path covers this, if the operator pre-registered an emergency key, they can revoke compromised + rotate to a successor without HSM access.
+- *Multi-region HSM topology.* If the operator's wrapper is in us-east-1 and the HSM is in eu-west-1, every sign is a transatlantic round-trip. atrib doesn't prescribe topology; the latency tradeoff is the operator's call.
+- *Auditability of HSM-side decisions.* AWS KMS, Vault, and YubiHSM each have their own audit log. atrib's [D039](#d039-audit-log-for-key-access) audit log is wrapper-side; it captures every sign request and the public key in use, but not the HSM's internal decision-making.
+
+**Implementation sequencing.** Spec [§7.6](atrib-spec.md#76-hsm-operator-profile) draft → callback-mode validation against a mock HSM signer → AWS KMS reference adapter in `packages/agent/src/keystore-aws-kms.ts` (deferred, separate phase) → operator runbook for Vault + YubiHSM (deferred).
+
+## D038: Per-conversation key derivation
+
+**Date:** 2026-04-30
+**Status:** Accepted (spec only; implementation deferred to V2)
+
+**Context.** A creator_key signs every record an agent emits, across every session, indefinitely. This couples three privacy/compromise concerns:
+
+1. **Cross-session linkability.** A verifier can trivially correlate every action by the same creator_key. For some applications (e.g., a long-running personal agent operating on the user's behalf) this is desired. For others (e.g., one-off task agents that should not be linkable across users) it leaks more than intended.
+2. **Compromise blast radius.** A leaked creator_key invalidates every record signed by it from the moment of leak forward (per [§1.9](atrib-spec.md#19-key-rotation-and-revocation)). With per-conversation derivation, a leak of a derived key compromises only that conversation, not the entire history.
+3. **Key rotation cadence.** Today, rotating the creator_key is a heavyweight act ([D033](#d033-key-rotation-and-revocation)) that produces a `key_revocation` record and updates the directory claim. Per-conversation keys would let routine "rotation" be derivation, with the master key only rotated on actual compromise.
+
+The mechanism: HKDF (RFC 5869) derives a per-conversation Ed25519 seed from a master seed plus a context label. The master public key is published to the directory (per [§6.1](atrib-spec.md#61-identity-claim-format)) along with the derivation rule; verifiers can independently re-derive the per-conversation public key for any record and confirm the signature against it.
+
+**Decision.**
+
+1. **Spec the derivation, defer the implementation to V2.** [§1.10](atrib-spec.md#110-per-conversation-key-derivation) (new subsection) is informative for v1, implementations MAY support derivation but MUST NOT require it. The bare creator_key path remains the default.
+
+2. **Derivation rule.** Per-conversation keys derive as:
+   ```
+   per_conv_seed = HKDF-SHA256(
+     ikm   = master_seed,           // 32 bytes
+     salt  = "atrib/v1/per-conv",   // domain separator (UTF-8 literal)
+     info  = context_id || conversation_id,  // 16 + 16 = 32 bytes
+     L     = 32,                    // output length
+   )
+   ```
+   The `conversation_id` is a 16-byte agent-chosen value carried in the record's `conversation_id` field (new optional field; lex-orders before `creator_key`). Records WITHOUT `conversation_id` use the master key directly.
+
+3. **Directory disclosure.** Identity claims that opt into per-conversation derivation declare it via a new `claim_subject.derivation` field:
+   ```jsonc
+   {
+     "creator_key": "<master pubkey>",
+     "claim_subject": {
+       "display_name": "...",
+       "derivation": {
+         "rule": "atrib/v1/per-conv-hkdf",
+         "info_format": "context_id || conversation_id"
+       }
+     }
+   }
+   ```
+   Verifiers seeing `derivation` consult [§1.10](atrib-spec.md#110-per-conversation-key-derivation) to re-derive the expected per-conversation public key for the record being verified.
+
+4. **Backward compatibility.** Identity claims WITHOUT `derivation` continue to be verified against the bare `creator_key`. Records WITH `conversation_id` but whose claim has no `derivation` are flagged `claim_derivation_mismatch: true` (soft signal per [§6.3](atrib-spec.md#63-verifier-consultation-algorithm) failure semantics).
+
+5. **No revocation propagation.** Revoking the master key revokes all derived keys (they share the master in their ancestry). Revoking a single derived key is NOT supported in this design, the granularity is per-master.
+
+**Alternatives considered.**
+
+1. *Per-record derivation (full forward secrecy).* Rejected for v1, every record requires a fresh KDF call + signature against a fresh public key, which compounds verifier work (every record requires re-deriving and looking up). The per-conversation grain is the right balance: bounded number of derived keys per master, all derivable on demand.
+
+2. *Threshold signatures (k-of-n cosigners).* Rejected as out of scope. Threshold schemes solve the operational continuity problem differently (no single key to compromise) but require significant cryptographic infrastructure. atrib v1 stays with single-key Ed25519.
+
+3. *Stateful key derivation (chain forward like Signal).* Rejected because it requires synchronized state between the agent and the verifier, both must replay from the master to the current per-conv key. The HKDF design is stateless: any verifier can derive any per-conv key independently.
+
+**Consequences.**
+
+- *Spec.* New [§1.10](atrib-spec.md#110-per-conversation-key-derivation) subsection (informative for v1, normative if/when an implementation adopts it). New optional `conversation_id` record field. New optional `claim_subject.derivation` field.
+- *Wrapper.* No code changes for v1. Future implementations add a `keyMode: 'derived' | 'master'` middleware option.
+- *Verifier.* No code changes for v1. Future implementations re-derive per-conversation public keys when verifying records that carry `conversation_id`.
+- *Directory.* No schema changes, `claim_subject` is already a free-form JSON object per [§6.1](atrib-spec.md#61-identity-claim-format).
+
+**What this DOES NOT solve.**
+
+- *Master key compromise.* If the master seed leaks, every derived key is reproducible. The compromise blast radius is reduced for short-lived derived keys (post-revocation new conversations get fresh keys), but the historical record signed under any conversation's pre-revocation derived key is forensically replayable from the leaked master.
+- *Mixing modes within one identity.* An identity that has SOME records signed with the master and OTHERS signed with derived keys is permitted but operationally confusing. Recommend operators commit to one mode per identity.
+
+**Implementation sequencing.** Spec only for v1. Pre-implementation work: a Wycheproof-shaped HKDF test corpus to confirm the derivation rule is reproducible across implementations.
+
+## D039: Audit log for creator-key access
+
+**Date:** 2026-04-30
+**Status:** Accepted (design + skeleton; full SIEM integration deferred)
+
+**Context.** The wrapper holds the creator_key seed (or a callback to an HSM, per [D037](#d037-hsmkms-operator-profile)) for the lifetime of the process. Every signature operation reads or proxies that key. Without an audit log, an operator investigating a compromise has no record of when, by which process, or in response to what input the key was used. atrib's degradation contract ([§5.8](atrib-spec.md#58-degradation-contract)) and idempotency cache mean even legitimate signature requests can fan out internally; the audit log captures the wrapper-side call, not just the on-the-wire submission.
+
+**Decision.**
+
+1. **Per-process JSONL audit file.** Every key-access operation in the wrapper appends one JSONL line to `~/.atrib/audit/<YYYY-MM-DD>.jsonl` (configurable via `ATRIB_AUDIT_PATH`). File permissions: dir 0700, file 0600.
+2. **Recorded fields.** Each line:
+   ```jsonc
+   {
+     "ts": 1743850000000,           // ms since epoch
+     "op": "sign",                  // 'sign' | 'load_seed' | 'derive'
+     "pid": 12345,                  // process id
+     "ppid": 12344,                 // parent process id
+     "node_v": "v22.0.0",           // node version (helps trace)
+     "creator_key": "<base64url>",  // public key (NEVER the seed)
+     "context_id": "<32-hex>",      // when applicable; redacted to null for non-record-bound ops
+     "record_hash": "sha256:..."    // for sign ops; null otherwise
+   }
+   ```
+   Notably ABSENT: the canonical signing input bytes, the resulting signature, and any seed material.
+3. **Optional remote sync.** The wrapper supports `ATRIB_AUDIT_FORWARD=<url>` for streaming each line to an operator's SIEM (e.g., a Splunk HEC endpoint, an OpenTelemetry collector). The forwarder is fire-and-forget per [§5.8](atrib-spec.md#58-degradation-contract); a failed forward warns once and continues.
+4. **Rotation.** One file per UTC day. Implicit rotation at midnight; the wrapper does not delete old files (operator policy).
+5. **Where this DOES NOT live.** The audit log lives wrapper-side (filesystem or operator SIEM). It is NOT submitted to the public log, the contents (process IDs, parent process IDs, op timing) are operator-private operational data.
+
+**Alternatives considered.**
+
+1. *No audit log; rely on the public log.* Rejected, the public log records the OUTCOME of signing (the record committed), not the wrapper-side ATTEMPT. Failed signs, retries, and idempotent cache hits never appear publicly. An operator investigating a compromise needs the wrapper's view.
+2. *syslog / journald instead of JSONL.* Rejected, JSONL is portable across OSes, easy to grep, and trivially forwardable. syslog would couple atrib to OS-specific configuration.
+3. *Encrypted audit file (AES-GCM with a separate audit key).* Rejected for v1, adds a key-management problem to solve a problem most operators don't have. File-mode 0600 + filesystem encryption (FileVault, LUKS) is the v1 default. Operators with stricter requirements use the SIEM forward.
+
+**Consequences.**
+
+- *Wrapper.* New `audit.ts` module in `packages/mcp/`. New env vars: `ATRIB_AUDIT_PATH`, `ATRIB_AUDIT_FORWARD`. Audit calls hooked into `signRecord` + `loadSeed`.
+- *No spec changes.* The audit log is a wrapper-implementation concern, not protocol.
+- *Default-on.* The audit log is created on first sign operation. Operators who want to disable it set `ATRIB_AUDIT_PATH=/dev/null`.
+
+**What this DOES NOT solve.**
+
+- *Tamper-evident audit.* The JSONL file is plain text, append-only by convention only, an attacker with filesystem write access can rewrite history. For tamper-evidence, the operator forwards to a SIEM with cryptographic timestamping. Building atrib-side tamper-evidence (sign each line, chain via the previous line's hash) is V2 work.
+- *Cross-host correlation.* When one logical "wrapper" runs across multiple processes (e.g., Node cluster mode), each process produces its own audit file. Correlation requires the operator to ship them all to the same SIEM.
+
+**Implementation sequencing.** `audit.ts` module → hook `signRecord` + `loadSeed` → integration tests asserting line shape + file mode → operator runbook documenting the format and SIEM forwarding example.
+
+## D040: Reserved
+
+D040 is reserved for the harness reference implementation ADR (per prior implementation work: scope of `@atrib/recall`, why it's informative-not-normative). It will be authored when @atrib/recall moves from  to the public `packages/recall/` directory.
 
 ## D041: informed_by linking primitive and INFORMED_BY edge type
 

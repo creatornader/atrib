@@ -144,6 +144,24 @@ async function handleRequest(
     return handleSubmit(req, res, tree, signer, proofCache, acquireLock, graphFanoutEndpoint)
   }
 
+  // §1.8 / T8: the log is append-only by design. DELETE is rejected
+  // explicitly with 405 and an Allow header so consumers don't mistake
+  // silence for "this might work later." GDPR requests for record
+  // removal cannot be served by the log; the immutable design is the
+  // protocol's correctness property and is documented in ARCHITECTURE.md.
+  if (req.method === 'DELETE' && req.url?.startsWith('/v1/entries')) {
+    res.statusCode = 405
+    res.setHeader('allow', 'POST')
+    res.setHeader('content-type', 'application/problem+json')
+    res.end(JSON.stringify({
+      type: 'https://atrib.dev/problems/append-only',
+      title: 'Method Not Allowed',
+      status: 405,
+      detail: 'The atrib log is append-only by design. Records cannot be deleted via the API. See ARCHITECTURE.md and §1.8.',
+    }))
+    return
+  }
+
   if (req.method === 'GET' && req.url === '/v1/checkpoint') {
     return handleCheckpoint(res, tree, signer)
   }

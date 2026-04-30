@@ -72,6 +72,21 @@ export function validateSubmission(record: Partial<AtribRecord>): ValidationResu
     }
   }
 
+  // T13: chain_root must match the spec §1.2.3 format,
+  // either the genesis form 'sha256:' + 64-hex of SHA-256(context_id),
+  // or a sha256: prefix + 64-hex of a prior record_hash. The format
+  // check rejects malformed inputs (empty string, missing prefix,
+  // wrong digest length) at the API boundary so they can't pollute
+  // the log.
+  if (!/^sha256:[0-9a-f]{64}$/.test(record.chain_root as string)) {
+    return { ok: false, status: 400, error: 'chain_root must match sha256:<64-hex>' }
+  }
+
+  // content_id follows the same shape per §1.2.5.
+  if (!/^sha256:[0-9a-f]{64}$/.test(record.content_id as string)) {
+    return { ok: false, status: 400, error: 'content_id must match sha256:<64-hex>' }
+  }
+
   // session_token is optional and OMITTED when absent (§1.3), but if present must be a string
   if ('session_token' in record && typeof record.session_token !== 'string') {
     return { ok: false, status: 400, error: 'session_token must be a string when present' }
