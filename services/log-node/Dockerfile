@@ -14,7 +14,9 @@ COPY packages/mcp/ packages/mcp/
 COPY packages/directory/ packages/directory/
 COPY services/log-node/ services/log-node/
 
-# D054: bundle the public-explorer HTML so log-node can serve it at /dashboard.
+# D054: bundle the public-explorer HTML + static assets (favicon, icons,
+# OG images) so log-node can serve them. apps/dashboard/static/ holds the
+# binary assets referenced by the HTML's <link> tags.
 COPY apps/dashboard/ apps/dashboard/
 
 RUN pnpm install --frozen-lockfile --filter @atrib/log-node...
