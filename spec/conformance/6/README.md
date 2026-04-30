@@ -10,8 +10,25 @@ privacy properties of the blinded path.
 
 ## Status
 
-**Skeleton.** The cases are enumerated below. JSON fixtures land alongside
-the directory implementation.
+**Initial subset shipped.** Two foundational cases are committed:
+`valid-self-attested-claim.json` (membership branch) and
+`valid-non-membership.json` (non-membership branch). Together they
+exercise §6.3 step 6 (directory lookup) + step 8 (claim parsing) of the
+9-step verifier consultation algorithm.
+
+Both files are byte-identical regenerations of
+`packages/log-dev/scripts/generate-conformance-6.ts` (run with
+`pnpm --filter @atrib/log-dev exec tsx scripts/generate-conformance-6.ts`).
+
+The reference implementation (`packages/verify/test/conformance-6.test.ts`)
+loads each fixture, mocks the directory response per the case's
+`directory_response`, and asserts the `resolveIdentity` output matches
+the case's `verifier_output`.
+
+Cases enumerated below that require live AKD proofs (anchor coherence,
+append-only consistency, AKD proof validation, witness coverage,
+capability envelopes) will generate when the corpus runner exercises
+a live `directory-node` + `log-node` pair against fixtures end-to-end.
 
 ## What will be in the corpus
 
