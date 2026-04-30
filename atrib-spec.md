@@ -3273,7 +3273,7 @@ The private key signs every attribution record emitted by the creator. Compromis
 
 - SDK implementations MUST zero the key material from memory after use when the runtime supports it.
 
-**Key compromise.** This specification does not define a key rotation or revocation mechanism (see §1.8). A compromised key cannot be revoked within the protocol; it can only be abandoned. Creators who believe their key has been compromised should generate a new key, publish a public attestation linking their old and new keys, and begin submitting records under the new key.
+**Key compromise.** §1.9 defines the normative key rotation and revocation mechanism. Creators who believe their key has been compromised SHOULD publish a `key_revocation` record per §1.9.1 with `revocation_reason: "compromise"` (and a `successor_key` if rotating to a new key), then submit subsequent records under the new key. Verifiers honor the revocation per §1.9.2 (records signed at or after the revocation timestamp are flagged `revoked_after_revocation`). The §6 directory propagates revocations to other agents and verifiers.
 
 ---
 
