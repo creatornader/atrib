@@ -1,26 +1,42 @@
-// Key resolution chain for atrib-emit. Mirrors the wrapper's resolution order
-// per the scope doc: env → file → macOS Keychain. atrib-emit signs records
-// under the agent's identity (same key as the wrapper), so it must agree
-// with whatever the wrapper resolves.
+// Key resolution chain for atrib-emit. MUST mirror the wrapper
+// wrapper's resolution order exactly, emit signs records under the same
+// identity as the wrapper, so a divergence here means the two producers
+// would sign as different identities in the same session, breaking the
+// chain assumption and creating mystery keys in the log.
+//
+// Resolution order (first hit wins):
+//   1. ATRIB_PRIVATE_KEY env var (legacy / dev path)
+//   2. ATRIB_KEY_FILE env var → 0600 file
+//   3. macOS Keychain, account = current user, services tried in order:
+//        - atrib-creator-<ATRIB_AGENT>  (agent-scoped; matches wrapper)
+//        - atrib-creator                (generic fallback)
+//
+// Wrapper source of truth:
+//   private wrapper source
 
 import { readFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
+import { userInfo } from 'node:os'
 import { base64urlDecode } from '@atrib/mcp'
-
-const KEYCHAIN_SERVICE = 'atrib-creator'
 
 export interface ResolvedKey {
   privateKey: Uint8Array
   /** Source the key came from. Surfaced in startup logs so operators can confirm key provenance. */
   source: 'env' | 'file' | 'keychain'
+  /** Which Keychain service yielded the key, when source === 'keychain'. */
+  keychainService?: string
 }
 
 /**
- * Resolve the agent's signing key. Ordered fallback so a development setup
- * (env var) takes precedence and Keychain is the production default on
- * macOS. Returns null when no key is available; callers run in pass-through
- * mode (per §5.8 degradation) and the emit tool returns a warning rather
- * than crashing.
+ * Resolve the agent's signing key. Returns null when no key is available;
+ * callers run in pass-through mode (per §5.8 degradation) and the emit
+ * tool returns a warning rather than crashing.
+ *
+ * The agent name (defaults to 'claude-code', override with ATRIB_AGENT)
+ * picks the agent-scoped Keychain service first, falling back to the
+ * generic 'atrib-creator' service. This matches the wrapper exactly: a
+ * Keychain entry created via `atrib keygen --keychain --service
+ * atrib-creator-claude-code` resolves identically here and in the wrapper.
  */
 export async function resolveKey(): Promise<ResolvedKey | null> {
   const envSeed = process.env['ATRIB_PRIVATE_KEY']
@@ -35,15 +51,21 @@ export async function resolveKey(): Promise<ResolvedKey | null> {
   }
 
   if (process.platform === 'darwin') {
-    const account = process.env['ATRIB_KEYCHAIN_ACCOUNT'] ?? KEYCHAIN_SERVICE
-    const result = spawnSync(
-      'security',
-      ['find-generic-password', '-a', account, '-s', KEYCHAIN_SERVICE, '-w'],
-      { encoding: 'utf-8' },
-    )
-    if (result.status === 0) {
-      const seed = result.stdout.trim()
-      if (seed.length > 0) return { privateKey: decodeSeed(seed), source: 'keychain' }
+    const account = process.env['ATRIB_KEYCHAIN_ACCOUNT'] ?? userInfo().username
+    const agent = process.env['ATRIB_AGENT'] ?? 'claude-code'
+    const services = [`atrib-creator-${agent}`, 'atrib-creator']
+    for (const service of services) {
+      const result = spawnSync(
+        'security',
+        ['find-generic-password', '-a', account, '-s', service, '-w'],
+        { encoding: 'utf-8' },
+      )
+      if (result.status === 0) {
+        const seed = result.stdout.trim()
+        if (seed.length > 0) {
+          return { privateKey: decodeSeed(seed), source: 'keychain', keychainService: service }
+        }
+      }
     }
   }
 
