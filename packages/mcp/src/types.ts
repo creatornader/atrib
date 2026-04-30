@@ -16,6 +16,14 @@ export type AtribRecord = {
   context_id: string
   timestamp: number
   signature: string
+  /**
+   * Optional cross-record reference list (D041 / spec §1.2.7). Each entry
+   * is the `sha256:<64-hex>` record_hash of a prior record this one was
+   * informed by. JCS-canonical form sorts the field lexicographically
+   * between `event_type` and `provenance_token`. Verifiers derive
+   * INFORMED_BY graph edges from these (§3.2.4).
+   */
+  informed_by?: string[]
 } & ({ session_token: string } | { session_token?: never })
 
 /** An unsigned record. all fields except signature. */

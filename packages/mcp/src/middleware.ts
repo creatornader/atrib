@@ -92,6 +92,19 @@ export interface AtribOptions {
    * signed-record mirror persisted by `onRecord`).
    */
   autoChainSeed?: AtribRecord[]
+  /**
+   * Optional callback invoked once per outbound tool call. Returns the list
+   * of prior `record_hash` values (each `sha256:<64-hex>`) that this call
+   * is informed by. The middleware injects the result into the signed
+   * record's `informed_by` field (D041 / spec §1.2.7), letting verifiers
+   * derive INFORMED_BY graph edges.
+   *
+   * Receives the MCP tool-call params object (so the host can inspect
+   * arguments, names, etc.). Returning `undefined` or an empty array omits
+   * the field. The host is responsible for accuracy — informed_by is a
+   * provenance claim, not a heuristic.
+   */
+  informedBy?: (params: Record<string, unknown>) => string[] | undefined
 }
 
 /** Extended McpServer with atrib-specific methods. */
@@ -360,6 +373,20 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
 
         // Construct the record
         const contentId = computeContentId(serverUrl, toolName)
+        // informedBy callback (D041 / §1.2.7): host declares which prior
+        // records influenced this call. Wrapped in try/catch so a faulty
+        // callback never blocks signing — per §5.8 attribution must degrade
+        // silently. Empty/undefined result omits the field entirely
+        // (presence affects the JCS canonical form, so omission is normal).
+        let informedByList: string[] | undefined
+        if (options.informedBy) {
+          try {
+            const result = options.informedBy(params as Record<string, unknown>)
+            if (Array.isArray(result) && result.length > 0) informedByList = result
+          } catch (e) {
+            console.warn('atrib: informedBy callback threw', e)
+          }
+        }
         const record: AtribRecord = {
           spec_version: 'atrib/1.0',
           content_id: contentId,
@@ -369,6 +396,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
           context_id: contextId,
           timestamp: Date.now(),
           signature: '',
+          ...(informedByList ? { informed_by: informedByList } : {}),
           ...(sessionToken ? { session_token: sessionToken } : {}),
         } as AtribRecord
 
