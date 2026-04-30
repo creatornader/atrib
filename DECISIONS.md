@@ -2378,3 +2378,51 @@ The URI migration ([D035](#d035-extensible-event_type-vocabulary-via-uri-typing)
 - *a downstream consumer.* Continues using `https://example.com/v1/types/...` URIs. No coordination with atrib spec maintainers required for vocabulary additions.
 - *atrib explorer.* Extension-URI records render with their full URI string (not a normative type label). When a second harness adopts an `apply`-shaped type, revisit promotion via a fresh ADR.
 - *Reopening criteria.* This decision is reopened automatically the moment a second independent harness uses the same URI shape (or an isomorphic one) — i.e., the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) bar starts to clear. At that point write a new ADR; do not amend D055.
+
+---
+
+# Pending decisions
+
+These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
+
+## P002: agent-bridge on atrib substrate
+
+**Source:** Strategic question raised 2026-04-30 ("what if agent-bridge just used atrib for this stuff?"). Captured in detail in `operator-internal dogfooding notes` "agent-bridge on atrib substrate" section, and in `operator-internal substrate notes` as Use Case 2.
+
+**The decision in question:** rebuild agent-bridge as `atrib-bridge` — a parallel implementation that uses atrib substrate (signed records + Merkle log + directory) instead of Postgres + Supabase as the storage and identity layer. Source becomes `creator_key` (cryptographic, not spoofable). Categories become `event_type` URIs in the agent-bridge namespace. Acks become signed records pointing at posts via `informed_by`. Postgres dependency disappears entirely.
+
+**Strategic implications.** The substrate's reach was under-claimed by the original "verifiable tool calls" positioning. agent-bridge fitting on atrib substrate proves the substrate generalizes to verifiable agent-to-agent coordination. This is a concrete second use case beyond the original wrapper-on-MCP-tool-calls one and a flywheel for atrib adoption (every bridge user becomes an atrib user).
+
+**Staging if accepted.** Build atrib-bridge as parallel implementation; dogfood for weeks; if it works, atrib-backed becomes the open-source default and the original Supabase-backed stays as legacy/development. Slots into the dogfooding sequencing as 6.5 + 6.6 (atrib-bridge prototype + atrib-bridge SKILL.md), after cross-session graph viz lands.
+
+**Likely outcome (not committed):** accept; build the parallel implementation; let dogfood prove it out. The architectural and strategic case is strong; the open question is purely capacity (multi-week effort).
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P003: promote `annotation` to atrib-normative event type as the recall-fidelity primitive
+
+**Source:** Recall-fidelity insight raised 2026-04-30 ("agents reading back signed records lose enormous nuance compared to the agent that signed them"). Captured in `operator-internal dogfooding notes` "The recall-fidelity problem" section.
+
+**Why this reopens [D055](#d055-a downstream consumer-annotation--proposal--apply-types-stay-as-extension-uris-not-promoted-to-atrib-normative).** D055 ruled `annotation` should stay as a a downstream consumer extension URI because no second harness used the same shape. The recall-fidelity insight is the second use case: ANY atrib-using agent emitting "this record is important; future-self should weight it heavy with these topics + this summary" is using the same shape. Two independent harnesses (atrib-using agents generally + a downstream consumer specifically) now need the same semantic. The [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion bar starts to clear.
+
+**The decision in question:** promote `https://atrib.dev/v1/types/annotation` to the atrib normative event_type vocabulary (taking byte `0x04` in the [§2.3.1](atrib-spec.md#231-entry-serialization) log entry encoding). Schema: `annotates: <sha256:...>` (target record_hash), `importance: enum`, `topics: string[]`, `summary: string`, optional `confidence`, `narrative_arc_id`, `sub_context`. Verifier derives `ANNOTATES` graph edges (a new edge type beyond [§3.2.3](atrib-spec.md#323-edge-types)'s seven). a downstream consumer's domain-specific `synthesis-annotation` shape stays in a downstream consumer namespace if semantically distinct from the protocol-level recall-fidelity annotation.
+
+**Implications if accepted.** Spec change in [§1.2.4](atrib-spec.md#124-event_type-values), [§2.3.1](atrib-spec.md#231-entry-serialization), [§3.2.3](atrib-spec.md#323-edge-types), [§3.2.4](atrib-spec.md#324-edge-derivation-rules). Conformance corpus addition. `@atrib/verify` graph derivation update. atrib SKILL.md updated to use the structured shape instead of the workaround pattern (observation with prose). Recall MCP gains optional `with_annotations` / `min_importance` filter parameters.
+
+**Likely outcome:** accept. The recall-fidelity problem is real; the substrate (annotation-as-record) is the right shape; second use case justifies normative promotion per [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary).
+
+**ADR number** will be assigned when the decision is acted on.
+
+## P004: human-direct signing as a first-class identity class (post-day-1)
+
+**Source:** Signer-taxonomy design pass 2026-04-30. Captured in `operator-internal dogfooding notes` "The signer taxonomy" section, design question #8 (resolved: yes, allowed, post-day-1).
+
+**The decision in question:** humans signing atrib records directly (distinct from agent-direction-of-human). Edge types to model the relationship: `AUTHORIZED_BY` (human → agent record), `ATTESTED_BY` (human → claim), `APPROVED_BY` (human → decision), `DELEGATED_TO` (human → agent). Spec changes: new edge types in [§3.2.3](atrib-spec.md#323-edge-types) + derivation rules in [§3.2.4](atrib-spec.md#324-edge-derivation-rules). Identity-resolution changes: humans get a distinct `claim_type` (currently `self_attested` covers both).
+
+**Why deferred.** Day 1 dogfood doesn't require it. Compliance-shaped use cases (regulator wants on-graph proof of human authorization) need it; we're not pursuing those use cases yet.
+
+**Reopening criteria.** First adopter that needs cryptographic distinction between "human authorized" and "agent did this autonomously." Likely candidates: payment-protocol counterparties, regulated financial actions, healthcare-adjacent automation.
+
+**Likely outcome when acted on:** the spec changes are small (new edge types + derivation rules + claim_type extension); the operational change is bigger (humans need their own keys, key management UX, distinguishing identity from agent identities they direct). Defer until a real use case forces the operational work.
+
+**ADR number** will be assigned when acted on.
