@@ -807,12 +807,28 @@ function renderIdentityLabel(creatorKey, opts = {}) {
 function atribSystemSignerKind(creatorKey) {
   const lookup = identityCache.get(creatorKey)
   if (!lookup || !lookup.found) return null
-  const url = lookup.claim?.claim_subject?.url
-  if (typeof url !== 'string') return null
-  let host
-  try { host = new URL(url).host } catch { return null }
-  if (host === 'directory.atrib.dev') return 'directory_anchor'
-  if (host === 'atrib.dev' || host.endsWith('.atrib.dev')) return 'system'
+  const subject = lookup.claim?.claim_subject
+  if (!subject) return null
+
+  // Canonical signal: explicit url host. Future self-claims should populate
+  // this; checking it first lets the URL-based path supersede string sniffing.
+  const url = subject.url
+  if (typeof url === 'string') {
+    let host
+    try { host = new URL(url).host } catch { host = null }
+    if (host === 'directory.atrib.dev') return 'directory_anchor'
+    if (host === 'atrib.dev' || (host && host.endsWith('.atrib.dev'))) return 'system'
+  }
+
+  // Fallback: scan display_name + organization for atrib-namespace hostnames.
+  // Existing self-claims (directory-node pre-D056-follow-up, log-node) encode
+  // the system-identity intent in the friendly name rather than the url field.
+  // Sniff for atrib.dev hostnames so the chip recognizes the signer until those
+  // claims get re-published with proper url fields.
+  const hay = `${subject.display_name ?? ''} ${subject.organization ?? ''}`.toLowerCase()
+  if (hay.includes('directory.atrib.dev')) return 'directory_anchor'
+  if (hay.includes('atrib.dev')) return 'system'
+
   return null
 }
 
