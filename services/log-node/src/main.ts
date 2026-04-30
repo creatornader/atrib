@@ -131,6 +131,26 @@ if (isMain) {
   // eslint-disable-next-line no-console
   console.log(`atrib-log listening on ${server.url}`)
 
+  // Sanity log: derived public key. Same pattern as directory-node — lets
+  // operators map the log signing key visible in /v1/log-pubkey back to
+  // a service identity without re-deriving from the secret seed by hand.
+  if (decision.logPrivateKey) {
+    const ed = await import('@noble/ed25519')
+    const pubKey = Buffer.from(await ed.getPublicKeyAsync(decision.logPrivateKey)).toString('base64url')
+    // eslint-disable-next-line no-console
+    console.log(`  signing key (creator_key): ${pubKey}`)
+
+    // Self-claim: the log signing key shows up in /v1/log-pubkey and signs
+    // every checkpoint. Without a directory claim it shows as 'unclaimed'
+    // anywhere a verifier resolves the identity. Best-effort idempotent
+    // publish on boot. Failure logs but doesn't block service startup.
+    const directoryEndpoint = process.env.ATRIB_DIRECTORY_ENDPOINT ?? 'https://directory.atrib.dev/v6'
+    void ensureLogSelfClaim(directoryEndpoint, pubKey, decision.logPrivateKey).catch((e: unknown) => {
+      // eslint-disable-next-line no-console
+      console.error(`self-claim attempt failed (will retry on next boot): ${e instanceof Error ? e.message : String(e)}`)
+    })
+  }
+
   // Graceful shutdown
   process.on('SIGTERM', async () => {
     await server.close()
@@ -140,4 +160,49 @@ if (isMain) {
     await server.close()
     process.exit(0)
   })
+}
+
+/**
+ * Publish a service-identity claim for the log signing key into the public
+ * directory. Mirrors directory-node's ensureSelfClaim — same shape, different
+ * service identity. Idempotent: lookup first, only publish if absent.
+ */
+async function ensureLogSelfClaim(
+  directoryEndpoint: string,
+  pubKey: string,
+  privateKey: Uint8Array,
+): Promise<void> {
+  const lookup = await fetch(`${directoryEndpoint}/lookup/${encodeURIComponent(pubKey)}`)
+    .then((r) => r.json())
+    .catch(() => null) as { claim: unknown | null } | null
+  if (lookup && lookup.claim) {
+    // eslint-disable-next-line no-console
+    console.log(`  self-claim already published for ${pubKey}`)
+    return
+  }
+
+  const { signClaim } = await import('@atrib/directory')
+  const signed = await signClaim(
+    {
+      creator_key: pubKey,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: {
+        display_name: 'log.atrib.dev (service identity)',
+        organization: 'atrib reference Merkle log: signs C2SP-format checkpoints (§2.4)',
+      },
+    },
+    privateKey,
+  )
+
+  const res = await fetch(`${directoryEndpoint}/publish`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(signed),
+  })
+  if (!res.ok) {
+    throw new Error(`self-claim publish returned ${res.status}: ${await res.text().catch(() => '')}`)
+  }
+  // eslint-disable-next-line no-console
+  console.log(`  self-claim published for ${pubKey}`)
 }
