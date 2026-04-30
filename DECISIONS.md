@@ -2344,3 +2344,37 @@ The right shape is a unified explorer that composes from the three services. Thi
 **Implementation sequencing.**
 
 Option 1 (now): single HTML file at `apps/dashboard/index.html`; CORS added to all three services; log-node serves the HTML at `/dashboard`; Dockerfile bundles the file; deployed to https://explore.atrib.dev/. The explorer loads against production (`log.atrib.dev`, `graph.atrib.dev`, `directory.atrib.dev`) by default with URL-param overrides for local services. Option 2 (when dogfood metrics are producing measurable signal): Vite/Next.js refactor of option 1's view components into a proper SPA; deploys to its own hosting (likely Cloudflare Pages). Option 3 (after gap-closure plan completion): full block-explorer-grade surface; search indexing, real-time updates, visualization. Personal dashboard tracks separately.
+
+## D055: a downstream consumer `annotation` / `proposal` / `apply` types stay as extension URIs (not promoted to atrib-normative)
+
+**Date:** 2026-04-30
+**Status:** Accepted
+
+**Context.** a downstream consumer's observation subsystem (synthesize.py v1, plus v2 plans) emits records that semantically fall into three shapes beyond atrib's then-normative vocabulary: `annotation` (a per-observation note attached to an existing record), `proposal` (a v2 cross-observation pattern suggesting a change), and `apply` (the act of executing an applied proposal). Bridge item 177 (2026-04-27, a downstream consumer → atrib) originally raised these as candidates for atrib-normative promotion when `event_type` was a closed enum (`tool_call` + `transaction` only). At that time the operator chose Path Y ("formally extend the atrib spec") over Path X ("collapse everything to `tool_call`"); `observation` was subsequently promoted to a third normative type as part of the [§1.2.4](atrib-spec.md#124-event_type-values) URI vocabulary migration.
+
+The URI migration ([D035](#d035-extensible-event_type-vocabulary-via-uri-typing) + [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)) materially changed the proposal's shape. Under the URI vocabulary, extension URIs in any namespace already validate, sign, chain, and verify; they encode as `0xFF` (extension) in the [§2.3.1](atrib-spec.md#231-entry-serialization) log entry; they do not need any spec change to be used in the wild. The remaining decision was therefore whether to promote any of `annotation` / `proposal` / `apply` to atrib-normative — taking byte assignments `0x04` / `0x05` / `0x06` and getting first-class treatment in conformance, in `@atrib/verify`, and in the explorer.
+
+**Decision.** Keep all three as extension URIs in a downstream consumer's namespace (e.g., `https://example.com/v1/types/annotation`). Do NOT promote any of them to atrib-normative.
+
+**Rationale.**
+
+1. **The [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion bar is not cleared.** [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) requires multi-harness adoption AND structural-shape relevance to verifiers (not just operators). Only one harness (a downstream consumer) currently uses these shapes; verifiers do not need to do anything different per type.
+
+2. **Extension URIs already give a downstream consumer everything it needs.** The records validate, sign, and chain identically. Extension URIs encode as `0xFF` in the binary entry — a downstream consumer consumers reading the JSON record see the full URI, which is more informative than a single byte. Nothing about a downstream consumer's actual workflow improves by switching to a normative byte.
+
+3. **Normative vocabulary should stay small.** `tool_call`, `transaction`, `observation` cover the universal substrate of agent-to-tool interactions. `annotation` / `proposal` / `apply` are a downstream consumer-shaped — they describe a particular reasoning workflow rather than the universal substrate. Adding workflow-specific types to atrib's normative vocabulary would re-introduce the closed-enum problem the URI migration was designed to escape.
+
+**Alternatives considered.**
+
+1. *Promote all three as atrib-normative (bytes `0x04` / `0x05` / `0x06`).* Rejected. Single-harness adoption fails [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary). Would prematurely freeze a downstream consumer's vocabulary into atrib's spec without evidence that other harnesses converge on the same shape.
+
+2. *Promote only `apply` (most generally-shaped).* Rejected. Same reasoning. `apply` does have cross-harness potential (any agent that executes a previously-proposed change has the same shape), but no second harness has surfaced it yet. Reassess if a second independent harness adopts `https://example.com/v1/types/apply` or proposes its own `apply` URI.
+
+3. *Defer the decision indefinitely (status quo via silence).* Rejected. The proposal had been open since 2026-04-27 with no formal disposition. Recording the decision either way is better than letting it linger as ambiguous bridge-item state.
+
+**Consequences.**
+
+- *Spec.* No spec changes. [§1.2.4](atrib-spec.md#124-event_type-values) already accommodates extension URIs.
+- *a downstream consumer.* Continues using `https://example.com/v1/types/...` URIs. No coordination with atrib spec maintainers required for vocabulary additions.
+- *atrib explorer.* Extension-URI records render with their full URI string (not a normative type label). When a second harness adopts an `apply`-shaped type, revisit promotion via a fresh ADR.
+- *Reopening criteria.* This decision is reopened automatically the moment a second independent harness uses the same URI shape (or an isomorphic one) — i.e., the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) bar starts to clear. At that point write a new ADR; do not amend D055.
