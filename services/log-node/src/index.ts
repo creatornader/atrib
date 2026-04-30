@@ -45,6 +45,17 @@ export interface LogServerOptions {
    * time the process starts.
    */
   persistencePath?: string
+  /**
+   * If set, log-node fire-and-forget POSTs every successfully-submitted
+   * record to this URL after the local commit completes. Intended for
+   * graph-node's /v1/ingest endpoint so the derived graph stays in sync
+   * with the source-of-truth log without operator coordination.
+   *
+   * The fanout never blocks the response or causes a submit to fail; the
+   * log is the source of truth and the graph is a derived view.
+   * Failures are logged with the `atrib-log: graph fanout` prefix.
+   */
+  graphFanoutEndpoint?: string
 }
 
 export interface LogServer {
@@ -88,7 +99,7 @@ export async function startLogServer(options?: LogServerOptions): Promise<LogSer
   // the key must be available for the process lifetime. JavaScript does not
   // support reliable key zeroing (GC is non-deterministic). If memory-dump
   // resistance is ever required, consider a native HSM integration.
-  const handle = await bindServer(tree, signer, port, options?.host)
+  const handle = await bindServer(tree, signer, port, options?.host, options?.graphFanoutEndpoint)
 
   return {
     get url() {

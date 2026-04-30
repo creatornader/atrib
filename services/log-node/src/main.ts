@@ -122,6 +122,9 @@ if (isMain) {
     ...(decision.logPrivateKey ? { logPrivateKey: decision.logPrivateKey } : {}),
     ...(process.env.HOST ? { host: process.env.HOST } : {}),
     ...(process.env.ATRIB_LOG_PERSIST ? { persistencePath: process.env.ATRIB_LOG_PERSIST } : {}),
+    ...(process.env.ATRIB_GRAPH_FANOUT_ENDPOINT
+      ? { graphFanoutEndpoint: process.env.ATRIB_GRAPH_FANOUT_ENDPOINT }
+      : {}),
   }
   const server = await startLogServer(opts)
 

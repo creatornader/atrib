@@ -42,6 +42,7 @@ export async function bindServer(
   signer: CheckpointSigner,
   port: number,
   host?: string,
+  graphFanoutEndpoint?: string,
 ): Promise<ServerHandle> {
   // Serialization lock: the append→proof→sign sequence must not be
   // interleaved by concurrent requests, because signer.sign is async
@@ -80,7 +81,7 @@ export async function bindServer(
       res.end()
       return
     }
-    handleRequest(req, res, tree, signer, proofCache, acquireSubmitLock).catch((err) => {
+    handleRequest(req, res, tree, signer, proofCache, acquireSubmitLock, graphFanoutEndpoint).catch((err) => {
       // eslint-disable-next-line no-console
       console.error('atrib-log-node: request handler crashed', err)
       if (!res.headersSent) {
@@ -125,6 +126,7 @@ async function handleRequest(
   signer: CheckpointSigner,
   proofCache: Map<string, ProofBundle>,
   acquireLock: AcquireLock,
+  graphFanoutEndpoint: string | undefined,
 ): Promise<void> {
   // D054: when accessed via the explore.atrib.dev hostname, serve the
   // dashboard HTML at the root path. log.atrib.dev keeps API behavior at /;
@@ -139,7 +141,7 @@ async function handleRequest(
   }
 
   if (req.method === 'POST' && req.url === '/v1/entries') {
-    return handleSubmit(req, res, tree, signer, proofCache, acquireLock)
+    return handleSubmit(req, res, tree, signer, proofCache, acquireLock, graphFanoutEndpoint)
   }
 
   if (req.method === 'GET' && req.url === '/v1/checkpoint') {
@@ -494,6 +496,7 @@ async function handleSubmit(
   signer: CheckpointSigner,
   proofCache: Map<string, ProofBundle>,
   acquireLock: AcquireLock,
+  graphFanoutEndpoint: string | undefined,
 ): Promise<void> {
   let body: string
   try {
@@ -590,6 +593,39 @@ async function handleSubmit(
   }
 
   sendJson(res, 200, proof)
+
+  // Fan out the full signed record to graph-node so the derived graph
+  // stays in sync with the source-of-truth log. Fire-and-forget; failures
+  // log a warning but never affect the submission. The fanout uses the
+  // post-commit record bytes so any tampering between log and graph would
+  // change the record_hash and be rejected by graph's verifyRecord step.
+  if (graphFanoutEndpoint) {
+    fanoutToGraph(graphFanoutEndpoint, fullRecord, recordHashHex)
+  }
+}
+
+const FANOUT_TIMEOUT_MS = 5000
+
+function fanoutToGraph(endpoint: string, record: AtribRecord, recordHashHex: string): void {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), FANOUT_TIMEOUT_MS)
+  fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(record),
+    signal: ctrl.signal,
+  }).then((r) => {
+    clearTimeout(timer)
+    if (!r.ok) {
+      // eslint-disable-next-line no-console
+      console.warn(`atrib-log: graph fanout for ${recordHashHex.slice(0, 12)}… returned ${r.status}`)
+    }
+  }).catch((err: unknown) => {
+    clearTimeout(timer)
+    const msg = err instanceof Error ? err.message : String(err)
+    // eslint-disable-next-line no-console
+    console.warn(`atrib-log: graph fanout for ${recordHashHex.slice(0, 12)}… failed: ${msg}`)
+  })
 }
 
 async function handleCheckpoint(
