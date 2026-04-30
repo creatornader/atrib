@@ -88,14 +88,14 @@
     --et-extension-subtle: var(--muted-subtle);
     --et-extension-border: rgba(156, 163, 175, 0.25);
     /* Atrib-system event types (e.g. directory_anchor, byte 0x04 per D056).
-       Teal sits clearly outside the agent-action triad (blue tool_call,
-       amber transaction, purple observation) so infrastructure events read
-       as a distinct category. Falls back to this style for any future
-       atrib-namespace URI that ships before its own byte allocation lands
-       (renderEventChip safety net). */
-    --et-system: #14b8a6;
-    --et-system-subtle: rgba(20, 184, 166, 0.12);
-    --et-system-border: rgba(20, 184, 166, 0.3);
+       Pink sits well outside both the agent-action triad (blue tool_call,
+       amber transaction, purple observation) and the verification-badge
+       greens, so infrastructure events read as a clearly distinct category.
+       Falls back to this style for any future atrib-namespace URI that ships
+       before its own byte allocation lands (renderEventChip safety net). */
+    --et-system: #ec4899;
+    --et-system-subtle: rgba(236, 72, 153, 0.12);
+    --et-system-border: rgba(236, 72, 153, 0.3);
 
     /* Type */
     --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, Roboto, sans-serif;
