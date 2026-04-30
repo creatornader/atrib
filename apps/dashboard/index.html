@@ -730,7 +730,10 @@ function renderIdentityLabel(creatorKey, opts = {}) {
   let inner
   if (lookup && lookup.found && lookup.claim?.claim_subject) {
     const subject = lookup.claim.claim_subject
-    const name = subject.name || subject.organization || subject.email || subject.url || subject.handle || null
+    // §6.1 IdentityClaim uses display_name. organization is a SECONDARY
+    // attribute, not a primary label, without this fallback ordering,
+    // an "individual under an org" claim shows the org as the identity.
+    const name = subject.display_name || subject.name || subject.organization || subject.email || subject.url || subject.handle || null
     if (name) {
       inner = el('span', { class: 'id-label' },
         el('span', { class: 'name' }, name),
