@@ -414,16 +414,23 @@
   table.feed tbody td .mono {
     font: 12.5px/1 var(--font-mono); color: var(--text-2);
   }
-  table.feed tbody tr.new {
-    animation: rowEnter 1500ms ease;
+  /* New-row highlight: a sustained amber wash (not a flicker). The cell-level
+   * animation matches the row-level so striped table backgrounds don't
+   * override on tr. Holds full color for ~3.5s, fades over ~3s. Total
+   * ~6.5s, long enough to actually catch the eye scanning the table. */
+  table.feed tbody tr.new,
+  table.feed tbody tr.new td {
+    animation: rowEnter 6500ms ease-out;
   }
   @keyframes rowEnter {
-    0%   { background: var(--accent-subtle); }
-    100% { background: transparent; }
+    0%   { background-color: rgba(252, 211, 77, 0.18); }
+    50%  { background-color: rgba(252, 211, 77, 0.18); }
+    100% { background-color: transparent; }
   }
   @media (prefers-reduced-motion: reduce) {
     .hero .eyebrow .pulse, .feed-head .live-tag .dot { animation: none; }
-    table.feed tbody tr.new { animation: none; }
+    table.feed tbody tr.new,
+    table.feed tbody tr.new td { animation: none; }
   }
 
   /* ─── Chips & badges ─────────────────────────────────────────────────── */
