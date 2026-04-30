@@ -92,5 +92,21 @@ export function validateSubmission(record: Partial<AtribRecord>): ValidationResu
     return { ok: false, status: 400, error: 'session_token must be a string when present' }
   }
 
+  // informed_by is optional (D041 / §1.2.7). When present: array of
+  // `sha256:<64-hex>` strings, each pointing at a prior record_hash.
+  // Order matters for canonicalization but is preserved as-given (verifiers
+  // tolerate any order; the JCS form embeds the array verbatim).
+  if ('informed_by' in record) {
+    const ib = record.informed_by
+    if (!Array.isArray(ib)) {
+      return { ok: false, status: 400, error: 'informed_by must be an array when present' }
+    }
+    for (const ref of ib) {
+      if (typeof ref !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(ref)) {
+        return { ok: false, status: 400, error: 'informed_by entries must each match sha256:<64-hex>' }
+      }
+    }
+  }
+
   return { ok: true }
 }
