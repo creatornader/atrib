@@ -3,92 +3,595 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>atrib explorer</title>
+<title>atrib — the public log of provable AI agent actions</title>
+<meta name="description" content="Every AI tool call, transaction, and observation here is cryptographically signed by an agent and committed to a public log anyone can verify." />
 <style>
+  /*
+   * atrib explorer — design system
+   * D054 option 1 — single-file vanilla; no framework, no build.
+   */
+
   :root {
-    --bg: #0c0d10;
-    --fg: #e6e6e6;
-    --fg-dim: #888;
-    --accent: #7dd3fc;
-    --accent-dim: #386881;
+    /* Surface */
+    --bg: #0a0b0e;
+    --surface: #14161a;
+    --surface-2: #1b1d22;
+    --surface-hover: #1f2128;
+    --border: #262930;
+    --border-subtle: #1d2026;
+
+    /* Text */
+    --text: #ededef;
+    --text-2: #a0a3ab;
+    --text-3: #6a6e78;
+    --text-4: #44474f;
+
+    /* Brand: amber, evoking wax seal / signed / highlighted */
+    --accent: #fcd34d;
+    --accent-strong: #fde68a;
+    --accent-subtle: rgba(252, 211, 77, 0.12);
+    --accent-border: rgba(252, 211, 77, 0.3);
+
+    /* Status */
+    --ok: #34d399;
+    --ok-subtle: rgba(52, 211, 153, 0.12);
+    --ok-border: rgba(52, 211, 153, 0.3);
     --warn: #fbbf24;
-    --err: #ef4444;
-    --ok: #4ade80;
-    --border: #1f2126;
-    --panel: #131418;
-    --code-bg: #07080a;
-    --link: #7dd3fc;
+    --warn-subtle: rgba(251, 191, 36, 0.12);
+    --warn-border: rgba(251, 191, 36, 0.3);
+    --err: #f87171;
+    --err-subtle: rgba(248, 113, 113, 0.12);
+    --err-border: rgba(248, 113, 113, 0.3);
+    --info: #60a5fa;
+    --info-subtle: rgba(96, 165, 250, 0.12);
+    --info-border: rgba(96, 165, 250, 0.3);
+    --muted: #9ca3af;
+    --muted-subtle: rgba(156, 163, 175, 0.1);
+
+    /* Per event_type chip colors */
+    --et-tool-call: var(--info);
+    --et-tool-call-subtle: var(--info-subtle);
+    --et-tool-call-border: var(--info-border);
+    --et-transaction: var(--accent);
+    --et-transaction-subtle: var(--accent-subtle);
+    --et-transaction-border: var(--accent-border);
+    --et-observation: #c084fc;
+    --et-observation-subtle: rgba(192, 132, 252, 0.12);
+    --et-observation-border: rgba(192, 132, 252, 0.3);
+    --et-extension: var(--muted);
+    --et-extension-subtle: var(--muted-subtle);
+    --et-extension-border: rgba(156, 163, 175, 0.25);
+
+    /* Type */
+    --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, Roboto, sans-serif;
+    --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+
+    /* Layout */
+    --container: 1180px;
+    --radius: 8px;
+    --radius-sm: 5px;
   }
+
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 -apple-system, "SF Pro", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-  a { color: var(--link); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  code { font: 12px/1.4 "SF Mono", Menlo, Monaco, "Courier New", monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; word-break: break-all; }
-  pre { font: 12px/1.5 "SF Mono", Menlo, Monaco, "Courier New", monospace; background: var(--code-bg); padding: 12px; border-radius: 4px; overflow-x: auto; max-height: 400px; }
-  header { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--panel); position: sticky; top: 0; z-index: 10; }
-  header h1 { font: 600 16px/1 monospace; margin: 0; }
-  header h1 a { color: var(--fg); }
-  header nav { display: flex; gap: 18px; font-size: 13px; }
-  main { padding: 24px; max-width: 1100px; margin: 0 auto; }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin-bottom: 16px; }
-  .panel h2 { margin: 0 0 12px; font: 600 14px/1 -apple-system, system-ui, sans-serif; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; }
-  .panel h3 { margin: 16px 0 8px; font: 600 13px/1 -apple-system, system-ui, sans-serif; color: var(--fg); }
-  .grid { display: grid; gap: 12px; grid-template-columns: 180px 1fr; }
-  .grid > div:nth-child(odd) { color: var(--fg-dim); font-size: 12px; }
-  .row { display: flex; gap: 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--border); }
-  .row:last-child { border-bottom: none; }
-  .row .label { color: var(--fg-dim); font-size: 12px; min-width: 110px; }
-  .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
-  .badge.ok { background: rgba(74, 222, 128, 0.15); color: var(--ok); }
-  .badge.warn { background: rgba(251, 191, 36, 0.15); color: var(--warn); }
-  .badge.err { background: rgba(239, 68, 68, 0.15); color: var(--err); }
-  .badge.dim { background: rgba(136, 136, 136, 0.15); color: var(--fg-dim); }
-  input[type=text], input[type=search] { background: var(--code-bg); border: 1px solid var(--border); color: var(--fg); padding: 8px 12px; border-radius: 4px; font: 13px monospace; width: 100%; }
-  input[type=text]:focus, input[type=search]:focus { outline: none; border-color: var(--accent); }
-  button { background: var(--accent-dim); color: var(--fg); border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font: 600 13px -apple-system, system-ui, sans-serif; }
-  button:hover { background: var(--accent); color: var(--bg); }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; }
-  th { color: var(--fg-dim); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
-  td.num { font-family: monospace; }
-  td.shrink { white-space: nowrap; width: 1%; }
-  .endpoints { font-size: 11px; color: var(--fg-dim); padding: 8px 24px; border-bottom: 1px solid var(--border); display: flex; gap: 18px; flex-wrap: wrap; }
-  .endpoints code { font-size: 11px; }
-  .empty { color: var(--fg-dim); font-style: italic; padding: 12px 0; }
-  .err-banner { background: rgba(239, 68, 68, 0.1); border: 1px solid var(--err); color: var(--err); padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; font-size: 13px; }
+  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+  }
+
+  ::selection { background: var(--accent); color: var(--bg); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--surface-hover); }
+
+  a { color: var(--accent); text-decoration: none; transition: color 120ms ease; }
+  a:hover { color: var(--accent-strong); text-decoration: underline; text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+  code {
+    font: 12.5px/1.4 var(--font-mono);
+    color: var(--text);
+    background: var(--surface-2);
+    padding: 1px 6px;
+    border-radius: 3px;
+    word-break: break-all;
+  }
+  pre {
+    font: 12.5px/1.55 var(--font-mono);
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    padding: 14px 16px;
+    border-radius: var(--radius-sm);
+    overflow-x: auto;
+    max-height: 420px;
+    color: var(--text-2);
+  }
+
+  /* ─── Page header (top nav) ──────────────────────────────────────────── */
+  /* Scoped to body > header so it doesn't bleed into per-view <header class="view-header">. */
+
+  body > header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px max(20px, calc((100vw - var(--container)) / 2 + 20px));
+    border-bottom: 1px solid var(--border);
+    background: rgba(10, 11, 14, 0.85);
+    backdrop-filter: saturate(180%) blur(12px);
+    -webkit-backdrop-filter: saturate(180%) blur(12px);
+    position: sticky; top: 0; z-index: 50;
+  }
+  body > header .brand { display: flex; align-items: center; gap: 10px; }
+  body > header .brand a {
+    color: var(--text); font: 600 16px/1 var(--font-sans);
+    letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px;
+  }
+  body > header .brand a:hover { text-decoration: none; color: var(--accent-strong); }
+  body > header .brand .seal {
+    display: inline-block; width: 18px; height: 18px;
+    background: var(--accent); border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(252, 211, 77, 0.2), inset 0 -2px 4px rgba(0, 0, 0, 0.2);
+  }
+  body > header .brand .sub {
+    color: var(--text-3); font: 12px/1 var(--font-mono);
+    padding-left: 10px; border-left: 1px solid var(--border);
+    margin-left: 2px;
+  }
+  body > header nav { display: flex; gap: 4px; align-items: center; }
+  body > header nav a {
+    color: var(--text-2); font: 500 13px/1 var(--font-sans);
+    padding: 8px 12px; border-radius: var(--radius-sm);
+    transition: background 120ms ease, color 120ms ease;
+  }
+  body > header nav a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+  body > header nav a.active { color: var(--accent); background: var(--accent-subtle); }
+
+  /* ─── Layout ──────────────────────────────────────────────────────────── */
+
+  main {
+    max-width: var(--container);
+    margin: 0 auto;
+    padding: 0 20px 80px;
+  }
+
+  .stack { display: flex; flex-direction: column; gap: 32px; }
+  .stack-sm { display: flex; flex-direction: column; gap: 12px; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    padding: 24px;
+  }
+  .panel.flush { padding: 0; overflow: hidden; }
+  .panel .panel-head {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .panel .panel-head h2 {
+    margin: 0; font: 600 13px/1 var(--font-sans);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-2);
+  }
+  .panel .panel-head .meta { font: 12px/1 var(--font-mono); color: var(--text-3); }
+  .panel .panel-body { padding: 20px; }
+
+  /* ─── Hero ───────────────────────────────────────────────────────────── */
+
+  .hero {
+    padding: 64px 0 48px;
+    text-align: left;
+    max-width: 880px;
+  }
+  .hero .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font: 500 11px/1 var(--font-sans);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--accent);
+    background: var(--accent-subtle);
+    border: 1px solid var(--accent-border);
+    padding: 6px 10px;
+    border-radius: 999px;
+    margin-bottom: 20px;
+  }
+  .hero .eyebrow .pulse {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 0 0 var(--ok);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6); }
+    70%  { box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+  }
+  .hero h1 {
+    font: 600 44px/1.08 var(--font-sans);
+    letter-spacing: -0.025em;
+    color: var(--text);
+    margin: 0 0 18px;
+  }
+  .hero h1 .accent { color: var(--accent); }
+  .hero .lede {
+    font: 17px/1.55 var(--font-sans);
+    color: var(--text-2);
+    margin: 0 0 28px;
+    max-width: 700px;
+  }
+  .hero .quick-links {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;
+  }
+  .hero .quick-links a {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    padding: 7px 12px;
+    font: 500 13px/1 var(--font-sans);
+    border-radius: var(--radius-sm);
+    transition: all 120ms ease;
+  }
+  .hero .quick-links a:hover {
+    background: var(--surface-hover); color: var(--text);
+    border-color: var(--text-3);
+    text-decoration: none;
+  }
+  .hero .quick-links a .arrow { color: var(--text-3); transition: color 120ms ease; }
+  .hero .quick-links a:hover .arrow { color: var(--accent); }
+
+  /* ─── System pulse strip (demoted stats) ─────────────────────────────── */
+
+  .pulse-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--border-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 32px;
+  }
+  .pulse-strip .stat {
+    background: var(--surface);
+    padding: 18px 22px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .pulse-strip .stat .label {
+    font: 500 11px/1 var(--font-sans);
+    color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .pulse-strip .stat .value {
+    font: 600 22px/1.1 var(--font-sans);
+    letter-spacing: -0.015em;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .pulse-strip .stat .sub {
+    font: 12px/1.3 var(--font-sans);
+    color: var(--text-3);
+  }
+
+  @media (max-width: 720px) {
+    .pulse-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .hero h1 { font-size: 32px; }
+  }
+
+  /* ─── Search ─────────────────────────────────────────────────────────── */
+
+  .search-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 4px;
+    display: flex; gap: 4px;
+    transition: border-color 120ms ease;
+  }
+  .search-wrap:focus-within { border-color: var(--accent); }
+  .search-wrap input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    padding: 12px 14px;
+    font: 14px/1 var(--font-mono);
+    min-width: 0;
+  }
+  .search-wrap input:focus { outline: none; }
+  .search-wrap input::placeholder { color: var(--text-4); }
+  .search-wrap button {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    padding: 0 18px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font: 600 13px/1 var(--font-sans);
+    letter-spacing: 0.01em;
+    transition: all 120ms ease;
+  }
+  .search-wrap button:hover { background: var(--accent-strong); }
+  .search-help {
+    font: 12px/1.5 var(--font-sans);
+    color: var(--text-3);
+    margin: 8px 2px 0;
+  }
+  .search-help code {
+    background: transparent;
+    color: var(--text-2);
+    padding: 0;
+    font-size: 12px;
+  }
+
+  /* ─── Activity feed ──────────────────────────────────────────────────── */
+
+  .feed-wrap { background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius); overflow: hidden; }
+  .feed-head {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .feed-head h2 {
+    margin: 0; font: 600 13px/1 var(--font-sans);
+    text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .feed-head .live-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: 500 11px/1 var(--font-sans);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ok);
+    padding: 4px 8px; border-radius: 999px;
+    background: var(--ok-subtle); border: 1px solid var(--ok-border);
+  }
+  .feed-head .live-tag .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--ok);
+    animation: pulse 2s infinite;
+  }
+  .feed-head .meta { font: 12px/1 var(--font-mono); color: var(--text-3); }
+
+  table.feed { width: 100%; border-collapse: collapse; font: 13.5px/1.4 var(--font-sans); }
+  table.feed thead th {
+    text-align: left;
+    color: var(--text-3);
+    font: 500 11px/1 var(--font-sans);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 10px 16px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  table.feed tbody tr {
+    border-bottom: 1px solid var(--border-subtle);
+    transition: background 120ms ease;
+  }
+  table.feed tbody tr:last-child { border-bottom: none; }
+  table.feed tbody tr:hover { background: var(--surface-hover); }
+  table.feed tbody td { padding: 12px 16px; vertical-align: middle; }
+  table.feed tbody td.shrink { white-space: nowrap; width: 1%; }
+  table.feed tbody td .mono {
+    font: 12.5px/1 var(--font-mono); color: var(--text-2);
+  }
+  table.feed tbody tr.new {
+    animation: rowEnter 1500ms ease;
+  }
+  @keyframes rowEnter {
+    0%   { background: var(--accent-subtle); }
+    100% { background: transparent; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero .eyebrow .pulse, .feed-head .live-tag .dot { animation: none; }
+    table.feed tbody tr.new { animation: none; }
+  }
+
+  /* ─── Chips & badges ─────────────────────────────────────────────────── */
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: 500 11px/1 var(--font-sans);
+    padding: 4px 8px;
+    border-radius: 4px;
+    text-transform: lowercase;
+    letter-spacing: 0;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .chip.event-tool_call    { background: var(--et-tool-call-subtle);    color: var(--et-tool-call);    border-color: var(--et-tool-call-border); }
+  .chip.event-transaction  { background: var(--et-transaction-subtle);  color: var(--et-transaction);  border-color: var(--et-transaction-border); }
+  .chip.event-observation  { background: var(--et-observation-subtle);  color: var(--et-observation);  border-color: var(--et-observation-border); }
+  .chip.event-extension    { background: var(--et-extension-subtle);    color: var(--et-extension);    border-color: var(--et-extension-border); }
+  .chip.event-reserved     { background: var(--err-subtle);             color: var(--err);             border-color: var(--err-border); }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font: 500 10.5px/1 var(--font-sans);
+    padding: 3px 7px; border-radius: 3px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .badge.ok    { background: var(--ok-subtle);    color: var(--ok);    border-color: var(--ok-border); }
+  .badge.warn  { background: var(--warn-subtle);  color: var(--warn);  border-color: var(--warn-border); }
+  .badge.err   { background: var(--err-subtle);   color: var(--err);   border-color: var(--err-border); }
+  .badge.info  { background: var(--info-subtle);  color: var(--info);  border-color: var(--info-border); }
+  .badge.dim   { background: var(--muted-subtle); color: var(--muted); border-color: rgba(156, 163, 175, 0.2); }
+
+  .verify-badges { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+
+  /* ─── Identity label ─────────────────────────────────────────────────── */
+
+  .id-label { display: inline-flex; align-items: center; gap: 8px; }
+  .id-label .name { color: var(--text); font-weight: 500; }
+  .id-label .key { color: var(--text-3); font: 11.5px/1 var(--font-mono); }
+
+  /* ─── Footer ─────────────────────────────────────────────────────────── */
+
+  footer {
+    border-top: 1px solid var(--border-subtle);
+    margin-top: 80px;
+    padding: 32px max(20px, calc((100vw - var(--container)) / 2 + 20px));
+    display: grid; grid-template-columns: 1fr 1fr; gap: 32px;
+    color: var(--text-3); font-size: 13px;
+  }
+  footer h3 {
+    margin: 0 0 12px; font: 500 11px/1 var(--font-sans);
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2);
+  }
+  footer .endpoints code {
+    background: transparent; padding: 0;
+    color: var(--text-2);
+    font-size: 12px;
+  }
+  footer .endpoints div { padding: 4px 0; }
+  footer .links { display: flex; flex-direction: column; gap: 6px; }
+  footer .links a { color: var(--text-2); }
+  footer .links a:hover { color: var(--accent); }
+
+  @media (max-width: 720px) { footer { grid-template-columns: 1fr; } }
+
+  /* ─── Loading + error states ─────────────────────────────────────────── */
+
+  .empty {
+    color: var(--text-3); font-style: normal;
+    padding: 32px 20px; text-align: center;
+    font-size: 14px;
+  }
+  .empty .icon { font-size: 24px; opacity: 0.4; display: block; margin-bottom: 8px; }
+
+  .err-banner {
+    background: var(--err-subtle); border: 1px solid var(--err-border);
+    color: var(--err); padding: 12px 16px;
+    border-radius: var(--radius-sm); margin-bottom: 16px;
+    font: 13px/1.5 var(--font-sans);
+  }
+  .err-banner .label { font-weight: 600; margin-right: 6px; }
+
+  /* ─── View headers (per-view onboarding) ─────────────────────────────── */
+
+  .view-header { margin: 32px 0 24px; }
+  .view-header .crumb {
+    display: inline-flex; gap: 6px; align-items: center;
+    font: 500 11px/1 var(--font-sans);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-3); margin-bottom: 12px;
+  }
+  .view-header h1 {
+    margin: 0 0 8px;
+    font: 600 28px/1.15 var(--font-sans);
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  .view-header .subject {
+    font: 13.5px/1.4 var(--font-mono);
+    color: var(--text-2);
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    display: inline-block;
+    margin-bottom: 16px;
+    word-break: break-all;
+  }
+  .view-header .explainer {
+    color: var(--text-2);
+    font: 14px/1.6 var(--font-sans);
+    max-width: 720px;
+    margin: 8px 0 0;
+  }
+  .view-header .explainer .term {
+    color: var(--accent); font-weight: 500;
+  }
+
+  /* ─── Key-value grids (per-view detail panels) ───────────────────────── */
+
+  dl.kv {
+    display: grid; grid-template-columns: 180px 1fr;
+    gap: 0; margin: 0;
+  }
+  dl.kv dt, dl.kv dd {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-subtle);
+    margin: 0;
+  }
+  dl.kv dt {
+    color: var(--text-3);
+    font: 12px/1.4 var(--font-sans);
+    text-transform: uppercase; letter-spacing: 0.05em;
+    padding-right: 16px;
+  }
+  dl.kv dd { color: var(--text); font: 13.5px/1.4 var(--font-sans); }
+  dl.kv dt:last-of-type, dl.kv dd:last-of-type { border-bottom: none; }
+  dl.kv dd .mono { font: 13px/1.4 var(--font-mono); color: var(--text-2); word-break: break-all; }
+
+  /* ─── About view styling ─────────────────────────────────────────────── */
+
+  .prose { max-width: 720px; color: var(--text-2); font-size: 15px; line-height: 1.7; }
+  .prose h2 { color: var(--text); margin: 32px 0 12px; font: 600 18px/1.2 var(--font-sans); letter-spacing: -0.01em; }
+  .prose h3 { color: var(--text); margin: 24px 0 8px; font: 600 14px/1.3 var(--font-sans); }
+  .prose p { margin: 0 0 16px; }
+  .prose ul { padding-left: 18px; margin: 0 0 16px; }
+  .prose li { margin: 6px 0; }
 </style>
 </head>
 <body>
+
 <header>
-  <h1><a href="#/">atrib explorer</a></h1>
-  <nav>
-    <a href="#/">overview</a>
-    <a href="#/anchoring">anchoring</a>
-    <a href="#/about">about</a>
+  <div class="brand">
+    <a href="#/">
+      <span class="seal" aria-hidden="true"></span>
+      <span>atrib</span>
+    </a>
+    <span class="sub" id="brand-sub">explorer</span>
+  </div>
+  <nav id="nav">
+    <a href="#/" data-route="overview">overview</a>
+    <a href="#/anchoring" data-route="anchoring">anchoring</a>
+    <a href="#/about" data-route="about">about</a>
   </nav>
 </header>
-<div class="endpoints" id="endpoints"></div>
-<main id="app">loading…</main>
+
+<main id="app"></main>
+
+<footer>
+  <div>
+    <h3>Endpoints</h3>
+    <div class="endpoints" id="endpoints"></div>
+  </div>
+  <div>
+    <h3>Links</h3>
+    <div class="links">
+      <a href="https://github.com/creatornader/atrib" target="_blank" rel="noopener">github.com/creatornader/atrib</a>
+      <a href="https://github.com/creatornader/atrib/blob/main/atrib-spec.md" target="_blank" rel="noopener">atrib-spec.md</a>
+      <a href="https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d054-unified-public-explorer-vs-per-service-admin-uis" target="_blank" rel="noopener">D054 (this explorer)</a>
+      <a href="#/about">what is this?</a>
+    </div>
+  </div>
+</footer>
 
 <script type="module">
-// atrib explorer — option 1 minimal vanilla-JS public surface (D054).
-// Read-only. No auth. Composes from log.atrib.dev + graph.atrib.dev + directory.atrib.dev.
-//
-// Hash routing:
-//   #/                              overview (recent activity + search)
-//   #/identity/<creator_key>        identity view (claim + history + recent records)
-//   #/session/<context_id>          session view (graph + records)
-//   #/action/<record_hash>          action view (record + chain position + verification)
-//   #/anchoring                     recent log checkpoints + directory anchors
-//   #/about                         what this is
-//
-// Endpoints can be overridden via ?log=, ?graph=, ?directory= URL params.
+/*
+ * atrib explorer — D054 option 1.
+ * Single-file vanilla JS. Read-only public surface composing log + graph + directory.
+ * Routes (URL hash):
+ *   #/                              overview (live activity feed + system pulse + search)
+ *   #/identity/<creator_key>        identity view
+ *   #/session/<context_id>          session view
+ *   #/action/<record_hash>          action view
+ *   #/anchoring                     log + directory anchoring details
+ *   #/about                         what atrib is, how to read this
+ */
 
 const DEFAULTS = {
   log:       'https://log.atrib.dev/v1',
   graph:     'https://graph.atrib.dev/v1',
   directory: 'https://directory.atrib.dev/v6',
 }
+
+const POLL_INTERVAL_MS = 5000
+const RECENT_LIMIT = 25
 
 function endpoints() {
   const q = new URLSearchParams(location.search)
@@ -99,9 +602,12 @@ function endpoints() {
   }
 }
 
+// ─── DOM helpers ─────────────────────────────────────────────────────────
+
 function el(tag, attrs = {}, ...children) {
   const e = document.createElement(tag)
   for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue
     if (k === 'class') e.className = v
     else if (k === 'style') e.style.cssText = v
     else if (k.startsWith('on')) e.addEventListener(k.slice(2), v)
@@ -109,394 +615,996 @@ function el(tag, attrs = {}, ...children) {
   }
   for (const c of children) {
     if (c == null || c === false) continue
-    if (Array.isArray(c)) for (const i of c) e.append(i instanceof Node ? i : document.createTextNode(String(i)))
+    if (Array.isArray(c)) for (const i of c) { if (i != null && i !== false) e.append(i instanceof Node ? i : document.createTextNode(String(i))) }
     else e.append(c instanceof Node ? c : document.createTextNode(String(c)))
   }
   return e
 }
 
-function shorten(s, head = 8, tail = 6) {
-  if (!s || s.length < head + tail + 3) return s
+function clearAndRender(node) {
+  document.getElementById('app').replaceChildren(node)
+}
+
+// ─── Formatting helpers ──────────────────────────────────────────────────
+
+function shorten(s, head = 6, tail = 4) {
+  if (!s) return ''
+  if (s.startsWith('sha256:')) return 'sha256:' + shorten(s.slice(7), head, tail)
+  if (s.length < head + tail + 2) return s
   return `${s.slice(0, head)}…${s.slice(-tail)}`
 }
 
-async function fetchJson(url) {
-  const r = await fetch(url, { headers: { accept: 'application/json' } })
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText} for ${url}`)
+function timeAgo(ms) {
+  if (!ms || typeof ms !== 'number') return '—'
+  const diff = Date.now() - ms
+  if (diff < 0) return 'just now'
+  const sec = Math.floor(diff / 1000)
+  if (sec < 5) return 'just now'
+  if (sec < 60) return `${sec}s ago`
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const day = Math.floor(hr / 24)
+  if (day < 7) return `${day}d ago`
+  return new Date(ms).toISOString().slice(0, 10)
+}
+
+function isoTime(ms) {
+  if (!ms || typeof ms !== 'number') return ''
+  return new Date(ms).toISOString()
+}
+
+// ─── Network helpers ─────────────────────────────────────────────────────
+
+async function fetchJson(url, opts = {}) {
+  const r = await fetch(url, { headers: { accept: 'application/json' }, ...opts })
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
   return r.json()
 }
 
-async function fetchMaybe(url) {
-  try { return await fetchJson(url) }
+async function fetchMaybe(url, opts = {}) {
+  try { return await fetchJson(url, opts) }
   catch (e) { return { _error: e.message } }
 }
 
-function renderEndpoints() {
-  const ep = endpoints()
-  document.getElementById('endpoints').replaceChildren(
-    el('span', {}, 'log: ', el('code', {}, ep.log)),
-    el('span', {}, 'graph: ', el('code', {}, ep.graph)),
-    el('span', {}, 'directory: ', el('code', {}, ep.directory)),
-  )
-}
-
-// ─── Overview view ────────────────────────────────────────────────────────────
-
-async function renderOverview() {
-  const ep = endpoints()
-  const root = el('div')
-
-  // Search
-  root.append(el('section', { class: 'panel' },
-    el('h2', {}, 'search'),
-    el('p', { style: 'color: var(--fg-dim); font-size: 13px;' },
-      'Paste any of: a creator_key (43 chars base64url), a context_id (32 hex chars), or a record_hash (sha256:… or 64 hex chars). The explorer routes you to the right view.'),
-    el('div', { style: 'display: flex; gap: 8px;' },
-      el('input', {
-        type: 'search',
-        id: 'search',
-        placeholder: 'creator_key  /  context_id  /  record_hash',
-        onkeydown: (e) => { if (e.key === 'Enter') doSearch() },
-      }),
-      el('button', { onclick: doSearch }, 'go'),
-    ),
-  ))
-
-  // Stats
-  const stats = await fetchMaybe(`${ep.log}/stats`)
-  if (stats._error) {
-    root.append(el('div', { class: 'err-banner' }, `log /stats error: ${stats._error}`))
-  } else {
-    const eventBreakdown = stats.entries_by_event_type || {}
-    root.append(el('section', { class: 'panel' },
-      el('h2', {}, 'log status'),
-      el('div', { class: 'grid' },
-        el('div', {}, 'tree size'),     el('div', {}, el('code', {}, String(stats.tree_size))),
-        el('div', {}, 'distinct signers'), el('div', {}, String(stats.distinct_signers)),
-        el('div', {}, 'oldest entry'),  el('div', {}, stats.oldest_timestamp_ms ? new Date(stats.oldest_timestamp_ms).toISOString() : '—'),
-        el('div', {}, 'newest entry'),  el('div', {}, stats.newest_timestamp_ms ? new Date(stats.newest_timestamp_ms).toISOString() : '—'),
-      ),
-      el('h3', {}, 'entries by event_type'),
-      el('table', {},
-        el('thead', {}, el('tr', {},
-          el('th', {}, 'event_type'),
-          el('th', {}, 'count'),
-          el('th', {}, '%'),
-        )),
-        el('tbody', {},
-          ...Object.entries(eventBreakdown).map(([type, count]) => {
-            const total = Object.values(eventBreakdown).reduce((a, b) => a + b, 0)
-            const pct = total ? ((count / total) * 100).toFixed(1) : '0.0'
-            return el('tr', {},
-              el('td', {}, type),
-              el('td', { class: 'num' }, String(count)),
-              el('td', { class: 'num' }, `${pct}%`),
-            )
-          }),
-        ),
-      ),
-    ))
-  }
-
-  // Latest checkpoint
-  const checkpoint = await fetchCheckpointMaybe(ep.log)
-  root.append(el('section', { class: 'panel' },
-    el('h2', {}, 'latest log checkpoint'),
-    checkpoint._error
-      ? el('div', { class: 'err-banner' }, `checkpoint error: ${checkpoint._error}`)
-      : el('pre', {}, checkpoint.text || '(no checkpoint)'),
-    el('p', { style: 'font-size: 12px; color: var(--fg-dim); margin: 8px 0 0;' },
-      'C2SP-canonical signed-note format per spec §2.4. Signature lines below the body verify against the log operator key + witness keys.'),
-  ))
-
-  document.getElementById('app').replaceChildren(root)
-}
-
-async function fetchCheckpointMaybe(logEndpoint) {
+async function fetchTextMaybe(url) {
   try {
-    const r = await fetch(`${logEndpoint}/checkpoint`)
+    const r = await fetch(url)
     if (!r.ok) return { _error: `${r.status} ${r.statusText}` }
     return { text: await r.text() }
   } catch (e) { return { _error: e.message } }
 }
 
-// ─── Search routing ───────────────────────────────────────────────────────────
+// ─── Identity-label cache ────────────────────────────────────────────────
+// Many feed rows share a small set of creator_keys. Cache directory lookups
+// across the page lifetime; "no claim" is a valid cached state too.
+
+const identityCache = new Map() // key → { found, claim, version, epoch } or { _error }
+
+async function resolveIdentity(creatorKey) {
+  if (identityCache.has(creatorKey)) return identityCache.get(creatorKey)
+  const ep = endpoints()
+  // Custom fetch: treat 404 (no claim published) as a successful "no claim"
+  // result rather than an error — per §6.1 absence of claim is normal.
+  let result
+  try {
+    const r = await fetch(`${ep.directory}/lookup/${creatorKey}`, {
+      headers: { accept: 'application/json' },
+    })
+    if (r.status === 404) {
+      result = { found: false }
+    } else if (!r.ok) {
+      result = { _error: `${r.status} ${r.statusText}` }
+    } else {
+      result = await r.json()
+    }
+  } catch (e) {
+    result = { _error: e.message }
+  }
+  identityCache.set(creatorKey, result)
+  return result
+}
+
+async function resolveIdentities(creatorKeys) {
+  const unique = [...new Set(creatorKeys)]
+  await Promise.all(unique.map((k) => resolveIdentity(k)))
+}
+
+function renderIdentityLabel(creatorKey, opts = {}) {
+  const lookup = identityCache.get(creatorKey)
+  const { withLink = true, short = true } = opts
+  let inner
+  if (lookup && lookup.found && lookup.claim?.claim_subject) {
+    const subject = lookup.claim.claim_subject
+    const name = subject.name || subject.organization || subject.email || subject.url || subject.handle || null
+    if (name) {
+      inner = el('span', { class: 'id-label' },
+        el('span', { class: 'name' }, name),
+        short ? el('span', { class: 'key' }, shorten(creatorKey)) : null,
+      )
+    } else {
+      inner = el('span', { class: 'id-label' },
+        el('span', { class: 'mono', style: 'font-family: var(--font-mono); color: var(--text-2);' }, short ? shorten(creatorKey) : creatorKey),
+      )
+    }
+  } else {
+    inner = el('span', { class: 'id-label' },
+      el('span', { class: 'mono', style: 'font-family: var(--font-mono); color: var(--text-2);' }, short ? shorten(creatorKey) : creatorKey),
+      lookup && lookup.found === false ? el('span', { class: 'badge dim' }, 'unclaimed') : null,
+    )
+  }
+  return withLink
+    ? el('a', { href: `#/identity/${creatorKey}`, style: 'text-decoration: none;' }, inner)
+    : inner
+}
+
+// ─── Verification badges ─────────────────────────────────────────────────
+// For each entry surfaced in the feed:
+//   sig:      always OK (log only accepts sig-validated submissions)
+//   identity: OK if directory has a claim, dim if not
+//   log:      always OK (the row IS in the log by definition)
+
+function renderVerifyBadges(creatorKey) {
+  const lookup = identityCache.get(creatorKey)
+  const idOk = lookup && lookup.found === true
+  return el('span', { class: 'verify-badges' },
+    el('span', { class: 'badge ok', title: 'Ed25519 signature verified at log submission (§1.4 + §2.6.1)' }, '✓ sig'),
+    idOk
+      ? el('span', { class: 'badge ok', title: 'Creator key has a published directory identity claim (§6.1)' }, '✓ id')
+      : el('span', { class: 'badge dim', title: 'Creator key has no published directory claim. Per §6.1 this is permitted; the signature is still valid.' }, '○ id'),
+    el('span', { class: 'badge ok', title: 'Entry is committed to the public Merkle log (§2.3)' }, '✓ log'),
+  )
+}
+
+// ─── Endpoints renderer ──────────────────────────────────────────────────
+
+function renderEndpoints() {
+  const ep = endpoints()
+  document.getElementById('endpoints').replaceChildren(
+    el('div', {}, 'log: ',       el('code', {}, ep.log)),
+    el('div', {}, 'graph: ',     el('code', {}, ep.graph)),
+    el('div', {}, 'directory: ', el('code', {}, ep.directory)),
+  )
+}
+
+function setActiveNav(routeName) {
+  for (const a of document.querySelectorAll('header nav a')) {
+    a.classList.toggle('active', a.dataset.route === routeName)
+  }
+  const sub = document.getElementById('brand-sub')
+  if (sub) sub.textContent = routeName === 'overview' ? 'explorer' : (routeName || 'explorer')
+}
+
+// ─── Search routing ──────────────────────────────────────────────────────
 
 function doSearch() {
   const q = document.getElementById('search').value.trim()
   if (!q) return
-  // Heuristic routing. Users can also navigate via the URL hash directly.
   if (/^[A-Za-z0-9_-]{43}$/.test(q))                location.hash = `#/identity/${q}`
   else if (/^[0-9a-f]{32}$/.test(q))                location.hash = `#/session/${q}`
   else if (/^sha256:[0-9a-f]{64}$/.test(q))         location.hash = `#/action/${q}`
   else if (/^[0-9a-f]{64}$/.test(q))                location.hash = `#/action/sha256:${q}`
-  else alert('not a recognized format. expected: 43-char base64url creator_key, 32-hex context_id, or 64-hex / sha256:-prefixed record_hash')
+  else alert('Not a recognized format.\n\nExpected one of:\n• creator_key — 43 chars base64url\n• context_id — 32 hex chars\n• record_hash — 64 hex chars (or sha256:-prefixed)')
 }
 
-// ─── Identity view ────────────────────────────────────────────────────────────
+// ─── Overview: hero, pulse strip, search, activity feed ──────────────────
 
-async function renderIdentity(creatorKey) {
+let pollHandle = null
+let lastFeedTopHash = null
+
+async function renderOverview() {
+  setActiveNav('overview')
   const ep = endpoints()
   const root = el('div')
-  root.append(el('section', { class: 'panel' },
-    el('h2', {}, 'identity'),
-    el('div', { class: 'grid' },
-      el('div', {}, 'creator_key'), el('div', {}, el('code', {}, creatorKey)),
+
+  root.append(el('section', { class: 'hero' },
+    el('span', { class: 'eyebrow' },
+      el('span', { class: 'pulse' }),
+      'live · public · verifiable',
+    ),
+    el('h1', {},
+      'The public log of ',
+      el('span', { class: 'accent' }, 'provable AI agent actions'),
+      '.',
+    ),
+    el('p', { class: 'lede' },
+      'Every line below is a real action taken by an AI agent — cryptographically signed by the agent\'s identity and committed to a public Merkle log anyone can verify. There is no central authority, no operator to trust. ',
+      el('a', { href: '#/about' }, 'How does this work?'),
+    ),
+    el('div', { class: 'quick-links', id: 'quick-links' }),
+  ))
+
+  root.append(el('div', { class: 'pulse-strip', id: 'pulse-strip' },
+    pulseStat('signed actions', '—'),
+    pulseStat('identities', '—'),
+    pulseStat('latest action', '—'),
+    pulseStat('latest checkpoint', '—'),
+  ))
+
+  root.append(el('section', { style: 'margin-bottom: 32px;' },
+    el('div', { class: 'search-wrap' },
+      el('input', {
+        type: 'search',
+        id: 'search',
+        placeholder: 'Search by creator_key, context_id, or record_hash…',
+        autocomplete: 'off',
+        spellcheck: 'false',
+        onkeydown: (e) => { if (e.key === 'Enter') doSearch() },
+      }),
+      el('button', { onclick: doSearch }, 'go'),
+    ),
+    el('p', { class: 'search-help' },
+      'Pasting a ',
+      el('code', {}, '43-char creator_key'),
+      ', ',
+      el('code', {}, '32-hex context_id'),
+      ', or ',
+      el('code', {}, 'sha256:…'),
+      ' record hash routes you to the right view.',
     ),
   ))
 
-  // Directory lookup
-  const lookup = await fetchMaybe(`${ep.directory}/lookup/${creatorKey}`)
-  const claimPanel = el('section', { class: 'panel' }, el('h2', {}, 'directory claim'))
-  if (lookup._error) {
-    claimPanel.append(el('div', { class: 'err-banner' }, `directory error: ${lookup._error}`))
-  } else if (!lookup.found) {
-    claimPanel.append(el('p', { class: 'empty' },
-      'no identity claim registered for this key. Per spec §6.1, signers MAY register a claim with the directory but are not required to. Records signed by this key remain cryptographically valid; identity attestation is a separate trust layer (see §8.7 layered trust assessment).'))
-  } else {
-    const c = lookup.claim
-    claimPanel.append(
-      el('div', { class: 'grid' },
-        el('div', {}, 'claim_type'),    el('div', {}, c.claim_type || '—'),
-        el('div', {}, 'claim_method'),  el('div', {}, el('code', {}, c.claim_method || '—')),
-        el('div', {}, 'version'),       el('div', {}, String(lookup.version)),
-        el('div', {}, 'directory epoch'), el('div', {}, String(lookup.epoch)),
+  root.append(el('section', { class: 'feed-wrap' },
+    el('div', { class: 'feed-head' },
+      el('h2', {},
+        'live activity',
+        el('span', { class: 'live-tag' },
+          el('span', { class: 'dot' }),
+          'updating',
+        ),
       ),
-      el('h3', {}, 'claim_subject'),
-      el('pre', {}, JSON.stringify(c.claim_subject, null, 2)),
-      c.capabilities ? el('h3', {}, 'capabilities (§6.7)') : null,
-      c.capabilities ? el('pre', {}, JSON.stringify(c.capabilities, null, 2)) : null,
-    )
-  }
-  root.append(claimPanel)
+      el('span', { class: 'meta', id: 'feed-meta' }, 'loading…'),
+    ),
+    el('div', { id: 'feed-body' },
+      el('div', { class: 'empty' }, 'loading recent activity…'),
+    ),
+  ))
 
-  // History
+  clearAndRender(root)
+
+  const [stats, recent, checkpoint] = await Promise.all([
+    fetchMaybe(`${ep.log}/stats`),
+    fetchMaybe(`${ep.log}/recent?limit=${RECENT_LIMIT}`),
+    fetchTextMaybe(`${ep.log}/checkpoint`),
+  ])
+
+  updatePulseStrip(stats, checkpoint)
+
+  if (recent._error || !recent.entries) {
+    document.getElementById('feed-body').replaceChildren(
+      el('div', { class: 'err-banner' },
+        el('span', { class: 'label' }, 'log error:'),
+        recent._error || 'no entries returned',
+      ),
+    )
+    document.getElementById('feed-meta').textContent = 'unavailable'
+  } else if (recent.entries.length === 0) {
+    document.getElementById('feed-body').replaceChildren(
+      el('div', { class: 'empty' },
+        el('span', { class: 'icon' }, '○'),
+        'No signed actions yet. The log is ready and waiting for the first agent to sign.',
+      ),
+    )
+    document.getElementById('feed-meta').textContent = 'empty'
+  } else {
+    await resolveIdentities(recent.entries.map(e => e.creator_key))
+    renderFeed(recent.entries, false)
+    populateQuickLinks(recent.entries)
+  }
+
+  startPolling()
+}
+
+function pulseStat(label, value, sub = null) {
+  return el('div', { class: 'stat' },
+    el('span', { class: 'label' }, label),
+    el('span', { class: 'value' }, value),
+    sub ? el('span', { class: 'sub' }, sub) : null,
+  )
+}
+
+function updatePulseStrip(stats, checkpoint) {
+  const strip = document.getElementById('pulse-strip')
+  if (!strip) return
+  if (stats._error) {
+    strip.replaceChildren(el('div', { class: 'stat', style: 'grid-column: 1 / -1;' },
+      el('span', { class: 'label' }, 'system'),
+      el('span', { class: 'value', style: 'color: var(--err);' }, 'log unreachable'),
+      el('span', { class: 'sub' }, stats._error),
+    ))
+    return
+  }
+  let cpSize = null, cpAge = '—'
+  if (!checkpoint._error && checkpoint.text) {
+    const sizeLine = checkpoint.text.split('\n')[1]
+    if (sizeLine && /^\d+$/.test(sizeLine.trim())) cpSize = parseInt(sizeLine.trim(), 10)
+    cpAge = stats.newest_timestamp_ms ? timeAgo(stats.newest_timestamp_ms) : '—'
+  }
+  strip.replaceChildren(
+    pulseStat('signed actions', String(stats.tree_size ?? '—'), 'committed to the log'),
+    pulseStat('signing identities', String(stats.distinct_signers ?? '—'), 'distinct creator_keys'),
+    pulseStat('latest action', stats.newest_timestamp_ms ? timeAgo(stats.newest_timestamp_ms) : '—',
+      stats.newest_timestamp_ms ? isoTime(stats.newest_timestamp_ms) : null),
+    pulseStat('latest checkpoint', cpAge,
+      cpSize !== null ? `tree size ${cpSize}` : null),
+  )
+}
+
+function renderFeed(entries, withAnimation) {
+  const body = document.getElementById('feed-body')
+  if (!body) return
+  const meta = document.getElementById('feed-meta')
+  if (meta) meta.textContent = `${entries.length} most recent`
+
+  const tbl = el('table', { class: 'feed' },
+    el('thead', {}, el('tr', {},
+      el('th', {}, 'event'),
+      el('th', {}, 'action'),
+      el('th', {}, 'identity'),
+      el('th', {}, 'session'),
+      el('th', { class: 'shrink' }, 'when'),
+      el('th', {}, 'verification'),
+    )),
+    el('tbody', {},
+      ...entries.map((e, idx) => {
+        const isNew = withAnimation && lastFeedTopHash !== null && idx === 0 && e.record_hash !== lastFeedTopHash
+        return el('tr', { class: isNew ? 'new' : '' },
+          el('td', {}, el('span', { class: `chip event-${e.event_type}` }, e.event_type)),
+          el('td', {}, el('a', { href: `#/action/${e.record_hash}` },
+            el('span', { class: 'mono' }, shorten(e.record_hash, 13, 4)),
+          )),
+          el('td', {}, renderIdentityLabel(e.creator_key)),
+          el('td', {}, el('a', { href: `#/session/${e.context_id}` },
+            el('span', { class: 'mono' }, shorten(e.context_id, 8, 4)),
+          )),
+          el('td', { class: 'shrink', title: isoTime(e.timestamp_ms) }, timeAgo(e.timestamp_ms)),
+          el('td', {}, renderVerifyBadges(e.creator_key)),
+        )
+      }),
+    ),
+  )
+  body.replaceChildren(tbl)
+  if (entries.length > 0) lastFeedTopHash = entries[0].record_hash
+}
+
+function populateQuickLinks(entries) {
+  const wrap = document.getElementById('quick-links')
+  if (!wrap || entries.length === 0) return
+  const recent = entries[0]
+  const txn = entries.find(e => e.event_type === 'transaction') || recent
+  wrap.replaceChildren(
+    el('a', { href: `#/action/${recent.record_hash}` },
+      'See a recent action ', el('span', { class: 'arrow' }, '→'),
+    ),
+    el('a', { href: `#/session/${recent.context_id}` },
+      'Browse a recent session ', el('span', { class: 'arrow' }, '→'),
+    ),
+    el('a', { href: `#/identity/${recent.creator_key}` },
+      'Inspect an identity ', el('span', { class: 'arrow' }, '→'),
+    ),
+    txn.event_type === 'transaction'
+      ? el('a', { href: `#/action/${txn.record_hash}` },
+          'See a transaction ', el('span', { class: 'arrow' }, '→'),
+        )
+      : null,
+  )
+}
+
+// ─── Polling ─────────────────────────────────────────────────────────────
+
+function isOverviewRoute() {
+  const h = location.hash.replace(/^#/, '')
+  return !h || h === '/' || h === '/overview'
+}
+
+function startPolling() {
+  stopPolling()
+  pollHandle = setInterval(async () => {
+    if (document.hidden) return
+    if (!isOverviewRoute()) { stopPolling(); return }
+    const ep = endpoints()
+    const [recent, stats, checkpoint] = await Promise.all([
+      fetchMaybe(`${ep.log}/recent?limit=${RECENT_LIMIT}`),
+      fetchMaybe(`${ep.log}/stats`),
+      fetchTextMaybe(`${ep.log}/checkpoint`),
+    ])
+    updatePulseStrip(stats, checkpoint)
+    if (recent._error || !recent.entries) return
+    if (recent.entries.length === 0) return
+    if (recent.entries[0].record_hash === lastFeedTopHash) {
+      const meta = document.getElementById('feed-meta')
+      if (meta) meta.textContent = `${recent.entries.length} most recent · synced just now`
+      return
+    }
+    await resolveIdentities(recent.entries.map(e => e.creator_key))
+    renderFeed(recent.entries, true)
+  }, POLL_INTERVAL_MS)
+}
+
+function stopPolling() {
+  if (pollHandle) { clearInterval(pollHandle); pollHandle = null }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && isOverviewRoute() && !pollHandle) startPolling()
+})
+
+// ─── View header (per-view onboarding chrome) ────────────────────────────
+
+function viewHeader({ crumb, title, subject, explainer }) {
+  return el('header', { class: 'view-header' },
+    el('span', { class: 'crumb' },
+      el('a', { href: '#/', style: 'color: var(--text-3);' }, 'explorer'),
+      ' / ',
+      crumb,
+    ),
+    el('h1', {}, title),
+    subject ? el('div', { class: 'subject' }, subject) : null,
+    explainer ? el('p', { class: 'explainer' }, ...explainer) : null,
+  )
+}
+
+// ─── Identity view ───────────────────────────────────────────────────────
+
+async function renderIdentity(creatorKey) {
+  setActiveNav(null)
+  const ep = endpoints()
+  const root = el('div')
+
+  root.append(viewHeader({
+    crumb: 'identity',
+    title: 'Identity',
+    subject: creatorKey,
+    explainer: [
+      'In atrib, an ',
+      el('span', { class: 'term' }, 'identity'),
+      ' is an Ed25519 public key (',
+      el('code', {}, '43-char base64url'),
+      ') that signs records. Identities MAY register a directory claim binding the key to an organization, person, or service — but a missing claim doesn\'t invalidate any signature. The directory is a separate trust layer; the cryptography stands alone.',
+    ],
+  }))
+
+  const stack = el('div', { class: 'stack' })
+  root.append(stack)
+
+  const lookup = await resolveIdentity(creatorKey)
+  stack.append(el('section', { class: 'panel flush' },
+    el('div', { class: 'panel-head' },
+      el('h2', {}, 'directory claim'),
+      el('span', { class: 'meta' },
+        lookup._error ? '' :
+        lookup.found ? `version ${lookup.version} · epoch ${lookup.epoch}` : 'no claim'),
+    ),
+    el('div', { class: 'panel-body' }, renderClaimBody(lookup)),
+  ))
+
   const history = await fetchMaybe(`${ep.directory}/history/${creatorKey}`)
   if (!history._error && history.versions && history.versions.length > 0) {
-    root.append(el('section', { class: 'panel' },
-      el('h2', {}, `claim history (${history.versions.length} versions)`),
-      el('table', {},
-        el('thead', {}, el('tr', {},
-          el('th', {}, 'version'), el('th', {}, 'epoch'), el('th', {}, 'claim_type'),
-        )),
-        el('tbody', {},
-          ...history.versions.map(v => el('tr', {},
-            el('td', { class: 'num' }, String(v.version)),
-            el('td', { class: 'num' }, String(v.epoch)),
-            el('td', {}, v.claim?.claim_type || '—'),
+    stack.append(el('section', { class: 'panel flush' },
+      el('div', { class: 'panel-head' },
+        el('h2', {}, 'claim history'),
+        el('span', { class: 'meta' }, `${history.versions.length} version${history.versions.length === 1 ? '' : 's'}`),
+      ),
+      el('div', { class: 'panel-body', style: 'padding: 0;' },
+        el('table', { class: 'feed' },
+          el('thead', {}, el('tr', {},
+            el('th', {}, 'version'), el('th', {}, 'epoch'), el('th', {}, 'claim_type'),
           )),
+          el('tbody', {},
+            ...history.versions.map(v => el('tr', {},
+              el('td', {}, String(v.version)),
+              el('td', {}, String(v.epoch)),
+              el('td', {}, v.claim?.claim_type || '—'),
+            )),
+          ),
         ),
       ),
     ))
   }
 
-  document.getElementById('app').replaceChildren(root)
+  // Try graph first; fall back to log-derived list when graph hasn't ingested.
+  let sessions = await fetchMaybe(`${ep.graph}/creators/${encodeURIComponent(creatorKey)}/sessions`)
+  let sessionsFromLog = false
+  if (sessions._error || !sessions.sessions || sessions.sessions.length === 0) {
+    const fromLog = await fetchMaybe(`${ep.log}/by-creator/${creatorKey}`)
+    if (!fromLog._error && fromLog.sessions && fromLog.sessions.length > 0) {
+      sessions = fromLog
+      sessionsFromLog = true
+    }
+  }
+  if (sessions.sessions && sessions.sessions.length > 0) {
+    stack.append(el('section', { class: 'panel flush' },
+      el('div', { class: 'panel-head' },
+        el('h2', {}, 'sessions'),
+        el('span', { class: 'meta' },
+          `${sessions.sessions.length} session${sessions.sessions.length === 1 ? '' : 's'}` +
+          (sessionsFromLog ? ' · from log (graph not ingested)' : '')),
+      ),
+      el('div', { class: 'panel-body', style: 'padding: 0;' },
+        el('table', { class: 'feed' },
+          el('thead', {}, el('tr', {},
+            el('th', {}, 'context_id'),
+            el('th', {}, 'nodes'),
+            el('th', {}, 'transaction'),
+            el('th', { class: 'shrink' }, 'first seen'),
+          )),
+          el('tbody', {},
+            ...sessions.sessions.map(s => el('tr', {},
+              el('td', {}, el('a', { href: `#/session/${s.context_id}` },
+                el('span', { class: 'mono' }, shorten(s.context_id, 10, 6)),
+              )),
+              el('td', {}, String(s.node_count ?? '—')),
+              el('td', {},
+                s.has_transaction
+                  ? el('span', { class: 'badge ok' }, '✓')
+                  : el('span', { class: 'badge dim' }, '—'),
+              ),
+              el('td', { class: 'shrink' }, s.first_seen_ms ? timeAgo(s.first_seen_ms) : '—'),
+            )),
+          ),
+        ),
+      ),
+    ))
+  }
+
+  clearAndRender(root)
 }
 
-// ─── Session view ─────────────────────────────────────────────────────────────
+function renderClaimBody(lookup) {
+  if (lookup._error) {
+    return el('div', { class: 'err-banner' },
+      el('span', { class: 'label' }, 'directory error:'), lookup._error,
+    )
+  }
+  if (!lookup.found) {
+    return el('div', {},
+      el('div', { class: 'empty', style: 'text-align: left; padding: 0 0 12px;' },
+        'No identity claim registered.',
+      ),
+      el('p', { style: 'color: var(--text-3); font-size: 13px; margin: 0;' },
+        'Per spec §6.1, identities MAY publish a claim with the directory but are not required to. Records signed by this key remain cryptographically valid; identity attestation is a separate trust layer (see §8.7 layered trust assessment).',
+      ),
+    )
+  }
+  const c = lookup.claim
+  const subject = c.claim_subject || {}
+  return el('div', {},
+    el('dl', { class: 'kv' },
+      el('dt', {}, 'claim type'),       el('dd', {}, c.claim_type || '—'),
+      el('dt', {}, 'claim method'),     el('dd', {}, el('span', { class: 'mono' }, c.claim_method || '—')),
+      el('dt', {}, 'directory epoch'),  el('dd', {}, String(lookup.epoch)),
+      el('dt', {}, 'version'),          el('dd', {}, String(lookup.version)),
+    ),
+    el('h3', { style: 'color: var(--text); margin: 24px 0 12px; font: 600 13px/1 var(--font-sans); text-transform: uppercase; letter-spacing: 0.06em;' }, 'subject'),
+    el('pre', {}, JSON.stringify(subject, null, 2)),
+    c.capabilities ? el('h3', { style: 'color: var(--text); margin: 24px 0 12px; font: 600 13px/1 var(--font-sans); text-transform: uppercase; letter-spacing: 0.06em;' }, 'capabilities (§6.7)') : null,
+    c.capabilities ? el('pre', {}, JSON.stringify(c.capabilities, null, 2)) : null,
+  )
+}
+
+// ─── Session view ────────────────────────────────────────────────────────
 
 async function renderSession(contextId) {
+  setActiveNav(null)
   const ep = endpoints()
   const root = el('div')
-  root.append(el('section', { class: 'panel' },
-    el('h2', {}, 'session'),
-    el('div', { class: 'grid' },
-      el('div', {}, 'context_id'), el('div', {}, el('code', {}, contextId)),
+
+  root.append(viewHeader({
+    crumb: 'session',
+    title: 'Session',
+    subject: contextId,
+    explainer: [
+      'A ',
+      el('span', { class: 'term' }, 'session'),
+      ' is a coherent unit of agent activity tied together by a shared ',
+      el('code', {}, 'context_id'),
+      ' (16-byte hex). All records inside one session form a graph: ordered by chain, sometimes converging on a transaction. The graph below is derived purely from observable record structure (per §3.2.4) — no semantic interpretation, no operator policy.',
+    ],
+  }))
+
+  // Try graph first; fall back to log-derived nodes when the graph hasn't
+  // ingested this session. The log is the source of truth; the graph is a
+  // derived view that may be unreachable or behind on ingestion.
+  let graph = await fetchMaybe(`${ep.graph}/graph/${contextId}`)
+  let usingFallback = false
+
+  if (graph._error || !graph.nodes || graph.nodes.length === 0) {
+    const logEntries = await fetchMaybe(`${ep.log}/by-context/${contextId}`)
+    if (!logEntries._error && logEntries.entries && logEntries.entries.length > 0) {
+      usingFallback = true
+      // Adapt log-entry shape into the graph node shape the renderer expects.
+      graph = {
+        node_count: logEntries.entries.length,
+        edge_count: 0,
+        edges: [],
+        nodes: logEntries.entries.map(e => ({
+          id: e.record_hash,
+          event_type: e.event_type,
+          creator_key: e.creator_key,
+          timestamp: e.timestamp_ms,
+          verification_state: 'log_committed',
+        })),
+      }
+    } else {
+      root.append(el('section', { class: 'panel' },
+        el('div', { class: 'empty' },
+          el('span', { class: 'icon' }, '○'),
+          'No records found for this context_id in either the graph or the log.',
+        ),
+      ))
+      clearAndRender(root)
+      return
+    }
+  }
+
+  const hasTx = graph.has_transaction || graph.nodes.some(n => n.event_type === 'transaction')
+  await resolveIdentities(graph.nodes.map(n => n.creator_key).filter(Boolean))
+
+  root.append(el('div', { class: 'pulse-strip' },
+    pulseStat('nodes', String(graph.node_count ?? graph.nodes.length)),
+    pulseStat('edges', String(graph.edge_count ?? graph.edges?.length ?? 0)),
+    pulseStat('transaction', hasTx ? 'present' : 'none', hasTx ? 'session converges on a transaction' : 'no transaction record'),
+    pulseStat('participants', String(new Set(graph.nodes.map(n => n.creator_key)).size), 'distinct identities'),
+  ))
+
+  if (usingFallback) {
+    root.append(el('div', {
+      style: 'background: var(--info-subtle); border: 1px solid var(--info-border); color: var(--info); padding: 12px 16px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 16px;',
+    },
+      el('strong', { style: 'font-weight: 600;' }, 'Showing log-derived view. '),
+      'graph-node hasn\'t ingested this session, so edges and node-level verification details are unavailable. The signed records below come directly from the log, which is the source of truth.',
+    ))
+  }
+
+  root.append(el('section', { class: 'feed-wrap' },
+    el('div', { class: 'feed-head' },
+      el('h2', {}, `nodes (${graph.nodes.length})`),
+      el('span', { class: 'meta' }, usingFallback ? 'from log (graph not ingested)' : 'derived per spec §3.2.4'),
+    ),
+    el('div', {},
+      el('table', { class: 'feed' },
+        el('thead', {}, el('tr', {},
+          el('th', {}, 'event'),
+          el('th', {}, 'action'),
+          el('th', {}, 'identity'),
+          el('th', { class: 'shrink' }, 'when'),
+          el('th', {}, 'verification'),
+        )),
+        el('tbody', {},
+          ...graph.nodes.map(n => el('tr', {},
+            el('td', {}, el('span', { class: `chip event-${n.event_type || 'extension'}` }, n.event_type || 'extension')),
+            el('td', {}, el('a', { href: `#/action/${n.id}` },
+              el('span', { class: 'mono' }, shorten(n.id, 13, 4)),
+            )),
+            el('td', {}, n.creator_key ? renderIdentityLabel(n.creator_key) : '—'),
+            el('td', { class: 'shrink', title: n.timestamp ? new Date(n.timestamp).toISOString() : '' },
+              n.timestamp ? timeAgo(typeof n.timestamp === 'number' ? n.timestamp : Date.parse(n.timestamp)) : '—'),
+            el('td', {}, badgeForState(n.verification_state)),
+          )),
+        ),
+      ),
     ),
   ))
 
-  const graph = await fetchMaybe(`${ep.graph}/graph/${contextId}`)
-  const graphPanel = el('section', { class: 'panel' }, el('h2', {}, 'graph'))
-  if (graph._error) {
-    graphPanel.append(el('div', { class: 'err-banner' }, `graph error: ${graph._error}`))
-  } else {
-    graphPanel.append(
-      el('div', { class: 'grid' },
-        el('div', {}, 'node_count'),  el('div', {}, String(graph.node_count ?? '—')),
-        el('div', {}, 'edge_count'),  el('div', {}, String(graph.edge_count ?? '—')),
-        el('div', {}, 'has transaction'), el('div', {}, graph.has_transaction ? el('span', { class: 'badge ok' }, 'yes') : el('span', { class: 'badge dim' }, 'no')),
+  if (graph.edges && graph.edges.length > 0) {
+    root.append(el('section', { class: 'feed-wrap', style: 'margin-top: 24px;' },
+      el('div', { class: 'feed-head' },
+        el('h2', {}, `edges (${graph.edges.length})`),
+        el('span', { class: 'meta' }, '7 deterministic types per §3.2.3'),
       ),
-      el('h3', {}, `nodes (${graph.nodes?.length ?? 0})`),
-      graph.nodes && graph.nodes.length > 0
-        ? el('table', {},
-            el('thead', {}, el('tr', {},
-              el('th', {}, 'event_type'),
-              el('th', {}, 'creator'),
-              el('th', {}, 'verification'),
-              el('th', {}, 'timestamp'),
-              el('th', {}, 'id'),
+      el('div', {},
+        el('table', { class: 'feed' },
+          el('thead', {}, el('tr', {},
+            el('th', {}, 'type'),
+            el('th', {}, 'source'),
+            el('th', {}, 'target'),
+          )),
+          el('tbody', {},
+            ...graph.edges.map(e => el('tr', {},
+              el('td', {}, el('code', {}, e.type)),
+              el('td', {}, el('a', { href: `#/action/${e.source}` }, el('span', { class: 'mono' }, shorten(e.source, 10, 4)))),
+              el('td', {}, el('a', { href: `#/action/${e.target}` }, el('span', { class: 'mono' }, shorten(e.target, 10, 4)))),
             )),
-            el('tbody', {},
-              ...graph.nodes.map(n => el('tr', {},
-                el('td', {}, n.event_type_kind || n.event_type || '—'),
-                el('td', {}, n.creator_key ? el('a', { href: `#/identity/${n.creator_key}` }, shorten(n.creator_key)) : '—'),
-                el('td', {}, badgeForState(n.verification_state)),
-                el('td', { class: 'shrink' }, n.timestamp ? new Date(n.timestamp).toISOString() : '—'),
-                el('td', {}, el('a', { href: `#/action/${n.id}` }, shorten(n.id))),
-              )),
-            ),
-          )
-        : el('div', { class: 'empty' }, 'no nodes (session may not exist or context_id is unknown)'),
-      graph.edges && graph.edges.length > 0 ? el('h3', {}, `edges (${graph.edges.length})`) : null,
-      graph.edges && graph.edges.length > 0
-        ? el('table', {},
-            el('thead', {}, el('tr', {}, el('th', {}, 'type'), el('th', {}, 'source → target'))),
-            el('tbody', {},
-              ...graph.edges.map(e => el('tr', {},
-                el('td', {}, el('code', {}, e.type)),
-                el('td', {}, shorten(e.source), ' → ', shorten(e.target)),
-              )),
-            ),
-          )
-        : null,
-    )
+          ),
+        ),
+      ),
+    ))
   }
-  root.append(graphPanel)
 
-  document.getElementById('app').replaceChildren(root)
+  clearAndRender(root)
 }
 
 function badgeForState(state) {
   const map = {
     unsigned:        ['warn', 'unsigned'],
-    signature_valid: ['ok',   'signed'],
-    log_committed:   ['ok',   'log-committed'],
-    witnessed:       ['ok',   'witnessed'],
+    signature_valid: ['ok',   '✓ signed'],
+    log_committed:   ['ok',   '✓ logged'],
+    witnessed:       ['ok',   '✓ witnessed'],
   }
   const [cls, txt] = map[state] || ['dim', state || '—']
   return el('span', { class: `badge ${cls}` }, txt)
 }
 
-// ─── Action view ──────────────────────────────────────────────────────────────
+// ─── Action view ─────────────────────────────────────────────────────────
 
 async function renderAction(recordHash) {
+  setActiveNav(null)
   const ep = endpoints()
   const root = el('div')
   const hashHex = recordHash.startsWith('sha256:') ? recordHash.slice(7) : recordHash
+  const fullHash = recordHash.startsWith('sha256:') ? recordHash : `sha256:${recordHash}`
 
-  root.append(el('section', { class: 'panel' },
-    el('h2', {}, 'action'),
-    el('div', { class: 'grid' },
-      el('div', {}, 'record_hash'), el('div', {}, el('code', {}, recordHash)),
+  root.append(viewHeader({
+    crumb: 'action',
+    title: 'Action',
+    subject: fullHash,
+    explainer: [
+      'A single ',
+      el('span', { class: 'term' }, 'action'),
+      ' is one signed record committed to the public log. The ',
+      el('code', {}, 'record_hash'),
+      ' is the SHA-256 of the canonical (RFC 8785 JCS) serialized record. Below: the record itself, the identity that signed it, the session it belongs to, and proof that it\'s included in the log.',
+    ],
+  }))
+
+  const entry = await fetchMaybe(`${ep.log}/lookup/${hashHex}`)
+  if (entry._error) {
+    root.append(el('section', { class: 'panel' },
+      el('div', { class: 'err-banner' },
+        el('span', { class: 'label' }, 'log lookup error:'), entry._error,
+      ),
+      el('p', { style: 'color: var(--text-3); font-size: 13px; margin: 0;' },
+        'This may mean the record_hash is malformed, or the action hasn\'t been committed to the log yet.',
+      ),
+    ))
+    clearAndRender(root)
+    return
+  }
+
+  if (entry.creator_key) await resolveIdentity(entry.creator_key)
+
+  root.append(el('section', { class: 'panel flush' },
+    el('div', { class: 'panel-head' },
+      el('h2', {}, 'log entry'),
+      el('span', { class: 'meta' },
+        entry.log_index !== undefined ? `index ${entry.log_index}` : ''),
+    ),
+    el('div', { class: 'panel-body' },
+      el('dl', { class: 'kv' },
+        el('dt', {}, 'event_type'),
+        el('dd', {}, el('span', { class: `chip event-${entry.event_type || 'extension'}` }, entry.event_type || '—')),
+        el('dt', {}, 'identity'),
+        el('dd', {}, entry.creator_key ? renderIdentityLabel(entry.creator_key, { short: false }) : '—'),
+        el('dt', {}, 'session'),
+        el('dd', {}, entry.context_id
+          ? el('a', { href: `#/session/${entry.context_id}` }, el('span', { class: 'mono' }, entry.context_id))
+          : '—'),
+        el('dt', {}, 'timestamp'),
+        el('dd', {}, entry.timestamp_ms
+          ? el('span', {}, timeAgo(entry.timestamp_ms), ' · ', el('span', { class: 'mono' }, isoTime(entry.timestamp_ms)))
+          : '—'),
+        el('dt', {}, 'verification'),
+        el('dd', {}, entry.creator_key ? renderVerifyBadges(entry.creator_key) : '—'),
+        el('dt', {}, 'log_index'),
+        el('dd', {}, el('span', { class: 'mono' }, String(entry.log_index ?? entry.index ?? '—'))),
+      ),
     ),
   ))
 
-  // Lookup by hash
-  const entry = await fetchMaybe(`${ep.log}/lookup/${hashHex}`)
-  const panel = el('section', { class: 'panel' }, el('h2', {}, 'log entry'))
-  if (entry._error) {
-    panel.append(el('div', { class: 'err-banner' }, `log lookup error: ${entry._error}`))
-  } else {
-    panel.append(
-      el('div', { class: 'grid' },
-        el('div', {}, 'log_index'),    el('div', { }, el('code', {}, String(entry.log_index ?? '—'))),
-        el('div', {}, 'creator_key'),  el('div', {}, entry.creator_key ? el('a', { href: `#/identity/${entry.creator_key}` }, entry.creator_key) : '—'),
-        el('div', {}, 'context_id'),   el('div', {}, entry.context_id ? el('a', { href: `#/session/${entry.context_id}` }, entry.context_id) : '—'),
-        el('div', {}, 'event_type'),   el('div', {}, el('code', {}, entry.event_type || '—')),
-        el('div', {}, 'timestamp'),    el('div', {}, entry.timestamp_ms ? new Date(entry.timestamp_ms).toISOString() : '—'),
-      ),
-      el('h3', {}, 'raw log entry'),
-      el('pre', {}, JSON.stringify(entry, null, 2)),
-    )
-  }
-  root.append(panel)
+  root.append(el('section', { class: 'panel flush', style: 'margin-top: 24px;' },
+    el('div', { class: 'panel-head' },
+      el('h2', {}, 'raw record'),
+      el('span', { class: 'meta' }, 'as returned by /v1/lookup'),
+    ),
+    el('div', { class: 'panel-body', style: 'padding: 0;' },
+      el('pre', { style: 'border: none; border-radius: 0; max-height: 600px;' }, JSON.stringify(entry, null, 2)),
+    ),
+  ))
 
-  document.getElementById('app').replaceChildren(root)
+  clearAndRender(root)
 }
 
-// ─── Anchoring view ───────────────────────────────────────────────────────────
+// ─── Anchoring view ──────────────────────────────────────────────────────
 
 async function renderAnchoring() {
+  setActiveNav('anchoring')
   const ep = endpoints()
   const root = el('div')
 
-  const stats = await fetchMaybe(`${ep.log}/stats`)
-  const checkpoint = await fetchCheckpointMaybe(ep.log)
-  const dirAnchor = await fetchMaybe(`${ep.directory}/anchor`)
+  root.append(viewHeader({
+    crumb: 'anchoring',
+    title: 'Anchoring',
+    explainer: [
+      'The ',
+      el('span', { class: 'term' }, 'anchoring'),
+      ' substrate is what makes atrib unforgeable. The Merkle log produces signed checkpoints in C2SP-canonical signed-note format (§2.4). The directory anchors every operation back into the log (§6.2.4). Together they prove: nothing can be retroactively added, removed, or reordered without invalidating every signature that came after.',
+    ],
+  }))
 
-  root.append(el('section', { class: 'panel' },
-    el('h2', {}, 'log checkpoint'),
-    checkpoint._error
-      ? el('div', { class: 'err-banner' }, `checkpoint error: ${checkpoint._error}`)
-      : el('pre', {}, checkpoint.text),
-    !stats._error
-      ? el('div', { class: 'grid' },
-          el('div', {}, 'tree size'), el('div', {}, String(stats.tree_size)),
-          el('div', {}, 'distinct signers'), el('div', {}, String(stats.distinct_signers)),
-        )
-      : null,
+  const stack = el('div', { class: 'stack' })
+  root.append(stack)
+
+  const [stats, checkpointResult, dirAnchor] = await Promise.all([
+    fetchMaybe(`${ep.log}/stats`),
+    fetchTextMaybe(`${ep.log}/checkpoint`),
+    fetchMaybe(`${ep.directory}/anchor`),
+  ])
+
+  if (!stats._error) {
+    const eb = stats.entries_by_event_type || {}
+    const total = Object.values(eb).reduce((a, b) => a + b, 0)
+    stack.append(el('div', { class: 'pulse-strip' },
+      pulseStat('tree size', String(stats.tree_size ?? '—'), 'total signed entries'),
+      pulseStat('signers', String(stats.distinct_signers ?? '—'), 'distinct creator_keys'),
+      pulseStat('time span',
+        stats.oldest_timestamp_ms && stats.newest_timestamp_ms
+          ? `${Math.max(1, Math.round((stats.newest_timestamp_ms - stats.oldest_timestamp_ms) / (1000 * 60 * 60)))}h`
+          : '—',
+        stats.oldest_timestamp_ms ? `since ${new Date(stats.oldest_timestamp_ms).toISOString().slice(0, 10)}` : null),
+      pulseStat('event mix',
+        Object.entries(eb).filter(([_, v]) => v > 0).length + ' types',
+        total > 0
+          ? Object.entries(eb).filter(([_, v]) => v > 0).map(([k, v]) => `${k} ${Math.round((v / total) * 100)}%`).join(' · ')
+          : 'no entries'),
+    ))
+  }
+
+  stack.append(el('section', { class: 'panel flush' },
+    el('div', { class: 'panel-head' },
+      el('h2', {}, 'latest log checkpoint'),
+      el('span', { class: 'meta' }, 'C2SP signed-note (§2.4)'),
+    ),
+    el('div', { class: 'panel-body' },
+      checkpointResult._error
+        ? el('div', { class: 'err-banner' },
+            el('span', { class: 'label' }, 'checkpoint error:'), checkpointResult._error)
+        : el('pre', {}, checkpointResult.text || '(no checkpoint)'),
+      el('p', { style: 'color: var(--text-3); font-size: 13px; margin: 12px 0 0;' },
+        'The body (above the blank line) commits to the log\'s origin, current size, and Merkle root. The signature lines below verify against the log operator key (',
+        el('code', {}, '/v1/log-pubkey'),
+        ') plus any registered witnesses. To independently verify: fetch ',
+        el('code', {}, '/v1/log-pubkey'),
+        ' and check the Ed25519 signature over the body.'),
+    ),
   ))
 
-  root.append(el('section', { class: 'panel' },
-    el('h2', {}, 'directory anchor (latest)'),
-    dirAnchor._error
-      ? el('div', { class: 'err-banner' }, `directory anchor error: ${dirAnchor._error}`)
-      : el('div', { class: 'grid' },
-          el('div', {}, 'epoch'),            el('div', {}, String(dirAnchor.epoch)),
-          el('div', {}, 'root_hash'),        el('div', {}, el('code', {}, dirAnchor.root_hash || '—')),
-          el('div', {}, 'directory_origin'), el('div', {}, el('code', {}, dirAnchor.directory_origin || '—')),
-        ),
-    el('p', { style: 'font-size: 12px; color: var(--fg-dim); margin: 12px 0 0;' },
-      'Per spec §6.2.4 per-operation anchoring: every directory state change emits a directory_anchor record to the log immediately. Verifiers cross-reference the directory state at the anchored checkpoint root.'),
+  stack.append(el('section', { class: 'panel flush' },
+    el('div', { class: 'panel-head' },
+      el('h2', {}, 'directory anchor'),
+      el('span', { class: 'meta' }, 'per-operation anchoring (§6.2.4)'),
+    ),
+    el('div', { class: 'panel-body' },
+      dirAnchor._error
+        ? el('div', { class: 'err-banner' },
+            el('span', { class: 'label' }, 'directory error:'), dirAnchor._error)
+        : el('dl', { class: 'kv' },
+            el('dt', {}, 'epoch'),            el('dd', {}, String(dirAnchor.epoch ?? '—')),
+            el('dt', {}, 'root_hash'),        el('dd', {}, el('span', { class: 'mono' }, dirAnchor.root_hash || '—')),
+            el('dt', {}, 'origin'),           el('dd', {}, el('span', { class: 'mono' }, dirAnchor.directory_origin || '—')),
+          ),
+      el('p', { style: 'color: var(--text-3); font-size: 13px; margin: 16px 0 0;' },
+        'Per spec §6.2.4 per-operation anchoring: every directory state change emits a ',
+        el('code', {}, 'directory_anchor'),
+        ' record to the log immediately. This binds directory history to log history — a verifier can prove the directory state at any historical checkpoint root.'),
+    ),
   ))
 
-  document.getElementById('app').replaceChildren(root)
+  clearAndRender(root)
 }
 
-// ─── About view ───────────────────────────────────────────────────────────────
+// ─── About view ──────────────────────────────────────────────────────────
 
 function renderAbout() {
+  setActiveNav('about')
   const root = el('div')
+  root.append(viewHeader({
+    crumb: 'about',
+    title: 'What you\'re looking at',
+    explainer: [
+      'This is the public surface for atrib — the protocol that makes AI agent actions cryptographically provable. Below: how it works, what each view shows, and how to verify any of this yourself.',
+    ],
+  }))
+
   root.append(el('section', { class: 'panel' },
-    el('h2', {}, 'about'),
-    el('p', {},
-      'atrib explorer is a public, read-only inspection surface over atrib\'s deployed services. It composes data from the public log (',
-      el('code', {}, 'log.atrib.dev'),
-      '), graph query service (',
-      el('code', {}, 'graph.atrib.dev'),
-      '), and identity-claim directory (',
-      el('code', {}, 'directory.atrib.dev'),
-      '). All data is public per spec §0.',
-    ),
-    el('p', {},
-      'No authentication is required. There is no concept of "your account" here; this is a block-explorer-style surface where you search by ',
-      el('code', {}, 'creator_key'), ', ',
-      el('code', {}, 'context_id'), ', or ',
-      el('code', {}, 'record_hash'),
-      ' to inspect that thing.',
-    ),
-    el('h3', {}, 'D054 status'),
-    el('p', {},
-      'This is option 1 of a three-stage build per ',
-      el('a', { href: 'https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d054-unified-public-explorer-vs-per-service-admin-uis' }, 'D054'),
-      ': minimal single-page HTML, no build step, no framework. Option 2 (Vite/Next.js SPA) ships when dogfood metrics produce useful signal. Option 3 (block-explorer-grade with search indexing + real-time updates) ships after the gap-closure plan is complete.',
-    ),
-    el('h3', {}, 'override endpoints'),
-    el('p', {},
-      'Append URL params to point at different services: ',
-      el('code', {}, '?log=https://localhost:3100/v1&graph=...&directory=...'),
+    el('div', { class: 'prose' },
+      el('h2', {}, 'The promise'),
+      el('p', {},
+        'AI agents make consequential decisions and take actions on behalf of people and organizations. Today, the only record of what an agent did is whatever logs the operator chose to keep. atrib changes that. Every tool call, transaction, or observation an agent takes becomes a ',
+        el('strong', { style: 'color: var(--text);' }, 'signed record'),
+        ' committed to a ',
+        el('strong', { style: 'color: var(--text);' }, 'public, append-only log'),
+        ' — the same way SSL certificates are made auditable through Certificate Transparency.',
+      ),
+      el('p', {}, 'The result: agents can prove what they did. Consumers can verify what was done. Auditors don\'t have to trust any operator.'),
+
+      el('h2', {}, 'The five views'),
+      el('h3', {}, 'Overview (this page)'),
+      el('p', {}, 'A live feed of the most recent signed actions. Updates every 5 seconds. Each row is a real record from a real atrib-instrumented agent.'),
+
+      el('h3', {}, 'Identity'),
+      el('p', {},
+        'An identity is an Ed25519 public key (43 chars base64url) that signs records. Identities MAY publish a directory claim binding the key to a person, org, or service — but the cryptography is independent of any naming layer. The identity view shows the claim (if any), claim history, and every session this identity has participated in.'),
+
+      el('h3', {}, 'Session'),
+      el('p', {},
+        'A session is a coherent unit of agent activity tied together by a shared 16-byte ',
+        el('code', {}, 'context_id'),
+        '. Records inside a session form a graph (chain order + convergence on transactions, if any). The session view shows the graph derived purely from observable record structure — no semantic interpretation.'),
+
+      el('h3', {}, 'Action'),
+      el('p', {},
+        'A single signed record. The action view shows the record\'s hash, identity, session, timestamp, verification state, and the raw JSON.'),
+
+      el('h3', {}, 'Anchoring'),
+      el('p', {},
+        'The substrate. Log checkpoint (signed C2SP note format) + directory anchor (per-operation cross-reference back into the log). This is what makes the system unforgeable.'),
+
+      el('h2', {}, 'How to verify any of this yourself'),
+      el('ul', {},
+        el('li', {}, 'Fetch ', el('code', {}, '/v1/log-pubkey'), ' to get the log operator\'s Ed25519 key.'),
+        el('li', {}, 'Fetch ', el('code', {}, '/v1/checkpoint'), ' and verify the Ed25519 signature over the body.'),
+        el('li', {}, 'For any record: fetch ', el('code', {}, '/v1/lookup/<hash>'), ', re-canonicalize it with RFC 8785 JCS, hash it, and confirm the hash matches.'),
+        el('li', {}, 'For inclusion proof: fetch ', el('code', {}, '/v1/tile/<level>/<index>'), ' and verify the Merkle path from the record to the checkpoint root.'),
+        el('li', {}, 'For identity: fetch ', el('code', {}, '/v6/lookup/<key>'), ' and check the AKD proof against the directory anchor in the log.'),
+      ),
+      el('p', {},
+        'All of this is in the ',
+        el('a', { href: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md', target: '_blank', rel: 'noopener' }, 'protocol spec'),
+        '. The reference verifier is at ',
+        el('code', {}, '@atrib/verify'),
+        '.'),
+
+      el('h2', {}, 'What this is NOT'),
+      el('ul', {},
+        el('li', {}, el('strong', { style: 'color: var(--text);' }, 'Not a personal dashboard.'), ' This is everybody\'s public data. There is no logged-in user concept. Authenticated personal management is a separate product.'),
+        el('li', {}, el('strong', { style: 'color: var(--text);' }, 'Not a build artifact.'), ' Single HTML file. No bundler, no framework. The file IS the dashboard.'),
+        el('li', {}, el('strong', { style: 'color: var(--text);' }, 'Not "trust the operator."'), ' atrib does not certify truth, only signing. The threat model is in §8.7.'),
+      ),
+
+      el('h2', {}, 'Override endpoints (for local dev)'),
+      el('p', {},
+        'Append URL params: ',
+        el('code', {}, '?log=http://localhost:3100/v1&graph=...&directory=...'),
+        '. The defaults point at the production deployments (',
+        el('code', {}, 'log.atrib.dev'), ', ',
+        el('code', {}, 'graph.atrib.dev'), ', ',
+        el('code', {}, 'directory.atrib.dev'), ').',
+      ),
     ),
   ))
-  document.getElementById('app').replaceChildren(root)
+
+  clearAndRender(root)
 }
 
-// ─── Router ───────────────────────────────────────────────────────────────────
+// ─── Router ──────────────────────────────────────────────────────────────
 
 async function route() {
   renderEndpoints()
+  if (!isOverviewRoute()) stopPolling()
   document.getElementById('app').replaceChildren(el('div', { class: 'empty' }, 'loading…'))
   const hash = location.hash.replace(/^#/, '')
-  if (!hash || hash === '/' || hash === '/overview') return renderOverview()
-  if (hash.startsWith('/identity/'))  return renderIdentity(hash.slice('/identity/'.length))
-  if (hash.startsWith('/session/'))   return renderSession(hash.slice('/session/'.length))
-  if (hash.startsWith('/action/'))    return renderAction(hash.slice('/action/'.length))
-  if (hash === '/anchoring')          return renderAnchoring()
-  if (hash === '/about')              return renderAbout()
-  // Unknown route
-  document.getElementById('app').replaceChildren(el('div', { class: 'panel' },
-    el('h2', {}, 'unknown route'),
-    el('p', {}, 'Try ', el('a', { href: '#/' }, 'overview'), '.'),
-  ))
+
+  try {
+    if (!hash || hash === '/' || hash === '/overview')      return await renderOverview()
+    if (hash.startsWith('/identity/'))                       return await renderIdentity(hash.slice('/identity/'.length))
+    if (hash.startsWith('/session/'))                        return await renderSession(hash.slice('/session/'.length))
+    if (hash.startsWith('/action/'))                         return await renderAction(hash.slice('/action/'.length))
+    if (hash === '/anchoring')                               return await renderAnchoring()
+    if (hash === '/about')                                   return renderAbout()
+
+    document.getElementById('app').replaceChildren(el('div', { class: 'panel' },
+      el('h2', {}, 'unknown route'),
+      el('p', {}, 'Try ', el('a', { href: '#/' }, 'overview'), '.'),
+    ))
+  } catch (e) {
+    document.getElementById('app').replaceChildren(el('div', { class: 'panel' },
+      el('div', { class: 'err-banner' },
+        el('span', { class: 'label' }, 'unhandled error:'), e?.message || String(e),
+      ),
+      el('p', {}, 'Return to ', el('a', { href: '#/' }, 'overview'), '.'),
+    ))
+  }
 }
 
 window.addEventListener('hashchange', route)
