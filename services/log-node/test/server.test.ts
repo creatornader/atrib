@@ -339,6 +339,94 @@ describe('CORS (D054)', () => {
   })
 })
 
+describe('GET /v1/recent', () => {
+  it('returns latest entries newest-first with decoded fields', async () => {
+    // Submit 3 records so /v1/recent has something to return
+    for (let i = 0; i < 3; i++) await post(server.url, await makeSignedRecord())
+    const res = await fetch(`${server.url}/v1/recent?limit=10`)
+    expect(res.status).toBe(200)
+    const body = await res.json() as {
+      tree_size: number
+      returned: number
+      entries: Array<{
+        index: number
+        record_hash: string
+        creator_key: string
+        context_id: string
+        timestamp_ms: number
+        event_type: string
+        event_type_byte: number
+      }>
+    }
+    expect(body.tree_size).toBeGreaterThanOrEqual(3)
+    expect(body.entries.length).toBeGreaterThanOrEqual(3)
+    // newest-first: indices descend
+    for (let i = 1; i < body.entries.length; i++) {
+      expect(body.entries[i - 1]!.index).toBeGreaterThan(body.entries[i]!.index)
+    }
+    const e = body.entries[0]!
+    expect(e.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(e.creator_key).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(e.context_id).toMatch(/^[0-9a-f]{32}$/)
+    expect(typeof e.timestamp_ms).toBe('number')
+    expect(['tool_call', 'transaction', 'observation', 'extension', 'reserved']).toContain(e.event_type)
+  })
+
+  it('clamps limit between 1 and 100', async () => {
+    const tooBig = await fetch(`${server.url}/v1/recent?limit=999`)
+    expect(tooBig.status).toBe(200)
+    const tooSmall = await fetch(`${server.url}/v1/recent?limit=0`)
+    expect(tooSmall.status).toBe(200)
+    const bigBody = await tooBig.json() as { entries: unknown[] }
+    expect(bigBody.entries.length).toBeLessThanOrEqual(100)
+  })
+})
+
+describe('GET /v1/lookup/<hex>', () => {
+  it('returns the entry for a known record_hash', async () => {
+    const record = await makeSignedRecord()
+    await post(server.url, record)
+    const recent = await fetch(`${server.url}/v1/recent?limit=10`)
+    const body = await recent.json() as { entries: Array<{ record_hash: string }> }
+    const target = body.entries[0]!
+    const hashHex = target.record_hash.slice(7) // strip 'sha256:'
+    const lookup = await fetch(`${server.url}/v1/lookup/${hashHex}`)
+    expect(lookup.status).toBe(200)
+    const found = await lookup.json() as { record_hash: string }
+    expect(found.record_hash).toBe(target.record_hash)
+  })
+
+  it('returns 404 for unknown record_hash', async () => {
+    const r = await fetch(`${server.url}/v1/lookup/${'a'.repeat(64)}`)
+    expect(r.status).toBe(404)
+  })
+})
+
+describe('GET /v1/by-context/<hex>', () => {
+  it('returns entries for a known context_id newest-first', async () => {
+    // submitted records share the same context_id from makeSignedRecord
+    await post(server.url, await makeSignedRecord())
+    await post(server.url, await makeSignedRecord())
+    const recent = await fetch(`${server.url}/v1/recent?limit=3`)
+    const recentBody = await recent.json() as { entries: Array<{ context_id: string }> }
+    const ctx = recentBody.entries[0]!.context_id
+    const r = await fetch(`${server.url}/v1/by-context/${ctx}`)
+    expect(r.status).toBe(200)
+    const body = await r.json() as { context_id: string; count: number; entries: Array<{ index: number; context_id: string }> }
+    expect(body.context_id).toBe(ctx)
+    expect(body.count).toBeGreaterThanOrEqual(1)
+    for (const e of body.entries) expect(e.context_id).toBe(ctx)
+    for (let i = 1; i < body.entries.length; i++) {
+      expect(body.entries[i - 1]!.index).toBeGreaterThan(body.entries[i]!.index)
+    }
+  })
+
+  it('returns 404 for unknown context_id', async () => {
+    const r = await fetch(`${server.url}/v1/by-context/${'0'.repeat(32)}`)
+    expect(r.status).toBe(404)
+  })
+})
+
 // D054: explorer served inline at /dashboard
 describe('GET /dashboard', () => {
   it('serves text/html with the explorer HTML', async () => {

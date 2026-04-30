@@ -17,7 +17,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { canonicalRecord, validateSubmission, verifyRecord, hexEncode, nodeHash } from '@atrib/mcp'
+import { canonicalRecord, validateSubmission, verifyRecord, hexEncode, nodeHash, base64urlEncode } from '@atrib/mcp'
 import type { AtribRecord, ProofBundle } from '@atrib/mcp'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { serializeEntry } from './entry.js'
@@ -158,6 +158,41 @@ async function handleRequest(
     return handleStats(res, tree)
   }
 
+  // GET /v1/recent, newest N decoded entries (default 20, max 100). Powers
+  // the public explorer's activity feed. Non-normative operator-visibility
+  // helper, parallel to /v1/stats; not part of spec §2.5.
+  if (req.method === 'GET' && req.url?.startsWith('/v1/recent')) {
+    const params = new URL(req.url, 'http://localhost').searchParams
+    const limit = Math.min(Math.max(parseInt(params.get('limit') ?? '20', 10) || 20, 1), 100)
+    return handleRecent(res, tree, limit)
+  }
+
+  // GET /v1/lookup/<hex>, find an entry by its record_hash (32 bytes hex).
+  // Returns the decoded entry. Linear scan; fine at current scale, indexed
+  // lookup is a future optimization. Non-normative.
+  const lookupMatch = req.url?.match(/^\/v1\/lookup\/([0-9a-fA-F]{64})$/)
+  if (req.method === 'GET' && lookupMatch) {
+    return handleLookup(res, tree, lookupMatch[1]!.toLowerCase())
+  }
+
+  // GET /v1/by-context/<hex>, list all entries for a context_id (16 bytes hex).
+  // Returns entries newest-first. Linear scan; non-normative explorer convenience.
+  // Lets the dashboard render a session view using log data alone when graph-node
+  // is unreachable or hasn't ingested.
+  const byContextMatch = req.url?.match(/^\/v1\/by-context\/([0-9a-fA-F]{32})$/)
+  if (req.method === 'GET' && byContextMatch) {
+    return handleByContext(res, tree, byContextMatch[1]!.toLowerCase())
+  }
+
+  // GET /v1/by-creator/<base64url>, list sessions for a creator_key (43 chars
+  // base64url). Returns one entry per distinct context_id with node_count,
+  // has_transaction, first_seen_ms. Mirrors the shape of graph-node's
+  // /v1/creators/<key>/sessions so the dashboard can fall back transparently.
+  const byCreatorMatch = req.url?.match(/^\/v1\/by-creator\/([A-Za-z0-9_-]{43})$/)
+  if (req.method === 'GET' && byCreatorMatch) {
+    return handleByCreator(res, tree, byCreatorMatch[1]!)
+  }
+
   // §2.5.2: Tile endpoints. GET /v1/tile/<level>/<index>
   const tileMatch = req.url?.match(/^\/v1\/tile\/(\d+)\/(\d+)$/)
   if (req.method === 'GET' && tileMatch) {
@@ -185,7 +220,7 @@ async function handleRequest(
 
   sendJson(res, 404, {
     error: 'not found',
-    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>, GET /dashboard',
+    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/recent, GET /v1/lookup/<hex>, GET /v1/by-context/<hex>, GET /v1/by-creator/<base64url>, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>, GET /dashboard',
   })
 }
 
@@ -295,6 +330,110 @@ async function handleDashboard(res: ServerResponse): Promise<void> {
   // window, but long enough to make repeated visits cheap.
   res.setHeader('cache-control', 'public, max-age=60')
   res.end(html)
+}
+
+// Decode entry layout per spec §2.3.1:
+//   [0]      version byte
+//   [1-32]   record_hash (32 bytes)
+//   [33-64]  creator_key (32 bytes)
+//   [65-80]  context_id (16 bytes)
+//   [81-88]  timestamp_ms (u64 big-endian)
+//   [89]     event_type byte
+function decodeEntry(bytes: Uint8Array, index: number): {
+  index: number
+  record_hash: string
+  creator_key: string
+  context_id: string
+  timestamp_ms: number
+  event_type: string
+  event_type_byte: number
+} {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const eventByte = bytes[89]!
+  const eventLabel =
+    eventByte === 0x01 ? 'tool_call' :
+    eventByte === 0x02 ? 'transaction' :
+    eventByte === 0x03 ? 'observation' :
+    eventByte === 0xff ? 'extension' :
+    'reserved'
+  return {
+    index,
+    record_hash: 'sha256:' + hexEncode(bytes.subarray(1, 33)),
+    creator_key: base64urlEncode(bytes.subarray(33, 65)),
+    context_id: hexEncode(bytes.subarray(65, 81)),
+    timestamp_ms: Number(view.getBigUint64(81, false)),
+    event_type: eventLabel,
+    event_type_byte: eventByte,
+  }
+}
+
+function handleLookup(res: ServerResponse, tree: MerkleTree, hexHash: string): void {
+  const size = tree.size
+  for (let i = 0; i < size; i++) {
+    const e = tree.entryBytes(i)
+    const recordHashHex = hexEncode(e.subarray(1, 33))
+    if (recordHashHex === hexHash) {
+      res.setHeader('cache-control', 'public, max-age=60')
+      sendJson(res, 200, decodeEntry(e, i))
+      return
+    }
+  }
+  sendJson(res, 404, { error: 'not found', record_hash: `sha256:${hexHash}` })
+}
+
+function handleByContext(res: ServerResponse, tree: MerkleTree, contextHex: string): void {
+  const size = tree.size
+  const matches: ReturnType<typeof decodeEntry>[] = []
+  for (let i = size - 1; i >= 0; i--) {
+    const e = tree.entryBytes(i)
+    const ctxHex = hexEncode(e.subarray(65, 81))
+    if (ctxHex === contextHex) matches.push(decodeEntry(e, i))
+  }
+  res.setHeader('cache-control', 'public, max-age=10')
+  sendJson(res, matches.length === 0 ? 404 : 200, {
+    context_id: contextHex,
+    count: matches.length,
+    entries: matches,
+  })
+}
+
+function handleByCreator(res: ServerResponse, tree: MerkleTree, creatorKey: string): void {
+  const size = tree.size
+  const sessions = new Map<string, { context_id: string; node_count: number; has_transaction: boolean; first_seen_ms: number }>()
+  for (let i = 0; i < size; i++) {
+    const e = tree.entryBytes(i)
+    const decoded = decodeEntry(e, i)
+    if (decoded.creator_key !== creatorKey) continue
+    const cur = sessions.get(decoded.context_id) ?? {
+      context_id: decoded.context_id,
+      node_count: 0,
+      has_transaction: false,
+      first_seen_ms: decoded.timestamp_ms,
+    }
+    cur.node_count += 1
+    if (decoded.event_type === 'transaction') cur.has_transaction = true
+    if (decoded.timestamp_ms < cur.first_seen_ms) cur.first_seen_ms = decoded.timestamp_ms
+    sessions.set(decoded.context_id, cur)
+  }
+  const list = [...sessions.values()].sort((a, b) => b.first_seen_ms - a.first_seen_ms)
+  res.setHeader('cache-control', 'public, max-age=10')
+  sendJson(res, 200, { creator_key: creatorKey, count: list.length, sessions: list })
+}
+
+function handleRecent(res: ServerResponse, tree: MerkleTree, limit: number): void {
+  const size = tree.size
+  const start = Math.max(0, size - limit)
+  const entries: ReturnType<typeof decodeEntry>[] = []
+  // Iterate newest-first by walking from size-1 down to start.
+  for (let i = size - 1; i >= start; i--) {
+    entries.push(decodeEntry(tree.entryBytes(i), i))
+  }
+  res.setHeader('cache-control', 'public, max-age=10')
+  sendJson(res, 200, {
+    tree_size: size,
+    returned: entries.length,
+    entries,
+  })
 }
 
 function handleStats(res: ServerResponse, tree: MerkleTree): void {
