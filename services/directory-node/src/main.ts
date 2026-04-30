@@ -19,14 +19,18 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
+  const persistencePath = process.env.ATRIB_DIRECTORY_PERSIST
+
   const handle = await bindDirectoryServer(port, host, {
     operatorPrivateKey,
     origin,
     logEndpoint,
+    ...(persistencePath ? { persistencePath } : {}),
   })
   console.log(`atrib directory-node listening on ${handle.url}`)
-  console.log(`  origin: ${origin}`)
-  console.log(`  log:    ${logEndpoint}`)
+  console.log(`  origin:  ${origin}`)
+  console.log(`  log:     ${logEndpoint}`)
+  console.log(`  persist: ${persistencePath ?? '(in-memory only, set ATRIB_DIRECTORY_PERSIST)'}`)
 
   for (const sig of ['SIGINT', 'SIGTERM']) {
     process.on(sig, () => {

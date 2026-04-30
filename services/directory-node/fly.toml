@@ -9,6 +9,15 @@ primary_region = 'iad'
   HOST = '0.0.0.0'
   ATRIB_DIRECTORY_ORIGIN = 'directory.atrib.dev/v6'
   ATRIB_LOG_ENDPOINT = 'https://log.atrib.dev/v1'
+  # JSONL of every successful publish. On startup, every line is replayed
+  # into a fresh in-memory AKD; replay is deterministic, so epoch numbers
+  # and root hashes match the live sequence. Without this, restart loses
+  # all prior claims.
+  ATRIB_DIRECTORY_PERSIST = '/data/publishes.jsonl'
+
+[[mounts]]
+  source = 'atrib_directory_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 3300

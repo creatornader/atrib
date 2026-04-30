@@ -194,3 +194,67 @@ describe('directory-node HTTP', () => {
     expect(r.headers.get('access-control-allow-origin')).toBe('*')
   })
 })
+
+describe('directory-node persistence', () => {
+  it('replays persisted claims after restart and produces identical lookups', async () => {
+    const { mkdtemp, rm } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const opKey = randomBytes(32)
+    const dir = await mkdtemp(join(tmpdir(), 'atrib-dir-persist-'))
+    const persistPath = join(dir, 'publishes.jsonl')
+
+    // Phase 1: boot, publish 2 claims, capture epoch + root_hash
+    const a = await bindDirectoryServer(0, '127.0.0.1', {
+      operatorPrivateKey: opKey,
+      origin: 'directory.test.local/v6',
+      persistencePath: persistPath,
+    })
+
+    const k1 = await genKeypair()
+    const k2 = await genKeypair()
+    const claim1 = await signClaim({
+      creator_key: k1.publicKey,
+      claim_type: 'self_attested', claim_method: 'self',
+      claim_subject: { display_name: 'alice' },
+    }, k1.privateKey)
+    const claim2 = await signClaim({
+      creator_key: k2.publicKey,
+      claim_type: 'self_attested', claim_method: 'self',
+      claim_subject: { display_name: 'bob' },
+    }, k2.privateKey)
+
+    for (const c of [claim1, claim2]) {
+      const r = await fetch(`${a.url}/v6/publish`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(c),
+      })
+      expect(r.status).toBe(200)
+    }
+    const beforeAnchor = await (await fetch(`${a.url}/v6/anchor`)).json() as { epoch: number; root_hash: string }
+    expect(beforeAnchor.epoch).toBe(2)
+    await a.close()
+
+    // Phase 2: boot a fresh server with the same persistence path, expect replay
+    const b = await bindDirectoryServer(0, '127.0.0.1', {
+      operatorPrivateKey: opKey,
+      origin: 'directory.test.local/v6',
+      persistencePath: persistPath,
+    })
+
+    const afterAnchor = await (await fetch(`${b.url}/v6/anchor`)).json() as { epoch: number; root_hash: string }
+    expect(afterAnchor.epoch).toBe(beforeAnchor.epoch)
+    expect(afterAnchor.root_hash).toBe(beforeAnchor.root_hash)
+
+    // Both claims still findable
+    const a1 = await (await fetch(`${b.url}/v6/lookup/${k1.publicKey}`)).json() as { found: boolean; claim: IdentityClaim }
+    const a2 = await (await fetch(`${b.url}/v6/lookup/${k2.publicKey}`)).json() as { found: boolean; claim: IdentityClaim }
+    expect(a1.found).toBe(true)
+    expect(a2.found).toBe(true)
+    expect(a1.claim.claim_subject.display_name).toBe('alice')
+    expect(a2.claim.claim_subject.display_name).toBe('bob')
+
+    await b.close()
+    await rm(dir, { recursive: true, force: true })
+  })
+})

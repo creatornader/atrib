@@ -13,6 +13,9 @@
 // against the log's witness-cosigned checkpoints.
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { appendFile, mkdir, readFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { AtribDirectory } from '@atrib/directory'
 import type { IdentityClaim } from '@atrib/directory'
 import { verifyClaimSignature } from '@atrib/directory'
@@ -25,6 +28,20 @@ export interface DirectoryServerConfig {
   origin: string
   /** atrib log endpoint to anchor checkpoints into. When undefined, anchoring is skipped (dev only). */
   logEndpoint?: string
+  /**
+   * Path to an append-only JSONL of every successful publish (one signed
+   * IdentityClaim per line). When set, on startup the server reads the file
+   * and replays each publish into a fresh in-memory AKD; the replay produces
+   * identical epoch numbers and root hashes because AKD publish is
+   * deterministic given the same input sequence. Without this, a restart
+   * loses all prior claims.
+   *
+   * For per-operation anchoring to remain coherent across restarts the file
+   * MUST be on a persistent volume (e.g., a Fly mount). Without persistence,
+   * anchoring still emits, but lookups for previously-published keys fail
+   * after restart.
+   */
+  persistencePath?: string
 }
 
 export interface DirectoryServerHandle {
@@ -54,12 +71,49 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   return JSON.parse(text)
 }
 
+async function replayPersistedClaims(directory: AtribDirectory, path: string): Promise<number> {
+  if (!existsSync(path)) return 0
+  const text = await readFile(path, 'utf-8')
+  let count = 0
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    let claim: IdentityClaim
+    try {
+      claim = JSON.parse(trimmed) as IdentityClaim
+    } catch {
+      // eslint-disable-next-line no-console
+      console.warn(`directory-node: skipping unparseable persistence line`)
+      continue
+    }
+    // Defensive: re-verify the signature on replay. A persistence-file tamper
+    // shouldn't be able to inject claims; the AKD root would diverge anyway.
+    if (!(await verifyClaimSignature(claim))) {
+      // eslint-disable-next-line no-console
+      console.warn(`directory-node: skipping persisted claim with invalid signature for ${claim.creator_key}`)
+      continue
+    }
+    await directory.publishSigned(claim)
+    count += 1
+  }
+  return count
+}
+
 export async function bindDirectoryServer(
   port: number,
   host: string,
   config: DirectoryServerConfig,
 ): Promise<DirectoryServerHandle> {
   const directory = await AtribDirectory.create(config.operatorPrivateKey)
+
+  if (config.persistencePath) {
+    await mkdir(dirname(config.persistencePath), { recursive: true })
+    const replayed = await replayPersistedClaims(directory, config.persistencePath)
+    if (replayed > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`directory-node: replayed ${replayed} persisted claim${replayed === 1 ? '' : 's'} from ${config.persistencePath}`)
+    }
+  }
 
   const server = createServer((req, res) => {
     // CORS for browser-based dashboards (D054). Read endpoints serve public data per spec §6;
@@ -125,6 +179,19 @@ async function handle(
 
     const { epoch } = await directory.publishSigned(claim)
     const snapshot = await directory.currentSnapshot()
+
+    // Append to persistence log AFTER successful publish. Order matters: AKD
+    // replay on restart depends on the persisted sequence matching the live
+    // sequence. If the append fails (disk full, etc.) we still respond 200,
+    // the in-memory state is correct, but a restart will lose this claim.
+    if (config.persistencePath) {
+      try {
+        await appendFile(config.persistencePath, JSON.stringify(claim) + '\n', { mode: 0o600 })
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error(`directory-node: persistence append failed for ${claim.creator_key}:`, e)
+      }
+    }
 
     // §6.2.4 per-operation anchoring: emit directory_anchor record after each publish.
     let anchor: { record_hash?: string; submitted: boolean; error?: string } = { submitted: false }
