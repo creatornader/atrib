@@ -143,10 +143,12 @@ describe('graph-node server (section 3.4)', () => {
     // Synthesize a key_revocation record. The extra fields (revoked_key,
     // revocation_reason) must be present BEFORE signing so the canonical
     // bytes include them; otherwise the signature won't verify.
+    // content_id char follows the file convention: timestamp/1000 → char,
+    // here 3000 → '3' (also avoids non-hex chars that fail §1.3 validation).
     const pk = await getPublicKey(TEST_KEY)
     const revocationUnsigned = {
       spec_version: 'atrib/1.0' as const,
-      content_id: `sha256:${'r'.repeat(64)}`,
+      content_id: `sha256:${'3'.repeat(64)}`,
       creator_key: base64urlEncode(pk),
       chain_root: genesisChainRoot(aliceCtx),
       event_type: 'https://atrib.dev/v1/types/key_revocation',
