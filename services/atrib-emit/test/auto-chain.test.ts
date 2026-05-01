@@ -223,8 +223,8 @@ describe('readMostRecentRecord', () => {
     expect(await __test_only__.readMostRecentRecord(join(tmpDir, 'nonexistent.jsonl'))).toBeNull()
   })
 
-  it('exposes the wrapper default mirror path', () => {
+  it('exposes the default mirror path under ~/.atrib/records/', () => {
     expect(__test_only__.DEFAULT_MIRROR).toContain('/.atrib/records/')
-    expect(__test_only__.DEFAULT_MIRROR).toContain('wrapper-mirror.jsonl')
+    expect(__test_only__.DEFAULT_MIRROR).toContain('claude-code.jsonl')
   })
 })
