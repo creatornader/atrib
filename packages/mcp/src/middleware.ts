@@ -175,11 +175,16 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   // autoChain survives process restarts. For each context_id, find the
   // most-recent record (by timestamp) and store its record_hash. The next
   // call in that context_id will chain to it instead of starting genesis.
+  // Tie-break on equal timestamps by iteration order (later seed entries
+  // win): on fast machines, two records signed in the same millisecond
+  // get equal Date.now() values, and a strict `>` would retain the OLDER
+  // one, which then incorrectly chains to it. JSONL mirrors are appended
+  // chronologically, so iteration order IS the correct tie-break signal.
   if (autoChain && options.autoChainSeed && options.autoChainSeed.length > 0) {
     const newestByContext = new Map<string, AtribRecord>()
     for (const r of options.autoChainSeed) {
       const existing = newestByContext.get(r.context_id)
-      if (!existing || r.timestamp > existing.timestamp) {
+      if (!existing || r.timestamp >= existing.timestamp) {
         newestByContext.set(r.context_id, r)
       }
     }
@@ -194,7 +199,10 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
       let bestCtx: string | undefined
       let bestTs = -Infinity
       for (const [ctx, r] of newestByContext) {
-        if (r.timestamp > bestTs) {
+        // Same `>=` tie-break rationale as the per-context loop above: on
+        // equal timestamps, prefer the later-iterated entry (jsonl mirror
+        // append order = chronological).
+        if (r.timestamp >= bestTs) {
           bestTs = r.timestamp
           bestCtx = ctx
         }
