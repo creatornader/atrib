@@ -465,7 +465,7 @@ describe('GET /v1/recent', () => {
     expect(e.creator_key).toMatch(/^[A-Za-z0-9_-]{43}$/)
     expect(e.context_id).toMatch(/^[0-9a-f]{32}$/)
     expect(typeof e.timestamp_ms).toBe('number')
-    expect(['tool_call', 'transaction', 'observation', 'extension', 'reserved']).toContain(e.event_type)
+    expect(['tool_call', 'transaction', 'observation', 'directory_anchor', 'extension', 'reserved']).toContain(e.event_type)
   })
 
   it('clamps limit between 1 and 100', async () => {
