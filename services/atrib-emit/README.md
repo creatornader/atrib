@@ -65,7 +65,7 @@ If a 1Password item stores the seed with a `ATRIB_PRIVATE_KEY=<value>` label pre
 | (Keychain) | | macOS only; falls back here last |
 | `ATRIB_LOG_ENDPOINT` | optional | log submission endpoint; defaults to `https://log.atrib.dev/v1/entries` |
 | `ATRIB_MIRROR_FILE` | optional | JSONL path emit WRITES its own envelope mirror to; if unset, mirroring is skipped |
-| `ATRIB_AUTOCHAIN_SOURCE` | optional | JSONL path emit READS to inherit the wrapper's session context_id; defaults to `~/.atrib/records/wrapper-mirror.jsonl`. Splitting read/write paths lets emit write its own envelope mirror while still inheriting the wrapper's chain |
+| `ATRIB_AUTOCHAIN_SOURCE` | optional | JSONL path emit READS to inherit the wrapper's session context_id; defaults to the wrapper's local mirror under `~/.atrib/records/`. Splitting read/write paths lets emit write its own envelope mirror while still inheriting the wrapper's chain |
 | `ATRIB_AGENT` | optional | agent name for the agent-scoped Keychain service `atrib-creator-<agent>`; defaults to `claude-code` |
 | `ATRIB_KEYCHAIN_ACCOUNT` | optional | Keychain account; defaults to `userInfo().username` |
 
@@ -103,7 +103,7 @@ Per §5.8 degradation contract: nothing in `atrib-emit` throws to the agent. Mis
 
 ## autoChain inheritance from the wrapper
 
-When `context_id` is omitted, atrib-emit reads the wrapper's local mirror (default `~/.atrib/records/wrapper-mirror.jsonl`, override with `ATRIB_MIRROR_FILE`) and inherits the most-recent record's `context_id`, chaining its own emit on top of that record's hash. This is the cognitive-feedback-loop convention: explicit observations, annotations, and revisions chain seamlessly with the agent's mechanical tool calls in the same session, and a verifier sees one coherent chain per `context_id`.
+When `context_id` is omitted, atrib-emit reads the wrapper's local mirror under `~/.atrib/records/` (override with `ATRIB_AUTOCHAIN_SOURCE`) and inherits the most-recent record's `context_id`, chaining its own emit on top of that record's hash. This is the cognitive-feedback-loop convention: explicit observations, annotations, and revisions chain seamlessly with the agent's mechanical tool calls in the same session, and a verifier sees one coherent chain per `context_id`.
 
 Resolution order:
 1. Caller-supplied `context_id` → genesis chain_root for that id (fresh chain).

@@ -1,5 +1,5 @@
-// Key resolution chain for atrib-emit. MUST mirror the wrapper
-// wrapper's resolution order exactly for the first three sources — emit
+// Key resolution chain for atrib-emit. MUST mirror the agent's wrapper
+// service resolution order exactly for the first three sources — emit
 // signs records under the same identity as the wrapper, so a divergence
 // here means the two producers would sign as different identities in the
 // same session, breaking the chain assumption and creating mystery keys
@@ -22,8 +22,8 @@
 // In that case the seed flows through `op read` stdout into our process
 // memory; never touches argv (the reference contains no secret).
 //
-// Wrapper source of truth:
-//   operator-internal wrapper source
+// Wrapper source of truth lives in the operator's internal repo; this
+// resolution chain must be kept in lockstep with that wrapper.
 
 import { readFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'

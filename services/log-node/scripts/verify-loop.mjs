@@ -23,8 +23,8 @@
  *     The log has at most ATRIB_PUBLIC_KEYS.length distinct creator_keys.
  *     SKIPs when ATRIB_PUBLIC_KEYS is unset (the production-log case where
  *     the multi-signer set isn't constrained to a known list — agent
- *     wrappers + a downstream consumer emitters + directory/log self-claims +
- *     atrib-emit + integration-partner keys all sign legitimately).
+ *     wrappers + downstream consumer emitters + directory/log self-claims
+ *     + atrib-emit + integration-partner keys all sign legitimately).
  *
  *   GATE C — Attribution to known pubkey(s):
  *     Every entry's creator_key is in the ATRIB_PUBLIC_KEYS set.
@@ -525,10 +525,10 @@ async function main() {
   // 3. GATE B: distinct-signer count within the scoped entry set.
   // When ATRIB_PUBLIC_KEYS is unset the gate SKIPs rather than defaulting
   // to "expect 1 signer" — production log is multi-signer by design (agent
-  // wrappers, a downstream consumer emitters, directory-node self-claim, log-node
-  // self-claim, atrib-emit, integration-partner keys). The "expect 1"
-  // default was a single-tenant artifact from an earlier era. Matches the
-  // signer.attribution skip-when-unset behavior below.
+  // wrappers, downstream consumer emitters, directory-node self-claim,
+  // log-node self-claim, atrib-emit, integration-partner keys). The
+  // "expect 1" default was a single-tenant artifact from an earlier era.
+  // Matches the signer.attribution skip-when-unset behavior below.
   const distinctSet = new Set(signerScopeEntries.map(e => b64urlEncode(e.creatorKey)))
   if (ATRIB_PUBLIC_KEYS.length === 0) {
     r.skip('signer.distinct', `${distinctSet.size} distinct creator_key(s) across ${signerScopeNote}; ATRIB_PUBLIC_KEYS env not set so no expected count`)
