@@ -7,7 +7,7 @@ atrib makes the actions an AI agent takes provable. Every MCP tool call becomes 
 The canonical positioning used across the README, spec abstract, and per-package READMEs:
 
 - **Headline:** Verifiable agent actions.
-- **Sub-line:** Every tool call becomes signed context for the next.
+- **Sub-line:** Every action becomes signed context for the next.
 - **Tagline:** Agents that reason from a past they can prove.
 
 Use this language in any new docs or commit messages that need a one-line description of the project. Don't reword it without an accompanying change to the README and spec.
