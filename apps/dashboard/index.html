@@ -801,12 +801,15 @@ function renderIdentityLabel(creatorKey, opts = {}) {
 
 // ─── Event-type chip ─────────────────────────────────────────────────────
 // The 90-byte log entry (§2.3.1) only carries one byte for event_type, so any
-// URI not in {tool_call, transaction, observation} arrives here as 'extension'.
-// But the spec reserves 0x04-0xFE for future atrib normative additions per
-// D036, and we already emit at least one such type today (directory_anchor,
-// §6.2.4). When an "extension" row is signed by an atrib-system identity
-// (claim URL in the atrib.dev namespace), relabel the chip "atrib system"
-// rather than implying it's an external/non-normative type.
+// URI without a dedicated normative byte slot arrives here as 'extension'.
+// As of D056 (2026-04-30), normative bytes are 0x01 tool_call, 0x02
+// transaction, 0x03 observation, 0x04 directory_anchor; the spec reserves
+// 0x05-0xFE for future atrib normative additions per D036, and 0xFF for
+// non-atrib-namespace extension URIs. Pre-D056 directory_anchor records
+// (encoded 0xFF before the byte allocation landed) still arrive here as
+// 'extension'; when one is signed by an atrib-system identity (claim URL
+// in the atrib.dev namespace), the renderEventChip helper below relabels
+// it rather than implying it's an external/non-normative type.
 function atribSystemSignerKind(creatorKey) {
   const lookup = identityCache.get(creatorKey)
   if (!lookup || !lookup.found) return null
