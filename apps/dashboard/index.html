@@ -313,12 +313,6 @@
   @media (max-width: 720px) {
     .pulse-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .hero h1 { font-size: 32px; }
-    /* Activity table: clipped on narrow viewports because .feed-wrap is
-     * overflow:hidden (for rounded-corner clip) + table.feed is width:100%.
-     * Switch the wrapper to horizontal scroll on mobile and pin a min-width
-     * on the table so columns stay readable rather than squeezed unreadable. */
-    .feed-wrap { overflow-x: auto; overflow-y: hidden; }
-    table.feed { min-width: 540px; }
   }
 
   /* ─── Search ─────────────────────────────────────────────────────────── */
@@ -383,6 +377,17 @@
   .load-more:hover { background: var(--surface-hover); color: var(--text); border-color: var(--accent); }
 
   .feed-wrap { background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius); overflow: hidden; }
+  /* Activity table mobile fix: on narrow viewports the table's columns
+   * (creator_key, content_id, hash, action) overflow the wrapper. The base
+   * wrapper rule above sets overflow:hidden (needed to clip rounded corners
+   * for animations etc.); on mobile, switch to overflow-x:auto and pin a
+   * min-width on the table so columns stay readable while horizontal scroll
+   * is enabled. Defined AFTER the base rule so the cascade resolves correctly
+   * (CSS specificity is identical; later rule wins). */
+  @media (max-width: 720px) {
+    .feed-wrap { overflow-x: auto; overflow-y: hidden; }
+    table.feed { min-width: 540px; }
+  }
   .feed-head {
     padding: 14px 20px;
     border-bottom: 1px solid var(--border-subtle);

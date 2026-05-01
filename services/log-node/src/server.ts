@@ -132,9 +132,14 @@ async function handleRequest(
   // dashboard HTML at the root path. log.atrib.dev keeps API behavior at /;
   // explore.atrib.dev gets the explorer at / so the URL is just the bare host.
   // Both hostnames still expose /dashboard for direct access.
+  //
+  // Strip query string before path equality so cache-bust suffixes like
+  // /?v=2026-05-01 (commonly used to bypass browser/CDN caches) still hit
+  // the dashboard route rather than falling through to a 404.
+  const urlPath = (req.url ?? '').split('?')[0]
   if (
     req.method === 'GET' &&
-    (req.url === '/' || req.url === '') &&
+    (urlPath === '/' || urlPath === '') &&
     req.headers.host?.startsWith('explore.atrib.dev')
   ) {
     return handleDashboard(res)
@@ -248,7 +253,7 @@ async function handleRequest(
   // the Dockerfile. /dashboard, /dashboard/, /dashboard.html all alias.
   if (
     req.method === 'GET' &&
-    (req.url === '/dashboard' || req.url === '/dashboard/' || req.url === '/dashboard.html')
+    (urlPath === '/dashboard' || urlPath === '/dashboard/' || urlPath === '/dashboard.html')
   ) {
     return handleDashboard(res)
   }
