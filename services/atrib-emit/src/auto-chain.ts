@@ -23,7 +23,17 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { canonicalRecord, hexEncode, sha256, type AtribRecord } from '@atrib/mcp'
 
-const DEFAULT_MIRROR = join(homedir(), '.atrib', 'records', 'wrapper-mirror.jsonl')
+// Default path is parameterized by ATRIB_AGENT so each agent gets its own
+// mirror file under ~/.atrib/records/. Wrappers that follow the same
+// convention will write to the same file and atrib-emit's autoChain picks
+// up inheritance for free. Wrappers that use a different filename should
+// have the operator set ATRIB_AUTOCHAIN_SOURCE explicitly.
+const DEFAULT_MIRROR = join(
+  homedir(),
+  '.atrib',
+  'records',
+  `${process.env.ATRIB_AGENT ?? 'claude-code'}.jsonl`,
+)
 
 export interface ChainContext {
   contextId: string
