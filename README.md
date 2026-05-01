@@ -1,6 +1,6 @@
 # atrib
 
-**Verifiable agent actions.** Every tool call becomes signed context for the next.
+**Verifiable agent actions.** Every action becomes signed context for the next.
 
 atrib is the substrate behind agents that reason from a past they can prove. Every MCP tool call gets an Ed25519-signed record at the moment of action, committed to a public Merkle log, chained into the next call, independently verifiable by anyone. The agent gains a provable history; downstream consumers (merchants, auditors, other agents) gain a verifiable trail. One line of code to integrate.
 

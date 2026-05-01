@@ -72,7 +72,7 @@ The window to build this substrate before platforms absorb the problem (and solv
 
 ## What We Are Building
 
-atrib is the substrate that makes agent actions verifiable. Every tool call becomes signed context for the next, anchored in a Merkle log, independently verifiable by anyone. Not an identity layer. Not a payment layer. Not a content attribution system. The thing that sits underneath all of those: **a substrate where agents reason from a past they can prove, and downstream consumers (merchants, auditors, other agents) verify that past without trusting any operator.**
+atrib is the substrate that makes agent actions verifiable. Every action becomes signed context for the next, anchored in a Merkle log, independently verifiable by anyone. Not an identity layer. Not a payment layer. Not a content attribution system. The thing that sits underneath all of those: **a substrate where agents reason from a past they can prove, and downstream consumers (merchants, auditors, other agents) verify that past without trusting any operator.**
 
 The central claim is this: it is possible to make the structural relationships of agent activity transparent (what tool calls preceded what outcomes, how contributions linked together within a session, what the observable shape of an agent's reasoning trail actually was) without making the content of those interactions visible to anyone who should not see it. Several distinct uses follow from this substrate: provable recall by the agent itself, independent audit by third parties, settlement when commerce closes a chain, and verifiable causality across handoffs between agents.
 
