@@ -20,8 +20,11 @@
  *     If A passes, the log has not lied about which leaves are committed.
  *
  *   GATE B, Distinct-signer count (signer.distinct):
- *     The log has at most ATRIB_PUBLIC_KEYS.length distinct creator_keys
- *     (default 1 when no keys provided, the dogfood-loop case).
+ *     The log has at most ATRIB_PUBLIC_KEYS.length distinct creator_keys.
+ *     SKIPs when ATRIB_PUBLIC_KEYS is unset (the production-log case where
+ *     the multi-signer set isn't constrained to a known list, agent
+ *     wrappers + a downstream consumer emitters + directory/log self-claims +
+ *     atrib-emit + integration-partner keys all sign legitimately).
  *
  *   GATE C, Attribution to known pubkey(s):
  *     Every entry's creator_key is in the ATRIB_PUBLIC_KEYS set.
@@ -30,7 +33,7 @@
  *     own seed(s) via @atrib/cli keygen).
  *
  *   GATE D, Format conformance (§2.3.1):
- *     Each 90-byte entry parses; version=0x01; event_type ∈ {0x01, 0x02, 0x03, 0xFF};
+ *     Each 90-byte entry parses; version=0x01; event_type ∈ {0x01, 0x02, 0x03, 0x04, 0xFF};
  *     timestamp_ms decodes to a sane Date.
  *
  *   GATE E, Checkpoint signature (requires /v1/pubkey):
@@ -459,8 +462,9 @@ async function main() {
       if (e.version !== 0x01) { formatOk = false; r.fail(`entry[${i}].version`, `0x${e.version.toString(16)}`); }
       // Valid event_type bytes per spec 1.2.4 + 2.3.1:
       //   0x01 tool_call, 0x02 transaction, 0x03 observation (atrib normative)
+      //   0x04 directory_anchor (atrib normative; promoted by D056)
       //   0xFF extension URI (consumer-minted, non-atrib namespace)
-      const validEventTypes = new Set([0x01, 0x02, 0x03, 0xff])
+      const validEventTypes = new Set([0x01, 0x02, 0x03, 0x04, 0xff])
       if (!validEventTypes.has(e.eventType)) {
         formatOk = false; r.fail(`entry[${i}].eventType`, `0x${e.eventType.toString(16)}`);
       }
@@ -519,12 +523,19 @@ async function main() {
   }
 
   // 3. GATE B: distinct-signer count within the scoped entry set.
+  // When ATRIB_PUBLIC_KEYS is unset the gate SKIPs rather than defaulting
+  // to "expect 1 signer", production log is multi-signer by design (agent
+  // wrappers, a downstream consumer emitters, directory-node self-claim, log-node
+  // self-claim, atrib-emit, integration-partner keys). The "expect 1"
+  // default was a single-tenant artifact from an earlier era. Matches the
+  // signer.attribution skip-when-unset behavior below.
   const distinctSet = new Set(signerScopeEntries.map(e => b64urlEncode(e.creatorKey)))
-  const expectedSignerCount = ATRIB_PUBLIC_KEYS.length || 1
-  if (distinctSet.size <= expectedSignerCount) {
-    r.pass('signer.distinct', `${distinctSet.size} distinct creator_key(s) across ${signerScopeNote} (expected <= ${expectedSignerCount})`)
+  if (ATRIB_PUBLIC_KEYS.length === 0) {
+    r.skip('signer.distinct', `${distinctSet.size} distinct creator_key(s) across ${signerScopeNote}; ATRIB_PUBLIC_KEYS env not set so no expected count`)
+  } else if (distinctSet.size <= ATRIB_PUBLIC_KEYS.length) {
+    r.pass('signer.distinct', `${distinctSet.size} distinct creator_key(s) across ${signerScopeNote} (expected <= ${ATRIB_PUBLIC_KEYS.length})`)
   } else {
-    r.fail('signer.distinct', `${distinctSet.size} distinct creator_keys across ${signerScopeNote} but only ${expectedSignerCount} expected`)
+    r.fail('signer.distinct', `${distinctSet.size} distinct creator_keys across ${signerScopeNote} but only ${ATRIB_PUBLIC_KEYS.length} expected`)
   }
 
   // 4. GATE C: attribution to one of the user-provided pubkey(s) within scope.
