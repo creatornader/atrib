@@ -1,11 +1,10 @@
 // autoChain inheritance from the wrapper's local JSONL mirror.
 //
-// The wrapper wrapper persists every signed record to a JSONL
-// file (default: ~/.atrib/records/wrapper-mirror.jsonl).
-// Each line is a bare AtribRecord, newest at EOF. When atrib-emit runs in
-// the same agent process, it can inherit the wrapper's active context_id
-// by reading the most-recent line and chain its emit on top of that
-// record (chain_root = sha256:<that record's hash>).
+// The wrapper service persists every signed record to a JSONL file under
+// ~/.atrib/records/. Each line is a bare AtribRecord, newest at EOF. When
+// atrib-emit runs in the same agent process, it can inherit the wrapper's
+// active context_id by reading the most-recent line and chain its emit on
+// top of that record (chain_root = sha256:<that record's hash>).
 //
 // This is the cognitive-feedback-loop convention: explicit observations
 // chain cleanly with the agent's mechanical tool calls in the same
@@ -113,8 +112,8 @@ async function readMostRecentRecord(path: string): Promise<AtribRecord | null> {
     if (lines.length === 0) return null
     const last = lines[lines.length - 1]!
     // Accept BOTH conventions:
-    //   (a) bare AtribRecord, the wrapper wrapper's mirror
-    //       writes one record per line.
+    //   (a) bare AtribRecord, the wrapper service's mirror writes one
+    //       record per line.
     //   (b) envelope { record, proof?, written_at? }, atrib-emit's own
     //       mirror writes this shape so it can preserve proof + timestamp
     //       metadata for local recall. autoChain inheritance only needs the

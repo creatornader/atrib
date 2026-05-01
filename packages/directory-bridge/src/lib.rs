@@ -16,8 +16,8 @@
 //   - audit_proof:    consistency proof between two epochs (append-only check)
 //
 // AKD parallelism is gated to `disabled()` because WASM runtimes lack a
-// Tokio executor. See internal AKD benchmark
-// for the benchmark that motivated the WASM-bridge decision (D034 §3.1).
+// Tokio executor. The WASM-bridge decision (D034 §3.1) was motivated by a
+// runtime benchmark; see D034 for the criterion and the conclusion.
 
 use wasm_bindgen::prelude::*;
 use akd::storage::memory::AsyncInMemoryDatabase;

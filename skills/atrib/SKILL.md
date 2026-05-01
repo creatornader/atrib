@@ -169,7 +169,7 @@ These patterns make your reasoning inspectable in real time, even before all the
 - It does NOT navigate sub-agent identities (HKDF derivation per the architecture plan, not yet implemented).
 - It does NOT enforce the verification stack. The verifier substrate (`@atrib/verify`) does that. Be aware of which layers are operational (Ed25519 sig, inclusion proof, chain integrity, revocation, calculation algorithm) vs warning-only (most of §6.3 identity resolution) vs not-yet-implemented (witnessing per §2.9, cross-log replication per §2.11, AKD lookup proof validation per §6.3 step 7).
 
-The skill is the practice; the substrate is the mechanism. As more producer/consumer surfaces ship (per the dogfooding architecture in `private architecture notes`), this skill will expand.
+The skill is the practice; the substrate is the mechanism. As more producer/consumer surfaces ship per the private dogfooding architecture, this skill will expand.
 
 ## Quick decision tree
 

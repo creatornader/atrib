@@ -4,7 +4,7 @@
 // submission primitives so emit-signed records are byte-identical to
 // wrapper-signed ones.
 //
-// Per the scope doc (private scope notes):
+// Per the scope spec (private):
 //   - One tool: emit
 //   - One key per process (the agent's wrapper key)
 //   - Reuses @atrib/mcp signing + submission queue

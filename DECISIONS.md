@@ -1473,7 +1473,7 @@ The `keystore: 'callback'` mode designed in  (and merged but not yet wired end-t
 
 - *Spec.* New [§7.6](atrib-spec.md#76-hsm-operator-profile) subsection (informative profiles + normative callback contract).
 - *Wrapper.* `keystore: 'callback'` is the load-bearing change, already designed, validation against a mock HSM signer closes the implementation gap.
-- *Documentation.* Each profile gets a 1-2 page operator runbook in `docs/operator/hsm-<profile>.md` (private first; promoted to public at first non-operator user).
+- *Documentation.* Each profile gets a 1-2 page operator runbook in `docs/operator/hsm-<profile>.md` (; promoted to public at first non-operator user).
 - *No breaking changes.* The `keystore: 'env' | 'file' | 'keychain'` modes remain available for solo operators / dev. Callback mode is additive.
 
 **What this DOES NOT solve.**
@@ -1602,7 +1602,7 @@ The mechanism: HKDF (RFC 5869) derives a per-conversation Ed25519 seed from a ma
 
 ## D040: Reserved
 
-D040 is reserved for the harness reference implementation ADR (per prior implementation work: scope of `@atrib/recall`, why it's informative-not-normative). It will be authored when @atrib/recall moves from  to the public `packages/recall/` directory.
+D040 is reserved for the harness reference implementation ADR: scope of `@atrib/recall`, why it's informative-not-normative. It will be authored when `@atrib/recall` moves from  to the public `packages/recall/` directory.
 
 ## D041: informed_by linking primitive and INFORMED_BY edge type
 
@@ -2345,39 +2345,39 @@ The right shape is a unified explorer that composes from the three services. Thi
 
 Option 1 (now): single HTML file at `apps/dashboard/index.html`; CORS added to all three services; log-node serves the HTML at `/dashboard`; Dockerfile bundles the file; deployed to https://explore.atrib.dev/. The explorer loads against production (`log.atrib.dev`, `graph.atrib.dev`, `directory.atrib.dev`) by default with URL-param overrides for local services. Option 2 (when dogfood metrics are producing measurable signal): Vite/Next.js refactor of option 1's view components into a proper SPA; deploys to its own hosting (likely Cloudflare Pages). Option 3 (after implementation work completion): full block-explorer-grade surface; search indexing, real-time updates, visualization. Personal dashboard tracks separately.
 
-## D055: a downstream consumer `annotation` / `proposal` / `apply` types stay as extension URIs (not promoted to atrib-normative)
+## D055: annotation / proposal / apply types stay as extension URIs (not promoted to atrib-normative)
 
 **Date:** 2026-04-30
 **Status:** Accepted
 
-**Context.** a downstream consumer's observation subsystem (synthesize.py v1, plus v2 plans) emits records that semantically fall into three shapes beyond atrib's then-normative vocabulary: `annotation` (a per-observation note attached to an existing record), `proposal` (a v2 cross-observation pattern suggesting a change), and `apply` (the act of executing an applied proposal). Bridge item 177 (2026-04-27, a downstream consumer → atrib) originally raised these as candidates for atrib-normative promotion when `event_type` was a closed enum (`tool_call` + `transaction` only). At that time the operator chose Path Y ("formally extend the atrib spec") over Path X ("collapse everything to `tool_call`"); `observation` was subsequently promoted to a third normative type as part of the [§1.2.4](atrib-spec.md#124-event_type-values) URI vocabulary migration.
+**Context.** A downstream consumer's observation subsystem emits records that semantically fall into three shapes beyond atrib's then-normative vocabulary: `annotation` (a per-observation note attached to an existing record), `proposal` (a cross-observation pattern suggesting a change), and `apply` (the act of executing an applied proposal). The shapes were originally raised as candidates for atrib-normative promotion when `event_type` was a closed enum (`tool_call` + `transaction` only). At that time the operator chose Path Y ("formally extend the atrib spec") over Path X ("collapse everything to `tool_call`"); `observation` was subsequently promoted to a third normative type as part of the [§1.2.4](atrib-spec.md#124-event_type-values) URI vocabulary migration.
 
-The URI migration ([D035](#d035-extensible-event_type-vocabulary-via-uri-typing) + [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)) materially changed the proposal's shape. Under the URI vocabulary, extension URIs in any namespace already validate, sign, chain, and verify; they encode as `0xFF` (extension) in the [§2.3.1](atrib-spec.md#231-entry-serialization) log entry; they do not need any spec change to be used in the wild. The remaining decision was therefore whether to promote any of `annotation` / `proposal` / `apply` to atrib-normative, taking byte assignments `0x04` / `0x05` / `0x06` and getting first-class treatment in conformance, in `@atrib/verify`, and in the explorer.
+The URI migration ([D035](#d035-extensible-event_type-vocabulary-via-uri-typing) + [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)) materially changed the proposal's shape. Under the URI vocabulary, extension URIs in any namespace already validate, sign, chain, and verify; they encode as `0xFF` (extension) in the [§2.3.1](atrib-spec.md#231-entry-serialization) log entry; they do not need any spec change to be used in the wild. The remaining decision was therefore whether to promote any of `annotation` / `proposal` / `apply` to atrib-normative, taking byte assignments and getting first-class treatment in conformance, in `@atrib/verify`, and in the explorer.
 
-**Decision.** Keep all three as extension URIs in a downstream consumer's namespace (e.g., `https://example.com/v1/types/annotation`). Do NOT promote any of them to atrib-normative.
+**Decision.** Keep all three as extension URIs in the consumer's own namespace (e.g., `https://example.com/v1/types/annotation`). Do NOT promote any of them to atrib-normative.
 
 **Rationale.**
 
-1. **The [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion bar is not cleared.** [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) requires multi-harness adoption AND structural-shape relevance to verifiers (not just operators). Only one harness (a downstream consumer) currently uses these shapes; verifiers do not need to do anything different per type.
+1. **The [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion bar is not cleared.** [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) requires multi-harness adoption AND structural-shape relevance to verifiers (not just operators). Only one harness currently uses these shapes; verifiers do not need to do anything different per type.
 
-2. **Extension URIs already give a downstream consumer everything it needs.** The records validate, sign, and chain identically. Extension URIs encode as `0xFF` in the binary entry, a downstream consumer consumers reading the JSON record see the full URI, which is more informative than a single byte. Nothing about a downstream consumer's actual workflow improves by switching to a normative byte.
+2. **Extension URIs already give the consumer everything it needs.** The records validate, sign, and chain identically. Extension URIs encode as `0xFF` in the binary entry; consumers reading the JSON record see the full URI, which is more informative than a single byte. Nothing about the consumer's actual workflow improves by switching to a normative byte.
 
-3. **Normative vocabulary should stay small.** `tool_call`, `transaction`, `observation` cover the universal substrate of agent-to-tool interactions. `annotation` / `proposal` / `apply` are a downstream consumer-shaped, they describe a particular reasoning workflow rather than the universal substrate. Adding workflow-specific types to atrib's normative vocabulary would re-introduce the closed-enum problem the URI migration was designed to escape.
+3. **Normative vocabulary should stay small.** `tool_call`, `transaction`, `observation` cover the universal substrate of agent-to-tool interactions. `annotation` / `proposal` / `apply` are consumer-workflow-shaped: they describe a particular reasoning workflow rather than the universal substrate. Adding workflow-specific types to atrib's normative vocabulary would re-introduce the closed-enum problem the URI migration was designed to escape.
 
 **Alternatives considered.**
 
-1. *Promote all three as atrib-normative (bytes `0x04` / `0x05` / `0x06`).* Rejected. Single-harness adoption fails [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary). Would prematurely freeze a downstream consumer's vocabulary into atrib's spec without evidence that other harnesses converge on the same shape.
+1. *Promote all three as atrib-normative (taking byte assignments).* Rejected. Single-harness adoption fails [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary). Would prematurely freeze a single consumer's vocabulary into atrib's spec without evidence that other harnesses converge on the same shape.
 
-2. *Promote only `apply` (most generally-shaped).* Rejected. Same reasoning. `apply` does have cross-harness potential (any agent that executes a previously-proposed change has the same shape), but no second harness has surfaced it yet. Reassess if a second independent harness adopts `https://example.com/v1/types/apply` or proposes its own `apply` URI.
+2. *Promote only `apply` (most generally-shaped).* Rejected. Same reasoning. `apply` does have cross-harness potential (any agent that executes a previously-proposed change has the same shape), but no second harness has surfaced it yet. Reassess if a second independent harness adopts an `apply` URI of its own.
 
-3. *Defer the decision indefinitely (status quo via silence).* Rejected. The proposal had been open since 2026-04-27 with no formal disposition. Recording the decision either way is better than letting it linger as ambiguous bridge-item state.
+3. *Defer the decision indefinitely (status quo via silence).* Rejected. The proposal had been open with no formal disposition. Recording the decision either way is better than letting it linger as ambiguous backlog state.
 
 **Consequences.**
 
 - *Spec.* No spec changes. [§1.2.4](atrib-spec.md#124-event_type-values) already accommodates extension URIs.
-- *a downstream consumer.* Continues using `https://example.com/v1/types/...` URIs. No coordination with atrib spec maintainers required for vocabulary additions.
+- *Consumer.* Continues using its own namespace URIs. No coordination with atrib spec maintainers required for vocabulary additions.
 - *atrib explorer.* Extension-URI records render with their full URI string (not a normative type label). When a second harness adopts an `apply`-shaped type, revisit promotion via a fresh ADR.
-- *Reopening criteria.* This decision is reopened automatically the moment a second independent harness uses the same URI shape (or an isomorphic one), i.e., the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) bar starts to clear. At that point write a new ADR; do not amend D055.
+- *Reopening criteria.* This decision is reopened automatically the moment a second independent harness uses the same URI shape (or an isomorphic one): i.e., the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) bar starts to clear. At that point write a new ADR; do not amend D055.
 
 ---
 
@@ -2440,7 +2440,7 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 
 ## P002: agent-bridge on atrib substrate
 
-**Source:** Strategic question raised 2026-04-30 ("what if agent-bridge just used atrib for this stuff?"). Captured in detail in `private architecture notes` "agent-bridge on atrib substrate" section, and in `private substrate notes` as Use Case 2.
+**Source:** Strategic question raised 2026-04-30 ("what if agent-bridge just used atrib for this stuff?"). Captured in detail in private dogfooding-architecture and substrate-positioning notes (Use Case 2: verifiable agent-to-agent coordination).
 
 **The decision in question:** rebuild agent-bridge as `atrib-bridge`, a parallel implementation that uses atrib substrate (signed records + Merkle log + directory) instead of Postgres + Supabase as the storage and identity layer. Source becomes `creator_key` (cryptographic, not spoofable). Categories become `event_type` URIs in the agent-bridge namespace. Acks become signed records pointing at posts via `informed_by`. Postgres dependency disappears entirely.
 
@@ -2454,11 +2454,11 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 
 ## P003: promote `annotation` to atrib-normative event type as the recall-fidelity primitive
 
-**Source:** Recall-fidelity insight raised 2026-04-30 ("agents reading back signed records lose enormous nuance compared to the agent that signed them"). Captured in `private architecture notes` "The recall-fidelity problem" section.
+**Source:** Recall-fidelity insight raised 2026-04-30 ("agents reading back signed records lose enormous nuance compared to the agent that signed them"). Captured in private dogfooding-architecture notes under "The recall-fidelity problem".
 
-**Why this reopens [D055](#d055-a downstream consumer-annotation--proposal--apply-types-stay-as-extension-uris-not-promoted-to-atrib-normative).** D055 ruled `annotation` should stay as a a downstream consumer extension URI because no second harness used the same shape. The recall-fidelity insight is the second use case: ANY atrib-using agent emitting "this record is important; future-self should weight it heavy with these topics + this summary" is using the same shape. Two independent harnesses (atrib-using agents generally + a downstream consumer specifically) now need the same semantic. The [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion bar starts to clear.
+**Why this reopens [D055](#d055-annotation--proposal--apply-types-stay-as-extension-uris-not-promoted-to-atrib-normative).** D055 ruled `annotation` should stay as an extension URI in a single consumer's namespace because no second harness used the same shape. The recall-fidelity insight is the second use case: ANY atrib-using agent emitting "this record is important; future-self should weight it heavy with these topics + this summary" is using the same shape. Two independent harnesses (atrib-using agents generally + the original consumer specifically) now need the same semantic. The [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion bar starts to clear.
 
-**The decision in question:** promote `https://atrib.dev/v1/types/annotation` to the atrib normative event_type vocabulary (taking byte `0x05` in the [§2.3.1](atrib-spec.md#231-entry-serialization) log entry encoding, `0x04` was claimed by [D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04) for `directory_anchor`; reserved range narrows to `0x06`–`0xFE`). Schema: `annotates: <sha256:...>` (target record_hash), `importance: enum`, `topics: string[]`, `summary: string`, optional `confidence`, `narrative_arc_id`, `sub_context`. Verifier derives `ANNOTATES` graph edges (a new edge type beyond [§3.2.3](atrib-spec.md#323-edge-types)'s seven). a downstream consumer's domain-specific `synthesis-annotation` shape stays in a downstream consumer namespace if semantically distinct from the protocol-level recall-fidelity annotation.
+**The decision in question:** promote `https://atrib.dev/v1/types/annotation` to the atrib normative event_type vocabulary (taking byte `0x05` in the [§2.3.1](atrib-spec.md#231-entry-serialization) log entry encoding; `0x04` was claimed by [D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04) for `directory_anchor`; reserved range narrows to `0x06`–`0xFE`). Schema: `annotates: <sha256:...>` (target record_hash), `importance: enum`, `topics: string[]`, `summary: string`, optional `confidence`, `narrative_arc_id`, `sub_context`. Verifier derives `ANNOTATES` graph edges (a new edge type beyond [§3.2.3](atrib-spec.md#323-edge-types)'s seven). A consumer's domain-specific synthesis-annotation shape may stay in the consumer's own namespace if semantically distinct from the protocol-level recall-fidelity annotation.
 
 **Implications if accepted.** Spec change in [§1.2.4](atrib-spec.md#124-event_type-values), [§2.3.1](atrib-spec.md#231-entry-serialization), [§3.2.3](atrib-spec.md#323-edge-types), [§3.2.4](atrib-spec.md#324-edge-derivation-rules). Conformance corpus addition. `@atrib/verify` graph derivation update. atrib SKILL.md updated to use the structured shape instead of the workaround pattern (observation with prose). Recall MCP gains optional `with_annotations` / `min_importance` filter parameters.
 
@@ -2468,7 +2468,7 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 
 ## P004: human-direct signing as a first-class identity class (post-day-1)
 
-**Source:** Signer-taxonomy design pass 2026-04-30. Captured in `private architecture notes` "The signer taxonomy" section, design question #8 (resolved: yes, allowed, post-day-1).
+**Source:** Signer-taxonomy design pass 2026-04-30. Captured in private dogfooding-architecture notes under "The signer taxonomy", design question #8 (resolved: yes, allowed, post-day-1).
 
 **The decision in question:** humans signing atrib records directly (distinct from agent-direction-of-human). Edge types to model the relationship: `AUTHORIZED_BY` (human → agent record), `ATTESTED_BY` (human → claim), `APPROVED_BY` (human → decision), `DELEGATED_TO` (human → agent). Spec changes: new edge types in [§3.2.3](atrib-spec.md#323-edge-types) + derivation rules in [§3.2.4](atrib-spec.md#324-edge-derivation-rules). Identity-resolution changes: humans get a distinct `claim_type` (currently `self_attested` covers both).
 
