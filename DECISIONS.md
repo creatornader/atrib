@@ -1473,7 +1473,7 @@ The `keystore: 'callback'` mode designed in Phase 1.2 (and merged but not yet wi
 
 - *Spec.* New [§7.6](atrib-spec.md#76-hsm-operator-profile) subsection (informative profiles + normative callback contract).
 - *Wrapper.* `keystore: 'callback'` is the load-bearing change — already designed, validation against a mock HSM signer per Phase 6.2 closes the implementation gap.
-- *Documentation.* Each profile gets a 1-2 page operator runbook in `docs/operator/hsm-<profile>.md` (operator-internal staging first; promoted to public at first non-operator user).
+- *Documentation.* Each profile gets a 1-2 page operator runbook in `docs/operator/hsm-<profile>.md`; runbooks are drafted privately and promoted to public at first non-operator adoption.
 - *No breaking changes.* The `keystore: 'env' | 'file' | 'keychain'` modes remain available for solo operators / dev. Callback mode is additive.
 
 **What this DOES NOT solve.**
@@ -1602,7 +1602,7 @@ The mechanism: HKDF (RFC 5869) derives a per-conversation Ed25519 seed from a ma
 
 ## D040: Reserved
 
-D040 is reserved for the harness reference implementation ADR: scope of `@atrib/recall`, why it's informative-not-normative. It will be authored when `@atrib/recall` moves from operator-internal staging to the public `packages/recall/` directory.
+D040 is reserved for the harness reference implementation ADR: scope of `@atrib/recall`, why it's informative-not-normative. It will be authored when `@atrib/recall` is published to the `packages/recall/` directory.
 
 ## D041: informed_by linking primitive and INFORMED_BY edge type
 
@@ -2440,7 +2440,7 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 
 ## P002: agent-bridge on atrib substrate
 
-**Source:** Strategic question raised 2026-04-30 ("what if agent-bridge just used atrib for this stuff?"). Captured in detail in operator-internal dogfooding-architecture and substrate-positioning notes (Use Case 2: verifiable agent-to-agent coordination).
+**Source:** Strategic question raised 2026-04-30 ("what if agent-bridge just used atrib for this stuff?"). Use Case 2: verifiable agent-to-agent coordination.
 
 **The decision in question:** rebuild agent-bridge as `atrib-bridge` — a parallel implementation that uses atrib substrate (signed records + Merkle log + directory) instead of Postgres + Supabase as the storage and identity layer. Source becomes `creator_key` (cryptographic, not spoofable). Categories become `event_type` URIs in the agent-bridge namespace. Acks become signed records pointing at posts via `informed_by`. Postgres dependency disappears entirely.
 
@@ -2454,7 +2454,7 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 
 ## P003: promote `annotation` to atrib-normative event type as the recall-fidelity primitive
 
-**Source:** Recall-fidelity insight raised 2026-04-30 ("agents reading back signed records lose enormous nuance compared to the agent that signed them"). Captured in operator-internal dogfooding-architecture notes under "The recall-fidelity problem".
+**Source:** Recall-fidelity insight raised 2026-04-30: agents reading back signed records lose enormous nuance compared to the agent that signed them.
 
 **Why this reopens [D055](#d055-annotation--proposal--apply-types-stay-as-extension-uris-not-promoted-to-atrib-normative).** D055 ruled `annotation` should stay as an extension URI in a single consumer's namespace because no second harness used the same shape. The recall-fidelity insight is the second use case: ANY atrib-using agent emitting "this record is important; future-self should weight it heavy with these topics + this summary" is using the same shape. Two independent harnesses (atrib-using agents generally + the original consumer specifically) now need the same semantic. The [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion bar starts to clear.
 
@@ -2468,7 +2468,7 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 
 ## P004: human-direct signing as a first-class identity class (post-day-1)
 
-**Source:** Signer-taxonomy design pass 2026-04-30. Captured in operator-internal dogfooding-architecture notes under "The signer taxonomy", design question #8 (resolved: yes, allowed, post-day-1).
+**Source:** Signer-taxonomy design pass 2026-04-30, design question #8 (resolved: humans-direct allowed, post-day-1).
 
 **The decision in question:** humans signing atrib records directly (distinct from agent-direction-of-human). Edge types to model the relationship: `AUTHORIZED_BY` (human → agent record), `ATTESTED_BY` (human → claim), `APPROVED_BY` (human → decision), `DELEGATED_TO` (human → agent). Spec changes: new edge types in [§3.2.3](atrib-spec.md#323-edge-types) + derivation rules in [§3.2.4](atrib-spec.md#324-edge-derivation-rules). Identity-resolution changes: humans get a distinct `claim_type` (currently `self_attested` covers both).
 
