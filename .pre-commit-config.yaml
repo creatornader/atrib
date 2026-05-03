@@ -5,10 +5,10 @@
 #   pre-commit install
 #
 # After setup, the hooks below run on every `git commit`. They cover
-# the public-facing concerns: secret scanning, formatting, lint. The
-# operator-private leak-audit infrastructure (Vale, semantic prose
-# audit, etc.) runs separately via the operator's global hooks and
-# does not need to bother contributors.
+# the public-facing concerns: secret scanning, formatting, lint.
+# Maintainers may run additional checks via their own hook chains;
+# nothing here depends on those, and contributors don't need to set
+# them up.
 
 repos:
   # Secret/credential scanning

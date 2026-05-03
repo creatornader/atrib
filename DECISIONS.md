@@ -1579,7 +1579,7 @@ The mechanism: HKDF (RFC 5869) derives a per-conversation Ed25519 seed from a ma
    Notably ABSENT: the canonical signing input bytes, the resulting signature, and any seed material.
 3. **Optional remote sync.** The wrapper supports `ATRIB_AUDIT_FORWARD=<url>` for streaming each line to an operator's SIEM (e.g., a Splunk HEC endpoint, an OpenTelemetry collector). The forwarder is fire-and-forget per [§5.8](atrib-spec.md#58-degradation-contract); a failed forward warns once and continues.
 4. **Rotation.** One file per UTC day. Implicit rotation at midnight; the wrapper does not delete old files (operator policy).
-5. **Where this DOES NOT live.** The audit log lives wrapper-side (filesystem or operator SIEM). It is NOT submitted to the public log — the contents (process IDs, parent process IDs, op timing) are operator-private operational data.
+5. **Where this DOES NOT live.** The audit log lives wrapper-side (filesystem or operator SIEM). It is NOT submitted to the public log — the contents (process IDs, parent process IDs, op timing) are operational data that stays local to the deploying organization.
 
 **Alternatives considered.**
 
