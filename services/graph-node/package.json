@@ -16,9 +16,9 @@
     "@atrib/verify": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22",
-    "tsx": "^4",
-    "typescript": "^5",
-    "vitest": "^3"
+    "@types/node": "^22.19.17",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }

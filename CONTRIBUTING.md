@@ -15,7 +15,11 @@ pnpm install
 # Build all packages
 pnpm -r build
 
-# Run all tests (expect 898 total, 897 passing, 1 documented skip)
+# Run all tests. One test is intentionally skipped, see DEV_LOG_SKIPS
+# in packages/log-dev/test/conformance.test.ts for the rationale (the
+# in-memory dev log can't implement §2.6.1 Step 1 signature verification
+# without a circular workspace dep on @atrib/verify; the production Go
+# log service is expected to honor it). All other tests should pass.
 pnpm -r test
 
 # Typecheck

@@ -1,7 +1,14 @@
 {
   "name": "atrib",
+  "description": "Verifiable agent actions: every action becomes signed context for the next.",
   "private": true,
   "license": "Apache-2.0",
+  "homepage": "https://atrib.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/creatornader/atrib"
+  },
+  "bugs": "https://github.com/creatornader/atrib/issues",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -18,13 +25,13 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.2.0",
+    "eslint": "^10.3.0",
     "eslint-config-prettier": "^10.1.8",
-    "prettier": "^3.8.2",
+    "prettier": "^3.8.3",
     "tsx": "^4.21.0",
-    "turbo": "^2.4.0",
-    "typescript": "^5.7.0",
-    "typescript-eslint": "^8.58.2",
-    "vitest": "^3.0.0"
+    "turbo": "^2.9.8",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.59.1",
+    "vitest": "^3.2.4"
   }
 }

@@ -1,6 +1,13 @@
 {
   "name": "@atrib/log-dev",
   "version": "0.1.0",
+  "description": "In-memory dev Merkle log stub for atrib (private, dev/test fixture only).",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/creatornader/atrib",
+    "directory": "packages/log-dev"
+  },
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -24,13 +31,13 @@
     "corpus:6": "tsx scripts/generate-conformance-6.ts"
   },
   "dependencies": {
-    "@atrib/mcp": "workspace:*",
     "@atrib/directory": "workspace:*",
-    "@noble/hashes": "^2.0.1"
+    "@atrib/mcp": "workspace:*",
+    "@noble/hashes": "^2.2.0"
   },
   "devDependencies": {
-    "@types/node": "^25.5.2",
-    "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "@types/node": "^25.6.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }
