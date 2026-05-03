@@ -1,6 +1,13 @@
 {
   "name": "@atrib/integration",
   "version": "0.0.0",
+  "description": "Cross-package integration tests + runnable framework examples for atrib (private).",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/creatornader/atrib",
+    "directory": "packages/integration"
+  },
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,19 +18,19 @@
     "calc-demo": "tsx scripts/calc-demo.ts"
   },
   "dependencies": {
-    "@atrib/mcp": "workspace:*",
     "@atrib/agent": "workspace:*",
-    "@atrib/verify": "workspace:*",
+    "@atrib/graph-node": "workspace:*",
     "@atrib/log-dev": "workspace:*",
     "@atrib/log-node": "workspace:*",
-    "@atrib/graph-node": "workspace:*"
+    "@atrib/mcp": "workspace:*",
+    "@atrib/verify": "workspace:*"
   },
   "devDependencies": {
-    "@noble/ed25519": "^2.2.0",
-    "@noble/hashes": "^2.0.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@types/node": "^25.5.2",
-    "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "@noble/ed25519": "^2.3.0",
+    "@noble/hashes": "^2.2.0",
+    "@types/node": "^25.6.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }

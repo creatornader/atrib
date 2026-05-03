@@ -2,7 +2,22 @@
   "name": "@atrib/directory",
   "version": "0.1.0",
   "description": "AKD-backed identity-claim directory SDK for atrib (spec §6)",
+  "author": "Atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
+  "homepage": "https://atrib.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/creatornader/atrib",
+    "directory": "packages/directory"
+  },
+  "bugs": "https://github.com/creatornader/atrib/issues",
+  "keywords": [
+    "atrib",
+    "akd",
+    "transparency-log",
+    "identity",
+    "wasm"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -21,13 +36,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@noble/ed25519": "^2.1.0",
-    "@noble/hashes": "^1.4.0",
-    "canonicalize": "^2.0.0"
+    "@noble/ed25519": "^2.3.0",
+    "@noble/hashes": "^1.8.0",
+    "canonicalize": "^2.1.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "typescript": "^5.5.4",
+    "@types/node": "^22.19.17",
+    "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }
 }
