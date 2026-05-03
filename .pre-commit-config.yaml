@@ -1,0 +1,59 @@
+# pre-commit.com configuration for atrib contributors.
+#
+# Run-once setup:
+#   pip install pre-commit  (or: brew install pre-commit)
+#   pre-commit install
+#
+# After setup, the hooks below run on every `git commit`. They cover
+# the public-facing concerns: secret scanning, formatting, lint. The
+# operator-private leak-audit infrastructure (Vale, semantic prose
+# audit, etc.) runs separately via the operator's global hooks and
+# does not need to bother contributors.
+
+repos:
+  # Secret/credential scanning
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        args: ['--config', '.gitleaks.toml']
+
+  # Generic file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: |
+          (?x)^(
+              packages/directory/wasm/.*|
+              .*\.wasm
+          )$
+      - id: end-of-file-fixer
+        exclude: |
+          (?x)^(
+              packages/directory/wasm/.*|
+              .*\.wasm|
+              .*\.png|
+              .*\.svg
+          )$
+      - id: check-merge-conflict
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+        exclude: '^spec/conformance/'  # corpus files have specific structure
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+        exclude: '^packages/directory/wasm/'  # WASM blob is intentional
+
+  # Prettier (formatting check, not auto-fix in pre-commit)
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        types_or: [javascript, jsx, ts, tsx, json, yaml, markdown]
+        exclude: |
+          (?x)^(
+              spec/conformance/.*|
+              packages/directory/wasm/.*|
+              pnpm-lock\.yaml
+          )$
