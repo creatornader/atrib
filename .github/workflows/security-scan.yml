@@ -15,9 +15,9 @@ name: security-scan
 # precision), TruffleHog catches what the catalog doesn't (entropy +
 # verification). Defense in depth.
 #
-# Vale (prose-leak linter) is intentionally NOT here, its style file
-# enumerates the denylist and lives in a private location. Vale runs
-# locally via the global pre-commit hook.
+# Vale (prose-leak linter) is run locally via a pre-commit hook with
+# a project-specific style configuration. The style configuration is
+# not part of this workflow.
 
 on:
   push:

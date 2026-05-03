@@ -19,7 +19,7 @@ cp pkg/atrib_directory_bridge.{js,d.ts} pkg/atrib_directory_bridge_bg.wasm \
 
 The built artifacts in `packages/directory/wasm/` are checked into git. Rebuild and re-copy when changing `src/lib.rs`.
 
-`build-wasm.sh` (rather than bare `wasm-pack build`) is required because Cargo embeds the builder's `$HOME` path into WASM debug info, panic locations, and DWARF symbols by default. Since this WASM ships in a public package, those paths would identify the builder. The wrapper sets `--remap-path-prefix` flags from `$HOME` at runtime and verifies the output contains no `/Users/` or `/home/` strings before exiting. Cargo's stable `trim-paths` profile setting will replace this wrapper when it ships out of nightly (RFC 3127).
+`build-wasm.sh` (rather than bare `wasm-pack build`) is required because Cargo embeds the builder's `$HOME` path into WASM debug info, panic locations, and DWARF symbols by default. Since this WASM ships in a public package, those paths would expose user-specific information about the builder. The wrapper sets `--remap-path-prefix` flags from `$HOME` at runtime and verifies the output contains no user-specific path fragments before exiting. Cargo's stable `trim-paths` profile setting will replace this wrapper when it ships out of nightly (RFC 3127).
 
 ## Why bridge ↔ SDK split
 

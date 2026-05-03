@@ -4,10 +4,10 @@
 # Why this exists: a bare `wasm-pack build` embeds the builder's $HOME
 # path into the WASM blob via debug info, panic location strings, and
 # DWARF symbols. The blob ships in a public package via
-# packages/directory/wasm/, so the builder's identity leaks publicly.
-# This wrapper sets --remap-path-prefix flags from $HOME at runtime,
-# so the script itself never references any specific build environment
-# path.
+# packages/directory/wasm/, so any user-specific path becomes publicly
+# visible. This wrapper sets --remap-path-prefix flags sourced from
+# $HOME at runtime to ensure build artifacts contain no user-specific
+# path fragments.
 #
 # Cargo's stable `trim-paths = "all"` profile setting would replace this
 # wrapper but is still nightly-only as of Cargo 1.90. When stable in
@@ -37,7 +37,7 @@ verify_clean() {
   local hits
   hits=$(strings "$wasm" | grep -cE '/Users/|/home/' || true)
   if [[ "$hits" -gt 0 ]]; then
-    echo "[build-wasm] FAIL: $hits builder-path strings in $wasm" >&2
+    echo "[build-wasm] FAIL: $hits user-specific path fragments in $wasm" >&2
     strings "$wasm" | grep -E '/Users/|/home/' | head -5 >&2
     return 1
   fi
