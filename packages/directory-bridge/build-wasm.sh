@@ -51,7 +51,7 @@ if [[ "${1:-}" == "--check-only" ]]; then
 fi
 
 # --remap-path-prefix takes literal-source=replacement. Reading from
-# $HOME at runtime keeps this script free of operator-specific strings.
+# $HOME at runtime keeps this script free of user-specific strings.
 # CARGO_HOME defaults to $HOME/.cargo if unset.
 CARGO_REG="${CARGO_HOME:-$HOME/.cargo}/registry/src"
 
