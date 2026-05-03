@@ -37,7 +37,7 @@ verify_clean() {
   local hits
   hits=$(strings "$wasm" | grep -cE '/Users/|/home/' || true)
   if [[ "$hits" -gt 0 ]]; then
-    echo "[build-wasm] FAIL: $hits operator-path strings in $wasm" >&2
+    echo "[build-wasm] FAIL: $hits builder-path strings in $wasm" >&2
     strings "$wasm" | grep -E '/Users/|/home/' | head -5 >&2
     return 1
   fi
