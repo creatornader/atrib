@@ -1,5 +1,5 @@
-//  (implementation work): live test that the submission queue cap
-// activates and drops correctly under sustained log outage.
+// Live test that the submission queue cap activates and drops correctly
+// under sustained log outage.
 //
 // Differs from submission.test.ts which uses vi.fn fetch + fake timers.
 // This test uses:
