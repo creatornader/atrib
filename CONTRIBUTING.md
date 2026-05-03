@@ -26,6 +26,20 @@ pnpm -r test
 pnpm -r typecheck
 ```
 
+## Optional: pre-commit hooks
+
+For automatic checking on every commit (gitleaks credential scanning, formatting, file hygiene), install the [pre-commit](https://pre-commit.com/) framework:
+
+```bash
+brew install pre-commit  # or: pip install pre-commit
+cd /path/to/atrib
+pre-commit install
+```
+
+After this, `git commit` runs the hooks defined in `.pre-commit-config.yaml`. They prevent accidental commits of credentials, formatting drift, and malformed files.
+
+Note: `pre-commit install` writes to `.git/hooks/pre-commit` and overrides any existing repo-local hook. If you have your own global git hooks via `core.hooksPath`, the pre-commit framework integrates by default; otherwise you may need to chain hooks yourself.
+
 ## How to Contribute
 
 ### Bug Reports
