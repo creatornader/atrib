@@ -1,0 +1,52 @@
+# Configuration for the `typos` typo checker.
+# https://github.com/crate-ci/typos
+#
+# Run: `typos` from repo root, or `typos --diff` to see suggested fixes.
+# Pre-commit hook (optional): in .pre-commit-config.yaml, add the
+# crate-ci/typos hook.
+
+[default]
+# Ignore crypto-shaped blobs throughout the spec/conformance corpus,
+# ADRs, and test files. These are intentional fixed test vectors, not
+# narrative text. typos sees patterns like "Fpr" or "ba" inside random
+# crypto blobs and false-flags them.
+extend-ignore-re = [
+    # base64url runs (any 32+ chars of base64url alphabet), covers
+    # signatures (87 chars), creator_keys (43 chars), record_hashes,
+    # chain_roots, and any other crypto blob in test vectors / ADRs.
+    "[A-Za-z0-9_-]{32,}",
+    # Hex runs (8+ chars), covers W3C trace-context test fixtures
+    # (deadbeef, 00f067aa0ba902b7, etc.) and SHA-256 hashes embedded
+    # in test prose. The 8-char minimum is wide enough to skip natural
+    # English words.
+    "\\b[0-9a-f]{8,}\\b",
+    # markdown anchor links (#some-heading-slug), typos flags slug
+    # fragments stripped of apostrophes (e.g. "atribs-normative-..."
+    # is the slug for "atrib's normative ...")
+    "#[a-z0-9][a-z0-9-]*",
+]
+
+[default.extend-words]
+# Project-specific terms typos doesn't recognize. Add sparingly.
+atrib = "atrib"
+JCS = "JCS"  # JSON Canonicalization Scheme (RFC 8785)
+ist = "ist"  # appears in legitimate contexts, not "is"
+
+[default.extend-identifiers]
+# Vendor proper nouns; typos's lowercased substring matcher gets
+# confused by HashiCorp (sees "Hashi" as a typo of "Hash").
+HashiCorp = "HashiCorp"
+
+[files]
+# Skip generated artifacts and gitignored content.
+extend-exclude = [
+    "packages/*/dist/",
+    "packages/directory/wasm/",
+    "packages/directory-bridge/pkg/",
+    "packages/directory-bridge/target/",
+    "node_modules/",
+    ".turbo/",
+    ".remember/",
+    "pnpm-lock.yaml",
+    "metrics/",
+]

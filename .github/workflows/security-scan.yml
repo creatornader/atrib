@@ -1,23 +1,26 @@
 name: security-scan
 
-# Two-tier credential / secret scanning for atrib.
+# Multi-tier security scanning for atrib.
 #
-# Tier 1: gitleaks, fast pattern-based credential scanner. Runs on every
-#   push and PR. Uses .gitleaks.toml at repo root for atrib-specific
-#   allowlists (Ed25519 public keys in conformance vectors are not
-#   credentials).
+# Tier 1 (every push + PR):
+#   - typos:     spelling check across spec, ADRs, code comments
+#   - gitleaks:  pattern-based credential scanner
+#   - TruffleHog: verified-secrets scanner with live API confirmation
 #
-# Tier 2: TruffleHog, verified-secrets scanner. Calls the live API for
-#   each candidate to confirm a real credential vs a regex-shaped string.
-#   Runs weekly + on push to main. Slower but high-precision.
+# Tier 2 (schedule-only, deeper scans):
+#   - OSV-Scanner: transitive-dep CVE check across the OSV database.
+#                  Runs Sunday 09:00 UTC. Complements gitleaks
+#                  (credentials) + TruffleHog (live secrets) by covering
+#                  the third surface: known CVEs in lockfiles. Overlaps
+#                  Dependabot but uses a different database.
 #
-# Why both: gitleaks catches what the pattern catalog knows about (regex
-# precision), TruffleHog catches what the catalog doesn't (entropy +
-# verification). Defense in depth.
+# Vale (prose-leak linter) is intentionally not in CI, local pre-commit
+# hook with a project-specific style configuration covers it. Layer B
+# (LLM semantic prose audit) is also local-only for cost reasons.
 #
-# Vale (prose-leak linter) is run locally via a pre-commit hook with
-# a project-specific style configuration. The style configuration is
-# not part of this workflow.
+# OSSF Scorecard is documented in the public-flip runbook and will be
+# added when the repo is public (Scorecard scores public-repo signals;
+# private repos return N/A for most checks).
 
 on:
   push:
@@ -25,15 +28,24 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # Weekly TruffleHog full-history sweep, Sunday 09:00 UTC. Catches
-    # drift if a credential ever lands outside CI (manual force-push,
-    # admin override, etc.).
+    # Sunday 09:00 UTC, full security sweep.
     - cron: '0 9 * * 0'
 
 permissions:
   contents: read
 
 jobs:
+  typos:
+    name: typos (spelling check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # crate-ci/typos action; reads _typos.toml at repo root for
+      # project-specific config (base64url + hex blob suppressions,
+      # vendor proper nouns).
+      - uses: crate-ci/typos@v1.46.0
+
   gitleaks:
     name: gitleaks (credential pattern scan)
     runs-on: ubuntu-latest
@@ -43,7 +55,6 @@ jobs:
           fetch-depth: 0  # full history so gitleaks scans every commit
 
       # gitleaks-action v2 auto-detects .gitleaks.toml at repo root.
-      # Don't pass config-path (deprecated in v2 API).
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -56,14 +67,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Full-repo scan. The action's base/head diff mode requires
-      # base != head, which fails on push-to-main and on schedule
-      # events. Full-repo scan works in all trigger contexts and only
-      # adds a few seconds. --results=verified,unknown surfaces both
-      # live-API-confirmed credentials (verified) and pattern matches
-      # without verification support (unknown), suppresses raw entropy
-      # noise.
       - uses: trufflesecurity/trufflehog@main
         with:
           path: ./
           extra_args: --results=verified,unknown
+
+  osv-scanner:
+    name: OSV-Scanner (CVE scan, scheduled)
+    # Reusable workflow from google/osv-scanner-action. Runs full repo
+    # scan + uploads SARIF to GHAS Code Scanning. Code Scanning requires
+    # GitHub Pro for private repos, until the public flip, the upload
+    # step will fail cleanly while the scan output still appears in the
+    # workflow logs.
+    if: github.event_name == 'schedule'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.5
+    permissions:
+      actions: read
+      security-events: write
+      contents: read

@@ -83,7 +83,7 @@ async function replayPersistedClaims(directory: AtribDirectory, path: string): P
       claim = JSON.parse(trimmed) as IdentityClaim
     } catch {
       // eslint-disable-next-line no-console
-      console.warn(`directory-node: skipping unparseable persistence line`)
+      console.warn(`directory-node: skipping unparsable persistence line`)
       continue
     }
     // Defensive: re-verify the signature on replay. A persistence-file tamper
