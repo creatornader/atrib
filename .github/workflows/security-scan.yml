@@ -42,11 +42,11 @@ jobs:
         with:
           fetch-depth: 0  # full history so gitleaks scans every commit
 
+      # gitleaks-action v2 auto-detects .gitleaks.toml at repo root.
+      # Don't pass config-path (deprecated in v2 API).
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          config-path: .gitleaks.toml
 
   trufflehog:
     name: TruffleHog (verified-secrets scan)
@@ -56,13 +56,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The official TruffleHog action runs `trufflehog git`.
-      # --results=verified,unknown reports verified secrets (high-
-      # precision live-API checks) plus unknown candidates (untested
-      # patterns worth manual review).
+      # Full-repo scan. The action's base/head diff mode requires
+      # base != head, which fails on push-to-main and on schedule
+      # events. Full-repo scan works in all trigger contexts and only
+      # adds a few seconds. --results=verified,unknown surfaces both
+      # live-API-confirmed credentials (verified) and pattern matches
+      # without verification support (unknown), suppresses raw entropy
+      # noise.
       - uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: main
-          head: HEAD
           extra_args: --results=verified,unknown
