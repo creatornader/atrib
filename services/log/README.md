@@ -31,7 +31,7 @@ When implemented, this service will:
 
 ## Why "not table stakes" was wrong
 
-Earlier prioritization treated the production log as deferrable in favor of completing the TypeScript SDK first. With hindsight that was a rationalization. A merchant cannot independently verify a recommendation against `@atrib/log-dev` because the dev stub returns placeholder Merkle hashes; the verifier's strict path will reject them. So a customer trying to actually run the protocol end-to-end (signed records → Merkle log → verifier returning `valid: true`) needs the real log.
+The production log was initially deprioritized in favor of completing the TypeScript SDK. That sequencing is now recognized as a misalignment with end-to-end verifiability requirements: a merchant cannot independently verify a recommendation against `@atrib/log-dev` because the dev stub returns placeholder Merkle hashes; the verifier's strict path will reject them. A customer trying to run the protocol end-to-end (signed records → Merkle log → verifier returning `valid: true`) needs the real log.
 
 What's true is that the **wire format** and the **client-side SDK** can both be finished before the Go service exists, and that's where the work has been concentrated. When the SDK is stable enough that customers want to run the full loop, the work in this directory becomes the next blocker.
 
