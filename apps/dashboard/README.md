@@ -4,7 +4,7 @@ Public read-only inspection surface over [`log.atrib.dev`](https://log.atrib.dev
 
 This is **option 1 of a three-stage build** per [D054](../../DECISIONS.md#d054-unified-public-explorer-vs-per-service-admin-uis): single HTML file, no build step, no framework, vanilla JavaScript with `fetch` against the public APIs.
 
-Option 2 (Vite/Next.js SPA) ships when dogfood metrics produce useful signal. Option 3 (block-explorer-grade with search indexing + real-time updates) ships after implementation work completion.
+Option 2 (Vite/Next.js SPA) ships when dogfood metrics produce useful signal. Option 3 (block-explorer-grade with search indexing + real-time updates) ships after the broader implementation work completes.
 
 ## Use it locally
 
