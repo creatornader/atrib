@@ -27,3 +27,12 @@ default = ["console_error_panic_hook"]
 opt-level = 3
 lto = true
 codegen-units = 1
+# IMPORTANT: this profile MUST be built via `./build-wasm.sh` (not bare
+# `wasm-pack build`). The wrapper sets --remap-path-prefix flags that
+# strip the builder's $HOME from debug info, panic locations, and
+# DWARF symbols. Without it, every WASM panic message contains the
+# builder's full path verbatim. See build-wasm.sh + README.md.
+#
+# The Cargo-native `trim-paths = "all"` would be the cleaner fix but
+# is still nightly-only as of Cargo 1.90 despite RFC 3127. Migrate
+# when stable.

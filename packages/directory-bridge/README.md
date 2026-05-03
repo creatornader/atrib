@@ -1,6 +1,6 @@
 # atrib-directory-bridge
 
-Rust→WASM bridge wrapping Meta's [`akd`](https://github.com/facebook/akd) crate. Built once via `wasm-pack build --target nodejs --release`; the resulting `pkg/` artifacts are copied into `packages/directory/wasm/` (which IS checked into git) so the SDK package ships the WASM module inline.
+Rust→WASM bridge wrapping Meta's [`akd`](https://github.com/facebook/akd) crate. Built via `./build-wasm.sh`; the resulting `pkg/` artifacts are copied into `packages/directory/wasm/` (which IS checked into git) so the SDK package ships the WASM module inline.
 
 The bridge exposes the four directory operations spec [§6](../../atrib-spec.md#6-key-directory) normatively requires (publish, lookup, history, prove_absence) plus the operations supporting per-operation anchoring (current_epoch, current_root, audit_proof) and the [§6.3](../../atrib-spec.md#63-verifier-consultation-algorithm) 9-step verifier consultation algorithm.
 
@@ -12,12 +12,14 @@ AKD parallelism is gated to `disabled()` because WASM lacks a Tokio runtime. Ins
 
 ```bash
 cd packages/directory-bridge
-wasm-pack build --target nodejs --release
+./build-wasm.sh
 cp pkg/atrib_directory_bridge.{js,d.ts} pkg/atrib_directory_bridge_bg.wasm \
    ../directory/wasm/
 ```
 
 The built artifacts in `packages/directory/wasm/` are checked into git. Rebuild and re-copy when changing `src/lib.rs`.
+
+`build-wasm.sh` (rather than bare `wasm-pack build`) is required because Cargo embeds the builder's `$HOME` path into WASM debug info, panic locations, and DWARF symbols by default. Since this WASM ships in a public package, those paths would identify the builder. The wrapper sets `--remap-path-prefix` flags from `$HOME` at runtime and verifies the output contains no `/Users/` or `/home/` strings before exiting. Cargo's stable `trim-paths` profile setting will replace this wrapper when it ships out of nightly (RFC 3127).
 
 ## Why bridge ↔ SDK split
 
