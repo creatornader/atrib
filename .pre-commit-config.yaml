@@ -45,11 +45,16 @@ repos:
         args: [--maxkb=1000]
         exclude: '^packages/directory/wasm/'  # WASM blob is intentional
 
-  # Prettier (formatting check, not auto-fix in pre-commit)
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v4.0.0-alpha.8
+  # Prettier — local hook using the project's installed prettier
+  # (devDependency in package.json, so any contributor who ran
+  # `pnpm install` has it). The pre-commit-mirrors-prettier hook is
+  # archived; using a local hook is the project-recommended path.
+  - repo: local
     hooks:
-      - id: prettier
+      - id: prettier-check
+        name: prettier (check formatting)
+        entry: pnpm exec prettier --check
+        language: system
         types_or: [javascript, jsx, ts, tsx, json, yaml, markdown]
         exclude: |
           (?x)^(
