@@ -121,7 +121,7 @@ describe('graph-node server (section 3.4)', () => {
   })
 
   // §1.9: revocation flips post-revocation records to revoked_after_revocation
-  it('flags post-revocation records via /v1/graph (Phase 3.4)', async () => {
+  it('flags post-revocation records via /v1/graph', async () => {
     // Submit two records by Alice with explicit log_index headers, then a
     // key_revocation by Alice retiring her own key, then another record by
     // Alice. The post-revocation record should be flagged.

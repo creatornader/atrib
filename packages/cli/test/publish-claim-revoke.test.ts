@@ -1,4 +1,4 @@
-// T11 (Phase 5 gap): tests for new CLI subcommands publish-claim + revoke.
+// T11: tests for new CLI subcommands publish-claim + revoke.
 //
 // We exercise the dry-run paths so we don't need a live directory or log.
 // dry-run prints the signed payload to stdout; the test captures it and

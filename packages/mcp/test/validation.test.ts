@@ -23,7 +23,7 @@ describe('validateSubmission (§2.6.1 Steps 2-5)', () => {
     expect(validateSubmission({ ...valid, spec_version: 'wrong' as any }).ok).toBe(false)
   })
 
-  // T13 (Phase 5): malformed chain_root per spec §1.2.3
+  // T13: malformed chain_root per spec §1.2.3
   it('rejects empty chain_root', () => {
     const r = validateSubmission({ ...valid, chain_root: '' })
     expect(r.ok).toBe(false)

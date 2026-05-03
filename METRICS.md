@@ -16,7 +16,7 @@ These are the dial-tones. If any of them goes red, nothing else on this page is 
 | `verify-loop` gate pass count | CI run output | 13/13 (or current count if more gates added) | No gate has silently regressed |
 | `log.atrib.dev` /v1/checkpoint HTTP status | external probe | 200 (or 404 if intentionally empty) | The log is reachable |
 | `log.atrib.dev` machine state | `fly machines list -a atrib-log` | started | Operator infrastructure is alive |
-| Persistence file size | inside the Fly VM | non-decreasing across redeploys | Tree state survives operator-side changes |
+| Persistence file size | inside the Fly VM | non-decreasing across redeploys | Tree state survives operational changes |
 | Time since last successful verify | CI run history | < 24 hours | The verifier itself is not broken |
 
 A Tier 0 alarm is paged. Anything else can wait.

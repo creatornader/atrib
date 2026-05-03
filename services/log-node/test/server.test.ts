@@ -398,7 +398,7 @@ describe('graph fanout', () => {
   })
 })
 
-// T8 (Phase 5 gap): the log is append-only; DELETE is rejected with 405.
+// T8: the log is append-only; DELETE is rejected with 405.
 describe('append-only design (T8)', () => {
   it('DELETE /v1/entries returns 405 with Allow header', async () => {
     const u = new URL(server.url)

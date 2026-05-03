@@ -72,7 +72,7 @@ export function validateSubmission(record: Partial<AtribRecord>): ValidationResu
     }
   }
 
-  // T13 (Phase 5): chain_root must match the spec §1.2.3 format —
+  // T13: chain_root must match the spec §1.2.3 format —
   // either the genesis form 'sha256:' + 64-hex of SHA-256(context_id),
   // or a sha256: prefix + 64-hex of a prior record_hash. The format
   // check rejects malformed inputs (empty string, missing prefix,

@@ -1,5 +1,5 @@
-// Phase 4.1 (gap-closure plan): live test that the submission queue cap
-// activates and drops correctly under sustained log outage.
+// Live test that the submission queue cap activates and drops correctly
+// under sustained log outage.
 //
 // Differs from submission.test.ts which uses vi.fn fetch + fake timers.
 // This test uses:
@@ -38,7 +38,7 @@ async function makeSignedRecord(suffix: number): Promise<AtribRecord> {
   )
 }
 
-describe('Phase 4.1 — live queue cap under sustained outage', () => {
+describe('live queue cap under sustained outage', () => {
   let server: Server
   let outageEndpoint: string
   let receivedCount = 0

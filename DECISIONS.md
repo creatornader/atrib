@@ -750,7 +750,7 @@ The spec/code drift fix is the kind of thing that only gets caught when you buil
 
 **Alternatives considered:**
 
-- **Drop `priority` from the wire entirely (option (a) from the priority discussion).** Initially leaned toward this on the grounds that no consumer existed. User pushback: "find a real consumer today; just do it all properly." Rejected after that pushback because two real consumers DO exist, they just hadn't been wired yet.
+- **Drop `priority` from the wire entirely (option (a) from the priority discussion).** Initially leaned toward this on the grounds that no consumer existed. Rejected after a closer review surfaced two real consumers that DO exist, they just hadn't been wired yet.
 - **Keep the broken wire format and note the spec drift in TODO.md.** Rejected per the radical-honesty rule. Shipping a known wire-format bug to customers because "we'll fix it later" is exactly the kind of avoidable failure the rule exists to prevent.
 - **Build the dev log as a separate `services/log/dev-server/` directory rather than a workspace package.** Rejected after weighing trade-offs: option A (workspace package) wins because the demo can `import { startDevLog } from '@atrib/log-dev'` directly without spawning a child process, the inspection API is type-safe and ergonomic, and the existing `@atrib/mcp` and `@atrib/agent` test suites can reuse the dev log as a real fixture in the future instead of mocking `fetch`.
 - **Build the dev log in Go (matching the future Tessera service).** Rejected for this chunk. The Go Tessera-backed log will live in `services/log/` when it ships; the dev log is a TypeScript fixture for in-process integration tests and demos. They have different operational profiles and can coexist; the dev log is not a stepping stone to the real one.
@@ -1149,7 +1149,7 @@ The divergence was present from the initial commit of `checkpoint.ts`. A round-t
 **Date:** 2026-04-27
 **Status:** Accepted; spec [§1.9](atrib-spec.md#19-key-rotation-and-revocation) drafted, implementation deferred to an upcoming implementation phase
 
-**Context.** [D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification) explicitly deferred key rotation. The substrate has been live for several weeks signing under the operator's first creator key, and during the post-B+C audit that key was discovered to have leaked into Claude Code conversation transcripts (transcripts have 600 perms but the key is "burned"; anyone with a copy of those transcripts has the key forever). An operator-side rotation rotated the seed manually but the substrate still has no protocol-level revocation: every record signed by the leaked key continues to verify under that pubkey forever, with no signal to a verifier that the key was retired.
+**Context.** [D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification) explicitly deferred key rotation. The substrate has been live for several weeks signing under the operator's first creator key, and during a post-deployment audit that key was discovered to have leaked into Claude Code conversation transcripts (transcripts have 600 perms but the key is "burned"; anyone with a copy of those transcripts has the key forever). The operator manually rotated the seed but the substrate still has no protocol-level revocation: every record signed by the leaked key continues to verify under that pubkey forever, with no signal to a verifier that the key was retired.
 
 A second motivation: scheduled 90-day rotation is not viable today. If a creator wanted to rotate, every existing record would still verify under the old pubkey but with no way to prove the rotation was authorized rather than a key-loss event.
 
@@ -1434,9 +1434,9 @@ Result: one promotion (`observation`), three correct-rejections that remain vali
 **Date:** 2026-04-30
 **Status:** Accepted (design only; implementation gated)
 
-**Context.** Today the `creator_key` Ed25519 seed lives as 32 raw bytes — in env variables, in `~/.atrib/keys/`, or in macOS Keychain (per [D033](#d033-key-rotation-and-revocation) + Phase 1 of the gap-closure plan). For the operator dogfood loop this is acceptable: the threat model is single-machine compromise (covered by Keychain + per-process file-mode 0600). For organizations using atrib in production, key material must never appear in process memory at all. The standard operator profile is HSM-backed signing: the seed lives inside a Cloud KMS, Vault Transit engine, or hardware YubiHSM; the wrapper requests a signature for each canonical record and never holds the bytes.
+**Context.** The `creator_key` Ed25519 seed currently lives as 32 raw bytes — in env variables, in `~/.atrib/keys/`, or in macOS Keychain (per [D033](#d033-key-rotation-and-revocation)). For the operator dogfood loop this is acceptable: the threat model is single-machine compromise (covered by Keychain + per-process file-mode 0600). For organizations using atrib in production, key material must never appear in process memory at all. The standard operator profile is HSM-backed signing: the seed lives inside a Cloud KMS, Vault Transit engine, or hardware YubiHSM; the wrapper requests a signature for each canonical record and never holds the bytes.
 
-The `keystore: 'callback'` mode designed in Phase 1.2 (and merged but not yet wired end-to-end) provides the wrapper-side hook. This ADR records the operator-side profile that closes the loop.
+The `keystore: 'callback'` mode (designed and merged but not yet wired end-to-end) provides the wrapper-side hook. This ADR records the operator profile that closes the loop.
 
 **Decision.**
 
@@ -1451,7 +1451,7 @@ The `keystore: 'callback'` mode designed in Phase 1.2 (and merged but not yet wi
      mode: 'callback',
      publicKey: 'base64url-43-chars',
      sign: async (canonicalBytes: Uint8Array): Promise<Uint8Array> => {
-       // operator-side: HSM call returning 64-byte Ed25519 signature
+       // operator: HSM call returning 64-byte Ed25519 signature
      },
    }
    ```
@@ -1472,7 +1472,7 @@ The `keystore: 'callback'` mode designed in Phase 1.2 (and merged but not yet wi
 **Consequences.**
 
 - *Spec.* New [§7.6](atrib-spec.md#76-hsm-operator-profile) subsection (informative profiles + normative callback contract).
-- *Wrapper.* `keystore: 'callback'` is the load-bearing change — already designed, validation against a mock HSM signer per Phase 6.2 closes the implementation gap.
+- *Wrapper.* `keystore: 'callback'` is the load-bearing change — already designed, validation against a mock HSM signer closes the implementation gap.
 - *Documentation.* Each profile gets a 1-2 page operator runbook in `docs/operator/hsm-<profile>.md`; runbooks are drafted privately and promoted to public at first non-operator adoption.
 - *No breaking changes.* The `keystore: 'env' | 'file' | 'keychain'` modes remain available for solo operators / dev. Callback mode is additive.
 
@@ -1482,7 +1482,7 @@ The `keystore: 'callback'` mode designed in Phase 1.2 (and merged but not yet wi
 - *Multi-region HSM topology.* If the operator's wrapper is in us-east-1 and the HSM is in eu-west-1, every sign is a transatlantic round-trip. atrib doesn't prescribe topology; the latency tradeoff is the operator's call.
 - *Auditability of HSM-side decisions.* AWS KMS, Vault, and YubiHSM each have their own audit log. atrib's [D039](#d039-audit-log-for-key-access) audit log is wrapper-side; it captures every sign request and the public key in use, but not the HSM's internal decision-making.
 
-**Implementation sequencing.** Spec [§7.6](atrib-spec.md#76-hsm-operator-profile) draft → callback-mode validation against a mock HSM signer (Phase 6.2) → AWS KMS reference adapter in `packages/agent/src/keystore-aws-kms.ts` (deferred, separate phase) → operator runbook for Vault + YubiHSM (deferred).
+**Implementation sequencing.** Spec [§7.6](atrib-spec.md#76-hsm-operator-profile) draft → callback-mode validation against a mock HSM signer → AWS KMS reference adapter in `packages/agent/src/keystore-aws-kms.ts` (deferred) → operator runbook for Vault + YubiHSM (deferred).
 
 ## D038: Per-conversation key derivation
 
@@ -2019,7 +2019,7 @@ The introduction of `informed_by` ([D041](#d041-informed_by-linking-primitive-an
 
 **Consequences.**
 
-- *`@atrib/agent`.* Existing adapters audited against the contract; gaps closed in next session's work. New context tracker (C5, C6) added to the middleware. New test file for conformance.
+- *`@atrib/agent`.* Existing adapters audited against the contract; gaps closed in subsequent work. New context tracker (C5, C6) added to the middleware. New test file for conformance.
 - *Spec.* [§5.4](atrib-spec.md#54-atribagent-agent-middleware) (adapter section) updated to reference the contract. [§5.7](atrib-spec.md#57-automation-triggers-normative) (Automation Triggers) extended with the new auto-emissions.
 - *Documentation.* Contract published in `packages/agent/README.md` adapter table. Adapter authoring guide added.
 
@@ -2041,15 +2041,15 @@ A layered defense replaces the ad-hoc catch-up cycle with structural prevention.
 
 **Decision.**
 
-1. **Style guide as source of truth.** An operator-side prose style guide defines the *positive* spec for what public prose may contain: present-tense decisions and rationale; no operator-state framing (numeric ordinals tied to internal plans, timestamps with hour-of-day precision, narrative attributions to specific actors, commit/session self-reference, references to private planning artifacts); cross-references to other ADRs by number, spec by section, code by file path only. The denylist becomes derivative; the style guide is primary.
+1. **Style guide as source of truth.** A prose style guide defines the *positive* spec for what public prose may contain: present-tense decisions and rationale; no operator-state framing (numeric ordinals tied to internal plans, timestamps with hour-of-day precision, narrative attributions to specific actors, commit/session self-reference, references to private planning artifacts); cross-references to other ADRs by number, spec by section, code by file path only. The denylist becomes derivative; the style guide is primary.
 
 2. **Layer A: Pre-commit regex check.** Local git hook running on `git commit`. Pattern-based regex catches generic shapes (numeric ordinals tied to plans; self-referential commit/session/pass language; time-of-day patterns; actor-narration patterns; references to private planning artifact and memory-store identifiers; references to subagent-process framing). Hook blocks commit on flag; can be bypassed with `--no-verify` for emergency override.
 
-3. **Layer B: Pre-push LLM-semantic audit.** Local git hook running on `git push`. Sends the diff to a hosted LLM API (free-tier model) with a prompt that asks "does this prose contain operator state, internal-process framing, or anything that doesn't belong in a public protocol spec?" Reads API credentials from operator-side configuration. Blocks push on flag; can be bypassed with explicit override flag.
+3. **Layer B: Pre-push LLM-semantic audit.** Local git hook running on `git push`. Sends the diff to a hosted LLM API (free-tier model) with a prompt that asks "does this prose contain operator state, internal-process framing, or anything that doesn't belong in a public protocol spec?" Reads API credentials from local configuration. Blocks push on flag; can be bypassed with explicit override flag.
 
 4. **Layer C: Cloud audit backstop.** A weekly remote audit runs against the public repo and includes the regex patterns from Layer A plus the LLM-semantic check from Layer B. Catches drift, regression after history rewrites, anything missed locally.
 
-5. **Layer D: Operator-side documentation.** A leak-class catalog and audit-procedure document cross-references the four layers and is updated as new leak classes are discovered. The style guide and this document together form the prevention reference.
+5. **Layer D: Documentation.** A leak-class catalog and audit-procedure document cross-references the four layers and is updated as new leak classes are discovered. The style guide and this document together form the prevention reference.
 
 6. **Implementation sequencing.** Style guide drafted first (defines what the regex/LLM check against). Then Layer A (regex hook; cheap, fast, catches the common shapes). Then Layer B (LLM hook; catches the spirit). Then Layer C update (cloud audit gains the new patterns). Each layer is independently useful; the combination is what makes the defense robust.
 
@@ -2067,7 +2067,7 @@ A layered defense replaces the ad-hoc catch-up cycle with structural prevention.
 
 **Consequences.**
 
-- *Operator-side artifacts.* New prose style guide. Updated leak-class catalog with the four-layer defense.
+- *Documentation artifacts.* New prose style guide. Updated leak-class catalog with the four-layer defense.
 - *atrib (public repo).* New `.git-hooks/pre-commit` and `.git-hooks/pre-push` scripts (committed for transparency; users opt in via `git config core.hooksPath .git-hooks`). New `scripts/check-leaks.mjs` (regex check) and `scripts/check-leaks-semantic.mjs` (LLM check).
 - *Cloud routine.* The weekly audit gains the new regex patterns and LLM-check step.
 
@@ -2077,7 +2077,7 @@ A layered defense replaces the ad-hoc catch-up cycle with structural prevention.
 - *Hosted LLM availability.* If the API is unavailable, Layer B fails open (push proceeds). The cloud audit (Layer C) catches what Layer B missed.
 - *Style guide drift.* The style guide itself can grow stale. Quarterly review (manual) checks alignment.
 
-**Implementation sequencing.** Style guide drafted operator-side → regex check script + pre-commit hook → LLM check script + pre-push hook → cloud audit update → documentation cross-reference.
+**Implementation sequencing.** Style guide drafted → regex check script + pre-commit hook → LLM check script + pre-push hook → cloud audit update → documentation cross-reference.
 
 ## D050: Cross-log replication for equivocation defense
 
