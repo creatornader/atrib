@@ -1,0 +1,68 @@
+name: security-scan
+
+# Two-tier credential / secret scanning for atrib.
+#
+# Tier 1: gitleaks — fast pattern-based credential scanner. Runs on every
+#   push and PR. Uses .gitleaks.toml at repo root for atrib-specific
+#   allowlists (Ed25519 public keys in conformance vectors are not
+#   credentials).
+#
+# Tier 2: TruffleHog — verified-secrets scanner. Calls the live API for
+#   each candidate to confirm a real credential vs a regex-shaped string.
+#   Runs weekly + on push to main. Slower but high-precision.
+#
+# Why both: gitleaks catches what the pattern catalog knows about (regex
+# precision), TruffleHog catches what the catalog doesn't (entropy +
+# verification). Defense in depth.
+#
+# Vale (prose-leak linter) is intentionally NOT here — its style file
+# enumerates the denylist and lives in a private location. Vale runs
+# locally via the global pre-commit hook.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly TruffleHog full-history sweep, Sunday 09:00 UTC. Catches
+    # drift if a credential ever lands outside CI (manual force-push,
+    # admin override, etc.).
+    - cron: '0 9 * * 0'
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: gitleaks (credential pattern scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so gitleaks scans every commit
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config-path: .gitleaks.toml
+
+  trufflehog:
+    name: TruffleHog (verified-secrets scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The official TruffleHog action runs `trufflehog git`.
+      # --results=verified,unknown reports verified secrets (high-
+      # precision live-API checks) plus unknown candidates (untested
+      # patterns worth manual review).
+      - uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --results=verified,unknown
