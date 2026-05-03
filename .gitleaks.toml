@@ -1,0 +1,72 @@
+# gitleaks configuration for atrib (the public protocol repo).
+#
+# Extends the default gitleaks ruleset with allowlists for atrib-specific
+# false-positive classes. atrib is a cryptographic protocol that publishes
+# Ed25519 PUBLIC keys throughout its conformance corpus and spec, those
+# look like generic API keys to the default gitleaks regex but they are
+# intentional, public, and load-bearing for the spec's testability.
+#
+# Run: `gitleaks git --no-banner` from repo root, or `gitleaks dir .`
+# for an unstaged scan.
+
+[extend]
+useDefault = true
+
+# ── Path-scoped allowlists ──────────────────────────────────────────────
+# Conformance corpus and spec contain public-key example values that
+# match the generic-api-key heuristic.
+
+[[allowlists]]
+description = "Conformance corpus public keys"
+paths = [
+  '''spec/conformance/.*\.json$''',
+  '''spec/conformance/.*manifest\.json$''',
+]
+
+[[allowlists]]
+description = "atrib spec public-key examples"
+paths = [
+  '''atrib-spec\.md$''',
+  '''skills/atrib/SKILL\.md$''',
+  '''DECISIONS\.md$''',
+  '''ARCHITECTURE\.md$''',
+]
+
+[[allowlists]]
+description = "MCP test fixtures with public keys"
+paths = [
+  '''packages/mcp/test/.*\.ts$''',
+  '''packages/verify/test/.*\.ts$''',
+  '''packages/agent/test/.*\.ts$''',
+  '''packages/cli/test/.*\.ts$''',
+  '''packages/log-dev/test/.*\.ts$''',
+  '''packages/integration/test/.*\.ts$''',
+  '''services/log-node/test/.*\.ts$''',
+  '''services/graph-node/test/.*\.ts$''',
+  '''services/directory-node/test/.*\.ts$''',
+]
+
+[[allowlists]]
+description = "JSON test fixtures across packages"
+paths = [
+  '''packages/agent/test/fixtures/.*\.json$''',
+  '''packages/.*/test/.*\.json$''',
+]
+
+# ── Stop-word allowlist for protocol field names ─────────────────────────
+# Even outside the allowed paths, these field-name prefixes are atrib
+# protocol vocabulary, not credentials. When followed by a base64url
+# value they're public keys / signatures by design.
+
+[[allowlists]]
+description = "atrib protocol field names, never credentials"
+regexes = [
+  '''(creator_key|revoked_key|successor_key|lookup_for_key|signing_key|signature|chain_root|content_id|record_hash|provenance_token|session_token)''',
+]
+regexTarget = "match"
+
+# ── Op note ───────────────────────────────────────────────────────────────
+# If gitleaks DOES flag something not in these allowlists, that IS worth
+# investigating. The audit-tree.sh / audit-history.sh scripts cover the
+# atrib-specific PROSE leak classes; gitleaks covers the credential
+# class as defense-in-depth.
