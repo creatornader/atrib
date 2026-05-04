@@ -51,11 +51,19 @@ export interface PreCallTransformContext {
  * the record BEFORE forwarding to the upstream handler so the host can embed
  * the resulting receipt_id (or record_hash) into the upstream call's args.
  *
- * Returning a new args object replaces `request.params.arguments` for the
- * upstream call. Returning `undefined` (or the same args reference) leaves
- * arguments unchanged. Errors thrown from the callback are caught; the
- * middleware then falls back to the standard post-call signing path so the
- * tool call itself never fails because of attribution (§5.8).
+ * Return contract:
+ *   - **Return a new object** to replace `request.params.arguments` for the
+ *     upstream call. The canonical pattern is `return { ...ctx.args, my_field: ctx.receiptId }`.
+ *   - Return `undefined` to leave arguments unchanged (observe-only mode).
+ *   - Mutating `ctx.args` in place AND returning the same reference is NOT
+ *     supported: the middleware uses reference equality to detect a transform,
+ *     so same-reference returns are treated as "no change." If the upstream
+ *     request had no `arguments` field at all, in-place mutations to `ctx.args`
+ *     are silently lost. Always allocate and return a fresh object.
+ *
+ * Errors thrown from the callback are caught; the middleware then falls back
+ * to the standard post-call signing path so the tool call itself never fails
+ * because of attribution (§5.8).
  *
  * Use case: cross-tool causal embedding. e.g., a wrapper around an MCP server
  * that writes rows to a database can use this to write the atrib receipt_id

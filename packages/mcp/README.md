@@ -212,7 +212,7 @@ await log.close()
 
 ## Test coverage
 
-326 tests across 24 test files covering:
+375 tests across 25 test files covering:
 
 - Wire-format conformance to spec [§2.6.1](../../atrib-spec.md#261-submit-entry) + [§2.6.2](../../atrib-spec.md#262-inclusion-proof-response)
 - Wycheproof Ed25519 test vectors (signing/verification)
