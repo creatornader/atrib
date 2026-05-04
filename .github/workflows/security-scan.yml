@@ -54,10 +54,17 @@ jobs:
         with:
           fetch-depth: 0  # full history so gitleaks scans every commit
 
-      # gitleaks-action v2 auto-detects .gitleaks.toml at repo root.
+      # gitleaks-action v2 needs GITLEAKS_CONFIG set explicitly to load
+      # the custom .gitleaks.toml at repo root. Without it, the action
+      # runs gitleaks's default ruleset only, which flags the conformance
+      # corpus's high-entropy public-key and provenance_token values as
+      # generic-api-key matches (CI failure observed on 4fba1b9). Both
+      # GITHUB_TOKEN and GITLEAKS_CONFIG resolve from CI-controlled
+      # contexts (no user-controlled inputs flow through this step).
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: ${{ github.workspace }}/.gitleaks.toml
 
   trufflehog:
     name: TruffleHog (verified-secrets scan)
