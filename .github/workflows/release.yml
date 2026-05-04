@@ -1,0 +1,117 @@
+name: Release
+
+# Two release modes through this single workflow file:
+#
+#   1. Regular release (push to main): runs changesets/action, which either
+#      opens a "chore: release" PR with version bumps from queued changesets,
+#      or publishes the bumped versions to npm if the release PR has been
+#      merged.
+#
+#   2. Snapshot release (workflow_dispatch): publishes a one-off version under
+#      the `snapshot` dist-tag, so changes can be previewed without entering
+#      changesets pre-release mode.
+#
+# Both modes go through this single workflow file because npm Trusted
+# Publishers (OIDC) bind publish authorization to one specific workflow
+# filename per package. Renaming this file will break publishing until each
+# package's npm-side trusted-publisher record is updated to match.
+#
+# Configure a Trusted Publisher for each released package on npmjs.com:
+#   https://www.npmjs.com/package/<package>/access -> Trusted Publisher
+#   Repository: creatornader/atrib
+#   Workflow:   release.yml
+#
+# `commitMode: github-api` on changesets/action makes the release commit go
+# through the GitHub REST API so it's auto-signed by GitHub. No GPG/SSH key
+# wrangling, no commit-signature-rule exceptions.
+#
+# Node 24+ is required: Node 22's bundled npm 10.x can sign provenance
+# attestations but cannot use OIDC tokens to authenticate the publish itself,
+# leading to a 404 after provenance signing succeeds. Node 24 ships npm 11.12+
+# which fixes this.
+#
+# Security note: this workflow does NOT interpolate any user-controlled
+# github.event.* fields into run: commands, per the GitHub Actions
+# script-injection guidance.
+#
+# See https://docs.npmjs.com/trusted-publishers for the npm-side docs.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  release:
+    if: github.event_name == 'push'
+    name: Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create release PR or publish to npm
+        id: changesets
+        uses: changesets/action@6a0a831ff30acef54f2c6aa1cbbc1096b066edaf # v1.7.0
+        with:
+          publish: pnpm release
+          version: pnpm version-packages
+          commitMode: github-api
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  snapshot:
+    if: github.event_name == 'workflow_dispatch'
+    name: Release snapshot
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm -r build
+
+      - name: Snapshot version
+        run: pnpm changeset version --snapshot snapshot
+
+      - name: Publish snapshot
+        run: pnpm changeset publish --tag snapshot --no-git-tag
+        env:
+          NPM_CONFIG_PROVENANCE: "true"

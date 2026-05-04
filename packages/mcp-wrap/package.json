@@ -1,9 +1,10 @@
 {
   "name": "@atrib/mcp-wrap",
   "version": "0.1.0",
-  "description": "Generic config-driven MCP wrapper. Spawns any upstream MCP server and applies @atrib/mcp middleware so every tool call is signed and logged. Multiplies coverage to ~30 MCPs at zero per-server code cost.",
+  "description": "Generic config-driven MCP wrapper for atrib. Spawns any upstream MCP server and applies @atrib/mcp middleware so every tool call is signed and logged. Wrap any MCP via JSON config, no per-server code.",
   "license": "Apache-2.0",
-  "private": true,
+  "homepage": "https://atrib.dev",
+  "author": "atrib <hello@atrib.dev>",
   "publishConfig": {
     "access": "public"
   },
