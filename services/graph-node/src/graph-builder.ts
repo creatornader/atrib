@@ -3,8 +3,16 @@
 /**
  * Attribution graph builder (section 3.2.4).
  *
- * Applies the 5 normative edge derivation steps to a set of attribution
+ * Applies the 7 normative edge derivation steps to a set of attribution
  * records and optional gap nodes to produce a GraphResponse.
+ *
+ *   Step 1: CHAIN_PRECEDES
+ *   Step 2: SESSION_PRECEDES
+ *   Step 3: SESSION_PARALLEL
+ *   Step 4: CONVERGES_ON
+ *   Step 5: CROSS_SESSION
+ *   Step 6: INFORMED_BY (D041)
+ *   Step 7: PROVENANCE_OF (D044)
  *
  * Two implementations applying these rules to identical input records
  * MUST produce identical edge sets.
@@ -14,6 +22,7 @@ import {
   canonicalRecord,
   sha256,
   hexEncode,
+  base64urlEncode,
   verifyRecord,
   genesisChainRoot,
 } from '@atrib/mcp'
@@ -242,6 +251,102 @@ export async function buildGraph(
 
         edges.push({ type: 'CROSS_SESSION', source: otherNode.id, target: txNode.id, directed: true })
       }
+    }
+  }
+
+  // Per §3.2.4 step 6 + 7: lazy creation of synthetic dangling nodes for
+  // unresolved INFORMED_BY / PROVENANCE_OF references. Created at most once
+  // per missing reference; subsequent edges to the same dangling target
+  // reuse the same node.
+  const ensureDanglingNode = (id: string): void => {
+    if (nodeById.has(id)) return
+    const node: GraphNode = {
+      id,
+      event_type: 'dangling_node',
+      event_type_uri: null,
+      content_id: null,
+      creator_key: null,
+      chain_root: null,
+      context_id: '',
+      timestamp: 0,
+      log_index: null,
+      verification_state: 'unsigned',
+      is_genesis: false,
+    }
+    nodes.push(node)
+    nodeById.set(id, node)
+  }
+
+  // Step 6: INFORMED_BY (D041, spec §3.2.4)
+  // For each record A with a non-empty informed_by array, create one
+  // INFORMED_BY edge per entry. Direction A → B reads "A is informed by B".
+  // Targets resolve via record_hash lookup; unresolved entries get a
+  // synthetic dangling target so the agent's claim stays visible.
+  for (const record of sorted) {
+    const informedBy = record.informed_by
+    if (!Array.isArray(informedBy) || informedBy.length === 0) continue
+    const sourceHash = hexEncode(sha256(canonicalRecord(record)))
+    const sourceId = `sha256:${sourceHash}`
+    for (const ref of informedBy) {
+      if (typeof ref !== 'string' || !ref.startsWith('sha256:')) continue
+      const refHash = ref.slice('sha256:'.length)
+      const targetId = hashToNodeId.get(refHash)
+      if (targetId) {
+        edges.push({ type: 'INFORMED_BY', source: sourceId, target: targetId, directed: true })
+      } else {
+        const danglingId = `dangling:${ref}`
+        ensureDanglingNode(danglingId)
+        edges.push({
+          type: 'INFORMED_BY',
+          source: sourceId,
+          target: danglingId,
+          directed: true,
+          dangling: true,
+        })
+      }
+    }
+  }
+
+  // Step 7: PROVENANCE_OF (D044, spec §3.2.4)
+  // For each session-genesis record D carrying provenance_token T, find any
+  // record U with first 16 bytes of SHA-256(JCS(U)) matching T AND
+  // U.context_id ≠ D.context_id. Direction D → U reads "D's session
+  // descends from U's anchor." Non-genesis records carrying
+  // provenance_token are malformed per §1.2.6 and excluded from derivation.
+  for (const record of sorted) {
+    const provenanceToken = record.provenance_token
+    if (typeof provenanceToken !== 'string' || provenanceToken.length === 0) continue
+    if (record.chain_root !== genesisChainRoot(record.context_id)) continue
+    const sourceHash = hexEncode(sha256(canonicalRecord(record)))
+    const sourceId = `sha256:${sourceHash}`
+    let resolvedTargetId: string | undefined
+    for (const candidate of sorted) {
+      if (candidate.context_id === record.context_id) continue
+      const candidateBytes = sha256(canonicalRecord(candidate))
+      const candidateToken = base64urlEncode(candidateBytes.slice(0, 16))
+      if (candidateToken === provenanceToken) {
+        resolvedTargetId = `sha256:${hexEncode(candidateBytes)}`
+        break
+      }
+    }
+    if (resolvedTargetId) {
+      edges.push({
+        type: 'PROVENANCE_OF',
+        source: sourceId,
+        target: resolvedTargetId,
+        directed: true,
+      })
+    } else {
+      const danglingId = `dangling:provenance:${provenanceToken}`
+      ensureDanglingNode(danglingId)
+      edges.push({
+        type: 'PROVENANCE_OF',
+        source: sourceId,
+        target: danglingId,
+        directed: true,
+        dangling: true,
+        reason: 'no_token_source_in_record_set',
+      })
     }
   }
 
