@@ -1,0 +1,28 @@
+{
+  "name": "non-genesis-with-provenance",
+  "spec_section": "1.2.6",
+  "description": "A NON-genesis record carrying provenance_token. chain_root is not genesisChainRoot(context_id). Per §1.2.6 (\"provenance_token MUST appear ONLY on the genesis record\"), both validators (§2.6.1) and verifiers (§5.5) MUST reject this record. Signature itself is valid; rejection is at the policy layer.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225603000,
+      "provenance_token": "AAAAAAAAAAAAAAAAAAAAAA",
+      "signature": "F464gTrIOJaFwOEFR49LYVSbp5-XXrJsl793rpUQllBsZBQUFIl_3hpAj5TBvOcyTw9xTCU3NHRGgQNvr44sDQ"
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "genesis_chain_root_for_context": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+    "record_chain_root": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "record_hash_hex": "c69d3ddcf232077ab5ed2dc58634aab0cc0a8a481f290e2bf104a258311de077",
+    "validator_should_accept": false,
+    "verifier_signature_ok": true,
+    "verifier_should_flag": true,
+    "rejection_reason": "provenance_token on non-genesis record"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "upstream-derivation",
+  "spec_section": "1.2.6",
+  "description": "Bob's session-genesis record carries a provenance_token derived from Alice's upstream record per §1.2.6: token = base64url(sha256(JCS(upstream))[:16]). Verifies the derivation invariant. Implementations consuming the downstream record MUST be able to reproduce the token by hashing the upstream record's canonical form.",
+  "input": {
+    "upstream_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225601000,
+      "provenance_token": "AAAAAAAAAAAAAAAAAAAAAA",
+      "signature": "7FZt7geNOdxCgkpYmXffamSqn9ejyr-Wi7ixgVC9lZ36w0-LZ-MHqp6DZkcrN2OBPpO7hIxiTBs6NXC_crIVDQ"
+    },
+    "downstream_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2",
+      "creator_key": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA",
+      "chain_root": "sha256:bdb339768bc5e4fecbe55a442056919b2b325907d49bcbf3bf8de13781996a83",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "timestamp": 1767225602000,
+      "provenance_token": "FQe-UGJDzDHc8oy4_AQpPQ",
+      "signature": "2Jdh5Ri5h8FaSFEiQnNiTRG8b1ej8ed-7UFoj-Aux4I7hy-eSPFvKbAwQBFFwgbiFu6ExAgmRz2KnQ9de3tsAg"
+    },
+    "downstream_signer_seed_hex": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "expected": {
+    "derived_provenance_token": "FQe-UGJDzDHc8oy4_AQpPQ",
+    "upstream_full_record_hash": "sha256:1507be506243cc31dcf28cb8fc04293d61e1b4e9cf089f9a5ab0d7272959b7e7",
+    "downstream_signature_verifies": true,
+    "validator_should_accept": true
+  }
+}

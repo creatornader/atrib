@@ -1,0 +1,25 @@
+{
+  "name": "omits-when-absent",
+  "spec_section": "1.2.6",
+  "description": "A record without provenance_token. The canonical signing input MUST omit the field entirely (not null, not empty string). Implementations that emit `provenance_token: \"\"` produce a different canonical bytes and a different signature; this case fixes the omission contract by hashing.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225604000,
+      "signature": "aDxVqCITFHBHwF0zyGWmGjgJzHFvsSOWgLV0nqEXlwEyfvcjEKJ28Fi3chvdXOZMkxlEwVAVmeJniJBpTkZjBA"
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "canonical_signing_input_utf8": "{\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc\",\"event_type\":\"https://atrib.dev/v1/types/observation\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1767225604000}",
+    "provenance_token_in_canonical_form": false,
+    "record_hash_hex": "f9614a4aab9b420a8e6c8080c8aefb3f997ae33ed50945111f09d2a0f1d5f3e0",
+    "validator_should_accept": true,
+    "verifier_signature_ok": true
+  }
+}
