@@ -53,6 +53,12 @@ paths = [
   '''packages/.*/test/.*\.json$''',
 ]
 
+[[allowlists]]
+description = "Per-package READMEs with public-key example values"
+paths = [
+  '''packages/.*/README\.md$''',
+]
+
 # ── Stop-word allowlist for protocol field names ─────────────────────────
 # Even outside the allowed paths, these field-name prefixes are atrib
 # protocol vocabulary, not credentials. When followed by a base64url
