@@ -139,3 +139,139 @@ describe('verifyRecord', () => {
     expect(result.provenance!.upstream_record_hash).toBeNull()
   })
 })
+
+describe('verifyRecord — informed_by_resolution', () => {
+  it('omits the annotation when informed_by is absent', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed)
+
+    const result = await verifyRecord(record)
+
+    expect(result.informed_by_resolution).toBeUndefined()
+  })
+
+  it('omits the annotation when informed_by is present but empty', async () => {
+    // Empty array shouldn't reach the canonical record per §1.2.5 (informed_by
+    // is omitted when empty), but defensively confirm the verifier handles it.
+    // signRecord canonicalizes — if the signer omitted informed_by per spec,
+    // the record won't have it; explicitly omit here.
+    const seed = await freshKey()
+    const record = await buildRecord(seed)
+
+    const result = await verifyRecord(record)
+
+    expect(result.informed_by_resolution).toBeUndefined()
+  })
+
+  it('classifies all entries as dangling when no candidates supplied', async () => {
+    const seed = await freshKey()
+    const refs = [
+      'sha256:' + 'd'.repeat(64),
+      'sha256:' + 'e'.repeat(64),
+    ]
+    const record = await buildRecord(seed, { informed_by: refs.slice().sort() })
+
+    const result = await verifyRecord(record)
+
+    expect(result.informed_by_resolution).toBeDefined()
+    expect(result.informed_by_resolution!.dangling.sort()).toEqual(refs.slice().sort())
+    expect(result.informed_by_resolution!.resolved).toEqual([])
+    // Dangling references are informational, not invalidating.
+    expect(result.signatureOk).toBe(true)
+  })
+
+  it('classifies entries as resolved when a matching candidate is supplied', async () => {
+    // Build the upstream first; compute its full record_hash to use as the
+    // informed_by reference on the downstream record.
+    const upstreamSeed = await freshKey()
+    const upstream = await buildRecord(upstreamSeed, { context_id: '1'.repeat(32) })
+    const upstreamHash = `sha256:${hexEncode(sha256(canonicalRecord(upstream)))}`
+
+    const downstreamSeed = await freshKey()
+    const downstream = await buildRecord(downstreamSeed, {
+      context_id: '2'.repeat(32),
+      informed_by: [upstreamHash],
+    })
+
+    const result = await verifyRecord(downstream, { informedByCandidates: [upstream] })
+
+    expect(result.informed_by_resolution!.resolved).toEqual([upstreamHash])
+    expect(result.informed_by_resolution!.dangling).toEqual([])
+  })
+
+  it('mixes resolved + dangling when only some candidates match', async () => {
+    const upstreamSeed = await freshKey()
+    const upstream = await buildRecord(upstreamSeed, { context_id: '3'.repeat(32) })
+    const upstreamHash = `sha256:${hexEncode(sha256(canonicalRecord(upstream)))}`
+    const fakeRef = 'sha256:' + 'f'.repeat(64) // no candidate supplied for this
+
+    const downstreamSeed = await freshKey()
+    const downstream = await buildRecord(downstreamSeed, {
+      context_id: '4'.repeat(32),
+      informed_by: [fakeRef, upstreamHash].sort(), // canonical sort per §1.2.5
+    })
+
+    const result = await verifyRecord(downstream, { informedByCandidates: [upstream] })
+
+    expect(result.informed_by_resolution!.resolved).toEqual([upstreamHash])
+    expect(result.informed_by_resolution!.dangling).toEqual([fakeRef])
+  })
+})
+
+describe('verifyRecord — posture (timestamp_granularity)', () => {
+  it('defaults to ms granularity when the field is absent', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed)
+
+    const result = await verifyRecord(record)
+
+    expect(result.posture.timestamp_granularity).toBe('ms')
+    expect(result.posture.timestamp_granularity_explicit).toBe(false)
+    expect(result.posture.timestamp_consistent).toBe(true)
+    expect(result.warnings).toEqual([])
+  })
+
+  it('flags as explicit when the field is set', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      // 16_666_666 minutes since epoch in ms — exactly minute-aligned
+      // (16_666_666 * 60_000 = 999_999_960_000).
+      timestamp: 999_999_960_000,
+      timestamp_granularity: 'min',
+    })
+
+    const result = await verifyRecord(record)
+
+    expect(result.posture.timestamp_granularity).toBe('min')
+    expect(result.posture.timestamp_granularity_explicit).toBe(true)
+    expect(result.posture.timestamp_consistent).toBe(true)
+  })
+
+  it('warns when the timestamp does not match the declared granularity', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      timestamp: 1_000_000_000_123, // not minute-aligned
+      timestamp_granularity: 'min',
+    })
+
+    const result = await verifyRecord(record)
+
+    expect(result.posture.timestamp_granularity).toBe('min')
+    expect(result.posture.timestamp_consistent).toBe(false)
+    expect(result.warnings.some((w) => w.includes('timestamp_granularity'))).toBe(true)
+    expect(result.valid).toBe(false) // any warning fails the valid bit
+  })
+
+  it('handles each granularity correctly', async () => {
+    // Pick a timestamp aligned to the day boundary so all five granularities
+    // pass the modulus check.
+    const dayAligned = 1_000_000 * 86_400_000 // 1M days since epoch ms
+    const seed = await freshKey()
+    for (const g of ['ms', 's', 'min', 'h', 'd'] as const) {
+      const record = await buildRecord(seed, { timestamp: dayAligned, timestamp_granularity: g })
+      const result = await verifyRecord(record)
+      expect(result.posture.timestamp_granularity).toBe(g)
+      expect(result.posture.timestamp_consistent).toBe(true)
+    }
+  })
+})
