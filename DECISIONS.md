@@ -2479,3 +2479,47 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 **Likely outcome when acted on:** the spec changes are small (new edge types + derivation rules + claim_type extension); the operational change is bigger (humans need their own keys, key management UX, distinguishing identity from agent identities they direct). Defer until a real use case forces the operational work.
 
 **ADR number** will be assigned when acted on.
+
+## P005: reconcile @atrib/verify README per-record annotations with actual code surface
+
+**Source:** Audit during the 2026-05-03 sign_record decoupling work. The package README documents per-record annotations the result object should surface (`informed_by_resolution`, `provenance`, `capability_check`, `cross_attestation`, `cross_log_proof_count`/`threshold_met`/`equivocation_detected`, posture detection from §8). Several of these decision references (D041, D044, D045, D051, D052) shipped to the spec but the corresponding code surface in `packages/verify/src/` is partial.
+
+**Source state at audit:**
+
+- `provenance` annotation: shipped 2026-05-03 via the new `verifyRecord(record, options)` per-record API in `packages/verify/src/verify-record.ts` + `spec/conformance/1.2.6/` corpus + `packages/verify/test/conformance-1.2.6.test.ts`.
+- `informed_by_resolution`, `capability_check`, `cross_attestation`, `cross_log_*`, posture detection: documented in README, NOT yet in code.
+- `resolveIdentity` and `CapabilityEnvelope` types ARE implemented but not surfaced through `VerificationResult`.
+
+**The decision in question.** The README represents intended state. Two paths to reconcile:
+
+1. **Land each annotation as a separate ADR-stamped piece of work** (D041 already covers informed_by; D051 covers capability_check; D052 covers cross_attestation; D050 covers cross_log_*; D045 covers posture). Each gets its own conformance corpus + verify code surface + test, in the same shape as D044's recently-completed work. Most rigorous.
+2. **One sweep that wires everything currently-spec'd into `verifyRecord` at once.** Faster but loses the ADR-per-feature traceability.
+
+**Why deferred.** No external consumer of `@atrib/verify` exists yet. The asymmetric README is correct as a design target; closing the gap now is investment for not-yet-existent verifiers. Day-1 dogfood works fine with `provenance` only (the D044 piece is shipped).
+
+**Reopening criteria.** First external verifier integrator OR first external auditor reading the README and getting confused by the missing fields. At that point, whichever ADR corresponds to the missing surface gets prioritized.
+
+**Likely outcome when acted on:** option 1, ADR-per-feature, since each feature already has a parent decision number to reference. The pattern set by D044's reconciliation (verify-record.ts + spec/conformance/1.2.6 + verify test) is reusable for each remaining annotation.
+
+**ADR number** will be assigned per-feature when acted on.
+
+## P006: introduce CHANGELOG.md when atrib goes public
+
+**Source:** Discussed during 2026-05-03 gap audit. The repo currently has no CHANGELOG.md anywhere (verified by audit). Pre-flip while frozen, the existing trail (README + DECISIONS.md + git log + atrib-spec.md revision history) is sufficient for the operator + a small number of insiders. Post-flip, external consumers (library users, spec implementers, auditors) will reasonably expect a CHANGELOG.
+
+**The decision in question:** which CHANGELOG model fits a multi-package monorepo + a normative spec.
+
+**Options considered:**
+
+1. **Per-package CHANGELOG.md + top-level summary** (standard monorepo pattern; @atrib/mcp, @atrib/agent, @atrib/verify, @atrib/cli, @atrib/directory each get their own). Plus the spec already has a revision history section that should be made consistent.
+2. **changesets** (https://github.com/changesets/changesets). pnpm-friendly tooling that generates CHANGELOG entries from PR-attached changeset files; integrates with version bumps + npm publish. Best ergonomics if + when atrib publishes packages publicly.
+3. **GitHub Releases tab only.** Lighter weight; works well for small projects but loses per-package version history when multiple packages diverge.
+4. **Conventional commits + auto-generated CHANGELOG.** Already part-way there: commits mostly use conventional-commits prefixes (feat:, fix:, docs:, refactor:). Tools like release-please can auto-generate CHANGELOG.md from this. Lower-effort introduction.
+
+**Why deferred.** Pre-flip frozen. No external consumer expects a CHANGELOG. Decision-shape and tooling-shape best made when the public-flip work is concretely scheduled rather than abstractly anticipated.
+
+**Reopening criteria.** Public-flip is unfrozen (per `project_public_flip_frozen_2026-05-03` memory) AND a release-tagging plan is in motion.
+
+**Likely outcome when acted on:** option 4 (release-please from conventional-commits) for the lightweight start, with potential migration to option 2 (changesets) if per-package version cadence diverges meaningfully. Either way, the spec's own revision history (`atrib-spec.md` Appendix or top-of-doc) should align with the package CHANGELOG so spec consumers and library consumers see consistent change history.
+
+**ADR number** will be assigned when acted on.
