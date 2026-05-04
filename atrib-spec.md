@@ -244,7 +244,10 @@ An attribution record is a JSON object. Two shapes exist depending on `event_typ
   "timestamp_granularity": "ms",             // OPTIONAL (see §8.4); default "ms" when absent
   "informed_by":           ["sha256:"],      // OPTIONAL (see §1.2.5); agent's claimed reasoning context
   "provenance_token":      "",               // OPTIONAL (see §1.2.6); genesis-record-only; cross-session anchor
+  "tool_name":             "",               // OPTIONAL (see §8.2); discloses the tool name; absent = §8.1 default posture
+  "args_hash":             "sha256:",        // OPTIONAL (see §8.3); commitment to the canonical args bytes
   "args_salt":             "",               // OPTIONAL (see §8.3); reveals salt for salted-sha256 args_hash
+  "result_hash":           "sha256:",        // OPTIONAL (see §8.3); commitment to the canonical result bytes
   "result_salt":           "",               // OPTIONAL (see §8.3); reveals salt for salted-sha256 result_hash
   "session_token":         "",               // OPTIONAL (see §1.5.5); omitted when not in a cross-trace session
   "signature":             ""
@@ -290,7 +293,10 @@ An attribution record is a JSON object. Two shapes exist depending on `event_typ
 | signature        | string  | MUST for non-transaction records | Ed25519 signature over the canonical serialization of the record with the signature field omitted, encoded as base64url (RFC 4648 §5, no padding). 86 characters. See [§1.4](#14-signing-and-verification) for the full signing procedure. Transaction records (`event_type = transaction`) carry the `signers` array per [§1.7.6](#176-cross-attestation-requirement-for-transaction-records) instead of (or in addition to) this top-level field. |
 | signers          | array   | MUST for transaction records, MUST NOT for others | Array of `{ creator_key, signature }` objects, one per cross-attestation party. Required on transaction records ([§1.7.6](#176-cross-attestation-requirement-for-transaction-records)); MUST NOT appear on tool_call, observation, or extension records. Minimum 2 entries (typically agent + counterparty). All signers cover the same canonical bytes: the JCS serialization of the record with `signers: []` and `signature` omitted. |
 | timestamp_granularity | string | MAY  | Declares the coarsening granularity of `timestamp` per the [§8.4](#84-coarsened-timing-posture) timing posture. Allowed values: `"ms"` (default when absent), `"s"`, `"min"`, `"h"`, `"d"`. Verifiers MUST reject records where the declared granularity does not match the value's trailing-zero pattern (e.g., `timestamp_granularity: "min"` requires `timestamp % 60000 == 0`). |
-| args_salt        | string  | MAY  | Base64url-encoded random salt (≥16 bytes) revealing the salt used to compute a `salted-sha256` `args_hash` per [§8.3](#83-salted-commitment-posture). Presence indicates the salted-commitment posture for args; absence with no `args_salt` and a verifiable plain hash indicates default posture. |
+| tool_name        | string  | MAY  | Discloses the verbatim or transformed tool name per the [§8.2](#82-opaque-name-posture) opaque-name posture. Absence indicates the [§8.1](#81-default-posture) default posture (no tool-name disclosure beyond what `content_id` derives from `serverUrl + toolName`). When present, value is one of: a verbatim string (e.g., `"book_flight"`), a transformed opaque label matching the §8.2 form regex `[a-z0-9_-]{1,64}`, or `"sha256:" + 64 lowercase hex` for the hashed form. JCS-canonical form places the field last in the current record schema: `tool_name` (`t-o-...`) sorts after `timestamp_granularity` (`t-i-m-e-s-t-a-m-p-_-...`) and after `signature` / `spec_version` (`s-` sorts before `t-`). No subsequent field exists at the time of writing. See [D061](DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-§121). |
+| args_hash        | string  | MAY  | Commitment to the canonical args bytes per the [§8.3](#83-salted-commitment-posture) salted-commitment posture. Format: `"sha256:" + 64 lowercase hex`. Absence indicates the [§8.1](#81-default-posture) default posture (no args commitment surfaced; verifiers cannot independently confirm what the agent claims to have sent). When present without `args_salt`, the commitment is `plain-sha256(canonical_args_bytes)`. When present with `args_salt`, the commitment is `salted-sha256(salt ‖ canonical_args_bytes)`. JCS-canonical form sorts the field between `annotates` (`a-n`) and `args_salt` (`a-r-g-s-_-s`) since `a-r-g-s-_-h` lies between them. See [D061](DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-§121). |
+| args_salt        | string  | MAY  | Base64url-encoded random salt (≥16 bytes) revealing the salt used to compute a `salted-sha256` `args_hash` per [§8.3](#83-salted-commitment-posture). Presence indicates the salted-commitment posture for args; absence indicates the default plain-sha256 scheme (or the §8.3 hmac-sha256 variant which is signaled out-of-band and not structurally detectable). |
+| result_hash      | string  | MAY  | Commitment to the canonical result bytes per the [§8.3](#83-salted-commitment-posture) salted-commitment posture. Same shape and semantics as `args_hash` but for the tool's response. JCS-canonical form sorts the field between `provenance_token` (`p`) and `result_salt` (`r-e-s-u-l-t-_-s`) since `r-e-s-u-l-t-_-h` lies between them. |
 | result_salt      | string  | MAY  | Base64url-encoded random salt (≥16 bytes) revealing the salt used to compute a `salted-sha256` `result_hash` per [§8.3](#83-salted-commitment-posture). Same posture-detection semantics as `args_salt`. |
 
 #### 1.2.2 content_id Derivation
@@ -3805,17 +3811,23 @@ The default behavior preserved from v1: plain SHA-256 hashes for `args_hash` and
 
 ### 8.2 Opaque-name posture
 
-`tool_name` MAY be one of:
+`tool_name` (the optional MAY field on the record per [§1.2.1](#121-field-definitions)) MAY be one of:
 
 - **Verbatim** (default): a human-readable string identifying the tool (e.g., `book_flight`, `transfer_usdc`). Maximum disclosure of intent.
 - **Opaque label**: a string matching `[a-z0-9_-]{1,64}` with no required mapping to a real tool name (e.g., `tool_a7f3`, `op_42`). Hides what the tool does without breaking record format.
 - **Hashed**: a string matching `sha256:<64 lowercase hex>` representing the SHA-256 of the verbatim name. Verifiers configured with a name-mapping can resolve; others see only the hash.
 
-Verifiers indicate the detected form: `tool_name_form: "verbatim" | "opaque" | "hashed"`. Detection is structural (form pattern matching against the value).
+Verifiers indicate the detected form: `tool_name_form: "hashed" | "plain" | null` per [D061](DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-§121).
+
+- `"hashed"` when the value matches `^sha256:[0-9a-f]{64}$` (unambiguous).
+- `"plain"` for any other present value (a verbatim name like `book_flight` and an opaque label like `tool_a7f3` both match the opaque-label regex `[a-z0-9_-]{1,64}` and are NOT structurally distinguishable; verifiers MUST NOT assert one over the other from the record value alone).
+- `null` when the field is absent from the record (the [§8.1](#81-default-posture) default posture).
+
+The verbatim-vs-opaque distinction is a producer-side intent: the signer chooses whether their `tool_name` carries semantic meaning. Consumers wanting to enforce the distinction MUST do so via out-of-band metadata (e.g., a name registry), not by parsing the record value.
 
 ### 8.3 Salted-commitment posture
 
-`args_hash` and `result_hash` MAY use salted commitments. Two schemes are defined; they have meaningfully different privacy properties and consumers MUST pick the one that matches their threat model.
+`args_hash` and `result_hash` (the optional MAY fields on the record per [§1.2.1](#121-field-definitions)) MAY use salted commitments. Two schemes are defined; they have meaningfully different privacy properties and consumers MUST pick the one that matches their threat model. When `args_hash` / `result_hash` is absent from the record entirely, the [§8.1](#81-default-posture) default posture applies and verifiers cannot independently confirm the commitment (they can verify the record's signature and structure, but the content claim is unverifiable without the hash field).
 
 **`salted-sha256`:** `H = SHA-256(salt ‖ canonical_bytes)` where `salt` is a per-record random value of at least 16 bytes. The salt is revealed in a sibling field (`args_salt`, `result_salt`) so any verifier with the canonical bytes can re-compute and confirm the commitment.
 

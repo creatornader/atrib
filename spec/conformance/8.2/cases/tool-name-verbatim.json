@@ -1,0 +1,27 @@
+{
+  "name": "tool-name-verbatim",
+  "spec_section": "8.2",
+  "description": "A record carrying a verbatim-style tool_name (`book_flight`). Verifiers MUST surface tool_name_form: 'plain'. Per D061 the verbatim-vs-opaque distinction is NOT structurally detectable: this case and the opaque-label case both surface as 'plain'.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0202020202020202020202020202020202020202020202020202020202020202",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225602000,
+      "tool_name": "book_flight",
+      "signature": "2Yu4LNFNgQHQXiSRbVK1J7DypS7IU-1DdfqzUBIn-KvY8ECSsGssLCx-j2iK_UswPIo7oBqDYjeSWb4J4qdYAg"
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "canonical_signing_input_utf8": "{\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:0202020202020202020202020202020202020202020202020202020202020202\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc\",\"event_type\":\"https://atrib.dev/v1/types/tool_call\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1767225602000,\"tool_name\":\"book_flight\"}",
+    "tool_name_in_canonical_form": true,
+    "record_hash_hex": "0d7999e0d830272afdc3ac7c1642bbba48b8c1fb1f21c876204db99ee00e1bbb",
+    "verifier_signature_ok": true,
+    "validator_should_accept": true,
+    "tool_name_form": "plain"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "tool-name-hashed",
+  "spec_section": "8.2",
+  "description": "A record carrying a hashed tool_name (`sha256:<64 lowercase hex>`). Verifiers MUST surface tool_name_form: 'hashed'. The regex `^sha256:[0-9a-f]{64}$` is unambiguous. Verifiers configured with a name-mapping can resolve to the verbatim name; others see only the hash.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0404040404040404040404040404040404040404040404040404040404040404",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225604000,
+      "tool_name": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "signature": "P-dz7jgthZTcfhFXjUiua3iAzf9xFrnbqdgF8Nt-lb8ryHkXiRqr9r5Nl0tnvSIcwd_r8dntNpDZ8WqvNVp-Cg"
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "canonical_signing_input_utf8": "{\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:0404040404040404040404040404040404040404040404040404040404040404\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc\",\"event_type\":\"https://atrib.dev/v1/types/tool_call\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1767225604000,\"tool_name\":\"sha256:5555555555555555555555555555555555555555555555555555555555555555\"}",
+    "tool_name_in_canonical_form": true,
+    "record_hash_hex": "0b88437bd9780b47fc540937bc101674b46d08d85e74148527801cc6ef5a1546",
+    "verifier_signature_ok": true,
+    "validator_should_accept": true,
+    "tool_name_form": "hashed"
+  }
+}
