@@ -1,7 +1,7 @@
 {
   "name": "@atrib/directory",
   "version": "0.1.1",
-  "description": "Identity-claim directory SDK for atrib. AKD-backed publish, lookup, history, and proof-of-absence operations per spec §6.",
+  "description": "Identity-claim directory SDK for atrib. Publish, lookup, history, and proof-of-absence operations with cryptographic proofs per atrib spec §6.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",
