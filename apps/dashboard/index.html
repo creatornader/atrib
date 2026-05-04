@@ -116,6 +116,16 @@
     --et-annotation: #14b8a6;
     --et-annotation-subtle: rgba(20, 184, 166, 0.12);
     --et-annotation-border: rgba(20, 184, 166, 0.3);
+    /* Revision event_type (D059, byte 0x06): the contradiction-handling
+       primitive. A revision asserts the agent now holds a position
+       incompatible with the referenced predecessor (which stays immutable
+       on the log). Distinct color from annotation (teal) because the
+       semantics are different: annotation comments, revision supersedes.
+       Indigo signals "structural change of stance" and reads as deeper /
+       weightier than annotation's commentary tone. */
+    --et-revision: #6366f1;
+    --et-revision-subtle: rgba(99, 102, 241, 0.12);
+    --et-revision-border: rgba(99, 102, 241, 0.3);
 
     /* Type */
     --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, Roboto, sans-serif;
@@ -491,6 +501,7 @@
   .chip.event-extension        { background: var(--et-extension-subtle); color: var(--et-extension); border-color: var(--et-extension-border); }
   .chip.event-directory_anchor { background: var(--et-system-subtle);    color: var(--et-system);    border-color: var(--et-system-border); }
   .chip.event-annotation       { background: var(--et-annotation-subtle); color: var(--et-annotation); border-color: var(--et-annotation-border); }
+  .chip.event-revision         { background: var(--et-revision-subtle);   color: var(--et-revision);   border-color: var(--et-revision-border); }
   .chip.event-system           { background: var(--et-system-subtle);    color: var(--et-system);    border-color: var(--et-system-border); }
   .chip.event-dangling_node    { background: var(--et-dangling-subtle);  color: var(--et-dangling);  border-color: var(--et-dangling-border); }
   .chip.event-reserved         { background: var(--err-subtle);          color: var(--err);          border-color: var(--err-border); }
@@ -835,10 +846,10 @@ function renderIdentityLabel(creatorKey, opts = {}) {
 // ─── Event-type chip ─────────────────────────────────────────────────────
 // The 90-byte log entry (§2.3.1) only carries one byte for event_type, so any
 // URI without a dedicated normative byte slot arrives here as 'extension'.
-// As of D058 (2026-05-04), normative bytes are 0x01 tool_call, 0x02
+// As of D059 (2026-05-04), normative bytes are 0x01 tool_call, 0x02
 // transaction, 0x03 observation, 0x04 directory_anchor (D056), 0x05
-// annotation (D058); the spec reserves 0x06-0xFE for future atrib
-// normative additions per D036, and 0xFF for non-atrib-namespace extension
+// annotation (D058), 0x06 revision (D059); the spec reserves 0x07-0xFE
+// for future atrib normative additions per D036, and 0xFF for non-atrib-namespace extension
 // URIs. Pre-D056 directory_anchor records (encoded 0xFF before the byte
 // allocation landed) still arrive here as 'extension'; when one is signed
 // by an atrib-system identity (claim URL in the atrib.dev namespace), the

@@ -171,6 +171,7 @@ const METRICS = [
       const ob = ctx.entries.filter((e) => e.eventType === 0x03).length
       const da = ctx.entries.filter((e) => e.eventType === 0x04).length
       const an = ctx.entries.filter((e) => e.eventType === 0x05).length
+      const rv = ctx.entries.filter((e) => e.eventType === 0x06).length
       const ext = ctx.entries.filter((e) => e.eventType === 0xff).length
       return {
         tool_call: tc,
@@ -178,6 +179,7 @@ const METRICS = [
         observation: ob,
         directory_anchor: da,
         annotation: an,
+        revision: rv,
         extension: ext,
         total: ctx.entries.length,
         transaction_pct:
@@ -315,7 +317,7 @@ function printSummary(snapshot) {
   if (m.event_type_ratio) {
     const er = m.event_type_ratio
     console.log(
-      `  event_type_ratio:       ${er.tool_call} tool_call / ${er.transaction} transaction / ${er.observation ?? 0} observation / ${er.directory_anchor ?? 0} directory_anchor / ${er.annotation ?? 0} annotation / ${er.extension ?? 0} extension (${er.transaction_pct}% tx)`,
+      `  event_type_ratio:       ${er.tool_call} tool_call / ${er.transaction} transaction / ${er.observation ?? 0} observation / ${er.directory_anchor ?? 0} directory_anchor / ${er.annotation ?? 0} annotation / ${er.revision ?? 0} revision / ${er.extension ?? 0} extension (${er.transaction_pct}% tx)`,
     )
   }
   if (m.log_age_days !== null && m.log_age_days !== undefined) {

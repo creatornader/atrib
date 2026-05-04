@@ -3,7 +3,7 @@
 /**
  * Attribution graph builder (section 3.2.4).
  *
- * Applies the 8 normative edge derivation steps to a set of attribution
+ * Applies the 9 normative edge derivation steps to a set of attribution
  * records and optional gap nodes to produce a GraphResponse.
  *
  *   Step 1: CHAIN_PRECEDES
@@ -14,6 +14,7 @@
  *   Step 6: INFORMED_BY (D041)
  *   Step 7: PROVENANCE_OF (D044)
  *   Step 8: ANNOTATES (D058)
+ *   Step 9: REVISES (D059)
  *
  * Two implementations applying these rules to identical input records
  * MUST produce identical edge sets.
@@ -376,6 +377,40 @@ export async function buildGraph(
       ensureDanglingNode(danglingId)
       edges.push({
         type: 'ANNOTATES',
+        source: sourceId,
+        target: danglingId,
+        directed: true,
+        dangling: true,
+      })
+    }
+  }
+
+  // Step 9: REVISES (D059, spec §3.2.4)
+  // For each revision record R (event_type =
+  // https://atrib.dev/v1/types/revision) carrying a non-empty `revises`
+  // field referencing record P, create one REVISES edge R → P. Direction
+  // reads "R supersedes P." Mirrors the ANNOTATES derivation pattern but
+  // with a stronger semantic: an annotation comments on a target while
+  // leaving the agent's prior position intact; a revision asserts the
+  // target is no longer held. Targets resolve via record_hash lookup;
+  // unresolved entries get a synthetic dangling target so the agent's
+  // claim stays visible. Multiple revisions of the same target are
+  // allowed (chain of mind-changes); the graph surfaces all of them.
+  for (const record of sorted) {
+    if (record.event_type !== 'https://atrib.dev/v1/types/revision') continue
+    const revises = record.revises
+    if (typeof revises !== 'string' || !revises.startsWith('sha256:')) continue
+    const sourceHash = hexEncode(sha256(canonicalRecord(record)))
+    const sourceId = `sha256:${sourceHash}`
+    const targetHash = revises.slice('sha256:'.length)
+    const targetId = hashToNodeId.get(targetHash)
+    if (targetId) {
+      edges.push({ type: 'REVISES', source: sourceId, target: targetId, directed: true })
+    } else {
+      const danglingId = `dangling:${revises}`
+      ensureDanglingNode(danglingId)
+      edges.push({
+        type: 'REVISES',
         source: sourceId,
         target: danglingId,
         directed: true,
