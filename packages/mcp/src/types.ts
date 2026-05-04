@@ -17,6 +17,14 @@ export type AtribRecord = {
   timestamp: number
   signature: string
   /**
+   * Optional reference to the record this annotation describes (D058 / spec
+   * §1.2.8). Required when event_type is the atrib-normative annotation URI
+   * and rejected on any other event_type per validators. Format
+   * `sha256:<64-hex>`. JCS-canonical form sorts the field immediately after
+   * `chain_root` and before `content_id` (a < c).
+   */
+  annotates?: string
+  /**
    * Optional cross-record reference list (D041 / spec §1.2.7). Each entry
    * is the `sha256:<64-hex>` record_hash of a prior record this one was
    * informed by. JCS-canonical form sorts the field lexicographically
@@ -68,6 +76,12 @@ export const EVENT_TYPE_TRANSACTION_URI = 'https://atrib.dev/v1/types/transactio
 export const EVENT_TYPE_OBSERVATION_URI = 'https://atrib.dev/v1/types/observation'
 // Promoted by D056 (2026-04-30); emitted by directory operators per spec 6.2.4.
 export const EVENT_TYPE_DIRECTORY_ANCHOR_URI = 'https://atrib.dev/v1/types/directory_anchor'
+// Promoted by D058 (2026-05-04); recall-fidelity primitive per spec §1.2.8 +
+// §3.2.4 step 8. An annotation is a signed commentary record pointing at any
+// prior record via the `annotates` field; verifiers derive ANNOTATES graph
+// edges from it. Dual of informed_by (forward-pointing rather than backward-
+// pointing).
+export const EVENT_TYPE_ANNOTATION_URI = 'https://atrib.dev/v1/types/annotation'
 
 /** Atrib normative event_type URI set (spec 1.2.4). */
 export const NORMATIVE_EVENT_TYPE_URIS = new Set([
@@ -75,6 +89,7 @@ export const NORMATIVE_EVENT_TYPE_URIS = new Set([
   EVENT_TYPE_TRANSACTION_URI,
   EVENT_TYPE_OBSERVATION_URI,
   EVENT_TYPE_DIRECTORY_ANCHOR_URI,
+  EVENT_TYPE_ANNOTATION_URI,
 ] as const)
 
 /**

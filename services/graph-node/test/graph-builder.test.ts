@@ -24,10 +24,15 @@ async function makeRecord(overrides: Partial<{
   content_id: string
   informed_by: string[]
   provenance_token: string
+  annotates: string
 }> = {}) {
   const pk = await getPublicKey(TEST_KEY)
+  // JCS sorts keys lexicographically. `annotates` (a) sorts before
+  // `chain_root` (c), so when present it must appear earlier in the
+  // object literal we hand to signRecord.
   const record = {
     spec_version: 'atrib/1.0' as const,
+    ...(overrides.annotates ? { annotates: overrides.annotates } : {}),
     content_id: overrides.content_id ?? `sha256:${'c'.repeat(64)}`,
     creator_key: base64urlEncode(pk),
     chain_root: overrides.chain_root ?? genesisChainRoot(overrides.context_id ?? CONTEXT_ID),
@@ -417,10 +422,98 @@ describe('buildGraph (section 3.2.4)', () => {
   })
 
   // ───────────────────────────────────────────────────────────────────────
-  // Regression guard: all 7 spec-mandated edge types are reachable
+  // Step 8: ANNOTATES (D058, spec §3.2.4)
   // ───────────────────────────────────────────────────────────────────────
 
-  it('regression: all 7 spec edge types are derivable from a comprehensive fixture', async () => {
+  describe('ANNOTATES edges (D058, §3.2.4 step 8)', () => {
+    it('creates ANNOTATES edge when target record exists in resolved set', async () => {
+      const target = await makeRecord({
+        timestamp: 1000,
+        content_id: `sha256:${'1'.repeat(64)}`,
+      })
+      const targetHash = hexEncode(sha256(canonicalRecord(target)))
+      const annotation = await makeRecord({
+        event_type: 'https://atrib.dev/v1/types/annotation',
+        timestamp: 2000,
+        content_id: `sha256:${'2'.repeat(64)}`,
+        annotates: `sha256:${targetHash}`,
+      })
+
+      const graph = await buildGraph([target, annotation])
+      const annotateEdges = graph.edges.filter((e) => e.type === 'ANNOTATES')
+      expect(annotateEdges).toHaveLength(1)
+      expect(annotateEdges[0]!.source).toBe(`sha256:${hexEncode(sha256(canonicalRecord(annotation)))}`)
+      expect(annotateEdges[0]!.target).toBe(`sha256:${targetHash}`)
+      expect(annotateEdges[0]!.directed).toBe(true)
+      expect(annotateEdges[0]!.dangling).toBeUndefined()
+    })
+
+    it('creates dangling ANNOTATES edge when target missing', async () => {
+      const annotation = await makeRecord({
+        event_type: 'https://atrib.dev/v1/types/annotation',
+        timestamp: 1000,
+        annotates: `sha256:${'9'.repeat(64)}`,
+      })
+
+      const graph = await buildGraph([annotation])
+      const annotateEdges = graph.edges.filter((e) => e.type === 'ANNOTATES')
+      expect(annotateEdges).toHaveLength(1)
+      expect(annotateEdges[0]!.dangling).toBe(true)
+      expect(annotateEdges[0]!.target).toMatch(/^dangling:sha256:9{64}$/)
+    })
+
+    it('does NOT derive ANNOTATES from non-annotation records carrying annotates field', async () => {
+      // Validators MUST reject `annotates` on any event_type other than
+      // annotation (per §1.2.8). The graph layer follows suit: such records
+      // do not participate in ANNOTATES derivation. Tests defensive behavior
+      // against malformed historical records.
+      const target = await makeRecord({
+        timestamp: 1000,
+        content_id: `sha256:${'a'.repeat(64)}`,
+      })
+      const targetHash = hexEncode(sha256(canonicalRecord(target)))
+      const malformed = await makeRecord({
+        event_type: 'https://atrib.dev/v1/types/tool_call', // NOT annotation
+        timestamp: 2000,
+        content_id: `sha256:${'b'.repeat(64)}`,
+        annotates: `sha256:${targetHash}`, // illegal on non-annotation
+      })
+
+      const graph = await buildGraph([target, malformed])
+      const annotateEdges = graph.edges.filter((e) => e.type === 'ANNOTATES')
+      expect(annotateEdges).toHaveLength(0)
+    })
+
+    it('multiple annotations of the same target produce multiple edges', async () => {
+      const target = await makeRecord({
+        timestamp: 1000,
+        content_id: `sha256:${'1'.repeat(64)}`,
+      })
+      const targetHash = hexEncode(sha256(canonicalRecord(target)))
+      const ann1 = await makeRecord({
+        event_type: 'https://atrib.dev/v1/types/annotation',
+        timestamp: 2000,
+        content_id: `sha256:${'2'.repeat(64)}`,
+        annotates: `sha256:${targetHash}`,
+      })
+      const ann2 = await makeRecord({
+        event_type: 'https://atrib.dev/v1/types/annotation',
+        timestamp: 3000,
+        content_id: `sha256:${'3'.repeat(64)}`,
+        annotates: `sha256:${targetHash}`,
+      })
+
+      const graph = await buildGraph([target, ann1, ann2])
+      const annotateEdges = graph.edges.filter((e) => e.type === 'ANNOTATES')
+      expect(annotateEdges).toHaveLength(2)
+    })
+  })
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Regression guard: all 8 spec-mandated edge types are reachable
+  // ───────────────────────────────────────────────────────────────────────
+
+  it('regression: all 8 spec edge types are derivable from a comprehensive fixture', async () => {
     // Constructs a fixture that exercises every step of §3.2.4. If any step
     // ever silently regresses to "implementation missing," this test fails.
     // The two cross-session edges (CROSS_SESSION via shared session_token,
@@ -477,7 +570,17 @@ describe('buildGraph (section 3.2.4)', () => {
       content_id: `sha256:${'7'.repeat(64)}`,
     })
 
-    const graph = await buildGraph([txA, toolA1, toolA2, toolB, toolB2, toolB3, genB])
+    // Annotation pointing at txA exercises Step 8 (ANNOTATES, D058).
+    const txAHash = hexEncode(sha256(canonicalRecord(txA)))
+    const annotation = await makeRecord({
+      context_id: 'e'.repeat(32),
+      event_type: 'https://atrib.dev/v1/types/annotation',
+      timestamp: 5000,
+      content_id: `sha256:${'8'.repeat(64)}`,
+      annotates: `sha256:${txAHash}`,
+    })
+
+    const graph = await buildGraph([txA, toolA1, toolA2, toolB, toolB2, toolB3, genB, annotation])
 
     const present = new Set(graph.edges.map((e) => e.type))
     const expected: Array<typeof graph.edges[number]['type']> = [
@@ -488,10 +591,11 @@ describe('buildGraph (section 3.2.4)', () => {
       'CROSS_SESSION',
       'INFORMED_BY',
       'PROVENANCE_OF',
+      'ANNOTATES',
     ]
     for (const type of expected) {
       expect(present.has(type), `missing edge type: ${type}`).toBe(true)
     }
-    expect(present.size).toBe(7) // exactly the 7 spec types, no others
+    expect(present.size).toBe(8) // exactly the 8 spec types, no others
   })
 })

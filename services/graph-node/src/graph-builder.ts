@@ -3,7 +3,7 @@
 /**
  * Attribution graph builder (section 3.2.4).
  *
- * Applies the 7 normative edge derivation steps to a set of attribution
+ * Applies the 8 normative edge derivation steps to a set of attribution
  * records and optional gap nodes to produce a GraphResponse.
  *
  *   Step 1: CHAIN_PRECEDES
@@ -13,6 +13,7 @@
  *   Step 5: CROSS_SESSION
  *   Step 6: INFORMED_BY (D041)
  *   Step 7: PROVENANCE_OF (D044)
+ *   Step 8: ANNOTATES (D058)
  *
  * Two implementations applying these rules to identical input records
  * MUST produce identical edge sets.
@@ -346,6 +347,39 @@ export async function buildGraph(
         directed: true,
         dangling: true,
         reason: 'no_token_source_in_record_set',
+      })
+    }
+  }
+
+  // Step 8: ANNOTATES (D058, spec §3.2.4)
+  // For each annotation record A (event_type =
+  // https://atrib.dev/v1/types/annotation) carrying a non-empty `annotates`
+  // field referencing record T, create one ANNOTATES edge A → T. Direction
+  // reads "A is an annotation of T." Targets resolve via record_hash lookup;
+  // unresolved entries get a synthetic dangling target so the agent's claim
+  // stays visible. The dual of INFORMED_BY: forward-pointing (annotation
+  // points at an earlier record) rather than backward-pointing (informed_by
+  // points at records the current record was informed by). Multiple
+  // annotations of the same target are normal and produce multiple edges.
+  for (const record of sorted) {
+    if (record.event_type !== 'https://atrib.dev/v1/types/annotation') continue
+    const annotates = record.annotates
+    if (typeof annotates !== 'string' || !annotates.startsWith('sha256:')) continue
+    const sourceHash = hexEncode(sha256(canonicalRecord(record)))
+    const sourceId = `sha256:${sourceHash}`
+    const targetHash = annotates.slice('sha256:'.length)
+    const targetId = hashToNodeId.get(targetHash)
+    if (targetId) {
+      edges.push({ type: 'ANNOTATES', source: sourceId, target: targetId, directed: true })
+    } else {
+      const danglingId = `dangling:${annotates}`
+      ensureDanglingNode(danglingId)
+      edges.push({
+        type: 'ANNOTATES',
+        source: sourceId,
+        target: danglingId,
+        directed: true,
+        dangling: true,
       })
     }
   }
