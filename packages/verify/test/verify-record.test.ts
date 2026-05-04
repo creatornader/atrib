@@ -343,7 +343,62 @@ describe('verifyRecord — posture (args/result commitment form, §8.3)', () => 
       timestamp_granularity_explicit: true,
       args_commitment_form: 'salted-sha256',
       result_commitment_form: 'plain-sha256',
+      tool_name_form: null,
     })
+  })
+})
+
+describe('verifyRecord — posture (tool_name_form, §8.2 / D061)', () => {
+  it('reports tool_name_form: null when the field is absent', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed)
+
+    const result = await verifyRecord(record)
+
+    expect(result.posture.tool_name_form).toBeNull()
+  })
+
+  it('detects tool_name_form: "plain" for a verbatim-style tool name', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, { tool_name: 'book_flight' })
+
+    const result = await verifyRecord(record)
+
+    expect(result.posture.tool_name_form).toBe('plain')
+    expect(result.signatureOk).toBe(true)
+  })
+
+  it('detects tool_name_form: "plain" for an opaque-label-style name (not distinguishable from verbatim)', async () => {
+    // Per D061: verbatim and opaque are NOT structurally distinguishable.
+    // `tool_a7f3` looks opaque but matches the same regex as `book_flight`.
+    const seed = await freshKey()
+    const record = await buildRecord(seed, { tool_name: 'tool_a7f3' })
+
+    const result = await verifyRecord(record)
+
+    expect(result.posture.tool_name_form).toBe('plain')
+  })
+
+  it('detects tool_name_form: "hashed" for a sha256:<hex> value', async () => {
+    const seed = await freshKey()
+    const hashedName = 'sha256:' + 'a'.repeat(64)
+    const record = await buildRecord(seed, { tool_name: hashedName })
+
+    const result = await verifyRecord(record)
+
+    expect(result.posture.tool_name_form).toBe('hashed')
+    expect(result.signatureOk).toBe(true)
+  })
+
+  it('treats sha256: with wrong hex length as plain (not hashed)', async () => {
+    // 63 chars instead of 64: not the canonical hashed form.
+    const seed = await freshKey()
+    const malformed = 'sha256:' + 'a'.repeat(63)
+    const record = await buildRecord(seed, { tool_name: malformed })
+
+    const result = await verifyRecord(record)
+
+    expect(result.posture.tool_name_form).toBe('plain')
   })
 })
 

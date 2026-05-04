@@ -38,6 +38,11 @@ import {
 
 const PROVENANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/
 const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
+// §8.2 hashed tool_name form per D061. The verbatim and opaque-label forms
+// are NOT structurally distinguishable (the spec's verbatim example
+// `book_flight` also matches the opaque regex), so this is the only
+// regex-detectable form.
+const TOOL_NAME_HASHED_PATTERN = /^sha256:[0-9a-f]{64}$/
 
 /**
  * Provenance surfacing for a record carrying `provenance_token` (D044 /
@@ -116,10 +121,8 @@ export interface CapabilityCheckAnnotation {
 }
 
 /**
- * Posture surfacing for a record. Exposes the timing posture (§8.4)
- * plus the args/result commitment posture (§8.3). The opaque-name
- * posture (§8.2) requires a `tool_name` field that isn't yet on
- * `AtribRecord`.
+ * Posture surfacing for a record. Exposes three §8 postures: timing
+ * (§8.4), args/result commitment (§8.3), and tool-name disclosure (§8.2).
  *
  * `timestamp_granularity` is the declared coarsening level (or 'ms' by
  * default when absent). `timestamp_consistent` is true iff the timestamp
@@ -133,6 +136,14 @@ export interface CapabilityCheckAnnotation {
  * non-key-holders (the issuer signals it out-of-band per §8.3, not via
  * record fields), so we surface only the two structurally-detectable
  * forms.
+ *
+ * `tool_name_form` is the §8.2 / D061 form of the optional `tool_name`
+ * field. The §8.2 verbatim-vs-opaque distinction is NOT structurally
+ * detectable (`book_flight` matches the opaque regex), so per D061 we
+ * surface only `'hashed' | 'plain' | null`: hashed when the value
+ * matches `^sha256:[0-9a-f]{64}$`, plain for any other present value,
+ * null when the field is absent. Consumers wanting verbatim-vs-opaque
+ * MUST use out-of-band metadata (e.g., a name registry).
  */
 export interface PostureAnnotation {
   timestamp_granularity: 'ms' | 's' | 'min' | 'h' | 'd'
@@ -158,6 +169,14 @@ export interface PostureAnnotation {
    * `args_commitment_form` but driven by `result_salt`.
    */
   result_commitment_form: 'plain-sha256' | 'salted-sha256'
+  /**
+   * Detected form of the optional `tool_name` field per §8.2 / D061:
+   *   - 'hashed' when value matches `^sha256:[0-9a-f]{64}$` (unambiguous)
+   *   - 'plain' for any other present value (verbatim and opaque-label
+   *     forms are not structurally distinguishable; both surface as plain)
+   *   - null when the field is absent (the §8.1 default posture)
+   */
+  tool_name_form: 'hashed' | 'plain' | null
 }
 
 const GRANULARITY_MULTIPLIER: Record<PostureAnnotation['timestamp_granularity'], number> = {
@@ -462,12 +481,21 @@ function detectPosture(record: AtribRecord, warnings: string[]): PostureAnnotati
   const args_commitment_form = typeof record.args_salt === 'string' ? 'salted-sha256' : 'plain-sha256'
   const result_commitment_form = typeof record.result_salt === 'string' ? 'salted-sha256' : 'plain-sha256'
 
+  // Spec §8.2 / D061 tool_name_form: hashed when the value matches the
+  // `sha256:<hex>` form (unambiguous), plain otherwise (verbatim vs opaque
+  // not structurally distinguishable), null when the field is absent.
+  let tool_name_form: 'hashed' | 'plain' | null = null
+  if (typeof record.tool_name === 'string') {
+    tool_name_form = TOOL_NAME_HASHED_PATTERN.test(record.tool_name) ? 'hashed' : 'plain'
+  }
+
   return {
     timestamp_granularity: granularity,
     timestamp_consistent: consistent,
     timestamp_granularity_explicit: explicit,
     args_commitment_form,
     result_commitment_form,
+    tool_name_form,
   }
 }
 

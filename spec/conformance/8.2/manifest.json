@@ -1,0 +1,29 @@
+{
+  "spec_section": "8.2",
+  "spec_title": "Opaque-name posture (tool_name field)",
+  "decision_link": "D061",
+  "generated_at": 1767225600000,
+  "generator": "packages/log-dev/scripts/generate-conformance-8.2.ts",
+  "cases": [
+    {
+      "file": "cases/tool-name-omitted.json",
+      "name": "tool-name-omitted"
+    },
+    {
+      "file": "cases/tool-name-verbatim.json",
+      "name": "tool-name-verbatim"
+    },
+    {
+      "file": "cases/tool-name-opaque.json",
+      "name": "tool-name-opaque"
+    },
+    {
+      "file": "cases/tool-name-hashed.json",
+      "name": "tool-name-hashed"
+    }
+  ],
+  "keys": {
+    "alice_pubkey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc"
+  },
+  "note": "The four cases cover every detection branch: omitted (null), verbatim (plain), opaque (plain), hashed. Per D061 the verbatim-vs-opaque distinction is not structurally detectable; both surface as plain. The corpus does NOT include a `tool_name_form: \"verbatim\"` or `\"opaque\"` case because those are not part of the verifier-detectable surface — that distinction lives in producer-side intent and out-of-band metadata."
+}

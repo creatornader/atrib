@@ -25,24 +25,55 @@ export type AtribRecord = {
    */
   annotates?: string
   /**
+   * Optional commitment to the canonical args bytes per spec §8.3 (D061).
+   * Format: `"sha256:" + 64 lowercase hex`. Absence indicates the §8.1
+   * default posture (no args commitment surfaced; verifiers cannot
+   * independently confirm what the agent claims to have sent). When present
+   * without `args_salt`: plain-sha256(canonical_args_bytes). When present
+   * with `args_salt`: salted-sha256(salt ‖ canonical_args_bytes). JCS-
+   * canonical form sorts between `annotates` ("a-n") and `args_salt`
+   * ("a-r-g-s-_-s") since "a-r-g-s-_-h" lies between them.
+   */
+  args_hash?: string
+  /**
    * Optional base64url-encoded random salt (≥16 bytes) revealing the salt used
    * to compute a `salted-sha256` `args_hash` per spec §8.3 (D045 salted-
    * commitment posture). Presence indicates the salted-commitment posture for
    * args; absence indicates the default plain-sha256 (or the hmac-sha256
    * variant which is indistinguishable to non-key-holders). JCS-canonical form
-   * sorts the field between `annotates` ("a-n") and `chain_root` ("c") since
-   * "a-r" lies between them. Verifiers detect `args_commitment_form` from this
-   * field's presence per spec §8.3.
+   * sorts the field between `args_hash` ("a-r-g-s-_-h") and `chain_root`
+   * ("c") since "a-r-g-s-_-s" lies between them. Verifiers detect
+   * `args_commitment_form` from this field's presence per spec §8.3.
    */
   args_salt?: string
+  /**
+   * Optional commitment to the canonical result bytes per spec §8.3 (D061).
+   * Same format and posture semantics as `args_hash` but for the tool's
+   * response. JCS-canonical form sorts between `provenance_token` ("p") and
+   * `result_salt` ("r-e-s-u-l-t-_-s") since "r-e-s-u-l-t-_-h" lies between
+   * them.
+   */
+  result_hash?: string
   /**
    * Optional base64url-encoded random salt (≥16 bytes) revealing the salt used
    * to compute a `salted-sha256` `result_hash` per spec §8.3 (D045 salted-
    * commitment posture). Same posture-detection semantics as `args_salt`.
-   * JCS-canonical form sorts the field between `provenance_token` ("p") and
-   * `revises` ("r-e-v") since "r-e-s" lies between them.
+   * JCS-canonical form sorts the field between `result_hash` ("r-e-s-u-l-t-
+   * _-h") and `revises` ("r-e-v") since "r-e-s-u-l-t-_-s" lies between them.
    */
   result_salt?: string
+  /**
+   * Optional tool-name disclosure per spec §8.2 (D061). Discloses the
+   * verbatim or transformed tool name. Absence indicates the §8.1 default
+   * posture (no tool-name disclosure beyond what content_id derives from
+   * serverUrl + toolName). Three structural forms per §8.2: verbatim
+   * (e.g. "book_flight"), opaque (matches `[a-z0-9_-]{1,64}`, indistinguishable
+   * from verbatim by regex), or hashed (matches `^sha256:[0-9a-f]{64}$`,
+   * unambiguous). JCS-canonical form places this field LAST in the current
+   * schema: "t-o-..." sorts after "t-i-..." (timestamp_granularity) and after
+   * "s-..." (signature, spec_version).
+   */
+  tool_name?: string
   /**
    * Optional reference to the record this revision supersedes (D059 / spec
    * §1.2.9). Required when event_type is the atrib-normative revision URI

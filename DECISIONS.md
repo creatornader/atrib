@@ -2685,3 +2685,82 @@ When P006 was filed, the repo had no CHANGELOG anywhere. By the time this decisi
 - Future Version Packages PRs auto-create per-package GitHub Releases (e.g., `@atrib/mcp@0.1.3`) on merge, in addition to publishing to npm.
 - DECISIONS.md doubles as the authoritative log for non-package architectural decisions; per-package CHANGELOGs cover code/release-level changes.
 - If atrib-spec.md revision history becomes load-bearing (first external spec implementer raises it), open a follow-up ADR specifying the location and format.
+
+## D061: Add tool_name, args_hash, result_hash fields to §1.2.1
+
+### Context
+
+§8.2 (opaque-name posture) and §8.3 (salted-commitment posture) referenced `tool_name`, `args_hash`, and `result_hash` as record fields without ever adding them to the §1.2.1 canonical record schema. The §1.2 standard-shape table only listed `args_salt` and `result_salt`, leaving the actual hash and tool-name fields as spec-implied-but-not-defined.
+
+This created two coupled gaps:
+
+- **§8.2 verifier surface** (`tool_name_form`) had nothing to detect against. The §1.2.2 `content_id` derivation hashes `serverUrl + toolName` into `content_id`, but the verifier cannot reverse-derive `tool_name` from that hash.
+- **§8.3 salted-commitment scheme** (`H = SHA-256(salt ‖ canonical_args_bytes)`) defined a salt without the corresponding hash. A salt with no companion `args_hash` on the record is salt-for-nothing — there is no committed value to verify against.
+
+The §8.3 commitment-form posture detection shipped on 2026-05-04 surfaces only the salt-presence dimension (`args_commitment_form: 'plain-sha256' | 'salted-sha256'` driven by `args_salt` presence). The actual commitment cannot be checked because `args_hash` is not on the record.
+
+### Decision
+
+**Add `tool_name`, `args_hash`, and `result_hash` as MAY fields on the §1.2.1 standard record shape. All three default to absence (preserving the §8.1 default posture). Verifiers MUST treat absence as "not asserted" rather than as a default value.**
+
+### Field details
+
+| Field | JCS-canonical sort position | Format |
+|---|---|---|
+| `tool_name` | last in current schema (`t-o-...` after `t-i-...`) | string per §8.2 |
+| `args_hash` | between `annotates` (`a-n`) and `args_salt` (`a-r-g-s-_-s`); `a-r-g-s-_-h` lies between | `"sha256:" + 64 lowercase hex` |
+| `result_hash` | between `provenance_token` (`p`) and `result_salt` (`r-e-s-u-l-t-_-s`); `r-e-s-u-l-t-_-h` lies between | `"sha256:" + 64 lowercase hex` |
+
+### §8.2 ambiguity resolution
+
+The §8.2 form distinction is between three values: `verbatim` / `opaque` / `hashed`. The opaque-label regex (`[a-z0-9_-]{1,64}`) is broad enough that the spec's own verbatim example `book_flight` matches it. There is no structural way for a verifier to tell `book_flight` (verbatim) apart from `tool_a7f3` (opaque) by reading the record.
+
+Three fixes were considered:
+
+1. Add a separate `tool_name_form?` field that the signer declares.
+2. Tighten the opaque regex (e.g., require an `op_` prefix). Backward-incompatible with the spec's own examples.
+3. Surface only the structurally-detectable distinction (`hashed` vs `plain`) and document that `verbatim` vs `opaque` is producer-side intent, not verifier-detectable.
+
+**Adopted: option 3.** Verifiers indicate `tool_name_form: "hashed" | "plain" | null`:
+- `"hashed"` when the value matches `^sha256:[0-9a-f]{64}$`.
+- `"plain"` for any other present value.
+- `null` when the field is absent.
+
+The §8.2 prose is updated to acknowledge the limitation: consumers wanting to enforce verbatim-vs-opaque MUST do so via out-of-band metadata (e.g., a name registry), not by parsing the record value.
+
+### Backward compatibility
+
+- Existing records (none on the production log carry `tool_name`, `args_hash`, or `result_hash` as of 2026-05-04) remain valid and continue to verify identically.
+- New records that opt into any of the three fields produce different JCS canonical bytes and therefore different signatures from records that omit them — this is intentional and is the same backward-compat shape as `informed_by`, `provenance_token`, `args_salt`, `result_salt`, and `timestamp_granularity`.
+- Middleware (`@atrib/mcp`) gains opt-in config flags that default to off:
+  - `disclosure: { tool_name: 'omit' | 'verbatim' | 'hashed' }` — defaults to `'omit'` (preserves §8.1).
+  - `commitment: { args: 'omit' | 'plain-sha256' | 'salted-sha256', result: 'omit' | 'plain-sha256' | 'salted-sha256' }` — defaults to `'omit'`.
+- Operators flipping any opt-in to non-`'omit'` are choosing to disclose more per §8 and accept the privacy trade-off documented in §8.6.
+
+### Verifier surface (`@atrib/verify`)
+
+`PostureAnnotation` gains:
+
+- `tool_name_form: 'hashed' | 'plain' | null` per the §8.2 fix above.
+- (Already shipped) `args_commitment_form` / `result_commitment_form` — semantics unchanged; these now align with the spec since `args_hash` and `result_hash` are formally on the record.
+
+### Conformance corpus
+
+`spec/conformance/8.2/` ships with this ADR: cases for omitted, plain (verbatim-style), plain (opaque-label-style — same surface as verbatim), and hashed values. Each case fixes the canonical signing input + expected `tool_name_form` output.
+
+### Alternatives rejected
+
+1. **Add only `tool_name` and defer `args_hash` / `result_hash`.** Rejected because the same shape of gap blocks both surfaces; doing one and not the other leaves the spec internally inconsistent the same way it was before.
+2. **Skip the spec change and have the verifier surface `unresolvable: true` permanently.** Rejected because that means the §8.2 / §8.3 surfaces are documentation-only forever — they describe postures consumers can never actually verify.
+3. **Tighten §8.2 opaque-label regex (option 2 above).** Rejected because backward-incompatible with the spec's own published examples; the cost is wider than the value.
+
+### Consequences
+
+- §1.2.1 field-table grows by three rows (tool_name, args_hash, result_hash); standard-shape example record updated.
+- §8.2 prose updated to reference the new field and document the regex ambiguity.
+- §8.3 prose clarifies that args_hash / result_hash are §1.2.1 MAY fields.
+- `AtribRecord` TypeScript type adds three optional string fields with the documented JCS sort positions.
+- `@atrib/mcp` middleware adds opt-in disclosure / commitment config (default off; preserves existing record shapes for consumers that don't flip the flags).
+- `@atrib/verify` `PostureAnnotation` adds `tool_name_form`.
+- `spec/conformance/8.2/` corpus + reference test ship in the same change.
+- CLAUDE.md sync triggers: "Privacy posture spec section §8 changed" already covers regenerating the §8.2 corpus and refreshing the verifier; the §1.2.1 schema-extension trigger ("Wire-format or wire-protocol change") covers the rest.
