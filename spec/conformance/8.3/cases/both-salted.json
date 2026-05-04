@@ -1,0 +1,30 @@
+{
+  "name": "both-salted",
+  "spec_section": "8.3",
+  "description": "A record carrying both args_salt and result_salt. Verifiers MUST detect both forms as salted-sha256. The two salt fields are independent dials per §8.3; an issuer can pick salted commitments for one and plain for the other freely. The canonical signing input contains both fields in their JCS-sorted positions.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0404040404040404040404040404040404040404040404040404040404040404",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225604000,
+      "args_salt": "AQIDBAUGBwgJCgsMDQ4PEA",
+      "result_salt": "EQ8NCwkHBQMBAgQGCAoMDg",
+      "signature": "6V-DG14Dhp4lB-KPZCIXjiDfTbLwmcEq87BihHL_VcjptbklKjXXe-v4msJJ4xus1V-cxLOnq6HmCx6iIEJyDQ"
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "canonical_signing_input_utf8": "{\"args_salt\":\"AQIDBAUGBwgJCgsMDQ4PEA\",\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:0404040404040404040404040404040404040404040404040404040404040404\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc\",\"event_type\":\"https://atrib.dev/v1/types/tool_call\",\"result_salt\":\"EQ8NCwkHBQMBAgQGCAoMDg\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1767225604000}",
+    "args_salt_in_canonical_form": true,
+    "result_salt_in_canonical_form": true,
+    "record_hash_hex": "c3a15a3605a3e9d58c341ce27773c79773d0156b42e2583fbf520c6a14abd077",
+    "verifier_signature_ok": true,
+    "validator_should_accept": true,
+    "args_commitment_form": "salted-sha256",
+    "result_commitment_form": "salted-sha256"
+  }
+}

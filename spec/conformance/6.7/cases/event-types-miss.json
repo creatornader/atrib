@@ -1,0 +1,44 @@
+{
+  "name": "event-types-miss",
+  "spec_section": "6.7",
+  "description": "Record event_type is NOT in the envelope.event_types allowlist. Verifier MUST surface in_envelope: false with a mismatch identifying the offending event_type. Per §6.7.3 this is a SIGNAL, not invalidation: the mismatch does NOT flip `valid` to false. Out-of-envelope records remain cryptographically valid; consumers decide policy.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0404040404040404040404040404040404040404040404040404040404040404",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225604000,
+      "signature": "qYECtfg8raehQeKrmymFN_QgOMCiNqwtbvM7Vg62GNh09nnta6pxEf-2doWUIeWBHFyym4uijAIi7_Uga-RvAQ"
+    },
+    "identity_claim": {
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "capabilities": {
+        "event_types": [
+          "https://atrib.dev/v1/types/tool_call"
+        ]
+      }
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "record_hash_hex": "09add40d843edce7c9720fd6d7057fdad81807bf21a1722973dc1d11121abd33",
+    "capability_check": {
+      "envelope": {
+        "event_types": [
+          "https://atrib.dev/v1/types/tool_call"
+        ]
+      },
+      "in_envelope": false,
+      "mismatches": [
+        "event_type 'https://atrib.dev/v1/types/observation' not in allowlist"
+      ],
+      "unresolvable": false
+    },
+    "verifier_signature_ok": true,
+    "validator_should_accept": true,
+    "valid_after_mismatch": true
+  }
+}

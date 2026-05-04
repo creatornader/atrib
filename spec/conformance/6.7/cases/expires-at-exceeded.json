@@ -1,0 +1,40 @@
+{
+  "name": "expires-at-exceeded",
+  "spec_section": "6.7",
+  "description": "Record timestamp is past envelope.expires_at. Verifier MUST surface in_envelope: false with an `envelope expired` mismatch. Per §6.7.2: expired envelope is \"treated as having no constraint and flagged separately\", the mismatch is informational, not invalidating. Signature still ok; valid stays true.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0505050505050505050505050505050505050505050505050505050505050505",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225605000,
+      "signature": "6XBsIYrqa8-ENON9Qz9HDaBuGtnLlU55h6WGeyXZCpaSgrl7W9fFvCkGKqOz1532Lrdm8-63N-q7waB9cMHCDg"
+    },
+    "identity_claim": {
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "capabilities": {
+        "expires_at": 1767225601000
+      }
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "record_hash_hex": "bc63f67e013db65142edccf299effa464a5bc82fd9bd7808735bdc5436e8b078",
+    "capability_check": {
+      "envelope": {
+        "expires_at": 1767225601000
+      },
+      "in_envelope": false,
+      "mismatches": [
+        "envelope expired at 1767225601000; record timestamp 1767225605000"
+      ],
+      "unresolvable": false
+    },
+    "verifier_signature_ok": true,
+    "validator_should_accept": true,
+    "valid_after_mismatch": true
+  }
+}

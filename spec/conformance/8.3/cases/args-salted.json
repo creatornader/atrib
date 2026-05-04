@@ -1,0 +1,29 @@
+{
+  "name": "args-salted",
+  "spec_section": "8.3",
+  "description": "A record carrying args_salt but no result_salt. Verifiers MUST detect args_commitment_form = \"salted-sha256\" (per §8.3: presence of args_salt indicates the salted-sha256 scheme) and result_commitment_form = \"plain-sha256\" (absence of result_salt indicates default). JCS canonical form sorts args_salt between annotates (\"a-n\") and chain_root (\"c\"), since \"a-r\" lies between them.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0202020202020202020202020202020202020202020202020202020202020202",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225602000,
+      "args_salt": "AQIDBAUGBwgJCgsMDQ4PEA",
+      "signature": "puyNeUM6COTF99ekYxaIhz6g6je7Xs9AIYXXcjzV9jypDgLPyrxuqFiYmjvV4xda5NLuObmUnmImp1h-fZfyBQ"
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "canonical_signing_input_utf8": "{\"args_salt\":\"AQIDBAUGBwgJCgsMDQ4PEA\",\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:0202020202020202020202020202020202020202020202020202020202020202\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc\",\"event_type\":\"https://atrib.dev/v1/types/tool_call\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1767225602000}",
+    "args_salt_in_canonical_form": true,
+    "result_salt_in_canonical_form": false,
+    "record_hash_hex": "73e76f01475f9b794899c0e5d3ddbdda097ab78e0ac03018261eff81b1cd021e",
+    "verifier_signature_ok": true,
+    "validator_should_accept": true,
+    "args_commitment_form": "salted-sha256",
+    "result_commitment_form": "plain-sha256"
+  }
+}

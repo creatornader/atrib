@@ -1,0 +1,33 @@
+{
+  "name": "empty-envelope",
+  "spec_section": "6.7",
+  "description": "The signing key's claim has `capabilities: {}` (empty envelope). Per §6.7.1 this declares no scope. Verifiers MUST surface envelope: null, in_envelope: true, mismatches: [], unresolvable: false. Behavior identical to no-envelope-on-claim.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0202020202020202020202020202020202020202020202020202020202020202",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225602000,
+      "signature": "2Ps3-Iqk_R4YOUkmL2jH6PpkW9CC-xZXUrNjqpjZy-t5UgbcAhQ597MlUS-ZCzoD0HEyTO0hh1Jxkx5Zt4NPBg"
+    },
+    "identity_claim": {
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "capabilities": {}
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "record_hash_hex": "81888aeb67f37d0aa72d824599fd07216781a8203506945035863dccd751f02b",
+    "capability_check": {
+      "envelope": null,
+      "in_envelope": true,
+      "mismatches": [],
+      "unresolvable": false
+    },
+    "verifier_signature_ok": true,
+    "validator_should_accept": true
+  }
+}

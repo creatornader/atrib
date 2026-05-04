@@ -1,0 +1,43 @@
+{
+  "name": "transaction-amount-unresolvable",
+  "spec_section": "6.7",
+  "description": "A transaction record with a max_amount envelope constraint. Per §6.7.2 the verifier MUST resolve the transaction amount from the protocol-specific payment event the record commits to. @atrib/verify doesn't have access to that out-of-band event, so it marks unresolvable: true. Same applies to counterparties constraints on transaction records.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0707070707070707070707070707070707070707070707070707070707070707",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/transaction",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225607000,
+      "signature": "EWm9XwrWXJ8G6wsWtdj5wfMqSf_Y5pzGKVdwE28tMTejAZ-expKq69BZv_DTcRn_o1EerIWIs4mzXdMEbMhoBg"
+    },
+    "identity_claim": {
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "capabilities": {
+        "max_amount": {
+          "currency": "USD",
+          "value": 100
+        }
+      }
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "record_hash_hex": "c751f4117732a2ad0c9e36e8a79c3d5dcab9f8c3be855155e60381665ccb44c9",
+    "capability_check": {
+      "envelope": {
+        "max_amount": {
+          "currency": "USD",
+          "value": 100
+        }
+      },
+      "in_envelope": true,
+      "mismatches": [],
+      "unresolvable": true
+    },
+    "verifier_signature_ok": true,
+    "validator_should_accept": true
+  }
+}
