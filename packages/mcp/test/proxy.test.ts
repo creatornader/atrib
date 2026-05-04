@@ -272,6 +272,77 @@ describe('createAtribProxy', () => {
     await proxy.close()
   })
 
+  it('preCallTransform option flows through createAtribProxy and mutates upstream args', async () => {
+    // Loop 5 / D057: cross-tool causal embedding. The middleware's preCallTransform
+    // hook is exposed at the bare atrib() entry point; this test confirms it
+    // also works at the createAtribProxy entry point so wrapper authors can
+    // rely on it without reaching past the proxy abstraction.
+    let upstreamSawArgs: Record<string, unknown> | undefined
+    const { proxySideTransport } = await makeUpstream({
+      tools: [
+        {
+          name: 'post_context',
+          handler: async (args) => {
+            upstreamSawArgs = args
+            return { content: [{ type: 'text', text: 'ok' }] }
+          },
+        },
+      ],
+    })
+
+    let preCallContext: import('../src/middleware.js').PreCallTransformContext | undefined
+    const proxy = await createAtribProxy({
+      name: 'pre-call-proxy',
+      upstream: { type: 'inMemory', transport: proxySideTransport },
+      atrib: {
+        creatorKey: PROXY_KEY,
+        serverUrl: PROXY_URL,
+        preCallTransform: (ctx) => {
+          preCallContext = ctx
+          return { ...ctx.args, atrib_receipt_id: ctx.receiptId }
+        },
+      },
+    })
+
+    const hostClient = new Client({ name: 'host', version: '1.0.0' })
+    const [hostTransport, proxyHostTransport] = InMemoryTransport.createLinkedPair()
+    await Promise.all([proxy.server.connect(proxyHostTransport), hostClient.connect(hostTransport)])
+
+    const result = await hostClient.callTool({
+      name: 'post_context',
+      arguments: { source: 'test', content: 'x' },
+    })
+
+    // preCallTransform fired with the right shape
+    expect(preCallContext).toBeDefined()
+    expect(preCallContext!.toolName).toBe('post_context')
+    expect(preCallContext!.recordHash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(preCallContext!.contextId).toMatch(/^[0-9a-f]{32}$/)
+    // §1.5.2 token format: 43 base64url chars, dot, 43 base64url chars
+    expect(preCallContext!.receiptId).toMatch(/^[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{43}$/)
+
+    // Upstream saw the mutated args (atrib_receipt_id injected by the host)
+    expect(upstreamSawArgs).toEqual({
+      source: 'test',
+      content: 'x',
+      atrib_receipt_id: preCallContext!.receiptId,
+    })
+
+    // Tool result still flows back unchanged
+    expect(result.content).toEqual([{ type: 'text', text: 'ok' }])
+
+    // Outbound _meta.atrib token equals the pre-call receiptId (no double-sign)
+    expect(result._meta?.atrib).toBe(preCallContext!.receiptId)
+
+    // Exactly one record submitted (the pre-built one, not a duplicate)
+    await proxy.server.flush()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(submissions.length).toBe(1)
+
+    await hostClient.close()
+    await proxy.close()
+  })
+
   it('close() disconnects the upstream client cleanly', async () => {
     const { proxySideTransport } = await makeUpstream({
       tools: [{ name: 'noop', handler: async () => ({ content: [] }) }],
