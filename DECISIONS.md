@@ -2609,11 +2609,19 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 
 **Source:** Audit during the 2026-05-03 sign_record decoupling work. The package README documents per-record annotations the result object should surface (`informed_by_resolution`, `provenance`, `capability_check`, `cross_attestation`, `cross_log_proof_count`/`threshold_met`/`equivocation_detected`, posture detection from §8). Several of these decision references (D041, D044, D045, D051, D052) shipped to the spec but the corresponding code surface in `packages/verify/src/` is partial.
 
-**Source state at audit:**
+**Source state at audit (initial 2026-05-03):**
 
 - `provenance` annotation: shipped 2026-05-03 via the new `verifyRecord(record, options)` per-record API in `packages/verify/src/verify-record.ts` + `spec/conformance/1.2.6/` corpus + `packages/verify/test/conformance-1.2.6.test.ts`.
 - `informed_by_resolution`, `capability_check`, `cross_attestation`, `cross_log_*`, posture detection: documented in README, NOT yet in code.
 - `resolveIdentity` and `CapabilityEnvelope` types ARE implemented but not surfaced through `VerificationResult`.
+
+**Progress as of 2026-05-04:**
+
+- `informed_by_resolution`: shipped (D041 surface) — `verifyRecord` populates `{ resolved, dangling }` from caller-supplied candidates.
+- `posture`: shipped (D045 surface) — `verifyRecord` always populates `{ timestamp_granularity, timestamp_consistent, timestamp_granularity_explicit }`.
+- `capability_check`: shipped (D051 surface) — `verifyRecord` populates `{ envelope, in_envelope, mismatches, unresolvable }` when caller passes a resolved `identityClaim`. Caller does the directory lookup; `@atrib/verify` has no `@atrib/directory` dependency. `tool_names` (against tool_call), `max_amount`, and `counterparties` (against transaction) flag `unresolvable: true` because the constraint inputs aren't on the standard record shape or aren't accessible without out-of-band protocol-event data.
+- `cross_attestation`: pending — needs `signers[]` field on `AtribRecord` per §1.7.6 first.
+- `cross_log_*`: pending — needs multi-log proof-bundle parsing infrastructure.
 
 **The decision in question.** The README represents intended state. Two paths to reconcile:
 

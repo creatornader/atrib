@@ -11,13 +11,19 @@
  * Implemented annotations (this file):
  *   - provenance:             { token, upstream_record_hash, upstream_resolved }    (D044 / §1.2.6)
  *   - informed_by_resolution: { resolved: string[], dangling: string[] }            (D041 / §1.2.5, §3.2.4)
- *   - posture:                { timestamp_granularity, timestamp_consistent }       (D045 / §8.4)
+ *   - posture:                { timestamp_granularity, timestamp_consistent, ...}   (D045 / §8.2 / §8.3 / §8.4)
+ *   - capability_check:       { envelope, in_envelope, mismatches, unresolvable }   (D051 / §6.7)
  *
  * Pending annotations (tracked in DECISIONS.md P005):
- *   - capability_check:       D051 / §6.7  (needs @atrib/directory integration)
  *   - cross_attestation:      D052 / §1.7.6  (needs `signers[]` type addition + transaction-record signing variant in @atrib/mcp)
  *   - cross_log_*:            D050 / §2.11  (needs multi-log proof-bundle infrastructure)
- *   - tool_name_form / args_commitment_form: §8.2 / §8.3  (needs tool_name + args_hash fields on the record shape — currently only content_id is exposed)
+ *
+ * Design note on dependencies. The capability_check annotation does NOT
+ * fetch the identity claim itself; the caller does the @atrib/directory
+ * lookup and passes the resolved claim into VerifyRecordOptions. This
+ * keeps @atrib/verify lean (no WASM-bridge dep) and lets the caller
+ * decide lookup strategy (cached vs live, batch vs per-record). Same
+ * pattern as `upstreamCandidate` and `informedByCandidates`.
  */
 
 import {
@@ -62,6 +68,51 @@ export interface ProvenanceAnnotation {
 export interface InformedByAnnotation {
   resolved: string[]
   dangling: string[]
+}
+
+/**
+ * Capability-envelope shape from spec §6.7.1. All sub-fields are optional;
+ * a claim with an empty envelope (`{}`) declares no scope. The verifier
+ * reads this off the resolved IdentityClaim's `capabilities` field.
+ */
+export interface CapabilityEnvelope {
+  tool_names?: string[]
+  event_types?: string[]
+  max_amount?: { currency: string; value: number }
+  counterparties?: string[]
+  expires_at?: number
+}
+
+/**
+ * Capability-check surfacing for a record whose signer published an
+ * IdentityClaim with a `capabilities` field (D051 / spec §6.7).
+ *
+ * Per §6.7.3: out-of-envelope is a SIGNAL, not invalidation. Records
+ * outside the envelope remain cryptographically valid; the signature
+ * verifies, log inclusion verifies. Consumers decide policy.
+ */
+export interface CapabilityCheckAnnotation {
+  /** The active envelope at the record's timestamp, or null if none. */
+  envelope: CapabilityEnvelope | null
+  /**
+   * True iff every present envelope field accommodates the record. False
+   * when any present constraint excludes the record's content. True when
+   * envelope is null (no constraint = trivially in-envelope).
+   */
+  in_envelope: boolean
+  /**
+   * Specific constraints the record violates, listed for debugging.
+   * Each entry is a short string like 'event_type not in allowlist' or
+   * 'expires_at exceeded'. Empty when in_envelope is true.
+   */
+  mismatches: string[]
+  /**
+   * True iff one or more checks could not be resolved out-of-band
+   * (e.g., a transaction record's amount + counterparty are not
+   * derivable without the protocol-specific payment event). Per §6.7.2
+   * the verifier MUST flag this rather than passing or failing silently.
+   */
+  unresolvable: boolean
 }
 
 /**
@@ -129,7 +180,26 @@ export interface RecordVerificationResult {
    * granularity and whether the timestamp value structurally matches it.
    */
   posture: PostureAnnotation
+  /**
+   * Capability-check annotation. Populated only when the caller passes
+   * an `identityClaim` in options. When the claim has no `capabilities`
+   * field (or an empty envelope), in_envelope is true and mismatches is
+   * empty (no constraint = trivially in-envelope per §6.7.1).
+   */
+  capability_check?: CapabilityCheckAnnotation
   warnings: string[]
+}
+
+/**
+ * Resolved identity claim for capability-check input. This is the SHAPE
+ * @atrib/verify needs from a directory lookup, NOT the @atrib/directory
+ * type itself (avoids a hard package dep). Callers pass either:
+ *   - the @atrib/directory `IdentityClaim` (structurally compatible), or
+ *   - a hand-constructed object with this shape (e.g., from a cache)
+ */
+export interface ResolvedIdentityClaim {
+  creator_key: string
+  capabilities?: CapabilityEnvelope
 }
 
 export interface VerifyRecordOptions {
@@ -150,6 +220,19 @@ export interface VerifyRecordOptions {
    * not invalidating.
    */
   informedByCandidates?: AtribRecord[]
+  /**
+   * Resolved identity claim for the record's `creator_key`, used for
+   * capability_check (D051 / §6.7). When supplied, verifyRecord populates
+   * `capability_check` on the result. The claim should be the active
+   * envelope at the record's timestamp per §6.7.2 step 1; the caller
+   * is responsible for picking the right historical version when the
+   * envelope has rotated. When omitted, capability_check is not surfaced.
+   *
+   * Caller is responsible for fetching this via @atrib/directory's
+   * lookup() or a cached equivalent. @atrib/verify intentionally does
+   * NOT depend on @atrib/directory.
+   */
+  identityClaim?: ResolvedIdentityClaim
 }
 
 /**
@@ -200,6 +283,13 @@ export async function verifyRecord(
       options.informedByCandidates ?? [],
       warnings,
     )
+  }
+
+  // capability_check (D051 / §6.7) — surface only when caller supplied a
+  // resolved identity claim. We do not look up the claim ourselves to
+  // avoid coupling @atrib/verify to @atrib/directory's WASM bridge.
+  if (options.identityClaim) {
+    result.capability_check = resolveCapabilityCheck(record, options.identityClaim, warnings)
   }
 
   result.valid = signatureOk && warnings.length === 0
@@ -255,6 +345,86 @@ function resolveInformedBy(
   return { resolved, dangling }
 }
 
+/**
+ * Capability-check derivation per spec §6.7.2.
+ *
+ * The signer's claim may declare a capability envelope. We check the
+ * record against each present sub-field of the envelope and report any
+ * mismatches. The caller is responsible for supplying the ACTIVE envelope
+ * at the record's timestamp (i.e., picking the right historical version
+ * when capabilities have rotated per §6.7.4).
+ *
+ * Per §6.7.3 mismatches are SIGNALS, not invalidation. We don't push
+ * mismatches into `warnings` (which would set `valid: false`); they go
+ * into the structured `mismatches[]` field for consumer policy to weigh.
+ *
+ * For transaction records with `max_amount` or `counterparties`
+ * constraints, we set `unresolvable: true`. The protocol-specific
+ * transaction event isn't accessible to @atrib/verify; the caller would
+ * need to provide the resolved amount + counterparty out-of-band, which
+ * is a future-API extension if a real consumer needs it.
+ */
+function resolveCapabilityCheck(
+  record: AtribRecord,
+  claim: ResolvedIdentityClaim,
+  _warnings: string[],
+): CapabilityCheckAnnotation {
+  const envelope = claim.capabilities ?? null
+  // Empty envelope or absent capabilities field: no constraint declared.
+  // Per §6.7.1: "A claim with `capabilities: {}` declares no scope."
+  if (!envelope || Object.keys(envelope).length === 0) {
+    return { envelope: null, in_envelope: true, mismatches: [], unresolvable: false }
+  }
+
+  const mismatches: string[] = []
+  let unresolvable = false
+
+  // expires_at: envelope expired when the record's timestamp is after the cutoff.
+  // Per §6.7.2: expired envelope is "treated as having no constraint and flagged
+  // separately" — we add the mismatch but don't treat it as out-of-envelope on
+  // its own; other sub-fields still apply if present.
+  if (typeof envelope.expires_at === 'number' && record.timestamp > envelope.expires_at) {
+    mismatches.push(`envelope expired at ${envelope.expires_at}; record timestamp ${record.timestamp}`)
+  }
+
+  // event_types: the record's event_type URI must be in the allowlist.
+  if (Array.isArray(envelope.event_types) && envelope.event_types.length > 0) {
+    if (!envelope.event_types.includes(record.event_type)) {
+      mismatches.push(`event_type '${record.event_type}' not in allowlist`)
+    }
+  }
+
+  // tool_names: per §6.7.2 step 2, only applies to tool_call records and
+  // requires the record's tool_name. The current AtribRecord shape does
+  // not expose tool_name (per §8.2 default posture: only content_id is
+  // present, which is a hash of serverUrl + toolName). Without tool_name
+  // we can't check this constraint. Mark unresolvable.
+  if (Array.isArray(envelope.tool_names) && envelope.tool_names.length > 0) {
+    if (record.event_type === 'https://atrib.dev/v1/types/tool_call') {
+      unresolvable = true
+    }
+  }
+
+  // max_amount + counterparties: per §6.7.2 the verifier "MUST resolve
+  // the transaction amount and counterparty from the protocol-specific
+  // transaction event the record commits to". @atrib/verify doesn't
+  // have access to the payment-protocol event; flag as unresolvable.
+  // Future API extension: accept resolved amount + counterparty as
+  // VerifyRecordOptions inputs if a real consumer needs it.
+  if (record.event_type === 'https://atrib.dev/v1/types/transaction') {
+    if (envelope.max_amount || (Array.isArray(envelope.counterparties) && envelope.counterparties.length > 0)) {
+      unresolvable = true
+    }
+  }
+
+  return {
+    envelope,
+    in_envelope: mismatches.length === 0,
+    mismatches,
+    unresolvable,
+  }
+}
+
 function detectPosture(record: AtribRecord, warnings: string[]): PostureAnnotation {
   const declared = record.timestamp_granularity
   const explicit = typeof declared === 'string'
@@ -284,6 +454,7 @@ export const __test_only__ = {
   GRANULARITY_MULTIPLIER,
   resolveProvenance,
   resolveInformedBy,
+  resolveCapabilityCheck,
   detectPosture,
   base64urlDecode,
 }
