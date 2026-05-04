@@ -276,6 +276,77 @@ describe('verifyRecord, posture (timestamp_granularity)', () => {
   })
 })
 
+describe('verifyRecord, posture (args/result commitment form, §8.3)', () => {
+  it('defaults to plain-sha256 for both args and result when no salts present', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed)
+
+    const result = await verifyRecord(record)
+
+    expect(result.posture.args_commitment_form).toBe('plain-sha256')
+    expect(result.posture.result_commitment_form).toBe('plain-sha256')
+  })
+
+  it('detects salted-sha256 for args when args_salt is present', async () => {
+    const seed = await freshKey()
+    // 16-byte salt encoded base64url (no padding) = 22 chars.
+    const record = await buildRecord(seed, { args_salt: 'AAAAAAAAAAAAAAAAAAAAAA' })
+
+    const result = await verifyRecord(record)
+
+    expect(result.posture.args_commitment_form).toBe('salted-sha256')
+    expect(result.posture.result_commitment_form).toBe('plain-sha256')
+    // signature still verifies, salt is included in canonical form
+    expect(result.signatureOk).toBe(true)
+    expect(result.valid).toBe(true)
+  })
+
+  it('detects salted-sha256 for result when result_salt is present', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, { result_salt: 'BBBBBBBBBBBBBBBBBBBBBB' })
+
+    const result = await verifyRecord(record)
+
+    expect(result.posture.args_commitment_form).toBe('plain-sha256')
+    expect(result.posture.result_commitment_form).toBe('salted-sha256')
+    expect(result.signatureOk).toBe(true)
+  })
+
+  it('detects salted-sha256 independently for both args and result', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      args_salt: 'AAAAAAAAAAAAAAAAAAAAAA',
+      result_salt: 'BBBBBBBBBBBBBBBBBBBBBB',
+    })
+
+    const result = await verifyRecord(record)
+
+    expect(result.posture.args_commitment_form).toBe('salted-sha256')
+    expect(result.posture.result_commitment_form).toBe('salted-sha256')
+    expect(result.signatureOk).toBe(true)
+  })
+
+  it('preserves the timestamp posture fields alongside commitment form', async () => {
+    // Verify the full PostureAnnotation shape co-populates correctly.
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      timestamp: 1_000_000 * 86_400_000,
+      timestamp_granularity: 'd',
+      args_salt: 'CCCCCCCCCCCCCCCCCCCCCC',
+    })
+
+    const result = await verifyRecord(record)
+
+    expect(result.posture).toEqual({
+      timestamp_granularity: 'd',
+      timestamp_consistent: true,
+      timestamp_granularity_explicit: true,
+      args_commitment_form: 'salted-sha256',
+      result_commitment_form: 'plain-sha256',
+    })
+  })
+})
+
 describe('verifyRecord, capability_check (D051 / §6.7)', () => {
   it('omits the annotation when no identityClaim is supplied', async () => {
     const seed = await freshKey()

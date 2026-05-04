@@ -25,6 +25,25 @@ export type AtribRecord = {
    */
   annotates?: string
   /**
+   * Optional base64url-encoded random salt (≥16 bytes) revealing the salt used
+   * to compute a `salted-sha256` `args_hash` per spec §8.3 (D045 salted-
+   * commitment posture). Presence indicates the salted-commitment posture for
+   * args; absence indicates the default plain-sha256 (or the hmac-sha256
+   * variant which is indistinguishable to non-key-holders). JCS-canonical form
+   * sorts the field between `annotates` ("a-n") and `chain_root` ("c") since
+   * "a-r" lies between them. Verifiers detect `args_commitment_form` from this
+   * field's presence per spec §8.3.
+   */
+  args_salt?: string
+  /**
+   * Optional base64url-encoded random salt (≥16 bytes) revealing the salt used
+   * to compute a `salted-sha256` `result_hash` per spec §8.3 (D045 salted-
+   * commitment posture). Same posture-detection semantics as `args_salt`.
+   * JCS-canonical form sorts the field between `provenance_token` ("p") and
+   * `revises` ("r-e-v") since "r-e-s" lies between them.
+   */
+  result_salt?: string
+  /**
    * Optional reference to the record this revision supersedes (D059 / spec
    * §1.2.9). Required when event_type is the atrib-normative revision URI
    * and rejected on any other event_type per validators. Format
