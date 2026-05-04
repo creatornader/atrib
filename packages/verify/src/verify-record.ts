@@ -6,15 +6,18 @@
  * Distinct from `AtribVerifier.verify(recommendationDoc)` which verifies a
  * settlement recommendation document by re-running the §4.6 calculation.
  * This module verifies one signed record at a time and surfaces the
- * per-record annotations defined in the package README:
+ * per-record annotations defined in the package README.
  *
- *   - provenance: { token, upstream_record_hash, upstream_resolved }
+ * Implemented annotations (this file):
+ *   - provenance:             { token, upstream_record_hash, upstream_resolved }    (D044 / §1.2.6)
+ *   - informed_by_resolution: { resolved: string[], dangling: string[] }            (D041 / §1.2.5, §3.2.4)
+ *   - posture:                { timestamp_granularity, timestamp_consistent }       (D045 / §8.4)
  *
- * Other annotations the README mentions (informed_by_resolution,
- * capability_check, cross_attestation, cross_log_*, posture detection)
- * are not yet implemented; see DECISIONS.md "Pending decisions" for the
- * planned reconciliation. Adding them follows the same shape: an optional
- * field on RecordVerificationResult populated when applicable to the record.
+ * Pending annotations (tracked in DECISIONS.md P005):
+ *   - capability_check:       D051 / §6.7  (needs @atrib/directory integration)
+ *   - cross_attestation:      D052 / §1.7.6  (needs `signers[]` type addition + transaction-record signing variant in @atrib/mcp)
+ *   - cross_log_*:            D050 / §2.11  (needs multi-log proof-bundle infrastructure)
+ *   - tool_name_form / args_commitment_form: §8.2 / §8.3  (needs tool_name + args_hash fields on the record shape, currently only content_id is exposed)
  */
 
 import {
@@ -33,13 +36,6 @@ const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
 /**
  * Provenance surfacing for a record carrying `provenance_token` (D044 /
  * spec §1.2.6).
- *
- * The token is the first 16 bytes of SHA-256(JCS(upstream-record)),
- * base64url-encoded (22 chars). The 16-byte truncation is irreversible:
- * `upstream_record_hash` cannot be derived from `token` alone. A caller
- * must supply the candidate upstream record (or look it up by other
- * means) to produce a populated `upstream_record_hash` and
- * `upstream_resolved=true`.
  */
 export interface ProvenanceAnnotation {
   token: string
@@ -53,6 +49,56 @@ export interface ProvenanceAnnotation {
    * bytes of its canonical-form SHA-256 match the decoded token.
    */
   upstream_resolved: boolean
+}
+
+/**
+ * Informed-by surfacing for a record carrying `informed_by[]` (D041 /
+ * spec §1.2.5). Splits the entries into resolved (caller supplied a
+ * candidate whose canonical-form SHA-256 matches the entry) and dangling
+ * (no candidate matched). Dangling references are flagged but do not
+ * fail verification, they're a signal that the verifier hasn't seen
+ * upstream context, not that the record is invalid.
+ */
+export interface InformedByAnnotation {
+  resolved: string[]
+  dangling: string[]
+}
+
+/**
+ * Posture surfacing for a record. Currently exposes only the timing
+ * posture (§8.4); tool_name_form (§8.2) and args_commitment_form (§8.3)
+ * require fields that aren't on the current AtribRecord shape.
+ *
+ * `timestamp_granularity` is the declared coarsening level (or 'ms' by
+ * default when absent). `timestamp_consistent` is true iff the timestamp
+ * value matches the granularity's trailing-zero invariant per spec §8.4
+ * (e.g., 'min' requires `timestamp % 60000 == 0`). A consistent posture
+ * means the record's coarsening claim is structurally honest; an
+ * inconsistent posture means the implementation declared a granularity
+ * that the timestamp doesn't satisfy, which validators and verifiers
+ * MUST reject per §8.4.
+ */
+export interface PostureAnnotation {
+  timestamp_granularity: 'ms' | 's' | 'min' | 'h' | 'd'
+  /**
+   * True iff the timestamp value matches the declared granularity's
+   * trailing-zero pattern. 'ms' is always consistent (no constraint).
+   */
+  timestamp_consistent: boolean
+  /**
+   * True iff the granularity field was explicitly present on the record,
+   * false iff it defaulted to 'ms' because the field was absent.
+   * Surfaced separately because absence affects JCS canonical form per §1.3.
+   */
+  timestamp_granularity_explicit: boolean
+}
+
+const GRANULARITY_MULTIPLIER: Record<PostureAnnotation['timestamp_granularity'], number> = {
+  ms: 1,
+  s: 1000,
+  min: 60_000,
+  h: 3_600_000,
+  d: 86_400_000,
 }
 
 export interface RecordVerificationResult {
@@ -69,6 +115,20 @@ export interface RecordVerificationResult {
    * equals genesisChainRoot(record.context_id).
    */
   provenance?: ProvenanceAnnotation
+  /**
+   * Informed-by annotation. Populated only when the record carries a
+   * non-empty `informed_by[]`. `resolved` lists the entries that match
+   * a caller-supplied candidate; `dangling` lists the entries that did
+   * not match any candidate. With no candidates supplied, all entries
+   * land in `dangling` (verification continues regardless).
+   */
+  informed_by_resolution?: InformedByAnnotation
+  /**
+   * Posture annotation. Always populated (every record has a timing
+   * posture, even if it defaults to 'ms'). Surfaces the declared
+   * granularity and whether the timestamp value structurally matches it.
+   */
+  posture: PostureAnnotation
   warnings: string[]
 }
 
@@ -80,6 +140,16 @@ export interface VerifyRecordOptions {
    * upstream_record_hash and sets upstream_resolved=true.
    */
   upstreamCandidate?: AtribRecord
+  /**
+   * Candidate records for informed_by[] resolution. The verifier hashes
+   * each candidate (canonical form) and tries to match each
+   * informed_by entry against the candidate set. Entries that match a
+   * candidate land in `resolved`; entries that do not land in `dangling`.
+   * Pass an empty array (or omit) when the verifier has no upstream
+   * context, every entry will land in `dangling`, which is informational
+   * not invalidating.
+   */
+  informedByCandidates?: AtribRecord[]
 }
 
 /**
@@ -107,12 +177,12 @@ export async function verifyRecord(
   const result: RecordVerificationResult = {
     valid: false,
     signatureOk,
+    posture: detectPosture(record, warnings),
     warnings,
   }
 
   // provenance_token is OPTIONAL per spec §1.2.6, surface only when present.
-  const provenanceToken = (record as AtribRecord & { provenance_token?: string })
-    .provenance_token
+  const provenanceToken = record.provenance_token
   if (typeof provenanceToken === 'string') {
     if (!PROVENANCE_TOKEN_PATTERN.test(provenanceToken)) {
       warnings.push(
@@ -121,6 +191,15 @@ export async function verifyRecord(
     } else {
       result.provenance = resolveProvenance(provenanceToken, options.upstreamCandidate)
     }
+  }
+
+  // informed_by is OPTIONAL per spec §1.2.5, surface only when present and non-empty.
+  if (record.informed_by && record.informed_by.length > 0) {
+    result.informed_by_resolution = resolveInformedBy(
+      record.informed_by,
+      options.informedByCandidates ?? [],
+      warnings,
+    )
   }
 
   result.valid = signatureOk && warnings.length === 0
@@ -135,8 +214,6 @@ function resolveProvenance(
     return { token, upstream_record_hash: null, upstream_resolved: false }
   }
 
-  // token = base64url(sha256(canonicalRecord(upstream))[:16])
-  // Compare the candidate's canonical-SHA[:16] to the decoded token bytes.
   const candidateHashBytes = sha256(canonicalRecord(upstreamCandidate))
   const candidateTokenBytes = candidateHashBytes.slice(0, 16)
   const candidateToken = base64urlEncode(candidateTokenBytes)
@@ -145,10 +222,58 @@ function resolveProvenance(
     return { token, upstream_record_hash: null, upstream_resolved: false }
   }
 
-  // Match: surface the full record_hash so the caller doesn't need to
-  // recompute. The full hash uses the same canonicalRecord input.
   const fullHash = `sha256:${hexEncode(candidateHashBytes)}`
   return { token, upstream_record_hash: fullHash, upstream_resolved: true }
+}
+
+function resolveInformedBy(
+  entries: string[],
+  candidates: AtribRecord[],
+  warnings: string[],
+): InformedByAnnotation {
+  // Pre-hash every candidate once. Each entry is a sha256:<64hex> ref;
+  // matching is by string comparison against the candidate's full hash.
+  const candidateHashes = new Set<string>()
+  for (const c of candidates) {
+    candidateHashes.add(`sha256:${hexEncode(sha256(canonicalRecord(c)))}`)
+  }
+
+  const resolved: string[] = []
+  const dangling: string[] = []
+  for (const entry of entries) {
+    if (!SHA256_REF_PATTERN.test(entry)) {
+      warnings.push(`informed_by entry has invalid format: ${entry.slice(0, 80)}`)
+      continue
+    }
+    if (candidateHashes.has(entry)) {
+      resolved.push(entry)
+    } else {
+      dangling.push(entry)
+    }
+  }
+
+  return { resolved, dangling }
+}
+
+function detectPosture(record: AtribRecord, warnings: string[]): PostureAnnotation {
+  const declared = record.timestamp_granularity
+  const explicit = typeof declared === 'string'
+  const granularity = explicit ? declared! : ('ms' as const)
+
+  // Spec §8.4 invariant: timestamp must match the granularity's trailing-zero pattern.
+  const multiplier = GRANULARITY_MULTIPLIER[granularity]
+  const consistent = record.timestamp % multiplier === 0
+  if (!consistent) {
+    warnings.push(
+      `timestamp_granularity declares '${granularity}' but timestamp ${record.timestamp} is not a multiple of ${multiplier}`,
+    )
+  }
+
+  return {
+    timestamp_granularity: granularity,
+    timestamp_consistent: consistent,
+    timestamp_granularity_explicit: explicit,
+  }
 }
 
 // Re-exported defensively so consumers that want stricter validation can
@@ -156,6 +281,9 @@ function resolveProvenance(
 export const __test_only__ = {
   PROVENANCE_TOKEN_PATTERN,
   SHA256_REF_PATTERN,
+  GRANULARITY_MULTIPLIER,
   resolveProvenance,
-  base64urlDecode, // referenced for test setup; export keeps it tree-shakable
+  resolveInformedBy,
+  detectPosture,
+  base64urlDecode,
 }

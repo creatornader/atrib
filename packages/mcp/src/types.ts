@@ -35,6 +35,15 @@ export type AtribRecord = {
    * lexicographically after `informed_by` and before `session_token` (i < p < s).
    */
   provenance_token?: string
+  /**
+   * Optional timing-posture declaration (D045 / spec §8.4).
+   * When present, the timestamp value MUST match the declared granularity's
+   * trailing-zero pattern (e.g. `'min'` requires `timestamp % 60000 == 0`).
+   * Default semantics when absent: 'ms'. JCS-canonical form sorts the field
+   * lexicographically immediately after `timestamp` (`timestamp` is a prefix
+   * of `timestamp_granularity`, so the shorter string sorts first).
+   */
+  timestamp_granularity?: 'ms' | 's' | 'min' | 'h' | 'd'
 } & ({ session_token: string } | { session_token?: never })
 
 /** An unsigned record. all fields except signature. */
