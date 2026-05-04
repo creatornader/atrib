@@ -2434,6 +2434,50 @@ Four of five indicators clear. Indicator 1 fails the literal cross-category read
 
 ---
 
+## D057: Pre-call signing hook (`preCallTransform`) for cross-tool causal embedding
+
+**Date:** 2026-05-04
+**Status:** Accepted
+
+**Context.** [§5.3](atrib-spec.md#53-atribmcp-mcp-server-middleware) describes the middleware as signing AFTER the upstream tool returns and adding the propagation token to the response `_meta`. This ordering is correct for the universal case: latency stays off the tool's critical path, and a failed tool call never produces an orphan signed record.
+
+A class of useful integrations needs the inverse ordering. When an MCP tool writes data to durable storage (e.g., a row in a database, a message on a queue, a record in an external API), and downstream consumers want to anchor their own `informed_by` references to the row produced by that call, the row needs to carry the atrib receipt_id at the moment of insert, not as a follow-up update after the row already exists. Concrete example: an MCP server that posts to a shared-context database. A second agent reading that row immediately after the post should be able to extract the receipt_id and use it as an `informed_by` anchor for its own emission, closing a cross-repo causal edge in the graph. With post-call signing, the row briefly exists without the receipt_id; a fast consumer reads it before the column is filled in.
+
+**Decision.** Add `preCallTransform?: PreCallTransform` to `AtribOptions`. When set, the middleware signs the record BEFORE forwarding the call to the upstream handler, computes the §1.5.2 propagation token (`receiptId`) and the canonical record_hash reference (`recordHash`), invokes the callback with `{ toolName, args, receiptId, recordHash, contextId }`, and replaces the upstream call's `arguments` with the return value. Post-success commit (onRecord, outbound context, log submission, autoChain bookkeeping) is unchanged: the same signed bytes that were committed pre-call to the host are queued for log submission post-success.
+
+**Rationale.**
+
+1. **Spec-orthogonal.** No on-disk record format changes, no spec section changes, no conformance corpus changes. The signed record is byte-identical to the post-call path; only the ordering of "produce signed bytes" vs. "forward to upstream" changes. Verifiers reading log entries cannot distinguish the two paths and do not need to.
+
+2. **Opt-in keeps the default contract.** Tools without `preCallTransform` set retain post-call signing, preserving the universal-case latency guarantee. The pre-call latency tax (one Ed25519 signature on the critical path) is paid only when the host explicitly opts in for the cross-tool embedding benefit.
+
+3. **Graceful degradation per [§5.8](atrib-spec.md#58-degradation-contract).** Errors thrown from `preCallTransform` (or any failure during pre-call signing) are caught; the middleware falls back to the standard post-call signing path so the tool call itself never fails because of attribution.
+
+4. **No double-sign.** The pre-built record is cached and reused at commit time. Exactly one signed record is emitted per successful tool call, identical to the post-call path semantics.
+
+5. **Failure semantics preserved.** If the upstream returns `isError: true` after pre-call signing, the pre-built record is discarded: no `onRecord` call, no log submission, no autoChain bookkeeping. The receipt_id may have been embedded into upstream args (and the tool may have done something with it), but no record claims that activity from the agent's side. This matches the post-call semantics: `isError` suppresses emission either way.
+
+**Alternatives considered.**
+
+1. *Two-phase commit via a follow-up `attach_atrib_receipt` tool on the upstream server.* Rejected. Two roundtrips per call; brief inconsistency window where the row exists without the receipt; requires every cross-tool-embedding upstream to expose a separate update tool; couples atrib's substrate to a specific upstream API shape.
+
+2. *Manual signing path in the wrapper bypassing `createAtribProxy` for the affected tool.* Rejected. Wrapper code re-implements every middleware concern (autoChain, informedBy, onRecord, queue submission) for one tool. Drift risk: future middleware improvements (chain context handling, additional optional record fields) won't apply to the tools using the manual path until the manual path is updated.
+
+3. *Default to pre-call signing for all tools.* Rejected. The universal-case contract is post-call signing per [§5.3](atrib-spec.md#53-atribmcp-mcp-server-middleware); changing the default would shift latency for every existing user of the middleware to gain a benefit only a small fraction of integrations need.
+
+**Consequences.**
+
+- *Spec.* No changes. The hook is implementation-side; on-the-wire records are identical.
+- *`packages/mcp/src/middleware.ts`.* `buildSignedRecord` and `commitRecord` extracted as inner helpers; `makeWrappedHandler` gains the pre-call branch gated on `options.preCallTransform`.
+- *`packages/mcp/src/index.ts`.* Exports `PreCallTransform` and `PreCallTransformContext` types alongside `AtribOptions` and `AtribServer`.
+- *`packages/mcp/test/middleware.test.ts`.* Five new test cases cover: receipt_id format + shape, args mutation reaches upstream, no double-sign, throw → fallback to post-call, upstream isError → no commit and no autoChain bookkeeping. Existing 26 tests unchanged.
+- *`packages/mcp/README.md`.* Adds a row to the `AtribOptions` table.
+- *Reusable beyond Loop 5.* Any wrapper that needs to embed an atrib receipt into downstream-visible data (database rows, queue messages, external-API request bodies) gets the same hook for free. Future cross-tool causal-link work does not need to revisit this design.
+
+**Reopening criteria.** None expected. The hook surface is small, opt-in, and on the SDK side rather than the spec side. If a future use case needs a different shape (e.g., the host needs to influence record fields beyond just args mutation), that is a separate addition rather than a revision of D057.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

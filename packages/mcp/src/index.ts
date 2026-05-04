@@ -4,7 +4,12 @@
 
 // Middleware (primary export)
 export { atrib } from './middleware.js'
-export type { AtribOptions, AtribServer } from './middleware.js'
+export type {
+  AtribOptions,
+  AtribServer,
+  PreCallTransform,
+  PreCallTransformContext,
+} from './middleware.js'
 
 // Proxy: in-process McpServer that forwards to an upstream MCP server with
 // attribution applied at the proxy layer. Use for hosts that accept an

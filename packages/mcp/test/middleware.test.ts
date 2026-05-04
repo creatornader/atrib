@@ -752,4 +752,169 @@ describe('atrib() middleware', () => {
       expect(second.chain_root).not.toBe(`sha256:${hex(hash(canon(first)))}`)
     })
   })
+
+  describe('preCallTransform (cross-tool causal embedding)', () => {
+    it('signs pre-call, exposes receiptId + recordHash + contextId, lets host mutate args', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const resultObj = { content: [{ type: 'text', text: 'ok' }] }
+
+      // Capture the args the upstream handler ultimately sees so we can
+      // assert the mutation took effect.
+      let upstreamArgs: Record<string, unknown> | undefined
+      const upstreamHandler = vi.fn(async (request: Record<string, unknown>) => {
+        const params = request.params as Record<string, unknown>
+        upstreamArgs = params.arguments as Record<string, unknown>
+        return resultObj
+      })
+
+      const captured: AtribRecord[] = []
+      let preCallReceived: import('../src/middleware.js').PreCallTransformContext | undefined
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        onRecord: (r) => { captured.push(r) },
+        preCallTransform: (ctx) => {
+          preCallReceived = ctx
+          return { ...ctx.args, atrib_receipt_id: ctx.receiptId }
+        },
+      })
+      registerToolHandler(upstreamHandler)
+
+      await getToolHandler()!(createToolCallRequest('post_context'), {})
+
+      // 1. preCallTransform was called with the right shape
+      expect(preCallReceived).toBeDefined()
+      expect(preCallReceived!.toolName).toBe('post_context')
+      expect(preCallReceived!.args).toEqual({ query: 'test' }) // pre-mutation snapshot
+      expect(preCallReceived!.recordHash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(preCallReceived!.contextId).toMatch(/^[0-9a-f]{32}$/)
+
+      // 2. receiptId is the canonical §1.5.2 propagation token
+      const decoded = decodeToken(preCallReceived!.receiptId)
+      expect(decoded).not.toBeNull()
+      expect(decoded!.recordHash.length).toBe(32)
+      expect(decoded!.creatorKey.length).toBe(32)
+      const expectedPubKey = await getPublicKey(TEST_PRIVATE_KEY)
+      expect(decoded!.creatorKey).toEqual(expectedPubKey)
+
+      // 3. recordHash matches the decoded hash (hex form of token's hash part)
+      expect(preCallReceived!.recordHash).toBe(`sha256:${hexEncode(decoded!.recordHash)}`)
+
+      // 4. The upstream handler received the mutated args (atrib_receipt_id injected)
+      expect(upstreamArgs).toEqual({ query: 'test', atrib_receipt_id: preCallReceived!.receiptId })
+
+      // 5. Exactly ONE record was emitted (not two, proves no double-sign)
+      expect(captured).toHaveLength(1)
+
+      // 6. The committed record is the SAME bytes as the pre-built one
+      // (the receipt_id the host embedded references this exact record)
+      const committedTokenFromMeta = (resultObj as { _meta?: { atrib?: string } })._meta?.atrib
+      expect(committedTokenFromMeta).toBe(preCallReceived!.receiptId)
+    })
+
+    it('on preCallTransform throw, falls back to post-call signing (degradation per §5.8)', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const resultObj = { content: [{ type: 'text', text: 'ok' }] }
+      const upstreamHandler = vi.fn().mockResolvedValue(resultObj)
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      const captured: AtribRecord[] = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        onRecord: (r) => { captured.push(r) },
+        preCallTransform: () => {
+          throw new Error('host blew up')
+        },
+      })
+      registerToolHandler(upstreamHandler)
+
+      const result = await getToolHandler()!(createToolCallRequest('post_context'), {})
+
+      // Tool call still succeeds
+      expect((result as { content: unknown }).content).toBeDefined()
+      // A record was still emitted (post-call fallback path)
+      expect(captured).toHaveLength(1)
+      // Warning surfaced
+      expect(warnSpy).toHaveBeenCalledWith(
+        'atrib: preCallTransform pre-sign failed, falling back to post-call',
+        expect.any(Error),
+      )
+      warnSpy.mockRestore()
+    })
+
+    it('on upstream isError after pre-sign, no record committed and no autoChain bookkeeping', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+
+      const captured: AtribRecord[] = []
+      const transforms: import('../src/middleware.js').PreCallTransformContext[] = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        autoChain: true,
+        onRecord: (r) => { captured.push(r) },
+        preCallTransform: (ctx) => { transforms.push(ctx); return undefined },
+      })
+
+      // First call: upstream errors. Pre-sign happened (preCallTransform ran),
+      // but no record should be committed and autoChain should NOT remember
+      // this run's record_hash.
+      const errorResult = { isError: true, content: [{ type: 'text', text: 'fail' }] }
+      registerToolHandler(vi.fn().mockResolvedValue(errorResult))
+      await getToolHandler()!(createToolCallRequest('a'), {})
+      expect(transforms).toHaveLength(1) // pre-sign DID run
+      expect(captured).toHaveLength(0)   // but no record committed
+
+      // Second call: upstream succeeds. chain_root MUST be genesis (the failed
+      // call's hash was discarded). If autoChain incorrectly remembered the
+      // failed record, this call would chain to it instead.
+      const successResult = { content: [{ type: 'text', text: 'ok' }] }
+      registerToolHandler(vi.fn().mockResolvedValue(successResult))
+      await getToolHandler()!(createToolCallRequest('b'), {})
+      expect(captured).toHaveLength(1)
+      const committed = captured[0]!
+      // Genesis chain_root format per §1.2.3: sha256:<hex(SHA256(UTF-8(context_id)))>
+      expect(committed.chain_root).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(committed.chain_root).not.toBe(transforms[0]!.recordHash)
+    })
+
+    it('preCallTransform returning undefined leaves args unchanged (opt-in observation)', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const resultObj = { content: [{ type: 'text', text: 'ok' }] }
+
+      let upstreamArgs: Record<string, unknown> | undefined
+      registerToolHandler(vi.fn(async (req: Record<string, unknown>) => {
+        upstreamArgs = (req.params as Record<string, unknown>).arguments as Record<string, unknown>
+        return resultObj
+      }))
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        preCallTransform: () => undefined, // observe-only
+      })
+
+      await getToolHandler()!(createToolCallRequest('search'), {})
+      expect(upstreamArgs).toEqual({ query: 'test' }) // unchanged
+    })
+
+    it('without preCallTransform, behavior is unchanged (regression guard)', async () => {
+      // This is exactly the "emits attribution record on successful tool call"
+      // test path, we run it again here to make the no-opt-in regression
+      // guarantee explicit alongside the new pre-call branch tests.
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const resultObj = { content: [{ type: 'text', text: 'ok' }] }
+      const captured: AtribRecord[] = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        onRecord: (r) => { captured.push(r) },
+      })
+      registerToolHandler(vi.fn().mockResolvedValue(resultObj))
+
+      await getToolHandler()!(createToolCallRequest('search'), {})
+      expect(captured).toHaveLength(1)
+      expect((resultObj as { _meta?: { atrib?: string } })._meta?.atrib).toBeDefined()
+    })
+  })
 })
