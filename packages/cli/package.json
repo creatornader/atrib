@@ -9,7 +9,7 @@
   "files": [
     "dist"
   ],
-  "description": "CLI for atrib. Generate Ed25519 keypairs, manage them in macOS Keychain, publish identity claims to the atrib directory.",
+  "description": "CLI for atrib. Key management, identity-claim publishing, and revocation.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",
