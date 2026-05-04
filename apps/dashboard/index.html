@@ -1474,7 +1474,7 @@ async function renderSession(contextId) {
     pulseStat('nodes', String(graph.node_count ?? graph.nodes.length)),
     pulseStat('edges', String(graph.edge_count ?? graph.edges?.length ?? 0)),
     pulseStat('transaction', hasTx ? 'present' : 'none', hasTx ? 'session converges on a transaction' : 'no transaction record'),
-    pulseStat('participants', String(new Set(graph.nodes.map(n => n.creator_key)).size), 'distinct identities'),
+    pulseStat('participants', String(new Set(graph.nodes.map(n => n.creator_key).filter(Boolean)).size), 'distinct identities'),
   ))
 
   if (usingFallback) {
@@ -1503,9 +1503,17 @@ async function renderSession(contextId) {
         el('tbody', {},
           ...graph.nodes.map(n => el('tr', {},
             el('td', {}, renderEventChip(n.event_type, n.creator_key, n.event_type_uri)),
-            el('td', {}, el('a', { href: `#/action/${n.id}` },
-              el('span', { class: 'mono' }, shorten(n.id, 13, 4)),
-            )),
+            // Dangling nodes (§3.2.4 step 6/7) have synthetic ids that no
+            // /action/ route can resolve. Render the id but skip the link so
+            // the user gets a clear "this is a placeholder" cue instead of a
+            // broken navigation. Reason annotation, when present on the
+            // associated edge, is shown via the edges-table tooltip.
+            el('td', {},
+              n.event_type === 'dangling_node'
+                ? el('span', { class: 'mono', title: 'unresolved reference (synthetic placeholder)' }, shorten(n.id, 13, 4))
+                : el('a', { href: `#/action/${n.id}` },
+                    el('span', { class: 'mono' }, shorten(n.id, 13, 4)),
+                  )),
             el('td', {}, n.creator_key ? renderIdentityLabel(n.creator_key) : '—'),
             (() => {
               const tsMs = n.timestamp ? (typeof n.timestamp === 'number' ? n.timestamp : Date.parse(n.timestamp)) : null
