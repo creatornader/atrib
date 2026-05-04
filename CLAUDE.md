@@ -54,6 +54,7 @@ atrib/
     atrib-emit/                # MCP server exposing the explicit `emit` tool. Producer-side cognitive primitive for observations/annotations/revisions the @atrib/mcp wrapper doesn't auto-sign. Records are byte-identical to wrapper-signed records; same key (the agent's). Standalone stdio binary; runs in the agent's process alongside other MCP servers.
   spec/
     conformance/
+      1.2.6/                   # provenance_token conformance corpus (test vectors for §1.2.6, D044). Generator at packages/log-dev/scripts/generate-conformance-1.2.6.ts; reference test at packages/verify/test/conformance-1.2.6.test.ts. Four cases cover canonical-form invariance, derivation rule, genesis-only invariant, absence-not-null contract.
       1.4/                     # Signing conformance corpus (test vectors for §1.4)
       1.9/                     # Key rotation/revocation conformance corpus (test vectors for §1.9, D033). Skeleton; fixtures land in an upcoming implementation phase.
       2.6.1/                   # Submission API conformance corpus (consumed by @atrib/log-dev and log-node)

@@ -332,4 +332,5 @@ Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hash
 - [atrib-spec.md](atrib-spec.md) — the complete protocol specification ([§0](atrib-spec.md#0-foundations)-[§7](atrib-spec.md#7-harness-integration-patterns))
 - [DECISIONS.md](DECISIONS.md) — architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-D053; D037-D040 reserved for upcoming work)
 - [packages/agent/README.md](packages/agent/README.md) -- adapter table with quick-start snippets for every framework
+- [spec/conformance/1.2.6/](spec/conformance/1.2.6/) -- conformance corpus for the `provenance_token` field (D044 / §1.2.6)
 - [spec/conformance/2.6.1/](spec/conformance/2.6.1/) -- shared conformance corpus for the submission API

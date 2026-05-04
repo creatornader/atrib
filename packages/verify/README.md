@@ -69,14 +69,43 @@ Per the [§5.8](../../atrib-spec.md#58-degradation-contract) degradation contrac
 
 Independently re-runs the [§4.6](../../atrib-spec.md#46-the-calculation-algorithm) calculation and verifies the document signature. Always returns a result object; never throws. Inspect `valid`, `signatureOk`, `calcMatch`, and `warnings` to understand the outcome.
 
-The result object surfaces per-record annotations introduced by [D041](../../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D044](../../DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), [D045](../../DECISIONS.md#d045-privacy-postures-normative-spec-section), [D051](../../DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes), and [D052](../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records):
+This method operates on `RecommendationDocument` shapes (settlement-recommendation flow per spec [§5.5.2](../../atrib-spec.md#552-verify)). For verifying individual `AtribRecord`s, see `verifyRecord` below.
 
-- `informed_by_resolution`: `{ resolved: string[], dangling: string[] }` per record carrying `informed_by`. Dangling references are flagged but do not fail verification.
-- `provenance`: `{ token, upstream_record_hash, upstream_resolved }` per session-genesis record carrying `provenance_token`.
-- `capability_check`: `{ envelope, in_envelope, mismatches }` when the signing key has a published [§6.7](../../atrib-spec.md#67-capability-declarations) capability envelope; out-of-envelope records are flagged as a signal, not invalidated.
-- `cross_attestation`: `{ signer_count, all_verified, missing_required }` for transaction records per [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records); records with fewer than 2 verified signers are flagged as `cross_attestation_missing: true`.
-- `cross_log_proof_count` + `cross_log_threshold_met` + `cross_log_equivocation_detected` for records with multi-log proof bundles per [§2.11](../../atrib-spec.md#211-cross-log-replication).
-- Posture detection per [§8](../../atrib-spec.md#8-privacy-postures): `tool_name_form`, `args_commitment_form`, `timestamp_granularity` derived from record bytes.
+### `verifyRecord(record, options): Promise<RecordVerificationResult>`
+
+Per-record verification. Verifies a single signed record's Ed25519 signature and surfaces per-record annotations defined by spec sections [§1.2.5](../../atrib-spec.md#125-informed_by) ([D041](../../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type)), [§1.2.6](../../atrib-spec.md#126-provenance_token) ([D044](../../DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring)), and [§8.4](../../atrib-spec.md#84-coarsened-timing-posture) ([D045](../../DECISIONS.md#d045-privacy-postures-normative-spec-section)).
+
+```typescript
+import { verifyRecord } from '@atrib/verify'
+
+const result = await verifyRecord(record, {
+  upstreamCandidate,         // optional, for provenance_token resolution
+  informedByCandidates: [],  // optional, for informed_by[] resolution
+})
+// result: {
+//   valid: boolean
+//   signatureOk: boolean
+//   posture: { timestamp_granularity, timestamp_consistent, timestamp_granularity_explicit }
+//   provenance?:              { token, upstream_record_hash, upstream_resolved }
+//   informed_by_resolution?:  { resolved: string[], dangling: string[] }
+//   warnings: string[]
+// }
+```
+
+**Implemented per-record annotations:**
+
+- `provenance`: `{ token, upstream_record_hash, upstream_resolved }` per session-genesis record carrying `provenance_token` ([D044](../../DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) / [§1.2.6](../../atrib-spec.md#126-provenance_token)). The 16-byte token truncation is irreversible: `upstream_record_hash` populates only when the caller supplies a candidate whose canonical-form SHA-256[:16] matches the token.
+- `informed_by_resolution`: `{ resolved: string[], dangling: string[] }` per record carrying `informed_by` ([D041](../../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type) / [§1.2.5](../../atrib-spec.md#125-informed_by)). Dangling references are flagged but do not fail verification — they signal "the verifier has not seen upstream context," not "the record is invalid."
+- `posture`: `{ timestamp_granularity, timestamp_consistent, timestamp_granularity_explicit }` ([D045](../../DECISIONS.md#d045-privacy-postures-normative-spec-section) / [§8.4](../../atrib-spec.md#84-coarsened-timing-posture)). Always populated. Surfaces the declared timing granularity, whether the timestamp value structurally matches the spec's trailing-zero invariant for that granularity, and whether the field was explicitly set vs defaulted from absence.
+
+**Pending per-record annotations** (tracked as a Pending decision in [DECISIONS.md P005](../../DECISIONS.md#p005-reconcile-atribverify-readme-per-record-annotations-with-actual-code-surface)):
+
+- `capability_check` ([D051](../../DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) / [§6.7](../../atrib-spec.md#67-capability-declarations)): requires `@atrib/directory` integration to look up the signing key's capability envelope.
+- `cross_attestation` ([D052](../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) / [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)): requires a `signers[]` field on `AtribRecord` plus a transaction-record canonicalization variant in `@atrib/mcp`.
+- `cross_log_proof_count` / `cross_log_threshold_met` / `cross_log_equivocation_detected` ([D050](../../DECISIONS.md#d050-cross-log-replication-for-equivocation-defense) / [§2.11](../../atrib-spec.md#211-cross-log-replication)): requires multi-log proof-bundle parsing and trusted-log-set config.
+- `tool_name_form` / `args_commitment_form` ([§8.2](../../atrib-spec.md#82-opaque-name-posture) / [§8.3](../../atrib-spec.md#83-salted-commitment-posture)): requires `tool_name`, `args_hash`, and `args_salt` fields on `AtribRecord` (the standard record shape currently exposes only the derived `content_id`).
+
+Each pending annotation is its own ADR scope when external consumers need it.
 
 ### `calculate(options): Promise<RecommendationDocument>`
 
