@@ -31,6 +31,7 @@ atrib/
     agent/                     # @atrib/agent: Agent middleware + framework adapters (public)
     verify/                    # @atrib/verify: Verifier library (record verification, §4.6 calc, settlement) (public)
     cli/                       # @atrib/cli: keygen + Keychain key management (public)
+    mcp-wrap/                  # @atrib/mcp-wrap: generic config-driven MCP wrapper (public). Library + binary. Wraps any upstream MCP server with @atrib/mcp middleware so every tool call is signed and logged. Multiplies coverage to ~30 MCPs at zero per-server code cost. Library surface (`wrap`, `parseConfig`, `buildPreCallTransform`, `resolveKey`, helpers) for in-tree wrappers; `atrib-wrap` binary reads $ATRIB_WRAP_CONFIG or ~/.atrib/wrap-config.json.
     directory/                 # @atrib/directory: AKD-backed identity-claim directory SDK (public). Bundles wasm/ artifacts built from packages/directory-bridge.
     directory-bridge/          # atrib-directory-bridge: Rust crate wrapping facebook/akd via wasm-bindgen. Source-only; build artifacts ship inside @atrib/directory.
     log-dev/                   # @atrib/log-dev: in-memory dev Merkle log stub (PRIVATE, dev only)
@@ -52,7 +53,6 @@ atrib/
     graph-node/                # Production Node.js graph query service. Implements §3.2.4 derivation. Deployed at https://graph.atrib.dev/v1.
     directory-node/            # Production Node.js AKD-backed identity-claim directory service per §6.2. Per-operation anchoring (§6.2.4) emits directory_anchor records to log-node automatically.
     atrib-emit/                # MCP server exposing the explicit `emit` tool. Producer-side cognitive primitive for observations/annotations/revisions the @atrib/mcp wrapper doesn't auto-sign. Records are byte-identical to wrapper-signed records; same key (the agent's). Standalone stdio binary; runs in the agent's process alongside other MCP servers.
-    mcp-wrap/                  # @atrib/mcp-wrap: generic config-driven MCP wrapper. Spawns any upstream MCP server and applies @atrib/mcp middleware so every tool call is signed and logged. Multiplies coverage to ~30 MCPs at zero per-server code cost. Reads JSON config (default: ~/.atrib/wrap-config.json). Per-tool overrides for transactionTool / injectReceiptId (D057). Operational shell (key resolution, file logging, signed-record mirror, autoChain seed loading) is shared via a small library surface so other in-tree wrappers can import wrap() directly.
   spec/
     conformance/
       1.2.6/                   # provenance_token conformance corpus (test vectors for §1.2.6, D044). Generator at packages/log-dev/scripts/generate-conformance-1.2.6.ts; reference test at packages/verify/test/conformance-1.2.6.test.ts. Four cases cover canonical-form invariance, derivation rule, genesis-only invariant, absence-not-null contract.
