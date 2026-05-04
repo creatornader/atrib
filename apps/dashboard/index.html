@@ -96,6 +96,15 @@
     --et-system: #ec4899;
     --et-system-subtle: rgba(236, 72, 153, 0.12);
     --et-system-border: rgba(236, 72, 153, 0.3);
+    /* Synthetic dangling nodes (§3.2.4 step 6/7): an INFORMED_BY or
+       PROVENANCE_OF reference that did not resolve to a record in the
+       resolved set. Surfaces the agent's claim without pretending the
+       upstream is recoverable here. Muted-warning style (warm grey) so
+       the dangling marker reads as "incomplete" without competing with
+       the err-red used for verification failures. */
+    --et-dangling: #92400e;
+    --et-dangling-subtle: rgba(146, 64, 14, 0.12);
+    --et-dangling-border: rgba(146, 64, 14, 0.3);
 
     /* Type */
     --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, Roboto, sans-serif;
@@ -471,6 +480,7 @@
   .chip.event-extension        { background: var(--et-extension-subtle); color: var(--et-extension); border-color: var(--et-extension-border); }
   .chip.event-directory_anchor { background: var(--et-system-subtle);    color: var(--et-system);    border-color: var(--et-system-border); }
   .chip.event-system           { background: var(--et-system-subtle);    color: var(--et-system);    border-color: var(--et-system-border); }
+  .chip.event-dangling_node    { background: var(--et-dangling-subtle);  color: var(--et-dangling);  border-color: var(--et-dangling-border); }
   .chip.event-reserved         { background: var(--err-subtle);          color: var(--err);          border-color: var(--err-border); }
 
   .badge {
@@ -1513,10 +1523,24 @@ async function renderSession(contextId) {
   ))
 
   if (graph.edges && graph.edges.length > 0) {
+    // Dangling targets (§3.2.4 step 6/7) start with `dangling:`. They are
+    // synthetic placeholders for agent-declared informed_by / provenance_token
+    // references that didn't resolve in this set. Render them inline as
+    // shortened-text but DO NOT link to /action/ since there's no record there.
+    const danglingCount = graph.edges.filter(e => e.dangling === true).length
+    const renderTarget = e => e.dangling
+      ? el('span', { class: 'mono', title: e.reason || 'dangling reference' },
+          shorten(e.target, 10, 4),
+          el('span', { class: 'chip event-dangling_node', style: 'margin-left: 6px;' }, 'dangling'))
+      : el('a', { href: `#/action/${e.target}` },
+          el('span', { class: 'mono' }, shorten(e.target, 10, 4)))
     root.append(el('section', { class: 'feed-wrap', style: 'margin-top: 24px;' },
       el('div', { class: 'feed-head' },
         el('h2', {}, `edges (${graph.edges.length})`),
-        el('span', { class: 'meta' }, '7 deterministic types per §3.2.3'),
+        el('span', { class: 'meta' },
+          danglingCount > 0
+            ? `7 deterministic types per §3.2.3 — ${danglingCount} dangling`
+            : '7 deterministic types per §3.2.3'),
       ),
       el('div', {},
         el('table', { class: 'feed' },
@@ -1529,7 +1553,7 @@ async function renderSession(contextId) {
             ...graph.edges.map(e => el('tr', {},
               el('td', {}, el('code', {}, e.type)),
               el('td', {}, el('a', { href: `#/action/${e.source}` }, el('span', { class: 'mono' }, shorten(e.source, 10, 4)))),
-              el('td', {}, el('a', { href: `#/action/${e.target}` }, el('span', { class: 'mono' }, shorten(e.target, 10, 4)))),
+              el('td', {}, renderTarget(e)),
             )),
           ),
         ),

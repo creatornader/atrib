@@ -24,7 +24,7 @@
  * preserved verbatim on `GraphNode.event_type_uri` for graph clients that
  * want the original URI.
  */
-export type EventType = 'tool_call' | 'transaction' | 'observation' | 'directory_anchor' | 'gap_node' | 'extension'
+export type EventType = 'tool_call' | 'transaction' | 'observation' | 'directory_anchor' | 'gap_node' | 'dangling_node' | 'extension'
 
 /**
  * Map an attribution record's event_type URI to a graph-layer short label.
@@ -62,6 +62,8 @@ export type EdgeType =
   | 'SESSION_PARALLEL'
   | 'CONVERGES_ON'
   | 'CROSS_SESSION'
+  | 'INFORMED_BY'
+  | 'PROVENANCE_OF'
 
 export type VerificationState =
   | 'unsigned'
@@ -106,6 +108,21 @@ export interface GraphEdge {
   source: string
   target: string
   directed: boolean
+  /**
+   * True when the edge target is a synthetic dangling node — the agent's
+   * declared informed_by or provenance_token reference did not resolve to a
+   * record in the resolved set. Per spec §3.2.4 steps 6 + 7, dangling
+   * references MUST be surfaced as edges (not silently dropped) so verifiers
+   * can see what the agent claimed even when the upstream isn't accessible.
+   * Only INFORMED_BY and PROVENANCE_OF edges can be dangling.
+   */
+  dangling?: boolean
+  /**
+   * Optional reason annotation. Currently used by PROVENANCE_OF dangling
+   * edges with the value `"no_token_source_in_record_set"` per spec §3.2.4
+   * step 7.
+   */
+  reason?: string
 }
 
 /** A graph response object (§3.5.1). */
