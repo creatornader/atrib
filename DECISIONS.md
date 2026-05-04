@@ -2526,6 +2526,53 @@ D055 ruled (2026-04-30) that `annotation` should stay as an extension URI in a s
 
 ---
 
+## D059: Promote `revision` to atrib-normative event_type byte 0x06
+
+**Date:** 2026-05-04
+**Status:** Accepted
+
+**Context.** Annotation (D058) addresses the recall-fidelity gap by letting agents weight, summarize, and topic-tag prior records. It does not address a distinct gap: when the agent's current position is *incompatible* with a prior claim, annotation comments without overturning, and informed_by acknowledges sources without contradicting them. There is no protocol-level primitive for "I held position X; I now hold not-X because of Z."
+
+A recognized gap in prior approaches is the lack of a protocol-level primitive for explicitly signaling when an agent's position contradicts a prior claim. A revision record should be signed to declare: "P was my prior claim. C is my new claim. Reason for revision: Z." This enables future agents to locate and evaluate changes in stance as first-class graph nodes. Without a normative type, agents either smuggle the contradiction through observation prose (lossy) or skip emitting anything (the silent-override anti-pattern).
+
+The promotion bar (D036) clears for the same reason annotation cleared: any atrib-using agent doing reasoning that involves position changes hits the same shape. The substrate generalizes; agent-specific divergence in semantics is unnecessary.
+
+**Decision.** Promote `https://atrib.dev/v1/types/revision` to the atrib-normative event_type vocabulary, taking byte `0x06` in the §2.3.1 log entry encoding. (D058 took `0x05`; reserved range narrows to `0x07`–`0xFE`.) Add the `revises` optional field to the record format (§1.2.9): `sha256:<64-hex>` reference to the predecessor record this revision supersedes. Validators MUST require `revises` on revision records and MUST reject `revises` on any other event_type. The graph layer derives `REVISES` edges (the ninth edge type) per a new §3.2.4 step 9: for each revision record R carrying `revises: T`, create edge R → T; if T is not in the resolved set, create R → synthetic_dangling_node(T) with `dangling: true`. Multiple revisions of the same target are allowed (a chain of mind-changes).
+
+**Rationale.**
+
+1. **Mind-changes deserve first-class status.** The substrate's "agents that reason from a past they can prove" claim depends on being able to surface contradictions explicitly. Without REVISES, an agent reading back records sees inconsistent positions with no signal that one supersedes the other. Annotation is too weak to carry the semantic.
+
+2. **D058 pattern is reusable verbatim.** Step 9 derivation mirrors Step 8 (ANNOTATES) modulo the field name (`revises` vs `annotates`) and event_type filter. The cascade across spec, mcp, verify, graph-node, log-node, dashboard is mechanical given the D058 precedent.
+
+3. **Distinct semantic from annotation justifies a separate byte.** Conflating revision into annotation would force consumers to inspect content to know whether the new record overturns the old one or merely comments on it. Byte-level distinction keeps queries fast.
+
+4. **No retroactive change to prior records.** Records remain immutable. A revision is a new signed record asserting the prior is no longer held; the prior stays on the log unchanged. This preserves the "atrib certifies what was signed, not what is currently true" invariant.
+
+5. **Multiple revisions of the same target are allowed.** A chain of mind-changes (R1 revises P, R2 revises R1, R3 revises R2) produces a REVISES chain in the graph. Verifiers and recall consumers walk the chain to find the current position; the substrate doesn't normatively prescribe which revision "wins" because that's a downstream policy concern.
+
+**Alternatives considered.**
+
+1. *Use annotation for both commentary and revisions.* Rejected. Conflating commentary (no position change) with revision (position change) loses queryability and forces consumers into per-content parsing.
+
+2. *Add a `revision_of` content field on observation records.* Rejected. Observations are first-class signed events, not commentary about prior records. Reusing observation for this would muddy its semantic and require consumers to filter every observation by content shape to find revisions.
+
+3. *Skip the spec change and rely on agent prose to declare revisions.* Rejected. The whole point of normative promotion is making agent-declared causal links structurally derivable, not parseable-from-content. Without a field, no graph derivation; without graph derivation, no edge for verifiers and recall to query.
+
+**Consequences.**
+
+- *Spec.* §1.2.4 event_type table gains a row for revision (byte 0x06). §1.2.9 added covering the `revises` field. §2.3.1 byte mapping table gains a row, reserved range narrows to 0x07-0xFE. §3.2.3 edge types table gains REVISES (9 types now). §3.2.4 derivation gets Step 9.
+- *@atrib/mcp.* `EVENT_TYPE_REVISION_URI` constant + `EVENT_TYPE_REVISION = 0x06` byte + entry encoder switch case + types.ts `revises` optional field. AtribRecord type extended.
+- *@atrib/verify.* `EventType` union gains `'revision'`. `EdgeType` union gains `'REVISES'`. `graphLabelFromEventTypeUri` switch gains a case.
+- *services/graph-node.* Step 9 derivation in graph-builder.ts.
+- *services/log-node.* Decoder switch + stats counter + endpoint doc + scripts/verify-loop.mjs validEventTypes Set + scripts/metrics.mjs per-byte filter and label.
+- *apps/dashboard.* Indigo chip color for revision + `.chip.event-revision` rule + Event-type chip block-comment refresh.
+- *Tests.* +4 graph-builder tests (resolved, dangling, malformed-on-non-revision, multi-revision). 9-edge regression guard now expects the REVISES leg.
+
+**Reopening criteria.** None expected. The pattern is now extensible to any future link-via-field event_type promotion (e.g., `delegation`, `apply`) following the same cascade with no reopening of D058 or D059.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

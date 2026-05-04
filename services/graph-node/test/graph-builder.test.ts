@@ -25,11 +25,13 @@ async function makeRecord(overrides: Partial<{
   informed_by: string[]
   provenance_token: string
   annotates: string
+  revises: string
 }> = {}) {
   const pk = await getPublicKey(TEST_KEY)
   // JCS sorts keys lexicographically. `annotates` (a) sorts before
   // `chain_root` (c), so when present it must appear earlier in the
-  // object literal we hand to signRecord.
+  // object literal we hand to signRecord. `revises` (r) sorts after
+  // `provenance_token` (p) and before `session_token` (s).
   const record = {
     spec_version: 'atrib/1.0' as const,
     ...(overrides.annotates ? { annotates: overrides.annotates } : {}),
@@ -42,6 +44,7 @@ async function makeRecord(overrides: Partial<{
     signature: '',
     ...(overrides.informed_by ? { informed_by: overrides.informed_by } : {}),
     ...(overrides.provenance_token ? { provenance_token: overrides.provenance_token } : {}),
+    ...(overrides.revises ? { revises: overrides.revises } : {}),
     ...(overrides.session_token ? { session_token: overrides.session_token } : {}),
   }
   return signRecord(record, TEST_KEY)
@@ -510,10 +513,101 @@ describe('buildGraph (section 3.2.4)', () => {
   })
 
   // ───────────────────────────────────────────────────────────────────────
-  // Regression guard: all 8 spec-mandated edge types are reachable
+  // Step 9: REVISES (D059, spec §3.2.4)
   // ───────────────────────────────────────────────────────────────────────
 
-  it('regression: all 8 spec edge types are derivable from a comprehensive fixture', async () => {
+  describe('REVISES edges (D059, §3.2.4 step 9)', () => {
+    it('creates REVISES edge when target record exists in resolved set', async () => {
+      const predecessor = await makeRecord({
+        timestamp: 1000,
+        content_id: `sha256:${'1'.repeat(64)}`,
+      })
+      const predHash = hexEncode(sha256(canonicalRecord(predecessor)))
+      const revision = await makeRecord({
+        event_type: 'https://atrib.dev/v1/types/revision',
+        timestamp: 2000,
+        content_id: `sha256:${'2'.repeat(64)}`,
+        revises: `sha256:${predHash}`,
+      })
+
+      const graph = await buildGraph([predecessor, revision])
+      const reviseEdges = graph.edges.filter((e) => e.type === 'REVISES')
+      expect(reviseEdges).toHaveLength(1)
+      expect(reviseEdges[0]!.source).toBe(`sha256:${hexEncode(sha256(canonicalRecord(revision)))}`)
+      expect(reviseEdges[0]!.target).toBe(`sha256:${predHash}`)
+      expect(reviseEdges[0]!.directed).toBe(true)
+      expect(reviseEdges[0]!.dangling).toBeUndefined()
+    })
+
+    it('creates dangling REVISES edge when target missing', async () => {
+      const revision = await makeRecord({
+        event_type: 'https://atrib.dev/v1/types/revision',
+        timestamp: 1000,
+        revises: `sha256:${'9'.repeat(64)}`,
+      })
+
+      const graph = await buildGraph([revision])
+      const reviseEdges = graph.edges.filter((e) => e.type === 'REVISES')
+      expect(reviseEdges).toHaveLength(1)
+      expect(reviseEdges[0]!.dangling).toBe(true)
+      expect(reviseEdges[0]!.target).toMatch(/^dangling:sha256:9{64}$/)
+    })
+
+    it('does NOT derive REVISES from non-revision records carrying revises field', async () => {
+      // Validators MUST reject `revises` on any event_type other than
+      // revision (per §1.2.9). Defensive guard against malformed records.
+      const target = await makeRecord({
+        timestamp: 1000,
+        content_id: `sha256:${'a'.repeat(64)}`,
+      })
+      const targetHash = hexEncode(sha256(canonicalRecord(target)))
+      const malformed = await makeRecord({
+        event_type: 'https://atrib.dev/v1/types/observation', // NOT revision
+        timestamp: 2000,
+        content_id: `sha256:${'b'.repeat(64)}`,
+        revises: `sha256:${targetHash}`, // illegal on non-revision
+      })
+
+      const graph = await buildGraph([target, malformed])
+      const reviseEdges = graph.edges.filter((e) => e.type === 'REVISES')
+      expect(reviseEdges).toHaveLength(0)
+    })
+
+    it('multiple revisions of the same target produce a chain of edges', async () => {
+      // A chain of mind-changes: P, then R1 revises P, then R2 revises R1.
+      // The graph surfaces all of them; downstream consumers walk the chain.
+      const p = await makeRecord({
+        timestamp: 1000,
+        content_id: `sha256:${'1'.repeat(64)}`,
+      })
+      const pHash = hexEncode(sha256(canonicalRecord(p)))
+      const r1 = await makeRecord({
+        event_type: 'https://atrib.dev/v1/types/revision',
+        timestamp: 2000,
+        content_id: `sha256:${'2'.repeat(64)}`,
+        revises: `sha256:${pHash}`,
+      })
+      const r1Hash = hexEncode(sha256(canonicalRecord(r1)))
+      const r2 = await makeRecord({
+        event_type: 'https://atrib.dev/v1/types/revision',
+        timestamp: 3000,
+        content_id: `sha256:${'3'.repeat(64)}`,
+        revises: `sha256:${r1Hash}`,
+      })
+
+      const graph = await buildGraph([p, r1, r2])
+      const reviseEdges = graph.edges.filter((e) => e.type === 'REVISES')
+      expect(reviseEdges).toHaveLength(2)
+      const targets = reviseEdges.map((e) => e.target).sort()
+      expect(targets).toEqual([`sha256:${pHash}`, `sha256:${r1Hash}`].sort())
+    })
+  })
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Regression guard: all 9 spec-mandated edge types are reachable
+  // ───────────────────────────────────────────────────────────────────────
+
+  it('regression: all 9 spec edge types are derivable from a comprehensive fixture', async () => {
     // Constructs a fixture that exercises every step of §3.2.4. If any step
     // ever silently regresses to "implementation missing," this test fails.
     // The two cross-session edges (CROSS_SESSION via shared session_token,
@@ -580,7 +674,16 @@ describe('buildGraph (section 3.2.4)', () => {
       annotates: `sha256:${txAHash}`,
     })
 
-    const graph = await buildGraph([txA, toolA1, toolA2, toolB, toolB2, toolB3, genB, annotation])
+    // Revision of toolA1 exercises Step 9 (REVISES, D059).
+    const revision = await makeRecord({
+      context_id: 'f'.repeat(32),
+      event_type: 'https://atrib.dev/v1/types/revision',
+      timestamp: 6000,
+      content_id: `sha256:${'9'.repeat(64)}`,
+      revises: `sha256:${toolA1Hash}`,
+    })
+
+    const graph = await buildGraph([txA, toolA1, toolA2, toolB, toolB2, toolB3, genB, annotation, revision])
 
     const present = new Set(graph.edges.map((e) => e.type))
     const expected: Array<typeof graph.edges[number]['type']> = [
@@ -592,10 +695,11 @@ describe('buildGraph (section 3.2.4)', () => {
       'INFORMED_BY',
       'PROVENANCE_OF',
       'ANNOTATES',
+      'REVISES',
     ]
     for (const type of expected) {
       expect(present.has(type), `missing edge type: ${type}`).toBe(true)
     }
-    expect(present.size).toBe(8) // exactly the 8 spec types, no others
+    expect(present.size).toBe(9) // exactly the 9 spec types, no others
   })
 })

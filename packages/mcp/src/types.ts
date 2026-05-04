@@ -25,6 +25,17 @@ export type AtribRecord = {
    */
   annotates?: string
   /**
+   * Optional reference to the record this revision supersedes (D059 / spec
+   * §1.2.9). Required when event_type is the atrib-normative revision URI
+   * and rejected on any other event_type per validators. Format
+   * `sha256:<64-hex>`. The current record asserts a position incompatible
+   * with the prior one; not a content edit (records are immutable) but a
+   * forward-pointing claim that future-self should weight this over the
+   * referenced predecessor. JCS-canonical form sorts the field after
+   * `provenance_token` and before `session_token` (p < r < s).
+   */
+  revises?: string
+  /**
    * Optional cross-record reference list (D041 / spec §1.2.7). Each entry
    * is the `sha256:<64-hex>` record_hash of a prior record this one was
    * informed by. JCS-canonical form sorts the field lexicographically
@@ -82,6 +93,15 @@ export const EVENT_TYPE_DIRECTORY_ANCHOR_URI = 'https://atrib.dev/v1/types/direc
 // edges from it. Dual of informed_by (forward-pointing rather than backward-
 // pointing).
 export const EVENT_TYPE_ANNOTATION_URI = 'https://atrib.dev/v1/types/annotation'
+// Promoted by D059 (2026-05-04); contradiction-handling primitive per spec
+// §1.2.9 + §3.2.4 step 9. A revision is a signed claim that supersedes a
+// prior record via the `revises` field; verifiers derive REVISES graph
+// edges from it. Distinct from annotation (which weights/comments) and from
+// informed_by (which acknowledges sources): revision says "I now hold a
+// position incompatible with that prior claim." The prior record stays
+// immutable on the log; the revision is a new record that future-self
+// should weight as the current position.
+export const EVENT_TYPE_REVISION_URI = 'https://atrib.dev/v1/types/revision'
 
 /** Atrib normative event_type URI set (spec 1.2.4). */
 export const NORMATIVE_EVENT_TYPE_URIS = new Set([
@@ -90,6 +110,7 @@ export const NORMATIVE_EVENT_TYPE_URIS = new Set([
   EVENT_TYPE_OBSERVATION_URI,
   EVENT_TYPE_DIRECTORY_ANCHOR_URI,
   EVENT_TYPE_ANNOTATION_URI,
+  EVENT_TYPE_REVISION_URI,
 ] as const)
 
 /**
