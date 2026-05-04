@@ -198,8 +198,8 @@ importers:
   packages/mcp-wrap:
     dependencies:
       '@atrib/mcp':
-        specifier: file:../mcp
-        version: file:packages/mcp(zod@3.25.76)
+        specifier: workspace:*
+        version: link:../mcp
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@3.25.76)
@@ -373,9 +373,6 @@ importers:
         version: 3.2.4(@types/node@25.6.0)(tsx@4.21.0)
 
 packages:
-
-  '@atrib/mcp@file:packages/mcp':
-    resolution: {directory: packages/mcp, type: directory}
 
   '@esbuild/aix-ppc64@0.27.7':
     resolution: {integrity: sha512-EKX3Qwmhz1eMdEJokhALr0YiD0lhQNwDqkPYyPhiSwKrh7/4KRjQc04sZ8db+5DVVnZ1LmbNDI1uAMPEUBnQPg==}
@@ -1689,17 +1686,6 @@ packages:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
 snapshots:
-
-  '@atrib/mcp@file:packages/mcp(zod@3.25.76)':
-    dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
-      '@noble/ed25519': 2.3.0
-      '@noble/hashes': 2.2.0
-      canonicalize: 2.1.0
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - supports-color
-      - zod
 
   '@esbuild/aix-ppc64@0.27.7':
     optional: true
