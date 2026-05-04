@@ -1,5 +1,12 @@
 # @atrib/graph-node
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [edf710f]
+  - @atrib/verify@0.1.2
+
 ## 0.1.1
 
 ### Patch Changes
