@@ -119,10 +119,13 @@ Per §5.8 degradation contract: nothing in `atrib-emit` throws to the agent. Mis
 When `context_id` is omitted, atrib-emit reads the wrapper's local mirror under `~/.atrib/records/` (override with `ATRIB_AUTOCHAIN_SOURCE`) and inherits the most-recent record's `context_id`, chaining its own emit on top of that record's hash. This is the cognitive-feedback-loop convention: explicit observations, annotations, and revisions chain seamlessly with the agent's mechanical tool calls in the same session, and a verifier sees one coherent chain per `context_id`.
 
 Resolution order:
-1. Caller supplies BOTH `context_id` AND `chain_root` → use both verbatim. Path used by consumers managing chain state themselves (e.g. nightly watcher pipelines that emit a sequence of records under one context_id and thread `chain_root` across records).
-2. Caller supplies `context_id` only → genesis chain_root for that id (fresh chain).
-3. Wrapper mirror present (no `context_id`) → inherit its most-recent record's `context_id`, chain on top.
-4. No mirror, no `context_id` → fresh genesis with random 16-byte context_id.
+When the caller supplies both `context_id` and `chain_root`, atrib-emit uses both verbatim. This path is used by consumers that manage chain state themselves, such as nightly observation pipelines emitting a sequence of records under one context_id with explicit chain_root threading.
+
+When the caller supplies only `context_id`, atrib-emit synthesizes a genesis `chain_root` for that context_id, initiating a fresh chain.
+
+When no `context_id` is supplied but a wrapper mirror is present, atrib-emit inherits the most recent record's `context_id` and chains on top.
+
+When neither `context_id` nor a wrapper mirror is present, atrib-emit generates a fresh genesis with a random 16-byte context_id.
 
 Both line shapes are accepted at read time: bare `AtribRecord` (the wrapper's convention) and `{record, proof, written_at}` envelope (atrib-emit's storage convention). When inheritance fires, the response's `warnings` array carries `inherited context_id from wrapper mirror: <id>` so the agent can confirm the session it landed in.
 

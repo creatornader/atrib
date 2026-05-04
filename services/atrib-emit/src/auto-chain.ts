@@ -44,17 +44,19 @@ export interface ChainContext {
 /**
  * Decide what context_id + chain_root the next emit record should use.
  *
- * Resolution order:
- *   1. Caller supplies BOTH context_id AND chain_root → use both verbatim
- *      (inheritedFrom: 'caller-supplied'). For consumers that manage chain
- *      state themselves (e.g. nightly watcher pipelines emitting a sequence
- *      of records under one context_id, where chain_root threading is owned
- *      by the caller, not by atrib-emit's mirror).
- *   2. Caller supplies context_id only → genesis with that context_id
- *      (chain_root = genesisChainRoot(context_id), inheritedFrom: 'fresh').
- *   3. Caller supplies neither → most-recent record in the wrapper's mirror
- *      file (when present) inherits both fields. Falls back to a fresh
- *      genesis context_id when no mirror is available.
+ * When the caller supplies both context_id and chain_root, atrib-emit
+ * uses them verbatim (inheritedFrom: 'caller-supplied'). This path is
+ * used by consumers that manage chain state themselves, such as nightly
+ * observation pipelines emitting a sequence of records under one
+ * context_id with explicit chain_root threading.
+ *
+ * When the caller supplies only context_id, atrib-emit generates a
+ * genesis record for that context_id (chain_root = genesisChainRoot(
+ * context_id), inheritedFrom: 'fresh').
+ *
+ * When the caller supplies neither, atrib-emit inherits both fields
+ * from the most recent record in the wrapper's mirror file. If no
+ * mirror is available, it falls back to a fresh genesis context_id.
  *
  * Caller passes a chainRootForCallerContext callback that knows how to
  * compute the genesis chain_root for a given context_id (we accept it as
