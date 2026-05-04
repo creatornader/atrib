@@ -275,3 +275,226 @@ describe('verifyRecord, posture (timestamp_granularity)', () => {
     }
   })
 })
+
+describe('verifyRecord, capability_check (D051 / §6.7)', () => {
+  it('omits the annotation when no identityClaim is supplied', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed)
+
+    const result = await verifyRecord(record)
+
+    expect(result.capability_check).toBeUndefined()
+  })
+
+  it('reports trivially in-envelope when the claim has no capabilities field', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed)
+
+    const result = await verifyRecord(record, { identityClaim: { creator_key: record.creator_key } })
+
+    expect(result.capability_check).toBeDefined()
+    expect(result.capability_check!.envelope).toBeNull()
+    expect(result.capability_check!.in_envelope).toBe(true)
+    expect(result.capability_check!.mismatches).toEqual([])
+    expect(result.capability_check!.unresolvable).toBe(false)
+  })
+
+  it('reports trivially in-envelope when the envelope is empty ({})', async () => {
+    // Per §6.7.1: "A claim with `capabilities: {}` declares no scope."
+    const seed = await freshKey()
+    const record = await buildRecord(seed)
+
+    const result = await verifyRecord(record, {
+      identityClaim: { creator_key: record.creator_key, capabilities: {} },
+    })
+
+    expect(result.capability_check!.envelope).toBeNull()
+    expect(result.capability_check!.in_envelope).toBe(true)
+    expect(result.capability_check!.mismatches).toEqual([])
+  })
+
+  it('confirms in_envelope when the record event_type is in the allowlist', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed) // event_type = observation
+
+    const result = await verifyRecord(record, {
+      identityClaim: {
+        creator_key: record.creator_key,
+        capabilities: {
+          event_types: [
+            'https://atrib.dev/v1/types/observation',
+            'https://atrib.dev/v1/types/tool_call',
+          ],
+        },
+      },
+    })
+
+    expect(result.capability_check!.in_envelope).toBe(true)
+    expect(result.capability_check!.mismatches).toEqual([])
+    expect(result.capability_check!.unresolvable).toBe(false)
+  })
+
+  it('flags a mismatch when the record event_type is not in the allowlist', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed) // observation
+
+    const result = await verifyRecord(record, {
+      identityClaim: {
+        creator_key: record.creator_key,
+        capabilities: { event_types: ['https://atrib.dev/v1/types/tool_call'] },
+      },
+    })
+
+    expect(result.capability_check!.in_envelope).toBe(false)
+    expect(result.capability_check!.mismatches.some((m) => m.includes('event_type'))).toBe(true)
+    // §6.7.3: out-of-envelope is a SIGNAL, not invalidation. signature still ok.
+    expect(result.signatureOk).toBe(true)
+    expect(result.warnings).toEqual([])
+    expect(result.valid).toBe(true)
+  })
+
+  it('confirms in_envelope when expires_at is in the future', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, { timestamp: 1_000_000_000_000 })
+
+    const result = await verifyRecord(record, {
+      identityClaim: {
+        creator_key: record.creator_key,
+        capabilities: { expires_at: 2_000_000_000_000 },
+      },
+    })
+
+    expect(result.capability_check!.in_envelope).toBe(true)
+    expect(result.capability_check!.mismatches).toEqual([])
+  })
+
+  it('flags expires_at exceeded when record timestamp is past the cutoff', async () => {
+    // Both timestamps must be in the past (signRecord rejects >5 min in the
+    // future per spec §5.3.5 staleness check). The cutoff is older than the
+    // record, so the envelope has already expired by the time the record signs.
+    const seed = await freshKey()
+    const record = await buildRecord(seed, { timestamp: 1_500_000_000_000 })
+
+    const result = await verifyRecord(record, {
+      identityClaim: {
+        creator_key: record.creator_key,
+        capabilities: { expires_at: 1_000_000_000_000 },
+      },
+    })
+
+    expect(result.capability_check!.in_envelope).toBe(false)
+    expect(result.capability_check!.mismatches.some((m) => m.includes('expired'))).toBe(true)
+    // expiry is a signal, not invalidation. signature still ok.
+    expect(result.warnings).toEqual([])
+    expect(result.valid).toBe(true)
+  })
+
+  it('marks unresolvable when tool_names allowlist applies to a tool_call record', async () => {
+    // §6.7.2 step 2: tool_names requires the record's tool_name. The current
+    // AtribRecord shape doesn't carry tool_name (per §8.2 default posture
+    // only content_id is present), so we mark unresolvable.
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/tool_call',
+    })
+
+    const result = await verifyRecord(record, {
+      identityClaim: {
+        creator_key: record.creator_key,
+        capabilities: { tool_names: ['allowed_tool'] },
+      },
+    })
+
+    expect(result.capability_check!.unresolvable).toBe(true)
+    expect(result.capability_check!.in_envelope).toBe(true) // mismatches empty
+  })
+
+  it('does not flag tool_names unresolvable for non-tool_call records', async () => {
+    // Per §6.7.2 step 2 the tool_names constraint applies only to tool_call.
+    // For an observation record, the tool_names list is irrelevant.
+    const seed = await freshKey()
+    const record = await buildRecord(seed) // observation
+
+    const result = await verifyRecord(record, {
+      identityClaim: {
+        creator_key: record.creator_key,
+        capabilities: { tool_names: ['allowed_tool'] },
+      },
+    })
+
+    expect(result.capability_check!.unresolvable).toBe(false)
+    expect(result.capability_check!.in_envelope).toBe(true)
+  })
+
+  it('marks unresolvable when transaction record has max_amount constraint', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/transaction',
+    })
+
+    const result = await verifyRecord(record, {
+      identityClaim: {
+        creator_key: record.creator_key,
+        capabilities: { max_amount: { currency: 'USD', value: 100 } },
+      },
+    })
+
+    expect(result.capability_check!.unresolvable).toBe(true)
+  })
+
+  it('marks unresolvable when transaction record has counterparties constraint', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/transaction',
+    })
+
+    const result = await verifyRecord(record, {
+      identityClaim: {
+        creator_key: record.creator_key,
+        capabilities: { counterparties: ['vendor.example'] },
+      },
+    })
+
+    expect(result.capability_check!.unresolvable).toBe(true)
+  })
+
+  it('combines event_types mismatch and expires_at mismatch into the same mismatches list', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      timestamp: 1_500_000_000_000,
+      event_type: 'https://atrib.dev/v1/types/observation',
+    })
+
+    const result = await verifyRecord(record, {
+      identityClaim: {
+        creator_key: record.creator_key,
+        capabilities: {
+          event_types: ['https://atrib.dev/v1/types/tool_call'],
+          expires_at: 1_000_000_000_000,
+        },
+      },
+    })
+
+    expect(result.capability_check!.in_envelope).toBe(false)
+    expect(result.capability_check!.mismatches.length).toBe(2)
+    expect(result.capability_check!.mismatches.some((m) => m.includes('event_type'))).toBe(true)
+    expect(result.capability_check!.mismatches.some((m) => m.includes('expired'))).toBe(true)
+  })
+
+  it('preserves the envelope object on the result for consumer inspection', async () => {
+    // Round-trip the envelope so consumers can read the constraint fields
+    // back without re-fetching the claim.
+    const seed = await freshKey()
+    const record = await buildRecord(seed)
+    const envelope = {
+      event_types: ['https://atrib.dev/v1/types/observation'],
+      expires_at: 9_999_999_999_999,
+    }
+
+    const result = await verifyRecord(record, {
+      identityClaim: { creator_key: record.creator_key, capabilities: envelope },
+    })
+
+    expect(result.capability_check!.envelope).toEqual(envelope)
+  })
+})
