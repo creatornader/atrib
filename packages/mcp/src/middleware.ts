@@ -16,6 +16,7 @@ import { readInboundContext, writeOutboundContext, parseBaggageAtribSession } fr
 import { signRecord, getPublicKey } from './signing.js'
 import { hexEncode, sha256 } from './hash.js'
 import { canonicalRecord } from './canon.js'
+import { encodeToken } from './token.js'
 import { createSubmissionQueue } from './submission.js'
 import { zeroize } from './zeroize.js'
 import {
@@ -24,6 +25,46 @@ import {
 } from './types.js'
 import type { AtribRecord } from './types.js'
 import type { SubmissionQueue, ProofBundle } from './submission.js'
+
+/** Context passed to a {@link PreCallTransform} callback. */
+export interface PreCallTransformContext {
+  /** MCP tool name (params.name), e.g. "post_context". */
+  toolName: string
+  /** Arguments the upstream handler will see. The host returns a replacement object to mutate. */
+  args: Record<string, unknown>
+  /**
+   * §1.5.2 propagation token for the record about to be emitted:
+   * `base64url(record_hash) + "." + base64url(creator_key)`. Self-contained
+   * reference to the (about-to-be-signed) record. Useful for embedding into
+   * the upstream tool's own data so cross-tool consumers can derive a causal
+   * edge back to the signed record.
+   */
+  receiptId: string
+  /** Canonical record_hash reference: `sha256:<64-hex>`. Same value the host would receive in `informed_by`. */
+  recordHash: string
+  /** Per-call context_id (32 hex chars). Stable across calls in the same session under autoChain. */
+  contextId: string
+}
+
+/**
+ * Pre-call transform callback. When set on {@link AtribOptions}, atrib signs
+ * the record BEFORE forwarding to the upstream handler so the host can embed
+ * the resulting receipt_id (or record_hash) into the upstream call's args.
+ *
+ * Returning a new args object replaces `request.params.arguments` for the
+ * upstream call. Returning `undefined` (or the same args reference) leaves
+ * arguments unchanged. Errors thrown from the callback are caught; the
+ * middleware then falls back to the standard post-call signing path so the
+ * tool call itself never fails because of attribution (§5.8).
+ *
+ * Use case: cross-tool causal embedding. e.g., a wrapper around an MCP server
+ * that writes rows to a database can use this to write the atrib receipt_id
+ * into the row at insert time, letting downstream consumers anchor their own
+ * `informed_by` references to the row's atrib record.
+ */
+export type PreCallTransform = (
+  ctx: PreCallTransformContext,
+) => Record<string, unknown> | undefined
 
 /** Options for the atrib() middleware (§5.3.1). */
 export interface AtribOptions {
@@ -105,6 +146,18 @@ export interface AtribOptions {
    * provenance claim, not a heuristic.
    */
   informedBy?: (params: Record<string, unknown>) => string[] | undefined
+  /**
+   * Optional pre-call transform. When set, atrib signs the record BEFORE
+   * forwarding to the upstream handler so the host can embed the resulting
+   * receipt_id into the upstream call's args. See {@link PreCallTransform}.
+   *
+   * When unset, signing happens AFTER the upstream returns (the default,
+   * spec-aligned with §5.3 latency contract: attribution must not block the
+   * tool's response shape). preCallTransform is opt-in because pre-call
+   * signing trades a small latency penalty (one signature on the critical
+   * path) for the ability to causally embed records into downstream data.
+   */
+  preCallTransform?: PreCallTransform
 }
 
 /** Extended McpServer with atrib-specific methods. */
@@ -283,6 +336,171 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     underlyingServer,
   )
 
+  /**
+   * Result of building + signing a record from a tools/call request. Captured
+   * once so pre-call and post-call branches share the same outputs.
+   */
+  interface BuiltRecord {
+    signed: AtribRecord
+    /** Hex-encoded record_hash WITHOUT "sha256:" prefix. */
+    recordHashHex: string
+    contextId: string
+    sessionToken: string | undefined
+    inboundTraceparent: unknown
+    eventType: string
+  }
+
+  /**
+   * Build + sign an attribution record from a tools/call request. Pure
+   * function over (request, closure-scoped key + options) — no side effects.
+   * autoChain bookkeeping, onRecord, writeOutboundContext, and queue.submit
+   * are intentionally NOT performed here; the caller decides when to commit
+   * those (post-success only).
+   */
+  const buildSignedRecord = async (
+    request: Record<string, unknown>,
+  ): Promise<BuiltRecord> => {
+    // §5.3.2: Read inbound context
+    const params = request.params as Record<string, unknown>
+    const inbound = readInboundContext(params)
+
+    // Extract context_id
+    const meta = params._meta as Record<string, unknown> | undefined
+    let contextId = inbound?.contextId
+    if (!contextId && meta?.traceparent && typeof meta.traceparent === 'string') {
+      const parts = meta.traceparent.split('-')
+      const traceId = parts[1]
+      if (traceId && /^[0-9a-f]{32}$/.test(traceId)) {
+        contextId = traceId
+      }
+    }
+    if (!contextId) {
+      if (autoChain) {
+        // Stable across the wrapper process's lifetime so successive
+        // calls share a trace. Without this, autoChain has no effect
+        // because every call would land in its own context_id bucket.
+        if (!stableContextId) {
+          const bytes = new Uint8Array(16)
+          crypto.getRandomValues(bytes)
+          stableContextId = hexEncode(bytes)
+        }
+        contextId = stableContextId
+      } else {
+        const bytes = new Uint8Array(16)
+        crypto.getRandomValues(bytes)
+        contextId = hexEncode(bytes)
+      }
+    }
+
+    // session_token can come from inbound context or directly from baggage
+    let sessionToken = inbound?.sessionToken
+    if (!sessionToken && meta?.baggage && typeof meta.baggage === 'string') {
+      sessionToken = parseBaggageAtribSession(meta.baggage)
+    }
+
+    // Forward traceparent to outbound _meta (§1.5.4)
+    const inboundTraceparent = meta?.traceparent
+
+    // Determine chain_root.
+    // 1. Prefer explicit inbound atrib propagation (the spec-canonical path).
+    // 2. With autoChain on, fall back to the most recent record this
+    //    middleware instance signed for this context_id. This synthesizes
+    //    chains for hosts that don't propagate atrib's outbound token.
+    // 3. Otherwise, genesis.
+    let chainRootValue: string
+    if (inbound) {
+      chainRootValue = `sha256:${hexEncode(inbound.recordHash)}`
+    } else if (autoChain && lastRecordHashByContext.has(contextId)) {
+      chainRootValue = `sha256:${lastRecordHashByContext.get(contextId)!}`
+    } else {
+      chainRootValue = genesisChainRoot(contextId)
+    }
+
+    // Determine event_type URI (spec 1.2.4)
+    const toolName = (params.name as string) ?? ''
+    const eventType = transactionTools.has(toolName)
+      ? EVENT_TYPE_TRANSACTION_URI
+      : EVENT_TYPE_TOOL_CALL_URI
+
+    // Construct the record
+    const contentId = computeContentId(serverUrl, toolName)
+    // informedBy callback (D041 / §1.2.7): host declares which prior
+    // records influenced this call. Wrapped in try/catch so a faulty
+    // callback never blocks signing — per §5.8 attribution must degrade
+    // silently. Empty/undefined result omits the field entirely
+    // (presence affects the JCS canonical form, so omission is normal).
+    let informedByList: string[] | undefined
+    if (options.informedBy) {
+      try {
+        const informed = options.informedBy(params)
+        if (Array.isArray(informed) && informed.length > 0) informedByList = informed
+      } catch (e) {
+        console.warn('atrib: informedBy callback threw', e)
+      }
+    }
+    const record: AtribRecord = {
+      spec_version: 'atrib/1.0',
+      content_id: contentId,
+      creator_key: publicKeyB64!,
+      chain_root: chainRootValue,
+      event_type: eventType,
+      context_id: contextId,
+      timestamp: Date.now(),
+      signature: '',
+      ...(informedByList ? { informed_by: informedByList } : {}),
+      ...(sessionToken ? { session_token: sessionToken } : {}),
+    } as AtribRecord
+
+    // §1.4.2: Sign the record
+    const signed = await signRecord(record, privateKey)
+    const recordHashHex = hexEncode(sha256(canonicalRecord(signed)))
+
+    return { signed, recordHashHex, contextId, sessionToken, inboundTraceparent, eventType }
+  }
+
+  /**
+   * Commit a built record: run the onRecord observer, attach outbound
+   * context to the result, queue for log submission, update autoChain
+   * bookkeeping. Called only on successful tool calls (after the upstream
+   * returned and isError is not true).
+   */
+  const commitRecord = (built: BuiltRecord, resultObj: Record<string, unknown>): void => {
+    // autoChain bookkeeping: remember this record's hash so the next
+    // call in the same context_id chains to it. Deferred to commit time so
+    // failed/aborted calls don't poison the chain.
+    if (autoChain) {
+      lastRecordHashByContext.set(built.contextId, built.recordHashHex)
+    }
+
+    // Optional onRecord observer (post-sign, pre-submit). Errors are
+    // swallowed per §5.8 — observation must never affect the tool call.
+    if (options.onRecord) {
+      try {
+        const r = options.onRecord(built.signed)
+        if (r && typeof (r as Promise<void>).then === 'function') {
+          ;(r as Promise<void>).catch((e) =>
+            console.warn('atrib: onRecord observer rejected', e),
+          )
+        }
+      } catch (e) {
+        console.warn('atrib: onRecord observer threw', e)
+      }
+    }
+
+    // §5.3.4: Write outbound context (includes traceparent, baggage, X-Atrib-Chain)
+    writeOutboundContext(resultObj, built.signed, {
+      traceparent:
+        typeof built.inboundTraceparent === 'string' ? built.inboundTraceparent : undefined,
+      sessionToken: built.sessionToken,
+    })
+
+    // 5.3.5: Non-blocking log submission. Transaction records (1.7 commerce hooks)
+    // are admitted at high priority so they are not delayed behind tool_call backlog.
+    const priority: 'high' | 'normal' =
+      built.eventType === EVENT_TYPE_TRANSACTION_URI ? 'high' : 'normal'
+    queue.submit(built.signed, priority)
+  }
+
   // The attribution wrapper. Extracted so we can apply it both to newly-
   // registered handlers (via the setRequestHandler patch) AND retroactively
   // to a handler that was already installed before atrib() was called.
@@ -299,7 +517,39 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     handler: (request: Record<string, unknown>, extra: unknown) => Promise<unknown>,
   ) => {
     return async (request: Record<string, unknown>, extra: unknown) => {
-      // Call the original handler FIRST, outside the try block for attribution.
+      // Pre-call signing branch: only when host opted in via preCallTransform.
+      // Signs the record BEFORE forwarding so the host can embed the
+      // receipt_id into the upstream args (cross-tool causal embedding).
+      // Errors here degrade silently to the standard post-call path.
+      let preBuilt: BuiltRecord | undefined
+      if (options.preCallTransform && !destroyed) {
+        try {
+          await publicKeyReady
+          const built = await buildSignedRecord(request)
+          const params = request.params as Record<string, unknown>
+          const args =
+            (params.arguments as Record<string, unknown> | undefined) ?? {}
+          const receiptId = encodeToken(built.signed)
+          const transformed = options.preCallTransform({
+            toolName: (params.name as string) ?? '',
+            args,
+            receiptId,
+            recordHash: `sha256:${built.recordHashHex}`,
+            contextId: built.contextId,
+          })
+          if (transformed && transformed !== args) {
+            params.arguments = transformed
+          }
+          preBuilt = built
+        } catch (err) {
+          // §5.8: pre-call signing must never block the tool call. Drop the
+          // pre-built record (if any) and fall through to the standard path.
+          console.warn('atrib: preCallTransform pre-sign failed, falling back to post-call', err)
+          preBuilt = undefined
+        }
+      }
+
+      // Call the upstream handler.
       // §5.8: If the handler itself throws, that's the tool's error. let it propagate.
       const result = await handler(request, extra)
 
@@ -309,142 +559,23 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
           return result
         }
 
-        await publicKeyReady
-
-        // §5.3.3: Only emit for successful calls (isError: false)
+        // §5.3.3: Only emit for successful calls (isError: false). On error,
+        // the pre-built record (if any) is discarded — its receipt_id may
+        // have been written into upstream args, but the row (or whatever the
+        // upstream did) is not represented by a logged record.
         const resultObj = result as Record<string, unknown>
         if (resultObj.isError === true) {
           return result
         }
 
-        // §5.3.2: Read inbound context
-        const params = request.params as Record<string, unknown>
-        const inbound = readInboundContext(params)
+        // Reuse the pre-built record from the preCallTransform branch when
+        // present; otherwise build + sign now (the standard post-call path).
+        const built = preBuilt ?? (await (async () => {
+          await publicKeyReady
+          return buildSignedRecord(request)
+        })())
 
-        // Extract context_id
-        const meta = params._meta as Record<string, unknown> | undefined
-        let contextId = inbound?.contextId
-        if (!contextId && meta?.traceparent && typeof meta.traceparent === 'string') {
-          const parts = meta.traceparent.split('-')
-          const traceId = parts[1]
-          if (traceId && /^[0-9a-f]{32}$/.test(traceId)) {
-            contextId = traceId
-          }
-        }
-        if (!contextId) {
-          if (autoChain) {
-            // Stable across the wrapper process's lifetime so successive
-            // calls share a trace. Without this, autoChain has no effect
-            // because every call would land in its own context_id bucket.
-            if (!stableContextId) {
-              const bytes = new Uint8Array(16)
-              crypto.getRandomValues(bytes)
-              stableContextId = hexEncode(bytes)
-            }
-            contextId = stableContextId
-          } else {
-            const bytes = new Uint8Array(16)
-            crypto.getRandomValues(bytes)
-            contextId = hexEncode(bytes)
-          }
-        }
-
-        // session_token can come from inbound context or directly from baggage
-        let sessionToken = inbound?.sessionToken
-        if (!sessionToken && meta?.baggage && typeof meta.baggage === 'string') {
-          sessionToken = parseBaggageAtribSession(meta.baggage)
-        }
-
-        // Forward traceparent to outbound _meta (§1.5.4)
-        const inboundTraceparent = meta?.traceparent
-
-        // Determine chain_root.
-        // 1. Prefer explicit inbound atrib propagation (the spec-canonical path).
-        // 2. With autoChain on, fall back to the most recent record this
-        //    middleware instance signed for this context_id. This synthesizes
-        //    chains for hosts that don't propagate atrib's outbound token.
-        // 3. Otherwise, genesis.
-        let chainRootValue: string
-        if (inbound) {
-          chainRootValue = `sha256:${hexEncode(inbound.recordHash)}`
-        } else if (autoChain && lastRecordHashByContext.has(contextId)) {
-          chainRootValue = `sha256:${lastRecordHashByContext.get(contextId)!}`
-        } else {
-          chainRootValue = genesisChainRoot(contextId)
-        }
-
-        // Determine event_type URI (spec 1.2.4)
-        const toolName = (params.name as string) ?? ''
-        const eventType = transactionTools.has(toolName)
-          ? EVENT_TYPE_TRANSACTION_URI
-          : EVENT_TYPE_TOOL_CALL_URI
-
-        // Construct the record
-        const contentId = computeContentId(serverUrl, toolName)
-        // informedBy callback (D041 / §1.2.7): host declares which prior
-        // records influenced this call. Wrapped in try/catch so a faulty
-        // callback never blocks signing — per §5.8 attribution must degrade
-        // silently. Empty/undefined result omits the field entirely
-        // (presence affects the JCS canonical form, so omission is normal).
-        let informedByList: string[] | undefined
-        if (options.informedBy) {
-          try {
-            const result = options.informedBy(params as Record<string, unknown>)
-            if (Array.isArray(result) && result.length > 0) informedByList = result
-          } catch (e) {
-            console.warn('atrib: informedBy callback threw', e)
-          }
-        }
-        const record: AtribRecord = {
-          spec_version: 'atrib/1.0',
-          content_id: contentId,
-          creator_key: publicKeyB64!,
-          chain_root: chainRootValue,
-          event_type: eventType,
-          context_id: contextId,
-          timestamp: Date.now(),
-          signature: '',
-          ...(informedByList ? { informed_by: informedByList } : {}),
-          ...(sessionToken ? { session_token: sessionToken } : {}),
-        } as AtribRecord
-
-        // §1.4.2: Sign the record
-        const signed = await signRecord(record, privateKey)
-
-        // autoChain bookkeeping: remember this record's hash so the next
-        // call in the same context_id chains to it. Computed AFTER signing
-        // so the hash matches what the log will see.
-        if (autoChain) {
-          const newHash = hexEncode(sha256(canonicalRecord(signed)))
-          lastRecordHashByContext.set(contextId, newHash)
-        }
-
-        // Optional onRecord observer (post-sign, pre-submit). Errors are
-        // swallowed per §5.8 — observation must never affect the tool call.
-        if (options.onRecord) {
-          try {
-            const r = options.onRecord(signed)
-            if (r && typeof (r as Promise<void>).then === 'function') {
-              ;(r as Promise<void>).catch((e) =>
-                console.warn('atrib: onRecord observer rejected', e),
-              )
-            }
-          } catch (e) {
-            console.warn('atrib: onRecord observer threw', e)
-          }
-        }
-
-        // §5.3.4: Write outbound context (includes traceparent, baggage, X-Atrib-Chain)
-        writeOutboundContext(resultObj, signed, {
-          traceparent: typeof inboundTraceparent === 'string' ? inboundTraceparent : undefined,
-          sessionToken,
-        })
-
-        // 5.3.5: Non-blocking log submission. Transaction records (1.7 commerce hooks)
-        // are admitted at high priority so they are not delayed behind tool_call backlog.
-        const priority: 'high' | 'normal' =
-          eventType === EVENT_TYPE_TRANSACTION_URI ? 'high' : 'normal'
-        queue.submit(signed, priority)
+        commitRecord(built, resultObj)
 
         return result
       } catch (err) {
