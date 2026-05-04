@@ -69,7 +69,14 @@ description = "atrib protocol field names, never credentials"
 regexes = [
   '''(creator_key|revoked_key|successor_key|lookup_for_key|signing_key|signature|chain_root|content_id|record_hash|provenance_token|session_token)''',
 ]
-regexTarget = "match"
+# regexTarget = "line" matches the entire flagged line. The atrib protocol
+# field names appear as JSON keys NEXT TO their high-entropy values, not
+# inside the secret value itself, so matching the line (which contains
+# both `"creator_key": "..."` and the value) is the correct target.
+# regexTarget = "match" matches only the secret value (no field name
+# present) and silently suppresses nothing, observed 2026-05-04 in CI
+# with gitleaks 8.24.3 vs local 8.30.x.
+regexTarget = "line"
 
 # ── Op note ───────────────────────────────────────────────────────────────
 # If gitleaks DOES flag something not in these allowlists, that IS worth
