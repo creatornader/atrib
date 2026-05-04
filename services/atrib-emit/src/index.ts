@@ -265,8 +265,7 @@ function hashRecord(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
 }
 
-// Test-only exports for unit tests that need to drive handleEmit's
-// validation paths directly (the McpServer SDK doesn't expose a public
-// way to invoke a registered tool by name from outside its harness).
-// Mirrors the `__test_only__` pattern in sign.ts.
+// Test-only export of handleEmit. Mirrors the `__test_only__` pattern
+// used in sign.ts; lets unit tests assert on the validation paths
+// without going through the McpServer transport surface.
 export const __test_only__ = { handleEmit }
