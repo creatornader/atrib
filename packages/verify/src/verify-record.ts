@@ -116,18 +116,23 @@ export interface CapabilityCheckAnnotation {
 }
 
 /**
- * Posture surfacing for a record. Currently exposes only the timing
- * posture (§8.4); tool_name_form (§8.2) and args_commitment_form (§8.3)
- * require fields that aren't on the current AtribRecord shape.
+ * Posture surfacing for a record. Exposes the timing posture (§8.4)
+ * plus the args/result commitment posture (§8.3). The opaque-name
+ * posture (§8.2) requires a `tool_name` field that isn't yet on
+ * `AtribRecord`.
  *
  * `timestamp_granularity` is the declared coarsening level (or 'ms' by
  * default when absent). `timestamp_consistent` is true iff the timestamp
  * value matches the granularity's trailing-zero invariant per spec §8.4
- * (e.g., 'min' requires `timestamp % 60000 == 0`). A consistent posture
- * means the record's coarsening claim is structurally honest; an
- * inconsistent posture means the implementation declared a granularity
- * that the timestamp doesn't satisfy, which validators and verifiers
- * MUST reject per §8.4.
+ * (e.g., 'min' requires `timestamp % 60000 == 0`).
+ *
+ * `args_commitment_form` and `result_commitment_form` are detected
+ * structurally per spec §8.3. Presence of `args_salt` indicates the
+ * salted-sha256 scheme; absence indicates the default plain-sha256
+ * scheme. The hmac-sha256 variant is structurally indistinguishable to
+ * non-key-holders (the issuer signals it out-of-band per §8.3, not via
+ * record fields), so we surface only the two structurally-detectable
+ * forms.
  */
 export interface PostureAnnotation {
   timestamp_granularity: 'ms' | 's' | 'min' | 'h' | 'd'
@@ -142,6 +147,17 @@ export interface PostureAnnotation {
    * Surfaced separately because absence affects JCS canonical form per §1.3.
    */
   timestamp_granularity_explicit: boolean
+  /**
+   * Detected commitment scheme for `args_hash`. 'salted-sha256' iff
+   * `args_salt` is present on the record; 'plain-sha256' otherwise. The
+   * 'hmac-sha256' variant from §8.3 is not structurally detectable.
+   */
+  args_commitment_form: 'plain-sha256' | 'salted-sha256'
+  /**
+   * Detected commitment scheme for `result_hash`. Same semantics as
+   * `args_commitment_form` but driven by `result_salt`.
+   */
+  result_commitment_form: 'plain-sha256' | 'salted-sha256'
 }
 
 const GRANULARITY_MULTIPLIER: Record<PostureAnnotation['timestamp_granularity'], number> = {
@@ -439,10 +455,19 @@ function detectPosture(record: AtribRecord, warnings: string[]): PostureAnnotati
     )
   }
 
+  // Spec §8.3 commitment-posture detection: presence of args_salt /
+  // result_salt indicates the salted-sha256 scheme; absence indicates the
+  // default plain-sha256 scheme. The hmac-sha256 variant from §8.3 is
+  // signaled out-of-band and is not structurally detectable.
+  const args_commitment_form = typeof record.args_salt === 'string' ? 'salted-sha256' : 'plain-sha256'
+  const result_commitment_form = typeof record.result_salt === 'string' ? 'salted-sha256' : 'plain-sha256'
+
   return {
     timestamp_granularity: granularity,
     timestamp_consistent: consistent,
     timestamp_granularity_explicit: explicit,
+    args_commitment_form,
+    result_commitment_form,
   }
 }
 
