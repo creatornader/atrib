@@ -30,6 +30,15 @@ name: Release
 # leading to a 404 after provenance signing succeeds. Node 24 ships npm 11.12+
 # which fixes this.
 #
+# Provenance attestations (`NPM_CONFIG_PROVENANCE`) are NOT set on this
+# workflow. Sigstore provenance verification requires the source repository
+# to be public. npm rejects provenance bundles from private repos with
+# E422 "Unsupported GitHub Actions source repository visibility: private".
+# OIDC-based Trusted Publishing (the auth path) works fine with private
+# repos; provenance signing (the build-attestation path) does not. Once the
+# repo is public, re-add `NPM_CONFIG_PROVENANCE: "true"` to both the release
+# job and the snapshot job's env blocks.
+#
 # Security note: this workflow does NOT interpolate any user-controlled
 # github.event.* fields into run: commands, per the GitHub Actions
 # script-injection guidance.
@@ -78,7 +87,6 @@ jobs:
           version: pnpm version-packages
           commitMode: github-api
         env:
-          NPM_CONFIG_PROVENANCE: "true"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   snapshot:
@@ -113,5 +121,3 @@ jobs:
 
       - name: Publish snapshot
         run: pnpm changeset publish --tag snapshot --no-git-tag
-        env:
-          NPM_CONFIG_PROVENANCE: "true"
