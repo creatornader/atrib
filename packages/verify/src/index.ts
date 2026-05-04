@@ -6,6 +6,18 @@
 export { AtribVerifier } from './verifier.js'
 export type { AtribVerifierOptions, CalculateOptions } from './verifier.js'
 
+// Per-record verification (single AtribRecord; surfaces D044 provenance
+// annotations). Distinct from AtribVerifier.verify which operates on a
+// settlement RecommendationDocument. Other per-record annotations the
+// README mentions (informed_by_resolution, capability_check, etc.) are
+// pending; see DECISIONS.md for the planned reconciliation.
+export { verifyRecord } from './verify-record.js'
+export type {
+  RecordVerificationResult,
+  ProvenanceAnnotation,
+  VerifyRecordOptions,
+} from './verify-record.js'
+
 // Calculation algorithm (§4.6). pure function, exported for direct use
 export { calculate, DEFAULT_POLICY, isValidPolicy } from './calculate.js'
 

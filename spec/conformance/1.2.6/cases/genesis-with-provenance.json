@@ -1,0 +1,25 @@
+{
+  "name": "genesis-with-provenance",
+  "spec_section": "1.2.6",
+  "description": "A session-genesis record carrying provenance_token. Verifies (a) the JCS field-order invariant (provenance_token sorts between informed_by and session_token), (b) the signature round-trips with the field present. Validators and verifiers MUST accept this record.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225601000,
+      "provenance_token": "AAAAAAAAAAAAAAAAAAAAAA",
+      "signature": "7FZt7geNOdxCgkpYmXffamSqn9ejyr-Wi7ixgVC9lZ36w0-LZ-MHqp6DZkcrN2OBPpO7hIxiTBs6NXC_crIVDQ"
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "canonical_signing_input_utf8": "{\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc\",\"event_type\":\"https://atrib.dev/v1/types/observation\",\"provenance_token\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1767225601000}",
+    "record_hash_hex": "1507be506243cc31dcf28cb8fc04293d61e1b4e9cf089f9a5ab0d7272959b7e7",
+    "validator_should_accept": true,
+    "verifier_signature_ok": true
+  }
+}

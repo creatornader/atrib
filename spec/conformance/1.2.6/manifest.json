@@ -1,0 +1,30 @@
+{
+  "spec_section": "1.2.6",
+  "spec_title": "provenance_token (cross-session causal anchor)",
+  "decision_link": "D044",
+  "generated_at": 1767225600000,
+  "generator": "packages/log-dev/scripts/generate-conformance-1.2.6.ts",
+  "cases": [
+    {
+      "file": "cases/genesis-with-provenance.json",
+      "name": "genesis-with-provenance"
+    },
+    {
+      "file": "cases/upstream-derivation.json",
+      "name": "upstream-derivation"
+    },
+    {
+      "file": "cases/non-genesis-with-provenance.json",
+      "name": "non-genesis-with-provenance"
+    },
+    {
+      "file": "cases/omits-when-absent.json",
+      "name": "omits-when-absent"
+    }
+  ],
+  "keys": {
+    "alice_pubkey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+    "bob_pubkey": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA"
+  },
+  "note": "The four cases collectively exercise the §1.2.6 contract: canonical-form invariance with the field present (case 1), derivation rule from upstream record (case 2), genesis-only rejection (case 3), and absence-not-null canonicalization (case 4)."
+}
