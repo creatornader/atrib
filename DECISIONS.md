@@ -2617,11 +2617,14 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 
 **Progress as of 2026-05-04:**
 
-- `informed_by_resolution`: shipped (D041 surface) — `verifyRecord` populates `{ resolved, dangling }` from caller-supplied candidates.
-- `posture`: shipped (D045 surface) — `verifyRecord` always populates `{ timestamp_granularity, timestamp_consistent, timestamp_granularity_explicit }`.
-- `capability_check`: shipped (D051 surface) — `verifyRecord` populates `{ envelope, in_envelope, mismatches, unresolvable }` when caller passes a resolved `identityClaim`. Caller does the directory lookup; `@atrib/verify` has no `@atrib/directory` dependency. `tool_names` (against tool_call), `max_amount`, and `counterparties` (against transaction) flag `unresolvable: true` because the constraint inputs aren't on the standard record shape or aren't accessible without out-of-band protocol-event data.
-- `cross_attestation`: pending — needs `signers[]` field on `AtribRecord` per §1.7.6 first.
-- `cross_log_*`: pending — needs multi-log proof-bundle parsing infrastructure.
+- `informed_by_resolution`: implemented (D041 surface) — `verifyRecord` populates `{ resolved, dangling }` from caller-supplied candidates.
+- `posture` (timestamp_granularity, §8.4): implemented (D045 surface) — `verifyRecord` always populates `{ timestamp_granularity, timestamp_consistent, timestamp_granularity_explicit }`.
+- `capability_check`: implemented (D051 surface) — `verifyRecord` populates `{ envelope, in_envelope, mismatches, unresolvable }` when caller passes a resolved `identityClaim`. Caller does the directory lookup; `@atrib/verify` has no `@atrib/directory` dependency. `tool_names` (against tool_call), `max_amount`, and `counterparties` (against transaction) flag `unresolvable: true` because the constraint inputs aren't on the standard record shape or aren't accessible without out-of-band protocol-event data.
+- `tool_name_form` (§8.2) and `args_commitment_form` (§8.3): **BLOCKED** on a §1.2 spec extension. Both surfaces detect form structurally from the record's `tool_name` / `args_hash` / `args_salt` / `result_hash` / `result_salt` fields, but only `args_salt` and `result_salt` appear in the §1.2.1 field table. `tool_name`, `args_hash`, and `result_hash` are referenced in §8.2/§8.3 prose and the §1.2.2 `content_id` derivation but never landed in the canonical record schema. Closing this requires a normative ADR adding the fields with their JCS-canonical sort positions (`a` < `c`, `r` < `s`, etc.), backwards-compat semantics (absence = default posture), conformance vectors, and the args/result_salt fields added to the `AtribRecord` TypeScript type. Verifier surface is trivial once the inputs exist.
+- `cross_attestation` (D052 / §1.7.6): **BLOCKED** on a `signers[]` field on `AtribRecord` plus a transaction-record canonicalization variant in `@atrib/mcp`. The §1.2 spec describes the transaction shape with `signers[]` instead of top-level `signature`, but the TypeScript type still uses the standard shape. Closing this requires the type extension, sign-side support for multi-signer transaction records, and verifier multi-signature path.
+- `cross_log_*` (D050 / §2.11): **BLOCKED** on multi-log proof-bundle parsing infrastructure and a trusted-log-set config surface.
+
+**Pattern.** P005.1 (capability_check) implemented cleanly because the constraint inputs were either (a) on the existing record (`event_type`, `timestamp`) or (b) supplied by the caller via the `identityClaim` option (which they fetch from `@atrib/directory`). The remaining surfaces all share a structural blocker: they need fields added to the canonical record shape first, which is downstream spec work, not verifier work. Tracked as separate ADRs when an external consumer needs the surface.
 
 **The decision in question.** The README represents intended state. Two paths to reconcile:
 
@@ -2636,23 +2639,49 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 
 **ADR number** will be assigned per-feature when acted on.
 
-## P006: introduce CHANGELOG.md when atrib goes public
+## D060: CHANGELOG strategy — changesets per-package + GitHub Releases, no top-level CHANGELOG
 
-**Source:** Discussed during 2026-05-03 gap audit. The repo currently has no CHANGELOG.md anywhere (verified by audit). Pre-flip while frozen, the existing trail (README + DECISIONS.md + git log + atrib-spec.md revision history) is sufficient for the operator + a small number of insiders. Post-flip, external consumers (library users, spec implementers, auditors) will reasonably expect a CHANGELOG.
+**Supersedes:** P006 (pending decision, now acted on)
 
-**The decision in question:** which CHANGELOG model fits a multi-package monorepo + a normative spec.
+### Context
 
-**Options considered:**
+When P006 was filed, the repo had no CHANGELOG anywhere. By the time this decision was made, the changesets pipeline had been deployed and per-package CHANGELOG.md files were being auto-generated by `changesets/action` on every Version Packages PR merge. The remaining question was whether that is enough or whether atrib needs additional artifacts (top-level CHANGELOG.md, GitHub Releases, spec revision history alignment).
 
-1. **Per-package CHANGELOG.md + top-level summary** (standard monorepo pattern; @atrib/mcp, @atrib/agent, @atrib/verify, @atrib/cli, @atrib/directory each get their own). Plus the spec already has a revision history section that should be made consistent.
-2. **changesets** (https://github.com/changesets/changesets). pnpm-friendly tooling that generates CHANGELOG entries from PR-attached changeset files; integrates with version bumps + npm publish. Best ergonomics if + when atrib publishes packages publicly.
-3. **GitHub Releases tab only.** Lighter weight; works well for small projects but loses per-package version history when multiple packages diverge.
-4. **Conventional commits + auto-generated CHANGELOG.** Already part-way there: commits mostly use conventional-commits prefixes (feat:, fix:, docs:, refactor:). Tools like release-please can auto-generate CHANGELOG.md from this. Lower-effort introduction.
+### Decision
 
-**Why deferred.** Pre-flip frozen. No external consumer expects a CHANGELOG. Decision-shape and tooling-shape best made when the public-flip work is concretely scheduled rather than abstractly anticipated.
+**Adopt changesets-generated per-package CHANGELOG.md as the source of truth. Enable GitHub Releases via `createGithubReleases: true` on `changesets/action` so external consumers can browse versioned release notes via the GitHub UI. Do NOT create a top-level CHANGELOG.md. Leave atrib-spec.md revision history as a separate concern, deferred until an external spec implementer needs it.**
 
-**Reopening criteria.** Public-flip is unfrozen (per `project_public_flip_frozen_2026-05-03` memory) AND a release-tagging plan is in motion.
+### Rationale
 
-**Likely outcome when acted on:** option 4 (release-please from conventional-commits) for the lightweight start, with potential migration to option 2 (changesets) if per-package version cadence diverges meaningfully. Either way, the spec's own revision history (`atrib-spec.md` Appendix or top-of-doc) should align with the package CHANGELOG so spec consumers and library consumers see consistent change history.
+**Per-package CHANGELOGs (changesets):**
+- Already shipped, already accurate. Each Version Packages PR merge appends to the relevant per-package files automatically.
+- Cross-package dependency-bump tracking ("Updated dependencies") happens for free.
+- Integrates with the existing Trusted Publishing OIDC pipeline; no separate tooling.
 
-**ADR number** will be assigned when acted on.
+**GitHub Releases:**
+- Useful for external consumers who browse via the GitHub UI rather than the npm registry.
+- One-line workflow change (`createGithubReleases: true`).
+- Tags created automatically per per-package version, leveraging the existing `commitMode: github-api` signing path.
+
+**Why NOT a top-level CHANGELOG.md:**
+- High drift risk. Per-package CHANGELOGs are auto-generated; a top-level summary would have to be hand-rolled or regenerated by a separate tool, adding maintenance cost without value-add.
+- Standard monorepo pattern (turborepo, vercel, vitest, vue, react) uses per-package CHANGELOGs without a top-level digest.
+- Consumers who want cross-package context can read the per-package files; consumers who want repo-level context can read git log or DECISIONS.md.
+
+**Why defer atrib-spec.md revision history:**
+- The spec is a normative protocol document, not a package. Its versioning concern is separate from package versioning (a package can ship without a spec change; a spec change can land before any package implements it).
+- No external spec implementer exists yet. When one does, the right shape is likely a §A appendix with dated revision entries OR a `spec/CHANGELOG.md` adjacent to the spec, not a section in DECISIONS.md or a per-package CHANGELOG.
+- The conformance corpus already partially serves this role: each spec section change triggers regeneration of the relevant `spec/conformance/<§>/` corpus, and corpus changes are visible in git log.
+
+### Alternatives rejected
+
+1. **Top-level CHANGELOG.md (P006 option 1).** Drift risk + maintenance cost.
+2. **release-please from conventional commits (P006 option 4).** Conflicts with changesets — both want to own version bumping.
+3. **GitHub Releases only, no per-package CHANGELOGs (P006 option 3).** Loses per-package version history once a package's release notes scroll off the Releases tab.
+
+### Consequences
+
+- `createGithubReleases: true` added to the release job's `changesets/action` config in `.github/workflows/release.yml`.
+- Future Version Packages PRs auto-create per-package GitHub Releases (e.g., `@atrib/mcp@0.1.3`) on merge, in addition to publishing to npm.
+- DECISIONS.md doubles as the authoritative log for non-package architectural decisions; per-package CHANGELOGs cover code/release-level changes.
+- If atrib-spec.md revision history becomes load-bearing (first external spec implementer raises it), open a follow-up ADR specifying the location and format.
