@@ -1,0 +1,28 @@
+{
+  "name": "default-posture",
+  "spec_section": "8.3",
+  "description": "A record with neither args_salt nor result_salt. Verifiers MUST detect args_commitment_form = \"plain-sha256\" and result_commitment_form = \"plain-sha256\" per §8.3 (absence of salt indicates the default plain-sha256 scheme). The canonical signing input MUST omit both salt fields entirely (not null, not empty string); presence/absence affects JCS canonical form and therefore the signature.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0101010101010101010101010101010101010101010101010101010101010101",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225601000,
+      "signature": "1K7VLxrdpH7ZVsAhfqy4QM9XbqQhansyeY3YiOeWmW-r4ujipS8Z1eqNJ15G18pLe2WLADWkWHT41ZmILW3lCA"
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "canonical_signing_input_utf8": "{\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:0101010101010101010101010101010101010101010101010101010101010101\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc\",\"event_type\":\"https://atrib.dev/v1/types/tool_call\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1767225601000}",
+    "args_salt_in_canonical_form": false,
+    "result_salt_in_canonical_form": false,
+    "record_hash_hex": "c6c0889feb977bd392c6de79421677ac3ee5b4d0babed16e45dfba0a5b71c2d5",
+    "verifier_signature_ok": true,
+    "validator_should_accept": true,
+    "args_commitment_form": "plain-sha256",
+    "result_commitment_form": "plain-sha256"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "tool-names-unresolvable",
+  "spec_section": "6.7",
+  "description": "A tool_call record with a tool_names envelope constraint. Per §6.7.2 step 2 the constraint requires the record's tool_name field; the standard record shape exposes only the derived content_id (sha256(server_url + tool_name)). Without tool_name on the record, the verifier MUST mark unresolvable: true rather than passing or failing silently. mismatches stays empty (no positive determination either way).",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0606060606060606060606060606060606060606060606060606060606060606",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225606000,
+      "signature": "3riIBgcklLv5DMQOlcSc3ANC4blOXmzhodlyRXsS4JtBjwbEmB5Q_K1Llr6fObInOz9x_bhUa-I_6mFMq651Ag"
+    },
+    "identity_claim": {
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "capabilities": {
+        "tool_names": [
+          "allowed_tool",
+          "another_allowed"
+        ]
+      }
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "record_hash_hex": "c44ce1255d6e85eb8ea8876cab44129512c3935ca605cf42978aaf4f9702f8fc",
+    "capability_check": {
+      "envelope": {
+        "tool_names": [
+          "allowed_tool",
+          "another_allowed"
+        ]
+      },
+      "in_envelope": true,
+      "mismatches": [],
+      "unresolvable": true
+    },
+    "verifier_signature_ok": true,
+    "validator_should_accept": true
+  }
+}

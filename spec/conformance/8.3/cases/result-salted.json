@@ -1,0 +1,29 @@
+{
+  "name": "result-salted",
+  "spec_section": "8.3",
+  "description": "A record carrying result_salt but no args_salt. Mirror of case 2: args_commitment_form = \"plain-sha256\", result_commitment_form = \"salted-sha256\". JCS canonical form sorts result_salt between provenance_token (\"p\") and revises (\"r-e-v\"), since \"r-e-s\" lies between them.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0303030303030303030303030303030303030303030303030303030303030303",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225603000,
+      "result_salt": "EQ8NCwkHBQMBAgQGCAoMDg",
+      "signature": "IfdTbste2sGtdvvvJsqEpPF6R98f3J2w2mNB_P-BaMRVO_IXur2VLmVgWFvlTyj32Oem4dj8PjlGrKSzrwKmDg"
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "canonical_signing_input_utf8": "{\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:0303030303030303030303030303030303030303030303030303030303030303\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc\",\"event_type\":\"https://atrib.dev/v1/types/tool_call\",\"result_salt\":\"EQ8NCwkHBQMBAgQGCAoMDg\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1767225603000}",
+    "args_salt_in_canonical_form": false,
+    "result_salt_in_canonical_form": true,
+    "record_hash_hex": "17599addae8ad385e00476ba6bb216e3265e991a0c0ef20d6758efd4aa01e51f",
+    "verifier_signature_ok": true,
+    "validator_should_accept": true,
+    "args_commitment_form": "plain-sha256",
+    "result_commitment_form": "salted-sha256"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "event-types-hit",
+  "spec_section": "6.7",
+  "description": "Record event_type is in the envelope.event_types allowlist. Verifier MUST surface in_envelope: true, mismatches: [], unresolvable: false. The full envelope is preserved on the result for consumer inspection.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0303030303030303030303030303030303030303030303030303030303030303",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225603000,
+      "signature": "O8_po01WWBwXOE4KDJw9ek9ElWT0MhVgqGMJ37yvFL-Zhj1m9E7sXPDuonxm5TkIcUgop5jZbpECGTIwqwL7Ag"
+    },
+    "identity_claim": {
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "capabilities": {
+        "event_types": [
+          "https://atrib.dev/v1/types/observation",
+          "https://atrib.dev/v1/types/tool_call"
+        ]
+      }
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "record_hash_hex": "9db3d054961e52d1f04e65336c86451da91237f77aa98aee529f5da29a7104f4",
+    "capability_check": {
+      "envelope": {
+        "event_types": [
+          "https://atrib.dev/v1/types/observation",
+          "https://atrib.dev/v1/types/tool_call"
+        ]
+      },
+      "in_envelope": true,
+      "mismatches": [],
+      "unresolvable": false
+    },
+    "verifier_signature_ok": true,
+    "validator_should_accept": true
+  }
+}

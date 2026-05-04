@@ -1,0 +1,33 @@
+{
+  "spec_section": "8.3",
+  "spec_title": "Salted-commitment posture (args_salt / result_salt)",
+  "decision_link": "D045",
+  "generated_at": 1767225600000,
+  "generator": "packages/log-dev/scripts/generate-conformance-8.3.ts",
+  "cases": [
+    {
+      "file": "cases/default-posture.json",
+      "name": "default-posture"
+    },
+    {
+      "file": "cases/args-salted.json",
+      "name": "args-salted"
+    },
+    {
+      "file": "cases/result-salted.json",
+      "name": "result-salted"
+    },
+    {
+      "file": "cases/both-salted.json",
+      "name": "both-salted"
+    }
+  ],
+  "keys": {
+    "alice_pubkey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc"
+  },
+  "salts": {
+    "args_salt_b64": "AQIDBAUGBwgJCgsMDQ4PEA",
+    "result_salt_b64": "EQ8NCwkHBQMBAgQGCAoMDg"
+  },
+  "note": "The four cases cover every salt-presence combination a §8.3 verifier will see: neither, args-only, result-only, both. Each case fixes the canonical signing input + expected commitment-form values. The §8.3 hmac-sha256 variant is signaled out-of-band per spec and is not structurally detectable, so it is not represented in this corpus."
+}
