@@ -4,3 +4,4 @@ packages:
   - 'services/graph-node'
   - 'services/directory-node'
   - 'services/atrib-emit'
+  - 'services/mcp-wrap'

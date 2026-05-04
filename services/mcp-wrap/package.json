@@ -1,0 +1,31 @@
+{
+  "name": "@atrib/mcp-wrap",
+  "version": "0.1.0",
+  "description": "Generic config-driven MCP wrapper. Spawns any upstream MCP server and applies @atrib/mcp middleware so every tool call is signed and logged. Multiplies coverage to ~30 MCPs at zero per-server code cost.",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "atrib-wrap": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "start": "node dist/main.js",
+    "dev": "tsx src/main.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@atrib/mcp": "file:../../packages/mcp",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@noble/ed25519": "^2.3.0",
+    "@noble/hashes": "^1.8.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.17",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
