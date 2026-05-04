@@ -86,6 +86,10 @@ jobs:
           publish: pnpm release
           version: pnpm version-packages
           commitMode: github-api
+          # Per D060: per-package GitHub Release per version bump alongside the
+          # npm publish. Tags + release notes auto-derived from each package's
+          # CHANGELOG.md entry by changesets/action.
+          createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
