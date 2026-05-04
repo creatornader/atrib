@@ -32,6 +32,12 @@ export interface BuildEmitRecordInput {
   /** Cognitive content. Used only for content_id derivation context; full content lives in the mirror. */
   content: Record<string, unknown>
   informedBy?: string[] | undefined
+  /**
+   * Optional cross-session causal anchor (spec §1.2.6 / D044). Caller is
+   * responsible for ensuring the genesis-record-only invariant holds; the
+   * index.ts handler validates this before reaching here.
+   */
+  provenanceToken?: string | undefined
 }
 
 /**
@@ -63,6 +69,7 @@ export async function buildAndSignEmitRecord(
     timestamp: Date.now(),
     signature: '',
     ...(informedBySorted ? { informed_by: informedBySorted } : {}),
+    ...(input.provenanceToken ? { provenance_token: input.provenanceToken } : {}),
   } as AtribRecord
 
   return signRecord(record, input.privateKey)

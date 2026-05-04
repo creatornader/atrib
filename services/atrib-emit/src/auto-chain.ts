@@ -38,18 +38,23 @@ const DEFAULT_MIRROR = join(
 export interface ChainContext {
   contextId: string
   chainRoot: string
-  inheritedFrom: 'wrapper-mirror' | 'fresh'
+  inheritedFrom: 'caller-supplied' | 'wrapper-mirror' | 'fresh'
 }
 
 /**
  * Decide what context_id + chain_root the next emit record should use.
  *
  * Resolution order:
- *   1. Caller-supplied context_id (with caller-supplied chain_root if known,
- *      otherwise genesis). Used when the host is explicit.
- *   2. Most-recent record in the wrapper's mirror file (when present).
- *      Inherits its context_id and chains on top of its record_hash.
- *   3. Fresh genesis context_id (random 16 bytes).
+ *   1. Caller supplies BOTH context_id AND chain_root → use both verbatim
+ *      (inheritedFrom: 'caller-supplied'). For consumers that manage chain
+ *      state themselves (e.g. nightly watcher pipelines emitting a sequence
+ *      of records under one context_id, where chain_root threading is owned
+ *      by the caller, not by atrib-emit's mirror).
+ *   2. Caller supplies context_id only → genesis with that context_id
+ *      (chain_root = genesisChainRoot(context_id), inheritedFrom: 'fresh').
+ *   3. Caller supplies neither → most-recent record in the wrapper's mirror
+ *      file (when present) inherits both fields. Falls back to a fresh
+ *      genesis context_id when no mirror is available.
  *
  * Caller passes a chainRootForCallerContext callback that knows how to
  * compute the genesis chain_root for a given context_id (we accept it as
@@ -59,6 +64,13 @@ export interface ChainContext {
  */
 export async function resolveChainContext(opts: {
   callerContextId?: string | undefined
+  /**
+   * Caller-managed chain_root. Only honored when callerContextId is also
+   * supplied; chain_root without a context_id is meaningless and is treated
+   * as undefined here (the index.ts handler validates this case earlier and
+   * returns a warnings-only response).
+   */
+  callerChainRoot?: string | undefined
   /** Path override. Defaults to ATRIB_MIRROR_FILE env, then the wrapper's default. */
   mirrorPath?: string | undefined
   /** Function returning genesis chain_root for a given context_id (spec §1.2.3). */
@@ -67,6 +79,13 @@ export async function resolveChainContext(opts: {
   randomContextId: () => string
 }): Promise<ChainContext> {
   if (opts.callerContextId) {
+    if (opts.callerChainRoot) {
+      return {
+        contextId: opts.callerContextId,
+        chainRoot: opts.callerChainRoot,
+        inheritedFrom: 'caller-supplied',
+      }
+    }
     return {
       contextId: opts.callerContextId,
       chainRoot: opts.genesisChainRoot(opts.callerContextId),

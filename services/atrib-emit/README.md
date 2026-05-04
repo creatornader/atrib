@@ -23,9 +23,22 @@ mcp__atrib-emit__emit({
                                      // committed on-chain via content_id derived from event_type leaf.
 
   // Optional
-  context_id?: string,          // 32-hex. If omitted, a fresh genesis context_id is generated.
+  context_id?: string,          // 32-hex. If omitted, atrib-emit auto-chains: it reads the
+                                // wrapper's local mirror and inherits the most-recent record's
+                                // context_id (or generates a fresh genesis if no mirror).
   informed_by?: string[],       // sha256:<64-hex> record_hashes that informed this event.
                                 // Sorted lexicographically before signing per §1.2.5.
+  chain_root?: string,          // sha256:<64-hex>. Caller-managed chain_root, the hash of the
+                                // immediately preceding record under this context_id. Required
+                                // when caller threads chain state across emits (e.g. multi-record
+                                // watcher pipelines that emit a sequence under one context_id).
+                                // When omitted with context_id present, atrib-emit synthesizes
+                                // the genesis chain_root per spec §1.2.3. Without context_id,
+                                // chain_root is meaningless and returns warnings.
+  provenance_token?: string,    // 22-char base64url cross-session causal anchor per spec §1.2.6
+                                // / D044. Genesis-record-only: atrib-emit refuses to sign when
+                                // chain_root is non-genesis, returning warnings rather than
+                                // emitting a malformed record (§5.8 graceful-degradation).
 })
 ```
 
@@ -106,9 +119,10 @@ Per §5.8 degradation contract: nothing in `atrib-emit` throws to the agent. Mis
 When `context_id` is omitted, atrib-emit reads the wrapper's local mirror under `~/.atrib/records/` (override with `ATRIB_AUTOCHAIN_SOURCE`) and inherits the most-recent record's `context_id`, chaining its own emit on top of that record's hash. This is the cognitive-feedback-loop convention: explicit observations, annotations, and revisions chain seamlessly with the agent's mechanical tool calls in the same session, and a verifier sees one coherent chain per `context_id`.
 
 Resolution order:
-1. Caller-supplied `context_id` → genesis chain_root for that id (fresh chain).
-2. Wrapper mirror present → inherit its most-recent record's `context_id`, chain on top.
-3. No mirror → fresh genesis with random 16-byte context_id.
+1. Caller supplies BOTH `context_id` AND `chain_root` → use both verbatim. Path used by consumers managing chain state themselves (e.g. nightly watcher pipelines that emit a sequence of records under one context_id and thread `chain_root` across records).
+2. Caller supplies `context_id` only → genesis chain_root for that id (fresh chain).
+3. Wrapper mirror present (no `context_id`) → inherit its most-recent record's `context_id`, chain on top.
+4. No mirror, no `context_id` → fresh genesis with random 16-byte context_id.
 
 Both line shapes are accepted at read time: bare `AtribRecord` (the wrapper's convention) and `{record, proof, written_at}` envelope (atrib-emit's storage convention). When inheritance fires, the response's `warnings` array carries `inherited context_id from wrapper mirror: <id>` so the agent can confirm the session it landed in.
 

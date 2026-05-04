@@ -234,4 +234,71 @@ describe('emit end-to-end (sign → submit → mirror)', () => {
     expect(log.received[1]!.context_id).toBe(log.received[0]!.context_id)
     expect(log.received[1]!.chain_root).toBe('sha256:' + r1Hash)
   })
+
+  it('handleEmit honors caller-supplied context_id + chain_root verbatim (caller-managed chain state)', async () => {
+    // The path that consumers managing their own chain state use:
+    // caller threads chain state explicitly across emits under one context_id,
+    // bypassing the wrapper-mirror inheritance mechanism. Confirms the
+    // submitted record carries the supplied chain_root, not a synthesized
+    // genesis.
+    const { seed } = await fixedKey()
+    const { __test_only__ } = await import('../src/index.js')
+    const { createSubmissionQueue } = await import('@atrib/mcp')
+    const queue = createSubmissionQueue(log.url)
+    const ctxId = 'c'.repeat(32)
+    const callerChainRoot = 'sha256:' + 'd'.repeat(64)
+
+    const result = await __test_only__.handleEmit({
+      input: {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'second emit in caller-managed chain' },
+        context_id: ctxId,
+        chain_root: callerChainRoot,
+      },
+      key: { privateKey: seed, source: 'env' },
+      queue,
+    })
+    await queue.flush()
+
+    expect(result.context_id).toBe(ctxId)
+    expect(result.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(log.received.length).toBe(1)
+    const landed = log.received[0]!
+    expect(landed.context_id).toBe(ctxId)
+    expect(landed.chain_root).toBe(callerChainRoot)
+  })
+
+  it('handleEmit emits provenance_token on a genesis record (D044 / spec §1.2.6)', async () => {
+    // Caller is making a new session that descends from an upstream anchor.
+    // chain_root is omitted, so atrib-emit synthesizes the genesis chain_root
+    // for the supplied context_id, then carries provenance_token on the
+    // record. This is the canonical D044 use case.
+    const { seed } = await fixedKey()
+    const { __test_only__ } = await import('../src/index.js')
+    const { createSubmissionQueue, verifyRecord } = await import('@atrib/mcp')
+    const queue = createSubmissionQueue(log.url)
+    const ctxId = 'e'.repeat(32)
+    const provenanceToken = 'BBBBBBBBBBBBBBBBBBBBBB' // 22 chars
+
+    const result = await __test_only__.handleEmit({
+      input: {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'genesis with cross-session anchor' },
+        context_id: ctxId,
+        provenance_token: provenanceToken,
+      },
+      key: { privateKey: seed, source: 'env' },
+      queue,
+    })
+    await queue.flush()
+
+    expect(result.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(log.received.length).toBe(1)
+    const landed = log.received[0]! as AtribRecord & { provenance_token?: string }
+    expect(landed.provenance_token).toBe(provenanceToken)
+    // Critically: the canonical record (with provenance_token) signs and
+    // verifies under @atrib/mcp's verifyRecord — proves the type addition
+    // and JCS handling round-trip cleanly.
+    expect(await verifyRecord(landed)).toBe(true)
+  })
 })

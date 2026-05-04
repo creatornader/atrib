@@ -24,6 +24,17 @@ export type AtribRecord = {
    * INFORMED_BY graph edges from these (§3.2.4).
    */
   informed_by?: string[]
+  /**
+   * Optional cross-session causal anchor (D044 / spec §1.2.6).
+   * 22-char base64url encoding of the first 16 bytes of an upstream record's
+   * hash. Genesis-record-only: validators and verifiers MUST reject records
+   * carrying this field when they are not the session's genesis record (the
+   * record whose chain_root equals genesisChainRoot(context_id)). Middleware
+   * (§5.3 / §5.4) SHOULD refuse to sign records that violate this constraint
+   * per §5.8 graceful-degradation. JCS-canonical form sorts the field
+   * lexicographically after `informed_by` and before `session_token` (i < p < s).
+   */
+  provenance_token?: string
 } & ({ session_token: string } | { session_token?: never })
 
 /** An unsigned record. all fields except signature. */
