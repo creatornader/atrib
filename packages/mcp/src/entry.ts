@@ -16,7 +16,8 @@
  *   0x02 = https://atrib.dev/v1/types/transaction       (atrib normative)
  *   0x03 = https://atrib.dev/v1/types/observation       (atrib normative)
  *   0x04 = https://atrib.dev/v1/types/directory_anchor  (atrib normative; promoted by D056)
- *   0x05-0xFE reserved for future atrib normative additions per D036
+ *   0x05 = https://atrib.dev/v1/types/annotation        (atrib normative; promoted by D058)
+ *   0x06-0xFE reserved for future atrib normative additions per D036
  *   0xFF = extension URI (URI is in a non-atrib.dev namespace; read content)
  *   0x00 reserved; MUST NOT be emitted
  */
@@ -28,6 +29,7 @@ import {
   EVENT_TYPE_TRANSACTION_URI,
   EVENT_TYPE_OBSERVATION_URI,
   EVENT_TYPE_DIRECTORY_ANCHOR_URI,
+  EVENT_TYPE_ANNOTATION_URI,
 } from './types.js'
 
 export const ENTRY_VERSION = 0x01 as const
@@ -35,6 +37,7 @@ export const EVENT_TYPE_TOOL_CALL = 0x01 as const
 export const EVENT_TYPE_TRANSACTION = 0x02 as const
 export const EVENT_TYPE_OBSERVATION = 0x03 as const
 export const EVENT_TYPE_DIRECTORY_ANCHOR = 0x04 as const
+export const EVENT_TYPE_ANNOTATION = 0x05 as const
 export const EVENT_TYPE_EXTENSION = 0xff as const
 
 export const ENTRY_SIZE = 90 as const
@@ -66,6 +69,8 @@ export function eventTypeUriToByte(uri: string): number {
       return EVENT_TYPE_OBSERVATION
     case EVENT_TYPE_DIRECTORY_ANCHOR_URI:
       return EVENT_TYPE_DIRECTORY_ANCHOR
+    case EVENT_TYPE_ANNOTATION_URI:
+      return EVENT_TYPE_ANNOTATION
     default:
       return EVENT_TYPE_EXTENSION
   }

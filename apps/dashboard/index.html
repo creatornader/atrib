@@ -96,15 +96,26 @@
     --et-system: #ec4899;
     --et-system-subtle: rgba(236, 72, 153, 0.12);
     --et-system-border: rgba(236, 72, 153, 0.3);
-    /* Synthetic dangling nodes (§3.2.4 step 6/7): an INFORMED_BY or
-       PROVENANCE_OF reference that did not resolve to a record in the
-       resolved set. Surfaces the agent's claim without pretending the
-       upstream is recoverable here. Muted-warning style (warm grey) so
-       the dangling marker reads as "incomplete" without competing with
-       the err-red used for verification failures. */
+    /* Synthetic dangling nodes (§3.2.4 step 6/7/8): an INFORMED_BY,
+       PROVENANCE_OF, or ANNOTATES reference that did not resolve to a
+       record in the resolved set. Surfaces the agent's claim without
+       pretending the upstream is recoverable here. Muted-warning style
+       (warm grey) so the dangling marker reads as "incomplete" without
+       competing with the err-red used for verification failures. */
     --et-dangling: #92400e;
     --et-dangling-subtle: rgba(146, 64, 14, 0.12);
     --et-dangling-border: rgba(146, 64, 14, 0.3);
+    /* Annotation event_type (D058, byte 0x05): the recall-fidelity
+       primitive. Annotations are commentary records pointing at any
+       prior record via the `annotates` field. Distinct color from
+       observation (purple) since their cognitive role is different,
+       annotations are forward-pointing claims about earlier records,
+       observations are first-class signed events. Teal sits between
+       observation's purple and tool_call's blue, signalling "related
+       to but distinct from both." */
+    --et-annotation: #14b8a6;
+    --et-annotation-subtle: rgba(20, 184, 166, 0.12);
+    --et-annotation-border: rgba(20, 184, 166, 0.3);
 
     /* Type */
     --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, Roboto, sans-serif;
@@ -479,6 +490,7 @@
   .chip.event-observation  { background: var(--et-observation-subtle);  color: var(--et-observation);  border-color: var(--et-observation-border); }
   .chip.event-extension        { background: var(--et-extension-subtle); color: var(--et-extension); border-color: var(--et-extension-border); }
   .chip.event-directory_anchor { background: var(--et-system-subtle);    color: var(--et-system);    border-color: var(--et-system-border); }
+  .chip.event-annotation       { background: var(--et-annotation-subtle); color: var(--et-annotation); border-color: var(--et-annotation-border); }
   .chip.event-system           { background: var(--et-system-subtle);    color: var(--et-system);    border-color: var(--et-system-border); }
   .chip.event-dangling_node    { background: var(--et-dangling-subtle);  color: var(--et-dangling);  border-color: var(--et-dangling-border); }
   .chip.event-reserved         { background: var(--err-subtle);          color: var(--err);          border-color: var(--err-border); }
@@ -823,14 +835,18 @@ function renderIdentityLabel(creatorKey, opts = {}) {
 // ─── Event-type chip ─────────────────────────────────────────────────────
 // The 90-byte log entry (§2.3.1) only carries one byte for event_type, so any
 // URI without a dedicated normative byte slot arrives here as 'extension'.
-// As of D056 (2026-04-30), normative bytes are 0x01 tool_call, 0x02
-// transaction, 0x03 observation, 0x04 directory_anchor; the spec reserves
-// 0x05-0xFE for future atrib normative additions per D036, and 0xFF for
-// non-atrib-namespace extension URIs. Pre-D056 directory_anchor records
-// (encoded 0xFF before the byte allocation landed) still arrive here as
-// 'extension'; when one is signed by an atrib-system identity (claim URL
-// in the atrib.dev namespace), the renderEventChip helper below relabels
-// it rather than implying it's an external/non-normative type.
+// As of D058 (2026-05-04), normative bytes are 0x01 tool_call, 0x02
+// transaction, 0x03 observation, 0x04 directory_anchor (D056), 0x05
+// annotation (D058); the spec reserves 0x06-0xFE for future atrib
+// normative additions per D036, and 0xFF for non-atrib-namespace extension
+// URIs. Pre-D056 directory_anchor records (encoded 0xFF before the byte
+// allocation landed) still arrive here as 'extension'; when one is signed
+// by an atrib-system identity (claim URL in the atrib.dev namespace), the
+// renderEventChip helper below relabels it rather than implying it's an
+// external/non-normative type. Pre-D058 annotation records (emitted under
+// downstream-consumer extension URIs before the byte allocation landed)
+// remain valid signed records but carry the extension byte; they will be
+// queryable via URI filter, not byte filter, until they age out.
 function atribSystemSignerKind(creatorKey) {
   const lookup = identityCache.get(creatorKey)
   if (!lookup || !lookup.found) return null

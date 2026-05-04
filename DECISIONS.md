@@ -2478,6 +2478,54 @@ A class of useful integrations needs the inverse ordering. When an MCP tool writ
 
 ---
 
+## D058: Promote `annotation` to atrib-normative event_type byte 0x05
+
+**Date:** 2026-05-04
+**Status:** Accepted
+
+**Context.** Agents that read back their own signed records via the recall harness lose nuance compared to the agent that wrote them. The agent-at-write knew which records mattered, what topics they covered, what one-sentence summary captured them, what confidence applied. The agent-at-read sees a flat list of records of equal apparent weight and has to reconstruct importance from prose, often imperfectly.
+
+The recall-fidelity primitive that closes this gap is *annotation*: a separate signed record pointing at any prior record via an `annotates` field, carrying structured metadata (importance, topics, summary) that downstream readers can filter and sort by. Annotation is the dual of `informed_by`, forward-pointing (a new record claims something *about* an earlier record) rather than backward-pointing (a new record claims earlier records *informed* it). Both are agent-declared causal links; both are surfaced as graph edges; their temporal orientation differs.
+
+D055 ruled (2026-04-30) that `annotation` should stay as an extension URI in a single consumer's namespace because no second harness used the same shape. That ruling is reopened here: ANY atrib-using agent emitting "this record matters more than the others; weight it heavy in future recall" is using the same shape. Two independent harnesses (atrib-using agents in general, plus the original consumer specifically) need the identical semantic. The D036 promotion bar clears.
+
+**Decision.** Promote `https://atrib.dev/v1/types/annotation` to the atrib-normative event_type vocabulary, taking byte `0x05` in the §2.3.1 log entry encoding. (D056 took `0x04` for `directory_anchor`; reserved range narrows from `0x05`–`0xFE` to `0x06`–`0xFE`.) Add the `annotates` optional field to the record format (§1.2.8): `sha256:<64-hex>` reference to the target record. Validators MUST require `annotates` on annotation records and MUST reject `annotates` on any other event_type. The graph layer derives `ANNOTATES` edges (the eighth edge type beyond §3.2.3's seven) per a new §3.2.4 step 8: for each annotation record A carrying `annotates: T`, create edge A → T; if T is not in the resolved set, create A → synthetic_dangling_node(T) with `dangling: true`.
+
+**Rationale.**
+
+1. **Recall fidelity is a substrate-level concern.** The "agents that reason from a past they can prove" tagline depends on that past being usefully readable, not just retrievable. Without structured annotation, every consumer reinvents the same importance-encoding pattern in prose, and readers can't filter by it without a domain-specific parser per consumer.
+
+2. **Promotion bar (D036) is met.** Two independent harnesses need the identical semantic with no harness-specific divergence: (a) any atrib-using agent annotating its own prior records during recall workflows, (b) the original downstream consumer that minted the extension URI. The shape (`annotates` ref + structured importance/topics/summary) is identical across both.
+
+3. **Dual-of-informed_by structure makes the cascade trivial.** Step 8 derivation mirrors Step 6 (INFORMED_BY) almost verbatim, modulo direction (forward vs backward) and the additional event_type filter. The dangling-node + reason annotation pattern from D056/Loop 5 carries over without modification.
+
+4. **Byte allocation is the canonical fast-path filter.** Verifiers can byte-filter for annotations without fetching records, enabling fast queries like "all annotations on a session" without scanning every record. Pre-D058 annotation records (emitted under downstream-consumer extension URIs) remain valid signed records and remain queryable by URI; the byte filter only catches post-promotion records.
+
+5. **Closes a downstream consumer's annotation-shape carryover.** Existing consumers emitting annotation-shaped records under `event_type=observation` (because the annotation URI wasn't normative) flip one URI string post-D058 and the records are correctly typed. The on-chain bytes are otherwise unaffected; the discontinuity is purely the event_type label.
+
+**Alternatives considered.**
+
+1. *Keep annotation as an extension URI per D055.* Rejected. The recall-fidelity insight provides the second-harness use case D055 was waiting for. Continuing to leave it as extension blocks structured recall queries across the atrib ecosystem.
+
+2. *Add `annotates` field to `observation` event_type instead of minting a new type.* Rejected. Observation and annotation have distinct cognitive roles: observations are first-class signed events the agent witnessed, annotations are commentary about earlier records. Conflating them in the same event_type loses the queryability advantage and forces consumers to inspect every observation record's content shape to know which kind it is.
+
+3. *Promote annotation but skip the `annotates` field requirement.* Rejected. Without a structured target reference, the graph layer can't derive ANNOTATES edges; consumers fall back to scanning content prose. The whole point of normative promotion is the structured queryability the field enables.
+
+**Consequences.**
+
+- *Spec.* §1.2.4 event_type table gains a row for annotation (byte 0x05). §1.2.8 added covering the `annotates` field. §2.3.1 byte mapping table gains a row, reserved range narrows. §3.2.3 edge types table gains ANNOTATES (eighth type). §3.2.4 derivation gets Step 8.
+- *@atrib/mcp.* `EVENT_TYPE_ANNOTATION_URI` constant + `EVENT_TYPE_ANNOTATION = 0x05` byte + entry encoder switch case + types.ts `annotates` optional field. AtribRecord type extended.
+- *@atrib/verify.* `EventType` union gains `'annotation'`. `EdgeType` union gains `'ANNOTATES'`. `graphLabelFromEventTypeUri` switch gains a case.
+- *services/graph-node.* Step 8 derivation in graph-builder.ts. 8-edge regression guard updated (was 7-edge from D041+D044).
+- *services/log-node.* Decoder switch + stats counter + endpoint doc + verify-loop validEventTypes Set + metrics.mjs per-byte filter.
+- *apps/dashboard.* Chip color (teal) + `.chip.event-annotation` rule + Event-type chip block-comment refresh to reference D058.
+- *Tests.* +4 graph-builder tests (resolved, dangling, malformed-on-non-annotation, multi-annotation). 8-edge regression guard now has the ANNOTATES leg.
+- *Reusable beyond P003.* The forward-pointing dangling pattern is now established for any future link-via-field promotion.
+
+**Reopening criteria.** None expected. Future cognitive primitives (e.g., revision per the parked P003.5 / 1.65 work) follow the same cascade pattern as new ADRs without revising D058.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -2495,20 +2543,6 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 **Likely outcome (not committed):** accept; build the parallel implementation; let dogfood prove it out. The architectural and strategic case is strong; the open question is purely capacity (multi-week effort).
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-## P003: promote `annotation` to atrib-normative event type as the recall-fidelity primitive
-
-**Source:** Recall-fidelity insight raised 2026-04-30: agents reading back signed records lose enormous nuance compared to the agent that signed them.
-
-**Why this reopens [D055](#d055-annotation--proposal--apply-types-stay-as-extension-uris-not-promoted-to-atrib-normative).** D055 ruled `annotation` should stay as an extension URI in a single consumer's namespace because no second harness used the same shape. The recall-fidelity insight is the second use case: ANY atrib-using agent emitting "this record is important; future-self should weight it heavy with these topics + this summary" is using the same shape. Two independent harnesses (atrib-using agents generally + the original consumer specifically) now need the same semantic. The [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion bar starts to clear.
-
-**The decision in question:** promote `https://atrib.dev/v1/types/annotation` to the atrib normative event_type vocabulary (taking byte `0x05` in the [§2.3.1](atrib-spec.md#231-entry-serialization) log entry encoding; `0x04` was claimed by [D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04) for `directory_anchor`; reserved range narrows to `0x06`–`0xFE`). Schema: `annotates: <sha256:...>` (target record_hash), `importance: enum`, `topics: string[]`, `summary: string`, optional `confidence`, `narrative_arc_id`, `sub_context`. Verifier derives `ANNOTATES` graph edges (a new edge type beyond [§3.2.3](atrib-spec.md#323-edge-types)'s seven). A consumer's domain-specific synthesis-annotation shape may stay in the consumer's own namespace if semantically distinct from the protocol-level recall-fidelity annotation.
-
-**Implications if accepted.** Spec change in [§1.2.4](atrib-spec.md#124-event_type-values), [§2.3.1](atrib-spec.md#231-entry-serialization), [§3.2.3](atrib-spec.md#323-edge-types), [§3.2.4](atrib-spec.md#324-edge-derivation-rules). Conformance corpus addition. `@atrib/verify` graph derivation update. atrib SKILL.md updated to use the structured shape instead of the workaround pattern (observation with prose). Recall MCP gains optional `with_annotations` / `min_importance` filter parameters.
-
-**Likely outcome:** accept. The recall-fidelity problem is real; the substrate (annotation-as-record) is the right shape; second use case justifies normative promotion per [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary).
-
-**ADR number** will be assigned when the decision is acted on.
 
 ## P004: human-direct signing as a first-class identity class (post-day-1)
 
