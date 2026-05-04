@@ -57,3 +57,16 @@ atrib uses exclusively audited libraries implementing published standards:
 | Merkle tree      | RFC 6962 (Certificate Transparency) | In-house, tested against Wycheproof vectors |
 
 No custom cryptography.
+
+## Release Integrity
+
+The protocol is about provable signed records; the project's own release artifacts are signed end-to-end so consumers can verify what they're running matches what was committed.
+
+| Surface                   | Mechanism                          | How to verify                                                                                                            |
+| ------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Commits                   | gitsign (Sigstore keyless OIDC)    | `git log --pretty='%h %G? %GS %s'` shows signature status; full verify via `gitsign verify --certificate-identity ...`   |
+| npm packages (`@atrib/*`) | npm publish `--provenance` (SLSA)  | `npm view @atrib/<pkg> dist.attestations`; visible as "verified" badges on npmjs.com                                     |
+| WASM artifact (directory) | `--remap-path-prefix` (build-time) | `strings packages/directory/wasm/atrib_directory_bridge_bg.wasm` should contain no `/Users/` or `/home/` paths           |
+| CI workflows              | GitHub Actions OIDC                | Security-scan results visible at github.com/creatornader/atrib/actions; SARIF uploaded to GHAS Code Scanning when public |
+
+Commits signed via gitsign appear in the Sigstore Rekor public transparency log. Anyone can independently verify a commit was signed by the claimed identity at the claimed time without needing access to a long-lived public key. This is the same trust model atrib provides for agent actions: no central issuer to trust, just verifiable cryptographic primitives + a public log.
