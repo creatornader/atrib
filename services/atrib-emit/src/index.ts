@@ -31,6 +31,8 @@ import { mirrorRecord } from './storage.js'
 
 const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
 const HEX_32_PATTERN = /^[0-9a-f]{32}$/
+// 16 bytes encoded as base64url with no padding = 22 chars per spec §1.2.6.
+const PROVENANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/
 
 const EmitInput = z.object({
   event_type: z.string().min(1).max(256).describe(
@@ -50,6 +52,23 @@ const EmitInput = z.object({
   informed_by: z.array(z.string().regex(SHA256_REF_PATTERN)).optional().describe(
     "Array of 'sha256:<64-hex>' record_hashes that informed this event. " +
     'Sorted lexicographically before signing per §1.2.5.',
+  ),
+  chain_root: z.string().regex(SHA256_REF_PATTERN).optional().describe(
+    "Caller-managed chain_root, the 'sha256:<64-hex>' hash of the immediately " +
+    'preceding record in this context_id. When supplied alongside context_id, ' +
+    'atrib-emit uses both verbatim instead of treating context_id as a fresh ' +
+    'genesis. Required when caller manages chain state across multiple emits ' +
+    "under one context_id (e.g. multi-record watcher pipelines). When omitted " +
+    'with context_id present, atrib-emit synthesizes the genesis chain_root ' +
+    'per spec §1.2.3. Without context_id, this field is meaningless and ' +
+    'returns a warnings-only response.',
+  ),
+  provenance_token: z.string().regex(PROVENANCE_TOKEN_PATTERN).optional().describe(
+    '22-char base64url cross-session causal anchor per spec §1.2.6 / D044. ' +
+    'Genesis-record-only: atrib-emit refuses to sign a record that carries ' +
+    'this field if its chain_root is not the genesis chain_root for the ' +
+    'context_id (per §5.8 graceful-degradation, this returns a warnings-only ' +
+    'response rather than a malformed record).',
   ),
 })
 
@@ -90,10 +109,13 @@ export async function createAtribEmitServer(
 
   const mcp = new McpServer({ name: 'atrib-emit', version: '0.1.0' })
 
-  mcp.tool(
+  mcp.registerTool(
     'emit',
-    'Sign and submit an explicit cognitive event (observation, annotation, revision, etc.) under your atrib identity. Emits a record that chains with your wrapper-signed tool calls when context_id is shared.',
-    EmitInput.shape,
+    {
+      description:
+        'Sign and submit an explicit cognitive event (observation, annotation, revision, etc.) under your atrib identity. Emits a record that chains with your wrapper-signed tool calls when context_id is shared.',
+      inputSchema: EmitInput.shape,
+    },
     async (rawInput) => {
       const input = EmitInput.parse(rawInput)
       const result = await handleEmit({ input, key, queue })
@@ -135,14 +157,41 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
     ])
   }
 
+  // chain_root without context_id is malformed: chain_root is meaningless
+  // outside the context it chains within. Surface a warning instead of
+  // synthesizing one of the two halves.
+  if (input.chain_root && !input.context_id) {
+    return emptyOutput(input.context_id ?? randomContextId(), [
+      'chain_root requires context_id (chain_root has no meaning without a context to chain within)',
+    ])
+  }
+
+  // provenance_token is genesis-record-only per spec §1.2.6. If the caller
+  // also supplied chain_root, that chain_root must equal the genesis
+  // chain_root for the context_id. Middleware refuses to sign malformed
+  // records per §5.8 rather than emit something the validator + verifier
+  // would reject.
+  if (input.provenance_token && input.chain_root && input.context_id) {
+    const genesisRoot = genesisChainRoot(input.context_id)
+    if (input.chain_root !== genesisRoot) {
+      return emptyOutput(input.context_id, [
+        'provenance_token is genesis-record-only per §1.2.6; ' +
+          'chain_root must equal genesisChainRoot(context_id) when provenance_token is supplied',
+      ])
+    }
+  }
+
   // autoChain inheritance: when the caller omits context_id, read the
   // wrapper's local mirror and inherit its most-recent record's context_id
   // (chaining on top of that record's hash). Falls back to a fresh genesis
   // when no mirror is present. The inheritance source is surfaced to the
   // caller in the warnings array so the agent knows which session this
-  // emit landed in.
+  // emit landed in. When the caller supplies BOTH context_id and chain_root,
+  // resolveChainContext uses them verbatim, the path needed by consumers
+  // that thread chain state themselves.
   const chain = await resolveChainContext({
     callerContextId: input.context_id,
+    callerChainRoot: input.chain_root,
     genesisChainRoot,
     randomContextId,
   })
@@ -161,6 +210,7 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
       chainRoot,
       content: input.content,
       informedBy: input.informed_by,
+      provenanceToken: input.provenance_token,
     })
   } catch (e) {
     return emptyOutput(contextId, [
@@ -214,3 +264,9 @@ function randomContextId(): string {
 function hashRecord(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
 }
+
+// Test-only exports for unit tests that need to drive handleEmit's
+// validation paths directly (the McpServer SDK doesn't expose a public
+// way to invoke a registered tool by name from outside its harness).
+// Mirrors the `__test_only__` pattern in sign.ts.
+export const __test_only__ = { handleEmit }

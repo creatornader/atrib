@@ -51,6 +51,40 @@ describe('resolveChainContext', () => {
     expect(ctx.inheritedFrom).toBe('fresh')
   })
 
+  it('uses caller-supplied context_id and chain_root verbatim when both are provided', async () => {
+    // Consumers managing chain state themselves (e.g. multi-record watcher
+    // pipelines that thread chain_root across records under one context_id)
+    // pass both. Mirror is irrelevant on this path.
+    const callerCtx = 'c'.repeat(32)
+    const callerChain = 'sha256:' + 'd'.repeat(64)
+
+    const ctx = await resolveChainContext({
+      callerContextId: callerCtx,
+      callerChainRoot: callerChain,
+      mirrorPath,
+      genesisChainRoot,
+      randomContextId: fixedRandom,
+    })
+
+    expect(ctx.contextId).toBe(callerCtx)
+    expect(ctx.chainRoot).toBe(callerChain)
+    expect(ctx.inheritedFrom).toBe('caller-supplied')
+  })
+
+  it('falls back to genesis chain_root when callerContextId supplied but callerChainRoot omitted', async () => {
+    // Regression: confirm the old single-arg path still produces genesis,
+    // not caller-supplied. The contract is: caller_chain_root is opt-in.
+    const ctx = await resolveChainContext({
+      callerContextId: 'e'.repeat(32),
+      mirrorPath,
+      genesisChainRoot,
+      randomContextId: fixedRandom,
+    })
+
+    expect(ctx.chainRoot).toBe(genesisChainRoot('e'.repeat(32)))
+    expect(ctx.inheritedFrom).toBe('fresh')
+  })
+
   it('falls back to fresh genesis when the mirror file does not exist', async () => {
     const ctx = await resolveChainContext({
       mirrorPath,

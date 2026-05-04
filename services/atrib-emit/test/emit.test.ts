@@ -5,8 +5,9 @@
 import { describe, expect, it } from 'vitest'
 import * as ed from '@noble/ed25519'
 import { canonicalRecord, sha256, hexEncode, verifyRecord, type AtribRecord } from '@atrib/mcp'
-import { createAtribEmitServer } from '../src/index.js'
+import { createAtribEmitServer, __test_only__ as __index_test_only__ } from '../src/index.js'
 import { buildAndSignEmitRecord, __test_only__ } from '../src/sign.js'
+import { createSubmissionQueue } from '@atrib/mcp'
 
 const LOCAL_LOG = 'http://127.0.0.1:0/v1/entries'
 
@@ -75,6 +76,44 @@ describe('buildAndSignEmitRecord', () => {
     expect(record).not.toHaveProperty('informed_by')
   })
 
+  it('carries provenance_token when supplied (D044 / spec §1.2.6)', async () => {
+    // 22 base64url chars = 16 bytes encoded, the spec-mandated shape for
+    // cross-session causal anchors. The genesis-record-only invariant is
+    // enforced upstream in handleEmit; buildAndSignEmitRecord trusts the
+    // caller and just plumbs through.
+    const seed = await freshKey()
+    const provenanceToken = 'AAAAAAAAAAAAAAAAAAAAAA' // 22 chars; contents irrelevant for this test
+
+    const record = await buildAndSignEmitRecord({
+      privateKey: seed,
+      eventType: 'https://atrib.dev/v1/types/observation',
+      contextId: 'a'.repeat(32),
+      chainRoot: 'sha256:' + 'b'.repeat(64),
+      content: { what: 'descended from upstream session' },
+      provenanceToken,
+    })
+
+    const r = record as AtribRecord & { provenance_token?: string }
+    expect(r.provenance_token).toBe(provenanceToken)
+    expect(await verifyRecord(record)).toBe(true)
+  })
+
+  it('omits provenance_token when not supplied', async () => {
+    // JCS canonicalization is sensitive to presence/absence; "omitted (not
+    // null)" is the spec contract per §1.3, same property §1.2.5 has for
+    // informed_by.
+    const seed = await freshKey()
+    const record = await buildAndSignEmitRecord({
+      privateKey: seed,
+      eventType: 'https://atrib.dev/v1/types/observation',
+      contextId: '1'.repeat(32),
+      chainRoot: 'sha256:' + '2'.repeat(64),
+      content: { what: 'no anchor' },
+    })
+
+    expect(record).not.toHaveProperty('provenance_token')
+  })
+
   it('record_hash is stable for identical inputs at the same timestamp', async () => {
     // Sanity: canonicalization should be deterministic for non-time-dependent
     // fields. We can't pin Date.now() through buildAndSignEmitRecord without
@@ -139,4 +178,58 @@ describe('createAtribEmitServer', () => {
     expect(server.mcp).toBeTruthy()
     await server.flush()
   })
+})
+
+describe('handleEmit validation paths', () => {
+  // These tests drive the internal handler exposed via __test_only__ so we
+  // can assert on the emptyOutput warnings rather than the McpServer
+  // dispatch shape. Per spec §5.8 graceful degradation: malformed inputs
+  // return warnings + a placeholder record_hash, never throw.
+  const { handleEmit } = __index_test_only__
+
+  it('refuses chain_root without context_id (no anchoring context)', async () => {
+    const seed = await freshKey()
+    const queue = createSubmissionQueue(LOCAL_LOG)
+    const result = await handleEmit({
+      input: {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'orphan chain_root' },
+        chain_root: 'sha256:' + 'f'.repeat(64),
+      },
+      key: { privateKey: seed, source: 'env' },
+      queue,
+    })
+
+    expect(result.record_hash).toBe('sha256:unknown')
+    expect(result.warnings.some((w) => w.includes('chain_root requires context_id'))).toBe(true)
+    await queue.flush()
+  })
+
+  it('refuses provenance_token alongside a non-genesis chain_root (spec §1.2.6)', async () => {
+    // chain_root is set to a sentinel value that is NOT genesisChainRoot for
+    // the supplied context_id; provenance_token is genesis-record-only, so
+    // the combination is invalid and atrib-emit refuses to sign per §5.8.
+    const seed = await freshKey()
+    const queue = createSubmissionQueue(LOCAL_LOG)
+    const result = await handleEmit({
+      input: {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'misplaced provenance' },
+        context_id: 'a'.repeat(32),
+        chain_root: 'sha256:' + 'f'.repeat(64), // not the genesis for 'aaa...'
+        provenance_token: 'AAAAAAAAAAAAAAAAAAAAAA',
+      },
+      key: { privateKey: seed, source: 'env' },
+      queue,
+    })
+
+    expect(result.record_hash).toBe('sha256:unknown')
+    expect(result.warnings.some((w) => w.includes('provenance_token is genesis-record-only'))).toBe(true)
+    await queue.flush()
+  })
+
+  // Note: positive-path tests for caller-supplied chain_root + provenance_token
+  // (where validation passes and the record submits) live in integration.test.ts
+  // because they need a real HTTP log stub. The unit tests above focus on the
+  // pre-submission rejection paths, which never hit the queue.
 })
