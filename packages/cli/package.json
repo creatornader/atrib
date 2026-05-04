@@ -9,15 +9,9 @@
   "files": [
     "dist"
   ],
-  "description": "CLI tools for atrib. Key generation and utilities.",
-  "author": "Atrib <hello@atrib.dev>",
+  "description": "CLI for atrib. Generate Ed25519 keypairs, manage them in macOS Keychain, publish identity claims to the atrib directory.",
+  "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/creatornader/atrib",
-    "directory": "packages/cli"
-  },
-  "bugs": "https://github.com/creatornader/atrib/issues",
   "homepage": "https://atrib.dev",
   "keywords": [
     "atrib",

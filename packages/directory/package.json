@@ -1,16 +1,10 @@
 {
   "name": "@atrib/directory",
   "version": "0.1.0",
-  "description": "AKD-backed identity-claim directory SDK for atrib (spec §6)",
-  "author": "Atrib <hello@atrib.dev>",
+  "description": "Identity-claim directory SDK for atrib. AKD-backed publish, lookup, history, and proof-of-absence operations per spec §6.",
+  "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/creatornader/atrib",
-    "directory": "packages/directory"
-  },
-  "bugs": "https://github.com/creatornader/atrib/issues",
   "keywords": [
     "atrib",
     "akd",

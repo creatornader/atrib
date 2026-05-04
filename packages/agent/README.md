@@ -2,7 +2,7 @@
 
 **Verifiable agent actions, client side. Every outbound MCP tool call gets signed at the moment of dispatch, carries provable context to the receiver, and chains into the next action. Works with every major MCP framework. Sits above every major agent payment protocol so commerce-closing settlement is bundled in.**
 
-`@atrib/agent` is the client-side half of the [atrib protocol](../../atrib-spec.md). Each outbound MCP tool call becomes a signed, chainable record so anyone (the agent itself, downstream auditors, merchants closing a transaction, future agents picking up the work) can verify what happened without trusting any intermediary.
+`@atrib/agent` is the client-side half of the [atrib protocol](https://github.com/creatornader/atrib/blob/main/atrib-spec.md). Each outbound MCP tool call becomes a signed, chainable record so anyone (the agent itself, downstream auditors, merchants closing a transaction, future agents picking up the work) can verify what happened without trusting any intermediary.
 
 You set up one `atrib()` interceptor, plug it into your framework's adapter, and every outbound `tools/call` from that point on carries W3C trace context, an atrib chain token, and the full atrib session lifecycle. When a payment completes (through any of the supported commerce protocols), a transaction record closes the chain and the substrate produces a signed settlement document anyone can recompute. When commerce never closes the chain, the substrate still serves recall, audit, and cross-agent provenance.
 
@@ -26,18 +26,18 @@ Two coverage surfaces define what you get:
 
 ## Coverage Matrix 2: Agent Payment Protocols
 
-`@atrib/agent` sits **above** every major agent payment protocol. It does not implement payments, move money, or enforce transactions; it detects transaction events in the response flow of whichever payment protocol your agent is using, and writes a signed transaction record that closes the attribution chain. **You do not choose a payment protocol at install time**; the detection logic for all six (ACP, UCP, x402, MPP, AP2, a2a-x402) runs simultaneously and fires on whichever one your tool responses happen to carry. Transaction records emitted by `@atrib/agent` carry the `signers` array per spec [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records); the counterparty signature is collected via the payment protocol's settlement response.
+`@atrib/agent` sits **above** every major agent payment protocol. It does not implement payments, move money, or enforce transactions; it detects transaction events in the response flow of whichever payment protocol your agent is using, and writes a signed transaction record that closes the attribution chain. **You do not choose a payment protocol at install time**; the detection logic for all six (ACP, UCP, x402, MPP, AP2, a2a-x402) runs simultaneously and fires on whichever one your tool responses happen to carry. Transaction records emitted by `@atrib/agent` carry the `signers` array per spec [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records); the counterparty signature is collected via the payment protocol's settlement response.
 
 All detection logic lives in `packages/agent/src/transaction.ts` and runs against unit tests for each protocol's published spec.
 
 | Protocol                              | Sponsor / origin                                            | Detection signal                                                                                                              | Spec reference                       |
 | ------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| **ACP**. Agentic Commerce Protocol   | Stripe / OpenAI; `github.com/agentic-commerce-protocol`    | `status === "completed"` + embedded `order` on `/checkout_sessions/{id}/complete`, or `order_create` / `order_update` webhook | [§1.7.1](../../atrib-spec.md#171-acp-agentic-commerce-protocol)                               |
-| **UCP**. Universal Commerce Protocol | `github.com/universal-commerce-protocol/ucp`                | Same shape as ACP + top-level `ucp.version` envelope                                                                          | [§1.7.2](../../atrib-spec.md#172-ucp-universal-commerce-protocol)                               |
-| **x402**                              | Coinbase. `github.com/coinbase/x402`                       | HTTP `PAYMENT-RESPONSE` header (v2) or legacy `X-PAYMENT-RESPONSE` (v1) on the 200 response                                   | [§1.7.3](../../atrib-spec.md#173-x402)                               |
-| **MPP**. Machine Payments Protocol   | Tempo Labs / Stripe; IETF `draft-ryan-httpauth-payment-01` | HTTP `Payment-Receipt` header on 200 success response                                                                         | [§1.7.4](../../atrib-spec.md#174-mpp-machine-payments-protocol)                               |
-| **AP2**. Agent Payments Protocol     | Google; `github.com/google-agentic-commerce/ap2`           | A2A Message with DataPart containing `ap2.mandates.PaymentMandate`                                                            | [§1.7.5](../../atrib-spec.md#175-ap2-and-a2a-x402)                               |
-| **a2a-x402**                          | Google. `github.com/google-agentic-commerce/a2a-x402`      | A2A task `status.message.metadata["x402.payment.status"] === "payment-completed"` + `receipts[].success === true`             | [§1.7.5](../../atrib-spec.md#175-ap2-and-a2a-x402) (reported as AP2 crypto path) |
+| **ACP**. Agentic Commerce Protocol   | Stripe / OpenAI; `github.com/agentic-commerce-protocol`    | `status === "completed"` + embedded `order` on `/checkout_sessions/{id}/complete`, or `order_create` / `order_update` webhook | [§1.7.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#171-acp-agentic-commerce-protocol)                               |
+| **UCP**. Universal Commerce Protocol | `github.com/universal-commerce-protocol/ucp`                | Same shape as ACP + top-level `ucp.version` envelope                                                                          | [§1.7.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#172-ucp-universal-commerce-protocol)                               |
+| **x402**                              | Coinbase. `github.com/coinbase/x402`                       | HTTP `PAYMENT-RESPONSE` header (v2) or legacy `X-PAYMENT-RESPONSE` (v1) on the 200 response                                   | [§1.7.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#173-x402)                               |
+| **MPP**. Machine Payments Protocol   | Tempo Labs / Stripe; IETF `draft-ryan-httpauth-payment-01` | HTTP `Payment-Receipt` header on 200 success response                                                                         | [§1.7.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#174-mpp-machine-payments-protocol)                               |
+| **AP2**. Agent Payments Protocol     | Google; `github.com/google-agentic-commerce/ap2`           | A2A Message with DataPart containing `ap2.mandates.PaymentMandate`                                                            | [§1.7.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#175-ap2-and-a2a-x402)                               |
+| **a2a-x402**                          | Google. `github.com/google-agentic-commerce/a2a-x402`      | A2A task `status.message.metadata["x402.payment.status"] === "payment-completed"` + `receipts[].success === true`             | [§1.7.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#175-ap2-and-a2a-x402) (reported as AP2 crypto path) |
 
 **The linking mechanism is the same across all six:** the session `context_id` (16-byte anchor, equal to the W3C OTel trace-id by default) travels with the outbound payment request; via `X-atrib-Context` HTTP header for protocols that don't expose a free-form metadata field, or via `params._meta.atrib` for any payment protocol running over MCP transport. When the merchant's side sees the payment-completed signal, atrib writes a transaction record with that `context_id`, and the attribution graph can reconstruct the full chain from contributing tool calls → transaction → settlement.
 
@@ -49,7 +49,7 @@ These are the exact shapes the production `detectTransaction()` function in [`pa
 
 #### ACP: Stripe / OpenAI Agentic Commerce Protocol
 
-Detected on the success response of `POST /checkout_sessions/{id}/complete`. Required fields: top-level `status: "completed"` plus an `order` object with a string `id`. The optional `order.permalink_url` becomes the `checkoutUrl` for Path 2 `content_id` derivation per spec [§5.4.5](../../atrib-spec.md#545-transaction-detection).
+Detected on the success response of `POST /checkout_sessions/{id}/complete`. Required fields: top-level `status: "completed"` plus an `order` object with a string `id`. The optional `order.permalink_url` becomes the `checkoutUrl` for Path 2 `content_id` derivation per spec [§5.4.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#545-transaction-detection).
 
 ```json
 {
@@ -90,7 +90,7 @@ The header value is base64-encoded JSON `{success, transaction, network, payer, 
 
 #### MPP: IETF draft `draft-ryan-httpauth-payment-01`
 
-Also header-based, but a **different** header from x402 (the two were conflated in earlier drafts of this code; see [`DECISIONS.md` D016](../../DECISIONS.md)). MPP uses `Payment-Receipt` per [§5.3](../../atrib-spec.md#53-atribmcp-mcp-server-middleware) of the IETF draft. Both headers may not co-exist on a real response, but if they do, x402 wins (deterministic precedence documented in the test suite).
+Also header-based, but a **different** header from x402 (the two were conflated in earlier drafts of this code; see [`DECISIONS.md` D016](https://github.com/creatornader/atrib/blob/main/DECISIONS.md)). MPP uses `Payment-Receipt` per [§5.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#53-atribmcp-mcp-server-middleware) of the IETF draft. Both headers may not co-exist on a real response, but if they do, x402 wins (deterministic precedence documented in the test suite).
 
 ```http
 HTTP/1.1 200 OK
@@ -278,20 +278,20 @@ const tools = await multi.getTools()
 Once the adapter is wired in, every successful `tools/call` from your agent:
 
 1. **Carries W3C trace context** (`traceparent`, `tracestate`, `baggage`) in `params._meta`, so downstream servers can correlate calls with your OTel traces.
-2. **Carries an attribution chain token** in `params._meta.atrib`, a ~87-char base64url token identifying the prior call in the chain ([§1.5.2](../../atrib-spec.md#152-http-transport-tracestate)).
-3. **Emits a signed attribution record** to the submission queue asynchronously, zero blocking on the hot path ([§5.3.5](../../atrib-spec.md#535-log-submission)).
+2. **Carries an attribution chain token** in `params._meta.atrib`, a ~87-char base64url token identifying the prior call in the chain ([§1.5.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#152-http-transport-tracestate)).
+3. **Emits a signed attribution record** to the submission queue asynchronously, zero blocking on the hot path ([§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission)).
 4. **Updates session state** with the response's own `_meta.atrib` token, so the next call chains correctly from the current response.
 5. **Detects transaction events** in the response via the `transaction.ts` detector, across all six payment protocols in coverage matrix 2. When a transaction is detected, a transaction record is emitted linking the session `context_id` to the transaction.
-6. **Fails silent**: if any internal atrib step (signing, submission, interceptor logic) throws, the error is caught, logged with the `atrib:` prefix, and the tool call proceeds normally per spec [§5.8](../../atrib-spec.md#58-degradation-contract).
+6. **Fails silent**: if any internal atrib step (signing, submission, interceptor logic) throws, the error is caught, logged with the `atrib:` prefix, and the tool call proceeds normally per spec [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract).
 
 ---
 
 ## Runnable examples
 
-- [`claude-agent-sdk/`](../../integration/examples/claude-agent-sdk/). Case A (in-process tools) and Case B (proxy) side-by-side
-- [`cloudflare-agents/`](../../integration/examples/cloudflare-agents/); `McpAgent` server-side and `Agent` client-side surfaces
-- [`vercel-ai-sdk/`](../../integration/examples/vercel-ai-sdk/); `createMCPClient` with AI Gateway model routing
-- [`langchain-js/`](../../integration/examples/langchain-js/); `MultiServerMCPClient` and the low-level `loadMcpTools` path
+- [`claude-agent-sdk/`](https://github.com/creatornader/atrib/tree/main/packages/integration/examples/claude-agent-sdk). Case A (in-process tools) and Case B (proxy) side-by-side
+- [`cloudflare-agents/`](https://github.com/creatornader/atrib/tree/main/packages/integration/examples/cloudflare-agents); `McpAgent` server-side and `Agent` client-side surfaces
+- [`vercel-ai-sdk/`](https://github.com/creatornader/atrib/tree/main/packages/integration/examples/vercel-ai-sdk); `createMCPClient` with AI Gateway model routing
+- [`langchain-js/`](https://github.com/creatornader/atrib/tree/main/packages/integration/examples/langchain-js); `MultiServerMCPClient` and the low-level `loadMcpTools` path
 
 Each example directory contains a `README.md` with framework-specific rationale and a runnable `integration.ts` snippet.
 
@@ -315,15 +315,19 @@ The entire atrib integration is wrapped in defensive error handling at every ada
 
 | Spec section | What it defines                                              |
 | ------------ | ------------------------------------------------------------ |
-| [§1.3](../../atrib-spec.md#13-canonical-serialization)         | JCS canonical serialization of records                       |
-| [§1.4](../../atrib-spec.md#14-signing-and-verification)         | Ed25519 signing and verification                             |
-| [§1.5](../../atrib-spec.md#15-context-propagation)         | Context propagation via `params._meta` and W3C trace context |
-| [§1.7](../../atrib-spec.md#17-transaction-event-hooks)         | Transaction event hooks for all 6 payment protocols          |
-| [§2](../../atrib-spec.md#2-merkle-log-protocol)           | Merkle log protocol (Tessera-backed, tlog-tiles spec)        |
-| [§3](../../atrib-spec.md#3-graph-query-interface)           | Graph query interface (fact layer only)                      |
-| [§4](../../atrib-spec.md#4-attribution-policy-format)           | Policy format (merchant-side value distribution)             |
-| [§5.3](../../atrib-spec.md#53-atribmcp-mcp-server-middleware)         | Agent-side middleware behavior                               |
-| [§5.4](../../atrib-spec.md#54-atribagent-agent-middleware)         | Path 1 / Path 2 transaction detection                        |
-| [§5.8](../../atrib-spec.md#58-degradation-contract)         | Degradation contract; silent failure never breaks the host  |
+| [§1.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#13-canonical-serialization)         | JCS canonical serialization of records                       |
+| [§1.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#14-signing-and-verification)         | Ed25519 signing and verification                             |
+| [§1.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#15-context-propagation)         | Context propagation via `params._meta` and W3C trace context |
+| [§1.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#17-transaction-event-hooks)         | Transaction event hooks for all 6 payment protocols          |
+| [§2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2-merkle-log-protocol)           | Merkle log protocol (Tessera-backed, tlog-tiles spec)        |
+| [§3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#3-graph-query-interface)           | Graph query interface (fact layer only)                      |
+| [§4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#4-attribution-policy-format)           | Policy format (merchant-side value distribution)             |
+| [§5.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#53-atribmcp-mcp-server-middleware)         | Agent-side middleware behavior                               |
+| [§5.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#54-atribagent-agent-middleware)         | Path 1 / Path 2 transaction detection                        |
+| [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)         | Degradation contract; silent failure never breaks the host  |
 
-The full protocol spec is at [`atrib-spec.md`](../../atrib-spec.md).
+The full protocol spec is at [`atrib-spec.md`](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).
+
+---
+
+> **A note on documentation links.** The atrib protocol repository is currently private (in-progress public preparation). Links in this README to the spec and sister packages (`atrib-spec.md`, `packages/agent/README.md`, etc.) point at `github.com/creatornader/atrib/blob/main/...` URLs that will resolve once the repository goes public. Until then, see [`atrib.dev`](https://atrib.dev) for the protocol overview.

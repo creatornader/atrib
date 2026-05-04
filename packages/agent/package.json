@@ -13,14 +13,9 @@
   "files": [
     "dist"
   ],
-  "description": "Agent middleware — interceptor + framework adapters for MCP attribution. Supports raw SDK, Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS.",
-  "author": "Atrib <hello@atrib.dev>",
+  "description": "Agent middleware for atrib. Interceptor plus framework adapters for MCP attribution. Supports raw SDK, Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS.",
+  "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/creatornader/atrib.git",
-    "directory": "packages/agent"
-  },
   "homepage": "https://atrib.dev",
   "keywords": [
     "mcp",

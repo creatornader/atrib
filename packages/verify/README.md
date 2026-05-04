@@ -1,6 +1,6 @@
 # `@atrib/verify`
 
-**Independent verification of atrib records and settlement documents. Re-runs the spec [§4.6](../../atrib-spec.md#46-the-calculation-algorithm) calculation algorithm locally and checks the result against what a recommendation document claims. Verifies any signed record against its creator key. No trust in any intermediary required.**
+**Independent verification of atrib records and settlement documents. Re-runs the spec [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm locally and checks the result against what a recommendation document claims. Verifies any signed record against its creator key. No trust in any intermediary required.**
 
 This is the **verifier half** of the atrib protocol, used by merchants closing transactions, auditors checking agent activity, regulators querying historical state, and any party that needs to validate atrib data independently. The agent and tool servers produce signed attribution records. The Merkle log stores them. This package answers the questions any verifier has to answer: _given the graph and the policy, is this distribution actually correct? Was this record actually signed by the key it claims? Did this action actually happen at the time it claims?_
 
@@ -33,11 +33,11 @@ const result = await verifier.verify(recommendationDoc)
 1. **Resolves the calculator's public key** from `recommendationDoc.calculated_by`. For the well-known `resolve.atrib.dev` service, the key is fetched from the `/pubkey` endpoint. For other calculators, the merchant supplies the key out-of-band.
 2. **Verifies the Ed25519 signature** over the JCS-canonicalized recommendation document (excluding the `signature` field).
 3. **Fetches the attribution graph** at `recommendationDoc.graph_tree_size` from the configured graph endpoint. Pinning to a specific tree size makes the verification reproducible; the graph is fixed, not "live."
-4. **Fetches the session policy record** referenced by `policy_record_id`, or uses the spec [§4.3](../../atrib-spec.md#43-the-default-policy) default policy if `policy_record_id === 'default'`.
+4. **Fetches the session policy record** referenced by `policy_record_id`, or uses the spec [§4.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#43-the-default-policy) default policy if `policy_record_id === 'default'`.
 5. **Re-runs `calculate(graph, policy, sessionPolicyRecord)`** locally; a pure function with no network calls and no randomness.
 6. **Compares distributions** using `distributionsMatch()` (within `1e-9` per recipient, accounting for floating-point drift across implementations).
 
-The key invariant per spec [§4.6](../../atrib-spec.md#46-the-calculation-algorithm): any party with the same graph and the same policy MUST get the same distribution. If they don't, either the calculator cheated, the document was tampered with, or one party has a buggy implementation. Either way the merchant should not pay against this document.
+The key invariant per spec [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm): any party with the same graph and the same policy MUST get the same distribution. If they don't, either the calculator cheated, the document was tampered with, or one party has a buggy implementation. Either way the merchant should not pay against this document.
 
 ## Post-hoc calculation (§5.5.3)
 
@@ -52,7 +52,7 @@ const recommendation = await verifier.calculate({
 // → fully-shaped RecommendationDocument, ready to settle against
 ```
 
-Per the [§5.8](../../atrib-spec.md#58-degradation-contract) degradation contract, this never throws on a missing key; if `signWith === 'merchant'` but `merchantKey` is unset, the document is returned **unsigned** with a warning rather than crashing the merchant pipeline.
+Per the [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation contract, this never throws on a missing key; if `signWith === 'merchant'` but `merchantKey` is unset, the document is returned **unsigned** with a warning rather than crashing the merchant pipeline.
 
 ## API reference
 
@@ -61,19 +61,19 @@ Per the [§5.8](../../atrib-spec.md#58-degradation-contract) degradation contrac
 | Field             | Type     | Default                       | Description                                                             |
 | ----------------- | -------- | ----------------------------- | ----------------------------------------------------------------------- |
 | `logEndpoint`     | `string` | `https://log.atrib.dev/v1`     | The Merkle log to fetch checkpoints and proofs from.                    |
-| `graphEndpoint`   | `string` | `https://graph.atrib.dev/v1`   | The graph query endpoint (spec [§3](../../atrib-spec.md#3-graph-query-interface)).                                     |
+| `graphEndpoint`   | `string` | `https://graph.atrib.dev/v1`   | The graph query endpoint (spec [§3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#3-graph-query-interface)).                                     |
 | `resolveEndpoint` | `string` | `https://resolve.atrib.dev/v1` | Reserved for v2 remote calculation.                                     |
 | `merchantKey`     | `string` | unset                         | Base64url Ed25519 32-byte seed. Optional. `verify()` works without it. |
 
 ### `verify(doc): Promise<VerificationResult>`
 
-Independently re-runs the [§4.6](../../atrib-spec.md#46-the-calculation-algorithm) calculation and verifies the document signature. Always returns a result object; never throws. Inspect `valid`, `signatureOk`, `calcMatch`, and `warnings` to understand the outcome.
+Independently re-runs the [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation and verifies the document signature. Always returns a result object; never throws. Inspect `valid`, `signatureOk`, `calcMatch`, and `warnings` to understand the outcome.
 
-This method operates on `RecommendationDocument` shapes (settlement-recommendation flow per spec [§5.5.2](../../atrib-spec.md#552-verify)). For verifying individual `AtribRecord`s, see `verifyRecord` below.
+This method operates on `RecommendationDocument` shapes (settlement-recommendation flow per spec [§5.5.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#552-verify)). For verifying individual `AtribRecord`s, see `verifyRecord` below.
 
 ### `verifyRecord(record, options): Promise<RecordVerificationResult>`
 
-Per-record verification. Verifies a single signed record's Ed25519 signature and surfaces per-record annotations defined by spec sections [§1.2.5](../../atrib-spec.md#125-informed_by) ([D041](../../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type)), [§1.2.6](../../atrib-spec.md#126-provenance_token) ([D044](../../DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring)), and [§8.4](../../atrib-spec.md#84-coarsened-timing-posture) ([D045](../../DECISIONS.md#d045-privacy-postures-normative-spec-section)).
+Per-record verification. Verifies a single signed record's Ed25519 signature and surfaces per-record annotations defined by spec sections [§1.2.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#125-informed_by) ([D041](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type)), [§1.2.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#126-provenance_token) ([D044](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring)), and [§8.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#84-coarsened-timing-posture) ([D045](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d045-privacy-postures-normative-spec-section)).
 
 ```typescript
 import { verifyRecord } from '@atrib/verify'
@@ -94,16 +94,16 @@ const result = await verifyRecord(record, {
 
 **Implemented per-record annotations:**
 
-- `provenance`: `{ token, upstream_record_hash, upstream_resolved }` per session-genesis record carrying `provenance_token` ([D044](../../DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) / [§1.2.6](../../atrib-spec.md#126-provenance_token)). The 16-byte token truncation is irreversible: `upstream_record_hash` populates only when the caller supplies a candidate whose canonical-form SHA-256[:16] matches the token.
-- `informed_by_resolution`: `{ resolved: string[], dangling: string[] }` per record carrying `informed_by` ([D041](../../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type) / [§1.2.5](../../atrib-spec.md#125-informed_by)). Dangling references are flagged but do not fail verification — they signal "the verifier has not seen upstream context," not "the record is invalid."
-- `posture`: `{ timestamp_granularity, timestamp_consistent, timestamp_granularity_explicit }` ([D045](../../DECISIONS.md#d045-privacy-postures-normative-spec-section) / [§8.4](../../atrib-spec.md#84-coarsened-timing-posture)). Always populated. Surfaces the declared timing granularity, whether the timestamp value structurally matches the spec's trailing-zero invariant for that granularity, and whether the field was explicitly set vs defaulted from absence.
+- `provenance`: `{ token, upstream_record_hash, upstream_resolved }` per session-genesis record carrying `provenance_token` ([D044](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) / [§1.2.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#126-provenance_token)). The 16-byte token truncation is irreversible: `upstream_record_hash` populates only when the caller supplies a candidate whose canonical-form SHA-256[:16] matches the token.
+- `informed_by_resolution`: `{ resolved: string[], dangling: string[] }` per record carrying `informed_by` ([D041](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type) / [§1.2.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#125-informed_by)). Dangling references are flagged but do not fail verification: they signal "the verifier has not seen upstream context," not "the record is invalid."
+- `posture`: `{ timestamp_granularity, timestamp_consistent, timestamp_granularity_explicit }` ([D045](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d045-privacy-postures-normative-spec-section) / [§8.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#84-coarsened-timing-posture)). Always populated. Surfaces the declared timing granularity, whether the timestamp value structurally matches the spec's trailing-zero invariant for that granularity, and whether the field was explicitly set vs defaulted from absence.
 
-**Pending per-record annotations** (tracked as a Pending decision in [DECISIONS.md P005](../../DECISIONS.md#p005-reconcile-atribverify-readme-per-record-annotations-with-actual-code-surface)):
+**Pending per-record annotations** (tracked as a Pending decision in [DECISIONS.md P005](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p005-reconcile-atribverify-readme-per-record-annotations-with-actual-code-surface)):
 
-- `capability_check` ([D051](../../DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) / [§6.7](../../atrib-spec.md#67-capability-declarations)): requires `@atrib/directory` integration to look up the signing key's capability envelope.
-- `cross_attestation` ([D052](../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) / [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)): requires a `signers[]` field on `AtribRecord` plus a transaction-record canonicalization variant in `@atrib/mcp`.
-- `cross_log_proof_count` / `cross_log_threshold_met` / `cross_log_equivocation_detected` ([D050](../../DECISIONS.md#d050-cross-log-replication-for-equivocation-defense) / [§2.11](../../atrib-spec.md#211-cross-log-replication)): requires multi-log proof-bundle parsing and trusted-log-set config.
-- `tool_name_form` / `args_commitment_form` ([§8.2](../../atrib-spec.md#82-opaque-name-posture) / [§8.3](../../atrib-spec.md#83-salted-commitment-posture)): requires `tool_name`, `args_hash`, and `args_salt` fields on `AtribRecord` (the standard record shape currently exposes only the derived `content_id`).
+- `capability_check` ([D051](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) / [§6.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#67-capability-declarations)): requires `@atrib/directory` integration to look up the signing key's capability envelope.
+- `cross_attestation` ([D052](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) / [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)): requires a `signers[]` field on `AtribRecord` plus a transaction-record canonicalization variant in `@atrib/mcp`.
+- `cross_log_proof_count` / `cross_log_threshold_met` / `cross_log_equivocation_detected` ([D050](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d050-cross-log-replication-for-equivocation-defense) / [§2.11](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#211-cross-log-replication)): requires multi-log proof-bundle parsing and trusted-log-set config.
+- `tool_name_form` / `args_commitment_form` ([§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture) / [§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture)): requires `tool_name`, `args_hash`, and `args_salt` fields on `AtribRecord` (the standard record shape currently exposes only the derived `content_id`).
 
 Each pending annotation is its own ADR scope when external consumers need it.
 
@@ -115,8 +115,8 @@ Post-hoc calculation when no agent SDK was present. Always returns a fully-shape
 
 For advanced use (custom calculators, alternative signing flows), the package also exports:
 
-- `calculate(graph, policy, sessionPolicyRecord)`: the pure [§4.6](../../atrib-spec.md#46-the-calculation-algorithm) calculation function
-- `DEFAULT_POLICY`: the spec [§4.3](../../atrib-spec.md#43-the-default-policy) default policy document
+- `calculate(graph, policy, sessionPolicyRecord)`: the pure [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation function
+- `DEFAULT_POLICY`: the spec [§4.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#43-the-default-policy) default policy document
 - `isValidPolicy(doc)`: schema check for `PolicyDocument`
 - `signRecommendation(unsigned, privateKey)`: JCS + Ed25519 signing
 - `verifyRecommendationSignature(doc, publicKey)`: signature verification
@@ -126,7 +126,7 @@ For advanced use (custom calculators, alternative signing flows), the package al
 
 ## Why pure functions matter
 
-The [§4.6](../../atrib-spec.md#46-the-calculation-algorithm) calculation algorithm is intentionally a **pure function** of `(graph, policy)`:
+The [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm is intentionally a **pure function** of `(graph, policy)`:
 
 - **No network calls** during calculation. The graph and policy are fetched up front and then `calculate()` runs in-memory.
 - **No timestamps** beyond those already embedded in the records. Two runs an hour apart on the same inputs produce the same output.
@@ -147,7 +147,7 @@ The merchant's payment pipeline never crashes because of an atrib problem. It ju
 
 ## Test coverage
 
-184 tests across 10 test files covering the [§4.6](../../atrib-spec.md#46-the-calculation-algorithm) calculation algorithm, graph endpoint client, JCS canonicalization, Ed25519 signing, settlement recommendations, policy templates, policy builder, calculation edge cases, property-based testing with fast-check, and full `verify()` / `calculate()` paths including [§5.8](../../atrib-spec.md#58-degradation-contract) degradation.
+184 tests across 10 test files covering the [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm, graph endpoint client, JCS canonicalization, Ed25519 signing, settlement recommendations, policy templates, policy builder, calculation edge cases, property-based testing with fast-check, and full `verify()` / `calculate()` paths including [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation.
 
 Run them with `pnpm --filter @atrib/verify test`.
 
@@ -155,19 +155,23 @@ Run them with `pnpm --filter @atrib/verify test`.
 
 | Spec section | What this package implements                         |
 | ------------ | ---------------------------------------------------- |
-| [§3](../../atrib-spec.md#3-graph-query-interface)           | Graph query interface (client side)                  |
-| [§4.3](../../atrib-spec.md#43-the-default-policy)         | Default policy document                              |
-| [§4.6](../../atrib-spec.md#46-the-calculation-algorithm)         | Pure calculation algorithm                           |
-| [§4.7](../../atrib-spec.md#47-settlement-recommendation-document)         | Recommendation document signing/verification         |
-| [§5.5](../../atrib-spec.md#55-atribverify-merchant-verification-library)         | `AtribVerifier` class. `verify()` and `calculate()` |
-| [§5.8](../../atrib-spec.md#58-degradation-contract)         | Degradation contract; failures never break the host |
+| [§3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#3-graph-query-interface)           | Graph query interface (client side)                  |
+| [§4.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#43-the-default-policy)         | Default policy document                              |
+| [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm)         | Pure calculation algorithm                           |
+| [§4.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#47-settlement-recommendation-document)         | Recommendation document signing/verification         |
+| [§5.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#55-atribverify-merchant-verification-library)         | `AtribVerifier` class. `verify()` and `calculate()` |
+| [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)         | Degradation contract; failures never break the host |
 
-The full protocol spec is at [`atrib-spec.md`](../../atrib-spec.md).
+The full protocol spec is at [`atrib-spec.md`](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).
 
 ## See also
 
-- [`@atrib/mcp`](../mcp/README.md), server-side middleware that produces the signed records `verify()` ultimately validates
-- [`@atrib/agent`](../agent/README.md), agent-side interceptor + framework adapters
-- [`@atrib/log-dev`](../log-dev/README.md), development-mode Merkle log stub. Returns placeholder Merkle hashes that **will not pass** strict cryptographic verification, fine for end-to-end shape testing, not for production verification.
-- [`packages/integration/examples/end-to-end/`](../integration/examples/end-to-end/), runnable demo wiring everything together
-- [`DECISIONS.md`](../../DECISIONS.md), architectural decision log
+- [`@atrib/mcp`](https://github.com/creatornader/atrib/blob/main/packages/mcp/README.md), server-side middleware that produces the signed records `verify()` ultimately validates
+- [`@atrib/agent`](https://github.com/creatornader/atrib/blob/main/packages/agent/README.md), agent-side interceptor + framework adapters
+- [`@atrib/log-dev`](https://github.com/creatornader/atrib/blob/main/packages/log-dev/README.md), development-mode Merkle log stub. Returns placeholder Merkle hashes that **will not pass** strict cryptographic verification, fine for end-to-end shape testing, not for production verification.
+- [`packages/integration/examples/end-to-end/`](https://github.com/creatornader/atrib/blob/main/packages/integration/examples/end-to-end/), runnable demo wiring everything together
+- [`DECISIONS.md`](https://github.com/creatornader/atrib/blob/main/DECISIONS.md), architectural decision log
+
+---
+
+> **A note on documentation links.** The atrib protocol repository is currently private (in-progress public preparation). Links in this README to the spec and sister packages (`atrib-spec.md`, `packages/agent/README.md`, etc.) point at `github.com/creatornader/atrib/blob/main/...` URLs that will resolve once the repository goes public. Until then, see [`atrib.dev`](https://atrib.dev) for the protocol overview.

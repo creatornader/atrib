@@ -8,7 +8,7 @@ record submitted to the atrib log.
 
 `createAtribProxy` from `@atrib/mcp` does the MCP plumbing: spawn an upstream,
 forward tool calls, apply `atrib()` middleware. But every wrapper that calls
-it ends up reinventing the same operational shell — key resolution (env / file
+it ends up reinventing the same operational shell: key resolution (env / file
 / Keychain / 1Password), file logging, signed-record mirror persistence,
 autoChain seed loading from disk, secure file permissions, per-tool gating for
 the preCallTransform hook. That's hundreds of lines of boilerplate per
@@ -54,15 +54,15 @@ and no env var, the wrapper reads `~/.atrib/wrap-config.json`.
 
 | Field             | Required | Default                                   | Notes                                                                                                                                            |
 | ----------------- | -------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`            | yes      | —                                         | Logical wrapper name. Surfaced to host as McpServer name + used in default file paths.                                                          |
+| `name`            | yes      | (no default)                              | Logical wrapper name. Surfaced to host as McpServer name + used in default file paths.                                                          |
 | `agent`           | no       | `claude-code`                             | Identity hint. Picks the `atrib-creator-<agent>` Keychain service before falling back to `atrib-creator`.                                       |
-| `upstream.command`| yes      | —                                         | Binary to spawn for the upstream MCP server.                                                                                                     |
+| `upstream.command`| yes      | (no default)                              | Binary to spawn for the upstream MCP server.                                                                                                     |
 | `upstream.args`   | no       | `[]`                                      | Args for the upstream binary.                                                                                                                    |
 | `upstream.env`    | no       | inherited                                 | Extra env merged with the parent process env (parent wins on conflicts).                                                                         |
-| `serverUrl`       | yes      | —                                         | Canonical URL for `content_id` derivation per spec §1.2.2. Path segment for `agent` is appended automatically.                                 |
+| `serverUrl`       | yes      | (no default)                              | Canonical URL for `content_id` derivation per spec §1.2.2. Path segment for `agent` is appended automatically.                                 |
 | `logEndpoint`     | no       | `https://log.atrib.dev/v1/entries`        | Submission endpoint. Override for local development against `@atrib/log-dev` or a local log-node.                                                |
 | `autoChain`       | no       | `true`                                    | Chain successive tool calls within this wrapper's process lifetime. Required for CHAIN_PRECEDES edges from stdio hosts.                        |
-| `tools[<name>]`   | no       | —                                         | Per-tool overrides. `transactionTool: true` emits a `transaction` event_type record. `injectReceiptId: true` enables D057 preCallTransform.    |
+| `tools[<name>]`   | no       | (none)                                    | Per-tool overrides. `transactionTool: true` emits a `transaction` event_type record. `injectReceiptId: true` enables D057 preCallTransform.    |
 | `logFile`         | no       | `~/.atrib/logs/<name>-<agent>.log`        | Wrapper debug log (jsonl). Set to `""` to disable.                                                                                              |
 | `recordFile`      | no       | `~/.atrib/records/<name>-<agent>.jsonl`   | Signed-record mirror (jsonl). Set to `""` to disable.                                                                                           |
 
@@ -75,7 +75,7 @@ The wrapper picks the signing key in this order (first hit wins):
 3. macOS Keychain entry for the current user, services tried in order:
    - `atrib-creator-<agent>` (agent-scoped; matches the wrapper convention).
    - `atrib-creator` (generic fallback).
-4. 1Password CLI (`op read`) — recovery path. Set `ATRIB_OP_REFERENCE` to a
+4. 1Password CLI (`op read`) as a recovery path. Set `ATRIB_OP_REFERENCE` to a
    valid `op://<vault>/<item>/<field>` reference. Off by default; activates
    only when the env var is set.
 

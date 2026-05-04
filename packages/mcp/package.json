@@ -1,6 +1,6 @@
 {
   "name": "@atrib/mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,14 +13,9 @@
   "files": [
     "dist"
   ],
-  "description": "MCP server middleware — signed receipts for every tool call. One-line integration.",
-  "author": "Atrib <hello@atrib.dev>",
+  "description": "MCP server middleware for atrib. Signed receipts for every tool call, one-line integration.",
+  "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/creatornader/atrib.git",
-    "directory": "packages/mcp"
-  },
   "homepage": "https://atrib.dev",
   "keywords": [
     "mcp",
