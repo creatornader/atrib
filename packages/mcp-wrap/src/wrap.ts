@@ -101,10 +101,12 @@ export async function wrap(
       autoChain: config.autoChain,
       ...(autoChainSeed.length > 0 ? { autoChainSeed } : {}),
       ...(transactionTools.length > 0 ? { transactionTools } : {}),
-      onRecord: (rec) =>
-        persistRecord(recordFile, rec as unknown as Record<string, unknown>, (msg, extra) =>
-          log('warn', msg, extra),
-        ),
+      // Persists the signed record + optional pre-sign sidecar. The sidecar
+      // carries the upstream tool name + raw args + raw result so consumers
+      // like atrib-trace and atrib-summarize can surface semantic context.
+      // Public log submission is unaffected.
+      onRecord: (rec, sidecar) =>
+        persistRecord(recordFile, rec, (msg, extra) => log('warn', msg, extra), sidecar),
       ...(preCallTransform ? { preCallTransform } : {}),
     },
   })

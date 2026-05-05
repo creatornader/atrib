@@ -75,6 +75,26 @@ export type PreCallTransform = (
   ctx: PreCallTransformContext,
 ) => Record<string, unknown> | undefined
 
+/**
+ * Pre-sign payload context passed to `onRecord` alongside the signed
+ * AtribRecord. The signed record commits to this content (via content_id /
+ * args_hash / result_hash) but does not itself contain it. Hosts can use
+ * this sidecar to populate a richer local mirror that surfaces semantic
+ * context (tool name, raw args, raw result) for consumers like atrib-trace
+ * and atrib-summarize, without leaking the same content to the public log.
+ *
+ * All fields are optional and best-effort. The sidecar is informational
+ * for observers; the canonical record bytes remain the AtribRecord.
+ */
+export interface OnRecordSidecar {
+  /** MCP tool name (params.name), e.g. "post_context". */
+  toolName?: string
+  /** Tool call arguments (params.arguments) at invocation time. */
+  args?: Record<string, unknown>
+  /** Upstream tool's result object, BEFORE atrib mutated _meta with its token. */
+  result?: Record<string, unknown>
+}
+
 /** Options for the atrib() middleware (§5.3.1). */
 export interface AtribOptions {
   /** Base64url-encoded Ed25519 private key (32 bytes). Required. */
@@ -94,10 +114,19 @@ export interface AtribOptions {
    * commitments). Errors thrown from the observer are caught and logged; they
    * do not block submission or affect the tool response (§5.8).
    *
+   * The optional `sidecar` argument carries pre-sign payload context that the
+   * record's content_id / args_hash / result_hash COMMIT TO but does not
+   * itself contain. Hosts can use it to persist a richer local mirror that
+   * surfaces tool name + args + result alongside the signed record without
+   * leaking that content to the public log (the public log only ever sees
+   * the bare AtribRecord). Backward-compatible: existing observers that
+   * ignore the second argument behave unchanged.
+   *
    * Use cases: dogfood verification (replay verifyRecord against creator_key),
-   * local audit trail, debugging "what exactly did we sign?".
+   * local audit trail, debugging "what exactly did we sign?", richer recall
+   * surfaces (atrib-trace, atrib-summarize) that need semantic context.
    */
-  onRecord?: (record: AtribRecord) => void | Promise<void>
+  onRecord?: (record: AtribRecord, sidecar?: OnRecordSidecar) => void | Promise<void>
   /**
    * Maximum number of records held in the in-memory submission queue while
    * the log is unreachable. When this cap is hit, the queue evicts the
@@ -606,8 +635,17 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
    * context to the result, queue for log submission, update autoChain
    * bookkeeping. Called only on successful tool calls (after the upstream
    * returned and isError is not true).
+   *
+   * `sidecar` is the optional pre-sign payload (toolName, args, result)
+   * passed through to onRecord observers that want to persist a richer
+   * local mirror. Public-log submission is unaffected, the queue only
+   * sees the bare AtribRecord.
    */
-  const commitRecord = (built: BuiltRecord, resultObj: Record<string, unknown>): void => {
+  const commitRecord = (
+    built: BuiltRecord,
+    resultObj: Record<string, unknown>,
+    sidecar?: OnRecordSidecar,
+  ): void => {
     // autoChain bookkeeping: remember this record's hash so the next
     // call in the same context_id chains to it. Deferred to commit time so
     // failed/aborted calls don't poison the chain.
@@ -619,7 +657,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     // swallowed per §5.8, observation must never affect the tool call.
     if (options.onRecord) {
       try {
-        const r = options.onRecord(built.signed)
+        const r = options.onRecord(built.signed, sidecar)
         if (r && typeof (r as Promise<void>).then === 'function') {
           ;(r as Promise<void>).catch((e) =>
             console.warn('atrib: onRecord observer rejected', e),
@@ -721,7 +759,16 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
           return buildSignedRecord(request, resultObj)
         })())
 
-        commitRecord(built, resultObj)
+        // Construct the pre-sign sidecar for onRecord observers. Captures
+        // toolName + raw args + raw result so a richer local mirror can
+        // surface semantic context alongside the signed bytes. Public log
+        // submission below is unchanged, it only sees `built.signed`.
+        const params = request.params as Record<string, unknown>
+        const sidecar: OnRecordSidecar = { result: resultObj }
+        if (typeof params.name === 'string') sidecar.toolName = params.name
+        const sideArgs = params.arguments as Record<string, unknown> | undefined
+        if (sideArgs) sidecar.args = sideArgs
+        commitRecord(built, resultObj, sidecar)
 
         return result
       } catch (err) {

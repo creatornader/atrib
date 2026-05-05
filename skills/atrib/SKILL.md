@@ -1,18 +1,21 @@
 ---
 name: atrib
-version: 0.1.0
+version: 0.2.0
 description: |
-  Use atrib as your literal substrate for memory, reasoning, and getting smarter
-  over time, not as instrumentation that observes you from the outside. Activate
-  before consequential decisions, when noticing things future-you should know,
-  when claims need to be defendable later, when current reasoning contradicts
-  past records, when starting work that builds on prior sessions, or when
-  expressing confidence/uncertainty that should be findable. Provides patterns
-  for invoking recall, populating informed_by precisely, signing explicit
-  observations / decisions / revisions, encoding importance for future-self
-  via annotations, and navigating the multi-identity graph.
+  Use atrib as your literal substrate for memory, reasoning, and getting
+  smarter over time, not as instrumentation that observes you from the
+  outside. Activate at every session start, before consequential decisions,
+  when claims need to be defendable later, when current reasoning
+  contradicts past records, when starting work that builds on prior
+  sessions, or when expressing confidence/uncertainty that should be
+  findable. Provides session-start ritual, pre-emit checklist, recall
+  patterns, informed_by discipline, code-shape examples for emit
+  (annotation / revision / observation), worked decision examples,
+  diagnostic patterns for catching practice gaps, and the multi-producer
+  composition story (wrapper + emit + nightly batch).
 allowed-tools:
   - mcp__atrib-recall__recall_my_attribution_history
+  - mcp__atrib-emit__emit
   - Bash
   - Read
   - Write
@@ -21,164 +24,284 @@ allowed-tools:
 
 # atrib: use the protocol from the inside out
 
-This skill teaches you to use atrib not as instrumentation that watches you from outside, but as your substrate for memory, reasoning, and the way you get smarter over time.
+This skill teaches you to use atrib as substrate for your memory, reasoning, and the way you get smarter across sessions. When the substrate is operational on the host running you, what's missing is YOU using it deliberately at the moments that matter.
 
-The substrate exists. The wrapper signs every MCP tool call you make. atrib-recall lets you query your own past with signatures verified locally. The directory binds keys to identities. What's missing is YOU using it deliberately at the moments that matter.
+If you're invoked in a Claude Code session and you're not emitting records during consequential work, **the substrate is fine but the practice is broken**. This skill is the fix.
 
-## When to invoke this skill
+## Status of the substrate (verify before relying)
 
-Activate when you're about to:
+| Capability | Mechanism | How to verify it's operational |
+|---|---|---|
+| Auto-sign every wrapped MCP tool call | `@atrib/mcp` middleware composed by an MCP wrapper | Wrapped MCP tools available in the current process |
+| Sign explicit cognitive events (observation, annotation, revision) | `mcp__atrib-emit__emit` MCP tool, wired in `~/.claude.json` | Tool present in the current process |
+| Query own past with local Ed25519 verification | `mcp__atrib-recall__recall_my_attribution_history` | Tool present in the current process |
+| Persist signed records to local mirrors | `~/.atrib/records/*.jsonl` (per-producer files) | `ls ~/.atrib/records/` |
+| Public log + browseable explorer | `https://log.atrib.dev/v1/stats` + `explore.atrib.dev` | `curl -s https://log.atrib.dev/v1/stats` |
+| Identity → key binding | `@atrib/directory` + `atrib publish-claim` CLI | `curl -s https://directory.atrib.dev/v6/lookup/<creator_key>` |
+| Per-record verification (signature, posture, capability_check, cross_attestation) | `@atrib/verify` `verifyRecord()` annotations (D041/D044/D045/D051/D052/D061) | `pnpm --filter @atrib/verify test` |
 
-- Make a consequential decision (architecture choice, plan revision, mutating action whose effect matters across time)
-- Make a claim you'll be expected to defend, cite, or revise later
-- Notice something a future-you would want to find again
-- Encounter a contradiction between what you currently think and what a past record says
-- Begin work that builds on prior sessions
-- Express confidence or uncertainty that should be findable later
+If any row of that table fails to verify in your session, the practice is moot, fix infrastructure first, then come back. If they all pass, the rest of this skill is your operating manual.
 
-NOT when you're:
+## Session-start ritual (DO THIS BEFORE ANY WORK)
+
+The most common failure mode is forgetting to look. Before you do anything else in a Claude Code session in a repo connected to atrib:
+
+```
+1. mcp__atrib-recall__recall_my_attribution_history({ limit: 5 })
+   → orient: what did past-me do most recently? what context_id are
+     we continuing? are signatures verifying?
+
+2. curl -s https://log.atrib.dev/v1/stats
+   → orient: when did the last record land on the public log?
+     If hours/days ago AND your session is about substantive work,
+     the dogfood loop is silent, you'll need to be the source.
+
+3. Mentally identify your session's likely emit moments:
+   • What decision will I make in the current process that future-me should find?
+   • What claim will I publish (commit message, PR, briefing)?
+   • What might I revise from a past claim?
+```
+
+Take ~30 seconds. The result of this ritual is a baseline you carry through the session.
+
+## When to invoke `mcp__atrib-emit__emit`
+
+YES, sign explicitly when:
+
+- Making a consequential decision (architecture choice, plan revision, mutating action whose effect matters across time)
+- Making a claim you'll be expected to defend, cite, or revise later
+- Noticing something a future-you would want to find again
+- Encountering a contradiction between current intent and a past record (sign a `revision`, not a silent override)
+- Beginning work that builds on prior sessions (sign an observation declaring continuity)
+- Expressing confidence or uncertainty that should be findable later
+- Discovering a session-spanning pattern (annotation with `importance: high` and topics)
+
+NO, skip explicit signing when:
 
 - Reading docs or grepping for known strings
 - Running mechanical operations (tests, type-checks, formatters)
-- Making trivial edits (typos, format-only changes)
+- Making trivial edits (typos, format-only changes, code style sweeps)
 - Doing pure computation (rendering, parsing, sweeping a known-good rule across many files)
 
-The default discipline: per-MCP-tool-call signing happens automatically via the wrapper. Your job is to add explicit signal at moments that matter, and to consult what you've already signed before deciding what to do next.
+The default discipline: per-MCP-tool-call signing happens automatically via the wrapper for tools served through wrapped MCPs. **Claude Code builtin tools (Read, Edit, Bash, Write, Grep, Glob) bypass MCP entirely and are NOT auto-signed.** This is the single biggest practice trap. If your work consists mostly of builtin calls, code edits, file reads, bash, atrib will be silent on you UNLESS you explicitly emit.
 
-## The four layers of atrib-native cognition
+## Pre-emit checklist (10 seconds before each emit)
 
-### Layer A: output (what you sign)
+Before calling `mcp__atrib-emit__emit`, ask:
 
-- Tool calls served via wrapped MCPs are signed automatically. You don't trigger that; it just happens.
-- Decisions, observations, revisions, reasoning transitions, uncertainty markers should be signed EXPLICITLY by you when they have content the mechanical record-of-tool-call won't capture.
-- Annotations (encoding importance for future-self) should be signed when you self-identify "this is one I'll want to find later with full context."
+1. **Why am I signing this?** One-line answer. ("Future-me will need to find when I made the §8.2 ambiguity decision.")
+2. **Did anything I already signed inform this?** Query `recall` if unsure. Identify the SUBSET of records that ACTUALLY shaped this decision; that's `informed_by`. Not "everything I happened to query."
+3. **Does this contradict a past claim of mine?** If yes, this is a `revision`, not an `observation`.
+4. **What importance signal does future-me need?** If this is one of the load-bearing records of the session, follow the emit with an `annotation` referencing it.
 
-### Layer B: input (what you consult)
+If you can't answer #1 in one line, you don't need to sign yet.
 
-- Before consequential decisions: query recall filtered to the relevant context_id, OR unfiltered for cross-session pattern matching.
-- When you see a record_hash referenced in conversation context, look it up via the log's `/v1/lookup/<hash>` endpoint or include it in a recall query.
-- Default thinking practice: "Have I done this before? What did past-me conclude? What's changed since?"
+## Code-shape examples
 
-### Layer C: reasoning (what you do internally)
+### Pattern 1: load-bearing observation + annotation
 
-- Treat your past graph as first-class working memory, not an audit trail you happen to have.
-- After querying recall, identify the SUBSET of records that ACTUALLY shaped your next action. Only those go into informed_by. Not everything you happened to query.
-- When current reasoning contradicts a past claim, sign a revision. Don't silently override.
+```typescript
+// Step 1: emit the observation describing what happened
+const obs = await mcp__atrib_emit__emit({
+  event_type: "https://atrib.dev/v1/types/observation",
+  content: {
+    what: "Decided that §8.2 verifier surface should report 'hashed' | 'plain' | null, NOT verbatim/opaque/hashed. The verbatim-vs-opaque regex is structurally indistinguishable.",
+    why_noted: "Future-me asking 'why didn't we surface verbatim/opaque distinctly?' should find this with the spec rationale.",
+    topics: ["D061", "§8.2", "tool_name_form", "spec_decision"]
+  }
+})
+// → { record_hash: "sha256:abc123...", context_id: "...", warnings: [...] }
 
-### Layer D: visibility (what you expose)
+// Step 2: annotate it as critical-importance for future retrieval
+await mcp__atrib_emit__emit({
+  event_type: "https://atrib.dev/v1/types/annotation",
+  content: {
+    annotates: obs.record_hash,
+    importance: "critical",
+    summary: "If you're investigating §8.2 form detection later, read this one.",
+    topics: ["D061", "§8.2"]
+  },
+  informed_by: [obs.record_hash]
+})
+```
 
-- Reference record_hashes in PR descriptions, commit messages, briefings: "Per record sha256:abc…, I previously established X. This change updates that to Y because Z."
-- Make your reasoning chain inspectable. The graph of records IS the contract you offer to humans and other agents reading your work.
+### Pattern 2: revision (current claim contradicts a past one)
 
-## How to query recall
+```typescript
+// Discovered a prior claim was wrong after deeper investigation.
+await mcp__atrib_emit__emit({
+  event_type: "https://atrib.dev/v1/types/revision",
+  content: {
+    revises: "sha256:abc123…",
+    prior_position: "X is not built / does not exist",
+    new_position: "X IS operational; my earlier search was incomplete and missed the actual location.",
+    reason: "Cross-checked authoritative project docs; corrected framing."
+  },
+  informed_by: ["sha256:abc123…"]
+})
+```
 
-The `mcp__atrib-recall__recall_my_attribution_history` tool reads your local signed-record mirror, verifies each Ed25519 signature, and returns records newest-first.
+### Pattern 3: cross-session continuity (provenance_token on genesis record)
 
-Useful filter patterns:
+```typescript
+// Starting a new context_id but acknowledging it descends from prior work.
+// The token is base64url(sha256(JCS(upstream))[:16]), derived BEFORE emit.
+const upstreamFullHash = "sha256:..."  // from prior session's last record
+const provenanceToken = computeProvenanceToken(upstreamFullHash)  // 22-char base64url
 
-- "What did I do in this trace?": `context_id: <current 32-hex>`
-- "My recent transactions": `event_type: 'transaction'`
-- "Everything I've ever signed": no filters
-- "I need full bytes for re-verification": `compact: false`
-- "Show me even tampered records so I can investigate": `include_unverified: true`
+await mcp__atrib_emit__emit({
+  event_type: "https://atrib.dev/v1/types/observation",
+  content: { what: "Continuing prior implementation work in fresh process." },
+  provenance_token: provenanceToken,
+  // chain_root deliberately omitted, atrib-emit synthesizes the genesis chain_root
+  // for this fresh context_id, which is what "genesis-record-only" anchoring requires.
+})
+```
 
-The `pagination_caveat` in the response is real: if new records arrive between calls, offset shifts. For consistent multi-page traversal, capture the first-page timestamps and re-page with a context_id or event_type filter.
+### Pattern 4: explicit informed_by from recall query
 
-`signature_verified` is local: it proves the record was signed by the named creator_key, not that the record was committed to log.atrib.dev. To confirm log inclusion, fetch the inclusion proof from the log API.
+```typescript
+// Querying past records, identifying which ACTUALLY changed the next action.
+const past = await mcp__atrib_recall__recall_my_attribution_history({ limit: 25 })
+// Suppose 25 came back; only two changed the approach.
+const decisive = [past.records[3].record_hash, past.records[12].record_hash]
 
-## How to populate informed_by precisely
+await mcp__atrib_emit__emit({
+  event_type: "https://atrib.dev/v1/types/observation",
+  content: {
+    what: "Proceeding with approach Y. Past records show I tried X twice and rolled back; Y is the next sensible variation.",
+    why_noted: "Future-me asking 'why didn't we just do X again?' should find this."
+  },
+  informed_by: decisive  // exactly the 2 records that mattered, not all 25
+})
+```
 
-The wrapper accepts an `informedBy` callback that injects `informed_by: [<sha256:...>]` into the next signed record. The agent-bridge wrapper doesn't yet wire automatic detection, you declare informed_by intentionally by setting it explicitly when invoking through the wrapper, or by including the relevant hashes in your action's prose where the wrapper can pick them up.
+## How recall works
 
-Discipline:
+`mcp__atrib-recall__recall_my_attribution_history` reads your local signed-record mirror, verifies each Ed25519 signature, and returns records newest-first.
 
-1. Query recall, get back N records.
-2. Identify the SUBSET (often just 1-2) that ACTUALLY changed what you're about to do.
-3. Declare ONLY those record_hashes as informed_by.
+| Filter | Use case |
+|---|---|
+| `context_id: <32hex>` | "What did I do in this trace?" |
+| `event_type: 'transaction'` | "My recent transactions" (only `tool_call` and `transaction` are filterable in v0.2 of recall) |
+| no filters | "Everything I've ever signed" |
+| `compact: false` | Need full bytes for re-verification |
+| `include_unverified: true` | Investigating tampered or partial mirror state |
 
-"I queried 25 records, 2 changed my approach, informed_by=[X, Y]" is precise. "I queried 25 records, informed_by=[all 25]" is noise that makes the cognitive graph untrustworthy.
+Caveats:
+- `pagination_caveat` is real, if new records arrive between calls, offset shifts. For consistent multi-page traversal, capture timestamps from page 1 and re-page with a context_id or event_type filter.
+- `signature_verified: true` is LOCAL, it proves the named creator_key signed those bytes. It does NOT prove log inclusion. To confirm log inclusion, fetch `https://log.atrib.dev/v1/lookup/<hash>` and verify the inclusion proof.
+- Recall reads only YOUR records (filtered by your wrapper's creator_key on the local mirror). To see records from other signers in a shared session, query the graph at `https://graph.atrib.dev/v1/sessions/<context_id>` or use the explorer.
 
-## The revision pattern (handling contradictions)
+## Per-record verification annotations (what verify gives you)
 
-When you query recall and see record P that contradicts your current intent C:
+When you call `verifyRecord(record, options)` from `@atrib/verify`, the result includes structured annotations beyond just `signatureOk`. Know what each one means:
 
-1. Don't silently override.
-2. Sign a revision record: "P was my prior claim. C is my new claim. Reason for revision: Z."
-3. Set `informed_by: [P]` so the revision is graph-linked back to what it's revising.
+| Annotation | Source | What it tells you |
+|---|---|---|
+| `posture.timestamp_granularity*` | §8.4 / D045 | Coarsening level + structural consistency |
+| `posture.args_commitment_form` / `result_commitment_form` | §8.3 / D045 | `'plain-sha256' \| 'salted-sha256'` per record's salt presence |
+| `posture.tool_name_form` | §8.2 / D061 | `'hashed' \| 'plain' \| null`, NOT verbatim-vs-opaque (not detectable) |
+| `provenance` | §1.2.6 / D044 | Token + upstream resolution status (cross-session anchor) |
+| `informed_by_resolution` | §1.2.5 / D041 | `{ resolved, dangling }`, dangling is signal not invalidation |
+| `capability_check` | §6.7 / D051 | `{ envelope, in_envelope, mismatches, unresolvable }`, mismatches don't flip valid |
+| `cross_attestation` | §1.7.6 / D052 | `{ signers_count, signers_valid, missing }` on transaction records, missing is signal |
 
-Until the spec ships a normative `revision` event_type, use `observation` with explicit prose: "REVISION OF sha256:P: …. Reason: …."
+All "signal not invalidation" annotations leave `valid` true even when they flag, that's intentional per their respective spec sections. Consumers decide policy.
 
-The revision becomes its own signed record that future-you finds when asking "what did I think about this?"
+## Multi-producer composition (the density picture)
 
-## Encoding importance for future-self (annotations)
+You are one signer in a multi-producer system. The graph density that makes recall useful comes from many surfaces composing:
 
-A signed record alone tells future-you WHAT happened but not how to weight it. Use annotations to encode the felt importance at sign time.
+| Surface | Cadence | What it produces |
+|---|---|---|
+| Wrapped MCP server middleware | Per MCP tool call | `tool_call` records auto-signed during your session |
+| `mcp__atrib-emit__emit` (you, deliberately) | Whenever you call it | `observation` / `annotation` / `revision` records |
+| Scheduled background batches | Cron / launchd | Per-event observation records from watchers; per-annotation records from synthesis passes; chained via `informed_by` |
+| Always-on agent runtime (host-specific) | Continuous, when wired in | Records the agent's autonomous activity between interactive sessions |
+| Future scheduled-runtime layer | Cron + event-driven scheduler | Replaces nightly-batch-only emission with finer-grained scheduled cognitive work |
 
-Pattern (until the spec ships the normative `annotation` event_type):
+When you check `https://log.atrib.dev/v1/stats` mid-day and `newest_timestamp_ms` is many hours old, the most common cause is that nightly batches have fired but no interactive session has been emitting since. **A multi-hour gap during business hours is a signal your practice has stopped, not infrastructure failure.** Always-on autonomous emission is a separate substrate decision, orthogonal to this skill.
 
-- For load-bearing records: follow the action with an `observation` record that references the action via `informed_by` and carries:
-  - `importance` (critical / high / medium / low / noise), explicitly stated in the observation prose
-  - A short summary for future-self ("if you only read this one record about <topic>, this is it")
-  - Topics / tags for retrieval ("relevant to: dogfooding architecture, signer taxonomy")
-  - Confidence level if relevant
+## Diagnostic patterns
 
-- OR, for actions that are fundamentally about producing context (briefings, PR descriptions, plan documents), put the importance signal in the prose where future-self's recall will surface it alongside the record_hash.
+### "I think I'm signing but the log is silent"
 
-The recall-fidelity problem this solves: agents reading back records in a later session lose enormous nuance compared to the agent that signed them. Annotations are the deliberate counter-pressure.
+Check in this order:
+1. `curl -s https://log.atrib.dev/v1/stats` → if tree_size hasn't grown since your emit, submission may be queued or the log may be down.
+2. `ls -lt ~/.atrib/records/atrib-emit-claude-code.jsonl` → if mtime updated, the local mirror has it; submission is the bottleneck.
+3. `tail -1 ~/.atrib/records/atrib-emit-claude-code.jsonl | jq .` → confirm the bytes you intended.
+4. Re-emit with `--verbose` mental model and check the `warnings` array on the response, submission failures land there.
+
+### "I'm in a session and atrib is going to be silent unless I act"
+
+Check `https://log.atrib.dev/v1/stats newest_timestamp_ms`. If the gap to now is > 4 hours AND you're doing substantive work, the practice is broken: explicitly emit at SKILL-listed triggers. Don't assume infrastructure will catch you.
+
+### "A past record contradicts what I'm about to claim"
+
+Sign a `revision` record per Pattern 2 above. Set `informed_by: [<the past record_hash>]`. Set `revises: <the past record_hash>` in `content`. Don't silently override.
+
+### "I queried recall and got 25 records, what's informed_by?"
+
+Read 25, identify the 1–3 that ACTUALLY changed your next action, declare ONLY those. The graph is only useful if `informed_by` is precise. "Every record I happened to see" is noise.
 
 ## Navigating the multi-identity graph
 
-You are not the only signer. The graph contains records from:
+The graph contains records from multiple signers. When interpreting results:
 
-- You (your wrapper's creator_key)
-- Other agents (other harnesses' wrapper keys)
-- Service identities (log-node signs checkpoints; directory-node signs anchors)
-- Transaction counterparties (per D052 cross-attestation)
-- Test fixtures (claimed and labeled as such; e.g. `GX9rI…` is the public `fill(42)` test seed)
-- (Future) sub-agents you spawned (HKDF-derived from your key, parent/child relationship preserved on-chain)
-- (Future) humans who authorized your actions (distinct identity class with `AUTHORIZED_BY` / `ATTESTED_BY` / `APPROVED_BY` / `DELEGATED_TO` edges to your records)
+| Class | What they sign |
+|---|---|
+| You (wrapper's creator_key) | tool_call + emitted observations / annotations / revisions in your sessions |
+| Other Claude Code agents (different wrapper keys) | their own tool_call + emit records |
+| Service identities | log-node signs checkpoints; directory-node signs anchors |
+| Transaction counterparties (D052) | cross-attestation entries in `signers[]` of transaction records |
+| Test fixtures | claimed and labeled (e.g. `GX9rI…` is the public `fill(42)` test seed) |
+| Future: HKDF-derived sub-agents | parent/child relationship preserved on-chain |
+| Future: humans authorizing actions | distinct identity class with `AUTHORIZED_BY` / `ATTESTED_BY` / `APPROVED_BY` / `DELEGATED_TO` edges |
 
-When you query recall, you get YOUR records (filtered by your creator_key). When you fetch a session graph for a context_id, you get records from EVERY signer in that session. Pay attention to `creator_key` when interpreting results; "what I did" vs "what someone else did in the same session" are different signals.
-
-The verifier surfaces verification state per node: `signed`, `logged`, `witnessed`, `revoked_after_revocation`, etc. Trust assessment is layered (per spec §8.7); a passing signature is one of ten layers, not the whole story.
+Recall returns YOUR records (filtered by your creator_key on the local mirror). The session graph at `graph.atrib.dev/v1/sessions/<context_id>` returns records from EVERY signer in that session. Pay attention to `creator_key`, "what I did" vs "what someone else did in the same session" are different signals.
 
 ## What atrib does NOT certify
 
-- That what you signed was true. atrib certifies that YOU signed it under that key at that time. Truth is downstream of signing.
-- That past records influenced your present action. That's what informed_by + annotations are for, and only if you populate them honestly.
-- That every signer is who they claim to be. The directory anchors identity claims; capability declarations (D051 / §6.7) tighten it; cross-attestation (D052) tightens further. None is universal yet.
+- **That what you signed was true.** atrib certifies that YOU signed it under that key at that time. Truth is downstream.
+- **That past records influenced your present action.** That's what informed_by + annotations are for, only if you populate them honestly.
+- **That every signer is who they claim to be.** The directory anchors identity claims; capability declarations (D051) tighten it; cross-attestation (D052) tightens further. None is universal yet.
 
-When citing your own records to others, lead with the cryptographic facts (what's verifiable) and qualify the semantic claims (what's interpretation).
+When citing your own records to others, lead with cryptographic facts (verifiable) and qualify semantic claims (interpretation).
 
-## Voice patterns
+## Voice patterns (use in conversation + commits + PRs)
 
-When referencing your own past in conversation or output:
+- "Per record sha256:abc…, my prior position was X. Revising to Y because [reason]. Signing revision now."
+- "Checked recall: 25 records matched, 2 changed my approach (sha256:def…, sha256:ghi…). Proceeding with informed_by=[those two]."
+- "Notice: [observation]. Importance: high. Topics: [tags]. Signing now."
+- "Confidence: low on A, high on B. Future-self should weight B when reading this back."
+- "This decision is load-bearing. Signing observation + annotation so future-self finds it under [topic]."
 
-- "Per record sha256:abc…, my prior position was X. Revising to Y because [reason]. Will sign new record."
-- "I checked recall: 3 records matched [filter], 1 actually changed my approach (sha256:def…). Proceeding with informed_by=[sha256:def…]."
-- "Notice: [observation]. Flagging as observation worth signing, importance: high, relevant to [topics]."
-- "Confidence: low on A, high on B. Future-self: weight the high-confidence claims when reading this back."
-- "This decision is load-bearing. Future-you should find this when asking about [topic] in [context]."
+These patterns make reasoning inspectable in real time and serve as discoverable hooks in commit messages and PR descriptions.
 
-These patterns make your reasoning inspectable in real time, even before all the producer-side wiring is complete.
-
-## What this skill does NOT do (yet)
-
-- It does NOT auto-emit annotations or observations for you. You choose when. Until the spec ships a normative `atrib-emit` MCP tool, explicit signing of non-tool-call records is a discipline expressed in prose, not a separate tool call.
-- It does NOT auto-detect informed_by from your tool call args. You declare them intentionally.
-- It does NOT navigate sub-agent identities (HKDF derivation per the architecture plan, not yet implemented).
-- It does NOT enforce the verification stack. The verifier substrate (`@atrib/verify`) does that. Be aware of which layers are operational (Ed25519 sig, inclusion proof, chain integrity, revocation, calculation algorithm) vs warning-only (most of §6.3 identity resolution) vs not-yet-implemented (witnessing per §2.9, cross-log replication per §2.11, AKD lookup proof validation per §6.3 step 7).
-
-The skill is the practice; the substrate is the mechanism. As more producer/consumer surfaces ship, this skill will expand.
-
-## Quick decision tree
+## Quick decision tree (memorize this)
 
 About to take an action? Ask:
 
-1. Will future-me, or another agent, want to find this with full context? → Sign explicitly + annotate.
-2. Did anything in my past directly shape this action? → Set informed_by precisely.
-3. Does this contradict a past claim of mine? → Sign a revision; don't silently override.
-4. Is this trivial / mechanical / read-only? → Skip explicit signing; the wrapper handles auto.
-5. Am I about to make a load-bearing claim? → Query recall first; declare confidence in prose.
+1. Will future-me, or another agent, want to find this with full context?
+   → Sign explicitly via emit. Add an annotation if it's load-bearing.
+2. Did anything in my past directly shape this action?
+   → Set `informed_by` precisely (not exhaustively).
+3. Does this contradict a past claim of mine?
+   → Sign a `revision`. Don't silently override.
+4. Is this trivial / mechanical / read-only?
+   → Skip explicit signing.
+5. Am I about to make a load-bearing claim externally (commit, PR, briefing)?
+   → Query recall first. Reference record_hashes. Declare confidence in prose.
 
 That's the loop. The graph of YOUR signed history is your working memory. Use it.
+
+## What's still pending (sets the realistic-expectations bar)
+
+These are honest gaps in the verification stack and producer-side cognitive surface. Be aware of which layers are operational vs warning-only vs not-yet-implemented:
+
+- **Operational**: Ed25519 signature, JCS canonical form, chain integrity within a context_id, log inclusion proof verification (when fetched), §6.7 capability_check, §1.7.6 cross_attestation, §8.2/§8.3/§8.4 posture detection.
+- **Warning-only (per `project_phase3_followup_gaps`)**: §6.3 verifier-consultation steps 1, 3, 4, 5, 7 surface explicit `IMPLEMENTATION-GAP` warnings rather than silently passing. These cover anchor freshness, witness coverage, directory checkpoint signature, append-only consistency, and AKD lookup proof validation.
+- **Not yet implemented**: cross-log replication / equivocation detection (D050 / §2.11), HKDF sub-agent identity derivation, periodic directory anchoring, emergency-key compromise path, `atrib-summarize` and `atrib-trace` MCP tools (would close the consumer side of the cognitive loop).
+
+The skill is the practice; the substrate is the mechanism. Both evolve. When this skill version (v0.2.0) feels stale, rewrite it again.

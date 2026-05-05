@@ -29,14 +29,35 @@ const VALID_RECORD = {
 }
 
 describe('persistRecord', () => {
-  it('appends one jsonl line per record', () => {
+  it('appends one jsonl envelope per record', () => {
     const file = join(tmpDir, 'records.jsonl')
     persistRecord(file, VALID_RECORD, () => {})
     persistRecord(file, { ...VALID_RECORD, timestamp: 2000 }, () => {})
     const lines = readFileSync(file, 'utf8').trim().split('\n')
     expect(lines.length).toBe(2)
-    expect(JSON.parse(lines[0]!).timestamp).toBe(1000)
-    expect(JSON.parse(lines[1]!).timestamp).toBe(2000)
+    // New envelope shape: { record, written_at, _local? }
+    const env0 = JSON.parse(lines[0]!)
+    const env1 = JSON.parse(lines[1]!)
+    expect(env0.record.timestamp).toBe(1000)
+    expect(env1.record.timestamp).toBe(2000)
+    expect(typeof env0.written_at).toBe('number')
+    expect(env0._local).toBeUndefined() // no sidecar passed
+  })
+
+  it('persists pre-sign sidecar when supplied', () => {
+    const file = join(tmpDir, 'records-with-sidecar.jsonl')
+    persistRecord(file, VALID_RECORD, () => {}, {
+      toolName: 'search_web',
+      args: { query: 'test query' },
+      result: { content: [{ type: 'text', text: 'result text' }] },
+    })
+    const env = JSON.parse(readFileSync(file, 'utf8').trim())
+    expect(env._local).toBeDefined()
+    expect(env._local.toolName).toBe('search_web')
+    expect(env._local.args.query).toBe('test query')
+    expect(env._local.result.content[0].text).toBe('result text')
+    // Signed record bytes are unchanged.
+    expect(env.record).toEqual(VALID_RECORD)
   })
 
   it('creates parent directories as needed', () => {
@@ -51,6 +72,43 @@ describe('persistRecord', () => {
     })
     // No exception, no error callback invocation = passing.
     expect(true).toBe(true)
+  })
+})
+
+describe('loadAutoChainSeed, backward compatibility with legacy bare-record entries', () => {
+  it('reads new envelope-shape lines correctly', () => {
+    const file = join(tmpDir, 'envelope.jsonl')
+    persistRecord(file, VALID_RECORD, () => {}, { toolName: 'foo' })
+    persistRecord(file, { ...VALID_RECORD, timestamp: 2000 }, () => {})
+    const records = loadAutoChainSeed(file, () => {})
+    expect(records).toHaveLength(2)
+    expect(records[0]!.timestamp).toBe(1000)
+    expect(records[1]!.timestamp).toBe(2000)
+  })
+
+  it('reads legacy bare-record lines correctly (legacy bare-record shape)', () => {
+    const file = join(tmpDir, 'legacy.jsonl')
+    writeFileSync(
+      file,
+      JSON.stringify(VALID_RECORD) + '\n' +
+        JSON.stringify({ ...VALID_RECORD, timestamp: 2000 }) + '\n',
+    )
+    const records = loadAutoChainSeed(file, () => {})
+    expect(records).toHaveLength(2)
+    expect(records[0]!.timestamp).toBe(1000)
+  })
+
+  it('reads mixed legacy + envelope lines correctly', () => {
+    const file = join(tmpDir, 'mixed.jsonl')
+    // Legacy line (bare record) + envelope line in the same file.
+    writeFileSync(file, JSON.stringify(VALID_RECORD) + '\n')
+    persistRecord(file, { ...VALID_RECORD, timestamp: 2000 }, () => {}, {
+      toolName: 'mixed_tool',
+    })
+    const records = loadAutoChainSeed(file, () => {})
+    expect(records).toHaveLength(2)
+    expect(records[0]!.timestamp).toBe(1000) // legacy
+    expect(records[1]!.timestamp).toBe(2000) // envelope
   })
 })
 

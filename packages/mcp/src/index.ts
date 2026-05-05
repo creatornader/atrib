@@ -7,6 +7,7 @@ export { atrib } from './middleware.js'
 export type {
   AtribOptions,
   AtribServer,
+  OnRecordSidecar,
   PreCallTransform,
   PreCallTransformContext,
 } from './middleware.js'

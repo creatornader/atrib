@@ -226,7 +226,14 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
   queue.submit(record, 'normal')
 
   // Best-effort mirror; mirrorRecord internally swallows errors per §5.8.
-  await mirrorRecord(record, queue.getProof(recordHash ?? '') ?? null)
+  // Persist the pre-sign `content` payload as a `_local` sidecar so
+  // consumers (recall, trace, summarize) can surface semantic context
+  // alongside the cryptographic evidence. The sidecar lives at the
+  // envelope level, the signed record bytes are unchanged.
+  await mirrorRecord(record, queue.getProof(recordHash ?? '') ?? null, {
+    content: input.content,
+    producer: 'atrib-emit',
+  })
 
   // Try to read a proof if the queue submitted synchronously and the log
   // returned one within the same tick. Most submissions return null here
