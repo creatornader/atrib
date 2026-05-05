@@ -3,21 +3,67 @@
 /**
  * Graph query service HTTP server (section 3.4).
  *
- * Serves 4 REST endpoints + 1 ingestion endpoint:
+ * Serves 6 read endpoints + 1 ingestion endpoint:
  *   GET  /v1/graph/:context_id                Full graph
  *   GET  /v1/graph/:context_id/nodes          Nodes only
  *   GET  /v1/graph/:context_id/transaction    Transaction node
- *   GET  /v1/creators/:creator_key/sessions   Creator sessions
+ *   GET  /v1/creators/:creator_key/sessions   Creator sessions (existing list)
+ *   GET  /v1/creators/:creator_key/graph      Activity-map graph: composes records across context_ids
+ *                                             for one creator into nodes + cross-session edges within
+ *                                             a time window
+ *   GET  /v1/trace/:record_hash               Provenance trace: backward walk via INFORMED_BY +
+ *                                             PROVENANCE_OF (and optionally ANNOTATES + REVISES) from
+ *                                             the starting record, returning the ancestor subgraph
  *   POST /v1/ingest                           Record ingestion
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { validateSubmission, verifyRecord } from '@atrib/mcp'
+import { validateSubmission, verifyRecord, canonicalRecord, sha256, hexEncode } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import { buildGraph } from './graph-builder.js'
 import { createRecordStore, type RecordStore } from './store.js'
-import { buildRevocationRegistry } from '@atrib/verify'
+import { buildRevocationRegistry, graphLabelFromEventTypeUri } from '@atrib/verify'
 import type { MinimalRecord } from '@atrib/verify'
+
+// Normalize an event_type query parameter to the short label form used by
+// graph-node nodes. Atrib normative URIs map via graphLabelFromEventTypeUri;
+// extension URIs and short labels pass through unchanged so the caller can
+// compare against either node.event_type (short label) or node.event_type_uri.
+//
+// Without this, queries like ?event_type=https://atrib.dev/v1/types/annotation
+// silently returned zero results because the prior inline normalizer in
+// handleNodes only covered tool_call / transaction / observation, missing
+// directory_anchor (D056), annotation (D058), and revision (D059). Refactored
+// to a shared helper to prevent the same drift recurring on the new endpoints.
+function normalizeEventTypeFilter(filter: string): string {
+  if (filter.startsWith('https://atrib.dev/v1/types/')) {
+    return graphLabelFromEventTypeUri(filter)
+  }
+  return filter
+}
+
+interface ParsedTimeWindow {
+  since: number | null
+  until: number | null
+  error: string | null
+}
+
+function parseTimeWindow(params: URLSearchParams): ParsedTimeWindow {
+  const sinceRaw = params.get('since')
+  const untilRaw = params.get('until')
+  const since = sinceRaw === null ? null : Number(sinceRaw)
+  const until = untilRaw === null ? null : Number(untilRaw)
+  if (sinceRaw !== null && !Number.isFinite(since)) {
+    return { since: null, until: null, error: '`since` must be a unix timestamp in milliseconds' }
+  }
+  if (untilRaw !== null && !Number.isFinite(until)) {
+    return { since: null, until: null, error: '`until` must be a unix timestamp in milliseconds' }
+  }
+  if (since !== null && until !== null && since > until) {
+    return { since: null, until: null, error: '`since` must be less than or equal to `until`' }
+  }
+  return { since, until, error: null }
+}
 
 export interface GraphServerHandle {
   url: string
@@ -111,6 +157,26 @@ async function handleRequest(
     return handleCreatorSessions(res, store, decodeURIComponent(creatorsMatch[1]!), new URL(`http://localhost${url}`).searchParams)
   }
 
+  // GET /v1/creators/:creator_key/graph
+  const creatorGraphMatch = url.match(/^\/v1\/creators\/([^/]+)\/graph(\?.*)?$/)
+  if (method === 'GET' && creatorGraphMatch) {
+    return handleCreatorGraph(
+      res,
+      store,
+      decodeURIComponent(creatorGraphMatch[1]!),
+      new URL(`http://localhost${url}`).searchParams,
+    )
+  }
+
+  // GET /v1/trace/:record_hash
+  // Accept both raw hex (64 chars) and the prefixed "sha256:<hex>" form. The
+  // record store keys by raw hex (canonicalRecord -> sha256 -> hexEncode); the
+  // dashboard URL convention uses the prefixed form. Normalize on the way in.
+  const traceMatch = url.match(/^\/v1\/trace\/(?:sha256:)?([0-9a-f]{64})(\?.*)?$/)
+  if (method === 'GET' && traceMatch) {
+    return handleTrace(res, store, traceMatch[1]!, new URL(`http://localhost${url}`).searchParams)
+  }
+
   // Malformed context_id check
   const badGraphMatch = url.match(/^\/v1\/graph\/([^/]+)/)
   if (method === 'GET' && badGraphMatch && !CONTEXT_ID_RE.test(badGraphMatch[1]!)) {
@@ -194,17 +260,7 @@ async function handleNodes(
 
   const eventTypeFilter = params.get('event_type')
   if (eventTypeFilter) {
-    // Accept both atrib normative URI form and the short-label form for
-    // backward-compatible queries. Anything else is treated as an opaque URI
-    // and matched against the node's event_type_uri (extension-typed nodes).
-    const normalized =
-      eventTypeFilter === 'https://atrib.dev/v1/types/tool_call'
-        ? 'tool_call'
-        : eventTypeFilter === 'https://atrib.dev/v1/types/transaction'
-          ? 'transaction'
-          : eventTypeFilter === 'https://atrib.dev/v1/types/observation'
-            ? 'observation'
-            : eventTypeFilter
+    const normalized = normalizeEventTypeFilter(eventTypeFilter)
     nodes = nodes.filter(
       (n) => n.event_type === normalized || n.event_type_uri === eventTypeFilter,
     )
@@ -264,6 +320,218 @@ function handleCreatorSessions(
   sendJson(res, 200, {
     sessions: paginated,
     next_cursor: paginated.length < filtered.length ? 'next' : null,
+  })
+}
+
+// Limits chosen to keep response payloads bounded. The activity-map view
+// renders a force-directed graph in the browser; per-page caps trade
+// recency-window vs render budget.
+const ACTIVITY_MAP_DEFAULT_LIMIT = 500
+const ACTIVITY_MAP_MAX_LIMIT = 2000
+
+async function handleCreatorGraph(
+  res: ServerResponse,
+  store: RecordStore,
+  creatorKey: string,
+  params: URLSearchParams,
+): Promise<void> {
+  const window = parseTimeWindow(params)
+  if (window.error) {
+    return sendProblem(res, 400, 'invalid-time-window', window.error, `/v1/creators/${creatorKey}/graph`)
+  }
+  const rawLimit = parseInt(params.get('limit') ?? String(ACTIVITY_MAP_DEFAULT_LIMIT), 10)
+  const limit = Math.max(1, Math.min(Number.isNaN(rawLimit) ? ACTIVITY_MAP_DEFAULT_LIMIT : rawLimit, ACTIVITY_MAP_MAX_LIMIT))
+
+  // Pull every record this creator signed across all sessions, then apply the
+  // time window. The store already indexes by creator_key → context_ids; we
+  // walk those.
+  const sessions = store.getSessionsByCreatorKey(creatorKey)
+  if (sessions.length === 0) {
+    return sendProblem(
+      res,
+      404,
+      'creator-not-found',
+      `No records found for creator_key ${creatorKey}`,
+      `/v1/creators/${creatorKey}/graph`,
+    )
+  }
+
+  const allRecords: AtribRecord[] = []
+  for (const s of sessions) {
+    for (const r of store.getRecordsByContextId(s.context_id)) {
+      if (r.creator_key !== creatorKey) continue
+      if (window.since !== null && r.timestamp < window.since) continue
+      if (window.until !== null && r.timestamp > window.until) continue
+      allRecords.push(r)
+    }
+  }
+
+  // Sort newest-first so a small `limit` retains the most recent activity.
+  allRecords.sort((a, b) => b.timestamp - a.timestamp)
+  const windowedRecords = allRecords.slice(0, limit)
+
+  const eventTypeFilter = params.get('event_type')
+  const filteredRecords = eventTypeFilter
+    ? windowedRecords.filter((r) => {
+        const normalized = normalizeEventTypeFilter(eventTypeFilter)
+        const recordLabel = r.event_type.startsWith('https://atrib.dev/v1/types/')
+          ? graphLabelFromEventTypeUri(r.event_type)
+          : r.event_type
+        return recordLabel === normalized || r.event_type === eventTypeFilter
+      })
+    : windowedRecords
+
+  // Build the graph from the windowed record set. buildGraph handles edge
+  // derivation across context_ids when CROSS_SESSION + INFORMED_BY +
+  // PROVENANCE_OF data is present (§3.2.4 steps 5-7), so the activity-map
+  // composition falls out of the existing derivation.
+  const graph = await buildGraph(filteredRecords, [], {
+    includeGapNodes: false,
+    includeCrossSession: true,
+    revocations: buildRegistry(store),
+    logIndexLookup: logIndexLookup(store),
+  })
+
+  sendJson(res, 200, {
+    creator_key: creatorKey,
+    window: { since: window.since, until: window.until, limit },
+    record_count: filteredRecords.length,
+    truncated: allRecords.length > limit,
+    graph,
+  })
+}
+
+// Limits for backward provenance walk. Trace depth is bounded both by edge
+// hops and total ancestor count so a degenerate fan-out doesn't return a
+// multi-megabyte payload.
+const TRACE_DEFAULT_DEPTH = 5
+const TRACE_MAX_DEPTH = 20
+const TRACE_MAX_NODES = 500
+
+async function handleTrace(
+  res: ServerResponse,
+  store: RecordStore,
+  recordHashHex: string,
+  params: URLSearchParams,
+): Promise<void> {
+  const rawDepth = parseInt(params.get('depth') ?? String(TRACE_DEFAULT_DEPTH), 10)
+  const depth = Math.max(1, Math.min(Number.isNaN(rawDepth) ? TRACE_DEFAULT_DEPTH : rawDepth, TRACE_MAX_DEPTH))
+  // include_annotations: include ANNOTATES targets in the walk (default true:
+  // annotations point at records the agent commented on, so they're part of
+  // the cognitive provenance even though §3.2.4 derives them as forward edges
+  // from annotation→target). Same for revisions.
+  const includeAnnotations = params.get('include_annotations') !== 'false'
+  const includeRevisions = params.get('include_revisions') !== 'false'
+
+  // Index every record by its record_hash (canonicalRecord -> sha256 -> hex)
+  // so we can walk by hash. The store doesn't expose this index directly;
+  // build it here once per request. For a busy log this would move into the
+  // store, but at current scale (low thousands of records) the per-request
+  // build is fast enough.
+  const allRecords = store.getAllRecords()
+  const byHash = new Map<string, AtribRecord>()
+  for (const { record } of allRecords) {
+    const hashHex = hexEncode(sha256(canonicalRecord(record)))
+    byHash.set(hashHex, record)
+  }
+
+  const startRecord = byHash.get(recordHashHex)
+  if (!startRecord) {
+    return sendProblem(
+      res,
+      404,
+      'record-not-found',
+      `No record with hash sha256:${recordHashHex}`,
+      `/v1/trace/${recordHashHex}`,
+    )
+  }
+
+  // BFS backward from start. At each step, collect the record's ancestors:
+  //   - informed_by[] entries (sha256:<hex> strings)
+  //   - provenance_token (genesis-only; truncated 16-byte ref)
+  //   - annotates (if include_annotations and event_type=annotation)
+  //   - revises (if include_revisions and event_type=revision)
+  // For each resolved ancestor, recurse one hop deeper (up to `depth`). Track
+  // visited hashes to prevent cycles (records are immutable, so a cycle would
+  // indicate a malformed chain — defensive).
+  const visited = new Set<string>([recordHashHex])
+  const collected: AtribRecord[] = [startRecord]
+  let frontier: string[] = [recordHashHex]
+  let truncatedByDepth = false
+  let truncatedByCount = false
+
+  for (let hop = 0; hop < depth; hop++) {
+    const next: string[] = []
+    for (const hash of frontier) {
+      const record = byHash.get(hash)
+      if (!record) continue
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const r = record as any
+
+      const candidates: string[] = []
+      if (Array.isArray(r.informed_by)) {
+        for (const ref of r.informed_by) {
+          if (typeof ref === 'string' && ref.startsWith('sha256:')) {
+            candidates.push(ref.slice('sha256:'.length))
+          }
+        }
+      }
+      if (typeof r.annotates === 'string' && includeAnnotations && r.annotates.startsWith('sha256:')) {
+        candidates.push(r.annotates.slice('sha256:'.length))
+      }
+      if (typeof r.revises === 'string' && includeRevisions && r.revises.startsWith('sha256:')) {
+        candidates.push(r.revises.slice('sha256:'.length))
+      }
+      // provenance_token is the truncated-16-byte form per §1.2.6; we cannot
+      // resolve it back to a full record_hash without scanning. Skip from the
+      // walk but include in the response for downstream UI to display.
+
+      for (const ancestorHash of candidates) {
+        if (visited.has(ancestorHash)) continue
+        visited.add(ancestorHash)
+        const ancestor = byHash.get(ancestorHash)
+        if (ancestor) {
+          collected.push(ancestor)
+          next.push(ancestorHash)
+        }
+        // If the ancestor is dangling (not in the store), still mark visited
+        // so we don't try to resolve it again. The graph layer's dangling-
+        // node mechanism (§3.2.4 step 6) will surface the unresolved ref.
+        if (collected.length >= TRACE_MAX_NODES) {
+          truncatedByCount = true
+          break
+        }
+      }
+      if (collected.length >= TRACE_MAX_NODES) break
+    }
+    if (collected.length >= TRACE_MAX_NODES) break
+    if (next.length === 0) break
+    frontier = next
+    if (hop === depth - 1 && next.length > 0) {
+      // We hit the depth ceiling but still had ancestors to walk; flag for
+      // the caller so the dashboard can render a "depth truncated" affordance.
+      truncatedByDepth = true
+    }
+  }
+
+  // Build the graph from the collected ancestor set. This produces the same
+  // node/edge shape as /v1/graph/:context_id, but the node set is restricted
+  // to the trace ancestors rather than a single context_id.
+  const graph = await buildGraph(collected, [], {
+    includeGapNodes: false,
+    includeCrossSession: true,
+    revocations: buildRegistry(store),
+    logIndexLookup: logIndexLookup(store),
+  })
+
+  sendJson(res, 200, {
+    start_record_hash: `sha256:${recordHashHex}`,
+    depth_requested: depth,
+    depth_walked: depth - (truncatedByDepth ? 0 : 0),
+    record_count: collected.length,
+    truncated_by_depth: truncatedByDepth,
+    truncated_by_count: truncatedByCount,
+    graph,
   })
 }
 
