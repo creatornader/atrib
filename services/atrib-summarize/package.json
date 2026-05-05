@@ -1,0 +1,29 @@
+{
+  "name": "@atrib/atrib-summarize",
+  "version": "0.1.0",
+  "description": "MCP server exposing the summarize tool, synthesizes a narrative across N records using an OpenAI-compatible LLM. Closes the consumer-side cognitive-loop primitive: agents read context, not raw records.",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "atrib-summarize": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "start": "node dist/main.js",
+    "dev": "tsx src/main.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@atrib/mcp": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.17",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
