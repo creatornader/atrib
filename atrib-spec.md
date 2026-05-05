@@ -3375,6 +3375,110 @@ The degradation contract means a developer can add `@atrib/mcp` or `@atrib/agent
 
 ---
 
+### 5.9 Local Mirror Conventions
+
+_This section is normative for hosts that persist signed records locally; see [D062](DECISIONS.md#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) for the design rationale and implementation evidence._
+
+The Merkle log ([§2](#2-merkle-log-protocol)) stores cryptographic commitments only, 90-byte fixed-size entries plus the inclusion-proof material. The original signed record JSON is unrecoverable from the log alone. Hosts that want re-verifiability against `creator_key`, autoChain seed continuity across process restarts, or richer consumer surfaces (recall, trace, summarize) MUST persist signed records to a local mirror.
+
+This section defines the canonical local-mirror persistence shape. It is normative for any implementation that produces or consumes the local mirror; non-mirror persistence (e.g. in-memory only, ephemeral test fixtures) is unaffected.
+
+#### 5.9.1 The two-tier persistence pattern
+
+atrib defines two distinct persistence tiers with different design constraints:
+
+| Tier | Owner | Constraint | Contains |
+| --- | --- | --- | --- |
+| Public log | log operator | MUST be lean; cryptographic-evidence-only; cheap to operate; safe to share publicly | `record_hash`, `creator_key`, `context_id`, `timestamp`, `event_type` byte (per [§2.3.1](#231-entry-serialization)) |
+| Local mirror | host (per-deployment) | MAY carry pre-sign payload context; never reaches the public log; scoped to the host's own consumption | The signed AtribRecord plus an OPTIONAL `_local` sidecar |
+
+The local mirror is OPTIONAL, hosts that don't need re-verifiability or richer consumer surfaces MAY skip it entirely. Hosts that DO persist locally MUST follow the conventions below so cross-producer mirrors (e.g. wrapper + emit writing to the same `~/.atrib/records/` directory) are interoperable for consumers.
+
+#### 5.9.2 The envelope shape
+
+Each line of a local-mirror JSONL file is a JSON object of one of three shapes. Readers MUST tolerate all three.
+
+**Shape 1: Envelope with sidecar** (current, preferred):
+
+```jsonc
+{
+  "record": { /* the canonical signed AtribRecord, bytes IDENTICAL to what was submitted to the public log */ },
+  "_local": { /* OPTIONAL pre-sign sidecar; see §5.9.3 */ },
+  "written_at": 1743850000000  /* OPTIONAL wall-clock timestamp in milliseconds */
+}
+```
+
+**Shape 2: Envelope without sidecar**:
+
+```jsonc
+{
+  "record": { /* the canonical signed AtribRecord */ },
+  "written_at": 1743850000000  /* OPTIONAL */
+}
+```
+
+**Shape 3: Legacy bare-record** (pre-D062 mirrors):
+
+```jsonc
+{ /* the canonical signed AtribRecord, unwrapped */ }
+```
+
+Producers SHOULD write Shape 1 or Shape 2 going forward. Producers SHOULD NOT write Shape 3 going forward, but consumers MUST read it for compatibility with mirrors that predate this section.
+
+**Field placement is load-bearing.** The `_local` sidecar MUST live at the envelope level (sibling to `record`), NEVER inside `record`. Placing sidecar content inside `record` would either change the JCS canonical form (breaking signature verification) or require producers to strip the sidecar before signing (introducing failure modes that the structural placement avoids).
+
+#### 5.9.3 The `_local` sidecar shape
+
+The sidecar is a free-form JSON object carrying pre-sign payload context that the signed record COMMITS TO via `content_id` / `args_hash` / `result_hash` / `tool_name` (per [§1.2](#12-the-attribution-record) and [§8](#8-privacy-postures)) but does not itself contain.
+
+The following field names are normative when present (producers SHOULD use these names; consumers SHOULD recognize them):
+
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `producer` | string | Identifies the producer that wrote this entry, for cross-source disambiguation when multiple producers write to the same mirror directory. Values are producer-specific (e.g. `"atrib-emit"`, or any other wrapper / emitter package name). |
+| `toolName` | string | The MCP tool name as invoked. Populated by wrapper-side producers; absent for emit-side producers (which have no tool name to record). |
+| `args` | object | The MCP tool call arguments as invoked. Populated by wrapper-side producers per the wrapped call. |
+| `result` | object | The MCP tool's result object, captured BEFORE any host-side mutation (e.g. before atrib middleware writes its propagation token to `result._meta`). Populated by wrapper-side producers. |
+| `content` | object | The pre-sign content payload as supplied to the producer. Populated by `atrib-emit`-style producers per the `content` argument the agent passed; typically carries `what`, `why_noted`, `topics`, `summary`, `importance` (depending on `event_type`). |
+
+Producers MAY add additional fields beyond this list. Consumers MUST tolerate unknown fields and SHOULD pass them through unchanged when re-emitting (e.g. when `atrib-trace` surfaces a sidecar summary for downstream tools).
+
+All sidecar fields are OPTIONAL. A sidecar containing only `{ "producer": "..." }` is well-formed; a missing sidecar is also well-formed.
+
+#### 5.9.4 Submission-path invariant
+
+Implementations of the standard submission path (the path that POSTs to the log per [§2.6.1](#261-submit-entry)) MUST NOT include the envelope or sidecar in the submitted bytes. The submission queue receives only the bare AtribRecord. The structural placement of the sidecar at the envelope level (outside `record`) means this invariant is enforced by construction in any host that uses the standard submission path; no additional guard is required.
+
+Hosts that build custom submission paths MUST manually ensure they extract `record` from the envelope before submission and never include `_local`.
+
+#### 5.9.5 Reading discipline
+
+Consumers (recall, trace, summarize, autoChain seed loaders) MUST normalize the three on-disk shapes to a uniform "signed record + optional sidecar" pair at read time. The reference normalization shape:
+
+```
+function normalize(line):
+  parsed = JSON.parse(line)
+  if parsed has "record" and parsed.record has all required AtribRecord fields:
+    return { record: parsed.record, sidecar: parsed._local || null }
+  if parsed has all required AtribRecord fields:
+    return { record: parsed, sidecar: null }
+  return null  // skip, malformed or unknown shape
+```
+
+The exact field-presence checks are implementation-defined; the load-bearing AtribRecord fields per [§1.2.1](#121-field-definitions) are `spec_version`, `creator_key`, `chain_root`, `event_type`, `context_id`, `timestamp`, and `signature` (or `signers` for transaction records).
+
+#### 5.9.6 Compatibility commitment
+
+This section freezes the envelope shape for atrib spec 1.0. Future spec versions MAY add new envelope-level fields (e.g. `cached_at`, `last_verified_at`) but MUST NOT remove the `record` field, MUST NOT change its semantics, and MUST NOT introduce a path by which envelope-level content reaches the public log.
+
+#### 5.9.7 Out of scope
+
+- Sidecar size limits (the sidecar persists the full result object regardless of size in this spec version). A future ADR may introduce a size-cap convention or "result fingerprint" pattern.
+- Encryption at rest (the mirror inherits whatever the host filesystem provides in this spec version). Operator-level encryption (FileVault, LUKS, etc.) covers most threat models; spec-level encryption is not in 5.9 scope.
+- Cross-host mirror sync (e.g. when a single human operates multiple agents on multiple devices). Per-host mirrors are independent in this section; cross-host coordination is a deployment concern, not a spec concern.
+
+---
+
 ## §6 Key Directory
 
 _Per D034._

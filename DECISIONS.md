@@ -2764,3 +2764,83 @@ The §8.2 prose is updated to acknowledge the limitation: consumers wanting to e
 - `@atrib/verify` `PostureAnnotation` adds `tool_name_form`.
 - `spec/conformance/8.2/` corpus + reference test ship in the same change.
 - CLAUDE.md sync triggers: "Privacy posture spec section §8 changed" already covers regenerating the §8.2 corpus and refreshing the verifier; the §1.2.1 schema-extension trigger ("Wire-format or wire-protocol change") covers the rest.
+
+## D062: Local mirror sidecar, two-tier "private local + public canonical" persistence
+
+**Date:** 2026-05-04
+**Status:** Implemented in `@atrib/mcp` v0.2.x, `@atrib/mcp-wrap` v0.2.x, `@atrib/atrib-emit` (envelope shape). Spec-formalized in atrib-spec.md §X.
+
+### Context
+
+The local jsonl mirror, what `@atrib/mcp-wrap`'s `persistRecord` and `@atrib/atrib-emit`'s `mirrorRecord` write to `~/.atrib/records/*.jsonl`, was always an implementation detail outside the spec. Originally it stored the bare signed AtribRecord, byte-identical to what gets submitted to the public log. That made the local mirror a useful re-verification and replay surface, but it threw away every piece of pre-sign payload context: tool names, raw args, raw results, the `content` blob passed to `atrib-emit`, the `topics`/`what`/`why_noted` fields.
+
+This was fine when nobody consumed the mirror semantically. As soon as we started building consumer-side cognitive primitives, first the SessionStart hook (2026-05-04), then `atrib-trace`, then `atrib-summarize`, the impoverishment was felt immediately. Recall returned event_type + hashes; trace returned chains of event_type + hashes; summarize had nothing semantic to feed an LLM. The mirror was the bottleneck: not the substrate, not the tools, but the *persistence layer between them*.
+
+The architectural opportunity: the public log MUST be lean (only commitments + cryptographic evidence, that's what makes it cheap to operate, public to share, hard to weaponize). But the local mirror has none of those constraints, it's the agent's own working memory, on the agent's own disk, scoped to the agent's own consumption. There's no spec reason it should be byte-identical to the log.
+
+### Decision
+
+**Adopt a two-tier persistence pattern: the public log stores the canonical signed AtribRecord (lean, cryptographically minimal); the local mirror stores an envelope around the same signed record plus an OPTIONAL `_local` sidecar carrying pre-sign payload context that the signed record commits to but does not itself contain.**
+
+Concretely:
+
+- The signed AtribRecord remains the canonical artifact. Public log submission is unchanged. Verifier semantics are unchanged.
+- The local mirror writes envelopes of shape `{ record, _local?, written_at }` per JSONL line.
+  - `record`: the canonical signed AtribRecord. UNCHANGED bytes.
+  - `_local`: optional sidecar carrying pre-sign content (`toolName`, `args`, `result`, `content`, `producer`). NEVER affects the signature. NEVER reaches the public log.
+  - `written_at`: wall-clock time of mirror write, for staleness debugging.
+- Readers MUST tolerate three on-disk shapes:
+  - LEGACY bare-record JSON per line (older mirror writes pre-D062)
+  - ENVELOPE without sidecar `{ record, written_at }`
+  - ENVELOPE with sidecar `{ record, _local: {...}, written_at }`
+- Producers MAY supply a sidecar; producers without pre-sign context (or callers that explicitly opt out) write envelopes without `_local`.
+
+### Implementation evidence (what the rollout taught us)
+
+The implementation shipped 2026-05-04 (commit `e0699b5` for `@atrib/mcp` + `@atrib/mcp-wrap` + `@atrib/atrib-emit`). Concrete findings that informed this ADR:
+
+1. **Backward compatibility is essentially free.** `loadAutoChainSeed` already had to parse "lines that may or may not have all fields" defensively (malformed lines, partial writes). Extending the parser to accept either bare-record OR envelope shape was 15 lines (`normalizeMirrorLine` in `mcp-wrap/src/mirror.ts`). 4 new tests in `mirror.test.ts` cover legacy + envelope + sidecar + mixed-shape file in the same JSONL.
+
+2. **The signature contract is not threatened.** Because the sidecar lives at the envelope level (not inside `record`), there is no path by which sidecar content can affect JCS canonicalization or the Ed25519 signature. The submission queue receives `record` directly; the envelope only exists on disk. We added zero spec rules that hosts must enforce, the structural placement is the enforcement.
+
+3. **The producer field disambiguates cross-source records.** When both a wrapper-side producer (auto-signing tool calls) and an emit-side producer (explicit observations) write to mirror files in the same directory, the `producer` field on the sidecar lets readers distinguish their origins. Useful for `atrib-trace` when walking a chain that mixes both.
+
+4. **Sidecar shape varies by producer.** Wrapper-side records get `toolName + args + result`; emit-side records get `content`. Both populate `producer`. The `OnRecordSidecar` TypeScript type has all fields optional, and downstream readers (storage.ts in trace + summarize) just access whichever fields are present. No shape-rigidity needed at the spec level, let producers populate what they have.
+
+5. **Consumer-side payoff is large.** Without the sidecar, `atrib-trace`'s per-record output was event_type + truncated hash + trace_id + creator_key. With the sidecar, output gains `tool_name`, `topics`, first 200 chars of `what`/`summary`, `importance` for annotations. `atrib-summarize` LLM prompts go from "synthesize this list of event_type chronology" to "synthesize this richly-described causal chain". Same code path, ~10x more useful output.
+
+6. **The `--local` field naming convention is enough.** Underscore-prefixed envelope-level fields are a standard "this is local-only" convention. No spec mechanism beyond the field name needed to enforce "don't leak this to the log", the structural placement (outside `record`) does it. Producers that go through the standard submission path literally cannot leak `_local` because the queue only sees `record`.
+
+### Alternatives rejected
+
+1. **Keep the mirror as a pure log-copy, build consumers against the impoverished view.** Tried implicitly through the SessionStart hook and the early `atrib-trace` scaffold. The output was too thin to be useful. `atrib-summarize` would have been actively misleading (impoverished input → confident-sounding LLM hallucinations).
+
+2. **Extend the signed AtribRecord with the semantic content directly.** Rejected on first principles: the public log MUST stay lean per the spec's privacy postures (§8) and the operator-cost principle (§2). Adding rich semantic content to signed records pushes against both.
+
+3. **A separate per-record JSON file alongside the JSONL mirror.** Considered briefly. Rejected because the JSONL append-only invariant is load-bearing for autoChain and crash-safety; introducing a second persistence surface creates synchronization risk.
+
+4. **A different field name (e.g. `meta`, `private`, `extra`).** Rejected because they're either too generic (`meta`, `extra`) or implied a security property the field doesn't actually provide (`private`, the field IS private to the host's filesystem, but that's a deployment property, not a cryptographic one). `_local` is honest: "this content lives on the local host only, by virtue of where it's written."
+
+### Consequences
+
+- **Spec**: new normative section in atrib-spec.md formalizing the local mirror as an OPTIONAL host-side persistence surface, the envelope shape as the canonical local format going forward, and the `_local` sidecar conventions. Existing producers + consumers are conformant by construction.
+- **Implementation**: `@atrib/mcp` exports the `OnRecordSidecar` type. `AtribOptions.onRecord` accepts an optional second argument. `@atrib/mcp-wrap` and `@atrib/atrib-emit` both write the envelope shape. `@atrib/atrib-trace` and `@atrib/atrib-summarize` read it.
+- **Backward compatibility**: legacy bare-record entries in existing mirror files continue to parse. No data migration required. New writes use the envelope shape unconditionally.
+- **Future-proofing**: the envelope is extensible. New optional sidecar fields can be added without spec changes (they're producer-agnostic). New envelope-level fields (e.g. `cached_at`, `last_verified_at`) can be added the same way.
+- **Public log unaffected**: this ADR introduces ZERO changes to public log semantics, submission protocol, or verifier behavior on log-fetched records.
+
+### Open questions deferred
+
+- **Conformance corpus**: a `spec/conformance/<§>/` corpus for the envelope shape would let third-party host-side persistence implementations validate against. Deferred until a third-party host actually exists; current consumers all live in the workspace and test against each other directly.
+- **Sidecar size limits**: tool-call results can be large (megabytes for some MCP tools). The current spec version persists the full `result` object regardless of size. A future ADR may introduce a size-cap convention or a "result fingerprint" pattern. Defer until a real bloat case appears.
+- **Encryption at rest**: the sidecar may contain secrets the host doesn't want on disk in plaintext (API keys leaking into tool args, etc). The current spec version lets the mirror live at mode 600 in `~/.atrib/records/` and inherit whatever the host filesystem provides. Spec-level encryption is out of scope; host-level encryption (FileVault, etc.) covers most threat models.
+
+### How to apply
+
+When extending atrib-emit, mcp-wrap, or any future producer to populate a sidecar field:
+1. Add the field to `OnRecordSidecar` in `@atrib/mcp/src/middleware.ts`
+2. Pass it through the existing `onRecord` callback or `mirrorRecord` call site
+3. Update consumers (`atrib-trace`, `atrib-summarize`, recall) to surface the new field
+4. No spec section update needed unless the field's semantics are normative
+
+When the spec needs to evolve (e.g. result fingerprint convention lands), update the new spec §X "Local mirror conventions" section, regenerate any associated conformance corpus, and refresh the implementations in lockstep.
