@@ -101,6 +101,12 @@ export async function wrap(
       autoChain: config.autoChain,
       ...(autoChainSeed.length > 0 ? { autoChainSeed } : {}),
       ...(transactionTools.length > 0 ? { transactionTools } : {}),
+      // mcp-wrap default: scan tool args for sha256:<hex> references and
+      // auto-populate informed_by per the dogfood-plug-and-play-map convention.
+      // See @atrib/mcp `AtribOptions.autoDetectInformedByFromArgs` for details.
+      // Wrapper users get the auto-detect "for free"; raw @atrib/mcp consumers
+      // (without mcp-wrap) opt in explicitly.
+      autoDetectInformedByFromArgs: true,
       // Persists the signed record + optional pre-sign sidecar. The sidecar
       // carries the upstream tool name + raw args + raw result so consumers
       // like atrib-trace and atrib-summarize can surface semantic context.
