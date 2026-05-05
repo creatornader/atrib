@@ -38,6 +38,13 @@ export interface BuildEmitRecordInput {
    * index.ts handler validates this before reaching here.
    */
   provenanceToken?: string | undefined
+  /**
+   * Optional annotates target per spec §1.2.7 / D058. Required when
+   * eventType is the annotation URI; FORBIDDEN on any other event_type.
+   * The index.ts handler enforces the require/forbid invariant before
+   * reaching here. Format: "sha256:" + 64 lowercase hex.
+   */
+  annotates?: string | undefined
 }
 
 /**
@@ -69,6 +76,7 @@ export async function buildAndSignEmitRecord(
     timestamp: Date.now(),
     signature: '',
     ...(informedBySorted ? { informed_by: informedBySorted } : {}),
+    ...(input.annotates ? { annotates: input.annotates } : {}),
     ...(input.provenanceToken ? { provenance_token: input.provenanceToken } : {}),
   } as AtribRecord
 

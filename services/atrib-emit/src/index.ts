@@ -70,6 +70,12 @@ const EmitInput = z.object({
     'context_id (per §5.8 graceful-degradation, this returns a warnings-only ' +
     'response rather than a malformed record).',
   ),
+  annotates: z.string().regex(SHA256_REF_PATTERN).optional().describe(
+    "'sha256:<64-hex>' record_hash this annotation describes per spec §1.2.7 / D058. " +
+    'REQUIRED when event_type is the annotation URI; FORBIDDEN on any other event_type. ' +
+    'atrib-emit enforces the require/forbid invariant per §1.2.7 (validators MUST reject ' +
+    'violations) and returns a warnings-only response rather than signing a malformed record.',
+  ),
 })
 
 type EmitOutput = {
@@ -181,6 +187,23 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
     }
   }
 
+  // annotates require/forbid invariant per spec §1.2.7 / D058. Validators MUST
+  // reject violations; we surface as warnings-only per §5.8 so callers see why
+  // we refused to sign rather than getting back a malformed record.
+  const ANNOTATION_URI = 'https://atrib.dev/v1/types/annotation'
+  if (input.event_type === ANNOTATION_URI && !input.annotates) {
+    return emptyOutput(input.context_id ?? randomContextId(), [
+      'annotation event_type requires annotates per §1.2.7 (D058); ' +
+        'omitted records would fail validator admission',
+    ])
+  }
+  if (input.annotates && input.event_type !== ANNOTATION_URI) {
+    return emptyOutput(input.context_id ?? randomContextId(), [
+      'annotates is FORBIDDEN on non-annotation event_types per §1.2.7 (D058); ' +
+        `received event_type=${input.event_type}`,
+    ])
+  }
+
   // autoChain inheritance: when the caller omits context_id, read the
   // wrapper's local mirror and inherit its most-recent record's context_id
   // (chaining on top of that record's hash). Falls back to a fresh genesis
@@ -211,6 +234,7 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
       content: input.content,
       informedBy: input.informed_by,
       provenanceToken: input.provenance_token,
+      annotates: input.annotates,
     })
   } catch (e) {
     return emptyOutput(contextId, [

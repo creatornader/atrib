@@ -11,6 +11,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { base64urlDecode, base64urlEncode } from './base64url.js'
 import { computeContentId } from './content-id.js'
+import { SHA256_REF_PATTERN, extractRecordHashes } from './refs.js'
 import { genesisChainRoot } from './chain-root.js'
 import { readInboundContext, writeOutboundContext, parseBaggageAtribSession } from './context.js'
 import { signRecord, getPublicKey } from './signing.js'
@@ -184,6 +185,30 @@ export interface AtribOptions {
    * provenance claim, not a heuristic.
    */
   informedBy?: (params: Record<string, unknown>) => string[] | undefined
+  /**
+   * Mechanical auto-detection of `informed_by` references from tool args.
+   *
+   * When `true`, the middleware scans the tool-call params for `sha256:<64hex>`
+   * substrings (skipping the `chain_root` field which carries the chain
+   * primitive, not a reference). Detected references are merged with the
+   * explicit `informedBy` callback result (if any), de-duped, and lex-sorted
+   * per §1.2.5. Default `false` preserves backward compat, existing wrappers
+   * see no behavioral change unless they opt in.
+   *
+   * Use case: agent text frequently quotes record_hashes when reasoning back
+   * about prior work. Without auto-detect, the agent has to ALSO declare them
+   * via the `informedBy` callback. With auto-detect, hash references in args
+   * automatically form INFORMED_BY graph edges. mcp-wrap defaults this to
+   * `true` per the dogfood-plug-and-play-map "wrapper-side mechanical match"
+   * convention; raw `@atrib/mcp` consumers opt in explicitly.
+   *
+   * Per spec §1.2.5: informed_by is a provenance CLAIM, not a heuristic.
+   * Auto-detected refs are still claims (the agent put the hash in args, so
+   * the agent is asserting awareness). The substrate doesn't certify they
+   * actually informed the action, graph layer surfaces dangling refs per
+   * §3.2.4 step 6.
+   */
+  autoDetectInformedByFromArgs?: boolean
   /**
    * Optional pre-call transform. When set, atrib signs the record BEFORE
    * forwarding to the upstream handler so the host can embed the resulting
@@ -523,13 +548,27 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     // silently. Empty/undefined result omits the field entirely
     // (presence affects the JCS canonical form, so omission is normal).
     let informedByList: string[] | undefined
+    const merged = new Set<string>()
     if (options.informedBy) {
       try {
         const informed = options.informedBy(params)
-        if (Array.isArray(informed) && informed.length > 0) informedByList = informed
+        if (Array.isArray(informed)) {
+          for (const h of informed) {
+            if (typeof h === 'string' && SHA256_REF_PATTERN.test(h)) merged.add(h)
+          }
+        }
       } catch (e) {
         console.warn('atrib: informedBy callback threw', e)
       }
+    }
+    // Mechanical auto-detect from args, opt-in via autoDetectInformedByFromArgs.
+    // See AtribOptions.autoDetectInformedByFromArgs for the rationale.
+    if (options.autoDetectInformedByFromArgs) {
+      for (const h of extractRecordHashes(params)) merged.add(h)
+    }
+    if (merged.size > 0) {
+      // Lex-sort per §1.2.5 to keep canonical form stable across emitters.
+      informedByList = [...merged].sort()
     }
     // §8 / D061 disclosure dials. Each defaults to 'omit' (preserves §8.1
     // default posture). Errors during disclosure synthesis fall through to
