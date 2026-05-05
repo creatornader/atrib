@@ -36,7 +36,7 @@ If you're invoked in a Claude Code session and you're not emitting records durin
 | Sign explicit cognitive events (observation, annotation, revision) | `mcp__atrib-emit__emit` MCP tool, wired in `~/.claude.json` | Tool present in the current process |
 | Query own past with local Ed25519 verification | `mcp__atrib-recall__recall_my_attribution_history` | Tool present in the current process |
 | Persist signed records to local mirrors | `~/.atrib/records/*.jsonl` (per-producer files) | `ls ~/.atrib/records/` |
-| Public log + browseable explorer | `https://log.atrib.dev/v1/stats` + `explore.atrib.dev` | `curl -s https://log.atrib.dev/v1/stats` |
+| Public log + browsable explorer | `https://log.atrib.dev/v1/stats` + `explore.atrib.dev` | `curl -s https://log.atrib.dev/v1/stats` |
 | Identity → key binding | `@atrib/directory` + `atrib publish-claim` CLI | `curl -s https://directory.atrib.dev/v6/lookup/<creator_key>` |
 | Per-record verification (signature, posture, capability_check, cross_attestation) | `@atrib/verify` `verifyRecord()` annotations (D041/D044/D045/D051/D052/D061) | `pnpm --filter @atrib/verify test` |
 
