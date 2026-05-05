@@ -355,12 +355,161 @@ A receiving implementation that decodes a propagation token and needs to set `ch
 | -------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `https://atrib.dev/v1/types/tool_call`             | `0x01` | An agent invoked a tool with input(s) and received a result. Emitted by an MCP server when it returns a successful (non-error) response to a `tools/call` request. MUST NOT be emitted when `isError: true` in the MCP result. Default for any active operation against external state.                                                                                |
 | `https://atrib.dev/v1/types/transaction`           | `0x02` | A commerce-protocol-detected closing event (ACP / UCP / x402 / MPP / AP2 / a2a-x402; see [§1.7](#17-transaction-event-hooks)). Emitted when a transaction completes, either by the merchant's agent writing a record, or by the atrib SDK reading a transaction webhook. The `content_id` for a transaction record uses the merchant's checkout endpoint URL as the server_url and `"checkout"` as the tool_name. [§4.6](#46-the-calculation-algorithm) calculation is normatively gated on this URI. |
-| `https://atrib.dev/v1/types/observation`           | `0x03` | A passive perception captured by an ambient watcher or input source. The agent did not invoke a tool to produce this record; the record captures something the agent received from its environment. Has no caller-supplied input and no return value to attest to. Distinct from `tool_call` in that there is no agent-chosen action.                                  |
+| `https://atrib.dev/v1/types/observation`           | `0x03` | A standalone perception or noting, with no required referent on a prior record. Two production shapes: (a) a passive perception captured by an ambient watcher or input source (the original framing in [§1.2.4.1](#1241-canonical-examples) example C below); (b) an agent self-emitted noting of an environmental fact, hypothesis, or in-the-moment discovery that does not point at a specific prior record. Distinguished from `tool_call` by the absence of agent-chosen action against external state. Distinguished from `annotation` and `revision` by the absence of a referent: observation has no `annotates` and no `revises` field. The agent or watcher is recording a first-class noting that future-self or downstream consumers can read back, weight, or anchor against.                                  |
 | `https://atrib.dev/v1/types/directory_anchor`      | `0x04` | A commitment by a directory operator to its current state, emitted per [§6.2.4](#624-anchor-cross-reference-into-the-tessera-log) after each directory operation. Carries `directory_root`, `epoch`, and `version` for downstream verifier consultation per [§6.3](#63-verifier-consultation-algorithm) step 7 (AKD anchor consistency check). Emitted by atrib-system directory services, not by agents. Promoted from extension namespace by [D056](DECISIONS.md#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04).                |
 | `https://atrib.dev/v1/types/annotation`            | `0x05` | A commentary record pointing at any prior record via the `annotates` field ([§1.2.7](#127-annotates)). The recall-fidelity primitive: an agent reading back its own signed records uses annotations to weight, summarize, and topic-tag earlier records that future-self should not lose to flat scanning. Distinct from `observation`: annotation is a forward-pointing claim *about* an earlier record; observation is a first-class signed event. Validators MUST require `annotates` on annotation records and MUST reject `annotates` on any other event_type. The graph layer derives ANNOTATES edges per [§3.2.4](#324-edge-derivation-rules) step 8. Promoted from extension namespace by [D058](DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05).                |
 | `https://atrib.dev/v1/types/revision`              | `0x06` | A claim that supersedes a prior record via the `revises` field ([§1.2.9](#129-revises)). The contradiction-handling primitive: when the agent now holds a position incompatible with a prior claim, the revision is the way to surface the change as a first-class graph node rather than a silent edit (records are immutable). Distinct from `annotation`: annotation comments while leaving the prior position intact, revision asserts the prior is no longer held. Validators MUST require `revises` on revision records and MUST reject `revises` on any other event_type. The graph layer derives REVISES edges per [§3.2.4](#324-edge-derivation-rules) step 9. Promoted from extension namespace by [D059](DECISIONS.md#d059-promote-revision-to-atrib-normative-event_type-byte-0x06).                |
 
 **Extension URIs:** Any absolute URI in a non-`atrib.dev` namespace is a valid extension URI. The 1-byte log entry slot ([§2.3.1](#231-entry-serialization)) maps such URIs to the byte `0xFF` (extension type); verifiers wanting to filter by the URI itself read the URI from the record. Extension URIs SHOULD identify a stable owner (a domain the consumer controls or a `urn:` namespace they registered); atrib does not enforce ownership.
+
+##### 1.2.4.1 Canonical examples
+
+Each example is an unsigned record skeleton (without `signature`, `creator_key`, `chain_root`, `context_id`, `timestamp`, which appear identically on every record). Captions explain the structural and semantic positioning. Example records elsewhere in this spec ([§A](#a-conformance-test-vectors-1) conformance corpora) provide complete signed instances; the examples here pin down the *type-selection* question only.
+
+**Example A: `tool_call`** — agent invoked an external tool with side effects.
+
+```json
+{
+  "spec_version": "atrib/1.0",
+  "event_type": "https://atrib.dev/v1/types/tool_call",
+  "content_id": "sha256:<canonical hash of {tool_name, args, result}>",
+  "tool_name": "Edit",
+  "args_hash": "sha256:<...>",
+  "result_hash": "sha256:<...>"
+}
+```
+
+Caption: an MCP server returned a non-error result for a `tools/call` request. The `Edit` invocation modified state (filesystem). The record signs the action; verifiers reading the chain can prove the agent took this step.
+
+**Example B: `transaction`** — commerce-protocol-detected closing event.
+
+```json
+{
+  "spec_version": "atrib/1.0",
+  "event_type": "https://atrib.dev/v1/types/transaction",
+  "content_id": "sha256:<canonical hash of {merchant_url, amount, ...}>",
+  "signers": [
+    { "creator_key": "<agent>", "signature": "..." },
+    { "creator_key": "<merchant>", "signature": "..." }
+  ]
+}
+```
+
+Caption: payment closed via x402 / ACP / UCP / MPP / AP2 / a2a-x402. The `signers` array carries cross-attestation per [§1.7.6](#176-cross-attestation-requirement-for-transaction-records). [§4.6](#46-the-calculation-algorithm) calculation gates on this URI.
+
+**Example C: `observation` (passive watcher)** — ambient process noted environmental state.
+
+```json
+{
+  "spec_version": "atrib/1.0",
+  "event_type": "https://atrib.dev/v1/types/observation",
+  "content_id": "sha256:<canonical hash of content>",
+  "content": {
+    "kind": "substrate_health",
+    "tree_size": 846,
+    "errors_in_window": 0,
+    "window_ms": 14400000
+  }
+}
+```
+
+Caption: a periodic prerun script reports health every four hours. No prior record is being commented on; the agent did not invoke a tool. This is a first-class noting that future-self can read back to anchor "the substrate was healthy at this moment."
+
+**Example D: `observation` (agent self-emitted)** — agent recorded an in-the-moment noting that does not point at a specific prior record.
+
+```json
+{
+  "spec_version": "atrib/1.0",
+  "event_type": "https://atrib.dev/v1/types/observation",
+  "content_id": "sha256:<canonical hash of content>",
+  "content": {
+    "kind": "discovery",
+    "summary": "the upstream HTTP client returns 502 on payloads larger than 64 KB",
+    "importance": "medium"
+  },
+  "informed_by": ["sha256:<the tool_call that surfaced the discovery>"]
+}
+```
+
+Caption: an agent learned something during work that future-self should be able to find. The `informed_by` field acknowledges sources that produced the discovery, but no `annotates` field is set because the observation is a *standalone* noting, not commentary about a specific prior record. Distinguishes observation from annotation: observation does not pick out *one* prior record as the target; annotation does.
+
+**Example E: `directory_anchor`** — directory operator commitment.
+
+```json
+{
+  "spec_version": "atrib/1.0",
+  "event_type": "https://atrib.dev/v1/types/directory_anchor",
+  "content_id": "sha256:<canonical hash of {directory_root, epoch, version}>",
+  "content": {
+    "directory_root": "...",
+    "epoch": 12345,
+    "version": "akd-v1"
+  }
+}
+```
+
+Caption: emitted by an atrib-system directory service per [§6.2.4](#624-anchor-cross-reference-into-the-tessera-log) after each directory operation. Not emitted by agents.
+
+**Example F: `annotation`** — agent commentary about a specific prior record.
+
+```json
+{
+  "spec_version": "atrib/1.0",
+  "event_type": "https://atrib.dev/v1/types/annotation",
+  "content_id": "sha256:<canonical hash of content>",
+  "annotates": "sha256:<the prior record being commented on>",
+  "content": {
+    "summary": "session covered the lint-rule rewrite plus its rollout plan",
+    "importance": "high",
+    "topics": ["lint-rule-rewrite", "session-summary"]
+  }
+}
+```
+
+Caption: a session-end retrospective hook commenting on the chain-tail of the trace it ran in. The `annotates` field REQUIRED per [§1.2.7](#127-annotates) makes this a forward-pointing claim *about* an earlier record. Annotation does not assert the prior record was wrong; it weights, summarizes, or tags the prior record for recall fidelity.
+
+**Example G: `revision`** — agent superseding a prior claim.
+
+```json
+{
+  "spec_version": "atrib/1.0",
+  "event_type": "https://atrib.dev/v1/types/revision",
+  "content_id": "sha256:<canonical hash of content>",
+  "revises": "sha256:<the prior record being superseded>",
+  "content": {
+    "prior_position": "the upstream service supports streaming responses",
+    "new_position": "the upstream service does not support streaming; the SSE-shaped traffic came from a different endpoint",
+    "reason": "tested empirically; verify against the OpenAPI document rather than inference"
+  }
+}
+```
+
+Caption: the agent now holds a position incompatible with a prior signed claim. Records are immutable, so the substrate surfaces the change as a first-class graph node rather than a silent edit. The `revises` field REQUIRED per [§1.2.9](#129-revises) carries the predecessor reference; the content carries the prior position, the new position, and the reason.
+
+##### 1.2.4.2 Choosing event_type
+
+The decision tree (consumer-facing; producers MUST emit the event_type that matches the structural reality of the record):
+
+1. **Is this a commerce-protocol-detected closing event?** → `transaction`. Carries `signers` array per [§1.7.6](#176-cross-attestation-requirement-for-transaction-records).
+2. **Is this a directory operator's state commitment?** → `directory_anchor`. Emitted by atrib-system directory services, not agents.
+3. **Did the agent invoke a tool with side effects on external state?** → `tool_call`. Result attested via `args_hash` / `result_hash` per [§1.2.1](#121-field-definitions).
+4. **Does the record point at a specific prior record as its target?**
+   - YES, the new claim supersedes the prior position (the agent no longer holds it) → `revision`. REQUIRES `revises` per [§1.2.9](#129-revises).
+   - YES, the new claim comments on, weights, summarizes, or tags the prior record without overturning it → `annotation`. REQUIRES `annotates` per [§1.2.7](#127-annotates).
+   - NO (standalone noting, no specific prior record being targeted) → `observation`.
+5. **Otherwise?** → mint or use an extension URI in your namespace per [D035](DECISIONS.md#d035-extensible-event_type-vocabulary-via-uri-typing). Atrib does not gate extension URIs.
+
+**Common confusion: observation vs annotation.** The structural distinction is *referent*. If the record points at a specific prior record (`annotates` set), it's an annotation. If the record is a standalone noting that may reference sources via `informed_by` but does not pick out a single prior record as its target, it's an observation. A discovery the agent makes during work, with no specific prior record being commented on, is an observation (Example D). A summary of "the trace covered topic Y" pointing at the trace's chain-tail is an annotation (Example F).
+
+**Common confusion: annotation vs revision.** Both carry forward-pointing claims about an earlier record. Annotation says "here is commentary on this prior record"; the agent's stance is unchanged. Revision says "I no longer hold the position I claimed in this prior record." Annotations weight, summarize, or tag for recall; revisions overturn. The semantic strength differs.
+
+**Producer guidance for emit pipelines.** Emit pipelines that automate event_type selection (lifecycle hooks, extractor sub-agents, periodic watchers) SHOULD select event_type by structural rule, not by content keyword:
+
+- A lifecycle hook with a chain-tail referent → `annotation`. The referent makes annotation correct.
+- A watcher with no referent → `observation`. The absence of a referent makes observation correct.
+- An extractor sub-agent reading the agent's transcript and emitting cognitive events SHOULD select per the decision tree above for each detected event: a hedge phrase contradicting a prior claim becomes `revision` if the prior record is identifiable, else `observation`; a discovery becomes `observation`; a summary about a specific prior chain becomes `annotation`.
+
+This guidance addresses the gap [D063](DECISIONS.md#d063-canonical-event_type-examples-and-selection-tree) records: prior to the canonical examples here, implementations of the dogfood loop drifted between observation and annotation for records that had clear structural answers (records with referents went to observation as a fallback before the annotation pipeline shipped, records without referents had no automated path at all).
 
 #### 1.2.5 informed_by
 
