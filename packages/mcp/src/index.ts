@@ -22,7 +22,7 @@ export { createAtribHttpHandler, handleAtribRequest } from './http.js'
 export type { AtribHttpResult } from './http.js'
 
 // Types
-export type { AtribRecord, UnsignedAtribRecord, DecodedToken } from './types.js'
+export type { AtribRecord, UnsignedAtribRecord, DecodedToken, SignerEntry } from './types.js'
 export {
   EVENT_TYPE_TOOL_CALL_URI,
   EVENT_TYPE_TRANSACTION_URI,
@@ -35,7 +35,7 @@ export {
 // Core primitives
 export { base64urlEncode, base64urlDecode } from './base64url.js'
 export { sha256, hexEncode, hexDecode } from './hash.js'
-export { canonicalSigningInput, canonicalRecord } from './canon.js'
+export { canonicalSigningInput, canonicalRecord, canonicalCrossAttestationInput } from './canon.js'
 export { getPublicKey, signRecord, verifyRecord } from './signing.js'
 export { computeContentId, normalizeServerUrl } from './content-id.js'
 export { genesisChainRoot, chainRoot } from './chain-root.js'

@@ -113,7 +113,29 @@ export type AtribRecord = {
    * of `timestamp_granularity`, so the shorter string sorts first).
    */
   timestamp_granularity?: 'ms' | 's' | 'min' | 'h' | 'd'
+  /**
+   * Cross-attestation signers for transaction records per spec §1.7.6
+   * (D052). REQUIRED on `event_type = transaction` records; MUST NOT
+   * appear on tool_call, observation, or extension records. Minimum 2
+   * entries (typically agent + counterparty). Each signer covers the
+   * SAME canonical bytes: the JCS serialization of the record with
+   * `signers: []` (empty array) and the top-level `signature` field
+   * omitted. JCS-canonical form sorts the field between `signature`
+   * ("si-g-n-a-t-u-r-e") and `spec_version` since "si-g-n-e-r-s" >
+   * "si-g-n-a-..." (position 4 'e' > 'a') and "si..." < "sp...".
+   */
+  signers?: SignerEntry[]
 } & ({ session_token: string } | { session_token?: never })
+
+/**
+ * One entry in the §1.7.6 transaction-record signers array. Each entry
+ * carries a creator key (Ed25519 public, base64url) and that key's
+ * signature over the cross-attestation canonical bytes.
+ */
+export interface SignerEntry {
+  creator_key: string
+  signature: string
+}
 
 /** An unsigned record. all fields except signature. */
 export type UnsignedAtribRecord = Omit<AtribRecord, 'signature'>

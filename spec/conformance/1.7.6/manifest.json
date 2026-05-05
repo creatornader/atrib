@@ -1,0 +1,35 @@
+{
+  "spec_section": "1.7.6",
+  "spec_title": "Cross-attestation requirement for transaction records",
+  "decision_link": "D052",
+  "generated_at": 1767225600000,
+  "generator": "packages/log-dev/scripts/generate-conformance-1.7.6.ts",
+  "cases": [
+    {
+      "file": "cases/legacy-single-signer.json",
+      "name": "legacy-single-signer"
+    },
+    {
+      "file": "cases/one-signer.json",
+      "name": "one-signer"
+    },
+    {
+      "file": "cases/two-signers-valid.json",
+      "name": "two-signers-valid"
+    },
+    {
+      "file": "cases/three-signers.json",
+      "name": "three-signers"
+    },
+    {
+      "file": "cases/tampered-second-signature.json",
+      "name": "tampered-second-signature"
+    }
+  ],
+  "keys": {
+    "agent_pubkey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+    "counterparty_pubkey": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA",
+    "facilitator_pubkey": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4"
+  },
+  "note": "The five cases collectively exercise the §1.7.6 cross_attestation algorithm: legacy single-sig (case 1), below-minimum signer counts (cases 1-2), the canonical happy path (case 3), above-minimum (case 4), and tamper-detection (case 5). Per §1.7.6 missing cross-attestation is a signal, not invalidation: legacy and tampered records remain cryptographically valid via the underlying signature."
+}

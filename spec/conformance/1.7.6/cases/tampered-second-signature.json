@@ -1,0 +1,40 @@
+{
+  "name": "tampered-second-signature",
+  "spec_section": "1.7.6",
+  "description": "A transaction record with two signers attached but the second signature has been tampered (first base64url char replaced). Verifier MUST surface signers_count: 2, signers_valid: 1, missing: true. Demonstrates that 'count' and 'valid' are independent: a cosigner cannot inflate signers_valid by attaching a bogus signature.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0505050505050505050505050505050505050505050505050505050505050505",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/transaction",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225605000,
+      "signature": "",
+      "signers": [
+        {
+          "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+          "signature": "X95nwzNABfGILfbluOWSuIbGjOZ63It23kqp5-1tz4WHDdyvCzL5ieoJyJziS2ihlSDbZIpUuYDUJDugV_d8Aw"
+        },
+        {
+          "creator_key": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA",
+          "signature": "AUt5G3oyPNWG3y0gzHoNIW1_tZWBu7tmgHKw9LTo59lNj6Xb3jvZSuwIc7SLOSazUsFt316S2BnFvbtGyzhKDA"
+        }
+      ]
+    },
+    "signer_seeds_hex": {
+      "agent": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  },
+  "expected": {
+    "record_hash_hex": "c6a7cba60cb27815e6f53c0327a7226b23362a7e08bd816304c70110971c6d49",
+    "cross_attestation": {
+      "signers_count": 2,
+      "signers_valid": 1,
+      "missing": true
+    },
+    "validator_should_accept": true,
+    "valid_after_signal": true
+  }
+}
