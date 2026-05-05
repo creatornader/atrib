@@ -1006,5 +1006,106 @@ describe('atrib() middleware', () => {
       const ok = await verifyRecord(rec)
       expect(ok).toBe(true)
     })
+
+    it('disclosure.result: "plain-sha256" writes result_hash without result_salt', async () => {
+      // Capture a record where the upstream handler returned a deterministic
+      // payload, with disclosure.result enabled. Repeat to confirm the hash
+      // is stable across calls with the same result.
+      async function capture() {
+        const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+        const resultObj = { content: [{ type: 'text', text: 'fixed' }] }
+        const captured: AtribRecord[] = []
+        atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://test.example.com',
+          onRecord: (r) => { captured.push(r) },
+          disclosure: { result: 'plain-sha256' },
+        })
+        registerToolHandler(vi.fn().mockResolvedValue(resultObj))
+        await getToolHandler()!(createToolCallRequest('search'), {})
+        return captured[0]!
+      }
+      const a = await capture()
+      const b = await capture()
+      expect(a.result_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(a.result_salt).toBeUndefined()
+      // Hash includes _meta because we hash BEFORE atrib mutates the result;
+      // but since both runs go through identical paths, the hashes match.
+      expect(b.result_hash).toBe(a.result_hash)
+    })
+
+    it('disclosure.result: "salted-sha256" writes both result_hash and result_salt', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: AtribRecord[] = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        onRecord: (r) => { captured.push(r) },
+        disclosure: { result: 'salted-sha256' },
+      })
+      registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'r' }] }))
+      await getToolHandler()!(createToolCallRequest('search'), {})
+      await getToolHandler()!(createToolCallRequest('search'), {})
+
+      expect(captured).toHaveLength(2)
+      const [first, second] = captured
+      expect(first!.result_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(first!.result_salt).toMatch(/^[A-Za-z0-9_-]{22}$/)
+      // Per-record random salt → different hash on repeat call.
+      expect(second!.result_salt).not.toBe(first!.result_salt)
+      expect(second!.result_hash).not.toBe(first!.result_hash)
+    })
+
+    it('signed record with all four §8.3 commitment fields verifies correctly', async () => {
+      const { verifyRecord } = await import('../src/signing.js')
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: AtribRecord[] = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        onRecord: (r) => { captured.push(r) },
+        disclosure: {
+          tool_name: 'verbatim',
+          args: 'salted-sha256',
+          result: 'salted-sha256',
+        },
+      })
+      registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
+      await getToolHandler()!(createToolCallRequest('compose'), {})
+      const rec = captured[0]!
+      // All §8.3 commitment fields populated.
+      expect(rec.args_hash).toBeDefined()
+      expect(rec.args_salt).toBeDefined()
+      expect(rec.result_hash).toBeDefined()
+      expect(rec.result_salt).toBeDefined()
+      expect(rec.tool_name).toBe('compose')
+      const ok = await verifyRecord(rec)
+      expect(ok).toBe(true)
+    })
+
+    it('disclosure.result is silently inactive on the preCallTransform path (warns at init)', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+        const captured: AtribRecord[] = []
+        atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://test.example.com',
+          onRecord: (r) => { captured.push(r) },
+          disclosure: { result: 'plain-sha256' },
+          preCallTransform: () => undefined, // observe-only
+        })
+        registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
+        await getToolHandler()!(createToolCallRequest('compose'), {})
+        // The pre-call branch signs first; result_hash is NOT populated.
+        expect(captured[0]!.result_hash).toBeUndefined()
+        expect(captured[0]!.result_salt).toBeUndefined()
+        // Init-time warning surfaces the misconfiguration to operators.
+        const warnings = warnSpy.mock.calls.map((c) => String(c[0]))
+        expect(warnings.some((w) => w.includes('disclosure.result is incompatible with preCallTransform'))).toBe(true)
+      } finally {
+        warnSpy.mockRestore()
+      }
+    })
   })
 })
