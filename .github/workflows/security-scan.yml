@@ -54,17 +54,31 @@ jobs:
         with:
           fetch-depth: 0  # full history so gitleaks scans every commit
 
-      # gitleaks-action v2 needs GITLEAKS_CONFIG set explicitly to load
-      # the custom .gitleaks.toml at repo root. Without it, the action
-      # runs gitleaks's default ruleset only, which flags the conformance
-      # corpus's high-entropy public-key and provenance_token values as
-      # generic-api-key matches (CI failure observed on 4fba1b9). Both
-      # GITHUB_TOKEN and GITLEAKS_CONFIG resolve from CI-controlled
-      # contexts (no user-controlled inputs flow through this step).
-      - uses: gitleaks/gitleaks-action@v2
+      # We invoke gitleaks directly rather than via gitleaks-action@v2
+      # because the action's bundled gitleaks binary (8.24.3 as of
+      # 2026-05-04) does not honor [[allowlists]] semantics the same way
+      # newer versions do — even with GITLEAKS_CONFIG set and
+      # regexTarget=line, the conformance-corpus public-key fixtures
+      # still trigger generic-api-key flags. Pinning to 8.30+ (matches
+      # local pre-push hook version) restores allowlist behavior.
+      # Re-evaluate when gitleaks-action bumps its bundled binary.
+      #
+      # Inputs to this step are all CI-controlled constants: a literal
+      # release URL, a literal version, and github.workspace (the runner
+      # path). No user-controlled github.event.* fields flow into either
+      # run: command. Per the github.blog injection guide.
+      - name: Install gitleaks 8.30.1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_CONFIG: ${{ github.workspace }}/.gitleaks.toml
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /tmp gitleaks
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+      - name: Run gitleaks (project config)
+        env:
+          GITLEAKS_CONFIG_PATH: ${{ github.workspace }}/.gitleaks.toml
+        run: gitleaks git --no-banner -c "$GITLEAKS_CONFIG_PATH"
 
   trufflehog:
     name: TruffleHog (verified-secrets scan)
