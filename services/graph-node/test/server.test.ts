@@ -193,4 +193,107 @@ describe('graph-node server (section 3.4)', () => {
     const res = await fetch(`${url}/v1/graph/${CONTEXT_ID}`)
     expect(res.headers.get('access-control-allow-origin')).toBe('*')
   })
+
+  it('GET /v1/creators/:key/graph returns activity-map graph for windowed records', async () => {
+    const pk = await getPublicKey(TEST_KEY)
+    const creatorKey = base64urlEncode(pk)
+    const res = await fetch(`${url}/v1/creators/${encodeURIComponent(creatorKey)}/graph`)
+    expect(res.ok).toBe(true)
+    const body = await res.json()
+    expect(body.creator_key).toBe(creatorKey)
+    expect(body.record_count).toBeGreaterThanOrEqual(2)
+    expect(body.truncated).toBe(false)
+    expect(body.graph.nodes.length).toBe(body.record_count)
+    expect(body.window).toEqual({ since: null, until: null, limit: 500 })
+  })
+
+  it('GET /v1/creators/:key/graph honors since/until window', async () => {
+    const pk = await getPublicKey(TEST_KEY)
+    const creatorKey = base64urlEncode(pk)
+    const unfiltered = await fetch(`${url}/v1/creators/${encodeURIComponent(creatorKey)}/graph`)
+    const unfilteredBody = await unfiltered.json()
+    // Earliest fixture records have low timestamps (1000+i). A `since` floor
+    // of 1_700_000_000_000 (sometime in 2023) drops anything with low test
+    // timestamps. Records ingested by sibling tests with Date.now() pass the
+    // floor. The contract: filtered count is less than unfiltered count.
+    const res = await fetch(`${url}/v1/creators/${encodeURIComponent(creatorKey)}/graph?since=1700000000000`)
+    expect(res.ok).toBe(true)
+    const body = await res.json()
+    expect(body.record_count).toBeLessThan(unfilteredBody.record_count)
+    expect(body.window.since).toBe(1700000000000)
+  })
+
+  it('GET /v1/creators/:key/graph rejects invalid time window', async () => {
+    const pk = await getPublicKey(TEST_KEY)
+    const creatorKey = base64urlEncode(pk)
+    const res = await fetch(`${url}/v1/creators/${encodeURIComponent(creatorKey)}/graph?since=abc`)
+    expect(res.status).toBe(400)
+  })
+
+  it('GET /v1/creators/:key/graph returns 404 for unknown creator', async () => {
+    const fakeKey = base64urlEncode(new Uint8Array(32).fill(0xff))
+    const res = await fetch(`${url}/v1/creators/${encodeURIComponent(fakeKey)}/graph`)
+    expect(res.status).toBe(404)
+  })
+
+  it('GET /v1/trace/:record_hash returns single-node trace for leaf record', async () => {
+    // Pull a record_hash from one of the fixture records via /v1/graph.
+    const graphRes = await fetch(`${url}/v1/graph/${CONTEXT_ID}/nodes`)
+    const graphBody = await graphRes.json() as { nodes: Array<{ id: string }> }
+    const recordHash = graphBody.nodes[0]!.id // node.id == "sha256:<hex>"
+    const hashHex = recordHash.replace(/^sha256:/, '')
+
+    const res = await fetch(`${url}/v1/trace/${hashHex}`)
+    expect(res.ok).toBe(true)
+    const body = await res.json()
+    expect(body.start_record_hash).toBe(`sha256:${hashHex}`)
+    // Fixture records have no informed_by, no annotates, no revises, leaf.
+    expect(body.record_count).toBe(1)
+    expect(body.truncated_by_depth).toBe(false)
+    expect(body.truncated_by_count).toBe(false)
+  })
+
+  it('GET /v1/trace/:record_hash accepts both raw hex and sha256: prefix forms', async () => {
+    const graphRes = await fetch(`${url}/v1/graph/${CONTEXT_ID}/nodes`)
+    const graphBody = await graphRes.json() as { nodes: Array<{ id: string }> }
+    const recordHash = graphBody.nodes[0]!.id
+    const hashHex = recordHash.replace(/^sha256:/, '')
+
+    const r1 = await fetch(`${url}/v1/trace/${hashHex}`)
+    const r2 = await fetch(`${url}/v1/trace/sha256:${hashHex}`)
+    expect(r1.ok).toBe(true)
+    expect(r2.ok).toBe(true)
+    expect((await r1.json()).start_record_hash).toBe((await r2.json()).start_record_hash)
+  })
+
+  it('GET /v1/trace/:unknown_hash returns 404', async () => {
+    const res = await fetch(`${url}/v1/trace/${'0'.repeat(64)}`)
+    expect(res.status).toBe(404)
+  })
+
+  it('GET /v1/trace/:invalid_hash returns 404 (route not matched)', async () => {
+    const res = await fetch(`${url}/v1/trace/not-a-valid-hash`)
+    expect(res.status).toBe(404)
+  })
+
+  it('GET /v1/graph/:context_id/nodes accepts URI form for all 6 normative event_types', async () => {
+    // Pre-D063 the inline normalizer only covered tool_call / transaction /
+    // observation; URI queries for directory_anchor / annotation / revision
+    // silently returned zero results because the equality compare against
+    // node.event_type (short label) never matched the URI form.
+    const uris = [
+      'https://atrib.dev/v1/types/tool_call',
+      'https://atrib.dev/v1/types/transaction',
+      'https://atrib.dev/v1/types/observation',
+      'https://atrib.dev/v1/types/directory_anchor',
+      'https://atrib.dev/v1/types/annotation',
+      'https://atrib.dev/v1/types/revision',
+    ]
+    for (const uri of uris) {
+      const res = await fetch(`${url}/v1/graph/${CONTEXT_ID}/nodes?event_type=${encodeURIComponent(uri)}`)
+      expect(res.ok).toBe(true)
+      // The fixture has only tool_call records; we just need the endpoint to
+      // not error. The normalizer is exercised regardless of match count.
+    }
+  })
 })
