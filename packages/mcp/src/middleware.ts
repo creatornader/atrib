@@ -16,6 +16,7 @@ import { readInboundContext, writeOutboundContext, parseBaggageAtribSession } fr
 import { signRecord, getPublicKey } from './signing.js'
 import { hexEncode, sha256 } from './hash.js'
 import { canonicalRecord } from './canon.js'
+import canonicalize from 'canonicalize'
 import { encodeToken } from './token.js'
 import { createSubmissionQueue } from './submission.js'
 import { zeroize } from './zeroize.js'
@@ -166,6 +167,32 @@ export interface AtribOptions {
    * path) for the ability to causally embed records into downstream data.
    */
   preCallTransform?: PreCallTransform
+  /**
+   * Optional disclosure controls per spec §8 / D061. Each dial picks how
+   * much the signed record discloses about the underlying tool call. All
+   * default to `'omit'`, preserving the §8.1 default posture (existing
+   * behavior; no change to record bytes for callers that don't opt in).
+   *
+   *   - `tool_name: 'omit' | 'verbatim' | 'hashed'` (§8.2). 'verbatim'
+   *     writes the raw tool name. 'hashed' writes `sha256:<hex>` of the
+   *     name (verifiers configured with a name registry can resolve;
+   *     others see only the hash). 'omit' adds nothing.
+   *   - `args: 'omit' | 'plain-sha256' | 'salted-sha256'` (§8.3).
+   *     'plain-sha256' writes `args_hash = sha256(JCS(arguments))`.
+   *     'salted-sha256' generates a 16-byte random salt, writes both
+   *     `args_salt` (the salt, base64url) and `args_hash =
+   *     sha256(salt || JCS(arguments))`. 'omit' adds nothing.
+   *
+   * Note on result_hash / result_salt: the §8.3 result-side commitment
+   * cannot be populated by this middleware path because signing happens
+   * BEFORE the upstream handler returns (to support preCallTransform).
+   * A separate post-call signing path is the next ADR. Until then,
+   * `disclosure.result` is intentionally NOT a field here.
+   */
+  disclosure?: {
+    tool_name?: 'omit' | 'verbatim' | 'hashed'
+    args?: 'omit' | 'plain-sha256' | 'salted-sha256'
+  }
 }
 
 /** Extended McpServer with atrib-specific methods. */
@@ -446,6 +473,46 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
         console.warn('atrib: informedBy callback threw', e)
       }
     }
+    // §8 / D061 disclosure dials. Each defaults to 'omit' (preserves §8.1
+    // default posture). Errors during disclosure synthesis fall through to
+    // omission rather than throwing — degradation contract per §5.8.
+    const disclosure = options.disclosure ?? {}
+    const toolNameDisclosure = disclosure.tool_name ?? 'omit'
+    const argsDisclosure = disclosure.args ?? 'omit'
+
+    let toolNameField: string | undefined
+    if (toolNameDisclosure === 'verbatim') {
+      toolNameField = toolName
+    } else if (toolNameDisclosure === 'hashed') {
+      toolNameField = `sha256:${hexEncode(sha256(new TextEncoder().encode(toolName)))}`
+    }
+
+    let argsHashField: string | undefined
+    let argsSaltField: string | undefined
+    if (argsDisclosure !== 'omit') {
+      try {
+        const argsValue = (params.arguments as Record<string, unknown> | undefined) ?? {}
+        const argsJcs = canonicalize(argsValue)
+        if (typeof argsJcs === 'string') {
+          const argsBytes = new TextEncoder().encode(argsJcs)
+          if (argsDisclosure === 'plain-sha256') {
+            argsHashField = `sha256:${hexEncode(sha256(argsBytes))}`
+          } else {
+            // salted-sha256 per §8.3: H = SHA-256(salt ‖ canonical_bytes)
+            const salt = new Uint8Array(16)
+            crypto.getRandomValues(salt)
+            const combined = new Uint8Array(salt.length + argsBytes.length)
+            combined.set(salt, 0)
+            combined.set(argsBytes, salt.length)
+            argsHashField = `sha256:${hexEncode(sha256(combined))}`
+            argsSaltField = base64urlEncode(salt)
+          }
+        }
+      } catch (e) {
+        console.warn('atrib: args disclosure synthesis failed, omitting', e)
+      }
+    }
+
     const record: AtribRecord = {
       spec_version: 'atrib/1.0',
       content_id: contentId,
@@ -455,8 +522,11 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
       context_id: contextId,
       timestamp: Date.now(),
       signature: '',
+      ...(argsHashField ? { args_hash: argsHashField } : {}),
+      ...(argsSaltField ? { args_salt: argsSaltField } : {}),
       ...(informedByList ? { informed_by: informedByList } : {}),
       ...(sessionToken ? { session_token: sessionToken } : {}),
+      ...(toolNameField !== undefined ? { tool_name: toolNameField } : {}),
     } as AtribRecord
 
     // §1.4.2: Sign the record
