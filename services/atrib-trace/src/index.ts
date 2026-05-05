@@ -59,9 +59,53 @@ interface CompactVisited {
   next_resolved: string[]
   /** Sub-set of next_informed_by that were dangling (not in mirror). */
   next_dangling: string[]
+  /**
+   * Semantic context from the local sidecar when present. Carries
+   * tool name + brief content summary so the agent can reason about
+   * the record's meaning without separately fetching it. Absent on
+   * legacy bare-record entries that pre-date the sidecar.
+   */
+  sidecar_summary?: {
+    tool_name?: string
+    topics?: string[]
+    /** First 200 chars of `what` (observation) or summary (annotation). */
+    what?: string
+    /** Annotation `importance` field when present. */
+    importance?: string
+    producer?: string
+  }
 }
 
-function compactVisited(v: TraceVisited, danglingSet: Set<string>): CompactVisited {
+/** Pull a compact summary from the sidecar's content payload. */
+function summarizeSidecar(
+  loadedRecord: { local?: import('./storage.js').SidecarPayload } | undefined,
+): CompactVisited['sidecar_summary'] {
+  if (!loadedRecord?.local) return undefined
+  const sc = loadedRecord.local
+  const out: NonNullable<CompactVisited['sidecar_summary']> = {}
+  if (sc.toolName) out.tool_name = sc.toolName
+  if (sc.producer) out.producer = sc.producer
+  const c = sc.content as Record<string, unknown> | undefined
+  if (c && Array.isArray(c['topics'])) {
+    out.topics = (c['topics'] as unknown[]).filter((t): t is string => typeof t === 'string').slice(0, 6)
+  }
+  if (c && typeof c['what'] === 'string') {
+    const w = c['what']
+    out.what = w.length > 200 ? w.slice(0, 197) + '…' : w
+  } else if (c && typeof c['summary'] === 'string') {
+    const s = c['summary']
+    out.what = s.length > 200 ? s.slice(0, 197) + '…' : s
+  }
+  if (c && typeof c['importance'] === 'string') out.importance = c['importance']
+  return Object.keys(out).length === 0 ? undefined : out
+}
+
+function compactVisited(
+  v: TraceVisited,
+  danglingSet: Set<string>,
+  byHash: Map<string, import('./storage.js').IndexedRecord>,
+): CompactVisited {
+  const indexed = byHash.get(v.record_hash)
   return {
     depth: v.depth,
     record_hash: v.record_hash,
@@ -74,6 +118,7 @@ function compactVisited(v: TraceVisited, danglingSet: Set<string>): CompactVisit
     next_informed_by: v.next_informed_by,
     next_resolved: v.next_informed_by.filter((h) => !danglingSet.has(h)),
     next_dangling: v.next_informed_by.filter((h) => danglingSet.has(h)),
+    ...(summarizeSidecar(indexed) ? { sidecar_summary: summarizeSidecar(indexed) } : {}),
   }
 }
 
@@ -114,7 +159,7 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
             direction: result.direction,
             depth_requested: result.depth_requested,
             depth_reached: result.depth_reached,
-            visited: result.visited.map((v) => compactVisited(v, danglingSet)),
+            visited: result.visited.map((v) => compactVisited(v, danglingSet, byHash)),
             dangling: result.dangling,
             truncated_by_depth: result.truncated_by_depth,
             truncated_by_cap: result.truncated_by_cap,

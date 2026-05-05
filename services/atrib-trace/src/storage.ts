@@ -14,7 +14,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { canonicalRecord, hexEncode, sha256, type AtribRecord } from '@atrib/mcp'
+import { canonicalRecord, hexEncode, sha256, type AtribRecord, type OnRecordSidecar } from '@atrib/mcp'
 
 export interface IndexedRecord {
   record: AtribRecord
@@ -22,6 +22,23 @@ export interface IndexedRecord {
   record_hash: string
   /** Source file the record was read from (for debugging). */
   source: string
+  /**
+   * Pre-sign payload context, when the producer wrote it to the local
+   * mirror as a `_local` sidecar on the envelope. Carries semantic content
+   * (toolName, args, result, content) the signed AtribRecord COMMITS TO
+   * via content_id / args_hash / result_hash but does not itself contain.
+   * Absent on legacy bare-record entries from older mirror writes.
+   */
+  local?: SidecarPayload
+}
+
+/**
+ * Combined sidecar shape — superset of every producer's local payload
+ * (mcp-wrap writes toolName/args/result; atrib-emit writes content).
+ */
+export interface SidecarPayload extends OnRecordSidecar {
+  content?: Record<string, unknown>
+  producer?: string
 }
 
 const RECORDS_DIR = process.env.ATRIB_RECORDS_DIR ?? join(homedir(), '.atrib', 'records')
@@ -60,12 +77,15 @@ export function loadAllRecords(dir: string = RECORDS_DIR): {
         try {
           const parsed = JSON.parse(trimmed) as
             | AtribRecord
-            | { record: AtribRecord; proof?: unknown; written_at?: unknown }
-          // Normalize: emit envelope vs bare wrapper record.
-          const rec: AtribRecord =
-            'record' in parsed && parsed.record && (parsed.record as AtribRecord).context_id
-              ? (parsed.record as AtribRecord)
-              : (parsed as AtribRecord)
+            | { record: AtribRecord; proof?: unknown; written_at?: unknown; _local?: SidecarPayload }
+          // Normalize: envelope shape vs legacy bare record shape.
+          const isEnvelope =
+            'record' in parsed &&
+            parsed.record &&
+            (parsed.record as AtribRecord).context_id !== undefined
+          const rec: AtribRecord = isEnvelope
+            ? (parsed.record as AtribRecord)
+            : (parsed as AtribRecord)
           if (!rec.context_id || !rec.signature || !rec.timestamp) continue
 
           const hashHex = hexEncode(sha256(canonicalRecord(rec)))
@@ -73,6 +93,13 @@ export function loadAllRecords(dir: string = RECORDS_DIR): {
             record: rec,
             record_hash: `sha256:${hashHex}`,
             source: fname,
+          }
+          // Lift the `_local` sidecar onto the indexed record when present.
+          // Legacy bare-record entries have no sidecar; that's OK — consumers
+          // tolerate its absence.
+          if (isEnvelope) {
+            const sidecar = (parsed as { _local?: SidecarPayload })._local
+            if (sidecar) indexed.local = sidecar
           }
           byHash.set(indexed.record_hash, indexed)
           all.push(indexed)
