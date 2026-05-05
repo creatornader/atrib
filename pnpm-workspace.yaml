@@ -5,3 +5,4 @@ packages:
   - 'services/directory-node'
   - 'services/atrib-emit'
   - 'services/atrib-trace'
+  - 'services/atrib-summarize'
