@@ -493,9 +493,34 @@ function handleByContext(res: ServerResponse, tree: MerkleTree, contextHex: stri
   })
 }
 
+interface SessionSummary {
+  context_id: string
+  node_count: number
+  /** Earliest record_timestamp_ms seen for this context_id from this creator. */
+  first_seen_ms: number
+  /** Latest record_timestamp_ms seen — useful for activity-map recency sort and live-trace detection. */
+  last_seen_ms: number
+  /**
+   * Per-event-type record counts within the context_id. Surfaces the
+   * diversity the older `has_transaction` boolean hid: clients need to
+   * know whether a context_id contains annotations / revisions /
+   * observations, not just whether commerce closed it. Keys mirror
+   * decodeEntry's normalized labels ('tool_call', 'transaction',
+   * 'observation', 'directory_anchor', 'annotation', 'revision',
+   * 'extension', 'reserved'); zero-count types are omitted to keep the
+   * response compact.
+   */
+  count_by_event_type: Record<string, number>
+  /**
+   * Retained for backward compatibility with dashboard code that already
+   * reads it. Equivalent to `(count_by_event_type.transaction ?? 0) > 0`.
+   */
+  has_transaction: boolean
+}
+
 function handleByCreator(res: ServerResponse, tree: MerkleTree, creatorKey: string): void {
   const size = tree.size
-  const sessions = new Map<string, { context_id: string; node_count: number; has_transaction: boolean; first_seen_ms: number }>()
+  const sessions = new Map<string, SessionSummary>()
   for (let i = 0; i < size; i++) {
     const e = tree.entryBytes(i)
     const decoded = decodeEntry(e, i)
@@ -503,15 +528,19 @@ function handleByCreator(res: ServerResponse, tree: MerkleTree, creatorKey: stri
     const cur = sessions.get(decoded.context_id) ?? {
       context_id: decoded.context_id,
       node_count: 0,
-      has_transaction: false,
       first_seen_ms: decoded.timestamp_ms,
+      last_seen_ms: decoded.timestamp_ms,
+      count_by_event_type: {},
+      has_transaction: false,
     }
     cur.node_count += 1
+    cur.count_by_event_type[decoded.event_type] = (cur.count_by_event_type[decoded.event_type] ?? 0) + 1
     if (decoded.event_type === 'transaction') cur.has_transaction = true
     if (decoded.timestamp_ms < cur.first_seen_ms) cur.first_seen_ms = decoded.timestamp_ms
+    if (decoded.timestamp_ms > cur.last_seen_ms) cur.last_seen_ms = decoded.timestamp_ms
     sessions.set(decoded.context_id, cur)
   }
-  const list = [...sessions.values()].sort((a, b) => b.first_seen_ms - a.first_seen_ms)
+  const list = [...sessions.values()].sort((a, b) => b.last_seen_ms - a.last_seen_ms)
   res.setHeader('cache-control', 'public, max-age=10')
   sendJson(res, 200, { creator_key: creatorKey, count: list.length, sessions: list })
 }
