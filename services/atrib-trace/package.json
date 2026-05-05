@@ -1,6 +1,6 @@
 {
   "name": "@atrib/atrib-trace",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server exposing the trace tool — walks informed_by chains backward from a record_hash to surface the reasoning chain that led to a record. Closes the consumer-side cognitive-loop primitive.",
   "license": "Apache-2.0",
   "private": true,
