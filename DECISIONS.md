@@ -2779,6 +2779,50 @@ When the spec needs to evolve (e.g. result fingerprint convention lands), update
 
 ---
 
+## D063: Canonical event_type examples and selection tree
+
+**Date:** 2026-05-05
+**Context:** The atrib spec [§1.2.4](atrib-spec.md#124-event_type-values) defined the six normative `event_type` URIs and the field-level requirements ([§1.2.7](atrib-spec.md#127-annotates) annotates, [§1.2.9](atrib-spec.md#129-revises) revises) but did not provide canonical examples or a selection tree. The result was repeatable drift between `observation` and `annotation` across producer implementations:
+
+- Lifecycle hooks (PreCompact, SessionEnd) initially emitted `event_type=observation` as a fallback when the annotates pipeline was not yet wired through atrib-emit, even though the records had a clear referent (the chain-tail record_hash) and were structurally annotations. Migrated to `event_type=annotation` per [D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) once the pipeline shipped.
+- A retrospective batch watcher pipeline emitted `event_type=observation` for records that carried `informed_by` and annotation-shaped content (`ref`, `observation_source`, `summary`). Migrated to `event_type=annotation` once the byte 0x05 promotion ([D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05)) cleared the on-the-wire ambiguity.
+- A separate cognitive-coverage analysis on the dogfood architecture documented a related class of drift: agent in-the-moment cognitive events that *should* have been `observation` (no specific referent: discoveries, hypotheses, in-the-moment notings) had no automated path and were not being signed at all. Tracked separately under the cognitive-completeness work; the spec-side fix is the canonical examples here.
+
+The semantic distinction between observation, annotation, and revision is structural (referent presence, referent strength) but the prose-only treatment in §1.2.7 / §1.2.9 left producers without a single place to look for "what does each look like, and which one fits this record?"
+
+**Decision:** Add two normative-explanatory subsections to [§1.2.4](atrib-spec.md#124-event_type-values):
+
+1. **§1.2.4.1 Canonical examples**, one example record skeleton per event_type (tool_call, transaction, observation [passive watcher], observation [agent self-emitted], directory_anchor, annotation, revision), with a caption explaining the structural and semantic positioning.
+2. **§1.2.4.2 Choosing event_type**, a five-step decision tree consumers run to select the right event_type, plus targeted disambiguation for the two common confusion cases (observation vs annotation, annotation vs revision) and producer guidance for emit pipelines that automate event_type selection (lifecycle hooks, extractor sub-agents, periodic watchers).
+
+Also broaden the `observation` row in the §1.2.4 normative-URI table to clearly include both production shapes (passive watcher AND agent self-emitted standalone notings); the prior wording read narrowly as "passive watcher only" even though the field semantics never required that.
+
+**Alternatives considered:**
+
+- *Leave the spec as-is and rely on implementation memory + skill docs for the disambiguation.* Rejected because the drift is documented across multiple producer surfaces (lifecycle hooks, synthesize.py, agent self-emission gap), and the dogfood architecture has now been bitten by the same ambiguity twice. The spec is the right level for the fix; implementation-side guidance leaks operator-context detail and does not propagate to future implementers.
+- *Restrict observation to passive-watcher use only and expand annotation to absorb agent self-emitted notings.* Rejected because annotation REQUIRES `annotates` per §1.2.7 (validators MUST reject annotation without it) and the structural semantics are load-bearing for [§3.2.4](atrib-spec.md#324-edge-derivation-rules) ANNOTATES edge derivation. Removing the requirement would silently break graph derivation. The right move is clarifying that observation has two valid production shapes, not collapsing observation into annotation.
+- *Mint extension URIs for the agent self-emitted case (e.g. `https://atrib.dev/v1/types/discovery`).* Rejected because the structural semantics already match the existing observation type (no required referent, first-class noting). Adding a new type would increase the vocabulary without resolving the drift; it would introduce a different ambiguity (discovery vs observation).
+- *Add canonical examples in a separate appendix or supplementary doc.* Rejected because consumers selecting an event_type are reading §1.2.4 first; a separate location would not be where the question gets asked.
+
+**Consequences:**
+
+- Producer implementations of the dogfood loop have a single source of truth for event_type selection. The §1.2.4.2 decision tree is the resolution path.
+- Future emit pipelines (extractor sub-agents reading transcripts, decision-time guidance hooks, Hermes-as-Critic per cognitive-completeness Track 1) have explicit guidance on how to map detected events to event_type. The producer-guidance sub-paragraph in §1.2.4.2 captures the mapping rule (referent → annotation; superseding referent → revision; standalone noting → observation).
+- The §1.2.4 observation prose now explicitly admits agent self-emitted observations as a valid production shape. Producers no longer need to choose between "this looks like observation but the spec implies passive watcher only" and "force it into annotation even though there's no referent."
+- The conformance corpus is unaffected ([§1.4.4](atrib-spec.md#144-test-vector-validation), [§A.10](atrib-spec.md#a10-conformance-corpus-for-optional-fields-and-postures)). The examples are illustrative, not normative test vectors.
+
+**Scope of the spec change.** The change is additive (new subsections + broadened prose for one row of the normative URI table). No field semantics change. No graph derivation rule changes. No conformance corpus regeneration required. Validators and verifiers do not need updates.
+
+**Cross-references:**
+
+- [§1.2.4](atrib-spec.md#124-event_type-values) normative URI set (table updated for observation row)
+- [§1.2.4.1](atrib-spec.md#1241-canonical-examples) canonical examples (NEW)
+- [§1.2.4.2](atrib-spec.md#1242-choosing-event_type) selection tree (NEW)
+- [D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) annotation byte 0x05 promotion (the on-the-wire ambiguity this clarification builds on)
+- [D059](#d059-promote-revision-to-atrib-normative-event_type-byte-0x06) revision byte 0x06 promotion (paired type with the same selection-tree question)
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
