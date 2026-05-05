@@ -14,6 +14,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { randomBytes } from 'node:crypto'
 import {
+  EVENT_TYPE_ANNOTATION_URI,
   canonicalRecord,
   createSubmissionQueue,
   genesisChainRoot,
@@ -189,15 +190,15 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
 
   // annotates require/forbid invariant per spec §1.2.7 / D058. Validators MUST
   // reject violations; we surface as warnings-only per §5.8 so callers see why
-  // we refused to sign rather than getting back a malformed record.
-  const ANNOTATION_URI = 'https://atrib.dev/v1/types/annotation'
-  if (input.event_type === ANNOTATION_URI && !input.annotates) {
+  // we refused to sign rather than getting back a malformed record. Use the
+  // @atrib/mcp normative constant so the URI string lives in one place.
+  if (input.event_type === EVENT_TYPE_ANNOTATION_URI && !input.annotates) {
     return emptyOutput(input.context_id ?? randomContextId(), [
       'annotation event_type requires annotates per §1.2.7 (D058); ' +
         'omitted records would fail validator admission',
     ])
   }
-  if (input.annotates && input.event_type !== ANNOTATION_URI) {
+  if (input.annotates && input.event_type !== EVENT_TYPE_ANNOTATION_URI) {
     return emptyOutput(input.context_id ?? randomContextId(), [
       'annotates is FORBIDDEN on non-annotation event_types per §1.2.7 (D058); ' +
         `received event_type=${input.event_type}`,
