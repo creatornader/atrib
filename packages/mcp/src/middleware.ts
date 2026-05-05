@@ -182,16 +182,20 @@ export interface AtribOptions {
    *     'salted-sha256' generates a 16-byte random salt, writes both
    *     `args_salt` (the salt, base64url) and `args_hash =
    *     sha256(salt || JCS(arguments))`. 'omit' adds nothing.
+   *   - `result: 'omit' | 'plain-sha256' | 'salted-sha256'` (§8.3).
+   *     Same scheme as `args` but for the tool's response. Hashes the
+   *     JCS canonicalization of the result object captured BEFORE
+   *     atrib mutates `result._meta` with its own fields.
    *
-   * Note on result_hash / result_salt: the §8.3 result-side commitment
-   * cannot be populated by this middleware path because signing happens
-   * BEFORE the upstream handler returns (to support preCallTransform).
-   * A separate post-call signing path is the next ADR. Until then,
-   * `disclosure.result` is intentionally NOT a field here.
+   * **Compatibility note**: `result` disclosure requires the post-call
+   * signing path. It is INCOMPATIBLE with `preCallTransform` (which
+   * signs BEFORE the handler returns). When both are set, `result`
+   * disclosure is silently ignored and a warning is logged.
    */
   disclosure?: {
     tool_name?: 'omit' | 'verbatim' | 'hashed'
     args?: 'omit' | 'plain-sha256' | 'salted-sha256'
+    result?: 'omit' | 'plain-sha256' | 'salted-sha256'
   }
 }
 
@@ -309,6 +313,22 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     publicKeyB64 = base64urlEncode(pk)
   })
 
+  // Init-time warning: result disclosure requires the post-call signing
+  // path. preCallTransform forces pre-call signing where the result isn't
+  // available yet, so the two are mutually exclusive. The runtime path
+  // already silently skips result hashing on pre-call; this warning makes
+  // the conflict visible at config time rather than letting it manifest as
+  // silently-missing result_hash fields on emitted records.
+  if (
+    options.preCallTransform &&
+    options.disclosure?.result &&
+    options.disclosure.result !== 'omit'
+  ) {
+    console.warn(
+      'atrib: disclosure.result is incompatible with preCallTransform (the result is not available pre-call). result_hash / result_salt will not appear on records produced via the preCallTransform path.',
+    )
+  }
+
   // === MCP SDK integration: setRequestHandler monkey-patch ===
   //
   // The MCP TypeScript SDK does not currently expose a documented middleware
@@ -392,8 +412,17 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
    * are intentionally NOT performed here; the caller decides when to commit
    * those (post-success only).
    */
+  /**
+   * Build + sign a record from the request. When `resultForHash` is
+   * supplied, the disclosure.result dial drives result_hash / result_salt
+   * computation against the JCS canonicalization of that object.
+   * Pre-call signing (preCallTransform path) calls without resultForHash
+   * because the handler hasn't returned yet; disclosure.result is
+   * silently ignored on that path with a warning.
+   */
   const buildSignedRecord = async (
     request: Record<string, unknown>,
+    resultForHash?: Record<string, unknown>,
   ): Promise<BuiltRecord> => {
     // §5.3.2: Read inbound context
     const params = request.params as Record<string, unknown>
@@ -487,6 +516,27 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
       toolNameField = `sha256:${hexEncode(sha256(new TextEncoder().encode(toolName)))}`
     }
 
+    // Helper for §8.3 commitment-form synthesis. Returns { hash, salt? }
+    // where salt is present iff scheme === 'salted-sha256'.
+    const computeCommitment = (
+      schemeBytes: Uint8Array,
+      scheme: 'plain-sha256' | 'salted-sha256',
+    ): { hash: string; salt?: string } => {
+      if (scheme === 'plain-sha256') {
+        return { hash: `sha256:${hexEncode(sha256(schemeBytes))}` }
+      }
+      // salted-sha256 per §8.3: H = SHA-256(salt ‖ canonical_bytes)
+      const salt = new Uint8Array(16)
+      crypto.getRandomValues(salt)
+      const combined = new Uint8Array(salt.length + schemeBytes.length)
+      combined.set(salt, 0)
+      combined.set(schemeBytes, salt.length)
+      return {
+        hash: `sha256:${hexEncode(sha256(combined))}`,
+        salt: base64urlEncode(salt),
+      }
+    }
+
     let argsHashField: string | undefined
     let argsSaltField: string | undefined
     if (argsDisclosure !== 'omit') {
@@ -495,21 +545,34 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
         const argsJcs = canonicalize(argsValue)
         if (typeof argsJcs === 'string') {
           const argsBytes = new TextEncoder().encode(argsJcs)
-          if (argsDisclosure === 'plain-sha256') {
-            argsHashField = `sha256:${hexEncode(sha256(argsBytes))}`
-          } else {
-            // salted-sha256 per §8.3: H = SHA-256(salt ‖ canonical_bytes)
-            const salt = new Uint8Array(16)
-            crypto.getRandomValues(salt)
-            const combined = new Uint8Array(salt.length + argsBytes.length)
-            combined.set(salt, 0)
-            combined.set(argsBytes, salt.length)
-            argsHashField = `sha256:${hexEncode(sha256(combined))}`
-            argsSaltField = base64urlEncode(salt)
-          }
+          const c = computeCommitment(argsBytes, argsDisclosure)
+          argsHashField = c.hash
+          argsSaltField = c.salt
         }
       } catch (e) {
         console.warn('atrib: args disclosure synthesis failed, omitting', e)
+      }
+    }
+
+    // §8.3 result_hash / result_salt synthesis. Only fires when:
+    //   (a) caller passed `resultForHash` (post-call signing path), AND
+    //   (b) `disclosure.result` is not 'omit'.
+    // Pre-call signing (preCallTransform) supplies no resultForHash so
+    // disclosure.result is silently inactive there.
+    const resultDisclosure = disclosure.result ?? 'omit'
+    let resultHashField: string | undefined
+    let resultSaltField: string | undefined
+    if (resultDisclosure !== 'omit' && resultForHash) {
+      try {
+        const resultJcs = canonicalize(resultForHash)
+        if (typeof resultJcs === 'string') {
+          const resultBytes = new TextEncoder().encode(resultJcs)
+          const c = computeCommitment(resultBytes, resultDisclosure)
+          resultHashField = c.hash
+          resultSaltField = c.salt
+        }
+      } catch (e) {
+        console.warn('atrib: result disclosure synthesis failed, omitting', e)
       }
     }
 
@@ -525,6 +588,8 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
       ...(argsHashField ? { args_hash: argsHashField } : {}),
       ...(argsSaltField ? { args_salt: argsSaltField } : {}),
       ...(informedByList ? { informed_by: informedByList } : {}),
+      ...(resultHashField ? { result_hash: resultHashField } : {}),
+      ...(resultSaltField ? { result_salt: resultSaltField } : {}),
       ...(sessionToken ? { session_token: sessionToken } : {}),
       ...(toolNameField !== undefined ? { tool_name: toolNameField } : {}),
     } as AtribRecord
@@ -648,9 +713,12 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
 
         // Reuse the pre-built record from the preCallTransform branch when
         // present; otherwise build + sign now (the standard post-call path).
+        // disclosure.result only fires on the post-call path: pre-call has
+        // no result yet, so commitment-form synthesis would have nothing
+        // to hash. The pre-call branch above silently skips it.
         const built = preBuilt ?? (await (async () => {
           await publicKeyReady
-          return buildSignedRecord(request)
+          return buildSignedRecord(request, resultObj)
         })())
 
         commitRecord(built, resultObj)
