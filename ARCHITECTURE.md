@@ -319,9 +319,23 @@ services/atrib-emit   MCP server exposing the explicit `emit` tool
       distinguish). Inherits the wrapper's session via local mirror
       autoChain so explicit emits chain seamlessly with mechanical tool
       calls in the same session.
+
+services/atrib-trace  MCP server for backward causal-chain walking
+  └── Consumer-side cognitive primitive — reads the local mirror (per
+      §5.9), follows `informed_by` edges backward from a starting record
+      hash, surfaces sidecar_summary per visited record (tool name,
+      topics, intent). Read-only; does not sign. Lets an agent reconstruct
+      "how did I arrive at this conclusion?" without round-tripping
+      through the public log.
+
+services/atrib-summarize  MCP server for narrative synthesis across N records
+  └── Consumer-side cognitive primitive — reads N records by context_id
+      and/or record_hashes from the local mirror, calls an OpenAI-compatible
+      LLM (defaults to NIM qwen3.5-397b) to synthesize a narrative. Closes
+      the consumer-side loop: agents read context, not raw records.
 ```
 
-The three public packages (`mcp`, `agent`, `verify`) are intended for npm publication. The two private packages (`log-dev`, `integration`) are workspace fixtures. All five are TypeScript strict mode, no `any` types, with error handling following the degradation contract.
+The six designed-public packages (`mcp`, `agent`, `verify`, `cli`, `mcp-wrap`, `directory`) are published to npm via Trusted Publishing OIDC. The two private packages (`log-dev`, `integration`) are workspace fixtures. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The `atrib-trace` and `atrib-summarize` MCP services run in the agent's process alongside `atrib-emit` and read the local mirror — no separate deployment needed.
 
 Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hashes` for SHA-256, `canonicalize` for JCS. Framework dependencies are structural-typed, never hard-imported.
 

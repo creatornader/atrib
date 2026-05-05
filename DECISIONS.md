@@ -2571,77 +2571,9 @@ The promotion bar (D036) clears for the same reason annotation cleared: any atri
 
 **Reopening criteria.** None expected. The pattern is now extensible to any future link-via-field event_type promotion (e.g., `delegation`, `apply`) following the same cascade with no reopening of D058 or D059.
 
----
-
-# Pending decisions
-
-These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
-
-## P002: agent-bridge on atrib substrate
-
-**Source:** Strategic question raised 2026-04-30 ("what if agent-bridge just used atrib for this stuff?"). Use Case 2: verifiable agent-to-agent coordination.
-
-**The decision in question:** rebuild agent-bridge as `atrib-bridge` — a parallel implementation that uses atrib substrate (signed records + Merkle log + directory) instead of Postgres + Supabase as the storage and identity layer. Source becomes `creator_key` (cryptographic, not spoofable). Categories become `event_type` URIs in the agent-bridge namespace. Acks become signed records pointing at posts via `informed_by`. Postgres dependency disappears entirely.
-
-**Strategic implications.** The substrate's reach was under-claimed by the original "verifiable tool calls" positioning. agent-bridge fitting on atrib substrate proves the substrate generalizes to verifiable agent-to-agent coordination. This is a concrete second use case beyond the original wrapper-on-MCP-tool-calls one and a flywheel for atrib adoption (every bridge user becomes an atrib user).
-
-**Staging if accepted.** Build atrib-bridge as parallel implementation; dogfood for weeks; if it works, atrib-backed becomes the open-source default and the original Supabase-backed stays as legacy/development. Slots into the dogfooding sequencing as 6.5 + 6.6 (atrib-bridge prototype + atrib-bridge SKILL.md), after cross-session graph viz lands.
-
-**Likely outcome (not committed):** accept; build the parallel implementation; let dogfood prove it out. The architectural and strategic case is strong; the open question is purely capacity (multi-week effort).
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-## P004: human-direct signing as a first-class identity class (post-day-1)
-
-**Source:** Signer-taxonomy design pass 2026-04-30, design question #8 (resolved: humans-direct allowed, post-day-1).
-
-**The decision in question:** humans signing atrib records directly (distinct from agent-direction-of-human). Edge types to model the relationship: `AUTHORIZED_BY` (human → agent record), `ATTESTED_BY` (human → claim), `APPROVED_BY` (human → decision), `DELEGATED_TO` (human → agent). Spec changes: new edge types in [§3.2.3](atrib-spec.md#323-edge-types) + derivation rules in [§3.2.4](atrib-spec.md#324-edge-derivation-rules). Identity-resolution changes: humans get a distinct `claim_type` (currently `self_attested` covers both).
-
-**Why deferred.** Day 1 dogfood doesn't require it. Compliance-shaped use cases (regulator wants on-graph proof of human authorization) need it; we're not pursuing those use cases yet.
-
-**Reopening criteria.** First adopter that needs cryptographic distinction between "human authorized" and "agent did this autonomously." Likely candidates: payment-protocol counterparties, regulated financial actions, healthcare-adjacent automation.
-
-**Likely outcome when acted on:** the spec changes are small (new edge types + derivation rules + claim_type extension); the operational change is bigger (humans need their own keys, key management UX, distinguishing identity from agent identities they direct). Defer until a real use case forces the operational work.
-
-**ADR number** will be assigned when acted on.
-
-## P005: reconcile @atrib/verify README per-record annotations with actual code surface
-
-**Source:** Audit during the 2026-05-03 sign_record decoupling work. The package README documents per-record annotations the result object should surface (`informed_by_resolution`, `provenance`, `capability_check`, `cross_attestation`, `cross_log_proof_count`/`threshold_met`/`equivocation_detected`, posture detection from §8). Several of these decision references (D041, D044, D045, D051, D052) shipped to the spec but the corresponding code surface in `packages/verify/src/` is partial.
-
-**Source state at audit (initial 2026-05-03):**
-
-- `provenance` annotation: shipped 2026-05-03 via the new `verifyRecord(record, options)` per-record API in `packages/verify/src/verify-record.ts` + `spec/conformance/1.2.6/` corpus + `packages/verify/test/conformance-1.2.6.test.ts`.
-- `informed_by_resolution`, `capability_check`, `cross_attestation`, `cross_log_*`, posture detection: documented in README, NOT yet in code.
-- `resolveIdentity` and `CapabilityEnvelope` types ARE implemented but not surfaced through `VerificationResult`.
-
-**Progress as of 2026-05-04:**
-
-- `informed_by_resolution`: implemented (D041 surface) — `verifyRecord` populates `{ resolved, dangling }` from caller-supplied candidates.
-- `posture` (timestamp_granularity, §8.4 + commitment forms, §8.3): implemented (D045 surface) — `verifyRecord` always populates `{ timestamp_granularity, timestamp_consistent, timestamp_granularity_explicit, args_commitment_form, result_commitment_form }`. Commitment-form detection is structural per §8.3: `args_salt` / `result_salt` presence ⇒ `salted-sha256`; absence ⇒ `plain-sha256` (the §8.3 hmac-sha256 variant is signaled out-of-band and not structurally detectable).
-- `capability_check`: implemented (D051 surface) — `verifyRecord` populates `{ envelope, in_envelope, mismatches, unresolvable }` when caller passes a resolved `identityClaim`. Caller does the directory lookup; `@atrib/verify` has no `@atrib/directory` dependency. `tool_names` (against tool_call), `max_amount`, and `counterparties` (against transaction) flag `unresolvable: true` because the constraint inputs aren't on the standard record shape or aren't accessible without out-of-band protocol-event data.
-- `tool_name_form` (§8.2): implemented (D061 surface) — D061 ADR added `tool_name`, `args_hash`, `result_hash` to §1.2.1 as MAY fields with documented JCS sort positions. Verifier surfaces `'hashed' | 'plain' | null` (the §8.2 verbatim-vs-opaque distinction is not structurally detectable per D061; consumers wanting that distinction MUST use out-of-band metadata). Middleware emission gated by the new `disclosure: { tool_name }` opt-in.
-- `cross_attestation` (D052 / §1.7.6): implemented — `AtribRecord` type gains `signers?: SignerEntry[]`; `@atrib/mcp` exposes `canonicalCrossAttestationInput` per spec §1.7.6 (JCS form with `signers: []` and top-level `signature` omitted); `@atrib/verify` surfaces `cross_attestation: { signers_count, signers_valid, missing }` on transaction records, verifying each signer's Ed25519 signature against the shared canonical bytes. `missing: true` when below the §1.7.6 normative minimum of 2. Per §1.7.6 missing is a SIGNAL not invalidation. The legacy top-level `signature` check is skipped for transaction records that carry a populated `signers[]` array per §1.2.1's "OPTIONAL on transaction records" clause. **Middleware-side multi-signer signing remains a separable follow-up**: the middleware currently signs transaction records with the standard single-signer path. Producing records with `signers[]` populated requires a counterparty-coordination protocol design (out-of-band? webhook? sign-then-merge?) that's separable from the verifier surface shipped here.
-- `cross_log_*` (D050 / §2.11): **BLOCKED** on multi-log proof-bundle parsing infrastructure and a trusted-log-set config surface.
-
-**Pattern.** P005.1 (capability_check) implemented cleanly because the constraint inputs were either (a) on the existing record (`event_type`, `timestamp`) or (b) supplied by the caller via the `identityClaim` option (which they fetch from `@atrib/directory`). The remaining surfaces all share a structural blocker: they need fields added to the canonical record shape first, which is downstream spec work, not verifier work. Tracked as separate ADRs when an external consumer needs the surface.
-
-**The decision in question.** The README represents intended state. Two paths to reconcile:
-
-1. **Land each annotation as a separate ADR-stamped piece of work** (D041 already covers informed_by; D051 covers capability_check; D052 covers cross_attestation; D050 covers cross_log_*; D045 covers posture). Each gets its own conformance corpus + verify code surface + test, in the same shape as D044's recently-completed work. Most rigorous.
-2. **One sweep that wires everything currently-spec'd into `verifyRecord` at once.** Faster but loses the ADR-per-feature traceability.
-
-**Why deferred.** No external consumer of `@atrib/verify` exists yet. The asymmetric README is correct as a design target; closing the gap now is investment for not-yet-existent verifiers. Day-1 dogfood works fine with `provenance` only (the D044 piece is shipped).
-
-**Reopening criteria.** First external verifier integrator OR first external auditor reading the README and getting confused by the missing fields. At that point, whichever ADR corresponds to the missing surface gets prioritized.
-
-**Likely outcome when acted on:** option 1, ADR-per-feature, since each feature already has a parent decision number to reference. The pattern set by D044's reconciliation (verify-record.ts + spec/conformance/1.2.6 + verify test) is reusable for each remaining annotation.
-
-**ADR number** will be assigned per-feature when acted on.
-
 ## D060: CHANGELOG strategy — changesets per-package + GitHub Releases, no top-level CHANGELOG
 
-**Supersedes:** P006 (pending decision, now acted on)
+**Supersedes:** P006 (a former pending decision about CHANGELOG strategy; entry removed when this ADR codified the choice).
 
 ### Context
 
@@ -2768,7 +2700,7 @@ The §8.2 prose is updated to acknowledge the limitation: consumers wanting to e
 ## D062: Local mirror sidecar — two-tier "private local + public canonical" persistence
 
 **Date:** 2026-05-04
-**Status:** Implemented in `@atrib/mcp` v0.2.x, `@atrib/mcp-wrap` v0.2.x, `@atrib/atrib-emit` (envelope shape). Spec-formalized in atrib-spec.md §X.
+**Status:** Implemented in `@atrib/mcp` v0.2.x, `@atrib/mcp-wrap` v0.2.x, `@atrib/atrib-emit` (envelope shape). Spec-formalized in atrib-spec.md §5.9.
 
 ### Context
 
@@ -2809,7 +2741,7 @@ The implementation shipped 2026-05-04 (commit `e0699b5` for `@atrib/mcp` + `@atr
 
 5. **Consumer-side payoff is large.** Without the sidecar, `atrib-trace`'s per-record output was event_type + truncated hash + trace_id + creator_key. With the sidecar, output gains `tool_name`, `topics`, first 200 chars of `what`/`summary`, `importance` for annotations. `atrib-summarize` LLM prompts go from "synthesize this list of event_type chronology" to "synthesize this richly-described causal chain". Same code path, ~10x more useful output.
 
-6. **The `--local` field naming convention is enough.** Underscore-prefixed envelope-level fields are a standard "this is local-only" convention. No spec mechanism beyond the field name needed to enforce "don't leak this to the log" — the structural placement (outside `record`) does it. Producers that go through the standard submission path literally cannot leak `_local` because the queue only sees `record`.
+6. **The `_local` field naming convention is enough.** Underscore-prefixed envelope-level fields are a standard "this is local-only" convention. No spec mechanism beyond the field name needed to enforce "don't leak this to the log" — the structural placement (outside `record`) does it. Producers that go through the standard submission path literally cannot leak `_local` because the queue only sees `record`.
 
 ### Alternatives rejected
 
@@ -2823,7 +2755,7 @@ The implementation shipped 2026-05-04 (commit `e0699b5` for `@atrib/mcp` + `@atr
 
 ### Consequences
 
-- **Spec**: new normative section in atrib-spec.md formalizing the local mirror as an OPTIONAL host-side persistence surface, the envelope shape as the canonical local format going forward, and the `_local` sidecar conventions. Existing producers + consumers are conformant by construction.
+- **Spec**: §5.9 formalizes the local mirror as an OPTIONAL host-side persistence surface, the envelope shape as the canonical local format going forward, and the `_local` sidecar conventions. Existing producers + consumers are conformant by construction.
 - **Implementation**: `@atrib/mcp` exports the `OnRecordSidecar` type. `AtribOptions.onRecord` accepts an optional second argument. `@atrib/mcp-wrap` and `@atrib/atrib-emit` both write the envelope shape. `@atrib/atrib-trace` and `@atrib/atrib-summarize` read it.
 - **Backward compatibility**: legacy bare-record entries in existing mirror files continue to parse. No data migration required. New writes use the envelope shape unconditionally.
 - **Future-proofing**: the envelope is extensible. New optional sidecar fields can be added without spec changes (they're producer-agnostic). New envelope-level fields (e.g. `cached_at`, `last_verified_at`) can be added the same way.
@@ -2843,4 +2775,63 @@ When extending atrib-emit, mcp-wrap, or any future producer to populate a sideca
 3. Update consumers (`atrib-trace`, `atrib-summarize`, recall) to surface the new field
 4. No spec section update needed unless the field's semantics are normative
 
-When the spec needs to evolve (e.g. result fingerprint convention lands), update the new spec §X "Local mirror conventions" section, regenerate any associated conformance corpus, and refresh the implementations in lockstep.
+When the spec needs to evolve (e.g. result fingerprint convention lands), update §5.9 "Local mirror conventions", regenerate any associated conformance corpus, and refresh the implementations in lockstep.
+
+---
+
+# Pending decisions
+
+These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
+
+## P002: agent-bridge on atrib substrate
+
+**Source:** Strategic question raised 2026-04-30 ("what if agent-bridge just used atrib for this stuff?"). Use Case 2: verifiable agent-to-agent coordination.
+
+**The decision in question:** rebuild agent-bridge as `atrib-bridge` — a parallel implementation that uses atrib substrate (signed records + Merkle log + directory) instead of Postgres + Supabase as the storage and identity layer. Source becomes `creator_key` (cryptographic, not spoofable). Categories become `event_type` URIs in the agent-bridge namespace. Acks become signed records pointing at posts via `informed_by`. Postgres dependency disappears entirely.
+
+**Strategic implications.** The substrate's reach was under-claimed by the original "verifiable tool calls" positioning. agent-bridge fitting on atrib substrate proves the substrate generalizes to verifiable agent-to-agent coordination. This is a concrete second use case beyond the original wrapper-on-MCP-tool-calls one and a flywheel for atrib adoption (every bridge user becomes an atrib user).
+
+**Staging if accepted.** Build atrib-bridge as parallel implementation; dogfood for weeks; if it works, atrib-backed becomes the open-source default and the original Supabase-backed stays as legacy/development. Slots into the dogfooding sequencing as 6.5 + 6.6 (atrib-bridge prototype + atrib-bridge SKILL.md), after cross-session graph viz lands.
+
+**Likely outcome (not committed):** accept; build the parallel implementation; let dogfood prove it out. The architectural and strategic case is strong; the open question is purely capacity (multi-week effort).
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P004: human-direct signing as a first-class identity class (post-day-1)
+
+**Source:** Signer-taxonomy design pass 2026-04-30, design question #8 (resolved: humans-direct allowed, post-day-1).
+
+**The decision in question:** humans signing atrib records directly (distinct from agent-direction-of-human). Edge types to model the relationship: `AUTHORIZED_BY` (human → agent record), `ATTESTED_BY` (human → claim), `APPROVED_BY` (human → decision), `DELEGATED_TO` (human → agent). Spec changes: new edge types in [§3.2.3](atrib-spec.md#323-edge-types) + derivation rules in [§3.2.4](atrib-spec.md#324-edge-derivation-rules). Identity-resolution changes: humans get a distinct `claim_type` (currently `self_attested` covers both).
+
+**Why deferred.** Day 1 dogfood doesn't require it. Compliance-shaped use cases (regulator wants on-graph proof of human authorization) need it; we're not pursuing those use cases yet.
+
+**Reopening criteria.** First adopter that needs cryptographic distinction between "human authorized" and "agent did this autonomously." Likely candidates: payment-protocol counterparties, regulated financial actions, healthcare-adjacent automation.
+
+**Likely outcome when acted on:** the spec changes are small (new edge types + derivation rules + claim_type extension); the operational change is bigger (humans need their own keys, key management UX, distinguishing identity from agent identities they direct). Defer until a real use case forces the operational work.
+
+**ADR number** will be assigned when acted on.
+
+## P005: reconcile @atrib/verify README per-record annotations with actual code surface
+
+**Source:** Audit during sign_record decoupling. The package README documented per-record annotations on the result object (`informed_by_resolution`, `provenance`, `capability_check`, `cross_attestation`, `cross_log_*`, posture detection) without corresponding code surface.
+
+**Status:** mostly codified per-feature. This entry is now a router stub; the substantive design lives in the per-feature ADRs.
+
+**Codified surfaces:**
+
+- `provenance` — shipped via `verifyRecord(record, options)` + `spec/conformance/1.2.6/` corpus. Tracked under [D044](#d044-provenance_token-field-for-cross-session-causal-anchoring).
+- `informed_by_resolution` — `verifyRecord` populates `{ resolved, dangling }` from caller-supplied candidates. Tracked under [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type).
+- `posture` (timestamp_granularity, args_commitment_form, result_commitment_form) — `verifyRecord` always populates these per [D045](#d045-privacy-postures-normative-spec-section).
+- `tool_name_form` (§8.2) — `'hashed' | 'plain' | null`. Tracked under [D061](#d061-add-tool_name-args_hash-result_hash-fields-to-§121).
+- `capability_check` — `{ envelope, in_envelope, mismatches, unresolvable }` when caller passes a resolved `identityClaim`. Tracked under [D051](#d051-capability-scoped-records-via-directory-published-envelopes).
+- `cross_attestation` (transaction records) — `{ signers_count, signers_valid, missing }` per [D052](#d052-cross-attestation-requirement-for-transaction-records).
+
+**Remaining work tracked separately:**
+
+- **Middleware-side multi-signer transaction signing** — `@atrib/mcp` currently signs transaction records with the standard single-signer path. Producing records with `signers[]` populated requires a counterparty-coordination protocol design (out-of-band? webhook? sign-then-merge?). Will be a follow-up ADR alongside the first protocol-adapter that needs it.
+- **`cross_log_*` verifier surface (D050 / §2.11)** — BLOCKED on multi-log proof-bundle parsing infrastructure and a trusted-log-set config surface. No code surface added; the README's documented annotation remains aspirational. Will be re-opened when a second independent log node ships.
+
+**Pattern observed during the rollout.** Surfaces with constraint inputs already on the record (or supplied by the caller via the `identityClaim` option) implemented cleanly. Surfaces that needed new fields on the canonical record shape (tool_name, args_hash, result_hash) required upstream spec work first ([D061](#d061-add-tool_name-args_hash-result_hash-fields-to-§121)). The pattern set by [D044](#d044-provenance_token-field-for-cross-session-causal-anchoring)'s reconciliation (verify-record.ts + spec/conformance/<§> + verify test) is reusable for any remaining annotation when a real consumer surfaces.
+
+**Reopening criteria.** First external verifier integrator hitting either of the two remaining gaps OR a new annotation surface that doesn't yet have an ADR. Open the per-feature ADR at that point and update this stub with a backlink.
+
