@@ -36,3 +36,26 @@ export function canonicalRecord(record: AtribRecord): Uint8Array {
   }
   return encoder.encode(json)
 }
+
+/**
+ * Cross-attestation canonical signing input per spec §1.7.6 (D052).
+ *
+ * Each entry in a transaction record's `signers` array signs over the
+ * SAME bytes: the JCS serialization of the record with `signers` set to
+ * `[]` (empty array) and the top-level `signature` field omitted. This
+ * ensures all signers commit to identical content; verifiers reproduce
+ * these bytes once and check each signer's signature against them.
+ *
+ * Use only on transaction records (event_type =
+ * https://atrib.dev/v1/types/transaction). On other event types, the
+ * standard `canonicalSigningInput` applies.
+ */
+export function canonicalCrossAttestationInput(record: AtribRecord): Uint8Array {
+  const { signature: _, signers: __, ...rest } = record
+  const withEmptySigners = { ...rest, signers: [] as Record<string, unknown>[] }
+  const json = canonicalize(withEmptySigners)
+  if (json === undefined) {
+    throw new Error('atrib: cross-attestation canonicalization produced undefined')
+  }
+  return encoder.encode(json)
+}

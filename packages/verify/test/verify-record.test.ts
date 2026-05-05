@@ -402,6 +402,124 @@ describe('verifyRecord, posture (tool_name_form, §8.2 / D061)', () => {
   })
 })
 
+describe('verifyRecord, cross_attestation (D052 / §1.7.6)', () => {
+  // Build a transaction-shape record and sign with N independent seeds,
+  // each entry covering the cross-attestation canonical bytes.
+  async function buildTransaction(
+    signerSeeds: Uint8Array[],
+    overrides: Partial<AtribRecord> = {},
+  ): Promise<AtribRecord> {
+    const { canonicalCrossAttestationInput } = await import('@atrib/mcp')
+    const firstSeed = signerSeeds[0]!
+    const firstPub = base64urlEncode(await ed.getPublicKeyAsync(firstSeed))
+    // Build the unsigned record skeleton with empty signers placeholder.
+    const skeleton: AtribRecord = {
+      spec_version: 'atrib/1.0',
+      content_id: 'sha256:' + 'd'.repeat(64),
+      creator_key: firstPub,
+      chain_root: 'sha256:' + 'e'.repeat(64),
+      event_type: 'https://atrib.dev/v1/types/transaction',
+      context_id: 'b'.repeat(32),
+      timestamp: 1_000_000_000_000,
+      signature: '',
+      signers: [],
+      ...overrides,
+    } as AtribRecord
+    const canonicalBytes = canonicalCrossAttestationInput(skeleton)
+    const signers = []
+    for (const seed of signerSeeds) {
+      const pub = base64urlEncode(await ed.getPublicKeyAsync(seed))
+      const sig = base64urlEncode(await ed.signAsync(canonicalBytes, seed))
+      signers.push({ creator_key: pub, signature: sig })
+    }
+    return { ...skeleton, signers } as AtribRecord
+  }
+
+  function altSeed(byte: number): Uint8Array {
+    const seed = new Uint8Array(32)
+    for (let i = 0; i < 32; i++) seed[i] = (byte + i) & 0xff
+    return seed
+  }
+
+  it('omits the annotation on non-transaction records', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed) // observation
+    const result = await verifyRecord(record)
+    expect(result.cross_attestation).toBeUndefined()
+  })
+
+  it('flags missing on a transaction record with no signers[] array', async () => {
+    // Legacy single-signer transaction (top-level signature only, no
+    // signers array). signers_count = 0, missing = true.
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/transaction',
+    })
+    const result = await verifyRecord(record)
+    expect(result.cross_attestation).toEqual({
+      signers_count: 0,
+      signers_valid: 0,
+      missing: true,
+    })
+    // Legacy single-sig keeps the record cryptographically valid.
+    expect(result.signatureOk).toBe(true)
+  })
+
+  it('flags missing when only one signer is present (below normative minimum of 2)', async () => {
+    const record = await buildTransaction([altSeed(0x10)])
+    const result = await verifyRecord(record)
+    expect(result.cross_attestation!.signers_count).toBe(1)
+    expect(result.cross_attestation!.signers_valid).toBe(1)
+    expect(result.cross_attestation!.missing).toBe(true)
+  })
+
+  it('passes when 2 signers verify (atrib normative minimum met)', async () => {
+    const record = await buildTransaction([altSeed(0x10), altSeed(0x20)])
+    const result = await verifyRecord(record)
+    expect(result.cross_attestation!.signers_count).toBe(2)
+    expect(result.cross_attestation!.signers_valid).toBe(2)
+    expect(result.cross_attestation!.missing).toBe(false)
+  })
+
+  it('handles 3+ signers correctly', async () => {
+    const record = await buildTransaction([altSeed(0x10), altSeed(0x20), altSeed(0x30)])
+    const result = await verifyRecord(record)
+    expect(result.cross_attestation!.signers_count).toBe(3)
+    expect(result.cross_attestation!.signers_valid).toBe(3)
+    expect(result.cross_attestation!.missing).toBe(false)
+  })
+
+  it('counts only valid signers when one signature is tampered', async () => {
+    const record = await buildTransaction([altSeed(0x10), altSeed(0x20)])
+    // Tamper the second signer's signature: flip a character.
+    const tampered = {
+      ...record,
+      signers: [
+        record.signers![0]!,
+        { ...record.signers![1]!, signature: 'A' + record.signers![1]!.signature.slice(1) },
+      ],
+    } as AtribRecord
+    const result = await verifyRecord(tampered)
+    expect(result.cross_attestation!.signers_count).toBe(2)
+    expect(result.cross_attestation!.signers_valid).toBe(1)
+    expect(result.cross_attestation!.missing).toBe(true)
+  })
+
+  it('signal-not-invalidation: missing cross_attestation does not flip valid', async () => {
+    // Legacy single-signer transaction record. Verifier flags missing=true
+    // but signature is structurally valid. Per §1.7.6 valid stays true.
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/transaction',
+    })
+    const result = await verifyRecord(record)
+    expect(result.cross_attestation!.missing).toBe(true)
+    expect(result.signatureOk).toBe(true)
+    expect(result.warnings).toEqual([])
+    expect(result.valid).toBe(true)
+  })
+})
+
 describe('verifyRecord, capability_check (D051 / §6.7)', () => {
   it('omits the annotation when no identityClaim is supplied', async () => {
     const seed = await freshKey()

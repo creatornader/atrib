@@ -1,0 +1,34 @@
+{
+  "name": "one-signer",
+  "spec_section": "1.7.6",
+  "description": "A transaction record with one signer in signers[]. Below the §1.7.6 normative minimum of 2 signers. Verifier MUST surface signers_count: 1, signers_valid: 1, missing: true.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0202020202020202020202020202020202020202020202020202020202020202",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/transaction",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225602000,
+      "signature": "",
+      "signers": [
+        {
+          "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+          "signature": "GGUj1o6Ezz6c6ABKWIgUj5o45VFxSHgFjUH3sWgHeSRdN1KxnmFP2Q9vgkFAEK5V36xqcqld6lcOW3dkKJWcAA"
+        }
+      ]
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "record_hash_hex": "9964b4000d5cba60fb3211dfe90fe5c0c4860be351e72fb9e9036653b45e4c0a",
+    "cross_attestation": {
+      "signers_count": 1,
+      "signers_valid": 1,
+      "missing": true
+    },
+    "validator_should_accept": true,
+    "valid_after_signal": true
+  }
+}

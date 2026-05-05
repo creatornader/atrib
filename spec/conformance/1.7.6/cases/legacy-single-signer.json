@@ -1,0 +1,29 @@
+{
+  "name": "legacy-single-signer",
+  "spec_section": "1.7.6",
+  "description": "A transaction record with only the top-level signature field (no signers[] array). Per §1.7.6 verifiers MUST surface signers_count: 0, signers_valid: 0, missing: true. The record remains cryptographically valid via the legacy signature; missing is a signal, not invalidation.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0101010101010101010101010101010101010101010101010101010101010101",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/transaction",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225601000,
+      "signature": "mP88QI4wdIQSmSKncHYQkC1PcEWmQILXAi-H9DpMruAZkaB4mXtEzKl8oKsBSa1nCtaxYqvAadCIJahu7acOCQ"
+    },
+    "signer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "record_hash_hex": "9bd0fd0e4876e872c333bdf1f3ad49905804ec173c1f3dda7fdf5022ab3ebe03",
+    "cross_attestation": {
+      "signers_count": 0,
+      "signers_valid": 0,
+      "missing": true
+    },
+    "verifier_signature_ok": true,
+    "validator_should_accept": true,
+    "valid_after_signal": true
+  }
+}

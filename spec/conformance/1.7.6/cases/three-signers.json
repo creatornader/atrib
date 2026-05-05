@@ -1,0 +1,45 @@
+{
+  "name": "three-signers",
+  "spec_section": "1.7.6",
+  "description": "A transaction record signed by three independent parties (agent + counterparty + a third facilitator/witness). Verifier MUST surface signers_count: 3, signers_valid: 3, missing: false. Demonstrates that the §1.7.6 minimum of 2 is a floor, not a cap; consumers can require higher thresholds via policy.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0404040404040404040404040404040404040404040404040404040404040404",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/transaction",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225604000,
+      "signature": "",
+      "signers": [
+        {
+          "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+          "signature": "ECmTZLZJlBC23deeDPkFeXEmiAUhwFECmoMMc-FzuJ1pROrxfypfxMGb3GI-mrPKtfRVqtn_1s0u2eQIPTZYDg"
+        },
+        {
+          "creator_key": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA",
+          "signature": "oHb27tcCyk9QTMpf_0iMZ8ZzT-_S6p55YEoUDgpqGTJRb_jr66Ih0rIcN8258UMxMDc3DOOmWQWO_SFk-4piAA"
+        },
+        {
+          "creator_key": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4",
+          "signature": "YpE2ZjPOg_NYz_Gomwzz4aXfSDDqVQXYcPZKeuXzOKaTPjK6cXZbGn3qfTcL6_gsmvhAUmo8xydQfeYKYrM9Bw"
+        }
+      ]
+    },
+    "signer_seeds_hex": {
+      "agent": "1111111111111111111111111111111111111111111111111111111111111111",
+      "counterparty": "2222222222222222222222222222222222222222222222222222222222222222",
+      "facilitator": "3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  },
+  "expected": {
+    "record_hash_hex": "21b9bb073cd6c38ff759f17843cf9133275a73793235eecab5f509fdc20b369d",
+    "cross_attestation": {
+      "signers_count": 3,
+      "signers_valid": 3,
+      "missing": false
+    },
+    "validator_should_accept": true
+  }
+}

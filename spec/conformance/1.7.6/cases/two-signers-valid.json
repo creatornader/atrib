@@ -1,0 +1,40 @@
+{
+  "name": "two-signers-valid",
+  "spec_section": "1.7.6",
+  "description": "The canonical happy path: a transaction record signed by two independent parties (agent + counterparty). Verifier MUST surface signers_count: 2, signers_valid: 2, missing: false. Both signers cover the SAME cross-attestation canonical bytes per §1.7.6 (JCS form with signers: [] and top-level signature omitted).",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0303030303030303030303030303030303030303030303030303030303030303",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/transaction",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225603000,
+      "signature": "",
+      "signers": [
+        {
+          "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+          "signature": "77aBeEa9Y0ZFHQbGleXBtBOnr1SDEmgdnVIQcyZzKSBqtMyf62qYJz5PDF-5mrS_AK6sx01uz7oDfnmQ-78HDA"
+        },
+        {
+          "creator_key": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA",
+          "signature": "J_D3xy9mw_-37Dvb1F-oPWYuf0oVyPbs_UCv7DVxDG6UuFaxPmS0mnYpGWSfSUotY1OOadiFpT_QDpRAPTgsBw"
+        }
+      ]
+    },
+    "signer_seeds_hex": {
+      "agent": "1111111111111111111111111111111111111111111111111111111111111111",
+      "counterparty": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  },
+  "expected": {
+    "record_hash_hex": "96c54ef17d9f9c27c494d6c4409c02d3e3c3085726f3665cf5d0fa068c9b93a0",
+    "cross_attestation": {
+      "signers_count": 2,
+      "signers_valid": 2,
+      "missing": false
+    },
+    "validator_should_accept": true
+  }
+}

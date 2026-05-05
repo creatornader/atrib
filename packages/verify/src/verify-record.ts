@@ -29,12 +29,15 @@
 import {
   base64urlDecode,
   base64urlEncode,
+  canonicalCrossAttestationInput,
   canonicalRecord,
   hexEncode,
   sha256,
   verifyRecord as verifyRecordSignature,
   type AtribRecord,
+  type SignerEntry,
 } from '@atrib/mcp'
+import * as ed from '@noble/ed25519'
 
 const PROVENANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/
 const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
@@ -118,6 +121,40 @@ export interface CapabilityCheckAnnotation {
    * the verifier MUST flag this rather than passing or failing silently.
    */
   unresolvable: boolean
+}
+
+/**
+ * Cross-attestation surfacing for a transaction record per spec §1.7.6
+ * (D052). atrib's normative minimum is two verified signers per
+ * transaction record (typically agent + counterparty). Records below
+ * the minimum get `missing: true`; verifiers MUST flag this rather
+ * than silently passing or failing.
+ *
+ * The annotation populates ONLY for records with
+ * `event_type = https://atrib.dev/v1/types/transaction`. Other event
+ * types continue to use the standard single-signer signature path.
+ */
+export interface CrossAttestationAnnotation {
+  /**
+   * Total signers attached to the record (regardless of validity).
+   * `0` for legacy single-signer transaction records that carry only the
+   * top-level `signature` field instead of the `signers[]` array.
+   */
+  signers_count: number
+  /**
+   * Number of signers whose Ed25519 signature successfully verifies
+   * against the cross-attestation canonical bytes (JCS form with
+   * `signers: []` and `signature` omitted, per §1.7.6).
+   */
+  signers_valid: number
+  /**
+   * `true` iff `signers_valid < 2` (atrib's normative minimum). Per
+   * §1.7.6 verifiers MUST flag this; consumers decide whether to accept
+   * the record. Like §6.7's `in_envelope: false`, this is a SIGNAL not
+   * an invalidation: the underlying record may still be cryptographically
+   * valid via the legacy top-level signature.
+   */
+  missing: boolean
 }
 
 /**
@@ -222,6 +259,14 @@ export interface RecordVerificationResult {
    * empty (no constraint = trivially in-envelope per §6.7.1).
    */
   capability_check?: CapabilityCheckAnnotation
+  /**
+   * Cross-attestation annotation per §1.7.6 (D052). Populated ONLY for
+   * transaction records (`event_type = https://atrib.dev/v1/types/transaction`).
+   * Surfaces signers_count, signers_valid, and missing (true when fewer
+   * than 2 signers verified). Per §1.7.6 verifiers MUST flag missing
+   * cross-attestation; consumers decide policy.
+   */
+  cross_attestation?: CrossAttestationAnnotation
   warnings: string[]
 }
 
@@ -284,12 +329,29 @@ export async function verifyRecord(
 ): Promise<RecordVerificationResult> {
   const warnings: string[] = []
 
+  // §1.2.1 + §1.7.6: the top-level `signature` field is OPTIONAL on
+  // transaction records that carry the `signers[]` array. Skip the
+  // legacy single-sig check when (a) the record is a transaction AND
+  // (b) signers[] is present and non-empty. The cross_attestation
+  // annotation below covers signature verification per signer.
+  const isTransaction = record.event_type === 'https://atrib.dev/v1/types/transaction'
+  const hasSignersArray = Array.isArray(record.signers) && record.signers.length > 0
+  const skipLegacySignatureCheck = isTransaction && hasSignersArray
+
   let signatureOk = false
-  try {
-    signatureOk = await verifyRecordSignature(record)
-    if (!signatureOk) warnings.push('signature verification failed')
-  } catch (err) {
-    warnings.push(`signature verification error: ${(err as Error).message}`)
+  if (skipLegacySignatureCheck) {
+    // §1.7.6: signature validity for transaction records lives in
+    // cross_attestation, not signatureOk. We treat signatureOk as true
+    // here so consumers' valid-bit logic isn't broken; the actual
+    // multi-sig validity is exposed via cross_attestation.signers_valid.
+    signatureOk = true
+  } else {
+    try {
+      signatureOk = await verifyRecordSignature(record)
+      if (!signatureOk) warnings.push('signature verification failed')
+    } catch (err) {
+      warnings.push(`signature verification error: ${(err as Error).message}`)
+    }
   }
 
   const result: RecordVerificationResult = {
@@ -325,6 +387,12 @@ export async function verifyRecord(
   // avoid coupling @atrib/verify to @atrib/directory's WASM bridge.
   if (options.identityClaim) {
     result.capability_check = resolveCapabilityCheck(record, options.identityClaim, warnings)
+  }
+
+  // cross_attestation (D052 / §1.7.6), surface only on transaction records.
+  // Other event types continue to use the standard single-signer path.
+  if (record.event_type === 'https://atrib.dev/v1/types/transaction') {
+    result.cross_attestation = await resolveCrossAttestation(record)
   }
 
   result.valid = signatureOk && warnings.length === 0
@@ -460,6 +528,60 @@ function resolveCapabilityCheck(
   }
 }
 
+/**
+ * Cross-attestation derivation per spec §1.7.6 (D052).
+ *
+ * For each entry in `record.signers`, verify the Ed25519 signature
+ * against the cross-attestation canonical bytes (JCS form with
+ * `signers: []` and the top-level `signature` field omitted). Count
+ * valid signatures; flag `missing: true` when fewer than 2 verify.
+ *
+ * Per §1.7.6 mismatches are SIGNALS, not invalidation: missing
+ * cross-attestation does NOT push to `warnings[]` (which would flip
+ * `valid` to false). The legacy top-level `signature` (already
+ * verified above by `verifyRecordSignature`) keeps the record
+ * cryptographically valid; cross_attestation is a policy signal.
+ */
+async function resolveCrossAttestation(record: AtribRecord): Promise<CrossAttestationAnnotation> {
+  const signers = Array.isArray(record.signers) ? record.signers : []
+  const signers_count = signers.length
+
+  if (signers_count === 0) {
+    // Legacy single-signer transaction record. Per §1.7.6 normative
+    // minimum is 2; flag as missing.
+    return { signers_count: 0, signers_valid: 0, missing: true }
+  }
+
+  // All signers cover the same canonical bytes (§1.7.6).
+  let canonicalBytes: Uint8Array
+  try {
+    canonicalBytes = canonicalCrossAttestationInput(record)
+  } catch {
+    // Canonicalization shouldn't fail on a structurally-valid record;
+    // if it does, treat all signers as unverifiable.
+    return { signers_count, signers_valid: 0, missing: true }
+  }
+
+  let signers_valid = 0
+  for (const entry of signers as SignerEntry[]) {
+    if (typeof entry?.creator_key !== 'string' || typeof entry?.signature !== 'string') continue
+    try {
+      const pubKey = base64urlDecode(entry.creator_key)
+      const sig = base64urlDecode(entry.signature)
+      const ok = await ed.verifyAsync(sig, canonicalBytes, pubKey)
+      if (ok) signers_valid++
+    } catch {
+      // Malformed key/sig bytes: skip without counting.
+    }
+  }
+
+  return {
+    signers_count,
+    signers_valid,
+    missing: signers_valid < 2,
+  }
+}
+
 function detectPosture(record: AtribRecord, warnings: string[]): PostureAnnotation {
   const declared = record.timestamp_granularity
   const explicit = typeof declared === 'string'
@@ -508,6 +630,7 @@ export const __test_only__ = {
   resolveProvenance,
   resolveInformedBy,
   resolveCapabilityCheck,
+  resolveCrossAttestation,
   detectPosture,
   base64urlDecode,
 }
