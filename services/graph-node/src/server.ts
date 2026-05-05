@@ -34,7 +34,7 @@ import type { MinimalRecord } from '@atrib/verify'
 // silently returned zero results because the prior inline normalizer in
 // handleNodes only covered tool_call / transaction / observation, missing
 // directory_anchor (D056), annotation (D058), and revision (D059). Refactored
-// to a shared helper to prevent the same drift recurring on the new endpoints.
+// to a shared helper to prevent recurrence of this drift on new endpoints.
 function normalizeEventTypeFilter(filter: string): string {
   if (filter.startsWith('https://atrib.dev/v1/types/')) {
     return graphLabelFromEventTypeUri(filter)

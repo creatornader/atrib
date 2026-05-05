@@ -509,7 +509,7 @@ The decision tree (consumer-facing; producers MUST emit the event_type that matc
 - A watcher with no referent → `observation`. The absence of a referent makes observation correct.
 - An extractor sub-agent reading the agent's transcript and emitting cognitive events SHOULD select per the decision tree above for each detected event: a hedge phrase contradicting a prior claim becomes `revision` if the prior record is identifiable, else `observation`; a discovery becomes `observation`; a summary about a specific prior chain becomes `annotation`.
 
-This guidance addresses the gap [D063](DECISIONS.md#d063-canonical-event_type-examples-and-selection-tree) records: prior to the canonical examples here, implementations of the dogfood loop drifted between observation and annotation for records that had clear structural answers (records with referents went to observation as a fallback before the annotation pipeline shipped, records without referents had no automated path at all).
+This guidance addresses the gap [D063](DECISIONS.md#d063-canonical-event_type-examples-and-selection-tree) records: prior to the canonical examples here, implementations in the atrib ecosystem drifted between observation and annotation for records that had clear structural answers (records with referents went to observation as a fallback before the annotation pipeline shipped, records without referents had no automated path at all).
 
 #### 1.2.5 informed_by
 
