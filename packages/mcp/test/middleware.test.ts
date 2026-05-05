@@ -917,4 +917,94 @@ describe('atrib() middleware', () => {
       expect((resultObj as { _meta?: { atrib?: string } })._meta?.atrib).toBeDefined()
     })
   })
+
+  describe('disclosure dials (D061 / §8.2 / §8.3)', () => {
+    async function captureRecord(
+      disclosure: { tool_name?: 'omit' | 'verbatim' | 'hashed'; args?: 'omit' | 'plain-sha256' | 'salted-sha256' } | undefined,
+      toolName: string = 'search_web',
+    ): Promise<AtribRecord> {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const resultObj = { content: [{ type: 'text', text: 'ok' }] }
+      const captured: AtribRecord[] = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        onRecord: (r) => { captured.push(r) },
+        ...(disclosure ? { disclosure } : {}),
+      })
+      registerToolHandler(vi.fn().mockResolvedValue(resultObj))
+      await getToolHandler()!(createToolCallRequest(toolName), {})
+      expect(captured).toHaveLength(1)
+      return captured[0]!
+    }
+
+    it('omits all disclosure fields by default (preserves §8.1 default posture)', async () => {
+      const rec = await captureRecord(undefined)
+      expect(rec.tool_name).toBeUndefined()
+      expect(rec.args_hash).toBeUndefined()
+      expect(rec.args_salt).toBeUndefined()
+    })
+
+    it('omits all disclosure fields when disclosure: {}', async () => {
+      const rec = await captureRecord({})
+      expect(rec.tool_name).toBeUndefined()
+      expect(rec.args_hash).toBeUndefined()
+      expect(rec.args_salt).toBeUndefined()
+    })
+
+    it('disclosure.tool_name: "verbatim" writes the verbatim tool name', async () => {
+      const rec = await captureRecord({ tool_name: 'verbatim' }, 'book_flight')
+      expect(rec.tool_name).toBe('book_flight')
+    })
+
+    it('disclosure.tool_name: "hashed" writes sha256:<hex> of the tool name', async () => {
+      const rec = await captureRecord({ tool_name: 'hashed' }, 'book_flight')
+      expect(rec.tool_name).toMatch(/^sha256:[0-9a-f]{64}$/)
+      // Independent computation: SHA-256 of UTF-8 "book_flight"
+      // Verify the value is deterministic (same input → same hash).
+      const second = await captureRecord({ tool_name: 'hashed' }, 'book_flight')
+      expect(second.tool_name).toBe(rec.tool_name)
+    })
+
+    it('disclosure.args: "plain-sha256" writes args_hash without args_salt', async () => {
+      const rec = await captureRecord({ args: 'plain-sha256' })
+      expect(rec.args_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(rec.args_salt).toBeUndefined()
+      // Deterministic across two calls with same args.
+      const second = await captureRecord({ args: 'plain-sha256' })
+      expect(second.args_hash).toBe(rec.args_hash)
+    })
+
+    it('disclosure.args: "salted-sha256" writes both args_hash AND args_salt', async () => {
+      const rec = await captureRecord({ args: 'salted-sha256' })
+      expect(rec.args_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(rec.args_salt).toMatch(/^[A-Za-z0-9_-]{22}$/) // 16 bytes base64url no padding
+      // Salt is per-record random: two consecutive calls produce different salts.
+      const second = await captureRecord({ args: 'salted-sha256' })
+      expect(second.args_salt).not.toBe(rec.args_salt)
+      expect(second.args_hash).not.toBe(rec.args_hash) // because salt → hash
+    })
+
+    it('combines tool_name + args disclosure independently', async () => {
+      const rec = await captureRecord(
+        { tool_name: 'verbatim', args: 'plain-sha256' },
+        'book_flight',
+      )
+      expect(rec.tool_name).toBe('book_flight')
+      expect(rec.args_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(rec.args_salt).toBeUndefined()
+    })
+
+    it('signed records with disclosure fields verify correctly', async () => {
+      // Round-trip: the record's signature MUST verify with the new fields
+      // present in the JCS canonical form.
+      const { verifyRecord } = await import('../src/signing.js')
+      const rec = await captureRecord(
+        { tool_name: 'hashed', args: 'salted-sha256' },
+        'transfer_usdc',
+      )
+      const ok = await verifyRecord(rec)
+      expect(ok).toBe(true)
+    })
+  })
 })
