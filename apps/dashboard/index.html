@@ -127,6 +127,28 @@
     --et-revision-subtle: rgba(99, 102, 241, 0.12);
     --et-revision-border: rgba(99, 102, 241, 0.3);
 
+    /* Edge-type colors (graph viz) — organized in two semantic tiers.
+       Tier 1 (vibrant): the load-bearing edges that carry meaning beyond
+       structure. Each either gets a dedicated color (informed_by) or
+       intentionally aliases a node color (annotates → annotation node,
+       revises → revision node, converges_on → transaction node) so the
+       visual cluster reads as a single semantic thread.
+       Tier 2 (muted greys, graded): structural-derivation edges with no
+       semantic content of their own. CHAIN_PRECEDES is "primary structural"
+       (every non-genesis record has one), the SESSION_* and CROSS_SESSION
+       edges are weaker derivations. The grey gradient marks this hierarchy
+       (text-2 > text-3 > text-4 > muted). */
+    /* Tier 1 — load-bearing semantic */
+    --edge-ancestry:         #fb923c;                  /* informed_by + provenance_of (warm orange, no node analogue) */
+    --edge-annotates:        var(--et-annotation);     /* tracks annotation node */
+    --edge-revises:          var(--et-revision);       /* tracks revision node */
+    --edge-converges:        var(--accent);            /* tracks transaction node */
+    /* Tier 2 — structural derivations, graded by strength */
+    --edge-chain:            var(--text-2);            /* chain_precedes — primary structural backbone */
+    --edge-session-precedes: var(--text-3);            /* session_precedes — fallback sequencing */
+    --edge-session-parallel: var(--text-4);            /* session_parallel — equal-time peers */
+    --edge-cross-session:    var(--muted);             /* cross_session — across-session derived */
+
     /* Type */
     --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, Roboto, sans-serif;
     --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
@@ -711,37 +733,86 @@
   }
   .trace-truncation strong { color: var(--warn); font-weight: 600; }
 
-  .edge-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 18px;
+  .graph-legend {
     padding: 14px 20px;
     border-top: 1px solid var(--border-subtle);
     background: var(--surface-2);
     font: 11.5px/1 var(--font-mono);
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 8px 14px;
+    align-items: center;
   }
-  .edge-legend .swatch {
+  .graph-legend .legend-label {
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+  .graph-legend .legend-row {
+    display: grid;
+    grid-auto-columns: max-content;
+    grid-auto-flow: column;
+    gap: 10px 16px;
+    align-items: center;
+  }
+  /* Tail container for unpaired entries. Each row has its own .legend-tail
+     occupying the SAME grid column, but the children inside flex independently
+     — so unpaired NODES (tool_call, observation) and unpaired EDGES (INFORMED_BY,
+     CHAIN_PRECEDES) don't inherit each other's widths. The shared column
+     auto-sizes to the wider tail; each tail's internal spacing is uniform. */
+  .graph-legend .legend-tail {
+    display: flex;
+    gap: 10px 16px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .graph-legend .swatch {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     color: var(--text-3);
   }
-  .edge-legend .swatch::before {
+  /* Node legend: filled disc preceding the label */
+  .graph-legend .swatch.node::before {
+    content: '';
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  /* Edge legend: 2px line preceding the label */
+  .graph-legend .swatch.edge::before {
     content: '';
     display: inline-block;
     width: 18px;
     height: 2px;
     background: currentColor;
   }
-  .edge-legend .swatch.informed_by      { color: var(--info); }
-  .edge-legend .swatch.provenance_of    { color: var(--info); }
-  .edge-legend .swatch.annotates        { color: var(--et-annotation); }
-  .edge-legend .swatch.revises          { color: var(--et-revision); }
-  .edge-legend .swatch.chain_precedes   { color: var(--accent); }
-  .edge-legend .swatch.session_precedes { color: var(--text-3); }
-  .edge-legend .swatch.session_parallel { color: var(--text-4); }
-  .edge-legend .swatch.cross_session    { color: var(--muted); }
-  .edge-legend .swatch.converges_on     { color: var(--accent); }
+  .graph-legend .swatch.empty {
+    color: var(--text-3);
+    font-style: italic;
+  }
+  /* Node-color tokens (read by JS via _cssVar; mirrored here so the legend
+     can reference them without parsing each event_type's chip class). */
+  .graph-legend .swatch.node.tool_call         { color: var(--info); }
+  .graph-legend .swatch.node.transaction       { color: var(--accent); }
+  .graph-legend .swatch.node.observation       { color: var(--et-observation); }
+  .graph-legend .swatch.node.annotation        { color: var(--et-annotation); }
+  .graph-legend .swatch.node.revision          { color: var(--et-revision); }
+  .graph-legend .swatch.node.directory_anchor  { color: var(--et-system); }
+  .graph-legend .swatch.node.extension         { color: var(--muted); }
+  .graph-legend .swatch.node.gap_node          { color: var(--et-dangling); }
+  .graph-legend .swatch.edge.informed_by      { color: var(--edge-ancestry); }
+  .graph-legend .swatch.edge.provenance_of    { color: var(--edge-ancestry); }
+  .graph-legend .swatch.edge.annotates        { color: var(--edge-annotates); }
+  .graph-legend .swatch.edge.revises          { color: var(--edge-revises); }
+  .graph-legend .swatch.edge.chain_precedes   { color: var(--edge-chain); }
+  .graph-legend .swatch.edge.converges_on     { color: var(--edge-converges); }
+  .graph-legend .swatch.edge.session_precedes { color: var(--edge-session-precedes); }
+  .graph-legend .swatch.edge.session_parallel { color: var(--edge-session-parallel); }
+  .graph-legend .swatch.edge.cross_session    { color: var(--edge-cross-session); }
 </style>
 </head>
 <body>
@@ -1866,17 +1937,22 @@ function eventTypeColor(eventType) {
   }
   return _cssVar(map[eventType] || '--muted', '#9ca3af')
 }
+// Edge color is keyed by edge_type, distinct vocabulary from node event_type.
+// All entries resolve via dedicated `--edge-*` tokens defined in :root; the
+// CSS records which edges intentionally alias a node color (ANNOTATES, REVISES,
+// CONVERGES_ON) versus which get their own hue (--edge-ancestry for INFORMED_BY
+// + PROVENANCE_OF — both are ancestry signals not bound to any one event_type).
 function edgeTypeColor(edgeType) {
   const map = {
-    INFORMED_BY: '--info',
-    PROVENANCE_OF: '--info',
-    ANNOTATES: '--et-annotation',
-    REVISES: '--et-revision',
-    CHAIN_PRECEDES: '--accent',
-    SESSION_PRECEDES: '--text-3',
-    SESSION_PARALLEL: '--text-4',
-    CONVERGES_ON: '--accent',
-    CROSS_SESSION: '--muted',
+    INFORMED_BY:      '--edge-ancestry',
+    PROVENANCE_OF:    '--edge-ancestry',
+    ANNOTATES:        '--edge-annotates',
+    REVISES:          '--edge-revises',
+    CHAIN_PRECEDES:   '--edge-chain',
+    CONVERGES_ON:     '--edge-converges',
+    SESSION_PRECEDES: '--edge-session-precedes',
+    SESSION_PARALLEL: '--edge-session-parallel',
+    CROSS_SESSION:    '--edge-cross-session',
   }
   return _cssVar(map[edgeType] || '--muted', '#9ca3af')
 }
@@ -1984,7 +2060,16 @@ async function renderTrace(rawHash) {
   const graphContainer = el('div', { class: 'trace-graph', id: 'trace-graph-container' },
     el('div', { class: 'loading' }, 'loading provenance graph…'),
   )
-  const legend = el('div', { class: 'edge-legend', id: 'trace-edge-legend' })
+  // Two-row legend: NODES (event_type colors) + EDGES (edge_type colors).
+  // Both rows filter dynamically to only the kinds present in the response.
+  const nodeLegendRow = el('div', { class: 'legend-row', id: 'trace-node-legend' })
+  const edgeLegendRow = el('div', { class: 'legend-row', id: 'trace-edge-legend' })
+  const legend = el('div', { class: 'graph-legend' },
+    el('span', { class: 'legend-label' }, 'nodes'),
+    nodeLegendRow,
+    el('span', { class: 'legend-label' }, 'edges'),
+    edgeLegendRow,
+  )
   const truncationSlot = el('div')
   const startSummary = el('section', { class: 'panel', style: 'margin-top: 24px;' },
     el('div', { class: 'panel-head' },
@@ -2091,6 +2176,64 @@ async function renderTrace(rawHash) {
     ))
   }
 
+  // Pair-aware legend layout: node-types and edge-types that share semantics
+  // (annotation/ANNOTATES, revision/REVISES, transaction/CONVERGES_ON) stack
+  // in the same grid column so the visual reads as "this node-color and this
+  // edge-color are the same thread by design." Unpaired entries flow into
+  // columns after the pairs — NODES-only columns first, then EDGES-only.
+  const NODE_EDGE_PAIRS = [
+    ['annotation', 'ANNOTATES'],
+    ['revision', 'REVISES'],
+    ['transaction', 'CONVERGES_ON'],
+  ]
+  const pairedNodeSet = new Set(NODE_EDGE_PAIRS.map((p) => p[0]))
+  const pairedEdgeSet = new Set(NODE_EDGE_PAIRS.map((p) => p[1]))
+
+  const presentNodeKinds = new Set(graph.nodes.map((n) => n.event_type).filter(Boolean))
+  const nodeKindOrder = [
+    'tool_call', 'observation', 'directory_anchor', 'extension', 'gap_node',
+  ]
+  const presentUnpairedNodes = nodeKindOrder.filter((k) =>
+    !pairedNodeSet.has(k) && presentNodeKinds.has(k),
+  )
+
+  // Active pairs = at least one side present; pre-computed so both rows
+  // share the same column-index baseline.
+  const presentEdgeTypes = new Set(graph.edges.map((e) => e.type))
+  const activePairs = NODE_EDGE_PAIRS.filter(([n, e]) =>
+    presentNodeKinds.has(n) || presentEdgeTypes.has(e),
+  )
+
+  // Layout columns (shared across both rows):
+  //   1..P     paired entries (P = activePairs.length)
+  //   P+1      tail — a single shared grid column holding a .legend-tail flex
+  //            container per row. The tails' INTERNAL widths are independent
+  //            (NODES tail and EDGES tail flex separately), but the shared
+  //            grid column auto-sizes to the wider tail so the left edges
+  //            of each row's unpaired entries align horizontally.
+  const tailCol = activePairs.length + 1
+
+  const nodeSwatches = []
+  activePairs.forEach(([nodeKind], i) => {
+    if (presentNodeKinds.has(nodeKind)) {
+      nodeSwatches.push(el('span',
+        { class: `swatch node ${nodeKind}`, style: `grid-column: ${i + 1};` },
+        nodeKind))
+    }
+  })
+  if (presentUnpairedNodes.length > 0) {
+    const tail = el('div', { class: 'legend-tail', style: `grid-column: ${tailCol};` })
+    presentUnpairedNodes.forEach((kind) => {
+      tail.append(el('span', { class: `swatch node ${kind}` }, kind))
+    })
+    nodeSwatches.push(tail)
+  }
+  if (nodeSwatches.length === 0) {
+    nodeLegendRow.replaceChildren(el('span', { class: 'swatch empty' }, 'none'))
+  } else {
+    nodeLegendRow.replaceChildren(...nodeSwatches)
+  }
+
   // Empty-ancestry case: the start record exists but has no resolvable
   // upstream. /v1/trace returns the start node alone in this case.
   if (nodeCount <= 1) {
@@ -2100,9 +2243,7 @@ async function renderTrace(rawHash) {
       ', or ', el('code', {}, 'revises'),
       ' edges into the resolved set — typically a genesis record.',
     ))
-    legend.replaceChildren(el('span', { style: 'color: var(--text-3);' },
-      'no edges in this trace',
-    ))
+    edgeLegendRow.replaceChildren(el('span', { class: 'swatch empty' }, 'none in this trace'))
     return
   }
 
@@ -2202,24 +2343,47 @@ async function renderTrace(rawHash) {
     else if (n && n.id) location.hash = `#/action/sha256:${n.id}`
   })
 
-  // Render legend with only the edge types actually present in the graph,
-  // so the user isn't confused by unused entries.
-  const presentEdgeTypes = new Set(graph.edges.map((e) => e.type))
-  const labelsOrder = [
+  // Edge legend: built around the same activePairs column baseline as the
+  // node row so paired entries (ANNOTATES under annotation, etc.) stack
+  // vertically. Unpaired edges flow into columns after the unpaired-NODE
+  // columns so the row visually segregates "paired" / "node-only" / "edge-only".
+  const edgeKindOrder = [
     ['INFORMED_BY', 'informed_by'],
-    ['ANNOTATES', 'annotates'],
-    ['REVISES', 'revises'],
     ['PROVENANCE_OF', 'provenance_of'],
     ['CHAIN_PRECEDES', 'chain_precedes'],
     ['SESSION_PRECEDES', 'session_precedes'],
     ['SESSION_PARALLEL', 'session_parallel'],
     ['CROSS_SESSION', 'cross_session'],
-    ['CONVERGES_ON', 'converges_on'],
   ]
-  const presentLegend = labelsOrder.filter(([typ]) => presentEdgeTypes.has(typ))
-  legend.replaceChildren(...presentLegend.map(([typ, cls]) =>
-    el('span', { class: `swatch ${cls}` }, typ),
-  ))
+  const presentUnpairedEdges = edgeKindOrder.filter(([typ]) =>
+    !pairedEdgeSet.has(typ) && presentEdgeTypes.has(typ),
+  )
+
+  // Edge row mirrors the node row's column scheme: paired entries at cols
+  // 1..P, tail at col P+1. The tail grid column is shared with NODES row's
+  // tail so the left edges of each row's unpaired entries align; each tail
+  // flexes independently so neither row inherits the other's content widths.
+  const edgeSwatches = []
+  activePairs.forEach(([, edgeKind], i) => {
+    if (presentEdgeTypes.has(edgeKind)) {
+      const cls = edgeKind.toLowerCase()
+      edgeSwatches.push(el('span',
+        { class: `swatch edge ${cls}`, style: `grid-column: ${i + 1};` },
+        edgeKind))
+    }
+  })
+  if (presentUnpairedEdges.length > 0) {
+    const tail = el('div', { class: 'legend-tail', style: `grid-column: ${tailCol};` })
+    presentUnpairedEdges.forEach(([typ, cls]) => {
+      tail.append(el('span', { class: `swatch edge ${cls}` }, typ))
+    })
+    edgeSwatches.push(tail)
+  }
+  if (edgeSwatches.length === 0) {
+    edgeLegendRow.replaceChildren(el('span', { class: 'swatch empty' }, 'none in this trace'))
+  } else {
+    edgeLegendRow.replaceChildren(...edgeSwatches)
+  }
 }
 
 // ─── Anchoring view ──────────────────────────────────────────────────────
