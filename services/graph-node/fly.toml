@@ -7,6 +7,16 @@ primary_region = 'iad'
 [env]
   PORT = '3200'
   HOST = '0.0.0.0'
+  # Append-only archive of every successful /v1/ingest. Replayed on
+  # cold-start so graph-node rebuilds its in-memory store after OOM /
+  # deploy / fly machine reboot. Mounts on the [mounts] volume below.
+  # See services/graph-node/src/persistence.ts for format + crash
+  # semantics.
+  ATRIB_RECORD_ARCHIVE = '/data/records.jsonl'
+
+[[mounts]]
+  source = 'atrib_graph_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 3200
