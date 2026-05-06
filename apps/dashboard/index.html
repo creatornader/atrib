@@ -1949,22 +1949,37 @@ async function renderAction(recordHash) {
 // graph view actually renders. Overview / identity / action / anchoring /
 // about views never pay the bytes.
 //
-// Versions pinned 2026-05-06; jsDelivr CDN; no SRI hashes, D054 explorer
-// ships pre-public-flip and SRI is part of the pre-flip hardening pass.
+// Versions pinned 2026-05-06; jsDelivr CDN with sha384 SRI integrity
+// hashes. If jsDelivr serves a tampered file, the browser blocks it and
+// the graph render fails closed (banner shown to user) instead of
+// executing untrusted JS in the explorer's origin.
+//
+// To regenerate hashes after bumping a version:
+//   curl -sL <url> | openssl dgst -sha384 -binary | base64
+// then prefix with 'sha384-'.
 
-const GRAPH_LIB_URLS = [
-  'https://cdn.jsdelivr.net/npm/graphology@0.26.0/dist/graphology.umd.min.js',
-  'https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js',
-  'https://cdn.jsdelivr.net/npm/sigma@3.0.0/dist/sigma.min.js',
+const GRAPH_LIBS = [
+  {
+    src: 'https://cdn.jsdelivr.net/npm/graphology@0.26.0/dist/graphology.umd.min.js',
+    integrity: 'sha384-YdXPUVLFDJ3oITK7LFAPRyzkOcDK06bb7KRaE8GiQyGLsrvHaLS9Ej/lELMC7aCE',
+  },
+  {
+    src: 'https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js',
+    integrity: 'sha384-2IH3T69EIKYC4c+RXZifZRvaH5SRUdacJW7j6HtE5rQbvLhKKdawxq6vpIzJ7j9M',
+  },
+  {
+    src: 'https://cdn.jsdelivr.net/npm/sigma@3.0.0/dist/sigma.min.js',
+    integrity: 'sha384-LJODrW2yz5f5z94ds0vxQWW6YK2fNbbAWQ291KBJ4NecKigl47jwhH+hYXDYkd4m',
+  },
 ]
 let _graphLibsPromise = null
 function loadGraphLibs() {
   if (_graphLibsPromise) return _graphLibsPromise
   _graphLibsPromise = (async () => {
     // graphology + dagre have no inter-dependency; load in parallel.
-    await Promise.all([loadScript(GRAPH_LIB_URLS[0]), loadScript(GRAPH_LIB_URLS[1])])
+    await Promise.all([loadScript(GRAPH_LIBS[0]), loadScript(GRAPH_LIBS[1])])
     // Sigma's UMD references graphology globally; load it last.
-    await loadScript(GRAPH_LIB_URLS[2])
+    await loadScript(GRAPH_LIBS[2])
   })().catch((e) => {
     // Reset on failure so a re-render can retry.
     _graphLibsPromise = null
@@ -1972,13 +1987,14 @@ function loadGraphLibs() {
   })
   return _graphLibsPromise
 }
-function loadScript(src) {
+function loadScript(spec) {
   return new Promise((resolve, reject) => {
     const s = document.createElement('script')
-    s.src = src
+    s.src = spec.src
     s.crossOrigin = 'anonymous'
+    if (spec.integrity) s.integrity = spec.integrity
     s.onload = () => resolve()
-    s.onerror = () => reject(new Error(`failed to load ${src}`))
+    s.onerror = () => reject(new Error(`failed to load ${spec.src}`))
     document.head.appendChild(s)
   })
 }
