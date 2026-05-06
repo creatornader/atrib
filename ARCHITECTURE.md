@@ -100,7 +100,7 @@ The reference implementation uses [Tessera](https://github.com/transparency-dev/
 
 ### Layer 3: Attribution graph (Section 3)
 
-The graph is a directed property multigraph with five node types (`tool_call`, `transaction`, `observation`, `extension`, `gap_node`) and seven edge types, all derived deterministically from record structure:
+The graph is a directed property multigraph with eight node types (`tool_call`, `transaction`, `observation`, `annotation`, `revision`, `directory_anchor`, `extension`, `gap_node`) and nine edge types, all derived deterministically from record structure:
 
 | Edge type          | Direction | Derivation                                                              |
 | ------------------ | --------- | ----------------------------------------------------------------------- |
@@ -111,6 +111,8 @@ The graph is a directed property multigraph with five node types (`tool_call`, `
 | `CROSS_SESSION`    | A -> T    | Different `context_id`, same explicit `session_token`. Same logical session across traces. Never inferred.  |
 | `INFORMED_BY`      | A -> B    | A's `informed_by` array contains the record_hash of B. Agent-declared reasoning context ([D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type)). Intra- or cross-session. Source/target may be any node type. |
 | `PROVENANCE_OF`    | D -> U    | D and U both carry the same `provenance_token` value, different `context_ids`, U is the token's source record. Cross-session causal anchoring ([D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring)). |
+| `ANNOTATES`        | A -> R    | A is an annotation record (event_type=annotation, byte 0x05) with `annotates: sha256:<R-hash>`. Forward-pointing commentary on a prior record ([D058](DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05)). |
+| `REVISES`          | V -> P    | V is a revision record (event_type=revision, byte 0x06) with `revises: sha256:<P-hash>`. Supersedure of a prior stance — predecessor stays immutable on the log; consumers choose whether to honor the revision ([D059](DECISIONS.md#d059-promote-revision-to-atrib-normative-event_type-byte-0x06)). |
 
 The derivation rules are normative (Section 3.2.4). Two implementations processing identical records must produce identical edge sets. This is what makes independent verification possible: you do not need to trust the graph service, because you can rebuild the graph yourself and check.
 
@@ -132,7 +134,7 @@ Log inclusion: the Merkle log returns RFC 6962 inclusion proofs. A hash path fro
 
 Log consistency: consecutive checkpoints can be verified for consistency. This proves the log only grew and nothing was modified or deleted between checkpoints. Same mechanism Certificate Transparency uses.
 
-Graph edges: all seven edge types are deterministically derived from record fields. Given the same records, any implementation following Section 3.2.4 must produce the same graph. You can verify by rebuilding it yourself.
+Graph edges: all nine edge types are deterministically derived from record fields. Given the same records, any implementation following Section 3.2.4 must produce the same graph. You can verify by rebuilding it yourself.
 
 Settlement calculation: the algorithm (Section 4.6) is a pure function. Graph + policy in, distribution out. No network calls, no randomness. Any party with the same inputs gets the same answer. `@atrib/verify` exists so merchants can run this locally and check.
 
