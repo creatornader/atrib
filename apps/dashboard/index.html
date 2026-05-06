@@ -2343,12 +2343,66 @@ async function renderTrace(rawHash) {
   }
 
   if (traceResult._error) {
-    graphContainer.replaceChildren(el('div', { class: 'err-banner' },
-      el('span', { class: 'label' }, 'trace error:'), ' ', traceResult._error,
-    ))
-    document.getElementById('trace-start-summary').replaceChildren(
-      el('div', { class: 'empty' }, 'no record found at this hash'),
-    )
+    // Distinguish graph-node lag (record is signed + committed to the log,
+    // but graph-node hasn't pulled it from the mirror yet — common for
+    // recently-emitted records) from a genuine missing record. The probe
+    // against log-node is cheap and only runs on the error path.
+    const logProbe = await fetchMaybe(`${ep.log}/lookup/${hashHex}`)
+    const inLog = !logProbe._error
+    const startSummaryEl = document.getElementById('trace-start-summary')
+
+    if (inLog && /\b404\b/.test(traceResult._error)) {
+      graphContainer.replaceChildren(el('div', { class: 'err-banner' },
+        el('span', { class: 'label' }, 'graph-node still indexing this record.'),
+        ' It\'s signed and committed to the log (', el('code', {}, '/v1/lookup'),
+        ' returns 200), but hasn\'t propagated through the mirror to graph-node yet. Provenance edges land after the next mirror push.',
+        el('div', { style: 'margin-top: 12px;' },
+          el('a', {
+            href: location.hash, // self-link forces re-fetch via route()
+            onclick: (ev) => { ev.preventDefault(); route() },
+            style: 'color: var(--accent); border-bottom: 1px dotted var(--accent); text-decoration: none; margin-right: 16px;',
+          }, '↻ retry'),
+          el('a', {
+            href: `#/action/${fullHash}`,
+            style: 'color: var(--text-2); border-bottom: 1px dotted var(--text-3); text-decoration: none;',
+          }, 'view the record directly →'),
+        ),
+      ))
+      // Populate the start-record summary from the log lookup so the user
+      // still sees the record's metadata while waiting on graph-node.
+      if (startSummaryEl && logProbe.creator_key) {
+        await resolveIdentity(logProbe.creator_key)
+        startSummaryEl.replaceChildren(el('dl', { class: 'kv' },
+          el('dt', {}, 'event_type'),
+          el('dd', {}, renderEventChip(logProbe.event_type, logProbe.creator_key)),
+          el('dt', {}, 'identity'),
+          el('dd', {}, renderIdentityLabel(logProbe.creator_key, { short: false })),
+          el('dt', {}, 'session'),
+          el('dd', {}, logProbe.context_id
+            ? el('a', { href: `#/session/${logProbe.context_id}` }, el('span', { class: 'mono' }, logProbe.context_id))
+            : '—'),
+          el('dt', {}, 'timestamp'),
+          el('dd', {}, logProbe.timestamp_ms
+            ? el('span', {}, timeAgo(logProbe.timestamp_ms), ' · ', el('span', { class: 'mono' }, isoTime(logProbe.timestamp_ms)))
+            : '—'),
+        ))
+      }
+    } else if (!inLog) {
+      graphContainer.replaceChildren(el('div', { class: 'err-banner' },
+        el('span', { class: 'label' }, 'record not found.'),
+        ' No signed record with this hash exists on either log-node or graph-node.',
+      ))
+      if (startSummaryEl) {
+        startSummaryEl.replaceChildren(el('div', { class: 'empty' }, 'no record found at this hash'))
+      }
+    } else {
+      graphContainer.replaceChildren(el('div', { class: 'err-banner' },
+        el('span', { class: 'label' }, 'trace error:'), ' ', traceResult._error,
+      ))
+      if (startSummaryEl) {
+        startSummaryEl.replaceChildren(el('div', { class: 'empty' }, 'unable to load record summary'))
+      }
+    }
     return
   }
 
