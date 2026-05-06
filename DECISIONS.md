@@ -2879,3 +2879,33 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 
 **Reopening criteria.** First external verifier integrator hitting either of the two remaining gaps OR a new annotation surface that doesn't yet have an ADR. Open the per-feature ADR at that point and update this stub with a backlink.
 
+## P008: referent-matched revision and annotation emission from the cognitive extractor
+
+**Source:** [D063](#d063-canonical-event_type-examples-and-selection-tree) added canonical examples and a selection tree distinguishing observation / annotation / revision by structural referent. A cognitive-extractor producer pattern (Mem0-style post-hoc transcript extraction) closes the in-the-moment observation gap, but emits all detected events as `event_type=observation` even when the LLM's classification suggests revision or annotation. The reason: revision REQUIRES `revises: "sha256:<hex>"` per §1.2.9 and annotation REQUIRES `annotates: "sha256:<hex>"` per §1.2.7, but the extractor doesn't know which prior signed record carries the position being revised or the target being annotated. Without referent matching, emitting with the structurally-correct event_type would either (a) violate the spec's REQUIRES constraints or (b) attach a fabricated/hallucinated hash, both unacceptable.
+
+The MVP preserves the LLM's classification as `extractor_classification` in the observation content (NOT as a `kind` field — the field name is intentional, signaling "this is the extractor's inference, not a spec-level event_type claim"). Consumers reading the record see `event_type=observation` on the wire and the extractor's classification in content; nothing in the record claims to be a revision/annotation while violating §1.2.9/§1.2.7.
+
+**Why deferred:** referent matching is a search problem, not a generation problem. The LLM identifies "agent revised X to Y" but cannot generate `revises=<hash>` because it doesn't know which signed record carries X. Solving requires either (a) scoping candidates to recent records the agent could plausibly be revising/annotating and passing the candidate set to the LLM in a second pass, or (b) building a vector-search index over the operator's signed records and pre-filtering candidates by semantic similarity. Both add machinery the MVP didn't justify before observation extraction was proven stable.
+
+**Why this is a follow-up, not a blocker:**
+
+- The MVP closes the biggest gap (no automated path for in-the-moment observations) without the harder referent-matching problem. SRA-Bench-style "absence of need-aware skill invocation" symptoms are partly addressed by transcript extraction; revisions and annotations remain in the residual judgment-discipline tier until referent matching ships.
+- The on-the-wire shape is honest: every cognitive-extractor record carries `event_type=observation`. Nothing pretends to be a revision or annotation while missing the spec-required referent.
+- Downstream consumers (graph viz, recall, atrib-summarize) can already render visual distinction by reading `extractor_classification` from the sidecar, even before spec-level event_type emission ships.
+
+**The right path when acted on:**
+
+The spec posture remains unchanged: §1.2.7 and §1.2.9 already require referents; the extractor will emit revision or annotation event_types only when a valid referent is confirmed.
+
+Implement hash-by-context-window referent matching: scope candidates to recent records in the active chain, pass the candidate set to the extractor LLM in a second pass with `record_hash + brief summary` per candidate, validate that the LLM's chosen hash is in the candidate list before emitting. Reject hallucinated hashes.
+
+Consider vector-search-backed referent matching as a future optimization if scale demands it; the in-context-window approach becomes less effective beyond ~50 candidate records, though typical lifecycle windows are 5–30 records.
+
+When an extracted event has a solid referent — the LLM selected a hash from the candidate list and confirmed its match — emit with `event_type=revision` or `event_type=annotation` and the proper top-level field. Otherwise, retain the observation-emission path.
+
+The `extractor_classification` field is redundant for records where event_type is promoted to revision or annotation. Retain it only on observation-emission records to preserve disambiguation, and remove it from revision/annotation records to avoid conflicting signals.
+
+**How to apply:** Schedule alongside the next graph-viz iteration that needs revision/annotation visual distinction. The MVP ensures the data shape remains compliant (`extractor_classification` is an honest signal, observation event_type doesn't violate spec) so the referent-matching work can be sequenced when there's a consumer demanding spec-level event_type fidelity.
+
+**ADR number** will be assigned when acted on.
+
