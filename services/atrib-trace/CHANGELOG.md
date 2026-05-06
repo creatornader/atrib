@@ -1,5 +1,21 @@
 # @atrib/trace
 
+## 0.2.1
+
+### Patch Changes
+
+- 2204434: Documentation refresh — package READMEs now reflect the post-rename names and the spec-aligned mirror filename convention.
+
+  `@atrib/recall` ships its first README (the package was previously internal and never had a public README).
+
+  `@atrib/emit`, `@atrib/trace`, `@atrib/summarize` README headers + body refs updated from the prior `@atrib/atrib-*` form to the `@atrib/<noun>` namespace pattern.
+
+  `@atrib/emit` README also genericizes a 1Password example that previously referenced a specific item title.
+
+  CHANGELOGs gain a callout explaining the version-skew between local-only workspace bumps and the first npm publish (e.g. `@atrib/emit` 0.4.0 was the first npm publish even though 0.2.0 + 0.3.0 entries appear in the changelog from the workspace-private period).
+
+  No code changes — purely docs + metadata for npmjs.com surface accuracy.
+
 > **Pre-0.2.0 versions exist in this changelog but were never published to npm.**
 > The package was renamed from `@atrib/atrib-trace` to `@atrib/trace` and flipped public on 2026-05-05; prior bumps were workspace-private. The first npm-published version is 0.2.0.
 
