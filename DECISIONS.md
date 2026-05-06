@@ -2828,7 +2828,7 @@ Also broaden the `observation` row in the §1.2.4 normative-URI table to clearly
 **Date:** 2026-05-06
 **Context:** graph-node holds the canonical full-record content in memory (records ingested via `/v1/ingest`, derived edges built per [§3.2.4](atrib-spec.md#324-edge-derivation-rules), revocation registry, capability envelopes). log-node persists only the 90-byte log entries per [§2.3.1](atrib-spec.md#231-entry-serialization) and discards the full record content after fanout — log-node alone CANNOT reconstruct graph-node's state. The only persistent copies of full records are in producer-local mirror files maintained per spec [§5.9](atrib-spec.md#59-local-mirror-conventions).
 
-A production incident exposed this: graph-node OOM-killed at ~1500 records globally, the in-memory state was lost, and the 90-byte log entries on log-node were not enough to rebuild. Trace endpoints 404'd for any record signed before the restart; session views showed only records signed since. Recovery required running an ad-hoc script against a producer's local mirror to POST records back to `/v1/ingest`.
+A failure mode was identified where graph-node, upon OOM-kill with ~1500 records in memory, could not reconstruct state from log-node alone due to the deliberate omission of full record content in the log. Trace endpoints returned 404s for pre-restart records and session views showed only post-restart data. Recovery was achieved by replaying records from a producer-local mirror via `/v1/ingest`.
 
 The architectural gap: graph-node has no startup-replay logic. There's no mechanism for a graph-node-equivalent to recover from log-node alone, because log-node deliberately doesn't persist full record content (privacy + log-size invariants).
 
@@ -2914,10 +2914,10 @@ The chain_root determination logic was extracted into a pure helper `resolveChai
 
 - Producer codebases (mcp-wrap, hook-driven emit-helpers, future runtime adapters) gain a clean primitive for chain-state handoff to spawned children. The pattern: read your current tail (via autoChain or your own in-memory state), set `ATRIB_CHAIN_TAIL_<context_id>` in the child's spawn env.
 - Within-process auto-chain semantics are unchanged. The env var is a third fallback, only consulted when both inbound traceparent and in-memory tail are empty for the context.
-- The 418-record genesis explosion is fixed forward (records signed after producers wire the env var chain properly). The historical genesis records are immutable; they keep `chain_root = sha256(context_id)` forever.
+- The issue producing fan-out genesis records is resolved for future signings (when producers correctly configure the env var). Historical genesis records remain immutable with `chain_root = sha256(context_id)`.
 - New unit tests cover the priority cascade (9 tests in `packages/mcp/test/chain-root.test.ts`): inbound wins over autoChain wins over env wins over genesis; namespace isolation; malformed-env fallthrough; format validation.
 - Shipped as `@atrib/mcp@0.5.0` (minor bump). The cognitive-primitive packages (`@atrib/emit`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`) still resolve `@atrib/mcp@^0.4.0` so they get 0.5.0 transitively at install time; their lockfiles need refresh-on-bump for the env var feature to be available downstream.
-- Producer-side wiring is the responsibility of the producer implementation (parent processes need to set the env var when spawning). Not done as part of this ADR; tracked per-producer.
+- Producer-side wiring is the responsibility of the producer implementation (parent processes must set the env var when spawning). Implementation is tracked per-producer.
 
 **Cross-references:**
 
