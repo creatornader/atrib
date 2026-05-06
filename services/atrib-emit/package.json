@@ -1,9 +1,8 @@
 {
-  "name": "@atrib/atrib-emit",
+  "name": "@atrib/emit",
   "version": "0.3.0",
-  "description": "MCP server exposing the explicit emit tool — the producer-side cognitive primitive that lets an agent sign observations, annotations, and revisions beyond what the wrapper auto-signs",
+  "description": "MCP server for atrib. The producer-side cognitive primitive: lets agents sign explicit observations, annotations, and revisions beyond what middleware auto-signs.",
   "license": "Apache-2.0",
-  "private": true,
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -27,5 +26,11 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }
