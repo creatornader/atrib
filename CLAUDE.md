@@ -176,7 +176,12 @@ These are non-negotiable. They come from the founding conversation and are the l
 
 ### Monorepo
 
-This is a TypeScript monorepo with **seven workspace packages** (five public: `@atrib/mcp`, `@atrib/agent`, `@atrib/verify`, `@atrib/cli`, `@atrib/directory`; two private: `@atrib/log-dev`, `@atrib/integration`) plus a Rust crate (`atrib-directory-bridge`, source-only; built artifacts ship inside `@atrib/directory`). Uses pnpm workspaces and turborepo for the TypeScript builds; the Rust bridge is built once via `wasm-pack` and the resulting WASM artifacts are checked into `packages/directory/wasm/`. Three deployable services: `services/log-node`, `services/graph-node`, `services/directory-node`.
+This is a TypeScript monorepo with **twelve workspace packages**:
+- **Six core public packages** (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`, `@atrib/cli`, `@atrib/mcp-wrap`, `@atrib/directory`)
+- **Four cognitive-primitive MCP servers** (`@atrib/emit`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`), published to npm with binaries
+- **Two private workspace packages** (`@atrib/log-dev`, `@atrib/integration`)
+
+Plus a Rust crate (`atrib-directory-bridge`, source-only; built artifacts ship inside `@atrib/directory`). Uses pnpm workspaces and turborepo for the TypeScript builds; the Rust bridge is built once via `wasm-pack` and the resulting WASM artifacts are checked into `packages/directory/wasm/`. Three deployable services not on npm: `services/log-node`, `services/graph-node`, `services/directory-node`.
 
 ### Package structure
 
