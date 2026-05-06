@@ -1,4 +1,7 @@
-# @atrib/atrib-trace
+# @atrib/trace
+
+> **Pre-0.2.0 versions exist in this changelog but were never published to npm.**
+> The package was renamed from `@atrib/atrib-trace` to `@atrib/trace` and flipped public on 2026-05-05; prior bumps were workspace-private. The first npm-published version is 0.2.0.
 
 ## 0.2.0
 
