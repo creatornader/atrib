@@ -85,7 +85,7 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 
 ## Sync triggers
 
-A subset of these triggers are mechanically enforced by `scripts/check-doc-sync.mjs` (run via `pnpm doc-sync` and integrated into CI). It catches number-word drift between canonical sources of truth and target docs (edge type count, node type count, dashboard view count, public package count, workspace package list completeness). When adding a new "<word> <thing>" claim that should stay in sync with an enumeration somewhere, extend the script with a new check rather than relying on manual review alone.
+A subset of these triggers are mechanically enforced by `scripts/check-doc-sync.mjs` (run via `pnpm doc-sync` and integrated into CI). It detects number-word drift between canonical sources of truth and target documents (edge type count, node type count, dashboard view count, public package count, workspace package list completeness). When adding a new "<word> <thing>" claim that should remain synchronized with an enumeration, extend the script with a new check to avoid reliance on manual review.
 
 | Event                                 | Update                                                                                                                                                                                                           |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
