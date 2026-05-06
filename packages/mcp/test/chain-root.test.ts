@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { genesisChainRoot, chainRoot } from '../src/chain-root.js'
+import { genesisChainRoot, chainRoot, resolveChainRoot } from '../src/chain-root.js'
 import { signRecord, getPublicKey } from '../src/signing.js'
 import { base64urlEncode } from '../src/base64url.js'
 import type { AtribRecord } from '../src/types.js'
@@ -86,5 +86,89 @@ describe('chainRoot', () => {
     const genesis = genesisChainRoot(contextId)
     const chain = chainRoot(signed)
     expect(chain).not.toBe(genesis)
+  })
+})
+
+describe('resolveChainRoot priority cascade', () => {
+  const ctx = '4bf92f3577b34da6a3ce929d0e0e4736'
+  const tailA = '1111111111111111111111111111111111111111111111111111111111111111'
+  const tailB = '2222222222222222222222222222222222222222222222222222222222222222'
+  const tailC = '3333333333333333333333333333333333333333333333333333333333333333'
+
+  it('returns inbound when present (highest priority)', () => {
+    const result = resolveChainRoot({
+      contextId: ctx,
+      inboundRecordHashHex: tailA,
+      autoChainTailHex: tailB,
+      env: { [`ATRIB_CHAIN_TAIL_${ctx}`]: `sha256:${tailC}` },
+    })
+    expect(result).toBe(`sha256:${tailA}`)
+  })
+
+  it('returns autoChain tail when no inbound', () => {
+    const result = resolveChainRoot({
+      contextId: ctx,
+      autoChainTailHex: tailB,
+      env: { [`ATRIB_CHAIN_TAIL_${ctx}`]: `sha256:${tailC}` },
+    })
+    expect(result).toBe(`sha256:${tailB}`)
+  })
+
+  it('returns env-var tail when no inbound and no autoChain (cross-producer handoff)', () => {
+    const result = resolveChainRoot({
+      contextId: ctx,
+      env: { [`ATRIB_CHAIN_TAIL_${ctx}`]: `sha256:${tailC}` },
+    })
+    expect(result).toBe(`sha256:${tailC}`)
+  })
+
+  it('falls through to genesis when env var is malformed', () => {
+    const result = resolveChainRoot({
+      contextId: ctx,
+      env: { [`ATRIB_CHAIN_TAIL_${ctx}`]: 'not-a-valid-hash' },
+    })
+    expect(result).toBe(genesisChainRoot(ctx))
+  })
+
+  it('falls through to genesis when env var is missing', () => {
+    const result = resolveChainRoot({
+      contextId: ctx,
+      env: {},
+    })
+    expect(result).toBe(genesisChainRoot(ctx))
+  })
+
+  it('namespaces env var by context_id (different ctx env not consulted)', () => {
+    const otherCtx = '00000000000000000000000000000000'
+    const result = resolveChainRoot({
+      contextId: ctx,
+      env: { [`ATRIB_CHAIN_TAIL_${otherCtx}`]: `sha256:${tailC}` },
+    })
+    expect(result).toBe(genesisChainRoot(ctx))
+  })
+
+  it('rejects env var with sha256: prefix but wrong hex length', () => {
+    const result = resolveChainRoot({
+      contextId: ctx,
+      env: { [`ATRIB_CHAIN_TAIL_${ctx}`]: 'sha256:abc123' },
+    })
+    expect(result).toBe(genesisChainRoot(ctx))
+  })
+
+  it('rejects env var with hex but no sha256: prefix', () => {
+    const result = resolveChainRoot({
+      contextId: ctx,
+      env: { [`ATRIB_CHAIN_TAIL_${ctx}`]: tailC },
+    })
+    expect(result).toBe(genesisChainRoot(ctx))
+  })
+
+  it('autoChain tail takes precedence over env var (within-process beats cross-process)', () => {
+    const result = resolveChainRoot({
+      contextId: ctx,
+      autoChainTailHex: tailB,
+      env: { [`ATRIB_CHAIN_TAIL_${ctx}`]: `sha256:${tailC}` },
+    })
+    expect(result).toBe(`sha256:${tailB}`)
   })
 })

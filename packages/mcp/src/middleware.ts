@@ -12,7 +12,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { base64urlDecode, base64urlEncode } from './base64url.js'
 import { computeContentId } from './content-id.js'
 import { SHA256_REF_PATTERN, extractRecordHashes } from './refs.js'
-import { genesisChainRoot } from './chain-root.js'
+import { resolveChainRoot } from './chain-root.js'
 import { readInboundContext, writeOutboundContext, parseBaggageAtribSession } from './context.js'
 import { signRecord, getPublicKey } from './signing.js'
 import { hexEncode, sha256 } from './hash.js'
@@ -519,20 +519,14 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     // Forward traceparent to outbound _meta (§1.5.4)
     const inboundTraceparent = meta?.traceparent
 
-    // Determine chain_root.
-    // 1. Prefer explicit inbound atrib propagation (the spec-canonical path).
-    // 2. With autoChain on, fall back to the most recent record this
-    //    middleware instance signed for this context_id. This synthesizes
-    //    chains for hosts that don't propagate atrib's outbound token.
-    // 3. Otherwise, genesis.
-    let chainRootValue: string
-    if (inbound) {
-      chainRootValue = `sha256:${hexEncode(inbound.recordHash)}`
-    } else if (autoChain && lastRecordHashByContext.has(contextId)) {
-      chainRootValue = `sha256:${lastRecordHashByContext.get(contextId)!}`
-    } else {
-      chainRootValue = genesisChainRoot(contextId)
-    }
+    // Determine chain_root via the priority cascade in resolveChainRoot:
+    // inbound traceparent > autoChain in-memory tail > ATRIB_CHAIN_TAIL_<ctx>
+    // env var (cross-producer handoff) > synthetic genesis.
+    const chainRootValue = resolveChainRoot({
+      contextId,
+      inboundRecordHashHex: inbound ? hexEncode(inbound.recordHash) : undefined,
+      autoChainTailHex: autoChain ? lastRecordHashByContext.get(contextId) : undefined,
+    })
 
     // Determine event_type URI (spec 1.2.4)
     const toolName = (params.name as string) ?? ''
