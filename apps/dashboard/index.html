@@ -635,6 +635,113 @@
   .prose p { margin: 0 0 16px; }
   .prose ul { padding-left: 18px; margin: 0 0 16px; }
   .prose li { margin: 6px 0; }
+
+  /* ─── Trace view (provenance ancestry) ──────────────────────────────── */
+
+  .trace-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--surface-2);
+    font: 13px/1.4 var(--font-sans);
+  }
+  .trace-controls label {
+    color: var(--text-3);
+    font: 500 11px/1 var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .trace-controls input[type=range] {
+    accent-color: var(--accent);
+    vertical-align: middle;
+  }
+  .trace-controls .depth-readout {
+    font: 11px var(--font-mono);
+    color: var(--text-3);
+    min-width: 56px;
+  }
+  .trace-controls .start-link a {
+    color: var(--text-2);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--text-3);
+  }
+  .trace-controls .start-link a:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .trace-controls .actions { margin-left: auto; display: inline-flex; gap: 12px; }
+  .trace-controls .actions a {
+    color: var(--text-2);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--text-3);
+  }
+  .trace-controls .actions a:hover { color: var(--accent); border-color: var(--accent); }
+
+  .trace-graph {
+    position: relative;
+    width: 100%;
+    height: 600px;
+    background: var(--surface);
+  }
+  .trace-graph .empty,
+  .trace-graph .loading,
+  .trace-graph .err-banner {
+    position: absolute;
+    inset: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-3);
+    font: 14px/1.5 var(--font-sans);
+    text-align: center;
+  }
+  .trace-graph canvas { display: block; }
+
+  .trace-truncation {
+    margin: 16px 0 0;
+    padding: 10px 14px;
+    border: 1px solid var(--warn-border);
+    background: var(--warn-subtle);
+    color: var(--warn);
+    border-radius: var(--radius-sm);
+    font: 13px/1.5 var(--font-sans);
+  }
+  .trace-truncation strong { color: var(--warn); font-weight: 600; }
+
+  .edge-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--surface-2);
+    font: 11.5px/1 var(--font-mono);
+  }
+  .edge-legend .swatch {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-3);
+  }
+  .edge-legend .swatch::before {
+    content: '';
+    display: inline-block;
+    width: 18px;
+    height: 2px;
+    background: currentColor;
+  }
+  .edge-legend .swatch.informed_by      { color: var(--info); }
+  .edge-legend .swatch.provenance_of    { color: var(--info); }
+  .edge-legend .swatch.annotates        { color: var(--et-annotation); }
+  .edge-legend .swatch.revises          { color: var(--et-revision); }
+  .edge-legend .swatch.chain_precedes   { color: var(--accent); }
+  .edge-legend .swatch.session_precedes { color: var(--text-3); }
+  .edge-legend .swatch.session_parallel { color: var(--text-4); }
+  .edge-legend .swatch.cross_session    { color: var(--muted); }
+  .edge-legend .swatch.converges_on     { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -681,6 +788,7 @@
  *   #/identity/<creator_key>        identity view
  *   #/session/<context_id>          session view
  *   #/action/<record_hash>          action view
+ *   #/trace/<record_hash>           provenance trace view (ancestor DAG)
  *   #/anchoring                     log + directory anchoring details
  *   #/about                         what atrib is, how to read this
  */
@@ -1676,6 +1784,16 @@ async function renderAction(recordHash) {
     ),
   ))
 
+  root.append(el('p', {
+    style: 'margin: 16px 0 0; color: var(--text-2); font-size: 14px;',
+  },
+    el('a',
+      { href: `#/trace/${fullHash}`, style: 'color: var(--accent); border-bottom: 1px dotted var(--accent); text-decoration: none;' },
+      '→ trace ancestry',
+    ),
+    ' · backward walk via informed_by, annotates, revises (D041, D058, D059)',
+  ))
+
   root.append(el('section', { class: 'panel flush', style: 'margin-top: 24px;' },
     el('div', { class: 'panel-head' },
       el('h2', {}, 'raw record'),
@@ -1687,6 +1805,406 @@ async function renderAction(recordHash) {
   ))
 
   clearAndRender(root)
+}
+
+// ─── Graph viz: lazy-loaded libraries ────────────────────────────────────
+// Graph-rendering libraries (graphology, dagre, sigma) only load when a
+// graph view actually renders. Overview / identity / action / anchoring /
+// about views never pay the bytes.
+//
+// Versions pinned 2026-05-06; jsDelivr CDN; no SRI hashes, D054 explorer
+// ships pre-public-flip and SRI is part of the pre-flip hardening pass.
+
+const GRAPH_LIB_URLS = [
+  'https://cdn.jsdelivr.net/npm/graphology@0.26.0/dist/graphology.umd.min.js',
+  'https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js',
+  'https://cdn.jsdelivr.net/npm/sigma@3.0.0/dist/sigma.min.js',
+]
+let _graphLibsPromise = null
+function loadGraphLibs() {
+  if (_graphLibsPromise) return _graphLibsPromise
+  _graphLibsPromise = (async () => {
+    // graphology + dagre have no inter-dependency; load in parallel.
+    await Promise.all([loadScript(GRAPH_LIB_URLS[0]), loadScript(GRAPH_LIB_URLS[1])])
+    // Sigma's UMD references graphology globally; load it last.
+    await loadScript(GRAPH_LIB_URLS[2])
+  })().catch((e) => {
+    // Reset on failure so a re-render can retry.
+    _graphLibsPromise = null
+    throw e
+  })
+  return _graphLibsPromise
+}
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = src
+    s.crossOrigin = 'anonymous'
+    s.onload = () => resolve()
+    s.onerror = () => reject(new Error(`failed to load ${src}`))
+    document.head.appendChild(s)
+  })
+}
+
+// Color helpers parallel the chip palette so the graph reads consistently
+// with the rest of the dashboard. Reads CSS variables live, so any future
+// theme override flows through without a code change.
+function _cssVar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return v || fallback
+}
+function eventTypeColor(eventType) {
+  const map = {
+    tool_call: '--info',
+    transaction: '--accent',
+    observation: '--et-observation',
+    annotation: '--et-annotation',
+    revision: '--et-revision',
+    directory_anchor: '--et-system',
+    extension: '--muted',
+    gap_node: '--et-dangling',
+  }
+  return _cssVar(map[eventType] || '--muted', '#9ca3af')
+}
+function edgeTypeColor(edgeType) {
+  const map = {
+    INFORMED_BY: '--info',
+    PROVENANCE_OF: '--info',
+    ANNOTATES: '--et-annotation',
+    REVISES: '--et-revision',
+    CHAIN_PRECEDES: '--accent',
+    SESSION_PRECEDES: '--text-3',
+    SESSION_PARALLEL: '--text-4',
+    CONVERGES_ON: '--accent',
+    CROSS_SESSION: '--muted',
+  }
+  return _cssVar(map[edgeType] || '--muted', '#9ca3af')
+}
+
+// ─── Trace view (provenance ancestry visualization) ──────────────────────
+// Backward BFS from a starting record_hash via INFORMED_BY (D041), ANNOTATES
+// (D058), REVISES (D059) edges. Renders the ancestor subgraph as a directed
+// DAG with dagre layout; Sigma.js draws to canvas/WebGL.
+//
+// Caveats inherited from /v1/trace:
+//  - PROVENANCE_OF refs (16-byte truncations per §1.2.6) are not walked
+//    server-side because resolving requires a scan; they appear in the
+//    response payload but not the ancestor subgraph.
+//  - Dangling edges (§3.2.4 step 6), INFORMED_BY refs to records not in
+//    the resolved set, surface as `gap_node` entries in graph.nodes.
+
+let _activeSigmaInstance = null
+
+async function renderTrace(rawHash) {
+  setActiveNav(null)
+  const ep = endpoints()
+
+  // Tear down any prior Sigma instance from a previous render. Sigma
+  // attaches canvas + event listeners that leak across hashchange.
+  if (_activeSigmaInstance) {
+    try { _activeSigmaInstance.kill() } catch {}
+    _activeSigmaInstance = null
+  }
+
+  // Accept both "sha256:<hex>" and bare 64-char hex; canonicalize once.
+  const hashHex = rawHash.startsWith('sha256:') ? rawHash.slice(7) : rawHash
+  const fullHash = `sha256:${hashHex}`
+
+  if (!/^[0-9a-f]{64}$/.test(hashHex)) {
+    clearAndRender(el('div', {},
+      viewHeader({
+        crumb: 'trace',
+        title: 'Provenance trace',
+        explainer: ['Backward provenance walk from a signed record. Follows ', el('code', {}, 'informed_by'), ', ', el('code', {}, 'annotates'), ', ', el('code', {}, 'revises'), '.'],
+      }),
+      el('section', { class: 'panel' },
+        el('div', { class: 'err-banner' },
+          el('span', { class: 'label' }, 'invalid record_hash:'),
+          ' expected 64 hex chars, optionally prefixed with sha256:',
+        ),
+      ),
+    ))
+    return
+  }
+
+  const root = el('div')
+  root.append(viewHeader({
+    crumb: 'trace',
+    title: 'Provenance trace',
+    subject: fullHash,
+    explainer: [
+      'A ',
+      el('span', { class: 'term' }, 'trace'),
+      ' is the backward provenance of one signed record. The walk follows ',
+      el('code', {}, 'informed_by'),
+      ' (D041), ',
+      el('code', {}, 'annotates'),
+      ' (D058), and ',
+      el('code', {}, 'revises'),
+      ' (D059) edges, hop by hop. Every node is a real signed record. Every edge is derived from record content alone, no semantic interpretation.',
+    ],
+  }))
+
+  // Depth from URL search params; clamped to the /v1/trace endpoint cap (20).
+  const params = new URLSearchParams(location.search)
+  let depth = Math.max(1, Math.min(parseInt(params.get('depth') ?? '5', 10) || 5, 20))
+
+  const depthReadout = el('span', { class: 'depth-readout' }, `depth ${depth}`)
+  const depthInput = el('input', {
+    type: 'range', min: '1', max: '20', value: String(depth), step: '1',
+    style: 'width: 120px;',
+    oninput: (ev) => {
+      depth = parseInt(ev.target.value, 10)
+      depthReadout.textContent = `depth ${depth}`
+    },
+    onchange: () => {
+      // Re-render at new depth. Use search-param so the URL is shareable.
+      const newUrl = new URL(location.href)
+      newUrl.searchParams.set('depth', String(depth))
+      history.replaceState(null, '', newUrl.toString())
+      route()
+    },
+  })
+
+  const controls = el('div', { class: 'trace-controls' },
+    el('label', {}, 'start'),
+    el('span', { class: 'start-link' },
+      el('a', { href: `#/action/${fullHash}` },
+        el('span', { class: 'mono' }, shorten(fullHash, 14, 6)),
+      ),
+    ),
+    el('label', { style: 'margin-left: 16px;' }, 'depth'),
+    depthInput,
+    depthReadout,
+    el('span', { class: 'actions' },
+      el('a', { href: `#/action/${fullHash}` }, 'open record →'),
+    ),
+  )
+
+  const graphContainer = el('div', { class: 'trace-graph', id: 'trace-graph-container' },
+    el('div', { class: 'loading' }, 'loading provenance graph…'),
+  )
+  const legend = el('div', { class: 'edge-legend', id: 'trace-edge-legend' })
+  const truncationSlot = el('div')
+  const startSummary = el('section', { class: 'panel', style: 'margin-top: 24px;' },
+    el('div', { class: 'panel-head' },
+      el('h2', {}, 'start record'),
+    ),
+    el('div', { class: 'panel-body', id: 'trace-start-summary' },
+      el('div', { class: 'empty' }, 'loading…'),
+    ),
+  )
+
+  root.append(
+    el('section', { class: 'panel flush' },
+      el('div', { class: 'panel-head' },
+        el('h2', {}, 'ancestry graph'),
+        el('span', { class: 'meta' }, '/v1/trace · backward BFS'),
+      ),
+      controls,
+      graphContainer,
+      legend,
+    ),
+    truncationSlot,
+    startSummary,
+  )
+
+  clearAndRender(root)
+
+  // Lazy-load libs while the trace fetch is in flight.
+  const [libErr, traceResult] = await Promise.all([
+    loadGraphLibs().then(() => null).catch((e) => e),
+    fetchMaybe(`${ep.graph}/trace/${hashHex}?depth=${depth}`),
+  ])
+
+  if (libErr) {
+    graphContainer.replaceChildren(el('div', { class: 'err-banner' },
+      el('span', { class: 'label' }, 'graph library load error:'), ' ', libErr.message,
+    ))
+    return
+  }
+
+  if (traceResult._error) {
+    graphContainer.replaceChildren(el('div', { class: 'err-banner' },
+      el('span', { class: 'label' }, 'trace error:'), ' ', traceResult._error,
+    ))
+    document.getElementById('trace-start-summary').replaceChildren(
+      el('div', { class: 'empty' }, 'no record found at this hash'),
+    )
+    return
+  }
+
+  const graph = traceResult.graph || { nodes: [], edges: [] }
+  const nodeCount = graph.nodes.length
+  const edgeCount = graph.edges.length
+
+  // Pre-resolve identity claims so renderIdentityLabel can pull synchronously.
+  const creatorKeys = [...new Set(graph.nodes.map((n) => n.creator_key).filter(Boolean))]
+  if (creatorKeys.length) await resolveIdentities(creatorKeys)
+
+  // Truncation banners, depth and/or count exceeded.
+  if (traceResult.truncated_by_depth || traceResult.truncated_by_count) {
+    const banner = el('div', { class: 'trace-truncation' })
+    if (traceResult.truncated_by_depth) {
+      banner.append(
+        el('strong', {}, 'depth ceiling reached'),
+        `, ${traceResult.depth_requested} hops walked. Some ancestors above the ceiling are not in this graph. Increase depth via the slider (max 20).`,
+      )
+    }
+    if (traceResult.truncated_by_count) {
+      banner.append(
+        traceResult.truncated_by_depth ? el('br', {}) : null,
+        el('strong', {}, 'node cap reached'),
+        ', 500 ancestors (the per-trace endpoint cap). Reduce depth or fetch upstream subtrees from individual records.',
+      )
+    }
+    truncationSlot.append(banner)
+  }
+
+  // Start-record summary panel. Find the start node by record_hash match;
+  // graph-node uses opaque ids, so several lookup attempts cover the field
+  // shape without taking a hard dependency on it.
+  const startNode = graph.nodes.find((n) =>
+    n.record_hash === fullHash || n.id === hashHex || n.id === fullHash,
+  ) || graph.nodes[0]
+  const startSummaryEl = document.getElementById('trace-start-summary')
+  if (startNode && startSummaryEl) {
+    startSummaryEl.replaceChildren(el('dl', { class: 'kv' },
+      el('dt', {}, 'event_type'),
+      el('dd', {}, renderEventChip(startNode.event_type, startNode.creator_key, startNode.event_type_uri)),
+      el('dt', {}, 'identity'),
+      el('dd', {}, startNode.creator_key ? renderIdentityLabel(startNode.creator_key, { short: false }) : '—'),
+      el('dt', {}, 'session'),
+      el('dd', {}, startNode.context_id
+        ? el('a', { href: `#/session/${startNode.context_id}` }, el('span', { class: 'mono' }, startNode.context_id))
+        : '—'),
+      el('dt', {}, 'timestamp'),
+      el('dd', {}, startNode.timestamp
+        ? el('span', {}, timeAgo(startNode.timestamp), ' · ', el('span', { class: 'mono' }, isoTime(startNode.timestamp)))
+        : '—'),
+      el('dt', {}, 'ancestors found'),
+      el('dd', {},
+        `${nodeCount - 1} record${nodeCount === 2 ? '' : 's'}`,
+        ', ',
+        `${edgeCount} edge${edgeCount === 1 ? '' : 's'}`,
+      ),
+    ))
+  }
+
+  // Empty-ancestry case: the start record exists but has no resolvable
+  // upstream. /v1/trace returns the start node alone in this case.
+  if (nodeCount <= 1) {
+    graphContainer.replaceChildren(el('div', { class: 'empty' },
+      'No ancestors. This record has no ',
+      el('code', {}, 'informed_by'), ', ', el('code', {}, 'annotates'),
+      ', or ', el('code', {}, 'revises'),
+      ' edges into the resolved set, typically a genesis record.',
+    ))
+    legend.replaceChildren(el('span', { style: 'color: var(--text-3);' },
+      'no edges in this trace',
+    ))
+    return
+  }
+
+  // Build graphology + dagre.
+  graphContainer.replaceChildren()
+  const Graph = window.graphology.Graph
+  const Sigma = window.Sigma
+  const dagre = window.dagre
+
+  const gx = new Graph({ type: 'directed', multi: true, allowSelfLoops: false })
+  const dgx = new dagre.graphlib.Graph({ multigraph: true })
+  dgx.setGraph({ rankdir: 'TB', ranksep: 70, nodesep: 50, marginx: 30, marginy: 30 })
+  dgx.setDefaultEdgeLabel(() => ({}))
+
+  for (const n of graph.nodes) {
+    const isStart = (n.record_hash === fullHash) || (n.id === hashHex) || (n.id === fullHash)
+    const color = eventTypeColor(n.event_type)
+    const size = isStart ? 16 : 10
+    const labelHash = n.record_hash || (n.id ? (n.id.startsWith('sha256:') ? n.id : `sha256:${n.id}`) : '')
+    const label = `${n.event_type || '?'} · ${shorten(labelHash, 8, 4)}`
+
+    gx.addNode(n.id, {
+      x: 0, y: 0,
+      size,
+      color,
+      label,
+      _node: n,
+      _isStart: isStart,
+    })
+    dgx.setNode(n.id, { width: Math.max(60, label.length * 7), height: 28 })
+  }
+
+  // Distinct-key edges so multi-edges (same source/target, different type)
+  // don't collide. Defensive try/catch: graph-node shouldn't emit an edge
+  // referencing a missing node, but skip rather than crash if it does.
+  let edgeSeq = 0
+  for (const e of graph.edges) {
+    const color = edgeTypeColor(e.type)
+    const key = `${e.source}->${e.target}#${e.type}#${edgeSeq++}`
+    if (!gx.hasNode(e.source) || !gx.hasNode(e.target)) continue
+    try {
+      gx.addEdgeWithKey(key, e.source, e.target, {
+        size: 1.6,
+        color,
+        type: 'arrow',
+        label: e.type,
+        _edge: e,
+      })
+    } catch {
+      continue
+    }
+    dgx.setEdge(e.source, e.target, {}, key)
+  }
+
+  dagre.layout(dgx)
+
+  // Copy positions back to graphology; flip y because Sigma's coordinate
+  // system has y growing upward (mathematical) while dagre's grows downward
+  // (screen). Without the flip the graph reads bottom-up on screen.
+  gx.forEachNode((nodeId) => {
+    const dnode = dgx.node(nodeId)
+    if (dnode) {
+      gx.mergeNodeAttributes(nodeId, { x: dnode.x, y: -dnode.y })
+    }
+  })
+
+  _activeSigmaInstance = new Sigma(gx, graphContainer, {
+    renderEdgeLabels: false,
+    defaultEdgeType: 'arrow',
+    defaultNodeColor: _cssVar('--muted', '#9ca3af'),
+    labelColor: { color: _cssVar('--text-2', '#a0a3ab') },
+    labelSize: 11,
+    labelDensity: 0.4,
+    edgeLabelColor: { color: _cssVar('--text-3', '#6a6e78') },
+  })
+
+  // Click → drill into action view for that record.
+  _activeSigmaInstance.on('clickNode', ({ node }) => {
+    const attrs = gx.getNodeAttributes(node)
+    const n = attrs._node
+    if (n && n.record_hash) location.hash = `#/action/${n.record_hash}`
+    else if (n && n.id) location.hash = `#/action/sha256:${n.id}`
+  })
+
+  // Render legend with only the edge types actually present in the graph,
+  // so the user isn't confused by unused entries.
+  const presentEdgeTypes = new Set(graph.edges.map((e) => e.type))
+  const labelsOrder = [
+    ['INFORMED_BY', 'informed_by'],
+    ['ANNOTATES', 'annotates'],
+    ['REVISES', 'revises'],
+    ['PROVENANCE_OF', 'provenance_of'],
+    ['CHAIN_PRECEDES', 'chain_precedes'],
+    ['SESSION_PRECEDES', 'session_precedes'],
+    ['SESSION_PARALLEL', 'session_parallel'],
+    ['CROSS_SESSION', 'cross_session'],
+    ['CONVERGES_ON', 'converges_on'],
+  ]
+  const presentLegend = labelsOrder.filter(([typ]) => presentEdgeTypes.has(typ))
+  legend.replaceChildren(...presentLegend.map(([typ, cls]) =>
+    el('span', { class: `swatch ${cls}` }, typ),
+  ))
 }
 
 // ─── Anchoring view ──────────────────────────────────────────────────────
@@ -1877,6 +2395,7 @@ async function route() {
     if (hash.startsWith('/identity/'))                       return await renderIdentity(hash.slice('/identity/'.length))
     if (hash.startsWith('/session/'))                        return await renderSession(hash.slice('/session/'.length))
     if (hash.startsWith('/action/'))                         return await renderAction(hash.slice('/action/'.length))
+    if (hash.startsWith('/trace/'))                          return await renderTrace(hash.slice('/trace/'.length))
     if (hash === '/anchoring')                               return await renderAnchoring()
     if (hash === '/about')                                   return renderAbout()
 
