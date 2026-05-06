@@ -2828,7 +2828,7 @@ Also broaden the `observation` row in the §1.2.4 normative-URI table to clearly
 **Date:** 2026-05-06
 **Context:** graph-node holds the canonical full-record content in memory (records ingested via `/v1/ingest`, derived edges built per [§3.2.4](atrib-spec.md#324-edge-derivation-rules), revocation registry, capability envelopes). log-node persists only the 90-byte log entries per [§2.3.1](atrib-spec.md#231-entry-serialization) and discards the full record content after fanout, log-node alone CANNOT reconstruct graph-node's state. The only persistent copies of full records are in producer-local mirror files maintained per spec [§5.9](atrib-spec.md#59-local-mirror-conventions).
 
-A failure mode was identified where graph-node, upon OOM-kill with ~1500 records in memory, could not reconstruct state from log-node alone due to the deliberate omission of full record content in the log. Trace endpoints returned 404s for pre-restart records and session views showed only post-restart data. Recovery was achieved by replaying records from a producer-local mirror via `/v1/ingest`.
+A failure mode occurs when graph-node is OOM-killed with ~1500 records in memory: state cannot be reconstructed from log-node alone due to the deliberate omission of full record content. Trace endpoints return 404s for pre-restart records and session views show only post-restart data. State can be recovered by replaying records from a producer-local mirror via `/v1/ingest`.
 
 The architectural gap: graph-node has no startup-replay logic. There's no mechanism for a graph-node-equivalent to recover from log-node alone, because log-node deliberately doesn't persist full record content (privacy + log-size invariants).
 
@@ -2855,7 +2855,7 @@ Crash safety: every successful ingest appends a single LF-terminated line via O_
 
 **Consequences:**
 
-- graph-node survives OOM / deploy / fly machine reboot without data loss going forward. Tested in production: 994 records replayed on first boot in <1s.
+- graph-node survives OOM / deploy / fly machine reboot without data loss going forward. In production deployments, 994 records have been replayed on first boot in under 1 second.
 - Cold-start time scales with archive size (~1-3 KB per record + JSON parse). Sustainable to ~10⁵ records before cold-start exceeds fly's startup grace; Layer 4 (disk-backed graph store) takes over at that scale.
 - Single-volume single-machine model only. Multi-machine would need either multiple volumes (data divergence) or shared external storage. Documented in [`services/graph-node/fly.toml`](services/graph-node/fly.toml).
 - Archive grows on every successful ingest, including dedups (because `store.addRecord` returns void, the appender can't tell whether the record was new). Bounded by fanout-retry count; tracked as a follow-up to flip `addRecord` to return `boolean`.
@@ -2916,7 +2916,7 @@ The chain_root determination logic was extracted into a pure helper `resolveChai
 - Within-process auto-chain semantics are unchanged. The env var is a third fallback, only consulted when both inbound traceparent and in-memory tail are empty for the context.
 - The issue producing fan-out genesis records is resolved for future signings (when producers correctly configure the env var). Historical genesis records remain immutable with `chain_root = sha256(context_id)`.
 - New unit tests cover the priority cascade (9 tests in `packages/mcp/test/chain-root.test.ts`): inbound wins over autoChain wins over env wins over genesis; namespace isolation; malformed-env fallthrough; format validation.
-- Shipped as `@atrib/mcp@0.5.0` (minor bump). The cognitive-primitive packages (`@atrib/emit`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`) still resolve `@atrib/mcp@^0.4.0` so they get 0.5.0 transitively at install time; their lockfiles need refresh-on-bump for the env var feature to be available downstream.
+- `@atrib/mcp@0.5.0` was released as a minor bump. The cognitive-primitive packages (`@atrib/emit`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`) resolve `@atrib/mcp@^0.4.0` and will receive the update transitively upon install; their lockfiles must be refreshed to enable the env var feature downstream.
 - Producer-side wiring is the responsibility of the producer implementation (parent processes must set the env var when spawning). Implementation is tracked per-producer.
 
 **Cross-references:**

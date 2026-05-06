@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Validate internal consistency of canonical docs.
 //
-// The sync-trigger table in CLAUDE.md represents a manual enforcement
-// mechanism: when an edge type is added, multiple files must be updated by
-// hand. Inconsistent adherence to that process can let drift land. This
-// script mechanically catches the specific staleness shape, number-word
-// count claims drifting out of sync with the underlying enumeration that
+// The sync-trigger table in CLAUDE.md defines a manual enforcement
+// mechanism: when an edge type is added, multiple files must be updated
+// manually. Inconsistent adherence can introduce drift. This script
+// mechanically detects the specific staleness pattern, number-word count
+// claims drifting out of sync with the underlying enumeration that
 // determines them.
 //
 // Each check:
