@@ -301,4 +301,87 @@ describe('emit end-to-end (sign → submit → mirror)', () => {
     // and JCS handling round-trip cleanly.
     expect(await verifyRecord(landed)).toBe(true)
   })
+
+  it('handleEmit signs a revision with revises pointing at predecessor record_hash (D059 / §1.2.9)', async () => {
+    // P008 promotion path: caller supplies event_type=revision and a
+    // revises field with the predecessor's record_hash. atrib-emit must
+    // accept the revises field, propagate it through buildAndSignEmitRecord
+    // into the signed AtribRecord, and the resulting record must verify
+    // under verifyRecord (proving JCS handling round-trips cleanly).
+    const { seed } = await fixedKey()
+    const { __test_only__ } = await import('../src/index.js')
+    const { createSubmissionQueue, verifyRecord } = await import('@atrib/mcp')
+    const queue = createSubmissionQueue(log.url)
+    const ctxId = 'f'.repeat(32)
+    const predecessorHash = 'sha256:' + 'a'.repeat(64)
+
+    const result = await __test_only__.handleEmit({
+      input: {
+        event_type: 'https://atrib.dev/v1/types/revision',
+        content: {
+          prior_position: 'the cutoff was 64KB',
+          new_position: 'the cutoff is 1MB; the 64KB observation was a different rate-limit response',
+          reason: 'tested empirically with proper variable payload sizes',
+        },
+        context_id: ctxId,
+        revises: predecessorHash,
+      },
+      key: { privateKey: seed, source: 'env' },
+      queue,
+    })
+    await queue.flush()
+
+    expect(result.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(log.received.length).toBe(1)
+    const landed = log.received[0]! as AtribRecord & { revises?: string }
+    expect(landed.event_type).toBe('https://atrib.dev/v1/types/revision')
+    expect(landed.revises).toBe(predecessorHash)
+    expect(await verifyRecord(landed)).toBe(true)
+  })
+
+  it('handleEmit refuses revision without revises (require/forbid invariant per §1.2.9)', async () => {
+    // The mirror of the §1.2.7 annotates require/forbid invariant: revision
+    // event_type without a revises field must be refused, returning a
+    // warnings-only response rather than signing a malformed record.
+    const { seed } = await fixedKey()
+    const { __test_only__ } = await import('../src/index.js')
+    const { createSubmissionQueue } = await import('@atrib/mcp')
+    const queue = createSubmissionQueue(log.url)
+
+    const result = await __test_only__.handleEmit({
+      input: {
+        event_type: 'https://atrib.dev/v1/types/revision',
+        content: { what: 'revision without referent — should be refused' },
+      },
+      key: { privateKey: seed, source: 'env' },
+      queue,
+    })
+    await queue.flush()
+
+    expect(result.record_hash).toBe('sha256:unknown')
+    expect(result.warnings.some((w) => w.includes('revises'))).toBe(true)
+    expect(log.received.length).toBe(0)
+  })
+
+  it('handleEmit refuses revises on non-revision event_type (FORBIDDEN per §1.2.9)', async () => {
+    const { seed } = await fixedKey()
+    const { __test_only__ } = await import('../src/index.js')
+    const { createSubmissionQueue } = await import('@atrib/mcp')
+    const queue = createSubmissionQueue(log.url)
+
+    const result = await __test_only__.handleEmit({
+      input: {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'observation with revises — should be refused' },
+        revises: 'sha256:' + 'b'.repeat(64),
+      },
+      key: { privateKey: seed, source: 'env' },
+      queue,
+    })
+    await queue.flush()
+
+    expect(result.record_hash).toBe('sha256:unknown')
+    expect(result.warnings.some((w) => w.includes('FORBIDDEN'))).toBe(true)
+    expect(log.received.length).toBe(0)
+  })
 })

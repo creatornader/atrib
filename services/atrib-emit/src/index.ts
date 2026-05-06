@@ -15,6 +15,7 @@ import { z } from 'zod'
 import { randomBytes } from 'node:crypto'
 import {
   EVENT_TYPE_ANNOTATION_URI,
+  EVENT_TYPE_REVISION_URI,
   canonicalRecord,
   createSubmissionQueue,
   genesisChainRoot,
@@ -75,6 +76,12 @@ const EmitInput = z.object({
     "'sha256:<64-hex>' record_hash this annotation describes per spec §1.2.7 / D058. " +
     'REQUIRED when event_type is the annotation URI; FORBIDDEN on any other event_type. ' +
     'atrib-emit enforces the require/forbid invariant per §1.2.7 (validators MUST reject ' +
+    'violations) and returns a warnings-only response rather than signing a malformed record.',
+  ),
+  revises: z.string().regex(SHA256_REF_PATTERN).optional().describe(
+    "'sha256:<64-hex>' record_hash this revision supersedes per spec §1.2.9 / D059. " +
+    'REQUIRED when event_type is the revision URI; FORBIDDEN on any other event_type. ' +
+    'atrib-emit enforces the require/forbid invariant per §1.2.9 (validators MUST reject ' +
     'violations) and returns a warnings-only response rather than signing a malformed record.',
   ),
 })
@@ -205,6 +212,23 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
     ])
   }
 
+  // revises require/forbid invariant per spec §1.2.9 / D059. Same shape as
+  // the annotates invariant above. Validators MUST reject violations; we
+  // surface as warnings-only per §5.8 so callers see why we refused to sign
+  // rather than getting back a malformed record.
+  if (input.event_type === EVENT_TYPE_REVISION_URI && !input.revises) {
+    return emptyOutput(input.context_id ?? randomContextId(), [
+      'revision event_type requires revises per §1.2.9 (D059); ' +
+        'omitted records would fail validator admission',
+    ])
+  }
+  if (input.revises && input.event_type !== EVENT_TYPE_REVISION_URI) {
+    return emptyOutput(input.context_id ?? randomContextId(), [
+      'revises is FORBIDDEN on non-revision event_types per §1.2.9 (D059); ' +
+        `received event_type=${input.event_type}`,
+    ])
+  }
+
   // autoChain inheritance: when the caller omits context_id, read the
   // wrapper's local mirror and inherit its most-recent record's context_id
   // (chaining on top of that record's hash). Falls back to a fresh genesis
@@ -236,6 +260,7 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
       informedBy: input.informed_by,
       provenanceToken: input.provenance_token,
       annotates: input.annotates,
+      revises: input.revises,
     })
   } catch (e) {
     return emptyOutput(contextId, [

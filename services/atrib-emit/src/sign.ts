@@ -45,6 +45,13 @@ export interface BuildEmitRecordInput {
    * reaching here. Format: "sha256:" + 64 lowercase hex.
    */
   annotates?: string | undefined
+  /**
+   * Optional revises target per spec §1.2.9 / D059. Required when
+   * eventType is the revision URI; FORBIDDEN on any other event_type.
+   * The index.ts handler enforces the require/forbid invariant before
+   * reaching here. Format: "sha256:" + 64 lowercase hex.
+   */
+  revises?: string | undefined
 }
 
 /**
@@ -78,6 +85,7 @@ export async function buildAndSignEmitRecord(
     ...(informedBySorted ? { informed_by: informedBySorted } : {}),
     ...(input.annotates ? { annotates: input.annotates } : {}),
     ...(input.provenanceToken ? { provenance_token: input.provenanceToken } : {}),
+    ...(input.revises ? { revises: input.revises } : {}),
   } as AtribRecord
 
   return signRecord(record, input.privateKey)
