@@ -1,4 +1,4 @@
-# @atrib/atrib-trace
+# @atrib/trace
 
 MCP server exposing the `trace` tool, walks a record's `informed_by` chain backward to surface the reasoning chain that led to it.
 
@@ -61,7 +61,7 @@ Add to your MCP host config (e.g. `~/.claude.json` `mcpServers`):
 }
 ```
 
-Or run as a one-off subprocess via `pnpm --filter @atrib/atrib-trace start`.
+Or run as a one-off subprocess via `pnpm --filter @atrib/trace start`.
 
 ## Status
 

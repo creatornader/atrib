@@ -1,4 +1,4 @@
-# `@atrib/atrib-emit`
+# `@atrib/emit`
 
 MCP server exposing the explicit `emit` tool, the producer-side cognitive primitive that lets an agent sign observations, annotations, and revisions under its own atrib identity, beyond what `@atrib/mcp` auto-signs.
 
@@ -67,7 +67,7 @@ Same chain as the wrapper for the first three sources, plus a 1Password fallback
 
 `atrib-emit` signs records under the **agent's** identity, the same key as the wrapper. There's no separate "emit identity"; skills don't have identities, the agent always signs as itself.
 
-If a 1Password item stores the seed with a `ATRIB_PRIVATE_KEY=<value>` label prefix (the convention used by the existing `Atrib key (current, haoZK4D1AXmy)` item), the prefix is stripped before decoding so both shapes work.
+If a 1Password item stores the seed with a `ATRIB_PRIVATE_KEY=<value>` label prefix, the prefix is stripped before decoding so both shapes work, useful for items that live alongside other env-prefixed credentials.
 
 ## Configuration
 
