@@ -26,3 +26,5 @@ jobs:
       - run: pnpm -r typecheck
 
       - run: pnpm -r test
+
+      - run: pnpm doc-sync

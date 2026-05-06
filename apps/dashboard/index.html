@@ -2718,7 +2718,7 @@ function renderAbout() {
       ),
       el('p', {}, 'Agents prove what they did. Consumers verify what was actually done. Auditors don\'t have to trust any operator.'),
 
-      el('h2', {}, 'Five views'),
+      el('h2', {}, 'Six views'),
       el('h3', {}, 'Overview (this page)'),
       el('p', {}, 'A live feed of the most recent signed actions, updating every 5 seconds. Every row is a real record from a real atrib-instrumented agent.'),
 
@@ -2735,6 +2735,10 @@ function renderAbout() {
       el('h3', {}, 'Action'),
       el('p', {},
         'A single signed record. The action view shows the hash, identity, session, timestamp, verification state, and the raw JSON.'),
+
+      el('h3', {}, 'Trace'),
+      el('p', {},
+        'Provenance ancestry for any record: the chain of prior records that informed it (', el('code', {}, 'informed_by'), '), the cross-session anchor it builds on (', el('code', {}, 'provenance_token'), '), and the records it annotates or revises. Rendered as a top-to-bottom DAG so you can see what the agent was reasoning from when it signed.'),
 
       el('h3', {}, 'Anchoring'),
       el('p', {},
