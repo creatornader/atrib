@@ -15,4 +15,4 @@ Multi-producer chain composition contract (D067 / spec §1.2.3.1).
 
 Conformance corpus at `spec/conformance/1.2.3/multi-producer/` covers the precedence cascade plus malformed env-var fall-through and namespace isolation. Producers in any language can consume the JSON and assert their resolver matches the expected `chain_root` per case. Reference test at `packages/mcp/test/conformance-1.2.3-multi-producer.test.ts`. Co-producer regression test at `services/atrib-emit/test/co-producer-chain.test.ts` exercises the full chain through the emit handler with simulated cross-producer state.
 
-The `inheritedFrom` value surfaced by `inheritChainContext` gains two new variants `'env-tail'` and `'mirror-tail'` (replacing the prior `'wrapper-mirror'`); consumers reading the value must handle them.
+The `inheritedFrom` value returned by `inheritChainContext` gains two new variants: `'env-tail'` and `'mirror-tail'` (replacing the prior `'wrapper-mirror'`); consumers reading the value must handle them.
