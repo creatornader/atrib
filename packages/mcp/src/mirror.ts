@@ -17,7 +17,7 @@
  *     (atrib-emit; sidecar fields per D062 §5.9).
  *
  * Both shapes are normalized to an `AtribRecord` here. Any malformed or
- * unparseable line is skipped (per §5.8 degradation: never throw to caller).
+ * unparsable line is skipped (per §5.8 degradation: never throw to caller).
  *
  * Filter-by-context_id is critical for the multi-producer composition
  * contract (spec §1.2.3, D067): inheriting a tail whose context_id differs
