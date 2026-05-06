@@ -345,6 +345,20 @@ This anchors every genesis record to its session without requiring a parent reco
 
 A receiving implementation that decodes a propagation token and needs to set `chain_root` MUST convert: `chain_root = "sha256:" + hex(decoded_token.record_hash)`.
 
+##### 1.2.3.1 Multi-producer chain composition
+
+When more than one producer signs records under the same `creator_key` for the same `context_id` across process boundaries (e.g., the wrapper middleware in `@atrib/mcp` signing tool calls alongside the `atrib-emit` cognitive-primitive subprocess in the same agent session), each producer MUST resolve `chain_root` for a new non-genesis record using the precedence ordering below. Honoring the ordering keeps records on the same context coherent under producer composition; deviating produces records that share `context_id` but split into multiple chains, which downstream consumers cannot recompose. Conformance fixtures live at [`spec/conformance/1.2.3/multi-producer/`](spec/conformance/1.2.3/multi-producer/) and the reference implementation is `resolveChainRoot` in `@atrib/mcp`. See [D067](DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract) for the decision rationale and rejected alternatives.
+
+Precedence (highest to lowest):
+
+1. **Inbound propagation token.** If the call carries an inbound atrib token decoded per [§1.5.2](#152-http-transport-tracestate) (MCP `_meta.atrib`, W3C tracestate `atrib=...`, or `X-Atrib-Chain` header), the token's `record_hash` MUST become the new record's `chain_root`. Ignoring it would re-genesis a chain the caller explicitly extended.
+2. **Within-process auto-chain tail.** If the producer signed a previous record under the same `context_id` in the current process and remembers its hash in memory, that hash MUST be the new record's `chain_root`.
+3. **Cross-producer env-var handoff.** If the env var `ATRIB_CHAIN_TAIL_<context_id>` is set with a value matching `^sha256:[0-9a-f]{64}$`, that value MUST be the new record's `chain_root`. The env var is namespaced by `context_id`; a value set for a different context MUST NOT be consulted. Malformed values MUST fall through to lower-priority sources rather than be treated as a chain anchor.
+4. **Cross-producer mirror-file inheritance.** If a peer producer's local mirror file (file-as-IPC channel; see [§5.9](#59-local-mirror-conventions)) contains a record on the same `context_id`, the most-recent such record's canonical hash MAY be used as the new record's `chain_root`. Producers consulting a mirror MUST filter to records matching `context_id`; chaining to a mirror tail on a different `context_id` produces a malformed record (`chain_root` pointing into a chain whose `context_id` differs from the new record's) and MUST be rejected by both validators ([§2.6.1](#261-submit-entry)) and verifiers.
+5. **Synthetic genesis.** If no upstream chain context exists, `chain_root` MUST be the genesis chain root per the formula in [§1.2.3](#123-chain_root-for-genesis-records).
+
+The precedence ordering reflects fidelity to the upstream signal: inbound tokens are the spec-canonical handoff, within-process state is fresher than out-of-process state, env-var handoff is set explicitly by a spawning process while a mirror file may lag (writes pending, peer producer signed something not yet flushed). Producers in any language MAY implement their own resolver but MUST pass the conformance corpus.
+
 #### 1.2.4 event_type Values
 
 `event_type` is an absolute URI. atrib publishes a small canonical core vocabulary; consumers MAY mint their own extension URIs in any namespace they control. atrib does not gate, register, or approve extension URIs; [D035](DECISIONS.md#d035-extensible-event_type-vocabulary-via-uri-typing) establishes the URI-typing mechanism, and [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) defines the bar for promoting an extension URI to atrib's normative set.

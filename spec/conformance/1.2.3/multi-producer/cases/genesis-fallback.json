@@ -1,0 +1,16 @@
+{
+  "name": "genesis-fallback",
+  "spec_section": "1.2.3",
+  "description": "No upstream chain context exists. chain_root MUST be the synthetic genesis per §1.2.3: sha256:hex(SHA-256(UTF-8(context_id))).",
+  "input": {
+    "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inbound_record_hash_hex": null,
+    "auto_chain_tail_hex": null,
+    "env": {},
+    "mirror_tail_hex": null
+  },
+  "expected": {
+    "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+    "precedence_layer": "genesis"
+  }
+}

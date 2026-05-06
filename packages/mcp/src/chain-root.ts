@@ -33,25 +33,48 @@ export function chainRoot(parentRecord: AtribRecord): string {
 }
 
 /**
- * Resolve the chain_root for a new record being signed, in priority order:
- *   1. Inbound atrib propagation token (the spec-canonical §1.5.2 path),
- *      `inboundRecordHashHex` if present.
- *   2. autoChain in-memory tail, `autoChainTailHex` for this context_id if
- *      autoChain is on AND a previous record has been signed by this
- *      middleware instance for this context.
- *   3. Cross-producer handoff via `ATRIB_CHAIN_TAIL_<context_id>` env var.
- *      Set by a parent process when spawning a child producer (different
- *      middleware instance, different producer type) so the child's first
- *      sign chains to the parent's tail rather than starting genesis.
- *   4. Synthetic genesis (sha256:hex(SHA-256(UTF-8(context_id)))).
+ * Resolve the chain_root for a new record being signed.
  *
- * Pure function; testable without mocking process.env (env is passed in).
- * The middleware passes process.env at call time.
+ * This helper is the single source of truth for chain-root selection across
+ * all atrib producers (the wrapper middleware, atrib-emit, and any future
+ * producer signing under the same identity). The precedence ordering is
+ * normative per spec §1.2.3 and tested in the conformance corpus at
+ * `spec/conformance/1.2.3/multi-producer/`.
+ *
+ * Precedence (highest to lowest):
+ *   1. Inbound atrib propagation token, `inboundRecordHashHex`.
+ *      The spec-canonical §1.5.2 cross-process handoff (MCP `_meta.atrib`,
+ *      W3C tracestate, X-Atrib-Chain header). When present, the new record
+ *      MUST chain to it; ignoring it would re-genesis a chain the caller
+ *      explicitly extended.
+ *   2. autoChain in-memory tail, `autoChainTailHex`.
+ *      Within-process continuity; the producer signed a previous record
+ *      under the same context in this process and remembers its hash.
+ *   3. Cross-producer env-var handoff, `ATRIB_CHAIN_TAIL_<context_id>`.
+ *      Parent process sets this when spawning a child producer so the
+ *      child's first sign chains to the parent's tail. Decoded as a full
+ *      `sha256:<64-hex>` string; malformed values fall through.
+ *   4. Cross-producer mirror-file inheritance, `mirrorTailHex`.
+ *      File-as-IPC fallback: caller pre-reads the most recent record from
+ *      a shared on-disk mirror (filtered to the same context_id; see
+ *      `readMirrorTail` in `./mirror.ts`) and passes its canonical hash
+ *      here. Lower priority than env-var because env-var is set
+ *      explicitly by the spawning process and reflects the freshest tail
+ *      the spawner knows about, while the mirror may lag (file write
+ *      hasn't completed, or a peer producer signed something the mirror
+ *      hasn't reflected yet).
+ *   5. Synthetic genesis, `sha256:hex(SHA-256(UTF-8(context_id)))` per
+ *      §1.2.3. Final fallback when no upstream chain context exists.
+ *
+ * Pure synchronous function. The middleware and atrib-emit pass
+ * `process.env` at call time; tests inject a stub env to avoid leaking
+ * state between cases.
  */
 export function resolveChainRoot(opts: {
   contextId: string
   inboundRecordHashHex?: string | undefined
   autoChainTailHex?: string | undefined
+  mirrorTailHex?: string | undefined
   env?: NodeJS.ProcessEnv
 }): string {
   if (opts.inboundRecordHashHex) {
@@ -64,6 +87,9 @@ export function resolveChainRoot(opts: {
   const envTail = env[`ATRIB_CHAIN_TAIL_${opts.contextId}`]
   if (envTail && /^sha256:[0-9a-f]{64}$/.test(envTail)) {
     return envTail
+  }
+  if (opts.mirrorTailHex && /^[0-9a-f]{64}$/.test(opts.mirrorTailHex)) {
+    return `sha256:${opts.mirrorTailHex}`
   }
   return genesisChainRoot(opts.contextId)
 }

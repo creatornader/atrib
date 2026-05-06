@@ -1,0 +1,16 @@
+{
+  "name": "mirror-tail-wins",
+  "spec_section": "1.2.3",
+  "description": "Cross-producer mirror-file inheritance is the lowest-priority non-genesis source. The caller pre-reads the mirror, filters to records matching this context_id, and passes the canonical hash. Used when env-var handoff is unavailable (e.g., a producer started independently of the wrapper).",
+  "input": {
+    "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inbound_record_hash_hex": null,
+    "auto_chain_tail_hex": null,
+    "env": {},
+    "mirror_tail_hex": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "expected": {
+    "chain_root": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "precedence_layer": "mirror-tail"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "inbound-wins",
+  "spec_section": "1.2.3",
+  "description": "All four resolution sources are present. The inbound propagation token (spec §1.5.2) MUST take precedence: it carries the explicit cross-process handoff from the upstream record. Ignoring it would re-genesis a chain the caller explicitly extended.",
+  "input": {
+    "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inbound_record_hash_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "auto_chain_tail_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+    "env": {
+      "ATRIB_CHAIN_TAIL_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "mirror_tail_hex": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "expected": {
+    "chain_root": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "precedence_layer": "inbound"
+  }
+}

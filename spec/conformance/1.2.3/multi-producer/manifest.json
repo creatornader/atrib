@@ -1,0 +1,45 @@
+{
+  "spec_section": "1.2.3",
+  "spec_title": "chain_root resolution / multi-producer composition",
+  "decision_link": "D067",
+  "generated_at": 1767225600000,
+  "generator": "packages/log-dev/scripts/generate-conformance-1.2.3-multi-producer.ts",
+  "cases": [
+    {
+      "file": "cases/inbound-wins.json",
+      "name": "inbound-wins"
+    },
+    {
+      "file": "cases/auto-chain-wins.json",
+      "name": "auto-chain-wins"
+    },
+    {
+      "file": "cases/env-tail-wins.json",
+      "name": "env-tail-wins"
+    },
+    {
+      "file": "cases/mirror-tail-wins.json",
+      "name": "mirror-tail-wins"
+    },
+    {
+      "file": "cases/genesis-fallback.json",
+      "name": "genesis-fallback"
+    },
+    {
+      "file": "cases/env-tail-malformed-falls-through.json",
+      "name": "env-tail-malformed-falls-through"
+    },
+    {
+      "file": "cases/env-tail-namespace-isolation.json",
+      "name": "env-tail-namespace-isolation"
+    }
+  ],
+  "constants": {
+    "context_id_a": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "tail_inbound": "1111111111111111111111111111111111111111111111111111111111111111",
+    "tail_auto_chain": "2222222222222222222222222222222222222222222222222222222222222222",
+    "tail_env": "3333333333333333333333333333333333333333333333333333333333333333",
+    "tail_mirror": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "note": "Seven cases covering the precedence cascade (inbound > auto-chain > env-tail > mirror-tail > genesis), env-var malformation fall-through, and env-var namespace isolation. Producers in any language may consume this corpus by serializing their resolveChainRoot equivalent against each case input and asserting the chain_root output matches."
+}
