@@ -2030,12 +2030,30 @@ function edgeTypeColor(edgeType) {
 // helper returns the live sigma instance so the caller can kill() it before
 // the next render.
 //
-// Defaults match the values the trace view used to inline before extraction:
-// rankdir=TB, focal size 16, regular size 10, slim 2px lines, fat
-// arrowheads via the custom EdgeArrowProgram (length=5, wideness=6).
+// Layout selection (per-render, by graph shape):
+//   - HIERARCHICAL_EDGE_TYPES present + total edges < DAGRE_MAX_EDGES
+//     -> dagre top-to-bottom DAG (the right tool for ancestry / chain views)
+//   - dense + non-hierarchical (e.g., a session with no chain_root
+//     reconstruction so every record gets all-pairs SESSION_PRECEDES,
+//     n*(n-1)/2 edges) -> built-in circular layout
+//
+// Why not force-atlas2 for the dense case: graphology-layout-forceatlas2 is
+// published as CommonJS, not browser-ready UMD. Bringing it in needs an
+// esm.sh import or local bundle. Circular gets the dense graph rendered
+// cleanly with zero new deps; FA2 is queued as polish for a later iteration.
 //
 // Color decisions defer to eventTypeColor() / edgeTypeColor() so any palette
 // override flows through both the helper and the legend code paths.
+
+const HIERARCHICAL_EDGE_TYPES = new Set([
+  'CHAIN_PRECEDES',
+  'INFORMED_BY',
+  'PROVENANCE_OF',
+  'ANNOTATES',
+  'REVISES',
+  'CONVERGES_ON',
+])
+const DAGRE_MAX_EDGES = 2000
 
 function renderSigmaDAG(container, graphData, options = {}) {
   const {
@@ -2053,10 +2071,22 @@ function renderSigmaDAG(container, graphData, options = {}) {
   const Sigma = window.Sigma
   const dagre = window.dagre
 
+  // Decide layout up front based on graph shape.
+  const totalEdges = graphData.edges.length
+  const hierarchicalEdgeCount = graphData.edges.filter((e) =>
+    HIERARCHICAL_EDGE_TYPES.has(e.type),
+  ).length
+  const useDagre = totalEdges < DAGRE_MAX_EDGES && (hierarchicalEdgeCount > 0 || totalEdges < 100)
+
   const gx = new Graph({ type: 'directed', multi: true, allowSelfLoops: false })
-  const dgx = new dagre.graphlib.Graph({ multigraph: true })
-  dgx.setGraph({ rankdir: rankDir, ranksep: rankSep, nodesep: nodeSep, marginx: 30, marginy: 30 })
-  dgx.setDefaultEdgeLabel(() => ({}))
+
+  // Build graphology graph (always). Build dagre side-graph only if we'll
+  // actually run dagre.layout, saves the per-node setNode call when not.
+  const dgx = useDagre ? new dagre.graphlib.Graph({ multigraph: true }) : null
+  if (dgx) {
+    dgx.setGraph({ rankdir: rankDir, ranksep: rankSep, nodesep: nodeSep, marginx: 30, marginy: 30 })
+    dgx.setDefaultEdgeLabel(() => ({}))
+  }
 
   for (const n of graphData.nodes) {
     const isFocal = isFocalNode(n)
@@ -2073,8 +2103,10 @@ function renderSigmaDAG(container, graphData, options = {}) {
       _node: n,
       _isFocal: isFocal,
     })
-    // Dagre node sizes are pixel boxes for layout spacing only.
-    dgx.setNode(n.id, { width: Math.max(60, label.length * 7), height: 28 })
+    if (dgx) {
+      // Dagre node sizes are pixel boxes for layout spacing only.
+      dgx.setNode(n.id, { width: Math.max(60, label.length * 7), height: 28 })
+    }
   }
 
   // Distinct-key edges so multi-edges (same source/target, different type)
@@ -2096,20 +2128,35 @@ function renderSigmaDAG(container, graphData, options = {}) {
     } catch {
       continue
     }
-    dgx.setEdge(e.source, e.target, {}, key)
+    if (dgx) dgx.setEdge(e.source, e.target, {}, key)
   }
 
-  dagre.layout(dgx)
-
-  // Copy positions back to graphology; flip y because Sigma's coordinate
-  // system has y growing upward (mathematical) while dagre's grows downward
-  // (screen). Without the flip the graph reads bottom-up on screen.
-  gx.forEachNode((nodeId) => {
-    const dnode = dgx.node(nodeId)
-    if (dnode) {
-      gx.mergeNodeAttributes(nodeId, { x: dnode.x, y: -dnode.y })
-    }
-  })
+  if (useDagre) {
+    dagre.layout(dgx)
+    // Copy positions back to graphology; flip y because Sigma's coordinate
+    // system has y growing upward (mathematical) while dagre's grows downward
+    // (screen). Without the flip the graph reads bottom-up on screen.
+    gx.forEachNode((nodeId) => {
+      const dnode = dgx.node(nodeId)
+      if (dnode) {
+        gx.mergeNodeAttributes(nodeId, { x: dnode.x, y: -dnode.y })
+      }
+    })
+  } else {
+    // Circular layout: scale radius with node count so labels don't crowd
+    // for small graphs and the ring is large enough to spread for dense ones.
+    const n = gx.order
+    const radius = Math.max(200, n * 6)
+    let i = 0
+    gx.forEachNode((nodeId) => {
+      const angle = (i / n) * 2 * Math.PI
+      gx.mergeNodeAttributes(nodeId, {
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+      })
+      i++
+    })
+  }
 
   // Custom arrow program: defaults are length=2.5x, wideness=2x of the edge
   // size, which renders almost-invisible heads on thin lines. Bumping the
