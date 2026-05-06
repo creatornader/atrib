@@ -2823,6 +2823,177 @@ Also broaden the `observation` row in the §1.2.4 normative-URI table to clearly
 
 ---
 
+## D064: graph-node persistent volume + replay-on-cold-start (Layer 1 durability)
+
+**Date:** 2026-05-06
+**Context:** graph-node holds the canonical full-record content in memory (records ingested via `/v1/ingest`, derived edges built per [§3.2.4](atrib-spec.md#324-edge-derivation-rules), revocation registry, capability envelopes). log-node persists only the 90-byte log entries per [§2.3.1](atrib-spec.md#231-entry-serialization) and discards the full record content after fanout, log-node alone CANNOT reconstruct graph-node's state. The only persistent copies of full records are in producer-local mirror files maintained per spec [§5.9](atrib-spec.md#59-local-mirror-conventions).
+
+This produced a real production incident on 2026-05-06: graph-node OOM-killed at ~1500 records globally, the in-memory state was lost, and the 90-byte log entries on log-node were not enough to rebuild. Trace endpoints 404'd for any record signed before the restart; session views showed only records signed since. Recovery required running an ad-hoc script against the operator's local mirror to POST records back to `/v1/ingest`.
+
+The architectural gap: graph-node has no startup-replay logic. There's no mechanism for a graph-node-equivalent to recover from log-node alone, because log-node deliberately doesn't persist full record content (privacy + log-size invariants).
+
+**Decision:** Add an opt-in append-only JSONL archive to graph-node, mounted on a fly volume, replayed on cold-start before binding the server.
+
+Concretely:
+
+1. `services/graph-node/src/persistence.ts` (NEW): exports `createArchiveAppender(path)` returning an O_APPEND handle, and `replayArchive(path, ingest)` that streams via readline and re-invokes the store's `addRecord` for each parsed line. Format: one JSON object per line, shape `{record, log_index}`. log_index is preserved alongside the record so revocation registry semantics per [§1.9.3](atrib-spec.md#193-revocation-cutoff) still apply after replay.
+
+2. `bindGraphServer` accepts a new `BindOptions` object: optional `store` (so callers can prepopulate state via replay before binding) and `onRecordIngested` hook (called after `store.addRecord` on each successful ingest). Existing callers pass nothing → behavior identical (fresh in-memory store, no persistence).
+
+3. `main.ts` wires the two via env var `ATRIB_RECORD_ARCHIVE`. When set: replay archive → create store with replayed state → open appender → bind server with `onRecordIngested = appender.append`. When unset: behavior identical to before this commit.
+
+4. Production `services/graph-node/fly.toml` gets `[[mounts]]` (volume `atrib_graph_data` mounted at `/data`) and `ATRIB_RECORD_ARCHIVE=/data/records.jsonl`. Memory bumped 256mb → 1024mb at the same time after the OOM observation.
+
+Crash safety: every successful ingest appends a single LF-terminated line via O_APPEND. The OS guarantees the line is atomic; a mid-write crash leaves at most a torn final line which the per-line try/catch on replay skips with a warning.
+
+**Alternatives considered:**
+
+- *Move log-node to persist full records (a full-record archive in addition to the 90-byte Merkle log).* Rejected for this layer because it requires a spec amendment ([§2.3.1](atrib-spec.md#231-entry-serialization) deliberately commits only to 90-byte entries) and ecosystem coordination across third-party log operators. Tracked separately as the Layer 5 long-term fix.
+- *External durable storage (S3/R2/Tigris) instead of a fly volume.* Rejected for now, adds a runtime dependency, network failure modes, and cost. Volume + replay is the simplest model that solves the immediate problem. External storage is the right answer if/when graph-node grows past one machine.
+- *Periodic snapshot to disk instead of append-on-every-ingest.* Rejected because periodic snapshot leaves a window of records-in-RAM-only between snapshots; if graph-node OOMs in that window, you lose the records since the last snapshot. Append-on-every-ingest is durable for every record up to the last successful append.
+- *SQLite or LMDB instead of JSONL append-only.* Considered but rejected for Layer 1 scope. Disk-backed graph store is the right Layer 4 fix once record volume forces it; for the first iteration, a flat JSONL file is the simplest crash-safe shape and produces a recoverable archive without any binary-format gotchas.
+
+**Consequences:**
+
+- graph-node survives OOM / deploy / fly machine reboot without data loss going forward. Tested in production: 994 records replayed on first boot in <1s.
+- Cold-start time scales with archive size (~1-3 KB per record + JSON parse). Sustainable to ~10⁵ records before cold-start exceeds fly's startup grace; Layer 4 (disk-backed graph store) takes over at that scale.
+- Single-volume single-machine model only. Multi-machine would need either multiple volumes (data divergence) or shared external storage. Documented in [`services/graph-node/fly.toml`](services/graph-node/fly.toml).
+- Archive grows on every successful ingest, including dedups (because `store.addRecord` returns void, the appender can't tell whether the record was new). Bounded by fanout-retry count; tracked as a follow-up to flip `addRecord` to return `boolean`.
+- New opt-in env var `ATRIB_RECORD_ARCHIVE`; tests run without it so the unit-test path is unaffected (50/50 graph-node tests pass).
+
+**Cross-references:**
+
+- [`services/graph-node/src/persistence.ts`](services/graph-node/src/persistence.ts) (the new module)
+- [`services/graph-node/src/main.ts`](services/graph-node/src/main.ts) (wiring + replay-before-bind)
+- [`services/graph-node/src/server.ts`](services/graph-node/src/server.ts) (`BindOptions` + `onRecordIngested` hook)
+- [`services/graph-node/fly.toml`](services/graph-node/fly.toml) (volume mount + env)
+- [§2.3.1](atrib-spec.md#231-entry-serialization) (log-node 90-byte entry serialization that motivates this gap)
+- [§5.9](atrib-spec.md#59-local-mirror-conventions) (producer-local mirror conventions that complement durability)
+- [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) (sidecar precedent for two-tier persistence design)
+
+---
+
+## D065: `ATRIB_CHAIN_TAIL_<context_id>` env var for cross-producer chain-tail handoff
+
+**Date:** 2026-05-06
+**Context:** atrib's `chain_root` derivation per [§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records) requires that every non-genesis record point at a real ancestor's record_hash. Producer middleware (`@atrib/mcp`) already supports two paths to find the right `chain_root` for a new sign:
+
+1. **Inbound traceparent** ([§1.5.2](atrib-spec.md#152-http-transport-tracestate)), the spec-canonical W3C-tracestate-based propagation. Cross-process via the wire.
+2. **autoChain in-memory tail**, the most recent record this middleware instance signed for the given `context_id`. Within-process across multiple calls; survives process restarts when the caller seeds via `autoChainSeed`.
+
+Neither covers the case observed in production 2026-05-06: a parent process spawns a *different middleware instance* (a separate producer type) as a child subprocess to sign records. The child has no traceparent and no autoChain seed for the parent's context, it sees an empty chain, marks itself genesis, and uses the synthetic-context-hash `chain_root` per [§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records).
+
+The b5a2ebf8… session at observation time had 130-418 records flagged `is_genesis=true` (all signed by the same `creator_key` in the same `context_id`), each starting its own single-record "chain" because hook subprocesses kept spawning fresh atrib-emit processes that each saw an empty chain. The session had no recoverable provenance structure; CHAIN_PRECEDES edges only formed within the long-lived atrib-emit instance's own emissions, missing the hook-spawned ones.
+
+**Decision:** Add a third source between (2) and the genesis fallback: an env var named `ATRIB_CHAIN_TAIL_<context_id>` whose value is the parent's current chain tail (`sha256:<64-hex>`). When the child middleware initializes and faces an empty in-memory tail for that context, it consults the env var; if set + valid format, that becomes the child's first sign's `chain_root`. Subsequent signs in the same child use the in-memory tail (autoChain natural behavior).
+
+Priority cascade (full):
+
+1. Inbound traceparent atrib token (spec-canonical [§1.5.2](atrib-spec.md#152-http-transport-tracestate))
+2. autoChain in-memory `lastRecordHashByContext` (within-process)
+3. **NEW:** `ATRIB_CHAIN_TAIL_<context_id>` env var (cross-process handoff)
+4. Synthetic genesis (`sha256:hex(SHA-256(UTF-8(context_id)))` per [§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records))
+
+The chain_root determination logic was extracted into a pure helper `resolveChainRoot()` (in `packages/mcp/src/chain-root.ts`) so it can be unit-tested without mocking `process.env`. The middleware passes `process.env` to the helper at call time; tests pass an explicit `env` to override.
+
+**Per-context-id namespacing.** A single parent process may handle multiple concurrent `context_id`s. Naming the env var with the `context_id` suffix lets the parent set only the relevant tail in the child's spawn env without leaking unrelated chain state. Format: `ATRIB_CHAIN_TAIL_<32-hex-context-id>=<sha256:64-hex-tail>`. Total ~111 chars, well within env limits.
+
+**No security wrapper.** The value being passed is a record_hash that's already in the public log; there's no secret. An attacker who controls the parent process can already sign whatever they want, adding the env var doesn't expand attack surface. Plain env inheritance, no encryption / IPC handshake / signed token.
+
+**Tree-shaped chains accepted.** Multiple parallel children spawned by the same parent will inherit the same env-var value and sign their first records with the same `chain_root` → fan-out from the common parent. Per [§3.2.4](atrib-spec.md#324-edge-derivation-rules) step 1, `CHAIN_PRECEDES` derivation handles fan-out naturally; the spec doesn't require chains to be linear, only that every non-genesis record point at a resolvable ancestor.
+
+**Alternatives considered:**
+
+- *Shared on-disk file with `flock` ([Approach A](#) in the audit pre-deliberation).* Rejected because lock contention on bursty hook fires would be a real footgun, and file I/O is on the hot path of every sign.
+- *Long-running emit daemon ([Approach B]).* Rejected: adds daemon lifecycle management + IPC complexity for a problem env-var inheritance solves cleanly.
+- *Coordinated signing through a single wrapper ([Approach C]).* Rejected: requires deep producer-architecture changes; creates a single point of failure; the env-var approach achieves the same goal with one variable.
+- *Mirror file as the sole source of truth with concurrency control ([Approach D]).* Already exists via `ATRIB_AUTOCHAIN_SOURCE` for within-producer-type chaining. The cross-producer-type case is what the env var fills; mirror file is the pull mechanism, env var is the push mechanism, both are valid and complement each other.
+- *Spec change: embrace multi-rooted chains as first-class ([Approach E]).* Rejected as unnecessary: the env-var fix produces tree-shaped chains which are already spec-valid per [§3.2.4](atrib-spec.md#324-edge-derivation-rules). Spec change would lose the "one chain per session" mental model without solving anything the env var doesn't already solve.
+
+**Consequences:**
+
+- Producer codebases (mcp-wrap, hook-driven emit-helpers, future runtime adapters) gain a clean primitive for chain-state handoff to spawned children. The pattern: read your current tail (via autoChain or your own in-memory state), set `ATRIB_CHAIN_TAIL_<context_id>` in the child's spawn env.
+- Within-process auto-chain semantics are unchanged. The env var is a third fallback, only consulted when both inbound traceparent and in-memory tail are empty for the context.
+- The 418-record genesis explosion is fixed forward (records signed after producers wire the env var chain properly). The historical genesis records are immutable; they keep `chain_root = sha256(context_id)` forever.
+- New unit tests cover the priority cascade (9 tests in `packages/mcp/test/chain-root.test.ts`): inbound wins over autoChain wins over env wins over genesis; namespace isolation; malformed-env fallthrough; format validation.
+- Shipped as `@atrib/mcp@0.5.0` (minor bump). The cognitive-primitive packages (`@atrib/emit`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`) still resolve `@atrib/mcp@^0.4.0` so they get 0.5.0 transitively at install time; their lockfiles need refresh-on-bump for the env var feature to be available downstream.
+- Producer-side wiring is the operator's responsibility per producer (parent processes need to actually SET the env var when spawning). Not done as part of this ADR; tracked per-producer.
+
+**Cross-references:**
+
+- [`packages/mcp/src/chain-root.ts`](packages/mcp/src/chain-root.ts) (`resolveChainRoot` helper + `genesisChainRoot` + `chainRoot`)
+- [`packages/mcp/src/middleware.ts`](packages/mcp/src/middleware.ts) (signing path uses `resolveChainRoot`)
+- [`packages/mcp/test/chain-root.test.ts`](packages/mcp/test/chain-root.test.ts) (priority cascade tests)
+- [§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records) (chain_root semantics)
+- [§1.5.2](atrib-spec.md#152-http-transport-tracestate) (canonical traceparent propagation, priority 1)
+- [§3.2.4](atrib-spec.md#324-edge-derivation-rules) (CHAIN_PRECEDES derivation tolerates tree-shaped chains)
+
+---
+
+## D066: Dashboard graph-viz library set: Sigma.js + dagre + graphology + cosmos.gl, lazy-loaded CDN, no build step
+
+**Date:** 2026-05-06
+**Context:** [D054](#d054-unified-public-explorer-vs-per-service-admin-uis) committed the explorer to a single-HTML-file no-build-step architecture (option 1 of three). The graph-rendering work for trace / session DAG / future creator activity / future global views needs concrete library choices that respect that constraint AND scale to the volumes the substrate is producing (one observed session: 243 nodes / 29403 SESSION_PRECEDES edges; future global view: 100k+ nodes).
+
+Two independent decisions need to compose:
+
+1. **Renderer.** What draws nodes + edges to the canvas / WebGL.
+2. **Layout.** What computes (x, y) positions.
+
+The dashboard's existing constraints:
+- No build step (D054). Libraries must be available as browser-loadable UMD or ESM, fetched from a CDN.
+- Single-HTML-file. No package.json, no bundler.
+- Performance scales with substrate growth. Sigma's WebGL renderer handles 100k+ nodes; dagre's hierarchical layout chokes on 17k+ edges (O(V + E²) crossing detection freezes the main thread).
+
+**Decision:** Use the following library set, lazy-loaded only when a graph view first renders so non-graph pages stay zero-byte:
+
+| Library | Version | Purpose | CDN |
+|---|---|---|---|
+| `graphology` | 0.26.0 | Graph data structure (nodes, edges, attributes) | jsDelivr |
+| `dagre` | 0.8.5 | Hierarchical (top-to-bottom) DAG layout | jsDelivr |
+| `sigma` | 3.0.0 | Canvas / WebGL renderer (handles 100k+ nodes) | jsDelivr |
+| `cosmos.gl` | (deferred to global-view rollout) | WebGL force-directed for the global view (100k+ nodes scale) | TBD |
+
+All three current libraries pinned with sha384 SRI integrity hashes. If jsDelivr serves a tampered file, the browser blocks it and the graph render fails closed (banner shown to user) instead of executing untrusted JS in `explore.atrib.dev`'s origin.
+
+**Layout selection by graph shape.** The DAG renderer (`renderSigmaDAG` in `apps/dashboard/index.html`) picks a layout per-render:
+- HIERARCHICAL_EDGE_TYPES present (`CHAIN_PRECEDES`, `INFORMED_BY`, `PROVENANCE_OF`, `ANNOTATES`, `REVISES`, `CONVERGES_ON`) AND total edges < `DAGRE_MAX_EDGES` (2000) → dagre top-to-bottom DAG. Right tool for ancestry / chain views.
+- Otherwise (large + non-hierarchical, e.g. a session with no chain_root reconstruction so every record gets all-pairs `SESSION_PRECEDES`) → built-in circular layout (no library). Every node renders around a ring, edges cross the middle. Sigma's WebGL handles the rendering scale; the dagre layout step is what was choking.
+
+Force-atlas2 would give nicer dense layouts than circular but is published as CommonJS only and needs `esm.sh` or local bundling, out of scope for the current iteration.
+
+**Custom EdgeArrowProgram.** Sigma's stock arrow program scales the head proportionally to edge size, conflating "make arrow visible" with "make line thicker." The dashboard substitutes a custom arrow program via `Sigma.rendering.createEdgeArrowProgram({ lengthToThicknessRatio: 5, widenessToThicknessRatio: 6 })`, decoupling head prominence from line weight. Slim 2px lines, fat triangular heads.
+
+**Edge-color palette in two semantic tiers.** Tier 1 (vibrant, load-bearing): `--edge-ancestry` (orange `#fb923c`, dedicated, no node analogue) for `INFORMED_BY` + `PROVENANCE_OF`; intentional aliases `--edge-annotates` / `--edge-revises` / `--edge-converges` track their paired node colors. Tier 2 (muted greys, structural, graded by strength): `--edge-chain` = `--text-2` (most common edge in any session graph but least semantically dense), `--edge-session-precedes` = `--text-3`, `--edge-session-parallel` = `--text-4`, `--edge-cross-session` = `--muted`. The aliasing IS the design statement: where an edge color tracks a node color, the `var(--et-*)` reference in CSS records the intent.
+
+**Pair-aware legend.** Two-row grid; paired entries (annotation/ANNOTATES, revision/REVISES, transaction/CONVERGES_ON) stack in the same grid column on both rows; unpaired entries flow into a shared tail column that flexes independently per row, so neither row's tail inherits the other's content widths.
+
+**Alternatives considered:**
+
+- *Cytoscape.js (single library, both renderer and layout).* Rejected: 5k node ceiling per its own docs. The substrate's growth rate makes that a 1-2 month problem at most; switching mid-flight when it fails would be more disruptive than picking the right library now.
+- *D3 + d3-force.* Rejected for the renderer half: d3 is SVG-based, doesn't scale to 100k+ nodes. Acceptable for layout but cosmos.gl is the right fit for the WebGL global view.
+- *Single library that does both renderer and layout (e.g., vis.js).* Same scale ceiling as Cytoscape; same rejection.
+- *Build the dashboard as a bundled SPA (option 2 per D054).* Rejected, contradicts D054 option 1 commitment. Lazy-loaded CDN with SRI gives us the needed dependency footprint without bundling.
+- *Inline the libraries in `index.html` instead of CDN.* Considered but rejected, would bloat the inline file from ~2400 lines to ~30k lines with minified library code, making the file unreadable for the "view source to learn" use case D054 explicitly preserves.
+- *Keep dagre for everything, accept main-thread freezes.* Rejected after observing the b5a2ebf8 session would freeze the browser. Layout-by-shape selector is the correct response.
+
+**Consequences:**
+
+- The trace view (`#/trace/<record_hash>`) and the session DAG view (`#/session/<context_id>`) ship with this library set.
+- The creator activity map (`#/creator/<key>/activity`, planned) reuses `renderSigmaDAG` + `populateGraphLegend`; no new library.
+- The global view (`#/global`, planned) introduces cosmos.gl as a second renderer for the 100k+ node scale; same data adapter `{nodes, edges}` flows through both renderers.
+- Future polish (legend click-to-highlight, hover spring, force-directed background motion, revision-aware rendering) builds on the same library set; Sigma's reducer-state pattern supports per-element re-render based on app state, which covers the interactive-legend + revision-applied-view roadmap items.
+- Total dashboard CDN footprint: ~540KB (graphology 74KB + dagre 284KB + sigma 186KB), all three fetched only when a graph view first renders.
+- SRI hashes must be regenerated whenever a version is bumped. Comment in `apps/dashboard/index.html` documents the procedure (`curl -sL <url> | openssl dgst -sha384 -binary | base64`).
+
+**Cross-references:**
+
+- [`apps/dashboard/index.html`](apps/dashboard/index.html) (the implementation)
+- [`apps/dashboard/README.md`](apps/dashboard/README.md) (graph viz dependencies section)
+- [D054](#d054-unified-public-explorer-vs-per-service-admin-uis) (the explorer architecture this builds on)
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
