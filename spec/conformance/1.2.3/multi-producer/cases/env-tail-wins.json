@@ -1,0 +1,18 @@
+{
+  "name": "env-tail-wins",
+  "spec_section": "1.2.3",
+  "description": "Cross-producer env-var handoff. With no inbound token and no within-process autoChain, the parent-set ATRIB_CHAIN_TAIL_<context_id> env var is the explicit cross-producer signal and wins over a mirror file (which may lag).",
+  "input": {
+    "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inbound_record_hash_hex": null,
+    "auto_chain_tail_hex": null,
+    "env": {
+      "ATRIB_CHAIN_TAIL_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "mirror_tail_hex": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "expected": {
+    "chain_root": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "precedence_layer": "env-tail"
+  }
+}

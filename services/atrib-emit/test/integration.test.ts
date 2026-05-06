@@ -128,13 +128,11 @@ describe('emit end-to-end (sign → submit → mirror)', () => {
     // to SDK internals.
     const { buildAndSignEmitRecord } = await import('../src/sign.js')
     const { mirrorRecord } = await import('../src/storage.js')
-    const { resolveChainContext } = await import('../src/auto-chain.js')
-    const { genesisChainRoot, createSubmissionQueue } = await import('@atrib/mcp')
+    const { inheritChainContext, createSubmissionQueue } = await import('@atrib/mcp')
     const { randomBytes } = await import('node:crypto')
     const queue = createSubmissionQueue(log.url)
-    const chain = await resolveChainContext({
+    const chain = await inheritChainContext({
       mirrorPath,
-      genesisChainRoot,
       randomContextId: () => randomBytes(16).toString('hex'),
     })
 
@@ -171,16 +169,14 @@ describe('emit end-to-end (sign → submit → mirror)', () => {
 
     const { buildAndSignEmitRecord } = await import('../src/sign.js')
     const { mirrorRecord } = await import('../src/storage.js')
-    const { resolveChainContext } = await import('../src/auto-chain.js')
-    const { genesisChainRoot, createSubmissionQueue, canonicalRecord, sha256, hexEncode } =
+    const { inheritChainContext, createSubmissionQueue, canonicalRecord, sha256, hexEncode } =
       await import('@atrib/mcp')
     const { randomBytes } = await import('node:crypto')
     const queue = createSubmissionQueue(log.url)
 
     // First emit: pure genesis (no mirror exists yet).
-    const chain1 = await resolveChainContext({
+    const chain1 = await inheritChainContext({
       mirrorPath,
-      genesisChainRoot,
       randomContextId: () => randomBytes(16).toString('hex'),
     })
     expect(chain1.inheritedFrom).toBe('fresh')
@@ -207,12 +203,11 @@ describe('emit end-to-end (sign → submit → mirror)', () => {
     await writeFile(mirrorPath, JSON.stringify(r1) + '\n')
 
     // Second emit: should inherit chain1's context_id and chain on top of r1.
-    const chain2 = await resolveChainContext({
+    const chain2 = await inheritChainContext({
       mirrorPath,
-      genesisChainRoot,
       randomContextId: () => randomBytes(16).toString('hex'),
     })
-    expect(chain2.inheritedFrom).toBe('wrapper-mirror')
+    expect(chain2.inheritedFrom).toBe('mirror-context-and-tail')
     expect(chain2.contextId).toBe(chain1.contextId)
     const r1Hash = hexEncode(sha256(canonicalRecord(r1)))
     expect(chain2.chainRoot).toBe('sha256:' + r1Hash)

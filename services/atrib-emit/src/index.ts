@@ -13,6 +13,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { randomBytes } from 'node:crypto'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import {
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_REVISION_URI,
@@ -20,16 +22,30 @@ import {
   createSubmissionQueue,
   genesisChainRoot,
   hexEncode,
+  inheritChainContext,
   isValidEventTypeUri,
   sha256,
   type AtribRecord,
   type ProofBundle,
   type SubmissionQueue,
 } from '@atrib/mcp'
-import { resolveChainContext } from './auto-chain.js'
 import { resolveKey, type ResolvedKey } from './keys.js'
 import { buildAndSignEmitRecord } from './sign.js'
 import { mirrorRecord } from './storage.js'
+
+// Read-side mirror inheritance: ATRIB_AUTOCHAIN_SOURCE points at the file
+// atrib-emit reads to inherit cross-producer chain state (typically the
+// wrapper's mirror). Falls back to ATRIB_MIRROR_FILE (where emit writes —
+// rarely useful as a read source, but kept for backward compatibility),
+// then to the per-agent default. Distinct from ATRIB_MIRROR_FILE which is
+// where emit's own records are persisted.
+function readMirrorPath(): string {
+  return (
+    process.env['ATRIB_AUTOCHAIN_SOURCE'] ??
+    process.env['ATRIB_MIRROR_FILE'] ??
+    join(homedir(), '.atrib', 'records', `${process.env['ATRIB_AGENT'] ?? 'claude-code'}.jsonl`)
+  )
+}
 
 const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
 const HEX_32_PATTERN = /^[0-9a-f]{32}$/
@@ -229,23 +245,25 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
     ])
   }
 
-  // autoChain inheritance: when the caller omits context_id, read the
-  // wrapper's local mirror and inherit its most-recent record's context_id
-  // (chaining on top of that record's hash). Falls back to a fresh genesis
-  // when no mirror is present. The inheritance source is surfaced to the
-  // caller in the warnings array so the agent knows which session this
-  // emit landed in. When the caller supplies BOTH context_id and chain_root,
-  // resolveChainContext uses them verbatim — the path needed by consumers
-  // that thread chain state themselves.
-  const chain = await resolveChainContext({
+  // Multi-producer chain composition per spec §1.2.3 / D067. Single source
+  // of truth in @atrib/mcp's inheritChainContext: caller-supplied verbatim
+  // when both fields supplied, else cascade through env-tail (cross-producer
+  // handoff) and mirror-file inheritance (filtered to the same context_id),
+  // falling back to genesis. When caller omits context_id entirely, the
+  // helper inherits BOTH context_id and chain_root from the mirror's most
+  // recent record. The cognitive-extractor hook spawning atrib-emit with
+  // ATRIB_CHAIN_TAIL_<context_id> + the agent's context_id is the primary
+  // load-bearing case; pre-fix this produced isolated genesis records
+  // because atrib-emit's local resolver short-circuited on caller context.
+  const chain = await inheritChainContext({
     callerContextId: input.context_id,
     callerChainRoot: input.chain_root,
-    genesisChainRoot,
+    mirrorPath: readMirrorPath(),
     randomContextId,
   })
   const contextId = chain.contextId
   const chainRoot = chain.chainRoot
-  if (chain.inheritedFrom === 'wrapper-mirror') {
+  if (chain.inheritedFrom === 'mirror-context-and-tail') {
     warnings.push(`inherited context_id from wrapper mirror: ${contextId}`)
   }
 

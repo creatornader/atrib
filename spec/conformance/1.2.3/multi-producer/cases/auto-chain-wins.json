@@ -1,0 +1,18 @@
+{
+  "name": "auto-chain-wins",
+  "spec_section": "1.2.3",
+  "description": "Without an inbound token, the producer's own in-memory tail (autoChain) wins. This is within-process continuity: the producer signed a previous record under the same context in this process and remembers its hash.",
+  "input": {
+    "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inbound_record_hash_hex": null,
+    "auto_chain_tail_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+    "env": {
+      "ATRIB_CHAIN_TAIL_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "mirror_tail_hex": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "expected": {
+    "chain_root": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "precedence_layer": "auto-chain"
+  }
+}

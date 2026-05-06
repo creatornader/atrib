@@ -1,0 +1,18 @@
+{
+  "name": "env-tail-malformed-falls-through",
+  "spec_section": "1.2.3",
+  "description": "When ATRIB_CHAIN_TAIL_<context_id> is set but malformed (not matching /^sha256:[0-9a-f]{64}$/), the resolver MUST fall through to the next layer rather than treating the malformed value as a chain anchor. Here mirror tail is the next available signal.",
+  "input": {
+    "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inbound_record_hash_hex": null,
+    "auto_chain_tail_hex": null,
+    "env": {
+      "ATRIB_CHAIN_TAIL_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "not-a-valid-hash"
+    },
+    "mirror_tail_hex": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "expected": {
+    "chain_root": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "precedence_layer": "mirror-tail"
+  }
+}

@@ -171,4 +171,81 @@ describe('resolveChainRoot priority cascade', () => {
     })
     expect(result).toBe(`sha256:${tailB}`)
   })
+
+  it('returns mirror tail when no inbound, no autoChain, no env-var (file-as-IPC fallback)', () => {
+    const result = resolveChainRoot({
+      contextId: ctx,
+      mirrorTailHex: tailA,
+      env: {},
+    })
+    expect(result).toBe(`sha256:${tailA}`)
+  })
+
+  it('env-var tail takes precedence over mirror tail (env is fresher signal)', () => {
+    const result = resolveChainRoot({
+      contextId: ctx,
+      mirrorTailHex: tailA,
+      env: { [`ATRIB_CHAIN_TAIL_${ctx}`]: `sha256:${tailC}` },
+    })
+    expect(result).toBe(`sha256:${tailC}`)
+  })
+
+  it('falls through to genesis when mirror tail is malformed', () => {
+    const result = resolveChainRoot({
+      contextId: ctx,
+      mirrorTailHex: 'not-a-valid-hash',
+      env: {},
+    })
+    expect(result).toBe(genesisChainRoot(ctx))
+  })
+
+  it('mirror tail with sha256: prefix is rejected (caller passes raw hex, not prefixed form)', () => {
+    const result = resolveChainRoot({
+      contextId: ctx,
+      mirrorTailHex: `sha256:${tailA}`,
+      env: {},
+    })
+    expect(result).toBe(genesisChainRoot(ctx))
+  })
+
+  it('full precedence cascade: inbound > autoChain > env > mirror > genesis', () => {
+    // All four signals present; inbound wins.
+    const inbound = resolveChainRoot({
+      contextId: ctx,
+      inboundRecordHashHex: tailA,
+      autoChainTailHex: tailB,
+      mirrorTailHex: '4'.repeat(64),
+      env: { [`ATRIB_CHAIN_TAIL_${ctx}`]: `sha256:${tailC}` },
+    })
+    expect(inbound).toBe(`sha256:${tailA}`)
+
+    // No inbound; autoChain wins.
+    const auto = resolveChainRoot({
+      contextId: ctx,
+      autoChainTailHex: tailB,
+      mirrorTailHex: '4'.repeat(64),
+      env: { [`ATRIB_CHAIN_TAIL_${ctx}`]: `sha256:${tailC}` },
+    })
+    expect(auto).toBe(`sha256:${tailB}`)
+
+    // No inbound, no autoChain; env wins.
+    const envTail = resolveChainRoot({
+      contextId: ctx,
+      mirrorTailHex: '4'.repeat(64),
+      env: { [`ATRIB_CHAIN_TAIL_${ctx}`]: `sha256:${tailC}` },
+    })
+    expect(envTail).toBe(`sha256:${tailC}`)
+
+    // No inbound, no autoChain, no env; mirror wins.
+    const mirror = resolveChainRoot({
+      contextId: ctx,
+      mirrorTailHex: '4'.repeat(64),
+      env: {},
+    })
+    expect(mirror).toBe(`sha256:${'4'.repeat(64)}`)
+
+    // Nothing: genesis.
+    const genesis = resolveChainRoot({ contextId: ctx, env: {} })
+    expect(genesis).toBe(genesisChainRoot(ctx))
+  })
 })

@@ -1,0 +1,18 @@
+{
+  "name": "env-tail-namespace-isolation",
+  "spec_section": "1.2.3",
+  "description": "The env var name is namespaced per context_id. ATRIB_CHAIN_TAIL_<other_context> set in the env MUST NOT be consulted when resolving for <this_context>. With no other signals, this falls through to genesis for the requested context.",
+  "input": {
+    "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inbound_record_hash_hex": null,
+    "auto_chain_tail_hex": null,
+    "env": {
+      "ATRIB_CHAIN_TAIL_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "mirror_tail_hex": null
+  },
+  "expected": {
+    "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+    "precedence_layer": "genesis"
+  }
+}

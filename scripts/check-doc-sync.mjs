@@ -369,6 +369,82 @@ function checkPublishedPackageCount() {
   }
 }
 
+// ─── conformance corpus consistency ────────────────────────────────────────
+// Each corpus under spec/conformance/<section>/ has a manifest.json that
+// enumerates `cases[]`. The on-disk cases/*.json count MUST equal the
+// manifest's declared count, or downstream reference tests iterate over a
+// stale list.
+function checkConformanceCorpusConsistency() {
+  const check = 'conformance-corpus-consistency'
+  const corpusRoots = []
+
+  function walk(dir) {
+    const here = join(ROOT, 'spec/conformance', dir)
+    let entries
+    try {
+      entries = readdirSync(here, { withFileTypes: true })
+    } catch (_) {
+      return
+    }
+    if (entries.some((e) => e.name === 'manifest.json')) {
+      corpusRoots.push(dir)
+    }
+    for (const e of entries) {
+      if (e.isDirectory()) walk(join(dir, e.name))
+    }
+  }
+  walk('.')
+
+  if (corpusRoots.length === 0) {
+    return // no corpora to check
+  }
+
+  let mismatches = 0
+  for (const root of corpusRoots) {
+    const manifestPath = `spec/conformance/${root}/manifest.json`
+    let manifest
+    try {
+      manifest = JSON.parse(read(manifestPath))
+    } catch (e) {
+      fail(check, `cannot read ${manifestPath}: ${e.message}`)
+      mismatches++
+      continue
+    }
+    const declared = Array.isArray(manifest.cases) ? manifest.cases.length : 0
+    const declaredFiles = new Set(
+      (manifest.cases || []).map((c) => c.file).filter(Boolean),
+    )
+    let actualCount = 0
+    const actualFiles = new Set()
+    try {
+      const files = readdirSync(join(ROOT, 'spec/conformance', root, 'cases'))
+      for (const f of files) {
+        if (!f.endsWith('.json')) continue
+        actualCount++
+        actualFiles.add(`cases/${f}`)
+      }
+    } catch (_) {
+      // No cases/ dir; manifest count of 0 is fine
+    }
+    if (declared !== actualCount) {
+      fail(check,
+        `${manifestPath}: manifest declares ${declared} cases, cases/ contains ${actualCount}`,
+        { declared, actual: actualCount, root })
+      mismatches++
+      continue
+    }
+    for (const file of declaredFiles) {
+      if (!actualFiles.has(file)) {
+        fail(check, `${manifestPath} references missing case file: ${file}`, { file, root })
+        mismatches++
+      }
+    }
+  }
+  if (mismatches === 0) {
+    ok(check, `${corpusRoots.length} conformance corpora consistent (cases/*.json ↔ manifest.json)`)
+  }
+}
+
 // ─── helpers ───────────────────────────────────────────────────────────────
 
 function capitalize(word) {
@@ -383,6 +459,7 @@ const checks = [
   checkDashboardViewCount,
   checkWorkspacePackages,
   checkPublishedPackageCount,
+  checkConformanceCorpusConsistency,
 ]
 
 for (const c of checks) {

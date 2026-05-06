@@ -2994,6 +2994,50 @@ Force-atlas2 would give nicer dense layouts than circular but is published as Co
 
 ---
 
+## D067: Multi-producer chain composition precedence contract
+
+**Date:** 2026-05-07
+**Context:** [D065](#d065-atrib_chain_tail_context_id-env-var-for-cross-producer-chain-tail-handoff) added `ATRIB_CHAIN_TAIL_<context_id>` to `@atrib/mcp`'s middleware as a third source for chain-root resolution between the inbound traceparent ([§1.5.2](atrib-spec.md#152-http-transport-tracestate)) and the synthetic genesis fallback. Verification against a live agent session post-deploy showed the fix worked for wrapper-signed `tool_call` records (mcp-wrap is a long-running middleware instance that consumes the new env var) but did not work for cognitive primitives signed by `atrib-emit` subprocesses: 35 of the 50 most recent `annotation`/`observation`/`revision` records on context `b5a2ebf81d43019ed658152d009ac927` carried `chain_root = sha256(context_id)`, the genesis chain root, meaning each emit subprocess produced an isolated single-record chain.
+
+The cause was a duplicated chain resolver. `services/atrib-emit/src/auto-chain.ts` reimplemented chain-root selection with its own decision tree (file-as-IPC mirror inheritance) and never consulted the env var. The published packaging suggested otherwise — `@atrib/emit@0.4.2` declared `@atrib/mcp@0.5.0` as a dependency — but the runtime did not call into `resolveChainRoot`. Worse, the local resolver short-circuited on `callerContextId`: when a hook spawned `atrib-emit` with the agent's `context_id` set (so cognitive records would land on the same trace), the resolver returned `genesisChainRoot(callerContextId)` without consulting any other source, including the mirror-file inheritance the same module advertised.
+
+The structural problem was duplication of chain-resolution logic across producers. The wrapper got the env-var fix; the emit subprocess did not. Without a normative contract at the spec level, every future producer joining the substrate would face the same drift hazard: reimplement the resolver to taste, miss whatever new resolution layer landed in `@atrib/mcp` last sprint, and silently produce malformed records. No co-producer test exercised both producers together, so the drift was invisible behind green CI.
+
+**Decision:** Make multi-producer chain composition a normative spec-level contract. Three coordinated changes:
+
+1. **Spec.** [§1.2.3.1](atrib-spec.md#1231-multi-producer-chain-composition) documents the precedence ordering as **MUST** language. Five layers, in order: inbound propagation token, within-process auto-chain tail, cross-producer env-var handoff, cross-producer mirror-file inheritance, synthetic genesis. The ordering reflects fidelity to the upstream signal (inbound is explicit, env-var is parent-set, mirror may lag). The mirror-file path requires filtering by `context_id` because chaining to a tail on a different context produces a malformed record.
+2. **Reference implementation.** `resolveChainRoot` in `packages/mcp/src/chain-root.ts` is extended to accept a `mirrorTailHex` parameter (priority 4) and `inheritChainContext` in `packages/mcp/src/mirror.ts` orchestrates the file I/O + context_id inheritance. Both are exported from `@atrib/mcp`. `services/atrib-emit/src/auto-chain.ts` is deleted; `atrib-emit` calls `inheritChainContext` directly. Future cognitive-primitive producers (`atrib-recall`, `atrib-trace`, `atrib-summarize`) and any third-party producer in any language MUST use `resolveChainRoot` as the reference implementation or replicate it bit-for-bit against the corpus.
+3. **Conformance corpus.** Seven cases at `spec/conformance/1.2.3/multi-producer/cases/` exercise the precedence cascade plus malformation fall-through and namespace isolation. Producers in any language can consume the JSON and assert their resolver matches the expected `chain_root` per case. Reference test at `packages/mcp/test/conformance-1.2.3-multi-producer.test.ts`. A regression-style co-producer integration test at `services/atrib-emit/test/co-producer-chain.test.ts` exercises the full chain through the emit handler with simulated cross-producer state — three of its four sub-tests failed before the fix, all four pass after.
+
+**Alternatives considered:**
+
+- *Patch atrib-emit's local resolver to consult the env var, leave the duplicate alive ([Approach A]).* Rejected: papers over the symptom but leaves the drift class in place. Next time `@atrib/mcp` adds a new resolution source (e.g., session_token threading, capability-scoped chain rules), atrib-emit drifts again. We are back here.
+- *Push chain coordination to the hook-helper layer ([Approach B]).* Rejected: hook helpers reading the recent chain tail from the mirror and passing `chain_root` explicitly via the emit tool's `chain_root` arg works, but it abandons the substrate's claim that the env-var/mirror handoff mechanism is universal. Every new hook-runtime would have to learn the dance.
+- *Extract chain resolution to a new `@atrib/chain` package ([Approach C]).* Same drift properties as the chosen approach, plus cleaner module boundary. Deferred: `@atrib/mcp` already owns record types, signing, JCS canonicalization, sha256 — chain resolution is in the same family. Pulling it into a new package is a defensible refactor but solves a problem the chosen approach solves equally well, with bigger refactor cost. Trigger to revisit: `@atrib/mcp` shipping multiple breaking minors driven by chain-resolution changes.
+- *External coordination daemon ([Approach D]).* Rejected: introduces a runtime dependency that fails. The substrate's [§5.8](atrib-spec.md#58-degradation-contract) degradation contract is built on the assumption that producers can sign records *without* a coordination service being up. Daemon-style coordination would make sense at multi-host scale, not for single-operator dogfood.
+
+**Consequences:**
+
+- Producers in `atrib-emit`, `mcp-wrap`, and future cognitive-primitive packages share one chain-resolution path, eliminating the drift class. A future producer joining the substrate writes one line of code (`await inheritChainContext({...})`) instead of reimplementing.
+- The `inheritedFrom` value that surfaces in `inheritChainContext` results gains two new variants: `'env-tail'` and `'mirror-tail'` (replacing the prior `'wrapper-mirror'`). Producers consuming the value (currently only `atrib-emit` for warnings) must handle the new variants. Backward compatibility was not preserved; the rename was load-bearing for clarity.
+- Live verification on a fresh emit post-fix: `chain_root != sha256(context_id)` for hook-spawned records sharing context with the wrapper. The 35-of-50 isolated-genesis ratio drops to zero for new emissions. Historical records signed before the fix remain immutable.
+- Conformance corpus enforces the precedence contract for any producer claiming `@atrib/mcp@0.5.x` compliance. Producers in non-Node languages can consume the JSON corpus directly; the corpus README documents the input/expected schema.
+- Spec [§1.2.3.1](atrib-spec.md#1231-multi-producer-chain-composition) is the new normative anchor. Future changes to the precedence ordering require regenerating the corpus, refreshing the reference implementation, and updating every producer's use site (tracked in CLAUDE.md sync-triggers).
+
+**Cross-references:**
+
+- [§1.2.3.1](atrib-spec.md#1231-multi-producer-chain-composition) (the normative precedence ordering)
+- [`packages/mcp/src/chain-root.ts`](packages/mcp/src/chain-root.ts) (`resolveChainRoot` reference implementation)
+- [`packages/mcp/src/mirror.ts`](packages/mcp/src/mirror.ts) (`readMirrorTail` + `inheritChainContext` orchestration)
+- [`packages/mcp/test/chain-root.test.ts`](packages/mcp/test/chain-root.test.ts) (priority cascade unit tests)
+- [`packages/mcp/test/mirror.test.ts`](packages/mcp/test/mirror.test.ts) (mirror reader + inheritance orchestration tests)
+- [`packages/mcp/test/conformance-1.2.3-multi-producer.test.ts`](packages/mcp/test/conformance-1.2.3-multi-producer.test.ts) (corpus reference test)
+- [`services/atrib-emit/test/co-producer-chain.test.ts`](services/atrib-emit/test/co-producer-chain.test.ts) (regression integration test)
+- [`spec/conformance/1.2.3/multi-producer/`](spec/conformance/1.2.3/multi-producer/) (the conformance corpus)
+- [D065](#d065-atrib_chain_tail_context_id-env-var-for-cross-producer-chain-tail-handoff) (the env-var primitive this contract formalizes)
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
