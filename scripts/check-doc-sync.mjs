@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // Validate internal consistency of canonical docs.
 //
-// The CLAUDE.md sync-trigger table is enforcement-by-discipline: when an edge
-// type is added, multiple files must be updated by hand. Real drift has shipped
-// to main multiple times because that discipline broke down. This script
-// mechanically catches the specific staleness shape, number-word count claims
-// drifting out of sync with the underlying enumeration that determines them.
+// The sync-trigger table in CLAUDE.md is enforcement-by-discipline: when an
+// edge type is added, multiple files must be updated by hand. Real drift has
+// shipped to main multiple times because that discipline broke down. This
+// script mechanically catches the specific staleness shape, number-word
+// count claims drifting out of sync with the underlying enumeration that
+// determines them.
 //
 // Each check:
 //   1. Derives the ground-truth count from a canonical enumeration (the place

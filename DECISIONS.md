@@ -2828,7 +2828,7 @@ Also broaden the `observation` row in the §1.2.4 normative-URI table to clearly
 **Date:** 2026-05-06
 **Context:** graph-node holds the canonical full-record content in memory (records ingested via `/v1/ingest`, derived edges built per [§3.2.4](atrib-spec.md#324-edge-derivation-rules), revocation registry, capability envelopes). log-node persists only the 90-byte log entries per [§2.3.1](atrib-spec.md#231-entry-serialization) and discards the full record content after fanout, log-node alone CANNOT reconstruct graph-node's state. The only persistent copies of full records are in producer-local mirror files maintained per spec [§5.9](atrib-spec.md#59-local-mirror-conventions).
 
-This produced a real production incident on 2026-05-06: graph-node OOM-killed at ~1500 records globally, the in-memory state was lost, and the 90-byte log entries on log-node were not enough to rebuild. Trace endpoints 404'd for any record signed before the restart; session views showed only records signed since. Recovery required running an ad-hoc script against the operator's local mirror to POST records back to `/v1/ingest`.
+A production incident exposed this: graph-node OOM-killed at ~1500 records globally, the in-memory state was lost, and the 90-byte log entries on log-node were not enough to rebuild. Trace endpoints 404'd for any record signed before the restart; session views showed only records signed since. Recovery required running an ad-hoc script against a producer's local mirror to POST records back to `/v1/ingest`.
 
 The architectural gap: graph-node has no startup-replay logic. There's no mechanism for a graph-node-equivalent to recover from log-node alone, because log-node deliberately doesn't persist full record content (privacy + log-size invariants).
 
@@ -2881,9 +2881,9 @@ Crash safety: every successful ingest appends a single LF-terminated line via O_
 1. **Inbound traceparent** ([§1.5.2](atrib-spec.md#152-http-transport-tracestate)), the spec-canonical W3C-tracestate-based propagation. Cross-process via the wire.
 2. **autoChain in-memory tail**, the most recent record this middleware instance signed for the given `context_id`. Within-process across multiple calls; survives process restarts when the caller seeds via `autoChainSeed`.
 
-Neither covers the case observed in production 2026-05-06: a parent process spawns a *different middleware instance* (a separate producer type) as a child subprocess to sign records. The child has no traceparent and no autoChain seed for the parent's context, it sees an empty chain, marks itself genesis, and uses the synthetic-context-hash `chain_root` per [§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records).
+Neither covers the case observed in production: a parent process spawns a *different middleware instance* (a separate producer type) as a child subprocess to sign records. The child has no traceparent and no autoChain seed for the parent's context, it sees an empty chain, marks itself genesis, and uses the synthetic-context-hash `chain_root` per [§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records).
 
-The b5a2ebf8… session at observation time had 130-418 records flagged `is_genesis=true` (all signed by the same `creator_key` in the same `context_id`), each starting its own single-record "chain" because hook subprocesses kept spawning fresh atrib-emit processes that each saw an empty chain. The session had no recoverable provenance structure; CHAIN_PRECEDES edges only formed within the long-lived atrib-emit instance's own emissions, missing the hook-spawned ones.
+An observed session with hash prefix `b5a2ebf8` had 130-418 records flagged `is_genesis=true` (all signed by the same `creator_key` in the same `context_id`), each starting its own single-record "chain" because hook subprocesses kept spawning fresh atrib-emit processes that each saw an empty chain. The session had no recoverable provenance structure; CHAIN_PRECEDES edges only formed within the long-lived atrib-emit instance's own emissions, missing the hook-spawned ones.
 
 **Decision:** Add a third source between (2) and the genesis fallback: an env var named `ATRIB_CHAIN_TAIL_<context_id>` whose value is the parent's current chain tail (`sha256:<64-hex>`). When the child middleware initializes and faces an empty in-memory tail for that context, it consults the env var; if set + valid format, that becomes the child's first sign's `chain_root`. Subsequent signs in the same child use the in-memory tail (autoChain natural behavior).
 
@@ -2917,7 +2917,7 @@ The chain_root determination logic was extracted into a pure helper `resolveChai
 - The 418-record genesis explosion is fixed forward (records signed after producers wire the env var chain properly). The historical genesis records are immutable; they keep `chain_root = sha256(context_id)` forever.
 - New unit tests cover the priority cascade (9 tests in `packages/mcp/test/chain-root.test.ts`): inbound wins over autoChain wins over env wins over genesis; namespace isolation; malformed-env fallthrough; format validation.
 - Shipped as `@atrib/mcp@0.5.0` (minor bump). The cognitive-primitive packages (`@atrib/emit`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`) still resolve `@atrib/mcp@^0.4.0` so they get 0.5.0 transitively at install time; their lockfiles need refresh-on-bump for the env var feature to be available downstream.
-- Producer-side wiring is the operator's responsibility per producer (parent processes need to actually SET the env var when spawning). Not done as part of this ADR; tracked per-producer.
+- Producer-side wiring is the responsibility of the producer implementation (parent processes need to set the env var when spawning). Not done as part of this ADR; tracked per-producer.
 
 **Cross-references:**
 
