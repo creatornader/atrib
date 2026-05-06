@@ -71,13 +71,37 @@ export interface GraphServerHandle {
   close(): Promise<void>
 }
 
+export interface BindOptions {
+  /**
+   * Pre-existing store to bind to. When omitted, bindGraphServer creates
+   * a fresh in-memory store. Callers that want to replay a durable archive
+   * before accepting traffic create the store, replay into it, then pass
+   * it here so the server inherits the rebuilt state.
+   */
+  store?: RecordStore
+
+  /**
+   * Optional hook invoked AFTER each successful /v1/ingest (post
+   * validateSubmission + verifyRecord + store.addRecord). Used by
+   * persistence.ts to mirror every accepted record to disk.
+   *
+   * Hook errors are logged but do not fail the ingest response, graph-node
+   * is the source of truth for in-memory query state, the archive is a
+   * recovery aid. A failed disk write means the next OOM loses that record;
+   * the producer-local mirror file remains the ultimate fallback (Layer 3).
+   */
+  onRecordIngested?: (record: AtribRecord, logIndex: number | undefined) => void | Promise<void>
+}
+
 const CONTEXT_ID_RE = /^[0-9a-f]{32}$/
 
 export async function bindGraphServer(
   port: number,
   host?: string,
+  opts: BindOptions = {},
 ): Promise<GraphServerHandle> {
-  const store = createRecordStore()
+  const store = opts.store ?? createRecordStore()
+  const onRecordIngested = opts.onRecordIngested
 
   const server = createServer((req, res) => {
     // CORS for browser-based dashboards (D054). Read endpoints serve public data per spec §3;
@@ -90,7 +114,7 @@ export async function bindGraphServer(
       res.end()
       return
     }
-    handleRequest(req, res, store).catch((err) => {
+    handleRequest(req, res, store, onRecordIngested).catch((err) => {
       console.error('graph-node: request handler crashed', err)
       if (!res.headersSent) {
         sendProblem(res, 500, 'internal-error', 'Internal server error', '')
@@ -124,13 +148,14 @@ async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
   store: RecordStore,
+  onRecordIngested?: (record: AtribRecord, logIndex: number | undefined) => void | Promise<void>,
 ): Promise<void> {
   const url = req.url ?? ''
   const method = req.method ?? ''
 
   // POST /v1/ingest
   if (method === 'POST' && url === '/v1/ingest') {
-    return handleIngest(req, res, store)
+    return handleIngest(req, res, store, onRecordIngested)
   }
 
   // GET /v1/graph/:context_id/transaction
@@ -539,6 +564,7 @@ async function handleIngest(
   req: IncomingMessage,
   res: ServerResponse,
   store: RecordStore,
+  onRecordIngested?: (record: AtribRecord, logIndex: number | undefined) => void | Promise<void>,
 ): Promise<void> {
   let body: string
   try {
@@ -579,6 +605,22 @@ async function handleIngest(
     logIndex = parseInt(headerIdx, 10)
   }
   store.addRecord(record, logIndex)
+
+  // Persistence hook (optional). The archive append is best-effort: a
+  // failure here means the record stays in the in-memory store but won't
+  // survive a restart. Logged but not surfaced to the caller, log-node's
+  // fanout retries on 5xx, and the producer-local mirror remains the ultimate
+  // recovery source. Awaiting the hook serializes appends per ingest, which
+  // is what we want (the order the in-memory store accepted records is the
+  // order they're durably recorded).
+  if (onRecordIngested) {
+    try {
+      await onRecordIngested(record, logIndex)
+    } catch (err) {
+      console.error('graph-node: persistence hook failed', err)
+    }
+  }
+
   sendJson(res, 200, { ok: true })
 }
 
