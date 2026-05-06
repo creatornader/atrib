@@ -1,5 +1,12 @@
 # @atrib/mcp-wrap
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [b06c720]
+  - @atrib/mcp@0.5.0
+
 ## 0.3.0
 
 ### Minor Changes
