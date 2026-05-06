@@ -1702,23 +1702,24 @@ async function renderSession(contextId) {
 
   const hasEdges = graph.edges && graph.edges.length > 0
 
+  // Graph panel (only when graph-node returned edges; built but not rendered
+  // until after the synchronous root structure is in place, Sigma needs
+  // its container attached to the DOM before init).
+  let graphContainer = null
+  let nodeLegendRow = null
+  let edgeLegendRow = null
   if (hasEdges) {
-    // Graph view: shared Sigma DAG renderer. Same pipeline as the trace view.
-    // The transaction node (if any) is the focal, sessions converge on a
-    // transaction, so highlighting it visually mirrors the "session climax"
-    // mental model the pulse-strip already calls out.
-    const graphContainer = el('div', { class: 'trace-graph', id: 'session-graph-container' },
+    graphContainer = el('div', { class: 'trace-graph', id: 'session-graph-container' },
       el('div', { class: 'loading' }, 'rendering session graph…'),
     )
-    const nodeLegendRow = el('div', { class: 'legend-row', id: 'session-node-legend' })
-    const edgeLegendRow = el('div', { class: 'legend-row', id: 'session-edge-legend' })
+    nodeLegendRow = el('div', { class: 'legend-row', id: 'session-node-legend' })
+    edgeLegendRow = el('div', { class: 'legend-row', id: 'session-edge-legend' })
     const legend = el('div', { class: 'graph-legend' },
       el('span', { class: 'legend-label' }, 'nodes'),
       nodeLegendRow,
       el('span', { class: 'legend-label' }, 'edges'),
       edgeLegendRow,
     )
-
     const danglingCount = graph.edges.filter((e) => e.dangling === true).length
     const meta = `${graph.nodes.length} nodes · ${graph.edges.length} edges${danglingCount > 0 ? ` · ${danglingCount} dangling` : ''} · §3.2.4`
 
@@ -1730,40 +1731,14 @@ async function renderSession(contextId) {
       graphContainer,
       legend,
     ))
-
-    clearAndRender(root)
-
-    // Tear down any prior Sigma instance from a previous render before
-    // starting a new one (prevents canvas + listener leaks).
-    if (_activeSigmaInstance) {
-      try { _activeSigmaInstance.kill() } catch {}
-      _activeSigmaInstance = null
-    }
-
-    try {
-      await loadGraphLibs()
-    } catch (e) {
-      graphContainer.replaceChildren(el('div', { class: 'err-banner' },
-        el('span', { class: 'label' }, 'graph library load error:'), ' ', e.message,
-      ))
-      return
-    }
-
-    graphContainer.replaceChildren()
-    const { sigma } = renderSigmaDAG(graphContainer, graph, {
-      isFocalNode: (n) => n.event_type === 'transaction',
-    })
-    _activeSigmaInstance = sigma
-    populateGraphLegend(nodeLegendRow, edgeLegendRow, graph)
-    return
   }
 
-  // No-edges fallback: log-derived view (graph-node hasn't ingested) OR a
-  // genesis-only session with no derived edges. Render the records as a
-  // table since there's no graph structure to show.
-  root.append(el('section', { class: 'feed-wrap' },
+  // Nodes table, always rendered. The graph above shows STRUCTURE
+  // (relationships); this table preserves the per-record METADATA the graph
+  // can't surface inline (identity / timestamp / verification badges).
+  root.append(el('section', { class: 'feed-wrap', style: hasEdges ? 'margin-top: 24px;' : '' },
     el('div', { class: 'feed-head' },
-      el('h2', {}, `nodes (${graph.nodes.length})`),
+      el('h2', {}, `records (${graph.nodes.length})`),
       el('span', { class: 'meta' }, usingFallback ? 'from log (graph not ingested)' : 'derived per spec §3.2.4'),
     ),
     el('div', {},
@@ -1804,7 +1779,69 @@ async function renderSession(contextId) {
     ),
   ))
 
+  // Edges table, only when graph-node returned edges. The graph encodes
+  // type / source / target visually, but the table preserves the per-edge
+  // dangling marker (§3.2.4 step 6/7) which the current Sigma rendering
+  // doesn't visually distinguish (left for a later polish pass).
+  if (hasEdges) {
+    const danglingCount = graph.edges.filter((e) => e.dangling === true).length
+    const renderTarget = e => e.dangling
+      ? el('span', { class: 'mono', title: e.reason || 'dangling reference' },
+          shorten(e.target, 10, 4),
+          el('span', { class: 'chip event-dangling_node', style: 'margin-left: 6px;' }, 'dangling'))
+      : el('a', { href: `#/action/${e.target}` },
+          el('span', { class: 'mono' }, shorten(e.target, 10, 4)))
+    root.append(el('section', { class: 'feed-wrap', style: 'margin-top: 24px;' },
+      el('div', { class: 'feed-head' },
+        el('h2', {}, `edges (${graph.edges.length})`),
+        el('span', { class: 'meta' },
+          danglingCount > 0
+            ? `9 deterministic types per §3.2.3, ${danglingCount} dangling`
+            : '9 deterministic types per §3.2.3'),
+      ),
+      el('div', {},
+        el('table', { class: 'feed' },
+          el('thead', {}, el('tr', {},
+            el('th', {}, 'type'),
+            el('th', {}, 'source'),
+            el('th', {}, 'target'),
+          )),
+          el('tbody', {},
+            ...graph.edges.map(e => el('tr', {},
+              el('td', {}, el('code', {}, e.type)),
+              el('td', {}, el('a', { href: `#/action/${e.source}` }, el('span', { class: 'mono' }, shorten(e.source, 10, 4)))),
+              el('td', {}, renderTarget(e)),
+            )),
+          ),
+        ),
+      ),
+    ))
+  }
+
   clearAndRender(root)
+
+  // Async graph viz init (only when hasEdges). Synchronous DOM is now in
+  // place above; Sigma can attach to graphContainer.
+  if (hasEdges) {
+    if (_activeSigmaInstance) {
+      try { _activeSigmaInstance.kill() } catch {}
+      _activeSigmaInstance = null
+    }
+    try {
+      await loadGraphLibs()
+    } catch (e) {
+      graphContainer.replaceChildren(el('div', { class: 'err-banner' },
+        el('span', { class: 'label' }, 'graph library load error:'), ' ', e.message,
+      ))
+      return
+    }
+    graphContainer.replaceChildren()
+    const { sigma } = renderSigmaDAG(graphContainer, graph, {
+      isFocalNode: (n) => n.event_type === 'transaction',
+    })
+    _activeSigmaInstance = sigma
+    populateGraphLegend(nodeLegendRow, edgeLegendRow, graph)
+  }
 }
 
 function badgeForState(state) {
