@@ -17,4 +17,8 @@ primary_region = 'iad'
 
 [[vm]]
   size = 'shared-cpu-1x'
-  memory = '256mb'
+  # Bumped from 256mb after observed OOM-kill on 2026-05-06 with ~1500 records
+  # in-memory. graph-node holds all derived edges + per-record verification
+  # state in memory (no volume), so memory pressure scales with log size.
+  # 1024mb gives headroom for several thousand records before OOM.
+  memory = '1024mb'
