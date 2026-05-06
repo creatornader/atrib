@@ -1,5 +1,8 @@
 # @atrib/recall
 
+> **Pre-0.2.0 versions exist in this changelog but were never published to npm.**
+> The package moved from a workspace-private location and flipped public on 2026-05-05; the prior 0.1.0 bump was internal. The first npm-published version is 0.2.0.
+
 ## 0.2.0
 
 ### Minor Changes

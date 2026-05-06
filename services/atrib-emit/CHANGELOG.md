@@ -1,4 +1,7 @@
-# @atrib/atrib-emit
+# @atrib/emit
+
+> **Pre-0.4.0 versions exist in this changelog but were never published to npm.**
+> The package was renamed from `@atrib/atrib-emit` to `@atrib/emit` and flipped public on 2026-05-05; prior bumps (0.2.0, 0.3.0) were workspace-private. The first npm-published version is 0.4.0.
 
 ## 0.4.0
 
