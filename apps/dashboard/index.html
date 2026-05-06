@@ -720,6 +720,14 @@
     font: 14px/1.5 var(--font-sans);
     text-align: center;
   }
+  /* Multi-element error content needs to lay out as a single centered block,
+     not as a flex row across the container width. The wrapper caps width so
+     long messages wrap naturally and the retry/affordance links sit below
+     the prose, not beside it. */
+  .trace-graph .err-banner .err-body {
+    max-width: 640px;
+    text-align: left;
+  }
   .trace-graph canvas { display: block; }
 
   .trace-truncation {
@@ -2353,19 +2361,26 @@ async function renderTrace(rawHash) {
 
     if (inLog && /\b404\b/.test(traceResult._error)) {
       graphContainer.replaceChildren(el('div', { class: 'err-banner' },
-        el('span', { class: 'label' }, 'graph-node still indexing this record.'),
-        ' It\'s signed and committed to the log (', el('code', {}, '/v1/lookup'),
-        ' returns 200), but hasn\'t propagated through the mirror to graph-node yet. Provenance edges land after the next mirror push.',
-        el('div', { style: 'margin-top: 12px;' },
-          el('a', {
-            href: location.hash, // self-link forces re-fetch via route()
-            onclick: (ev) => { ev.preventDefault(); route() },
-            style: 'color: var(--accent); border-bottom: 1px dotted var(--accent); text-decoration: none; margin-right: 16px;',
-          }, '↻ retry'),
-          el('a', {
-            href: `#/action/${fullHash}`,
-            style: 'color: var(--text-2); border-bottom: 1px dotted var(--text-3); text-decoration: none;',
-          }, 'view the record directly →'),
+        el('div', { class: 'err-body' },
+          el('p', { style: 'margin: 0 0 8px;' },
+            el('span', { class: 'label', style: 'color: var(--text-2); font-weight: 600;' },
+              'graph-node still indexing this record.'),
+          ),
+          el('p', { style: 'margin: 0 0 14px;' },
+            'It\'s signed and committed to the log (', el('code', {}, '/v1/lookup'),
+            ' returns 200), but hasn\'t propagated through the mirror to graph-node yet. Provenance edges land after the next mirror push.',
+          ),
+          el('div', {},
+            el('a', {
+              href: location.hash, // self-link forces re-fetch via route()
+              onclick: (ev) => { ev.preventDefault(); route() },
+              style: 'color: var(--accent); border-bottom: 1px dotted var(--accent); text-decoration: none; margin-right: 16px;',
+            }, '↻ retry'),
+            el('a', {
+              href: `#/action/${fullHash}`,
+              style: 'color: var(--text-2); border-bottom: 1px dotted var(--text-3); text-decoration: none;',
+            }, 'view the record directly →'),
+          ),
         ),
       ))
       // Populate the start-record summary from the log lookup so the user
