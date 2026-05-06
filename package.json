@@ -21,6 +21,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "doc-sync": "node scripts/check-doc-sync.mjs",
     "clean": "turbo clean",
     "version-packages": "changeset version",
     "release": "pnpm -r build && changeset publish"

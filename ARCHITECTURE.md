@@ -48,7 +48,7 @@ Three protocol layers, one SDK layer that automates them. Data flows in one dire
                 ┌─────────────────────────────────────────────────────┐
                 │  Layer 3: Attribution Graph (§3)                     │
                 │                                                     │
-                │  7 edge types, deterministic derivation              │
+                │  9 edge types, deterministic derivation              │
                 │  Structure + agent-claimed causation, no inferred    │
                 └────────────────────────┬────────────────────────────┘
                                          │
@@ -273,7 +273,7 @@ The load-bearing choices. Each is in [DECISIONS.md](DECISIONS.md) with full rati
 
 **tlog-tiles, not a custom log format ([D006](DECISIONS.md#d006-merkle-log-c2sp-tlog-tiles-not-blockchain)).** The C2SP tlog-tiles spec defines an HTTP-based read interface for tiled Merkle trees. It is used by Certificate Transparency, Go module checksums, and Sigstore. Using a standard format means existing tooling (Tessera, witnesses, monitors) works out of the box.
 
-**Seven edge types, deterministic derivation ([D005](DECISIONS.md#d005-structure-not-causality-in-the-graph), [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), Section 3.2.4).** The graph records observable structure plus agent-declared causation (INFORMED_BY, PROVENANCE_OF). No edge encodes inferred causation; the agent-declared edges are derived from explicit fields the agent signed. Causal interpretation of those declarations remains the policy layer's job. The derivation rules are ordered and deterministic: two implementations on identical input must produce identical graphs.
+**Nine edge types, deterministic derivation ([D005](DECISIONS.md#d005-structure-not-causality-in-the-graph), [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), [D058](DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05), [D059](DECISIONS.md#d059-promote-revision-to-atrib-normative-event_type-byte-0x06), Section 3.2.4).** The graph records observable structure plus agent-declared causation (INFORMED_BY, PROVENANCE_OF, ANNOTATES, REVISES). No edge encodes inferred causation; the agent-declared edges are derived from explicit fields the agent signed. Causal interpretation of those declarations remains the policy layer's job. The derivation rules are ordered and deterministic: two implementations on identical input must produce identical graphs.
 
 **Robustness layers ([D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense)-D052, Sections 1.7.6, 2.11, 6.7).** Transaction records require ≥2 signatures (agent + counterparty per [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)). Records may be cross-replicated to multiple independent logs and verifiers detect equivocation across them ([§2.11](atrib-spec.md#211-cross-log-replication)). Identity claims may declare capability envelopes that verifiers check records against; out-of-envelope records are flagged as a signal ([§6.7](atrib-spec.md#67-capability-declarations)). These are additive defenses; single-signer transactions, single-log submissions, and capability-less identity claims remain conforming.
 
