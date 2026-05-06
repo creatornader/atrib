@@ -1,4 +1,4 @@
-# @atrib/atrib-summarize
+# @atrib/summarize
 
 MCP server exposing the `summarize` tool — synthesizes a narrative across N records using an OpenAI-compatible LLM.
 
@@ -43,7 +43,7 @@ Without an API key, the tool returns a warnings-only response per the §5.8 grac
 
 ## Reads
 
-Same as `@atrib/atrib-trace`: every `*.jsonl` mirror under `~/.atrib/records/` (override via `ATRIB_RECORDS_DIR`). Tolerates both legacy bare-record and current envelope shapes.
+Same as `@atrib/trace`: every `*.jsonl` mirror under `~/.atrib/records/` (override via `ATRIB_RECORDS_DIR`). Tolerates both legacy bare-record and current envelope shapes.
 
 When a record lacks a `_local` sidecar (legacy entry), the prompt includes a marker telling the LLM the input is impoverished — only event_type + cryptographic metadata is available — so the synthesis can be honest about gaps. The output reports `records_with_sidecar` and `records_without_sidecar` counts so callers know how rich the input was.
 
