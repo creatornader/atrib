@@ -1688,10 +1688,71 @@ async function renderSession(contextId) {
       style: 'background: var(--info-subtle); border: 1px solid var(--info-border); color: var(--info); padding: 12px 16px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 16px;',
     },
       el('strong', { style: 'font-weight: 600;' }, 'Showing log-derived view. '),
-      'graph-node hasn\'t ingested this session, so edges and node-level verification details are unavailable. The signed records below come directly from the log, which is the source of truth.',
+      'graph-node hasn\'t ingested records under this context_id yet, so edges are unavailable. Showing the records as a tabular list pulled directly from the log (the source of truth).',
     ))
   }
 
+  const hasEdges = graph.edges && graph.edges.length > 0
+
+  if (hasEdges) {
+    // Graph view: shared Sigma DAG renderer. Same pipeline as the trace view.
+    // The transaction node (if any) is the focal, sessions converge on a
+    // transaction, so highlighting it visually mirrors the "session climax"
+    // mental model the pulse-strip already calls out.
+    const graphContainer = el('div', { class: 'trace-graph', id: 'session-graph-container' },
+      el('div', { class: 'loading' }, 'rendering session graph…'),
+    )
+    const nodeLegendRow = el('div', { class: 'legend-row', id: 'session-node-legend' })
+    const edgeLegendRow = el('div', { class: 'legend-row', id: 'session-edge-legend' })
+    const legend = el('div', { class: 'graph-legend' },
+      el('span', { class: 'legend-label' }, 'nodes'),
+      nodeLegendRow,
+      el('span', { class: 'legend-label' }, 'edges'),
+      edgeLegendRow,
+    )
+
+    const danglingCount = graph.edges.filter((e) => e.dangling === true).length
+    const meta = `${graph.nodes.length} nodes · ${graph.edges.length} edges${danglingCount > 0 ? ` · ${danglingCount} dangling` : ''} · §3.2.4`
+
+    root.append(el('section', { class: 'panel flush' },
+      el('div', { class: 'panel-head' },
+        el('h2', {}, 'session graph'),
+        el('span', { class: 'meta' }, meta),
+      ),
+      graphContainer,
+      legend,
+    ))
+
+    clearAndRender(root)
+
+    // Tear down any prior Sigma instance from a previous render before
+    // starting a new one (prevents canvas + listener leaks).
+    if (_activeSigmaInstance) {
+      try { _activeSigmaInstance.kill() } catch {}
+      _activeSigmaInstance = null
+    }
+
+    try {
+      await loadGraphLibs()
+    } catch (e) {
+      graphContainer.replaceChildren(el('div', { class: 'err-banner' },
+        el('span', { class: 'label' }, 'graph library load error:'), ' ', e.message,
+      ))
+      return
+    }
+
+    graphContainer.replaceChildren()
+    const { sigma } = renderSigmaDAG(graphContainer, graph, {
+      isFocalNode: (n) => n.event_type === 'transaction',
+    })
+    _activeSigmaInstance = sigma
+    populateGraphLegend(nodeLegendRow, edgeLegendRow, graph)
+    return
+  }
+
+  // No-edges fallback: log-derived view (graph-node hasn't ingested) OR a
+  // genesis-only session with no derived edges. Render the records as a
+  // table since there's no graph structure to show.
   root.append(el('section', { class: 'feed-wrap' },
     el('div', { class: 'feed-head' },
       el('h2', {}, `nodes (${graph.nodes.length})`),
@@ -1712,8 +1773,7 @@ async function renderSession(contextId) {
             // Dangling nodes (§3.2.4 step 6/7) have synthetic ids that no
             // /action/ route can resolve. Render the id but skip the link so
             // the user gets a clear "this is a placeholder" cue instead of a
-            // broken navigation. Reason annotation, when present on the
-            // associated edge, is shown via the edges-table tooltip.
+            // broken navigation.
             el('td', {},
               n.event_type === 'dangling_node'
                 ? el('span', { class: 'mono', title: 'unresolved reference (synthetic placeholder)' }, shorten(n.id, 13, 4))
@@ -1735,45 +1795,6 @@ async function renderSession(contextId) {
       ),
     ),
   ))
-
-  if (graph.edges && graph.edges.length > 0) {
-    // Dangling targets (§3.2.4 step 6/7) start with `dangling:`. They are
-    // synthetic placeholders for agent-declared informed_by / provenance_token
-    // references that didn't resolve in this set. Render them inline as
-    // shortened-text but DO NOT link to /action/ since there's no record there.
-    const danglingCount = graph.edges.filter(e => e.dangling === true).length
-    const renderTarget = e => e.dangling
-      ? el('span', { class: 'mono', title: e.reason || 'dangling reference' },
-          shorten(e.target, 10, 4),
-          el('span', { class: 'chip event-dangling_node', style: 'margin-left: 6px;' }, 'dangling'))
-      : el('a', { href: `#/action/${e.target}` },
-          el('span', { class: 'mono' }, shorten(e.target, 10, 4)))
-    root.append(el('section', { class: 'feed-wrap', style: 'margin-top: 24px;' },
-      el('div', { class: 'feed-head' },
-        el('h2', {}, `edges (${graph.edges.length})`),
-        el('span', { class: 'meta' },
-          danglingCount > 0
-            ? `7 deterministic types per §3.2.3, ${danglingCount} dangling`
-            : '7 deterministic types per §3.2.3'),
-      ),
-      el('div', {},
-        el('table', { class: 'feed' },
-          el('thead', {}, el('tr', {},
-            el('th', {}, 'type'),
-            el('th', {}, 'source'),
-            el('th', {}, 'target'),
-          )),
-          el('tbody', {},
-            ...graph.edges.map(e => el('tr', {},
-              el('td', {}, el('code', {}, e.type)),
-              el('td', {}, el('a', { href: `#/action/${e.source}` }, el('span', { class: 'mono' }, shorten(e.source, 10, 4)))),
-              el('td', {}, renderTarget(e)),
-            )),
-          ),
-        ),
-      ),
-    ))
-  }
 
   clearAndRender(root)
 }
@@ -1955,6 +1976,218 @@ function edgeTypeColor(edgeType) {
     CROSS_SESSION:    '--edge-cross-session',
   }
   return _cssVar(map[edgeType] || '--muted', '#9ca3af')
+}
+
+// ─── Shared DAG renderer (graphology + dagre + sigma) ────────────────────
+// One pipeline used by every graph view (trace, session DAG, future creator
+// activity map). Caller supplies the graph data ({nodes, edges} from any
+// graph-node response) plus optional focal-node test + click handler. The
+// helper returns the live sigma instance so the caller can kill() it before
+// the next render.
+//
+// Defaults match the values the trace view used to inline before extraction:
+// rankdir=TB, focal size 16, regular size 10, slim 2px lines, fat
+// arrowheads via the custom EdgeArrowProgram (length=5, wideness=6).
+//
+// Color decisions defer to eventTypeColor() / edgeTypeColor() so any palette
+// override flows through both the helper and the legend code paths.
+
+function renderSigmaDAG(container, graphData, options = {}) {
+  const {
+    isFocalNode = () => false,
+    focalSize = 16,
+    nodeSize = 10,
+    rankDir = 'TB',
+    nodeSep = 50,
+    rankSep = 70,
+    edgeSize = 2,
+    onNodeClick = null,
+  } = options
+
+  const Graph = window.graphology.Graph
+  const Sigma = window.Sigma
+  const dagre = window.dagre
+
+  const gx = new Graph({ type: 'directed', multi: true, allowSelfLoops: false })
+  const dgx = new dagre.graphlib.Graph({ multigraph: true })
+  dgx.setGraph({ rankdir: rankDir, ranksep: rankSep, nodesep: nodeSep, marginx: 30, marginy: 30 })
+  dgx.setDefaultEdgeLabel(() => ({}))
+
+  for (const n of graphData.nodes) {
+    const isFocal = isFocalNode(n)
+    const color = eventTypeColor(n.event_type)
+    const size = isFocal ? focalSize : nodeSize
+    const labelHash = n.record_hash || (n.id ? (n.id.startsWith('sha256:') ? n.id : `sha256:${n.id}`) : '')
+    const label = `${n.event_type || '?'} · ${shorten(labelHash, 8, 4)}`
+
+    gx.addNode(n.id, {
+      x: 0, y: 0,
+      size,
+      color,
+      label,
+      _node: n,
+      _isFocal: isFocal,
+    })
+    // Dagre node sizes are pixel boxes for layout spacing only.
+    dgx.setNode(n.id, { width: Math.max(60, label.length * 7), height: 28 })
+  }
+
+  // Distinct-key edges so multi-edges (same source/target, different type)
+  // don't collide. Defensive try/catch: graph-node shouldn't emit an edge
+  // referencing a missing node, but skip rather than crash if it does.
+  let edgeSeq = 0
+  for (const e of graphData.edges) {
+    const color = edgeTypeColor(e.type)
+    const key = `${e.source}->${e.target}#${e.type}#${edgeSeq++}`
+    if (!gx.hasNode(e.source) || !gx.hasNode(e.target)) continue
+    try {
+      gx.addEdgeWithKey(key, e.source, e.target, {
+        size: edgeSize,
+        color,
+        type: 'arrow',
+        label: e.type,
+        _edge: e,
+      })
+    } catch {
+      continue
+    }
+    dgx.setEdge(e.source, e.target, {}, key)
+  }
+
+  dagre.layout(dgx)
+
+  // Copy positions back to graphology; flip y because Sigma's coordinate
+  // system has y growing upward (mathematical) while dagre's grows downward
+  // (screen). Without the flip the graph reads bottom-up on screen.
+  gx.forEachNode((nodeId) => {
+    const dnode = dgx.node(nodeId)
+    if (dnode) {
+      gx.mergeNodeAttributes(nodeId, { x: dnode.x, y: -dnode.y })
+    }
+  })
+
+  // Custom arrow program: defaults are length=2.5x, wideness=2x of the edge
+  // size, which renders almost-invisible heads on thin lines. Bumping the
+  // ratios lets the line stay slim while the direction marker reads at a
+  // glance, direction is the load-bearing signal in any provenance graph.
+  const ProminentArrowProgram = Sigma.rendering.createEdgeArrowProgram({
+    lengthToThicknessRatio: 5,
+    widenessToThicknessRatio: 6,
+  })
+
+  const sigmaInstance = new Sigma(gx, container, {
+    renderEdgeLabels: false,
+    defaultEdgeType: 'arrow',
+    edgeProgramClasses: { arrow: ProminentArrowProgram },
+    defaultNodeColor: _cssVar('--muted', '#9ca3af'),
+    labelColor: { color: _cssVar('--text-2', '#a0a3ab') },
+    labelSize: 11,
+    labelDensity: 0.4,
+    edgeLabelColor: { color: _cssVar('--text-3', '#6a6e78') },
+  })
+
+  // Default click → drill into the matching action view. Caller can override
+  // (e.g., a session view might prefer to highlight in-place rather than
+  // navigate). Callback signature: (nodeId, sourceRecord) => void.
+  const handleClick = onNodeClick || ((nodeId, sourceRecord) => {
+    if (sourceRecord && sourceRecord.record_hash) {
+      location.hash = `#/action/${sourceRecord.record_hash}`
+    } else if (sourceRecord && sourceRecord.id) {
+      const id = sourceRecord.id.startsWith('sha256:') ? sourceRecord.id : `sha256:${sourceRecord.id}`
+      location.hash = `#/action/${id}`
+    }
+  })
+  sigmaInstance.on('clickNode', ({ node }) => {
+    const attrs = gx.getNodeAttributes(node)
+    handleClick(node, attrs._node)
+  })
+
+  return { sigma: sigmaInstance, graph: gx }
+}
+
+// Pair-aware legend population for any graph view. Two-row layout:
+//   row 1 (nodes): event_type swatches as filled discs
+//   row 2 (edges): edge_type swatches as 2px lines
+// Paired entries (annotation/ANNOTATES, revision/REVISES, transaction/
+// CONVERGES_ON) stack in the same grid column; unpaired entries flow
+// into a shared tail column that flexes independently per row.
+function populateGraphLegend(nodeLegendRow, edgeLegendRow, graphData) {
+  const PAIRS = [
+    ['annotation', 'ANNOTATES'],
+    ['revision', 'REVISES'],
+    ['transaction', 'CONVERGES_ON'],
+  ]
+  const pairedNodeSet = new Set(PAIRS.map((p) => p[0]))
+  const pairedEdgeSet = new Set(PAIRS.map((p) => p[1]))
+
+  const presentNodeKinds = new Set(graphData.nodes.map((n) => n.event_type).filter(Boolean))
+  const presentEdgeTypes = new Set(graphData.edges.map((e) => e.type))
+
+  const activePairs = PAIRS.filter(([n, e]) =>
+    presentNodeKinds.has(n) || presentEdgeTypes.has(e),
+  )
+
+  const nodeKindOrder = ['tool_call', 'observation', 'directory_anchor', 'extension', 'gap_node']
+  const presentUnpairedNodes = nodeKindOrder.filter((k) =>
+    !pairedNodeSet.has(k) && presentNodeKinds.has(k),
+  )
+
+  const edgeKindOrder = [
+    ['INFORMED_BY', 'informed_by'],
+    ['PROVENANCE_OF', 'provenance_of'],
+    ['CHAIN_PRECEDES', 'chain_precedes'],
+    ['SESSION_PRECEDES', 'session_precedes'],
+    ['SESSION_PARALLEL', 'session_parallel'],
+    ['CROSS_SESSION', 'cross_session'],
+  ]
+  const presentUnpairedEdges = edgeKindOrder.filter(([typ]) =>
+    !pairedEdgeSet.has(typ) && presentEdgeTypes.has(typ),
+  )
+
+  const tailCol = activePairs.length + 1
+
+  const nodeSwatches = []
+  activePairs.forEach(([nodeKind], i) => {
+    if (presentNodeKinds.has(nodeKind)) {
+      nodeSwatches.push(el('span',
+        { class: `swatch node ${nodeKind}`, style: `grid-column: ${i + 1};` },
+        nodeKind))
+    }
+  })
+  if (presentUnpairedNodes.length > 0) {
+    const tail = el('div', { class: 'legend-tail', style: `grid-column: ${tailCol};` })
+    presentUnpairedNodes.forEach((kind) => {
+      tail.append(el('span', { class: `swatch node ${kind}` }, kind))
+    })
+    nodeSwatches.push(tail)
+  }
+  if (nodeSwatches.length === 0) {
+    nodeLegendRow.replaceChildren(el('span', { class: 'swatch empty' }, 'none'))
+  } else {
+    nodeLegendRow.replaceChildren(...nodeSwatches)
+  }
+
+  const edgeSwatches = []
+  activePairs.forEach(([, edgeKind], i) => {
+    if (presentEdgeTypes.has(edgeKind)) {
+      const cls = edgeKind.toLowerCase()
+      edgeSwatches.push(el('span',
+        { class: `swatch edge ${cls}`, style: `grid-column: ${i + 1};` },
+        edgeKind))
+    }
+  })
+  if (presentUnpairedEdges.length > 0) {
+    const tail = el('div', { class: 'legend-tail', style: `grid-column: ${tailCol};` })
+    presentUnpairedEdges.forEach(([typ, cls]) => {
+      tail.append(el('span', { class: `swatch edge ${cls}` }, typ))
+    })
+    edgeSwatches.push(tail)
+  }
+  if (edgeSwatches.length === 0) {
+    edgeLegendRow.replaceChildren(el('span', { class: 'swatch empty' }, 'none'))
+  } else {
+    edgeLegendRow.replaceChildren(...edgeSwatches)
+  }
 }
 
 // ─── Trace view (provenance ancestry visualization) ──────────────────────
@@ -2176,66 +2409,12 @@ async function renderTrace(rawHash) {
     ))
   }
 
-  // Pair-aware legend layout: node-types and edge-types that share semantics
-  // (annotation/ANNOTATES, revision/REVISES, transaction/CONVERGES_ON) stack
-  // in the same grid column so the visual reads as "this node-color and this
-  // edge-color are the same thread by design." Unpaired entries flow into
-  // columns after the pairs, NODES-only columns first, then EDGES-only.
-  const NODE_EDGE_PAIRS = [
-    ['annotation', 'ANNOTATES'],
-    ['revision', 'REVISES'],
-    ['transaction', 'CONVERGES_ON'],
-  ]
-  const pairedNodeSet = new Set(NODE_EDGE_PAIRS.map((p) => p[0]))
-  const pairedEdgeSet = new Set(NODE_EDGE_PAIRS.map((p) => p[1]))
-
-  const presentNodeKinds = new Set(graph.nodes.map((n) => n.event_type).filter(Boolean))
-  const nodeKindOrder = [
-    'tool_call', 'observation', 'directory_anchor', 'extension', 'gap_node',
-  ]
-  const presentUnpairedNodes = nodeKindOrder.filter((k) =>
-    !pairedNodeSet.has(k) && presentNodeKinds.has(k),
-  )
-
-  // Active pairs = at least one side present; pre-computed so both rows
-  // share the same column-index baseline.
-  const presentEdgeTypes = new Set(graph.edges.map((e) => e.type))
-  const activePairs = NODE_EDGE_PAIRS.filter(([n, e]) =>
-    presentNodeKinds.has(n) || presentEdgeTypes.has(e),
-  )
-
-  // Layout columns (shared across both rows):
-  //   1..P     paired entries (P = activePairs.length)
-  //   P+1      tail, a single shared grid column holding a .legend-tail flex
-  //            container per row. The tails' INTERNAL widths are independent
-  //            (NODES tail and EDGES tail flex separately), but the shared
-  //            grid column auto-sizes to the wider tail so the left edges
-  //            of each row's unpaired entries align horizontally.
-  const tailCol = activePairs.length + 1
-
-  const nodeSwatches = []
-  activePairs.forEach(([nodeKind], i) => {
-    if (presentNodeKinds.has(nodeKind)) {
-      nodeSwatches.push(el('span',
-        { class: `swatch node ${nodeKind}`, style: `grid-column: ${i + 1};` },
-        nodeKind))
-    }
-  })
-  if (presentUnpairedNodes.length > 0) {
-    const tail = el('div', { class: 'legend-tail', style: `grid-column: ${tailCol};` })
-    presentUnpairedNodes.forEach((kind) => {
-      tail.append(el('span', { class: `swatch node ${kind}` }, kind))
-    })
-    nodeSwatches.push(tail)
-  }
-  if (nodeSwatches.length === 0) {
-    nodeLegendRow.replaceChildren(el('span', { class: 'swatch empty' }, 'none'))
-  } else {
-    nodeLegendRow.replaceChildren(...nodeSwatches)
-  }
+  // Populate both legend rows in one shared call (used by every graph view).
+  populateGraphLegend(nodeLegendRow, edgeLegendRow, graph)
 
   // Empty-ancestry case: the start record exists but has no resolvable
-  // upstream. /v1/trace returns the start node alone in this case.
+  // upstream. /v1/trace returns the start node alone here. populateGraphLegend
+  // already handles the empty-edge case (renders "none" in the edges row).
   if (nodeCount <= 1) {
     graphContainer.replaceChildren(el('div', { class: 'empty' },
       'No ancestors. This record has no ',
@@ -2243,147 +2422,19 @@ async function renderTrace(rawHash) {
       ', or ', el('code', {}, 'revises'),
       ' edges into the resolved set, typically a genesis record.',
     ))
-    edgeLegendRow.replaceChildren(el('span', { class: 'swatch empty' }, 'none in this trace'))
     return
   }
 
-  // Build graphology + dagre.
+  // Hand off to the shared DAG renderer. The trace view's only specialty
+  // here is the focal-node test (start record can match by record_hash, by
+  // hashHex, or by sha256-prefixed id depending on the node-id shape
+  // graph-node returned).
   graphContainer.replaceChildren()
-  const Graph = window.graphology.Graph
-  const Sigma = window.Sigma
-  const dagre = window.dagre
-
-  const gx = new Graph({ type: 'directed', multi: true, allowSelfLoops: false })
-  const dgx = new dagre.graphlib.Graph({ multigraph: true })
-  dgx.setGraph({ rankdir: 'TB', ranksep: 70, nodesep: 50, marginx: 30, marginy: 30 })
-  dgx.setDefaultEdgeLabel(() => ({}))
-
-  for (const n of graph.nodes) {
-    const isStart = (n.record_hash === fullHash) || (n.id === hashHex) || (n.id === fullHash)
-    const color = eventTypeColor(n.event_type)
-    const size = isStart ? 16 : 10
-    const labelHash = n.record_hash || (n.id ? (n.id.startsWith('sha256:') ? n.id : `sha256:${n.id}`) : '')
-    const label = `${n.event_type || '?'} · ${shorten(labelHash, 8, 4)}`
-
-    gx.addNode(n.id, {
-      x: 0, y: 0,
-      size,
-      color,
-      label,
-      _node: n,
-      _isStart: isStart,
-    })
-    dgx.setNode(n.id, { width: Math.max(60, label.length * 7), height: 28 })
-  }
-
-  // Distinct-key edges so multi-edges (same source/target, different type)
-  // don't collide. Defensive try/catch: graph-node shouldn't emit an edge
-  // referencing a missing node, but skip rather than crash if it does.
-  let edgeSeq = 0
-  for (const e of graph.edges) {
-    const color = edgeTypeColor(e.type)
-    const key = `${e.source}->${e.target}#${e.type}#${edgeSeq++}`
-    if (!gx.hasNode(e.source) || !gx.hasNode(e.target)) continue
-    try {
-      gx.addEdgeWithKey(key, e.source, e.target, {
-        // Line thickness stays slim (~2px); arrow head prominence comes from
-        // the custom arrow program's length/wideness ratios below, not from
-        // the edge size attribute. This decouples "how visible is the
-        // direction marker" from "how heavy does the connecting line read".
-        size: 2,
-        color,
-        type: 'arrow',
-        label: e.type,
-        _edge: e,
-      })
-    } catch {
-      continue
-    }
-    dgx.setEdge(e.source, e.target, {}, key)
-  }
-
-  dagre.layout(dgx)
-
-  // Copy positions back to graphology; flip y because Sigma's coordinate
-  // system has y growing upward (mathematical) while dagre's grows downward
-  // (screen). Without the flip the graph reads bottom-up on screen.
-  gx.forEachNode((nodeId) => {
-    const dnode = dgx.node(nodeId)
-    if (dnode) {
-      gx.mergeNodeAttributes(nodeId, { x: dnode.x, y: -dnode.y })
-    }
+  const { sigma } = renderSigmaDAG(graphContainer, graph, {
+    isFocalNode: (n) =>
+      (n.record_hash === fullHash) || (n.id === hashHex) || (n.id === fullHash),
   })
-
-  // Custom arrow-head program: defaults are length=2.5x, wideness=2x of the
-  // edge size, which renders almost-invisible arrowheads on thin lines.
-  // Bumping the ratios lets the line stay slim while the direction marker
-  // reads at a glance, important because direction is the load-bearing
-  // signal in a provenance graph (which record came from which).
-  const ProminentArrowProgram = Sigma.rendering.createEdgeArrowProgram({
-    lengthToThicknessRatio: 5,
-    widenessToThicknessRatio: 6,
-  })
-
-  _activeSigmaInstance = new Sigma(gx, graphContainer, {
-    renderEdgeLabels: false,
-    defaultEdgeType: 'arrow',
-    edgeProgramClasses: { arrow: ProminentArrowProgram },
-    defaultNodeColor: _cssVar('--muted', '#9ca3af'),
-    labelColor: { color: _cssVar('--text-2', '#a0a3ab') },
-    labelSize: 11,
-    labelDensity: 0.4,
-    edgeLabelColor: { color: _cssVar('--text-3', '#6a6e78') },
-  })
-
-  // Click → drill into action view for that record.
-  _activeSigmaInstance.on('clickNode', ({ node }) => {
-    const attrs = gx.getNodeAttributes(node)
-    const n = attrs._node
-    if (n && n.record_hash) location.hash = `#/action/${n.record_hash}`
-    else if (n && n.id) location.hash = `#/action/sha256:${n.id}`
-  })
-
-  // Edge legend: built around the same activePairs column baseline as the
-  // node row so paired entries (ANNOTATES under annotation, etc.) stack
-  // vertically. Unpaired edges flow into columns after the unpaired-NODE
-  // columns so the row visually segregates "paired" / "node-only" / "edge-only".
-  const edgeKindOrder = [
-    ['INFORMED_BY', 'informed_by'],
-    ['PROVENANCE_OF', 'provenance_of'],
-    ['CHAIN_PRECEDES', 'chain_precedes'],
-    ['SESSION_PRECEDES', 'session_precedes'],
-    ['SESSION_PARALLEL', 'session_parallel'],
-    ['CROSS_SESSION', 'cross_session'],
-  ]
-  const presentUnpairedEdges = edgeKindOrder.filter(([typ]) =>
-    !pairedEdgeSet.has(typ) && presentEdgeTypes.has(typ),
-  )
-
-  // Edge row mirrors the node row's column scheme: paired entries at cols
-  // 1..P, tail at col P+1. The tail grid column is shared with NODES row's
-  // tail so the left edges of each row's unpaired entries align; each tail
-  // flexes independently so neither row inherits the other's content widths.
-  const edgeSwatches = []
-  activePairs.forEach(([, edgeKind], i) => {
-    if (presentEdgeTypes.has(edgeKind)) {
-      const cls = edgeKind.toLowerCase()
-      edgeSwatches.push(el('span',
-        { class: `swatch edge ${cls}`, style: `grid-column: ${i + 1};` },
-        edgeKind))
-    }
-  })
-  if (presentUnpairedEdges.length > 0) {
-    const tail = el('div', { class: 'legend-tail', style: `grid-column: ${tailCol};` })
-    presentUnpairedEdges.forEach(([typ, cls]) => {
-      tail.append(el('span', { class: `swatch edge ${cls}` }, typ))
-    })
-    edgeSwatches.push(tail)
-  }
-  if (edgeSwatches.length === 0) {
-    edgeLegendRow.replaceChildren(el('span', { class: 'swatch empty' }, 'none in this trace'))
-  } else {
-    edgeLegendRow.replaceChildren(...edgeSwatches)
-  }
+  _activeSigmaInstance = sigma
 }
 
 // ─── Anchoring view ──────────────────────────────────────────────────────
