@@ -1,0 +1,33 @@
+{
+  "name": "@atrib/recall",
+  "version": "0.1.0",
+  "description": "MCP server for atrib. Lets agents query their own provable past from the local signed-record mirror with per-record signature verification.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "atrib-recall": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@atrib/mcp": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.5"
+  },
+  "license": "Apache-2.0",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}
