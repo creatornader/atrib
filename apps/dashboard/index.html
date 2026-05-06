@@ -2145,7 +2145,11 @@ async function renderTrace(rawHash) {
     if (!gx.hasNode(e.source) || !gx.hasNode(e.target)) continue
     try {
       gx.addEdgeWithKey(key, e.source, e.target, {
-        size: 1.6,
+        // Line thickness stays slim (~2px); arrow head prominence comes from
+        // the custom arrow program's length/wideness ratios below, not from
+        // the edge size attribute. This decouples "how visible is the
+        // direction marker" from "how heavy does the connecting line read".
+        size: 2,
         color,
         type: 'arrow',
         label: e.type,
@@ -2169,9 +2173,20 @@ async function renderTrace(rawHash) {
     }
   })
 
+  // Custom arrow-head program: defaults are length=2.5x, wideness=2x of the
+  // edge size, which renders almost-invisible arrowheads on thin lines.
+  // Bumping the ratios lets the line stay slim while the direction marker
+  // reads at a glance, important because direction is the load-bearing
+  // signal in a provenance graph (which record came from which).
+  const ProminentArrowProgram = Sigma.rendering.createEdgeArrowProgram({
+    lengthToThicknessRatio: 5,
+    widenessToThicknessRatio: 6,
+  })
+
   _activeSigmaInstance = new Sigma(gx, graphContainer, {
     renderEdgeLabels: false,
     defaultEdgeType: 'arrow',
+    edgeProgramClasses: { arrow: ProminentArrowProgram },
     defaultNodeColor: _cssVar('--muted', '#9ca3af'),
     labelColor: { color: _cssVar('--text-2', '#a0a3ab') },
     labelSize: 11,
