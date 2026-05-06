@@ -1,6 +1,6 @@
 {
   "name": "@atrib/atrib-summarize",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "MCP server exposing the summarize tool — synthesizes a narrative across N records using an OpenAI-compatible LLM. Closes the consumer-side cognitive-loop primitive: agents read context, not raw records.",
   "license": "Apache-2.0",
   "private": true,
