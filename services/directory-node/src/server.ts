@@ -157,7 +157,7 @@ async function handle(
   // Service-info index. Both the bare hostname (/) and the version-scoped
   // base (/v6) return the same discovery JSON. Without this handler, GET
   // https://directory.atrib.dev/ and /v6 both 404, which is confusing
-  // because READMEs and the CLI default both write the URL as if browseable.
+  // because READMEs and the CLI default both write the URL as if browsable.
   // Mirrors the pattern in log-node and graph-node so all three services
   // share a uniform discovery surface. Endpoint URLs are derived from
   // CURRENT_VERSION; a future major version bump (e.g. v7) is a single
@@ -184,7 +184,7 @@ async function handle(
         audit_proof: `GET /${v}/audit-proof?from=N&to=M`,
       },
       explorer: 'https://explore.atrib.dev/',
-      note: 'This base URL has no browseable UI. Use the endpoints listed above. The public explorer at https://explore.atrib.dev/ composes log + graph + directory reads into a unified surface.',
+      note: 'This base URL has no browsable UI. Use the endpoints listed above. The public explorer at https://explore.atrib.dev/ composes log + graph + directory reads into a unified surface.',
     })
     return
   }

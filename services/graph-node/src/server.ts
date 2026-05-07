@@ -181,7 +181,7 @@ async function handleRequest(
         ingest: `POST /${v}/ingest`,
       },
       explorer: 'https://explore.atrib.dev/',
-      note: 'This base URL has no browseable UI. Use the endpoints listed above. The public explorer at https://explore.atrib.dev/ composes log + graph + directory reads into a unified surface.',
+      note: 'This base URL has no browsable UI. Use the endpoints listed above. The public explorer at https://explore.atrib.dev/ composes log + graph + directory reads into a unified surface.',
     })
   }
 
