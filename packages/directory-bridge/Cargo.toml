@@ -20,6 +20,12 @@ getrandom = { version = "0.2", features = ["js"] }
 bincode = "1"
 hex = "0.4"
 
+[dev-dependencies]
+# Native test runtime. AKD's prover + verifier paths are async; we drive
+# them through tokio::test in the test module. Only used for
+# `cargo test`; never in the WASM build.
+tokio = { version = "1", features = ["macros", "rt"] }
+
 [features]
 default = ["console_error_panic_hook"]
 

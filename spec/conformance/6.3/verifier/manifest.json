@@ -1,0 +1,70 @@
+{
+  "spec_section": "6.3",
+  "spec_title": "Verifier consultation algorithm — proof verification primitives",
+  "decision_link": "D034 (AKD) + D051 (capability declarations) + D052 (cross-attestation)",
+  "generated_at": 1767225600000,
+  "generator": "packages/log-dev/scripts/generate-conformance-6.3.ts",
+  "backend": {
+    "vrf": "HardCodedAkdVRF",
+    "configuration": "WhatsAppV1Configuration",
+    "vrf_public_key_b64u": "9uxJyAhfTUvmnbjiSL8RziiAJvW4xfZZne_lgwPQcC0"
+  },
+  "cases": [
+    {
+      "file": "cases/lookup-verify-accept.json",
+      "name": "lookup-verify-accept",
+      "kind": "lookup"
+    },
+    {
+      "file": "cases/lookup-verify-reject-root.json",
+      "name": "lookup-verify-reject-root",
+      "kind": "lookup"
+    },
+    {
+      "file": "cases/lookup-verify-reject-vrf.json",
+      "name": "lookup-verify-reject-vrf",
+      "kind": "lookup"
+    },
+    {
+      "file": "cases/lookup-verify-reject-label.json",
+      "name": "lookup-verify-reject-label",
+      "kind": "lookup"
+    },
+    {
+      "file": "cases/lookup-verify-reject-epoch.json",
+      "name": "lookup-verify-reject-epoch",
+      "kind": "lookup"
+    },
+    {
+      "file": "cases/audit-verify-accept-2.json",
+      "name": "audit-verify-accept-2",
+      "kind": "audit"
+    },
+    {
+      "file": "cases/audit-verify-accept-4.json",
+      "name": "audit-verify-accept-4",
+      "kind": "audit"
+    },
+    {
+      "file": "cases/audit-verify-reject-start.json",
+      "name": "audit-verify-reject-start",
+      "kind": "audit"
+    },
+    {
+      "file": "cases/audit-verify-reject-end.json",
+      "name": "audit-verify-reject-end",
+      "kind": "audit"
+    },
+    {
+      "file": "cases/audit-verify-reject-mid.json",
+      "name": "audit-verify-reject-mid",
+      "kind": "audit"
+    },
+    {
+      "file": "cases/audit-verify-reject-count.json",
+      "name": "audit-verify-reject-count",
+      "kind": "audit"
+    }
+  ],
+  "note": "These eleven cases exercise the verifier-side primitives at the heart of §6.3 steps 5 + 7. The other §6.3 steps (anchor fetch, freshness, witness coverage, checkpoint signature, revocation) surface as warnings or output fields rather than single deterministic input/output pairs and are not fixture-replayable. A third-party implementation can decode each input field, run lookup_verify or audit_verify against the AKD configuration declared in `backend`, and assert the boolean matches `expected.verifies`. Re-run the generator when akd 0.x bumps; the proof byte format is version-coupled."
+}
