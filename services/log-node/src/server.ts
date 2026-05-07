@@ -145,6 +145,49 @@ async function handleRequest(
     return handleDashboard(res)
   }
 
+  // Service-info index for the bare hostname when NOT served over
+  // explore.atrib.dev (i.e. log.atrib.dev itself or any other host).
+  // Without this, GET https://log.atrib.dev/ 404s, which is confusing
+  // because READMEs and docs reference the bare hostname as if it were
+  // browseable. Mirrors directory-node's /v6 index pattern and follows
+  // the GitHub `api.github.com` / Stripe `api.stripe.com` convention of
+  // returning a discovery JSON at the bare hostname rather than a 404
+  // or auto-redirect to the latest version (auto-redirect breaks the
+  // version-isolation contract on future major-version ships).
+  //
+  // Endpoint URLs are derived from current_version so a future major
+  // version bump (when v2 ships) is a single CURRENT_VERSION change
+  // plus appending to SUPPORTED_VERSIONS. The endpoint catalog stays
+  // valid for the new version, and old `/v1/...` URLs keep resolving
+  // until v1 is formally deprecated and removed.
+  if (req.method === 'GET' && (urlPath === '/' || urlPath === '')) {
+    const CURRENT_VERSION = 'v1'
+    const SUPPORTED_VERSIONS = ['v1']
+    const v = CURRENT_VERSION
+    return sendJson(res, 200, {
+      service: 'atrib-log-node',
+      versions: SUPPORTED_VERSIONS,
+      current_version: CURRENT_VERSION,
+      origin: `log.atrib.dev/${v}`,
+      spec: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2-merkle-log-protocol',
+      endpoints: {
+        submit: `POST /${v}/entries`,
+        checkpoint: `GET /${v}/checkpoint`,
+        log_pubkey: `GET /${v}/log-pubkey`,
+        pubkey_json: `GET /${v}/pubkey`,
+        stats: `GET /${v}/stats`,
+        recent: `GET /${v}/recent`,
+        lookup: `GET /${v}/lookup/<record_hash_hex>`,
+        by_context: `GET /${v}/by-context/<context_id_hex>`,
+        by_creator: `GET /${v}/by-creator/<creator_key_b64url>`,
+        tile: `GET /${v}/tile/<level>/<index>`,
+        entry_bundle: `GET /${v}/tile/entries/<index>`,
+      },
+      explorer: 'https://explore.atrib.dev/',
+      note: 'This base URL has no browseable UI. Use the endpoints listed above. The public explorer at https://explore.atrib.dev/ composes log + graph + directory reads into a unified surface.',
+    })
+  }
+
   if (req.method === 'POST' && req.url === '/v1/entries') {
     return handleSubmit(req, res, tree, signer, proofCache, acquireLock, graphFanoutEndpoint)
   }

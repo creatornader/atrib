@@ -154,27 +154,37 @@ async function handle(
   directory: AtribDirectory,
   config: DirectoryServerConfig,
 ): Promise<void> {
-  // GET /v6, service-info index for the bare base URL. Without this
-  // handler, `curl https://directory.atrib.dev/v6` 404s, which is
-  // confusing because the README and CLI default both write the URL as
-  // if it were a browseable surface. The index returns a small JSON
-  // document listing the available endpoints so visitors get an
-  // affordance for discovery and humans clicking the URL from docs land
-  // on a useful page rather than 404.
-  if (req.method === 'GET' && (url.pathname === '/v6' || url.pathname === '/v6/')) {
+  // Service-info index. Both the bare hostname (/) and the version-scoped
+  // base (/v6) return the same discovery JSON. Without this handler, GET
+  // https://directory.atrib.dev/ and /v6 both 404, which is confusing
+  // because READMEs and the CLI default both write the URL as if browseable.
+  // Mirrors the pattern in log-node and graph-node so all three services
+  // share a uniform discovery surface. Endpoint URLs are derived from
+  // CURRENT_VERSION; a future major version bump (e.g. v7) is a single
+  // constant change plus an append to SUPPORTED_VERSIONS.
+  if (
+    req.method === 'GET' &&
+    (url.pathname === '/' || url.pathname === '' ||
+     url.pathname === '/v6' || url.pathname === '/v6/')
+  ) {
+    const CURRENT_VERSION = 'v6'
+    const SUPPORTED_VERSIONS = ['v6']
+    const v = CURRENT_VERSION
     jsonResponse(res, 200, {
       service: 'atrib-directory-node',
-      version: 'v6',
+      versions: SUPPORTED_VERSIONS,
+      current_version: CURRENT_VERSION,
       origin: config.origin,
       spec: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#6-key-directory',
       endpoints: {
-        publish: 'POST /v6/publish',
-        lookup: 'GET /v6/lookup/:creator_key',
-        history: 'GET /v6/history/:creator_key',
-        anchor: 'GET /v6/anchor',
-        audit_proof: 'GET /v6/audit-proof?from=N&to=M',
+        publish: `POST /${v}/publish`,
+        lookup: `GET /${v}/lookup/<creator_key>`,
+        history: `GET /${v}/history/<creator_key>`,
+        anchor: `GET /${v}/anchor`,
+        audit_proof: `GET /${v}/audit-proof?from=N&to=M`,
       },
-      note: 'This base URL has no browseable UI. Use the endpoints listed above. The public explorer at https://explore.atrib.dev/ composes lookups across log, graph, and directory services.',
+      explorer: 'https://explore.atrib.dev/',
+      note: 'This base URL has no browseable UI. Use the endpoints listed above. The public explorer at https://explore.atrib.dev/ composes log + graph + directory reads into a unified surface.',
     })
     return
   }

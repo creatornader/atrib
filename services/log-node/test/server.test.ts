@@ -119,6 +119,19 @@ describe('POST /v1/entries', () => {
   })
 })
 
+describe('GET / (service-info index)', () => {
+  it('returns service-info JSON for non-explore.atrib.dev hosts', async () => {
+    const res = await fetch(`${server.url}/`)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.service).toBe('atrib-log-node')
+    expect(body.versions).toEqual(['v1'])
+    expect(body.current_version).toBe('v1')
+    expect(body.endpoints.submit).toBe('POST /v1/entries')
+    expect(body.explorer).toBe('https://explore.atrib.dev/')
+  })
+})
+
 describe('GET /v1/checkpoint', () => {
   it('returns the signed checkpoint as text after at least one entry', async () => {
     // Ensure there is at least one entry in this server's tree
@@ -581,19 +594,36 @@ describe('GET /dashboard', () => {
     expect(got.body).toMatch(/<!doctype html>/i)
   })
 
-  it('returns API 404 at root when Host=log.atrib.dev', async () => {
+  it('returns service-info JSON (not the dashboard) at root when Host=log.atrib.dev', async () => {
+    // Pre-2026-05-06: bare / on Host=log.atrib.dev returned 404, intentionally,
+    // so the dashboard would never accidentally render on the API hostname.
+    // Post-fix: bare / on Host=log.atrib.dev returns the service-info index
+    // (matches GitHub api.github.com / Stripe api.stripe.com discovery
+    // pattern). The "no dashboard on API hostname" invariant is preserved
+    // by content-type assertion below, dashboard would be text/html, the
+    // service-info is application/json.
     const u = new URL(server.url)
-    const got = await new Promise<number>((resolve, reject) => {
+    const got = await new Promise<{ status: number, ct: string, body: string }>((resolve, reject) => {
       const req = httpRequest({
         method: 'GET', hostname: u.hostname, port: u.port, path: '/',
         headers: { host: 'log.atrib.dev' },
       }, (res: IncomingMessage) => {
-        res.resume()
-        resolve(res.statusCode ?? 0)
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => resolve({
+          status: res.statusCode ?? 0,
+          ct: String(res.headers['content-type'] ?? ''),
+          body: Buffer.concat(chunks).toString('utf-8'),
+        }))
       })
       req.on('error', reject)
       req.end()
     })
-    expect(got).toBe(404)
+    expect(got.status).toBe(200)
+    expect(got.ct).toContain('application/json')
+    expect(got.body).not.toMatch(/<!doctype html>/i)
+    const body = JSON.parse(got.body)
+    expect(body.service).toBe('atrib-log-node')
+    expect(body.current_version).toBe('v1')
   })
 })

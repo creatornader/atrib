@@ -327,6 +327,18 @@ describe('graph-node server (section 3.4)', () => {
     expect(res.status).toBe(404)
   })
 
+  it('GET / returns service-info index', async () => {
+    const res = await fetch(`${url}/`)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.service).toBe('atrib-graph-node')
+    expect(body.versions).toEqual(['v1'])
+    expect(body.current_version).toBe('v1')
+    expect(body.endpoints.trace).toBe('GET /v1/trace/<record_hash>')
+    expect(body.endpoints.chain).toBe('GET /v1/chain/<record_hash>')
+    expect(body.explorer).toBe('https://explore.atrib.dev/')
+  })
+
   it('GET /v1/graph/:context_id/nodes accepts URI form for all 6 normative event_types', async () => {
     // Pre-D063 the inline normalizer only covered tool_call / transaction /
     // observation; URI queries for directory_anchor / annotation / revision

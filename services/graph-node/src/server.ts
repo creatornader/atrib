@@ -152,6 +152,38 @@ async function handleRequest(
 ): Promise<void> {
   const url = req.url ?? ''
   const method = req.method ?? ''
+  const urlPath = url.split('?')[0]
+
+  // Service-info index for the bare hostname. Mirrors the pattern in
+  // log-node and directory-node so a curl https://graph.atrib.dev/ no
+  // longer 404s. Lists supported versions and the endpoint catalog so
+  // visitors get a useful discovery surface. Endpoint URLs are derived
+  // from CURRENT_VERSION; a future major version bump is a single
+  // constant change plus an append to SUPPORTED_VERSIONS.
+  if (method === 'GET' && (urlPath === '/' || urlPath === '')) {
+    const CURRENT_VERSION = 'v1'
+    const SUPPORTED_VERSIONS = ['v1']
+    const v = CURRENT_VERSION
+    return sendJson(res, 200, {
+      service: 'atrib-graph-node',
+      versions: SUPPORTED_VERSIONS,
+      current_version: CURRENT_VERSION,
+      origin: `graph.atrib.dev/${v}`,
+      spec: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#3-graph-query-interface',
+      endpoints: {
+        graph: `GET /${v}/graph/<context_id>`,
+        graph_nodes: `GET /${v}/graph/<context_id>/nodes`,
+        graph_transaction: `GET /${v}/graph/<context_id>/transaction`,
+        creator_sessions: `GET /${v}/creators/<creator_key>/sessions`,
+        creator_graph: `GET /${v}/creators/<creator_key>/graph`,
+        trace: `GET /${v}/trace/<record_hash>`,
+        chain: `GET /${v}/chain/<record_hash>`,
+        ingest: `POST /${v}/ingest`,
+      },
+      explorer: 'https://explore.atrib.dev/',
+      note: 'This base URL has no browseable UI. Use the endpoints listed above. The public explorer at https://explore.atrib.dev/ composes log + graph + directory reads into a unified surface.',
+    })
+  }
 
   // POST /v1/ingest
   if (method === 'POST' && url === '/v1/ingest') {
