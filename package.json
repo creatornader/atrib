@@ -22,6 +22,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "doc-sync": "node scripts/check-doc-sync.mjs",
+    "typos": "typos .",
     "clean": "turbo clean",
     "version-packages": "changeset version",
     "release": "pnpm -r build && changeset publish"

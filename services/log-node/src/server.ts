@@ -149,7 +149,7 @@ async function handleRequest(
   // explore.atrib.dev (i.e. log.atrib.dev itself or any other host).
   // Without this, GET https://log.atrib.dev/ 404s, which is confusing
   // because READMEs and docs reference the bare hostname as if it were
-  // browseable. Mirrors directory-node's /v6 index pattern and follows
+  // browsable. Mirrors directory-node's /v6 index pattern and follows
   // the GitHub `api.github.com` / Stripe `api.stripe.com` convention of
   // returning a discovery JSON at the bare hostname rather than a 404
   // or auto-redirect to the latest version (auto-redirect breaks the
@@ -184,7 +184,7 @@ async function handleRequest(
         entry_bundle: `GET /${v}/tile/entries/<index>`,
       },
       explorer: 'https://explore.atrib.dev/',
-      note: 'This base URL has no browseable UI. Use the endpoints listed above. The public explorer at https://explore.atrib.dev/ composes log + graph + directory reads into a unified surface.',
+      note: 'This base URL has no browsable UI. Use the endpoints listed above. The public explorer at https://explore.atrib.dev/ composes log + graph + directory reads into a unified surface.',
     })
   }
 

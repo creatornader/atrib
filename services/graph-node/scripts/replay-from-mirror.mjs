@@ -86,7 +86,7 @@ for (const raw of lines) {
   if (records.length >= MAX_RECORDS) break
 }
 
-log(`parsed ${records.length} records${parseErrors > 0 ? ` (${parseErrors} unparseable lines skipped)` : ''}`)
+log(`parsed ${records.length} records${parseErrors > 0 ? ` (${parseErrors} unparsable lines skipped)` : ''}`)
 if (records.length === 0) {
   log('nothing to replay; exiting clean')
   process.exit(0)
