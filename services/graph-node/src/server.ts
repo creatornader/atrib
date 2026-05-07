@@ -694,7 +694,7 @@ async function handleIngest(
   if (typeof headerIdx === 'string' && /^\d+$/.test(headerIdx)) {
     logIndex = parseInt(headerIdx, 10)
   }
-  store.addRecord(record, logIndex)
+  const wasNew = store.addRecord(record, logIndex)
 
   // Persistence hook (optional). The archive append is best-effort: a
   // failure here means the record stays in the in-memory store but won't
@@ -703,7 +703,11 @@ async function handleIngest(
   // recovery source. Awaiting the hook serializes appends per ingest, which
   // is what we want (the order the in-memory store accepted records is the
   // order they're durably recorded).
-  if (onRecordIngested) {
+  //
+  // Skip the hook on dedup hits: re-appending an already-archived record
+  // bloats the archive with duplicates and slows replay-on-cold-start. The
+  // store's dedup index (seenRecordHashes) is the source of truth.
+  if (onRecordIngested && wasNew) {
     try {
       await onRecordIngested(record, logIndex)
     } catch (err) {

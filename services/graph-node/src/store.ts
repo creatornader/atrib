@@ -15,8 +15,14 @@ export interface RecordStore {
    * log-node fanout via the x-atrib-log-index header), revocation
    * semantics per §1.9.3 require it. When omitted, revocation cannot
    * be applied to records signed by this creator_key.
+   *
+   * Returns `true` when the record was new (added to the store) and
+   * `false` when the record was already present (dedup hit). Callers
+   * MAY use the boolean to skip downstream side effects on duplicate
+   * ingest, most importantly, the persistence appender skips
+   * duplicate writes to keep the on-disk archive free of redundancy.
    */
-  addRecord(record: AtribRecord, logIndex?: number): void
+  addRecord(record: AtribRecord, logIndex?: number): boolean
   addGapNode(gapNode: GapNode): void
   getRecordsByContextId(contextId: string): AtribRecord[]
   getGapNodesByContextId(contextId: string): GapNode[]
@@ -55,7 +61,7 @@ export function createRecordStore(): RecordStore {
   const allRecords: { record: AtribRecord; recordHash: string }[] = []
 
   return {
-    addRecord(record: AtribRecord, logIndex?: number): void {
+    addRecord(record: AtribRecord, logIndex?: number): boolean {
       const recordHash = hexEncode(sha256(canonicalRecord(record)))
       if (seenRecordHashes.has(recordHash)) {
         // If the record was previously ingested without a log_index but is
@@ -63,7 +69,7 @@ export function createRecordStore(): RecordStore {
         if (typeof logIndex === 'number' && !logIndexByHash.has(recordHash)) {
           logIndexByHash.set(recordHash, logIndex)
         }
-        return
+        return false
       }
       seenRecordHashes.add(recordHash)
       if (typeof logIndex === 'number') logIndexByHash.set(recordHash, logIndex)
@@ -76,6 +82,7 @@ export function createRecordStore(): RecordStore {
       const contexts = byCreator.get(record.creator_key) ?? new Set()
       contexts.add(record.context_id)
       byCreator.set(record.creator_key, contexts)
+      return true
     },
 
     addGapNode(gapNode: GapNode): void {

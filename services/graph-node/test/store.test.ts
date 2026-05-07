@@ -40,6 +40,34 @@ describe('RecordStore dedup', () => {
     expect(store.getRecordsByContextId(record.context_id).length).toBe(1)
   })
 
+  it('addRecord returns true on first add and false on duplicates', async () => {
+    const store = createRecordStore()
+    const record = await makeRecord()
+
+    expect(store.addRecord(record)).toBe(true)
+    expect(store.addRecord(record)).toBe(false)
+    expect(store.addRecord(record)).toBe(false)
+  })
+
+  it('addRecord boolean-was-new lets the caller skip side effects on dup', async () => {
+    const store = createRecordStore()
+    const r1 = await makeRecord({ content_id: `sha256:${'a'.repeat(64)}`, timestamp: 1_700_000_000_001 })
+    const r2 = await makeRecord({ content_id: `sha256:${'b'.repeat(64)}`, timestamp: 1_700_000_000_002 })
+    let appendCalls = 0
+    const onIngest = (rec: typeof r1) => {
+      const wasNew = store.addRecord(rec)
+      if (wasNew) appendCalls += 1
+    }
+
+    onIngest(r1)
+    onIngest(r2)
+    onIngest(r1) // duplicate: should NOT append
+    onIngest(r2) // duplicate: should NOT append
+    onIngest(r1) // duplicate: should NOT append
+
+    expect(appendCalls).toBe(2)
+  })
+
   it('addRecord keeps distinct records with the same context_id', async () => {
     const store = createRecordStore()
     // Distinguish by content_id (changes record_hash). Same context_id.
