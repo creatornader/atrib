@@ -1614,7 +1614,69 @@ async function renderIdentity(creatorKey) {
     ))
   }
 
+  // Activity-map graph (§3.4.7 / D068.consequences). Composes records across
+  // every session this creator participated in into a single graph response.
+  // Surfaces cross-session edges (CROSS_SESSION via shared session_token,
+  // PROVENANCE_OF anchoring sessions) that the per-session DAG cannot show.
+  // Renders only when the API returns a non-empty graph; falls back silently
+  // when graph-node hasn't ingested yet.
+  const activityGraphContainer = el('div', { class: 'trace-graph', id: 'identity-activity-graph' })
+  const activityNodeLegend = el('div', { class: 'legend-row', id: 'identity-activity-node-legend' })
+  const activityEdgeLegend = el('div', { class: 'legend-row', id: 'identity-activity-edge-legend' })
+  const activityLegend = el('div', { class: 'graph-legend' },
+    el('span', { class: 'legend-label' }, 'nodes'),
+    activityNodeLegend,
+    el('span', { class: 'legend-label' }, 'edges'),
+    activityEdgeLegend,
+  )
+  const activitySection = el('section', { class: 'panel flush' },
+    el('div', { class: 'panel-head' },
+      el('h2', {}, 'activity map'),
+      el('span', { class: 'meta' }, 'all signed records across sessions · cross-session edges visible'),
+    ),
+    activityGraphContainer,
+    activityLegend,
+  )
+  stack.append(activitySection)
+  activityGraphContainer.replaceChildren(el('div', { class: 'loading' }, 'loading activity map…'))
+
   clearAndRender(root)
+
+  // Async fetch + render. Capture the route generation so the renderer
+  // bails if the user navigates mid-fetch.
+  const myGen = currentRouteGeneration()
+  ;(async () => {
+    const activity = await fetchMaybe(`${ep.graph}/creators/${encodeURIComponent(creatorKey)}/graph`)
+    if (!routeGenerationStillCurrent(myGen)) return
+    if (activity._error || !activity.graph || !activity.graph.nodes || activity.graph.nodes.length === 0) {
+      activitySection.remove()
+      return
+    }
+    const graph = activity.graph
+    if (graph.edges.length === 0) {
+      activityGraphContainer.replaceChildren(el('div', { class: 'empty' },
+        'No cross-record edges in this creator\'s activity. Each session\'s records render independently in the per-session view.',
+      ))
+      populateGraphLegend(activityNodeLegend, activityEdgeLegend, graph)
+      return
+    }
+    try {
+      await loadGraphLibs()
+    } catch (e) {
+      activityGraphContainer.replaceChildren(el('div', { class: 'err-banner' },
+        el('span', { class: 'label' }, 'graph library load error:'), ' ', e.message,
+      ))
+      return
+    }
+    if (!routeGenerationStillCurrent(myGen)) return
+    activityGraphContainer.replaceChildren()
+    const { sigma } = renderSigmaDAG(activityGraphContainer, graph, {})
+    if (_activeSigmaInstance) {
+      try { _activeSigmaInstance.kill() } catch {}
+    }
+    _activeSigmaInstance = sigma
+    populateGraphLegend(activityNodeLegend, activityEdgeLegend, graph)
+  })()
 }
 
 function renderClaimBody(lookup) {
@@ -2445,21 +2507,21 @@ function appendChainSection(root, chainResult, fullHash) {
     sectionHead,
     el('div', { class: 'panel-body' },
       // Scope hint: explicitly call out that this list is a SUBSET (just
-      // chain_precedes) of what the graph above renders (all 4 edge types).
-      // Prevents the reader from guessing whether the list re-renders the
-      // graph or shows something different.
+      // chain_precedes) of what the graph above renders. The graph derives
+      // every applicable edge type from the merged record set — up to 9
+      // when all are present — so naming a fixed count would be wrong.
       el('p', { style: 'margin: 0 0 12px; color: var(--text-3); font-size: 13px;' },
         'Linear timeline view of the substrate-derived ',
         el('code', {}, 'chain_precedes'),
-        ' edges only. The graph above shows all four edge types (',
+        ' edges only. The graph above shows producer-claimed ancestry (',
         el('code', {}, 'informed_by'),
         ', ',
         el('code', {}, 'annotates'),
         ', ',
         el('code', {}, 'revises'),
-        ', and ',
+        ') alongside substrate-derived structure (',
         el('code', {}, 'chain_precedes'),
-        '); this section is the linear backbone read from the same chain.',
+        ' plus session_precedes / session_parallel / cross_session / converges_on / provenance_of when applicable). This section is the linear backbone read from the same chain.',
       ),
       el('p', { style: 'margin: 0 0 12px; color: var(--text-2);' },
         nodes.length - 1, ' substrate-derived predecessor',
@@ -2521,20 +2583,20 @@ async function renderTrace(rawHash) {
       'A ',
       el('span', { class: 'term' }, 'trace'),
       ' is the backward provenance of one signed record, split into two views per spec §3.4.5/§3.4.6 (D068). The ',
-      el('strong', {}, 'provenance trace'),
-      ' graph above follows producer-claimed ancestry: ',
+      el('strong', {}, 'graph above'),
+      ' merges producer claims (',
       el('code', {}, 'informed_by'),
-      ' (D041), ',
+      ', ',
       el('code', {}, 'annotates'),
-      ' (D058), and ',
+      ', ',
       el('code', {}, 'revises'),
-      ' (D059) edges. The ',
-      el('strong', {}, 'chain predecessors'),
-      ' section below follows substrate-derived ordering: ',
+      ') with substrate-derived structure (',
       el('code', {}, 'chain_precedes'),
-      ' edges via ',
-      el('code', {}, 'chain_root'),
-      ' until session genesis. Every node is a real signed record; every edge is derived from record content alone — no semantic interpretation.',
+      ' plus session/cross-session/transaction edges when applicable) — up to 9 edge types when all are present. The ',
+      el('strong', {}, 'chain timeline below'),
+      ' is the linear backbone of the chain, ',
+      el('code', {}, 'chain_precedes'),
+      ' only. Every node is a real signed record; every edge is derived from record content alone — no semantic interpretation.',
     ],
   }))
 
@@ -2601,7 +2663,7 @@ async function renderTrace(rawHash) {
     el('section', { class: 'panel flush' },
       el('div', { class: 'panel-head' },
         el('h2', {}, 'ancestry graph'),
-        el('span', { class: 'meta' }, 'all 4 edge types · ', el('code', {}, 'informed_by'), ' / ', el('code', {}, 'annotates'), ' / ', el('code', {}, 'revises'), ' / ', el('code', {}, 'chain_precedes')),
+        el('span', { class: 'meta' }, 'producer claims + substrate structure · all 9 edge types when present'),
       ),
       controls,
       graphContainer,
