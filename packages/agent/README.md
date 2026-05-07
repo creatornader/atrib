@@ -297,7 +297,7 @@ Each example directory contains a `README.md` with framework-specific rationale 
 
 ---
 
-## Failure model (spec §5.8)
+## Failure model (spec [§5.8](../../atrib-spec.md#58-degradation-contract))
 
 The entire atrib integration is wrapped in defensive error handling at every adapter boundary. If any of the following fails, the original tool call continues normally and an `atrib:`-prefixed warning is logged:
 

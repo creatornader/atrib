@@ -65,5 +65,5 @@ Or run via `npx`:
 ## What this does NOT do
 
 - **No log-inclusion verification.** Local signature verification ≠ log commitment proof. Use the log API for inclusion proofs.
-- **No graph derivation.** Returns records, not the §3.2.4 graph. For that, use `@atrib/trace` (causal chain) or query graph-node directly.
+- **No graph derivation.** Returns records, not the [§3.2.4](../../atrib-spec.md#324-edge-derivation-rules) graph. For that, use `@atrib/trace` (causal chain) or query graph-node directly.
 - **No write surface.** Read-only. Use `@atrib/emit` to sign new records.

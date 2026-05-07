@@ -418,7 +418,7 @@ The user passes the proxy to Claude Agent SDK as `{ type: 'sdk', name, instance:
 - **A Claude-SDK-specific wrapper helper** like `wrapClaudeAgentSdkMcpServer(sdkConfig)`. Rejected: it would only repackage the one-line `atrib(sdkServer.instance, opts)` call into a less explicit form, hiding the fact that the user already owns a real `McpServer`. Worse, it would create the false impression that atrib needs Claude-Agent-SDK-aware code, discouraging users from understanding that the same `atrib()` function works against any MCP host.
 - **A JSON-Schema → Zod converter** so `createAtribProxy` could use `McpServer.registerTool()`. Rejected: `registerTool` is not the only path to register a `tools/call` handler (the low-level `setRequestHandler` is supported and more honest about what we're doing), the conversion is lossy for JSON Schema features Zod doesn't model cleanly (e.g., `oneOf`, `not`), and it adds a new failure mode for v1 with no real upside.
 - **Forwarding upstream tool definitions through `registerTool` with a permissive `z.any()` schema.** Rejected: `z.any()` schemas defeat the entire purpose of the schema validation that the SDK does at registration time; tool inputs would be passed through unchecked. The low-level approach is structurally identical without misleading about validation.
-- **Multi-upstream fan-out per proxy.** Rejected for v1 (D020 already locked this in). Each proxy maps 1:1 to an upstream; users with N upstreams create N proxies. Simpler reasoning, no namespace-collision logic, easier failure isolation per upstream.
+- **Multi-upstream fan-out per proxy.** Rejected for v1 ([D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision) already locked this in). Each proxy maps 1:1 to an upstream; users with N upstreams create N proxies. Simpler reasoning, no namespace-collision logic, easier failure isolation per upstream.
 - **Dynamic tool list refresh.** Deferred to V2. The proxy snapshots `listTools()` once at construction. Restart the proxy if the upstream catalog changes. The upstream-driven `tools/list_changed` notification path can be added later without breaking the public API.
 
 **Files added:**
@@ -428,7 +428,7 @@ The user passes the proxy to Claude Agent SDK as `{ type: 'sdk', name, instance:
   1. `tools/list` is forwarded from the upstream snapshot
   2. `tools/call` forwards arguments and returns the response unchanged
   3. Attribution records are emitted on the proxy side (verified via mocked submission `fetch` and outbound `_meta.atrib` token)
-  4. §5.8 degradation: upstream `isError: true` results propagate without record emission (per §5.3.3)
+  4. [§5.8](atrib-spec.md#58-degradation-contract) degradation: upstream `isError: true` results propagate without record emission (per [§5.3.3](atrib-spec.md#533-record-construction-and-signing))
   5. `close()` disconnects the upstream client cleanly
 
 **Files modified:**
@@ -469,7 +469,7 @@ export function createAtribProxy(options: AtribProxyOptions): Promise<AtribProxy
 ## D022: Cloudflare Agents adapter: McpAgent server-side is zero-code; Agent client-side uses attributeCloudflareAgentMcp() (NOT createAtribProxy)
 
 **Date:** 2026-04-06
-**Context:** D020 set the framework-adapter build order as Claude Agent SDK → Cloudflare Agents → Vercel AI SDK and described the Cloudflare adapter as "the same proxy server pattern as Claude Agent SDK", i.e. expected to reuse the `createAtribProxy()` primitive shipped in D021. Before writing code, the actual `agents@0.9.0` source was inspected (npm pack + grep on `dist/index-BtHngIIG.d.ts` and `dist/client-BwgM3cRz.js`). The findings make the right architecture noticeably different from D020's prediction in two ways: the proxy isn't needed for either of Cloudflare's two MCP surfaces, and the client-side surface is even smaller than expected.
+**Context:** [D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision) set the framework-adapter build order as Claude Agent SDK → Cloudflare Agents → Vercel AI SDK and described the Cloudflare adapter as "the same proxy server pattern as Claude Agent SDK", i.e. expected to reuse the `createAtribProxy()` primitive shipped in [D021](#d021-claude-agent-sdk-case-a-is-zero-new-code-case-b-uses-createatribproxy-in-process-forwarder). Before writing code, the actual `agents@0.9.0` source was inspected (npm pack + grep on `dist/index-BtHngIIG.d.ts` and `dist/client-BwgM3cRz.js`). The findings make the right architecture noticeably different from [D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision)'s prediction in two ways: the proxy isn't needed for either of Cloudflare's two MCP surfaces, and the client-side surface is even smaller than expected.
 
 **What Cloudflare Agents actually exposes (verified against `agents@0.9.0`):**
 
@@ -502,7 +502,7 @@ export class WeatherMcp extends McpAgent<Env> {
 }
 ```
 
-This is the same Case A pattern as Claude Agent SDK in D021. The retroactive wrapping shipped in commit `c450672` lets `atrib()` be called before OR after `registerTool()`.
+This is the same Case A pattern as Claude Agent SDK in [D021](#d021-claude-agent-sdk-case-a-is-zero-new-code-case-b-uses-createatribproxy-in-process-forwarder). The retroactive wrapping shipped in commit `c450672` lets `atrib()` be called before OR after `registerTool()`.
 
 ### Surface 2: `Agent.addMcpServer` (client-side, your Agent connects out to upstream MCP servers)
 
@@ -545,11 +545,11 @@ class WeatherChatAgent extends Agent<Env> {
 
 2. **Agent client-side:** new helper `attributeCloudflareAgentMcp(agent, { interceptor })` in `@atrib/agent` (NOT in `@atrib/mcp`; the wrap happens on the agent/consumer side, and it builds on the existing `wrapMcpClient` adapter). Plus a runnable example.
 
-**Why this is different from D020's prediction:**
+**Why this is different from [D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision)'s prediction:**
 
-D020 said the Cloudflare adapter would "use the same proxy server pattern as Claude Agent SDK". That prediction was based on the dependency-graph signal that `agents` bundles `@modelcontextprotocol/sdk`, and assumed the integration shape would mirror Claude SDK's. It was right that the McpAgent server-side surface exists, but the Cloudflare-specific architecture also exposes the client field publicly on `MCPClientConnection`, which is a more direct integration point than building a full proxy MCP server. The proxy approach would have worked but would have required deploying a separate Worker as the proxy URL, operationally heavier than necessary. Reading the source revealed the simpler path.
+[D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision) said the Cloudflare adapter would "use the same proxy server pattern as Claude Agent SDK". That prediction was based on the dependency-graph signal that `agents` bundles `@modelcontextprotocol/sdk`, and assumed the integration shape would mirror Claude SDK's. It was right that the McpAgent server-side surface exists, but the Cloudflare-specific architecture also exposes the client field publicly on `MCPClientConnection`, which is a more direct integration point than building a full proxy MCP server. The proxy approach would have worked but would have required deploying a separate Worker as the proxy URL, operationally heavier than necessary. Reading the source revealed the simpler path.
 
-**`createAtribProxy` is NOT part of the Cloudflare adapter.** The proxy primitive shipped in D021 is still useful: for hosts that DON'T expose the underlying Client field publicly, or for upstream MCP servers that the user wants to attribute from outside any host (e.g. exposing a stdio MCP server as an attributed HTTP endpoint that any consumer can connect to). But for Cloudflare specifically, the client-wrap path is strictly simpler and more direct.
+**`createAtribProxy` is NOT part of the Cloudflare adapter.** The proxy primitive shipped in [D021](#d021-claude-agent-sdk-case-a-is-zero-new-code-case-b-uses-createatribproxy-in-process-forwarder) is still useful: for hosts that DON'T expose the underlying Client field publicly, or for upstream MCP servers that the user wants to attribute from outside any host (e.g. exposing a stdio MCP server as an attributed HTTP endpoint that any consumer can connect to). But for Cloudflare specifically, the client-wrap path is strictly simpler and more direct.
 
 **Workers runtime constraint:** Cloudflare Workers don't support child processes, so the MCP SDK's `StdioClientTransport` doesn't work in the Worker runtime. Cloudflare Agents can only connect to upstream MCP servers via HTTP transports (`streamable-http` or the deprecated `sse`). If a user needs to attribute a stdio upstream from a Cloudflare Agent, they have to either run the stdio server elsewhere with an HTTP front-end, or use `createAtribProxy()` on a non-Worker runtime that proxies stdio out as Streamable HTTP and have the Cloudflare Agent connect to that proxy URL. The README in `packages/integration/examples/cloudflare-agents/` documents this.
 
@@ -562,7 +562,7 @@ D020 said the Cloudflare adapter would "use the same proxy server pattern as Cla
 
 **Files added:**
 
-- `packages/agent/src/adapters/cloudflare-agent.ts` (~170 lines): `attributeCloudflareAgentMcp(agent, options)` helper. Walks `agent.mcp.mcpConnections`, wraps each `client` with `wrapMcpClient`, marks wrapped clients with a `Symbol.for('atrib.cloudflare.wrapped')` for idempotency. Per-connection failures are caught and skipped per spec §5.8 degradation.
+- `packages/agent/src/adapters/cloudflare-agent.ts` (~170 lines): `attributeCloudflareAgentMcp(agent, options)` helper. Walks `agent.mcp.mcpConnections`, wraps each `client` with `wrapMcpClient`, marks wrapped clients with a `Symbol.for('atrib.cloudflare.wrapped')` for idempotency. Per-connection failures are caught and skipped per spec [§5.8](atrib-spec.md#58-degradation-contract) degradation.
 - `packages/agent/test/cloudflare-agent.test.ts`: 5 unit tests using a structural mock of `agents`'s `Agent.mcp` interface (we can't import the real `agents` package because it requires the WorkerD runtime). Tests cover: tool calls flow through the interceptor with W3C trace context in outbound `_meta`, idempotency on second helper call, malformed connection skip-without-throwing, missing `mcp.mcpConnections` returns 0 with warning, and `serverUrls` override.
 - `packages/integration/examples/cloudflare-agents/README.md`: Surface 1 + Surface 2 walkthrough, runtime-constraint notes, environment variables, and expected behavior.
 - `packages/integration/examples/cloudflare-agents/surface-1-mcp-agent.ts`: runnable McpAgent server example.
@@ -597,30 +597,30 @@ The `CloudflareAgentLike.mcp.mcpConnections[*].client` field is typed as `unknow
 
 **Notes on test coverage:**
 
-The cloudflare-agent unit tests can't import the real `agents` package because it depends on the WorkerD runtime (Durable Object bindings, Cloudflare-specific globals, etc.). Instead, the tests construct a structural mock that mirrors the public shape we depend on: `{ mcp: { mcpConnections: { [name]: { client: MinimalMcpClient, url } } } }`. This validates the helper's behavior against the same field shapes the real Cloudflare classes expose. If `agents` ever changes the public shape, the integration would break in production silently; a future improvement is to add a daily/weekly CI job that npm-installs the latest `agents` and runs a regression test against the real types (similar to the SDK shape regression test added in D019).
+The cloudflare-agent unit tests can't import the real `agents` package because it depends on the WorkerD runtime (Durable Object bindings, Cloudflare-specific globals, etc.). Instead, the tests construct a structural mock that mirrors the public shape we depend on: `{ mcp: { mcpConnections: { [name]: { client: MinimalMcpClient, url } } } }`. This validates the helper's behavior against the same field shapes the real Cloudflare classes expose. If `agents` ever changes the public shape, the integration would break in production silently; a future improvement is to add a daily/weekly CI job that npm-installs the latest `agents` and runs a regression test against the real types (similar to the SDK shape regression test added in [D019](#d019-mcp-sdk-monkey-patch-is-documented-and-shape-tested-against-the-real-sdk)).
 
 The runnable examples (`surface-1-mcp-agent.ts`, `surface-2-agent-client.ts`) are the secondary line of defense: they typecheck against user-installed `agents` in a real Worker project, and any breaking change in the Cloudflare API would surface there at deploy time.
 
 **Test results:** 360 tests passing across all 4 packages (was 355; +5 cloudflare-agent unit tests). No regressions in mcp (166), verify (82), or integration (5).
 
-**Followup:** Vercel AI SDK adapter is the next §6 chunk. Different shape entirely: wrap the `tools()` record returned by `createMCPClient`, not `callTool()`. Lives in `@atrib/agent`, similar surface to `attributeCloudflareAgentMcp` but different mechanism. After Vercel AI SDK, §7 (developer integration documentation) and §8 (TypeDoc API reference) remain.
+**Followup:** Vercel AI SDK adapter is the next [§6](atrib-spec.md#6-key-directory) chunk. Different shape entirely: wrap the `tools()` record returned by `createMCPClient`, not `callTool()`. Lives in `@atrib/agent`, similar surface to `attributeCloudflareAgentMcp` but different mechanism. After Vercel AI SDK, [§7](atrib-spec.md#7-harness-integration-patterns) (developer integration documentation) and [§8](atrib-spec.md#8-privacy-postures) (TypeDoc API reference) remain.
 
 ---
 
 ## D023: Vercel AI SDK MCP adapter: monkey-patch `MCPClient.request`, NOT `wrapMcpClient` and NOT the `tools()` execute callbacks
 
 **Date:** 2026-04-06
-**Context:** Third framework adapter in the build order, after Claude Agent SDK (D021) and Cloudflare Agents (D022). The Vercel AI SDK exposes MCP integration through `createMCPClient()` in `@ai-sdk/mcp` (and the legacy `experimental_createMCPClient()` re-exported from `ai`). The initial assumption (anchored to the followup note in D022) was that this would be a `tools()`-record-wrapping job: replace each tool's `execute()` callback with one that runs through atrib's interceptor. Source-reading `@ai-sdk/mcp@1.0.35`'s `dist/index.mjs` invalidated that plan and surfaced two structural facts that ruled out both `wrapMcpClient` and the `tools()`-wrap approach.
+**Context:** Third framework adapter in the build order, after Claude Agent SDK ([D021](#d021-claude-agent-sdk-case-a-is-zero-new-code-case-b-uses-createatribproxy-in-process-forwarder)) and Cloudflare Agents ([D022](#d022-cloudflare-agents-adapter-mcpagent-server-side-is-zero-code-agent-client-side-uses-attributecloudflareagentmcp-not-createatribproxy)). The Vercel AI SDK exposes MCP integration through `createMCPClient()` in `@ai-sdk/mcp` (and the legacy `experimental_createMCPClient()` re-exported from `ai`). The initial assumption (anchored to the followup note in [D022](#d022-cloudflare-agents-adapter-mcpagent-server-side-is-zero-code-agent-client-side-uses-attributecloudflareagentmcp-not-createatribproxy)) was that this would be a `tools()`-record-wrapping job: replace each tool's `execute()` callback with one that runs through atrib's interceptor. Source-reading `@ai-sdk/mcp@1.0.35`'s `dist/index.mjs` invalidated that plan and surfaced two structural facts that ruled out both `wrapMcpClient` and the `tools()`-wrap approach.
 
-**Decision:** Ship a third adapter shape, `attributeVercelAiSdkMcp(client, { interceptor, serverUrl? })`, which **monkey-patches the client's `request()` method in place**. The patch intercepts only `tools/call` JSON-RPC methods, injects atrib's outbound `_meta` (atrib token, traceparent, tracestate, baggage, X-atrib-Chain) into `request.params._meta`, forwards to the original `request()`, then flows the raw response (with its own `_meta` intact) through `interceptor.onAfterToolResponse`. Idempotent via `Symbol.for('atrib.vercel-ai-sdk.patched')`. Lives at `packages/agent/src/adapters/vercel-ai-sdk-mcp.ts`. Six unit tests cover the contract (passthrough, injection, no caller mutation, response flow, idempotency, §5.8 degradation).
+**Decision:** Ship a third adapter shape, `attributeVercelAiSdkMcp(client, { interceptor, serverUrl? })`, which **monkey-patches the client's `request()` method in place**. The patch intercepts only `tools/call` JSON-RPC methods, injects atrib's outbound `_meta` (atrib token, traceparent, tracestate, baggage, X-atrib-Chain) into `request.params._meta`, forwards to the original `request()`, then flows the raw response (with its own `_meta` intact) through `interceptor.onAfterToolResponse`. Idempotent via `Symbol.for('atrib.vercel-ai-sdk.patched')`. Lives at `packages/agent/src/adapters/vercel-ai-sdk-mcp.ts`. Six unit tests cover the contract (passthrough, injection, no caller mutation, response flow, idempotency, [§5.8](atrib-spec.md#58-degradation-contract) degradation).
 
 **Two structural facts that forced this approach:**
 
 1. **`@ai-sdk/mcp` MCPClient is NOT a `@modelcontextprotocol/sdk` Client.** It has its own JSON-RPC implementation. Different `callTool` shape (`{name, args, options}` vs `{name, arguments, _meta}`), and crucially the `_meta` field is **not accepted** by AI SDK's `callTool`; it builds the request as `{ method: 'tools/call', params: { name, arguments: args } }` at `dist/index.mjs:1819` with no `_meta` field at all. So `wrapMcpClient` (which depends on `client.callTool({ name, arguments, _meta })` shape) cannot patch this client. Verified by structural source read, not by importing the package as a dependency.
 
-2. **`tools()` builds AI-SDK-shaped tool definitions whose execute() callbacks pass through `extractStructuredContent`** when an outputSchema is set, and that helper **drops the `_meta` field from the result envelope** at `dist/index.mjs:1989-1991`. Wrapping at the AI SDK execute layer would lose the response-side `_meta` (which carries the server's `atrib` chain token from the @atrib/mcp middleware) for any tool with structured output. This rules out the `tools()`-record-wrapping approach I had initially planned in D022's followup.
+2. **`tools()` builds AI-SDK-shaped tool definitions whose execute() callbacks pass through `extractStructuredContent`** when an outputSchema is set, and that helper **drops the `_meta` field from the result envelope** at `dist/index.mjs:1989-1991`. Wrapping at the AI SDK execute layer would lose the response-side `_meta` (which carries the server's `atrib` chain token from the @atrib/mcp middleware) for any tool with structured output. This rules out the `tools()`-record-wrapping approach I had initially planned in [D022](#d022-cloudflare-agents-adapter-mcpagent-server-side-is-zero-code-agent-client-side-uses-attributecloudflareagentmcp-not-createatribproxy)'s followup.
 
-**Why `request()` is the right integration point:** It's the JSON-RPC bottleneck through which every `tools/call` flows on its way to the transport (`dist/index.mjs:1750`). Patching here lets us inject `_meta` into the outbound request **before** it hits the transport and read raw `_meta` from the response **before** any AI-SDK-specific transformation strips it. This is structurally symmetric to how `@atrib/mcp` patches `McpServer.server.setRequestHandler(CallToolRequestSchema, ...)` on the server side (D018): same pattern, opposite end of the wire.
+**Why `request()` is the right integration point:** It's the JSON-RPC bottleneck through which every `tools/call` flows on its way to the transport (`dist/index.mjs:1750`). Patching here lets us inject `_meta` into the outbound request **before** it hits the transport and read raw `_meta` from the response **before** any AI-SDK-specific transformation strips it. This is structurally symmetric to how `@atrib/mcp` patches `McpServer.server.setRequestHandler(CallToolRequestSchema, ...)` on the server side ([D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow)): same pattern, opposite end of the wire.
 
 **Alternatives considered:**
 
@@ -629,34 +629,34 @@ The runnable examples (`surface-1-mcp-agent.ts`, `surface-2-agent-client.ts`) ar
 - **`createAtribProxy`**: overkill. The Vercel AI SDK already accepts a real working MCPClient connected to the upstream; we don't need to interpose a fake server. The proxy pattern is for cases (like Claude Agent SDK Case B) where the host accepts a `McpServer` instance but not an MCPClient.
 - **Subclass `MCPClient`**: would require importing `@ai-sdk/mcp` as a hard dependency, which we explicitly avoid (the AI SDK has a heavy transport dependency tree we don't want in `@atrib/agent`).
 
-**Idempotency:** The marker symbol pattern from D022's `attributeCloudflareAgentMcp` is reused: `Symbol.for('atrib.vercel-ai-sdk.patched')` set on the client after first patch, checked on entry. Calling the helper twice on the same client is a no-op the second time. Verified by a unit test that asserts the `request` method reference is unchanged after a second call.
+**Idempotency:** The marker symbol pattern from [D022](#d022-cloudflare-agents-adapter-mcpagent-server-side-is-zero-code-agent-client-side-uses-attributecloudflareagentmcp-not-createatribproxy)'s `attributeCloudflareAgentMcp` is reused: `Symbol.for('atrib.vercel-ai-sdk.patched')` set on the client after first patch, checked on entry. Calling the helper twice on the same client is a no-op the second time. Verified by a unit test that asserts the `request` method reference is unchanged after a second call.
 
 **Order independence:** The helper can be called BEFORE or AFTER `mcpClient.tools()` because the AI SDK builds tool execute() callbacks that read `client.request` at **invocation time**, not at build time. This means users don't need to remember to patch before calling `tools()`; the patch fires correctly regardless of order. This is documented in both the source comment and the example README.
 
 **Caller-arg immutability:** The patched `request()` constructs a new args object (`{ ...args, request: { ...args.request, params: { ...params, _meta: outboundMeta } } }`) rather than mutating the caller's params. Verified by a unit test that captures the caller's params reference and asserts `_meta` was never added to it. This matters because AI SDK tool execute callbacks may share/cache the args object.
 
-**§5.8 degradation:** Both `onBeforeToolCall` and `onAfterToolResponse` are wrapped in try/catch. On `onBeforeToolCall` failure, the request is forwarded with the **original** params (no `_meta` injection), never mutated, never broken. On `onAfterToolResponse` failure, the result is still returned to the caller. Both failure paths log to `console.warn` with the `atrib:` prefix per spec §5.8.
+**[§5.8](atrib-spec.md#58-degradation-contract) degradation:** Both `onBeforeToolCall` and `onAfterToolResponse` are wrapped in try/catch. On `onBeforeToolCall` failure, the request is forwarded with the **original** params (no `_meta` injection), never mutated, never broken. On `onAfterToolResponse` failure, the result is still returned to the caller. Both failure paths log to `console.warn` with the `atrib:` prefix per spec [§5.8](atrib-spec.md#58-degradation-contract).
 
-**Example:** `packages/integration/examples/vercel-ai-sdk/` ships a runnable `integration.ts` showing the four-step wiring (interceptor → createMCPClient → attributeVercelAiSdkMcp → tools), plus a README that recommends routing model calls through the Vercel AI Gateway via the `'provider/model'` string form (e.g. `'openai/gpt-5.4'`) for OIDC auth, automatic failover, and unified observability. The README shows both the implicit string form and the explicit `gateway('openai/gpt-5.4')` helper from `@ai-sdk/gateway`; both route through the Gateway with no provider API keys required. The `examples/` directory is excluded from `@atrib/integration`'s tsconfig so it typechecks against the user's installed AI SDK, not our test build (consistent with D021/D022 example handling).
+**Example:** `packages/integration/examples/vercel-ai-sdk/` ships a runnable `integration.ts` showing the four-step wiring (interceptor → createMCPClient → attributeVercelAiSdkMcp → tools), plus a README that recommends routing model calls through the Vercel AI Gateway via the `'provider/model'` string form (e.g. `'openai/gpt-5.4'`) for OIDC auth, automatic failover, and unified observability. The README shows both the implicit string form and the explicit `gateway('openai/gpt-5.4')` helper from `@ai-sdk/gateway`; both route through the Gateway with no provider API keys required. The `examples/` directory is excluded from `@atrib/integration`'s tsconfig so it typechecks against the user's installed AI SDK, not our test build (consistent with [D021](#d021-claude-agent-sdk-case-a-is-zero-new-code-case-b-uses-createatribproxy-in-process-forwarder)/[D022](#d022-cloudflare-agents-adapter-mcpagent-server-side-is-zero-code-agent-client-side-uses-attributecloudflareagentmcp-not-createatribproxy) example handling).
 
 **Test results:** 366 tests passing across all 4 packages (was 360; +6 vercel-ai-sdk-mcp unit tests). No regressions in mcp, verify, or integration.
 
-**Followup:** With three framework adapters shipped (Claude Agent SDK, Cloudflare Agents, Vercel AI SDK), the framework-adapter rollout is substantially complete. Remaining work: decide whether to add OpenAI Agents SDK and/or Mastra adapters based on the GitHub usage data from earlier research, then developer integration documentation and TypeDoc API reference. A pattern is emerging across D018/D021/D022/D023: each adapter required source-reading the host framework before deciding the integration shape, and in every case the initial guess from D020 was wrong in the specifics. The general approach (interceptor lifecycle + structural-shape adapters) holds, but the integration point varies per framework: server-side `setRequestHandler` patch (@atrib/mcp), in-process `McpServer` proxy (Claude Agent SDK Case B), in-place `client` field replacement (Cloudflare Agent), and `request()` monkey-patch (Vercel AI SDK).
+**Followup:** With three framework adapters shipped (Claude Agent SDK, Cloudflare Agents, Vercel AI SDK), the framework-adapter rollout is substantially complete. Remaining work: decide whether to add OpenAI Agents SDK and/or Mastra adapters based on the GitHub usage data from earlier research, then developer integration documentation and TypeDoc API reference. A pattern is emerging across [D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow)/[D021](#d021-claude-agent-sdk-case-a-is-zero-new-code-case-b-uses-createatribproxy-in-process-forwarder)/[D022](#d022-cloudflare-agents-adapter-mcpagent-server-side-is-zero-code-agent-client-side-uses-attributecloudflareagentmcp-not-createatribproxy)/[D023](#d023-vercel-ai-sdk-mcp-adapter-monkey-patch-mcpclientrequest-not-wrapmcpclient-and-not-the-tools-execute-callbacks): each adapter required source-reading the host framework before deciding the integration shape, and in every case the initial guess from [D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision) was wrong in the specifics. The general approach (interceptor lifecycle + structural-shape adapters) holds, but the integration point varies per framework: server-side `setRequestHandler` patch (@atrib/mcp), in-process `McpServer` proxy (Claude Agent SDK Case B), in-place `client` field replacement (Cloudflare Agent), and `request()` monkey-patch (Vercel AI SDK).
 
 ---
 
 ## D024: LangChain JS MCP adapter: NOT docs-only. `MultiServerMCPClient` needs a proper helper because its internal Client references are `#private`
 
 **Date:** 2026-04-06
-**Context:** D020 asserted that LangChain would ship as a docs-only adapter because `loadMcpTools(name, rawClient)` accepts an injected `@modelcontextprotocol/sdk` Client, so `wrapMcpClient` from `@atrib/agent` would cover it transparently. After a closer review on "why docs-only instead of doing it properly", I unpacked `@langchain/mcp-adapters@1.1.3` and source-read the actual API. The docs-only claim was half right and half wrong.
+**Context:** [D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision) asserted that LangChain would ship as a docs-only adapter because `loadMcpTools(name, rawClient)` accepts an injected `@modelcontextprotocol/sdk` Client, so `wrapMcpClient` from `@atrib/agent` would cover it transparently. After a closer review on "why docs-only instead of doing it properly", I unpacked `@langchain/mcp-adapters@1.1.3` and source-read the actual API. The docs-only claim was half right and half wrong.
 
 **What the SDK actually exposes (verified against `@langchain/mcp-adapters@1.1.3`):**
 
 LangChain has **two** MCP APIs, not one:
 
-1. **Low-level: `loadMcpTools(serverName, client, options?)`**: second parameter is typed `Client | Client_from_mcp_sdk` at `dist/tools.d.ts:28`. Users construct their own Client, call `.connect(transport)`, then pass it in. For this path, `wrapMcpClient` works transparently because the user owns the Client and can substitute a wrapped version. D020's "docs-only" claim is correct for this path.
+1. **Low-level: `loadMcpTools(serverName, client, options?)`**: second parameter is typed `Client | Client_from_mcp_sdk` at `dist/tools.d.ts:28`. Users construct their own Client, call `.connect(transport)`, then pass it in. For this path, `wrapMcpClient` works transparently because the user owns the Client and can substitute a wrapped version. [D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision)'s "docs-only" claim is correct for this path.
 
-2. **High-level: `new MultiServerMCPClient({ mcpServers: {...} })`**: config-driven, used by the vast majority of LangChain agents because it handles multi-server setup, reconnection, and auth plumbing internally. The multi-client constructs `@modelcontextprotocol/sdk` Client instances behind `#private` fields (`dist/client.d.ts:12`). Users NEVER see the Client reference directly. There is a `getClient(serverName)` getter that returns the internal Client, but NO corresponding setter; `wrapMcpClient` (which returns a NEW Proxy-wrapped object) cannot be substituted because there is nowhere to put the new reference. D020's "docs-only" claim is WRONG for this path.
+2. **High-level: `new MultiServerMCPClient({ mcpServers: {...} })`**: config-driven, used by the vast majority of LangChain agents because it handles multi-server setup, reconnection, and auth plumbing internally. The multi-client constructs `@modelcontextprotocol/sdk` Client instances behind `#private` fields (`dist/client.d.ts:12`). Users NEVER see the Client reference directly. There is a `getClient(serverName)` getter that returns the internal Client, but NO corresponding setter; `wrapMcpClient` (which returns a NEW Proxy-wrapped object) cannot be substituted because there is nowhere to put the new reference. [D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision)'s "docs-only" claim is WRONG for this path.
 
 **Fork propagation, the second structural finding that makes this a non-trivial adapter:**
 
@@ -694,7 +694,7 @@ A fork of an already-patched client: when the patched `fork()` is invoked, it ca
 
 **Alternatives considered:**
 
-- **Docs-only for both paths (D020's original plan).** Rejected because it leaves `MultiServerMCPClient`, the idiomatic LangChain API, unsupported. Users following our docs would have to rewrite their agent to use `loadMcpTools` directly, which is a non-starter for existing LangChain apps.
+- **Docs-only for both paths ([D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision)'s original plan).** Rejected because it leaves `MultiServerMCPClient`, the idiomatic LangChain API, unsupported. Users following our docs would have to rewrite their agent to use `loadMcpTools` directly, which is a non-starter for existing LangChain apps.
 - **Subclass `MultiServerMCPClient` and publish as `@atrib/langchain-mcp`.** Rejected for the dependency-tree reason above.
 - **Proxy-wrap `getClient` itself** so every call returns a wrapped client. Would work for direct `getClient` users, but LangChain's internal `_initializeConnection` doesn't go through `getClient`; it uses the `#private` field directly, so the proxy would not catch the Client that tool construction binds to. Fragile.
 - **Skip fork propagation** and document the per-call-header limitation. Rejected per the radical-honesty rule: a silent attribution drop for an idiomatic LangChain pattern would be exactly the kind of bug that undermines trust in the protocol.
@@ -707,30 +707,30 @@ A fork of an already-patched client: when the patched `fork()` is invoked, it ca
 4. Does not mutate caller-supplied params object
 5. Flows responses through `onAfterToolResponse` with raw `_meta`
 6. **Fork propagation: forked clients are recursively patched**
-7. §5.8 degradation: `onBeforeToolCall` failure does not break the call
+7. [§5.8](atrib-spec.md#58-degradation-contract) degradation: `onBeforeToolCall` failure does not break the call
 8. Skips servers whose `getClient` returns undefined (not initialized)
 9. Selective patching via `options.servers`
 
 **Test results:** 375 tests passing across all 4 packages (was 366; +9 langchain-mcp). No regressions.
 
-**Followup:** Four framework adapters shipped (Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS). The unified `packages/agent/README.md` documents all adapters side-by-side under two coverage matrices (framework adapters + payment protocols), making the "one interceptor, any framework" story concrete and demonstrable. Remaining adapter work: OpenAI Agents SDK (deferred per D020; meaningfully different architecture, custom transports) and Mastra (deferred; smaller footprint, needs source verification). Next priority is developer integration docs, including the local log stub and end-to-end demo.
+**Followup:** Four framework adapters shipped (Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS). The unified `packages/agent/README.md` documents all adapters side-by-side under two coverage matrices (framework adapters + payment protocols), making the "one interceptor, any framework" story concrete and demonstrable. Remaining adapter work: OpenAI Agents SDK (deferred per [D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision); meaningfully different architecture, custom transports) and Mastra (deferred; smaller footprint, needs source verification). Next priority is developer integration docs, including the local log stub and end-to-end demo.
 
 ---
 
 ## D025: `@atrib/log-dev` + spec/code drift fix in submission wire format + `priority` wired to two real consumers
 
 **Date:** 2026-04-06
-**Context:** A runnable end-to-end demo for developer onboarding required a local Merkle log stub. While preparing to build that stub against spec §2.6, source-reading `@atrib/mcp/src/submission.ts` surfaced two real wire-format bugs that would have caused every submission from the existing client to be rejected by any spec-compliant log:
+**Context:** A runnable end-to-end demo for developer onboarding required a local Merkle log stub. While preparing to build that stub against spec [§2.6](atrib-spec.md#26-submission-api-write-interface), source-reading `@atrib/mcp/src/submission.ts` surfaced two real wire-format bugs that would have caused every submission from the existing client to be rejected by any spec-compliant log:
 
-**Discrepancy 1: Request body shape was wrong.** Spec §2.6.1 specifies the POST body as a bare attribution record. The existing `submitWithRetry` was wrapping it as `{record, priority}`. The wrapping pattern was even codified in `packages/mcp/test/submission.test.ts` ("sends record and priority in request body"), meaning the test was written against the buggy code rather than against the spec.
+**Discrepancy 1: Request body shape was wrong.** Spec [§2.6.1](atrib-spec.md#261-submit-entry) specifies the POST body as a bare attribution record. The existing `submitWithRetry` was wrapping it as `{record, priority}`. The wrapping pattern was even codified in `packages/mcp/test/submission.test.ts` ("sends record and priority in request body"), meaning the test was written against the buggy code rather than against the spec.
 
-**Discrepancy 2: Proof bundle field naming was wrong.** Spec §2.6.2 returns `{log_index, checkpoint, inclusion_proof, leaf_hash}` (snake_case). The existing `ProofBundle` interface used camelCase (`logIndex`, `inclusionProof`). This was less load-bearing because the cast to `ProofBundle` in the submission queue is opaque; nothing read the fields after caching, but `@atrib/verify`'s `GraphNode.log_index` already used snake_case correctly, so the two packages were inconsistent with each other and only one matched the spec.
+**Discrepancy 2: Proof bundle field naming was wrong.** Spec [§2.6.2](atrib-spec.md#262-inclusion-proof-response) returns `{log_index, checkpoint, inclusion_proof, leaf_hash}` (snake_case). The existing `ProofBundle` interface used camelCase (`logIndex`, `inclusionProof`). This was less load-bearing because the cast to `ProofBundle` in the submission queue is opaque; nothing read the fields after caching, but `@atrib/verify`'s `GraphNode.log_index` already used snake_case correctly, so the two packages were inconsistent with each other and only one matched the spec.
 
-**Decision:** Fix both discrepancies as part of this chunk and ship `@atrib/log-dev` as a faithful spec §2.6 reference implementation. Specifically:
+**Decision:** Fix both discrepancies as part of this chunk and ship `@atrib/log-dev` as a faithful spec [§2.6](atrib-spec.md#26-submission-api-write-interface) reference implementation. Specifically:
 
-1. **Wire format fix in `submission.ts`:** POST body is now a bare signed record per §2.6.1. The `ProofBundle` interface uses snake_case to match §2.6.2 exactly. Updated all consuming tests across `@atrib/mcp`, `@atrib/agent`, and `@atrib/integration` (test-harness mocked the wrong shape too; fixed there as well).
+1. **Wire format fix in `submission.ts`:** POST body is now a bare signed record per [§2.6.1](atrib-spec.md#261-submit-entry). The `ProofBundle` interface uses snake_case to match [§2.6.2](atrib-spec.md#262-inclusion-proof-response) exactly. Updated all consuming tests across `@atrib/mcp`, `@atrib/agent`, and `@atrib/integration` (test-harness mocked the wrong shape too; fixed there as well).
 
-2. **`@atrib/log-dev`**: new private workspace package at `packages/log-dev/`. Implements `POST /v1/entries` with full §2.6.1 validation (Steps 2-6, skipping Step 1 cryptographic signature verification to avoid a circular dep on `@atrib/verify`), returns spec §2.6.2-shaped proof bundles with deterministic placeholder hashes, and exposes an inspection API (`entries`, `onSubmit`, `clear`) for tests and demos. Marked `private: true` so it cannot be `pnpm publish`'d to npm. README has a prominent ⚠️ NOT FOR PRODUCTION warning at the top.
+2. **`@atrib/log-dev`**: new private workspace package at `packages/log-dev/`. Implements `POST /v1/entries` with full [§2.6.1](atrib-spec.md#261-submit-entry) validation (Steps 2-6, skipping Step 1 cryptographic signature verification to avoid a circular dep on `@atrib/verify`), returns spec [§2.6.2](atrib-spec.md#262-inclusion-proof-response)-shaped proof bundles with deterministic placeholder hashes, and exposes an inspection API (`entries`, `onSubmit`, `clear`) for tests and demos. Marked `private: true` so it cannot be `pnpm publish`'d to npm. README has a prominent ⚠️ NOT FOR PRODUCTION warning at the top.
 
 3. **`priority` wired to two real consumers**: an early sketch dropped `priority` from the wire entirely after recognizing that the in-memory dev log cannot meaningfully consume it. That sketch was wrong: the field has two real consumers that justify keeping it on the wire:
 
@@ -738,7 +738,7 @@ A fork of an already-patched client: when the patched `fork()` is invoked, it ca
 
    **Consumer #2: `@atrib/log-dev`'s admission control under capacity.** The dev log accepts a `maxConcurrent` option (default `Infinity`). When capacity is finite and the in-flight submission count is at the cap, new submissions go into a priority queue inside `storage.ts` and high-priority records are admitted first when capacity frees up. This faithfully models the admission-control behavior a real Tessera-backed log would expose under load. Verified by a new test in `log-dev/test/server.test.ts` ("high-priority submissions are admitted before normal under capacity pressure") that uses `maxConcurrent: 1` and `processingDelayMs: 30` to deterministically demonstrate the priority ordering.
 
-   The wire format is `X-atrib-Priority: high|normal` HTTP header, a non-conflicting extension to spec §2.6.1 that does not require a spec change because HTTP headers are a standard extension mechanism.
+   The wire format is `X-atrib-Priority: high|normal` HTTP header, a non-conflicting extension to spec [§2.6.1](atrib-spec.md#261-submit-entry) that does not require a spec change because HTTP headers are a standard extension mechanism.
 
 4. **End-to-end demo** at `packages/integration/examples/end-to-end/demo.ts`, runnable in a single command (`pnpm --filter @atrib/integration demo`), wires together the dev log + a fake merchant tool server (wrapped with `@atrib/mcp`'s `atrib()`) + a fake agent client (wrapped with `@atrib/agent`'s `wrapMcpClient`) + a stubbed x402 payment receipt that triggers the production transaction-detection logic in `transaction.ts`. CLI visualizer subscribes to the dev log via `onSubmit()` and pretty-prints each record with colored chain hashes as it lands. Verified end-to-end: one run produces 2 tool_call records + 1 transaction record, all chained, all visible in the CLI output.
 
@@ -746,7 +746,7 @@ A fork of an already-patched client: when the patched `fork()` is invoked, it ca
 
 The end-to-end demo answers "what can a developer hand a customer in 15 minutes?" Before this work, the protocol was implemented but a customer couldn't watch it work without standing up Tessera first (which doesn't exist). With the demo, `pnpm demo` produces a complete attribution chain visible in real time, with real signatures and real transaction detection, against a real (but in-memory) spec-compliant log. The fakery is in the surrounding environment: the merchant returns hardcoded search results, the agent issues hardcoded tool calls, the x402 payment is a stubbed header, but the protocol layer is real.
 
-The spec/code drift fix is the kind of thing that only gets caught when you build a real reference implementation. Mocking `globalThis.fetch` in unit tests doesn't catch wire-format bugs because the mocks don't validate the request shape against the spec. The dev log is a real server that validates per §2.6.1; it caught the wrong wire format on the first integration attempt. This is a strong argument for keeping `@atrib/log-dev` in the test infrastructure permanently rather than treating it as a one-off demo helper.
+The spec/code drift fix is the kind of thing that only gets caught when you build a real reference implementation. Mocking `globalThis.fetch` in unit tests doesn't catch wire-format bugs because the mocks don't validate the request shape against the spec. The dev log is a real server that validates per [§2.6.1](atrib-spec.md#261-submit-entry); it caught the wrong wire format on the first integration attempt. This is a strong argument for keeping `@atrib/log-dev` in the test infrastructure permanently rather than treating it as a one-off demo helper.
 
 **Alternatives considered:**
 
@@ -754,7 +754,7 @@ The spec/code drift fix is the kind of thing that only gets caught when you buil
 - **Keep the broken wire format and note the spec drift in TODO.md.** Rejected per the radical-honesty rule. Shipping a known wire-format bug to customers because "we'll fix it later" is exactly the kind of avoidable failure the rule exists to prevent.
 - **Build the dev log as a separate `services/log/dev-server/` directory rather than a workspace package.** Rejected after weighing trade-offs: option A (workspace package) wins because the demo can `import { startDevLog } from '@atrib/log-dev'` directly without spawning a child process, the inspection API is type-safe and ergonomic, and the existing `@atrib/mcp` and `@atrib/agent` test suites can reuse the dev log as a real fixture in the future instead of mocking `fetch`.
 - **Build the dev log in Go (matching the future Tessera service).** Rejected for this chunk. The Go Tessera-backed log will live in `services/log/` when it ships; the dev log is a TypeScript fixture for in-process integration tests and demos. They have different operational profiles and can coexist; the dev log is not a stepping stone to the real one.
-- **Implement signature verification (§2.6.1 Step 1) in the dev log.** Rejected because it would create a circular workspace dep: `@atrib/log-dev` would have to import from `@atrib/verify`, which already imports from `@atrib/mcp`. The dev log skips signature verification and is honest about it in the file header. Anyone using the dev log for end-to-end correctness testing should run `@atrib/verify` against the captured records separately.
+- **Implement signature verification ([§2.6.1](atrib-spec.md#261-submit-entry) Step 1) in the dev log.** Rejected because it would create a circular workspace dep: `@atrib/log-dev` would have to import from `@atrib/verify`, which already imports from `@atrib/mcp`. The dev log skips signature verification and is honest about it in the file header. Anyone using the dev log for end-to-end correctness testing should run `@atrib/verify` against the captured records separately.
 
 **Test results:** 391 tests passing across all 5 packages (was 375 + 16 new):
 
@@ -770,11 +770,11 @@ Plus the demo runs end-to-end and produces the expected output (verified manuall
 
 ---
 
-## D026: Spec §2.6.1 conformance corpus at `spec/conformance/2.6.1/` (shared between TS dev log and future Go log)
+## D026: Spec [§2.6.1](atrib-spec.md#261-submit-entry) conformance corpus at `spec/conformance/2.6.1/` (shared between TS dev log and future Go log)
 
 **Date:** 2026-04-06
 
-**Context:** After D025 landed, a remaining gap surfaced: `@atrib/log-dev` and the future `services/log/` Tessera-backed Go service had no shared agreement on §2.6.1 behavior beyond the prose in the spec. Two implementations of "what does §2.6.1 reject" derived independently from the spec text would inevitably drift in subtle ways. The right move was to ship a conformance corpus immediately, even though the Go consumer doesn't yet exist, so when it arrives it has a fixed reference set to validate against.
+**Context:** After [D025](#d025-atriblog-dev-speccode-drift-fix-in-submission-wire-format-priority-wired-to-two-real-consumers) landed, a remaining gap surfaced: `@atrib/log-dev` and the future `services/log/` Tessera-backed Go service had no shared agreement on [§2.6.1](atrib-spec.md#261-submit-entry) behavior beyond the prose in the spec. Two implementations of "what does [§2.6.1](atrib-spec.md#261-submit-entry) reject" derived independently from the spec text would inevitably drift in subtle ways. The right move was to ship a conformance corpus immediately, even though the Go consumer doesn't yet exist, so when it arrives it has a fixed reference set to validate against.
 
 **Decision:** Build a static, shared, language-neutral conformance corpus at `spec/conformance/2.6.1/` consisting of one JSON file per test case plus a manifest. Each case is a fully self-contained `{request, expected}` pair: the `request.body` is the bare signed `AtribRecord` ready to JSON.stringify, and `expected.status` is the canonical accept/reject outcome. A reference TypeScript consumer ships in `@atrib/log-dev`'s test suite today; the future Go service will consume the same files when it ships.
 
@@ -782,19 +782,19 @@ Plus the demo runs end-to-end and produces the expected output (verified manuall
 
 1. **Corpus structure** (8 cases + 1 sequence at this writing, growable):
    - `cases/accept-tool-call.json` and `accept-transaction.json`: well-formed signed records
-   - `cases/reject-bad-signature.json`: §2.6.1 Step 1 (Ed25519 verify fails)
-   - `cases/reject-wrong-spec-version.json`: §2.6.1 Step 2
-   - `cases/reject-unknown-event-type.json`: §2.6.1 Step 3
-   - `cases/reject-future-timestamp.json`: §2.6.1 Step 4 (timestamp 20 minutes ahead of `reference_time_ms`)
-   - `cases/reject-malformed-context-id.json`: §2.6.1 Step 5
+   - `cases/reject-bad-signature.json`: [§2.6.1](atrib-spec.md#261-submit-entry) Step 1 (Ed25519 verify fails)
+   - `cases/reject-wrong-spec-version.json`: [§2.6.1](atrib-spec.md#261-submit-entry) Step 2
+   - `cases/reject-unknown-event-type.json`: [§2.6.1](atrib-spec.md#261-submit-entry) Step 3
+   - `cases/reject-future-timestamp.json`: [§2.6.1](atrib-spec.md#261-submit-entry) Step 4 (timestamp 20 minutes ahead of `reference_time_ms`)
+   - `cases/reject-malformed-context-id.json`: [§2.6.1](atrib-spec.md#261-submit-entry) Step 5
    - `cases/reject-non-json-body.json`: pre-Step-1 sanity (raw string body, not parseable)
-   - `sequences/idempotent-resubmission.json`: §2.6.1 Step 6 (same record twice, same proof, log_size stays at 1)
+   - `sequences/idempotent-resubmission.json`: [§2.6.1](atrib-spec.md#261-submit-entry) Step 6 (same record twice, same proof, log_size stays at 1)
 
 2. **Time handling.** The corpus stores fully-signed records with frozen timestamps, so the bytes are byte-deterministic across regenerations. Step 4 (the future-timestamp case) only produces stable validation outcomes if the consumer pretends "now" is the manifest's `reference_time_ms` (`2026-01-01T00:00:00Z`). The TS consumer uses `vi.useFakeTimers()` + `vi.setSystemTime()`. A Go consumer would inject a `clock.Clock` interface into its validator. The mock-clock requirement is documented in the corpus README and in the consumer code.
 
 3. **Hardcoded signing seed.** The seed is `0x07` repeated 32 times, committed in `manifest.json` as `signing.seed_b64url`. This is so the corpus is regeneration-deterministic; successive runs of the generator produce byte-identical files unless the inputs change. The seed is loudly marked NEVER-FOR-PRODUCTION in both the README and the manifest.
 
-4. **Per-implementation skip lists in the consumer, not in the corpus.** `@atrib/log-dev` cannot honor `reject-bad-signature` because it skips §2.6.1 Step 1 to avoid a circular workspace dep on `@atrib/verify`. The TS consumer maintains a `DEV_LOG_SKIPS` map keyed by case name, with a justification string. The corpus itself stays canonical; the Go service is expected to honor every case (its `DEV_LOG_SKIPS` equivalent will be empty). This keeps the corpus clean of implementation-specific notes.
+4. **Per-implementation skip lists in the consumer, not in the corpus.** `@atrib/log-dev` cannot honor `reject-bad-signature` because it skips [§2.6.1](atrib-spec.md#261-submit-entry) Step 1 to avoid a circular workspace dep on `@atrib/verify`. The TS consumer maintains a `DEV_LOG_SKIPS` map keyed by case name, with a justification string. The corpus itself stays canonical; the Go service is expected to honor every case (its `DEV_LOG_SKIPS` equivalent will be empty). This keeps the corpus clean of implementation-specific notes.
 
 5. **Generator at `packages/log-dev/scripts/generate-conformance-corpus.ts`** (run via `pnpm --filter @atrib/log-dev corpus`). It uses `signRecord` from `@atrib/mcp` (the canonical signer) so the test signatures are byte-identical to what a real `@atrib/mcp`-using merchant would produce. The generator imports nothing implementation-specific to the dev log; it only writes JSON.
 
@@ -807,8 +807,8 @@ The corpus is shared infrastructure between TypeScript and Go implementations of
 **What this DOESN'T solve:**
 
 - Verification that the corpus is truly implementation-independent. We catch this only when the Go consumer ships and runs the same files. Until then, there's a small risk that I've encoded a TS-specific assumption into the JSON (e.g., header name casing, JSON field ordering). I've kept the consumer trivial enough that this risk is small but it exists.
-- §2.6.2 proof bundle shape conformance beyond "is the type of each field correct?"; the dev log returns placeholder hashes, so the corpus can't assert specific bytes. A real Tessera service will produce real Merkle proofs that the corpus consumer would need to verify with `@atrib/verify`'s strict path, which is a different test layer.
-- §2.5.1 (checkpoint endpoint), §2.5.2 (tile endpoints), and §2.9 (witnessing). These are deferred until the Go service ships; there's no point conformance-testing endpoints that no implementation has yet.
+- [§2.6.2](atrib-spec.md#262-inclusion-proof-response) proof bundle shape conformance beyond "is the type of each field correct?"; the dev log returns placeholder hashes, so the corpus can't assert specific bytes. A real Tessera service will produce real Merkle proofs that the corpus consumer would need to verify with `@atrib/verify`'s strict path, which is a different test layer.
+- [§2.5.1](atrib-spec.md#251-checkpoint-endpoint) (checkpoint endpoint), [§2.5.2](atrib-spec.md#252-tile-endpoints) (tile endpoints), and [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) (witnessing). These are deferred until the Go service ships; there's no point conformance-testing endpoints that no implementation has yet.
 
 **Test results:** 8 conformance cases + 1 sequence = 9 new tests in `@atrib/log-dev`, of which 8 pass and 1 is skipped (the bad-signature case, with documented reason). Total package tests: 22 (was 13). Total workspace tests: 400 (399 passing, 1 documented skip), up from 391.
 
@@ -822,7 +822,7 @@ The corpus is shared infrastructure between TypeScript and Go implementations of
 
 A second, orthogonal question has come up in practice: "what does atrib observe about a specific payment protocol's ecosystem, independent of any single agent session?" For x402 specifically, there is rich public on-chain data that no existing dashboard analyzes contract-first, and attribution gaps no one has worked through. The same question applies to ACP, UCP, AP2, MPP: each has its own ecosystem-level observability problem distinct from runtime detection.
 
-Runtime detection (already shipped in `@atrib/agent`, D008–D009) handles the "this session used x402" case. It does not answer "what is the x402 ecosystem's volume, who are the facilitators, and where does the attribution gap live?" Those questions require a retrospective ecosystem scanner, a canonical facilitator registry, and protocol-specific attribution machinery (e.g., decoding Permit2 witness calldata, sender-pattern clustering against on-chain recipient graphs).
+Runtime detection (already shipped in `@atrib/agent`, [D008](#d008-middleware-pattern-not-method-calls)–[D009](#d009-factpolicy-separation-as-an-architectural-boundary)) handles the "session used x402" case during runtime. It does not answer "what is the x402 ecosystem's volume, who are the facilitators, and where does the attribution gap live?" Those questions require a retrospective ecosystem scanner, a canonical facilitator registry, and protocol-specific attribution machinery (e.g., decoding Permit2 witness calldata, sender-pattern clustering against on-chain recipient graphs).
 
 **Decision:** Establish **protocol adapters** as a first-class architectural pattern in atrib, parallel to framework adapters. Each adapter provides observability FOR a specific payment protocol's ecosystem and has three canonical layers:
 
@@ -834,33 +834,33 @@ Two observation surfaces exist per protocol: **runtime** (via `@atrib/agent` fra
 
 **Implementation details:**
 
-1. **Pattern template**. Each protocol adapter has the same directory shape: `registry/`, `scanner/`, `attribution/`, `queries/`, `results/`, `README.md`. The top-level README frames the adapter as "atrib × `<protocol>`" and catalogs its layers against atrib's spec sections (§3 graph, §4 attribution calculation, §2 log as tamper-evidence for the dataset).
+1. **Pattern template**. Each protocol adapter has the same directory shape: `registry/`, `scanner/`, `attribution/`, `queries/`, `results/`, `README.md`. The top-level README frames the adapter as "atrib × `<protocol>`" and catalogs its layers against atrib's spec sections ([§3](atrib-spec.md#3-graph-query-interface) graph, [§4](atrib-spec.md#4-attribution-policy-format) attribution calculation, [§2](atrib-spec.md#2-merkle-log-protocol) log as tamper-evidence for the dataset).
 
 2. **Naming**. Protocol adapters are named by the protocol: `x402/`, `acp/`, `ucp/`, `ap2/`, `mpp/`. Standard layout is `atrib/packages/<protocol>/` for SDK code and `atrib/services/<protocol>-scanner/` for ecosystem scanner services.
 
-3. **Scope of adapter vs spec**. A protocol adapter does NOT modify atrib's spec. The spec remains protocol-agnostic. Adapters are implementations of the spec's primitives against protocol-specific data. This preserves §3.6's fact/policy separation: protocol-specific attribution lives in the `attribution/` layer, never in the `registry/` or `scanner/`.
+3. **Scope of adapter vs spec**. A protocol adapter does NOT modify atrib's spec. The spec remains protocol-agnostic. Adapters are implementations of the spec's primitives against protocol-specific data. This preserves [§3.6](atrib-spec.md#36-implementation-notes)'s fact/policy separation: protocol-specific attribution lives in the `attribution/` layer, never in the `registry/` or `scanner/`.
 
 4. **Two demonstration paths.** For a protocol adapter to demonstrate the full spec end-to-end, it needs both:
-   - **Path A (retrospective):** scanner + registry + attribution. Demonstrates §3 (graph) and §4 (attribution calculation) applied to ecosystem-level data. Does NOT demonstrate §1 (signed records) or §5 (SDK contract) because it observes, it doesn't transact.
-   - **Path B (runtime reference agent):** a reference agent that makes real payments with `@atrib/agent` instrumented, signing records into a running atrib log, with merchant-side verification via `@atrib/verify`. Demonstrates §1, §2.6.1 submission, §5 SDK contract, and the verify flow.
+   - **Path A (retrospective):** scanner + registry + attribution. Demonstrates [§3](atrib-spec.md#3-graph-query-interface) (graph) and [§4](atrib-spec.md#4-attribution-policy-format) (attribution calculation) applied to ecosystem-level data. Does NOT demonstrate [§1](atrib-spec.md#1-attribution-record-format) (signed records) or [§5](atrib-spec.md#5-sdk-specification) (SDK contract) because it observes, it doesn't transact.
+   - **Path B (runtime reference agent):** a reference agent that makes real payments with `@atrib/agent` instrumented, signing records into a running atrib log, with merchant-side verification via `@atrib/verify`. Demonstrates [§1](atrib-spec.md#1-attribution-record-format), [§2.6.1](atrib-spec.md#261-submit-entry) submission, [§5](atrib-spec.md#5-sdk-specification) SDK contract, and the verify flow.
    
    A complete protocol adapter artifact includes both paths. Path A alone is a dataset; Path B alone is a demo; together they prove the spec works end-to-end for that protocol.
 
 **Rejected alternatives:**
 
-1. *Bake protocol-specific scanning into `@atrib/agent`.* Rejected because runtime detection and retrospective scanning have different access patterns (hot path vs bulk analytical), different dependencies (host framework vs blockchain indexer), and different failure modes (pass-through on error vs partial-result on error). Coupling them would blur D008 (middleware pattern: zero ongoing surface area) and mix the detection-latency budget with ecosystem-scan latency.
+1. *Bake protocol-specific scanning into `@atrib/agent`.* Rejected because runtime detection and retrospective scanning have different access patterns (hot path vs bulk analytical), different dependencies (host framework vs blockchain indexer), and different failure modes (pass-through on error vs partial-result on error). Coupling them would blur [D008](#d008-middleware-pattern-not-method-calls) (middleware pattern: zero ongoing surface area) and mix the detection-latency budget with ecosystem-scan latency.
 
-2. *One universal scanner with protocol plugins.* Rejected because each protocol has a different settlement surface (EIP-3009 + Permit2 for x402, mandate-passing for AP2, payment-token flows for Stripe ACP) and different on-chain/off-chain observability properties. A universal scanner abstraction would either compromise to the lowest common denominator or become a pass-through with nothing shared, per D018's source-read-first principle.
+2. *One universal scanner with protocol plugins.* Rejected because each protocol has a different settlement surface (EIP-3009 + Permit2 for x402, mandate-passing for AP2, payment-token flows for Stripe ACP) and different on-chain/off-chain observability properties. A universal scanner abstraction would either compromise to the lowest common denominator or become a pass-through with nothing shared, per [D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow)'s source-read-first principle.
 
-3. *Move scanner data into the spec as a new section.* Rejected because the spec stays protocol-agnostic (§3.6, §4.1). The protocol-specific attribution rationale lives in the adapter's documentation, not the spec body. The spec only says "graph + policy → distribution"; how the graph is populated for a specific protocol is an adapter concern.
+3. *Move scanner data into the spec as a new section.* Rejected because the spec stays protocol-agnostic ([§3.6](atrib-spec.md#36-implementation-notes), [§4.1](atrib-spec.md#41-purpose-and-position-in-the-protocol)). The protocol-specific attribution rationale lives in the adapter's documentation, not the spec body. The spec only says "graph + policy → distribution"; how the graph is populated for a specific protocol is an adapter concern.
 
 **What this DOESN'T solve:**
 
 - Integration of scanned observations back into atrib's Merkle log. Today the log is fed by runtime-signed records. A scan could optionally emit observer-signed records into the log for tamper-evidence of the dataset, but that's a separate decision (future ADR if/when we implement it).
-- A formal conformance corpus for adapter outputs (analogous to the §2.6.1 corpus in D026). Premature until the second protocol adapter ships and we have two data points to shape the corpus against.
-- Unified cross-adapter attribution calculation. Each adapter today computes its own distribution against its own policy. A multi-protocol attribution (e.g., a session that spans x402 + ACP) is future work, tied to §3's graph derivation extending across adapters.
+- A formal conformance corpus for adapter outputs (analogous to the [§2.6.1](atrib-spec.md#261-submit-entry) corpus in [D026](#d026-spec-261-conformance-corpus-at-specconformance261-shared-between-ts-dev-log-and-future-go-log)). Premature until the second protocol adapter ships and we have two data points to shape the corpus against.
+- Unified cross-adapter attribution calculation. Each adapter computes its own distribution against its own policy. A multi-protocol attribution (e.g., a session that spans x402 + ACP) is future work, tied to [§3](atrib-spec.md#3-graph-query-interface)'s graph derivation extending across adapters.
 
-**First implementation:** the x402 adapter (2026-04-21). Registry (45 facilitators resolved, 92 attributed addresses, `/supported` enrichment), scanner (Dune contract-first query producing $5.4M Base 30d), attribution (baseline mapping + unknown-sender residual). Path A (retrospective surface) exercises §3 + §4; Path B (runtime reference agent using `@atrib/agent`) provides the second observation surface, exercising §1, §2.6.1, §5.
+**First implementation:** the x402 adapter (2026-04-21). Registry (45 facilitators resolved, 92 attributed addresses, `/supported` enrichment), scanner (Dune contract-first query producing $5.4M Base 30d), attribution (baseline mapping + unknown-sender residual). Path A (retrospective surface) exercises [§3](atrib-spec.md#3-graph-query-interface) + [§4](atrib-spec.md#4-attribution-policy-format); Path B (runtime reference agent using `@atrib/agent`) provides the second observation surface, exercising [§1](atrib-spec.md#1-attribution-record-format), [§2.6.1](atrib-spec.md#261-submit-entry), [§5](atrib-spec.md#5-sdk-specification).
 
 ---
 
@@ -894,7 +894,7 @@ A test verifies that the published `key_id` exactly matches the prefix in the li
 
 1. *Publish the pubkey to a static `.well-known` file.* Rejected because it requires a second hosting surface and decouples the published key from the running signer. With `/v1/pubkey` reading from the live signer, the pubkey can never drift out of sync with the actual signature being produced.
 
-2. *Embed the pubkey in every checkpoint body* (e.g. as a 4th line). Rejected because it changes the wire format of `/v1/checkpoint`, a breaking change to a published spec section (§2.4.1) for a problem that's solved cleanly with an additive endpoint.
+2. *Embed the pubkey in every checkpoint body* (e.g. as a 4th line). Rejected because it changes the wire format of `/v1/checkpoint`, a breaking change to a published spec section ([§2.4.1](atrib-spec.md#241-body-structure)) for a problem that's solved cleanly with an additive endpoint.
 
 3. *Require verifiers to derive the pubkey from the seed via a separate "trust root" service.* Rejected because it introduces a second trust dependency for what is fundamentally one log's accountability surface.
 
@@ -913,7 +913,7 @@ A test verifies that the published `key_id` exactly matches the prefix in the li
 **Date:** 2026-04-27
 **Status:** Accepted; shipped in `@atrib/mcp` middleware
 
-**Context.** The atrib log stores commitments only, `record_hash`, `creator_key`, `context_id`, `timestamp`, `event_type`, not the original signed record JSON. This is intentional (§3.6 fact/policy separation; the log is observability, not storage). But it leaves a verification gap: third parties have no way to prove "this record_hash is the hash of a record signed by that creator_key" without the original record bytes. The bytes exist transiently inside the middleware between sign and submit; once the submit returns, they're gone.
+**Context.** The atrib log stores commitments only, `record_hash`, `creator_key`, `context_id`, `timestamp`, `event_type`, not the original signed record JSON. This is intentional ([§3.6](atrib-spec.md#36-implementation-notes) fact/policy separation; the log is observability, not storage). But it leaves a verification gap: third parties have no way to prove "this record_hash is the hash of a record signed by that creator_key" without the original record bytes. The bytes exist transiently inside the middleware between sign and submit; once the submit returns, they're gone.
 
 A reproducible end-to-end verifier hits this gap directly: the gate that replays the record's Ed25519 signature against `creator_key` cannot run without access to the original signed record bytes. Without retention, that verification path is unreachable.
 
@@ -932,7 +932,7 @@ interface AtribOptions {
 }
 ```
 
-The hook is fired post-sign (so the `signature` field is present), pre-submit (so persistence happens before any network attempt), and wrapped in try/catch with promise-rejection capture. The §5.8 degradation contract is preserved: a `onRecord` observer that throws or rejects does not block the tool call, the attribution token in `_meta`, or the log submission.
+The hook is fired post-sign (so the `signature` field is present), pre-submit (so persistence happens before any network attempt), and wrapped in try/catch with promise-rejection capture. The [§5.8](atrib-spec.md#58-degradation-contract) degradation contract is preserved: a `onRecord` observer that throws or rejects does not block the tool call, the attribution token in `_meta`, or the log submission.
 
 The first consumer is an MCP wrapper service (kept outside this repo during pre-launch validation) that uses `onRecord` to append records as one JSON per line at a local jsonl mirror under `~/.atrib/records/`.
 
@@ -940,7 +940,7 @@ The first consumer is an MCP wrapper service (kept outside this repo during pre-
 
 1. *Return signed records from a side-channel API like `getRecord(hash)`.* Rejected because it requires the middleware to retain records in memory indefinitely (memory leak in long-running processes) or expose a query endpoint (new attack surface, new failure mode).
 
-2. *Make the wrapper sign records itself instead of going through the middleware.* Rejected because it duplicates §1.4 signing logic outside `@atrib/mcp` (drift risk: future signing-format changes would have to land in N places). Keep one signer, expose one observer.
+2. *Make the wrapper sign records itself instead of going through the middleware.* Rejected because it duplicates [§1.4](atrib-spec.md#14-signing-and-verification) signing logic outside `@atrib/mcp` (drift risk: future signing-format changes would have to land in N places). Keep one signer, expose one observer.
 
 3. *Add a "tee" mode where the middleware writes records to a file path passed via `AtribOptions`.* Rejected because file paths are a host concern (sandboxing, permissions, log rotation, format) and embedding them in `@atrib/mcp` couples the protocol middleware to filesystem semantics. The hook lets each host decide how to persist.
 
@@ -950,7 +950,7 @@ The first consumer is an MCP wrapper service (kept outside this repo during pre-
 
 - The dogfood verifier's GATE F (`record.sig` Ed25519 replay) becomes runnable once any consumer wires `onRecord` to disk. This closes the previously-named "GAP 2".
 - Other consumers (e.g. `@atrib/agent` framework adapters) can use the same hook for their own observability needs, auditing, metrics, replay debugging, without anything specific to the dogfood case being baked in.
-- Two new tests in `packages/mcp/test/middleware.test.ts`: (a) records are observed post-sign with the right shape, (b) observer throws don't break tool calls (the §5.8 invariant). All 328 mcp tests continue to pass.
+- Two new tests in `packages/mcp/test/middleware.test.ts`: (a) records are observed post-sign with the right shape, (b) observer throws don't break tool calls (the [§5.8](atrib-spec.md#58-degradation-contract) invariant). All 328 mcp tests continue to pass.
 
 **What this DOESN'T solve.**
 
@@ -962,13 +962,13 @@ The first consumer is an MCP wrapper service (kept outside this repo during pre-
 ## D030: Log key publication serves both C2SP vkey and JSON, at distinct endpoints
 
 **Date:** 2026-04-27
-**Status:** Accepted; deployed alongside D028
+**Status:** Accepted; deployed alongside [D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification)
 
-**Context.** D028 shipped `GET /v1/pubkey` returning JSON `{origin, public_key, key_id, algorithm}` to close the dogfood verifier's checkpoint-signature gap. During the post-D028 spec sync (atrib-spec.md §2.4.2), an existing spec line surfaced that the D028 ADR had not acknowledged:
+**Context.** [D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification) shipped `GET /v1/pubkey` returning JSON `{origin, public_key, key_id, algorithm}` to close the dogfood verifier's checkpoint-signature gap. During the post-[D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification) spec sync (atrib-spec.md [§2.4.2](atrib-spec.md#242-log-signing-key-and-key-id)), an existing spec line surfaced that the [D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification) ADR had not acknowledged:
 
 > "The verifier key string published at `log.atrib.dev/v1/log-pubkey` encodes the key name, key ID, and public key in the C2SP vkey format"
 
-So the spec already committed the log to publishing its key, but at a different path (`/v1/log-pubkey`) and in a different format (a single C2SP vkey string, `<origin>+<hex(keyid)>+<base64(0x01||pubkey)>`, served as `text/plain`). The D028 implementation diverged from this without amending the spec. The two formats serve different audiences:
+So the spec already committed the log to publishing its key, but at a different path (`/v1/log-pubkey`) and in a different format (a single C2SP vkey string, `<origin>+<hex(keyid)>+<base64(0x01||pubkey)>`, served as `text/plain`). The [D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification) implementation diverged from this without amending the spec. The two formats serve different audiences:
 
 - The C2SP vkey form is parsed directly by `golang.org/x/mod/sumdb/note.NewVerifier`, sigsum, tlog-witness, and other tlog ecosystem tooling. These tools expect a key string they can read from a file or URL and pass to a verifier constructor.
 - The JSON form is friendlier for hand-rolled verifiers (browser-based verify scripts, end-to-end verification harnesses, future graph-side audit code) that benefit from structured access.
@@ -976,43 +976,43 @@ So the spec already committed the log to publishing its key, but at a different 
 **Decision.** Keep both endpoints, both serving the same key:
 
 - `GET /v1/log-pubkey` returns the C2SP vkey string as `text/plain; charset=utf-8`, per the existing spec line.
-- `GET /v1/pubkey` returns JSON as defined by D028.
+- `GET /v1/pubkey` returns JSON as defined by [D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification).
 
 Both MUST be backed by the same `CheckpointSigner` (same key bytes, same `key_id`, same `origin`). A new test verifies that the vkey-extracted public key bytes equal the bytes returned by the JSON endpoint, and that the vkey-extracted key actually verifies a real `/v1/checkpoint` signature. A new helper `formatVkey(origin, keyId, publicKey)` lives next to `formatCheckpointBody` in `services/log-node/src/checkpoint.ts`; both produce C2SP-formatted artifacts so they cohabit.
 
-The spec was updated in §2.4.2 to document both endpoints, with normative MUSTs that they agree on `origin`, `key_id`, and the underlying public key, and that the published `key_id` equal the 4-byte hex prefix on every `/v1/checkpoint` signature line.
+The spec was updated in [§2.4.2](atrib-spec.md#242-log-signing-key-and-key-id) to document both endpoints, with normative MUSTs that they agree on `origin`, `key_id`, and the underlying public key, and that the published `key_id` equal the 4-byte hex prefix on every `/v1/checkpoint` signature line.
 
 **Alternatives considered.**
 
 1. *Rename `/v1/pubkey` to `/v1/log-pubkey` and switch its response to vkey text format (impl follows spec).* Rejected because the deployed JSON endpoint already has at least one consumer (the dogfood verifier) and changing both path and content type is observable. More importantly, the JSON form is genuinely useful for consumers that don't speak C2SP, converting it to vkey-only would force every such consumer to write a custom parser.
 
-2. *Update §2.4.2 to drop the C2SP vkey reference and document JSON-only at `/v1/pubkey` (spec follows impl).* Rejected because dropping vkey breaks compatibility with existing C2SP-conformant tooling. Witness software, sumdb/note verifiers, and any future cosignature work expect to point at a URL and parse the response as a vkey string. JSON-only forces adapters everywhere.
+2. *Update [§2.4.2](atrib-spec.md#242-log-signing-key-and-key-id) to drop the C2SP vkey reference and document JSON-only at `/v1/pubkey` (spec follows impl).* Rejected because dropping vkey breaks compatibility with existing C2SP-conformant tooling. Witness software, sumdb/note verifiers, and any future cosignature work expect to point at a URL and parse the response as a vkey string. JSON-only forces adapters everywhere.
 
 3. *Single hybrid endpoint at `/v1/pubkey` returning JSON that includes the vkey as a string field.* Rejected because tools like `note.NewVerifier` expect to fetch a vkey directly, not extract one from JSON. Even if such a tool's plumbing could be wrapped to do the extraction, the friction is exactly the kind of "everyone has to write a custom adapter" that C2SP was designed to avoid. The fact that two endpoints cost ~30 lines of code and are both load-bearing for their respective audiences makes the duplication cheap.
 
 **Consequences.**
 
 - Adds a `formatVkey` helper and a `handleLogPubkey` handler. ~30 lines of code, four new tests covering format correctness and end-to-end signature verification under the vkey-extracted key.
-- The dogfood verifier (D028 / D029 motivation) will exercise both endpoints to confirm they agree on the key bytes, a small additional gate that catches any future drift between the two surfaces.
-- Future witness/cosignature work (planned for V2) gets the canonical vkey URL it needs without any new spec writing; the path was already committed in §2.4.2.
+- The dogfood verifier ([D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification) / [D029](#d029-atriboptionsonrecordrecord-observer-hook-on-the-middleware) motivation) will exercise both endpoints to confirm they agree on the key bytes, a small additional gate that catches any future drift between the two surfaces.
+- Future witness/cosignature work (planned for V2) gets the canonical vkey URL it needs without any new spec writing; the path was already committed in [§2.4.2](atrib-spec.md#242-log-signing-key-and-key-id).
 
 **What this DOESN'T solve.**
 
-- Key rotation, still. D028 explicitly punted that to a future ADR; this resolution doesn't change that. When rotation is implemented, both endpoints will need to grow a versioned representation (likely an array of `{key_id, public_key, valid_from, valid_to}` for `/v1/pubkey` and a multi-line vkey list for `/v1/log-pubkey`). Out of scope.
+- Key rotation, still. [D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification) explicitly punted that to a future ADR; this resolution doesn't change that. When rotation is implemented, both endpoints will need to grow a versioned representation (likely an array of `{key_id, public_key, valid_from, valid_to}` for `/v1/pubkey` and a multi-line vkey list for `/v1/log-pubkey`). Out of scope.
 - Witness key publication. If/when third parties cosign checkpoints, each witness will publish its own vkey from its own service. The atrib spec describes the format the log uses; witness operators apply the same shape to their own infrastructure.
 
-**Acknowledged process failure.** D028 was drafted and shipped without grepping the spec for an existing key-publication contract. The §2.4.2 line was always there. A spec-sync pass should be part of "the ADR is done" rather than an after-the-fact cleanup. Recording this so the lesson outlives the moment.
+**Acknowledged process failure.** [D028](#d028-log-exposes-its-signing-pubkey-at-get-v1pubkey-for-self-contained-verification) was drafted and shipped without grepping the spec for an existing key-publication contract. The [§2.4.2](atrib-spec.md#242-log-signing-key-and-key-id) line was always there. A spec-sync pass should be part of "the ADR is done" rather than an after-the-fact cleanup. Recording this so the lesson outlives the moment.
 
 ---
 
-## D031: Reconcile §2.4.3 signed-note divergence from C2SP
+## D031: Reconcile [§2.4.3](atrib-spec.md#243-signed-note-format) signed-note divergence from C2SP
 
 **Date:** 2026-04-27
 **Status:** Accepted; implemented in commit `096c8a5`
 
 **Context.**
 
-atrib spec §2.4.3 opens with:
+atrib spec [§2.4.3](atrib-spec.md#243-signed-note-format) opens with:
 
 > "The complete checkpoint (body plus signatures) is a signed note per the C2SP signed-note specification (c2sp.org/signed-note)."
 
@@ -1257,7 +1257,7 @@ A decision was needed on three questions: (1) AKD vs roll-our-own simpler struct
 
 **Consequences.**
 
-- New service `services/directory-node/` (TypeScript wrapper around AKD via WASM bridge per the §3.1 benchmark dated 2026-04-29; rust-wasm via wasm-pack chosen).
+- New service `services/directory-node/` (TypeScript wrapper around AKD via WASM bridge per the [§3.1](atrib-spec.md#31-design-principles-and-rationale) benchmark dated 2026-04-29; rust-wasm via wasm-pack chosen).
 - New package `@atrib/directory` exposing `publish`, `lookup`, `history`, `proveAbsence` SDK methods.
 - `@atrib/verify` consumes the directory and annotates verification results with `identity_resolved`.
 - The recall tool (an MCP server consumed by the host agent) annotates returned records with the resolved identity claim per record.
@@ -1271,7 +1271,7 @@ A decision was needed on three questions: (1) AKD vs roll-our-own simpler struct
 - *AKD's own implementation correctness.* atrib trusts the AKD crate. If AKD has a bug, atrib has the bug. Mitigation: pin the version, follow upstream advisories, run AKD's own conformance suite as part of CI.
 - *Directory-key rotation.* The directory-signing key has the same rotation problem as the log-signing key. Same V2 deferral.
 
-**Implementation sequencing.** Bridge benchmark (2026-04-29): WASM lookup at 100K labels measured at 1.8ms p95, comfortably under the 50ms threshold from §3.1. Decision: ship WASM via wasm-pack + wasm-bindgen. NAPI would be ~5x faster (typical native vs WASM ratio for crypto-heavy code) but the distribution simplicity (single .wasm artifact vs per-platform .node binaries), sandbox property, and zero-toolchain install requirement make WASM the right tradeoff. AKD parallelism is gated to `disabled()` in the WASM target because WASM runtimes lack a Tokio executor; insert throughput drops to ~6.3K labels/sec single-threaded, which is comfortably above the per-operation anchoring cadence (§6.2.4). Sequence: AKD WASM bridge crate → @atrib/directory package → services/directory-node service → wire into @atrib/verify → wire into recall.
+**Implementation sequencing.** Bridge benchmark (2026-04-29): WASM lookup at 100K labels measured at 1.8ms p95, comfortably under the 50ms threshold from [§3.1](atrib-spec.md#31-design-principles-and-rationale). Decision: ship WASM via wasm-pack + wasm-bindgen. NAPI would be ~5x faster (typical native vs WASM ratio for crypto-heavy code) but the distribution simplicity (single .wasm artifact vs per-platform .node binaries), sandbox property, and zero-toolchain install requirement make WASM the right tradeoff. AKD parallelism is gated to `disabled()` in the WASM target because WASM runtimes lack a Tokio executor; insert throughput drops to ~6.3K labels/sec single-threaded, which is comfortably above the per-operation anchoring cadence ([§6.2.4](atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log)). Sequence: AKD WASM bridge crate → @atrib/directory package → services/directory-node service → wire into @atrib/verify → wire into recall.
 
 ## D035: Extensible event_type vocabulary via URI typing
 
@@ -1602,7 +1602,7 @@ The mechanism: HKDF (RFC 5869) derives a per-conversation Ed25519 seed from a ma
 
 ## D040: Reserved
 
-D040 is reserved for the harness reference implementation ADR: scope of `@atrib/recall`, why it's informative-not-normative. It will be authored when `@atrib/recall` is published to the `packages/recall/` directory.
+[D040](#d040-reserved) is reserved for the harness reference implementation ADR: scope of `@atrib/recall`, why it's informative-not-normative. It will be authored when `@atrib/recall` is published to the `packages/recall/` directory.
 
 ## D041: informed_by linking primitive and INFORMED_BY edge type
 
@@ -1886,7 +1886,7 @@ Mitigations exist (opaque tool labels, salted commitments, coarsened timing) but
 
 **What this DOESN'T solve.**
 
-- *Identity privacy.* `creator_key` is required and discloses the agent's stable identity. The [§6](atrib-spec.md#6-key-directory) directory may resolve creator_key to a real-world identity claim. Identity privacy requires a different mechanism (key rotation, per-conversation derivation) addressed in [D033](#d033-key-rotation-and-revocation) and the deferred D038.
+- *Identity privacy.* `creator_key` is required and discloses the agent's stable identity. The [§6](atrib-spec.md#6-key-directory) directory may resolve creator_key to a real-world identity claim. Identity privacy requires a different mechanism (key rotation, per-conversation derivation) addressed in [D033](#d033-key-rotation-and-revocation) and the deferred [D038](#d038-per-conversation-key-derivation).
 - *Linkage privacy.* `informed_by` and `provenance_token` disclose the agent's claimed reasoning composition. This is the structural disclosure that makes auditability work. Harness-layer mitigations (commitment-and-reveal patterns) are documented in [§7](atrib-spec.md#7-harness-integration-patterns).
 - *Metadata privacy of the log itself.* The log entry ([§2.3.1](atrib-spec.md#231-entry-serialization)) discloses creator_key, context_id, timestamp, event_type byte even when the record content uses high-privacy postures. Mitigating this requires log-level changes outside this ADR's scope.
 
@@ -1933,7 +1933,7 @@ The positioning needs to be visible in the spec, README, and per-package READMEs
 
 **Implementation sequencing.** Spec [§0](atrib-spec.md#0-foundations) abstract + new [§3](atrib-spec.md#3-graph-query-interface) positioning subsection → README block → per-package README blocks → ARCHITECTURE.md trust model update → CLAUDE.md sync trigger registration.
 
-## D047: Harness-side reasoning chains as informative §7 pattern
+## D047: Harness-side reasoning chains as informative [§7](atrib-spec.md#7-harness-integration-patterns) pattern
 
 **Date:** 2026-04-28
 **Status:** Accepted
@@ -2272,7 +2272,7 @@ A new optional field `inclusion_proof_refs: [{ log_id, record_hash, checkpoint_r
 - Sequencing is non-trivial: a record citing its parent's inclusion proof needs the parent to have been committed AND for a checkpoint covering it to have been published AND for that checkpoint to have been witnessed (depending on consumer policy). The chicken-and-egg patterns need careful design.
 - Cross-log replication ([D050](#d050-cross-log-replication-for-equivocation-defense)) introduces multiple proofs per record; the citation field needs to specify which log(s) to cite.
 - Field bloat: each record gains another reference list; storage and proof verification work scale.
-- Adding a fourth robustness mechanism in the same session as [D050](#d050-cross-log-replication-for-equivocation-defense)-D052 increases interaction surface beyond what careful design supports.
+- Adding a fourth robustness mechanism in the same session as [D050](#d050-cross-log-replication-for-equivocation-defense)-[D052](#d052-cross-attestation-requirement-for-transaction-records) increases interaction surface beyond what careful design supports.
 
 **Known design questions for the formal ADR.**
 
@@ -2327,7 +2327,7 @@ The right shape is a unified explorer that composes from the three services. Thi
 
 **Consequences.**
 
-- *Spec.* No spec changes for D054 itself; the explorer reads from the existing §2.5 / §3.4 / §6.2 read APIs. CORS clarification can land in those sections as a normative note (`Access-Control-Allow-Origin: *` is the canonical setting for the read endpoints).
+- *Spec.* No spec changes for [D054](#d054-unified-public-explorer-vs-per-service-admin-uis) itself; the explorer reads from the existing [§2.5](atrib-spec.md#25-tile-api-read-interface) / [§3.4](atrib-spec.md#34-query-api) / [§6.2](atrib-spec.md#62-directory-operations) read APIs. CORS clarification can land in those sections as a normative note (`Access-Control-Allow-Origin: *` is the canonical setting for the read endpoints).
 - *log-node, graph-node, directory-node.* All three gain `Access-Control-Allow-Origin: *` headers on read endpoints (and OPTIONS preflight handling). Tests confirm headers present.
 - *Repo.* New `apps/dashboard/` directory ships the explorer source. Option 1 is a single HTML file with embedded CSS + vanilla JS (no build step). Options 2 and 3 will introduce a framework + build step when they're built.
 - *Hosting.* Option 1 is served inline by log-node at `https://explore.atrib.dev/` (also at `https://log.atrib.dev/dashboard` for legacy direct access). The Dockerfile copies `apps/dashboard/index.html` into the image; the server reads it once at startup, caches in memory, and returns with `Cache-Control: public, max-age=60`. The "no per-service inspection UIs" rule (point 1 above) bans per-service ADMIN HTML, page-shaped, service-private surfaces. Serving the unified explorer from a service is materially different: log-node is acting as a static-file host for the cross-service surface, not exposing a service-specific admin. The host-based routing is explicit: when the request `Host` header is `explore.atrib.dev` the dashboard is returned at `/`; otherwise log-node returns API responses at `/v1/*` and a 404 hint at `/`. When option 2 (SPA) ships it will get its own hosting (likely Cloudflare Pages); the inline route stays as a fallback. **Naming rationale:** `explore` was chosen over `dashboard` so that `dashboard.atrib.dev` is reserved for the actual auth-gated personal dashboard product (separate memory entry); `explore` reads as block-explorer and avoids the "dashboard implies my-account" connotation.
@@ -2377,7 +2377,7 @@ The URI migration ([D035](#d035-extensible-event_type-vocabulary-via-uri-typing)
 - *Spec.* No spec changes. [§1.2.4](atrib-spec.md#124-event_type-values) already accommodates extension URIs.
 - *Consumer.* Continues using its own namespace URIs. No coordination with atrib spec maintainers required for vocabulary additions.
 - *atrib explorer.* Extension-URI records render with their full URI string (not a normative type label). When a second harness adopts an `apply`-shaped type, revisit promotion via a fresh ADR.
-- *Reopening criteria.* This decision is reopened automatically the moment a second independent harness uses the same URI shape (or an isomorphic one): i.e., the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) bar starts to clear. At that point write a new ADR; do not amend D055.
+- *Reopening criteria.* This decision is reopened automatically the moment a second independent harness uses the same URI shape (or an isomorphic one): i.e., the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) bar starts to clear. At that point write a new ADR; do not amend [D055](#d055-annotation-proposal-apply-types-stay-as-extension-uris-not-promoted-to-atrib-normative).
 
 ---
 
@@ -2443,7 +2443,7 @@ Four of five indicators clear. Indicator 1 fails the literal cross-category read
 
 A class of useful integrations needs the inverse ordering. When an MCP tool writes data to durable storage (e.g., a row in a database, a message on a queue, a record in an external API), and downstream consumers want to anchor their own `informed_by` references to the row produced by that call, the row needs to carry the atrib receipt_id at the moment of insert, not as a follow-up update after the row already exists. Concrete example: an MCP server that posts to a shared-context database. A second agent reading that row immediately after the post should be able to extract the receipt_id and use it as an `informed_by` anchor for its own emission, closing a cross-repo causal edge in the graph. With post-call signing, the row briefly exists without the receipt_id; a fast consumer reads it before the column is filled in.
 
-**Decision.** Add `preCallTransform?: PreCallTransform` to `AtribOptions`. When set, the middleware signs the record BEFORE forwarding the call to the upstream handler, computes the §1.5.2 propagation token (`receiptId`) and the canonical record_hash reference (`recordHash`), invokes the callback with `{ toolName, args, receiptId, recordHash, contextId }`, and replaces the upstream call's `arguments` with the return value. Post-success commit (onRecord, outbound context, log submission, autoChain bookkeeping) is unchanged: the same signed bytes that were committed pre-call to the host are queued for log submission post-success.
+**Decision.** Add `preCallTransform?: PreCallTransform` to `AtribOptions`. When set, the middleware signs the record BEFORE forwarding the call to the upstream handler, computes the [§1.5.2](atrib-spec.md#152-http-transport-tracestate) propagation token (`receiptId`) and the canonical record_hash reference (`recordHash`), invokes the callback with `{ toolName, args, receiptId, recordHash, contextId }`, and replaces the upstream call's `arguments` with the return value. Post-success commit (onRecord, outbound context, log submission, autoChain bookkeeping) is unchanged: the same signed bytes that were committed pre-call to the host are queued for log submission post-success.
 
 **Rationale.**
 
@@ -2474,7 +2474,7 @@ A class of useful integrations needs the inverse ordering. When an MCP tool writ
 - *`packages/mcp/README.md`.* Adds a row to the `AtribOptions` table.
 - *Reusable beyond Loop 5.* Any wrapper that needs to embed an atrib receipt into downstream-visible data (database rows, queue messages, external-API request bodies) gets the same hook for free. Future cross-tool causal-link work does not need to revisit this design.
 
-**Reopening criteria.** None expected. The hook surface is small, opt-in, and on the SDK side rather than the spec side. If a future use case needs a different shape (e.g., the host needs to influence record fields beyond just args mutation), that is a separate addition rather than a revision of D057.
+**Reopening criteria.** None expected. The hook surface is small, opt-in, and on the SDK side rather than the spec side. If a future use case needs a different shape (e.g., the host needs to influence record fields beyond just args mutation), that is a separate addition rather than a revision of [D057](#d057-pre-call-signing-hook-precalltransform-for-cross-tool-causal-embedding).
 
 ---
 
@@ -2487,25 +2487,25 @@ A class of useful integrations needs the inverse ordering. When an MCP tool writ
 
 The recall-fidelity primitive that closes this gap is *annotation*: a separate signed record pointing at any prior record via an `annotates` field, carrying structured metadata (importance, topics, summary) that downstream readers can filter and sort by. Annotation is the dual of `informed_by`, forward-pointing (a new record claims something *about* an earlier record) rather than backward-pointing (a new record claims earlier records *informed* it). Both are agent-declared causal links; both are surfaced as graph edges; their temporal orientation differs.
 
-D055 ruled (2026-04-30) that `annotation` should stay as an extension URI in a single consumer's namespace because no second harness used the same shape. That ruling is reopened here: ANY atrib-using agent emitting "this record matters more than the others; weight it heavy in future recall" is using the same shape. Two independent harnesses (atrib-using agents in general, plus the original consumer specifically) need the identical semantic. The D036 promotion bar clears.
+[D055](#d055-annotation-proposal-apply-types-stay-as-extension-uris-not-promoted-to-atrib-normative) ruled (2026-04-30) that `annotation` should stay as an extension URI in a single consumer's namespace because no second harness used the same shape. That ruling is reopened here: ANY atrib-using agent emitting "this record matters more than the others; weight it heavy in future recall" is using the same shape. Two independent harnesses (atrib-using agents in general, plus the original consumer specifically) need the identical semantic. The [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion bar clears.
 
-**Decision.** Promote `https://atrib.dev/v1/types/annotation` to the atrib-normative event_type vocabulary, taking byte `0x05` in the §2.3.1 log entry encoding. (D056 took `0x04` for `directory_anchor`; reserved range narrows from `0x05`–`0xFE` to `0x06`–`0xFE`.) Add the `annotates` optional field to the record format (§1.2.8): `sha256:<64-hex>` reference to the target record. Validators MUST require `annotates` on annotation records and MUST reject `annotates` on any other event_type. The graph layer derives `ANNOTATES` edges (the eighth edge type beyond §3.2.3's seven) per a new §3.2.4 step 8: for each annotation record A carrying `annotates: T`, create edge A → T; if T is not in the resolved set, create A → synthetic_dangling_node(T) with `dangling: true`.
+**Decision.** Promote `https://atrib.dev/v1/types/annotation` to the atrib-normative event_type vocabulary, taking byte `0x05` in the [§2.3.1](atrib-spec.md#231-entry-serialization) log entry encoding. ([D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04) took `0x04` for `directory_anchor`; reserved range narrows from `0x05`–`0xFE` to `0x06`–`0xFE`.) Add the `annotates` optional field to the record format (§1.2.8): `sha256:<64-hex>` reference to the target record. Validators MUST require `annotates` on annotation records and MUST reject `annotates` on any other event_type. The graph layer derives `ANNOTATES` edges (the eighth edge type beyond [§3.2.3](atrib-spec.md#323-edge-types)'s seven) per a new [§3.2.4](atrib-spec.md#324-edge-derivation-rules) step 8: for each annotation record A carrying `annotates: T`, create edge A → T; if T is not in the resolved set, create A → synthetic_dangling_node(T) with `dangling: true`.
 
 **Rationale.**
 
 1. **Recall fidelity is a substrate-level concern.** The "agents that reason from a past they can prove" tagline depends on that past being usefully readable, not just retrievable. Without structured annotation, every consumer reinvents the same importance-encoding pattern in prose, and readers can't filter by it without a domain-specific parser per consumer.
 
-2. **Promotion bar (D036) is met.** Two independent harnesses need the identical semantic with no harness-specific divergence: (a) any atrib-using agent annotating its own prior records during recall workflows, (b) the original downstream consumer that minted the extension URI. The shape (`annotates` ref + structured importance/topics/summary) is identical across both.
+2. **Promotion bar ([D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)) is met.** Two independent harnesses need the identical semantic with no harness-specific divergence: (a) any atrib-using agent annotating its own prior records during recall workflows, (b) the original downstream consumer that minted the extension URI. The shape (`annotates` ref + structured importance/topics/summary) is identical across both.
 
-3. **Dual-of-informed_by structure makes the cascade trivial.** Step 8 derivation mirrors Step 6 (INFORMED_BY) almost verbatim, modulo direction (forward vs backward) and the additional event_type filter. The dangling-node + reason annotation pattern from D056/Loop 5 carries over without modification.
+3. **Dual-of-informed_by structure makes the cascade trivial.** Step 8 derivation mirrors Step 6 (INFORMED_BY) almost verbatim, modulo direction (forward vs backward) and the additional event_type filter. The dangling-node + reason annotation pattern from [D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04)/Loop 5 carries over without modification.
 
-4. **Byte allocation is the canonical fast-path filter.** Verifiers can byte-filter for annotations without fetching records, enabling fast queries like "all annotations on a session" without scanning every record. Pre-D058 annotation records (emitted under downstream-consumer extension URIs) remain valid signed records and remain queryable by URI; the byte filter only catches post-promotion records.
+4. **Byte allocation is the canonical fast-path filter.** Verifiers can byte-filter for annotations without fetching records, enabling fast queries like "all annotations on a session" without scanning every record. Pre-[D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) annotation records (emitted under downstream-consumer extension URIs) remain valid signed records and remain queryable by URI; the byte filter only catches post-promotion records.
 
-5. **Closes a downstream consumer's annotation-shape carryover.** Existing consumers emitting annotation-shaped records under `event_type=observation` (because the annotation URI wasn't normative) flip one URI string post-D058 and the records are correctly typed. The on-chain bytes are otherwise unaffected; the discontinuity is purely the event_type label.
+5. **Closes a downstream consumer's annotation-shape carryover.** Existing consumers emitting annotation-shaped records under `event_type=observation` (because the annotation URI wasn't normative) flip one URI string post-[D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) and the records are correctly typed. The on-chain bytes are otherwise unaffected; the discontinuity is purely the event_type label.
 
 **Alternatives considered.**
 
-1. *Keep annotation as an extension URI per D055.* Rejected. The recall-fidelity insight provides the second-harness use case D055 was waiting for. Continuing to leave it as extension blocks structured recall queries across the atrib ecosystem.
+1. *Keep annotation as an extension URI per [D055](#d055-annotation-proposal-apply-types-stay-as-extension-uris-not-promoted-to-atrib-normative).* Rejected. The recall-fidelity insight provides the second-harness use case [D055](#d055-annotation-proposal-apply-types-stay-as-extension-uris-not-promoted-to-atrib-normative) was waiting for. Continuing to leave it as extension blocks structured recall queries across the atrib ecosystem.
 
 2. *Add `annotates` field to `observation` event_type instead of minting a new type.* Rejected. Observation and annotation have distinct cognitive roles: observations are first-class signed events the agent witnessed, annotations are commentary about earlier records. Conflating them in the same event_type loses the queryability advantage and forces consumers to inspect every observation record's content shape to know which kind it is.
 
@@ -2513,16 +2513,16 @@ D055 ruled (2026-04-30) that `annotation` should stay as an extension URI in a s
 
 **Consequences.**
 
-- *Spec.* §1.2.4 event_type table gains a row for annotation (byte 0x05). §1.2.8 added covering the `annotates` field. §2.3.1 byte mapping table gains a row, reserved range narrows. §3.2.3 edge types table gains ANNOTATES (eighth type). §3.2.4 derivation gets Step 8.
+- *Spec.* [§1.2.4](atrib-spec.md#124-event_type-values) event_type table gains a row for annotation (byte 0x05). §1.2.8 added covering the `annotates` field. [§2.3.1](atrib-spec.md#231-entry-serialization) byte mapping table gains a row, reserved range narrows. [§3.2.3](atrib-spec.md#323-edge-types) edge types table gains ANNOTATES (eighth type). [§3.2.4](atrib-spec.md#324-edge-derivation-rules) derivation gets Step 8.
 - *@atrib/mcp.* `EVENT_TYPE_ANNOTATION_URI` constant + `EVENT_TYPE_ANNOTATION = 0x05` byte + entry encoder switch case + types.ts `annotates` optional field. AtribRecord type extended.
 - *@atrib/verify.* `EventType` union gains `'annotation'`. `EdgeType` union gains `'ANNOTATES'`. `graphLabelFromEventTypeUri` switch gains a case.
-- *services/graph-node.* Step 8 derivation in graph-builder.ts. 8-edge regression guard updated (was 7-edge from D041+D044).
+- *services/graph-node.* Step 8 derivation in graph-builder.ts. 8-edge regression guard updated (was 7-edge from [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type)+[D044](#d044-provenance_token-field-for-cross-session-causal-anchoring)).
 - *services/log-node.* Decoder switch + stats counter + endpoint doc + verify-loop validEventTypes Set + metrics.mjs per-byte filter.
-- *apps/dashboard.* Chip color (teal) + `.chip.event-annotation` rule + Event-type chip block-comment refresh to reference D058.
+- *apps/dashboard.* Chip color (teal) + `.chip.event-annotation` rule + Event-type chip block-comment refresh to reference [D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05).
 - *Tests.* +4 graph-builder tests (resolved, dangling, malformed-on-non-annotation, multi-annotation). 8-edge regression guard now has the ANNOTATES leg.
 - *Reusable beyond P003.* The forward-pointing dangling pattern is now established for any future link-via-field promotion.
 
-**Reopening criteria.** None expected. Future cognitive primitives (e.g., revision per the parked P003.5 / 1.65 work) follow the same cascade pattern as new ADRs without revising D058.
+**Reopening criteria.** None expected. Future cognitive primitives (e.g., revision per the parked P003.5 / 1.65 work) follow the same cascade pattern as new ADRs without revising [D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05).
 
 ---
 
@@ -2531,19 +2531,19 @@ D055 ruled (2026-04-30) that `annotation` should stay as an extension URI in a s
 **Date:** 2026-05-04
 **Status:** Accepted
 
-**Context.** Annotation (D058) addresses the recall-fidelity gap by letting agents weight, summarize, and topic-tag prior records. It does not address a distinct gap: when the agent's current position is *incompatible* with a prior claim, annotation comments without overturning, and informed_by acknowledges sources without contradicting them. There is no protocol-level primitive for "I held position X; I now hold not-X because of Z."
+**Context.** Annotation ([D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05)) addresses the recall-fidelity gap by letting agents weight, summarize, and topic-tag prior records. It does not address a distinct gap: when the agent's current position is *incompatible* with a prior claim, annotation comments without overturning, and informed_by acknowledges sources without contradicting them. There is no protocol-level primitive for "I held position X; I now hold not-X because of Z."
 
 A recognized gap in prior approaches is the lack of a protocol-level primitive for explicitly signaling when an agent's position contradicts a prior claim. A revision record should be signed to declare: "P was my prior claim. C is my new claim. Reason for revision: Z." This enables future agents to locate and evaluate changes in stance as first-class graph nodes. Without a normative type, agents either smuggle the contradiction through observation prose (lossy) or skip emitting anything (the silent-override anti-pattern).
 
-The promotion bar (D036) clears for the same reason annotation cleared: any atrib-using agent doing reasoning that involves position changes hits the same shape. The substrate generalizes; agent-specific divergence in semantics is unnecessary.
+The promotion bar ([D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)) clears for the same reason annotation cleared: any atrib-using agent doing reasoning that involves position changes hits the same shape. The substrate generalizes; agent-specific divergence in semantics is unnecessary.
 
-**Decision.** Promote `https://atrib.dev/v1/types/revision` to the atrib-normative event_type vocabulary, taking byte `0x06` in the §2.3.1 log entry encoding. (D058 took `0x05`; reserved range narrows to `0x07`–`0xFE`.) Add the `revises` optional field to the record format (§1.2.9): `sha256:<64-hex>` reference to the predecessor record this revision supersedes. Validators MUST require `revises` on revision records and MUST reject `revises` on any other event_type. The graph layer derives `REVISES` edges (the ninth edge type) per a new §3.2.4 step 9: for each revision record R carrying `revises: T`, create edge R → T; if T is not in the resolved set, create R → synthetic_dangling_node(T) with `dangling: true`. Multiple revisions of the same target are allowed (a chain of mind-changes).
+**Decision.** Promote `https://atrib.dev/v1/types/revision` to the atrib-normative event_type vocabulary, taking byte `0x06` in the [§2.3.1](atrib-spec.md#231-entry-serialization) log entry encoding. ([D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) took `0x05`; reserved range narrows to `0x07`–`0xFE`.) Add the `revises` optional field to the record format ([§1.2.9](atrib-spec.md#129-revises)): `sha256:<64-hex>` reference to the predecessor record this revision supersedes. Validators MUST require `revises` on revision records and MUST reject `revises` on any other event_type. The graph layer derives `REVISES` edges (the ninth edge type) per a new [§3.2.4](atrib-spec.md#324-edge-derivation-rules) step 9: for each revision record R carrying `revises: T`, create edge R → T; if T is not in the resolved set, create R → synthetic_dangling_node(T) with `dangling: true`. Multiple revisions of the same target are allowed (a chain of mind-changes).
 
 **Rationale.**
 
 1. **Mind-changes deserve first-class status.** The substrate's "agents that reason from a past they can prove" claim depends on being able to surface contradictions explicitly. Without REVISES, an agent reading back records sees inconsistent positions with no signal that one supersedes the other. Annotation is too weak to carry the semantic.
 
-2. **D058 pattern is reusable verbatim.** Step 9 derivation mirrors Step 8 (ANNOTATES) modulo the field name (`revises` vs `annotates`) and event_type filter. The cascade across spec, mcp, verify, graph-node, log-node, dashboard is mechanical given the D058 precedent.
+2. **[D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) pattern is reusable verbatim.** Step 9 derivation mirrors Step 8 (ANNOTATES) modulo the field name (`revises` vs `annotates`) and event_type filter. The cascade across spec, mcp, verify, graph-node, log-node, dashboard is mechanical given the [D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) precedent.
 
 3. **Distinct semantic from annotation justifies a separate byte.** Conflating revision into annotation would force consumers to inspect content to know whether the new record overturns the old one or merely comments on it. Byte-level distinction keeps queries fast.
 
@@ -2561,7 +2561,7 @@ The promotion bar (D036) clears for the same reason annotation cleared: any atri
 
 **Consequences.**
 
-- *Spec.* §1.2.4 event_type table gains a row for revision (byte 0x06). §1.2.9 added covering the `revises` field. §2.3.1 byte mapping table gains a row, reserved range narrows to 0x07-0xFE. §3.2.3 edge types table gains REVISES (9 types now). §3.2.4 derivation gets Step 9.
+- *Spec.* [§1.2.4](atrib-spec.md#124-event_type-values) event_type table gains a row for revision (byte 0x06). [§1.2.9](atrib-spec.md#129-revises) added covering the `revises` field. [§2.3.1](atrib-spec.md#231-entry-serialization) byte mapping table gains a row, reserved range narrows to 0x07-0xFE. [§3.2.3](atrib-spec.md#323-edge-types) edge types table gains REVISES (9 types now). [§3.2.4](atrib-spec.md#324-edge-derivation-rules) derivation gets Step 9.
 - *@atrib/mcp.* `EVENT_TYPE_REVISION_URI` constant + `EVENT_TYPE_REVISION = 0x06` byte + entry encoder switch case + types.ts `revises` optional field. AtribRecord type extended.
 - *@atrib/verify.* `EventType` union gains `'revision'`. `EdgeType` union gains `'REVISES'`. `graphLabelFromEventTypeUri` switch gains a case.
 - *services/graph-node.* Step 9 derivation in graph-builder.ts.
@@ -2569,7 +2569,7 @@ The promotion bar (D036) clears for the same reason annotation cleared: any atri
 - *apps/dashboard.* Indigo chip color for revision + `.chip.event-revision` rule + Event-type chip block-comment refresh.
 - *Tests.* +4 graph-builder tests (resolved, dangling, malformed-on-non-revision, multi-revision). 9-edge regression guard now expects the REVISES leg.
 
-**Reopening criteria.** None expected. The pattern is now extensible to any future link-via-field event_type promotion (e.g., `delegation`, `apply`) following the same cascade with no reopening of D058 or D059.
+**Reopening criteria.** None expected. The pattern is now extensible to any future link-via-field event_type promotion (e.g., `delegation`, `apply`) following the same cascade with no reopening of [D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) or [D059](#d059-promote-revision-to-atrib-normative-event_type-byte-0x06).
 
 ## D060: CHANGELOG strategy, changesets per-package + GitHub Releases, no top-level CHANGELOG
 
@@ -2618,34 +2618,34 @@ When P006 was filed, the repo had no CHANGELOG anywhere. By the time this decisi
 - DECISIONS.md doubles as the authoritative log for non-package architectural decisions; per-package CHANGELOGs cover code/release-level changes.
 - If atrib-spec.md revision history becomes load-bearing (first external spec implementer raises it), open a follow-up ADR specifying the location and format.
 
-## D061: Add tool_name, args_hash, result_hash fields to §1.2.1
+## D061: Add tool_name, args_hash, result_hash fields to [§1.2.1](atrib-spec.md#121-field-definitions)
 
 ### Context
 
-§8.2 (opaque-name posture) and §8.3 (salted-commitment posture) referenced `tool_name`, `args_hash`, and `result_hash` as record fields without ever adding them to the §1.2.1 canonical record schema. The §1.2 standard-shape table only listed `args_salt` and `result_salt`, leaving the actual hash and tool-name fields as spec-implied-but-not-defined.
+[§8.2](atrib-spec.md#82-opaque-name-posture) (opaque-name posture) and [§8.3](atrib-spec.md#83-salted-commitment-posture) (salted-commitment posture) referenced `tool_name`, `args_hash`, and `result_hash` as record fields without ever adding them to the [§1.2.1](atrib-spec.md#121-field-definitions) canonical record schema. The [§1.2](atrib-spec.md#12-the-attribution-record) standard-shape table only listed `args_salt` and `result_salt`, leaving the actual hash and tool-name fields as spec-implied-but-not-defined.
 
 This created two coupled gaps:
 
-- **§8.2 verifier surface** (`tool_name_form`) had nothing to detect against. The §1.2.2 `content_id` derivation hashes `serverUrl + toolName` into `content_id`, but the verifier cannot reverse-derive `tool_name` from that hash.
-- **§8.3 salted-commitment scheme** (`H = SHA-256(salt ‖ canonical_args_bytes)`) defined a salt without the corresponding hash. A salt with no companion `args_hash` on the record is salt-for-nothing, there is no committed value to verify against.
+- **[§8.2](atrib-spec.md#82-opaque-name-posture) verifier surface** (`tool_name_form`) had nothing to detect against. The [§1.2.2](atrib-spec.md#122-content_id-derivation) `content_id` derivation hashes `serverUrl + toolName` into `content_id`, but the verifier cannot reverse-derive `tool_name` from that hash.
+- **[§8.3](atrib-spec.md#83-salted-commitment-posture) salted-commitment scheme** (`H = SHA-256(salt ‖ canonical_args_bytes)`) defined a salt without the corresponding hash. A salt with no companion `args_hash` on the record is salt-for-nothing, there is no committed value to verify against.
 
-The §8.3 commitment-form posture detection shipped on 2026-05-04 surfaces only the salt-presence dimension (`args_commitment_form: 'plain-sha256' | 'salted-sha256'` driven by `args_salt` presence). The actual commitment cannot be checked because `args_hash` is not on the record.
+The [§8.3](atrib-spec.md#83-salted-commitment-posture) commitment-form posture detection shipped on 2026-05-04 surfaces only the salt-presence dimension (`args_commitment_form: 'plain-sha256' | 'salted-sha256'` driven by `args_salt` presence). The actual commitment cannot be checked because `args_hash` is not on the record.
 
 ### Decision
 
-**Add `tool_name`, `args_hash`, and `result_hash` as MAY fields on the §1.2.1 standard record shape. All three default to absence (preserving the §8.1 default posture). Verifiers MUST treat absence as "not asserted" rather than as a default value.**
+**Add `tool_name`, `args_hash`, and `result_hash` as MAY fields on the [§1.2.1](atrib-spec.md#121-field-definitions) standard record shape. All three default to absence (preserving the [§8.1](atrib-spec.md#81-default-posture) default posture). Verifiers MUST treat absence as "not asserted" rather than as a default value.**
 
 ### Field details
 
 | Field | JCS-canonical sort position | Format |
 |---|---|---|
-| `tool_name` | last in current schema (`t-o-...` after `t-i-...`) | string per §8.2 |
+| `tool_name` | last in current schema (`t-o-...` after `t-i-...`) | string per [§8.2](atrib-spec.md#82-opaque-name-posture) |
 | `args_hash` | between `annotates` (`a-n`) and `args_salt` (`a-r-g-s-_-s`); `a-r-g-s-_-h` lies between | `"sha256:" + 64 lowercase hex` |
 | `result_hash` | between `provenance_token` (`p`) and `result_salt` (`r-e-s-u-l-t-_-s`); `r-e-s-u-l-t-_-h` lies between | `"sha256:" + 64 lowercase hex` |
 
 ### §8.2 ambiguity resolution
 
-The §8.2 form distinction is between three values: `verbatim` / `opaque` / `hashed`. The opaque-label regex (`[a-z0-9_-]{1,64}`) is broad enough that the spec's own verbatim example `book_flight` matches it. There is no structural way for a verifier to tell `book_flight` (verbatim) apart from `tool_a7f3` (opaque) by reading the record.
+The [§8.2](atrib-spec.md#82-opaque-name-posture) form distinction is between three values: `verbatim` / `opaque` / `hashed`. The opaque-label regex (`[a-z0-9_-]{1,64}`) is broad enough that the spec's own verbatim example `book_flight` matches it. There is no structural way for a verifier to tell `book_flight` (verbatim) apart from `tool_a7f3` (opaque) by reading the record.
 
 Three fixes were considered:
 
@@ -2658,22 +2658,22 @@ Three fixes were considered:
 - `"plain"` for any other present value.
 - `null` when the field is absent.
 
-The §8.2 prose is updated to acknowledge the limitation: consumers wanting to enforce verbatim-vs-opaque MUST do so via out-of-band metadata (e.g., a name registry), not by parsing the record value.
+The [§8.2](atrib-spec.md#82-opaque-name-posture) prose is updated to acknowledge the limitation: consumers wanting to enforce verbatim-vs-opaque MUST do so via out-of-band metadata (e.g., a name registry), not by parsing the record value.
 
 ### Backward compatibility
 
 - Existing records (none on the production log carry `tool_name`, `args_hash`, or `result_hash` as of 2026-05-04) remain valid and continue to verify identically.
 - New records that opt into any of the three fields produce different JCS canonical bytes and therefore different signatures from records that omit them, this is intentional and is the same backward-compat shape as `informed_by`, `provenance_token`, `args_salt`, `result_salt`, and `timestamp_granularity`.
 - Middleware (`@atrib/mcp`) gains opt-in config flags that default to off:
-  - `disclosure: { tool_name: 'omit' | 'verbatim' | 'hashed' }`, defaults to `'omit'` (preserves §8.1).
+  - `disclosure: { tool_name: 'omit' | 'verbatim' | 'hashed' }`, defaults to `'omit'` (preserves [§8.1](atrib-spec.md#81-default-posture)).
   - `commitment: { args: 'omit' | 'plain-sha256' | 'salted-sha256', result: 'omit' | 'plain-sha256' | 'salted-sha256' }`, defaults to `'omit'`.
-- Operators flipping any opt-in to non-`'omit'` are choosing to disclose more per §8 and accept the privacy trade-off documented in §8.6.
+- Operators flipping any opt-in to non-`'omit'` are choosing to disclose more per [§8](atrib-spec.md#8-privacy-postures) and accept the privacy trade-off documented in [§8.6](atrib-spec.md#86-threat-model).
 
 ### Verifier surface (`@atrib/verify`)
 
 `PostureAnnotation` gains:
 
-- `tool_name_form: 'hashed' | 'plain' | null` per the §8.2 fix above.
+- `tool_name_form: 'hashed' | 'plain' | null` per the [§8.2](atrib-spec.md#82-opaque-name-posture) fix above.
 - (Already shipped) `args_commitment_form` / `result_commitment_form`, semantics unchanged; these now align with the spec since `args_hash` and `result_hash` are formally on the record.
 
 ### Conformance corpus
@@ -2683,24 +2683,24 @@ The §8.2 prose is updated to acknowledge the limitation: consumers wanting to e
 ### Alternatives rejected
 
 1. **Add only `tool_name` and defer `args_hash` / `result_hash`.** Rejected because the same shape of gap blocks both surfaces; doing one and not the other leaves the spec internally inconsistent the same way it was before.
-2. **Skip the spec change and have the verifier surface `unresolvable: true` permanently.** Rejected because that means the §8.2 / §8.3 surfaces are documentation-only forever, they describe postures consumers can never actually verify.
-3. **Tighten §8.2 opaque-label regex (option 2 above).** Rejected because backward-incompatible with the spec's own published examples; the cost is wider than the value.
+2. **Skip the spec change and have the verifier surface `unresolvable: true` permanently.** Rejected because that means the [§8.2](atrib-spec.md#82-opaque-name-posture) / [§8.3](atrib-spec.md#83-salted-commitment-posture) surfaces are documentation-only forever, they describe postures consumers can never actually verify.
+3. **Tighten [§8.2](atrib-spec.md#82-opaque-name-posture) opaque-label regex (option 2 above).** Rejected because backward-incompatible with the spec's own published examples; the cost is wider than the value.
 
 ### Consequences
 
-- §1.2.1 field-table grows by three rows (tool_name, args_hash, result_hash); standard-shape example record updated.
-- §8.2 prose updated to reference the new field and document the regex ambiguity.
-- §8.3 prose clarifies that args_hash / result_hash are §1.2.1 MAY fields.
+- [§1.2.1](atrib-spec.md#121-field-definitions) field-table grows by three rows (tool_name, args_hash, result_hash); standard-shape example record updated.
+- [§8.2](atrib-spec.md#82-opaque-name-posture) prose updated to reference the new field and document the regex ambiguity.
+- [§8.3](atrib-spec.md#83-salted-commitment-posture) prose clarifies that args_hash / result_hash are [§1.2.1](atrib-spec.md#121-field-definitions) MAY fields.
 - `AtribRecord` TypeScript type adds three optional string fields with the documented JCS sort positions.
 - `@atrib/mcp` middleware adds opt-in disclosure / commitment config (default off; preserves existing record shapes for consumers that don't flip the flags).
 - `@atrib/verify` `PostureAnnotation` adds `tool_name_form`.
 - `spec/conformance/8.2/` corpus + reference test ship in the same change.
-- CLAUDE.md sync triggers: "Privacy posture spec section §8 changed" already covers regenerating the §8.2 corpus and refreshing the verifier; the §1.2.1 schema-extension trigger ("Wire-format or wire-protocol change") covers the rest.
+- CLAUDE.md sync triggers: "Privacy posture spec section [§8](atrib-spec.md#8-privacy-postures) changed" already covers regenerating the [§8.2](atrib-spec.md#82-opaque-name-posture) corpus and refreshing the verifier; the [§1.2.1](atrib-spec.md#121-field-definitions) schema-extension trigger ("Wire-format or wire-protocol change") covers the rest.
 
 ## D062: Local mirror sidecar, two-tier "private local + public canonical" persistence
 
 **Date:** 2026-05-04
-**Status:** Implemented in `@atrib/mcp` v0.2.x, `@atrib/mcp-wrap` v0.2.x, `@atrib/atrib-emit` (envelope shape). Spec-formalized in atrib-spec.md §5.9.
+**Status:** Implemented in `@atrib/mcp` v0.2.x, `@atrib/mcp-wrap` v0.2.x, `@atrib/atrib-emit` (envelope shape). Spec-formalized in atrib-spec.md [§5.9](atrib-spec.md#59-local-mirror-conventions).
 
 ### Context
 
@@ -2722,7 +2722,7 @@ Concretely:
   - `_local`: optional sidecar carrying pre-sign content (`toolName`, `args`, `result`, `content`, `producer`). NEVER affects the signature. NEVER reaches the public log.
   - `written_at`: wall-clock time of mirror write, for staleness debugging.
 - Readers MUST tolerate three on-disk shapes:
-  - LEGACY bare-record JSON per line (older mirror writes pre-D062)
+  - LEGACY bare-record JSON per line (older mirror writes pre-[D062](#d062-local-mirror-sidecar-two-tier-private-local-public-canonical-persistence))
   - ENVELOPE without sidecar `{ record, written_at }`
   - ENVELOPE with sidecar `{ record, _local: {...}, written_at }`
 - Producers MAY supply a sidecar; producers without pre-sign context (or callers that explicitly opt out) write envelopes without `_local`.
@@ -2747,7 +2747,7 @@ The implementation shipped 2026-05-04 (commit `e0699b5` for `@atrib/mcp` + `@atr
 
 1. **Keep the mirror as a pure log-copy, build consumers against the impoverished view.** Tried implicitly through the SessionStart hook and the early `atrib-trace` scaffold. The output was too thin to be useful. `atrib-summarize` would have been actively misleading (impoverished input → confident-sounding LLM hallucinations).
 
-2. **Extend the signed AtribRecord with the semantic content directly.** Rejected on first principles: the public log MUST stay lean per the spec's privacy postures (§8) and the operator-cost principle (§2). Adding rich semantic content to signed records pushes against both.
+2. **Extend the signed AtribRecord with the semantic content directly.** Rejected on first principles: the public log MUST stay lean per the spec's privacy postures ([§8](atrib-spec.md#8-privacy-postures)) and the operator-cost principle ([§2](atrib-spec.md#2-merkle-log-protocol)). Adding rich semantic content to signed records pushes against both.
 
 3. **A separate per-record JSON file alongside the JSONL mirror.** Considered briefly. Rejected because the JSONL append-only invariant is load-bearing for autoChain and crash-safety; introducing a second persistence surface creates synchronization risk.
 
@@ -2755,7 +2755,7 @@ The implementation shipped 2026-05-04 (commit `e0699b5` for `@atrib/mcp` + `@atr
 
 ### Consequences
 
-- **Spec**: §5.9 formalizes the local mirror as an OPTIONAL host-side persistence surface, the envelope shape as the canonical local format going forward, and the `_local` sidecar conventions. Existing producers + consumers are conformant by construction.
+- **Spec**: [§5.9](atrib-spec.md#59-local-mirror-conventions) formalizes the local mirror as an OPTIONAL host-side persistence surface, the envelope shape as the canonical local format going forward, and the `_local` sidecar conventions. Existing producers + consumers are conformant by construction.
 - **Implementation**: `@atrib/mcp` exports the `OnRecordSidecar` type. `AtribOptions.onRecord` accepts an optional second argument. `@atrib/mcp-wrap` and `@atrib/atrib-emit` both write the envelope shape. `@atrib/atrib-trace` and `@atrib/atrib-summarize` read it.
 - **Backward compatibility**: legacy bare-record entries in existing mirror files continue to parse. No data migration required. New writes use the envelope shape unconditionally.
 - **Future-proofing**: the envelope is extensible. New optional sidecar fields can be added without spec changes (they're producer-agnostic). New envelope-level fields (e.g. `cached_at`, `last_verified_at`) can be added the same way.
@@ -2775,7 +2775,7 @@ When extending atrib-emit, mcp-wrap, or any future producer to populate a sideca
 3. Update consumers (`atrib-trace`, `atrib-summarize`, recall) to surface the new field
 4. No spec section update needed unless the field's semantics are normative
 
-When the spec needs to evolve (e.g. result fingerprint convention lands), update §5.9 "Local mirror conventions", regenerate any associated conformance corpus, and refresh the implementations in lockstep.
+When the spec needs to evolve (e.g. result fingerprint convention lands), update [§5.9](atrib-spec.md#59-local-mirror-conventions) "Local mirror conventions", regenerate any associated conformance corpus, and refresh the implementations in lockstep.
 
 ---
 
@@ -2788,27 +2788,27 @@ When the spec needs to evolve (e.g. result fingerprint convention lands), update
 - A retrospective batch watcher pipeline emitted `event_type=observation` for records that carried `informed_by` and annotation-shaped content (`ref`, `observation_source`, `summary`). Migrated to `event_type=annotation` once the byte 0x05 promotion ([D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05)) cleared the on-the-wire ambiguity.
 - An analysis of cognitive event drift in the atrib ecosystem documented a related class of drift: agent in-the-moment cognitive events that *should* have been `observation` (no specific referent: discoveries, hypotheses, in-the-moment notings) had no automated path and were not being signed at all. Tracked separately under the cognitive-completeness work; the spec-side fix is the canonical examples here.
 
-The semantic distinction between observation, annotation, and revision is structural (referent presence, referent strength) but the prose-only treatment in §1.2.7 / §1.2.9 left producers without a single place to look for "what does each look like, and which one fits this record?"
+The semantic distinction between observation, annotation, and revision is structural (referent presence, referent strength) but the prose-only treatment in [§1.2.7](atrib-spec.md#127-annotates) / [§1.2.9](atrib-spec.md#129-revises) left producers without a single place to look for "what does each look like, and which one fits this record?"
 
 **Decision:** Add two normative-explanatory subsections to [§1.2.4](atrib-spec.md#124-event_type-values):
 
-1. **§1.2.4.1 Canonical examples**, one example record skeleton per event_type (tool_call, transaction, observation [passive watcher], observation [agent self-emitted], directory_anchor, annotation, revision), with a caption explaining the structural and semantic positioning.
-2. **§1.2.4.2 Choosing event_type**, a five-step decision tree consumers run to select the right event_type, plus targeted disambiguation for the two common confusion cases (observation vs annotation, annotation vs revision) and producer guidance for emit pipelines that automate event_type selection (lifecycle hooks, extractor sub-agents, periodic watchers).
+1. **[§1.2.4.1](atrib-spec.md#1241-canonical-examples) Canonical examples**, one example record skeleton per event_type (tool_call, transaction, observation [passive watcher], observation [agent self-emitted], directory_anchor, annotation, revision), with a caption explaining the structural and semantic positioning.
+2. **[§1.2.4.2](atrib-spec.md#1242-choosing-event_type) Choosing event_type**, a five-step decision tree consumers run to select the right event_type, plus targeted disambiguation for the two common confusion cases (observation vs annotation, annotation vs revision) and producer guidance for emit pipelines that automate event_type selection (lifecycle hooks, extractor sub-agents, periodic watchers).
 
-Also broaden the `observation` row in the §1.2.4 normative-URI table to clearly include both production shapes (passive watcher AND agent self-emitted standalone notings); the prior wording read narrowly as "passive watcher only" even though the field semantics never required that.
+Also broaden the `observation` row in the [§1.2.4](atrib-spec.md#124-event_type-values) normative-URI table to clearly include both production shapes (passive watcher AND agent self-emitted standalone notings); the prior wording read narrowly as "passive watcher only" even though the field semantics never required that.
 
 **Alternatives considered:**
 
 - *Leave the spec as-is and rely on implementation memory + skill docs for the disambiguation.* Rejected because the drift is documented across multiple producer surfaces (lifecycle hooks, synthesize.py, agent self-emission gap), and the dogfood architecture has now been bitten by the same ambiguity twice. The spec is the right level for the fix; implementation-side guidance leaks operator-context detail and does not propagate to future implementers.
-- *Restrict observation to passive-watcher use only and expand annotation to absorb agent self-emitted notings.* Rejected because annotation REQUIRES `annotates` per §1.2.7 (validators MUST reject annotation without it) and the structural semantics are load-bearing for [§3.2.4](atrib-spec.md#324-edge-derivation-rules) ANNOTATES edge derivation. Removing the requirement would silently break graph derivation. The right move is clarifying that observation has two valid production shapes, not collapsing observation into annotation.
+- *Restrict observation to passive-watcher use only and expand annotation to absorb agent self-emitted notings.* Rejected because annotation REQUIRES `annotates` per [§1.2.7](atrib-spec.md#127-annotates) (validators MUST reject annotation without it) and the structural semantics are load-bearing for [§3.2.4](atrib-spec.md#324-edge-derivation-rules) ANNOTATES edge derivation. Removing the requirement would silently break graph derivation. The right move is clarifying that observation has two valid production shapes, not collapsing observation into annotation.
 - *Mint extension URIs for the agent self-emitted case (e.g. `https://atrib.dev/v1/types/discovery`).* Rejected because the structural semantics already match the existing observation type (no required referent, first-class noting). Adding a new type would increase the vocabulary without resolving the drift; it would introduce a different ambiguity (discovery vs observation).
-- *Add canonical examples in a separate appendix or supplementary doc.* Rejected because consumers selecting an event_type are reading §1.2.4 first; a separate location would not be where the question gets asked.
+- *Add canonical examples in a separate appendix or supplementary doc.* Rejected because consumers selecting an event_type are reading [§1.2.4](atrib-spec.md#124-event_type-values) first; a separate location would not be where the question gets asked.
 
 **Consequences:**
 
-- Producer implementations of the dogfood loop have a single source of truth for event_type selection. The §1.2.4.2 decision tree is the resolution path.
-- Future emit pipelines (extractor sub-agents reading transcripts, decision-time guidance hooks, Hermes-as-Critic per cognitive-completeness Track 1) have explicit guidance on how to map detected events to event_type. The producer-guidance sub-paragraph in §1.2.4.2 captures the mapping rule (referent → annotation; superseding referent → revision; standalone noting → observation).
-- The §1.2.4 observation prose now explicitly admits agent self-emitted observations as a valid production shape. Producers no longer need to choose between "this looks like observation but the spec implies passive watcher only" and "force it into annotation even though there's no referent."
+- Producer implementations of the dogfood loop have a single source of truth for event_type selection. The [§1.2.4.2](atrib-spec.md#1242-choosing-event_type) decision tree is the resolution path.
+- Future emit pipelines (extractor sub-agents reading transcripts, decision-time guidance hooks, Hermes-as-Critic per cognitive-completeness Track 1) have explicit guidance on how to map detected events to event_type. The producer-guidance sub-paragraph in [§1.2.4.2](atrib-spec.md#1242-choosing-event_type) captures the mapping rule (referent → annotation; superseding referent → revision; standalone noting → observation).
+- The [§1.2.4](atrib-spec.md#124-event_type-values) observation prose now explicitly admits agent self-emitted observations as a valid production shape. Producers no longer need to choose between "this looks like observation but the spec implies passive watcher only" and "force it into annotation even though there's no referent."
 - The conformance corpus is unaffected ([§1.4.4](atrib-spec.md#144-test-vector-validation), [§A.10](atrib-spec.md#a10-conformance-corpus-for-optional-fields-and-postures)). The examples are illustrative, not normative test vectors.
 
 **Scope of the spec change.** The change is additive (new subsections + broadened prose for one row of the normative URI table). No field semantics change. No graph derivation rule changes. No conformance corpus regeneration required. Validators and verifiers do not need updates.
@@ -2941,7 +2941,7 @@ Two independent decisions need to compose:
 2. **Layout.** What computes (x, y) positions.
 
 The dashboard's existing constraints:
-- No build step (D054). Libraries must be available as browser-loadable UMD or ESM, fetched from a CDN.
+- No build step ([D054](#d054-unified-public-explorer-vs-per-service-admin-uis)). Libraries must be available as browser-loadable UMD or ESM, fetched from a CDN.
 - Single-HTML-file. No package.json, no bundler.
 - Performance scales with substrate growth. Sigma's WebGL renderer handles 100k+ nodes; dagre's hierarchical layout chokes on 17k+ edges (O(V + E²) crossing detection freezes the main thread).
 
@@ -2973,8 +2973,8 @@ Force-atlas2 would give nicer dense layouts than circular but is published as Co
 - *Cytoscape.js (single library, both renderer and layout).* Rejected: 5k node ceiling per its own docs. The substrate's growth rate makes that a 1-2 month problem at most; switching mid-flight when it fails would be more disruptive than picking the right library now.
 - *D3 + d3-force.* Rejected for the renderer half: d3 is SVG-based, doesn't scale to 100k+ nodes. Acceptable for layout but cosmos.gl is the right fit for the WebGL global view.
 - *Single library that does both renderer and layout (e.g., vis.js).* Same scale ceiling as Cytoscape; same rejection.
-- *Build the dashboard as a bundled SPA (option 2 per D054).* Rejected, contradicts D054 option 1 commitment. Lazy-loaded CDN with SRI gives us the needed dependency footprint without bundling.
-- *Inline the libraries in `index.html` instead of CDN.* Considered but rejected, would bloat the inline file from ~2400 lines to ~30k lines with minified library code, making the file unreadable for the "view source to learn" use case D054 explicitly preserves.
+- *Build the dashboard as a bundled SPA (option 2 per [D054](#d054-unified-public-explorer-vs-per-service-admin-uis)).* Rejected, contradicts [D054](#d054-unified-public-explorer-vs-per-service-admin-uis) option 1 commitment. Lazy-loaded CDN with SRI gives us the needed dependency footprint without bundling.
+- *Inline the libraries in `index.html` instead of CDN.* Considered but rejected, would bloat the inline file from ~2400 lines to ~30k lines with minified library code, making the file unreadable for the "view source to learn" use case [D054](#d054-unified-public-explorer-vs-per-service-admin-uis) explicitly preserves.
 - *Keep dagre for everything, accept main-thread freezes.* Rejected after observing the b5a2ebf8 session would freeze the browser. Layout-by-shape selector is the correct response.
 
 **Consequences:**
@@ -3003,13 +3003,13 @@ The cause was a duplicated chain resolver. `services/atrib-emit/src/auto-chain.t
 
 The structural problem was duplication of chain-resolution logic across producers. The wrapper got the env-var fix; the emit subprocess did not. Without a normative contract at the spec level, every future producer joining the substrate would face the same drift hazard: reimplement the resolver to taste, miss whatever new resolution layer landed in `@atrib/mcp` last sprint, and silently produce malformed records. No co-producer test exercised both producers together, so the drift was invisible behind green CI.
 
-**Decision:** Make multi-producer chain composition a normative spec-level contract. Three coordinated changes:
+**Decision:** Make multi-producer chain composition a normative spec-level contract, delivered through three parallel artifacts.
 
-First, [§1.2.3.1](atrib-spec.md#1231-multi-producer-chain-composition) documents the precedence ordering as **MUST** language: inbound propagation token, within-process auto-chain tail, cross-producer env-var handoff, cross-producer mirror-file inheritance, synthetic genesis. The ordering reflects fidelity to the upstream signal (inbound is explicit, env-var is parent-set, mirror may lag). The mirror-file path requires filtering by `context_id` because chaining to a tail on a different context produces a malformed record.
+**Spec.** [§1.2.3.1](atrib-spec.md#1231-multi-producer-chain-composition) documents the precedence ordering as **MUST** language: inbound propagation token, within-process auto-chain tail, cross-producer env-var handoff, cross-producer mirror-file inheritance, synthetic genesis. The ordering reflects fidelity to the upstream signal (inbound is explicit, env-var is parent-set, mirror may lag). The mirror-file path requires filtering by `context_id` because chaining to a tail on a different context produces a malformed record.
 
-Second, `resolveChainRoot` in `packages/mcp/src/chain-root.ts` is extended to accept a `mirrorTailHex` parameter and `inheritChainContext` in `packages/mcp/src/mirror.ts` orchestrates the file I/O + context_id inheritance. Both are exported from `@atrib/mcp`. `services/atrib-emit/src/auto-chain.ts` is deleted; `atrib-emit` calls `inheritChainContext` directly. Future cognitive-primitive producers (`atrib-recall`, `atrib-trace`, `atrib-summarize`) and any third-party producer in any language MUST use `resolveChainRoot` as the reference implementation or replicate it bit-for-bit against the corpus.
+**Reference implementation.** `resolveChainRoot` in `packages/mcp/src/chain-root.ts` is extended to accept a `mirrorTailHex` parameter and `inheritChainContext` in `packages/mcp/src/mirror.ts` orchestrates the file I/O + context_id inheritance. Both are exported from `@atrib/mcp`. `services/atrib-emit/src/auto-chain.ts` is deleted; `atrib-emit` calls `inheritChainContext` directly. Future cognitive-primitive producers (`atrib-recall`, `atrib-trace`, `atrib-summarize`) and any third-party producer in any language MUST use `resolveChainRoot` as the reference implementation or replicate it bit-for-bit against the corpus.
 
-Third, conformance cases at `spec/conformance/1.2.3/multi-producer/cases/` exercise the precedence cascade plus malformation fall-through and namespace isolation. Producers in any language can consume the JSON and assert their resolver matches the expected `chain_root` per case. Reference test at `packages/mcp/test/conformance-1.2.3-multi-producer.test.ts`. A regression-style co-producer integration test at `services/atrib-emit/test/co-producer-chain.test.ts` exercises the full chain through the emit handler with simulated cross-producer state.
+**Conformance corpus.** Conformance cases at `spec/conformance/1.2.3/multi-producer/cases/` exercise the precedence cascade plus malformation fall-through and namespace isolation. Producers in any language can consume the JSON and assert their resolver matches the expected `chain_root` per case. Reference test at `packages/mcp/test/conformance-1.2.3-multi-producer.test.ts`. A regression-style co-producer integration test at `services/atrib-emit/test/co-producer-chain.test.ts` exercises the full chain through the emit handler with simulated cross-producer state.
 
 **Alternatives considered:**
 
@@ -3083,14 +3083,14 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 - `provenance`, shipped via `verifyRecord(record, options)` + `spec/conformance/1.2.6/` corpus. Tracked under [D044](#d044-provenance_token-field-for-cross-session-causal-anchoring).
 - `informed_by_resolution`, `verifyRecord` populates `{ resolved, dangling }` from caller-supplied candidates. Tracked under [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type).
 - `posture` (timestamp_granularity, args_commitment_form, result_commitment_form), `verifyRecord` always populates these per [D045](#d045-privacy-postures-normative-spec-section).
-- `tool_name_form` (§8.2), `'hashed' | 'plain' | null`. Tracked under [D061](#d061-add-tool_name-args_hash-result_hash-fields-to-§121).
+- `tool_name_form` ([§8.2](atrib-spec.md#82-opaque-name-posture)), `'hashed' | 'plain' | null`. Tracked under [D061](#d061-add-tool_name-args_hash-result_hash-fields-to-§121).
 - `capability_check`, `{ envelope, in_envelope, mismatches, unresolvable }` when caller passes a resolved `identityClaim`. Tracked under [D051](#d051-capability-scoped-records-via-directory-published-envelopes).
 - `cross_attestation` (transaction records), `{ signers_count, signers_valid, missing }` per [D052](#d052-cross-attestation-requirement-for-transaction-records).
 
 **Remaining work tracked separately:**
 
 - **Middleware-side multi-signer transaction signing**, `@atrib/mcp` currently signs transaction records with the standard single-signer path. Producing records with `signers[]` populated requires a counterparty-coordination protocol design (out-of-band? webhook? sign-then-merge?). Will be a follow-up ADR alongside the first protocol-adapter that needs it.
-- **`cross_log_*` verifier surface (D050 / §2.11)**, BLOCKED on multi-log proof-bundle parsing infrastructure and a trusted-log-set config surface. No code surface added; the README's documented annotation remains aspirational. Will be re-opened when a second independent log node ships.
+- **`cross_log_*` verifier surface ([D050](#d050-cross-log-replication-for-equivocation-defense) / [§2.11](atrib-spec.md#211-cross-log-replication))**, BLOCKED on multi-log proof-bundle parsing infrastructure and a trusted-log-set config surface. No code surface added; the README's documented annotation remains aspirational. Will be re-opened when a second independent log node ships.
 
 **Pattern observed during the rollout.** Surfaces with constraint inputs already on the record (or supplied by the caller via the `identityClaim` option) implemented cleanly. Surfaces that needed new fields on the canonical record shape (tool_name, args_hash, result_hash) required upstream spec work first ([D061](#d061-add-tool_name-args_hash-result_hash-fields-to-§121)). The pattern set by [D044](#d044-provenance_token-field-for-cross-session-causal-anchoring)'s reconciliation (verify-record.ts + spec/conformance/<§> + verify test) is reusable for any remaining annotation when a real consumer surfaces.
 
@@ -3098,9 +3098,9 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 
 ## P008: referent-matched revision and annotation emission from the cognitive extractor
 
-**Source:** [D063](#d063-canonical-event_type-examples-and-selection-tree) added canonical examples and a selection tree distinguishing observation / annotation / revision by structural referent. A cognitive-extractor producer pattern (Mem0-style post-hoc transcript extraction) closes the in-the-moment observation gap, but emits all detected events as `event_type=observation` even when the LLM's classification suggests revision or annotation. The reason: revision REQUIRES `revises: "sha256:<hex>"` per §1.2.9 and annotation REQUIRES `annotates: "sha256:<hex>"` per §1.2.7, but the extractor doesn't know which prior signed record carries the position being revised or the target being annotated. Without referent matching, emitting with the structurally-correct event_type would either (a) violate the spec's REQUIRES constraints or (b) attach a fabricated/hallucinated hash, both unacceptable.
+**Source:** [D063](#d063-canonical-event_type-examples-and-selection-tree) added canonical examples and a selection tree distinguishing observation / annotation / revision by structural referent. A cognitive-extractor producer pattern (Mem0-style post-hoc transcript extraction) closes the in-the-moment observation gap, but emits all detected events as `event_type=observation` even when the LLM's classification suggests revision or annotation. The reason: revision REQUIRES `revises: "sha256:<hex>"` per [§1.2.9](atrib-spec.md#129-revises) and annotation REQUIRES `annotates: "sha256:<hex>"` per [§1.2.7](atrib-spec.md#127-annotates), but the extractor doesn't know which prior signed record carries the position being revised or the target being annotated. Without referent matching, emitting with the structurally-correct event_type would either (a) violate the spec's REQUIRES constraints or (b) attach a fabricated/hallucinated hash, both unacceptable.
 
-The MVP preserves the LLM's classification as `extractor_classification` in the observation content (NOT as a `kind` field, the field name is intentional, signaling "this is the extractor's inference, not a spec-level event_type claim"). Consumers reading the record see `event_type=observation` on the wire and the extractor's classification in content; nothing in the record claims to be a revision/annotation while violating §1.2.9/§1.2.7.
+The MVP preserves the LLM's classification as `extractor_classification` in the observation content (NOT as a `kind` field, the field name is intentional, signaling "this is the extractor's inference, not a spec-level event_type claim"). Consumers reading the record see `event_type=observation` on the wire and the extractor's classification in content; nothing in the record claims to be a revision/annotation while violating [§1.2.9](atrib-spec.md#129-revises)/[§1.2.7](atrib-spec.md#127-annotates).
 
 **Why deferred:** referent matching is a search problem, not a generation problem. The LLM identifies "agent revised X to Y" but cannot generate `revises=<hash>` because it doesn't know which signed record carries X. Solving requires either (a) scoping candidates to recent records the agent could plausibly be revising/annotating and passing the candidate set to the LLM in a second pass, or (b) building a vector-search index over the operator's signed records and pre-filtering candidates by semantic similarity. Both add machinery the MVP didn't justify before observation extraction was proven stable.
 
@@ -3112,7 +3112,7 @@ The MVP preserves the LLM's classification as `extractor_classification` in the 
 
 **The right path when acted on:**
 
-The spec posture remains unchanged: §1.2.7 and §1.2.9 already require referents; the extractor will emit revision or annotation event_types only when a valid referent is confirmed.
+The spec posture remains unchanged: [§1.2.7](atrib-spec.md#127-annotates) and [§1.2.9](atrib-spec.md#129-revises) already require referents; the extractor will emit revision or annotation event_types only when a valid referent is confirmed.
 
 Implement hash-by-context-window referent matching: scope candidates to recent records in the active chain, pass the candidate set to the extractor LLM in a second pass with `record_hash + brief summary` per candidate, validate that the LLM's chosen hash is in the candidate list before emitting. Reject hallucinated hashes.
 

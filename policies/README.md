@@ -52,11 +52,11 @@ const customPolicy = buildPolicy(basePolicy, {
 
 ## How creator and merchant policies interact
 
-Creators and merchants publish separate policies. The agent negotiates between them at session start (spec §4.5). The rules:
+Creators and merchants publish separate policies. The agent negotiates between them at session start (spec [§4.5](../atrib-spec.md#45-session-negotiation)). The rules:
 
 1. **Merchant sets the weights and modifiers.** The merchant's `edge_weights`, `modifiers`, and `distribution` fields are used.
 2. **Creator sets their own floor.** A creator's `minimum_own_share` becomes a floor in the session policy record.
-3. **Conflicts are resolved by the spec's 7 rules** (§4.5.2). If a creator's floor exceeds the merchant's cap, the negotiation protocol handles it.
+3. **Conflicts are resolved by the spec's 7 rules** ([§4.5.2](../atrib-spec.md#452-conflict-resolution)). If a creator's floor exceeds the merchant's cap, the negotiation protocol handles it.
 
 In practice: the merchant says how to weight contributions. The creator says their minimum acceptable share. The protocol merges them.
 
@@ -101,7 +101,7 @@ Content-Type: application/json
 }
 ```
 
-If you're using `@atrib/mcp`, pass the policy as an init option and it will be served automatically (once §5.3.6 is implemented):
+If you're using `@atrib/mcp`, pass the policy as an init option and it will be served automatically (once [§5.3.6](../atrib-spec.md#536-policy-exposure) is implemented):
 
 ```typescript
 const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {

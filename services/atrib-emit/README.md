@@ -112,7 +112,7 @@ Three files do the work:
 - `src/submit.ts`, wraps `@atrib/mcp`'s `createSubmissionQueue`. Same priority semantics as the wrapper (cognitive events use 'normal' priority).
 - `src/storage.ts`, Best-effort JSONL mirror of full record + proof, for local recall.
 
-Per §5.8 degradation contract: nothing in `atrib-emit` throws to the agent. Missing key → warning in the response. Sign failure → warning. Network failure → submission queued for retry.
+Per [§5.8](../../atrib-spec.md#58-degradation-contract) degradation contract: nothing in `atrib-emit` throws to the agent. Missing key → warning in the response. Sign failure → warning. Network failure → submission queued for retry.
 
 ## autoChain inheritance from the wrapper
 

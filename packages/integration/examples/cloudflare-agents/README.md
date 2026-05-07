@@ -17,7 +17,7 @@ Both integrations are zero-deploy: no extra Worker, no proxy hop, no architectur
 
 `Agent.addMcpServer` uses an internal `MCPClientManager` whose `callTool({ serverId, name, arguments })` method delegates straight to `mcpConnections[serverId].client.callTool(...)` (verified at `agents@0.9.0` `dist/client-BwgM3cRz.js:1444`). The `client` field is publicly exposed on `MCPClientConnection`, so we can wrap it in place after `addMcpServer` runs and every subsequent tool call goes through atrib's interceptor.
 
-See `DECISIONS.md` D022 for the full architectural rationale.
+See `DECISIONS.md` [D022](../../../../DECISIONS.md#d022-cloudflare-agents-adapter-mcpagent-server-side-is-zero-code-agent-client-side-uses-attributecloudflareagentmcp-not-createatribproxy) for the full architectural rationale.
 
 ---
 
@@ -199,7 +199,7 @@ If your upstream is stdio-only, you have two options:
 Both surfaces assume:
 
 - **`ATRIB_PRIVATE_KEY`**: base64url-encoded 32-byte Ed25519 seed. Set via `wrangler secret put ATRIB_PRIVATE_KEY`. In production, store the matching public key on the merchant verification side.
-- **`ATRIB_LOG_ENDPOINT`**: URL of your atrib Merkle log submission endpoint. Optional in development; submission queue silently buffers when unset (per spec §5.8 degradation contract).
+- **`ATRIB_LOG_ENDPOINT`**: URL of your atrib Merkle log submission endpoint. Optional in development; submission queue silently buffers when unset (per spec [§5.8](../../../../atrib-spec.md#58-degradation-contract) degradation contract).
 
 If `ATRIB_PRIVATE_KEY` is omitted, atrib operates in pass-through mode with a console warning. No records are emitted, but tool calls (and the Cloudflare DO lifecycle) still work normally.
 

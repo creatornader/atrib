@@ -2,7 +2,7 @@
 
 This example shows how to add atrib attribution to a Vercel AI SDK application that uses MCP tools via `createMCPClient` from `@ai-sdk/mcp`.
 
-The integration is **one extra line**: `attributeVercelAiSdkMcp(mcpClient, { interceptor })` after `createMCPClient(...)` resolves. The helper patches the client's `request` method so every outbound `tools/call` flows through atrib's interceptor lifecycle (W3C trace context propagation, attribution token chaining, transaction detection per spec §5.4).
+The integration is **one extra line**: `attributeVercelAiSdkMcp(mcpClient, { interceptor })` after `createMCPClient(...)` resolves. The helper patches the client's `request` method so every outbound `tools/call` flows through atrib's interceptor lifecycle (W3C trace context propagation, attribution token chaining, transaction detection per spec [§5.4](../../../../atrib-spec.md#54-atribagent-agent-middleware)).
 
 ---
 
@@ -18,7 +18,7 @@ The `@ai-sdk/mcp` MCPClient is **not** a `@modelcontextprotocol/sdk` Client. It 
 
 Because the `_meta` field is stripped at the AI SDK MCPClient layer, wrapping at the AI SDK execute callback level loses atrib's outbound metadata. The right integration point is the **`request()` method**; the JSON-RPC bottleneck through which every MCP call flows on its way to the transport. Patching here lets atrib inject `_meta` into outbound `tools/call` and read raw `_meta` from the response before AI-SDK-specific transformations like `extractStructuredContent` strip it.
 
-This is symmetrical to how `@atrib/mcp` patches `setRequestHandler` on the server side: same pattern, opposite end of the wire. Full architectural rationale is in [`DECISIONS.md`](../../../../DECISIONS.md) D023.
+This is symmetrical to how `@atrib/mcp` patches `setRequestHandler` on the server side: same pattern, opposite end of the wire. Full architectural rationale is in [`DECISIONS.md`](../../../../DECISIONS.md) [D023](../../../../DECISIONS.md#d023-vercel-ai-sdk-mcp-adapter-monkey-patch-mcpclientrequest-not-wrapmcpclient-and-not-the-tools-execute-callbacks).
 
 ---
 
@@ -149,8 +149,8 @@ After running with `ATRIB_LOG_ENDPOINT` pointed at your log:
 
 - Every successful `tools/call` from the AI SDK emits a signed atrib record
 - Records share a `context_id` per agent session and chain via `chain_root` references
-- Failed tool calls (`isError: true` from the upstream) emit no record per spec §5.3.3
-- internal atrib failures (network, signing, interceptor errors) never reach the AI SDK's tool dispatch; they're caught and logged with the `atrib:` console prefix per §5.8
+- Failed tool calls (`isError: true` from the upstream) emit no record per spec [§5.3.3](../../../../atrib-spec.md#533-record-construction-and-signing)
+- internal atrib failures (network, signing, interceptor errors) never reach the AI SDK's tool dispatch; they're caught and logged with the `atrib:` console prefix per [§5.8](../../../../atrib-spec.md#58-degradation-contract)
 
 If you don't see records, check:
 

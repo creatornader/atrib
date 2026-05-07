@@ -1,6 +1,6 @@
-# atrib spec §1.9 conformance corpus
+# atrib spec [§1.9](../../../atrib-spec.md#19-key-rotation-and-revocation) conformance corpus
 
-Test fixtures for key rotation and revocation per spec §1.9 (D033).
+Test fixtures for key rotation and revocation per spec [§1.9](../../../atrib-spec.md#19-key-rotation-and-revocation) ([D033](../../../DECISIONS.md#d033-key-rotation-and-revocation)).
 
 This corpus is the shared contract between every implementation that
 processes `key_revocation` records and applies the `'revoked_after_revocation'`

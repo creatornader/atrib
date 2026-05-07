@@ -44,15 +44,15 @@
 
   Naming convention rationale: package names dropped the redundant `@atrib/atrib-` prefix in favor of `@atrib/<noun>` (per the `@atrib/<noun>` namespace pattern already used by `@atrib/mcp`, `@atrib/agent`, `@atrib/verify`, etc). Binary names retained the `atrib-<noun>` form to preserve operator hook-script compatibility, package rename only, no binary rename.
 
-  Also adopted: the local mirror filename convention `<wrapper-name>-<agent>.jsonl` per spec §5.9 with the default wrapper name `mcp-wrap`. `@atrib/recall`'s default mirror path picks up this convention; existing wrappers using a different `name` config value should override `ATRIB_RECORD_FILE` accordingly.
+  Also adopted: the local mirror filename convention `<wrapper-name>-<agent>.jsonl` per spec [§5.9](../../atrib-spec.md#59-local-mirror-conventions) with the default wrapper name `mcp-wrap`. `@atrib/recall`'s default mirror path picks up this convention; existing wrappers using a different `name` config value should override `ATRIB_RECORD_FILE` accordingly.
 
 ## 0.3.0
 
 ### Minor Changes
 
-- 3c2d0b7: Add `revises` field for revision event_type (D059 / spec §1.2.9).
+- 3c2d0b7: Add `revises` field for revision event_type ([D059](../../DECISIONS.md#d059-promote-revision-to-atrib-normative-event_type-byte-0x06) / spec [§1.2.9](../../atrib-spec.md#129-revises)).
 
-  `atrib-emit` now accepts a top-level `revises: "sha256:<64-hex>"` field on the `emit` tool input. REQUIRED when `event_type` is `https://atrib.dev/v1/types/revision`; FORBIDDEN on any other event_type. The require/forbid invariant surfaces as a warnings-only response per §5.8 rather than producing a malformed signed record.
+  `atrib-emit` now accepts a top-level `revises: "sha256:<64-hex>"` field on the `emit` tool input. REQUIRED when `event_type` is `https://atrib.dev/v1/types/revision`; FORBIDDEN on any other event_type. The require/forbid invariant surfaces as a warnings-only response per [§5.8](../../atrib-spec.md#58-degradation-contract) rather than producing a malformed signed record.
 
   `BuildEmitRecordInput.revises` flows through `buildAndSignEmitRecord` into the signed `AtribRecord`. JCS canonical-form ordering puts `revises` after `provenance_token` (r > p) and before `session_token` (r < s), handled automatically by `canonicalize`.
 
@@ -67,12 +67,12 @@
 - b22913a: Annotates pipeline and auto-detect informed_by from args.
 
   `@atrib/mcp` adds:
-  - `autoDetectInformedByFromArgs?: boolean` option on `AtribOptions` (default `false`). When `true`, the middleware scans tool-call params for `sha256:<64hex>` substrings (skipping the `chain_root` field) and merges them with the explicit `informedBy` callback result, lex-sorted per spec §1.2.5. Records with auto-detected references gain INFORMED_BY graph edges automatically.
+  - `autoDetectInformedByFromArgs?: boolean` option on `AtribOptions` (default `false`). When `true`, the middleware scans tool-call params for `sha256:<64hex>` substrings (skipping the `chain_root` field) and merges them with the explicit `informedBy` callback result, lex-sorted per spec [§1.2.5](../../atrib-spec.md#125-informed_by). Records with auto-detected references gain INFORMED_BY graph edges automatically.
   - `SHA256_REF_PATTERN`, `SHA256_REF_GLOBAL_PATTERN`, and `extractRecordHashes(value)` exported from the package root. These are co-located so producer-side consumers (middleware, atrib-emit, out-of-tree wrappers) share one definition. Drift between them would silently produce records with inconsistent reference detection.
   - Three previously-internal `EVENT_TYPE_*_URI` constants now re-exported from the package root: `EVENT_TYPE_DIRECTORY_ANCHOR_URI`, `EVENT_TYPE_ANNOTATION_URI`, `EVENT_TYPE_REVISION_URI`. The other three were already exported.
 
   `atrib-emit` adds:
-  - Top-level `annotates` field on the `emit` tool input schema (`sha256:<64-hex>`). REQUIRED when `event_type` is the annotation URI; FORBIDDEN on any other event_type, per spec §1.2.7 / D058. Validation surfaces as warnings-only response per §5.8 rather than producing a malformed signed record.
+  - Top-level `annotates` field on the `emit` tool input schema (`sha256:<64-hex>`). REQUIRED when `event_type` is the annotation URI; FORBIDDEN on any other event_type, per spec [§1.2.7](../../atrib-spec.md#127-annotates) / [D058](../../DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05). Validation surfaces as warnings-only response per [§5.8](../../atrib-spec.md#58-degradation-contract) rather than producing a malformed signed record.
   - `BuildEmitRecordInput.annotates` flows through to the signed `AtribRecord`.
 
   `@atrib/mcp-wrap` defaults `autoDetectInformedByFromArgs: true` so wrapper consumers (Claude Code, Cursor, generic stdio hosts) get auto-detect for free without explicit middleware configuration.

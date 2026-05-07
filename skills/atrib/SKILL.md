@@ -38,7 +38,7 @@ If you're invoked in a Claude Code session and you're not emitting records durin
 | Persist signed records to local mirrors | `~/.atrib/records/*.jsonl` (per-producer files) | `ls ~/.atrib/records/` |
 | Public log + browsable explorer | `https://log.atrib.dev/v1/stats` + `explore.atrib.dev` | `curl -s https://log.atrib.dev/v1/stats` |
 | Identity → key binding | `@atrib/directory` + `atrib publish-claim` CLI | `curl -s https://directory.atrib.dev/v6/lookup/<creator_key>` |
-| Per-record verification (signature, posture, capability_check, cross_attestation) | `@atrib/verify` `verifyRecord()` annotations (D041/D044/D045/D051/D052/D061) | `pnpm --filter @atrib/verify test` |
+| Per-record verification (signature, posture, capability_check, cross_attestation) | `@atrib/verify` `verifyRecord()` annotations ([D041](../../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type)/[D044](../../DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring)/[D045](../../DECISIONS.md#d045-privacy-postures-normative-spec-section)/[D051](../../DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes)/[D052](../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)/[D061](../../DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-121)) | `pnpm --filter @atrib/verify test` |
 
 If any row of that table fails to verify in your session, the practice is moot, fix infrastructure first, then come back. If they all pass, the rest of this skill is your operating manual.
 
@@ -89,7 +89,7 @@ The default discipline: per-MCP-tool-call signing happens automatically via the 
 
 Before calling `mcp__atrib-emit__emit`, ask:
 
-1. **Why am I signing this?** One-line answer. ("Future-me will need to find when I made the §8.2 ambiguity decision.")
+1. **Why am I signing this?** One-line answer. ("Future-me will need to find when I made the [§8.2](../../atrib-spec.md#82-opaque-name-posture) ambiguity decision.")
 2. **Did anything I already signed inform this?** Query `recall` if unsure. Identify the SUBSET of records that ACTUALLY shaped this decision; that's `informed_by`. Not "everything I happened to query."
 3. **Does this contradict a past claim of mine?** If yes, this is a `revision`, not an `observation`.
 4. **What importance signal does future-me need?** If this is one of the load-bearing records of the session, follow the emit with an `annotation` referencing it.
@@ -199,13 +199,13 @@ When you call `verifyRecord(record, options)` from `@atrib/verify`, the result i
 
 | Annotation | Source | What it tells you |
 |---|---|---|
-| `posture.timestamp_granularity*` | §8.4 / D045 | Coarsening level + structural consistency |
-| `posture.args_commitment_form` / `result_commitment_form` | §8.3 / D045 | `'plain-sha256' \| 'salted-sha256'` per record's salt presence |
-| `posture.tool_name_form` | §8.2 / D061 | `'hashed' \| 'plain' \| null`, NOT verbatim-vs-opaque (not detectable) |
-| `provenance` | §1.2.6 / D044 | Token + upstream resolution status (cross-session anchor) |
-| `informed_by_resolution` | §1.2.5 / D041 | `{ resolved, dangling }`, dangling is signal not invalidation |
-| `capability_check` | §6.7 / D051 | `{ envelope, in_envelope, mismatches, unresolvable }`, mismatches don't flip valid |
-| `cross_attestation` | §1.7.6 / D052 | `{ signers_count, signers_valid, missing }` on transaction records, missing is signal |
+| `posture.timestamp_granularity*` | [§8.4](../../atrib-spec.md#84-coarsened-timing-posture) / [D045](../../DECISIONS.md#d045-privacy-postures-normative-spec-section) | Coarsening level + structural consistency |
+| `posture.args_commitment_form` / `result_commitment_form` | [§8.3](../../atrib-spec.md#83-salted-commitment-posture) / [D045](../../DECISIONS.md#d045-privacy-postures-normative-spec-section) | `'plain-sha256' \| 'salted-sha256'` per record's salt presence |
+| `posture.tool_name_form` | [§8.2](../../atrib-spec.md#82-opaque-name-posture) / [D061](../../DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-121) | `'hashed' \| 'plain' \| null`, NOT verbatim-vs-opaque (not detectable) |
+| `provenance` | [§1.2.6](../../atrib-spec.md#126-provenance_token) / [D044](../../DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) | Token + upstream resolution status (cross-session anchor) |
+| `informed_by_resolution` | [§1.2.5](../../atrib-spec.md#125-informed_by) / [D041](../../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type) | `{ resolved, dangling }`, dangling is signal not invalidation |
+| `capability_check` | [§6.7](../../atrib-spec.md#67-capability-declarations) / [D051](../../DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) | `{ envelope, in_envelope, mismatches, unresolvable }`, mismatches don't flip valid |
+| `cross_attestation` | [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) / [D052](../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) | `{ signers_count, signers_valid, missing }` on transaction records, missing is signal |
 
 All "signal not invalidation" annotations leave `valid` true even when they flag, that's intentional per their respective spec sections. Consumers decide policy.
 
@@ -254,7 +254,7 @@ The graph contains records from multiple signers. When interpreting results:
 | You (wrapper's creator_key) | tool_call + emitted observations / annotations / revisions in your sessions |
 | Other Claude Code agents (different wrapper keys) | their own tool_call + emit records |
 | Service identities | log-node signs checkpoints; directory-node signs anchors |
-| Transaction counterparties (D052) | cross-attestation entries in `signers[]` of transaction records |
+| Transaction counterparties ([D052](../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)) | cross-attestation entries in `signers[]` of transaction records |
 | Test fixtures | claimed and labeled (e.g. `GX9rI…` is the public `fill(42)` test seed) |
 | Future: HKDF-derived sub-agents | parent/child relationship preserved on-chain |
 | Future: humans authorizing actions | distinct identity class with `AUTHORIZED_BY` / `ATTESTED_BY` / `APPROVED_BY` / `DELEGATED_TO` edges |
@@ -265,7 +265,7 @@ Recall returns YOUR records (filtered by your creator_key on the local mirror). 
 
 - **That what you signed was true.** atrib certifies that YOU signed it under that key at that time. Truth is downstream.
 - **That past records influenced your present action.** That's what informed_by + annotations are for, only if you populate them honestly.
-- **That every signer is who they claim to be.** The directory anchors identity claims; capability declarations (D051) tighten it; cross-attestation (D052) tightens further. None is universal yet.
+- **That every signer is who they claim to be.** The directory anchors identity claims; capability declarations ([D051](../../DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes)) tighten it; cross-attestation ([D052](../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)) tightens further. None is universal yet.
 
 When citing your own records to others, lead with cryptographic facts (verifiable) and qualify semantic claims (interpretation).
 
@@ -300,8 +300,8 @@ That's the loop. The graph of YOUR signed history is your working memory. Use it
 
 These are honest gaps in the verification stack and producer-side cognitive surface. Be aware of which layers are operational vs warning-only vs not-yet-implemented:
 
-- **Operational**: Ed25519 signature, JCS canonical form, chain integrity within a context_id, log inclusion proof verification (when fetched), §6.7 capability_check, §1.7.6 cross_attestation, §8.2/§8.3/§8.4 posture detection.
-- **Warning-only (per `project_phase3_followup_gaps`)**: §6.3 verifier-consultation steps 1, 3, 4, 5, 7 surface explicit `IMPLEMENTATION-GAP` warnings rather than silently passing. These cover anchor freshness, witness coverage, directory checkpoint signature, append-only consistency, and AKD lookup proof validation.
-- **Not yet implemented**: cross-log replication / equivocation detection (D050 / §2.11), HKDF sub-agent identity derivation, periodic directory anchoring, emergency-key compromise path, `atrib-summarize` and `atrib-trace` MCP tools (would close the consumer side of the cognitive loop).
+- **Operational**: Ed25519 signature, JCS canonical form, chain integrity within a context_id, log inclusion proof verification (when fetched), [§6.7](../../atrib-spec.md#67-capability-declarations) capability_check, [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) cross_attestation, [§8.2](../../atrib-spec.md#82-opaque-name-posture)/[§8.3](../../atrib-spec.md#83-salted-commitment-posture)/[§8.4](../../atrib-spec.md#84-coarsened-timing-posture) posture detection.
+- **Warning-only (per `project_phase3_followup_gaps`)**: [§6.3](../../atrib-spec.md#63-verifier-consultation-algorithm) verifier-consultation steps 1, 3, 4, 5, 7 surface explicit `IMPLEMENTATION-GAP` warnings rather than silently passing. These cover anchor freshness, witness coverage, directory checkpoint signature, append-only consistency, and AKD lookup proof validation.
+- **Not yet implemented**: cross-log replication / equivocation detection ([D050](../../DECISIONS.md#d050-cross-log-replication-for-equivocation-defense) / [§2.11](../../atrib-spec.md#211-cross-log-replication)), HKDF sub-agent identity derivation, periodic directory anchoring, emergency-key compromise path, `atrib-summarize` and `atrib-trace` MCP tools (would close the consumer side of the cognitive loop).
 
 The skill is the practice; the substrate is the mechanism. Both evolve. When this skill version (v0.2.0) feels stale, rewrite it again.

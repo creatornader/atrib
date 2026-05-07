@@ -39,7 +39,7 @@ OpenAI-compatible HTTP. Defaults to NVIDIA NIM with `qwen/qwen3.5-397b-a17b`. Ov
 | `ATRIB_SUMMARIZE_TEMPERATURE` | `0.3` |
 | `ATRIB_SUMMARIZE_TIMEOUT_MS` | `120000` |
 
-Without an API key, the tool returns a warnings-only response per the §5.8 graceful-degradation contract.
+Without an API key, the tool returns a warnings-only response per the [§5.8](../../atrib-spec.md#58-degradation-contract) graceful-degradation contract.
 
 ## Reads
 

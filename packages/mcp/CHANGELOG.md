@@ -6,7 +6,7 @@
 
 - b06c720: Add `ATRIB_CHAIN_TAIL_<context_id>` env var as the cross-producer chain-tail handoff. When a parent process spawns a child producer (different middleware instance, e.g. wrapper spawning an atrib-emit subprocess) and writes its current chain tail to this env var, the child's first sign chains to the parent's tail instead of starting at synthetic-genesis. Fills the gap between within-process autoChain and cross-process traceparent propagation.
 
-  Priority cascade now: inbound traceparent (§1.5.2) > autoChain in-memory tail > `ATRIB_CHAIN_TAIL_<context_id>` env var > synthetic genesis.
+  Priority cascade now: inbound traceparent ([§1.5.2](../../atrib-spec.md#152-http-transport-tracestate)) > autoChain in-memory tail > `ATRIB_CHAIN_TAIL_<context_id>` env var > synthetic genesis.
 
   Refactored chain_root determination into a pure `resolveChainRoot` helper exported from `@atrib/mcp` for unit-testable composition.
 
@@ -17,12 +17,12 @@
 - b22913a: Annotates pipeline and auto-detect informed_by from args.
 
   `@atrib/mcp` adds:
-  - `autoDetectInformedByFromArgs?: boolean` option on `AtribOptions` (default `false`). When `true`, the middleware scans tool-call params for `sha256:<64hex>` substrings (skipping the `chain_root` field) and merges them with the explicit `informedBy` callback result, lex-sorted per spec §1.2.5. Records with auto-detected references gain INFORMED_BY graph edges automatically.
+  - `autoDetectInformedByFromArgs?: boolean` option on `AtribOptions` (default `false`). When `true`, the middleware scans tool-call params for `sha256:<64hex>` substrings (skipping the `chain_root` field) and merges them with the explicit `informedBy` callback result, lex-sorted per spec [§1.2.5](../../atrib-spec.md#125-informed_by). Records with auto-detected references gain INFORMED_BY graph edges automatically.
   - `SHA256_REF_PATTERN`, `SHA256_REF_GLOBAL_PATTERN`, and `extractRecordHashes(value)` exported from the package root. These are co-located so producer-side consumers (middleware, atrib-emit, out-of-tree wrappers) share one definition. Drift between them would silently produce records with inconsistent reference detection.
   - Three previously-internal `EVENT_TYPE_*_URI` constants now re-exported from the package root: `EVENT_TYPE_DIRECTORY_ANCHOR_URI`, `EVENT_TYPE_ANNOTATION_URI`, `EVENT_TYPE_REVISION_URI`. The other three were already exported.
 
   `atrib-emit` adds:
-  - Top-level `annotates` field on the `emit` tool input schema (`sha256:<64-hex>`). REQUIRED when `event_type` is the annotation URI; FORBIDDEN on any other event_type, per spec §1.2.7 / D058. Validation surfaces as warnings-only response per §5.8 rather than producing a malformed signed record.
+  - Top-level `annotates` field on the `emit` tool input schema (`sha256:<64-hex>`). REQUIRED when `event_type` is the annotation URI; FORBIDDEN on any other event_type, per spec [§1.2.7](../../atrib-spec.md#127-annotates) / [D058](../../DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05). Validation surfaces as warnings-only response per [§5.8](../../atrib-spec.md#58-degradation-contract) rather than producing a malformed signed record.
   - `BuildEmitRecordInput.annotates` flows through to the signed `AtribRecord`.
 
   `@atrib/mcp-wrap` defaults `autoDetectInformedByFromArgs: true` so wrapper consumers (Claude Code, Cursor, generic stdio hosts) get auto-detect for free without explicit middleware configuration.
@@ -45,23 +45,23 @@
 
 ### Minor Changes
 
-- 79199ee: Add `args_commitment_form` and `result_commitment_form` posture detection (atrib spec §8.3 / D045).
+- 79199ee: Add `args_commitment_form` and `result_commitment_form` posture detection (atrib spec [§8.3](../../atrib-spec.md#83-salted-commitment-posture) / [D045](../../DECISIONS.md#d045-privacy-postures-normative-spec-section)).
 
-  `@atrib/mcp` `AtribRecord` type gains optional `args_salt` and `result_salt` fields. These were already MAY fields per spec §1.2.1 (lines 293-294 of `atrib-spec.md`) but had not been surfaced in the TypeScript type. JCS-canonical sort positions: `args_salt` between `annotates` and `chain_root` (a-n < a-r < c); `result_salt` between `provenance_token` and `revises` (p < r-e-s < r-e-v). Backward-compatible (absence preserves default posture).
+  `@atrib/mcp` `AtribRecord` type gains optional `args_salt` and `result_salt` fields. These were already MAY fields per spec [§1.2.1](../../atrib-spec.md#121-field-definitions) (lines 293-294 of `atrib-spec.md`) but had not been surfaced in the TypeScript type. JCS-canonical sort positions: `args_salt` between `annotates` and `chain_root` (a-n < a-r < c); `result_salt` between `provenance_token` and `revises` (p < r-e-s < r-e-v). Backward-compatible (absence preserves default posture).
 
-  `@atrib/verify` `PostureAnnotation` gains `args_commitment_form` and `result_commitment_form` fields (`'plain-sha256' | 'salted-sha256'`). Detection is structural per §8.3: presence of `args_salt` / `result_salt` ⇒ `salted-sha256`; absence ⇒ `plain-sha256`. The §8.3 `hmac-sha256` variant is signaled out-of-band and is not structurally detectable.
+  `@atrib/verify` `PostureAnnotation` gains `args_commitment_form` and `result_commitment_form` fields (`'plain-sha256' | 'salted-sha256'`). Detection is structural per [§8.3](../../atrib-spec.md#83-salted-commitment-posture): presence of `args_salt` / `result_salt` ⇒ `salted-sha256`; absence ⇒ `plain-sha256`. The [§8.3](../../atrib-spec.md#83-salted-commitment-posture) `hmac-sha256` variant is signaled out-of-band and is not structurally detectable.
 
   5 new tests added; verify package now at 247 passing.
 
-  Implements the args/result commitment-posture half of the §8.3 surface. The `tool_name_form` (§8.2) surface remains blocked on a §1.2.1 spec extension to add `tool_name` as a MAY field.
+  Implements the args/result commitment-posture half of the [§8.3](../../atrib-spec.md#83-salted-commitment-posture) surface. The `tool_name_form` ([§8.2](../../atrib-spec.md#82-opaque-name-posture)) surface remains blocked on a [§1.2.1](../../atrib-spec.md#121-field-definitions) spec extension to add `tool_name` as a MAY field.
 
-- 8abcb67: D052 / §1.7.6: cross-attestation type + verifier surface.
+- 8abcb67: [D052](../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) / [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records): cross-attestation type + verifier surface.
 
-  `@atrib/mcp` `AtribRecord` type gains optional `signers?: SignerEntry[]` field for transaction records per spec §1.7.6. New `canonicalCrossAttestationInput(record)` helper exported alongside `canonicalRecord` / `canonicalSigningInput` produces the JCS form with `signers: []` and the top-level `signature` field omitted, the bytes every signer in `signers[]` covers per §1.7.6.
+  `@atrib/mcp` `AtribRecord` type gains optional `signers?: SignerEntry[]` field for transaction records per spec [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records). New `canonicalCrossAttestationInput(record)` helper exported alongside `canonicalRecord` / `canonicalSigningInput` produces the JCS form with `signers: []` and the top-level `signature` field omitted, the bytes every signer in `signers[]` covers per [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records).
 
-  `@atrib/verify` `verifyRecord()` now surfaces `cross_attestation: { signers_count, signers_valid, missing }` on transaction records (`event_type = transaction`). Verifies each signer's Ed25519 signature against the cross-attestation canonical bytes; flags `missing: true` when below the §1.7.6 normative minimum of 2 verified signers. Per §1.7.6 missing is a SIGNAL, not invalidation: the underlying signature path keeps the record cryptographically valid. Legacy single-signer transaction records (no `signers[]`, top-level `signature` only) surface as `signers_count: 0, missing: true`.
+  `@atrib/verify` `verifyRecord()` now surfaces `cross_attestation: { signers_count, signers_valid, missing }` on transaction records (`event_type = transaction`). Verifies each signer's Ed25519 signature against the cross-attestation canonical bytes; flags `missing: true` when below the [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) normative minimum of 2 verified signers. Per [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) missing is a SIGNAL, not invalidation: the underlying signature path keeps the record cryptographically valid. Legacy single-signer transaction records (no `signers[]`, top-level `signature` only) surface as `signers_count: 0, missing: true`.
 
-  The verifier's top-level signature check is skipped for transaction records that carry a populated `signers[]` array per §1.2.1's "signature is OPTIONAL on transaction records" clause; in those records `signatureOk` is set to `true` and the actual cryptographic validity flows through `cross_attestation.signers_valid`.
+  The verifier's top-level signature check is skipped for transaction records that carry a populated `signers[]` array per [§1.2.1](../../atrib-spec.md#121-field-definitions)'s "signature is OPTIONAL on transaction records" clause; in those records `signatureOk` is set to `true` and the actual cryptographic validity flows through `cross_attestation.signers_valid`.
 
   `spec/conformance/1.7.6/` corpus (5 cases) ships alongside: legacy-single-signer, one-signer (below minimum), two-signers-valid (canonical happy path), three-signers (above minimum), tampered-second-signature (count vs valid independence). Reference test at `packages/verify/test/conformance-1.7.6.test.ts`.
 
@@ -69,31 +69,31 @@
 
   **Middleware-side signing of multi-signer transaction records is a separable follow-up.** This change implements the verifier; the producer-side counterparty-coordination protocol (how the agent and counterparty exchange signatures over the same canonical bytes) is its own design problem and ships in a separate ADR when payment-protocol integration work begins.
 
-- 3161e59: D061: add `tool_name`, `args_hash`, `result_hash` to the §1.2.1 canonical record schema.
+- 3161e59: [D061](../../DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-121): add `tool_name`, `args_hash`, `result_hash` to the [§1.2.1](../../atrib-spec.md#121-field-definitions) canonical record schema.
 
-  Closes the spec gap where §8.2 (opaque-name posture) and §8.3 (salted-commitment posture) referenced record fields that had never been added to the §1.2 canonical shape. Verifier surfaces for both postures now have structural inputs to detect against.
+  Closes the spec gap where [§8.2](../../atrib-spec.md#82-opaque-name-posture) (opaque-name posture) and [§8.3](../../atrib-spec.md#83-salted-commitment-posture) (salted-commitment posture) referenced record fields that had never been added to the [§1.2](../../atrib-spec.md#12-the-attribution-record) canonical shape. Verifier surfaces for both postures now have structural inputs to detect against.
 
   `@atrib/mcp` `AtribRecord` type gains three optional fields with documented JCS-canonical sort positions:
   - `tool_name?`, last in current schema (`t-o-...` after `t-i-...`)
   - `args_hash?`, between `annotates` and `args_salt`
   - `result_hash?`, between `provenance_token` and `result_salt`
 
-  All three default to absence (preserving the §8.1 default posture). Backward-compatible: existing records continue to verify identically.
+  All three default to absence (preserving the [§8.1](../../atrib-spec.md#81-default-posture) default posture). Backward-compatible: existing records continue to verify identically.
 
-  `@atrib/verify` `PostureAnnotation` gains `tool_name_form: 'hashed' | 'plain' | null`. Detection per the D061 fix to §8.2's regex ambiguity:
+  `@atrib/verify` `PostureAnnotation` gains `tool_name_form: 'hashed' | 'plain' | null`. Detection per the [D061](../../DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-121) fix to [§8.2](../../atrib-spec.md#82-opaque-name-posture)'s regex ambiguity:
   - `'hashed'` when value matches `^sha256:[0-9a-f]{64}$` (unambiguous)
   - `'plain'` for any other present value (verbatim and opaque-label NOT structurally distinguishable; both surface as plain)
   - `null` when the field is absent
 
   5 new verifier tests + 4 conformance-corpus reference tests added; verify package now at 267 passing tests. New `spec/conformance/8.2/` corpus (4 cases) ships alongside.
 
-  §8.2 prose updated to acknowledge the regex ambiguity. §8.3 prose clarifies that `args_hash` / `result_hash` are §1.2.1 MAY fields. §1.2.1 standard-shape example record + field table extended with all three fields.
+  [§8.2](../../atrib-spec.md#82-opaque-name-posture) prose updated to acknowledge the regex ambiguity. [§8.3](../../atrib-spec.md#83-salted-commitment-posture) prose clarifies that `args_hash` / `result_hash` are [§1.2.1](../../atrib-spec.md#121-field-definitions) MAY fields. [§1.2.1](../../atrib-spec.md#121-field-definitions) standard-shape example record + field table extended with all three fields.
 
   Middleware-side opt-in (config-gated emission of the new fields) is a separate follow-up; this change is verifier-only and spec-only and does not change the bytes any existing record produces.
 
-- a3d24f9: Add opt-in `disclosure` option to `atrib()` middleware (D061 / §8.2 / §8.3).
+- a3d24f9: Add opt-in `disclosure` option to `atrib()` middleware ([D061](../../DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-121) / [§8.2](../../atrib-spec.md#82-opaque-name-posture) / [§8.3](../../atrib-spec.md#83-salted-commitment-posture)).
 
-  `AtribOptions.disclosure` lets callers opt into producing records with `tool_name`, `args_hash`, and `args_salt` populated. Both dials default to `'omit'`, preserving the §8.1 default posture; existing callers see no behavior change and produce byte-identical records.
+  `AtribOptions.disclosure` lets callers opt into producing records with `tool_name`, `args_hash`, and `args_salt` populated. Both dials default to `'omit'`, preserving the [§8.1](../../atrib-spec.md#81-default-posture) default posture; existing callers see no behavior change and produce byte-identical records.
 
   ```ts
   atrib(server, {
@@ -115,7 +115,7 @@
 
   8 new middleware tests added; mcp package now at 384 passing tests.
 
-- d7c806c: Add `disclosure.result` to the middleware opt-in dial (D061 / §8.3 result-side commitment).
+- d7c806c: Add `disclosure.result` to the middleware opt-in dial ([D061](../../DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-121) / [§8.3](../../atrib-spec.md#83-salted-commitment-posture) result-side commitment).
 
   `AtribOptions.disclosure.result: 'omit' | 'plain-sha256' | 'salted-sha256'` populates `result_hash` (and optionally `result_salt`) on the signed record. The result is hashed BEFORE atrib mutates `result._meta` with its own propagation token, so the commitment covers exactly what the upstream handler returned. Same scheme as the existing `args` disclosure.
 
@@ -134,7 +134,7 @@
 
   4 new middleware tests added; mcp package now at 388 passing tests.
 
-  Closes the §8.3 commitment-form middleware surface end-to-end. The verifier's `args_commitment_form` and `result_commitment_form` posture annotations now have real-data inputs.
+  Closes the [§8.3](../../atrib-spec.md#83-salted-commitment-posture) commitment-form middleware surface end-to-end. The verifier's `args_commitment_form` and `result_commitment_form` posture annotations now have real-data inputs.
 
 ## 0.1.2
 
