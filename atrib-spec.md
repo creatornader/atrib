@@ -1296,6 +1296,8 @@ Contents
   - [2.5.1 Checkpoint endpoint](#251-checkpoint-endpoint)
   - [2.5.2 Tile endpoints](#252-tile-endpoints)
   - [2.5.3 Entry bundle endpoint](#253-entry-bundle-endpoint)
+  - [2.5.4 Point-lookup endpoint (OPTIONAL)](#254-point-lookup-endpoint-optional)
+  - [2.5.5 Recent-records endpoint (OPTIONAL)](#255-recent-records-endpoint-optional)
 - [2.6 Submission API (Write Interface)](#26-submission-api-write-interface)
   - [2.6.1 Submit entry](#261-submit-entry)
   - [2.6.2 Inclusion proof response](#262-inclusion-proof-response)
@@ -1532,6 +1534,74 @@ struct LengthPrefixedEntry {
 Tile API error responses:
 - 404 Not Found: the requested tile, entry bundle, or checkpoint does not exist (e.g., tile coordinates beyond the current tree)
 - 400 Bad Request: malformed path (non-numeric level or index)
+
+#### 2.5.4 Point-Lookup Endpoint (OPTIONAL)
+
+Log implementations MAY expose a point-lookup endpoint that returns a single decoded entry by its `record_hash`. The endpoint is OPTIONAL — verifiers achieve the same result by walking the entry-bundle endpoint ([§2.5.3](#253-entry-bundle-endpoint)) — but explorers, identity views, and ad-hoc record-verification flows benefit from a single-record fetch when the implementation provides one. When provided, the endpoint MUST follow the shape below so consumers can rely on a uniform contract across log implementations.
+
+```
+GET https://log.atrib.dev/v1/lookup/<record_hash_hex>
+
+// record_hash_hex: 64 lowercase hex characters
+
+Response 200 OK:
+Content-Type: application/json
+
+{
+  "log_index":     482193,                 // 0-indexed position in the log
+  "record_hash":   "sha256:4797...",        // canonical sha256 of the signed record
+  "creator_key":   "haoZK4...",            // base64url Ed25519 pubkey
+  "context_id":    "b5a2ebf81d43...",       // 32-hex
+  "timestamp_ms":  1778112565186,
+  "event_type":    "https://atrib.dev/v1/types/observation",
+  "record":        { /* full AtribRecord object per §1.2 */ }
+}
+
+Error responses:
+- 404 Not Found: no record with the given record_hash exists in the log
+- 400 Bad Request: malformed record_hash (not 64 hex characters)
+```
+
+A log MAY decline to provide this endpoint and respond 404 to all `/v1/lookup/...` requests. Consumers who require single-record fetches against such logs MUST fall back to entry-bundle traversal per [§2.5.3](#253-entry-bundle-endpoint).
+
+#### 2.5.5 Recent-Records Endpoint (OPTIONAL)
+
+Log implementations MAY expose a recent-records endpoint returning the newest N decoded entries in the tree. The endpoint is OPTIONAL — explorers and live-activity feeds benefit from a paginated newest-first feed, but verification does not depend on it. When provided, the endpoint MUST follow the shape below so dashboards can render activity feeds across log implementations uniformly.
+
+```
+GET https://log.atrib.dev/v1/recent
+
+// Optional query parameters:
+// limit=<n>                         (default: 20, max: 100)
+// offset=<n>                        (default: 0; skip the N most-recent)
+
+Response 200 OK:
+Content-Type: application/json
+
+{
+  "tree_size":  1882,                  // total entries in the log at query time
+  "limit":      20,
+  "offset":     0,
+  "entries": [
+    {
+      "log_index":     1881,           // newest first
+      "record_hash":   "sha256:4797...",
+      "creator_key":   "haoZK4...",
+      "context_id":    "b5a2ebf81d43...",
+      "timestamp_ms":  1778112565186,
+      "event_type":    "https://atrib.dev/v1/types/observation"
+    }
+    // ...
+  ]
+}
+
+Error responses:
+- 400 Bad Request: invalid limit or offset (negative, non-numeric)
+```
+
+The response carries a compact per-entry shape (no full `record` object) so a feed of 20 entries stays small. Consumers needing the full record for any entry follow up with [§2.5.4](#254-point-lookup-endpoint-optional) or the entry-bundle endpoint.
+
+A log MAY decline to provide this endpoint and respond 404 to all `/v1/recent` requests. Consumers who require activity feeds against such logs MUST fall back to walking the entry-bundle endpoint and decoding entries client-side.
 
 ---
 
