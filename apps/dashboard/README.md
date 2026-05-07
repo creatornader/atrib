@@ -41,23 +41,38 @@ CORS is configured on log-node, graph-node, and directory-node (`Access-Control-
 
 - **Not a personal dashboard.** This shows everybody's public data, not your account. There is no "logged-in user" concept. A separate authenticated personal-dashboard product is queued for after public outreach starts (tracked in operator memory, not in the repo).
 - **Not a build artifact.** No transpilation, no bundling, no dependencies. The HTML file is the dashboard.
-- **Not real-time.** Pull-on-load. Refresh to update. Real-time updates come in option 3.
+- **Auto-refreshes.** The overview polls `/v1/recent` + `/v1/stats` + `/v1/checkpoint` every few seconds and prepends new entries without disrupting the user's loaded-older state. Detail views (identity, session, action, trace, anchoring) soft-refresh every 60s by re-running `route()`, long enough to avoid flicker, short enough that newly-arrived records become visible without a manual reload. Refresh pauses when the tab is backgrounded.
 
 ## Six views
 
-| Path | Anchor | Composes |
-|---|---|---|
-| `#/` | (default) | `/v1/stats` + `/v1/checkpoint` from log; search bar |
-| `#/identity/<creator_key>` | base64url 43-char Ed25519 pubkey | directory `/v6/lookup` + `/v6/history` |
-| `#/session/<context_id>` | 32-hex context_id | graph `/v1/graph/<id>` |
-| `#/action/<record_hash>` | `sha256:<64-hex>` or just `<64-hex>` | log `/v1/lookup/<hex>` |
-| `#/trace/<record_hash>` | `sha256:<64-hex>` or just `<64-hex>` | graph `/v1/trace/<hex>` rendered as a provenance-ancestry DAG |
-| `#/anchoring` | (none) | log `/v1/stats` + `/v1/checkpoint` + directory `/v6/anchor` |
-| `#/about` | (none) | static text |
+| Path | Anchor | Composes | Graph? |
+|---|---|---|---|
+| `#/` | (default) | `/v1/stats` + `/v1/checkpoint` + `/v1/recent` from log; search bar | ❌ |
+| `#/identity/<creator_key>` | base64url 43-char Ed25519 pubkey | directory `/v6/lookup` + `/v6/history`; graph `/v1/creators/<key>/sessions` + `/v1/creators/<key>/graph` | ✅ activity-map DAG (cross-session edges) with time-window selector |
+| `#/session/<context_id>` | 32-hex context_id | graph `/v1/graph/<id>` (fallback: log `/v1/by-context/<id>`) | ✅ session DAG (dagre or circular layout per [D066](../../DECISIONS.md#d066-dashboard-graph-viz-library-set-sigmajs--dagre--graphology--cosmosgl-lazy-loaded-cdn-no-build-step) adaptive selector); records-only table when no edges |
+| `#/action/<record_hash>` | `sha256:<64-hex>` or just `<64-hex>` | log `/v1/lookup/<hex>` | ❌ |
+| `#/trace/<record_hash>` | `sha256:<64-hex>` or just `<64-hex>` | graph `/v1/trace/<hex>` + `/v1/chain/<hex>` merged | ✅ provenance-ancestry DAG (all 9 edge types when present) + chain-timeline list |
+| `#/anchoring` | (none) | log `/v1/stats` + `/v1/checkpoint` + directory `/v6/anchor` | ❌ |
+| `#/about` | (none) | static text | ❌ |
+
+## Graph surfaces
+
+Of the six dashboard views above, the trace, session, and identity views render Sigma DAGs in the current implementation; the others are non-graph views. The identity activity map was added with [§3.4.7](../../atrib-spec.md#347-get-v1creatorscreator_keygraph) / [D068](../../DECISIONS.md#d068-trace-operations-split--provenance-trace-vs-causal-chain). Per [D066](../../DECISIONS.md#d066-dashboard-graph-viz-library-set-sigmajs--dagre--graphology--cosmosgl-lazy-loaded-cdn-no-build-step) consequences, additional graph surfaces are planned but not yet built:
+
+| Surface | Status | Library | Notes |
+|---|---|---|---|
+| Trace view (`#/trace/<hash>`) | ✅ Live | Sigma + dagre | All 9 edge types when present (4 producer-claimed + 5 substrate-derived). Pairs with chain-timeline list section. |
+| Session DAG (`#/session/<id>`) | ✅ Live | Sigma + dagre/circular | Adaptive layout per [D066](../../DECISIONS.md#d066-dashboard-graph-viz-library-set-sigmajs--dagre--graphology--cosmosgl-lazy-loaded-cdn-no-build-step): dagre when hierarchical edges + edges < 2000; circular fallback for large all-pairs sessions. |
+| Identity activity map (`#/identity/<key>`) | ✅ Live | Sigma + dagre | Cross-session edges only by default (intra-session edges filtered per [§3.4.7](../../atrib-spec.md#347-get-v1creatorscreator_keygraph)). Time-window selector (last 6h / 24h / 7d / 30d / all time). |
+| Transaction settlement view | 📋 Planned | Sigma + dagre | Either a new `#/transaction/<hash>` route or an upgraded action view when `event_type=transaction`. Renders `CONVERGES_ON` edges from contributing records to the transaction node. |
+| Cross-creator network | 📋 Planned | Sigma (small) / cosmos.gl (large) | Two or more `creator_key`s + records they jointly informed/annotated/revised. No route assigned yet. |
+| Global view | 📋 Planned | cosmos.gl | The 100k+ node scale view at `#/global`, second renderer beyond Sigma. Same `{nodes, edges}` data adapter. |
+
+This table is the canonical breakdown of dashboard graph surfaces. Update it alongside [D066](../../DECISIONS.md#d066-dashboard-graph-viz-library-set-sigmajs--dagre--graphology--cosmosgl-lazy-loaded-cdn-no-build-step) consequences when shipping a new graph view, and update the [Six views](#six-views) table's "Graph?" column.
 
 ## Graph viz dependencies (lazy-loaded)
 
-The trace view renders an interactive DAG via three CDN-loaded libraries: [graphology](https://graphology.github.io/) (~74KB) for the data structure, [dagre](https://github.com/dagrejs/dagre) (~284KB) for hierarchical layout, and [Sigma.js](https://www.sigmajs.org/) (~186KB) for canvas/WebGL rendering. They load only when a graph view is first rendered; overview / identity / action / anchoring / about pages never pay the bytes. Versions pinned in `index.html` under `GRAPH_LIB_URLS`. Subresource-integrity (SRI) hashes are not currently set; this is tracked alongside the broader hardening of public-facing assets.
+The graph-rendering views (trace, session, identity activity map) load three CDN-pinned libraries: [graphology](https://graphology.github.io/) (~74KB) for the data structure, [dagre](https://github.com/dagrejs/dagre) (~284KB) for hierarchical layout, and [Sigma.js](https://www.sigmajs.org/) (~186KB) for canvas/WebGL rendering. They load only when a graph view is first rendered; overview / action / anchoring / about pages never pay the bytes. Versions + sha384 SRI integrity hashes pinned in `index.html` under `GRAPH_LIB_URLS` per [D066](../../DECISIONS.md#d066-dashboard-graph-viz-library-set-sigmajs--dagre--graphology--cosmosgl-lazy-loaded-cdn-no-build-step), if jsDelivr serves a tampered file, the browser blocks it and the graph render fails closed.
 
 ## Files
 
