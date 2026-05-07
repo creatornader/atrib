@@ -402,7 +402,7 @@ async fn verify_append_only_hash_wasm_safe<TC: Configuration>(
 // prover side to generate proofs, then feed those proofs into our WASM-safe
 // verifier path. If the upstream akd crate updates the proof shape,
 // internal hash recomputation, or the AzksParallelismConfig contract,
-// these tests catch the drift before our WASM build silently mis-verifies.
+// these tests catch the drift before our WASM build silently produces wrong verification results.
 //
 // Coverage: round-trip accept paths (lookup, audit), adversarial paths
 // (tampered roots, wrong VRF, wrong epoch, wrong label, malformed proof
