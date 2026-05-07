@@ -288,6 +288,19 @@
   }
   .panel .panel-head .meta { font: 12px/1 var(--font-mono); color: var(--text-3); }
   .panel .panel-body { padding: 20px; }
+  /* Mobile horizontal-scroll fix for tables and graphs inside flush panels.
+     The .panel.flush rule above sets overflow:hidden so rounded corners clip
+     correctly. On narrow viewports that would also clip wide tables (the
+     sessions table, claim history, action detail) and graph canvases (trace,
+     session DAG, identity activity map), making them unreadable on mobile.
+     Applying overflow-x:auto on tables AND graph containers, matching the
+     existing .feed-wrap pattern at line 454, restores horizontal scroll
+     globally — not just on the homepage feed. */
+  @media (max-width: 720px) {
+    .panel.flush { overflow-x: auto; overflow-y: hidden; }
+    .panel.flush table { min-width: 540px; }
+    .panel.flush .trace-graph { min-width: 540px; }
+  }
 
   /* ─── Hero ───────────────────────────────────────────────────────────── */
 
@@ -1440,6 +1453,27 @@ function populateQuickLinks(entries) {
 function isOverviewRoute() {
   const h = location.hash.replace(/^#/, '')
   return !h || h === '/' || h === '/overview'
+}
+
+// Per-view soft refresh: every active view (identity, session, action,
+// trace, anchoring) re-runs route() on a long interval so newly-arrived
+// records become visible without a manual reload. The overview route uses
+// the dedicated fast feed polling above; this is a coarser fallback for
+// views that don't have incremental update logic. Pause when the tab is
+// hidden so background tabs don't burn CPU. Generation-guarded inside the
+// renderers so a refresh mid-fetch doesn't stomp on a navigation.
+const VIEW_REFRESH_INTERVAL_MS = 60_000  // 60s; long enough to avoid flicker
+let viewRefreshHandle = null
+function startViewRefresh() {
+  stopViewRefresh()
+  viewRefreshHandle = setInterval(() => {
+    if (document.hidden) return
+    if (isOverviewRoute()) return  // overview has its own faster polling
+    route()
+  }, VIEW_REFRESH_INTERVAL_MS)
+}
+function stopViewRefresh() {
+  if (viewRefreshHandle) { clearInterval(viewRefreshHandle); viewRefreshHandle = null }
 }
 
 function startPolling() {
@@ -3222,6 +3256,16 @@ async function route() {
   const myGen = _routeGeneration
   renderEndpoints()
   if (!isOverviewRoute()) stopPolling()
+  // Cross-view soft refresh: turn ON for non-overview views, OFF when on
+  // overview (which has its own dedicated polling at a faster interval).
+  // The router fires startViewRefresh() once and the interval calls back
+  // into route() periodically; the recursive call is safe because each
+  // route() bumps the generation counter so any in-flight render bails.
+  if (isOverviewRoute()) {
+    stopViewRefresh()
+  } else {
+    startViewRefresh()
+  }
   document.getElementById('app').replaceChildren(el('div', { class: 'empty' }, 'loading…'))
   const hash = location.hash.replace(/^#/, '')
 
