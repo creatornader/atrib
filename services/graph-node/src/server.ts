@@ -48,16 +48,29 @@ interface ParsedTimeWindow {
   error: string | null
 }
 
+// Parse a single since/until value as either unix milliseconds (a numeric
+// string) or an ISO 8601 datetime string. Returns null on invalid input.
+// Spec §3.4.4 + §3.4.7 both accept either form. Numeric coerces via Number();
+// non-numeric strings fall through to Date.parse() which handles ISO 8601 +
+// other widely-supported formats. Date.parse(NaN-string) returns NaN, so the
+// finite check covers both.
+function parseTimestampParam(raw: string): number | null {
+  const asNumber = Number(raw)
+  if (Number.isFinite(asNumber)) return asNumber
+  const asDate = Date.parse(raw)
+  return Number.isFinite(asDate) ? asDate : null
+}
+
 function parseTimeWindow(params: URLSearchParams): ParsedTimeWindow {
   const sinceRaw = params.get('since')
   const untilRaw = params.get('until')
-  const since = sinceRaw === null ? null : Number(sinceRaw)
-  const until = untilRaw === null ? null : Number(untilRaw)
-  if (sinceRaw !== null && !Number.isFinite(since)) {
-    return { since: null, until: null, error: '`since` must be a unix timestamp in milliseconds' }
+  const since = sinceRaw === null ? null : parseTimestampParam(sinceRaw)
+  const until = untilRaw === null ? null : parseTimestampParam(untilRaw)
+  if (sinceRaw !== null && since === null) {
+    return { since: null, until: null, error: '`since` must be a unix timestamp in milliseconds or an ISO 8601 datetime' }
   }
-  if (untilRaw !== null && !Number.isFinite(until)) {
-    return { since: null, until: null, error: '`until` must be a unix timestamp in milliseconds' }
+  if (untilRaw !== null && until === null) {
+    return { since: null, until: null, error: '`until` must be a unix timestamp in milliseconds or an ISO 8601 datetime' }
   }
   if (since !== null && until !== null && since > until) {
     return { since: null, until: null, error: '`since` must be less than or equal to `until`' }
@@ -382,6 +395,11 @@ function handleCreatorSessions(
   creatorKey: string,
   params: URLSearchParams,
 ): void {
+  const window = parseTimeWindow(params)
+  if (window.error) {
+    return sendProblem(res, 400, 'invalid-time-window', window.error, `/v1/creators/${creatorKey}/sessions`)
+  }
+
   const sessions = store.getSessionsByCreatorKey(creatorKey)
   const rawLimit = parseInt(params.get('limit') ?? '50', 10)
   const limit = Math.min(Number.isNaN(rawLimit) ? 50 : rawLimit, 200)
@@ -390,6 +408,18 @@ function handleCreatorSessions(
   const hasTx = params.get('has_transaction')
   if (hasTx === 'true') filtered = filtered.filter((s) => s.has_transaction)
   if (hasTx === 'false') filtered = filtered.filter((s) => !s.has_transaction)
+
+  // §3.4.4 since/until time-window: keep sessions whose [first_seen, last_seen]
+  // overlaps the window. A session is excluded when it ends before `since` or
+  // starts after `until`. Both bounds inclusive. Without this, the spec's
+  // documented filters were a no-op (impl ignored them), forcing callers to
+  // post-filter in JavaScript with the entire session list.
+  if (window.since !== null) {
+    filtered = filtered.filter((s) => s.last_seen >= window.since!)
+  }
+  if (window.until !== null) {
+    filtered = filtered.filter((s) => s.first_seen <= window.until!)
+  }
 
   const paginated = filtered.slice(0, limit)
 

@@ -111,6 +111,43 @@ describe('graph-node server (section 3.4)', () => {
     expect(body.sessions[0].node_count).toBe(2)
   })
 
+  it('GET /v1/creators/:key/sessions honors since/until window (unix_ms)', async () => {
+    const pk = await getPublicKey(TEST_KEY)
+    const creatorKey = base64urlEncode(pk)
+    // Fixture sessions span ts=1000..1001. Window completely after the session
+    // → 0 results. Window before the session → 0 results. Window covering it
+    // → 1 result.
+    const before = await fetch(`${url}/v1/creators/${encodeURIComponent(creatorKey)}/sessions?until=999`)
+    expect(before.ok).toBe(true)
+    expect((await before.json()).sessions).toHaveLength(0)
+
+    const after = await fetch(`${url}/v1/creators/${encodeURIComponent(creatorKey)}/sessions?since=1002`)
+    expect(after.ok).toBe(true)
+    expect((await after.json()).sessions).toHaveLength(0)
+
+    const cover = await fetch(`${url}/v1/creators/${encodeURIComponent(creatorKey)}/sessions?since=999&until=1002`)
+    expect(cover.ok).toBe(true)
+    expect((await cover.json()).sessions).toHaveLength(1)
+  })
+
+  it('GET /v1/creators/:key/sessions accepts ISO 8601 since/until (§3.4.4 spec format)', async () => {
+    const pk = await getPublicKey(TEST_KEY)
+    const creatorKey = base64urlEncode(pk)
+    // Both formats must work per spec §3.4.4: <ISO8601 | unix_ms>. The fixture
+    // is at unix_ms 1000-1001 (1970-01-01T00:00:01Z window). ISO 8601 query
+    // with a window AFTER 1970 → 0 results, validating parser conversion.
+    const isoFar = await fetch(`${url}/v1/creators/${encodeURIComponent(creatorKey)}/sessions?since=2050-01-01T00:00:00Z`)
+    expect(isoFar.ok).toBe(true)
+    expect((await isoFar.json()).sessions).toHaveLength(0)
+
+    // Malformed ISO 8601 → 400.
+    const bad = await fetch(`${url}/v1/creators/${encodeURIComponent(creatorKey)}/sessions?since=not-a-date`)
+    expect(bad.status).toBe(400)
+    const body = await bad.json()
+    // The detail field carries the parser-supplied message naming the offending param.
+    expect(body.detail).toMatch(/since/i)
+  })
+
   it('POST /v1/ingest rejects invalid records', async () => {
     const res = await fetch(`${url}/v1/ingest`, {
       method: 'POST',
