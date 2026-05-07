@@ -17,6 +17,8 @@
  * warnings in the returned object.
  */
 
+import * as ed25519 from '@noble/ed25519'
+import canonicalize from 'canonicalize'
 import type { RevocationEntry } from './revocations.js'
 
 /** Identity claim shape from spec §6.1. Mirrored here to avoid an import cycle with @atrib/directory. */
@@ -104,6 +106,14 @@ export interface IdentityResolution {
    * (a step-1 warning carries the reason).
    */
   anchor: AnchorSurface | null
+  /**
+   * §6.3 step 4. `true` when the directory operator's Ed25519
+   * signature on the anchor body verifies, `false` when it doesn't
+   * (triggers §6.3 step 4 HARD failure rejection, a faulty operator
+   * is not a soft signal). `null` when the check wasn't attempted
+   * (no anchor body discovered, no `directoryOperatorKey` supplied).
+   */
+  directory_checkpoint_signature_valid: boolean | null
   warnings: string[]
 }
 
@@ -257,6 +267,21 @@ export interface ResolveIdentityOptions {
    * §6.3 step 5 HARD failure rejection), throws for malformed input.
    */
   verifyAuditProof?: (input: VerifyAuditProofInput) => Promise<boolean>
+  /**
+   * §6.3 step 3: minimum count of valid witness cosignatures required
+   * on the log's checkpoint covering the anchor. When set, the
+   * verifier fetches the checkpoint, parses cosignature lines, counts
+   * lines whose origin differs from the log's own (witness signatures),
+   * and surfaces a step-3-witness-insufficient warning if below
+   * threshold. When omitted, step 3 stays warning-only.
+   *
+   * Note. Cryptographic verification of each witness signature against
+   * a configured trusted-witness set is a separate enhancement; the
+   * current implementation counts cosignature lines as a proxy. See
+   * `step-3-witness-not-cryptographically-verified` warning surfaced
+   * alongside the count.
+   */
+  witnessThreshold?: number
 }
 
 const DEFAULT_DIRECTORY = 'https://directory.atrib.dev/v6'
@@ -298,6 +323,7 @@ export async function resolveIdentity(
         capability_envelope: null,
         key_revocation_status: status,
         lookup_proof_valid: null,
+        directory_checkpoint_signature_valid: null,
         append_only_consistent: null,
         anchor: null,
         warnings,
@@ -315,6 +341,7 @@ export async function resolveIdentity(
       capability_envelope: null,
       key_revocation_status: status,
       lookup_proof_valid: null,
+        directory_checkpoint_signature_valid: null,
       append_only_consistent: null,
       anchor: null,
       warnings,
@@ -329,6 +356,7 @@ export async function resolveIdentity(
       capability_envelope: null,
       key_revocation_status: applyRevocationOnly(creatorKey, opts, warnings),
       lookup_proof_valid: null,
+        directory_checkpoint_signature_valid: null,
       append_only_consistent: null,
       anchor: null,
       warnings,
@@ -347,6 +375,7 @@ export async function resolveIdentity(
       capability_envelope: null,
       key_revocation_status: applyRevocationOnly(creatorKey, opts, warnings),
       lookup_proof_valid: null,
+        directory_checkpoint_signature_valid: null,
       append_only_consistent: null,
       anchor: null,
       warnings,
@@ -366,6 +395,7 @@ export async function resolveIdentity(
   let anchor: AnchorSurface | null = null
   let anchorBody: AnchorBody | null = null
   let priorAnchorBody: AnchorBody | null = null
+  let directorySignatureValid: boolean | null = null
   if (opts.logEndpoint && opts.directoryOperatorKey && opts.fetchAnchorBody) {
     const stepOneResult = await runStepOne({
       logEndpoint: opts.logEndpoint,
@@ -382,6 +412,57 @@ export async function resolveIdentity(
       anchor = stepOneResult.anchor
       anchorBody = stepOneResult.currentBody
       priorAnchorBody = stepOneResult.priorBody
+    }
+  }
+
+  // Step 4 (directory checkpoint signature verification). HARD failure
+  // path per spec §6.3: a directory operator returning an invalidly-
+  // signed anchor body is a fault, not a soft signal, reject the
+  // entire query. Step 4 runs only when step 1 surfaced a body AND
+  // `directoryOperatorKey` was supplied (which step 1 already required).
+  if (anchorBody && opts.directoryOperatorKey) {
+    const ok = await verifyAnchorSignature(anchorBody, opts.directoryOperatorKey, warnings)
+    directorySignatureValid = ok
+    if (ok) {
+      const idx = warnings.findIndex((w) => w.startsWith('step-4-checkpoint-signature-not-checked'))
+      if (idx >= 0) warnings.splice(idx, 1)
+    } else {
+      // §6.3 step 4 hard-failure: reject. Anchor + step-4 result stay
+      // populated so consumers see WHY the rejection happened.
+      return {
+        identity_resolved: null,
+        identity_resolution_method: 'rejected',
+        capability_envelope: null,
+        key_revocation_status: applyRevocationOnly(creatorKey, opts, warnings),
+        lookup_proof_valid: null,
+        append_only_consistent: null,
+        anchor,
+        directory_checkpoint_signature_valid: false,
+        warnings,
+      }
+    }
+  }
+
+  // Step 3 (witness coverage on the log's checkpoint). Soft signal:
+  // counts cosignature lines on the latest log checkpoint whose origin
+  // differs from the log's own (= witness signatures). Compares against
+  // `witnessThreshold`. Implemented as a count-only check; cryptographic
+  // verification of each witness signature is a separate enhancement.
+  // log-node currently produces single-signer checkpoints (no witnesses
+  // cosigning), so the actual count is 0 against any production
+  // checkpoint as of the time of writing, that's honest data, not
+  // a bug; the threshold semantic still works once witnesses come online.
+  if (opts.logEndpoint && anchor) {
+    const witnessCount = await runStepThree(
+      opts.logEndpoint,
+      opts.witnessThreshold,
+      fetchFn,
+      opts.signal,
+      warnings,
+    )
+    if (witnessCount !== null) {
+      // anchor is non-null here (we checked above); update its witness count.
+      anchor = { ...anchor, anchor_witness_count: witnessCount }
     }
   }
 
@@ -417,6 +498,7 @@ export async function resolveIdentity(
         lookup_proof_valid: false,
         append_only_consistent: null,
         anchor,
+        directory_checkpoint_signature_valid: directorySignatureValid,
         warnings,
       }
     }
@@ -447,6 +529,7 @@ export async function resolveIdentity(
         lookup_proof_valid: lookupProofValid,
         append_only_consistent: false,
         anchor,
+        directory_checkpoint_signature_valid: directorySignatureValid,
         warnings,
       }
     }
@@ -461,6 +544,7 @@ export async function resolveIdentity(
     lookup_proof_valid: lookupProofValid,
     append_only_consistent: appendOnlyConsistent,
     anchor,
+    directory_checkpoint_signature_valid: directorySignatureValid,
     warnings,
   }
 }
@@ -926,4 +1010,140 @@ function applyRevocationOnly(
     revoked_at_log_index: entry.log_index,
     since_revocation: sinceRevocation,
   }
+}
+
+/**
+ * Spec §6.3 step 4, verify the directory operator's Ed25519 signature
+ * on the anchor record body.
+ *
+ * The signed bytes are the canonical (JCS-style) JSON of the body MINUS
+ * the `signature` field. The atrib substrate uses `canonicalize` (RFC
+ * 8785 JCS); the directory's own emitDirectoryAnchor canonicalizes the
+ * unsigned shape THEN appends the signature, so re-canonicalizing the
+ * body without `signature` reproduces the bytes the operator signed.
+ *
+ * Returns `true` for a valid signature, `false` otherwise. Pushes a
+ * `step-4-signature-invalid` warning on rejection so consumers see why.
+ * Errors during canonicalization, base64url decode, or ed25519 verify
+ * all return `false`, a fault during step 4 is not a soft signal,
+ * per spec §6.3 ("a directory operator returning an invalidly-signed
+ * checkpoint is a fault").
+ */
+async function verifyAnchorSignature(
+  body: AnchorBody,
+  expectedOperatorKey: string,
+  warnings: string[],
+): Promise<boolean> {
+  // Re-canonicalize without the signature field. Order matches the
+  // emit-side: every non-signature field is included.
+  const { signature, ...unsigned } = body
+  const canonical = canonicalize(unsigned)
+  if (typeof canonical !== 'string') {
+    warnings.push('step-4-canonicalize-failed: anchor body could not be canonicalized')
+    return false
+  }
+  let sigBytes: Uint8Array
+  let pubBytes: Uint8Array
+  try {
+    sigBytes = base64urlToBytes(signature)
+    pubBytes = base64urlToBytes(expectedOperatorKey)
+  } catch (e) {
+    warnings.push(`step-4-decode-failed: ${e instanceof Error ? e.message : String(e)}`)
+    return false
+  }
+  if (sigBytes.length !== 64 || pubBytes.length !== 32) {
+    warnings.push(`step-4-decode-failed: signature must be 64 bytes (got ${sigBytes.length}), pubkey 32 bytes (got ${pubBytes.length})`)
+    return false
+  }
+  let ok = false
+  try {
+    ok = await ed25519.verifyAsync(sigBytes, new TextEncoder().encode(canonical), pubBytes)
+  } catch (e) {
+    warnings.push(`step-4-verify-threw: ${e instanceof Error ? e.message : String(e)}`)
+    return false
+  }
+  if (!ok) {
+    warnings.push('step-4-signature-invalid: directory operator signature on anchor body did not verify')
+  }
+  return ok
+}
+
+/**
+ * Spec §6.3 step 3, count witness cosignatures on the log's latest
+ * checkpoint. Soft signal.
+ *
+ * Fetches `GET /v1/checkpoint` from the log, parses the C2SP signed-note
+ * format, counts cosignature lines whose origin differs from the log's
+ * own (= witnesses, not the log signing itself). Compares against
+ * `threshold` and surfaces a step-3-witness-insufficient warning if
+ * below.
+ *
+ * Returns the count when discoverable; `null` when the count couldn't
+ * be determined (fetch failure, malformed checkpoint, etc.).
+ *
+ * Implementation note. This is a count-only check: each cosignature
+ * line is parsed for shape and origin, but the signatures are NOT
+ * cryptographically verified against a configured trusted-witness
+ * set. The `step-3-witness-not-cryptographically-verified` warning
+ * surfaces alongside the count to make this honest. Verifying each
+ * signature against trusted witness vkeys is a separate enhancement.
+ */
+async function runStepThree(
+  logEndpoint: string,
+  threshold: number | undefined,
+  fetchFn: typeof fetch,
+  signal: AbortSignal | undefined,
+  warnings: string[],
+): Promise<number | null> {
+  let checkpointText: string
+  try {
+    const url = `${logEndpoint.replace(/\/$/, '')}/checkpoint`
+    const res = await fetchFn(url, {
+      headers: { accept: 'text/plain' },
+      ...(signal ? { signal } : {}),
+    })
+    if (!res.ok) {
+      warnings.push(`step-3-checkpoint-fetch-error: ${res.status} ${res.statusText}`)
+      return null
+    }
+    checkpointText = await res.text()
+  } catch (e) {
+    warnings.push(`step-3-checkpoint-fetch-error: ${e instanceof Error ? e.message : String(e)}`)
+    return null
+  }
+
+  // Parse the C2SP signed-note format: `body\n\n<signature lines>`.
+  // The first line of the body is the log's origin string; cosignature
+  // lines whose origin matches are the log's own signature, not witness
+  // cosignatures.
+  const blankSep = checkpointText.indexOf('\n\n')
+  if (blankSep < 0) {
+    warnings.push('step-3-checkpoint-malformed: signed-note body/signature separator not found')
+    return null
+  }
+  const body = checkpointText.slice(0, blankSep)
+  const sigBlock = checkpointText.slice(blankSep + 2)
+  const logOrigin = body.split('\n', 1)[0] ?? ''
+
+  let witnessCount = 0
+  for (const line of sigBlock.split('\n')) {
+    if (!line.trim()) continue
+    // Each signature line starts with em-dash + space + origin + space + sigToken.
+    const match = line.match(/^[—\-] (\S+) (\S+)\s*$/)
+    if (!match) continue
+    const sigOrigin = match[1] as string
+    if (sigOrigin !== logOrigin) witnessCount += 1
+  }
+
+  warnings.push('step-3-witness-not-cryptographically-verified: witness cosignature count is line-based, not cryptographically verified against a trusted-witness set')
+
+  if (typeof threshold === 'number' && witnessCount < threshold) {
+    warnings.push(`step-3-witness-insufficient: actual=${witnessCount}, required=${threshold}`)
+  }
+
+  // Remove the up-front step-3-witness-not-checked warning since we did parse the checkpoint.
+  const idx = warnings.findIndex((w) => w.startsWith('step-3-witness-not-checked'))
+  if (idx >= 0) warnings.splice(idx, 1)
+
+  return witnessCount
 }
