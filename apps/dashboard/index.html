@@ -2378,9 +2378,14 @@ function mergeGraphs(a, b) {
 // alongside the merged DAG: the graph shows the full topology including
 // chain edges; the list shows the linear timeline at a glance.
 function appendChainSection(root, chainResult, fullHash) {
+  // The "chain timeline" naming + scope-explicit meta line make the
+  // section's purpose unambiguous: this is the linear chain_precedes walk,
+  // a subset of what the graph above shows. Without these tweaks, readers
+  // who don't already know the spec couldn't tell whether the list was
+  // re-rendering the same data as the graph or showing something different.
   const sectionHead = el('div', { class: 'panel-head' },
-    el('h2', {}, 'chain predecessors'),
-    el('span', { class: 'meta' }, '/v1/chain · backward chain_precedes walk'),
+    el('h2', {}, 'chain timeline'),
+    el('span', { class: 'meta' }, 'linear view · ', el('code', {}, 'chain_precedes'), ' only'),
   )
 
   if (!chainResult || chainResult._error) {
@@ -2407,7 +2412,8 @@ function appendChainSection(root, chainResult, fullHash) {
       sectionHead,
       el('div', { class: 'panel-body' },
         el('div', { class: 'empty' },
-          'No chain predecessors. This is the genesis record of its session, ',
+          'No ', el('code', {}, 'chain_precedes'), ' predecessors. ',
+          'This is the genesis record of its session, ',
           el('code', {}, 'chain_root'), ' equals ', el('code', {}, 'SHA-256(context_id)'),
           ' per spec §1.2.3.',
         ),
@@ -2438,6 +2444,23 @@ function appendChainSection(root, chainResult, fullHash) {
   root.append(el('section', { class: 'panel', style: 'margin-top: 24px;' },
     sectionHead,
     el('div', { class: 'panel-body' },
+      // Scope hint: explicitly call out that this list is a SUBSET (just
+      // chain_precedes) of what the graph above renders (all 4 edge types).
+      // Prevents the reader from guessing whether the list re-renders the
+      // graph or shows something different.
+      el('p', { style: 'margin: 0 0 12px; color: var(--text-3); font-size: 13px;' },
+        'Linear timeline view of the substrate-derived ',
+        el('code', {}, 'chain_precedes'),
+        ' edges only. The graph above shows all four edge types (',
+        el('code', {}, 'informed_by'),
+        ', ',
+        el('code', {}, 'annotates'),
+        ', ',
+        el('code', {}, 'revises'),
+        ', and ',
+        el('code', {}, 'chain_precedes'),
+        '); this section is the linear backbone read from the same chain.',
+      ),
       el('p', { style: 'margin: 0 0 12px; color: var(--text-2);' },
         nodes.length - 1, ' substrate-derived predecessor',
         nodes.length === 2 ? '' : 's',
@@ -2578,7 +2601,7 @@ async function renderTrace(rawHash) {
     el('section', { class: 'panel flush' },
       el('div', { class: 'panel-head' },
         el('h2', {}, 'ancestry graph'),
-        el('span', { class: 'meta' }, '/v1/trace · backward BFS'),
+        el('span', { class: 'meta' }, 'all 4 edge types · ', el('code', {}, 'informed_by'), ' / ', el('code', {}, 'annotates'), ' / ', el('code', {}, 'revises'), ' / ', el('code', {}, 'chain_precedes')),
       ),
       controls,
       graphContainer,
