@@ -2398,6 +2398,9 @@ function appendChainSection(root, chainResult, fullHash) {
 async function renderTrace(rawHash) {
   setActiveNav(null)
   const ep = endpoints()
+  // Capture the generation at entry; any post-fetch DOM write below bails
+  // when the user navigated away mid-fetch.
+  const myGen = currentRouteGeneration()
 
   // Tear down any prior Sigma instance from a previous render. Sigma
   // attaches canvas + event listeners that leak across hashchange.
@@ -2538,6 +2541,11 @@ async function renderTrace(rawHash) {
     fetchMaybe(`${ep.graph}/trace/${hashHex}?depth=${depth}`),
     fetchMaybe(`${ep.graph}/chain/${hashHex}?depth=${depth}`),
   ])
+
+  // The user may have navigated away during the parallel fetches above.
+  // Bailing here prevents the trace renderer from stomping on whatever
+  // view is now in progress.
+  if (!routeGenerationStillCurrent(myGen)) return
 
   if (libErr) {
     graphContainer.replaceChildren(el('div', { class: 'err-banner' },
@@ -2896,8 +2904,24 @@ function renderAbout() {
 }
 
 // ─── Router ──────────────────────────────────────────────────────────────
+//
+// Generation token guards against late-async-fetch render races. Each
+// route() invocation increments _routeGeneration; render functions can
+// capture the current generation at entry and compare against the live
+// counter before any post-fetch DOM write. Mid-fetch hashchange (the user
+// navigates from /trace to /session before the trace's parallel fetches
+// complete) bumps the generation, so the trace's late .then() callbacks
+// no-op via routeGenerationStillCurrent() instead of stomping on the
+// session view's DOM. Without this guard, fast navigation between views
+// produced flicker + occasional wrong-DOM-target write errors.
+
+let _routeGeneration = 0
+function currentRouteGeneration() { return _routeGeneration }
+function routeGenerationStillCurrent(captured) { return captured === _routeGeneration }
 
 async function route() {
+  _routeGeneration += 1
+  const myGen = _routeGeneration
   renderEndpoints()
   if (!isOverviewRoute()) stopPolling()
   document.getElementById('app').replaceChildren(el('div', { class: 'empty' }, 'loading…'))
@@ -2912,11 +2936,13 @@ async function route() {
     if (hash === '/anchoring')                               return await renderAnchoring()
     if (hash === '/about')                                   return renderAbout()
 
+    if (!routeGenerationStillCurrent(myGen)) return // stale render
     document.getElementById('app').replaceChildren(el('div', { class: 'panel' },
       el('h2', {}, 'unknown route'),
       el('p', {}, 'Try ', el('a', { href: '#/' }, 'overview'), '.'),
     ))
   } catch (e) {
+    if (!routeGenerationStillCurrent(myGen)) return // user navigated; do not paint
     document.getElementById('app').replaceChildren(el('div', { class: 'panel' },
       el('div', { class: 'err-banner' },
         el('span', { class: 'label' }, 'unhandled error:'), e?.message || String(e),
