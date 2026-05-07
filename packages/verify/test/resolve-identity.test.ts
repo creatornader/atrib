@@ -1,6 +1,6 @@
 // Tests for resolveIdentity (spec §6.3 verifier consultation).
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import { resolveIdentity } from '../src/resolve-identity.js'
 import { buildRevocationRegistry } from '../src/revocations.js'
 import type { IdentityClaim } from '../src/resolve-identity.js'
@@ -312,16 +312,71 @@ interface VerifyArgs {
 // ===========================================================================
 
 describe('steps 1 + 2 + 5 — anchor arc', () => {
-  const OPERATOR_KEY = 'op'.repeat(21) + 'x' // 43 chars
+  // Real Ed25519 keypair so step 4 (signature verify on anchor bodies)
+  // doesn't reject the fixtures. Use the canonical hard-coded base64url
+  // pubkey + seed pair so the suite stays deterministic. Generated via
+  // ed25519.getPublicKey(seed=0x42^32) and pasted here; verified
+  // structurally by the first test in the block.
+  const OPERATOR_SEED = new Uint8Array(32).fill(0x42)
+  // ed25519 pubkey for the OPERATOR_SEED (derived once via beforeAll
+  // and stored in this mutable so synchronous fixture builders can use
+  // it). The 43-char base64url shape is enforced by the SDK.
+  let OPERATOR_KEY = ''
   const ORIGIN = 'directory.test.local/v6'
   const CONTEXT_ID_HEX = anchorContextHexFor(ORIGIN)
   const CURRENT_ROOT_HEX = 'aa'.repeat(32)
   const PRIOR_ROOT_HEX = 'bb'.repeat(32)
-  const CURRENT_HASH = 'sha256:' + 'cc'.repeat(32)
-  const PRIOR_HASH = 'sha256:' + 'dd'.repeat(32)
+  // Both anchor record_hash values are computed in beforeAll once we
+  // have signed bodies (sha256(canonical(body))).
+  let CURRENT_HASH = ''
+  let PRIOR_HASH = ''
   const T_NOW = 1_700_000_000_000
   const PRIOR_TS = T_NOW - 60_000  // 1 minute before
   const CURRENT_TS = T_NOW - 30_000 // 30s before
+  let CURRENT_BODY: ReturnType<typeof makeBodyShape>
+  let PRIOR_BODY: ReturnType<typeof makeBodyShape>
+
+  function makeBodyShape(rootHex: string, epoch: number, ts: number) {
+    return {
+      chain_root: 'sha256:' + '0'.repeat(64),
+      content_id: 'sha256:' + '0'.repeat(64),
+      context_id: CONTEXT_ID_HEX,
+      creator_key: OPERATOR_KEY,
+      event_type: 'https://atrib.dev/v1/types/directory_anchor',
+      metadata: { directory_origin: ORIGIN, directory_root: rootHex, directory_epoch: epoch },
+      spec_version: 'atrib/1.0',
+      timestamp: ts,
+      signature: '',
+    }
+  }
+
+  beforeAll(async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { default: canonicalize } = await import('canonicalize')
+    const ed = await import('@noble/ed25519')
+    const { sha256 } = await import('@noble/hashes/sha2.js')
+    const pubBytes = await ed.getPublicKeyAsync(OPERATOR_SEED)
+    OPERATOR_KEY = Buffer.from(pubBytes).toString('base64url').replace(/=+$/, '')
+
+    async function signBody(b: ReturnType<typeof makeBodyShape>) {
+      const { signature: _, ...unsigned } = { ...b, creator_key: OPERATOR_KEY }
+      const canonical = canonicalize(unsigned)!
+      const sigBytes = await ed.signAsync(new TextEncoder().encode(canonical), OPERATOR_SEED)
+      const sig = Buffer.from(sigBytes).toString('base64url').replace(/=+$/, '')
+      const signed = { ...b, creator_key: OPERATOR_KEY, signature: sig }
+      const fullCanonical = canonicalize(signed)!
+      const hashHex = Buffer.from(sha256(new TextEncoder().encode(fullCanonical))).toString('hex')
+      return { signed, hashHex: 'sha256:' + hashHex }
+    }
+
+    const cur = await signBody(makeBodyShape(CURRENT_ROOT_HEX, 2, CURRENT_TS))
+    CURRENT_BODY = cur.signed
+    CURRENT_HASH = cur.hashHex
+
+    const pri = await signBody(makeBodyShape(PRIOR_ROOT_HEX, 1, PRIOR_TS))
+    PRIOR_BODY = pri.signed
+    PRIOR_HASH = pri.hashHex
+  })
 
   const minimalClaim: IdentityClaim = {
     creator_key: KEY,
@@ -342,28 +397,14 @@ describe('steps 1 + 2 + 5 — anchor arc', () => {
       .join('')
   }
 
-  function makeAnchorBody(rootHex: string, epoch: number): {
-    chain_root: string
-    content_id: string
-    context_id: string
-    creator_key: string
-    event_type: string
-    metadata: { directory_origin: string; directory_root: string; directory_epoch: number }
-    spec_version: string
-    timestamp: number
-    signature: string
-  } {
-    return {
-      chain_root: 'sha256:' + '0'.repeat(64),
-      content_id: 'sha256:' + '0'.repeat(64),
-      context_id: CONTEXT_ID_HEX,
-      creator_key: OPERATOR_KEY,
-      event_type: 'https://atrib.dev/v1/types/directory_anchor',
-      metadata: { directory_origin: ORIGIN, directory_root: rootHex, directory_epoch: epoch },
-      spec_version: 'atrib/1.0',
-      timestamp: epoch === 1 ? PRIOR_TS : CURRENT_TS,
-      signature: 'sig-' + epoch,
-    }
+  /**
+   * Returns the pre-signed body matching the requested epoch. Test
+   * callers either request epoch=2 (current) or epoch=1 (prior).
+   * Constructed in beforeAll with a real ed25519 signature against
+   * OPERATOR_SEED so step 4 verification accepts it.
+   */
+  function makeAnchorBody(_rootHex: string, epoch: number) {
+    return epoch === 1 ? PRIOR_BODY : CURRENT_BODY
   }
 
   /**
@@ -469,7 +510,9 @@ describe('steps 1 + 2 + 5 — anchor arc', () => {
       logEndpoint: 'http://log.test/v1',
       directoryOperatorKey: OPERATOR_KEY,
       fetchAnchorBody: async () => {
-        const body = makeAnchorBody(CURRENT_ROOT_HEX, 2)
+        // Clone before mutating — makeAnchorBody returns the shared
+        // pre-signed CURRENT_BODY; mutating in place poisoned later tests.
+        const body = { ...makeAnchorBody(CURRENT_ROOT_HEX, 2) }
         body.creator_key = 'wrong'.repeat(8) + 'xxx'
         return body
       },
@@ -590,5 +633,198 @@ describe('steps 1 + 2 + 5 — anchor arc', () => {
     expect(result.anchor).not.toBeNull()
     expect(result.append_only_consistent).toBeNull()
     expect(called).toBe(false)
+  })
+
+  // =========================================================================
+  // Step 4 — directory checkpoint signature verification.
+  //
+  // Hard-failure path per spec §6.3 step 4: an invalidly-signed body is
+  // a fault, not a soft signal. The verifier rejects the entire result.
+  // =========================================================================
+
+  it('step 4: directory_checkpoint_signature_valid=true and warning removed when signature verifies', async () => {
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetch(),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+    })
+    expect(result.directory_checkpoint_signature_valid).toBe(true)
+    expect(result.warnings.some((w) => w.startsWith('step-4-checkpoint-signature-not-checked'))).toBe(false)
+  })
+
+  it('step 4: hard-rejection when body signature is tampered', async () => {
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetch(),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: async () => {
+        const body = { ...makeAnchorBody(CURRENT_ROOT_HEX, 2) }
+        // Flip a bit in the signature.
+        const sigBytes = Buffer.from(body.signature + '='.repeat((4 - body.signature.length % 4) % 4), 'base64url')
+        sigBytes[0] = (sigBytes[0]! ^ 0x01) & 0xff
+        body.signature = sigBytes.toString('base64url').replace(/=+$/, '')
+        return body
+      },
+      recordTimestamp: T_NOW,
+    })
+    expect(result.identity_resolution_method).toBe('rejected')
+    expect(result.identity_resolved).toBeNull()
+    expect(result.directory_checkpoint_signature_valid).toBe(false)
+    expect(result.warnings.some((w) => w.includes('step-4-signature-invalid'))).toBe(true)
+  })
+
+  it('step 4: hard-rejection when directoryOperatorKey is the wrong pubkey', async () => {
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetch(),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: 'A'.repeat(43), // valid format but wrong key
+      fetchAnchorBody: async () => {
+        // Body still has correct creator_key (OPERATOR_KEY) so step 1
+        // cross-check passes; signature was made by OPERATOR_KEY, not 'A'.
+        return makeAnchorBody(CURRENT_ROOT_HEX, 2)
+      },
+      recordTimestamp: T_NOW,
+    })
+    // Step 1's log-entry filter (event_type=directory_anchor +
+    // creator_key === opts.directoryOperatorKey) rejects every entry
+    // because the log entries' creator_key is the real OPERATOR_KEY
+    // and directoryOperatorKey is the wrong key. Step 1 returns
+    // anchor-not-found; step 4 never runs because no anchorBody was
+    // discovered. This catches operator-key mismatches earliest in
+    // the pipeline (before any body fetch).
+    expect(result.anchor).toBeNull()
+    expect(result.directory_checkpoint_signature_valid).toBeNull()
+    expect(result.warnings.some((w) => w.includes('step-1-anchor-not-found'))).toBe(true)
+  })
+
+  it('step 4: not invoked when no anchor body is discovered (no log endpoint)', async () => {
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetch(),
+      // logEndpoint omitted → step 1 doesn't run → step 4 doesn't run
+    })
+    expect(result.anchor).toBeNull()
+    expect(result.directory_checkpoint_signature_valid).toBeNull()
+    expect(result.warnings.some((w) => w.startsWith('step-4-checkpoint-signature-not-checked'))).toBe(true)
+  })
+
+  // =========================================================================
+  // Step 3 — witness coverage on the log's checkpoint.
+  //
+  // Soft signal: counts cosignature lines whose origin differs from the
+  // log's own. Always emits step-3-witness-not-cryptographically-verified
+  // alongside the count to make the lack of crypto-verify explicit.
+  // =========================================================================
+
+  /** Build a C2SP signed-note checkpoint body+signature(s) for tests. */
+  function makeCheckpointText(logOrigin: string, witnessOrigins: string[]): string {
+    const body = `${logOrigin}\n5\n${'A'.repeat(44)}\n`
+    const lines: string[] = [`— ${logOrigin} ${'B'.repeat(92)}`]
+    for (const w of witnessOrigins) {
+      lines.push(`— ${w} ${'C'.repeat(92)}`)
+    }
+    return body + '\n' + lines.join('\n') + '\n'
+  }
+
+  function makeAnchorFetchWithCheckpoint(checkpointText: string): typeof fetch {
+    const base = makeAnchorFetch()
+    return (async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.endsWith('/checkpoint')) {
+        return new Response(checkpointText, {
+          status: 200, headers: { 'content-type': 'text/plain' },
+        })
+      }
+      return base(input as RequestInfo)
+    }) as typeof fetch
+  }
+
+  it('step 3: anchor_witness_count=0 when checkpoint has only the log signer (no witnesses)', async () => {
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithCheckpoint(makeCheckpointText('log.test/v1', [])),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+    })
+    expect(result.anchor?.anchor_witness_count).toBe(0)
+    expect(result.warnings.some((w) => w.startsWith('step-3-witness-not-cryptographically-verified'))).toBe(true)
+    expect(result.warnings.some((w) => w.startsWith('step-3-witness-not-checked'))).toBe(false)
+  })
+
+  it('step 3: anchor_witness_count counts cosignatures from non-log origins', async () => {
+    const cp = makeCheckpointText('log.test/v1', ['witness-a/v1', 'witness-b/v1'])
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithCheckpoint(cp),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+    })
+    expect(result.anchor?.anchor_witness_count).toBe(2)
+  })
+
+  it('step 3: surfaces step-3-witness-insufficient warning when below threshold', async () => {
+    const cp = makeCheckpointText('log.test/v1', ['witness-a/v1'])
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithCheckpoint(cp),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+      witnessThreshold: 3, // 1 actual; 3 required
+    })
+    expect(result.anchor?.anchor_witness_count).toBe(1)
+    expect(result.warnings.some((w) => w.includes('step-3-witness-insufficient'))).toBe(true)
+    expect(result.warnings.some((w) => w.includes('actual=1, required=3'))).toBe(true)
+  })
+
+  it('step 3: no insufficient warning when at-or-above threshold', async () => {
+    const cp = makeCheckpointText('log.test/v1', ['witness-a/v1', 'witness-b/v1', 'witness-c/v1'])
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithCheckpoint(cp),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+      witnessThreshold: 3,
+    })
+    expect(result.anchor?.anchor_witness_count).toBe(3)
+    expect(result.warnings.some((w) => w.includes('step-3-witness-insufficient'))).toBe(false)
+  })
+
+  it('step 3: anchor_witness_count stays null when checkpoint fetch fails', async () => {
+    // Fetch impl that returns 503 for /checkpoint
+    const fetchImpl = ((input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.endsWith('/checkpoint')) {
+        return new Response('', { status: 503 })
+      }
+      return makeAnchorFetch()(input as RequestInfo)
+    }) as typeof fetch
+
+    const result = await resolveIdentity(KEY, {
+      fetchImpl,
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+    })
+    expect(result.anchor?.anchor_witness_count).toBeNull()
+    expect(result.warnings.some((w) => w.includes('step-3-checkpoint-fetch-error'))).toBe(true)
+  })
+
+  it('step 3: not invoked when step 1 didn\'t surface an anchor', async () => {
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetch({ logEntries: [] }),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+    })
+    expect(result.anchor).toBeNull()
+    // The up-front step-3 warning is preserved since the actual check didn't run
+    expect(result.warnings.some((w) => w.startsWith('step-3-witness-not-checked'))).toBe(true)
   })
 })
