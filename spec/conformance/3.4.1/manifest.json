@@ -1,0 +1,29 @@
+{
+  "spec_section": "3.4.1.1",
+  "spec_title": "Intra-session edge compaction",
+  "decision_link": "§3.4.1.1 (default-on for /v1/graph/<context_id>)",
+  "generated_at": 1767225600000,
+  "generator": "packages/log-dev/scripts/generate-conformance-3.4.1.ts",
+  "cases": [
+    {
+      "file": "cases/fully-chained-skip-redundant.json",
+      "name": "fully-chained-skip-redundant"
+    },
+    {
+      "file": "cases/fully-unchained-adjacent-only.json",
+      "name": "fully-unchained-adjacent-only"
+    },
+    {
+      "file": "cases/mixed-chains-cross-component-only.json",
+      "name": "mixed-chains-cross-component-only"
+    },
+    {
+      "file": "cases/equal-timestamp-parallel-cross-component.json",
+      "name": "equal-timestamp-parallel-cross-component"
+    }
+  ],
+  "keys": {
+    "alice_pubkey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc"
+  },
+  "note": "Compaction is information-preserving with respect to the partial order over the resolved record set; ?compact=false MUST also accept the same input records and produce the full all-pairs derivation per §3.2.4 steps 2-3. The corpus only enumerates the compacted edge set; full-derivation conformance is covered by spec/conformance/3.2.4-style cross-implementation tests."
+}

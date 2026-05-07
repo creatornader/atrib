@@ -1,0 +1,92 @@
+{
+  "name": "fully-chained-skip-redundant",
+  "description": "Five records forming one CHAIN_PRECEDES connected component within a single context_id. Compact derivation per §3.4.1.1 emits the four CHAIN_PRECEDES links and zero SESSION_PRECEDES / SESSION_PARALLEL edges (the chain already encodes the temporal order; additional intra-component edges would carry no information).",
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:aa00000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225600000,
+        "signature": "0QmI2Qc6r8CmoUKtqbFYHxSDPDRAJAoeSKyhQMczwO8Trk27jrhF8s6iVfXc8eq2FBuctIt10KHylZFkymZVDQ"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:aa01000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:cd3f3260373711237298255b885eb26b2d173cf69883b15ae7405cae78b543db",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225600001,
+        "signature": "_aGLic-lcyUzwVVA1ow-2mbofce1ss2f9xZpac7rTLWVKGz4_mBllwCa9Mpv7yEHO9WolgEhBvAbQK2VdmMWDw"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:aa02000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:4e1c7a15de3e9c3682c528a017a1ccd33e8485e2fab50fa8a6afb16d01461ab6",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225600002,
+        "signature": "ac_PmUegGulANirgfX-nS13Rkp_x1q0v7L_3TtjuKSaBEqF8TPfuNJBHOHGWsXp7SfeY_pqNqyzxf9Gz-1TVBA"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:aa03000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:aaf26ccea7f2757d0f88452fb0ca9257de16798d4e1179636ccc2dc3d9dc4a80",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225600003,
+        "signature": "Oi7v9z1Ub7LmRa2DnGhNAn6bzYXsZYLvKIKmKmlOAd6a3CkNoKykH8KQKS3p0Zjja6nB5DUBLPBZkRTDdEezBA"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:aa04000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:3be96d737f03d428b49251fde1956b6dac076c2aa1af7b855ca317236b1796a1",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225600004,
+        "signature": "enO-EIMuj3Yi9tqLw8weBlF9mSEAUIBXssWkE2EzQ5Lgl9xVzTYmvCh5Zo-6Wip4FDCzvbiixEaUX22_R7CBDQ"
+      }
+    ],
+    "compact": true
+  },
+  "expected": {
+    "edges": [
+      {
+        "type": "CHAIN_PRECEDES",
+        "source_record_index": 0,
+        "target_record_index": 1,
+        "directed": true
+      },
+      {
+        "type": "CHAIN_PRECEDES",
+        "source_record_index": 1,
+        "target_record_index": 2,
+        "directed": true
+      },
+      {
+        "type": "CHAIN_PRECEDES",
+        "source_record_index": 2,
+        "target_record_index": 3,
+        "directed": true
+      },
+      {
+        "type": "CHAIN_PRECEDES",
+        "source_record_index": 3,
+        "target_record_index": 4,
+        "directed": true
+      }
+    ],
+    "edge_count_by_type": {
+      "CHAIN_PRECEDES": 4,
+      "SESSION_PRECEDES": 0,
+      "SESSION_PARALLEL": 0
+    }
+  }
+}
