@@ -225,6 +225,183 @@ describe('directory-node HTTP', () => {
   })
 })
 
+// ===========================================================================
+// /v6/anchors (point lookup + recent list) — body retrieval for §6.3 step 1.
+//
+// Boots a stub log-node sink so emitDirectoryAnchor produces a record (which
+// the directory persists in its in-memory anchor history) regardless of log
+// submission outcome. The stub responds 200 to /v1/entries; the bodies in the
+// stub responses are irrelevant to these tests because we read the anchors
+// from directory-node, not from the log.
+// ===========================================================================
+
+describe('directory-node /v6/anchors body retrieval', () => {
+  let handle: DirectoryServerHandle
+  let stubLog: { url: string; close: () => Promise<void>; submissions: unknown[] }
+
+  beforeEach(async () => {
+    const { createServer } = await import('node:http')
+    const submissions: unknown[] = []
+    const server = createServer((req, res) => {
+      if (req.method === 'POST' && req.url === '/v1/entries') {
+        let body = ''
+        req.setEncoding('utf-8')
+        req.on('data', (c) => { body += c })
+        req.on('end', () => {
+          try { submissions.push(JSON.parse(body)) } catch { /* tolerate non-json in stub */ }
+          res.statusCode = 200
+          res.setHeader('content-type', 'application/json')
+          res.end(JSON.stringify({ tree_size: submissions.length }))
+        })
+        return
+      }
+      res.statusCode = 404
+      res.end()
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', () => resolve()))
+    const addr = server.address()
+    const port = typeof addr === 'object' && addr ? addr.port : 0
+    stubLog = {
+      url: `http://127.0.0.1:${port}`,
+      close: () => new Promise(resolve => server.close(() => resolve())),
+      submissions,
+    }
+
+    handle = await bindDirectoryServer(0, '127.0.0.1', {
+      operatorPrivateKey: randomBytes(32),
+      origin: 'directory.test.local/v6',
+      logEndpoint: `${stubLog.url}/v1`,
+    })
+  })
+
+  afterEach(async () => {
+    await handle.close()
+    await stubLog.close()
+  })
+
+  async function publishOne(displayName: string): Promise<{ recordHash: string; epoch: number }> {
+    const { privateKey, publicKey } = await genKeypair()
+    const claim = await signClaim({
+      creator_key: publicKey,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: { display_name: displayName },
+    }, privateKey)
+    const r = await fetch(`${handle.url}/v6/publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(claim),
+    })
+    expect(r.status).toBe(200)
+    const body = await r.json() as { epoch: number; anchor: { record_hash: string; submitted: boolean } }
+    expect(body.anchor.submitted).toBe(true)
+    expect(body.anchor.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    return { recordHash: body.anchor.record_hash, epoch: body.epoch }
+  }
+
+  it('GET /v6/anchors/<hash> returns the signed body for a known anchor', async () => {
+    const { recordHash, epoch } = await publishOne('alice')
+
+    const r = await fetch(`${handle.url}/v6/anchors/${recordHash}`)
+    expect(r.status).toBe(200)
+    const body = await r.json() as {
+      record_hash: string
+      record: {
+        event_type: string
+        creator_key: string
+        metadata: { directory_origin: string; directory_root: string; directory_epoch: number }
+        signature: string
+      }
+    }
+    expect(body.record_hash).toBe(recordHash)
+    expect(body.record.event_type).toBe('https://atrib.dev/v1/types/directory_anchor')
+    expect(body.record.metadata.directory_epoch).toBe(epoch)
+    expect(body.record.metadata.directory_origin).toBe('directory.test.local/v6')
+    expect(body.record.metadata.directory_root.length).toBeGreaterThan(0)
+    expect(body.record.signature.length).toBeGreaterThan(0)
+  })
+
+  it('GET /v6/anchors/<hash> returns 404 for an unknown hash', async () => {
+    await publishOne('alice') // ensure history is non-empty
+    const fakeHash = 'sha256:' + 'f'.repeat(64)
+    const r = await fetch(`${handle.url}/v6/anchors/${fakeHash}`)
+    expect(r.status).toBe(404)
+  })
+
+  it('GET /v6/anchors/<hash> returns 404 for a malformed hash (regex miss)', async () => {
+    const r = await fetch(`${handle.url}/v6/anchors/notahash`)
+    // Falls through to the default 404 because the regex doesn't match;
+    // documented behavior: malformed inputs are not honored.
+    expect(r.status).toBe(404)
+  })
+
+  it('GET /v6/anchors returns recent anchors newest-first', async () => {
+    const a = await publishOne('alice')
+    const b = await publishOne('bob')
+    const c = await publishOne('carol')
+
+    const r = await fetch(`${handle.url}/v6/anchors`)
+    expect(r.status).toBe(200)
+    const body = await r.json() as {
+      total_anchors: number
+      since: number | null
+      limit: number
+      count: number
+      anchors: { metadata: { directory_epoch: number } }[]
+    }
+    expect(body.total_anchors).toBe(3)
+    expect(body.since).toBeNull()
+    expect(body.limit).toBe(100)
+    expect(body.count).toBe(3)
+    // Newest-first order: carol (epoch 3) → bob (2) → alice (1)
+    expect(body.anchors.map(x => x.metadata.directory_epoch)).toEqual([c.epoch, b.epoch, a.epoch])
+  })
+
+  it('GET /v6/anchors honors `since` cutoff', async () => {
+    await publishOne('alice')
+    const middle = Date.now()
+    // Brief wait so the next anchor's timestamp is strictly greater than `middle`.
+    await new Promise(resolve => setTimeout(resolve, 5))
+    await publishOne('bob')
+
+    const r = await fetch(`${handle.url}/v6/anchors?since=${middle}`)
+    expect(r.status).toBe(200)
+    const body = await r.json() as { count: number; anchors: { metadata: { directory_epoch: number } }[] }
+    expect(body.count).toBe(1)
+    expect(body.anchors[0]?.metadata.directory_epoch).toBe(2) // only bob
+  })
+
+  it('GET /v6/anchors honors `limit` cap', async () => {
+    await publishOne('a')
+    await publishOne('b')
+    await publishOne('c')
+
+    const r = await fetch(`${handle.url}/v6/anchors?limit=2`)
+    const body = await r.json() as { count: number; anchors: unknown[] }
+    expect(body.count).toBe(2)
+    expect(body.anchors.length).toBe(2)
+  })
+
+  it('GET /v6/anchors rejects negative `since`', async () => {
+    const r = await fetch(`${handle.url}/v6/anchors?since=-1`)
+    expect(r.status).toBe(400)
+  })
+
+  it('GET /v6/anchors rejects zero `limit`', async () => {
+    const r = await fetch(`${handle.url}/v6/anchors?limit=0`)
+    expect(r.status).toBe(400)
+  })
+
+  it('GET /v6/anchors returns empty list before any publishes', async () => {
+    const r = await fetch(`${handle.url}/v6/anchors`)
+    expect(r.status).toBe(200)
+    const body = await r.json() as { total_anchors: number; count: number; anchors: unknown[] }
+    expect(body.total_anchors).toBe(0)
+    expect(body.count).toBe(0)
+    expect(body.anchors).toEqual([])
+  })
+})
+
 describe('directory-node persistence', () => {
   it('replays persisted claims after restart and produces identical lookups', async () => {
     const { mkdtemp, rm } = await import('node:fs/promises')
