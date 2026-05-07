@@ -391,7 +391,7 @@ Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hash
 ## Further reading
 
 - [atrib-spec.md](atrib-spec.md) — the complete protocol specification ([§0](atrib-spec.md#0-foundations)-[§7](atrib-spec.md#7-harness-integration-patterns))
-- [DECISIONS.md](DECISIONS.md) — architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D053](DECISIONS.md#d053-inclusion-proof-aggregation-flagged-for-follow-up); [D037](DECISIONS.md#d037-hsmkms-operator-profile)-[D040](DECISIONS.md#d040-reserved) reserved for upcoming work)
+- [DECISIONS.md](DECISIONS.md) — architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D070](DECISIONS.md#d070-record-body-archive-layer-placeholder-adr); [D053](DECISIONS.md#d053-inclusion-proof-aggregation-flagged-for-follow-up) and [D070](DECISIONS.md#d070-record-body-archive-layer-placeholder-adr) are placeholder ADRs awaiting formal write-ups)
 - [packages/agent/README.md](packages/agent/README.md) -- adapter table with quick-start snippets for every framework
 - [spec/conformance/1.2.6/](spec/conformance/1.2.6/) -- conformance corpus for the `provenance_token` field ([D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) / [§1.2.6](atrib-spec.md#126-provenance_token))
 - [spec/conformance/2.6.1/](spec/conformance/2.6.1/) -- shared conformance corpus for the submission API
