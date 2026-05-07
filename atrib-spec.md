@@ -1927,6 +1927,9 @@ Contents
   - [3.4.2 GET /v1/graph/{context_id}/nodes](#342-get-v1graphcontext_idnodes)
   - [3.4.3 GET /v1/graph/{context_id}/transaction](#343-get-v1graphcontext_idtransaction)
   - [3.4.4 GET /v1/creators/{creator_key}/sessions](#344-get-v1creatorscreator_keysessions)
+  - [3.4.5 GET /v1/trace/{record_hash}](#345-get-v1tracerecord_hash)
+  - [3.4.6 GET /v1/chain/{record_hash}](#346-get-v1chainrecord_hash)
+  - [3.4.7 GET /v1/creators/{creator_key}/graph](#347-get-v1creatorscreator_keygraph)
 - [3.5 Response Schema](#35-response-schema)
   - [3.5.1 Graph response object](#351-graph-response-object)
   - [3.5.2 Node object](#352-node-object)
@@ -2203,6 +2206,79 @@ GET /v1/creators/ABC.../sessions
   "next_cursor": "eyJhZnRlciI..."  // null if no further results
 }
 ```
+
+#### 3.4.5 GET /v1/trace/{record_hash}
+
+Returns the **provenance trace** of a record: the ancestor subgraph reachable by walking producer-claimed ancestry edges backward from the starting record. Provenance trace walks INFORMED_BY, ANNOTATES, and REVISES edges, all derived from explicit producer-set fields per [§1.2.5](#125-informed_by), [§1.2.7](#127-annotates), and [§1.2.9](#129-revises). PROVENANCE_OF is conceptually walked but truncated `provenance_token` references that cannot be resolved against the response set are surfaced unresolved rather than recursed.
+
+Provenance trace is the producer's claim layer: every edge walked is a record where the producer explicitly named a prior record as informing, annotating, or revising the current one. Provenance trace MUST NOT walk CHAIN_PRECEDES, chain ordering is substrate-derived structure, not a producer claim, and conflating the two layers violates the structure-vs-claims separation that justifies the optional INFORMED_BY field's signed-claim semantics.
+
+```
+GET /v1/trace/4797633fc95a...
+
+// Optional query parameters:
+// depth=<n>                         (default: 5, max: 20)
+// include_annotations=true|false    (default: true; ANNOTATES walk)
+// include_revisions=true|false      (default: true; REVISES walk)
+
+// 200 OK  -> GraphResponse ([§3.5.1](#351-graph-response-object)) restricted to
+//            the ancestor set + the starting record
+// 404     -> no record with this hash
+// 400     -> malformed record_hash (not 64 hex chars)
+```
+
+The response carries the same `nodes` and `edges` shape as [§3.4.1](#341-get-v1graphcontext_id) so consumers can render trace responses with the same rendering pipeline. Truncation flags (`truncated_by_depth`, `truncated_by_count`) signal when the walk exceeded the configured limits; consumers can re-request with a deeper depth to extend the walk.
+
+#### 3.4.6 GET /v1/chain/{record_hash}
+
+Returns the **causal chain** of a record: the ancestor subgraph reachable by walking CHAIN_PRECEDES edges backward from the starting record. Causal chain walks substrate-derived ordering, the chain_root linkage every record carries per [§1.2.3](#123-chain_root-for-genesis-records). The walk terminates at the session's genesis record (where chain_root = SHA-256(context_id) per [§1.2.3](#123-chain_root-for-genesis-records)).
+
+Causal chain is the substrate's structural layer: every edge walked is a record whose chain_root identifies its immediate predecessor in the same context_id. Producers do not declare these edges; the substrate derives them per [§3.2.4](#324-edge-derivation-rules). Causal chain MUST NOT walk INFORMED_BY, ANNOTATES, or REVISES, those are producer claims, not substrate structure, and walking them would conflate the two layers.
+
+```
+GET /v1/chain/4797633fc95a...
+
+// Optional query parameters:
+// depth=<n>                         (default: 5, max: 20)
+
+// 200 OK  -> GraphResponse ([§3.5.1](#351-graph-response-object)) restricted to
+//            the chain_precedes ancestor set + the starting record
+// 404     -> no record with this hash
+// 400     -> malformed record_hash (not 64 hex chars)
+```
+
+The response carries the same `nodes` and `edges` shape as [§3.4.1](#341-get-v1graphcontext_id). The walk produces a linear chain (each non-genesis record has exactly one chain_precedes ancestor), so `truncated_by_count` is unreachable in practice; `truncated_by_depth` is the only truncation mode.
+
+The two operations are complementary, not redundant. [§3.4.5](#345-get-v1tracerecord_hash) answers "what did the producer claim informed this record?" and [§3.4.6](#346-get-v1chainrecord_hash) answers "what did the substrate observe came before this record in the same context_id?" Consumers needing both views compose the responses client-side; the API does not provide a combined endpoint to keep the structure-vs-claims boundary visible at the protocol layer.
+
+#### 3.4.7 GET /v1/creators/{creator_key}/graph
+
+Returns a creator activity-map graph: every record signed by the creator across all `context_id` boundaries within an optional time window, composed into a single graph response. Cross-session edges are derived per [§3.2.4](#324-edge-derivation-rules) (CROSS_SESSION when records share a `session_token`, INFORMED_BY across context_ids, PROVENANCE_OF anchoring sessions to upstream genesis records).
+
+This endpoint differs from [§3.4.4](#344-get-v1creatorscreator_keysessions): the sessions endpoint returns a paginated list of sessions per creator, while this endpoint composes the underlying records into a connected graph that visualizes how a creator's activity flows across sessions.
+
+```
+GET /v1/creators/ABC.../graph
+
+// Optional query parameters:
+// since=<ISO8601 | unix_ms>         (default: unbounded; oldest in window)
+// until=<ISO8601 | unix_ms>         (default: now; newest in window)
+// limit=<n>                         (default: 200, max: 1000; max records)
+// event_type=<short_label | uri>    (filter by node event_type)
+
+// 200 OK  -> CreatorGraphResponse:
+//            {
+//              "creator_key":   "ABC...",
+//              "window":        { "since": ..., "until": ..., "limit": 200 },
+//              "record_count":  47,
+//              "truncated":     false,            // true if limit hit
+//              "graph":         GraphResponse     // [§3.5.1](#351-graph-response-object)
+//            }
+// 404     -> creator has no records in store
+// 400     -> invalid time window or malformed creator_key
+```
+
+The response carries the same `nodes` and `edges` shape as [§3.4.1](#341-get-v1graphcontext_id) inside the `graph` field, so consumers can render creator activity-maps with the same rendering pipeline used for session graphs. The outer envelope (`creator_key`, `window`, `record_count`, `truncated`) provides the metadata callers need to parameterize follow-up queries (paginate by adjusting `since`/`until`, refine by `event_type`).
 
 ---
 

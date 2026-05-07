@@ -3040,6 +3040,50 @@ The structural problem was duplication of chain-resolution logic across producer
 
 ---
 
+## D068: trace operations split, provenance trace vs causal chain
+
+**Date:** 2026-05-07
+**Context:** graph-node ships a `/v1/trace/{record_hash}` endpoint that walks producer-claimed ancestry edges (INFORMED_BY, ANNOTATES, REVISES). The endpoint exists in the implementation but was not codified in the spec, [§3.4](atrib-spec.md#34-query-api) defined `/v1/graph/...` and `/v1/creators/...` endpoints but said nothing about trace operations. Reviewing the dashboard's trace view surfaced a separate gap: most production records (~71%, the union of `tool_call` records and `observation` records emitted without `informed_by`) show the message "no informed_by, annotates, or revises edges into the resolved set," because those producer-set fields are typically absent. CHAIN_PRECEDES edges, derived structurally from `chain_root` per [§3.2.4](atrib-spec.md#324-edge-derivation-rules), connect those records into their session chain, but the trace endpoint did not walk them.
+
+**Decision.** Codify two distinct trace operations in [§3.4](atrib-spec.md#34-query-api), separated along the structure-vs-claims axis that [§3.1](atrib-spec.md#31-design-principles-and-rationale) establishes for the graph layer overall.
+
+**Provenance trace** at [§3.4.5](atrib-spec.md#345-get-v1tracerecord_hash) walks INFORMED_BY, ANNOTATES, REVISES, every edge is derived from a field the producer explicitly set, naming a specific prior record as informing, annotating, or revising the current one. Provenance trace MUST NOT walk CHAIN_PRECEDES.
+
+**Causal chain** at [§3.4.6](atrib-spec.md#346-get-v1chainrecord_hash) walks CHAIN_PRECEDES, the substrate-derived ordering edge linking each record to its immediate predecessor in the same `context_id`. Causal chain MUST NOT walk INFORMED_BY, ANNOTATES, or REVISES.
+
+The two endpoints answer different questions: provenance trace answers "what did the producer claim informed this record?" and causal chain answers "what did the substrate observe came before this record in the same context_id?" Consumers needing both views compose the responses client-side.
+
+**Rationale.** The structure-vs-claims separation is the same boundary [§1.2.5](atrib-spec.md#125-informed_by) establishes for `informed_by` (optional, signed claim) and [§1.2.6](atrib-spec.md#126-provenance_token) for `provenance_token` (signed claim, genesis-only). The graph layer ([§3.1](atrib-spec.md#31-design-principles-and-rationale) "the graph records structure, not causality") declares the same boundary at the data-model level. A trace operation that walked both layers would conflate "what the agent said happened" with "what the substrate observed happened", the exact distinction this protocol's invariants exist to preserve.
+
+**Alternatives considered.**
+
+1. *Extend `/v1/trace/{record_hash}` with a `?include_chain_precedes=true` query parameter.* Rejected. The query parameter would let one endpoint return both layers, but the response shape would mix them in the same `edges[]` array. Consumers reading the response could not tell which edges were producer-claimed and which were substrate-derived without inspecting `edge.type`. The two-endpoint shape exposes the boundary at the protocol layer.
+
+2. *Single `/v1/trace/{record_hash}` walking all four ancestor edge types.* Rejected for the same reason as alternative 1, with the additional cost that backward-compatibility for existing consumers expecting only producer-claimed edges would require a versioning shim.
+
+3. *Leave the gap in place.* Rejected. The dashboard's "no ancestors" message, repeated across the majority of production records, made it look as though the substrate had failed to capture causal ordering. The substrate had captured it (in `chain_root`); the trace endpoint had simply not surfaced it. Codifying both operations resolves the apparent gap without inventing new edge types or modifying producer behavior.
+
+**Consequences.**
+
+- [§3.4](atrib-spec.md#34-query-api) gains [§3.4.5](atrib-spec.md#345-get-v1tracerecord_hash) and [§3.4.6](atrib-spec.md#346-get-v1chainrecord_hash) as new normative subsections. The existing `/v1/trace/{record_hash}` implementation in `services/graph-node/src/server.ts` is the reference for [§3.4.5](atrib-spec.md#345-get-v1tracerecord_hash); its current behavior aligns with the new specification, so the implementation requires no functional change beyond the documentation header and endpoint comment.
+- `services/graph-node/src/server.ts` adds a new `/v1/chain/{record_hash}` handler walking CHAIN_PRECEDES backward from the starting record. The walk terminates at the session's genesis record (where `chain_root = SHA-256(context_id)`).
+- `apps/dashboard/index.html` trace view renders both ancestor sections: "Provenance ancestors" (existing) and "Chain predecessors" (new), labeled so users can distinguish producer-claimed ancestry from substrate-derived ordering. The previous "no ancestors" message becomes "no provenance ancestors; see chain predecessors below" when one section is empty and the other has results.
+- No producer behavior change. `@atrib/mcp` does NOT auto-populate `informed_by` for tool_call records; that would invent a causal claim the producer has no evidence for, violating the structure-vs-claims invariant. Producers continue to set `informed_by` only when they have evidence (e.g., the cognitive extractor reading transcripts).
+- Future: a deeper extension of cognitive-primitive producers to set `informed_by` on observations based on transcript evidence is tracked as a follow-up under the existing P008 referent-matched emission pattern.
+
+**Cross-references.**
+- [§3.4.5](atrib-spec.md#345-get-v1tracerecord_hash) (provenance trace operation)
+- [§3.4.6](atrib-spec.md#346-get-v1chainrecord_hash) (causal chain operation)
+- [§3.1](atrib-spec.md#31-design-principles-and-rationale) (the structure-vs-claims principle this decision applies)
+- [§3.2.3](atrib-spec.md#323-edge-types) (the edge-type taxonomy the two operations partition)
+- [§3.2.4](atrib-spec.md#324-edge-derivation-rules) (CHAIN_PRECEDES derivation)
+- [§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records) (chain_root contract feeding causal chain)
+- [§1.2.5](atrib-spec.md#125-informed_by) (informed_by feeding provenance trace)
+- [§1.2.7](atrib-spec.md#127-annotates) (annotates feeding provenance trace)
+- [§1.2.9](atrib-spec.md#129-revises) (revises feeding provenance trace)
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
