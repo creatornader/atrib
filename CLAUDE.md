@@ -21,7 +21,7 @@ atrib/
   README.md                    # Public-facing project description (customer entry point)
   CLAUDE.md                    # THIS FILE: hub doc, conventions, invariants
   atrib-spec.md                # The single source of truth for the protocol
-  DECISIONS.md                 # Architectural decision log (D001-D063; D040 reserved for the @atrib/recall harness ADR). A "Pending decisions" section at the end (forward-looking pattern) tracks forward-looking decisions awaiting action (P002, P004, P005, P006).
+  DECISIONS.md                 # Architectural decision log (D001-D070; D070 is a placeholder for the Record Body Archive Layer per §2.12). A "Pending decisions" section at the end (forward-looking pattern) tracks forward-looking decisions awaiting action (P002, P004, P005, P008).
   ARCHITECTURE.md              # Technical architecture overview: trust model, protocol layers, design decisions
   PRIOR-ART.md                 # Prior art & standards map: every spec/protocol atrib builds on, organized by layer
   METRICS.md                   # Tiered metrics framework + lifecycle states + quarterly evolution review for the dogfood experiment
