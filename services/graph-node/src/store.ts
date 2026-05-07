@@ -44,6 +44,20 @@ export interface SessionSummary {
   last_seen: number
   node_count: number
   has_transaction: boolean
+  /**
+   * Per-event-type record counts within the context_id. Surfaces session
+   * composition (e.g., 568 tool_call, 469 annotation, 196 observation, 51
+   * revision). Zero-count types are omitted to keep responses compact.
+   * Mirrors log-node's by-creator helper which has carried this since
+   * inception. Specified as OPTIONAL in §3.4.4; implementations MAY include.
+   */
+  count_by_event_type: Record<string, number>
+  /**
+   * True when the context_id contains a genesis record (chain_root =
+   * SHA-256(context_id) per §1.2.3). Distinguishes "session that started
+   * here" from "single record that landed alone with no chain root."
+   */
+  has_genesis: boolean
 }
 
 export function createRecordStore(): RecordStore {
@@ -108,13 +122,34 @@ export function createRecordStore(): RecordStore {
         const records = byContext.get(contextId) ?? []
         if (records.length === 0) continue
 
-        const timestamps = records.map((r) => r.timestamp)
+        // Single pass: collect timestamps, event-type breakdown, transaction
+        // flag, and genesis presence. Math.min/max(...timestamps) avoided
+        // here because spread on a 1000+ record array hits the v8 spread
+        // arg limit on some hosts (call stack overflow).
+        const expectedGenesis = `sha256:${hexEncode(sha256(new TextEncoder().encode(contextId)))}`
+        let firstSeen = records[0]!.timestamp
+        let lastSeen = records[0]!.timestamp
+        let hasTransaction = false
+        let hasGenesis = false
+        const countByEventType: Record<string, number> = {}
+        for (const r of records) {
+          if (r.timestamp < firstSeen) firstSeen = r.timestamp
+          if (r.timestamp > lastSeen) lastSeen = r.timestamp
+          const label = r.event_type.startsWith('https://atrib.dev/v1/types/')
+            ? r.event_type.slice('https://atrib.dev/v1/types/'.length)
+            : r.event_type
+          countByEventType[label] = (countByEventType[label] ?? 0) + 1
+          if (label === 'transaction') hasTransaction = true
+          if (r.chain_root === expectedGenesis) hasGenesis = true
+        }
         summaries.push({
           context_id: contextId,
-          first_seen: Math.min(...timestamps),
-          last_seen: Math.max(...timestamps),
+          first_seen: firstSeen,
+          last_seen: lastSeen,
           node_count: records.length + (gapsByContext.get(contextId)?.length ?? 0),
-          has_transaction: records.some((r) => r.event_type === 'transaction'),
+          has_transaction: hasTransaction,
+          count_by_event_type: countByEventType,
+          has_genesis: hasGenesis,
         })
       }
 

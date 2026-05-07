@@ -1536,12 +1536,32 @@ async function renderIdentity(creatorKey) {
   const lookup = await resolveIdentity(creatorKey)
   stack.append(el('section', { class: 'panel flush' },
     el('div', { class: 'panel-head' },
-      el('h2', {}, 'directory claim'),
+      el('h2', {},
+        'directory claim ',
+        el('span', { class: 'meta', style: 'font-weight: normal; font-size: 12px;' },
+          '· spec ', el('a', { href: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#62-directory-operations', target: '_blank', rel: 'noopener', style: 'color: var(--text-2);' }, '§6.2'),
+        ),
+      ),
       el('span', { class: 'meta' },
         lookup._error ? '' :
-        lookup.found ? `version ${lookup.version} · epoch ${lookup.epoch}` : 'no claim'),
+        lookup.found
+          ? el('span', {},
+              el('span', { title: 'Per-key counter. The Nth time this creator_key has published to the directory.' }, `version ${lookup.version}`),
+              ' · ',
+              el('span', { title: 'Global directory counter. The Nth publish operation across ALL keys system-wide.' }, `epoch ${lookup.epoch}`),
+            )
+          : 'no claim'),
     ),
-    el('div', { class: 'panel-body' }, renderClaimBody(lookup)),
+    el('div', { class: 'panel-body' },
+      lookup.found ? el('p', { class: 'meta', style: 'margin: 0 0 14px; color: var(--text-3); font-size: 13px;' },
+        'A directory claim binds a creator_key to a name. Optional per spec [§6.1]; the cryptography works either way. ',
+        el('strong', {}, 'version'),
+        ' increments each time this key publishes (e.g., updating display_name → v2). ',
+        el('strong', {}, 'epoch'),
+        ' is the directory\'s global counter — every publish across all keys advances it.',
+      ) : null,
+      renderClaimBody(lookup),
+    ),
   ))
 
   const history = await fetchMaybe(`${ep.directory}/history/${creatorKey}`)
@@ -1551,7 +1571,10 @@ async function renderIdentity(creatorKey) {
         el('h2', {}, 'claim history'),
         el('span', { class: 'meta' }, `${history.versions.length} version${history.versions.length === 1 ? '' : 's'}`),
       ),
-      el('div', { class: 'panel-body', style: 'padding: 0;' },
+      el('div', { class: 'panel-body' },
+        el('p', { class: 'meta', style: 'margin: 0 0 14px; color: var(--text-3); font-size: 13px;' },
+          'Each row is a prior version of this key\'s claim. v2 superseded v1; both remain audit-visible. AKD proofs let any verifier confirm a historical version was the directory\'s current state at its epoch.',
+        ),
         el('table', { class: 'feed' },
           el('thead', {}, el('tr', {},
             el('th', {}, 'version'), el('th', {}, 'epoch'), el('th', {}, 'claim_type'),
@@ -1586,25 +1609,41 @@ async function renderIdentity(creatorKey) {
           `${sessions.sessions.length} session${sessions.sessions.length === 1 ? '' : 's'}` +
           (sessionsFromLog ? ' · from log (graph not ingested)' : '')),
       ),
-      el('div', { class: 'panel-body', style: 'padding: 0;' },
+      el('div', { class: 'panel-body' },
+        el('p', { class: 'meta', style: 'margin: 0 0 14px; color: var(--text-3); font-size: 13px;' },
+          'A ',
+          el('strong', {}, 'session'),
+          ' is one logical workflow — a trace, a task, a conversation. Records sharing a ',
+          el('code', {}, 'context_id'),
+          ' are related operations within that workflow per spec ',
+          el('a', { href: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#151-context_id-the-session-anchor', target: '_blank', rel: 'noopener', style: 'color: var(--text-2);' }, '§1.5.1'),
+          '. New workflow → new session. Long-running collaborative work can produce sessions of thousands of records; one-off scripts produce single-record sessions.',
+        ),
         el('table', { class: 'feed' },
           el('thead', {}, el('tr', {},
             el('th', {}, 'context_id'),
-            el('th', {}, 'nodes'),
-            el('th', {}, 'transaction'),
+            el('th', {}, 'records'),
+            el('th', {}, 'composition'),
+            el('th', { class: 'shrink' }, 'duration'),
             el('th', { class: 'shrink' }, 'first seen'),
           )),
           el('tbody', {},
             ...sessions.sessions.map(s => el('tr', {},
-              el('td', {}, el('a', { href: `#/session/${s.context_id}` },
-                el('span', { class: 'mono' }, shorten(s.context_id, 10, 6)),
-              )),
-              el('td', {}, String(s.node_count ?? '—')),
               el('td', {},
-                s.has_transaction
-                  ? el('span', { class: 'badge ok' }, '✓')
-                  : el('span', { class: 'badge dim' }, '—'),
+                el('a', { href: `#/session/${s.context_id}` },
+                  el('span', { class: 'mono' }, shorten(s.context_id, 10, 6)),
+                ),
+                ' ',
+                s.has_genesis
+                  ? el('span', { class: 'badge dim', style: 'font-size: 10px; margin-left: 4px;', title: 'Session contains a genesis record (chain_root = SHA-256(context_id))' }, 'G')
+                  : null,
               ),
+              el('td', {}, String(s.node_count ?? '—')),
+              el('td', {}, renderCompositionChips(s)),
+              el('td', { class: 'shrink' },
+                s.first_seen && s.last_seen
+                  ? renderDuration(s.first_seen, s.last_seen)
+                  : '—'),
               el('td', { class: 'shrink', ...(s.first_seen ? { 'data-ts': String(s.first_seen) } : {}) },
                 s.first_seen ? timeAgo(s.first_seen) : '—'),
             )),
@@ -1618,8 +1657,25 @@ async function renderIdentity(creatorKey) {
   // every session this creator participated in into a single graph response.
   // Surfaces cross-session edges (CROSS_SESSION via shared session_token,
   // PROVENANCE_OF anchoring sessions) that the per-session DAG cannot show.
-  // Renders only when the API returns a non-empty graph; falls back silently
-  // when graph-node hasn't ingested yet.
+  //
+  // Time slider exposes the spec §3.4.7 since/until query parameters as a
+  // simple "last N hours/days/weeks" select. Without the slider, the activity
+  // map is unscoped and quickly becomes unreadable on long-running creators
+  // (1000+ records all rendered at once produces a dense blob; selecting
+  // "last 24h" trims to recent activity, restoring useful structure).
+  const TIME_WINDOWS = [
+    { label: 'last 6h', sinceMs: 6 * 60 * 60 * 1000 },
+    { label: 'last 24h', sinceMs: 24 * 60 * 60 * 1000 },
+    { label: 'last 7d', sinceMs: 7 * 24 * 60 * 60 * 1000 },
+    { label: 'last 30d', sinceMs: 30 * 24 * 60 * 60 * 1000 },
+    { label: 'all time', sinceMs: null },
+  ]
+  let currentWindowIdx = 1 // default: last 24h
+  const windowSelect = el('select', {
+    style: 'background: var(--surface-2); color: var(--text-1); border: 1px solid var(--bd-2); padding: 4px 8px; border-radius: 3px; font-family: var(--font-mono); font-size: 12px;',
+    onchange: (ev) => { currentWindowIdx = parseInt(ev.target.value, 10); refetchActivity() },
+  }, ...TIME_WINDOWS.map((w, i) => el('option', { value: String(i), ...(i === currentWindowIdx ? { selected: '' } : {}) }, w.label)))
+
   const activityGraphContainer = el('div', { class: 'trace-graph', id: 'identity-activity-graph' })
   const activityNodeLegend = el('div', { class: 'legend-row', id: 'identity-activity-node-legend' })
   const activityEdgeLegend = el('div', { class: 'legend-row', id: 'identity-activity-edge-legend' })
@@ -1629,10 +1685,32 @@ async function renderIdentity(creatorKey) {
     el('span', { class: 'legend-label' }, 'edges'),
     activityEdgeLegend,
   )
+  const activityMetaSlot = el('span', { class: 'meta', id: 'identity-activity-meta' }, 'cross-session edges only · loading…')
   const activitySection = el('section', { class: 'panel flush' },
     el('div', { class: 'panel-head' },
       el('h2', {}, 'activity map'),
-      el('span', { class: 'meta' }, 'all signed records across sessions · cross-session edges visible'),
+      activityMetaSlot,
+    ),
+    el('div', { class: 'panel-body', style: 'padding: 0 0 12px;' },
+      el('p', { class: 'meta', style: 'margin: 0 12px 14px; color: var(--text-3); font-size: 13px;' },
+        'Cross-session relationships across this creator\'s records — ',
+        el('code', {}, 'CROSS_SESSION'),
+        ' (shared ', el('code', {}, 'session_token'), '), ',
+        el('code', {}, 'INFORMED_BY'),
+        ' / ', el('code', {}, 'ANNOTATES'), ' / ', el('code', {}, 'REVISES'),
+        ' across context boundaries, plus ',
+        el('code', {}, 'CHAIN_PRECEDES'),
+        '. Intra-session sequencing (',
+        el('code', {}, 'SESSION_PRECEDES'),
+        ' / ', el('code', {}, 'SESSION_PARALLEL'),
+        ') is excluded by default per spec §3.4.7 to keep the cross-session signal visible. Each per-session DAG is at ',
+        el('code', {}, '#/session/<context_id>'),
+        '.',
+      ),
+      el('div', { style: 'margin: 0 12px 12px; display: flex; align-items: center; gap: 8px;' },
+        el('label', { style: 'color: var(--text-2); font-size: 12px;' }, 'time window'),
+        windowSelect,
+      ),
     ),
     activityGraphContainer,
     activityLegend,
@@ -1642,20 +1720,41 @@ async function renderIdentity(creatorKey) {
 
   clearAndRender(root)
 
-  // Async fetch + render. Capture the route generation so the renderer
-  // bails if the user navigates mid-fetch.
   const myGen = currentRouteGeneration()
-  ;(async () => {
-    const activity = await fetchMaybe(`${ep.graph}/creators/${encodeURIComponent(creatorKey)}/graph`)
+
+  async function refetchActivity() {
     if (!routeGenerationStillCurrent(myGen)) return
-    if (activity._error || !activity.graph || !activity.graph.nodes || activity.graph.nodes.length === 0) {
-      activitySection.remove()
+    const w = TIME_WINDOWS[currentWindowIdx]
+    activityGraphContainer.replaceChildren(el('div', { class: 'loading' }, 'loading activity map…'))
+    activityMetaSlot.textContent = 'cross-session edges only · loading…'
+    const params = new URLSearchParams()
+    if (w.sinceMs !== null) params.set('since', String(Date.now() - w.sinceMs))
+    params.set('limit', '1000')
+    const url = `${ep.graph}/creators/${encodeURIComponent(creatorKey)}/graph?${params.toString()}`
+    const activity = await fetchMaybe(url)
+    if (!routeGenerationStillCurrent(myGen)) return
+    if (activity._error) {
+      activityGraphContainer.replaceChildren(el('div', { class: 'err-banner' },
+        el('span', { class: 'label' }, 'activity-map error:'), ' ', activity._error,
+      ))
+      activityMetaSlot.textContent = 'cross-session edges only · error'
+      return
+    }
+    if (!activity.graph || !activity.graph.nodes || activity.graph.nodes.length === 0) {
+      activityGraphContainer.replaceChildren(el('div', { class: 'empty' },
+        `No records in this window (${w.label}). Try a longer window.`,
+      ))
+      activityMetaSlot.textContent = `cross-session edges only · ${w.label} · 0 records`
       return
     }
     const graph = activity.graph
+    activityMetaSlot.textContent = `cross-session edges only · ${w.label} · ${activity.record_count} record${activity.record_count === 1 ? '' : 's'}, ${graph.edges.length} edge${graph.edges.length === 1 ? '' : 's'}` + (activity.truncated ? ' · truncated' : '')
+
     if (graph.edges.length === 0) {
       activityGraphContainer.replaceChildren(el('div', { class: 'empty' },
-        'No cross-record edges in this creator\'s activity. Each session\'s records render independently in the per-session view.',
+        'No cross-session edges in this window. Each record\'s session DAG is at ',
+        el('code', {}, '#/session/<context_id>'),
+        '.',
       ))
       populateGraphLegend(activityNodeLegend, activityEdgeLegend, graph)
       return
@@ -1670,13 +1769,66 @@ async function renderIdentity(creatorKey) {
     }
     if (!routeGenerationStillCurrent(myGen)) return
     activityGraphContainer.replaceChildren()
-    const { sigma } = renderSigmaDAG(activityGraphContainer, graph, {})
     if (_activeSigmaInstance) {
       try { _activeSigmaInstance.kill() } catch {}
+      _activeSigmaInstance = null
     }
+    const { sigma } = renderSigmaDAG(activityGraphContainer, graph, {})
     _activeSigmaInstance = sigma
     populateGraphLegend(activityNodeLegend, activityEdgeLegend, graph)
-  })()
+  }
+
+  refetchActivity()
+}
+
+// Render a session's event-type breakdown as inline chips. Replaces the
+// older transaction-only column which showed "—" for every session that
+// didn't close commerce. count_by_event_type comes from graph-node and
+// log-node session-summary endpoints; absent on legacy responses, in which
+// case we fall back to the has_transaction boolean for compatibility.
+function renderCompositionChips(s) {
+  const counts = s.count_by_event_type
+  if (!counts || typeof counts !== 'object') {
+    return s.has_transaction
+      ? el('span', { class: 'badge ok' }, '✓ tx')
+      : el('span', { class: 'meta', style: 'color: var(--text-4);' }, '—')
+  }
+  const ORDER = ['tool_call', 'observation', 'annotation', 'revision', 'transaction', 'directory_anchor', 'extension']
+  const chips = []
+  const keys = Object.keys(counts).sort((a, b) => {
+    const ai = ORDER.indexOf(a), bi = ORDER.indexOf(b)
+    if (ai === -1 && bi === -1) return a.localeCompare(b)
+    if (ai === -1) return 1
+    if (bi === -1) return -1
+    return ai - bi
+  })
+  for (const k of keys) {
+    const n = counts[k]
+    if (!n) continue
+    chips.push(el('span', {
+      class: `chip event-${k}`,
+      style: 'font-size: 11px; padding: 1px 6px; margin-right: 4px;',
+      title: `${n} ${k} record${n === 1 ? '' : 's'}`,
+    }, `${k} ${n}`))
+  }
+  return el('span', { style: 'display: inline-flex; flex-wrap: wrap; gap: 2px;' }, ...chips)
+}
+
+// Format a duration as Nm / Nh / N-days given two unix-ms timestamps.
+// Used in the sessions table to show how long a context_id was active.
+// Single-record sessions return "instant".
+function renderDuration(firstSeenMs, lastSeenMs) {
+  const span = Math.max(0, lastSeenMs - firstSeenMs)
+  if (span < 1000) return el('span', { class: 'meta', style: 'font-size: 12px;' }, 'instant')
+  const sec = span / 1000
+  const min = sec / 60
+  const hr = min / 60
+  const day = hr / 24
+  const txt = day >= 1 ? `${day.toFixed(1)}d`
+            : hr >= 1 ? `${hr.toFixed(1)}h`
+            : min >= 1 ? `${Math.round(min)}m`
+            : `${Math.round(sec)}s`
+  return el('span', { class: 'mono', style: 'font-size: 12px;' }, txt)
 }
 
 function renderClaimBody(lookup) {
