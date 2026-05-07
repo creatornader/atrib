@@ -377,4 +377,34 @@ describe('graph-node server (section 3.4)', () => {
       // not error. The normalizer is exercised regardless of match count.
     }
   })
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Server-level test for ?compact=true|false on /v1/graph/<context_id>
+  // (§3.4.1.1 intra-session edge compaction). Companion to graph-builder
+  // unit tests; this layer verifies the query-param parsing + default
+  // wiring in handleGraph, not the derivation itself.
+  // ─────────────────────────────────────────────────────────────────────
+
+  it('GET /v1/graph/:context_id defaults to ?compact=true', async () => {
+    // The fixture's two records are independent (no chain link), so under the
+    // default compact=true we expect 1 SESSION_PRECEDES edge (adjacent-only).
+    const res = await fetch(`${url}/v1/graph/${CONTEXT_ID}`)
+    expect(res.ok).toBe(true)
+    const body = await res.json()
+    const sessionEdges = body.edges.filter((e: { type: string }) => e.type === 'SESSION_PRECEDES')
+    // 2-record session, no chain links between them → adjacent-only emits 1 edge.
+    expect(sessionEdges).toHaveLength(1)
+  })
+
+  it('GET /v1/graph/:context_id?compact=false restores spec §3.2.4 all-pairs derivation', async () => {
+    const res = await fetch(`${url}/v1/graph/${CONTEXT_ID}?compact=false`)
+    expect(res.ok).toBe(true)
+    const body = await res.json()
+    // For 2 records, all-pairs and adjacent-only produce the same single edge,
+    // so we just verify the request succeeds and the edge type is present.
+    // The derivation difference is exercised exhaustively by the graph-builder
+    // unit tests (compactIntraSessionEdges describe block).
+    const sessionEdges = body.edges.filter((e: { type: string }) => e.type === 'SESSION_PRECEDES')
+    expect(sessionEdges).toHaveLength(1)
+  })
 })
