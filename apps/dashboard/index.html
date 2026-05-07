@@ -1605,8 +1605,8 @@ async function renderIdentity(creatorKey) {
                   ? el('span', { class: 'badge ok' }, '✓')
                   : el('span', { class: 'badge dim' }, '—'),
               ),
-              el('td', { class: 'shrink', ...(s.first_seen_ms ? { 'data-ts': String(s.first_seen_ms) } : {}) },
-                s.first_seen_ms ? timeAgo(s.first_seen_ms) : '—'),
+              el('td', { class: 'shrink', ...(s.first_seen ? { 'data-ts': String(s.first_seen) } : {}) },
+                s.first_seen ? timeAgo(s.first_seen) : '—'),
             )),
           ),
         ),

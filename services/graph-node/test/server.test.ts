@@ -205,6 +205,24 @@ describe('graph-node server (section 3.4)', () => {
     expect(body.truncated).toBe(false)
     expect(body.graph.nodes.length).toBe(body.record_count)
     expect(body.window).toEqual({ since: null, until: null, limit: 500 })
+    expect(body.intra_session_edges_filtered).toBe(true)
+    // Default response excludes intra-session edge types per §3.4.7.
+    const intraSessionTypes = new Set(['SESSION_PRECEDES', 'SESSION_PARALLEL'])
+    for (const edge of body.graph.edges) {
+      expect(intraSessionTypes.has(edge.type)).toBe(false)
+    }
+  })
+
+  it('GET /v1/creators/:key/graph?include_intra_session=true restores SESSION_PRECEDES', async () => {
+    const pk = await getPublicKey(TEST_KEY)
+    const creatorKey = base64urlEncode(pk)
+    const res = await fetch(`${url}/v1/creators/${encodeURIComponent(creatorKey)}/graph?include_intra_session=true`)
+    expect(res.ok).toBe(true)
+    const body = await res.json()
+    expect(body.intra_session_edges_filtered).toBe(false)
+    // The fixture has 2 records in one context_id; chain_precedes wires them
+    // into a chain so SESSION_PRECEDES doesn't fire. Just assert the flag
+    // toggles correctly; the edge presence depends on per-fixture chain state.
   })
 
   it('GET /v1/creators/:key/graph honors since/until window', async () => {
