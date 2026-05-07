@@ -1902,6 +1902,10 @@ function renderClaimBody(lookup) {
 async function renderSession(contextId) {
   setActiveNav(null)
   const ep = endpoints()
+  // Capture route generation: per-view auto-refresh fires route() every
+  // 60s, which would otherwise stomp on this render's late awaits. Bail
+  // when generation drifts.
+  const myGen = currentRouteGeneration()
   const root = el('div')
 
   root.append(viewHeader({
@@ -1921,10 +1925,12 @@ async function renderSession(contextId) {
   // ingested this session. The log is the source of truth; the graph is a
   // derived view that may be unreachable or behind on ingestion.
   let graph = await fetchMaybe(`${ep.graph}/graph/${contextId}`)
+  if (!routeGenerationStillCurrent(myGen)) return
   let usingFallback = false
 
   if (graph._error || !graph.nodes || graph.nodes.length === 0) {
     const logEntries = await fetchMaybe(`${ep.log}/by-context/${contextId}`)
+    if (!routeGenerationStillCurrent(myGen)) return
     if (!logEntries._error && logEntries.entries && logEntries.entries.length > 0) {
       usingFallback = true
       // Adapt log-entry shape into the graph node shape the renderer expects.
@@ -1954,6 +1960,7 @@ async function renderSession(contextId) {
 
   const hasTx = graph.has_transaction || graph.nodes.some(n => n.event_type === 'transaction')
   await resolveIdentities(graph.nodes.map(n => n.creator_key).filter(Boolean))
+  if (!routeGenerationStillCurrent(myGen)) return
 
   root.append(el('div', { class: 'pulse-strip' },
     pulseStat('nodes', String(graph.node_count ?? graph.nodes.length)),
@@ -2131,6 +2138,9 @@ function badgeForState(state) {
 async function renderAction(recordHash) {
   setActiveNav(null)
   const ep = endpoints()
+  // Capture route generation: per-view auto-refresh fires route() every
+  // 60s, which would otherwise stomp on this render's late awaits.
+  const myGen = currentRouteGeneration()
   const root = el('div')
   const hashHex = recordHash.startsWith('sha256:') ? recordHash.slice(7) : recordHash
   const fullHash = recordHash.startsWith('sha256:') ? recordHash : `sha256:${recordHash}`
@@ -2149,6 +2159,7 @@ async function renderAction(recordHash) {
   }))
 
   const entry = await fetchMaybe(`${ep.log}/lookup/${hashHex}`)
+  if (!routeGenerationStillCurrent(myGen)) return
   if (entry._error) {
     root.append(el('section', { class: 'panel' },
       el('div', { class: 'err-banner' },
@@ -3061,6 +3072,7 @@ async function renderTrace(rawHash) {
 async function renderAnchoring() {
   setActiveNav('anchoring')
   const ep = endpoints()
+  const myGen = currentRouteGeneration()
   const root = el('div')
 
   root.append(viewHeader({
@@ -3080,6 +3092,7 @@ async function renderAnchoring() {
     fetchTextMaybe(`${ep.log}/checkpoint`),
     fetchMaybe(`${ep.directory}/anchor`),
   ])
+  if (!routeGenerationStillCurrent(myGen)) return
 
   if (!stats._error) {
     const eb = stats.entries_by_event_type || {}
