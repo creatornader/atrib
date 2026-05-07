@@ -1,0 +1,44 @@
+{
+  "name": "equal-timestamp-parallel-cross-component",
+  "description": "Two unchained-genesis records sharing one context_id and one timestamp. Compact derivation emits one SESSION_PARALLEL edge (equal timestamp, different chain components) and zero SESSION_PRECEDES edges (no records at distinct timestamps to bridge). The shape is deterministic regardless of any hash-tiebreak order applied to the time-sort.",
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:aa00000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225605000,
+        "signature": "MBs9TzgCvpyItMlcmLlnMos8A0p_8Q0EaRl5JTIpWhjE15JAa51uYD-ORNPKFG0K0vCOHulL8tf1r5ZN1c2rCg"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:bb00000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225605000,
+        "signature": "wtNqPjYegXEPtO2IpUpVRv3P0Lx1lVLfxPHfp1GPn1x6TPumlSz4NLsPiDBHFZecl6ec8dKr5INLnQRzV3cLCQ"
+      }
+    ],
+    "compact": true
+  },
+  "expected": {
+    "edges": [
+      {
+        "type": "SESSION_PARALLEL",
+        "source_record_index": 0,
+        "target_record_index": 1,
+        "directed": false
+      }
+    ],
+    "edge_count_by_type": {
+      "CHAIN_PRECEDES": 0,
+      "SESSION_PRECEDES": 0,
+      "SESSION_PARALLEL": 1
+    }
+  }
+}

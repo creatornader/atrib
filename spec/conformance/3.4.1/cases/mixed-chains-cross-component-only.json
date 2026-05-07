@@ -1,0 +1,108 @@
+{
+  "name": "mixed-chains-cross-component-only",
+  "description": "Two parallel chains in the same context_id (3 records each). Compact derivation emits the four CHAIN_PRECEDES links plus exactly one SESSION_PRECEDES at the cross-component boundary (chain A tail → chain B head), since those are the only consecutive-in-time pairs sitting in different chain-connected-components. All other consecutive pairs are within a single chain component and skipped.",
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:a000000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225601000,
+        "signature": "in_1IwOcBpZ5-o_yKVoC3k7ukCkIYajsYpA_pDT8kyDqLQl-93DM7zkPqNq9t1lhGhz10V5WWqfj9k5WeL0nCA"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:a001000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:7874f2814ed8b182f09d8b4d857035e9d07165eebe22ddb39ee50435ec2c8667",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225601001,
+        "signature": "Zm1x1CTsD0AFsnBFFBu3q3uZFacKrsBVWPX6T7uudl6Ruhtent6VEAecmRml7RkJ4VGy9GAyekckgwfj4CPJBA"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:a002000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:d0348241530354e24d3741db0271f42d22b3ea926ae454d6617ba3177431ea69",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225601002,
+        "signature": "JCpgKZ8IQYGRn6w6npqkSM9iZD-0_EX0HHp3mbZ5q_vy0TCxJ3lL9gUNl90UIKh4_5RuikVbrnJGzeExBL0SCQ"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:b000000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225602000,
+        "signature": "GlaaEtPZzZIw1kanajokWJHEO9XzbyUK7pu3RXNvASXQ75RIelhWIJdIiyGFu1qdxHTnW0EIBT3O6yi6WkmTDw"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:b001000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:0a937d0dc5688f54ab1cc656836b19342e06b281ef07475fecdd9ece75a17615",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225602001,
+        "signature": "Wkhf6ewz8L6IeKKYOKXrIWP1YXx7L1hzwxK5TmPdYxDgRivXMV3PyG_4Vb4Q6oZtjOR8U1ZG1-mmM-5m7WoTDw"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:b002000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:63460c366c52c86560ad7c95f171b74be3bdb81203736b9af41d3ec4a23e9bdb",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225602002,
+        "signature": "oYUB8-H1i-xcDBVDJK1snqUiGOVBPvIS_kF3IJC-w6MnqSx2lZf54IpnuTwlF4xE_0oLMfY28KwrGJwwTQjuDA"
+      }
+    ],
+    "compact": true
+  },
+  "expected": {
+    "edges": [
+      {
+        "type": "CHAIN_PRECEDES",
+        "source_record_index": 0,
+        "target_record_index": 1,
+        "directed": true
+      },
+      {
+        "type": "CHAIN_PRECEDES",
+        "source_record_index": 1,
+        "target_record_index": 2,
+        "directed": true
+      },
+      {
+        "type": "CHAIN_PRECEDES",
+        "source_record_index": 3,
+        "target_record_index": 4,
+        "directed": true
+      },
+      {
+        "type": "CHAIN_PRECEDES",
+        "source_record_index": 4,
+        "target_record_index": 5,
+        "directed": true
+      },
+      {
+        "type": "SESSION_PRECEDES",
+        "source_record_index": 2,
+        "target_record_index": 3,
+        "directed": true
+      }
+    ],
+    "edge_count_by_type": {
+      "CHAIN_PRECEDES": 4,
+      "SESSION_PRECEDES": 1,
+      "SESSION_PARALLEL": 0
+    }
+  }
+}
