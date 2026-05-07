@@ -296,4 +296,147 @@ describe('@atrib/directory smoke', () => {
     })
     expect(ok).toBe(false)
   })
+
+  // ===========================================================================
+  // Adversarial / input-validation cases.
+  //
+  // These cover the throw paths in the SDK's verifier wrappers (input length
+  // validation) and a cross-directory proof-reuse scenario that the
+  // conformance corpus doesn't capture. The crypto-correctness adversarial
+  // cases (tampered root, wrong VRF, wrong label, wrong epoch) live in
+  // conformance-6.3.test.ts since they replay portable JSON fixtures.
+  // ===========================================================================
+
+  it('verifyLookupProof throws on wrong-length rootHash', async () => {
+    const { privateKey, publicKey } = await genKeypairAsync()
+    const dir = await AtribDirectory.create(privateKey)
+    await dir.publishAndSign({
+      creator_key: publicKey,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: {},
+    })
+    const looked = await dir.lookup(publicKey)
+    const vrfPublicKey = await directoryVrfPublicKey()
+
+    expect(() =>
+      verifyLookupProof({
+        vrfPublicKey,
+        rootHash: new Uint8Array(31), // wrong length
+        currentEpoch: 1,
+        label: publicKey,
+        proof: looked.proof,
+      }),
+    ).toThrow(/rootHash must be 32 bytes/)
+  })
+
+  it('verifyLookupProof throws on wrong-length vrfPublicKey', async () => {
+    const { privateKey, publicKey } = await genKeypairAsync()
+    const dir = await AtribDirectory.create(privateKey)
+    await dir.publishAndSign({
+      creator_key: publicKey,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: {},
+    })
+    const looked = await dir.lookup(publicKey)
+    const snap = await dir.currentSnapshot()
+
+    expect(() =>
+      verifyLookupProof({
+        vrfPublicKey: new Uint8Array(16), // wrong length
+        rootHash: hexToBytes(snap.root_hash),
+        currentEpoch: snap.epoch,
+        label: publicKey,
+        proof: looked.proof,
+      }),
+    ).toThrow(/vrfPublicKey must be 32 bytes/)
+  })
+
+  it('verifyAuditProof throws on empty rootHashes', async () => {
+    await expect(
+      verifyAuditProof({
+        rootHashes: [],
+        proof: new Uint8Array([1, 2, 3]),
+      }),
+    ).rejects.toThrow(/rootHashes must be non-empty/)
+  })
+
+  it('verifyAuditProof throws on wrong-length rootHash entry', async () => {
+    await expect(
+      verifyAuditProof({
+        rootHashes: [new Uint8Array(32), new Uint8Array(31)], // index 1 is wrong
+        proof: new Uint8Array([1, 2, 3]),
+      }),
+    ).rejects.toThrow(/rootHashes\[1\] must be 32 bytes/)
+  })
+
+  it('verifyLookupProof rejects a proof from a different directory instance', async () => {
+    // Two independent directories, both publish the same key. Each generates
+    // its own proof against its own VRF state. Verifying directory A's proof
+    // against directory B's root must fail, proofs do not cross directories.
+    const { privateKey, publicKey } = await genKeypairAsync()
+
+    const dirA = await AtribDirectory.create(privateKey)
+    await dirA.publishAndSign({
+      creator_key: publicKey,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: { display_name: 'A' },
+    })
+    const proofFromA = (await dirA.lookup(publicKey)).proof
+
+    const dirB = await AtribDirectory.create(privateKey)
+    // Salt directory B with an extra publish so its root diverges from A's.
+    await dirB.publishAndSign({
+      creator_key: (await genKeypairAsync()).publicKey,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: {},
+    })
+    await dirB.publishAndSign({
+      creator_key: publicKey,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: { display_name: 'B' },
+    })
+    const snapB = await dirB.currentSnapshot()
+    const vrfPublicKey = await directoryVrfPublicKey()
+
+    const ok = verifyLookupProof({
+      vrfPublicKey,
+      rootHash: hexToBytes(snapB.root_hash),
+      currentEpoch: snapB.epoch,
+      label: publicKey,
+      proof: proofFromA,
+    })
+    expect(ok).toBe(false)
+  })
+
+  it('verifyLookupProof rejects malformed proof bytes (truncation)', async () => {
+    const { privateKey, publicKey } = await genKeypairAsync()
+    const dir = await AtribDirectory.create(privateKey)
+    await dir.publishAndSign({
+      creator_key: publicKey,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: {},
+    })
+    const looked = await dir.lookup(publicKey)
+    const snap = await dir.currentSnapshot()
+    const vrfPublicKey = await directoryVrfPublicKey()
+
+    // Truncate the bincode proof to half its length. The bridge surfaces
+    // bincode failures as a thrown error (per the deserialize map_err).
+    const truncated = looked.proof.slice(0, Math.floor(looked.proof.length / 2))
+    expect(() =>
+      verifyLookupProof({
+        vrfPublicKey,
+        rootHash: hexToBytes(snap.root_hash),
+        currentEpoch: snap.epoch,
+        label: publicKey,
+        proof: truncated,
+      }),
+    ).toThrow(/deserialize lookup proof/)
+  })
 })

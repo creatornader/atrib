@@ -393,6 +393,227 @@ async fn verify_append_only_hash_wasm_safe<TC: Configuration>(
     Ok(())
 }
 
+// =============================================================================
+// Tests, drift-detection between our inlined audit_verify chain and the
+// upstream akd 0.12 prover side.
+// =============================================================================
+//
+// These tests run via `cargo test` (native, not WASM). They drive AKD's
+// prover side to generate proofs, then feed those proofs into our WASM-safe
+// verifier path. If the upstream akd crate updates the proof shape,
+// internal hash recomputation, or the AzksParallelismConfig contract,
+// these tests catch the drift before our WASM build silently mis-verifies.
+//
+// Coverage: round-trip accept paths (lookup, audit), adversarial paths
+// (tampered roots, wrong VRF, wrong epoch, wrong label, malformed proof
+// bytes, wrong hash count), and one multi-epoch chain.
+//
+// JsValue handling note: our wasm-bindgen `verify_lookup_proof` / `verify_audit_proof`
+// public functions return `Result<bool, JsValue>`. JsValue construction
+// works on native targets but is awkward in tests. So tests call the
+// inner crypto path directly: `akd::client::lookup_verify` for the
+// lookup case (which our wasm-bindgen wrapper just delegates to with
+// no extra logic) and `audit_verify_wasm_safe` for the audit case.
+// The wasm-bindgen serialization layer is exercised by JS smoke tests.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use akd::client::lookup_verify;
+    use akd::storage::manager::StorageManager;
+    use akd::storage::memory::AsyncInMemoryDatabase;
+    use akd::{AkdLabel, AkdValue, Directory};
+
+    /// Build a fresh in-memory directory + capture roots after each publish
+    /// for round-trip tests. Returns (directory, vrf_public_key_bytes).
+    async fn fresh_dir() -> (Directory<Cfg, AsyncInMemoryDatabase, HardCodedAkdVRF>, Vec<u8>) {
+        let db = AsyncInMemoryDatabase::new();
+        let manager = StorageManager::new_no_cache(db);
+        let vrf = HardCodedAkdVRF {};
+        let vrf_pk = vrf.get_vrf_public_key().await.expect("vrf pk").as_bytes().to_vec();
+        let dir = Directory::<Cfg, _, _>::new(manager, vrf, AzksParallelismConfig::disabled())
+            .await
+            .expect("directory init");
+        (dir, vrf_pk)
+    }
+
+    #[tokio::test]
+    async fn lookup_verify_accepts_fresh_proof() {
+        let (dir, vrf_pk) = fresh_dir().await;
+        dir.publish(vec![(AkdLabel::from("alice"), AkdValue::from("v1"))])
+            .await
+            .expect("publish");
+        let (proof, root) = dir.lookup(AkdLabel::from("alice")).await.expect("lookup");
+        let epoch = dir.get_epoch_hash().await.expect("epoch").epoch();
+
+        // Cast root.hash() into the [u8; 32] Digest we expose from the bridge.
+        let result = lookup_verify::<Cfg>(&vrf_pk, root.hash(), epoch, AkdLabel::from("alice"), proof);
+        assert!(result.is_ok(), "lookup_verify should accept fresh proof");
+    }
+
+    #[tokio::test]
+    async fn lookup_verify_rejects_tampered_root() {
+        let (dir, vrf_pk) = fresh_dir().await;
+        dir.publish(vec![(AkdLabel::from("alice"), AkdValue::from("v1"))])
+            .await
+            .expect("publish");
+        let (proof, root) = dir.lookup(AkdLabel::from("alice")).await.expect("lookup");
+        let epoch = dir.get_epoch_hash().await.expect("epoch").epoch();
+
+        let mut tampered = root.hash();
+        tampered[0] ^= 0x01;
+        let result = lookup_verify::<Cfg>(&vrf_pk, tampered, epoch, AkdLabel::from("alice"), proof);
+        assert!(result.is_err(), "lookup_verify should reject tampered root");
+    }
+
+    #[tokio::test]
+    async fn lookup_verify_rejects_wrong_vrf_pubkey() {
+        let (dir, _vrf_pk) = fresh_dir().await;
+        dir.publish(vec![(AkdLabel::from("alice"), AkdValue::from("v1"))])
+            .await
+            .expect("publish");
+        let (proof, root) = dir.lookup(AkdLabel::from("alice")).await.expect("lookup");
+        let epoch = dir.get_epoch_hash().await.expect("epoch").epoch();
+
+        // Random 32 bytes; not the VRF pubkey.
+        let wrong_vrf = vec![0xAA; 32];
+        let result = lookup_verify::<Cfg>(&wrong_vrf, root.hash(), epoch, AkdLabel::from("alice"), proof);
+        assert!(result.is_err(), "lookup_verify should reject wrong VRF pubkey");
+    }
+
+    #[tokio::test]
+    async fn lookup_verify_rejects_wrong_label() {
+        let (dir, vrf_pk) = fresh_dir().await;
+        dir.publish(vec![(AkdLabel::from("alice"), AkdValue::from("v1"))])
+            .await
+            .expect("publish");
+        let (proof, root) = dir.lookup(AkdLabel::from("alice")).await.expect("lookup");
+        let epoch = dir.get_epoch_hash().await.expect("epoch").epoch();
+
+        let result = lookup_verify::<Cfg>(&vrf_pk, root.hash(), epoch, AkdLabel::from("bob"), proof);
+        assert!(result.is_err(), "lookup_verify should reject wrong label");
+    }
+
+    #[tokio::test]
+    async fn lookup_verify_rejects_proof_version_above_epoch() {
+        let (dir, vrf_pk) = fresh_dir().await;
+        dir.publish(vec![(AkdLabel::from("alice"), AkdValue::from("v1"))])
+            .await
+            .expect("publish");
+        let (proof, root) = dir.lookup(AkdLabel::from("alice")).await.expect("lookup");
+        // Pass a current_epoch BELOW the proof's version; akd's lookup_verify
+        // rejects when proof.version > current_epoch.
+        let result = lookup_verify::<Cfg>(&vrf_pk, root.hash(), 0, AkdLabel::from("alice"), proof);
+        assert!(result.is_err(), "lookup_verify should reject epoch < proof.version");
+    }
+
+    #[tokio::test]
+    async fn audit_verify_accepts_two_epoch_chain() {
+        let (dir, _) = fresh_dir().await;
+        dir.publish(vec![(AkdLabel::from("alice"), AkdValue::from("v1"))])
+            .await
+            .expect("publish 1");
+        let root_1 = dir.get_epoch_hash().await.expect("epoch 1").1;
+        dir.publish(vec![(AkdLabel::from("bob"), AkdValue::from("v1"))])
+            .await
+            .expect("publish 2");
+        let root_2 = dir.get_epoch_hash().await.expect("epoch 2").1;
+
+        let proof = dir.audit(1, 2).await.expect("audit proof");
+        let result = audit_verify_wasm_safe::<Cfg>(vec![root_1, root_2], proof).await;
+        assert!(result.is_ok(), "audit_verify should accept clean chain: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn audit_verify_accepts_four_epoch_chain() {
+        let (dir, _) = fresh_dir().await;
+        let mut hashes: Vec<Digest> = Vec::new();
+        for i in 1..=4 {
+            let label = format!("user{i}");
+            dir.publish(vec![(AkdLabel::from(label.as_str()), AkdValue::from("v1"))])
+                .await
+                .expect("publish");
+            hashes.push(dir.get_epoch_hash().await.expect("epoch").1);
+        }
+
+        let proof = dir.audit(1, 4).await.expect("audit proof");
+        let result = audit_verify_wasm_safe::<Cfg>(hashes, proof).await;
+        assert!(result.is_ok(), "audit_verify should accept 4-epoch chain: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn audit_verify_rejects_tampered_start_hash() {
+        let (dir, _) = fresh_dir().await;
+        dir.publish(vec![(AkdLabel::from("a"), AkdValue::from("v1"))])
+            .await
+            .expect("publish 1");
+        let mut root_1 = dir.get_epoch_hash().await.expect("epoch 1").1;
+        dir.publish(vec![(AkdLabel::from("b"), AkdValue::from("v1"))])
+            .await
+            .expect("publish 2");
+        let root_2 = dir.get_epoch_hash().await.expect("epoch 2").1;
+
+        root_1[0] ^= 0x01;
+        let proof = dir.audit(1, 2).await.expect("audit proof");
+        let result = audit_verify_wasm_safe::<Cfg>(vec![root_1, root_2], proof).await;
+        assert!(result.is_err(), "audit_verify should reject tampered start hash");
+    }
+
+    #[tokio::test]
+    async fn audit_verify_rejects_tampered_end_hash() {
+        let (dir, _) = fresh_dir().await;
+        dir.publish(vec![(AkdLabel::from("a"), AkdValue::from("v1"))])
+            .await
+            .expect("publish 1");
+        let root_1 = dir.get_epoch_hash().await.expect("epoch 1").1;
+        dir.publish(vec![(AkdLabel::from("b"), AkdValue::from("v1"))])
+            .await
+            .expect("publish 2");
+        let mut root_2 = dir.get_epoch_hash().await.expect("epoch 2").1;
+        root_2[0] ^= 0x01;
+
+        let proof = dir.audit(1, 2).await.expect("audit proof");
+        let result = audit_verify_wasm_safe::<Cfg>(vec![root_1, root_2], proof).await;
+        assert!(result.is_err(), "audit_verify should reject tampered end hash");
+    }
+
+    #[tokio::test]
+    async fn audit_verify_rejects_tampered_intermediate_hash_in_long_chain() {
+        let (dir, _) = fresh_dir().await;
+        let mut hashes: Vec<Digest> = Vec::new();
+        for i in 1..=4 {
+            let label = format!("user{i}");
+            dir.publish(vec![(AkdLabel::from(label.as_str()), AkdValue::from("v1"))])
+                .await
+                .expect("publish");
+            hashes.push(dir.get_epoch_hash().await.expect("epoch").1);
+        }
+        // Flip a bit on the middle hash.
+        hashes[2][0] ^= 0x01;
+
+        let proof = dir.audit(1, 4).await.expect("audit proof");
+        let result = audit_verify_wasm_safe::<Cfg>(hashes, proof).await;
+        assert!(result.is_err(), "audit_verify should reject tampered intermediate hash");
+    }
+
+    #[tokio::test]
+    async fn audit_verify_rejects_wrong_hash_count() {
+        let (dir, _) = fresh_dir().await;
+        dir.publish(vec![(AkdLabel::from("a"), AkdValue::from("v1"))])
+            .await
+            .expect("publish 1");
+        let root_1 = dir.get_epoch_hash().await.expect("epoch 1").1;
+        dir.publish(vec![(AkdLabel::from("b"), AkdValue::from("v1"))])
+            .await
+            .expect("publish 2");
+
+        let proof = dir.audit(1, 2).await.expect("audit proof");
+        // Only 1 hash for a 2-epoch chain (need 2). Should error.
+        let result = audit_verify_wasm_safe::<Cfg>(vec![root_1], proof).await;
+        assert!(result.is_err(), "audit_verify should reject epoch/hash count mismatch");
+    }
+}
+
 /// Return the VRF public key for the bridge's `HardCodedAkdVRF`.
 ///
 /// Verifiers need the operator's VRF public key to validate lookup
