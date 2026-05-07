@@ -149,4 +149,157 @@ describe('resolveIdentity', () => {
     expect(result.identity_resolution_method).toBe('rejected')
     expect(result.warnings.some((w) => w.includes('claim-malformed'))).toBe(true)
   })
+
+  // ===========================================================================
+  // Step 7 (AKD lookup proof verification) — wired only when caller supplies
+  // both `verifyLookupProof` callback and `directoryVrfPublicKey`. Tests use
+  // a stub callback so this file stays independent of the WASM bridge.
+  // ===========================================================================
+
+  describe('step 7 — lookup proof verification', () => {
+    const VRF_PUBKEY = new Uint8Array(32).fill(0xAB)
+    const ROOT_HEX = 'cd'.repeat(32)
+    const PROOF_B64U = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+
+    const happyClaim: IdentityClaim = {
+      creator_key: KEY,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: { display_name: 'Alice' },
+      signature: 'sig',
+    }
+
+    function happyFetch(): typeof fetch {
+      return mockFetch({
+        [`/lookup/${KEY}`]: {
+          status: 200,
+          body: { found: true, claim: happyClaim, version: 1, proof: PROOF_B64U },
+        },
+        '/anchor': { status: 200, body: { epoch: 1, root_hash: ROOT_HEX } },
+      })
+    }
+
+    it('populates lookup_proof_valid=true and removes the up-front warning when callback returns true', async () => {
+      const calls: VerifyArgs[] = []
+      const result = await resolveIdentity(KEY, {
+        fetchImpl: happyFetch(),
+        directoryVrfPublicKey: VRF_PUBKEY,
+        verifyLookupProof: (input) => { calls.push(input); return true },
+      })
+      expect(result.lookup_proof_valid).toBe(true)
+      expect(result.identity_resolution_method).toBe('directory_lookup')
+      expect(result.warnings.some((w) => w.startsWith('step-7-akd-proof-not-validated'))).toBe(false)
+      expect(calls).toHaveLength(1)
+      expect(calls[0]?.label).toBe(KEY)
+      expect(calls[0]?.currentEpoch).toBe(1)
+      expect(calls[0]?.rootHash).toEqual(new Uint8Array(32).fill(0xCD))
+      expect(calls[0]?.vrfPublicKey).toBe(VRF_PUBKEY)
+    })
+
+    it('rejects the result with lookup_proof_valid=false when callback returns false (§6.3 step 7 hard failure)', async () => {
+      const result = await resolveIdentity(KEY, {
+        fetchImpl: happyFetch(),
+        directoryVrfPublicKey: VRF_PUBKEY,
+        verifyLookupProof: () => false,
+      })
+      expect(result.identity_resolution_method).toBe('rejected')
+      expect(result.identity_resolved).toBeNull()
+      expect(result.lookup_proof_valid).toBe(false)
+      expect(result.warnings.some((w) => w.includes('step-7-akd-proof-invalid'))).toBe(true)
+    })
+
+    it('keeps the up-front warning and lookup_proof_valid=null when callback throws', async () => {
+      const result = await resolveIdentity(KEY, {
+        fetchImpl: happyFetch(),
+        directoryVrfPublicKey: VRF_PUBKEY,
+        verifyLookupProof: () => { throw new Error('malformed proof') },
+      })
+      expect(result.lookup_proof_valid).toBeNull()
+      expect(result.identity_resolution_method).toBe('directory_lookup')
+      expect(result.warnings.some((w) => w.includes('step-7-verify-threw'))).toBe(true)
+    })
+
+    it('keeps lookup_proof_valid=null when /anchor fetch fails', async () => {
+      const fetchImpl = mockFetch({
+        [`/lookup/${KEY}`]: {
+          status: 200,
+          body: { found: true, claim: happyClaim, version: 1, proof: PROOF_B64U },
+        },
+        '/anchor': { status: 503, body: {} },
+      })
+      const result = await resolveIdentity(KEY, {
+        fetchImpl,
+        directoryVrfPublicKey: VRF_PUBKEY,
+        verifyLookupProof: () => true,
+      })
+      expect(result.lookup_proof_valid).toBeNull()
+      expect(result.identity_resolution_method).toBe('directory_lookup')
+      expect(result.warnings.some((w) => w.includes('step-7-anchor-fetch-error'))).toBe(true)
+    })
+
+    it('keeps lookup_proof_valid=null when /anchor returns malformed body', async () => {
+      const fetchImpl = mockFetch({
+        [`/lookup/${KEY}`]: {
+          status: 200,
+          body: { found: true, claim: happyClaim, version: 1, proof: PROOF_B64U },
+        },
+        '/anchor': { status: 200, body: { epoch: 'not-a-number' } },
+      })
+      const result = await resolveIdentity(KEY, {
+        fetchImpl,
+        directoryVrfPublicKey: VRF_PUBKEY,
+        verifyLookupProof: () => true,
+      })
+      expect(result.lookup_proof_valid).toBeNull()
+      expect(result.warnings.some((w) => w.includes('step-7-anchor-malformed'))).toBe(true)
+    })
+
+    it('keeps lookup_proof_valid=null when proof field is missing from lookup response', async () => {
+      const fetchImpl = mockFetch({
+        [`/lookup/${KEY}`]: {
+          status: 200,
+          body: { found: true, claim: happyClaim, version: 1 }, // no proof
+        },
+        '/anchor': { status: 200, body: { epoch: 1, root_hash: ROOT_HEX } },
+      })
+      let called = false
+      const result = await resolveIdentity(KEY, {
+        fetchImpl,
+        directoryVrfPublicKey: VRF_PUBKEY,
+        verifyLookupProof: () => { called = true; return true },
+      })
+      expect(result.lookup_proof_valid).toBeNull()
+      expect(called).toBe(false) // step 7 short-circuited before the callback
+      expect(result.warnings.some((w) => w.includes('step-7-proof-missing'))).toBe(true)
+    })
+
+    it('does not invoke step 7 when verifyLookupProof callback is omitted', async () => {
+      const result = await resolveIdentity(KEY, {
+        fetchImpl: happyFetch(),
+        directoryVrfPublicKey: VRF_PUBKEY,
+        // verifyLookupProof intentionally omitted
+      })
+      expect(result.lookup_proof_valid).toBeNull()
+      expect(result.warnings.some((w) => w.startsWith('step-7-akd-proof-not-validated'))).toBe(true)
+    })
+
+    it('does not invoke step 7 when directoryVrfPublicKey is omitted', async () => {
+      let called = false
+      const result = await resolveIdentity(KEY, {
+        fetchImpl: happyFetch(),
+        verifyLookupProof: () => { called = true; return true },
+      })
+      expect(called).toBe(false)
+      expect(result.lookup_proof_valid).toBeNull()
+      expect(result.warnings.some((w) => w.startsWith('step-7-akd-proof-not-validated'))).toBe(true)
+    })
+  })
 })
+
+interface VerifyArgs {
+  vrfPublicKey: Uint8Array
+  rootHash: Uint8Array
+  currentEpoch: number
+  label: string
+  proof: Uint8Array
+}

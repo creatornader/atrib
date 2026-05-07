@@ -116,6 +116,9 @@ importers:
       '@atrib/agent':
         specifier: workspace:*
         version: link:../agent
+      '@atrib/directory':
+        specifier: workspace:*
+        version: link:../directory
       '@atrib/graph-node':
         specifier: workspace:*
         version: link:../../services/graph-node
