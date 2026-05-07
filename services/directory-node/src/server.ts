@@ -154,6 +154,31 @@ async function handle(
   directory: AtribDirectory,
   config: DirectoryServerConfig,
 ): Promise<void> {
+  // GET /v6, service-info index for the bare base URL. Without this
+  // handler, `curl https://directory.atrib.dev/v6` 404s, which is
+  // confusing because the README and CLI default both write the URL as
+  // if it were a browseable surface. The index returns a small JSON
+  // document listing the available endpoints so visitors get an
+  // affordance for discovery and humans clicking the URL from docs land
+  // on a useful page rather than 404.
+  if (req.method === 'GET' && (url.pathname === '/v6' || url.pathname === '/v6/')) {
+    jsonResponse(res, 200, {
+      service: 'atrib-directory-node',
+      version: 'v6',
+      origin: config.origin,
+      spec: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#6-key-directory',
+      endpoints: {
+        publish: 'POST /v6/publish',
+        lookup: 'GET /v6/lookup/:creator_key',
+        history: 'GET /v6/history/:creator_key',
+        anchor: 'GET /v6/anchor',
+        audit_proof: 'GET /v6/audit-proof?from=N&to=M',
+      },
+      note: 'This base URL has no browseable UI. Use the endpoints listed above. The public explorer at https://explore.atrib.dev/ composes lookups across log, graph, and directory services.',
+    })
+    return
+  }
+
   // POST /v6/publish
   if (req.method === 'POST' && url.pathname === '/v6/publish') {
     let body: unknown

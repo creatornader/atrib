@@ -181,6 +181,27 @@ describe('directory-node HTTP', () => {
     expect(r.status).toBe(404)
   })
 
+  it('GET /v6 returns service-info index', async () => {
+    const r = await fetch(`${handle.url}/v6`)
+    expect(r.status).toBe(200)
+    const body = await r.json()
+    expect(body.service).toBe('atrib-directory-node')
+    expect(body.version).toBe('v6')
+    expect(body.endpoints).toMatchObject({
+      publish: 'POST /v6/publish',
+      lookup: 'GET /v6/lookup/:creator_key',
+      history: 'GET /v6/history/:creator_key',
+      anchor: 'GET /v6/anchor',
+    })
+  })
+
+  it('GET /v6/ (with trailing slash) also returns service-info index', async () => {
+    const r = await fetch(`${handle.url}/v6/`)
+    expect(r.status).toBe(200)
+    const body = await r.json()
+    expect(body.service).toBe('atrib-directory-node')
+  })
+
   // D054: browser-based explorer reads
   it('OPTIONS preflight returns CORS headers (D054)', async () => {
     const r = await fetch(`${handle.url}/v6/audit-proof?from=1&to=2`, { method: 'OPTIONS' })
