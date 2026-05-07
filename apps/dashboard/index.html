@@ -144,10 +144,19 @@
     --edge-revises:          var(--et-revision);       /* tracks revision node */
     --edge-converges:        var(--accent);            /* tracks transaction node */
     /* Tier 2, structural derivations, graded by strength */
-    --edge-chain:            var(--text-2);            /* chain_precedes, primary structural backbone */
-    --edge-session-precedes: var(--text-3);            /* session_precedes, fallback sequencing */
-    --edge-session-parallel: var(--text-4);            /* session_parallel, equal-time peers */
-    --edge-cross-session:    var(--muted);             /* cross_session, across-session derived */
+    /* Structural edges deliberately use desaturated hues from different
+       parts of the color wheel rather than a monochromatic grey ramp.
+       The original --text-2/3/4 ramp had two failure modes: chain_precedes
+       (#a0a3ab) and cross_session (#9ca3af) were near-identical at line
+       widths, and the text-2/3/4 gradient is too tight to distinguish at
+       1-2px stroke. Each color below is desaturated enough to read as
+       "structural / quiet" relative to the semantic edges (orange for
+       ancestry, teal for annotates, etc.) while staying distinguishable
+       from each other at small line widths. */
+    --edge-chain:            #6b8aaf;  /* chain_precedes, desaturated slate-blue (primary structural backbone) */
+    --edge-session-precedes: #8a7aa8;  /* session_precedes, desaturated indigo (fallback sequencing) */
+    --edge-session-parallel: #6b8e7a;  /* session_parallel, desaturated sage (equal-time peers) */
+    --edge-cross-session:    #a08672;  /* cross_session, desaturated taupe (across-session derived) */
 
     /* Type */
     --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, Roboto, sans-serif;
