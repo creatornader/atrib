@@ -702,4 +702,142 @@ describe('buildGraph (section 3.2.4)', () => {
     }
     expect(present.size).toBe(9) // exactly the 9 spec types, no others
   })
+
+  // ───────────────────────────────────────────────────────────────────────
+  // compactIntraSessionEdges: chain-component + adjacent-only optimization
+  // ───────────────────────────────────────────────────────────────────────
+
+  describe('compactIntraSessionEdges (intra-session edge compaction)', () => {
+    const COMPACT_CTX = 'c'.repeat(32)
+
+    async function buildLinearChain(n: number, startTs = 1000) {
+      // Returns N records where each subsequent record's chain_root points at
+      // its immediate predecessor's hash, forming one chain-connected
+      // component within COMPACT_CTX.
+      const records = [] as Awaited<ReturnType<typeof makeRecord>>[]
+      const first = await makeRecord({
+        context_id: COMPACT_CTX,
+        timestamp: startTs,
+        content_id: `sha256:${'a0'.padEnd(64, '0')}`,
+      })
+      records.push(first)
+      let prevHash = hexEncode(sha256(canonicalRecord(first)))
+      for (let i = 1; i < n; i++) {
+        const r = await makeRecord({
+          context_id: COMPACT_CTX,
+          chain_root: `sha256:${prevHash}`,
+          timestamp: startTs + i,
+          content_id: `sha256:${('a' + i.toString().padStart(2, '0')).padEnd(64, '0')}`,
+        })
+        records.push(r)
+        prevHash = hexEncode(sha256(canonicalRecord(r)))
+      }
+      return records
+    }
+
+    async function buildIsolatedGenesis(n: number, startTs = 1000) {
+      // Returns N records all sharing COMPACT_CTX but each emitting its own
+      // genesis chain_root (no chain links between them).
+      const records = [] as Awaited<ReturnType<typeof makeRecord>>[]
+      for (let i = 0; i < n; i++) {
+        records.push(await makeRecord({
+          context_id: COMPACT_CTX,
+          timestamp: startTs + i,
+          content_id: `sha256:${('b' + i.toString().padStart(2, '0')).padEnd(64, '0')}`,
+        }))
+      }
+      return records
+    }
+
+    it('emits zero SESSION_PRECEDES for a fully-chained session (chain encodes order)', async () => {
+      const records = await buildLinearChain(8)
+      const graph = await buildGraph(records, [], { compactIntraSessionEdges: true })
+
+      const chainEdges = graph.edges.filter((e) => e.type === 'CHAIN_PRECEDES')
+      expect(chainEdges).toHaveLength(7) // N-1 chain links for N=8 records
+
+      const sessionEdges = graph.edges.filter((e) => e.type === 'SESSION_PRECEDES')
+      expect(sessionEdges).toHaveLength(0)
+
+      const parallelEdges = graph.edges.filter((e) => e.type === 'SESSION_PARALLEL')
+      expect(parallelEdges).toHaveLength(0)
+    })
+
+    it('emits N-1 adjacent SESSION_PRECEDES for a fully-unchained session', async () => {
+      // 8 isolated-genesis records → adjacent path of 7 SESSION_PRECEDES edges
+      // (down from 28 in the all-pairs derivation).
+      const records = await buildIsolatedGenesis(8)
+      const graph = await buildGraph(records, [], { compactIntraSessionEdges: true })
+
+      const chainEdges = graph.edges.filter((e) => e.type === 'CHAIN_PRECEDES')
+      expect(chainEdges).toHaveLength(0) // none chained
+
+      const sessionEdges = graph.edges.filter((e) => e.type === 'SESSION_PRECEDES')
+      expect(sessionEdges).toHaveLength(7) // adjacent-only
+
+      // Verify all edges connect consecutive records in time order.
+      const sortedRecords = [...records].sort((a, b) => a.timestamp - b.timestamp)
+      const expectedPairs = new Set<string>()
+      for (let i = 0; i < sortedRecords.length - 1; i++) {
+        const a = hexEncode(sha256(canonicalRecord(sortedRecords[i]!)))
+        const b = hexEncode(sha256(canonicalRecord(sortedRecords[i + 1]!)))
+        expectedPairs.add(`sha256:${a}->sha256:${b}`)
+      }
+      const actualPairs = new Set(sessionEdges.map((e) => `${e.source}->${e.target}`))
+      expect(actualPairs).toEqual(expectedPairs)
+    })
+
+    it('emits SESSION_PRECEDES only across chain boundaries when two chains share a context_id', async () => {
+      // Two parallel chains in the same context_id (chains A and B), 4 records each.
+      // Expected: 3 CHAIN_PRECEDES per chain = 6 chain edges; SESSION_PRECEDES
+      // only between adjacent-in-time pairs across chain boundaries.
+      const chainA = await buildLinearChain(4, 1000)
+      // Build chain B with timestamps interleaving chainA so adjacency in time
+      // crosses chain boundaries.
+      const chainBRecords = [] as Awaited<ReturnType<typeof makeRecord>>[]
+      const b0 = await makeRecord({
+        context_id: COMPACT_CTX,
+        timestamp: 1500, // between chainA[0] (1000) and chainA[1] (1001)... actually after both
+        content_id: `sha256:${'b00'.padEnd(64, '0')}`,
+      })
+      chainBRecords.push(b0)
+      let prevB = hexEncode(sha256(canonicalRecord(b0)))
+      for (let i = 1; i < 4; i++) {
+        const r = await makeRecord({
+          context_id: COMPACT_CTX,
+          chain_root: `sha256:${prevB}`,
+          timestamp: 1500 + i,
+          content_id: `sha256:${('b' + i.toString().padStart(2, '0')).padEnd(64, '0')}`,
+        })
+        chainBRecords.push(r)
+        prevB = hexEncode(sha256(canonicalRecord(r)))
+      }
+
+      const all = [...chainA, ...chainBRecords]
+      const graph = await buildGraph(all, [], { compactIntraSessionEdges: true })
+
+      const chainEdges = graph.edges.filter((e) => e.type === 'CHAIN_PRECEDES')
+      expect(chainEdges).toHaveLength(6) // 3 per chain
+
+      const sessionEdges = graph.edges.filter((e) => e.type === 'SESSION_PRECEDES')
+      // Adjacency walk over [chainA[0..3], chainB[0..3]] (sorted by timestamp).
+      // Boundary: chainA[3] (ts=1003) → chainB[0] (ts=1500). Other adjacent
+      // pairs are within the same chain and get skipped.
+      expect(sessionEdges).toHaveLength(1)
+      const e = sessionEdges[0]!
+      const expectedSrc = `sha256:${hexEncode(sha256(canonicalRecord(chainA[3]!)))}`
+      const expectedTgt = `sha256:${hexEncode(sha256(canonicalRecord(chainBRecords[0]!)))}`
+      expect(e.source).toBe(expectedSrc)
+      expect(e.target).toBe(expectedTgt)
+    })
+
+    it('default (compactIntraSessionEdges undefined) preserves spec-faithful all-pairs derivation', async () => {
+      // 4 isolated-genesis records → 4*3/2 = 6 SESSION_PRECEDES edges
+      // when compaction is OFF (default behavior, per §3.2.4 step 2).
+      const records = await buildIsolatedGenesis(4)
+      const graph = await buildGraph(records, [])
+      const sessionEdges = graph.edges.filter((e) => e.type === 'SESSION_PRECEDES')
+      expect(sessionEdges).toHaveLength(6)
+    })
+  })
 })

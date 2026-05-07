@@ -2218,11 +2218,24 @@ GET /v1/graph/4bf92f3577b34da6a3ce929d0e0e4736
 // include_gap_nodes=true|false      (default: true)
 // include_cross_session=true|false  (default: true)
 // include_proof=true|false          (default: false; proof bundles are large)
+// compact=true|false                (default: true; intra-session edge compaction per §3.4.1.1)
 
 // 200 OK  -> GraphResponse ([§3.5.1](#351-graph-response-object))
 // 404     -> no records with this context_id
 // 400     -> malformed context_id (not 32 hex chars)
 ```
+
+##### 3.4.1.1 Intra-session edge compaction
+
+Implementations MAY emit a reduced SESSION_PRECEDES / SESSION_PARALLEL edge set when the response would otherwise carry information-redundant edges. The reduction is structural — it preserves all causal information already present in CHAIN_PRECEDES — and is enabled by default for `/v1/graph/{context_id}`. Callers who require the full pairwise derivation per [§3.2.4](#324-edge-derivation-rules) steps 2–3 (e.g. conformance harnesses) MUST pass `?compact=false`.
+
+The compaction rule:
+
+1. **Chain-component skip.** Treat the records sharing this `context_id` as a graph whose edges are CHAIN_PRECEDES. Compute connected components. For every pair of records `(a, b)` sitting in the same component, omit any SESSION_PRECEDES or SESSION_PARALLEL edge that would otherwise connect them — the chain already encodes their relationship and the additional edge carries no information.
+2. **Adjacent-only emission.** For pairs that ARE in different chain components, sort by `timestamp` ascending and emit one SESSION_PRECEDES edge per consecutive pair (rather than every cross-component pair). The transitive ordering "X happens-before Z" is implied by the emitted "X→Y" + "Y→Z" without materializing a third edge.
+3. SESSION_PARALLEL between equal-`timestamp` pairs is emitted only when both records belong to different chain components (rule 1 still applies).
+
+Compaction is information-preserving with respect to the partial order over the resolved record set: any "happens-before" relation derivable from the full pairwise edge set is still derivable from the compacted edge set plus CHAIN_PRECEDES transitivity. This is distinct from [§3.4.7](#347-get-v1creatorscreator_keygraph)'s identity-view filter, which drops intra-session edges entirely (lossy by design — that view shows cross-session activity, not within-session topology).
 
 #### 3.4.2 GET /v1/graph/{context_id}/nodes
 

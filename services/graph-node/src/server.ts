@@ -295,11 +295,21 @@ async function handleGraph(
 
   const records = store.getRecordsByContextId(contextId)
   const gapNodes = store.getGapNodesByContextId(contextId)
+  // Default-on intra-session edge compaction. SESSION_PRECEDES/SESSION_PARALLEL
+  // between transitively-chained records are information-redundant with
+  // CHAIN_PRECEDES; between unchained records the all-pairs O(N²) emission
+  // produces unintelligible blobs. Compact path emits CHAIN_PRECEDES + adjacent
+  // SESSION_PRECEDES across chain components, preserving load-bearing structure
+  // while keeping responses tractable for large sessions. Callers needing the
+  // full pairwise spec §3.2.4 derivation pass ?compact=false.
+  const compactParam = params.get('compact')
+  const compactIntraSessionEdges = compactParam !== 'false'
   const graph = await buildGraph(records, gapNodes, {
     includeGapNodes: params.get('include_gap_nodes') !== 'false',
     includeCrossSession: params.get('include_cross_session') !== 'false',
     revocations: buildRegistry(store),
     logIndexLookup: logIndexLookup(store),
+    compactIntraSessionEdges,
   })
 
   sendJson(res, 200, graph)
