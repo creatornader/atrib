@@ -276,6 +276,57 @@ describe('graph-node server (section 3.4)', () => {
     expect(res.status).toBe(404)
   })
 
+  it('GET /v1/chain/:record_hash returns single-node chain for genesis record', async () => {
+    // Pull a record_hash; fixture records share one context_id so chain
+    // terminates at the session genesis.
+    const graphRes = await fetch(`${url}/v1/graph/${CONTEXT_ID}/nodes`)
+    const graphBody = await graphRes.json() as { nodes: Array<{ id: string; is_genesis?: boolean }> }
+    const genesisNode = graphBody.nodes.find((n) => n.is_genesis)
+    expect(genesisNode).toBeDefined()
+    const hashHex = genesisNode!.id.replace(/^sha256:/, '')
+
+    const res = await fetch(`${url}/v1/chain/${hashHex}`)
+    expect(res.ok).toBe(true)
+    const body = await res.json()
+    expect(body.start_record_hash).toBe(`sha256:${hashHex}`)
+    expect(body.record_count).toBe(1) // genesis has no chain ancestors
+    expect(body.truncated_by_depth).toBe(false)
+    expect(body.truncated_by_count).toBe(false)
+  })
+
+  it('GET /v1/chain/:record_hash walks chain backward from leaf', async () => {
+    const graphRes = await fetch(`${url}/v1/graph/${CONTEXT_ID}/nodes`)
+    const graphBody = await graphRes.json() as { nodes: Array<{ id: string; is_genesis?: boolean; log_index: number | null }> }
+    // Find a record that is NOT genesis (has a chain predecessor in store).
+    const nonGenesis = graphBody.nodes
+      .filter((n) => !n.is_genesis && n.log_index !== null)
+      .sort((a, b) => (b.log_index ?? 0) - (a.log_index ?? 0))[0]
+    if (!nonGenesis) return // fixture has no non-genesis records; nothing to walk
+    const hashHex = nonGenesis.id.replace(/^sha256:/, '')
+
+    const res = await fetch(`${url}/v1/chain/${hashHex}`)
+    expect(res.ok).toBe(true)
+    const body = await res.json()
+    expect(body.record_count).toBeGreaterThan(1) // at least the start + one ancestor
+  })
+
+  it('GET /v1/chain/:hash accepts both raw hex and sha256: prefix forms', async () => {
+    const graphRes = await fetch(`${url}/v1/graph/${CONTEXT_ID}/nodes`)
+    const graphBody = await graphRes.json() as { nodes: Array<{ id: string }> }
+    const hashHex = graphBody.nodes[0]!.id.replace(/^sha256:/, '')
+
+    const r1 = await fetch(`${url}/v1/chain/${hashHex}`)
+    const r2 = await fetch(`${url}/v1/chain/sha256:${hashHex}`)
+    expect(r1.ok).toBe(true)
+    expect(r2.ok).toBe(true)
+    expect((await r1.json()).start_record_hash).toBe((await r2.json()).start_record_hash)
+  })
+
+  it('GET /v1/chain/:unknown_hash returns 404', async () => {
+    const res = await fetch(`${url}/v1/chain/${'0'.repeat(64)}`)
+    expect(res.status).toBe(404)
+  })
+
   it('GET /v1/graph/:context_id/nodes accepts URI form for all 6 normative event_types', async () => {
     // Pre-D063 the inline normalizer only covered tool_call / transaction /
     // observation; URI queries for directory_anchor / annotation / revision

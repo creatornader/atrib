@@ -202,6 +202,15 @@ async function handleRequest(
     return handleTrace(res, store, traceMatch[1]!, new URL(`http://localhost${url}`).searchParams)
   }
 
+  // GET /v1/chain/:record_hash — substrate-derived causal chain walk per
+  // spec §3.4.6 / D068. Walks CHAIN_PRECEDES backward from the starting
+  // record, terminating at the session genesis (chain_root = SHA-256(context_id)).
+  // Disjoint from /v1/trace which walks producer-claimed ancestry.
+  const chainMatch = url.match(/^\/v1\/chain\/(?:sha256:)?([0-9a-f]{64})(\?.*)?$/)
+  if (method === 'GET' && chainMatch) {
+    return handleChain(res, store, chainMatch[1]!, new URL(`http://localhost${url}`).searchParams)
+  }
+
   // Malformed context_id check
   const badGraphMatch = url.match(/^\/v1\/graph\/([^/]+)/)
   if (method === 'GET' && badGraphMatch && !CONTEXT_ID_RE.test(badGraphMatch[1]!)) {
@@ -556,6 +565,87 @@ async function handleTrace(
     record_count: collected.length,
     truncated_by_depth: truncatedByDepth,
     truncated_by_count: truncatedByCount,
+    graph,
+  })
+}
+
+// /v1/chain/:record_hash — substrate-derived causal chain walk per §3.4.6.
+// Walks CHAIN_PRECEDES backward from the starting record, resolving each step
+// via record.chain_root (which carries the prior record's hex hash, prefixed
+// with "sha256:"). Terminates at the session's genesis record where chain_root
+// equals SHA-256(context_id) per §1.2.3. The walk is linear (each non-genesis
+// record has exactly one chain_precedes ancestor) so truncation is depth-only.
+async function handleChain(
+  res: ServerResponse,
+  store: RecordStore,
+  recordHashHex: string,
+  params: URLSearchParams,
+): Promise<void> {
+  const rawDepth = parseInt(params.get('depth') ?? String(TRACE_DEFAULT_DEPTH), 10)
+  const depth = Math.max(1, Math.min(Number.isNaN(rawDepth) ? TRACE_DEFAULT_DEPTH : rawDepth, TRACE_MAX_DEPTH))
+
+  // Build a hash index once per request so we can resolve chain_root references
+  // back to records. Mirrors handleTrace's approach.
+  const allRecords = store.getAllRecords()
+  const byHash = new Map<string, AtribRecord>()
+  for (const { record } of allRecords) {
+    const hashHex = hexEncode(sha256(canonicalRecord(record)))
+    byHash.set(hashHex, record)
+  }
+
+  const startRecord = byHash.get(recordHashHex)
+  if (!startRecord) {
+    return sendProblem(
+      res,
+      404,
+      'record-not-found',
+      `No record with hash sha256:${recordHashHex}`,
+      `/v1/chain/${recordHashHex}`,
+    )
+  }
+
+  const collected: AtribRecord[] = [startRecord]
+  const visited = new Set<string>([recordHashHex])
+  let truncatedByDepth = false
+  let current: AtribRecord = startRecord
+
+  for (let hop = 0; hop < depth; hop++) {
+    // Genesis termination: chain_root === SHA-256(context_id). At genesis the
+    // record has no further predecessor; the walk completes naturally.
+    const expectedGenesis = `sha256:${hexEncode(sha256(new TextEncoder().encode(current.context_id)))}`
+    if (current.chain_root === expectedGenesis) break
+
+    if (!current.chain_root.startsWith('sha256:')) break
+    const ancestorHash = current.chain_root.slice('sha256:'.length)
+    if (visited.has(ancestorHash)) break
+    visited.add(ancestorHash)
+
+    const ancestor = byHash.get(ancestorHash)
+    if (!ancestor) break // chain_root references a record outside the store
+    collected.push(ancestor)
+    current = ancestor
+
+    if (hop === depth - 1) {
+      // Hit the depth ceiling but the chain may extend further — flag for
+      // the caller so the dashboard can offer "load more" affordance.
+      const nextGenesis = `sha256:${hexEncode(sha256(new TextEncoder().encode(current.context_id)))}`
+      if (current.chain_root !== nextGenesis) truncatedByDepth = true
+    }
+  }
+
+  const graph = await buildGraph(collected, [], {
+    includeGapNodes: false,
+    includeCrossSession: false,
+    revocations: buildRegistry(store),
+    logIndexLookup: logIndexLookup(store),
+  })
+
+  sendJson(res, 200, {
+    start_record_hash: `sha256:${recordHashHex}`,
+    depth_requested: depth,
+    record_count: collected.length,
+    truncated_by_depth: truncatedByDepth,
+    truncated_by_count: false, // linear walk; count truncation unreachable
     graph,
   })
 }
