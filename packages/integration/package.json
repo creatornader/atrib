@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@atrib/agent": "workspace:*",
+    "@atrib/directory": "workspace:*",
     "@atrib/graph-node": "workspace:*",
     "@atrib/log-dev": "workspace:*",
     "@atrib/log-node": "workspace:*",
