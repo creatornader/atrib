@@ -410,6 +410,41 @@ describe('§3.2.4 cross-implementation conformance', () => {
   // the demo's output.
   // ──────────────────────────────────────────────────────────────────────
 
+  // ──────────────────────────────────────────────────────────────────────
+  // §3.4.1.1 corpus replay: every case in spec/conformance/3.4.1/cases/
+  // must produce identical edge sets across both implementations.
+  // graph-node's own conformance-3.4.1.test.ts validates graph-node alone;
+  // this block extends the coverage so the integration impl stays in lock-
+  // step (the circular-workspace-dep prevents the graph-node test from
+  // importing integration directly).
+  // ──────────────────────────────────────────────────────────────────────
+
+  it('§3.4.1.1 corpus: both impls agree on all 4 cases', async () => {
+    const { readFileSync, readdirSync } = await import('node:fs')
+    const { fileURLToPath } = await import('node:url')
+    const { dirname, join, resolve } = await import('node:path')
+    const here = dirname(fileURLToPath(import.meta.url))
+    const casesDir = resolve(here, '..', '..', '..', 'spec', 'conformance', '3.4.1', 'cases')
+    const cases = readdirSync(casesDir)
+      .filter((f) => f.endsWith('.json'))
+      .sort()
+      .map((f) => JSON.parse(readFileSync(join(casesDir, f), 'utf8')) as {
+        name: string
+        input: { records: AtribRecord[]; compact: boolean }
+      })
+
+    expect(cases.length).toBeGreaterThan(0)
+    for (const c of cases) {
+      const gn = await buildGraph(c.input.records, [], { compactIntraSessionEdges: c.input.compact })
+      const intg = await buildGraphFromAllRecords(c.input.records, { compactIntraSessionEdges: c.input.compact })
+      try {
+        assertGraphsAgree(gn, intg)
+      } catch (e) {
+        throw new Error(`§3.4.1.1 case "${c.name}", impls disagree: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+  })
+
   it('agrees under compactIntraSessionEdges=true (§3.4.1.1)', async () => {
     // Five-record linear chain: zero SESSION_PRECEDES expected under compact mode.
     const r0 = await makeRecord({ timestamp: 1000, content_id: `sha256:${'aa'.repeat(32)}` })
