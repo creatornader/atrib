@@ -185,7 +185,21 @@
     background: var(--surface-2);
     padding: 1px 6px;
     border-radius: 3px;
-    word-break: break-all;
+    /* Code chips wrap AS UNITS in flowing prose, not character-by-character.
+       word-break: break-all (the previous setting) split tokens like
+       `informed_by` mid-identifier into `informed` + `_by` on two lines, with
+       the chip background painting both halves separately. overflow-wrap:
+       anywhere only breaks when the token alone exceeds container width
+       (e.g. a 64-char hash in a narrow column), and white-space: nowrap
+       keeps short identifiers together. The combination handles:
+       — flowing prose with `informed_by` chips → chips stay intact, lines wrap between chips
+       — long hashes inside narrow panels → soft-break to fit
+       — identifier names with underscores → never split mid-token
+       Reference: this is the third recurring layout bug from word-break:break-all,
+       fixed once globally rather than per-view. Applies to every <code> in
+       every view via the cascade. */
+    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
   pre {
     font: 12.5px/1.55 var(--font-mono);
@@ -2312,12 +2326,48 @@ function populateGraphLegend(nodeLegendRow, edgeLegendRow, graphData) {
 
 let _activeSigmaInstance = null
 
+// Merge two graph responses (each {nodes:[], edges:[], ...}) into a single
+// graph response. Nodes are deduped by id (same record is included only once
+// even if both endpoints returned it). Edges are deduped by (source, target,
+// type) tuple. Other top-level fields are taken from the first non-empty
+// graph (context_id, has_transaction, etc.) — these aren't well-defined for
+// a merged trace+chain view, so the dashboard treats them as informational.
+function mergeGraphs(a, b) {
+  const seenNodes = new Map()
+  const seenEdges = new Set()
+  const out = {
+    nodes: [],
+    edges: [],
+    spec_version: a.spec_version || b.spec_version,
+    context_id: a.context_id || b.context_id,
+    generated_at: a.generated_at || b.generated_at,
+  }
+  for (const n of [...(a.nodes || []), ...(b.nodes || [])]) {
+    const id = n.id || n.record_hash
+    if (!id || seenNodes.has(id)) continue
+    seenNodes.set(id, n)
+    out.nodes.push(n)
+  }
+  for (const e of [...(a.edges || []), ...(b.edges || [])]) {
+    const src = e.source || e.from
+    const tgt = e.target || e.to
+    const key = `${src}|${tgt}|${e.type}`
+    if (seenEdges.has(key)) continue
+    seenEdges.add(key)
+    out.edges.push(e)
+  }
+  out.node_count = out.nodes.length
+  out.edge_count = out.edges.length
+  return out
+}
+
 // Render a compact "Chain predecessors" section as a linear sequence of
 // record links. The chain endpoint per §3.4.6 walks chain_precedes
 // backward — substrate-derived ordering, distinct from the
 // producer-claimed ancestry that /v1/trace surfaces. The chain is linear
-// (each record has exactly one chain_precedes ancestor), so a list view
-// reads more naturally than another DAG.
+// (each record has exactly one chain_precedes ancestor), so the list reads
+// alongside the merged DAG: the graph shows the full topology including
+// chain edges; the list shows the linear timeline at a glance.
 function appendChainSection(root, chainResult, fullHash) {
   const sectionHead = el('div', { class: 'panel-head' },
     el('h2', {}, 'chain predecessors'),
@@ -2625,7 +2675,18 @@ async function renderTrace(rawHash) {
     return
   }
 
-  const graph = traceResult.graph || { nodes: [], edges: [] }
+  // Merge the trace graph (producer-claimed ancestry) and chain graph
+  // (substrate-derived chain_precedes) into one rendered DAG. The two API
+  // endpoints stay disjoint per D068 (structure-vs-claims separation at the
+  // protocol layer), but the dashboard composes them client-side so users see
+  // every relationship in one visualization. Without the merge, chain
+  // predecessors only rendered in the list section below — an unjustified
+  // asymmetry given chain_precedes is a first-class edge type per §3.2.3.
+  const traceGraph = traceResult.graph || { nodes: [], edges: [] }
+  const chainGraph = chainResult && !chainResult._error
+    ? (chainResult.graph || { nodes: [], edges: [] })
+    : { nodes: [], edges: [] }
+  const graph = mergeGraphs(traceGraph, chainGraph)
   const nodeCount = graph.nodes.length
   const edgeCount = graph.edges.length
 
@@ -2685,27 +2746,18 @@ async function renderTrace(rawHash) {
   // Populate both legend rows in one shared call (used by every graph view).
   populateGraphLegend(nodeLegendRow, edgeLegendRow, graph)
 
-  // Empty-ancestry case: the start record exists but has no resolvable
-  // producer-claimed ancestors. /v1/trace returns the start node alone here.
-  // populateGraphLegend already handles the empty-edge case.
-  //
-  // Chain predecessors (§3.4.6 / D068) render in a separate section below
-  // regardless of trace-graph emptiness, so a record without informed_by
-  // ancestors still shows its substrate-derived chain.
+  // True empty case: neither producer-claimed nor substrate-derived ancestors.
+  // The merged graph still has the start record as a single isolated node;
+  // skip the DAG render and surface the explainer text instead.
   if (nodeCount <= 1) {
-    const chainCount = chainResult && !chainResult._error
-      ? Math.max(0, (chainResult.record_count ?? 1) - 1)
-      : 0
     graphContainer.replaceChildren(el('div', { class: 'empty' },
-      'No provenance ancestors. This record has no ',
-      el('code', {}, 'informed_by'), ', ', el('code', {}, 'annotates'),
-      ', or ', el('code', {}, 'revises'),
-      ' edges into the resolved set.',
-      chainCount > 0
-        ? el('span', {}, ' See chain predecessors below: ',
-            el('strong', {}, `${chainCount} substrate-derived predecessor${chainCount === 1 ? '' : 's'}`),
-            ' via ', el('code', {}, 'chain_precedes'), '.')
-        : el('span', {}, ' This is also a session genesis (no chain predecessors).'),
+      'No ancestors. This record has no ',
+      el('code', {}, 'informed_by'), ', ',
+      el('code', {}, 'annotates'), ', ',
+      el('code', {}, 'revises'),
+      ', or ',
+      el('code', {}, 'chain_precedes'),
+      ' edges into the resolved set — typically a session genesis with no producer-claimed informants.',
     ))
     appendChainSection(root, chainResult, fullHash)
     return
