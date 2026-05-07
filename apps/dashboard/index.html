@@ -2312,6 +2312,89 @@ function populateGraphLegend(nodeLegendRow, edgeLegendRow, graphData) {
 
 let _activeSigmaInstance = null
 
+// Render a compact "Chain predecessors" section as a linear sequence of
+// record links. The chain endpoint per §3.4.6 walks chain_precedes
+// backward, substrate-derived ordering, distinct from the
+// producer-claimed ancestry that /v1/trace surfaces. The chain is linear
+// (each record has exactly one chain_precedes ancestor), so a list view
+// reads more naturally than another DAG.
+function appendChainSection(root, chainResult, fullHash) {
+  const sectionHead = el('div', { class: 'panel-head' },
+    el('h2', {}, 'chain predecessors'),
+    el('span', { class: 'meta' }, '/v1/chain · backward chain_precedes walk'),
+  )
+
+  if (!chainResult || chainResult._error) {
+    root.append(el('section', { class: 'panel', style: 'margin-top: 24px;' },
+      sectionHead,
+      el('div', { class: 'panel-body' },
+        el('div', { class: 'empty' },
+          'Could not fetch chain predecessors',
+          chainResult?._error ? `: ${chainResult._error}` : '.',
+        ),
+      ),
+    ))
+    return
+  }
+
+  const nodes = (chainResult.graph?.nodes || []).slice()
+  // graph-builder returns nodes in arbitrary order; sort newest-first by
+  // timestamp so the start record appears at the top and predecessors run
+  // backward in time below it.
+  nodes.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+
+  if (nodes.length <= 1) {
+    root.append(el('section', { class: 'panel', style: 'margin-top: 24px;' },
+      sectionHead,
+      el('div', { class: 'panel-body' },
+        el('div', { class: 'empty' },
+          'No chain predecessors. This is the genesis record of its session, ',
+          el('code', {}, 'chain_root'), ' equals ', el('code', {}, 'SHA-256(context_id)'),
+          ' per spec §1.2.3.',
+        ),
+      ),
+    ))
+    return
+  }
+
+  const list = el('ol', { class: 'chain-list', style: 'list-style: none; padding: 0; margin: 0;' })
+  for (const node of nodes) {
+    const isStart = node.record_hash === fullHash || node.id === fullHash
+    const recordHash = node.record_hash || node.id || ''
+    list.append(el('li', { style: 'padding: 8px 0; border-bottom: 1px solid var(--bd-2); display: flex; align-items: center; gap: 12px; flex-wrap: wrap;' },
+      isStart
+        ? el('span', { class: 'chip', style: 'background: var(--accent-soft); color: var(--accent);' }, 'start')
+        : null,
+      renderEventChip(node.event_type, node.creator_key, node.event_type_uri),
+      el('a', { href: `#/action/${recordHash}`, class: 'mono', style: 'color: var(--text-1);' },
+        shorten(recordHash, 14, 6),
+      ),
+      node.timestamp
+        ? el('span', { class: 'meta', style: 'margin-left: auto; font-size: 12px;' }, timeAgo(node.timestamp))
+        : null,
+    ))
+  }
+
+  const truncated = chainResult.truncated_by_depth
+  root.append(el('section', { class: 'panel', style: 'margin-top: 24px;' },
+    sectionHead,
+    el('div', { class: 'panel-body' },
+      el('p', { style: 'margin: 0 0 12px; color: var(--text-2);' },
+        nodes.length - 1, ' substrate-derived predecessor',
+        nodes.length === 2 ? '' : 's',
+        ' via ', el('code', {}, 'chain_precedes'),
+        '. Walks backward through ', el('code', {}, 'chain_root'),
+        ' until session genesis.',
+      ),
+      list,
+      truncated
+        ? el('p', { style: 'margin-top: 12px; color: var(--warn); font-size: 13px;' },
+            'Depth ceiling reached, chain extends further. Increase depth via the slider.')
+        : null,
+    ),
+  ))
+}
+
 async function renderTrace(rawHash) {
   setActiveNav(null)
   const ep = endpoints()
@@ -2352,13 +2435,21 @@ async function renderTrace(rawHash) {
     explainer: [
       'A ',
       el('span', { class: 'term' }, 'trace'),
-      ' is the backward provenance of one signed record. The walk follows ',
+      ' is the backward provenance of one signed record, split into two views per spec §3.4.5/§3.4.6 (D068). The ',
+      el('strong', {}, 'provenance trace'),
+      ' graph above follows producer-claimed ancestry: ',
       el('code', {}, 'informed_by'),
       ' (D041), ',
       el('code', {}, 'annotates'),
       ' (D058), and ',
       el('code', {}, 'revises'),
-      ' (D059) edges, hop by hop. Every node is a real signed record. Every edge is derived from record content alone, no semantic interpretation.',
+      ' (D059) edges. The ',
+      el('strong', {}, 'chain predecessors'),
+      ' section below follows substrate-derived ordering: ',
+      el('code', {}, 'chain_precedes'),
+      ' edges via ',
+      el('code', {}, 'chain_root'),
+      ' until session genesis. Every node is a real signed record; every edge is derived from record content alone, no semantic interpretation.',
     ],
   }))
 
@@ -2437,10 +2528,15 @@ async function renderTrace(rawHash) {
 
   clearAndRender(root)
 
-  // Lazy-load libs while the trace fetch is in flight.
-  const [libErr, traceResult] = await Promise.all([
+  // Lazy-load libs while BOTH the trace and chain fetches are in flight.
+  // /v1/trace walks producer-claimed ancestry (informed_by/annotates/revises);
+  // /v1/chain walks substrate-derived chain_precedes per spec §3.4.6 / D068.
+  // The two operations are disjoint by design, see D068 for the
+  // structure-vs-claims separation.
+  const [libErr, traceResult, chainResult] = await Promise.all([
     loadGraphLibs().then(() => null).catch((e) => e),
     fetchMaybe(`${ep.graph}/trace/${hashHex}?depth=${depth}`),
+    fetchMaybe(`${ep.graph}/chain/${hashHex}?depth=${depth}`),
   ])
 
   if (libErr) {
@@ -2582,17 +2678,31 @@ async function renderTrace(rawHash) {
   populateGraphLegend(nodeLegendRow, edgeLegendRow, graph)
 
   // Empty-ancestry case: the start record exists but has no resolvable
-  // upstream. /v1/trace returns the start node alone here. populateGraphLegend
-  // already handles the empty-edge case (renders "none" in the edges row).
+  // producer-claimed ancestors. /v1/trace returns the start node alone here.
+  // populateGraphLegend already handles the empty-edge case.
+  //
+  // Chain predecessors (§3.4.6 / D068) render in a separate section below
+  // regardless of trace-graph emptiness, so a record without informed_by
+  // ancestors still shows its substrate-derived chain.
   if (nodeCount <= 1) {
+    const chainCount = chainResult && !chainResult._error
+      ? Math.max(0, (chainResult.record_count ?? 1) - 1)
+      : 0
     graphContainer.replaceChildren(el('div', { class: 'empty' },
-      'No ancestors. This record has no ',
+      'No provenance ancestors. This record has no ',
       el('code', {}, 'informed_by'), ', ', el('code', {}, 'annotates'),
       ', or ', el('code', {}, 'revises'),
-      ' edges into the resolved set, typically a genesis record.',
+      ' edges into the resolved set.',
+      chainCount > 0
+        ? el('span', {}, ' See chain predecessors below: ',
+            el('strong', {}, `${chainCount} substrate-derived predecessor${chainCount === 1 ? '' : 's'}`),
+            ' via ', el('code', {}, 'chain_precedes'), '.')
+        : el('span', {}, ' This is also a session genesis (no chain predecessors).'),
     ))
+    appendChainSection(root, chainResult, fullHash)
     return
   }
+  appendChainSection(root, chainResult, fullHash)
 
   // Hand off to the shared DAG renderer. The trace view's only specialty
   // here is the focal-node test (start record can match by record_hash, by
