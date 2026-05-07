@@ -2282,7 +2282,7 @@ A new optional field `inclusion_proof_refs: [{ log_id, record_hash, checkpoint_r
 4. Storage and verification cost trade-offs at high record volumes.
 5. Failure modes: how does a verifier surface "cited proof exists but doesn't verify against current checkpoint state"?
 
-**Implementation sequencing.** None for now. When formally written: spec subsection (likely §2.12) → record format extension → verifier-side cross-checking → conformance corpus → operator guidance.
+**Implementation sequencing.** None for now. When formally written: spec subsection (the original [§2.12](atrib-spec.md#212-record-body-archive-layer) placeholder slot is taken by [D070](#d070-record-body-archive-layer-placeholder-adr) Record Body Archive Layer; aggregation lands in §2.13 or as a [§2.11](atrib-spec.md#211-cross-log-replication) extension) → record format extension → verifier-side cross-checking → conformance corpus → operator guidance.
 
 **Caveat on this entry.** Because this ADR is a placeholder, anything described above is a sketch, not a commitment. The formal ADR (when authored) will follow the standard format and may diverge from this placeholder in any technical detail. Cross-references to [D053](#d053-inclusion-proof-aggregation-flagged-for-follow-up) from other ADRs or the spec MUST treat the substance as forward-looking, not normative.
 
@@ -3083,6 +3083,46 @@ The two endpoints answer different questions: provenance trace answers "what did
 - [§1.2.5](atrib-spec.md#125-informed_by) (informed_by feeding provenance trace)
 - [§1.2.7](atrib-spec.md#127-annotates) (annotates feeding provenance trace)
 - [§1.2.9](atrib-spec.md#129-revises) (revises feeding provenance trace)
+
+---
+
+## D070: Record Body Archive Layer (placeholder ADR)
+
+**Date:** 2026-05-07.
+
+**Status:** Placeholder. The [§2.12](atrib-spec.md#212-record-body-archive-layer) Record Body Archive Layer surface exists in the spec; the formal ADR codifying API contract details, retention manifest format, federation rules, signed retention checkpoints, and reference implementation lives behind this placeholder until that work lands. Cross-references from the spec or other ADRs to [D070](#d070-record-body-archive-layer-placeholder-adr) MUST treat the substance below as forward-looking, not normative.
+
+This ADR is a placeholder. It records that the record body archive layer has been carved out of the spec and queued for full design work, without committing to specific implementation details. When this ADR is formally written and the mechanism is implemented, the details below MAY change in any way; this entry documents the intent and the known design questions, not the final design.
+
+**Context:**
+
+The atrib log commits to a record's hash, not its body ([§2.3](atrib-spec.md#23-log-entry-format), [§2.10](atrib-spec.md#210-what-the-log-stores-and-what-it-does-not)). This separation preserves the salted-commitment privacy posture ([§8.3](atrib-spec.md#83-salted-commitment-posture)) and bounds log storage cost. It also creates a verifiability gap: a verifier with only the public commitment cannot re-canonicalize the record and re-check its signature without obtaining the body from somewhere.
+
+[D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) addresses the producer side — the producer-local mirror always carries the canonical body. But producer-local-only durability is brittle: if the producer's mirror is wiped, the body is unrecoverable forever. [§2.12](atrib-spec.md#212-record-body-archive-layer) introduces a separate Record Body Archive Layer to close this gap for records whose privacy posture admits public-body retrieval.
+
+**Why deferred:**
+
+The skeleton ([§2.12](atrib-spec.md#212-record-body-archive-layer)) defines the protocol-level contract — content-addressed retrieval, retention manifest, federation, trust model, tiered verifiability — but the implementation work (a new `services/archive-node/` service with submission API, retention checkpoints, multi-archive federation rules, conformance corpora) is multi-hour design work that warrants its own ADR with explicit privacy-posture analysis. Shipping the spec skeleton first lets verifiers and producers code against the contract while the implementation is sequenced.
+
+**Known design questions** (for the formal ADR to resolve):
+
+1. **Submission API shape.** [§2.12.2](atrib-spec.md#2122-submission-model) establishes that submission is at-sign and idempotent. The actual write API (endpoint, body shape, error responses, retry semantics, rate-limiting) is unspecified.
+2. **Retention checkpoints.** [§2.12.6](atrib-spec.md#2126-trust-model) mentions signed retention checkpoints (mirroring [§2.4](atrib-spec.md#24-checkpoint-format) log checkpoints) as a future mitigation against archives lying about retention. The checkpoint format, signing key model, and cosignature surface are not yet specified.
+3. **Federation rules.** [§2.12.5](atrib-spec.md#2125-federation) states multi-archive federation MAY happen and is content-addressed. The protocol contract for multi-archive verifier policy (M-of-N, archive trust set, propagation latency tolerances) is not yet specified.
+4. **Conformance corpora.** [§2.12.8](atrib-spec.md#2128-conformance) references conformance corpora that ship alongside [D070](#d070-record-body-archive-layer-placeholder-adr) work; the corpus shape (input bodies + retrieval expectations + retention-window cases) is not yet designed.
+5. **Reference implementation deployment.** A V1 archive (`archive.atrib.dev`) needs the same Fly-style deployment shape as log/graph/directory; storage backend (volume vs object storage) not yet decided.
+6. **Producer policy expression.** Producers MAY submit some records' bodies and not others ([§2.12.2](atrib-spec.md#2122-submission-model)). Whether this policy is expressed as a per-record annotation, a producer-wide configuration, or both is not yet specified.
+
+**Caveat on this entry.** Because this ADR is a placeholder, anything described above is a sketch, not a commitment. The formal ADR (when authored) will follow the standard format and may diverge from this placeholder in any technical detail. Cross-references to [D070](#d070-record-body-archive-layer-placeholder-adr) from other ADRs or the spec MUST treat the substance as forward-looking, not normative.
+
+**Cross-references:**
+
+- [§2.12](atrib-spec.md#212-record-body-archive-layer) (Record Body Archive Layer; the spec surface this ADR codifies)
+- [§2.5.4](atrib-spec.md#254-point-lookup-endpoint-optional) (log point-lookup; no body; redirects callers to the archive layer)
+- [§2.10](atrib-spec.md#210-what-the-log-stores-and-what-it-does-not) (log scope boundary)
+- [§5.9](atrib-spec.md#59-local-mirror-conventions) (producer-local mirror; the other body-availability path)
+- [§8.3](atrib-spec.md#83-salted-commitment-posture) (privacy posture that opts out of archive submission)
+- [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) (two-tier private-local + public-canonical persistence on the producer side)
 
 ---
 
