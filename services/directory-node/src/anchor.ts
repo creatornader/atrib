@@ -21,6 +21,42 @@ export interface AnchorEmissionResult {
   record_hash?: string
   submitted: boolean
   error?: string
+  /**
+   * The full signed anchor record, returned to callers so the directory
+   * can persist a body-history map for §6.3 step 1 verifiers (until the
+   * §2.12 record-body archive layer ships and supersedes per-producer
+   * body retrieval; D070 placeholder ADR).
+   *
+   * Shape mirrors AtribRecord: every field that goes into the canonical
+   * signed bytes plus the `signature` itself.
+   */
+  record?: AnchorRecord
+}
+
+/**
+ * Signed `directory_anchor` record body. Shape matches the canonical
+ * AtribRecord with the directory_anchor-specific `metadata` payload.
+ *
+ * Verifiers (§6.3 step 1) read `metadata.directory_root` +
+ * `metadata.directory_epoch` to cross-check against the directory's
+ * `/v6/anchor` self-report. The full body also lets verifiers
+ * re-canonicalize and re-verify the signature against the operator's
+ * pubkey (defense-in-depth beyond log inclusion).
+ */
+export interface AnchorRecord {
+  chain_root: string
+  content_id: string
+  context_id: string
+  creator_key: string
+  event_type: 'https://atrib.dev/v1/types/directory_anchor'
+  metadata: {
+    directory_origin: string
+    directory_root: string
+    directory_epoch: number
+  }
+  spec_version: 'atrib/1.0'
+  timestamp: number
+  signature: string
 }
 
 const ENCODER = new TextEncoder()
@@ -84,10 +120,10 @@ export async function emitDirectoryAnchor(input: AnchorEmissionInput): Promise<A
     })
     if (!response.ok) {
       const errBody = await response.text().catch(() => '')
-      return { record_hash: recordHash, submitted: false, error: `log returned ${response.status}: ${errBody.slice(0, 200)}` }
+      return { record_hash: recordHash, submitted: false, error: `log returned ${response.status}: ${errBody.slice(0, 200)}`, record: record as AnchorRecord }
     }
-    return { record_hash: recordHash, submitted: true }
+    return { record_hash: recordHash, submitted: true, record: record as AnchorRecord }
   } catch (e) {
-    return { record_hash: recordHash, submitted: false, error: e instanceof Error ? e.message : String(e) }
+    return { record_hash: recordHash, submitted: false, error: e instanceof Error ? e.message : String(e), record: record as AnchorRecord }
   }
 }

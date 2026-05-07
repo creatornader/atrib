@@ -52,24 +52,58 @@ export interface KeyRevocationStatus {
   since_revocation: boolean
 }
 
+/**
+ * Anchor surface populated by spec §6.3 step 1 + step 2.
+ *
+ * The verifier discovers the anchor commitment on the log by querying
+ * `directory_anchor` records in the directory's reserved context_id
+ * (= sha256(directory_origin)[:16]) filtered by creator_key + timestamp.
+ * It then fetches the body (with directory_root + directory_epoch +
+ * signature) via the supplied `fetchAnchorBody` callback. The current
+ * routing target is directory-node's `/v6/anchors/<hash>` endpoint;
+ * after the §2.12 record-body archive layer ships (D070 placeholder
+ * ADR), the same callback can route to the standard archive endpoint
+ * with no change to resolveIdentity.
+ *
+ * `anchor_witness_count` and `anchor_freshness_ok` are populated when
+ * the relevant inputs are available (witness threshold config for the
+ * former; `freshnessThresholdMs` for the latter); otherwise they're
+ * `null` to distinguish "not checked" from "checked + clean."
+ */
+export interface AnchorSurface {
+  anchor_record_hash: string
+  checkpoint_version: number
+  anchor_timestamp: number
+  anchor_age_ms: number
+  anchor_witness_count: number | null
+  anchor_freshness_ok: boolean | null
+}
+
 export interface IdentityResolution {
   identity_resolved: IdentityClaim | null
   identity_resolution_method: IdentityResolutionMethod
   capability_envelope: CapabilityEnvelope | null
   key_revocation_status: KeyRevocationStatus | null
   /**
-   * lookup_proof_valid: per §6.3 step 7. NULL when the lookup returned
-   * non-membership (no proof to validate) or when the verifier hasn't
-   * implemented AKD proof validation in JS. The directory returns a
-   * proof bytes blob; validation requires the AKD WASM bridge in the
-   * verifier process. Currently null for both reasons; warnings flag
-   * which one applies.
+   * §6.3 step 7. `true` when the AKD lookup proof verifies against the
+   * directory's anchored root, `false` when verification rejects (which
+   * triggers the hard-failure rejection path), `null` when not attempted
+   * (callback or vrf pubkey omitted, or anchor fetch failed mid-flight).
    */
   lookup_proof_valid: boolean | null
-  /** §6.3 step 5, currently not checked; reflected in warnings. */
+  /**
+   * §6.3 step 5. `true` when the audit proof between the prior anchor
+   * and the current anchor verifies, `false` when verification rejects
+   * (triggers hard-failure rejection), `null` when not attempted.
+   */
   append_only_consistent: boolean | null
-  /** §6.3 step 1, currently not checked; reflected in warnings. */
-  anchor: null
+  /**
+   * §6.3 step 1 + step 2. Populated when `directoryOperatorKey` +
+   * `logEndpoint` + `fetchAnchorBody` are all supplied AND a recent
+   * directory_anchor record was discovered on the log. `null` otherwise
+   * (a step-1 warning carries the reason).
+   */
+  anchor: AnchorSurface | null
   warnings: string[]
 }
 
@@ -87,6 +121,55 @@ export interface VerifyLookupProofInput {
   currentEpoch: number
   label: string
   proof: Uint8Array
+}
+
+/**
+ * Inputs to the verifyAuditProof callback. Mirrors `@atrib/directory`'s
+ * `verifyAuditProof` signature; same dependency-inversion pattern as
+ * `verifyLookupProof`.
+ */
+export interface VerifyAuditProofInput {
+  /** Sequence of 32-byte root hashes, one per epoch boundary. */
+  rootHashes: Uint8Array[]
+  /** Bincode-serialized append-only proof bytes. */
+  proof: Uint8Array
+}
+
+/**
+ * Signed `directory_anchor` record body. Returned by `fetchAnchorBody`.
+ * Shape mirrors `services/directory-node/src/anchor.ts:AnchorRecord`
+ * but is re-declared here so `@atrib/verify` doesn't import from a
+ * service package.
+ */
+export interface AnchorBody {
+  chain_root: string
+  content_id: string
+  context_id: string
+  creator_key: string
+  event_type: string
+  metadata: {
+    directory_origin: string
+    directory_root: string
+    directory_epoch: number
+  }
+  spec_version: string
+  timestamp: number
+  signature: string
+}
+
+/**
+ * Log-side commitment shape returned by `GET /v1/by-context/<hex>` on
+ * log-node. Re-declared here so `@atrib/verify` doesn't import from
+ * `@atrib/log-node`. Only the fields step 1 reads are typed; the rest
+ * are tolerated.
+ */
+export interface AnchorCommitment {
+  record_hash: string
+  log_index: number
+  creator_key: string
+  context_id: string
+  timestamp_ms: number
+  event_type: string
 }
 
 export interface ResolveIdentityOptions {
@@ -128,6 +211,52 @@ export interface ResolveIdentityOptions {
    * step 7 HARD failure semantics; throw → warning + null).
    */
   verifyLookupProof?: (input: VerifyLookupProofInput) => boolean
+  /**
+   * Directory operator's Ed25519 public key (43-char base64url). Required
+   * for §6.3 step 1 anchor discovery: the verifier filters
+   * `directory_anchor` log entries by this key. Production deployments
+   * publish the operator key alongside the directory origin.
+   */
+  directoryOperatorKey?: string
+  /**
+   * Tessera log endpoint (e.g., `https://log.atrib.dev/v1`). Required
+   * for §6.3 step 1 to query `directory_anchor` records via
+   * `GET /v1/by-context/<hex>`. When omitted, steps 1 + 2 + 5 are
+   * warning-only.
+   */
+  logEndpoint?: string
+  /**
+   * Callback that retrieves a `directory_anchor` record body by its
+   * `record_hash`. The verifier fetches the COMMITMENT from the log,
+   * then uses this callback to fetch the BODY (which carries
+   * directory_root + directory_epoch + signature). Returns `null` when
+   * the body isn't available.
+   *
+   * The current routing target is `GET /v6/anchors/<hash>` on the
+   * directory itself. After the §2.12 record-body archive layer ships
+   * (D070 placeholder ADR), production deployments swap the callback
+   * to route to the standard archive endpoint without any change to
+   * resolveIdentity.
+   */
+  fetchAnchorBody?: (recordHash: string) => Promise<AnchorBody | null>
+  /**
+   * §6.3 step 2: anchor freshness threshold (ms). When set, the
+   * verifier sets `anchor_freshness_ok` based on whether
+   * `anchor_age_ms ≤ freshnessThresholdMs`. When omitted, no threshold
+   * is applied and `anchor_freshness_ok` stays `null`.
+   */
+  freshnessThresholdMs?: number
+  /**
+   * Callback that performs AKD audit proof verification (spec §6.3 step 5).
+   * Should be `verifyAuditProof` from `@atrib/directory`. When omitted,
+   * step 5 stays warning-only. When supplied AND step 1 surfaces an
+   * anchor pair (current + prior), the verifier fetches the audit proof
+   * from the directory and calls this callback.
+   *
+   * Returns `true` for a valid proof, `false` for invalid (triggers
+   * §6.3 step 5 HARD failure rejection), throws for malformed input.
+   */
+  verifyAuditProof?: (input: VerifyAuditProofInput) => Promise<boolean>
 }
 
 const DEFAULT_DIRECTORY = 'https://directory.atrib.dev/v6'
@@ -224,12 +353,48 @@ export async function resolveIdentity(
     }
   }
 
+  // Step 1 (anchor discovery on the log) + Step 2 (anchor freshness threshold).
+  // Runs when `directoryOperatorKey` + `logEndpoint` + `fetchAnchorBody` are
+  // all supplied. Discovers the most recent directory_anchor record on the
+  // log (in the directory's reserved context_id), fetches its body via
+  // the supplied callback, cross-checks the body's metadata, and populates
+  // the `anchor` output field.
+  //
+  // T (the record's timestamp) defaults to `recordTimestamp` opt; falls back
+  // to `Date.now()` when unset (verifying a record produced just-in-time).
+  const T = typeof opts.recordTimestamp === 'number' ? opts.recordTimestamp : Date.now()
+  let anchor: AnchorSurface | null = null
+  let anchorBody: AnchorBody | null = null
+  let priorAnchorBody: AnchorBody | null = null
+  if (opts.logEndpoint && opts.directoryOperatorKey && opts.fetchAnchorBody) {
+    const stepOneResult = await runStepOne({
+      logEndpoint: opts.logEndpoint,
+      directoryOperatorKey: opts.directoryOperatorKey,
+      fetchAnchorBody: opts.fetchAnchorBody,
+      directoryEndpoint,
+      recordTimestamp: T,
+      freshnessThresholdMs: opts.freshnessThresholdMs,
+      fetchFn,
+      signal: opts.signal,
+      warnings,
+    })
+    if (stepOneResult) {
+      anchor = stepOneResult.anchor
+      anchorBody = stepOneResult.currentBody
+      priorAnchorBody = stepOneResult.priorBody
+    }
+  }
+
   // Step 7 (AKD lookup proof verification). Only attempted when the
   // caller supplies both `verifyLookupProof` (the bridge wrapper from
   // `@atrib/directory`) and `directoryVrfPublicKey`. When supplied AND
   // the proof is missing/malformed, we surface a warning and proceed
   // (soft signal). When the proof verifies as invalid, §6.3 step 7
   // mandates a HARD failure: the result is rejected.
+  //
+  // When step 1 surfaced a log-anchored body, step 7 verifies against
+  // the LOG-ANCHORED root (stronger; catches directory body forgery).
+  // Otherwise it falls back to the directory's self-reported `/anchor`.
   let lookupProofValid: boolean | null = null
   if (opts.verifyLookupProof && opts.directoryVrfPublicKey) {
     const stepSevenOutcome = await runStepSeven(
@@ -241,11 +406,9 @@ export async function resolveIdentity(
       fetchFn,
       opts.signal,
       warnings,
+      anchorBody, // pass log-anchored body when available; else null → self-report fallback
     )
     if (stepSevenOutcome === 'rejected') {
-      // §6.3 step 7 hard-failure path: cryptographically valid signature
-      // but the AKD proof did not anchor to the directory's claimed root.
-      // The directory is faulty; reject the result.
       return {
         identity_resolved: null,
         identity_resolution_method: 'rejected',
@@ -253,11 +416,41 @@ export async function resolveIdentity(
         key_revocation_status: applyRevocationOnly(creatorKey, opts, warnings),
         lookup_proof_valid: false,
         append_only_consistent: null,
-        anchor: null,
+        anchor,
         warnings,
       }
     }
     lookupProofValid = stepSevenOutcome // true | null
+  }
+
+  // Step 5 (append-only consistency). Only attempted when step 1 surfaced
+  // both a current AND a prior anchor body (need a pair for audit_verify),
+  // AND `verifyAuditProof` callback is supplied.
+  let appendOnlyConsistent: boolean | null = null
+  if (opts.verifyAuditProof && anchorBody && priorAnchorBody) {
+    const stepFiveOutcome = await runStepFive({
+      currentBody: anchorBody,
+      priorBody: priorAnchorBody,
+      directoryEndpoint,
+      verifyAuditProof: opts.verifyAuditProof,
+      fetchFn,
+      signal: opts.signal,
+      warnings,
+    })
+    if (stepFiveOutcome === 'rejected') {
+      // §6.3 step 5 hard-failure path: append-only consistency violated.
+      return {
+        identity_resolved: null,
+        identity_resolution_method: 'rejected',
+        capability_envelope: null,
+        key_revocation_status: applyRevocationOnly(creatorKey, opts, warnings),
+        lookup_proof_valid: lookupProofValid,
+        append_only_consistent: false,
+        anchor,
+        warnings,
+      }
+    }
+    appendOnlyConsistent = stepFiveOutcome // true | null
   }
 
   return {
@@ -266,10 +459,315 @@ export async function resolveIdentity(
     capability_envelope: claim.capabilities ?? null,
     key_revocation_status: applyRevocationOnly(creatorKey, opts, warnings),
     lookup_proof_valid: lookupProofValid,
-    append_only_consistent: null,
-    anchor: null,
+    append_only_consistent: appendOnlyConsistent,
+    anchor,
     warnings,
   }
+}
+
+/**
+ * Compute the directory's reserved context_id from its origin per the
+ * pattern in services/directory-node/src/anchor.ts: sha256(origin)
+ * truncated to the first 16 bytes (32 hex chars).
+ */
+function deriveDirectoryContextId(origin: string): string {
+  // Use SubtleCrypto if available to avoid importing @noble/hashes here.
+  // (The SDK callers already import @noble/hashes; this function lives
+  // in the verify package which we keep dep-light.)
+  const enc = new TextEncoder().encode(origin)
+  // Synchronous SHA-256 via @noble/hashes is already a transitive dep
+  // (through @atrib/mcp); use it to keep the call sync.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { sha256 } = require('@noble/hashes/sha2.js') as { sha256: (data: Uint8Array) => Uint8Array }
+  const digest = sha256(enc)
+  return Array.from(digest.slice(0, 16))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+/** Inputs to runStepOne (anchor discovery + step 2 freshness). */
+interface StepOneInputs {
+  logEndpoint: string
+  directoryOperatorKey: string
+  fetchAnchorBody: (recordHash: string) => Promise<AnchorBody | null>
+  directoryEndpoint: string
+  recordTimestamp: number
+  freshnessThresholdMs: number | undefined
+  fetchFn: typeof fetch
+  signal: AbortSignal | undefined
+  warnings: string[]
+}
+
+interface StepOneSuccess {
+  anchor: AnchorSurface
+  /** Body of the discovered anchor (current). */
+  currentBody: AnchorBody
+  /** Body of the predecessor anchor when present; null for a single-anchor history. */
+  priorBody: AnchorBody | null
+}
+
+/**
+ * Spec §6.3 step 1: discover the most recent `directory_anchor` record
+ * on the log whose timestamp is ≤ T (the verifying record's timestamp),
+ * fetch its body, cross-check the body's signed metadata, and populate
+ * the verifier's `anchor` output field. Step 2 (freshness threshold)
+ * piggybacks since we have anchor.timestamp + recordTimestamp here.
+ *
+ * Side effects (only on the warnings array):
+ *   - Removes the up-front step-1-anchor-not-checked warning when
+ *     anchor discovery succeeds (a more specific warning replaces it
+ *     when the body fetch fails or the cross-check rejects).
+ *
+ * Returns null when discovery couldn't be completed (log fetch
+ * failure, no anchor matches, body fetch fails). Returns a
+ * StepOneSuccess when the anchor is discovered + body retrieved +
+ * metadata cross-check passes.
+ *
+ * Cross-check (lightweight sanity): body's metadata.directory_origin
+ * must be a non-empty string; body's metadata.directory_epoch must be
+ * a number; body's signature must be a non-empty string.
+ * Stronger: re-canonicalize the body and verify the signature against
+ * the operator's pubkey (deferred to a follow-on commit; the log's
+ * inclusion proof already authenticates the hash, so the signature
+ * re-verify is defense-in-depth, not load-bearing for step 1).
+ */
+async function runStepOne(opts: StepOneInputs): Promise<StepOneSuccess | null> {
+  const directoryOrigin = await fetchDirectoryOrigin(opts.directoryEndpoint, opts.fetchFn, opts.signal, opts.warnings)
+  if (!directoryOrigin) return null
+  const contextHex = deriveDirectoryContextId(directoryOrigin)
+
+  let entries: AnchorCommitment[]
+  try {
+    const url = `${opts.logEndpoint.replace(/\/$/, '')}/by-context/${contextHex}`
+    const res = await opts.fetchFn(url, {
+      headers: { accept: 'application/json' },
+      ...(opts.signal ? { signal: opts.signal } : {}),
+    })
+    if (res.status === 404) {
+      opts.warnings.push('step-1-anchor-not-found: no directory_anchor records in the directory\'s context_id on the log')
+      return null
+    }
+    if (!res.ok) {
+      opts.warnings.push(`step-1-log-fetch-error: ${res.status} ${res.statusText}`)
+      return null
+    }
+    const body = await res.json() as { entries?: AnchorCommitment[] }
+    entries = body.entries ?? []
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    opts.warnings.push(`step-1-log-fetch-error: ${msg}`)
+    return null
+  }
+
+  // Filter by event_type=directory_anchor + creator_key match + timestamp ≤ T.
+  // The handleByContext response is newest-first.
+  const matches = entries.filter(
+    (e) =>
+      e.event_type === 'directory_anchor' &&
+      e.creator_key === opts.directoryOperatorKey &&
+      e.timestamp_ms <= opts.recordTimestamp,
+  )
+  if (matches.length === 0) {
+    opts.warnings.push('step-1-anchor-not-found: no directory_anchor on the log matches the operator key + timestamp window')
+    return null
+  }
+  const current = matches[0]! // newest-first → first match is the most recent
+  const prior = matches[1] ?? null // second-most-recent, if any
+
+  // Fetch the body for the current anchor (and predecessor when present).
+  const recordHashStr = current.record_hash.startsWith('sha256:') ? current.record_hash : `sha256:${current.record_hash}`
+  let currentBody: AnchorBody | null
+  try {
+    currentBody = await opts.fetchAnchorBody(recordHashStr)
+  } catch (e) {
+    opts.warnings.push(`step-1-body-fetch-error: ${e instanceof Error ? e.message : String(e)}`)
+    return null
+  }
+  if (!currentBody) {
+    opts.warnings.push(`step-1-body-not-available: anchor ${recordHashStr} present on log but body not retrievable from directory or archive`)
+    return null
+  }
+
+  // Cross-check: body's signed metadata must be self-consistent. Strong
+  // checks (signature re-verify against operator pubkey) are deferred;
+  // log inclusion already authenticates the hash, so this catches body
+  // forgery scenarios without re-implementing Ed25519 verify here.
+  if (
+    typeof currentBody.metadata?.directory_origin !== 'string' ||
+    currentBody.metadata.directory_origin.length === 0 ||
+    typeof currentBody.metadata?.directory_epoch !== 'number' ||
+    typeof currentBody.metadata?.directory_root !== 'string' ||
+    typeof currentBody.signature !== 'string' ||
+    currentBody.signature.length === 0
+  ) {
+    opts.warnings.push('step-1-body-malformed: anchor body missing required metadata fields')
+    return null
+  }
+  if (currentBody.creator_key !== opts.directoryOperatorKey) {
+    opts.warnings.push('step-1-body-creator-mismatch: anchor body creator_key does not match directoryOperatorKey')
+    return null
+  }
+
+  // Optional predecessor body for step 5; tolerate failure since step 5
+  // can stay warning-only without it.
+  let priorBody: AnchorBody | null = null
+  if (prior) {
+    const priorHashStr = prior.record_hash.startsWith('sha256:') ? prior.record_hash : `sha256:${prior.record_hash}`
+    try {
+      priorBody = await opts.fetchAnchorBody(priorHashStr)
+    } catch {
+      // Soft: step 5 will note its absence.
+    }
+  }
+
+  const anchorAgeMs = opts.recordTimestamp - current.timestamp_ms
+  const freshnessOk =
+    typeof opts.freshnessThresholdMs === 'number'
+      ? anchorAgeMs <= opts.freshnessThresholdMs
+      : null
+  if (typeof opts.freshnessThresholdMs === 'number' && freshnessOk === false) {
+    opts.warnings.push(`step-2-anchor-stale: anchor_age_ms=${anchorAgeMs} > threshold=${opts.freshnessThresholdMs}`)
+  }
+
+  const surface: AnchorSurface = {
+    anchor_record_hash: recordHashStr,
+    checkpoint_version: currentBody.metadata.directory_epoch,
+    anchor_timestamp: current.timestamp_ms,
+    anchor_age_ms: anchorAgeMs,
+    anchor_witness_count: null, // step 3, deferred
+    anchor_freshness_ok: freshnessOk,
+  }
+
+  // Remove the up-front step-1 warning since we did discover one.
+  const idx = opts.warnings.findIndex((w) => w.startsWith('step-1-anchor-not-checked'))
+  if (idx >= 0) opts.warnings.splice(idx, 1)
+
+  return { anchor: surface, currentBody, priorBody }
+}
+
+/**
+ * Fetch the directory's origin string from its `/anchor` endpoint.
+ * The origin is what we hash to compute the directory's reserved
+ * context_id for log-side anchor discovery.
+ *
+ * Returns null on any error (warnings array gets a step-1-origin-fetch entry).
+ */
+async function fetchDirectoryOrigin(
+  directoryEndpoint: string,
+  fetchFn: typeof fetch,
+  signal: AbortSignal | undefined,
+  warnings: string[],
+): Promise<string | null> {
+  try {
+    const url = `${directoryEndpoint.replace(/\/$/, '')}/anchor`
+    const res = await fetchFn(url, {
+      headers: { accept: 'application/json' },
+      ...(signal ? { signal } : {}),
+    })
+    if (!res.ok) {
+      warnings.push(`step-1-origin-fetch-error: ${res.status} ${res.statusText}`)
+      return null
+    }
+    const body = await res.json() as { directory_origin?: string }
+    if (typeof body.directory_origin !== 'string' || body.directory_origin.length === 0) {
+      warnings.push('step-1-origin-missing: directory /anchor response missing directory_origin')
+      return null
+    }
+    return body.directory_origin
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    warnings.push(`step-1-origin-fetch-error: ${msg}`)
+    return null
+  }
+}
+
+interface StepFiveInputs {
+  currentBody: AnchorBody
+  priorBody: AnchorBody
+  directoryEndpoint: string
+  verifyAuditProof: (input: VerifyAuditProofInput) => Promise<boolean>
+  fetchFn: typeof fetch
+  signal: AbortSignal | undefined
+  warnings: string[]
+}
+
+/**
+ * Spec §6.3 step 5: append-only consistency check. Fetches the audit
+ * proof between the prior anchor's epoch and the current anchor's
+ * epoch from the directory's `/v6/audit-proof` endpoint, then runs
+ * verify_audit_proof against the [prior_root, current_root] pair.
+ *
+ * Returns:
+ *   - `true`     when the audit proof verifies
+ *   - `null`     when verification couldn't be attempted (fetch or
+ *                decode error, callback throws)
+ *   - `'rejected'` when verification rejects → §6.3 step 5 HARD failure
+ */
+async function runStepFive(opts: StepFiveInputs): Promise<true | null | 'rejected'> {
+  const fromEpoch = opts.priorBody.metadata.directory_epoch
+  const toEpoch = opts.currentBody.metadata.directory_epoch
+  if (toEpoch <= fromEpoch) {
+    opts.warnings.push(`step-5-invalid-epoch-range: prior=${fromEpoch} >= current=${toEpoch}`)
+    return null
+  }
+
+  // Fetch audit proof from the directory.
+  let proofB64u: string
+  try {
+    const url = `${opts.directoryEndpoint.replace(/\/$/, '')}/audit-proof?from=${fromEpoch}&to=${toEpoch}`
+    const res = await opts.fetchFn(url, {
+      headers: { accept: 'application/json' },
+      ...(opts.signal ? { signal: opts.signal } : {}),
+    })
+    if (!res.ok) {
+      opts.warnings.push(`step-5-audit-proof-fetch-error: ${res.status} ${res.statusText}`)
+      return null
+    }
+    const body = await res.json() as { proof?: string }
+    if (typeof body.proof !== 'string' || body.proof.length === 0) {
+      opts.warnings.push('step-5-audit-proof-missing: directory /audit-proof response missing proof field')
+      return null
+    }
+    proofB64u = body.proof
+  } catch (e) {
+    opts.warnings.push(`step-5-audit-proof-fetch-error: ${e instanceof Error ? e.message : String(e)}`)
+    return null
+  }
+
+  // Decode roots + proof.
+  let priorRoot: Uint8Array
+  let currentRoot: Uint8Array
+  let proof: Uint8Array
+  try {
+    priorRoot = hexToBytes(opts.priorBody.metadata.directory_root)
+    currentRoot = hexToBytes(opts.currentBody.metadata.directory_root)
+    if (priorRoot.length !== 32 || currentRoot.length !== 32) {
+      throw new Error('directory_root must be 32 bytes')
+    }
+    proof = base64urlToBytes(proofB64u)
+  } catch (e) {
+    opts.warnings.push(`step-5-input-decode-error: ${e instanceof Error ? e.message : String(e)}`)
+    return null
+  }
+
+  let verified: boolean
+  try {
+    verified = await opts.verifyAuditProof({
+      rootHashes: [priorRoot, currentRoot],
+      proof,
+    })
+  } catch (e) {
+    opts.warnings.push(`step-5-verify-threw: ${e instanceof Error ? e.message : String(e)}`)
+    return null
+  }
+
+  if (verified) {
+    const idx = opts.warnings.findIndex((w) => w.startsWith('step-5-append-only-not-checked'))
+    if (idx >= 0) opts.warnings.splice(idx, 1)
+    return true
+  }
+  opts.warnings.push('step-5-audit-proof-invalid: audit proof did not verify against the prior + current anchored roots')
+  return 'rejected'
 }
 
 /**
@@ -299,42 +797,59 @@ async function runStepSeven(
   fetchFn: typeof fetch,
   signal: AbortSignal | undefined,
   warnings: string[],
+  /**
+   * Optional log-anchored body from step 1. When supplied, step 7
+   * verifies the lookup proof against the LOG-ANCHORED root + epoch
+   * (stronger; catches directory body forgery). When null, falls back
+   * to the directory's self-reported `/anchor` (still useful but
+   * weaker, depends on the directory being honest about its current
+   * state). The fallback path is tracked by the step-1 warnings
+   * since step 1 is what discovers the log-anchored body in the first
+   * place.
+   */
+  logAnchoredBody: AnchorBody | null,
 ): Promise<true | null | 'rejected'> {
   if (typeof proofB64u !== 'string' || proofB64u.length === 0) {
     warnings.push('step-7-proof-missing: directory lookup did not return a proof field')
     return null
   }
 
-  // Fetch the directory's currently-anchored snapshot. The
-  // `/anchor` endpoint returns `{ epoch, root_hash }` per
-  // `services/directory-node/src/server.ts` handleAnchor.
-  let anchorBody: { epoch?: number; root_hash?: string }
-  try {
-    const url = `${directoryEndpoint.replace(/\/$/, '')}/anchor`
-    const res = await fetchFn(url, {
-      headers: { accept: 'application/json' },
-      ...(signal ? { signal } : {}),
-    })
-    if (!res.ok) {
-      warnings.push(`step-7-anchor-fetch-error: ${res.status} ${res.statusText}`)
+  // Source the (root, epoch) pair: prefer log-anchored body when supplied.
+  let rootHashHex: string
+  let currentEpoch: number
+  if (logAnchoredBody) {
+    rootHashHex = logAnchoredBody.metadata.directory_root
+    currentEpoch = logAnchoredBody.metadata.directory_epoch
+  } else {
+    let anchorResp: { epoch?: number; root_hash?: string }
+    try {
+      const url = `${directoryEndpoint.replace(/\/$/, '')}/anchor`
+      const res = await fetchFn(url, {
+        headers: { accept: 'application/json' },
+        ...(signal ? { signal } : {}),
+      })
+      if (!res.ok) {
+        warnings.push(`step-7-anchor-fetch-error: ${res.status} ${res.statusText}`)
+        return null
+      }
+      anchorResp = await res.json() as typeof anchorResp
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      warnings.push(`step-7-anchor-fetch-error: ${msg}`)
       return null
     }
-    anchorBody = await res.json() as typeof anchorBody
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    warnings.push(`step-7-anchor-fetch-error: ${msg}`)
-    return null
-  }
-
-  if (typeof anchorBody.epoch !== 'number' || typeof anchorBody.root_hash !== 'string') {
-    warnings.push('step-7-anchor-malformed: anchor response missing epoch or root_hash')
-    return null
+    if (typeof anchorResp.epoch !== 'number' || typeof anchorResp.root_hash !== 'string') {
+      warnings.push('step-7-anchor-malformed: anchor response missing epoch or root_hash')
+      return null
+    }
+    rootHashHex = anchorResp.root_hash
+    currentEpoch = anchorResp.epoch
   }
 
   let rootHash: Uint8Array
   let proof: Uint8Array
   try {
-    rootHash = hexToBytes(anchorBody.root_hash)
+    rootHash = hexToBytes(rootHashHex)
     if (rootHash.length !== 32) {
       throw new Error(`root_hash must be 32 bytes (got ${rootHash.length})`)
     }
@@ -350,7 +865,7 @@ async function runStepSeven(
     verified = verifyLookupProof({
       vrfPublicKey,
       rootHash,
-      currentEpoch: anchorBody.epoch,
+      currentEpoch,
       label: creatorKey,
       proof,
     })

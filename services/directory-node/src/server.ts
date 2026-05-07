@@ -19,7 +19,59 @@ import { dirname } from 'node:path'
 import { AtribDirectory } from '@atrib/directory'
 import type { IdentityClaim } from '@atrib/directory'
 import { verifyClaimSignature } from '@atrib/directory'
-import { emitDirectoryAnchor } from './anchor.js'
+import { emitDirectoryAnchor, type AnchorRecord } from './anchor.js'
+
+/**
+ * In-memory anchor history. Each successful `emitDirectoryAnchor` adds
+ * the signed body to this map keyed by record_hash, plus to a parallel
+ * timestamp-ordered array for `/v6/anchors?since=&limit=` queries.
+ *
+ * Spec §6.3 step 1 verifiers need anchor BODIES (the body holds
+ * directory_root + directory_epoch); the log retains only commitments
+ * (90-byte hash + metadata). Until the §2.12 record-body archive layer
+ * ships (D070 placeholder ADR), each producer hosts its own bodies.
+ *
+ * Transition plan when §2.12 ships: this in-memory map stays useful
+ * for directory-specific queries (e.g., "all anchors from epoch N to
+ * M") but the plain body retrieval path moves to the standard archive
+ * endpoint. Verifier callers swap the body-fetch endpoint URL; the
+ * record shape stays identical.
+ *
+ * Persistence: in-memory only. Lost on restart (same as the AKD state).
+ * Production durability would store these alongside `persistencePath`
+ * but that's not yet implemented.
+ */
+class AnchorHistory {
+  private byHash = new Map<string, AnchorRecord>()
+  private chronological: AnchorRecord[] = []
+
+  add(record: AnchorRecord, recordHash: string): void {
+    if (this.byHash.has(recordHash)) return
+    this.byHash.set(recordHash, record)
+    this.chronological.push(record)
+  }
+
+  getByHash(recordHash: string): AnchorRecord | undefined {
+    return this.byHash.get(recordHash)
+  }
+
+  /**
+   * Return anchors in newest-first order. `since` filters to anchors
+   * whose timestamp is strictly greater than the cutoff. `limit` caps
+   * the response (default 100, max 1000).
+   */
+  recent(since?: number, limit = 100): AnchorRecord[] {
+    const cap = Math.min(Math.max(1, limit), 1000)
+    const filtered = typeof since === 'number'
+      ? this.chronological.filter(r => r.timestamp > since)
+      : this.chronological
+    return [...filtered].reverse().slice(0, cap)
+  }
+
+  size(): number {
+    return this.chronological.length
+  }
+}
 
 export interface DirectoryServerConfig {
   /** Operator's Ed25519 32-byte seed for signing directory checkpoints. */
@@ -105,6 +157,7 @@ export async function bindDirectoryServer(
   config: DirectoryServerConfig,
 ): Promise<DirectoryServerHandle> {
   const directory = await AtribDirectory.create(config.operatorPrivateKey)
+  const anchorHistory = new AnchorHistory()
 
   if (config.persistencePath) {
     await mkdir(dirname(config.persistencePath), { recursive: true })
@@ -128,7 +181,7 @@ export async function bindDirectoryServer(
       return
     }
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-    void handle(req, res, url, directory, config).catch((e) => {
+    void handle(req, res, url, directory, config, anchorHistory).catch((e) => {
       problemResponse(res, 500, 'internal-error', 'Internal Server Error', String(e))
     })
   })
@@ -153,6 +206,7 @@ async function handle(
   url: URL,
   directory: AtribDirectory,
   config: DirectoryServerConfig,
+  anchorHistory: AnchorHistory,
 ): Promise<void> {
   // Service-info index. Both the bare hostname (/) and the version-scoped
   // base (/v6) return the same discovery JSON. Without this handler, GET
@@ -181,6 +235,8 @@ async function handle(
         lookup: `GET /${v}/lookup/<creator_key>`,
         history: `GET /${v}/history/<creator_key>`,
         anchor: `GET /${v}/anchor`,
+        anchors: `GET /${v}/anchors?since=<ms>&limit=<n>`,
+        anchor_by_hash: `GET /${v}/anchors/<record_hash>`,
         audit_proof: `GET /${v}/audit-proof?from=N&to=M`,
       },
       explorer: 'https://explore.atrib.dev/',
@@ -231,13 +287,17 @@ async function handle(
     // §6.2.4 per-operation anchoring: emit directory_anchor record after each publish.
     let anchor: { record_hash?: string; submitted: boolean; error?: string } = { submitted: false }
     if (config.logEndpoint) {
-      anchor = await emitDirectoryAnchor({
+      const result = await emitDirectoryAnchor({
         logEndpoint: config.logEndpoint,
         directoryOrigin: config.origin,
         operatorPrivateKey: config.operatorPrivateKey,
         epoch: snapshot.epoch,
         rootHash: snapshot.root_hash,
       })
+      if (result.record && result.record_hash) {
+        anchorHistory.add(result.record, result.record_hash)
+      }
+      anchor = { record_hash: result.record_hash, submitted: result.submitted, ...(result.error ? { error: result.error } : {}) }
     }
 
     jsonResponse(res, 200, {
@@ -297,6 +357,60 @@ async function handle(
       epoch: snapshot.epoch,
       root_hash: snapshot.root_hash,
       directory_origin: config.origin,
+    })
+    return
+  }
+
+  // GET /v6/anchors/<record_hash>, point lookup of an anchor body by hash.
+  // The record_hash format mirrors the `sha256:<64hex>` shape stored in the
+  // log + carried in canonical record fields. Used by spec §6.3 step 1
+  // verifiers after they discover an anchor commitment on the log via
+  // `GET /v1/by-context/...` on log-node, the verifier reads the body
+  // here to recover directory_root + directory_epoch + signature.
+  //
+  // Transitional path. When the §2.12 record-body archive layer ships
+  // (D070 placeholder), plain body retrieval moves to the standard
+  // archive endpoint; this endpoint stays as a directory-specific
+  // surface but is no longer the only way to reach the body.
+  const anchorByHashMatch = url.pathname.match(/^\/v6\/anchors\/(sha256:[0-9a-f]{64})$/)
+  if (req.method === 'GET' && anchorByHashMatch) {
+    const recordHash = anchorByHashMatch[1]!
+    const record = anchorHistory.getByHash(recordHash)
+    if (!record) {
+      problemResponse(res, 404, 'anchor-not-found', 'Not Found', `no anchor with record_hash ${recordHash}`)
+      return
+    }
+    res.setHeader('cache-control', 'public, max-age=60')
+    jsonResponse(res, 200, { record_hash: recordHash, record })
+    return
+  }
+
+  // GET /v6/anchors?since=<ms>&limit=<n>, recent anchors in newest-first
+  // order. Used by §6.3 step 1 verifiers walking back to find the anchor
+  // closest to (but not after) a record's timestamp T, and by §6.3 step 5
+  // verifiers walking back from the latest anchor to its predecessor for
+  // the audit-proof input pair.
+  if (req.method === 'GET' && url.pathname === '/v6/anchors') {
+    const sinceStr = url.searchParams.get('since')
+    const limitStr = url.searchParams.get('limit')
+    const since = sinceStr ? Number(sinceStr) : undefined
+    const limit = limitStr ? Number(limitStr) : 100
+    if (sinceStr !== null && (!Number.isFinite(since) || (since as number) < 0)) {
+      problemResponse(res, 400, 'invalid-since', 'Bad Request', 'since must be a non-negative integer (unix ms)')
+      return
+    }
+    if (!Number.isFinite(limit) || limit <= 0) {
+      problemResponse(res, 400, 'invalid-limit', 'Bad Request', 'limit must be a positive integer')
+      return
+    }
+    const records = anchorHistory.recent(since, limit)
+    res.setHeader('cache-control', 'public, max-age=10')
+    jsonResponse(res, 200, {
+      total_anchors: anchorHistory.size(),
+      since: since ?? null,
+      limit,
+      count: records.length,
+      anchors: records,
     })
     return
   }
