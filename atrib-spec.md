@@ -2273,7 +2273,7 @@ Returns a paginated list of sessions in which a given creator appears. Requires 
 ```
 GET /v1/creators/ABC.../sessions
 
-// Optional: after=<ISO8601>, before=<ISO8601>, has_transaction=true|false
+// Optional: since=<ISO8601 | unix_ms>, until=<ISO8601 | unix_ms>, has_transaction=true|false
 // Optional: limit= (default 50, max 200), cursor=
 
 {
@@ -2286,7 +2286,7 @@ GET /v1/creators/ABC.../sessions
       "has_transaction": true
     }
   ],
-  "next_cursor": "eyJhZnRlciI..."  // null if no further results
+  "next_cursor": "eyJzaW5jZSI..."  // null if no further results
 }
 ```
 
