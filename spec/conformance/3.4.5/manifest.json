@@ -1,0 +1,25 @@
+{
+  "spec_section": "3.4.5",
+  "spec_title": "Provenance trace (producer-claim ancestry walk)",
+  "decision_link": "D068 + §3.4.5",
+  "generated_at": 1767225600000,
+  "generator": "packages/log-dev/scripts/generate-conformance-3.4.5-7.ts",
+  "cases": [
+    {
+      "file": "cases/linear-informed-by-chain.json",
+      "name": "linear-informed-by-chain"
+    },
+    {
+      "file": "cases/chain-precedes-not-walked.json",
+      "name": "chain-precedes-not-walked"
+    },
+    {
+      "file": "cases/depth-limit-truncates.json",
+      "name": "depth-limit-truncates"
+    }
+  ],
+  "keys": {
+    "alice_pubkey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc"
+  },
+  "note": "Provenance trace walks producer-claimed ancestry edges only (INFORMED_BY, ANNOTATES, REVISES). The structure-vs-claims invariant (§3.1) requires that CHAIN_PRECEDES NOT be walked. Cases enumerate the load-bearing properties: multi-hop walk, the structural-edge prohibition, and depth truncation."
+}

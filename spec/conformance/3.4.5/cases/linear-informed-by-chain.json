@@ -1,0 +1,57 @@
+{
+  "name": "linear-informed-by-chain",
+  "description": "Three records linked by informed_by: C→B→A. Trace from C with default depth must surface the full ancestry: {A, B, C}. Records appear in the response regardless of order; the response set membership is the spec-normative property.",
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+        "content_id": "sha256:a100000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "TVsyDotGSzuqxlEucgJvBs533fH4skDvAeDVSdXnsmK-C1fqi4eAFMV7yMgEyqbg6-r--IrkAU5wAO5AQBOODA",
+        "timestamp": 1767225601000
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+        "content_id": "sha256:b100000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "informed_by": [
+          "sha256:26068ad35b17a0a967c796ba9a38da31b766daaae6bb87b40fc941590b8a20eb"
+        ],
+        "signature": "fH6YxGhpafe_HAYDg_pUtAUPpqPt9MoSJTce2hUIsj1Dlj9srrGm-DoDPgDrPCSFbJU9v9qcW1b1NZYvRGteAw",
+        "timestamp": 1767225602000
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+        "content_id": "sha256:c100000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "informed_by": [
+          "sha256:761ac3a7177c810aa6786f2d7ca4ecdf6611960faa4bcae93a242f9e31bdf6b7"
+        ],
+        "signature": "EZGHjfgoYOUYbrZO4rpFqdbMLRvPU3z20v6_kmxOmSQgHaXncwgp5R0VqOPAKrhVpbilPUVfB195mhklfiYRAA",
+        "timestamp": 1767225603000
+      }
+    ],
+    "start_record_index": 2,
+    "depth": 5,
+    "include_annotations": true,
+    "include_revisions": true
+  },
+  "expected": {
+    "record_indexes_in_response": [
+      0,
+      1,
+      2
+    ],
+    "truncated_by_depth": false,
+    "truncated_by_count": false
+  }
+}

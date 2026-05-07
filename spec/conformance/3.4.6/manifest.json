@@ -1,0 +1,25 @@
+{
+  "spec_section": "3.4.6",
+  "spec_title": "Causal chain (substrate-derived chain_root walk)",
+  "decision_link": "D068 + §3.4.6",
+  "generated_at": 1767225600000,
+  "generator": "packages/log-dev/scripts/generate-conformance-3.4.5-7.ts",
+  "cases": [
+    {
+      "file": "cases/linear-chain-to-genesis.json",
+      "name": "linear-chain-to-genesis"
+    },
+    {
+      "file": "cases/informed-by-not-walked.json",
+      "name": "informed-by-not-walked"
+    },
+    {
+      "file": "cases/depth-limit-truncates.json",
+      "name": "depth-limit-truncates"
+    }
+  ],
+  "keys": {
+    "alice_pubkey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc"
+  },
+  "note": "Causal chain walks chain_root linkage only — the substrate-derived structural ordering. Symmetric counterpart to §3.4.5: producer claims (INFORMED_BY, ANNOTATES, REVISES) MUST NOT be walked. Cases enumerate linear-walk-to-genesis, the producer-claim prohibition, and depth truncation."
+}

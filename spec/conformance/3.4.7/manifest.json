@@ -1,0 +1,21 @@
+{
+  "spec_section": "3.4.7",
+  "spec_title": "Creator activity-map (windowed cross-session view)",
+  "decision_link": "§3.4.7",
+  "generated_at": 1767225600000,
+  "generator": "packages/log-dev/scripts/generate-conformance-3.4.5-7.ts",
+  "cases": [
+    {
+      "file": "cases/cross-session-only-by-default.json",
+      "name": "cross-session-only-by-default"
+    },
+    {
+      "file": "cases/include-intra-session-true-restores.json",
+      "name": "include-intra-session-true-restores"
+    }
+  ],
+  "keys": {
+    "alice_pubkey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc"
+  },
+  "note": "By default, the creator activity-map excludes intra-session edges (SESSION_PRECEDES, SESSION_PARALLEL) so the cross-session signal isn't swamped. ?include_intra_session=true restores the full edge set. Both modes preserve cross-session edges (CROSS_SESSION, INFORMED_BY across context_ids, PROVENANCE_OF, ANNOTATES, REVISES) and CHAIN_PRECEDES."
+}
