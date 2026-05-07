@@ -58,6 +58,39 @@ export interface BuildGraphOptions {
    * log_index and revocation cannot be applied.
    */
   logIndexLookup?: (recordHashHex: string) => number | null
+  /**
+   * When set, emit SESSION_PRECEDES (§3.2.4 step 2) and SESSION_PARALLEL
+   * (§3.2.4 step 3) only between records that carry independent information.
+   * Two reductions stack:
+   *
+   *   1. Chain-component skip. If two records sit in the same CHAIN_PRECEDES
+   *      connected component, their temporal order is already encoded in
+   *      the chain, a SESSION_PRECEDES edge between them is information-
+   *      free. Computed via Union-Find over the chain edges.
+   *
+   *   2. Adjacent-only emission. For pairs that ARE in different chain
+   *      components, emit one SESSION_PRECEDES edge per consecutive pair
+   *      in time order rather than the full N*(N-1)/2 pairwise set. The
+   *      transitive "X happens-before Z" relation is implied by "X→Y" +
+   *      "Y→Z" and doesn't need to be materialized as an edge.
+   *
+   * Stacked, these reduce a fully-chained 1484-record session from 1.1M
+   * SESSION_PRECEDES candidates to 0 emitted edges (chain encodes order
+   * already), and a 1484-record unchained session from 1.1M candidates to
+   * 1483 edges (one per consecutive pair).
+   *
+   * Default false (preserves the full pairwise derivation per spec §3.2.4
+   * steps 2-3 verbatim). The /v1/graph/<context_id> endpoint defaults this
+   * ON because rendering 1.1M edges blows the response budget AND produces
+   * an unintelligible all-pairs blob, neither the substrate nor the human
+   * benefits. Endpoints that need spec-faithful all-pairs derivation (e.g.
+   * conformance harnesses) leave this false.
+   *
+   * Tracked separately from §3.4.7's intra-session filter for the identity
+   * view: that endpoint drops intra-session edges entirely; this option
+   * preserves the load-bearing temporal links across chain boundaries.
+   */
+  compactIntraSessionEdges?: boolean
 }
 
 /** Build an attribution graph from records and gap nodes. */
@@ -152,6 +185,35 @@ export async function buildGraph(
   // Edge derivation (section 3.2.4, normative, must be applied in order)
   const edges: GraphEdge[] = []
   const chainPrecedesPairs = new Set<string>() // "sourceId->targetId"
+  const compact = options.compactIntraSessionEdges ?? false
+
+  // Union-Find over CHAIN_PRECEDES connectivity. Used by the compact path to
+  // skip SESSION_PRECEDES/SESSION_PARALLEL between transitively-chained
+  // records, since the chain already encodes their relationship.
+  const chainParent = new Map<string, string>()
+  const findChainRoot = (id: string): string => {
+    let curr = id
+    let parent = chainParent.get(curr)
+    while (parent !== undefined && parent !== curr) {
+      curr = parent
+      parent = chainParent.get(curr)
+    }
+    const root = curr
+    // Path compression
+    let walker = id
+    while (walker !== root) {
+      const next = chainParent.get(walker) ?? walker
+      chainParent.set(walker, root)
+      walker = next
+      if (next === walker) break
+    }
+    return root
+  }
+  const unionChain = (a: string, b: string): void => {
+    const rootA = findChainRoot(a)
+    const rootB = findChainRoot(b)
+    if (rootA !== rootB) chainParent.set(rootA, rootB)
+  }
 
   // Step 1: CHAIN_PRECEDES
   for (const node of nodes) {
@@ -169,6 +231,7 @@ export async function buildGraph(
       })
       chainPrecedesPairs.add(`${parentId}->${node.id}`)
       chainPrecedesPairs.add(`${node.id}->${parentId}`)
+      if (compact) unionChain(parentId, node.id)
     }
   }
 
@@ -176,44 +239,99 @@ export async function buildGraph(
   const sessionPrecedesPairs = new Set<string>()
   const byContext = groupByContextId(nodes)
 
-  for (const contextNodes of byContext.values()) {
-    for (let i = 0; i < contextNodes.length; i++) {
-      for (let j = i + 1; j < contextNodes.length; j++) {
-        const a = contextNodes[i]!
-        const b = contextNodes[j]!
+  if (compact) {
+    // Compact path: sort each context's records by timestamp, walk pairwise,
+    // emit SESSION_PRECEDES only when consecutive records belong to different
+    // chain-connected-components. The transitive ordering is implied by the
+    // emitted edges plus CHAIN_PRECEDES, no information loss.
+    for (const contextNodes of byContext.values()) {
+      const ts = [...contextNodes].sort((a, b) => {
+        if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+      })
+      for (let i = 0; i < ts.length - 1; i++) {
+        const a = ts[i]!
+        const b = ts[i + 1]!
+        if (a.timestamp >= b.timestamp) continue
         const pairKey = `${a.id}->${b.id}`
         const reversePairKey = `${b.id}->${a.id}`
-
-        // Skip if CHAIN_PRECEDES exists between them
         if (chainPrecedesPairs.has(pairKey) || chainPrecedesPairs.has(reversePairKey)) continue
+        if (findChainRoot(a.id) === findChainRoot(b.id)) continue
+        edges.push({ type: 'SESSION_PRECEDES', source: a.id, target: b.id, directed: true })
+        sessionPrecedesPairs.add(pairKey)
+        sessionPrecedesPairs.add(reversePairKey)
+      }
+    }
+  } else {
+    for (const contextNodes of byContext.values()) {
+      for (let i = 0; i < contextNodes.length; i++) {
+        for (let j = i + 1; j < contextNodes.length; j++) {
+          const a = contextNodes[i]!
+          const b = contextNodes[j]!
+          const pairKey = `${a.id}->${b.id}`
+          const reversePairKey = `${b.id}->${a.id}`
 
-        if (a.timestamp < b.timestamp) {
-          edges.push({ type: 'SESSION_PRECEDES', source: a.id, target: b.id, directed: true })
-          sessionPrecedesPairs.add(pairKey)
-          sessionPrecedesPairs.add(reversePairKey)
-        } else if (b.timestamp < a.timestamp) {
-          edges.push({ type: 'SESSION_PRECEDES', source: b.id, target: a.id, directed: true })
-          sessionPrecedesPairs.add(pairKey)
-          sessionPrecedesPairs.add(reversePairKey)
+          // Skip if CHAIN_PRECEDES exists between them
+          if (chainPrecedesPairs.has(pairKey) || chainPrecedesPairs.has(reversePairKey)) continue
+
+          if (a.timestamp < b.timestamp) {
+            edges.push({ type: 'SESSION_PRECEDES', source: a.id, target: b.id, directed: true })
+            sessionPrecedesPairs.add(pairKey)
+            sessionPrecedesPairs.add(reversePairKey)
+          } else if (b.timestamp < a.timestamp) {
+            edges.push({ type: 'SESSION_PRECEDES', source: b.id, target: a.id, directed: true })
+            sessionPrecedesPairs.add(pairKey)
+            sessionPrecedesPairs.add(reversePairKey)
+          }
+          // Equal timestamps handled in Step 3 (SESSION_PARALLEL)
         }
-        // Equal timestamps handled in Step 3 (SESSION_PARALLEL)
       }
     }
   }
 
   // Step 3: SESSION_PARALLEL
-  for (const contextNodes of byContext.values()) {
-    for (let i = 0; i < contextNodes.length; i++) {
-      for (let j = i + 1; j < contextNodes.length; j++) {
-        const a = contextNodes[i]!
-        const b = contextNodes[j]!
-        const pairKey = `${a.id}->${b.id}`
-        const reversePairKey = `${b.id}->${a.id}`
+  if (compact) {
+    // Compact path: equal-timestamp pairs not already covered by CHAIN_PRECEDES
+    // and sitting in different chain-components. Group same-timestamp records
+    // per context_id; emit one undirected edge per pair within the group when
+    // their chain components differ.
+    for (const contextNodes of byContext.values()) {
+      const byTs = new Map<number, GraphNode[]>()
+      for (const n of contextNodes) {
+        const list = byTs.get(n.timestamp) ?? []
+        list.push(n)
+        byTs.set(n.timestamp, list)
+      }
+      for (const peers of byTs.values()) {
+        if (peers.length < 2) continue
+        for (let i = 0; i < peers.length; i++) {
+          for (let j = i + 1; j < peers.length; j++) {
+            const a = peers[i]!
+            const b = peers[j]!
+            const pairKey = `${a.id}->${b.id}`
+            const reversePairKey = `${b.id}->${a.id}`
+            if (chainPrecedesPairs.has(pairKey) || chainPrecedesPairs.has(reversePairKey)) continue
+            if (sessionPrecedesPairs.has(pairKey) || sessionPrecedesPairs.has(reversePairKey)) continue
+            if (findChainRoot(a.id) === findChainRoot(b.id)) continue
+            edges.push({ type: 'SESSION_PARALLEL', source: a.id, target: b.id, directed: false })
+          }
+        }
+      }
+    }
+  } else {
+    for (const contextNodes of byContext.values()) {
+      for (let i = 0; i < contextNodes.length; i++) {
+        for (let j = i + 1; j < contextNodes.length; j++) {
+          const a = contextNodes[i]!
+          const b = contextNodes[j]!
+          const pairKey = `${a.id}->${b.id}`
+          const reversePairKey = `${b.id}->${a.id}`
 
-        if (chainPrecedesPairs.has(pairKey) || chainPrecedesPairs.has(reversePairKey)) continue
-        if (sessionPrecedesPairs.has(pairKey) || sessionPrecedesPairs.has(reversePairKey)) continue
+          if (chainPrecedesPairs.has(pairKey) || chainPrecedesPairs.has(reversePairKey)) continue
+          if (sessionPrecedesPairs.has(pairKey) || sessionPrecedesPairs.has(reversePairKey)) continue
 
-        edges.push({ type: 'SESSION_PARALLEL', source: a.id, target: b.id, directed: false })
+          edges.push({ type: 'SESSION_PARALLEL', source: a.id, target: b.id, directed: false })
+        }
       }
     }
   }
