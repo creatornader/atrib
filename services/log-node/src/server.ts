@@ -269,7 +269,7 @@ async function handleRequest(
 
   // GET /v1/by-creator/<base64url>, list sessions for a creator_key (43 chars
   // base64url). Returns one entry per distinct context_id with node_count,
-  // has_transaction, first_seen_ms. Mirrors the shape of graph-node's
+  // has_transaction, first_seen. Mirrors the shape of graph-node's
   // /v1/creators/<key>/sessions so the dashboard can fall back transparently.
   const byCreatorMatch = req.url?.match(/^\/v1\/by-creator\/([A-Za-z0-9_-]{43})$/)
   if (req.method === 'GET' && byCreatorMatch) {
@@ -540,9 +540,9 @@ interface SessionSummary {
   context_id: string
   node_count: number
   /** Earliest record_timestamp_ms seen for this context_id from this creator. */
-  first_seen_ms: number
+  first_seen: number
   /** Latest record_timestamp_ms seen, useful for activity-map recency sort and live-trace detection. */
-  last_seen_ms: number
+  last_seen: number
   /**
    * Per-event-type record counts within the context_id. Surfaces the
    * diversity the older `has_transaction` boolean hid: clients need to
@@ -571,19 +571,19 @@ function handleByCreator(res: ServerResponse, tree: MerkleTree, creatorKey: stri
     const cur = sessions.get(decoded.context_id) ?? {
       context_id: decoded.context_id,
       node_count: 0,
-      first_seen_ms: decoded.timestamp_ms,
-      last_seen_ms: decoded.timestamp_ms,
+      first_seen: decoded.timestamp_ms,
+      last_seen: decoded.timestamp_ms,
       count_by_event_type: {},
       has_transaction: false,
     }
     cur.node_count += 1
     cur.count_by_event_type[decoded.event_type] = (cur.count_by_event_type[decoded.event_type] ?? 0) + 1
     if (decoded.event_type === 'transaction') cur.has_transaction = true
-    if (decoded.timestamp_ms < cur.first_seen_ms) cur.first_seen_ms = decoded.timestamp_ms
-    if (decoded.timestamp_ms > cur.last_seen_ms) cur.last_seen_ms = decoded.timestamp_ms
+    if (decoded.timestamp_ms < cur.first_seen) cur.first_seen = decoded.timestamp_ms
+    if (decoded.timestamp_ms > cur.last_seen) cur.last_seen = decoded.timestamp_ms
     sessions.set(decoded.context_id, cur)
   }
-  const list = [...sessions.values()].sort((a, b) => b.last_seen_ms - a.last_seen_ms)
+  const list = [...sessions.values()].sort((a, b) => b.last_seen - a.last_seen)
   res.setHeader('cache-control', 'public, max-age=10')
   sendJson(res, 200, { creator_key: creatorKey, count: list.length, sessions: list })
 }

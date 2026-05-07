@@ -2331,24 +2331,30 @@ This endpoint differs from [§3.4.4](#344-get-v1creatorscreator_keysessions): th
 GET /v1/creators/ABC.../graph
 
 // Optional query parameters:
-// since=<ISO8601 | unix_ms>         (default: unbounded; oldest in window)
-// until=<ISO8601 | unix_ms>         (default: now; newest in window)
-// limit=<n>                         (default: 200, max: 1000; max records)
-// event_type=<short_label | uri>    (filter by node event_type)
+// since=<ISO8601 | unix_ms>            (default: unbounded; oldest in window)
+// until=<ISO8601 | unix_ms>            (default: now; newest in window)
+// limit=<n>                            (default: 200, max: 1000; max records)
+// event_type=<short_label | uri>       (filter by node event_type)
+// include_intra_session=true|false     (default: false; see "Edge scope" below)
 
 // 200 OK  -> CreatorGraphResponse:
 //            {
-//              "creator_key":   "ABC...",
-//              "window":        { "since": ..., "until": ..., "limit": 200 },
-//              "record_count":  47,
-//              "truncated":     false,            // true if limit hit
-//              "graph":         GraphResponse     // [§3.5.1](#351-graph-response-object)
+//              "creator_key":                    "ABC...",
+//              "window":                         { "since": ..., "until": ..., "limit": 200 },
+//              "record_count":                   47,
+//              "truncated":                      false,    // true if limit hit
+//              "intra_session_edges_filtered":   true,     // false if include_intra_session=true
+//              "graph":                          GraphResponse  // [§3.5.1](#351-graph-response-object)
 //            }
 // 404     -> creator has no records in store
 // 400     -> invalid time window or malformed creator_key
 ```
 
-The response carries the same `nodes` and `edges` shape as [§3.4.1](#341-get-v1graphcontext_id) inside the `graph` field, so consumers can render creator activity-maps with the same rendering pipeline used for session graphs. The outer envelope (`creator_key`, `window`, `record_count`, `truncated`) provides the metadata callers need to parameterize follow-up queries (paginate by adjusting `since`/`until`, refine by `event_type`).
+The response carries the same `nodes` and `edges` shape as [§3.4.1](#341-get-v1graphcontext_id) inside the `graph` field, so consumers can render creator activity-maps with the same rendering pipeline used for session graphs. The outer envelope (`creator_key`, `window`, `record_count`, `truncated`, `intra_session_edges_filtered`) provides the metadata callers need to parameterize follow-up queries (paginate by adjusting `since`/`until`, refine by `event_type`, restore intra-session edges via `include_intra_session=true`).
+
+**Edge scope.** The activity-map exists to surface CROSS-SESSION relationships: how a creator's records connect across `context_id` boundaries. By default the response excludes the two intra-session-only edge types, `SESSION_PRECEDES` ([§3.2.4](#324-edge-derivation-rules) step 2) and `SESSION_PARALLEL` ([§3.2.4](#324-edge-derivation-rules) step 3), because those are what the per-session graph at [§3.4.1](#341-get-v1graphcontext_id) renders. Including intra-session edges here also produces O(N²) edge counts when records in a session don't chain (a single session of 500 records can produce ~125k `SESSION_PRECEDES` pairs), swamping the cross-session signal the activity-map exists for. Implementations MUST set `intra_session_edges_filtered: true` in the response envelope when this default applies.
+
+Callers that need every applicable edge type (e.g., a single-creator analytics tool that wants per-session sequencing AND cross-session relationships in one response) opt in via `include_intra_session=true`; the response then carries every edge `buildGraph` derived and reports `intra_session_edges_filtered: false`. Cross-session edge types (`CROSS_SESSION`, `INFORMED_BY` across context_ids, `PROVENANCE_OF`, `ANNOTATES`, `REVISES`) are always included regardless of the flag, and `CHAIN_PRECEDES` is always included because it is intra-session linkage that nonetheless reflects the producer's chain integrity rather than O(N²) fallback ordering.
 
 ---
 

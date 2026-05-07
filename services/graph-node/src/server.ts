@@ -458,12 +458,40 @@ async function handleCreatorGraph(
     logIndexLookup: logIndexLookup(store),
   })
 
+  // Activity-map scope: per spec §3.4.7, the creator activity-map exists
+  // to surface CROSS-SESSION relationships (CROSS_SESSION via session_token,
+  // INFORMED_BY across context_ids, PROVENANCE_OF anchoring sessions to
+  // upstream genesis records, plus ANNOTATES + REVISES across boundaries).
+  // Intra-session sequencing, SESSION_PRECEDES (§3.2.4 step 2) and
+  // SESSION_PARALLEL (§3.2.4 step 3), is what the per-session view at
+  // /v1/graph/<context_id> renders. Including those edges in the
+  // activity-map response produces O(N²) edge counts when records in a
+  // session don't chain (a single session of 500 records produces 125k
+  // SESSION_PRECEDES pairs), swamping the cross-session signal the
+  // activity map exists for.
+  //
+  // The opt-in `?include_intra_session=true` query parameter restores the
+  // unfiltered view for callers that want every edge type (e.g., a
+  // single-creator analytics tool that ALSO wants per-session ordering).
+  // Default is false: cross-session signal only.
+  const includeIntraSession = params.get('include_intra_session') === 'true'
+  const filteredGraph = includeIntraSession
+    ? graph
+    : {
+        ...graph,
+        edges: graph.edges.filter(
+          (e) => e.type !== 'SESSION_PRECEDES' && e.type !== 'SESSION_PARALLEL',
+        ),
+      }
+  filteredGraph.edge_count = filteredGraph.edges.length
+
   sendJson(res, 200, {
     creator_key: creatorKey,
     window: { since: window.since, until: window.until, limit },
     record_count: filteredRecords.length,
     truncated: allRecords.length > limit,
-    graph,
+    intra_session_edges_filtered: !includeIntraSession,
+    graph: filteredGraph,
   })
 }
 
