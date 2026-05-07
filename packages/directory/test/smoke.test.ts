@@ -6,13 +6,34 @@
 //   3. Lookup unregistered key → returns null with valid non-membership proof
 //   4. currentSnapshot() returns advancing epochs after each publish
 //   5. auditProof between two epochs returns serialized proof bytes
+//   6. verifyLookupProof accepts a fresh lookup proof against the anchored root (§6.3 step 7)
+//   7. verifyLookupProof rejects a lookup proof under a tampered root
+//   8. verifyAuditProof accepts an audit proof against the captured root chain (§6.3 step 5)
+//   9. verifyAuditProof rejects an audit proof under tampered hashes
+//   10. directoryVrfPublicKey returns 32 bytes (HardCodedAkdVRF reference)
 
 import { describe, it, expect, beforeAll } from 'vitest'
 import { randomBytes } from 'node:crypto'
 import * as ed25519 from '@noble/ed25519'
 
-import { AtribDirectory, signClaim, verifyClaimSignature } from '../src/index.js'
+import {
+  AtribDirectory,
+  signClaim,
+  verifyClaimSignature,
+  verifyLookupProof,
+  verifyAuditProof,
+  directoryVrfPublicKey,
+} from '../src/index.js'
 import type { IdentityClaim } from '../src/index.js'
+
+/** Helper: hex string → Uint8Array. */
+function hexToBytes(hex: string): Uint8Array {
+  const out = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < out.length; i++) {
+    out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+  }
+  return out
+}
 
 function genKeypair(): { privateKey: Uint8Array; publicKey: string } {
   const privateKey = randomBytes(32)
@@ -149,5 +170,130 @@ describe('@atrib/directory smoke', () => {
     const proof = await dir.auditProof(1, 2)
     expect(proof).toBeInstanceOf(Uint8Array)
     expect(proof.length).toBeGreaterThan(0)
+  })
+
+  it('directoryVrfPublicKey returns 32-byte HardCodedAkdVRF pubkey', async () => {
+    const pk = await directoryVrfPublicKey()
+    expect(pk).toBeInstanceOf(Uint8Array)
+    expect(pk.length).toBe(32)
+  })
+
+  it('verifyLookupProof accepts a fresh proof against the anchored root (§6.3 step 7)', async () => {
+    const { privateKey, publicKey } = await genKeypairAsync()
+    const dir = await AtribDirectory.create(privateKey)
+
+    await dir.publishAndSign({
+      creator_key: publicKey,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: { display_name: 'verifier-target' },
+    })
+
+    const looked = await dir.lookup(publicKey)
+    expect(looked.claim).not.toBeNull()
+    expect(looked.proof.length).toBeGreaterThan(0)
+
+    const snap = await dir.currentSnapshot()
+    const vrfPublicKey = await directoryVrfPublicKey()
+
+    const ok = verifyLookupProof({
+      vrfPublicKey,
+      rootHash: hexToBytes(snap.root_hash),
+      currentEpoch: snap.epoch,
+      label: publicKey,
+      proof: looked.proof,
+    })
+    expect(ok).toBe(true)
+  })
+
+  it('verifyLookupProof rejects a proof under a tampered root', async () => {
+    const { privateKey, publicKey } = await genKeypairAsync()
+    const dir = await AtribDirectory.create(privateKey)
+
+    await dir.publishAndSign({
+      creator_key: publicKey,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: {},
+    })
+
+    const looked = await dir.lookup(publicKey)
+    const snap = await dir.currentSnapshot()
+    const vrfPublicKey = await directoryVrfPublicKey()
+
+    // Flip a bit in the root hash to simulate a tampered anchor.
+    const tampered = hexToBytes(snap.root_hash)
+    tampered[0] ^= 0x01
+
+    const ok = verifyLookupProof({
+      vrfPublicKey,
+      rootHash: tampered,
+      currentEpoch: snap.epoch,
+      label: publicKey,
+      proof: looked.proof,
+    })
+    expect(ok).toBe(false)
+  })
+
+  it('verifyAuditProof accepts a proof against the captured root chain (§6.3 step 5)', async () => {
+    const { privateKey, publicKey } = await genKeypairAsync()
+    const dir = await AtribDirectory.create(privateKey)
+
+    // Capture root at epoch 1 and epoch 2 to feed audit_verify.
+    await dir.publishAndSign({
+      creator_key: publicKey,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: { display_name: 'epoch1' },
+    })
+    const snap1 = await dir.currentSnapshot()
+    expect(snap1.epoch).toBe(1)
+
+    await dir.publishAndSign({
+      creator_key: (await genKeypairAsync()).publicKey,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: { display_name: 'epoch2' },
+    })
+    const snap2 = await dir.currentSnapshot()
+    expect(snap2.epoch).toBe(2)
+
+    const proof = await dir.auditProof(1, 2)
+    const ok = await verifyAuditProof({
+      rootHashes: [hexToBytes(snap1.root_hash), hexToBytes(snap2.root_hash)],
+      proof,
+    })
+    expect(ok).toBe(true)
+  })
+
+  it('verifyAuditProof rejects a proof under a tampered end-root', async () => {
+    const { privateKey, publicKey } = await genKeypairAsync()
+    const dir = await AtribDirectory.create(privateKey)
+
+    await dir.publishAndSign({
+      creator_key: publicKey,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: {},
+    })
+    const snap1 = await dir.currentSnapshot()
+
+    await dir.publishAndSign({
+      creator_key: (await genKeypairAsync()).publicKey,
+      claim_type: 'self_attested',
+      claim_method: 'self',
+      claim_subject: {},
+    })
+    const snap2 = await dir.currentSnapshot()
+
+    const proof = await dir.auditProof(1, 2)
+    const tamperedEnd = hexToBytes(snap2.root_hash)
+    tamperedEnd[0] ^= 0x01
+
+    const ok = await verifyAuditProof({
+      rootHashes: [hexToBytes(snap1.root_hash), tamperedEnd],
+      proof,
+    })
+    expect(ok).toBe(false)
   })
 })

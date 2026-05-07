@@ -64,3 +64,51 @@ export class DirectoryHandle {
 }
 
 export function init(): void;
+
+/**
+ * Verify an AKD audit (append-only) proof against a sequence of root hashes.
+ *
+ * Per spec §6.3 step 5. Takes (a) the concatenated 32-byte root hashes
+ * captured at each anchored checkpoint between two epochs, in order
+ * (so for epochs e..f, that's `f - e + 1` hashes = `(f-e+1)*32` bytes),
+ * and (b) the bincode-serialized audit proof from the `/v6/audit-proof`
+ * endpoint.
+ *
+ * We inline akd's `audit_verify` rather than calling the upstream
+ * function because upstream's `verify_append_only_hash` hardcodes
+ * `AzksParallelismConfig::default()` (= `AvailableOr(32)`) which calls
+ * `std::thread::available_parallelism()` and tries to spawn parallel
+ * Tokio tasks. WASM has no Tokio executor, so the upstream path panics
+ * with `RuntimeError: unreachable`. Our inlined path passes
+ * `AzksParallelismConfig::disabled()` everywhere.
+ *
+ * Async because the underlying AKD storage backend is async; no actual I/O.
+ */
+export function verify_audit_proof(hashes_concat: Uint8Array, proof_bytes: Uint8Array): Promise<boolean>;
+
+/**
+ * Verify an AKD lookup proof against a known root hash.
+ *
+ * Per spec §6.3 step 7. The verifier holds (a) the directory operator's
+ * VRF public key (out of band; for HardCodedAkdVRF use [`vrf_public_key`]),
+ * (b) the anchored root hash at the proof's epoch (from a `directory_anchor`
+ * log entry), (c) the directory's current epoch, (d) the looked-up label,
+ * and (e) the bincode-serialized lookup proof from the `/v6/lookup/:key`
+ * endpoint.
+ *
+ * Wraps [`akd_core::verify::lookup_verify`] which is `pub fn` and pure.
+ */
+export function verify_lookup_proof(vrf_public_key: Uint8Array, root_hash: Uint8Array, current_epoch: bigint, label: string, proof_bytes: Uint8Array): boolean;
+
+/**
+ * Return the VRF public key for the bridge's `HardCodedAkdVRF`.
+ *
+ * Verifiers need the operator's VRF public key to validate lookup
+ * proofs. For production directories the operator publishes their own
+ * VRF pubkey in their identity claim or a dedicated record. For this
+ * reference implementation (which uses `HardCodedAkdVRF` per
+ * `DirectoryHandle::new`), the key is constant and exposed here.
+ *
+ * Returns the 32-byte VRF public key.
+ */
+export function vrf_public_key(): Promise<Uint8Array>;
