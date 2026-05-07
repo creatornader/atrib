@@ -445,6 +445,225 @@ function checkConformanceCorpusConsistency() {
   }
 }
 
+// ─── inline-link discipline ────────────────────────────────────────────────
+// Bare §X.Y and Dxxx references in markdown prose drift over time as readers
+// can't navigate them. The going-forward fix lives in
+// .changeset/changelog-atrib.cjs (auto-links during version generation); this
+// check enforces the same rule across the full doc surface so authors keep
+// hand-written prose linked too.
+//
+// Rules:
+//   * Refs inside fenced code blocks (``` or ~~~) are allowed.
+//   * Refs inside inline code spans (`...`) are allowed.
+//   * Refs already inside markdown links [text](url) are allowed.
+//   * The leading ref of a heading line ('## D001:', '## §1 Foo') is the
+//     anchor source for that heading and is allowed bare.
+//   * External RFC refs (preceded by 'RFC NNNN ') are allowed bare.
+//
+// A bare ref is FAIL if its target anchor exists (drift, could be linked but
+// wasn't). A bare ref is OK-with-warning if no anchor exists (typo, stale
+// reference, or speculative future section). The check fails only on drift.
+function checkInlineLinks() {
+  const check = 'inline-links'
+  const sectionAnchors = mineSectionAnchors()
+  const adrAnchors = mineAdrAnchors()
+  const skipDirs = new Set(['node_modules', 'dist', 'build', '.git', '.next',
+    '.turbo', 'wasm', 'pkg', 'target', 'coverage'])
+
+  function walkMd(rel) {
+    const out = []
+    const entries = readdirSync(join(ROOT, rel), { withFileTypes: true })
+    for (const e of entries) {
+      if (skipDirs.has(e.name)) continue
+      if (e.name.startsWith('.') && e.name !== '.changeset') continue
+      const sub = rel ? `${rel}/${e.name}` : e.name
+      if (e.isDirectory()) {
+        out.push(...walkMd(sub))
+      } else if (e.isFile() && e.name.endsWith('.md')) {
+        out.push(sub)
+      }
+    }
+    return out
+  }
+
+  const files = walkMd('')
+  const drifted = []
+  const unmapped = []
+  for (const rel of files) {
+    const text = read(rel)
+    const findings = scanFileForBareRefs(text)
+    for (const f of findings) {
+      const slug = f.kind === 'section' ? sectionAnchors[f.key] : adrAnchors[f.key]
+      if (slug) {
+        drifted.push({ file: rel, ...f })
+      } else {
+        unmapped.push({ file: rel, ...f })
+      }
+    }
+  }
+
+  if (drifted.length > 0) {
+    for (const d of drifted) {
+      fail(check, `${d.file}:${d.line} bare ref "${d.text}", anchor exists, should be inline-linked`,
+        { file: d.file, line: d.line, text: d.text, snippet: d.snippet })
+    }
+    return
+  }
+  ok(check, `${files.length} markdown file(s) clean (${unmapped.length} unmapped, typo/speculative refs allowed)`)
+}
+
+function mineSectionAnchors() {
+  const text = read('atrib-spec.md')
+  const out = {}
+  let inFence = false
+  for (const line of text.split('\n')) {
+    const s = line.trimStart()
+    if (s.startsWith('```') || s.startsWith('~~~')) { inFence = !inFence; continue }
+    if (inFence) continue
+    const h = s.match(/^#{1,6}\s+(.+?)\s*$/)
+    if (!h) continue
+    const stripped = h[1].replace(/^§\s?/, '')
+    const num = stripped.match(/^(\d+(?:\.\d+)*)\s+/)
+    if (!num) continue
+    out[num[1]] = slugifyForAnchor(h[1])
+  }
+  return out
+}
+
+function mineAdrAnchors() {
+  const text = read('DECISIONS.md')
+  const out = {}
+  let inFence = false
+  for (const line of text.split('\n')) {
+    const s = line.trimStart()
+    if (s.startsWith('```') || s.startsWith('~~~')) { inFence = !inFence; continue }
+    if (inFence) continue
+    const h = s.match(/^#{1,6}\s+(D\d{3})\b.*$/)
+    if (h) out[h[1].toUpperCase()] = slugifyForAnchor(s.replace(/^#{1,6}\s+/, ''))
+  }
+  return out
+}
+
+// Slug rule modeled after GitHub's heading slugification: strip markdown link
+// syntax to display text, lowercase, drop punctuation outside [a-z0-9-_], map
+// whitespace to hyphens.
+function slugifyForAnchor(text) {
+  return text
+    .trim()
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .toLowerCase()
+    .replace(/`/g, '')
+    .replace(/\*/g, '')
+    .replace(/[\[\]()]/g, '')
+    .replace(/[^a-z0-9\-_ ]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+const REF_RE = /§\s?\d+(?:\.\d+)*|\bD\d{3}\b/g
+const LEADING_REF_RE = /^(?:§\s?\d+(?:\.\d+)*|D\d{3}\b)/
+
+function scanFileForBareRefs(text) {
+  const out = []
+  let inFence = false
+  const rawLines = text.split('\n')
+  for (let i = 0; i < rawLines.length; i += 1) {
+    const original = rawLines[i]
+    const trimmed = original.trimStart()
+    if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+      inFence = !inFence
+      continue
+    }
+    if (inFence) continue
+    if (!/§|D\d{3}/.test(original)) continue
+    const linkMask = buildLinkMask(original)
+    const codeMask = buildInlineCodeMask(original)
+    const mask = linkMask.map((v, idx) => v || codeMask[idx])
+    const headingMatch = original.match(/^(\s*#{1,6}\s+)/)
+    if (headingMatch) {
+      const titleStart = headingMatch[0].length
+      const tail = original.slice(titleStart)
+      const lead = tail.match(LEADING_REF_RE)
+      if (lead) {
+        for (let m = titleStart; m < titleStart + lead[0].length; m += 1) {
+          mask[m] = 1
+        }
+      }
+    }
+    for (const m of original.matchAll(REF_RE)) {
+      const start = m.index
+      const end = start + m[0].length
+      let masked = false
+      for (let k = start; k < end; k += 1) {
+        if (mask[k]) { masked = true; break }
+      }
+      if (masked) continue
+      if (m[0].startsWith('§')) {
+        const before = original.slice(Math.max(0, start - 12), start)
+        if (/RFC\s+\d{3,5}\s+$/.test(before)) continue
+      }
+      out.push({
+        line: i + 1,
+        col: start + 1,
+        text: m[0],
+        kind: m[0].startsWith('§') ? 'section' : 'adr',
+        key: m[0].startsWith('§') ? m[0].replace(/§\s?/, '') : m[0].toUpperCase(),
+        snippet: original.slice(Math.max(0, start - 30), end + 30).trim(),
+      })
+    }
+  }
+  return out
+}
+
+function buildLinkMask(line) {
+  const mask = new Array(line.length).fill(0)
+  let i = 0
+  while (i < line.length) {
+    if (line[i] === '[') {
+      let depth = 1
+      let j = i + 1
+      while (j < line.length && depth > 0) {
+        if (line[j] === '[') depth += 1
+        else if (line[j] === ']') depth -= 1
+        if (depth === 0) break
+        j += 1
+      }
+      if (depth !== 0 || line[j + 1] !== '(') { i += 1; continue }
+      let k = j + 2
+      let pdepth = 1
+      while (k < line.length && pdepth > 0) {
+        if (line[k] === '(') pdepth += 1
+        else if (line[k] === ')') pdepth -= 1
+        if (pdepth === 0) break
+        k += 1
+      }
+      if (pdepth !== 0) { i += 1; continue }
+      for (let m = i; m <= k; m += 1) mask[m] = 1
+      i = k + 1
+    } else {
+      i += 1
+    }
+  }
+  return mask
+}
+
+function buildInlineCodeMask(line) {
+  const mask = new Array(line.length).fill(0)
+  let i = 0
+  while (i < line.length) {
+    if (line[i] === '`') {
+      const close = line.indexOf('`', i + 1)
+      if (close === -1) break
+      for (let m = i; m <= close; m += 1) mask[m] = 1
+      i = close + 1
+    } else {
+      i += 1
+    }
+  }
+  return mask
+}
+
 // ─── helpers ───────────────────────────────────────────────────────────────
 
 function capitalize(word) {
@@ -460,6 +679,7 @@ const checks = [
   checkWorkspacePackages,
   checkPublishedPackageCount,
   checkConformanceCorpusConsistency,
+  checkInlineLinks,
 ]
 
 for (const c of checks) {
