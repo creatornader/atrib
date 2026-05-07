@@ -44,7 +44,7 @@ After the response is sent (non-blocking; see invariant #4 below):
 7. **Submits the signed record to the log endpoint** with retry (exponential backoff, max 3 attempts, 30s window).
 8. **Caches the proof bundle on success**, or caches the signed record for `flush()` retry on failure.
 
-## Critical behaviors (degradation contract per spec §5.8)
+## Critical behaviors (degradation contract per spec [§5.8](../../atrib-spec.md#58-degradation-contract))
 
 The middleware is built around one absolute invariant: **atrib failures must never affect the primary tool call or agent response.** Concretely:
 
@@ -53,7 +53,7 @@ The middleware is built around one absolute invariant: **atrib failures must nev
 - Log submission failures are silent and retried. Records that fail repeatedly are cached locally and given one final retry on `flush()`, drained in priority order (high before normal; see "How priority works on the wire" below).
 - If a tool handler returns `isError: true`, **no record is emitted** per [§5.3.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#533-record-construction-and-signing) and no context is written to the response. Errors do not contribute to attribution chains.
 
-## Wire format (spec §2.6.1)
+## Wire format (spec [§2.6.1](../../atrib-spec.md#261-submit-entry))
 
 The submission queue POSTs each signed record as a **bare attribution record** to your log endpoint:
 
@@ -104,7 +104,7 @@ Wraps an `McpServer` instance in place. The wrapper is idempotent and can be cal
 | `logEndpoint`      | `string`         | optional in dev         | Where to POST signed records. Defaults to `https://log.atrib.dev/v1/entries`. Use `@atrib/log-dev`'s submission endpoint for local development.                   |
 | `policy`           | `PolicyDocument` | optional                | Policy document to serve at `/.well-known/atrib-policy.json` (for HTTP transports) and embed in `serverInfo` (for stdio).                                        |
 | `transactionTools` | `string[]`       | optional                | Tool names that should emit a transaction record (`event_type: https://atrib.dev/v1/types/transaction`) instead of a tool_call record. The middleware emits one of three atrib normative `event_type` URIs (tool_call, transaction, observation) per [§1.2.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#124-event_type-values); consumers may also mint extension URIs in their own namespaces. Defaults to a built-in heuristic for common checkout/payment tool names. |
-| `preCallTransform` | `PreCallTransform` | optional             | Pre-call hook for cross-tool causal embedding. When set, the middleware signs the record BEFORE forwarding to the upstream handler and invokes the callback with `{ toolName, args, receiptId, recordHash, contextId }`. The host returns mutated args to inject the receipt_id (or record_hash) into the upstream call. Use case: a wrapper around a database-writing tool that wants the tool to record its own atrib receipt at insert time, letting downstream consumers anchor `informed_by` references to the row. Errors thrown from the callback degrade silently to the standard post-call signing path (§5.8). Tools without `preCallTransform` set retain the default post-call signing semantics. |
+| `preCallTransform` | `PreCallTransform` | optional             | Pre-call hook for cross-tool causal embedding. When set, the middleware signs the record BEFORE forwarding to the upstream handler and invokes the callback with `{ toolName, args, receiptId, recordHash, contextId }`. The host returns mutated args to inject the receipt_id (or record_hash) into the upstream call. Use case: a wrapper around a database-writing tool that wants the tool to record its own atrib receipt at insert time, letting downstream consumers anchor `informed_by` references to the row. Errors thrown from the callback degrade silently to the standard post-call signing path ([§5.8](../../atrib-spec.md#58-degradation-contract)). Tools without `preCallTransform` set retain the default post-call signing semantics. |
 | `disclosure`       | `{ tool_name?: 'omit'\|'verbatim'\|'hashed'; args?: 'omit'\|'plain-sha256'\|'salted-sha256'; result?: 'omit'\|'plain-sha256'\|'salted-sha256' }` | optional | Opt-in disclosure dials per [§8 / D061](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-§121). All three default to `'omit'`, preserving the [§8.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#81-default-posture) default posture (existing behavior; record bytes unchanged for callers that don't opt in). `tool_name: 'verbatim'` writes the raw tool name; `'hashed'` writes `sha256:<hex>` of it. `args` and `result` use the same scheme: `'plain-sha256'` writes `<field>_hash = sha256(JCS(payload))`; `'salted-sha256'` generates a 16-byte random salt per record and writes both the salt field and `<field>_hash = sha256(salt ‖ JCS(payload))`. The result is hashed BEFORE atrib mutates `result._meta` with its own propagation token, so the commitment covers exactly what the upstream handler returned. **Compatibility**: `disclosure.result` requires the post-call signing path and is INCOMPATIBLE with `preCallTransform` (which signs pre-call when no result is available); when both are set, `result` disclosure is silently inactive on the pre-call path and an init-time warning fires so the conflict is visible at config time. |
 
 Returns a `SubmissionQueue`-aware wrapper exposing:
@@ -120,7 +120,7 @@ In-process surrogate `McpServer` that forwards every tool call to an upstream MC
 
 For advanced use cases (custom transports, manual signing, recommendation calculation), the package also exports the cryptographic and serialization primitives directly: `signRecord`, `verifyRecord`, `canonicalRecord`, `computeContentId`, `genesisChainRoot`, `chainRoot`, `encodeToken`, `decodeToken`, `base64urlEncode`, `base64urlDecode`, `sha256`, `hexEncode`, `hexDecode`, plus the W3C trace-context helpers (`readInboundContext`, `writeOutboundContext`, `parseTracestateAtrib`, `parseBaggageAtribSession`, `extractTraceId`, `mergeTracestate`, `mergeBaggageAtribSession`) and the submission queue itself (`createSubmissionQueue`).
 
-## Serving well-known endpoints (§5.3.5, §5.3.6)
+## Serving well-known endpoints ([§5.3.5](../../atrib-spec.md#535-log-submission), [§5.3.6](../../atrib-spec.md#536-policy-exposure))
 
 For HTTP transports, the spec requires serving the policy document at `/.well-known/atrib-policy.json` and cached inclusion proofs at `/.well-known/atrib-proof/{record_hash}`. Two helpers make this easy.
 

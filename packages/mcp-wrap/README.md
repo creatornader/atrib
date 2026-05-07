@@ -59,10 +59,10 @@ and no env var, the wrapper reads `~/.atrib/wrap-config.json`.
 | `upstream.command`| yes      | (no default)                              | Binary to spawn for the upstream MCP server.                                                                                                     |
 | `upstream.args`   | no       | `[]`                                      | Args for the upstream binary.                                                                                                                    |
 | `upstream.env`    | no       | inherited                                 | Extra env merged with the parent process env (parent wins on conflicts).                                                                         |
-| `serverUrl`       | yes      | (no default)                              | Canonical URL for `content_id` derivation per spec §1.2.2. Path segment for `agent` is appended automatically.                                 |
+| `serverUrl`       | yes      | (no default)                              | Canonical URL for `content_id` derivation per spec [§1.2.2](../../atrib-spec.md#122-content_id-derivation). Path segment for `agent` is appended automatically.                                 |
 | `logEndpoint`     | no       | `https://log.atrib.dev/v1/entries`        | Submission endpoint. Override for local development against `@atrib/log-dev` or a local log-node.                                                |
 | `autoChain`       | no       | `true`                                    | Chain successive tool calls within this wrapper's process lifetime. Required for CHAIN_PRECEDES edges from stdio hosts.                        |
-| `tools[<name>]`   | no       | (none)                                    | Per-tool overrides. `transactionTool: true` emits a `transaction` event_type record. `injectReceiptId: true` enables D057 preCallTransform.    |
+| `tools[<name>]`   | no       | (none)                                    | Per-tool overrides. `transactionTool: true` emits a `transaction` event_type record. `injectReceiptId: true` enables [D057](../../DECISIONS.md#d057-pre-call-signing-hook-precalltransform-for-cross-tool-causal-embedding) preCallTransform.    |
 | `logFile`         | no       | `~/.atrib/logs/<name>-<agent>.log`        | Wrapper debug log (jsonl). Set to `""` to disable.                                                                                              |
 | `recordFile`      | no       | `~/.atrib/records/<name>-<agent>.jsonl`   | Signed-record mirror (jsonl). Set to `""` to disable.                                                                                           |
 
@@ -87,7 +87,7 @@ should surface immediately rather than silently degrading.
 For each tool call through the wrapped MCP:
 
 1. Wrapper signs the record (Ed25519 over the JCS-canonical record).
-2. Optionally injects the §1.5.2 receipt token into the upstream args
+2. Optionally injects the [§1.5.2](../../atrib-spec.md#152-http-transport-tracestate) receipt token into the upstream args
    (when `tools[<name>].injectReceiptId === true`).
 3. Forwards to the upstream MCP server.
 4. On success, persists the signed record to the local jsonl mirror

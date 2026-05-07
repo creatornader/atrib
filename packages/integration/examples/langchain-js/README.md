@@ -2,7 +2,7 @@
 
 This example shows how to add atrib attribution to a LangChain JS application that uses MCP tools via `MultiServerMCPClient` from `@langchain/mcp-adapters`.
 
-The integration is **one extra line**: `await attributeLangchainMcp(multiClient, { interceptor })` after `multiClient.initializeConnections()` resolves. The helper walks every server in the multi-client's config, reaches each internal `@modelcontextprotocol/sdk` Client via `multiClient.getClient(serverName)`, and patches `callTool` in place so every outbound tools/call flows through atrib's interceptor lifecycle (W3C trace context propagation, attribution token chaining, transaction detection per spec §5.4).
+The integration is **one extra line**: `await attributeLangchainMcp(multiClient, { interceptor })` after `multiClient.initializeConnections()` resolves. The helper walks every server in the multi-client's config, reaches each internal `@modelcontextprotocol/sdk` Client via `multiClient.getClient(serverName)`, and patches `callTool` in place so every outbound tools/call flows through atrib's interceptor lifecycle (W3C trace context propagation, attribution token chaining, transaction detection per spec [§5.4](../../../../atrib-spec.md#54-atribagent-agent-middleware)).
 
 ---
 
@@ -170,8 +170,8 @@ After running with `ATRIB_LOG_ENDPOINT` pointed at your log:
 
 - Every successful `tools/call` from the LangChain agent emits a signed atrib record
 - Records share a `context_id` per agent session and chain via `chain_root` references
-- Failed tool calls (`isError: true` from the upstream) emit no record per spec §5.3.3
-- internal atrib failures (network, signing, interceptor errors) never reach LangChain's tool dispatch; they're caught and logged with the `atrib:` console prefix per §5.8
+- Failed tool calls (`isError: true` from the upstream) emit no record per spec [§5.3.3](../../../../atrib-spec.md#533-record-construction-and-signing)
+- internal atrib failures (network, signing, interceptor errors) never reach LangChain's tool dispatch; they're caught and logged with the `atrib:` console prefix per [§5.8](../../../../atrib-spec.md#58-degradation-contract)
 - Per-call-header workflows (forked clients) also emit records; no silent drops
 
 If you don't see records, check:

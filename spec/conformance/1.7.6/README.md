@@ -1,6 +1,6 @@
-# atrib spec §1.7.6 conformance corpus
+# atrib spec [§1.7.6](../../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) conformance corpus
 
-Test fixtures for cross-attestation per spec §1.7.6 ([D052](../../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)).
+Test fixtures for cross-attestation per spec [§1.7.6](../../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) ([D052](../../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)).
 
 The corpus is the shared contract between every implementation that produces or consumes transaction records. It is used by `@atrib/verify` and any third-party verifier implementation that surfaces a `cross_attestation` annotation.
 
@@ -8,10 +8,10 @@ The corpus is the shared contract between every implementation that produces or 
 
 | File | Asserts |
 |---|---|
-| `cases/legacy-single-signer.json` | A transaction record with only the top-level `signature` field (no `signers[]` array). Verifier MUST surface `signers_count: 0, signers_valid: 0, missing: true`. The record stays cryptographically valid via the legacy signature; missing is a SIGNAL per §1.7.6, not invalidation. |
-| `cases/one-signer.json` | A transaction record with one entry in `signers[]`. Below the §1.7.6 normative minimum of 2. `signers_valid: 1, missing: true`. |
+| `cases/legacy-single-signer.json` | A transaction record with only the top-level `signature` field (no `signers[]` array). Verifier MUST surface `signers_count: 0, signers_valid: 0, missing: true`. The record stays cryptographically valid via the legacy signature; missing is a SIGNAL per [§1.7.6](../../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records), not invalidation. |
+| `cases/one-signer.json` | A transaction record with one entry in `signers[]`. Below the [§1.7.6](../../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) normative minimum of 2. `signers_valid: 1, missing: true`. |
 | `cases/two-signers-valid.json` | The canonical happy path: two independent signers (agent + counterparty). Both cover the SAME cross-attestation canonical bytes (JCS form with `signers: []` and top-level `signature` omitted). `signers_valid: 2, missing: false`. |
-| `cases/three-signers.json` | Three signers (agent + counterparty + facilitator). Demonstrates that the §1.7.6 minimum of 2 is a floor, not a cap. `signers_valid: 3, missing: false`. |
+| `cases/three-signers.json` | Three signers (agent + counterparty + facilitator). Demonstrates that the [§1.7.6](../../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) minimum of 2 is a floor, not a cap. `signers_valid: 3, missing: false`. |
 | `cases/tampered-second-signature.json` | Two signers attached but the second signature has been tampered. `signers_count: 2, signers_valid: 1, missing: true`. Demonstrates that count and valid are independent: a cosigner cannot inflate `signers_valid` by attaching a bogus signature. |
 
 ## Generator
@@ -24,14 +24,14 @@ pnpm --filter @atrib/log-dev exec tsx scripts/generate-conformance-1.7.6.ts
 
 Seeds and timestamps are hardcoded so successive regenerations produce byte-identical files. Regenerate when:
 
-- §1.7.6 detection invariant changes
-- Canonical record format (§1.2 / §1.3) changes — particularly the cross-attestation bytes (signers: [] + signature omitted)
+- [§1.7.6](../../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) detection invariant changes
+- Canonical record format ([§1.2](../../../atrib-spec.md#12-the-attribution-record) / [§1.3](../../../atrib-spec.md#13-canonical-serialization)) changes — particularly the cross-attestation bytes (signers: [] + signature omitted)
 - A new test case is added
 
 ## Reference implementation
 
-`packages/verify/test/conformance-1.7.6.test.ts` loads each case and asserts the full `cross_attestation` annotation matches `expected.cross_attestation` deep-equal, plus the §1.7.6 signal-not-invalidation guarantee where applicable. Conforming third-party implementations SHOULD load the same fixtures and assert the same invariants.
+`packages/verify/test/conformance-1.7.6.test.ts` loads each case and asserts the full `cross_attestation` annotation matches `expected.cross_attestation` deep-equal, plus the [§1.7.6](../../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) signal-not-invalidation guarantee where applicable. Conforming third-party implementations SHOULD load the same fixtures and assert the same invariants.
 
 ## Status
 
-**Initial five-case corpus shipped.** Cases collectively exercise the §1.7.6 algorithm: legacy single-sig (case 1), below-minimum signer counts (cases 1-2), the canonical happy path (case 3), above-minimum (case 4), and tamper-detection (case 5).
+**Initial five-case corpus shipped.** Cases collectively exercise the [§1.7.6](../../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) algorithm: legacy single-sig (case 1), below-minimum signer counts (cases 1-2), the canonical happy path (case 3), above-minimum (case 4), and tamper-detection (case 5).

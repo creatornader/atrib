@@ -1,6 +1,6 @@
-# atrib spec §6 conformance corpus
+# atrib spec [§6](../../../atrib-spec.md#6-key-directory) conformance corpus
 
-Test fixtures for the public-key directory per spec §6 (D034).
+Test fixtures for the public-key directory per spec [§6](../../../atrib-spec.md#6-key-directory) ([D034](../../../DECISIONS.md#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers)).
 
 This corpus is the shared contract between every atrib directory implementation
 (unblinded AKD mode) and every verifier that consults the directory. AKD's
@@ -13,7 +13,7 @@ privacy properties of the blinded path.
 **Initial subset shipped.** Two foundational cases are committed:
 `valid-self-attested-claim.json` (membership branch) and
 `valid-non-membership.json` (non-membership branch). Together they
-exercise §6.3 step 6 (directory lookup) + step 8 (claim parsing) of the
+exercise [§6.3](../../../atrib-spec.md#63-verifier-consultation-algorithm) step 6 (directory lookup) + step 8 (claim parsing) of the
 9-step verifier consultation algorithm.
 
 Both files are byte-identical regenerations of

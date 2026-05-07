@@ -31,7 +31,7 @@ The minimum subset of spec [§2.6](../../atrib-spec.md#26-submission-api-write-i
 | [§2.9](../../atrib-spec.md#29-witnessing-and-cosignatures)          | Witnessing/cosignatures          | ⏳ Not implemented. out of scope for a dev stub                                                                          |
 | **Extension** | Honors `X-atrib-Priority` header | ✅ Implemented. high-priority submissions are admitted first when `maxConcurrent` is finite                              |
 
-## What this package adds beyond spec §2.6
+## What this package adds beyond spec [§2.6](../../atrib-spec.md#26-submission-api-write-interface)
 
 A small **inspection API** for tests and demos that wouldn't make sense on a real log:
 

@@ -52,7 +52,7 @@ fake values. Shape is exact to the published examples.
 
 ## Note on the prior W3C VC assumption
 
-The original atrib spec §1.7.5 and the v1 SDK both assumed AP2 would use
+The original atrib spec [§1.7.5](../../../../../atrib-spec.md#175-ap2-and-a2a-x402) and the v1 SDK both assumed AP2 would use
 W3C Verifiable Credentials with `type: "VerifiableCredential"` and
 `credentialSubject.type: "PaymentMandate"`. AP2 v0.1 does not. The
 detector keeps the VC string-form check as a backward-compatible fallback

@@ -1,4 +1,4 @@
-# atrib spec §2.6.1 conformance corpus
+# atrib spec [§2.6.1](../../../atrib-spec.md#261-submit-entry) conformance corpus
 
 A canonical set of test fixtures for the atrib log submission API. This corpus is the **shared contract** between every atrib log implementation:
 
@@ -71,7 +71,7 @@ Sequences are similar but contain a `steps` array, each step having its own requ
 
 ## Time handling
 
-The corpus stores **fully-signed records with frozen timestamps**. This makes the corpus byte-deterministic across runs but means the `reject-future-timestamp` case (§2.6.1 Step 4) only behaves correctly if the log thinks "now" matches `manifest.reference_time_ms`.
+The corpus stores **fully-signed records with frozen timestamps**. This makes the corpus byte-deterministic across runs but means the `reject-future-timestamp` case ([§2.6.1](../../../atrib-spec.md#261-submit-entry) Step 4) only behaves correctly if the log thinks "now" matches `manifest.reference_time_ms`.
 
 Test consumers MUST mock the system clock to `reference_time_ms` before sending cases. In the TypeScript reference consumer, this is done with `vi.useFakeTimers()` + `vi.setSystemTime()`. In Go you would inject a `clock.Clock` into the validator under test.
 
@@ -93,9 +93,9 @@ This runs [`packages/log-dev/scripts/generate-conformance-corpus.ts`](../../../p
 
 Regenerate when:
 
-- A spec §2.6.1 validation rule changes
-- The canonical record format (§1.2) or JCS encoding changes
-- A new test case is needed (e.g., spec §2.6.1 grows a Step 7)
+- A spec [§2.6.1](../../../atrib-spec.md#261-submit-entry) validation rule changes
+- The canonical record format ([§1.2](../../../atrib-spec.md#12-the-attribution-record)) or JCS encoding changes
+- A new test case is needed (e.g., spec [§2.6.1](../../../atrib-spec.md#261-submit-entry) grows a Step 7)
 
 After regenerating, review the diff carefully; the whole point of byte-determinism is that diffs in PR review are trivial to read.
 

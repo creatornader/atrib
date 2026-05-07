@@ -13,7 +13,7 @@ Both cases produce the same kind of attribution record. From Claude Agent SDK's 
 
 Claude Agent SDK accepts user-supplied MCP servers as `{ type: 'sdk', name, instance }` where `instance` is a real `McpServer` from `@modelcontextprotocol/sdk/server/mcp.js`, the **exact same class** that atrib's `atrib()` middleware wraps. When the SDK invokes a tool on the in-process server, it goes through the standard `McpServer.connect(transport)` dispatch path, and atrib's interceptor fires on every `tools/call`. There is no Claude-specific code in `@atrib/mcp`; the same primitive works against any host that accepts an in-process `McpServer`.
 
-See `DECISIONS.md` D021 for the full architecture rationale.
+See `DECISIONS.md` [D021](../../../../DECISIONS.md#d021-claude-agent-sdk-case-a-is-zero-new-code-case-b-uses-createatribproxy-in-process-forwarder) for the full architecture rationale.
 
 ---
 
@@ -165,7 +165,7 @@ The upstream `server-filesystem` process is unmodified. It sees a normal `tools/
 Both cases assume:
 
 - `ATRIB_PRIVATE_KEY`: base64url-encoded 32-byte Ed25519 seed. Use `node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))'` to generate one for development. In production, store the matching public key on the merchant verification side.
-- `ATRIB_LOG_ENDPOINT`: URL of your atrib Merkle log submission endpoint. Optional in development; submission queue silently buffers when unset (per spec §5.8 degradation contract).
+- `ATRIB_LOG_ENDPOINT`: URL of your atrib Merkle log submission endpoint. Optional in development; submission queue silently buffers when unset (per spec [§5.8](../../../../atrib-spec.md#58-degradation-contract) degradation contract).
 
 If `ATRIB_PRIVATE_KEY` is omitted, atrib operates in pass-through mode with a console warning; no records are emitted but the tool calls still work.
 
@@ -177,8 +177,8 @@ After running either example with `ATRIB_LOG_ENDPOINT` pointed at your log:
 
 - A signed atrib record per successful tool call (Case A: per `weather` call; Case B: per forwarded filesystem call)
 - The records share a `context_id` per Claude session and chain via `chain_root` references (verifiable with `@atrib/verify`)
-- Failed calls (`isError: true` from the tool) emit no record per spec §5.3.3
-- internal atrib failures (network, signing) never reach Claude Agent SDK's tool dispatch; they're caught and logged with the `atrib:` console prefix per §5.8
+- Failed calls (`isError: true` from the tool) emit no record per spec [§5.3.3](../../../../atrib-spec.md#533-record-construction-and-signing)
+- internal atrib failures (network, signing) never reach Claude Agent SDK's tool dispatch; they're caught and logged with the `atrib:` console prefix per [§5.8](../../../../atrib-spec.md#58-degradation-contract)
 
 If you don't see records, check:
 

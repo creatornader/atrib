@@ -3,7 +3,7 @@
 "@atrib/emit": patch
 ---
 
-Multi-producer chain composition contract (D067 / spec §1.2.3.1).
+Multi-producer chain composition contract ([D067](../DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract) / spec [§1.2.3.1](../atrib-spec.md#1231-multi-producer-chain-composition)).
 
 `@atrib/mcp` exports two new helpers that single-source chain-root resolution across all atrib producers signing under one identity:
 

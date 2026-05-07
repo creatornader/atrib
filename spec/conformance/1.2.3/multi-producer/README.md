@@ -1,4 +1,4 @@
-# atrib spec §1.2.3 multi-producer chain composition conformance corpus
+# atrib spec [§1.2.3](../../../../atrib-spec.md#123-chain_root-for-genesis-records) multi-producer chain composition conformance corpus
 
 Test fixtures for the chain-root resolution precedence ordering when
 multiple producers participate in one agent session under one identity.

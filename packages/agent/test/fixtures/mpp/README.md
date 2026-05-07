@@ -26,7 +26,7 @@ The detector triggers on step 5; presence of the `Payment-Receipt` header on a s
 
 ## Required fields in the decoded receipt
 
-Per draft §5.3:
+Per draft [§5.3](../../../../../atrib-spec.md#53-atribmcp-mcp-server-middleware):
 
 | Field       | Type   | Value                                                       |
 | ----------- | ------ | ----------------------------------------------------------- |
