@@ -839,5 +839,150 @@ describe('buildGraph (section 3.2.4)', () => {
       const sessionEdges = graph.edges.filter((e) => e.type === 'SESSION_PRECEDES')
       expect(sessionEdges).toHaveLength(6)
     })
+
+    it('emits SESSION_PARALLEL across chain components for equal-timestamp pairs', async () => {
+      // Two short chains in COMPACT_CTX whose tails share the same timestamp.
+      // Compact-mode step 3 must emit a SESSION_PARALLEL edge at the boundary
+      // (different chain components, equal timestamps) and skip pairs WITHIN
+      // a chain component.
+      const TS_TIE = 9999
+
+      // Chain A: a0 (ts=9000) → a1 (ts=TS_TIE, chained from a0)
+      const a0 = await makeRecord({
+        context_id: COMPACT_CTX,
+        timestamp: 9000,
+        content_id: `sha256:${'a000'.padEnd(64, '0')}`,
+      })
+      const a0Hash = hexEncode(sha256(canonicalRecord(a0)))
+      const a1 = await makeRecord({
+        context_id: COMPACT_CTX,
+        chain_root: `sha256:${a0Hash}`,
+        timestamp: TS_TIE,
+        content_id: `sha256:${'a001'.padEnd(64, '0')}`,
+      })
+
+      // Chain B: b0 (ts=9001) → b1 (ts=TS_TIE, chained from b0).
+      const b0 = await makeRecord({
+        context_id: COMPACT_CTX,
+        timestamp: 9001,
+        content_id: `sha256:${'b000'.padEnd(64, '0')}`,
+      })
+      const b0Hash = hexEncode(sha256(canonicalRecord(b0)))
+      const b1 = await makeRecord({
+        context_id: COMPACT_CTX,
+        chain_root: `sha256:${b0Hash}`,
+        timestamp: TS_TIE,
+        content_id: `sha256:${'b001'.padEnd(64, '0')}`,
+      })
+
+      const graph = await buildGraph([a0, a1, b0, b1], [], { compactIntraSessionEdges: true })
+
+      const chainEdges = graph.edges.filter((e) => e.type === 'CHAIN_PRECEDES')
+      expect(chainEdges).toHaveLength(2) // one per chain
+
+      // SESSION_PARALLEL: only a1 ↔ b1 (different chain components, equal ts).
+      // a0 vs b0, a0 vs b1, a1 vs b0 each have non-equal timestamps so they
+      // become SESSION_PRECEDES (when adjacent in time order) or are skipped
+      // (when non-adjacent).
+      const parallelEdges = graph.edges.filter((e) => e.type === 'SESSION_PARALLEL')
+      expect(parallelEdges).toHaveLength(1)
+      const a1Id = `sha256:${hexEncode(sha256(canonicalRecord(a1)))}`
+      const b1Id = `sha256:${hexEncode(sha256(canonicalRecord(b1)))}`
+      const ends = new Set([parallelEdges[0]!.source, parallelEdges[0]!.target])
+      expect(ends.has(a1Id) && ends.has(b1Id)).toBe(true)
+      expect(parallelEdges[0]!.directed).toBe(false)
+    })
+
+    it('regression: all 9 spec edge types remain derivable under compact: true', async () => {
+      // Replays the comprehensive 9-edge fixture under compact: true to guard
+      // against the compaction path silently dropping any spec edge type.
+      // Compaction only touches SESSION_PRECEDES + SESSION_PARALLEL emission;
+      // the other 7 types (CHAIN_PRECEDES, CONVERGES_ON, CROSS_SESSION,
+      // INFORMED_BY, PROVENANCE_OF, ANNOTATES, REVISES) must remain present.
+      const sessionToken = 'STSTSTSTSTSTSTSTSTSTSt'
+
+      const txA = await makeRecord({
+        context_id: 'a'.repeat(32),
+        event_type: 'https://atrib.dev/v1/types/transaction',
+        timestamp: 1000,
+        content_id: `sha256:${'1'.repeat(64)}`,
+        session_token: sessionToken,
+      })
+      const toolA1 = await makeRecord({
+        context_id: 'a'.repeat(32),
+        timestamp: 1500,
+        content_id: `sha256:${'2'.repeat(64)}`,
+      })
+      const toolA1Hash = hexEncode(sha256(canonicalRecord(toolA1)))
+      const toolA2 = await makeRecord({
+        context_id: 'a'.repeat(32),
+        chain_root: `sha256:${toolA1Hash}`,
+        timestamp: 2000,
+        content_id: `sha256:${'3'.repeat(64)}`,
+      })
+      const toolB = await makeRecord({
+        context_id: 'b'.repeat(32),
+        timestamp: 3000,
+        content_id: `sha256:${'4'.repeat(64)}`,
+        session_token: sessionToken,
+        informed_by: [`sha256:${toolA1Hash}`],
+      })
+      const txAToken = base64urlEncode(sha256(canonicalRecord(txA)).slice(0, 16))
+      const genB = await makeRecord({
+        context_id: 'd'.repeat(32),
+        timestamp: 4000,
+        content_id: `sha256:${'5'.repeat(64)}`,
+        provenance_token: txAToken,
+      })
+      const toolB2 = await makeRecord({
+        context_id: 'b'.repeat(32),
+        timestamp: 3500,
+        content_id: `sha256:${'6'.repeat(64)}`,
+      })
+      // Force a SESSION_PARALLEL edge between toolB2 and toolB3 — both are
+      // unchained genesis records in 'b'.repeat(32) at the SAME timestamp,
+      // so compact-mode step 3 must still emit between them.
+      const toolB3 = await makeRecord({
+        context_id: 'b'.repeat(32),
+        timestamp: 3500,
+        content_id: `sha256:${'7'.repeat(64)}`,
+      })
+      const txAHash = hexEncode(sha256(canonicalRecord(txA)))
+      const annotation = await makeRecord({
+        context_id: 'e'.repeat(32),
+        event_type: 'https://atrib.dev/v1/types/annotation',
+        timestamp: 5000,
+        content_id: `sha256:${'8'.repeat(64)}`,
+        annotates: `sha256:${txAHash}`,
+      })
+      const revision = await makeRecord({
+        context_id: 'f'.repeat(32),
+        event_type: 'https://atrib.dev/v1/types/revision',
+        timestamp: 6000,
+        content_id: `sha256:${'9'.repeat(64)}`,
+        revises: `sha256:${toolA1Hash}`,
+      })
+
+      const graph = await buildGraph(
+        [txA, toolA1, toolA2, toolB, toolB2, toolB3, genB, annotation, revision],
+        [],
+        { compactIntraSessionEdges: true },
+      )
+      const present = new Set(graph.edges.map((e) => e.type))
+      const expected: Array<typeof graph.edges[number]['type']> = [
+        'CHAIN_PRECEDES',
+        'SESSION_PRECEDES',
+        'SESSION_PARALLEL',
+        'CONVERGES_ON',
+        'CROSS_SESSION',
+        'INFORMED_BY',
+        'PROVENANCE_OF',
+        'ANNOTATES',
+        'REVISES',
+      ]
+      for (const type of expected) {
+        expect(present.has(type), `missing edge type under compact: true: ${type}`).toBe(true)
+      }
+    })
   })
 })

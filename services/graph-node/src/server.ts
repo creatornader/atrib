@@ -457,17 +457,6 @@ async function handleCreatorGraph(
       })
     : windowedRecords
 
-  // Build the graph from the windowed record set. buildGraph handles edge
-  // derivation across context_ids when CROSS_SESSION + INFORMED_BY +
-  // PROVENANCE_OF data is present (§3.2.4 steps 5-7), so the activity-map
-  // composition falls out of the existing derivation.
-  const graph = await buildGraph(filteredRecords, [], {
-    includeGapNodes: false,
-    includeCrossSession: true,
-    revocations: buildRegistry(store),
-    logIndexLookup: logIndexLookup(store),
-  })
-
   // Activity-map scope: per spec §3.4.7, the creator activity-map exists
   // to surface CROSS-SESSION relationships (CROSS_SESSION via session_token,
   // INFORMED_BY across context_ids, PROVENANCE_OF anchoring sessions to
@@ -484,7 +473,24 @@ async function handleCreatorGraph(
   // unfiltered view for callers that want every edge type (e.g., a
   // single-creator analytics tool that ALSO wants per-session ordering).
   // Default is false: cross-session signal only.
+  //
+  // Implementation: we pass compactIntraSessionEdges: true to buildGraph so
+  // intra-session derivation skips chain-component-internal pairs at the
+  // builder level (§3.4.1.1), avoiding the O(N²) work entirely. The
+  // post-build filter then drops the small remaining set of cross-component
+  // adjacent edges when include_intra_session is false. Without the
+  // builder-level compaction, a 1500-record mega-session would still iterate
+  // 1.1M pairs inside buildGraph just to have the edges thrown away.
   const includeIntraSession = params.get('include_intra_session') === 'true'
+
+  const graph = await buildGraph(filteredRecords, [], {
+    includeGapNodes: false,
+    includeCrossSession: true,
+    revocations: buildRegistry(store),
+    logIndexLookup: logIndexLookup(store),
+    compactIntraSessionEdges: !includeIntraSession,
+  })
+
   const filteredGraph = includeIntraSession
     ? graph
     : {
