@@ -25,6 +25,8 @@
 import { bindGraphServer } from './server.js'
 import { createRecordStore } from './store.js'
 import { createArchiveAppender, replayArchive } from './persistence.js'
+import { statfs } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import type { AtribRecord } from '@atrib/mcp'
 
 const port = parseInt(process.env.PORT ?? '3200', 10)
@@ -64,6 +66,63 @@ const server = await bindGraphServer(port, host, bindOpts)
 
 // eslint-disable-next-line no-console
 console.log(`atrib-graph listening on ${server.url}`)
+
+// Periodic disk-utilization watchdog. The persistence archive grows linearly
+// with ingest volume, so a slow Fly volume fill will silently degrade the
+// service. Emit a structured-log warning at 80% utilization, an error at 95%.
+// The check is stateful (last-emitted threshold) so a steady high-utilization
+// state does not spam logs every minute. Disabled when no archive is set.
+const DISK_CHECK_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
+let lastDiskAlert: 'ok' | 'warn' | 'error' = 'ok'
+
+async function checkDiskUtilization(target: string): Promise<void> {
+  let stats
+  try {
+    stats = await statfs(target)
+  } catch (e) {
+    // statfs may fail on weird filesystems or restricted mounts; surface once
+    // and bail without crashing the service.
+    if (lastDiskAlert !== 'error') {
+      // eslint-disable-next-line no-console
+      console.error(`atrib-graph: disk-watchdog statfs failed on ${target}: ${(e as Error).message}`)
+      lastDiskAlert = 'error'
+    }
+    return
+  }
+  const usedFraction = 1 - (stats.bavail * stats.bsize) / (stats.blocks * stats.bsize)
+  const pct = (usedFraction * 100).toFixed(1)
+  let level: 'ok' | 'warn' | 'error' = 'ok'
+  if (usedFraction >= 0.95) level = 'error'
+  else if (usedFraction >= 0.80) level = 'warn'
+
+  if (level === 'ok') {
+    // Log on recovery (was warn/error, now ok) so operators see the all-clear.
+    if (lastDiskAlert !== 'ok') {
+      // eslint-disable-next-line no-console
+      console.log(`atrib-graph: disk-watchdog recovered on ${target} (${pct}% used)`)
+    }
+  } else if (level !== lastDiskAlert) {
+    // Only log on threshold transition; steady state is silent to avoid spam.
+    const msg = `atrib-graph: disk-watchdog ${level.toUpperCase()} on ${target}: ${pct}% used (threshold: ${level === 'error' ? '95%' : '80%'})`
+    if (level === 'error') {
+      // eslint-disable-next-line no-console
+      console.error(msg)
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn(msg)
+    }
+  }
+  lastDiskAlert = level
+}
+
+if (archivePath) {
+  const target = dirname(archivePath)
+  // Run once on startup, then on a fixed interval. The interval handle is
+  // unref()'d so the process can exit cleanly without it.
+  void checkDiskUtilization(target)
+  const handle = setInterval(() => { void checkDiskUtilization(target) }, DISK_CHECK_INTERVAL_MS)
+  handle.unref()
+}
 
 // Graceful shutdown
 async function shutdown(signal: string): Promise<void> {
