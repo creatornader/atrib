@@ -1697,18 +1697,73 @@ async function renderIdentity(creatorKey) {
   // map is unscoped and quickly becomes unreadable on long-running creators
   // (1000+ records all rendered at once produces a dense blob; selecting
   // "last 24h" trims to recent activity, restoring useful structure).
+  // Time-window control: hybrid of presets + explicit since/until inputs
+  // for analytical queries (e.g. "what happened during a specific past session"
+  // or "the week of April 28"). Presets cover the common case; the custom
+  // option exposes the spec §3.4.7 since/until query parameters directly
+  // as datetime-local inputs. The custom range is opt-in to keep the
+  // common case (last N hours) one click away.
   const TIME_WINDOWS = [
     { label: 'last 6h', sinceMs: 6 * 60 * 60 * 1000 },
     { label: 'last 24h', sinceMs: 24 * 60 * 60 * 1000 },
     { label: 'last 7d', sinceMs: 7 * 24 * 60 * 60 * 1000 },
     { label: 'last 30d', sinceMs: 30 * 24 * 60 * 60 * 1000 },
     { label: 'all time', sinceMs: null },
+    { label: 'custom range…', sinceMs: 'custom' },
   ]
   let currentWindowIdx = 1 // default: last 24h
+  let customSinceMs = null
+  let customUntilMs = null
   const windowSelect = el('select', {
     style: 'background: var(--surface-2); color: var(--text-1); border: 1px solid var(--bd-2); padding: 4px 8px; border-radius: 3px; font-family: var(--font-mono); font-size: 12px;',
-    onchange: (ev) => { currentWindowIdx = parseInt(ev.target.value, 10); refetchActivity() },
+    onchange: (ev) => {
+      currentWindowIdx = parseInt(ev.target.value, 10)
+      const isCustom = TIME_WINDOWS[currentWindowIdx].sinceMs === 'custom'
+      customRangeRow.style.display = isCustom ? 'flex' : 'none'
+      if (!isCustom) refetchActivity()
+    },
   }, ...TIME_WINDOWS.map((w, i) => el('option', { value: String(i), ...(i === currentWindowIdx ? { selected: '' } : {}) }, w.label)))
+
+  // Datetime-local inputs for the custom-range case. When the user picks
+  // "custom range…" from the dropdown, this row becomes visible. Apply
+  // button triggers the refetch so the user can dial in both bounds before
+  // hitting the network.
+  const isoLocal = (ms) => new Date(ms - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+  const sinceInput = el('input', {
+    type: 'datetime-local',
+    style: 'background: var(--surface-2); color: var(--text-1); border: 1px solid var(--bd-2); padding: 3px 6px; border-radius: 3px; font-family: var(--font-mono); font-size: 12px; color-scheme: dark;',
+    value: isoLocal(Date.now() - 24 * 60 * 60 * 1000),
+  })
+  const untilInput = el('input', {
+    type: 'datetime-local',
+    style: 'background: var(--surface-2); color: var(--text-1); border: 1px solid var(--bd-2); padding: 3px 6px; border-radius: 3px; font-family: var(--font-mono); font-size: 12px; color-scheme: dark;',
+    value: isoLocal(Date.now()),
+  })
+  const applyCustomBtn = el('button', {
+    style: 'background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); padding: 3px 12px; border-radius: 3px; font-size: 12px; cursor: pointer;',
+    onclick: () => {
+      const since = new Date(sinceInput.value).getTime()
+      const until = new Date(untilInput.value).getTime()
+      if (Number.isNaN(since) || Number.isNaN(until)) {
+        activityMetaSlot.textContent = 'invalid date range'
+        return
+      }
+      if (since > until) {
+        activityMetaSlot.textContent = 'since must be earlier than until'
+        return
+      }
+      customSinceMs = since
+      customUntilMs = until
+      refetchActivity()
+    },
+  }, 'apply')
+  const customRangeRow = el('div', { style: 'display: none; margin: 0 12px 12px; align-items: center; gap: 8px; flex-wrap: wrap;' },
+    el('label', { style: 'color: var(--text-2); font-size: 12px;' }, 'from'),
+    sinceInput,
+    el('label', { style: 'color: var(--text-2); font-size: 12px;' }, 'to'),
+    untilInput,
+    applyCustomBtn,
+  )
 
   const activityGraphContainer = el('div', { class: 'trace-graph', id: 'identity-activity-graph' })
   const activityNodeLegend = el('div', { class: 'legend-row', id: 'identity-activity-node-legend' })
@@ -1745,6 +1800,7 @@ async function renderIdentity(creatorKey) {
         el('label', { style: 'color: var(--text-2); font-size: 12px;' }, 'time window'),
         windowSelect,
       ),
+      customRangeRow,
     ),
     activityGraphContainer,
     activityLegend,
@@ -1762,7 +1818,22 @@ async function renderIdentity(creatorKey) {
     activityGraphContainer.replaceChildren(el('div', { class: 'loading' }, 'loading activity map…'))
     activityMetaSlot.textContent = 'cross-session edges only · loading…'
     const params = new URLSearchParams()
-    if (w.sinceMs !== null) params.set('since', String(Date.now() - w.sinceMs))
+    let windowLabel = w.label
+    if (w.sinceMs === 'custom') {
+      if (customSinceMs === null || customUntilMs === null) {
+        // User picked "custom range…" but hasn't applied bounds yet.
+        activityMetaSlot.textContent = 'cross-session edges only · pick from/to and apply'
+        activityGraphContainer.replaceChildren(el('div', { class: 'empty' },
+          'Pick from + to dates and click apply.',
+        ))
+        return
+      }
+      params.set('since', String(customSinceMs))
+      params.set('until', String(customUntilMs))
+      windowLabel = `${new Date(customSinceMs).toISOString().slice(0,16).replace('T',' ')}Z → ${new Date(customUntilMs).toISOString().slice(0,16).replace('T',' ')}Z`
+    } else if (w.sinceMs !== null) {
+      params.set('since', String(Date.now() - w.sinceMs))
+    }
     params.set('limit', '1000')
     const url = `${ep.graph}/creators/${encodeURIComponent(creatorKey)}/graph?${params.toString()}`
     const activity = await fetchMaybe(url)
@@ -1776,13 +1847,13 @@ async function renderIdentity(creatorKey) {
     }
     if (!activity.graph || !activity.graph.nodes || activity.graph.nodes.length === 0) {
       activityGraphContainer.replaceChildren(el('div', { class: 'empty' },
-        `No records in this window (${w.label}). Try a longer window.`,
+        `No records in this window (${windowLabel}). Try a longer window.`,
       ))
-      activityMetaSlot.textContent = `cross-session edges only · ${w.label} · 0 records`
+      activityMetaSlot.textContent = `cross-session edges only · ${windowLabel} · 0 records`
       return
     }
     const graph = activity.graph
-    activityMetaSlot.textContent = `cross-session edges only · ${w.label} · ${activity.record_count} record${activity.record_count === 1 ? '' : 's'}, ${graph.edges.length} edge${graph.edges.length === 1 ? '' : 's'}` + (activity.truncated ? ' · truncated' : '')
+    activityMetaSlot.textContent = `cross-session edges only · ${windowLabel} · ${activity.record_count} record${activity.record_count === 1 ? '' : 's'}, ${graph.edges.length} edge${graph.edges.length === 1 ? '' : 's'}` + (activity.truncated ? ' · truncated' : '')
 
     if (graph.edges.length === 0) {
       activityGraphContainer.replaceChildren(el('div', { class: 'empty' },
