@@ -1992,14 +1992,28 @@ async function renderSession(contextId) {
     ],
   }))
 
-  // Try graph first; fall back to log-derived nodes when the graph hasn't
-  // ingested this session. The log is the source of truth; the graph is a
-  // derived view that may be unreachable or behind on ingestion.
+  // Try graph first; fall back to log-derived nodes when graph-node either
+  // hasn't ingested the requested context_id OR fails to respond (5xx,
+  // timeout, 502 on very large contexts where buildGraph hits a CPU
+  // ceiling). The
+  // log is the source of truth; the graph is a derived view that may be
+  // unreachable, behind on ingestion, or unable to serve a particular
+  // session size. fallbackReason distinguishes the cases for the banner.
   let graph = await fetchMaybe(`${ep.graph}/graph/${contextId}`)
   if (!routeGenerationStillCurrent(myGen)) return
   let usingFallback = false
+  let fallbackReason = null  // 'not-ingested' | 'graph-error' | null
 
   if (graph._error || !graph.nodes || graph.nodes.length === 0) {
+    // Distinguish 404 (graph-node responded; this context_id genuinely
+    // has no records there yet) from any other error class (timeout, 5xx,
+    // network failure, graph-node is reachable but couldn't return THIS
+    // session). The error string from fetchMaybe is "<status> <statusText>".
+    if (graph._error && /^[45]\d\d/.test(graph._error)) {
+      fallbackReason = /^404/.test(graph._error) ? 'not-ingested' : 'graph-error'
+    } else {
+      fallbackReason = 'not-ingested'
+    }
     const logEntries = await fetchMaybe(`${ep.log}/by-context/${contextId}`)
     if (!routeGenerationStillCurrent(myGen)) return
     if (!logEntries._error && logEntries.entries && logEntries.entries.length > 0) {
@@ -2033,20 +2047,52 @@ async function renderSession(contextId) {
   await resolveIdentities(graph.nodes.map(n => n.creator_key).filter(Boolean))
   if (!routeGenerationStillCurrent(myGen)) return
 
+  // Composition breakdown across the session. Surfaces the event-type
+  // diversity (e.g. "473 annotation, 753 tool_call, 204 observation, 54
+  // revision") that the bare "transaction: none" stat hides. For
+  // transaction-less sessions (the common case) this is the more useful
+  // pulse stat; for transaction-bearing sessions both stats are shown.
+  const eventTypeCounts = {}
+  for (const n of graph.nodes) {
+    const et = n.event_type || 'unknown'
+    eventTypeCounts[et] = (eventTypeCounts[et] ?? 0) + 1
+  }
+  const compositionLabel = Object.entries(eventTypeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([k, v]) => `${v} ${k}`)
+    .join(' · ')
+
   root.append(el('div', { class: 'pulse-strip' },
     pulseStat('nodes', String(graph.node_count ?? graph.nodes.length)),
     pulseStat('edges', String(graph.edge_count ?? graph.edges?.length ?? 0)),
-    pulseStat('transaction', hasTx ? 'present' : 'none', hasTx ? 'session converges on a transaction' : 'no transaction record'),
+    pulseStat('transaction', hasTx ? 'present' : 'none', hasTx ? 'session converges on a transaction' : 'no transaction record (typical for non-commerce sessions)'),
     pulseStat('participants', String(new Set(graph.nodes.map(n => n.creator_key).filter(Boolean)).size), 'distinct identities'),
+    pulseStat('composition', compositionLabel || '—', 'top event-type counts'),
   ))
 
   if (usingFallback) {
-    root.append(el('div', {
+    const banner = el('div', {
       style: 'background: var(--info-subtle); border: 1px solid var(--info-border); color: var(--info); padding: 12px 16px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 16px;',
-    },
-      el('strong', { style: 'font-weight: 600;' }, 'Showing log-derived view. '),
-      'graph-node hasn\'t ingested records under this context_id yet, so edges are unavailable. Showing the records as a tabular list pulled directly from the log (the source of truth).',
-    ))
+    })
+    if (fallbackReason === 'graph-error') {
+      // Most common cause for very large sessions: graph-node's buildGraph
+      // hits a CPU/memory ceiling deriving O(N²) intra-session edges and
+      // returns 5xx. The records ARE in graph-node's store; the response
+      // just couldn't be assembled. Distinguishing this from the "not
+      // ingested" case avoids the misleading "graph-node hasn't ingested"
+      // message that previously fired here.
+      banner.append(
+        el('strong', { style: 'font-weight: 600;' }, 'Showing log-derived view. '),
+        'graph-node returned an error for this context_id (likely too large to assemble, sessions with non-chained records produce O(N²) edges that exceed graph-node\'s response budget). The records below are pulled directly from the log (the source of truth). Edges are not shown.',
+      )
+    } else {
+      banner.append(
+        el('strong', { style: 'font-weight: 600;' }, 'Showing log-derived view. '),
+        'graph-node hasn\'t ingested records under this context_id yet, so edges are unavailable. Showing the records as a tabular list pulled directly from the log (the source of truth).',
+      )
+    }
+    root.append(banner)
   }
 
   const hasEdges = graph.edges && graph.edges.length > 0
@@ -2085,10 +2131,64 @@ async function renderSession(contextId) {
   // Nodes table, always rendered. The graph above shows STRUCTURE
   // (relationships); this table preserves the per-record METADATA the graph
   // can't surface inline (identity / timestamp / verification badges).
+  //
+  // Pagination: large sessions (1000+ records, common for long-running
+  // collaborative work) made the unpaginated table unreadable AND killed
+  // browser scroll performance because every row contained a chip + link
+  // + identity badge + timestamp. SESSION_PAGE_SIZE=100 is the load-more
+  // unit; a "load more" button at the foot fetches the next page client-
+  // side from the already-loaded graph.nodes array (no additional API
+  // call, the data was returned in one shot). Sort newest-first so the
+  // first page is the most recently active records.
+  const SESSION_PAGE_SIZE = 100
+  const sortedNodes = [...graph.nodes].sort((a, b) => {
+    const ta = typeof a.timestamp === 'number' ? a.timestamp : Date.parse(a.timestamp || 0)
+    const tb = typeof b.timestamp === 'number' ? b.timestamp : Date.parse(b.timestamp || 0)
+    return tb - ta
+  })
+  let sessionVisibleCount = Math.min(SESSION_PAGE_SIZE, sortedNodes.length)
+  const renderRow = n => el('tr', {},
+    el('td', {}, renderEventChip(n.event_type, n.creator_key, n.event_type_uri)),
+    el('td', {},
+      n.event_type === 'dangling_node'
+        ? el('span', { class: 'mono', title: 'unresolved reference (synthetic placeholder)' }, shorten(n.id, 13, 4))
+        : el('a', { href: `#/action/${n.id}` },
+            el('span', { class: 'mono' }, shorten(n.id, 13, 4)),
+          )),
+    el('td', {}, n.creator_key ? renderIdentityLabel(n.creator_key) : '—'),
+    (() => {
+      const tsMs = n.timestamp ? (typeof n.timestamp === 'number' ? n.timestamp : Date.parse(n.timestamp)) : null
+      return el('td', {
+        class: 'shrink',
+        title: tsMs ? new Date(tsMs).toISOString() : '',
+        ...(tsMs ? { 'data-ts': String(tsMs) } : {}),
+      }, tsMs ? timeAgo(tsMs) : '—')
+    })(),
+    el('td', {}, badgeForState(n.verification_state)),
+  )
+  const tbody = el('tbody', {}, ...sortedNodes.slice(0, sessionVisibleCount).map(renderRow))
+  const loadMoreSlot = el('div', { class: 'load-more-slot', style: 'padding: 12px 16px; text-align: center;' })
+  function refreshLoadMore() {
+    const remaining = sortedNodes.length - sessionVisibleCount
+    if (remaining <= 0) {
+      loadMoreSlot.replaceChildren(el('span', { class: 'meta', style: 'font-size: 12px; color: var(--text-3);' }, `all ${sortedNodes.length} records loaded`))
+      return
+    }
+    loadMoreSlot.replaceChildren(el('button', {
+      class: 'load-more',
+      onclick: () => {
+        const next = Math.min(sessionVisibleCount + SESSION_PAGE_SIZE, sortedNodes.length)
+        for (let i = sessionVisibleCount; i < next; i += 1) tbody.append(renderRow(sortedNodes[i]))
+        sessionVisibleCount = next
+        refreshLoadMore()
+      },
+    }, `load older (${remaining.toLocaleString()} more)`))
+  }
+  refreshLoadMore()
   root.append(el('section', { class: 'feed-wrap', style: hasEdges ? 'margin-top: 24px;' : '' },
     el('div', { class: 'feed-head' },
-      el('h2', {}, `records (${graph.nodes.length})`),
-      el('span', { class: 'meta' }, usingFallback ? 'from log (graph not ingested)' : 'derived per spec §3.2.4'),
+      el('h2', {}, `records (${graph.nodes.length.toLocaleString()})`),
+      el('span', { class: 'meta' }, usingFallback ? 'from log · graph not available' : 'derived per spec §3.2.4'),
     ),
     el('div', {},
       el('table', { class: 'feed' },
@@ -2099,32 +2199,9 @@ async function renderSession(contextId) {
           el('th', { class: 'shrink' }, 'when'),
           el('th', {}, 'verification'),
         )),
-        el('tbody', {},
-          ...graph.nodes.map(n => el('tr', {},
-            el('td', {}, renderEventChip(n.event_type, n.creator_key, n.event_type_uri)),
-            // Dangling nodes (§3.2.4 step 6/7) have synthetic ids that no
-            // /action/ route can resolve. Render the id but skip the link so
-            // the user gets a clear "this is a placeholder" cue instead of a
-            // broken navigation.
-            el('td', {},
-              n.event_type === 'dangling_node'
-                ? el('span', { class: 'mono', title: 'unresolved reference (synthetic placeholder)' }, shorten(n.id, 13, 4))
-                : el('a', { href: `#/action/${n.id}` },
-                    el('span', { class: 'mono' }, shorten(n.id, 13, 4)),
-                  )),
-            el('td', {}, n.creator_key ? renderIdentityLabel(n.creator_key) : '—'),
-            (() => {
-              const tsMs = n.timestamp ? (typeof n.timestamp === 'number' ? n.timestamp : Date.parse(n.timestamp)) : null
-              return el('td', {
-                class: 'shrink',
-                title: tsMs ? new Date(tsMs).toISOString() : '',
-                ...(tsMs ? { 'data-ts': String(tsMs) } : {}),
-              }, tsMs ? timeAgo(tsMs) : '—')
-            })(),
-            el('td', {}, badgeForState(n.verification_state)),
-          )),
-        ),
+        tbody,
       ),
+      loadMoreSlot,
     ),
   ))
 
