@@ -88,7 +88,10 @@ export async function buildGraphFromRecords(
       chain_root: r.chain_root,
       context_id: r.context_id,
       timestamp: r.timestamp,
-      log_index: 0,
+      // null when no log_index lookup is supplied. Matches graph-node's
+      // convention so the demo-vs-production drift guard doesn't see a
+      // spurious `log_index: 0` divergence on every node.
+      log_index: null,
       verification_state: verificationStates[i]!,
       is_genesis:
         r.chain_root === `sha256:${hexEncode(sha256(new TextEncoder().encode(r.context_id)))}`,
@@ -455,10 +458,13 @@ export async function buildGraphFromAllRecords(
 
   // Lazy creation of synthetic dangling nodes for unresolved INFORMED_BY /
   // PROVENANCE_OF / ANNOTATES / REVISES references. Mirrors graph-node's
-  // ensureDanglingNode pattern.
+  // ensureDanglingNode pattern: an O(1) Set-based existence check
+  // covering both real and dangling node IDs (matches graph-node's
+  // `nodeById.has(id)` short-circuit).
+  const allNodeIds = new Set<string>(nodes.map((n) => n.id))
   const ensureDanglingNode = (id: string): void => {
-    if (idByRecord.size > 0 && [...recordById.keys()].includes(id)) return
-    if (nodes.some((n) => n.id === id)) return
+    if (allNodeIds.has(id)) return
+    allNodeIds.add(id)
     nodes.push({
       id,
       event_type: 'dangling_node',
