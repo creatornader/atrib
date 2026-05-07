@@ -186,11 +186,12 @@ describe('directory-node HTTP', () => {
     expect(r.status).toBe(200)
     const body = await r.json()
     expect(body.service).toBe('atrib-directory-node')
-    expect(body.version).toBe('v6')
+    expect(body.versions).toEqual(['v6'])
+    expect(body.current_version).toBe('v6')
     expect(body.endpoints).toMatchObject({
       publish: 'POST /v6/publish',
-      lookup: 'GET /v6/lookup/:creator_key',
-      history: 'GET /v6/history/:creator_key',
+      lookup: 'GET /v6/lookup/<creator_key>',
+      history: 'GET /v6/history/<creator_key>',
       anchor: 'GET /v6/anchor',
     })
   })
@@ -200,6 +201,14 @@ describe('directory-node HTTP', () => {
     expect(r.status).toBe(200)
     const body = await r.json()
     expect(body.service).toBe('atrib-directory-node')
+  })
+
+  it('GET / (bare hostname) returns the same service-info index', async () => {
+    const r = await fetch(`${handle.url}/`)
+    expect(r.status).toBe(200)
+    const body = await r.json()
+    expect(body.service).toBe('atrib-directory-node')
+    expect(body.current_version).toBe('v6')
   })
 
   // D054: browser-based explorer reads
