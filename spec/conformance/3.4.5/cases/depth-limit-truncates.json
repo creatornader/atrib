@@ -1,0 +1,56 @@
+{
+  "name": "depth-limit-truncates",
+  "description": "Three-record informed_by chain (C→B→A). Trace from C with depth=1 must return {B, C} and set truncated_by_depth=true (B has an unwalked ancestor).",
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+        "content_id": "sha256:a300000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "qRXyFh5U2nV1oNFNGcjJ_ayIYwYZMA4g6JKyYrApbNGjoqg4LTwypgjew0KMy9a5VxUYPml56ADc25GSf4UKBQ",
+        "timestamp": 1767225607000
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+        "content_id": "sha256:b300000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "informed_by": [
+          "sha256:2d2ae46436252b5bd21291fc4e0e0f1b45890e7cc9d3b23df70ecef8b9bf8093"
+        ],
+        "signature": "p563GtMvLEp34OivBh8lVFhDBqvjQSkSl9ois_UvBCLwferS_Q7ZQxPJoOAoA5kBO5ZK5wlE_y61PEjctl0HBA",
+        "timestamp": 1767225608000
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+        "content_id": "sha256:c300000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "informed_by": [
+          "sha256:d0c2783310e3ff46f0380c923d9f33d89da3333b1454ee1521339da288e2d38e"
+        ],
+        "signature": "cikuMUUUPHFyU9SA8CPPQeOLopLFwlvjrrBeI__IrSBhOeqJfLGxHS6PJV8FWMrARO0l_nVcvTer1tByRPdKBg",
+        "timestamp": 1767225609000
+      }
+    ],
+    "start_record_index": 2,
+    "depth": 1,
+    "include_annotations": true,
+    "include_revisions": true
+  },
+  "expected": {
+    "record_indexes_in_response": [
+      1,
+      2
+    ],
+    "truncated_by_depth": true,
+    "truncated_by_count": false
+  }
+}

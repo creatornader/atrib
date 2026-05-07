@@ -1,0 +1,61 @@
+{
+  "name": "include-intra-session-true-restores",
+  "description": "Same fixture, include_intra_session=true. The response MUST include intra-session edges (SESSION_PRECEDES at least, between the two unchained records in each context_id) alongside cross-session edges. intra_session_edges_filtered MUST be false.",
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:cd93782b7fb95559de14f738b65988af85d41dc1565f7c7d1ed2d035665b519c",
+        "content_id": "sha256:a700000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "cccccccccccccccccccccccccccccccc",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "4uJB9mcpuRqh4F-6ER2S6aX8Sdb4U6qoWwgrtzZGZxZHyoUmgX_mhpiuyUrgZAhQ_rplmNP5f-gUqlDoHZWbAg",
+        "timestamp": 1767225620000
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:cd93782b7fb95559de14f738b65988af85d41dc1565f7c7d1ed2d035665b519c",
+        "content_id": "sha256:a800000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "cccccccccccccccccccccccccccccccc",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "kF7_UFQmfPS16Q6WdfWtJxU74TESGLflhvFrBAsnvXfMRaWG2M4chaJfi3GmL3HTT4rA5PJF2gU1sOprQ6XeCQ",
+        "timestamp": 1767225621000
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:fbbbb6de2aa74c3c9570d2d8db1de31eadb66113c96034a7adb21243754d7683",
+        "content_id": "sha256:b700000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "dddddddddddddddddddddddddddddddd",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "informed_by": [
+          "sha256:f04aa97633c1b09fbf97cdb864f5690b5c60ebd706e87546e7b27e1d3a0e013d"
+        ],
+        "signature": "N20ZZBNfM1ltll_Wknn-MU_RVd2trWnghEWPWf5nGP151ou2UyCfxHKjWiN5meVYWXqlODJ5z78V0xBpMrE7Cw",
+        "timestamp": 1767225622000
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:fbbbb6de2aa74c3c9570d2d8db1de31eadb66113c96034a7adb21243754d7683",
+        "content_id": "sha256:b800000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "dddddddddddddddddddddddddddddddd",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "NuLau0lczNCML2c9UIuLYdyb3pv0fseQ_U2pEnCbSBsEP8Wp29pS72WRh9gERnoBm1xjerkBLKzr5OpAcrgUAw",
+        "timestamp": 1767225623000
+      }
+    ],
+    "include_intra_session": true
+  },
+  "expected": {
+    "record_count": 4,
+    "edge_types_excluded": [],
+    "edge_types_present_at_least_one": [
+      "INFORMED_BY",
+      "SESSION_PRECEDES"
+    ],
+    "intra_session_edges_filtered": false
+  }
+}

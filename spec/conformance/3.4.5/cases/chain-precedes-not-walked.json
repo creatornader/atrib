@@ -1,0 +1,49 @@
+{
+  "name": "chain-precedes-not-walked",
+  "description": "Three records linked by chain_root only (CHAIN_PRECEDES). Trace from C MUST return ONLY {C}, chain_root edges are substrate-derived structure per §3.2.4, not producer claims, and §3.4.5 forbids the trace walk from following them. Conflating the structural and claim layers violates the structure-vs-claims separation justifying §1.2.5 informed_by semantics.",
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+        "content_id": "sha256:a200000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "HUP9sLVdayzCqIsF8AQiA1bGmUwWcNuggampJxmAhWIJ9MkRaFbAwJ9cubftJ1T6IDITj7A1vHD26_XvsjirDw",
+        "timestamp": 1767225604000
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:21d65fd47e3cb02d7364afececcaa5218fc840bb8712d40a84a681d32c9452ae",
+        "content_id": "sha256:b200000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "vxFPZ_R0IcYsaFvCS-TczL1nNNWHZbYQYOaPAojpouCpWFWG9Quxf_IjawIcGBGlzM9o_g-v75KLO5ybtiRdBQ",
+        "timestamp": 1767225605000
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:14816aa8a127de025f075ef8a677670255460fc78278e419e0e0f567aeecae80",
+        "content_id": "sha256:c200000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "3jTg97SjlvaPu9b-oSLXTW9GqjrkmSYMe5QKombmwIgnCifcyEtEqLrxSsDao8B1YNY9pmYpDXOrnCrt5yDeDQ",
+        "timestamp": 1767225606000
+      }
+    ],
+    "start_record_index": 2,
+    "depth": 5,
+    "include_annotations": true,
+    "include_revisions": true
+  },
+  "expected": {
+    "record_indexes_in_response": [
+      2
+    ],
+    "truncated_by_depth": false,
+    "truncated_by_count": false
+  }
+}

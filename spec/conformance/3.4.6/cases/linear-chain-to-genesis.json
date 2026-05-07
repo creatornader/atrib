@@ -1,0 +1,48 @@
+{
+  "name": "linear-chain-to-genesis",
+  "description": "Three-record chain A → B → C in one context_id. Chain walk from C must return {A, B, C} and terminate at A (the session-genesis record where chain_root = SHA-256(context_id)). truncated_by_depth=false.",
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:bdb339768bc5e4fecbe55a442056919b2b325907d49bcbf3bf8de13781996a83",
+        "content_id": "sha256:a400000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "BjCDQuLCgRQcFumi-F92Swz2QUthaM1nps2rR3_1k88f4yatCHRBYMuEi9c5tnlT7Ahv3aqGUQwkzOSa10P8CA",
+        "timestamp": 1767225610000
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:e30e45b658b9093ef82e5c789d3f9c6d197ef695cc07aab9c7a309f0eb20a204",
+        "content_id": "sha256:b400000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "QGr2WwtYg9wEchQaLaU5Uh6zp2XclzyJfDxyAaBMpMHHFcGPPLGbnJzfTRxFN87mTzunxLaRmj3Ma7RDrjC3Bw",
+        "timestamp": 1767225611000
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:e408230aa5660131ea107650e327a2cc858e97f8234bc315c5c7a7cf31b4126b",
+        "content_id": "sha256:c400000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "QGwTr62joNhLwgQ8-RXd9aArN3H0flnQ7vcLc2Nzt76QYSs0cLgqPlQTX8XTPYMPR_h8L-ksHJ6H_wGhZE09Aw",
+        "timestamp": 1767225612000
+      }
+    ],
+    "start_record_index": 2,
+    "depth": 5
+  },
+  "expected": {
+    "record_indexes_in_response": [
+      0,
+      1,
+      2
+    ],
+    "truncated_by_depth": false
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "informed-by-not-walked",
+  "description": "Two records: B is informed by A but B carries the genesis chain_root for its context_id. Chain walk from B MUST return ONLY {B}, informed_by is a producer claim, not substrate structure, and §3.4.6 forbids the chain walk from following producer claims. Symmetric counterpart to §3.4.5's chain-precedes-not-walked invariant.",
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:bdb339768bc5e4fecbe55a442056919b2b325907d49bcbf3bf8de13781996a83",
+        "content_id": "sha256:a500000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "AeHPzImKxEh0kp2vCRLiQdhu6F_Bhyn2oTC5aWDtJA_RxXJY4rs2UPgTmiVfVxNQDlls5ngR2_Nc4KfymBsgCA",
+        "timestamp": 1767225613000
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:bdb339768bc5e4fecbe55a442056919b2b325907d49bcbf3bf8de13781996a83",
+        "content_id": "sha256:b500000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "informed_by": [
+          "sha256:16ace3940fda335a305d27929eeca00d47bb4368603720cc7deb5d2205a0997e"
+        ],
+        "signature": "eB3mkPDOPaBj2f7LuPOGAGozbzzIHyTUVxIHs0KLxsHrxwCdRx26qaD6fr9Md2OTmE2OReKD5l2H_luDdDt3BQ",
+        "timestamp": 1767225614000
+      }
+    ],
+    "start_record_index": 1,
+    "depth": 5
+  },
+  "expected": {
+    "record_indexes_in_response": [
+      1
+    ],
+    "truncated_by_depth": false
+  }
+}

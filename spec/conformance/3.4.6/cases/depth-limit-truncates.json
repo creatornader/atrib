@@ -1,0 +1,47 @@
+{
+  "name": "depth-limit-truncates",
+  "description": "Three-record chain A → B → C. Chain walk from C with depth=1 must return {B, C} and set truncated_by_depth=true (B has an unwalked predecessor that is not the genesis).",
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:bdb339768bc5e4fecbe55a442056919b2b325907d49bcbf3bf8de13781996a83",
+        "content_id": "sha256:a600000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "dBV-MCJqQ-Bvde4u5etVyQ-Ju_xf0Byxh9-UipNXJ80vruIA9n824H4EWXBdLJXRFUGy5m2D-CDv-9SklxCUBQ",
+        "timestamp": 1767225615000
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:151fc392d35315b881d702a1ed44b15444a04da08337d20d5cf9e5f9bca549ee",
+        "content_id": "sha256:b600000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "JY5mRFhdbLUUoIEP_xVSKLTT9muYtBCaC-k2q8GJ59RdmRCMlpKh7_kvz4LY3yeUhkJcLRRZk3bHKQSZQVbvDA",
+        "timestamp": 1767225616000
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "chain_root": "sha256:197b1fa7bbda4d2688aff1a995c3aa6ba5a371b8c6c85248b98f0fadb2223c43",
+        "content_id": "sha256:c600000000000000000000000000000000000000000000000000000000000000",
+        "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "signature": "fVIGn-ssk_ce8KvdZxeJsnCsUGvR7kf7tFdQTSy9jFXdKLI5SYdDqFOrdqxM3MSO4sz962g_Uk5-zL9tPynyBg",
+        "timestamp": 1767225617000
+      }
+    ],
+    "start_record_index": 2,
+    "depth": 1
+  },
+  "expected": {
+    "record_indexes_in_response": [
+      1,
+      2
+    ],
+    "truncated_by_depth": true
+  }
+}
