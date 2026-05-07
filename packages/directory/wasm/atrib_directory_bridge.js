@@ -119,6 +119,91 @@ function init() {
     wasm.init();
 }
 exports.init = init;
+
+/**
+ * Verify an AKD audit (append-only) proof against a sequence of root hashes.
+ *
+ * Per spec §6.3 step 5. Takes (a) the concatenated 32-byte root hashes
+ * captured at each anchored checkpoint between two epochs, in order
+ * (so for epochs e..f, that's `f - e + 1` hashes = `(f-e+1)*32` bytes),
+ * and (b) the bincode-serialized audit proof from the `/v6/audit-proof`
+ * endpoint.
+ *
+ * We inline akd's `audit_verify` rather than calling the upstream
+ * function because upstream's `verify_append_only_hash` hardcodes
+ * `AzksParallelismConfig::default()` (= `AvailableOr(32)`) which calls
+ * `std::thread::available_parallelism()` and tries to spawn parallel
+ * Tokio tasks. WASM has no Tokio executor, so the upstream path panics
+ * with `RuntimeError: unreachable`. Our inlined path passes
+ * `AzksParallelismConfig::disabled()` everywhere.
+ *
+ * Async because the underlying AKD storage backend is async; no actual I/O.
+ * @param {Uint8Array} hashes_concat
+ * @param {Uint8Array} proof_bytes
+ * @returns {Promise<boolean>}
+ */
+function verify_audit_proof(hashes_concat, proof_bytes) {
+    const ptr0 = passArray8ToWasm0(hashes_concat, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(proof_bytes, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.verify_audit_proof(ptr0, len0, ptr1, len1);
+    return ret;
+}
+exports.verify_audit_proof = verify_audit_proof;
+
+/**
+ * Verify an AKD lookup proof against a known root hash.
+ *
+ * Per spec §6.3 step 7. The verifier holds (a) the directory operator's
+ * VRF public key (out of band; for HardCodedAkdVRF use [`vrf_public_key`]),
+ * (b) the anchored root hash at the proof's epoch (from a `directory_anchor`
+ * log entry), (c) the directory's current epoch, (d) the looked-up label,
+ * and (e) the bincode-serialized lookup proof from the `/v6/lookup/:key`
+ * endpoint.
+ *
+ * Wraps [`akd_core::verify::lookup_verify`] which is `pub fn` and pure.
+ * @param {Uint8Array} vrf_public_key
+ * @param {Uint8Array} root_hash
+ * @param {bigint} current_epoch
+ * @param {string} label
+ * @param {Uint8Array} proof_bytes
+ * @returns {boolean}
+ */
+function verify_lookup_proof(vrf_public_key, root_hash, current_epoch, label, proof_bytes) {
+    const ptr0 = passArray8ToWasm0(vrf_public_key, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(root_hash, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(label, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passArray8ToWasm0(proof_bytes, wasm.__wbindgen_malloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.verify_lookup_proof(ptr0, len0, ptr1, len1, current_epoch, ptr2, len2, ptr3, len3);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0] !== 0;
+}
+exports.verify_lookup_proof = verify_lookup_proof;
+
+/**
+ * Return the VRF public key for the bridge's `HardCodedAkdVRF`.
+ *
+ * Verifiers need the operator's VRF public key to validate lookup
+ * proofs. For production directories the operator publishes their own
+ * VRF pubkey in their identity claim or a dedicated record. For this
+ * reference implementation (which uses `HardCodedAkdVRF` per
+ * `DirectoryHandle::new`), the key is constant and exposed here.
+ *
+ * Returns the 32-byte VRF public key.
+ * @returns {Promise<Uint8Array>}
+ */
+function vrf_public_key() {
+    const ret = wasm.vrf_public_key();
+    return ret;
+}
+exports.vrf_public_key = vrf_public_key;
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
@@ -257,7 +342,7 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 150, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 168, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h5693a240b404b655);
             return ret;
         },
@@ -453,6 +538,13 @@ function makeMutClosure(arg0, arg1, f) {
     };
     CLOSURE_DTORS.register(real, state, state);
     return real;
+}
+
+function passArray8ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 1, 1) >>> 0;
+    getUint8ArrayMemory0().set(arg, ptr / 1);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
 }
 
 function passStringToWasm0(arg, malloc, realloc) {
