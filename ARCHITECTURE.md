@@ -368,6 +368,18 @@ services/atrib-summarize  MCP server for narrative synthesis across N records
       and/or record_hashes from the local mirror, calls an OpenAI-compatible
       LLM (defaults to NIM qwen3.5-397b) to synthesize a narrative. Closes
       the consumer-side loop: agents read context, not raw records.
+
+(Future, not yet built, placeholder per D070)
+services/archive-node  Record Body Archive Layer (§2.12)
+  └── Separate from log-node by design. Stores canonical record bodies
+      content-addressed by record_hash. Submission OPTIONAL at the
+      protocol level, producers using the salted-commitment privacy
+      posture (§8.3) keep bodies producer-local instead. Multi-archive
+      federation supported via content-addressing; multiple archives
+      MAY mirror the same body set. Closes the verifiability loop for
+      records whose privacy posture admits public-body retrieval. The
+      formal ADR + reference implementation are tracked under D070;
+      §2.12 carries the current spec contract.
 ```
 
 The six designed-public packages (`mcp`, `agent`, `verify`, `cli`, `mcp-wrap`, `directory`) are published to npm via Trusted Publishing OIDC. The two private packages (`log-dev`, `integration`) are workspace fixtures. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The `atrib-trace` and `atrib-summarize` MCP services run in the agent's process alongside `atrib-emit` and read the local mirror, no separate deployment needed.

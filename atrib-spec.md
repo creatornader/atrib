@@ -1305,6 +1305,8 @@ Contents
 - [2.8 Proof Bundle Format](#28-proof-bundle-format)
 - [2.9 Witnessing and Cosignatures](#29-witnessing-and-cosignatures)
 - [2.10 What the Log Stores and What It Does Not](#210-what-the-log-stores-and-what-it-does-not)
+- [2.11 Cross-log Replication](#211-cross-log-replication)
+- [2.12 Record Body Archive Layer](#212-record-body-archive-layer)
 
 ### 2.1 Purpose and Design Rationale
 
@@ -1537,7 +1539,7 @@ Tile API error responses:
 
 #### 2.5.4 Point-Lookup Endpoint (OPTIONAL)
 
-Log implementations MAY expose a point-lookup endpoint that returns a single decoded entry by its `record_hash`. The endpoint is OPTIONAL, verifiers achieve the same result by walking the entry-bundle endpoint ([§2.5.3](#253-entry-bundle-endpoint)), but explorers, identity views, and ad-hoc record-verification flows benefit from a single-record fetch when the implementation provides one. When provided, the endpoint MUST follow the shape below so consumers can rely on a uniform contract across log implementations.
+Log implementations MAY expose a point-lookup endpoint that returns a single decoded log entry by its `record_hash`. The endpoint is OPTIONAL, verifiers achieve the same result by walking the entry-bundle endpoint ([§2.5.3](#253-entry-bundle-endpoint)), but explorers, identity views, and ad-hoc record-verification flows benefit from a single-record fetch when the implementation provides one. When provided, the endpoint MUST follow the shape below so consumers can rely on a uniform contract across log implementations.
 
 ```
 GET https://log.atrib.dev/v1/lookup/<record_hash_hex>
@@ -1548,19 +1550,25 @@ Response 200 OK:
 Content-Type: application/json
 
 {
-  "log_index":     482193,                 // 0-indexed position in the log
-  "record_hash":   "sha256:4797...",        // canonical sha256 of the signed record
-  "creator_key":   "haoZK4...",            // base64url Ed25519 pubkey
-  "context_id":    "b5a2ebf81d43...",       // 32-hex
-  "timestamp_ms":  1778112565186,
-  "event_type":    "https://atrib.dev/v1/types/observation",
-  "record":        { /* full AtribRecord object per §1.2 */ }
+  "log_index":      482193,                                  // 0-indexed position in the log
+  "record_hash":    "sha256:4797...",                         // canonical sha256 of the signed record
+  "creator_key":    "haoZK4...",                             // base64url Ed25519 pubkey
+  "context_id":     "b5a2ebf81d43...",                        // 32-hex
+  "timestamp_ms":   1778112565186,
+  "event_type":     "https://atrib.dev/v1/types/observation", // URI form for full fidelity
+  "event_type_byte": 3                                        // numeric byte per §2.3.1
 }
 
 Error responses:
 - 404 Not Found: no record with the given record_hash exists in the log
 - 400 Bad Request: malformed record_hash (not 64 hex characters)
 ```
+
+The response carries the **decoded 90-byte log entry only** ([§2.3.1](#231-entry-serialization)). It does NOT carry the full canonical record body. The log commits to a hash; the body lives elsewhere by design (see [§2.10](#210-what-the-log-stores-and-what-it-does-not) and [D062](DECISIONS.md#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence)). Consumers needing the body to re-canonicalize and re-verify the signature MUST retrieve it via one of:
+
+1. The producer-local mirror per [§5.9](#59-local-mirror-conventions), if the producer's mirror is reachable.
+2. A Record Body Archive Layer per [§2.12](#212-record-body-archive-layer), if one is available for the record's `creator_key` namespace.
+3. Any consumer-side index that retained the body during ingest (e.g. graph indexers may cache bodies; this is implementation-specific and not a normative protocol surface).
 
 A log MAY decline to provide this endpoint and respond 404 to all `/v1/lookup/...` requests. Consumers who require single-record fetches against such logs MUST fall back to entry-bundle traversal per [§2.5.3](#253-entry-bundle-endpoint).
 
@@ -1599,7 +1607,7 @@ Error responses:
 - 400 Bad Request: invalid limit or offset (negative, non-numeric)
 ```
 
-The response carries a compact per-entry shape (no full `record` object) so a feed of 20 entries stays small. Consumers needing the full record for any entry follow up with [§2.5.4](#254-point-lookup-endpoint-optional) or the entry-bundle endpoint.
+The response carries a compact per-entry shape (no full `record` object) so a feed of 20 entries stays small. Like [§2.5.4](#254-point-lookup-endpoint-optional), the body is NOT returned, the log only stores the 90-byte commitment. Consumers needing the full record body for any entry retrieve it via the producer-local mirror ([§5.9](#59-local-mirror-conventions)) or a Record Body Archive Layer ([§2.12](#212-record-body-archive-layer)).
 
 A log MAY decline to provide this endpoint and respond 404 to all `/v1/recent` requests. Consumers who require activity feeds against such logs MUST fall back to walking the entry-bundle endpoint and decoding entries client-side.
 
@@ -1955,6 +1963,125 @@ Each log publishes a stable `log_id` derived from its origin string per [§2.4](
 **Does NOT defend against:** collusion across all logs in the trusted set (consumer is responsible for picking logs operated by independent parties with different incentives); submission-time censorship by some logs (threshold M handles this gracefully); record-level retroactive removal across all logs (no defense if all logs comply).
 
 See [D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense) for the design rationale and the alternatives considered.
+
+---
+
+### 2.12 Record Body Archive Layer
+
+The atrib log commits to a record's hash. The signed canonical record body lives separately by design ([§2.10](#210-what-the-log-stores-and-what-it-does-not), [§2.3](#23-log-entry-format)). This separation preserves the salted-commitment privacy posture ([§8.3](#83-salted-commitment-posture)) and bounds the log's storage cost. It also creates a verifiability question: a verifier holding the public commitment cannot re-canonicalize the record and re-check its signature without obtaining the body from somewhere.
+
+This section specifies the OPTIONAL **Record Body Archive Layer**: a content-addressed durability layer for canonical record bodies, separate from the log. The archive is what closes the verifiability loop for records whose privacy posture admits public-body retrieval. Records using the salted-commitment posture ([§8.3](#83-salted-commitment-posture)) deliberately do NOT submit bodies to any archive; their verifiability story is producer-local.
+
+The full archive ADR is tracked separately as [D070](DECISIONS.md#d070-record-body-archive-layer-design); this section establishes the spec-level surface and contract.
+
+#### 2.12.1 Architectural position
+
+The archive is a **separate service** from the public log. It MUST NOT be collapsed into the log operator's surface, preserving this separation is what keeps [§2.3.1](#231-entry-serialization)'s commitment-only guarantee intact and lets [§8.3](#83-salted-commitment-posture) producers participate without leaking bodies. An archive operator MAY also run a log; they are distinct services with distinct trust models.
+
+The protocol does not mandate a single archive. Multiple archives MAY mirror the same record set; consumers MAY query any archive that purports to hold a given record. Bodies are content-addressed (each body's canonical hash matches the public log's `record_hash`), so any archive serving a record body is verifiable against the log without trusting the archive operator beyond the question "do you have this record."
+
+#### 2.12.2 Submission model
+
+Producers MAY submit a record body to one or more archives at the same time as committing the record's hash to the log. Submission to the archive is OPTIONAL at the protocol level. A producer's archive policy is per-record: producers MAY submit some records' bodies and not others (e.g., submit `tool_call` bodies but withhold `observation` bodies that contain sensitive content; in the latter case the producer typically also uses the salted-commitment posture per [§8.3](#83-salted-commitment-posture)).
+
+Submission is content-addressed and idempotent: re-submitting an already-archived body MUST be a 200 success, not a 4xx duplicate. The archive validates submissions by canonicalizing the body, computing its `record_hash`, and confirming the same hash is present in at least one log the archive trusts (preventing archives from being used as garbage stores for bodies whose hashes have never been committed anywhere).
+
+#### 2.12.3 Retrieval API
+
+```
+GET https://archive.atrib.dev/v1/record/<record_hash_hex>
+
+// record_hash_hex: 64 lowercase hex characters
+
+Response 200 OK:
+Content-Type: application/json
+
+{
+  "record": { /* full AtribRecord per §1.2, including signature */ },
+  "log_proofs": [ /* optional: §2.8 proof bundle entries from logs the archive trusts */ ]
+}
+
+Response 404 Not Found:
+{ "error": "not archived", "record_hash": "sha256:..." }
+
+Response 410 Gone:
+{
+  "error": "retention expired",
+  "record_hash": "sha256:...",
+  "retention_window_ms": 31536000000,
+  "archived_at_ms": 1700000000000,
+  "expired_at_ms":  1731536000000
+}
+```
+
+`410 Gone` is distinct from `404 Not Found`: `410` means "the body was archived and has been deleted per retention policy"; `404` means "this body was never archived here." Verifiers that see `410` from one archive MAY query other archives; verifiers that see `404` across all known archives know the body is producer-local-only.
+
+The returned `record` is verified the same way regardless of source: re-canonicalize via [§1.3](#13-canonical-serialization), re-hash, compare against the log commitment, then re-verify the signature per [§1.4](#14-signing-and-verification). The archive cannot fabricate bodies; it can only suppress them.
+
+#### 2.12.4 Retention manifest
+
+Each archive operator MUST publish a retention manifest stating its commitment:
+
+```
+GET https://archive.atrib.dev/v1/retention
+
+{
+  "operator":          "archive.atrib.dev",
+  "minimum_window_ms": 31536000000,                  // 1 year, MUST hold every body at least this long
+  "best_effort":       "forever",                    // OR a numeric window, OR null
+  "archived_after_ms": 1735689600000,                // bodies submitted before this time MAY be 410'd
+  "policy_url":        "https://archive.atrib.dev/policy"
+}
+```
+
+The manifest is a public commitment by the operator. Operators MAY publish a stronger commitment than `minimum_window_ms`; operators MUST NOT publish a weaker one without a transition window during which both old and new manifests are honored for already-archived bodies.
+
+#### 2.12.5 Federation
+
+Multiple archives MAY mirror the same body set. The protocol contract that makes this work is content-addressing: a record body retrieved from archive A has the same bytes as the same body from archive B (any difference is a hash mismatch, which is trivially detectable and rejects the differing body). Federation requires:
+
+1. **Submission to multiple archives is allowed.** Producers MAY submit the same body to multiple archives, each independently. There is no protocol-level archive registry.
+2. **Cross-archive sync is implementation-defined.** Archives MAY pull from each other or share a common backing store; the protocol does not mandate a sync mechanism.
+3. **Verifier queries multiple archives.** Consumers MAY treat an archive set the same way [§2.11](#211-cross-log-replication) treats a trusted log set: query M archives, accept any body whose hash matches the log commitment, treat consistent `404` from all M as "body unavailable."
+
+A V1 deployment MAY ship with a single archive (`archive.atrib.dev`); the API contract is shaped so federation is additive when consumer demand for it appears.
+
+#### 2.12.6 Trust model
+
+What an archive can do:
+
+- **Suppress bodies** (return 404 or 410 for records it should hold). Mitigation: federation; verifier policy that requires M archives.
+- **Lie about retention** (claim a window in the manifest, then delete earlier). Mitigation: signed retention checkpoints (a future ADR may specify [§2.4](#24-checkpoint-format)-shaped checkpoints for archive retention, mirroring the log's tree-state checkpoints).
+
+What an archive cannot do:
+
+- **Fabricate bodies.** Bodies are content-addressed; any returned body's hash must match a log commitment, or a verifier rejects it on hash mismatch.
+- **Replace bodies retroactively.** Same: content-addressed, hash mismatch.
+- **Forge submissions.** Each archive validates that submitted bodies have a corresponding committed log entry before accepting (enforced at submission time per [§2.12.2](#2122-submission-model)).
+
+#### 2.12.7 Tiered verifiability
+
+The archive layer enables a three-tier verifiability story for any committed record:
+
+| Tier | What it proves | What it requires | Privacy posture |
+|---|---|---|---|
+| **1: Commitment** | The record hash existed at time T | Public log + checkpoint signature ([§2.4](#24-checkpoint-format)) | Compatible with all postures, including [§8.3](#83-salted-commitment-posture) |
+| **2: Body retrieval** | The actual canonical bytes the hash commits to | Body from producer mirror ([§5.9](#59-local-mirror-conventions)) OR archive ([§2.12.3](#2123-retrieval-api)) | Producer-local body works for all postures; archive body requires producer to have submitted |
+| **3: Signature re-verification** | The body was signed by the claimed `creator_key` | Body (Tier 2) + Ed25519 verification ([§1.4](#14-signing-and-verification)) | Same as Tier 2 |
+
+A verifier presented with only Tier 1 can prove "a record existed"; Tiers 2 + 3 prove "this is the record." Tools that depend on full verification (e.g., the [§4.6](#46-the-calculation-algorithm) calculation algorithm) require all three tiers. Tools that only need existence proof (e.g., audit-log replay, anomaly detection over event-type byte distributions) can operate at Tier 1 alone.
+
+#### 2.12.8 Conformance
+
+Archive operators implementing this section:
+
+- MUST expose `/v1/record/<record_hash_hex>` with the response shape in [§2.12.3](#2123-retrieval-api).
+- MUST expose `/v1/retention` with the manifest shape in [§2.12.4](#2124-retention-manifest).
+- MUST validate submitted bodies against at least one log's commitment before accepting.
+- MUST honor the `minimum_window_ms` retention they publish.
+- MAY decline to archive any specific submission (returning a documented submission API error not yet specified here, the submission API surface is a [D070](DECISIONS.md#d070-record-body-archive-layer-design) follow-up).
+
+Conformance corpora for the retrieval API and the retention manifest land alongside [D070](DECISIONS.md#d070-record-body-archive-layer-design); this section establishes the contract those corpora target.
 
 ---
 
