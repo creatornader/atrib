@@ -2828,58 +2828,37 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   })
 
   /**
-   * Frame the graph in the camera. Computes the bounding box of all node
-   * positions and animates the camera to a center + ratio that maps the
-   * larger bbox dimension into the container's viewport (with a small
-   * padding margin so nodes near the edge aren't clipped).
+   * Frame the graph in the camera. Sigma 3's camera operates in
+   * normalized framed-graph space ([0,1] x [0,1] regardless of raw
+   * graph coordinate scale), and the canonical "fit the entire graph
+   * to the viewport" state is `{x: 0.5, y: 0.5, ratio: 1}`, which is
+   * exactly what `camera.animatedReset()` returns to.
    *
-   * Sigma's camera ratio = world-units-per-pixel; smaller ratio = zoomed in.
-   * `padding=0.85` leaves ~15% margin around the framed graph.
+   * Earlier this file did its own bbox-derived setState in raw graph
+   * coords (computing center + width/dims ratio). That was wrong:
+   * Sigma interpreted those raw coords as positions thousands of
+   * graph-widths off-screen, producing a blank canvas. The bug
+   * showed at any non-trivial graph size where bbox center was far
+   * from origin (dagre TB layout produces y in [−15000, 0] for a
+   * ~150-node session, for example).
    *
-   * Defensive guards (every one is load-bearing): an early-return on a
-   * bad value here is much better than calling camera.setState with a
-   * non-finite ratio, which bricks the camera and produces a blank canvas.
-   * - Empty / single-point graphs skip framing.
-   * - Container dims can be 0 if the function fires before layout is
-   *   committed; we use `container.clientWidth/Height` (CSS-driven, always
-   *   up-to-date) instead of `sigmaInstance.getDimensions()` which can
-   *   lag by a frame on initial mount.
-   * - Non-finite or non-positive ratio (NaN from a degenerate FA2 step,
-   *   Infinity from a zero-dim viewport) skips framing.
+   * Per Sigma 3's design, ratio < 1 zooms in; ratio = 1 is fit-to-
+   * graph; ratio > 1 zooms out beyond the graph. So the framed
+   * default IS the framed graph; we don't need custom math.
    */
-  function fitCameraToGraph(animate = true, padding = 0.85) {
-    const bbox = computeGraphBBox(gx)
-    if (!bbox || !isFinite(bbox.minX) || !isFinite(bbox.maxX) ||
-        !isFinite(bbox.minY) || !isFinite(bbox.maxY)) return
-    if (bbox.width === 0 && bbox.height === 0) return
-    const dimW = container.clientWidth
-    const dimH = container.clientHeight
-    if (!dimW || !dimH) return
-    const targetX = (bbox.minX + bbox.maxX) / 2
-    const targetY = (bbox.minY + bbox.maxY) / 2
-    const ratioByX = bbox.width / (dimW * padding)
-    const ratioByY = bbox.height / (dimH * padding)
-    const ratio = Math.max(ratioByX, ratioByY, 0.1)
-    if (!isFinite(ratio) || ratio <= 0) return
-    if (!isFinite(targetX) || !isFinite(targetY)) return
+  function fitCameraToGraph(animate = true) {
     const camera = sigmaInstance.getCamera()
     if (animate) {
-      camera.animate({ x: targetX, y: targetY, ratio }, { duration: 300 })
+      camera.animatedReset({ duration: 300 })
     } else {
-      camera.setState({ x: targetX, y: targetY, ratio })
+      camera.setState({ x: 0.5, y: 0.5, ratio: 1, angle: 0 })
     }
   }
 
-  // Frame the graph on initial render. Defer one frame so the canvas has
-  // committed its dimensions. The fitCameraToGraph helper is fully guarded
-  // against zero/NaN/Infinity, so a no-op fit is safe to ignore.
-  requestAnimationFrame(() => {
-    try { fitCameraToGraph(false) } catch (e) {
-      // Never let a fit failure block render. Sigma's default camera
-      // (centered at 0,0, ratio=1) is suboptimal but visible.
-      console.warn('[atrib-dashboard] camera fit failed; using Sigma default:', e)
-    }
-  })
+  // Sigma 3's default camera state already frames the graph; no
+  // explicit fit call needed at construction. We keep fitCameraToGraph
+  // returned so the reset button can return to the framed view if
+  // the user has scrolled / panned / zoomed.
 
   return { sigma: sigmaInstance, graph: gx, fitCameraToGraph }
 }
