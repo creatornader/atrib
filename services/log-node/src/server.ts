@@ -324,7 +324,9 @@ async function handleRequest(
   // Restrict the regex to the dashboard-root level (no slashes) so we
   // can never accidentally serve files from anywhere else in the
   // image. .mjs Content-Type is the spec-correct value for ES modules.
-  const mjsMatch = req.url?.match(/^\/([A-Za-z0-9_-]+\.mjs)$/)
+  // Match the URL pathname only (urlPath is computed above) so cache-
+  // bust query strings (./graph-utils.mjs?v=...) still resolve.
+  const mjsMatch = (urlPath ?? '').match(/^\/([A-Za-z0-9_-]+\.mjs)$/)
   if (req.method === 'GET' && mjsMatch) {
     return handleDashboardModule(res, mjsMatch[1]!)
   }
