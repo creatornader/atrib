@@ -1,0 +1,20 @@
+{
+  "name": "@atrib/dashboard",
+  "version": "0.0.1",
+  "description": "atrib public explorer dashboard (single-file HTML + sibling .mjs helpers, served by log-node).",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/creatornader/atrib",
+    "directory": "apps/dashboard"
+  },
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "echo 'no typecheck for vanilla .mjs (no .ts files)'"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
+  }
+}

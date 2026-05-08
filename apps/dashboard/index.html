@@ -925,6 +925,21 @@
 </footer>
 
 <script type="module">
+// Pure graph-rendering helpers (layout selection, degree, node size,
+// bbox, framed-camera default state) live in a sibling .mjs so a
+// vitest suite can exercise the optimization-relevant branches without
+// a browser. log-node serves /graph-utils.mjs from apps/dashboard/.
+import {
+  HIERARCHICAL_EDGE_TYPES,
+  DAGRE_MAX_EDGES,
+  FA2_MAX_NODES,
+  SIGMA_FRAMED_DEFAULT_CAMERA,
+  selectLayout,
+  computeNodeDegrees,
+  computeNodeSize,
+  computeGraphBBox,
+} from './graph-utils.mjs'
+
 /*
  * atrib explorer — D054 option 1.
  * Single-file vanilla JS. Read-only public surface composing log + graph + directory.
@@ -2544,23 +2559,10 @@ function edgeTypeColor(edgeType) {
 // every node would otherwise look identical. Transactions get a stronger
 // bump because they're the natural focal point of any settlement view.
 
-const HIERARCHICAL_EDGE_TYPES = new Set([
-  'CHAIN_PRECEDES',
-  'INFORMED_BY',
-  'PROVENANCE_OF',
-  'ANNOTATES',
-  'REVISES',
-  'CONVERGES_ON',
-])
-const DAGRE_MAX_EDGES = 2000
-// Beyond ~5K nodes the FA2 simulation cost dominates render time and the
-// visual gain shrinks (nodes become a colored cloud regardless). Fall
-// back to circular for the extreme-dense case to keep render times sane.
-const FA2_MAX_NODES = 5000
-// Number of FA2 simulation steps to run synchronously before painting.
-// 200 produces a stable layout for typical session-DAG densities (200-2000
-// nodes); the cost is ~50-200ms in the dense case, ~5-20ms in the moderate
-// case. Higher iteration counts buy diminishing returns.
+// FA2 iteration count stays inline — it's an FA2-implementation tuning
+// knob, not a pure helper. 200 produces a stable layout for typical
+// session-DAG densities (200-2000 nodes); cost is ~50-200ms in the
+// dense case, ~5-20ms in the moderate case.
 const FA2_ITERATIONS = 200
 
 /**
@@ -2591,47 +2593,6 @@ function attachCameraResetButton(container, fitCameraToGraph) {
   container.appendChild(btn)
 }
 
-/**
- * Compute a per-node size that gives the eye an anchor in dense layouts.
- * Strategy: focal nodes use focalSize verbatim; transactions get a strong
- * bump because they're settlement-view anchors; all other nodes scale by
- * degree (capped) so high-connectivity records visually emerge from a
- * sea of low-connectivity ones.
- */
-function computeNodeSize(node, isFocal, degree, baseSize, focalSize) {
-  if (isFocal) return focalSize
-  if (node.event_type === 'transaction') {
-    // Transactions float between baseSize+4 and focalSize regardless of
-    // degree. Even a low-degree transaction reads as the focal point in
-    // a settlement context.
-    return Math.min(focalSize, baseSize + 4 + Math.min(degree, 4))
-  }
-  // Degree encoding: log-scaled so a 100-degree hub doesn't dwarf
-  // baseline records. Cap at 1.7x baseline.
-  const bump = Math.min(0.7, Math.log2(1 + degree) / 4)
-  return baseSize * (1 + bump)
-}
-
-/**
- * Compute graph-extent bounding box in node coords. Used by camera fit-
- * to-graph: Sigma's `camera.animate` accepts a target { x, y, ratio }
- * where ratio = 1 / zoom-level. To frame the entire graph we set the
- * camera center to the bbox center and pick a ratio that maps the
- * larger of (bbox width, bbox height) into the container's render
- * dimensions, with a small padding margin.
- */
-function computeGraphBBox(graph) {
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
-  graph.forEachNode((_id, attrs) => {
-    if (attrs.x < minX) minX = attrs.x
-    if (attrs.x > maxX) maxX = attrs.x
-    if (attrs.y < minY) minY = attrs.y
-    if (attrs.y > maxY) maxY = attrs.y
-  })
-  if (!isFinite(minX)) return null
-  return { minX, maxX, minY, maxY, width: maxX - minX, height: maxY - minY }
-}
-
 async function renderSigmaDAG(container, graphData, options = {}) {
   const {
     isFocalNode = () => false,
@@ -2648,16 +2609,11 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   const Sigma = window.Sigma
   const dagre = window.dagre
 
-  // Decide layout up front based on graph shape.
-  const totalEdges = graphData.edges.length
-  const totalNodes = graphData.nodes.length
-  const hierarchicalEdgeCount = graphData.edges.filter((e) =>
-    HIERARCHICAL_EDGE_TYPES.has(e.type),
-  ).length
-  const useDagre = totalEdges < DAGRE_MAX_EDGES && (hierarchicalEdgeCount > 0 || totalEdges < 100)
-  // FA2 path: dense + non-hierarchical, but not so extreme that simulation
-  // dominates render time. Above FA2_MAX_NODES we fall through to circular.
-  const useForceAtlas2 = !useDagre && totalNodes <= FA2_MAX_NODES
+  // Decide layout up front based on graph shape (selectLayout is a pure
+  // helper in graph-utils.mjs; tests cover every branch).
+  const layout = selectLayout(graphData)
+  const useDagre = layout === 'dagre'
+  const useForceAtlas2 = layout === 'fa2'
 
   const gx = new Graph({ type: 'directed', multi: true, allowSelfLoops: false })
 
@@ -2669,13 +2625,10 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     dgx.setDefaultEdgeLabel(() => ({}))
   }
 
-  // Pre-compute degree per node so size encoding can read it. graphData
-  // is the wire format (graph-node response shape); we walk edges once.
-  const degreeByNodeId = new Map()
-  for (const e of graphData.edges) {
-    degreeByNodeId.set(e.source, (degreeByNodeId.get(e.source) ?? 0) + 1)
-    degreeByNodeId.set(e.target, (degreeByNodeId.get(e.target) ?? 0) + 1)
-  }
+  // Pre-compute degree per node so size encoding can read it. The
+  // computeNodeDegrees helper from graph-utils.mjs is the unit-tested
+  // single source of truth for this walk.
+  const degreeByNodeId = computeNodeDegrees(graphData.edges)
 
   for (const n of graphData.nodes) {
     const isFocal = isFocalNode(n)

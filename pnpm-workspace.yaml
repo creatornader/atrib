@@ -7,3 +7,4 @@ packages:
   - 'services/atrib-recall'
   - 'services/atrib-trace'
   - 'services/atrib-summarize'
+  - 'apps/dashboard'

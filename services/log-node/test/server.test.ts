@@ -570,6 +570,32 @@ describe('GET /dashboard', () => {
     expect(b.status).toBe(200)
   })
 
+  it('serves /graph-utils.mjs (sibling ES module imported by index.html)', async () => {
+    // The dashboard's <script type="module"> imports pure helpers from
+    // ./graph-utils.mjs. log-node serves the file with the spec-correct
+    // text/javascript content-type so the browser parses it as ESM.
+    const res = await fetch(`${server.url}/graph-utils.mjs`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/javascript')
+    const body = await res.text()
+    expect(body).toMatch(/export\s+(const|function)/)
+    expect(body).toMatch(/SIGMA_FRAMED_DEFAULT_CAMERA/)
+    expect(body).toMatch(/selectLayout/)
+  })
+
+  it('returns 404 for an unknown sibling .mjs', async () => {
+    const res = await fetch(`${server.url}/does-not-exist.mjs`)
+    expect(res.status).toBe(404)
+  })
+
+  it('rejects path traversal via /<name>.mjs (regex restricts to root-level filenames)', async () => {
+    // Regex is ^/[A-Za-z0-9_-]+\.mjs$, so slashes/dots in the name
+    // don't match — these requests fall through to the default 404.
+    // Test with a percent-encoded slash to be thorough.
+    const a = await fetch(`${server.url}/%2E%2E%2Fpackage.mjs`)
+    expect(a.status).toBe(404)
+  })
+
   it('serves dashboard at root when Host=explore.atrib.dev (D054)', async () => {
     // Node fetch silently drops the Host header; use node:http to set it.
     const u = new URL(server.url)

@@ -318,10 +318,20 @@ async function handleRequest(
       'application/octet-stream'
     return handleStaticAsset(res, name, contentType)
   }
+  // Sibling ES modules imported by index.html (e.g. graph-utils.mjs).
+  // These live next to the HTML in apps/dashboard/ and are extracted
+  // pure helpers that need to be unit-testable without a browser.
+  // Restrict the regex to the dashboard-root level (no slashes) so we
+  // can never accidentally serve files from anywhere else in the
+  // image. .mjs Content-Type is the spec-correct value for ES modules.
+  const mjsMatch = req.url?.match(/^\/([A-Za-z0-9_-]+\.mjs)$/)
+  if (req.method === 'GET' && mjsMatch) {
+    return handleDashboardModule(res, mjsMatch[1]!)
+  }
 
   sendJson(res, 404, {
     error: 'not found',
-    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/recent, GET /v1/lookup/<hex>, GET /v1/by-context/<hex>, GET /v1/by-creator/<base64url>, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>, GET /dashboard, GET /static/<name>, GET /favicon.ico',
+    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/recent, GET /v1/lookup/<hex>, GET /v1/by-context/<hex>, GET /v1/by-creator/<base64url>, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>, GET /dashboard, GET /<name>.mjs (dashboard sibling modules), GET /static/<name>, GET /favicon.ico',
   })
 }
 
@@ -447,6 +457,38 @@ const STATIC_DIR = (() => {
   return join(here, '..', '..', '..', 'apps', 'dashboard', 'static')
 })()
 const staticCache = new Map<string, Buffer>()
+/**
+ * Serve a dashboard sibling ES module file (e.g. graph-utils.mjs).
+ * Resolved relative to apps/dashboard/, NOT apps/dashboard/static/,
+ * because these are real source files imported by index.html. Cached
+ * after first read for the process lifetime — bundled with the image,
+ * unchanged between deploys.
+ */
+const moduleCache = new Map<string, Buffer>()
+async function handleDashboardModule(res: ServerResponse, name: string): Promise<void> {
+  let bytes = moduleCache.get(name)
+  if (!bytes) {
+    try {
+      // here = .../services/log-node/{src,dist}/  →  ../../../apps/dashboard/<name>
+      const here = dirname(fileURLToPath(import.meta.url))
+      bytes = await readFile(join(here, '..', '..', '..', 'apps', 'dashboard', name))
+      moduleCache.set(name, bytes)
+    } catch {
+      res.statusCode = 404
+      res.setHeader('content-type', 'text/plain; charset=utf-8')
+      res.end(`module not found: ${name}\n`)
+      return
+    }
+  }
+  res.statusCode = 200
+  res.setHeader('content-type', 'text/javascript; charset=utf-8')
+  res.setHeader('content-length', bytes.length)
+  // Modest cache so a hotfix to the .mjs is picked up after redeploy
+  // within minutes; immutable would require a cache-bust query param.
+  res.setHeader('cache-control', 'public, max-age=300')
+  res.end(bytes)
+}
+
 async function handleStaticAsset(res: ServerResponse, name: string, contentType: string): Promise<void> {
   let bytes = staticCache.get(name)
   if (!bytes) {
