@@ -991,7 +991,7 @@ import {
   computeNodeSizeFromCentrality,
   computeGraphBBox,
   computeNeighborhood,
-} from './graph-utils.mjs?v=2026-05-08-edge-shrink'
+} from './graph-utils.mjs?v=2026-05-08-zoom-fix'
 
 /*
  * atrib explorer — D054 option 1.
@@ -2730,12 +2730,13 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     rankDir = 'TB',
     nodeSep = 50,
     rankSep = 70,
-    // Base edge size in world units. Reduced from 2 → 1 after a UX
-    // report that edges visually overtook nodes at high zoom levels
-    // because Sigma's edge-thickness scales linearly with zoom while
-    // node radius scales at sqrt(ratio). Half the base thickness keeps
-    // edges legible at low zoom and out-of-the-way at high zoom.
-    edgeSize = 1,
+    // Base edge size in world units. Reduced from 1 → 0.5 after a zoom
+    // test on a 327-node chain showed the edges merged into a solid
+    // horizontal cyan band that hid the nodes. Sigma's edge-thickness
+    // scales linearly with zoom while node radius scales at sqrt(ratio),
+    // so a thin base keeps edges legible at low zoom and out-of-the-way
+    // at high zoom.
+    edgeSize = 0.5,
     onNodeClick = null,
   } = options
 
@@ -2981,14 +2982,29 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     defaultNodeColor: _cssVar('--muted', '#9ca3af'),
     labelColor: { color: _cssVar('--text-2', '#a0a3ab') },
     labelSize: 11,
-    labelDensity: 0.4,
+    // Only paint a label once the node renders at ≥6px on screen.
+    // At fit-to-graph zoom, a 327-node timeline has nodes at ~3px so
+    // labels were stacking into illegible noise. As the user zooms in
+    // past ~3x, nodes pass the threshold and labels appear.
+    labelRenderedSizeThreshold: 6,
+    // Density gate kept low so even past the size threshold, only the
+    // most prominent labels in a viewport region show (not every node).
+    labelDensity: 0.07,
     edgeLabelColor: { color: _cssVar('--text-3', '#6a6e78') },
-    // Trust Sigma's default zoomToSizeRatioFunction. Custom overrides
-    // attempted previously (ratio^-0.5, ratio^0.7) produced wrong-
-    // direction scaling. The edge-dominance issue at deep zoom is
-    // addressed by reducing edgeSize from 2 to 1 and reducing arrow
-    // wideness ratio, not by zoom-curve manipulation.
+    // Drop edges + labels during pan/zoom to keep dense chains responsive.
+    hideEdgesOnMove: true,
+    hideLabelsOnMove: true,
   })
+
+  // For long chain-shaped layouts (timeline mode w/ many nodes) the
+  // canonical fit-to-graph state compresses 300+ nodes into ~700 px,
+  // which is illegible. Start the camera zoomed in at the left edge so
+  // the user sees readable detail and pans through the chain instead.
+  // Reset button still calls animatedReset, which returns to fit-all.
+  if (layoutMode === 'timeline' && gx.order > 80) {
+    const camera = sigmaInstance.getCamera()
+    camera.setState({ x: 0.05, y: 0.5, ratio: 0.12, angle: 0 })
+  }
 
   // Hover-reducer pattern (Sigma 3 storybook story 4-use-reducers): on
   // hover, dim everything except the hovered node + its 1-hop neighbors.
