@@ -258,20 +258,27 @@ export const LAYOUT_MODES = ['auto', 'timeline', 'organic', 'cluster']
 /**
  * Resolve auto → concrete layout based on graph shape.
  * Pure function over graphData.
+ *
+ * Heuristic (revised 2026-05-08 after live verification):
+ *   - Very dense / hub-and-spoke graphs (edges/nodes > 2.5) → cluster.
+ *     These don't read well as a timeline because there's no
+ *     dominant chain order; cluster groups by event_type instead.
+ *   - Otherwise → timeline. Chain-shaped session data dominates atrib's
+ *     workload, and timeline (dagre LR) is the most legible default
+ *     for that shape. Empirically, organic mode produced tall columns
+ *     for chain-shaped data because FA2 stretched the dagre TB seed
+ *     vertically; timeline avoids that pitfall by ranking horizontally
+ *     to begin with.
+ *
+ * Users can still pick organic or cluster explicitly via the UI
+ * switcher; auto is just the first-render default.
  */
 export function resolveLayoutMode(mode, graphData) {
   if (mode === 'timeline' || mode === 'organic' || mode === 'cluster') return mode
-  // 'auto' (or anything unknown), pick by graph shape
   const totalNodes = graphData.nodes.length
   const totalEdges = graphData.edges.length
-  // Tiny graphs read fine as a vertical column; keep timeline (LR is
-  // unnecessarily horizontal for a 5-node chain).
-  if (totalNodes < 20) return 'timeline'
-  // Very dense / hub-and-spoke graphs benefit from cluster grouping.
-  // Heuristic: edges/nodes ratio > 2.5 → cluster.
   if (totalEdges / Math.max(1, totalNodes) > 2.5) return 'cluster'
-  // Default to organic for medium chain-shaped sessions.
-  return 'organic'
+  return 'timeline'
 }
 
 /**
