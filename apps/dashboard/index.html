@@ -774,6 +774,49 @@
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
+  /* Layout-mode switcher: top-left of the graph. Three-button group
+     ('timeline', 'organic', 'cluster') so users can compare layouts
+     side-by-side. Each click re-renders the graph with the selected
+     layout. Same opacity/color vocabulary as the reset button. */
+  .graph-layout-switcher {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 5;
+    display: flex;
+    gap: 0;
+    background: var(--surface-2, var(--surface));
+    border: 1px solid var(--border, rgba(255,255,255,0.08));
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    opacity: 0.65;
+    transition: opacity 120ms ease;
+  }
+  .graph-layout-switcher:hover { opacity: 1; }
+  .graph-layout-switcher button {
+    background: transparent;
+    color: var(--text-2);
+    border: none;
+    border-right: 1px solid var(--border, rgba(255,255,255,0.08));
+    padding: 6px 10px;
+    cursor: pointer;
+    font: 500 11px/1 var(--font-sans);
+    letter-spacing: 0.02em;
+    transition: all 120ms ease;
+  }
+  .graph-layout-switcher button:last-child { border-right: none; }
+  .graph-layout-switcher button:hover {
+    background: var(--surface);
+    color: var(--text-1, var(--text-2));
+  }
+  .graph-layout-switcher button.active {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .graph-layout-switcher button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
   .trace-graph .empty,
   .trace-graph .loading,
   .trace-graph .err-banner {
@@ -934,7 +977,9 @@ import {
   DAGRE_MAX_EDGES,
   FA2_MAX_NODES,
   SIGMA_FRAMED_DEFAULT_CAMERA,
-  selectLayout,
+  LAYOUT_MODES,
+  resolveLayoutMode,
+  clusterSeedPositions,
   computeNodeDegrees,
   computeNodeSizeFromCentrality,
   computeGraphBBox,
@@ -1924,9 +1969,20 @@ async function renderIdentity(creatorKey) {
       try { _activeSigmaInstance.kill() } catch {}
       _activeSigmaInstance = null
     }
-    const { sigma, fitCameraToGraph } = await renderSigmaDAG(activityGraphContainer, graph, {})
-    _activeSigmaInstance = sigma
-    attachCameraResetButton(activityGraphContainer, fitCameraToGraph)
+    let _activityLayoutMode = 'auto'
+    const renderActivity = async (mode) => {
+      _activityLayoutMode = mode
+      activityGraphContainer.replaceChildren()
+      if (_activeSigmaInstance) {
+        try { _activeSigmaInstance.kill() } catch {}
+        _activeSigmaInstance = null
+      }
+      const { sigma, fitCameraToGraph, resolvedMode } = await renderSigmaDAG(activityGraphContainer, graph, { layoutMode: mode })
+      _activeSigmaInstance = sigma
+      attachCameraResetButton(activityGraphContainer, fitCameraToGraph)
+      attachLayoutSwitcher(activityGraphContainer, resolvedMode, renderActivity)
+    }
+    await renderActivity(_activityLayoutMode)
     populateGraphLegend(activityNodeLegend, activityEdgeLegend, graph)
   }
 
@@ -2308,12 +2364,23 @@ async function renderSession(contextId) {
       ))
       return
     }
-    graphContainer.replaceChildren()
-    const { sigma, fitCameraToGraph } = await renderSigmaDAG(graphContainer, graph, {
-      isFocalNode: (n) => n.event_type === 'transaction',
-    })
-    _activeSigmaInstance = sigma
-    attachCameraResetButton(graphContainer, fitCameraToGraph)
+    let _sessionLayoutMode = 'auto'
+    const renderSessionGraph = async (mode) => {
+      _sessionLayoutMode = mode
+      graphContainer.replaceChildren()
+      if (_activeSigmaInstance) {
+        try { _activeSigmaInstance.kill() } catch {}
+        _activeSigmaInstance = null
+      }
+      const { sigma, fitCameraToGraph, resolvedMode } = await renderSigmaDAG(graphContainer, graph, {
+        isFocalNode: (n) => n.event_type === 'transaction',
+        layoutMode: mode,
+      })
+      _activeSigmaInstance = sigma
+      attachCameraResetButton(graphContainer, fitCameraToGraph)
+      attachLayoutSwitcher(graphContainer, resolvedMode, renderSessionGraph)
+    }
+    await renderSessionGraph(_sessionLayoutMode)
     populateGraphLegend(nodeLegendRow, edgeLegendRow, graph)
   }
 }
@@ -2608,6 +2675,46 @@ function attachCameraResetButton(container, fitCameraToGraph) {
   container.appendChild(btn)
 }
 
+/**
+ * Attach a layout-mode switcher overlay (top-left of the graph
+ * container). Three buttons: timeline, organic, cluster. Click triggers
+ * the supplied `onChange` callback with the selected mode; caller is
+ * responsible for re-rendering the graph with the new layoutMode.
+ *
+ * Idempotent: removes any prior switcher before insertion. The
+ * `currentMode` arg highlights the active button.
+ */
+function attachLayoutSwitcher(container, currentMode, onChange) {
+  const prior = container.querySelector(':scope > .graph-layout-switcher')
+  if (prior) prior.remove()
+  const wrap = el('div', {
+    class: 'graph-layout-switcher',
+    role: 'group',
+    'aria-label': 'Graph layout mode',
+  })
+  const modes = [
+    { mode: 'timeline', label: 'timeline', title: 'Horizontal timeline (dagre LR) — chain reads left to right' },
+    { mode: 'organic', label: 'organic', title: 'Force-directed relaxation over a dagre seed — chain becomes a curved arc' },
+    { mode: 'cluster', label: 'cluster', title: 'Group nodes by event_type — what kinds of activity happened' },
+  ]
+  for (const { mode, label, title } of modes) {
+    const btn = el('button', {
+      type: 'button',
+      class: mode === currentMode ? 'active' : '',
+      title,
+      'aria-pressed': String(mode === currentMode),
+    }, label)
+    btn.addEventListener('click', () => {
+      if (mode === currentMode) return // no-op
+      try { onChange(mode) } catch (e) {
+        console.warn('[atrib-dashboard] layout switch failed:', e)
+      }
+    })
+    wrap.appendChild(btn)
+  }
+  container.appendChild(wrap)
+}
+
 async function renderSigmaDAG(container, graphData, options = {}) {
   const {
     isFocalNode = () => false,
@@ -2624,19 +2731,31 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   const Sigma = window.Sigma
   const dagre = window.dagre
 
-  // Decide layout up front based on graph shape (selectLayout is a pure
-  // helper in graph-utils.mjs; tests cover every branch).
-  const layout = selectLayout(graphData)
-  const useDagre = layout === 'dagre'
-  const useForceAtlas2 = layout === 'fa2'
+  // Resolve layout mode (timeline / organic / cluster) — caller can
+  // pass an explicit mode in options or 'auto' picks by graph shape.
+  // resolveLayoutMode is a pure helper in graph-utils.mjs.
+  const requestedMode = options.layoutMode ?? 'auto'
+  const layoutMode = resolveLayoutMode(requestedMode, graphData)
+  // Dagre is now used by 'timeline' (LR) and 'organic' (TB seed for FA2).
+  // 'cluster' skips dagre entirely.
+  const useDagre = layoutMode === 'timeline' || layoutMode === 'organic'
+  const useForceAtlas2 = layoutMode === 'organic'
+  const useCluster = layoutMode === 'cluster'
 
   const gx = new Graph({ type: 'directed', multi: true, allowSelfLoops: false })
 
   // Build graphology graph (always). Build dagre side-graph only if we'll
   // actually run dagre.layout — saves the per-node setNode call when not.
+  // 'timeline' uses LR (horizontal timeline); 'organic' uses TB as a seed
+  // for FA2 relaxation. The timeline path doesn't relax, so its rank/node
+  // separation needs to be tuned for legibility (taller ranksep = more
+  // horizontal spread).
   const dgx = useDagre ? new dagre.graphlib.Graph({ multigraph: true }) : null
   if (dgx) {
-    dgx.setGraph({ rankdir: rankDir, ranksep: rankSep, nodesep: nodeSep, marginx: 30, marginy: 30 })
+    const dagreRankDir = layoutMode === 'timeline' ? 'LR' : 'TB'
+    const dagreRankSep = layoutMode === 'timeline' ? 110 : rankSep
+    const dagreNodeSep = layoutMode === 'timeline' ? 35 : nodeSep
+    dgx.setGraph({ rankdir: dagreRankDir, ranksep: dagreRankSep, nodesep: dagreNodeSep, marginx: 30, marginy: 30 })
     dgx.setDefaultEdgeLabel(() => ({}))
   }
 
@@ -2694,62 +2813,77 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     if (dgx) dgx.setEdge(e.source, e.target, {}, key)
   }
 
-  if (useDagre) {
+  if (layoutMode === 'timeline') {
+    // Dagre LR: horizontal ribbon. Time flows left → right; branches
+    // (INFORMED_BY, ANNOTATES, REVISES) go up/down vertically.
     dagre.layout(dgx)
-    // Copy positions back to graphology; flip y because Sigma's coordinate
-    // system has y growing upward (mathematical) while dagre's grows downward
-    // (screen). Without the flip the graph reads bottom-up on screen.
+    gx.forEachNode((nodeId) => {
+      const dnode = dgx.node(nodeId)
+      if (dnode) {
+        // Sigma's y grows upward; dagre's grows downward. Flip y for
+        // both timeline and organic seed paths so the orientation
+        // reads correctly.
+        gx.mergeNodeAttributes(nodeId, { x: dnode.x, y: -dnode.y })
+      }
+    })
+  } else if (layoutMode === 'organic') {
+    // Dagre TB seed → FA2 relaxation. Dagre gives every node a
+    // sensible starting position based on topological depth; FA2
+    // pushes related nodes together via attractive forces and
+    // unrelated nodes apart via repulsion. The chain becomes a
+    // curved arc instead of a straight column; clustered hubs emerge
+    // because high-degree nodes pull their neighbors close.
+    dagre.layout(dgx)
     gx.forEachNode((nodeId) => {
       const dnode = dgx.node(nodeId)
       if (dnode) {
         gx.mergeNodeAttributes(nodeId, { x: dnode.x, y: -dnode.y })
       }
     })
-  } else if (useForceAtlas2) {
-    // Seed positions on a unit circle so FA2 has a non-degenerate starting
-    // point — without seeding, all nodes start at (0,0) and FA2's force
-    // calculations produce NaN / fail to spread.
-    const n = gx.order
-    let i = 0
+    try {
+      const fa2 = await loadForceAtlas2()
+      const settings = fa2.inferSettings(gx)
+      // Tune for chain relaxation: high scalingRatio pushes the chain
+      // apart laterally; low gravity lets it spread without
+      // collapsing back. Iterations dialed lower than the from-scratch
+      // FA2 path because dagre seed already has good structure.
+      settings.scalingRatio = Math.max(settings.scalingRatio ?? 1, 25)
+      settings.gravity = 0.5
+      settings.barnesHutOptimize = gx.order > 1000
+      fa2.assign(gx, { iterations: 80, settings })
+    } catch (e) {
+      console.warn('[atrib-dashboard] Force-Atlas 2 relaxation failed; keeping dagre TB seed:', e)
+    }
+  } else if (layoutMode === 'cluster') {
+    // Cluster by event_type. clusterSeedPositions in graph-utils.mjs
+    // groups nodes by type and arranges each group as a small ring;
+    // the rings sit around a larger circle. Optional FA2 polish to
+    // tighten clusters around their centroids without losing the
+    // overall layout.
+    const seeds = clusterSeedPositions(graphData.nodes, {
+      clusterRadius: Math.max(600, gx.order * 4),
+      intraClusterRadius: Math.max(120, Math.sqrt(gx.order) * 30),
+    })
     gx.forEachNode((nodeId) => {
-      const angle = (i / n) * 2 * Math.PI
-      gx.mergeNodeAttributes(nodeId, {
-        x: Math.cos(angle) * 100,
-        y: Math.sin(angle) * 100,
-      })
-      i++
+      const p = seeds.get(nodeId)
+      if (p) gx.mergeNodeAttributes(nodeId, { x: p.x, y: p.y })
     })
     try {
       const fa2 = await loadForceAtlas2()
       const settings = fa2.inferSettings(gx)
-      // Tune scaling for atrib graphs: a slightly higher scaling ratio
-      // pushes nodes apart for legibility; gravity keeps disconnected
-      // components from drifting offscreen.
-      settings.scalingRatio = Math.max(settings.scalingRatio ?? 1, 10)
-      settings.gravity = 1
-      // Run iterations synchronously and assign positions in place. The
-      // `assign` helper writes x/y back to the graphology graph; the
-      // default exported function returns positions instead.
-      fa2.assign(gx, { iterations: FA2_ITERATIONS, settings })
+      // Lower scalingRatio + higher gravity keeps clusters tight.
+      settings.scalingRatio = 5
+      settings.gravity = 2
+      settings.barnesHutOptimize = gx.order > 1000
+      fa2.assign(gx, { iterations: 30, settings })
     } catch (e) {
-      // FA2 load or compute failed: fall back to circular so the graph
-      // still renders. Surface to console for triage; don't break the view.
-      console.warn('[atrib-dashboard] Force-Atlas 2 layout failed; falling back to circular:', e)
-      const radius = Math.max(200, n * 6)
-      let i2 = 0
-      gx.forEachNode((nodeId) => {
-        const angle = (i2 / n) * 2 * Math.PI
-        gx.mergeNodeAttributes(nodeId, {
-          x: Math.cos(angle) * radius,
-          y: Math.sin(angle) * radius,
-        })
-        i2++
-      })
+      // No-op: seed positions are already valid, just less polished.
+      console.warn('[atrib-dashboard] cluster polish skipped:', e)
     }
   } else {
-    // Circular layout: extreme-density fallback (> FA2_MAX_NODES). Scale
-    // radius with node count so labels don't crowd for small graphs and
-    // the ring is large enough to spread for dense ones.
+    // Fallback for any unknown mode: circular layout. Should be
+    // unreachable since resolveLayoutMode normalizes to one of the
+    // three modes above, but defensive.
     const n = gx.order
     const radius = Math.max(200, n * 6)
     let i = 0
@@ -2763,13 +2897,17 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     })
   }
 
-  // Custom arrow program: defaults are length=2.5x, wideness=2x of the edge
-  // size, which renders almost-invisible heads on thin lines. Bumping the
-  // ratios lets the line stay slim while the direction marker reads at a
-  // glance — direction is the load-bearing signal in any provenance graph.
+  // Custom arrow program. Sigma's defaults are length=2.5x, wideness=2x
+  // of the edge size, which renders nearly-invisible heads on thin
+  // lines. Bumping the length so the direction marker reads at a glance
+  // matters because direction is the load-bearing signal in any
+  // provenance graph. Wideness stays modest so the arrow doesn't
+  // visually overtake the node it points at — reduced from 6 to 3.5
+  // after a UX report that arrowheads were dominating nodes at high
+  // zoom levels.
   const ProminentArrowProgram = Sigma.rendering.createEdgeArrowProgram({
     lengthToThicknessRatio: 5,
-    widenessToThicknessRatio: 6,
+    widenessToThicknessRatio: 3.5,
   })
 
   // @sigma/edge-curve registration. Atrib's graph has multi-edges between
@@ -2830,6 +2968,14 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     labelSize: 11,
     labelDensity: 0.4,
     edgeLabelColor: { color: _cssVar('--text-3', '#6a6e78') },
+    // Zoom-scaling: by default Sigma scales node size linearly with the
+    // inverse of camera ratio (closer = bigger), but edges use a
+    // different scaling curve which makes arrowheads visually overtake
+    // nodes at high zoom levels. Use a unified scaling function so the
+    // ratio stays constant: nodes and edges grow together as you zoom in.
+    // Math.sqrt provides a gentler scaling curve than the default
+    // 1/ratio (avoids extreme blow-up at deep zoom).
+    zoomToSizeRatioFunction: (ratio) => Math.pow(ratio, -0.5),
   })
 
   // Hover-reducer pattern (Sigma 3 storybook story 4-use-reducers): on
@@ -2910,7 +3056,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   // returned so the reset button can return to the framed view if
   // the user has scrolled / panned / zoomed.
 
-  return { sigma: sigmaInstance, graph: gx, fitCameraToGraph }
+  return { sigma: sigmaInstance, graph: gx, fitCameraToGraph, resolvedMode: layoutMode }
 }
 
 // Pair-aware legend population for any graph view. Two-row layout:
@@ -3477,13 +3623,24 @@ async function renderTrace(rawHash) {
   // here is the focal-node test (start record can match by record_hash, by
   // hashHex, or by sha256-prefixed id depending on the node-id shape
   // graph-node returned).
-  graphContainer.replaceChildren()
-  const { sigma, fitCameraToGraph } = await renderSigmaDAG(graphContainer, graph, {
-    isFocalNode: (n) =>
-      (n.record_hash === fullHash) || (n.id === hashHex) || (n.id === fullHash),
-  })
-  _activeSigmaInstance = sigma
-  attachCameraResetButton(graphContainer, fitCameraToGraph)
+  let _traceLayoutMode = 'auto'
+  const renderTraceGraph = async (mode) => {
+    _traceLayoutMode = mode
+    graphContainer.replaceChildren()
+    if (_activeSigmaInstance) {
+      try { _activeSigmaInstance.kill() } catch {}
+      _activeSigmaInstance = null
+    }
+    const { sigma, fitCameraToGraph, resolvedMode } = await renderSigmaDAG(graphContainer, graph, {
+      isFocalNode: (n) =>
+        (n.record_hash === fullHash) || (n.id === hashHex) || (n.id === fullHash),
+      layoutMode: mode,
+    })
+    _activeSigmaInstance = sigma
+    attachCameraResetButton(graphContainer, fitCameraToGraph)
+    attachLayoutSwitcher(graphContainer, resolvedMode, renderTraceGraph)
+  }
+  await renderTraceGraph(_traceLayoutMode)
 }
 
 // ─── Anchoring view ──────────────────────────────────────────────────────

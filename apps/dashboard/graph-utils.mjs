@@ -230,6 +230,93 @@ export function computeGraphBBox(positionsLike) {
 }
 
 /**
+ * Available layout modes for the dashboard graph viewer. Each produces
+ * a visibly different shape for the same record graph; users can flip
+ * between them via the in-canvas switcher.
+ *
+ *   timeline — dagre LR (left-to-right), reads as a horizontal timeline.
+ *              Time flows left → right; INFORMED_BY / ANNOTATES / REVISES
+ *              branches go up/down. Best when chain order is the dominant
+ *              story (single-session view).
+ *
+ *   organic  — dagre seed + Force-Atlas 2 relaxation. Chain becomes a
+ *              curved arc instead of a straight column; branches push
+ *              outward. Reads as 'graph-shaped' rather than 'tree-shaped'.
+ *              Best for sessions with substantial cross-linking.
+ *
+ *   cluster  — group nodes by event_type, run circular layout per cluster,
+ *              position cluster centers around a larger circle. Best for
+ *              'show me what KIND of activity happened'. Loses temporal
+ *              ordering.
+ *
+ *   auto     — pick automatically per the heuristic in `selectLayout`.
+ *              Currently mapped to 'organic' for non-trivial graphs and
+ *              'timeline' for small ones. Default.
+ */
+export const LAYOUT_MODES = ['auto', 'timeline', 'organic', 'cluster']
+
+/**
+ * Resolve auto → concrete layout based on graph shape.
+ * Pure function over graphData.
+ */
+export function resolveLayoutMode(mode, graphData) {
+  if (mode === 'timeline' || mode === 'organic' || mode === 'cluster') return mode
+  // 'auto' (or anything unknown) — pick by graph shape
+  const totalNodes = graphData.nodes.length
+  const totalEdges = graphData.edges.length
+  // Tiny graphs read fine as a vertical column; keep timeline (LR is
+  // unnecessarily horizontal for a 5-node chain).
+  if (totalNodes < 20) return 'timeline'
+  // Very dense / hub-and-spoke graphs benefit from cluster grouping.
+  // Heuristic: edges/nodes ratio > 2.5 → cluster.
+  if (totalEdges / Math.max(1, totalNodes) > 2.5) return 'cluster'
+  // Default to organic for medium chain-shaped sessions.
+  return 'organic'
+}
+
+/**
+ * Compute initial seed positions arranged so each event_type group sits
+ * in its own region of space, with cluster centers placed around a
+ * larger circle. Used by both the 'cluster' layout (final positions)
+ * and the 'organic' layout (FA2 starting state when dagre would
+ * produce a column).
+ *
+ * Returns Map<nodeId, {x, y}>. Pure; no graphology dependency.
+ */
+export function clusterSeedPositions(nodes, options = {}) {
+  const { clusterRadius = 800, intraClusterRadius = 200 } = options
+  // Group nodes by event_type
+  const groups = new Map()
+  for (const n of nodes) {
+    const key = n.event_type || 'unknown'
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(n)
+  }
+  const groupKeys = [...groups.keys()].sort()
+  const G = groupKeys.length || 1
+  const positions = new Map()
+  for (let gi = 0; gi < groupKeys.length; gi++) {
+    const groupKey = groupKeys[gi]
+    const groupAngle = (gi / G) * 2 * Math.PI
+    const cx = Math.cos(groupAngle) * clusterRadius
+    const cy = Math.sin(groupAngle) * clusterRadius
+    const members = groups.get(groupKey)
+    const M = members.length
+    for (let mi = 0; mi < M; mi++) {
+      const member = members[mi]
+      // Single member sits at center; multiple members ring around.
+      const innerAngle = M > 1 ? (mi / M) * 2 * Math.PI : 0
+      const innerR = M > 1 ? intraClusterRadius : 0
+      positions.set(member.id, {
+        x: cx + Math.cos(innerAngle) * innerR,
+        y: cy + Math.sin(innerAngle) * innerR,
+      })
+    }
+  }
+  return positions
+}
+
+/**
  * The Sigma 3 framed-graph default camera state.
  *
  * We learned the hard way (see commit fe3f04e): Sigma 3's camera
