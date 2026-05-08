@@ -21,7 +21,10 @@ import {
   DAGRE_MAX_EDGES,
   FA2_MAX_NODES,
   SIGMA_FRAMED_DEFAULT_CAMERA,
+  LAYOUT_MODES,
   selectLayout,
+  resolveLayoutMode,
+  clusterSeedPositions,
   computeNodeDegrees,
   degreeCentralityFromGraph,
   computeNodeSize,
@@ -441,5 +444,119 @@ describe('computeNeighborhood', () => {
     const nb = computeNeighborhood(g, 'a')
     expect(nb.nodes).toEqual(new Set(['a', 'b']))
     expect(nb.edges).toEqual(new Set(['e1', 'e2', 'e3']))
+  })
+})
+
+describe('LAYOUT_MODES', () => {
+  it('exports the three modes plus auto', () => {
+    expect(LAYOUT_MODES).toEqual(['auto', 'timeline', 'organic', 'cluster'])
+  })
+})
+
+describe('resolveLayoutMode', () => {
+  // Pure function over graphData = { nodes, edges }. Returns one of
+  // 'timeline' | 'organic' | 'cluster'. Test the explicit-mode pass-
+  // through and the 'auto' heuristic branches.
+
+  it('passes through explicit modes verbatim', () => {
+    const g = graph([n('a')], [])
+    expect(resolveLayoutMode('timeline', g)).toBe('timeline')
+    expect(resolveLayoutMode('organic', g)).toBe('organic')
+    expect(resolveLayoutMode('cluster', g)).toBe('cluster')
+  })
+
+  it('auto picks timeline for tiny graphs (< 20 nodes)', () => {
+    const nodes = []
+    for (let i = 0; i < 5; i++) nodes.push(n(`n${i}`))
+    expect(resolveLayoutMode('auto', graph(nodes, []))).toBe('timeline')
+  })
+
+  it('auto picks cluster for hub-and-spoke graphs (edges/nodes > 2.5)', () => {
+    const nodes = []
+    const edges = []
+    for (let i = 0; i < 30; i++) nodes.push(n(`n${i}`))
+    // 30 nodes, 90 edges → ratio 3.0
+    for (let i = 0; i < 90; i++) edges.push(e(`n${i % 30}`, `n${(i + 1) % 30}`))
+    expect(resolveLayoutMode('auto', graph(nodes, edges))).toBe('cluster')
+  })
+
+  it('auto picks organic for medium chain-shaped sessions', () => {
+    const nodes = []
+    const edges = []
+    for (let i = 0; i < 100; i++) nodes.push(n(`n${i}`))
+    // 100 nodes, 99 chain edges → ratio ~1.0 (well under 2.5)
+    for (let i = 0; i < 99; i++) edges.push(e(`n${i}`, `n${i + 1}`))
+    expect(resolveLayoutMode('auto', graph(nodes, edges))).toBe('organic')
+  })
+
+  it('treats unknown / undefined modes as auto', () => {
+    const nodes = []
+    for (let i = 0; i < 50; i++) nodes.push(n(`n${i}`))
+    const g = graph(nodes, [])
+    expect(resolveLayoutMode('mystery', g)).toBe('organic') // 50 nodes, 0 edges → organic via auto
+    expect(resolveLayoutMode(undefined, g)).toBe('organic')
+    expect(resolveLayoutMode(null, g)).toBe('organic')
+  })
+})
+
+describe('clusterSeedPositions', () => {
+  it('returns empty Map for empty input', () => {
+    expect(clusterSeedPositions([]).size).toBe(0)
+  })
+
+  it('places nodes of the same event_type in the same cluster region', () => {
+    const nodes = [
+      n('a', 'tool_call'), n('b', 'tool_call'), n('c', 'tool_call'),
+      n('x', 'transaction'), n('y', 'transaction'),
+    ]
+    const positions = clusterSeedPositions(nodes, { clusterRadius: 1000, intraClusterRadius: 100 })
+    // Tool_call nodes should be near each other; same for transactions.
+    const toolCallPositions = ['a', 'b', 'c'].map(id => positions.get(id))
+    const txPositions = ['x', 'y'].map(id => positions.get(id))
+    // Centroid of each cluster
+    const centroidOf = ps => ({
+      x: ps.reduce((s, p) => s + p.x, 0) / ps.length,
+      y: ps.reduce((s, p) => s + p.y, 0) / ps.length,
+    })
+    const tcCenter = centroidOf(toolCallPositions)
+    const txCenter = centroidOf(txPositions)
+    // Distance between cluster centers should be roughly clusterRadius
+    // (since they're placed on a circle of that radius around origin).
+    const interClusterDist = Math.hypot(tcCenter.x - txCenter.x, tcCenter.y - txCenter.y)
+    expect(interClusterDist).toBeGreaterThan(500)
+    // Distance within a cluster should be much smaller
+    const intraDist = Math.hypot(toolCallPositions[0].x - toolCallPositions[1].x, toolCallPositions[0].y - toolCallPositions[1].y)
+    expect(intraDist).toBeLessThan(interClusterDist)
+  })
+
+  it('places single-member cluster at exactly the cluster center (innerR=0)', () => {
+    const positions = clusterSeedPositions([n('lonely', 'observation')], { clusterRadius: 500 })
+    const p = positions.get('lonely')
+    expect(p).toBeDefined()
+    // With G=1, groupAngle=0; cx = cos(0)*500 = 500, cy = 0. innerR = 0
+    // because M=1 (single member), so position = cluster center exactly.
+    expect(p.x).toBe(500)
+    expect(p.y).toBe(0)
+  })
+
+  it('produces deterministic output for the same input', () => {
+    const nodes = [n('a', 'tool_call'), n('b', 'observation'), n('c', 'transaction')]
+    const p1 = clusterSeedPositions(nodes)
+    const p2 = clusterSeedPositions(nodes)
+    for (const id of ['a', 'b', 'c']) {
+      expect(p1.get(id)).toEqual(p2.get(id))
+    }
+  })
+
+  it('handles missing event_type gracefully (defaults to "unknown" group)', () => {
+    const nodes = [{ id: 'a' }, { id: 'b' }] // no event_type field
+    const positions = clusterSeedPositions(nodes)
+    expect(positions.size).toBe(2)
+    // Both end up in the same 'unknown' cluster
+    const a = positions.get('a')
+    const b = positions.get('b')
+    const dist = Math.hypot(a.x - b.x, a.y - b.y)
+    // Same cluster, so within intraClusterRadius * 2 (default 200 * 2 = 400)
+    expect(dist).toBeLessThan(500)
   })
 })
