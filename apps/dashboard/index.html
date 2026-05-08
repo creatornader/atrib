@@ -991,7 +991,7 @@ import {
   computeNodeSizeFromCentrality,
   computeGraphBBox,
   computeNeighborhood,
-} from './graph-utils.mjs?v=2026-05-08-layouts'
+} from './graph-utils.mjs?v=2026-05-08-zoom-fix'
 
 /*
  * atrib explorer — D054 option 1.
@@ -2975,14 +2975,13 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     labelSize: 11,
     labelDensity: 0.4,
     edgeLabelColor: { color: _cssVar('--text-3', '#6a6e78') },
-    // Zoom-scaling: by default Sigma scales node size linearly with the
-    // inverse of camera ratio (closer = bigger), but edges use a
-    // different scaling curve which makes arrowheads visually overtake
-    // nodes at high zoom levels. Use a unified scaling function so the
-    // ratio stays constant: nodes and edges grow together as you zoom in.
-    // Math.sqrt provides a gentler scaling curve than the default
-    // 1/ratio (avoids extreme blow-up at deep zoom).
-    zoomToSizeRatioFunction: (ratio) => Math.pow(ratio, -0.5),
+    // Note: Sigma 3's default zoomToSizeRatioFunction handles the
+    // node-vs-edge scaling proportionally. A previous attempt to
+    // override with `Math.pow(ratio, -0.5)` produced inverted behavior
+    // (nodes shrunk on zoom-in), so we trust the default. The arrow-
+    // dominance issue at deep zoom is addressed by the
+    // widenessToThicknessRatio reduction (3.5 instead of the default 6)
+    // on ProminentArrowProgram, not by zoom-curve manipulation.
   })
 
   // Hover-reducer pattern (Sigma 3 storybook story 4-use-reducers): on

@@ -465,10 +465,16 @@ describe('resolveLayoutMode', () => {
     expect(resolveLayoutMode('cluster', g)).toBe('cluster')
   })
 
-  it('auto picks timeline for tiny graphs (< 20 nodes)', () => {
+  it('auto picks timeline for chain-shaped graphs (any size)', () => {
+    // Tiny graph
+    const small = graph([n('a'), n('b'), n('c')], [e('a', 'b'), e('b', 'c')])
+    expect(resolveLayoutMode('auto', small)).toBe('timeline')
+    // Medium chain
     const nodes = []
-    for (let i = 0; i < 5; i++) nodes.push(n(`n${i}`))
-    expect(resolveLayoutMode('auto', graph(nodes, []))).toBe('timeline')
+    const edges = []
+    for (let i = 0; i < 100; i++) nodes.push(n(`n${i}`))
+    for (let i = 0; i < 99; i++) edges.push(e(`n${i}`, `n${i + 1}`))
+    expect(resolveLayoutMode('auto', graph(nodes, edges))).toBe('timeline')
   })
 
   it('auto picks cluster for hub-and-spoke graphs (edges/nodes > 2.5)', () => {
@@ -480,22 +486,13 @@ describe('resolveLayoutMode', () => {
     expect(resolveLayoutMode('auto', graph(nodes, edges))).toBe('cluster')
   })
 
-  it('auto picks organic for medium chain-shaped sessions', () => {
-    const nodes = []
-    const edges = []
-    for (let i = 0; i < 100; i++) nodes.push(n(`n${i}`))
-    // 100 nodes, 99 chain edges → ratio ~1.0 (well under 2.5)
-    for (let i = 0; i < 99; i++) edges.push(e(`n${i}`, `n${i + 1}`))
-    expect(resolveLayoutMode('auto', graph(nodes, edges))).toBe('organic')
-  })
-
-  it('treats unknown / undefined modes as auto', () => {
+  it('treats unknown / undefined modes as auto (timeline default)', () => {
     const nodes = []
     for (let i = 0; i < 50; i++) nodes.push(n(`n${i}`))
     const g = graph(nodes, [])
-    expect(resolveLayoutMode('mystery', g)).toBe('organic') // 50 nodes, 0 edges → organic via auto
-    expect(resolveLayoutMode(undefined, g)).toBe('organic')
-    expect(resolveLayoutMode(null, g)).toBe('organic')
+    expect(resolveLayoutMode('mystery', g)).toBe('timeline')
+    expect(resolveLayoutMode(undefined, g)).toBe('timeline')
+    expect(resolveLayoutMode(null, g)).toBe('timeline')
   })
 })
 
