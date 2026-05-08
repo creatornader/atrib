@@ -991,7 +991,7 @@ import {
   computeNodeSizeFromCentrality,
   computeGraphBBox,
   computeNeighborhood,
-} from './graph-utils.mjs?v=2026-05-08-edge-zoom-clamp'
+} from './graph-utils.mjs?v=2026-05-08-density-sizing'
 
 /*
  * atrib explorer, D054 option 1.
@@ -2725,8 +2725,8 @@ function attachLayoutSwitcher(container, currentMode, onChange) {
 async function renderSigmaDAG(container, graphData, options = {}) {
   const {
     isFocalNode = () => false,
-    focalSize = 16,
-    nodeSize = 10,
+    focalSize: focalSizeOpt = 16,
+    nodeSize: nodeSizeOpt = 10,
     rankDir = 'TB',
     nodeSep = 50,
     rankSep = 70,
@@ -2739,6 +2739,15 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     edgeSize = 0.5,
     onNodeClick = null,
   } = options
+
+  // Density-adaptive node sizing. With baseSize=10 and many nodes laid
+  // out in a chain, per-node viewport width drops below the rendered
+  // node diameter and circles overlap into a solid band. Shrink the
+  // base size as the node count grows: at 50 nodes use full size, at
+  // 200 nodes use ~70%, at 500 nodes use ~45%.
+  const densityFactor = Math.sqrt(Math.min(1, 50 / Math.max(1, graphData.nodes.length)))
+  const nodeSize = Math.max(3, nodeSizeOpt * densityFactor)
+  const focalSize = Math.max(6, focalSizeOpt * densityFactor)
 
   const Graph = window.graphology.Graph
   const Sigma = window.Sigma
