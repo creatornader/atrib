@@ -23,8 +23,11 @@ import {
   SIGMA_FRAMED_DEFAULT_CAMERA,
   selectLayout,
   computeNodeDegrees,
+  degreeCentralityFromGraph,
   computeNodeSize,
+  computeNodeSizeFromCentrality,
   computeGraphBBox,
+  computeNeighborhood,
 } from '../graph-utils.mjs'
 
 // Helper: build a graphData wire-format object.
@@ -293,5 +296,150 @@ describe('SIGMA_FRAMED_DEFAULT_CAMERA', () => {
     // Anything substantially different from 1 would NOT be the framed
     // default, so guard the canonical value.
     expect(SIGMA_FRAMED_DEFAULT_CAMERA.ratio).toBe(1)
+  })
+})
+
+describe('computeNodeSizeFromCentrality', () => {
+  const BASE = 10
+  const FOCAL = 16
+
+  it('focal nodes always use focalSize verbatim', () => {
+    expect(computeNodeSizeFromCentrality(n('x', 'tool_call'), true, 0, BASE, FOCAL)).toBe(FOCAL)
+    expect(computeNodeSizeFromCentrality(n('x', 'transaction'), true, 1, BASE, FOCAL)).toBe(FOCAL)
+  })
+
+  it('transactions size with centrality, capped at focalSize', () => {
+    // bump = 4 + min(4, c*8). At c=0 → 4; at c=0.5 → 8; at c≥0.5 → 8.
+    const tLow = computeNodeSizeFromCentrality(n('t', 'transaction'), false, 0, BASE, FOCAL)
+    expect(tLow).toBe(BASE + 4) // 14
+    const tHalf = computeNodeSizeFromCentrality(n('t', 'transaction'), false, 0.5, BASE, FOCAL)
+    expect(tHalf).toBeGreaterThan(BASE + 4)
+    expect(tHalf).toBeLessThanOrEqual(FOCAL)
+    const tFull = computeNodeSizeFromCentrality(n('t', 'transaction'), false, 1, BASE, FOCAL)
+    expect(tFull).toBe(FOCAL) // capped
+  })
+
+  it('non-transaction nodes scale linearly with centrality', () => {
+    const isolated = computeNodeSizeFromCentrality(n('x', 'tool_call'), false, 0, BASE, FOCAL)
+    expect(isolated).toBe(BASE)
+    const half = computeNodeSizeFromCentrality(n('x', 'tool_call'), false, 0.5, BASE, FOCAL)
+    expect(half).toBeCloseTo(BASE * (1 + 0.7 * 0.5), 5) // 13.5
+    const full = computeNodeSizeFromCentrality(n('x', 'tool_call'), false, 1, BASE, FOCAL)
+    expect(full).toBeCloseTo(BASE * 1.7, 5) // 17
+  })
+
+  it('clamps centrality to [0, 1] (defensive)', () => {
+    // negative or > 1 centrality (e.g., from a buggy upstream metric)
+    // should saturate, not produce nonsense sizes.
+    const neg = computeNodeSizeFromCentrality(n('x', 'tool_call'), false, -0.5, BASE, FOCAL)
+    expect(neg).toBe(BASE)
+    const huge = computeNodeSizeFromCentrality(n('x', 'tool_call'), false, 5, BASE, FOCAL)
+    expect(huge).toBeCloseTo(BASE * 1.7, 5)
+  })
+
+  it('produces size-invariant scaling: same centrality → same size regardless of graph size', () => {
+    // The whole point of the centrality-based path: a 0.5-centrality
+    // node looks the same on a 10-node graph and a 1000-node graph.
+    // (Compare with computeNodeSize, where degree=5 looks different
+    // depending on graph size.)
+    const small = computeNodeSizeFromCentrality(n('x', 'tool_call'), false, 0.5, BASE, FOCAL)
+    const large = computeNodeSizeFromCentrality(n('x', 'tool_call'), false, 0.5, BASE, FOCAL)
+    expect(small).toBe(large)
+  })
+})
+
+describe('degreeCentralityFromGraph', () => {
+  // Mock graphology graph: implements `order`, `forEachNode`, `degree`.
+  function mockGraph(adjacency) {
+    const nodeIds = Object.keys(adjacency)
+    return {
+      order: nodeIds.length,
+      forEachNode(cb) { for (const id of nodeIds) cb(id) },
+      degree(id) { return adjacency[id] ?? 0 },
+      hasNode(id) { return id in adjacency },
+    }
+  }
+
+  it('returns empty Map for graphs with 0 or 1 nodes (no centrality defined)', () => {
+    expect(degreeCentralityFromGraph(mockGraph({})).size).toBe(0)
+    expect(degreeCentralityFromGraph(mockGraph({ a: 0 })).size).toBe(0)
+  })
+
+  it('normalizes degree to [0, 1] (0 = isolated, 1 = connected to every other node)', () => {
+    // 4 nodes; node "hub" connects to all 3 others (degree 3, max possible).
+    const c = degreeCentralityFromGraph(mockGraph({ hub: 3, a: 1, b: 1, c: 1 }))
+    expect(c.get('hub')).toBe(1) // 3 / (4-1) = 1
+    expect(c.get('a')).toBeCloseTo(1 / 3, 5)
+  })
+
+  it('handles isolated nodes correctly (centrality = 0)', () => {
+    const c = degreeCentralityFromGraph(mockGraph({ a: 0, b: 1, c: 1 }))
+    expect(c.get('a')).toBe(0)
+    expect(c.get('b')).toBeCloseTo(0.5, 5)
+  })
+})
+
+describe('computeNeighborhood', () => {
+  // Mock graphology graph: implements `hasNode`, `forEachEdge` for an
+  // edge-keyed multigraph. Edges keyed by source + '->' + target + '#' + idx.
+  function mockMultiGraph(nodes, edges) {
+    return {
+      hasNode(id) { return nodes.includes(id) },
+      forEachEdge(nodeOrCallback, cb) {
+        // graphology supports two signatures; we use forEachEdge(node, cb)
+        const node = nodeOrCallback
+        const callback = cb
+        for (const [key, source, target] of edges) {
+          if (source === node || target === node) callback(key, {}, source, target)
+        }
+      },
+    }
+  }
+
+  it('returns null when the hovered node is not in the graph', () => {
+    const g = mockMultiGraph(['a', 'b'], [['e1', 'a', 'b']])
+    expect(computeNeighborhood(g, 'missing')).toBeNull()
+    expect(computeNeighborhood(g, null)).toBeNull()
+    expect(computeNeighborhood(g, undefined)).toBeNull()
+  })
+
+  it('returns the hovered node + its 1-hop neighbors', () => {
+    // Star graph: hub connects to a, b, c.
+    const g = mockMultiGraph(
+      ['hub', 'a', 'b', 'c', 'far'],
+      [['e1', 'hub', 'a'], ['e2', 'hub', 'b'], ['e3', 'hub', 'c'], ['e4', 'a', 'far']],
+    )
+    const nb = computeNeighborhood(g, 'hub')
+    expect(nb).not.toBeNull()
+    expect(nb.nodes).toEqual(new Set(['hub', 'a', 'b', 'c']))
+    expect(nb.edges).toEqual(new Set(['e1', 'e2', 'e3']))
+    // 'far' is 2 hops away, NOT in neighborhood
+    expect(nb.nodes.has('far')).toBe(false)
+    // 'e4' isn't incident to hub, NOT in edge set
+    expect(nb.edges.has('e4')).toBe(false)
+  })
+
+  it('handles a leaf node (only 1 incident edge)', () => {
+    const g = mockMultiGraph(['hub', 'leaf'], [['e1', 'hub', 'leaf']])
+    const nb = computeNeighborhood(g, 'leaf')
+    expect(nb.nodes).toEqual(new Set(['leaf', 'hub']))
+    expect(nb.edges).toEqual(new Set(['e1']))
+  })
+
+  it('handles isolated nodes (zero incident edges)', () => {
+    const g = mockMultiGraph(['lonely', 'a', 'b'], [['e1', 'a', 'b']])
+    const nb = computeNeighborhood(g, 'lonely')
+    expect(nb.nodes).toEqual(new Set(['lonely']))
+    expect(nb.edges.size).toBe(0)
+  })
+
+  it('handles multi-edges between the same pair (each gets its own edge key)', () => {
+    const g = mockMultiGraph(
+      ['a', 'b'],
+      [['e1', 'a', 'b'], ['e2', 'a', 'b'], ['e3', 'a', 'b']],
+    )
+    const nb = computeNeighborhood(g, 'a')
+    expect(nb.nodes).toEqual(new Set(['a', 'b']))
+    expect(nb.edges).toEqual(new Set(['e1', 'e2', 'e3']))
   })
 })

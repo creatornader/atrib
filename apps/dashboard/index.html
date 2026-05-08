@@ -936,8 +936,9 @@ import {
   SIGMA_FRAMED_DEFAULT_CAMERA,
   selectLayout,
   computeNodeDegrees,
-  computeNodeSize,
+  computeNodeSizeFromCentrality,
   computeGraphBBox,
+  computeNeighborhood,
 } from './graph-utils.mjs'
 
 /*
@@ -2465,6 +2466,20 @@ async function loadForceAtlas2() {
   _fa2Module = await import(/* @vite-ignore */ FA2_ESM_URL)
   return _fa2Module
 }
+
+// @sigma/edge-curve, quadratic Bézier edge renderer with auto-fanning of
+// parallel edges (different curvatures so multi-edges between same pair
+// don't visually overlap). Atrib has ~9 edge types and CONVERGES_ON +
+// CHAIN_PRECEDES often connect the same node pair; the straight-line
+// renderer collapses them to a single visible line and loses information.
+// Loaded once per session on first graph render.
+const EDGE_CURVE_ESM_URL = 'https://esm.sh/@sigma/edge-curve@3.1.0?deps=sigma@3.0.0'
+let _edgeCurveModule = null
+async function loadEdgeCurve() {
+  if (_edgeCurveModule) return _edgeCurveModule
+  _edgeCurveModule = await import(/* @vite-ignore */ EDGE_CURVE_ESM_URL)
+  return _edgeCurveModule
+}
 let _graphLibsPromise = null
 function loadGraphLibs() {
   if (_graphLibsPromise) return _graphLibsPromise
@@ -2625,16 +2640,20 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     dgx.setDefaultEdgeLabel(() => ({}))
   }
 
-  // Pre-compute degree per node so size encoding can read it. The
-  // computeNodeDegrees helper from graph-utils.mjs is the unit-tested
-  // single source of truth for this walk.
+  // Pre-compute degree per node + normalize to centrality for size
+  // encoding. computeNodeDegrees walks the wire-format edges array
+  // (no graphology graph instance needed). The (n-1) divisor turns
+  // raw counts into normalized centrality ∈ [0, 1] so size scaling
+  // behaves consistently regardless of total graph size.
   const degreeByNodeId = computeNodeDegrees(graphData.edges)
+  const centralityDenom = Math.max(1, graphData.nodes.length - 1)
 
   for (const n of graphData.nodes) {
     const isFocal = isFocalNode(n)
     const color = eventTypeColor(n.event_type)
     const degree = degreeByNodeId.get(n.id) ?? 0
-    const size = computeNodeSize(n, isFocal, degree, nodeSize, focalSize)
+    const centrality = degree / centralityDenom
+    const size = computeNodeSizeFromCentrality(n, isFocal, centrality, nodeSize, focalSize)
     const labelHash = n.record_hash || (n.id ? (n.id.startsWith('sha256:') ? n.id : `sha256:${n.id}`) : '')
     const label = `${n.event_type || '?'} · ${shorten(labelHash, 8, 4)}`
 
@@ -2753,15 +2772,93 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     widenessToThicknessRatio: 6,
   })
 
+  // @sigma/edge-curve registration. Atrib's graph has multi-edges between
+  // the same node pair (e.g., CHAIN_PRECEDES + CONVERGES_ON connecting a
+  // transaction to its contributors). The straight-line renderer collapses
+  // them to a single visible line and loses information; edge-curve fans
+  // them into different curvatures.
+  //
+  // Strategy: detect parallel edges (>1 edge between same {source, target}),
+  // mark all parallel edges as type='curved', keep singleton edges as
+  // type='arrow'. For curved edges, compute a per-edge curvature index so
+  // they fan symmetrically around the straight line.
+  let edgeProgramClasses = { arrow: ProminentArrowProgram }
+  try {
+    const edgeCurve = await loadEdgeCurve()
+    // The package's canonical helper. After this call, parallel edges have
+    // a `parallelIndex` and `parallelMaxIndex` attribute; we read those.
+    if (typeof edgeCurve.indexParallelEdgesIndex === 'function') {
+      edgeCurve.indexParallelEdgesIndex(gx, { edgeIndexAttribute: 'parallelIndex', edgeMaxIndexAttribute: 'parallelMaxIndex' })
+    }
+    // Promote any edge with parallelMaxIndex > 0 to type='curved'.
+    let curvedCount = 0
+    gx.forEachEdge((edgeKey, attrs) => {
+      const maxIdx = attrs.parallelMaxIndex
+      if (typeof maxIdx === 'number' && maxIdx > 0) {
+        // Curvature: -0.4..+0.4 spread across parallelMaxIndex+1 lanes.
+        const idx = attrs.parallelIndex ?? 0
+        const lanes = maxIdx + 1
+        // Map idx ∈ [0, maxIdx] to curvature ∈ [-0.4, +0.4]. When lanes=2,
+        // idx=0 → -0.2, idx=1 → +0.2. When lanes=3, idx=0 → -0.4, 1 → 0, 2 → +0.4.
+        const curvature = lanes > 1 ? (idx / maxIdx - 0.5) * 0.8 : 0
+        gx.setEdgeAttribute(edgeKey, 'type', 'curved')
+        gx.setEdgeAttribute(edgeKey, 'curvature', curvature)
+        curvedCount++
+      }
+    })
+    if (curvedCount > 0 && edgeCurve.EdgeCurvedArrowProgram) {
+      // EdgeCurvedArrowProgram is the right renderer for directed curved
+      // edges (matches atrib's directional provenance vocabulary). Falls
+      // back to the simpler EdgeCurveProgram if the curved-arrow variant
+      // isn't exported by the loaded version.
+      edgeProgramClasses.curved = edgeCurve.EdgeCurvedArrowProgram
+    } else if (curvedCount > 0 && edgeCurve.default) {
+      edgeProgramClasses.curved = edgeCurve.default
+    }
+  } catch (e) {
+    // CDN failure or module-shape mismatch: keep all edges straight,
+    // log the warning, don't break the view.
+    console.warn('[atrib-dashboard] edge-curve unavailable; rendering parallel edges as overlapping straight lines:', e)
+  }
+
   const sigmaInstance = new Sigma(gx, container, {
     renderEdgeLabels: false,
     defaultEdgeType: 'arrow',
-    edgeProgramClasses: { arrow: ProminentArrowProgram },
+    edgeProgramClasses,
     defaultNodeColor: _cssVar('--muted', '#9ca3af'),
     labelColor: { color: _cssVar('--text-2', '#a0a3ab') },
     labelSize: 11,
     labelDensity: 0.4,
     edgeLabelColor: { color: _cssVar('--text-3', '#6a6e78') },
+  })
+
+  // Hover-reducer pattern (Sigma 3 storybook story 4-use-reducers): on
+  // hover, dim everything except the hovered node + its 1-hop neighbors.
+  // Reducers run on every render and let us re-style without rebuilding
+  // the graph. Use computeNeighborhood from graph-utils.mjs for the
+  // topology lookup; tests cover its behavior.
+  let _hoveredNode = null
+  let _hoveredNeighborhood = null
+  const _DIM_COLOR = _cssVar('--text-4', '#5a5e68')
+  sigmaInstance.setSetting('nodeReducer', (nodeId, attrs) => {
+    if (!_hoveredNode || !_hoveredNeighborhood) return attrs
+    if (_hoveredNeighborhood.nodes.has(nodeId)) return attrs
+    return { ...attrs, color: _DIM_COLOR, label: '', size: Math.max(2, attrs.size * 0.5) }
+  })
+  sigmaInstance.setSetting('edgeReducer', (edgeKey, attrs) => {
+    if (!_hoveredNode || !_hoveredNeighborhood) return attrs
+    if (_hoveredNeighborhood.edges.has(edgeKey)) return attrs
+    return { ...attrs, hidden: true }
+  })
+  sigmaInstance.on('enterNode', ({ node }) => {
+    _hoveredNode = node
+    _hoveredNeighborhood = computeNeighborhood(gx, node)
+    sigmaInstance.refresh({ skipIndexation: true })
+  })
+  sigmaInstance.on('leaveNode', () => {
+    _hoveredNode = null
+    _hoveredNeighborhood = null
+    sigmaInstance.refresh({ skipIndexation: true })
   })
 
   // Default click → drill into the matching action view. Caller can override
