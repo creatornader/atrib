@@ -972,6 +972,13 @@
 // bbox, framed-camera default state) live in a sibling .mjs so a
 // vitest suite can exercise the optimization-relevant branches without
 // a browser. log-node serves /graph-utils.mjs from apps/dashboard/.
+//
+// Cache-busting: the URL carries a deploy-tag query param so Cloudflare's
+// edge cache invalidates the import URL on every deploy. Without this,
+// adding new exports to graph-utils.mjs ships an HTML that imports
+// names the cached mjs doesn't define, causing the entire <script>
+// to throw at module-resolution time and a blank explorer. Bump the
+// tag whenever graph-utils.mjs changes its export surface.
 import {
   HIERARCHICAL_EDGE_TYPES,
   DAGRE_MAX_EDGES,
@@ -984,7 +991,7 @@ import {
   computeNodeSizeFromCentrality,
   computeGraphBBox,
   computeNeighborhood,
-} from './graph-utils.mjs'
+} from './graph-utils.mjs?v=2026-05-08-layouts'
 
 /*
  * atrib explorer, D054 option 1.
