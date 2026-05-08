@@ -991,7 +991,7 @@ import {
   computeNodeSizeFromCentrality,
   computeGraphBBox,
   computeNeighborhood,
-} from './graph-utils.mjs?v=2026-05-08-zoom-fix'
+} from './graph-utils.mjs?v=2026-05-08-edge-zoom-clamp'
 
 /*
  * atrib explorer — D054 option 1.
@@ -3020,8 +3020,21 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     return { ...attrs, color: _DIM_COLOR, label: '', size: Math.max(2, attrs.size * 0.5) }
   })
   sigmaInstance.setSetting('edgeReducer', (edgeKey, attrs) => {
-    if (!_hoveredNode || !_hoveredNeighborhood) return attrs
-    if (_hoveredNeighborhood.edges.has(edgeKey)) return attrs
+    // Counter Sigma's linear edge-thickness scaling at deep zoom: nodes
+    // scale at sqrt(ratio) but edges scale at 1/ratio, so edges visually
+    // overtake nodes as you zoom in. Scale edge size by sqrt(ratio) so
+    // edges grow at the same rate as nodes — keeps proportions stable
+    // across zoom levels.
+    const ratio = sigmaInstance.getCamera().getState().ratio
+    const zoomScale = Math.sqrt(Math.max(ratio, 0.01))
+    const baseSize = attrs.size ?? 0.5
+    const scaledSize = baseSize * zoomScale
+    if (!_hoveredNode || !_hoveredNeighborhood) {
+      return { ...attrs, size: scaledSize }
+    }
+    if (_hoveredNeighborhood.edges.has(edgeKey)) {
+      return { ...attrs, size: scaledSize }
+    }
     return { ...attrs, hidden: true }
   })
   sigmaInstance.on('enterNode', ({ node }) => {
