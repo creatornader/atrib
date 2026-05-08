@@ -991,7 +991,7 @@ import {
   computeNodeSizeFromCentrality,
   computeGraphBBox,
   computeNeighborhood,
-} from './graph-utils.mjs?v=2026-05-08-zoom-fix'
+} from './graph-utils.mjs?v=2026-05-08-edge-shrink'
 
 /*
  * atrib explorer — D054 option 1.
@@ -2730,7 +2730,12 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     rankDir = 'TB',
     nodeSep = 50,
     rankSep = 70,
-    edgeSize = 2,
+    // Base edge size in world units. Reduced from 2 → 1 after a UX
+    // report that edges visually overtook nodes at high zoom levels
+    // because Sigma's edge-thickness scales linearly with zoom while
+    // node radius scales at sqrt(ratio). Half the base thickness keeps
+    // edges legible at low zoom and out-of-the-way at high zoom.
+    edgeSize = 1,
     onNodeClick = null,
   } = options
 
@@ -2906,15 +2911,18 @@ async function renderSigmaDAG(container, graphData, options = {}) {
 
   // Custom arrow program. Sigma's defaults are length=2.5x, wideness=2x
   // of the edge size, which renders nearly-invisible heads on thin
-  // lines. Bumping the length so the direction marker reads at a glance
-  // matters because direction is the load-bearing signal in any
-  // provenance graph. Wideness stays modest so the arrow doesn't
-  // visually overtake the node it points at — reduced from 6 to 3.5
-  // after a UX report that arrowheads were dominating nodes at high
-  // zoom levels.
+  // lines. Tuned for atrib's chain-shaped graphs: longer arrowheads
+  // (length=8x thickness) read direction at a glance without dominating;
+  // narrow arrowheads (wideness=2.5x thickness) keep them looking like
+  // arrows rather than triangles glued to the node end.
+  //
+  // Two earlier UX-driven adjustments after this commit's rev1: arrow
+  // wideness was 6, then 3.5, now 2.5; arrowheads kept overtaking
+  // nodes visually. The combination of edgeSize=1 (down from 2) and
+  // narrower arrowheads should keep edges legibly out of the way.
   const ProminentArrowProgram = Sigma.rendering.createEdgeArrowProgram({
-    lengthToThicknessRatio: 5,
-    widenessToThicknessRatio: 3.5,
+    lengthToThicknessRatio: 8,
+    widenessToThicknessRatio: 2.5,
   })
 
   // @sigma/edge-curve registration. Atrib's graph has multi-edges between
@@ -2975,13 +2983,11 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     labelSize: 11,
     labelDensity: 0.4,
     edgeLabelColor: { color: _cssVar('--text-3', '#6a6e78') },
-    // Note: Sigma 3's default zoomToSizeRatioFunction handles the
-    // node-vs-edge scaling proportionally. A previous attempt to
-    // override with `Math.pow(ratio, -0.5)` produced inverted behavior
-    // (nodes shrunk on zoom-in), so we trust the default. The arrow-
-    // dominance issue at deep zoom is addressed by the
-    // widenessToThicknessRatio reduction (3.5 instead of the default 6)
-    // on ProminentArrowProgram, not by zoom-curve manipulation.
+    // Trust Sigma's default zoomToSizeRatioFunction. Custom overrides
+    // attempted previously (ratio^-0.5, ratio^0.7) produced wrong-
+    // direction scaling. The edge-dominance issue at deep zoom is
+    // addressed by reducing edgeSize from 2 to 1 and reducing arrow
+    // wideness ratio, not by zoom-curve manipulation.
   })
 
   // Hover-reducer pattern (Sigma 3 storybook story 4-use-reducers): on
