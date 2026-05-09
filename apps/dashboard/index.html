@@ -2129,7 +2129,11 @@ async function renderIdentity(creatorKey) {
       activityGraphContainer.replaceChildren(el('div', { class: 'empty' },
         `No records in this window (${windowLabel}). Try a longer window.`,
       ))
-      setActivityMeta(`cross-session edges only · ${windowLabel} · 0 records`)
+      setActivityMetaLines([
+        { label: 'window', value: windowLabel },
+        { label: 'records', value: '0' },
+        { label: 'edges', value: '0' },
+      ])
       return
     }
     const graph = activity.graph
@@ -2144,14 +2148,33 @@ async function renderIdentity(creatorKey) {
     const eff = activity.effective_window ?? {}
     const direction = activity.window?.direction === 'oldest' ? 'oldest-first' : 'newest-first'
 
+    // Field selection: every line answers a distinct question.
+    //
+    //   window   – which window did the user pick? (echoes the dropdown
+    //              + custom range so the meta is self-contained without
+    //              looking up at the controls)
+    //   records  – how many records and is this the full window? when
+    //              truncated, says "X of Y (Z-first slice)" so the user
+    //              sees the lossiness AND the slice direction in one line
+    //   edges    – how many cross-session edges were derived
+    //   returned span – ONLY when truncated: the actual date range of
+    //                   the records returned (helps "I asked for 5 days,
+    //                   got days 1-3")
+    //   truncated – ONLY when truncated: WHY it was truncated and how
+    //               to address it. Warning-styled so the eye lands here.
+    //
+    // Dropped: the prior 'scope' line ("cross-session edges only") is
+    // already in the explainer paragraph above the controls; repeating
+    // it on every render added noise. The 'fetched' latency line is
+    // moved to a tooltip on the meta block, useful for investigation
+    // but not load-bearing in the visible meta.
     const lines = [
-      { label: 'scope', value: 'cross-session edges only' },
       { label: 'window', value: windowLabel },
       {
         label: 'records',
         value: activity.truncated
-          ? `${activity.record_count} of ${total} in window (${direction} slice)`
-          : `${activity.record_count} (full window)`,
+          ? `${activity.record_count} of ${total} (${direction} slice)`
+          : `${activity.record_count}`,
       },
       { label: 'edges', value: String(graph.edges.length) },
     ]
@@ -2166,8 +2189,8 @@ async function renderIdentity(creatorKey) {
         emphasis: 'warn',
       })
     }
-    lines.push({ label: 'fetched', value: `${fetchMs}ms` })
     setActivityMetaLines(lines)
+    activityMetaInline.title = `fetched in ${fetchMs}ms`
 
     if (graph.edges.length === 0) {
       activityGraphContainer.replaceChildren(el('div', { class: 'empty' },
