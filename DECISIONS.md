@@ -3303,6 +3303,139 @@ Recall, trace, and summarize MAY filter records produced under `inheritedFrom ==
 
 ---
 
+## D073: `handoff` event_type byte (placeholder ADR)
+
+**Date:** 2026-05-09
+
+**Status:** Placeholder. The byte is reserved at the design level; full normative promotion follows the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) bar (five-indicator evaluation) when a producer demonstrably needs it. A multi-agent harness field study motivates the design but does not constitute production demand.
+
+**Context:** Multi-agent orchestration platforms (OpenAI Agents SDK, Microsoft Agent Framework, AutoGen, LangGraph, CrewAI) routinely model an explicit "handoff" — one agent transfers control to another with a structured envelope distinct from a tool call or transaction. atrib producers currently represent these as `tool_call` records whose `tool_name` happens to encode the handoff semantic ("transfer_to_planner", "delegate_to_executor"). Verifiers reasoning about cross-agent causality must inspect `tool_name` strings to recover the handoff structure — fragile, producer-dependent, and not enforceable.
+
+A normative `handoff` event_type would let verifiers identify handoffs by byte rather than string match, enable structural validation (e.g., handoff records SHOULD reference the previous agent's chain tail via `informed_by` or carry the recipient agent's `creator_key` in content), and unblock multi-agent demos / benchmarks that want to count handoffs as a substrate-level metric.
+
+**Decision (placeholder).** Reserve byte `0x07` for `handoff`. Full promotion happens via a future ADR that demonstrates:
+
+1. **Adoption signal**: at least one producer (in atrib's own codebase or a partner integration) emits records that would benefit from the byte distinction.
+2. **Demand signal**: a consumer (verifier, dashboard, benchmark harness) has a queryable use case that `tool_name` matching cannot serve.
+3. **Schema clarity**: the content-payload conventions for handoffs are documented (recipient `creator_key`, originating session, optional capability narrowing).
+4. **Conformance fixtures**: corpus cases under `spec/conformance/1.2.4/handoff/` cover canonical-form invariance, byte/URI duality, and the handoff-specific structural validation.
+5. **Cross-package coordination**: the [D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04) sync-trigger checklist (URI table, byte mapping, package constants, log-node decoder, dashboard chip color, verify-loop validEventTypes set, metrics filter) is applied in lockstep.
+
+Until that ADR lands, producers requiring handoff semantics SHOULD emit records under the extension URI `https://atrib.dev/v1/types/handoff` (event_type byte `0xFF` per [§2.3.1](atrib-spec.md#231-entry-serialization)) and document their content-payload conventions in their own README. The byte slot is reserved against accidental allocation to a different concept.
+
+**Alternatives considered:**
+
+- *Promote `handoff` to byte 0x07 immediately, before any producer needs it.* Rejected per [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary): pre-emptive byte allocation accumulates normative debt for use cases that may never materialize. The `directory_anchor` promotion ([D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04)) cleared the bar by load-bearing branch — producers were already emitting it. handoff has not.
+- *Document the convention in [§7](atrib-spec.md#7-harness-integration-patterns) instead of reserving a byte.* Considered. Rejected because [§7](atrib-spec.md#7-harness-integration-patterns) covers consumer-side patterns, not the producer-side event_type vocabulary. Reserving the byte is the load-bearing commitment; the harness integration narrative (when written) can reference this ADR.
+- *Use [§9](atrib-spec.md#9-runtime-integration-patterns) Pattern #3 (callback handlers) to capture handoffs as ordinary tool calls without a new byte.* Considered as a transition path, not a long-term answer. Multi-agent verifiers need the byte distinction to count handoffs without parsing `tool_name` strings; Pattern #3 instrumentation can produce the records but doesn't solve the verifier-side query problem.
+
+**Consequences:**
+
+- Byte `0x07` is informally reserved at the design level. The reserved range in [§2.3.1](atrib-spec.md#231-entry-serialization) currently spans `0x07–0xFE`; this ADR notes the intent to allocate `0x07` to handoff when promotion lands, without tightening the range yet.
+- Producers MAY emit handoff records under the extension URI in advance of normative promotion. They SHOULD document content-payload shape in their package README so a future normative ADR can adopt the convention rather than reinvent it.
+- A multi-agent harness benchmark (when one runs against an OpenAI Agents or Microsoft Agent Framework subject task) is the natural source of adoption signal: the handoff records produced will inform the formal ADR.
+
+**Cross-references:**
+
+- [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) (the bar this placeholder defers to)
+- [D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04) (precedent for full promotion; sync-trigger checklist)
+- [§1.2.4](atrib-spec.md#124-event_type-values) (event_type URI table this ADR will eventually amend)
+- [§2.3.1](atrib-spec.md#231-entry-serialization) (byte mapping table this ADR will eventually amend)
+- [§9](atrib-spec.md#9-runtime-integration-patterns) (runtime integration patterns; multi-agent harnesses surface the handoff use case)
+
+---
+
+## D074: Git-trailer record-hash binding for repo-scoped agents
+
+**Date:** 2026-05-09
+
+**Context:** A class of agents (Aider, Cursor coding mode, Claude Code in code mode, future code-editing harnesses) operate by committing changes to a git repository. Their tool calls are atrib-signed, but the connection between an atrib record and the resulting git commit is implicit — a consumer reading a commit cannot verify which atrib record produced it without scanning the local mirror by timestamp. Conversely, an atrib record cannot reference the commit it produced because the commit hash is not known until after the commit lands.
+
+Aider's existing convention writes a `Co-Authored-By` trailer naming the LLM that produced the commit. The convention is host-tooled, unsigned, and unverifiable. atrib has a stronger primitive: the `record_hash` of the tool_call (or transaction) that authored the commit, signed by the agent's `creator_key`, committed to the public log. Wiring `record_hash` into a git trailer gives cryptographic lineage between commit and atrib record at zero new storage cost.
+
+**Decision.** Producers operating on git repositories MAY add an `Atrib-Record-Hash` git commit trailer naming the atrib `record_hash` of the tool_call (or transaction) that authored the commit. Format:
+
+```
+Atrib-Record-Hash: sha256:<64-hex>
+Atrib-Creator-Key: <43-char-base64url>
+```
+
+The `Atrib-Creator-Key` trailer is OPTIONAL and provides quick verifier access to the signing identity without a graph lookup. Both trailers MUST appear in the trailer block (per `git interpret-trailers` conventions: separated from the body by a blank line, key:value form, no inline punctuation in keys).
+
+Verification semantics:
+
+1. Reader extracts the trailer values.
+2. Reader queries the atrib log for the named `record_hash` (e.g., via `/v1/lookup/<hex>` on log-node).
+3. Reader confirms the record's `event_type` is `tool_call` or `transaction`, and that the record's signature verifies against the (optionally trailer-supplied, otherwise log-derived) `creator_key`.
+4. Reader OPTIONALLY confirms that the record's content references the commit-relevant action (file paths, command, etc.) — this is a content-layer assertion outside the substrate's normative scope.
+
+The substrate guarantees the record exists, was signed by the named creator, and is anchored in the public log. It does NOT guarantee the commit produced what the record describes — that requires content-layer reasoning (out of scope for atrib).
+
+**Alternatives considered:**
+
+- *Use the existing `Co-Authored-By` trailer with a synthetic email derived from `creator_key`.* Rejected. `Co-Authored-By` is a humans-and-bots field; overloading it with cryptographic identifiers conflates two different concerns and breaks tooling that parses the trailer for human attribution. Dedicated `Atrib-*` trailers are unambiguous.
+- *Embed the `record_hash` in the commit message body.* Rejected. Body content is unstructured; trailers are structured (per `git interpret-trailers`) and tooling-friendly. Trailers also survive rebases that rewrite message bodies.
+- *Use git notes (`refs/notes/atrib`) instead of trailers.* Considered. Notes have the advantage of post-hoc attachment without rewriting the commit, but the disadvantages of optional fetch (notes don't ship with `git fetch` by default), namespace contention, and weaker discoverability. Trailers are the lower-friction path; notes remain available as a complement when post-hoc attachment is needed (e.g., for historical commits).
+- *Make trailers MUST rather than MAY.* Rejected. Not every agent operates on a repo; not every operator wants to leak `record_hash` into commit history. MAY preserves operator choice; producers that adopt the convention follow this format.
+
+**Consequences:**
+
+- The trailer format becomes a documented producer convention. Adapters in `@atrib/agent` for Aider, Claude Agent SDK code mode, and similar code-editing surfaces MAY emit the trailer when committing on the agent's behalf.
+- A consumer-side helper (`@atrib/verify` `verifyCommitTrailer(commit, atribLog)`) MAY be built once at least one producer emits the trailer; deferred until adoption.
+- The trailer format is forward-compatible with Sigstore commit signing: a commit may carry `gitsign`-style signature footers AND `Atrib-Record-Hash` trailers; the two layers verify orthogonally (Sigstore proves the human/CI signed the commit; atrib proves the agent's tool call corresponds to it).
+- Spec [§7](atrib-spec.md#7-harness-integration-patterns) (harness integration patterns) gains an informative subsection when first producer adopts: documents the trailer convention as a Pattern #3 (callback handlers) extension for code-editing surfaces.
+
+**Cross-references:**
+
+- [§1.2](atrib-spec.md#12-record-format) (record format; `record_hash` is defined as the SHA-256 of the canonical record)
+- [§2.5.4](atrib-spec.md#254-point-lookup-endpoint-optional) (point lookup endpoint; verifier path for retrieving the trailer-named record)
+- [§7](atrib-spec.md#7-harness-integration-patterns) (harness integration patterns; future home of the producer-side documentation)
+- [D031](#d031-reconcile-243-signed-note-divergence-from-c2sp) (Sigstore signed-note format; orthogonal commit-signing layer this ADR composes with)
+
+---
+
+## D075: Compose-not-override hook config layering
+
+**Date:** 2026-05-09
+
+**Context:** atrib's Layer-2 producer surface (per [§9](atrib-spec.md#9-runtime-integration-patterns) Pattern #1, lifecycle hooks) is configured via the host runtime's hook-config file (Claude Code's `~/.claude/settings.json`, Cursor's settings, OpenAI Codex CLI's config). When multiple config layers are present (project-level + user-level + organization-level), the question of how they combine has two failure modes:
+
+1. **Override semantics**: the highest-precedence layer fully replaces lower layers. Common default in many tools. Failure mode for atrib: a project-level config that wires a single dev-time hook silently disables the user-level atrib signing hook, producing unsigned records the operator believed were being signed. The orphan-handling fix in [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) makes this visible (orphans land in `fresh-orphan` isolates), but the upstream cause is the override.
+
+2. **Naive concatenation**: every layer's hooks fire for every event. Failure mode: duplicate hook execution, double-signed records, race conditions on mirror-file appends.
+
+OpenAI Codex CLI documents this concern explicitly in its config docs: "higher-precedence config layers do not replace lower-precedence hooks" — Codex composes hook lists rather than overriding. The pattern produces correct behavior without forcing operators to maintain duplicate hook entries across layers.
+
+**Decision.** atrib RECOMMENDS that producer-side hook configurations layer (project + user + organization) by **list-extension composition**, not override. When multiple config layers register hooks for the same lifecycle event:
+
+1. Each layer's hook list is preserved in priority order (highest-precedence layer's hooks run first, then lower-precedence).
+2. Hooks de-duplicate by **identity** (script path, command, or normalized invocation string) — registering the same hook in two layers produces ONE invocation, not two.
+3. A hook MAY be explicitly suppressed at a higher precedence layer via a `disable` directive (atrib does not specify the directive's wire format; the host runtime's config schema is authoritative).
+4. Order within a single layer is preserved (the layer's author chose ordering deliberately).
+
+This is a producer-side recommendation, not a normative spec constraint. atrib does not own the host's config schema; the recommendation guides operators wiring atrib hooks alongside other tooling and guides any future atrib-published `install-hooks` helper.
+
+**Alternatives considered:**
+
+- *Mandate override semantics so the highest-precedence layer is fully authoritative.* Rejected. Operators routinely want project-specific hooks IN ADDITION to their user-level atrib signing — override semantics force them to duplicate the atrib hook into every project config, a maintenance footgun.
+- *Mandate concatenation without de-duplication.* Rejected. A user-level hook copied into a project config produces double-signing; double-signed records are valid (each signature is correct) but wasteful and confusing in logs.
+- *Stay silent and let operators figure it out.* Rejected. The orphan absorption pathology that motivated [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) was downstream of operators discovering hook config interactions the hard way. A documented recommendation reduces the failure surface.
+
+**Consequences:**
+
+- atrib's documentation (`packages/mcp-wrap/README.md`, future `@atrib/install-hooks` helper) cites this ADR when describing how to wire hooks alongside other tooling.
+- A reference hook installer that lives outside this repository follows the recommendation: when a project-level config exists, atrib hooks are appended to the existing list rather than replacing it.
+- When a future runtime adapter (per [§9](atrib-spec.md#9-runtime-integration-patterns) Pattern #1) ships, its `install` step composes against existing config rather than overwriting.
+- This ADR does NOT modify the host runtime's config schema. It documents atrib's expectation; runtimes that override hook lists will still produce orphans (visible per [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail), addressable by config edits).
+
+**Cross-references:**
+
+- [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) (orphan handling; the failure mode that surfaces when this recommendation is violated)
+- [§9](atrib-spec.md#9-runtime-integration-patterns) (runtime integration patterns; Pattern #1 lifecycle hooks are the surface this ADR governs)
+- [D048](#d048-plug-and-play-enforcement-contract-for-adapters) (adapter conformance contract; the install step in any per-pattern adapter SHOULD honor the compose-not-override recommendation)
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
