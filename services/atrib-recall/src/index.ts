@@ -5,11 +5,21 @@
  * @atrib/recall — recall_my_attribution_history MCP server.
  *
  * Exposes a single tool to the host agent: recall_my_attribution_history.
- * The tool reads the local signed-record jsonl mirror that an @atrib/mcp-wrap
- * wrapper persists (~/.atrib/records/<wrapper-name>-<agent>.jsonl per spec §5.9
- * D062), VERIFIES the Ed25519 signature on each record before returning it,
- * and tags every entry with signature_verified so the agent can distinguish
- * provable past from tampered or partial mirror state.
+ * Reads signed-record jsonl mirrors (per spec §5.9), VERIFIES the Ed25519
+ * signature on each record before returning it, and tags every entry with
+ * signature_verified so the agent can distinguish provable past from tampered
+ * or partial mirror state.
+ *
+ * Mirror discovery (in priority order):
+ *   1. ATRIB_RECORD_FILE — single explicit jsonl file. Back-compat with
+ *      pre-0.4.0 callers that pinned a specific producer's mirror.
+ *   2. ATRIB_MIRROR_DIR — directory; recall reads every `*.jsonl` inside.
+ *      Default: ~/.atrib/records (the spec §5.9 well-known mirror namespace).
+ *
+ * Two on-disk shapes are accepted, matching D062 / spec §5.9:
+ *   - Bare AtribRecord (legacy producers):           {spec_version, ...}
+ *   - Envelope (D062 sidecar form):                  {record: {...}, proof?, _local?}
+ * Both round-trip through verifyRecord; the parser picks the right inner shape.
  *
  * Trust scope: signature verification is local-only. A passing signature_verified
  * proves the record was signed by the named creator_key; it does NOT prove the
@@ -17,8 +27,8 @@
  * should fetch the inclusion proof from the log API.
  *
  * Configuration via environment variables:
- *   ATRIB_RECORD_FILE — path to the jsonl mirror.
- *                        Default: ~/.atrib/records/mcp-wrap-claude-code.jsonl
+ *   ATRIB_RECORD_FILE — single explicit file (overrides directory scan).
+ *   ATRIB_MIRROR_DIR — directory to scan. Default: ~/.atrib/records.
  *   ATRIB_LOG_ORIGIN — origin used in human-readable messages.
  *                        Default: log.atrib.dev
  */
@@ -41,18 +51,45 @@ const EVENT_TYPE_SHORT_TO_URI: Record<string, string> = {
   tool_call: EVENT_TYPE_TOOL_CALL_URI,
   transaction: EVENT_TYPE_TRANSACTION_URI,
 }
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
 
-const ATRIB_RECORD_FILE = process.env.ATRIB_RECORD_FILE ?? join(
+const ATRIB_RECORD_FILE = process.env.ATRIB_RECORD_FILE
+const ATRIB_MIRROR_DIR = process.env.ATRIB_MIRROR_DIR ?? join(
   homedir(),
   '.atrib',
   'records',
-  'mcp-wrap-claude-code.jsonl',
 )
 const ATRIB_LOG_ORIGIN = process.env.ATRIB_LOG_ORIGIN ?? 'log.atrib.dev'
+
+/**
+ * Pull the inner AtribRecord out of either on-disk shape (D062 envelope or
+ * legacy bare record). Returns null when the line is neither shape or is
+ * missing required fields. Same shape contract as the wrapper-side
+ * normalizeMirrorLine in @atrib/mcp-wrap.
+ */
+function extractRecord(parsed: unknown): AtribRecord | null {
+  if (!parsed || typeof parsed !== 'object') return null
+  const obj = parsed as Record<string, unknown>
+  // D062 envelope: { record: {...}, proof?, _local?, written_at? }.
+  // Legacy bare: the AtribRecord fields sit at the top level.
+  const candidate = (typeof obj.record === 'object' && obj.record !== null)
+    ? (obj.record as Record<string, unknown>)
+    : obj
+  if (
+    typeof candidate.spec_version === 'string' &&
+    typeof candidate.event_type === 'string' &&
+    typeof candidate.context_id === 'string' &&
+    typeof candidate.creator_key === 'string' &&
+    typeof candidate.chain_root === 'string' &&
+    typeof candidate.signature === 'string'
+  ) {
+    return candidate as unknown as AtribRecord
+  }
+  return null
+}
 
 export function loadRecords(path: string): AtribRecord[] {
   if (!existsSync(path)) return []
@@ -62,24 +99,57 @@ export function loadRecords(path: string): AtribRecord[] {
     const trimmed = line.trim()
     if (!trimmed) continue
     try {
-      const parsed = JSON.parse(trimmed) as AtribRecord
-      // Light shape check: require the load-bearing fields. Anything missing
-      // these is malformed jsonl from an older wrapper version; skip silently.
-      if (
-        parsed.spec_version &&
-        parsed.event_type &&
-        parsed.context_id &&
-        parsed.creator_key &&
-        parsed.chain_root &&
-        parsed.signature
-      ) {
-        out.push(parsed)
-      }
+      const rec = extractRecord(JSON.parse(trimmed))
+      if (rec) out.push(rec)
     } catch {
-      // Malformed line; skip.
+      // Malformed JSON; skip.
     }
   }
   return out
+}
+
+/**
+ * Load every `*.jsonl` file in `dir` and merge their records. Files that
+ * don't exist or aren't readable are silently skipped (a file rotated out
+ * mid-scan shouldn't error the whole call). Returns the union of records;
+ * de-duplication and ordering are caller responsibilities.
+ *
+ * Spec §5.9 establishes `~/.atrib/records/` as the well-known per-agent
+ * mirror namespace; every producer running under one identity writes a
+ * file there with the convention `<producer>-<agent>.jsonl`. Scanning the
+ * directory unifies recall across producers without recall having to know
+ * the naming scheme — any producer that follows §5.9 just shows up.
+ */
+export function loadRecordsFromDir(dir: string): { records: AtribRecord[]; files: string[] } {
+  if (!existsSync(dir)) return { records: [], files: [] }
+  let entries: string[] = []
+  try {
+    entries = readdirSync(dir).filter((name) => name.endsWith('.jsonl'))
+  } catch {
+    return { records: [], files: [] }
+  }
+  const records: AtribRecord[] = []
+  const files: string[] = []
+  for (const name of entries) {
+    const full = join(dir, name)
+    try {
+      const stat = statSync(full)
+      if (!stat.isFile()) continue
+    } catch {
+      continue
+    }
+    const loaded = loadRecords(full)
+    if (loaded.length > 0) {
+      records.push(...loaded)
+      files.push(full)
+    } else {
+      // Surface empty/unreadable files too so the operator can see them in
+      // the response if they care, but only if the file existed (which it
+      // does — readdirSync returned it).
+      files.push(full)
+    }
+  }
+  return { records, files }
 }
 
 interface RecallArgs {
@@ -126,6 +196,16 @@ export interface RecallResult {
    * Always 0 when include_unverified=true was passed.
    */
   filtered_out_by_verification: number
+  /**
+   * Mirror files actually scanned. When ATRIB_RECORD_FILE was set, this is
+   * a single-element list (back-compat). Otherwise it lists every `*.jsonl`
+   * found in ATRIB_MIRROR_DIR.
+   */
+  record_files: string[]
+  /**
+   * @deprecated Use `record_files`. Preserved as the first entry of
+   * `record_files` for callers still reading this field.
+   */
   record_file: string
   log_origin: string
   pagination_caveat: string
@@ -160,9 +240,30 @@ function compactify(records: RecallRecordFull[]): RecallRecordCompact[] {
   })
 }
 
+/**
+ * Discover and load records per the mirror-discovery contract:
+ *   - If `recordFile` is provided, load just that file.
+ *   - Else if ATRIB_RECORD_FILE is set, load just that file (back-compat).
+ *   - Else scan ATRIB_MIRROR_DIR (default ~/.atrib/records).
+ *
+ * Returns the union of records and the list of files scanned. Callers that
+ * dedupe should key on `record.signature` (signatures are unique per record
+ * per spec §1.4); the same record present in two mirrors will appear twice
+ * here unless the caller dedupes.
+ */
+export function discoverRecords(
+  recordFile?: string,
+): { records: AtribRecord[]; files: string[] } {
+  const explicit = recordFile ?? ATRIB_RECORD_FILE
+  if (explicit) {
+    return { records: loadRecords(explicit), files: [explicit] }
+  }
+  return loadRecordsFromDir(ATRIB_MIRROR_DIR)
+}
+
 export async function recall(
   args: RecallArgs,
-  recordFile: string = ATRIB_RECORD_FILE,
+  recordFile?: string,
 ): Promise<RecallResult> {
   // Defaults: compact=true (small responses) and include_unverified=false
   // (no tampered records). The verbose+include-tampered combo is opt-in.
@@ -171,7 +272,7 @@ export async function recall(
   const compact = args.compact !== false
   const includeUnverified = args.include_unverified === true
 
-  const all = loadRecords(recordFile)
+  const { records: all, files } = discoverRecords(recordFile)
   let filtered = all
   if (args.context_id) filtered = filtered.filter((r) => r.context_id === args.context_id)
   if (args.event_type) {
@@ -208,7 +309,8 @@ export async function recall(
     total: filtered.length,
     returned: verified.length,
     filtered_out_by_verification: filteredOutByVerification,
-    record_file: recordFile,
+    record_files: files,
+    record_file: files[0] ?? '',
     log_origin: ATRIB_LOG_ORIGIN,
     pagination_caveat:
       'offset is not stable when new records are appended. For consistent paging, capture the' +
