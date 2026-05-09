@@ -3307,6 +3307,36 @@ Recall, trace, and summarize MAY filter records produced under `inheritedFrom ==
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
 
+## P009: middleware orphan-flagging consistency with [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail)
+
+**Source:** Audit pass 2026-05-09 after [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) shipped. The middleware's MCP-traffic-handling path in `packages/mcp/src/middleware.ts` synthesizes a `context_id` (random or `stableContextId` under `autoChain`) when no inbound atrib token, no `traceparent`, and no caller value are available. This path produces real per-call records but does NOT mark them with `inheritedFrom = 'fresh-orphan'` because the middleware's signing path doesn't go through `inheritChainContext`.
+
+**The decision in question:** should middleware-side orphans (records produced when MCP _meta carries no atrib context) get the same `'fresh-orphan'` flag that `inheritChainContext`-driven orphans get? Or is the middleware case structurally different enough that it stays unflagged?
+
+**Considerations.**
+- Middleware orphans are usually one-record sessions or autoChain-clustered short sessions, they don't have the absorption pathology that motivated [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail). The absorption-into-existing-chain failure mode is specific to mirror-tail inheritance.
+- A consistent flag across all orphan paths would let recall/trace/summarize filter uniformly via `inheritedFrom === 'fresh-orphan'` regardless of producer.
+- Adding the flag requires extending the middleware's `ToolCallSigningContext` (or equivalent) to carry the orphan provenance through to the consumer side, since middleware doesn't currently surface a `ChainContext`-shaped result.
+
+**Likely outcome (not committed):** accept; extend middleware to flag orphans. The cost is small (a boolean threading) and the consistency is worth it. Defer until at least one consumer (recall, trace, or substrate-health) actually uses the flag.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P010: sidecar `_local.fallback: 'orphan'` field per [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail)
+
+**Source:** [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) "Alternatives considered" notes that producers MAY add a sidecar `_local.fallback: 'orphan'` field to mark orphan provenance on the local-mirror side. The signed record carries no orphan signal; the producer's runtime context (`inheritedFrom`) is the load-bearing source of truth, but it lives in producer memory only.
+
+**The decision in question:** should the local-mirror sidecar shape (per [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) / [§5.9](atrib-spec.md#59-local-mirror-conventions)) gain a normative `fallback: 'orphan' | undefined` field so consumers reading the mirror (atrib-recall, atrib-trace, atrib-summarize) can filter orphans without needing access to the producer's runtime state?
+
+**Considerations.**
+- Currently atrib-emit emits the warning at sign time but doesn't write the orphan flag into the sidecar. Consumers reading the mirror have no way to filter orphans even though [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) says they MAY.
+- Adding `fallback` to the [§5.9.3](atrib-spec.md#593-the-_local-sidecar-shape) sidecar table is non-breaking (back-compat tolerates absence per [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence)).
+- Requires coordinated update across atrib-emit (writer) + atrib-recall + atrib-trace + atrib-summarize (readers, optional default-filter). Per the [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) sync-trigger row, sidecar shape changes require coordinated multi-package work.
+
+**Likely outcome (not committed):** accept; add the field as producer-side convention first, normalize in the spec [§5.9.3](atrib-spec.md#593-the-_local-sidecar-shape) table when at least one consumer uses it.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
 ## P002: agent-bridge on atrib substrate
 
 **Source:** Strategic question raised 2026-04-30 ("what if agent-bridge just used atrib for this stuff?"). Use Case 2: verifiable agent-to-agent coordination.
