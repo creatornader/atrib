@@ -106,7 +106,7 @@ export interface ChainContext {
   chainRoot: string
   inheritedFrom:
     | 'caller-supplied'
-    | 'mirror-context-and-tail'
+    | 'fresh-orphan'
     | 'env-tail'
     | 'mirror-tail'
     | 'fresh'
@@ -128,10 +128,20 @@ export interface ChainContext {
  *        chain to it. inheritedFrom = 'mirror-tail'.
  *      - Else: genesis chain_root for `callerContextId`. inheritedFrom = 'fresh'.
  *
- *   3. Caller supplies neither:
- *      - If a mirror tail exists (any context_id): inherit BOTH context_id
- *        and chain_root from it. inheritedFrom = 'mirror-context-and-tail'.
- *      - Else: random new context_id + genesis chain_root. inheritedFrom = 'fresh'.
+ *   3. Caller supplies no `callerContextId`:
+ *      Synthesize a fresh random context_id + genesis chain_root. The result
+ *      is marked 'fresh-orphan' to signal that the runtime did NOT pass a
+ *      session identifier to the producer (typically a Layer-2 hook miswire
+ *      or a harness that doesn't expose its session_id). The orphan record
+ *      lands in its own isolated context rather than being absorbed into
+ *      whichever session happens to be at the mirror tail. See [D072] for
+ *      the rationale; the prior 'mirror-context-and-tail' behavior collapsed
+ *      every orphan into one giant pseudo-session ('1500+ records spanning
+ *      6+ days under one context_id' in production), which made orphan
+ *      provenance unrecoverable.
+ *
+ *      Consumers can identify orphans by `inheritedFrom === 'fresh-orphan'`
+ *      and surface them as such; recall/trace/summarize MAY filter them.
  *
  * Inheriting only `callerContextId` from the caller WHILE pulling chain_root
  * from a mirror that is on a DIFFERENT context_id is forbidden — it would
@@ -184,24 +194,16 @@ export async function inheritChainContext(opts: {
     return { contextId: ctxId, chainRoot, inheritedFrom }
   }
 
-  // (3) No caller context — inherit context_id AND chain_root from mirror,
-  // or fall through to fresh genesis.
-  const inherited = opts.mirrorPath
-    ? await readMirrorTail({ path: opts.mirrorPath })
-    : null
-  if (inherited) {
-    const tailHex = hexEncode(sha256(canonicalRecord(inherited)))
-    return {
-      contextId: inherited.context_id,
-      chainRoot: `sha256:${tailHex}`,
-      inheritedFrom: 'mirror-context-and-tail',
-    }
-  }
-
+  // (3) No caller context_id — synthesize a fresh isolate. Do NOT inherit
+  // context_id from the mirror tail; that absorbs records from runtimes
+  // that failed to pass session_id into whichever session was active when
+  // the orphan landed. The 'fresh-orphan' label distinguishes "caller
+  // didn't pass context_id" from branch (2)'s 'fresh' (caller passed
+  // context_id but no chain_root and the session is brand-new). Per [D072].
   const fresh = opts.randomContextId()
   return {
     contextId: fresh,
     chainRoot: genesisChainRoot(fresh),
-    inheritedFrom: 'fresh',
+    inheritedFrom: 'fresh-orphan',
   }
 }

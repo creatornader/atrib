@@ -213,9 +213,14 @@ describe('inheritChainContext', () => {
     expect(result.inheritedFrom).toBe('env-tail')
   })
 
-  it('no caller context + mirror tail present: inherits BOTH context and chain', async () => {
+  it('no caller context + mirror tail present: orphan-synthesizes, does NOT inherit from mirror', async () => {
+    // Per D072: when caller passes no context_id, the producer synthesizes
+    // a fresh isolate rather than inheriting from the mirror tail. The
+    // record lands in its own context, identifiable as 'fresh-orphan',
+    // and is NOT absorbed into whatever session happens to be at the tail.
+    // This replaces the prior 'mirror-context-and-tail' behavior that
+    // collapsed orphans into one giant pseudo-session in production.
     const r1 = await makeRecord({ context_id: CTX_B })
-    const r1Hex = hexEncode(sha256(canonicalRecord(r1)))
     await writeFile(mirrorPath, JSON.stringify(r1) + '\n')
 
     const result = await inheritChainContext({
@@ -223,28 +228,29 @@ describe('inheritChainContext', () => {
       env: {},
       randomContextId,
     })
-    expect(result.contextId).toBe(CTX_B)
-    expect(result.chainRoot).toBe(`sha256:${r1Hex}`)
-    expect(result.inheritedFrom).toBe('mirror-context-and-tail')
+    expect(result.contextId).toBe('f'.repeat(32))
+    expect(result.contextId).not.toBe(CTX_B)
+    expect(result.chainRoot).toBe(genesisChainRoot('f'.repeat(32)))
+    expect(result.inheritedFrom).toBe('fresh-orphan')
   })
 
-  it('no caller context + no mirror: random fresh context + genesis', async () => {
+  it('no caller context + no mirror: orphan-synthesizes (fresh-orphan)', async () => {
     const result = await inheritChainContext({
       env: {},
       randomContextId,
     })
     expect(result.contextId).toBe('f'.repeat(32))
     expect(result.chainRoot).toBe(genesisChainRoot('f'.repeat(32)))
-    expect(result.inheritedFrom).toBe('fresh')
+    expect(result.inheritedFrom).toBe('fresh-orphan')
   })
 
-  it('no caller context + missing mirror file: random fresh context + genesis', async () => {
+  it('no caller context + missing mirror file: orphan-synthesizes (fresh-orphan)', async () => {
     const result = await inheritChainContext({
       mirrorPath: join(tmpDir, 'does-not-exist.jsonl'),
       env: {},
       randomContextId,
     })
     expect(result.contextId).toBe('f'.repeat(32))
-    expect(result.inheritedFrom).toBe('fresh')
+    expect(result.inheritedFrom).toBe('fresh-orphan')
   })
 })

@@ -263,8 +263,14 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
   })
   const contextId = chain.contextId
   const chainRoot = chain.chainRoot
-  if (chain.inheritedFrom === 'mirror-context-and-tail') {
-    warnings.push(`inherited context_id from wrapper mirror: ${contextId}`)
+  if (chain.inheritedFrom === 'fresh-orphan') {
+    // Per D072: caller passed no context_id, so the producer synthesized
+    // a fresh isolate rather than inheriting from the mirror tail. Surface
+    // this as a warning so operators can trace the runtime miswire that
+    // caused it (typically a Layer-2 hook that didn't thread session_id).
+    warnings.push(
+      `synthesized orphan context_id ${contextId} (caller passed no context_id; fix runtime to thread session_id per D072)`,
+    )
   }
 
   let record
