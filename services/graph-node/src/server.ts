@@ -553,16 +553,22 @@ async function handleCreatorGraph(
 
   // effective_window: the actual [first_ts, last_ts] range covered by
   // the records we're returning. When the response is truncated and
-  // direction='oldest', this is [requested_since, last_returned_ts]
-  //, strictly inside the requested window, but a contiguous prefix.
-  // When direction='newest' and truncated, this is [first_returned_ts,
-  // requested_until_or_now], a contiguous suffix.
-  // Lets the caller render: "you asked for X-Y, got X-Z (Y-Z dropped)"
-  // without computing it client-side.
-  const tsList = filteredRecords.map((r) => r.timestamp)
-  const effectiveWindow = tsList.length > 0
-    ? { since: Math.min(...tsList), until: Math.max(...tsList) }
-    : { since: null, until: null }
+  // direction='oldest', this is a contiguous prefix of the requested
+  // window. When direction='newest' and truncated, this is a contiguous
+  // suffix. Lets the caller render "you asked for X-Y, got X-Z" without
+  // computing it client-side.
+  //
+  // Single-pass min/max instead of Math.min(...spread), the spread
+  // form passes every record as a separate function argument, which
+  // is fine for hundreds but degrades for thousands and is dependent
+  // on V8 stack-frame limits. The loop is O(n) with constant memory.
+  let effSince: number | null = null
+  let effUntil: number | null = null
+  for (const r of filteredRecords) {
+    if (effSince === null || r.timestamp < effSince) effSince = r.timestamp
+    if (effUntil === null || r.timestamp > effUntil) effUntil = r.timestamp
+  }
+  const effectiveWindow = { since: effSince, until: effUntil }
 
   sendJson(res, 200, {
     creator_key: creatorKey,
