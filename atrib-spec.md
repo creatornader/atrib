@@ -2475,24 +2475,34 @@ GET /v1/creators/ABC.../graph
 // Optional query parameters:
 // since=<ISO8601 | unix_ms>            (default: unbounded; oldest in window)
 // until=<ISO8601 | unix_ms>            (default: now; newest in window)
-// limit=<n>                            (default: 200, max: 1000; max records)
+// limit=<n>                            (default: 500, max: 2000; max records)
+// direction=newest|oldest              (default: newest; truncation slice direction, see "Truncation" below)
 // event_type=<short_label | uri>       (filter by node event_type)
 // include_intra_session=true|false     (default: false; see "Edge scope" below)
 
 // 200 OK  -> CreatorGraphResponse:
 //            {
 //              "creator_key":                    "ABC...",
-//              "window":                         { "since": ..., "until": ..., "limit": 200 },
-//              "record_count":                   47,
-//              "truncated":                      false,    // true if limit hit
-//              "intra_session_edges_filtered":   true,     // false if include_intra_session=true
+//              "window":                         { "since": ..., "until": ..., "limit": 500, "direction": "newest" },
+//              "record_count":                   47,         // records actually returned (after truncation)
+//              "total_in_window":                47,         // records in the requested window before truncation
+//              "truncated":                      false,      // true when total_in_window > limit
+//              "effective_window":               { "since": ..., "until": ... },  // first/last timestamp of returned records; null both when record_count = 0
+//              "intra_session_edges_filtered":   true,       // false if include_intra_session=true
 //              "graph":                          GraphResponse  // [§3.5.1](#351-graph-response-object)
 //            }
 // 404     -> creator has no records in store
 // 400     -> invalid time window or malformed creator_key
 ```
 
-The response carries the same `nodes` and `edges` shape as [§3.4.1](#341-get-v1graphcontext_id) inside the `graph` field, so consumers can render creator activity-maps with the same rendering pipeline used for session graphs. The outer envelope (`creator_key`, `window`, `record_count`, `truncated`, `intra_session_edges_filtered`) provides the metadata callers need to parameterize follow-up queries (paginate by adjusting `since`/`until`, refine by `event_type`, restore intra-session edges via `include_intra_session=true`).
+The response carries the same `nodes` and `edges` shape as [§3.4.1](#341-get-v1graphcontext_id) inside the `graph` field, so consumers can render creator activity-maps with the same rendering pipeline used for session graphs. The outer envelope (`creator_key`, `window`, `record_count`, `total_in_window`, `truncated`, `effective_window`, `intra_session_edges_filtered`) provides the metadata callers need to parameterize follow-up queries (paginate by adjusting `since`/`until`, refine by `event_type`, restore intra-session edges via `include_intra_session=true`, switch slice direction).
+
+**Truncation.** When the requested window contains more records than `limit`, the implementation MUST return a contiguous slice of the records (not a sample) so that derived edges remain consistent with the spec [§3.2.4](#324-edge-derivation-rules) rules. Stratified sampling within the window is forbidden because it breaks intra-session chain edges (a `CHAIN_PRECEDES` edge between two records requires both records to be present in the response). The `direction` query parameter selects which contiguous slice to return:
+
+- `direction=newest` (default): the most-recent `limit` records in the window. Right for windows anchored to the present (e.g., "last 24h"). Truncation drops the oldest tail.
+- `direction=oldest`: the oldest `limit` records in the window. Right for explicit `[since, until]` ranges where the user has anchored a start time and wants to see what happened from there forward. Truncation drops the newest tail.
+
+Implementations MUST set `effective_window: { since, until }` to the timestamps of the first and last records actually returned (after truncation), so callers can render "you asked for X to Y, got X to Z" feedback without computing it client-side. When `record_count` is 0, both fields of `effective_window` MUST be `null`.
 
 **Edge scope.** The activity-map exists to surface CROSS-SESSION relationships: how a creator's records connect across `context_id` boundaries. By default the response excludes the two intra-session-only edge types, `SESSION_PRECEDES` ([§3.2.4](#324-edge-derivation-rules) step 2) and `SESSION_PARALLEL` ([§3.2.4](#324-edge-derivation-rules) step 3), because those are what the per-session graph at [§3.4.1](#341-get-v1graphcontext_id) renders. Including intra-session edges here also produces O(N²) edge counts when records in a session don't chain (a single session of 500 records can produce ~125k `SESSION_PRECEDES` pairs), swamping the cross-session signal the activity-map exists for. Implementations MUST set `intra_session_edges_filtered: true` in the response envelope when this default applies.
 

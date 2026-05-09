@@ -1902,14 +1902,27 @@ async function renderIdentity(creatorKey) {
     applyCustomBtn,
   )
 
-  // A second meta slot rendered RIGHT ABOVE the graph itself so the
-  // user always sees fetch counts + latency + truncation flags
-  // adjacent to the visualization, not buried in the section header
-  // that scrolls off-screen on the identity view (which has multiple
-  // panels stacked above this one). updateActivityMeta() keeps both
-  // slots in sync.
+  // Single visible meta block, rendered between the time-window
+  // controls and the graph. Structured as a multi-line block (one
+  // line per fact) so it reads cleanly even when the truncation
+  // message is verbose. setActivityMeta() rebuilds the children;
+  // setActivityMetaText() handles transient string-only states
+  // (loading, validation errors) without the structured layout.
   const activityMetaInline = el('div', {
-    style: 'margin: 0 12px 8px; color: var(--text-3); font-size: 12px; font-family: var(--font-mono);',
+    style: [
+      'margin: 0 12px 12px',
+      'padding: 10px 12px',
+      'background: var(--surface-2)',
+      'border: 1px solid var(--bd-2)',
+      'border-radius: 4px',
+      'color: var(--text-2)',
+      'font-size: 12px',
+      'font-family: var(--font-mono)',
+      'line-height: 1.6',
+      'display: flex',
+      'flex-direction: column',
+      'gap: 2px',
+    ].join('; '),
   }, 'cross-session edges only · loading…')
 
   const activityGraphContainer = el('div', { class: 'trace-graph', id: 'identity-activity-graph' })
@@ -1921,11 +1934,14 @@ async function renderIdentity(creatorKey) {
     el('span', { class: 'legend-label' }, 'edges'),
     activityEdgeLegend,
   )
-  const activityMetaSlot = el('span', { class: 'meta', id: 'identity-activity-meta' }, 'cross-session edges only · loading…')
+  // Hidden anchor element kept ONLY for back-compat with anything that
+  // queries '#identity-activity-meta'. The visible meta lives inline
+  // above the graph (activityMetaInline), which renders as a structured
+  // multi-line block, readable, single-source-of-truth.
+  const activityMetaSlot = el('span', { class: 'meta', id: 'identity-activity-meta', style: 'display: none;' }, '')
   const activitySection = el('section', { class: 'panel flush' },
     el('div', { class: 'panel-head' },
       el('h2', {}, 'activity map'),
-      activityMetaSlot,
     ),
     el('div', { class: 'panel-body', style: 'padding: 0 0 12px;' },
       el('p', { class: 'meta', style: 'margin: 0 12px 14px; color: var(--text-3); font-size: 13px;' },
@@ -1960,15 +1976,41 @@ async function renderIdentity(creatorKey) {
 
   const myGen = currentRouteGeneration()
 
-  // Helper: update both meta slots together so the user always sees
-  // current state regardless of scroll position. The header slot is
-  // in the panel-head (scrolls off-screen on identity view); the
-  // inline slot lives just above the graph (always visible when the
-  // graph is). Both should agree.
-  const setActivityMeta = (text) => {
-    activityMetaSlot.textContent = text
-    activityMetaInline.textContent = text
+  // Two helpers for updating the activity-map meta block:
+  //
+  //   setActivityMetaText(text), collapses to one line. For transient
+  //   states (loading, validation errors) where structure adds noise.
+  //
+  //   setActivityMetaLines(rows), renders each row as { label, value }
+  //   on its own line, with the label dim and the value highlighted.
+  //   Used for the populated post-fetch state where there are 4-6
+  //   distinct facts the user wants to read.
+  //
+  // The hidden activityMetaSlot stays empty; it exists only so any
+  // legacy querySelector('#identity-activity-meta') consumer still
+  // finds a node.
+  const setActivityMetaText = (text) => {
+    activityMetaInline.replaceChildren(document.createTextNode(text))
   }
+  const setActivityMetaLines = (rows) => {
+    const children = []
+    for (const row of rows) {
+      if (!row) continue
+      const lineStyle = row.emphasis === 'warn'
+        ? 'color: var(--warning, #f59e0b); font-weight: 500;'
+        : 'color: var(--text-2);'
+      const labelStyle = 'color: var(--text-3); display: inline-block; min-width: 132px;'
+      children.push(el('div', { style: lineStyle },
+        el('span', { style: labelStyle }, row.label + ':'),
+        ' ',
+        row.value,
+      ))
+    }
+    activityMetaInline.replaceChildren(...children)
+  }
+  // Backwards-compat alias for the few existing call sites that pass a
+  // simple string.
+  const setActivityMeta = setActivityMetaText
 
   async function refetchActivity() {
     if (!routeGenerationStillCurrent(myGen)) return
@@ -1988,11 +2030,25 @@ async function renderIdentity(creatorKey) {
       }
       params.set('since', String(customSinceMs))
       params.set('until', String(customUntilMs))
+      // Custom range = explicit bounds = oldest-first slice. If the
+      // window contains more than `limit` records, the user wants to
+      // see what happened from their picked start time forward, not
+      // the most-recent slice of the same window. The server applies
+      // direction; truncation feedback is rendered below.
+      params.set('direction', 'oldest')
       windowLabel = `${new Date(customSinceMs).toISOString().slice(0,16).replace('T',' ')}Z → ${new Date(customUntilMs).toISOString().slice(0,16).replace('T',' ')}Z`
     } else if (w.sinceMs !== null) {
       params.set('since', String(Date.now() - w.sinceMs))
+      // Preset windows ("last 24h" etc.) are anchored to NOW, so
+      // truncation should drop the oldest tail. Default direction
+      // (newest) does this. Don't set direction explicitly.
     }
-    params.set('limit', '1000')
+    // Server max is 2000 (ACTIVITY_MAP_MAX_LIMIT). Bumped from 1000 to
+    // 2000 to reduce truncation frequency for high-volume creators.
+    // When truncation still happens, the response carries
+    // total_in_window + effective_window so the user sees what they're
+    // missing.
+    params.set('limit', '2000')
     // Cache-bust per fetch so neither the browser nor any CDN-side cache
     // returns a stale activity-map for a window the user just switched
     // to. Earlier versions of this view occasionally rendered identical
@@ -2022,15 +2078,41 @@ async function renderIdentity(creatorKey) {
       return
     }
     const graph = activity.graph
-    // Verbose meta-slot: shows the fetch latency too, so the user can
-    // verify a click actually triggered a network round-trip (not a
-    // cached or no-op render). The truncated flag flags when results
-    // hit the 1000 record cap, important because for high-volume
-    // creators 7d/30d/all-time may all hit the cap and return
-    // identical record sets, which renders identical graphs even
-    // though the requested windows differ. Surface that explicitly.
+    // Structured meta lines. Always shown: window label, record + edge
+    // counts, fetch latency. Shown only on truncation: total in window,
+    // returned slice direction + effective date range, narrowing hint.
+    // Each fact lives on its own line so the eye reads it cleanly even
+    // when truncation adds two extra lines.
     const fetchMs = Date.now() - fetchStartedAt
-    setActivityMeta(`cross-session edges only · ${windowLabel} · ${activity.record_count} record${activity.record_count === 1 ? '' : 's'}, ${graph.edges.length} edge${graph.edges.length === 1 ? '' : 's'} · fetched in ${fetchMs}ms` + (activity.truncated ? ' · TRUNCATED at 1000-record cap (try a narrower window)' : ''))
+    const fmtTs = (ms) => ms == null ? '?' : new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + 'Z'
+    const total = typeof activity.total_in_window === 'number' ? activity.total_in_window : activity.record_count
+    const eff = activity.effective_window ?? {}
+    const direction = activity.window?.direction === 'oldest' ? 'oldest-first' : 'newest-first'
+
+    const lines = [
+      { label: 'scope', value: 'cross-session edges only' },
+      { label: 'window', value: windowLabel },
+      {
+        label: 'records',
+        value: activity.truncated
+          ? `${activity.record_count} of ${total} in window (${direction} slice)`
+          : `${activity.record_count} (full window)`,
+      },
+      { label: 'edges', value: String(graph.edges.length) },
+    ]
+    if (activity.truncated) {
+      lines.push({
+        label: 'returned span',
+        value: `${fmtTs(eff.since)} → ${fmtTs(eff.until)}`,
+      })
+      lines.push({
+        label: 'truncated',
+        value: `${total - activity.record_count} record${total - activity.record_count === 1 ? '' : 's'} not shown, narrow the range to see the rest (pagination is on the roadmap)`,
+        emphasis: 'warn',
+      })
+    }
+    lines.push({ label: 'fetched', value: `${fetchMs}ms` })
+    setActivityMetaLines(lines)
 
     if (graph.edges.length === 0) {
       activityGraphContainer.replaceChildren(el('div', { class: 'empty' },

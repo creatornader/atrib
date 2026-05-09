@@ -241,7 +241,7 @@ describe('graph-node server (section 3.4)', () => {
     expect(body.record_count).toBeGreaterThanOrEqual(2)
     expect(body.truncated).toBe(false)
     expect(body.graph.nodes.length).toBe(body.record_count)
-    expect(body.window).toEqual({ since: null, until: null, limit: 500 })
+    expect(body.window).toEqual({ since: null, until: null, limit: 500, direction: 'newest' })
     expect(body.intra_session_edges_filtered).toBe(true)
     // Default response excludes intra-session edge types per §3.4.7.
     const intraSessionTypes = new Set(['SESSION_PRECEDES', 'SESSION_PARALLEL'])
