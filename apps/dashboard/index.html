@@ -2999,25 +2999,23 @@ async function renderSigmaDAG(container, graphData, options = {}) {
         curvedCount++
       }
     })
-    if (curvedCount > 0 && edgeCurve.EdgeCurvedArrowProgram) {
-      // EdgeCurvedArrowProgram is the right renderer for directed curved
-      // edges (matches atrib's directional provenance vocabulary).
-      //
-      // Try to configure the curved-arrow program with the same head
-      // proportions as the straight-arrow program (1:1.4 ratio per
-      // arrow design principles). Without this, curved edges render
-      // with Sigma's defaults, visibly thinner heads than straight
-      // edges in the same view. The factory function name varies by
-      // @sigma/edge-curve version; fall back to the default-options
-      // class if the factory isn't exposed.
-      if (typeof edgeCurve.createEdgeCurvedArrowProgram === 'function') {
-        edgeProgramClasses.curved = edgeCurve.createEdgeCurvedArrowProgram({
+    if (curvedCount > 0 && typeof edgeCurve.createEdgeCurveProgram === 'function') {
+      // @sigma/edge-curve@3.1.0 exports `createEdgeCurveProgram(options)`
+      // as the canonical factory. Passing `arrowHead` opts the program
+      // into directed-curve rendering with configurable head proportions
+      // (mirrors createEdgeArrowProgram's API). Without `arrowHead`, the
+      // program renders curves without arrowheads. The class export
+      // `EdgeCurvedArrowProgram` is a directed program with DEFAULT head
+      // dimensions (smaller than the straight-arrow program's 7:5),
+      // which produced the "annotation arrows are smaller" mismatch.
+      edgeProgramClasses.curved = edgeCurve.createEdgeCurveProgram({
+        arrowHead: {
           lengthToThicknessRatio: 7,
           widenessToThicknessRatio: 5,
-        })
-      } else {
-        edgeProgramClasses.curved = edgeCurve.EdgeCurvedArrowProgram
-      }
+        },
+      })
+    } else if (curvedCount > 0 && edgeCurve.EdgeCurvedArrowProgram) {
+      edgeProgramClasses.curved = edgeCurve.EdgeCurvedArrowProgram
     } else if (curvedCount > 0 && edgeCurve.default) {
       edgeProgramClasses.curved = edgeCurve.default
     }
