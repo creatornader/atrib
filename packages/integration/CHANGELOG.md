@@ -1,5 +1,17 @@
 # @atrib/integration
 
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [eb46d66]
+  - @atrib/mcp@0.6.0
+  - @atrib/agent@0.1.7
+  - @atrib/log-dev@0.1.7
+  - @atrib/verify@0.2.4
+  - @atrib/graph-node@0.1.7
+  - @atrib/log-node@0.1.7
+
 ## 0.0.6
 
 ### Patch Changes
