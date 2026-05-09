@@ -164,7 +164,14 @@ describe('emit end-to-end (sign → submit → mirror)', () => {
     expect(mirrorHash).toBe(landedHash)
   })
 
-  it('autoChain inheritance: second emit chains on top of the first', async () => {
+  it('autoChain inheritance via caller-managed context_id: second emit chains on top of the first (mirror-tail branch)', async () => {
+    // Per D072: when caller passes a context_id explicitly, the second emit
+    // can inherit chain_root from the mirror tail filtered by that context_id
+    // (inheritChainContext branch 2, label 'mirror-tail'). This is the
+    // canonical way to chain emits across producers that share a context.
+    // The pre-D072 'mirror-context-and-tail' branch (no caller context_id,
+    // inherit context AND chain from tail) was removed because it absorbed
+    // orphans. Producers MUST now thread context_id explicitly to chain.
     const { seed } = await fixedKey()
 
     const { buildAndSignEmitRecord } = await import('../src/sign.js')
@@ -173,13 +180,16 @@ describe('emit end-to-end (sign → submit → mirror)', () => {
       await import('@atrib/mcp')
     const { randomBytes } = await import('node:crypto')
     const queue = createSubmissionQueue(log.url)
+    const sharedContextId = randomBytes(16).toString('hex')
 
-    // First emit: pure genesis (no mirror exists yet).
+    // First emit: caller-supplied context_id, no mirror tail yet → 'fresh'.
     const chain1 = await inheritChainContext({
+      callerContextId: sharedContextId,
       mirrorPath,
       randomContextId: () => randomBytes(16).toString('hex'),
     })
     expect(chain1.inheritedFrom).toBe('fresh')
+    expect(chain1.contextId).toBe(sharedContextId)
 
     const r1 = await buildAndSignEmitRecord({
       privateKey: seed,
@@ -192,23 +202,20 @@ describe('emit end-to-end (sign → submit → mirror)', () => {
     await mirrorRecord(r1, null)
     await queue.flush()
 
-    // Crucially: write the bare AtribRecord (wrapper convention) to the
-    // mirror so resolveChainContext picks it up. The atrib-emit storage
-    // wraps in an envelope, but the wrapper writes bare records. For the
-    // autoChain inheritance to span emit + wrapper, both producers should
-    // write the bare-record convention. Adjusting the test to reflect the
-    // wrapper convention catches the open architectural mismatch flagged
-    // in the scope doc design-question #2.
+    // Write the bare AtribRecord to the mirror so the second call picks it
+    // up via the wrapper-bare-record convention (matches §5.9).
     const { writeFile, appendFile } = await import('node:fs/promises')
     await writeFile(mirrorPath, JSON.stringify(r1) + '\n')
 
-    // Second emit: should inherit chain1's context_id and chain on top of r1.
+    // Second emit: caller passes the SAME context_id; branch 2 sees a mirror
+    // tail filtered by that context_id and chains to it.
     const chain2 = await inheritChainContext({
+      callerContextId: sharedContextId,
       mirrorPath,
       randomContextId: () => randomBytes(16).toString('hex'),
     })
-    expect(chain2.inheritedFrom).toBe('mirror-context-and-tail')
-    expect(chain2.contextId).toBe(chain1.contextId)
+    expect(chain2.inheritedFrom).toBe('mirror-tail')
+    expect(chain2.contextId).toBe(sharedContextId)
     const r1Hash = hexEncode(sha256(canonicalRecord(r1)))
     expect(chain2.chainRoot).toBe('sha256:' + r1Hash)
 
@@ -228,6 +235,47 @@ describe('emit end-to-end (sign → submit → mirror)', () => {
     expect(log.received[1]!.signature).toBe(r2.signature)
     expect(log.received[1]!.context_id).toBe(log.received[0]!.context_id)
     expect(log.received[1]!.chain_root).toBe('sha256:' + r1Hash)
+  })
+
+  it('orphan isolation per D072: emits with no caller context_id land in DIFFERENT contexts (no mirror inheritance)', async () => {
+    // Per D072: when caller passes no context_id, the producer synthesizes
+    // a fresh isolate and marks it 'fresh-orphan'. Multiple orphan emits
+    // do NOT chain to each other; each lands in its own context. This test
+    // verifies the prior buggy 'mirror-context-and-tail' absorption is gone.
+    const { seed } = await fixedKey()
+
+    const { buildAndSignEmitRecord } = await import('../src/sign.js')
+    const { inheritChainContext, createSubmissionQueue } = await import('@atrib/mcp')
+    const { randomBytes } = await import('node:crypto')
+    const queue = createSubmissionQueue(log.url)
+
+    // First orphan emit: no caller context_id, no mirror tail → fresh-orphan.
+    const chain1 = await inheritChainContext({
+      mirrorPath,
+      randomContextId: () => randomBytes(16).toString('hex'),
+    })
+    expect(chain1.inheritedFrom).toBe('fresh-orphan')
+
+    const r1 = await buildAndSignEmitRecord({
+      privateKey: seed,
+      eventType: 'https://atrib.dev/v1/types/observation',
+      contextId: chain1.contextId,
+      chainRoot: chain1.chainRoot,
+      content: { what: 'orphan-one' },
+    })
+    queue.submit(r1, 'normal')
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(mirrorPath, JSON.stringify(r1) + '\n')
+    await queue.flush()
+
+    // Second orphan emit: no caller context_id, mirror tail PRESENT but
+    // NOT consulted under D072. New isolate; different context_id.
+    const chain2 = await inheritChainContext({
+      mirrorPath,
+      randomContextId: () => randomBytes(16).toString('hex'),
+    })
+    expect(chain2.inheritedFrom).toBe('fresh-orphan')
+    expect(chain2.contextId).not.toBe(chain1.contextId)
   })
 
   it('handleEmit honors caller-supplied context_id + chain_root verbatim (caller-managed chain state)', async () => {

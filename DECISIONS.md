@@ -3255,6 +3255,54 @@ The ten conventions:
 
 ---
 
+## D072: Orphan handling, synthesize fresh, never inherit from mirror tail
+
+**Date:** 2026-05-09
+
+**Context:** `inheritChainContext` in `@atrib/mcp` resolves `{contextId, chainRoot}` for a producer about to sign a record. When the caller supplied no `callerContextId`, the prior implementation read the mirror tail and inherited BOTH the most-recent record's `context_id` AND its hash as the new record's `chain_root` (label: `'mirror-context-and-tail'`).
+
+In production, runtime-side miswires were inevitable. A Layer-2 hook that failed to thread its host's session identifier through to the producer caused every tool call from that hook to land without a `callerContextId`. Each such record then absorbed the mirror tail's context, producing one pseudo-session that accumulated records across many real sessions: a single `context_id` carried 1500+ records spanning 6+ days of unrelated work. The orphan provenance was structurally unrecoverable: a downstream consumer reading the chain saw what looked like one continuous session, with no signal distinguishing real session continuation from orphan absorption.
+
+The mirror-tail-inheritance fallback was meant to soften the case where a caller didn't manage chain state. The actual cost was higher than the convenience: it converted a recoverable runtime miswire into unrecoverable substrate-level pollution.
+
+**Decision.** When `inheritChainContext` is called with no `callerContextId`, the producer MUST synthesize a fresh random `context_id` and a genesis `chain_root` for it. The result MUST be marked `inheritedFrom = 'fresh-orphan'` so consumers can distinguish "caller didn't pass context_id" from "caller passed context_id but no chain_root and the session is brand-new" (the latter remains `'fresh'`). The `'mirror-context-and-tail'` label is removed from the `ChainContext` union; producers MUST NOT consult the mirror tail for `context_id` inheritance.
+
+The orphan record lands in its own isolated context. Multiple orphans from the same producer process land in DIFFERENT `context_id`s, since the synthesized value is per-invocation. Producers that want orphan clustering for forensic reasons MAY cache a per-process synthetic and reuse it; this is producer-side polish, not normative.
+
+Recall, trace, and summarize MAY filter records produced under `inheritedFrom === 'fresh-orphan'` from default queries; consumers that want to see orphan provenance MAY surface them with an explicit flag. The substrate carries enough signal for either rendering.
+
+**Alternatives considered:**
+
+- *Keep the mirror-tail inheritance.* Rejected. The convenience of "the record finds a chain to attach to" is exactly the cost: it absorbs orphans silently. Convenience that erodes ground truth is a bad trade.
+
+- *Refuse to sign records when caller passes no `context_id` (fail closed).* Considered. This would force runtime-side correctness with the strongest possible signal. Rejected because it conflicts with the [§5.8](atrib-spec.md#58-degradation-contract) degradation contract: atrib failures MUST NOT affect the primary tool call. A producer that throws on missing `context_id` would either propagate to the host (violating the degradation contract) or be silently swallowed (worse). Synthesizing a fresh isolate honors the degradation contract while preserving orphan identifiability.
+
+- *Per-process synthetic context_id (cluster all orphans from one process).* Considered. This would make forensic clustering easier ("process X had N orphans during this period under context Y"). Rejected as the default because the per-call synthesis is simpler and has no process-state to manage; `mcp-wrap` and `atrib-emit` typically run as short-lived subprocesses where per-call and per-process degenerate to the same thing; producers that want clustering can cache a synthetic at their layer. Available as producer-side polish; not normative.
+
+- *Sidecar tag on orphan records (`_local.fallback: 'orphan'`).* Considered as a complement, not an alternative. The producer-side mirror sidecar (per [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence)) MAY carry a `fallback` field marking the orphan provenance. This is non-normative producer convention; the load-bearing signal is `inheritedFrom`, which is in the producer's resolved context (not the signed record itself).
+
+**Consequences:**
+
+- `packages/mcp/src/mirror.ts` `inheritChainContext` branch (3) collapses: always synthesize fresh, never read mirror tail. The `'mirror-context-and-tail'` label is removed from the `ChainContext` union; `'fresh-orphan'` is added.
+
+- `packages/mcp/test/mirror.test.ts` updated: the test that asserted mirror-tail inheritance for the no-caller-context case now asserts orphan synthesis. The new test verifies that even when a mirror tail exists, the resolved context_id differs from the tail's.
+
+- Layer-2 hook miswires remain the runtime-side fix path. This ADR does NOT relax the requirement that runtimes pass session identifiers properly; it changes what happens when they don't.
+
+- Orphan detection becomes substrate-level: any consumer reading a producer's resolved context can identify `inheritedFrom === 'fresh-orphan'` and surface the orphan accordingly. Recall and trace MAY filter; the substrate-health surface SHOULD count orphans as a producer-side signal worth flagging.
+
+- The 1500+-record pseudo-session that surfaced this footgun is historical, already on the public log. New records from the same producer-side miswire pattern, if any recur, will land in isolated contexts and will not pollute existing chains.
+
+**Cross-references:**
+
+- [D067](#d067-multi-producer-chain-composition-precedence-contract) (multi-producer chain composition precedence; this ADR governs the case upstream of [D067](#d067-multi-producer-chain-composition-precedence-contract)'s precedence cascade, when no `context_id` is supplied at all)
+- [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) (local mirror sidecar; producer-side polish MAY add `fallback: 'orphan'` sidecar metadata)
+- [§1.5.1](atrib-spec.md#151-context_id-the-session-anchor) (the session anchor; runtimes that don't produce OTel SHOULD generate a random 16-byte value and use its hex encoding as `context_id`)
+- [§5.8](atrib-spec.md#58-degradation-contract) (degradation contract; honored by synthesizing rather than failing closed)
+- [D071](#d071-spec-writing-conventions) (spec writing conventions; this ADR follows convention 9 template + convention 10 architectural framing)
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
