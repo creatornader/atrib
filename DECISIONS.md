@@ -3086,33 +3086,35 @@ The two endpoints answer different questions: provenance trace answers "what did
 
 ---
 
-## D069: Runtime integration patterns, five first-class peers, no canonical path
+## D069: Runtime integration patterns, first-class peers, no canonical path
 
 **Date:** 2026-05-09
 
 **Context:** A field study of 48 agent harnesses (22 in round 1, 26 in round 2, surveyed 2026-05-08) showed that ~97% of records in atrib's production substrate flow through Claude-Code-specific Layer-2 hooks (`atrib-tool-emit-helper.mjs` invoked by `atrib-mcp-hook.mjs` + `atrib-builtin-hook.mjs`). The substrate's portability claim, that atrib produces a verifiable record of agent actions regardless of which harness an agent runs in, was empirically narrow.
 
-The narrowness was not a structural problem with the substrate; it was an integration-coverage problem. Five integration patterns across the surveyed harnesses cover every harness category with no significant residual:
+The narrowness was not a structural problem with the substrate; it was an integration-coverage problem. Six integration patterns across the surveyed harnesses cover every harness category with no significant residual:
 
-- **Lifecycle hooks** (Claude Code, Cursor, OpenAI Codex CLI, Browser-Use, CrewAI hooks), stdin-JSON IPC contract, deny/allow/modify decisions on PreToolUse/PostToolUse boundaries.
-- **In-process MCP middleware** (Goose, Continue, Cody, Claude Code MCP-served tools), atrib mounted as an MCP server fronting upstream tools; per-call signing happens at the protocol boundary.
-- **Callback / lifecycle handlers** (LangGraph BaseCallbackHandler, CrewAI tool_hooks, AutoGen InterventionHandler, Anthropic Agent SDK HookCallback, smolagents step_callbacks, OpenAI Agents RunHooks/AgentHooks), SDK-native interception of tool invocation.
-- **OpenInference SpanProcessor** (Vercel AI native, AutoGen native, OpenAI Agents native, smolagents via OpenInference, CrewAI optional, LangGraph via LangSmith), atrib reads the openinference.tool.* span attributes that already carry semantic LLM/agent conventions on top of OpenTelemetry.
-- **Post-hoc API import + operator re-sign** (Devin, Manus, Operator, Bolt/v0/Lovable), closed-loop runtimes that own the trace; the operator pulls the vendor's session events via a public API, re-signs each step under the operator's atrib key, and anchors to the public log. The signature attests to *the operator's observation of what the vendor reported*, not to the vendor's truthfulness.
+- **Lifecycle hooks** (Claude Code, Cursor, OpenAI Codex CLI, Browser-Use, CrewAI hooks, Augment Code Auggie SDK, Pi/Earendil events API), stdin-JSON IPC contract, deny/allow/modify decisions on PreToolUse/PostToolUse boundaries.
+- **In-process MCP middleware** (Goose, Continue, Cody, Claude Code MCP-served tools, opencode, Browserbase/Stagehand transitively), atrib mounted as an MCP server fronting upstream tools; per-call signing happens at the protocol boundary.
+- **Callback / lifecycle handlers** (LangGraph BaseCallbackHandler, CrewAI tool_hooks, AutoGen InterventionHandler, Microsoft Agent Framework middleware, Anthropic Agent SDK HookCallback, smolagents step_callbacks, OpenAI Agents RunHooks/AgentHooks, Vercel AI tool wrapping, Flue setEventCallback, Google ADK community-extensions), SDK-native interception of tool invocation.
+- **OpenInference SpanProcessor** (Vercel AI native, OpenAI Agents native, Claude Agent SDK Python instrumentation, smolagents via OpenInference, CrewAI optional, LangChain/LangGraph via OpenInference + LangSmith bridge, LlamaIndex, DSPy, MCP itself instrumented, Strands Agents OTel-native, Bedrock AgentCore via planned OTel integrations), atrib reads the openinference.tool.* span attributes that already carry semantic LLM/agent conventions on top of OpenTelemetry. The OpenInference repo currently maintains 33 Python instrumentations + 9 JS packages.
+- **Post-hoc API import + consumer re-sign** (Cursor Cloud Agents, Devin, Manus, Operator, Bolt/v0/Lovable), closed-loop runtimes that own the trace; the consumer pulls the vendor's session events via a public API, re-signs each step under the consumer's atrib key, and anchors to the public log. The signature attests to *the consumer's observation of what the vendor reported*, not to the vendor's truthfulness. Pattern #5b is a session-level fallback when a vendor's API returns only chat history or summary text, not structured per-step actions.
+- **Streaming interceptor** (OpenAI Realtime API, future voice/multimodal harnesses, WebSocket-based agent runtimes), sits in the streaming protocol path, signs each tool-dispatch frame as it passes through, with concurrent-path signing to avoid breaking the streaming latency contract.
 
 The original "wrap every MCP at zero per-server cost" framing positioned `@atrib/mcp-wrap` as the universal interception path. The Layer-2 hook architecture (May 4-5) showed this framing was too narrow: hooks intercept everything in hook-equipped harnesses; the wrapper intercepts MCP traffic specifically. Treating one of the five as canonical and the others as alternatives produced an integration-coverage gap that surfaced as the portability concern in dogfood.
 
-**Decision.** Codify the five integration patterns as **first-class peers** in spec [§9](atrib-spec.md#9-runtime-integration-patterns). None is canonical. Each carries its own informative pattern documentation, conformance contract scope ([D048](#d048-plug-and-play-enforcement-contract-for-adapters) extended to per-pattern adapter conformance), and per-pattern reference implementation. A harness builder picks the pattern its runtime ergonomics support; multiple patterns can compose for one runtime when the runtime supports more than one (Claude Code supports both Lifecycle hooks AND In-process MCP middleware concurrently).
+**Decision.** Codify the six integration patterns as **first-class peers** in spec [§9](atrib-spec.md#9-runtime-integration-patterns). None is canonical. Each carries its own informative pattern documentation, conformance contract scope ([D048](#d048-plug-and-play-enforcement-contract-for-adapters) extended to per-pattern adapter conformance), and per-pattern reference implementation. A harness builder picks the pattern its runtime ergonomics support; multiple patterns can compose for one runtime when the runtime supports more than one (Claude Code supports both Lifecycle hooks AND In-process MCP middleware concurrently).
 
-**The five patterns and their reference implementations:**
+**The six patterns and their reference implementations:**
 
 | Pattern | Reference implementation | Lives in |
 |---|---|---|
 | Lifecycle hooks | hook helper subprocessing the `atrib-emit` MCP | per-host hook scripts |
 | In-process MCP middleware | `@atrib/mcp-wrap` | `packages/mcp-wrap/` |
 | Callback / lifecycle handlers | `@atrib/agent` framework adapters per [D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow), [D024](#d024-langchain-js-mcp-adapter-not-docs-only-multiservermcpclient-needs-a-proper-helper-because-its-internal-client-references-are-private) | `packages/agent/src/adapters/` |
-| OpenInference SpanProcessor | `@atrib/openinference-processor` (planned, ~1 week) | new package |
-| Post-hoc API import | per-runtime adapters (planned, deferred per [D-V4-43](#d-v4-43-tracker)) | likely `services/atrib-{runtime}-adapter/` |
+| OpenInference SpanProcessor | `@atrib/openinference-processor` (planned) | new package |
+| Post-hoc API import | per-runtime adapters (planned, deferred per [D-V4-43](#d-v4-43-tracker)); Cursor Cloud Agents recommended as first reference target | likely `services/atrib-{runtime}-adapter/` |
+| Streaming interceptor | not yet built; deferred until a streaming runtime integration target is selected | likely a transform-stream library or per-protocol adapter |
 
 **The wrapper role narrowing.** `@atrib/mcp-wrap` retains its current implementation but its docs framing changes: from "wrap every MCP at zero per-server cost" (the original 2026-05-04 pitch) to "Pattern #2, in-process MCP middleware. Required for transaction records ([D052](#d052-cross-attestation-requirement-for-transaction-records)), preCallTransform ([D057](#d057-pre-call-signing-hook-precalltransform-for-cross-tool-causal-embedding)), payment-protocol cross-attestation, and any MCP-native host (Goose, Continue, Cody)." This re-frame is informative; no breaking changes to the wrapper API.
 

@@ -4682,7 +4682,7 @@ Five integration patterns cover every runtime category surveyed in atrib's harne
 
 ### 9.1 Pattern: Lifecycle hooks (stdin-JSON IPC)
 
-**Where it fits.** Runtimes that expose a typed lifecycle event surface where a third-party hook script receives a JSON envelope on stdin, returns a JSON envelope on stdout, and may deny / allow / modify the runtime's next action. Surveyed examples: Claude Code, Cursor, OpenAI Codex CLI, Browser-Use lifecycle hooks, CrewAI tool hooks.
+**Where it fits.** Runtimes that expose a typed lifecycle event surface where a third-party hook script receives a JSON envelope on stdin, returns a JSON envelope on stdout, and may deny / allow / modify the runtime's next action. Surveyed examples: Claude Code, Cursor, OpenAI Codex CLI, Browser-Use lifecycle hooks, CrewAI tool hooks, Augment Code (Auggie SDK with PreToolUse/PostToolUse/Stop/SubagentStart-Stop), Pi (Earendil events API, deliberately non-MCP).
 
 **How atrib mounts.** A hook script reads the lifecycle envelope (typically a `PreToolUse` or `PostToolUse` event with `tool_name`, `tool_input`, `tool_result`, `session_id`, `transcript_path`), constructs an [§1.2.1](#121-field-definitions) AtribRecord, signs with the operator's Ed25519 key, and submits to the log. Best practice: spawn a detached helper subprocess so the runtime's tool-call latency is the hook's spawn time, not the signing roundtrip.
 
@@ -4694,7 +4694,7 @@ Five integration patterns cover every runtime category surveyed in atrib's harne
 
 ### 9.2 Pattern: In-process MCP middleware (the wrapper)
 
-**Where it fits.** Runtimes that call tools through Model Context Protocol (MCP) servers. atrib mounts as a middleware server fronting the upstream tool MCP, signing each request/response pair as it passes through. Surveyed examples: Goose (70+ MCP extensions), Continue (MCP-only), Cody, Claude Code MCP-served tools, any generic stdio MCP host.
+**Where it fits.** Runtimes that call tools through Model Context Protocol (MCP) servers. atrib mounts as a middleware server fronting the upstream tool MCP, signing each request/response pair as it passes through. Surveyed examples: Goose (70+ MCP extensions), Continue (MCP-only), Cody, Claude Code MCP-served tools, opencode, Browserbase/Stagehand (covered transitively via the official `@browserbasehq/mcp-stagehand` MCP server), any generic stdio MCP host. Pi (Earendil) is intentionally NON-MCP; integrations with Pi use Pattern #1 hooks instead.
 
 **How atrib mounts.** The runtime registers `@atrib/mcp-wrap` (or an equivalent middleware) instead of the upstream MCP server. The wrapper spawns the upstream as a subprocess, intercepts every `tools/list`, `tools/call`, and `tools/call/result` message, signs the call payload as an AtribRecord, and forwards transparently. The operator's MCP host config points at the wrapper instead of the upstream; the upstream sees no protocol change.
 
@@ -4708,7 +4708,7 @@ Five integration patterns cover every runtime category surveyed in atrib's harne
 
 ### 9.3 Pattern: Callback / lifecycle handlers (SDK-native interception)
 
-**Where it fits.** Multi-agent SDKs and frameworks that expose a callback or hook API in their core surface. Surveyed examples: LangGraph (BaseCallbackHandler with `on_tool_start`/`on_tool_end`), CrewAI (`register_before_tool_call_hook` / `register_after_tool_call_hook`), AutoGen (InterventionHandler `on_send`/`on_publish`/`on_response`), Anthropic Claude Agent SDK (`HookCallback` with `PreToolUse`/`PostToolUse`/`SubagentStart`), smolagents (`step_callbacks`), OpenAI Agents SDK (`RunHooks` and `AgentHooks` with `on_tool_start`/`on_tool_end`/`on_handoff`), Vercel AI SDK (tool wrapping).
+**Where it fits.** Multi-agent SDKs and frameworks that expose a callback or hook API in their core surface. Surveyed examples: LangGraph (BaseCallbackHandler with `on_tool_start`/`on_tool_end`), CrewAI (`register_before_tool_call_hook` / `register_after_tool_call_hook`), AutoGen (InterventionHandler `on_send`/`on_publish`/`on_response`; AutoGen entered maintenance mode April 2026, Microsoft directs new users to Microsoft Agent Framework), Microsoft Agent Framework (explicit middleware system designed for "compliance / logging / safety filters", verbatim atrib fit), Anthropic Claude Agent SDK (`HookCallback` with `PreToolUse`/`PostToolUse`/`SubagentStart`), smolagents (`step_callbacks`), OpenAI Agents SDK (`RunHooks` and `AgentHooks` with `on_tool_start`/`on_tool_end`/`on_handoff`), Vercel AI SDK (tool wrapping), Flue (`ctx.setEventCallback(cb)` with 14-variant FlueEvent discriminated union; pre-1.0 API, semver-pin recommended), Google ADK (community-extensions structure).
 
 **How atrib mounts.** A framework-specific adapter registers callbacks at the SDK's documented extension points and constructs AtribRecords from the callback context. The adapter ships with the framework's typed input + idiomatic registration code.
 
@@ -4720,7 +4720,7 @@ Five integration patterns cover every runtime category surveyed in atrib's harne
 
 ### 9.4 Pattern: OpenInference SpanProcessor (telemetry-substrate hook)
 
-**Where it fits.** Runtimes instrumented with OpenInference (the OpenTelemetry conventions layer for LLM/agent frameworks maintained by Arize). atrib mounts as a custom SpanProcessor that reads OpenInference-shaped tool-call spans and constructs AtribRecords. Surveyed examples: Vercel AI (native), AutoGen (native), OpenAI Agents SDK (native), smolagents (via OpenInference instrumentation), CrewAI (optional), LangGraph (via LangSmith bridge), LlamaIndex, DSPy.
+**Where it fits.** Runtimes instrumented with OpenInference (the OpenTelemetry conventions layer for LLM/agent frameworks maintained by Arize). atrib mounts as a custom SpanProcessor that reads OpenInference-shaped tool-call spans and constructs AtribRecords. Surveyed examples: Vercel AI (native), OpenAI Agents SDK (native), Claude Agent SDK (Python instrumentation), smolagents (via OpenInference instrumentation), CrewAI (optional), LangChain / LangGraph (via OpenInference + LangSmith bridge), LlamaIndex, DSPy, MCP itself (instrumented), Strands Agents (OTel-native), Bedrock AgentCore (planned LangFuse/Datadog/Dynatrace integrations route through OTel). The OpenInference repo currently maintains 33 Python instrumentations + 9 JS packages.
 
 **How atrib mounts.** A custom SpanProcessor implementing OpenTelemetry's `onEnd(span)` interface filters for spans carrying OpenInference attributes (`openinference.tool.name`, `openinference.input.value`, `openinference.output.value`), maps each tool span to an AtribRecord, signs with the operator's key, and submits to the log. The runtime's existing OpenTelemetry tracer registration adds atrib's processor alongside existing exporters (Phoenix, Langfuse, etc.); atrib does not replace existing observability, it composes.
 
@@ -4732,7 +4732,7 @@ Five integration patterns cover every runtime category surveyed in atrib's harne
 
 ### 9.5 Pattern: Post-hoc API import + operator re-sign
 
-**Where it fits.** Closed-loop proprietary runtimes that own the agent's execution loop and expose a session-export API but no in-process middleware path. Surveyed examples: Devin, Manus (hosted), Replit Agent, OpenAI Operator, Bolt/v0/Lovable, GitHub Copilot Coding Agent.
+**Where it fits.** Closed-loop proprietary runtimes that own the agent's execution loop and expose a session-export API but no in-process middleware path. Surveyed examples: Cursor Cloud Agents (recommended first reference target, public REST API, Pro tier, SSE stream emits `event: tool_call` as first-class type, official `@cursor/sdk` ships Zod validators), Devin (Core $20/mo blocks API; Teams $500/mo gates; messages endpoint plain text only), Manus (hosted), Replit Agent (LangSmith only), OpenAI Operator (no public trace API), Bolt/v0/Lovable (chat history + deployed code only).
 
 **How atrib mounts.** A consumer-controlled adapter polls or webhook-receives the runtime's session-export API, parses each step into a tool_call shape, constructs an AtribRecord per step, signs with the consumer's atrib key, and submits to the log. Critically: the consumer (not the vendor) is the signer. The signature attests to *the consumer's observation of what the vendor reported happened*, not to the vendor's truthfulness.
 
@@ -4744,21 +4744,35 @@ Five integration patterns cover every runtime category surveyed in atrib's harne
 
 **Trade-offs.** Only path for closed-loop proprietary runtimes. Latency is post-hoc (not real-time). Trust shifts to consumer-attestation. Vendor API shape varies; each adapter is bespoke.
 
-### 9.6 Composing patterns
+**Run-level attestation fallback.** When a vendor's API returns only chat history or summary text (not structured per-step actions), per-step Pattern #5 isn't viable. The fallback is a single run-level observation record per completed agent execution, signed by the consumer, attesting to the vendor-reported summary. Strictly weaker than per-step Pattern #5 but recoverable for runtimes (Devin's plain-text messages endpoint, Bolt/v0/Lovable, GitHub Copilot Coding Agent's `Agent-Logs-Url` trailer) where structured per-step access is structurally blocked. Verifiers MUST surface the attestation level so consumers can reason about which records carry per-step verifiability and which carry only session-level.
+
+### 9.6 Pattern: Streaming interceptor (real-time bidirectional)
+
+**Where it fits.** Runtimes that expose a streaming bidirectional protocol (audio, video, real-time tool dispatch) where action capture must happen in the protocol stream itself, not at discrete tool-call boundaries. Surveyed examples: OpenAI Realtime API (voice agents), future voice/multimodal harnesses, WebSocket-based agent runtimes that don't model tool calls as request/response pairs.
+
+**How atrib mounts.** A streaming interceptor sits in the protocol path (typically a WebSocket proxy or a transform stream), filters frames carrying tool-dispatch payloads, signs each as it passes through, and submits to the log. The interceptor MUST NOT add latency that breaks the streaming contract; signing happens on a separate concurrent path with the dispatched action.
+
+**Causality formation.** Streaming intervals are softer than discrete tool-call boundaries. The adapter chooses a granularity (per-frame, per-utterance, per-action-cluster) and emits one record per chosen unit. `informed_by` formation depends on the runtime's session-state model.
+
+**Reference implementation.** Not yet built. Pattern documented here so consumers building voice-agent or multimodal-agent integrations have a reference contract.
+
+**Trade-offs.** Necessary for real-time bidirectional protocols. Latency budget is tight. Granularity choices are consumer-specific.
+
+### 9.7 Composing patterns
 
 A runtime may support multiple patterns concurrently. Claude Code supports Pattern #1 (lifecycle hooks for builtin tools) AND Pattern #2 (the wrapper for MCP-served tools) simultaneously. AutoGen supports Pattern #3 (InterventionHandler) AND Pattern #4 (native OpenInference). When patterns compose, the consumer MUST ensure they don't double-sign the same observation: each pattern's adapter signs its own boundary; the boundaries should not overlap.
 
 A canonical composition example: PostToolUse hooks fire on `mcp__.*` tools (Pattern #1 covers atrib-emit signing) AND on built-in tool names like `Bash|Edit|Write|Read|MultiEdit|WebFetch|WebSearch` (Pattern #1 again, with verb-based importance grading). Wrapper-fronted MCP tools (Pattern #2) sign at the protocol boundary. The hook skip-list excludes already-wrapped MCPs to avoid double-signing.
 
-### 9.7 Selecting a pattern
+### 9.8 Selecting a pattern
 
 A runtime builder picks based on:
 
-1. **What does the runtime expose?** Lifecycle hooks → Pattern #1. Native MCP → Pattern #2. SDK callbacks → Pattern #3. OpenInference instrumentation → Pattern #4. Closed-loop API only → Pattern #5.
+1. **What does the runtime expose?** Lifecycle hooks → Pattern #1. Native MCP → Pattern #2. SDK callbacks → Pattern #3. OpenInference instrumentation → Pattern #4. Closed-loop API only → Pattern #5 (or run-level attestation fallback when per-step shape is unavailable). Streaming bidirectional protocol → Pattern #6.
 2. **What does the runtime's threat model require?** Real-time signing for cross-attestation → Pattern #2 (only synchronous request-path access supports counterparty signature collection per [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)). Deferred-signature signing acceptable → any pattern.
-3. **What's the deployment shape?** Consumer-controlled execution loop → Patterns #1-4. Vendor-owned execution loop → Pattern #5.
+3. **What's the deployment shape?** Consumer-controlled execution loop → Patterns #1-4 + #6. Vendor-owned execution loop → Pattern #5 (or #5b).
 
-**Pattern coverage commitments.** atrib v1 ships reference implementations for Patterns #1, #2, #3 (multiple frameworks). Patterns #4 and #5 are documented in this section with their conformance contract scope; reference implementations land per [D-V4-43](DECISIONS.md#d-v4-43-tracker) sequencing (Pattern #4 next; Pattern #5 deferred until a target runtime API selection or until benchmark-backed downstream work resumes). Third-party adapters in any pattern are encouraged; the [D048](DECISIONS.md#d048-plug-and-play-enforcement-contract-for-adapters) conformance contract scope extends to each pattern's reference test surface.
+**Pattern coverage commitments.** atrib v1 ships reference implementations for Patterns #1, #2, #3 (multiple frameworks). Patterns #4, #5, and #6 are documented in this section with their conformance contract scope; reference implementations are planned for future development, prioritized by community demand and integration readiness. Third-party adapters in any pattern are encouraged; the [D048](DECISIONS.md#d048-plug-and-play-enforcement-contract-for-adapters) conformance contract scope extends to each pattern's reference test surface.
 
 ---
 
