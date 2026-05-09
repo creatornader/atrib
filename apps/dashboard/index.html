@@ -2748,13 +2748,17 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     rankDir = 'TB',
     nodeSep = 50,
     rankSep = 70,
-    // Base edge size in world units. Reduced from 1 → 0.5 after a zoom
-    // test on a 327-node chain showed the edges merged into a solid
-    // horizontal cyan band that hid the nodes. Sigma's edge-thickness
-    // scales linearly with zoom while node radius scales at sqrt(ratio),
-    // so a thin base keeps edges legible at low zoom and out-of-the-way
-    // at high zoom.
-    edgeSize = 0.5,
+    // Base edge size in world units before density adaptation. Earlier
+    // iteration reduced from 1 → 0.5 after a zoom test on a 327-node
+    // chain showed edges merged into a solid horizontal cyan band that
+    // hid the nodes. The fix kept dense graphs legible but left
+    // normal-density (50-100 node) graphs with arrowheads barely
+    // visible at default zoom (head dimensions are thickness-relative,
+    // so a 0.5 edge yields a ~3.5px head). Below, edgeSize is density-
+    // adapted (mirrors the nodeSize adaptation): full size for sparse
+    // graphs, floors at 0.5 for dense ones. Sigma's edge thickness
+    // scales linearly with zoom while node radius scales at sqrt(ratio).
+    edgeSizeOpt = 1.0,
     onNodeClick = null,
   } = options
 
@@ -2766,6 +2770,13 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   const densityFactor = Math.sqrt(Math.min(1, 50 / Math.max(1, graphData.nodes.length)))
   const nodeSize = Math.max(3, nodeSizeOpt * densityFactor)
   const focalSize = Math.max(6, focalSizeOpt * densityFactor)
+  // Density-adaptive edge sizing. Same adaptation curve, but with a
+  // softer floor (0.5 vs 0.3) because edge thickness drives arrowhead
+  // dimensions (lengthToThicknessRatio=7, widenessToThicknessRatio=5).
+  // A 0.5 floor on dense graphs yields a 3.5x2.5px head, readable but
+  // restrained. Sparse graphs (under 50 nodes) get the full 1.0 base,
+  // yielding a 7x5px head that reads clearly as a directional arrow.
+  const edgeSize = Math.max(0.5, edgeSizeOpt * densityFactor)
 
   const Graph = window.graphology.Graph
   const Sigma = window.Sigma
