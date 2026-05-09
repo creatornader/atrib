@@ -3196,6 +3196,65 @@ The skeleton ([§2.12](atrib-spec.md#212-record-body-archive-layer)) defines the
 
 ---
 
+## D071: Spec writing conventions
+
+**Date:** 2026-05-09
+
+**Context:** The atrib specification grew from [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type) through [D070](#d070-record-body-archive-layer-placeholder-adr) over six weeks of intensive spec work. Sections written across many sessions varied in their treatment of normative vs informative status, cross-reference style, conformance-corpus binding, and pattern-subsection layout. Drift across these dimensions creates two costs. First, readers integrating against the spec face inconsistent claims: a `MUST` in one section means "verifier rejects on violation," in another section it means "implementations should agree but no test vector enforces." Second, the spec maintenance contract erodes: if [§3](atrib-spec.md#3-graph-query-interface) patterns follow one template and [§9](atrib-spec.md#9-runtime-integration-patterns) patterns follow another, future sections have no clear template to copy.
+
+The [§9](atrib-spec.md#9-runtime-integration-patterns) + [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) work (2026-05-09) applied a consistent set of conventions across new spec material. Those conventions, applied informally, are the de facto standard. Without codification, future sections may drift away from them as new contributors or sessions adopt different defaults.
+
+**Decision.** Adopt ten conventions as binding for new spec material and for substantive edits to existing spec material. Existing material that predates this ADR is grandfathered and migrated opportunistically, not by sweep.
+
+The ten conventions:
+
+1. **Section status declaration.** Each spec section MUST declare its status explicitly at the top with one of: `_This section is normative._` or `_This section is informative._`. Mixed sections SHOULD be split.
+
+2. **RFC 2119 language for normative claims.** Normative claims MUST use RFC 2119 keywords (`MUST`, `MUST NOT`, `SHOULD`, `SHOULD NOT`, `MAY`) where the spec defines a verifier or implementation constraint. Informative prose MUST NOT use these keywords.
+
+3. **Inline cross-references via markdown anchor links.** Cross-references to spec sections MUST use the form `[§N.M](atrib-spec.md#nm-anchor)`. Cross-references to ADRs MUST use the form `[Dxxx](DECISIONS.md#dxxx-slug)`. Bare `§N` or `Dxxx` references without anchor links are prohibited; `scripts/check-doc-sync.mjs` enforces this mechanically.
+
+4. **Pattern subsection template.** Spec sections that enumerate patterns (currently [§7](atrib-spec.md#7-harness-integration-patterns) and [§9](atrib-spec.md#9-runtime-integration-patterns)) MUST use the consistent template: `Where it fits` / `How atrib mounts` (or equivalent integration verb) / `Causality formation` / `Reference implementation` / `Trade-offs`. The template provides reader predictability across patterns.
+
+5. **Reference implementation status tags.** Every reference implementation cited in the spec MUST be tagged either as shipped (with package path) or planned (with sequencing note pointing at the ADR or tracker row that owns the build).
+
+6. **Conformance corpus is jointly normative with Appendix A.** When a spec section ships a conformance corpus, the corpus and Appendix A test vectors are jointly normative; the spec body MUST declare which form is canonical for each case. Implementations conform when they pass both surfaces.
+
+7. **Prose audit on every push.** Spec material MUST pass the Layer A regex catalog and Layer B semantic audit per [D049](#d049-layered-leak-defense-regex--llm-semantic--cloud-audit--style-guide) before any push. The audit bans private-context vocabulary that erodes the spec's public-facing voice.
+
+8. **Sync triggers updated when sections change.** When a spec section is added, removed, or substantively changed, the `CLAUDE.md` sync-triggers table MUST gain a corresponding row naming the downstream surfaces (other spec sections, package READMEs, conformance corpora, scripts) the change propagates to.
+
+9. **ADR template.** Every ADR in DECISIONS.md MUST include `Date`, `Context`, `Decision`, `Alternatives considered`, `Consequences`, `Cross-references` sections. Placeholder ADRs (forward-looking, awaiting the work that codifies the decision) MAY use a shorter form but MUST declare placeholder status explicitly.
+
+10. **Architectural framing, not session narrative.** ADRs MUST be written in the architectural register: what the constraint is, why it holds, what it rejects. ADRs MUST NOT use first-person session narrative or incident-framing language. The history that produced the decision belongs in commit messages and private handoffs, not in the ADR record itself.
+
+**Alternatives considered:**
+
+- *Keep the conventions informal.* Considered. The argument: drift has not yet been a documented problem, so codification is premature optimization. Rejected because the [§9](atrib-spec.md#9-runtime-integration-patterns) + [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) work was the first session where multiple convention dimensions interacted (status declaration + pattern subsection template + sync triggers + prose audit), and the conventions held only because one author applied them consistently across the same session. A future session with different defaults would silently drift, and the drift would be costly to repair after the fact.
+
+- *Adopt some conventions but not others.* Considered. Specifically, codify the load-bearing ones (RFC 2119, anchor links, prose audit, sync triggers) and leave the softer ones (pattern template, ADR template, status tags) informal. Rejected because partial codification creates ambiguity at the boundary: a reader cannot tell which conventions are binding without consulting both this ADR and an informal convention set elsewhere. Codifying all ten or none avoids the gray zone.
+
+- *Codify in a separate `SPEC-STYLE.md` document instead of an ADR.* Considered. The argument: style guides typically live outside the decision log. Rejected because the conventions are decisions about how the spec is maintained, not just stylistic preferences. They belong in DECISIONS.md so that future ADRs can cite them and so that the sync-triggers contract applies to them like every other binding decision.
+
+**Consequences:**
+
+- New spec sections written after this ADR MUST follow all ten conventions. `scripts/check-doc-sync.mjs` enforces conventions 3 and 8 mechanically. `scripts/check-leaks.mjs` and `scripts/check-leaks-semantic.mjs` enforce convention 7. The other conventions are enforced by review.
+
+- Existing spec sections predating this ADR are grandfathered. Substantive edits to those sections (more than a typo or small clarification) bring the section in scope; the editor migrates the section to convention compliance as part of the edit.
+
+- Future ADRs follow convention 9 (template) and convention 10 (architectural framing). The convention-9 template matches the structure [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) and [D070](#d070-record-body-archive-layer-placeholder-adr) use; no new structure is required.
+
+- A new `CLAUDE.md` sync-triggers row is added for [D071](#d071-spec-writing-conventions) itself: when conventions are revised, this ADR is the canonical source; downstream surfaces include `scripts/check-doc-sync.mjs` (if mechanical enforcement extends), the spec sections currently following the conventions, and any private stocktaking documents that referenced the prior informal status.
+
+**Cross-references:**
+
+- [D048](#d048-plug-and-play-enforcement-contract-for-adapters) (spec-side conformance contract for adapters; this ADR is the prose-side conformance contract for the spec itself)
+- [D049](#d049-layered-leak-defense-regex--llm-semantic--cloud-audit--style-guide) (Layer-B prose audit; convention 7 inherits the existing audit pipeline)
+- [D060](#d060-changelog-strategy--changesets-per-package--github-releases) (CHANGELOG voice; the same public-facing framing applies)
+- [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) (the most recent substantive ADR; first ADR to apply all ten conventions consistently)
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
