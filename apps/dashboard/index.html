@@ -3001,10 +3001,23 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     })
     if (curvedCount > 0 && edgeCurve.EdgeCurvedArrowProgram) {
       // EdgeCurvedArrowProgram is the right renderer for directed curved
-      // edges (matches atrib's directional provenance vocabulary). Falls
-      // back to the simpler EdgeCurveProgram if the curved-arrow variant
-      // isn't exported by the loaded version.
-      edgeProgramClasses.curved = edgeCurve.EdgeCurvedArrowProgram
+      // edges (matches atrib's directional provenance vocabulary).
+      //
+      // Try to configure the curved-arrow program with the same head
+      // proportions as the straight-arrow program (1:1.4 ratio per
+      // arrow design principles). Without this, curved edges render
+      // with Sigma's defaults, visibly thinner heads than straight
+      // edges in the same view. The factory function name varies by
+      // @sigma/edge-curve version; fall back to the default-options
+      // class if the factory isn't exposed.
+      if (typeof edgeCurve.createEdgeCurvedArrowProgram === 'function') {
+        edgeProgramClasses.curved = edgeCurve.createEdgeCurvedArrowProgram({
+          lengthToThicknessRatio: 7,
+          widenessToThicknessRatio: 5,
+        })
+      } else {
+        edgeProgramClasses.curved = edgeCurve.EdgeCurvedArrowProgram
+      }
     } else if (curvedCount > 0 && edgeCurve.default) {
       edgeProgramClasses.curved = edgeCurve.default
     }
@@ -3054,7 +3067,16 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   let _hoveredNeighborhood = null
   const _DIM_COLOR = _cssVar('--text-4', '#5a5e68')
   sigmaInstance.setSetting('nodeReducer', (nodeId, attrs) => {
-    if (!_hoveredNode || !_hoveredNeighborhood) return attrs
+    // Labels OFF by default, Sigma's text rendering has no background
+    // pill or styling, so dense graphs render labels overlapping into
+    // illegible noise. On hover, labels appear for the hovered node + its
+    // 1-hop neighbors (handled in the next branch). Focal nodes
+    // (transactions and explicit foci passed via isFocalNode) keep their
+    // labels visible at all times so the eye has anchor points.
+    if (!_hoveredNode || !_hoveredNeighborhood) {
+      const isFocal = attrs.isFocal === true || attrs.event_type === 'transaction'
+      return isFocal ? attrs : { ...attrs, label: '' }
+    }
     if (_hoveredNeighborhood.nodes.has(nodeId)) return attrs
     return { ...attrs, color: _DIM_COLOR, label: '', size: Math.max(2, attrs.size * 0.5) }
   })
