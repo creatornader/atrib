@@ -1,5 +1,12 @@
 # @atrib/emit
 
+## 0.4.5
+
+### Patch Changes
+
+- Updated dependencies [e1f336c]
+  - @atrib/mcp@0.6.2
+
 ## 0.4.4
 
 ### Patch Changes
