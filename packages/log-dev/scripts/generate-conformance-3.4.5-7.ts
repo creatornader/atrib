@@ -338,12 +338,28 @@ async function buildChainCases(): Promise<CaseOutput<ChainInput, ChainExpected>[
 interface CreatorGraphInput {
   records: AtribRecord[]
   include_intra_session: boolean
+  // §3.4.7 limit + direction (added 2026-05-09 alongside truncation transparency).
+  // limit defaults to the server's default (currently 500); cases that need to
+  // exercise the truncation path set limit explicitly to a value smaller than
+  // records.length. direction defaults to 'newest' on the server when omitted.
+  limit?: number
+  direction?: 'newest' | 'oldest'
 }
 interface CreatorGraphExpected {
   record_count: number
   edge_types_excluded: string[]   // edge types that MUST NOT appear in graph.edges
   edge_types_present_at_least_one: string[]  // edge types that MUST appear at least once
   intra_session_edges_filtered: boolean
+  // §3.4.7 truncation transparency expectations (added 2026-05-09).
+  total_in_window: number
+  truncated: boolean
+  direction_returned: 'newest' | 'oldest'
+  // effective_window: which records the slice contains. Identified by the
+  // 0-indexed position(s) in the input.records array (after timestamp-sort
+  // ascending). Lets a cross-impl test compare timestamps without depending
+  // on a generator-specific REFERENCE_TIME_MS.
+  effective_window_first_record_index: number | null
+  effective_window_last_record_index: number | null
 }
 
 async function buildCreatorGraphCases(): Promise<CaseOutput<CreatorGraphInput, CreatorGraphExpected>[]> {
@@ -381,16 +397,23 @@ async function buildCreatorGraphCases(): Promise<CaseOutput<CreatorGraphInput, C
   // Case 1: default include_intra_session=false → no SESSION_PRECEDES /
   // SESSION_PARALLEL in response, but the cross-session INFORMED_BY edge
   // is preserved. intra_session_edges_filtered must be true.
+  // No truncation: 4 records fit comfortably under the default limit;
+  // direction defaults to 'newest' but is irrelevant when nothing is sliced.
   cases.push({
     name: 'cross-session-only-by-default',
     description:
-      'Four records by one creator across two context_ids, with an INFORMED_BY edge from ctxB to ctxA. The default response (include_intra_session=false) MUST exclude SESSION_PRECEDES and SESSION_PARALLEL edges (intra-session) AND MUST include INFORMED_BY (cross-session). intra_session_edges_filtered MUST be true.',
+      'Four records by one creator across two context_ids, with an INFORMED_BY edge from ctxB to ctxA. The default response (include_intra_session=false) MUST exclude SESSION_PRECEDES and SESSION_PARALLEL edges (intra-session) AND MUST include INFORMED_BY (cross-session). intra_session_edges_filtered MUST be true. No truncation: total_in_window === record_count; effective_window spans first..last record.',
     input: { records, include_intra_session: false },
     expected: {
       record_count: 4,
       edge_types_excluded: ['SESSION_PRECEDES', 'SESSION_PARALLEL'],
       edge_types_present_at_least_one: ['INFORMED_BY'],
       intra_session_edges_filtered: true,
+      total_in_window: 4,
+      truncated: false,
+      direction_returned: 'newest',
+      effective_window_first_record_index: 0, // a0 (oldest)
+      effective_window_last_record_index: 3,  // b1 (newest)
     },
   })
 
@@ -400,13 +423,63 @@ async function buildCreatorGraphCases(): Promise<CaseOutput<CreatorGraphInput, C
   cases.push({
     name: 'include-intra-session-true-restores',
     description:
-      'Same fixture, include_intra_session=true. The response MUST include intra-session edges (SESSION_PRECEDES at least, between the two unchained records in each context_id) alongside cross-session edges. intra_session_edges_filtered MUST be false.',
+      'Same fixture, include_intra_session=true. The response MUST include intra-session edges (SESSION_PRECEDES at least, between the two unchained records in each context_id) alongside cross-session edges. intra_session_edges_filtered MUST be false. No truncation.',
     input: { records, include_intra_session: true },
     expected: {
       record_count: 4,
       edge_types_excluded: [],
       edge_types_present_at_least_one: ['INFORMED_BY', 'SESSION_PRECEDES'],
       intra_session_edges_filtered: false,
+      total_in_window: 4,
+      truncated: false,
+      direction_returned: 'newest',
+      effective_window_first_record_index: 0,
+      effective_window_last_record_index: 3,
+    },
+  })
+
+  // Case 3: truncation, direction=newest (default).
+  // limit=2 with 4 records in window → returns the 2 newest (b0, b1);
+  // total_in_window=4, truncated=true, effective_window covers
+  // [b0.timestamp, b1.timestamp] (records[2], records[3] in ascending-ts).
+  cases.push({
+    name: 'truncation-newest-first-default-direction',
+    description:
+      'Same 4-record fixture with limit=2 and direction omitted (defaults to newest). The response MUST return the 2 most-recent records (b0, b1) and drop the 2 oldest (a0, a1). total_in_window MUST equal 4 (records before truncation), truncated MUST be true, direction_returned MUST be "newest", and effective_window MUST span [b0.timestamp, b1.timestamp]. The slice MUST be contiguous, stratified sampling is forbidden because it breaks chain-precedes derivation.',
+    input: { records, include_intra_session: false, limit: 2 },
+    expected: {
+      record_count: 2,
+      edge_types_excluded: ['SESSION_PRECEDES', 'SESSION_PARALLEL'],
+      edge_types_present_at_least_one: [], // INFORMED_BY edge from b0 → a0 is broken (a0 dropped)
+      intra_session_edges_filtered: true,
+      total_in_window: 4,
+      truncated: true,
+      direction_returned: 'newest',
+      effective_window_first_record_index: 2, // b0 (after timestamp-sort ascending)
+      effective_window_last_record_index: 3,  // b1
+    },
+  })
+
+  // Case 4: truncation, direction=oldest.
+  // limit=2 with 4 records in window, direction=oldest → returns the 2
+  // oldest (a0, a1); total_in_window=4, truncated=true, effective_window
+  // covers [a0.timestamp, a1.timestamp]. Right slice for explicit
+  // [since, until] custom ranges where the user anchored a start time.
+  cases.push({
+    name: 'truncation-oldest-first-explicit-direction',
+    description:
+      'Same 4-record fixture with limit=2 and direction=oldest. The response MUST return the 2 oldest records (a0, a1) and drop the 2 newest (b0, b1). total_in_window MUST equal 4, truncated MUST be true, direction_returned MUST be "oldest", and effective_window MUST span [a0.timestamp, a1.timestamp]. Right slice for user-bounded ranges where preserving the start time matters more than the most-recent activity.',
+    input: { records, include_intra_session: false, limit: 2, direction: 'oldest' },
+    expected: {
+      record_count: 2,
+      edge_types_excluded: ['SESSION_PRECEDES', 'SESSION_PARALLEL'],
+      edge_types_present_at_least_one: [], // INFORMED_BY edge from b0 → a0 is broken (b0 dropped)
+      intra_session_edges_filtered: true,
+      total_in_window: 4,
+      truncated: true,
+      direction_returned: 'oldest',
+      effective_window_first_record_index: 0, // a0
+      effective_window_last_record_index: 1,  // a1
     },
   })
 

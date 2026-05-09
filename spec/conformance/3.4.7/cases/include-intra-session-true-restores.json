@@ -1,6 +1,6 @@
 {
   "name": "include-intra-session-true-restores",
-  "description": "Same fixture, include_intra_session=true. The response MUST include intra-session edges (SESSION_PRECEDES at least, between the two unchained records in each context_id) alongside cross-session edges. intra_session_edges_filtered MUST be false.",
+  "description": "Same fixture, include_intra_session=true. The response MUST include intra-session edges (SESSION_PRECEDES at least, between the two unchained records in each context_id) alongside cross-session edges. intra_session_edges_filtered MUST be false. No truncation.",
   "input": {
     "records": [
       {
@@ -56,6 +56,11 @@
       "INFORMED_BY",
       "SESSION_PRECEDES"
     ],
-    "intra_session_edges_filtered": false
+    "intra_session_edges_filtered": false,
+    "total_in_window": 4,
+    "truncated": false,
+    "direction_returned": "newest",
+    "effective_window_first_record_index": 0,
+    "effective_window_last_record_index": 3
   }
 }

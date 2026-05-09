@@ -1,6 +1,6 @@
 {
-  "name": "cross-session-only-by-default",
-  "description": "Four records by one creator across two context_ids, with an INFORMED_BY edge from ctxB to ctxA. The default response (include_intra_session=false) MUST exclude SESSION_PRECEDES and SESSION_PARALLEL edges (intra-session) AND MUST include INFORMED_BY (cross-session). intra_session_edges_filtered MUST be true. No truncation: total_in_window === record_count; effective_window spans first..last record.",
+  "name": "truncation-oldest-first-explicit-direction",
+  "description": "Same 4-record fixture with limit=2 and direction=oldest. The response MUST return the 2 oldest records (a0, a1) and drop the 2 newest (b0, b1). total_in_window MUST equal 4, truncated MUST be true, direction_returned MUST be \"oldest\", and effective_window MUST span [a0.timestamp, a1.timestamp]. Right slice for user-bounded ranges where preserving the start time matters more than the most-recent activity.",
   "input": {
     "records": [
       {
@@ -47,22 +47,22 @@
         "timestamp": 1767225623000
       }
     ],
-    "include_intra_session": false
+    "include_intra_session": false,
+    "limit": 2,
+    "direction": "oldest"
   },
   "expected": {
-    "record_count": 4,
+    "record_count": 2,
     "edge_types_excluded": [
       "SESSION_PRECEDES",
       "SESSION_PARALLEL"
     ],
-    "edge_types_present_at_least_one": [
-      "INFORMED_BY"
-    ],
+    "edge_types_present_at_least_one": [],
     "intra_session_edges_filtered": true,
     "total_in_window": 4,
-    "truncated": false,
-    "direction_returned": "newest",
+    "truncated": true,
+    "direction_returned": "oldest",
     "effective_window_first_record_index": 0,
-    "effective_window_last_record_index": 3
+    "effective_window_last_record_index": 1
   }
 }
