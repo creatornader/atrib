@@ -1558,12 +1558,32 @@ function isOverviewRoute() {
   return !h || h === '/' || h === '/overview'
 }
 
-// Per-view soft refresh: every active view (identity, session, action,
-// trace, anchoring) re-runs route() on a long interval so newly-arrived
-// records become visible without a manual reload. The overview route uses
-// the dedicated fast feed polling above; this is a coarser fallback for
-// views that don't have incremental update logic. Pause when the tab is
-// hidden so background tabs don't burn CPU. Generation-guarded inside the
+// Views that maintain user-driven state across renders. Silent-refresh
+// (the 60s `route({ silent: true })` interval) re-runs the render
+// function which creates fresh closures, wiping any in-memory state
+// (dropdown selections, custom date-range inputs, layout-switcher
+// position). Identity view has the time-window dropdown + custom range;
+// session view has the layout-switcher (timeline / organic / cluster).
+// Both lose user state on silent-refresh, manifesting as "I clicked
+// apply and the same graph rendered" — the silent refresh ran between
+// the user picking a range and clicking apply, resetting the state.
+//
+// These views skip silent-refresh and rely on user-driven refresh
+// (dropdown change, layout toggle, browser reload). Views without user
+// state (action, trace, anchoring) keep silent-refresh.
+function isUserStatefulRoute() {
+  const h = location.hash.replace(/^#/, '')
+  return h.startsWith('/identity/') || h.startsWith('/session/')
+}
+
+// Per-view soft refresh: every active view (action, trace, anchoring)
+// re-runs route() on a long interval so newly-arrived records become
+// visible without a manual reload. The overview route uses the
+// dedicated fast feed polling above; this is a coarser fallback for
+// views that don't have incremental update logic. Identity + session
+// are excluded because they maintain user state that silent-refresh
+// would wipe (see isUserStatefulRoute). Pause when the tab is hidden
+// so background tabs don't burn CPU. Generation-guarded inside the
 // renderers so a refresh mid-fetch doesn't stomp on a navigation.
 const VIEW_REFRESH_INTERVAL_MS = 60_000  // 60s; long enough to avoid flicker
 let viewRefreshHandle = null
@@ -1572,6 +1592,7 @@ function startViewRefresh() {
   viewRefreshHandle = setInterval(() => {
     if (document.hidden) return
     if (isOverviewRoute()) return  // overview has its own faster polling
+    if (isUserStatefulRoute()) return  // identity + session maintain user state
     // Pass silent: true so route() skips the "loading…" blank state.
     // Each render function builds its `root` off-screen and atomic-swaps
     // via clearAndRender(root) at the end; with silent=true the existing
