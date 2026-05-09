@@ -1,5 +1,12 @@
 # @atrib/cli
 
+## 0.1.9
+
+### Patch Changes
+
+- Updated dependencies [e1f336c]
+  - @atrib/mcp@0.6.2
+
 ## 0.1.8
 
 ### Patch Changes
