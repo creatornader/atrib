@@ -4690,7 +4690,7 @@ Six integration patterns cover every runtime category surveyed in atrib's harnes
 
 **Reference implementation.** A hook helper script that subprocesses the `atrib-emit` MCP server. The helper reads the lifecycle envelope on stdin, calls the `atrib-emit` `emit` tool over stdio with `event_type`, `content`, optional `context_id`, and any explicit `informed_by` declarations, and exits with the runtime's expected hook contract. Detached spawning keeps the runtime's tool-call latency bounded by spawn time, not signing roundtrip.
 
-**Trade-offs.** Strongest causality formation in any pattern (the runtime knows exactly what triggered the tool call). Requires the runtime to ship a hook surface; not all do. Hook scripts run in the operator's process space, so the operator's atrib key is reachable.
+**Trade-offs.** Strongest causality formation in any pattern (the runtime knows exactly what triggered the tool call). Requires the runtime to ship a hook surface; not all do. Hook scripts run in the consumer's process space, so the consumer's atrib key is reachable.
 
 ### 9.2 Pattern: In-process MCP middleware (the wrapper)
 
@@ -4730,7 +4730,7 @@ Six integration patterns cover every runtime category surveyed in atrib's harnes
 
 **Trade-offs.** Highest reach per LOC across the multi-agent SDK landscape (one integration → 8+ frameworks). OpenInference span schema is stable for the common attributes but evolving for newer ones; the adapter codes against the stable subset and falls through cleanly when extended attributes appear. Requires the runtime to be OpenInference-instrumented; non-instrumented runtimes need a different pattern.
 
-### 9.5 Pattern: Post-hoc API import + operator re-sign
+### 9.5 Pattern: Post-hoc API import + consumer re-sign
 
 **Where it fits.** Closed-loop proprietary runtimes that own the agent's execution loop and expose a session-export API but no in-process middleware path. Surveyed examples: Cursor Cloud Agents (recommended first reference target — public REST API, Pro tier, SSE stream emits `event: tool_call` as first-class type, official `@cursor/sdk` ships Zod validators), Devin (Core $20/mo blocks API; Teams $500/mo gates; messages endpoint plain text only), Manus (hosted), Replit Agent (LangSmith only), OpenAI Operator (no public trace API), Bolt/v0/Lovable (chat history + deployed code only).
 
