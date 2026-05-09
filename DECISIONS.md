@@ -3086,6 +3086,74 @@ The two endpoints answer different questions: provenance trace answers "what did
 
 ---
 
+## D069: Runtime integration patterns — five first-class peers, no canonical path
+
+**Date:** 2026-05-09
+
+**Context:** A field study of 48 agent harnesses (22 in round 1, 26 in round 2, surveyed 2026-05-08) showed that ~97% of records in atrib's production substrate flow through Claude-Code-specific Layer-2 hooks (`atrib-tool-emit-helper.mjs` invoked by `atrib-mcp-hook.mjs` + `atrib-builtin-hook.mjs`). The substrate's portability claim — that atrib produces a verifiable record of agent actions regardless of which harness an agent runs in — was empirically narrow.
+
+The narrowness was not a structural problem with the substrate; it was an integration-coverage problem. Five integration patterns across the surveyed harnesses cover every harness category with no significant residual:
+
+- **Lifecycle hooks** (Claude Code, Cursor, OpenAI Codex CLI, Browser-Use, CrewAI hooks) — stdin-JSON IPC contract, deny/allow/modify decisions on PreToolUse/PostToolUse boundaries.
+- **In-process MCP middleware** (Goose, Continue, Cody, Claude Code MCP-served tools) — atrib mounted as an MCP server fronting upstream tools; per-call signing happens at the protocol boundary.
+- **Callback / lifecycle handlers** (LangGraph BaseCallbackHandler, CrewAI tool_hooks, AutoGen InterventionHandler, Anthropic Agent SDK HookCallback, smolagents step_callbacks, OpenAI Agents RunHooks/AgentHooks) — SDK-native interception of tool invocation.
+- **OpenInference SpanProcessor** (Vercel AI native, AutoGen native, OpenAI Agents native, smolagents via OpenInference, CrewAI optional, LangGraph via LangSmith) — atrib reads the openinference.tool.* span attributes that already carry semantic LLM/agent conventions on top of OpenTelemetry.
+- **Post-hoc API import + operator re-sign** (Devin, Manus, Operator, Bolt/v0/Lovable) — closed-loop runtimes that own the trace; the operator pulls the vendor's session events via a public API, re-signs each step under the operator's atrib key, and anchors to the public log. The signature attests to *the operator's observation of what the vendor reported*, not to the vendor's truthfulness.
+
+The original "wrap every MCP at zero per-server cost" framing positioned `@atrib/mcp-wrap` as the universal interception path. The Layer-2 hook architecture (May 4-5) showed this framing was too narrow: hooks intercept everything in hook-equipped harnesses; the wrapper intercepts MCP traffic specifically. Treating one of the five as canonical and the others as alternatives produced an integration-coverage gap that surfaced as the portability concern in dogfood.
+
+**Decision.** Codify the five integration patterns as **first-class peers** in spec [§9](atrib-spec.md#9-runtime-integration-patterns). None is canonical. Each carries its own informative pattern documentation, conformance contract scope ([D048](#d048-plug-and-play-enforcement-contract-for-adapters) extended to per-pattern adapter conformance), and per-pattern reference implementation. A harness builder picks the pattern its runtime ergonomics support; multiple patterns can compose for one runtime when the runtime supports more than one (Claude Code supports both Lifecycle hooks AND In-process MCP middleware concurrently).
+
+**The five patterns and their reference implementations:**
+
+| Pattern | Reference implementation | Lives in |
+|---|---|---|
+| Lifecycle hooks | hook helper subprocessing the `atrib-emit` MCP | per-host hook scripts |
+| In-process MCP middleware | `@atrib/mcp-wrap` | `packages/mcp-wrap/` |
+| Callback / lifecycle handlers | `@atrib/agent` framework adapters per [D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow) — [D024](#d024-langchain-js-mcp-adapter-not-docs-only-multiservermcpclient-needs-a-proper-helper-because-its-internal-client-references-are-private) | `packages/agent/src/adapters/` |
+| OpenInference SpanProcessor | `@atrib/openinference-processor` (planned, ~1 week) | new package |
+| Post-hoc API import | per-runtime adapters (planned, deferred per [D-V4-43](#d-v4-43-tracker)) | likely `services/atrib-{runtime}-adapter/` |
+
+**The wrapper role narrowing.** `@atrib/mcp-wrap` retains its current implementation but its docs framing changes: from "wrap every MCP at zero per-server cost" (the original 2026-05-04 pitch) to "Pattern #2 — in-process MCP middleware. Required for transaction records ([D052](#d052-cross-attestation-requirement-for-transaction-records)), preCallTransform ([D057](#d057-pre-call-signing-hook-precalltransform-for-cross-tool-causal-embedding)), payment-protocol cross-attestation, and any MCP-native host (Goose, Continue, Cody)." This re-frame is informative; no breaking changes to the wrapper API.
+
+**Per-pattern conformance contract.** [D048](#d048-plug-and-play-enforcement-contract-for-adapters) established the conformance contract for adapters under what was at the time the dominant pattern (callback/lifecycle handlers in `@atrib/agent`). The contract extends pattern-by-pattern: the same observable behaviors (passthrough, `_meta` injection or equivalent, no caller mutation, response flow, idempotency, [§5.8](atrib-spec.md#58-degradation-contract) degradation) MUST hold for every pattern's reference implementation, with pattern-specific test surfaces. The lifecycle-hook test surface is end-to-end against a fake hook envelope; the OpenInference test surface is a fake SpanProcessor consuming canonical openinference attributes; the post-hoc API test surface is a fake vendor API returning canonical session events.
+
+**Alternatives considered:**
+
+- *Canonicalize one pattern as primary; treat others as fallbacks ([Approach A]).* Rejected: this is the framing the original wrapper pitch implicitly used and the framing the Layer-2 hook adoption broke. There is no single pattern that fits every harness category — the five categories surveyed each have ergonomic constraints (interactive vs batch, hook-equipped vs not, in-process vs hosted, structured-trace-API vs message-history-only) that exclude at least one of the other four. Canonicalizing one would orphan some category.
+
+- *Ship a "universal adapter" abstraction layer that all five patterns implement ([Approach B]).* Considered. The unified abstraction would expose `AdapterContract { onToolCallPre, onToolCallPost, onSessionStart, onSessionEnd }` and each pattern would supply the surface. Rejected for atrib v1 because the cross-pattern interface drift (lifecycle hooks have deny/allow/modify, OpenInference has spans-not-events, post-hoc has no real-time, callback handlers vary across SDKs) would force lowest-common-denominator compromises that erode each pattern's strengths. Worth revisiting in a future ADR if cross-pattern compositions surface real friction.
+
+- *Defer the codification until benchmarks land ([Approach C], the [D-V4-43](#d-v4-43-tracker) dogfood-first reading).* Rejected for the spec section but accepted for the implementation work. The taxonomy itself is decided now (the field study made the categories explicit and durable), and codifying the patterns enables anyone — first or third party — to start an adapter against the spec contract without waiting for benchmarks. Deferring the spec codification while shipping new adapter implementations would re-create the pattern-fragmentation that drove this ADR. Adapter-build sequencing remains [D-V4-43](#d-v4-43-tracker)-aligned: prioritize adapters that extend dogfood (Phoenix/OpenInference + Browser-Use) over adapters that are integration-partner-flavored (Cursor + Codex + post-hoc API), aligned with [D-V4-43](#d-v4-43-tracker) sequencing.
+
+**Consequences:**
+
+- atrib-spec.md gains [§9](atrib-spec.md#9-runtime-integration-patterns) "Runtime Integration Patterns" as a new informative section after [§8](atrib-spec.md#8-privacy-postures). The section parallels [§7](atrib-spec.md#7-harness-integration-patterns) "Harness Integration Patterns" — [§7](atrib-spec.md#7-harness-integration-patterns) covers the agent's view of atrib once mounted (session-start surfacing, recall tool, persisted mirror, reasoning chains, outcome verification); [§9](atrib-spec.md#9-runtime-integration-patterns) covers how a runtime mounts atrib in the first place. The two are orthogonal: a harness picks one [§9](atrib-spec.md#9-runtime-integration-patterns) integration pattern AND any subset of [§7](atrib-spec.md#7-harness-integration-patterns) consumption patterns.
+
+- `packages/mcp-wrap/README.md` re-frames the wrapper as Pattern #2 (in-process MCP middleware). The "wrap every MCP at zero per-server cost" pitch is demoted to historical context. No functional changes.
+
+- `packages/agent/README.md` re-frames its adapter table under Pattern #3 (callback / lifecycle handlers). Each existing adapter ([D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow) — [D024](#d024-langchain-js-mcp-adapter-not-docs-only-multiservermcpclient-needs-a-proper-helper-because-its-internal-client-references-are-private)) is one Pattern #3 instance.
+
+- A new package `@atrib/openinference-processor` is planned for Pattern #4 (separate ADR when the build lands). The OpenInference span schema is the integration boundary; the package reads `openinference.tool.name`, `openinference.input.value`, `openinference.output.value`, etc., and constructs AtribRecord content from each tool span on `onEnd`.
+
+- A reference implementation for Pattern #5 (post-hoc API import + operator re-sign) is deferred per [D-V4-43](#d-v4-43-tracker). The pattern is documented in [§9](atrib-spec.md#9-runtime-integration-patterns) so consumers can build their own; atrib's reference implementation lands when Devin or Operator API access becomes available + benchmarks unblock outward-facing work.
+
+- [D048](#d048-plug-and-play-enforcement-contract-for-adapters) conformance contract scope extends pattern-by-pattern. The existing `packages/agent/test/conformance.test.ts` covers Pattern #3; per-pattern conformance test surfaces are tracked as follow-ons (one per shipped adapter).
+
+- The runtime-adapter spec revival reframes the deferred P002 atrib-bridge prototype. P002's "proves substrate generalizes" goal is what [§9](atrib-spec.md#9-runtime-integration-patterns) makes structural. The atrib-bridge work continues as a Pattern #5 instance once a target runtime API is selected.
+
+**Cross-references:**
+
+- [§9](atrib-spec.md#9-runtime-integration-patterns) (the normative section this ADR introduces)
+- [§7](atrib-spec.md#7-harness-integration-patterns) (orthogonal section: agent-side patterns once mounted)
+- [D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow) — [D024](#d024-langchain-js-mcp-adapter-not-docs-only-multiservermcpclient-needs-a-proper-helper-because-its-internal-client-references-are-private) (existing Pattern #3 adapter ADRs)
+- [D048](#d048-plug-and-play-enforcement-contract-for-adapters) (the conformance contract this ADR extends per-pattern)
+- [D052](#d052-cross-attestation-requirement-for-transaction-records) (transaction records require Pattern #2 wrapper for cross-attestation)
+- [D057](#d057-pre-call-signing-hook-precalltransform-for-cross-tool-causal-embedding) (preCallTransform requires Pattern #2 wrapper)
+- A synthesized field study across 48 agent harnesses surveyed in early May 2026 drives the findings codified in this ADR
+
+---
+
 ## D070: Record Body Archive Layer (placeholder ADR)
 
 **Date:** 2026-05-07.
