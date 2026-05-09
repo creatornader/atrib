@@ -48,12 +48,22 @@ interface ChainCase extends BaseCase {
 }
 
 interface CreatorGraphCase extends BaseCase {
-  input: { records: AtribRecord[]; include_intra_session: boolean }
+  input: {
+    records: AtribRecord[]
+    include_intra_session: boolean
+    limit?: number
+    direction?: 'newest' | 'oldest'
+  }
   expected: {
     record_count: number
     edge_types_excluded: string[]
     edge_types_present_at_least_one: string[]
     intra_session_edges_filtered: boolean
+    total_in_window: number
+    truncated: boolean
+    direction_returned: 'newest' | 'oldest'
+    effective_window_first_record_index: number | null
+    effective_window_last_record_index: number | null
   }
 }
 
@@ -183,11 +193,15 @@ describe('§3.4.7 conformance: creator activity-map', () => {
       const creatorKey = c.input.records[0]!.creator_key
       const params = new URLSearchParams()
       if (c.input.include_intra_session) params.set('include_intra_session', 'true')
-      // Also pin the time window to the records' timestamps so accumulated
-      // records from earlier tests don't pollute the response.
-      const ts = c.input.records.map((r) => r.timestamp).sort((a, b) => a - b)
-      params.set('since', String(ts[0]!))
-      params.set('until', String(ts[ts.length - 1]!))
+      // §3.4.7 limit + direction (added 2026-05-09 alongside truncation
+      // transparency): cases that exercise truncation set these explicitly.
+      if (typeof c.input.limit === 'number') params.set('limit', String(c.input.limit))
+      if (c.input.direction) params.set('direction', c.input.direction)
+      // Pin the time window to the records' timestamps so accumulated records
+      // from earlier tests don't pollute the response.
+      const sortedTs = c.input.records.map((r) => r.timestamp).sort((a, b) => a - b)
+      params.set('since', String(sortedTs[0]!))
+      params.set('until', String(sortedTs[sortedTs.length - 1]!))
 
       const res = await fetch(`${url}/v1/creators/${encodeURIComponent(creatorKey)}/graph?${params.toString()}`)
       expect(res.ok, `creator-graph returned ${res.status}`).toBe(true)
@@ -195,6 +209,24 @@ describe('§3.4.7 conformance: creator activity-map', () => {
 
       expect(body.record_count).toBe(c.expected.record_count)
       expect(body.intra_session_edges_filtered).toBe(c.expected.intra_session_edges_filtered)
+      expect(body.total_in_window).toBe(c.expected.total_in_window)
+      expect(body.truncated).toBe(c.expected.truncated)
+      expect(body.window.direction).toBe(c.expected.direction_returned)
+
+      // effective_window: identified by 0-indexed positions in the
+      // ascending-timestamp-sorted input.records array. This decouples the
+      // expectation from the generator's REFERENCE_TIME_MS so cross-impl
+      // verifiers can replay the corpus without sharing the constant.
+      if (c.expected.effective_window_first_record_index !== null) {
+        expect(body.effective_window.since).toBe(sortedTs[c.expected.effective_window_first_record_index])
+      } else {
+        expect(body.effective_window.since).toBe(null)
+      }
+      if (c.expected.effective_window_last_record_index !== null) {
+        expect(body.effective_window.until).toBe(sortedTs[c.expected.effective_window_last_record_index])
+      } else {
+        expect(body.effective_window.until).toBe(null)
+      }
 
       const presentTypes = new Set(body.graph.edges.map((e: { type: string }) => e.type))
       for (const t of c.expected.edge_types_excluded) {

@@ -1,6 +1,6 @@
 {
-  "name": "cross-session-only-by-default",
-  "description": "Four records by one creator across two context_ids, with an INFORMED_BY edge from ctxB to ctxA. The default response (include_intra_session=false) MUST exclude SESSION_PRECEDES and SESSION_PARALLEL edges (intra-session) AND MUST include INFORMED_BY (cross-session). intra_session_edges_filtered MUST be true. No truncation: total_in_window === record_count; effective_window spans first..last record.",
+  "name": "truncation-newest-first-default-direction",
+  "description": "Same 4-record fixture with limit=2 and direction omitted (defaults to newest). The response MUST return the 2 most-recent records (b0, b1) and drop the 2 oldest (a0, a1). total_in_window MUST equal 4 (records before truncation), truncated MUST be true, direction_returned MUST be \"newest\", and effective_window MUST span [b0.timestamp, b1.timestamp]. The slice MUST be contiguous — stratified sampling is forbidden because it breaks chain-precedes derivation.",
   "input": {
     "records": [
       {
@@ -47,22 +47,21 @@
         "timestamp": 1767225623000
       }
     ],
-    "include_intra_session": false
+    "include_intra_session": false,
+    "limit": 2
   },
   "expected": {
-    "record_count": 4,
+    "record_count": 2,
     "edge_types_excluded": [
       "SESSION_PRECEDES",
       "SESSION_PARALLEL"
     ],
-    "edge_types_present_at_least_one": [
-      "INFORMED_BY"
-    ],
+    "edge_types_present_at_least_one": [],
     "intra_session_edges_filtered": true,
     "total_in_window": 4,
-    "truncated": false,
+    "truncated": true,
     "direction_returned": "newest",
-    "effective_window_first_record_index": 0,
+    "effective_window_first_record_index": 2,
     "effective_window_last_record_index": 3
   }
 }

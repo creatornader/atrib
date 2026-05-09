@@ -12,6 +12,14 @@
     {
       "file": "cases/include-intra-session-true-restores.json",
       "name": "include-intra-session-true-restores"
+    },
+    {
+      "file": "cases/truncation-newest-first-default-direction.json",
+      "name": "truncation-newest-first-default-direction"
+    },
+    {
+      "file": "cases/truncation-oldest-first-explicit-direction.json",
+      "name": "truncation-oldest-first-explicit-direction"
     }
   ],
   "keys": {
