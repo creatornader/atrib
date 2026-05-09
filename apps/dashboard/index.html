@@ -1964,7 +1964,18 @@ async function renderIdentity(creatorKey) {
       params.set('since', String(Date.now() - w.sinceMs))
     }
     params.set('limit', '1000')
+    // Cache-bust per fetch so neither the browser nor any CDN-side cache
+    // returns a stale activity-map for a window the user just switched
+    // to. Earlier versions of this view occasionally rendered identical
+    // graphs across genuinely different windows; cache-busting rules out
+    // caching as a cause and keeps each user-driven refresh genuinely
+    // fresh.
+    params.set('_cb', String(Date.now()))
     const url = `${ep.graph}/creators/${encodeURIComponent(creatorKey)}/graph?${params.toString()}`
+    // Expose the URL on the meta slot too so the user can see in real
+    // time what window the dashboard is requesting, plus open it in a
+    // new tab to inspect the response directly.
+    const fetchStartedAt = Date.now()
     const activity = await fetchMaybe(url)
     if (!routeGenerationStillCurrent(myGen)) return
     if (activity._error) {
@@ -1982,7 +1993,15 @@ async function renderIdentity(creatorKey) {
       return
     }
     const graph = activity.graph
-    activityMetaSlot.textContent = `cross-session edges only · ${windowLabel} · ${activity.record_count} record${activity.record_count === 1 ? '' : 's'}, ${graph.edges.length} edge${graph.edges.length === 1 ? '' : 's'}` + (activity.truncated ? ' · truncated' : '')
+    // Verbose meta-slot: shows the fetch latency too, so the user can
+    // verify a click actually triggered a network round-trip (not a
+    // cached or no-op render). The truncated flag flags when results
+    // hit the 1000 record cap — important because for high-volume
+    // creators 7d/30d/all-time may all hit the cap and return
+    // identical record sets, which renders identical graphs even
+    // though the requested windows differ. Surface that explicitly.
+    const fetchMs = Date.now() - fetchStartedAt
+    activityMetaSlot.textContent = `cross-session edges only · ${windowLabel} · ${activity.record_count} record${activity.record_count === 1 ? '' : 's'}, ${graph.edges.length} edge${graph.edges.length === 1 ? '' : 's'} · fetched in ${fetchMs}ms` + (activity.truncated ? ' · TRUNCATED at 1000-record cap (try a narrower window)' : '')
 
     if (graph.edges.length === 0) {
       activityGraphContainer.replaceChildren(el('div', { class: 'empty' },
