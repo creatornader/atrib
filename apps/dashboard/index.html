@@ -1765,54 +1765,109 @@ async function renderIdentity(creatorKey) {
     }
   }
   if (sessions.sessions && sessions.sessions.length > 0) {
+    // Collapse-state cache key. Per-creator so a user who collapses
+    // their own dense identity view doesn't accidentally collapse a
+    // sparse one. localStorage survives reloads + tabs; sessionStorage
+    // would scope to one tab which is the wrong shape (user expects
+    // their preference to stick across browser sessions). Default
+    // open: legacy behavior — only a user who explicitly collapsed
+    // sees it collapsed on the next visit.
+    const collapseKey = `atrib.identity.sessions-collapsed.${creatorKey}`
+    let collapsed = false
+    try {
+      collapsed = localStorage.getItem(collapseKey) === '1'
+    } catch {
+      // localStorage unavailable (private mode, quota, sandboxed iframe).
+      // Treat as "always open" — better than throwing.
+    }
+
+    const tableBody = el('div', {
+      class: 'panel-body',
+      style: collapsed ? 'display: none;' : '',
+    },
+      el('p', { class: 'meta', style: 'margin: 0 0 14px; color: var(--text-3); font-size: 13px;' },
+        'A ',
+        el('strong', {}, 'session'),
+        ' is one logical workflow — a trace, a task, a conversation. Records sharing a ',
+        el('code', {}, 'context_id'),
+        ' are related operations within that workflow per spec ',
+        el('a', { href: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#151-context_id-the-session-anchor', target: '_blank', rel: 'noopener', style: 'color: var(--text-2);' }, '§1.5.1'),
+        '. New workflow → new session. Long-running collaborative work can produce sessions of thousands of records; one-off scripts produce single-record sessions.',
+      ),
+      el('table', { class: 'feed' },
+        el('thead', {}, el('tr', {},
+          el('th', {}, 'context_id'),
+          el('th', {}, 'records'),
+          el('th', {}, 'composition'),
+          el('th', { class: 'shrink' }, 'duration'),
+          el('th', { class: 'shrink' }, 'first seen'),
+        )),
+        el('tbody', {},
+          ...sessions.sessions.map(s => el('tr', {},
+            el('td', {},
+              el('a', { href: `#/session/${s.context_id}` },
+                el('span', { class: 'mono' }, shorten(s.context_id, 10, 6)),
+              ),
+              ' ',
+              s.has_genesis
+                ? el('span', { class: 'badge dim', style: 'font-size: 10px; margin-left: 4px;', title: 'Session contains a genesis record (chain_root = SHA-256(context_id))' }, 'G')
+                : null,
+            ),
+            el('td', {}, String(s.node_count ?? '—')),
+            el('td', {}, renderCompositionChips(s)),
+            el('td', { class: 'shrink' },
+              s.first_seen && s.last_seen
+                ? renderDuration(s.first_seen, s.last_seen)
+                : '—'),
+            el('td', { class: 'shrink', ...(s.first_seen ? { 'data-ts': String(s.first_seen) } : {}) },
+              s.first_seen ? timeAgo(s.first_seen) : '—'),
+          )),
+        ),
+      ),
+    )
+
+    // Toggle button in the panel-head. Glyph rotates / label flips so
+    // the user sees both the affordance ("clickable to expand") and
+    // the current state. Persists choice to localStorage under the
+    // per-creator key so it survives reloads.
+    const toggleBtn = el('button', {
+      type: 'button',
+      'aria-expanded': String(!collapsed),
+      'aria-controls': `sessions-body-${creatorKey.slice(0, 12)}`,
+      style: [
+        'background: transparent',
+        'border: 1px solid var(--bd-2)',
+        'color: var(--text-2)',
+        'padding: 3px 10px',
+        'border-radius: 3px',
+        'font-size: 12px',
+        'cursor: pointer',
+        'font-family: var(--font-sans)',
+        'margin-left: auto',
+      ].join('; '),
+    }, collapsed ? 'expand ▾' : 'collapse ▴')
+    toggleBtn.addEventListener('click', () => {
+      collapsed = !collapsed
+      tableBody.style.display = collapsed ? 'none' : ''
+      toggleBtn.textContent = collapsed ? 'expand ▾' : 'collapse ▴'
+      toggleBtn.setAttribute('aria-expanded', String(!collapsed))
+      try {
+        localStorage.setItem(collapseKey, collapsed ? '1' : '0')
+      } catch {
+        // Persistence failed; the in-memory toggle still works.
+      }
+    })
+    tableBody.id = `sessions-body-${creatorKey.slice(0, 12)}`
+
     stack.append(el('section', { class: 'panel flush' },
       el('div', { class: 'panel-head' },
         el('h2', {}, 'sessions'),
         el('span', { class: 'meta' },
           `${sessions.sessions.length} session${sessions.sessions.length === 1 ? '' : 's'}` +
           (sessionsFromLog ? ' · from log (graph not ingested)' : '')),
+        toggleBtn,
       ),
-      el('div', { class: 'panel-body' },
-        el('p', { class: 'meta', style: 'margin: 0 0 14px; color: var(--text-3); font-size: 13px;' },
-          'A ',
-          el('strong', {}, 'session'),
-          ' is one logical workflow — a trace, a task, a conversation. Records sharing a ',
-          el('code', {}, 'context_id'),
-          ' are related operations within that workflow per spec ',
-          el('a', { href: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#151-context_id-the-session-anchor', target: '_blank', rel: 'noopener', style: 'color: var(--text-2);' }, '§1.5.1'),
-          '. New workflow → new session. Long-running collaborative work can produce sessions of thousands of records; one-off scripts produce single-record sessions.',
-        ),
-        el('table', { class: 'feed' },
-          el('thead', {}, el('tr', {},
-            el('th', {}, 'context_id'),
-            el('th', {}, 'records'),
-            el('th', {}, 'composition'),
-            el('th', { class: 'shrink' }, 'duration'),
-            el('th', { class: 'shrink' }, 'first seen'),
-          )),
-          el('tbody', {},
-            ...sessions.sessions.map(s => el('tr', {},
-              el('td', {},
-                el('a', { href: `#/session/${s.context_id}` },
-                  el('span', { class: 'mono' }, shorten(s.context_id, 10, 6)),
-                ),
-                ' ',
-                s.has_genesis
-                  ? el('span', { class: 'badge dim', style: 'font-size: 10px; margin-left: 4px;', title: 'Session contains a genesis record (chain_root = SHA-256(context_id))' }, 'G')
-                  : null,
-              ),
-              el('td', {}, String(s.node_count ?? '—')),
-              el('td', {}, renderCompositionChips(s)),
-              el('td', { class: 'shrink' },
-                s.first_seen && s.last_seen
-                  ? renderDuration(s.first_seen, s.last_seen)
-                  : '—'),
-              el('td', { class: 'shrink', ...(s.first_seen ? { 'data-ts': String(s.first_seen) } : {}) },
-                s.first_seen ? timeAgo(s.first_seen) : '—'),
-            )),
-          ),
-        ),
-      ),
+      tableBody,
     ))
   }
 
