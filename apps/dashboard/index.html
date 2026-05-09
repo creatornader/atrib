@@ -397,6 +397,11 @@
     font: 12px/1.3 var(--font-sans);
     color: var(--text-3);
   }
+  /* Wide-row stat: opts a stat into spanning the full row. Used for
+     composition-style breakdowns that benefit from horizontal room
+     (avoids cramped wrapping when an atomic-stat row has a different
+     final stat that is intrinsically a list, not a single number). */
+  .pulse-strip .stat.wide { grid-column: 1 / -1; }
 
   @media (max-width: 720px) {
     .pulse-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1399,8 +1404,8 @@ async function renderOverview() {
   startPolling()
 }
 
-function pulseStat(label, value, sub = null) {
-  return el('div', { class: 'stat' },
+function pulseStat(label, value, sub = null, wide = false) {
+  return el('div', { class: wide ? 'stat wide' : 'stat' },
     el('span', { class: 'label' }, label),
     el('span', { class: 'value' }, value),
     sub ? el('span', { class: 'sub' }, sub) : null,
@@ -2158,27 +2163,35 @@ async function renderSession(contextId) {
   if (!routeGenerationStillCurrent(myGen)) return
 
   // Composition breakdown across the session. Surfaces the event-type
-  // diversity (e.g. "473 annotation, 753 tool_call, 204 observation, 54
-  // revision") that the bare "transaction: none" stat hides. For
-  // transaction-less sessions (the common case) this is the more useful
-  // pulse stat; for transaction-bearing sessions both stats are shown.
+  // diversity that the bare "transaction: none" stat hides. Each piece
+  // is colored with the canonical event-type palette (eventTypeColor
+  // resolves the CSS variable per type, including the directory_anchor
+  // -> --et-system special case). Underscore -> space and s-pluralize
+  // produce human-readable labels ("4 tool_call" -> "4 tool calls").
   const eventTypeCounts = {}
   for (const n of graph.nodes) {
     const et = n.event_type || 'unknown'
     eventTypeCounts[et] = (eventTypeCounts[et] ?? 0) + 1
   }
-  const compositionLabel = Object.entries(eventTypeCounts)
+  const sortedTypes = Object.entries(eventTypeCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4)
-    .map(([k, v]) => `${v} ${k}`)
-    .join(' · ')
+  const compositionPieces = []
+  for (let i = 0; i < sortedTypes.length; i++) {
+    const [type, count] = sortedTypes[i]
+    if (i > 0) compositionPieces.push(' · ')
+    const display = type.replace(/_/g, ' ') + (count === 1 ? '' : 's')
+    compositionPieces.push(el('span', {
+      style: `color: ${eventTypeColor(type)}`,
+    }, `${count} ${display}`))
+  }
 
   root.append(el('div', { class: 'pulse-strip' },
     pulseStat('nodes', String(graph.node_count ?? graph.nodes.length)),
     pulseStat('edges', String(graph.edge_count ?? graph.edges?.length ?? 0)),
     pulseStat('transaction', hasTx ? 'present' : 'none', hasTx ? 'session converges on a transaction' : 'no transaction record (typical for non-commerce sessions)'),
     pulseStat('participants', String(new Set(graph.nodes.map(n => n.creator_key).filter(Boolean)).size), 'distinct identities'),
-    pulseStat('composition', compositionLabel || '—', 'top event-type counts'),
+    pulseStat('composition', sortedTypes.length > 0 ? compositionPieces : '—', 'top event-type counts', true),
   ))
 
   if (usingFallback) {
