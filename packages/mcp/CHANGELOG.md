@@ -1,5 +1,41 @@
 # @atrib/mcp
 
+## 0.6.1
+
+### Patch Changes
+
+- b16d08b: [D071](../DECISIONS.md#d071-spec-writing-conventions): codify ten spec writing conventions as binding ADR.
+
+  The atrib specification grew from [D041](../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type) through [D070](../DECISIONS.md#d070-record-body-archive-layer-placeholder-adr) over six weeks of intensive spec work, with sections varying in their treatment of normative vs informative status, cross-reference style, conformance-corpus binding, and pattern-subsection layout. Drift across these dimensions creates costs both for readers (`MUST` claims meaning different things in different sections) and for spec maintenance (no clear template for new sections).
+
+  The new ADR adopts ten conventions as binding for new spec material and substantive edits to existing material. Existing sections that predate the ADR are grandfathered until substantively edited. Conventions:
+  1. Section status declaration (`_This section is normative._` / `_informative._`)
+  2. RFC 2119 language for normative claims
+  3. Inline cross-references via markdown anchor links (mechanically enforced by `scripts/check-doc-sync.mjs`)
+  4. Pattern subsection template (`Where it fits` / `How atrib mounts` / `Causality formation` / `Reference implementation` / `Trade-offs`)
+  5. Reference implementation status tags (shipped or planned with sequencing note)
+  6. Conformance corpus jointly normative with Appendix A
+  7. Prose audit on every push (mechanically enforced by `scripts/check-leaks.mjs`)
+  8. Sync triggers updated when sections change (mechanically enforced by `scripts/check-doc-sync.mjs`)
+  9. ADR template (`Date` / `Context` / `Decision` / `Alternatives considered` / `Consequences` / `Cross-references`)
+  10. Architectural framing, not session narrative
+
+  Conventions 3, 7, and 8 have mechanical enforcement; others are review-enforced. No code changes in `@atrib/mcp` itself; this changeset documents the spec-side governance change since `@atrib/mcp` is the canonical reference implementation that future spec sections will cite.
+
+- b16d08b: [D072](../DECISIONS.md#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail): orphan handling, synthesize fresh, never inherit from mirror tail.
+
+  When `inheritChainContext` was called with no `callerContextId`, the prior implementation read the mirror tail and inherited BOTH the most-recent record's `context_id` AND its hash as the new record's `chain_root` (label: `'mirror-context-and-tail'`). In production, runtime miswires that failed to thread session_id caused every orphan record to absorb into whichever session was at the tail, producing pseudo-sessions that accumulated 1500+ unrelated records under one `context_id`.
+
+  `@atrib/mcp` now collapses `inheritChainContext` branch (3): when no `callerContextId` is supplied, the producer synthesizes a fresh random `context_id` and a genesis `chain_root`. The result is marked `inheritedFrom = 'fresh-orphan'` so consumers can identify orphans. The `'mirror-context-and-tail'` label is removed from the `ChainContext` union; producers MUST NOT consult the mirror tail for `context_id` inheritance. Producers that want orphan clustering for forensic reasons MAY cache a per-process synthetic and reuse it.
+
+  `@atrib/emit` adds a warning when `inheritedFrom === 'fresh-orphan'` so operators can trace the upstream runtime miswire (typically a Layer-2 hook that didn't pass session_id through). The warning text includes the synthesized `context_id` and a hint to fix the runtime per [D072](../DECISIONS.md#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail).
+
+  Tests updated:
+  - `packages/mcp/test/mirror.test.ts`: the test that asserted the buggy mirror-tail inheritance now asserts orphan synthesis with a different `context_id` even when a tail exists.
+  - `services/atrib-emit/test/integration.test.ts`: replaced the autoChain-via-mirror test (which relied on the removed branch) with two tests, one for the canonical caller-managed-context_id path (`mirror-tail` branch), one for orphan isolation (two orphan emits land in different contexts).
+
+  Layer-2 hook miswires remain the runtime-side fix path. This change does NOT relax the requirement that runtimes pass session identifiers properly; it changes what happens when they don't, surfacing orphans as visible isolates rather than silent absorption. Sidecar tagging (`_local.fallback: 'orphan'` per [D062](../DECISIONS.md#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence)) MAY be added by producers as polish; not implemented yet.
+
 ## 0.6.0
 
 ### Minor Changes
