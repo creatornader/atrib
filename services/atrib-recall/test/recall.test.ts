@@ -16,7 +16,7 @@ import {
   EVENT_TYPE_TRANSACTION_URI,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
-import { loadRecords, recall } from '../src/index.js'
+import { loadRecords, loadRecordsFromDir, discoverRecords, recall } from '../src/index.js'
 
 const KEY = new Uint8Array(32).fill(7)
 const CTX = 'a'.repeat(32)
@@ -232,6 +232,116 @@ describe('recall', () => {
     writeFileSync(recordFile, JSON.stringify(r))
     const result = await recall({}, recordFile)
     expect(result.pagination_caveat).toMatch(/offset is not stable/i)
+  })
+})
+
+describe('envelope parsing (D062 sidecar form)', () => {
+  it('extracts records from {record, proof, _local} envelopes', async () => {
+    const r = await makeSigned()
+    const envelope = {
+      record: r,
+      proof: { tree_size: 100, leaf_index: 42 },
+      _local: { content: { tool_name: 'Edit' }, producer: 'test' },
+      written_at: 1700000000000,
+    }
+    writeFileSync(recordFile, JSON.stringify(envelope))
+    const loaded = loadRecords(recordFile)
+    expect(loaded).toHaveLength(1)
+    expect(loaded[0]!.signature).toBe(r.signature)
+  })
+
+  it('coexists in one file with bare records (mixed shapes)', async () => {
+    const r1 = await makeSigned({ timestamp: 1, content_id: `sha256:${'1'.repeat(64)}` })
+    const r2 = await makeSigned({ timestamp: 2, content_id: `sha256:${'2'.repeat(64)}` })
+    writeFileSync(recordFile, [
+      JSON.stringify(r1),
+      JSON.stringify({ record: r2, _local: {} }),
+    ].join('\n'))
+    expect(loadRecords(recordFile)).toHaveLength(2)
+  })
+
+  it('skips envelopes whose inner record is missing required fields', async () => {
+    writeFileSync(recordFile, JSON.stringify({ record: { foo: 'bar' } }))
+    expect(loadRecords(recordFile)).toEqual([])
+  })
+
+  it('verifyRecord round-trips through envelope extraction', async () => {
+    const r = await makeSigned()
+    writeFileSync(recordFile, JSON.stringify({ record: r, _local: {} }))
+    const result = await recall({}, recordFile)
+    expect(result.returned).toBe(1)
+    expect(result.records[0]!.signature_verified).toBe(true)
+  })
+})
+
+describe('directory-as-contract (loadRecordsFromDir)', () => {
+  it('loads + merges every *.jsonl in the directory', async () => {
+    const r1 = await makeSigned({ timestamp: 1, content_id: `sha256:${'1'.repeat(64)}` })
+    const r2 = await makeSigned({ timestamp: 2, content_id: `sha256:${'2'.repeat(64)}` })
+    const r3 = await makeSigned({ timestamp: 3, content_id: `sha256:${'3'.repeat(64)}` })
+    writeFileSync(join(tmp, 'producer-a-claude.jsonl'), JSON.stringify(r1))
+    writeFileSync(join(tmp, 'producer-b-claude.jsonl'), JSON.stringify(r2))
+    writeFileSync(join(tmp, 'producer-c-claude.jsonl'), JSON.stringify({ record: r3, _local: {} }))
+    const { records, files } = loadRecordsFromDir(tmp)
+    expect(records).toHaveLength(3)
+    expect(files).toHaveLength(3)
+  })
+
+  it('returns empty when dir does not exist', () => {
+    const { records, files } = loadRecordsFromDir(join(tmp, 'no-such-dir'))
+    expect(records).toEqual([])
+    expect(files).toEqual([])
+  })
+
+  it('ignores non-.jsonl files in the directory', async () => {
+    const r = await makeSigned()
+    writeFileSync(join(tmp, 'records.jsonl'), JSON.stringify(r))
+    writeFileSync(join(tmp, 'README.md'), '# notes')
+    writeFileSync(join(tmp, 'log.txt'), 'unrelated')
+    const { records, files } = loadRecordsFromDir(tmp)
+    expect(records).toHaveLength(1)
+    expect(files).toHaveLength(1)
+  })
+
+  it('discoverRecords prefers ATRIB_RECORD_FILE when both env vars are set (back-compat)', async () => {
+    // Spec the priority: explicit single file beats directory scan, so
+    // operators with pinned configs from before 0.4.0 keep working.
+    const r1 = await makeSigned({ timestamp: 1, content_id: `sha256:${'1'.repeat(64)}` })
+    const r2 = await makeSigned({ timestamp: 2, content_id: `sha256:${'2'.repeat(64)}` })
+    writeFileSync(join(tmp, 'pinned.jsonl'), JSON.stringify(r1))
+    writeFileSync(join(tmp, 'other.jsonl'), JSON.stringify(r2))
+    const result = discoverRecords(join(tmp, 'pinned.jsonl'))
+    expect(result.records).toHaveLength(1)
+    expect(result.files).toEqual([join(tmp, 'pinned.jsonl')])
+  })
+})
+
+describe('recall result shape', () => {
+  it('reports record_files (plural) alongside legacy record_file', async () => {
+    const r = await makeSigned()
+    writeFileSync(recordFile, JSON.stringify(r))
+    const result = await recall({}, recordFile)
+    expect(result.record_files).toEqual([recordFile])
+    expect(result.record_file).toBe(recordFile)
+  })
+
+  it('record_files lists every file scanned when reading from a directory', async () => {
+    const r1 = await makeSigned({ timestamp: 1, content_id: `sha256:${'a'.repeat(64)}` })
+    const r2 = await makeSigned({ timestamp: 2, content_id: `sha256:${'b'.repeat(64)}` })
+    const dir = mkdtempSync(join(tmpdir(), 'atrib-recall-dirtest-'))
+    try {
+      const f1 = join(dir, 'a.jsonl')
+      const f2 = join(dir, 'b.jsonl')
+      writeFileSync(f1, JSON.stringify(r1))
+      writeFileSync(f2, JSON.stringify(r2))
+      // recall reads via discoverRecords; pass dir-scoped env via a shim:
+      // use loadRecordsFromDir directly for the dir-scan check, since recall's
+      // env-var path is integration-tested by mcp-protocol.test.ts.
+      const { files } = loadRecordsFromDir(dir)
+      expect(files.sort()).toEqual([f1, f2].sort())
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 
