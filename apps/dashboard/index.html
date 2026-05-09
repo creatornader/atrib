@@ -2937,20 +2937,21 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     })
   }
 
-  // Custom arrow program. Sigma's defaults are length=2.5x, wideness=2x
-  // of the edge size, which renders nearly-invisible heads on thin
-  // lines. Tuned for atrib's chain-shaped graphs: longer arrowheads
-  // (length=8x thickness) read direction at a glance without dominating;
-  // narrow arrowheads (wideness=2.5x thickness) keep them looking like
-  // arrows rather than triangles glued to the node end.
-  //
-  // Two earlier UX-driven adjustments after this commit's rev1: arrow
-  // wideness was 6, then 3.5, now 2.5; arrowheads kept overtaking
-  // nodes visually. The combination of edgeSize=1 (down from 2) and
-  // narrower arrowheads should keep edges legibly out of the way.
+  // Custom arrow program. Sigma's defaults render nearly-invisible heads
+  // on thin lines. Earlier iterations tuned narrow (wideness=2.5x,
+  // length=8x = 1:3.2 ratio) to avoid arrows overtaking nodes; the
+  // resulting head was a thin needle that read as the line tapering off
+  // rather than a directional arrow, and at non-axial angles the head
+  // foreshortened so much it disappeared. Per arrow design principles
+  // for shapes that imply motion (closed filled triangle, asymmetric
+  // weight, wideness:length around 1:1.3 to 1:1.5), the head needs
+  // visible mass at the join. Settled on length=7, wideness=5 (= 1:1.4
+  // ratio): wide enough to read as an arrow at any angle, short enough
+  // that it doesn't extend dramatically past the node, and proportioned
+  // so the directional intent is unambiguous.
   const ProminentArrowProgram = Sigma.rendering.createEdgeArrowProgram({
-    lengthToThicknessRatio: 8,
-    widenessToThicknessRatio: 2.5,
+    lengthToThicknessRatio: 7,
+    widenessToThicknessRatio: 5,
   })
 
   // @sigma/edge-curve registration. Atrib's graph has multi-edges between
