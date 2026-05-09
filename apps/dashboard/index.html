@@ -3001,15 +3001,17 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     })
     if (curvedCount > 0 && typeof edgeCurve.createEdgeCurveProgram === 'function') {
       // @sigma/edge-curve@3.1.0 exports `createEdgeCurveProgram(options)`
-      // as the canonical factory. Passing `arrowHead` opts the program
-      // into directed-curve rendering with configurable head proportions
-      // (mirrors createEdgeArrowProgram's API). Without `arrowHead`, the
-      // program renders curves without arrowheads. The class export
-      // `EdgeCurvedArrowProgram` is a directed program with DEFAULT head
-      // dimensions (smaller than the straight-arrow program's 7:5),
-      // which produced the "annotation arrows are smaller" mismatch.
+      // as the canonical factory. The `arrowHead` option opts the program
+      // into directed-curve rendering. Critically, the option object MUST
+      // include `extremity: 'target'`, that's the flag that says "draw
+      // an arrow head at the target end." Without it, the program renders
+      // a curve with no arrow at all (verified by reading the bundle:
+      // `EdgeCurvedArrowProgram = createEdgeCurveProgram({ arrowHead: oe })`
+      // where `oe` is sigma's DEFAULT_EDGE_ARROW_HEAD_PROGRAM_OPTIONS,
+      // which includes extremity:'target' alongside the proportion ratios).
       edgeProgramClasses.curved = edgeCurve.createEdgeCurveProgram({
         arrowHead: {
+          extremity: 'target',
           lengthToThicknessRatio: 7,
           widenessToThicknessRatio: 5,
         },
