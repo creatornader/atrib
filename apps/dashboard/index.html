@@ -1874,10 +1874,18 @@ async function renderIdentity(creatorKey) {
       const since = new Date(sinceInput.value).getTime()
       const until = new Date(untilInput.value).getTime()
       if (Number.isNaN(since) || Number.isNaN(until)) {
+        // setActivityMeta isn't in scope yet at element-creation time
+        // (the helper is declared inside renderIdentity AFTER the
+        // applyCustomBtn is created), but by the time the user clicks
+        // apply the closure resolves to the initialized const. Update
+        // both meta slots so the validation error is visible whether
+        // the user is scrolled to the panel-head or to the controls.
+        activityMetaInline.textContent = 'invalid date range'
         activityMetaSlot.textContent = 'invalid date range'
         return
       }
       if (since > until) {
+        activityMetaInline.textContent = 'since must be earlier than until'
         activityMetaSlot.textContent = 'since must be earlier than until'
         return
       }
@@ -1893,6 +1901,16 @@ async function renderIdentity(creatorKey) {
     untilInput,
     applyCustomBtn,
   )
+
+  // A second meta slot rendered RIGHT ABOVE the graph itself so the
+  // user always sees fetch counts + latency + truncation flags
+  // adjacent to the visualization, not buried in the section header
+  // that scrolls off-screen on the identity view (which has multiple
+  // panels stacked above this one). updateActivityMeta() keeps both
+  // slots in sync.
+  const activityMetaInline = el('div', {
+    style: 'margin: 0 12px 8px; color: var(--text-3); font-size: 12px; font-family: var(--font-mono);',
+  }, 'cross-session edges only · loading…')
 
   const activityGraphContainer = el('div', { class: 'trace-graph', id: 'identity-activity-graph' })
   const activityNodeLegend = el('div', { class: 'legend-row', id: 'identity-activity-node-legend' })
@@ -1930,6 +1948,7 @@ async function renderIdentity(creatorKey) {
         windowSelect,
       ),
       customRangeRow,
+      activityMetaInline,
     ),
     activityGraphContainer,
     activityLegend,
@@ -1941,17 +1960,27 @@ async function renderIdentity(creatorKey) {
 
   const myGen = currentRouteGeneration()
 
+  // Helper: update both meta slots together so the user always sees
+  // current state regardless of scroll position. The header slot is
+  // in the panel-head (scrolls off-screen on identity view); the
+  // inline slot lives just above the graph (always visible when the
+  // graph is). Both should agree.
+  const setActivityMeta = (text) => {
+    activityMetaSlot.textContent = text
+    activityMetaInline.textContent = text
+  }
+
   async function refetchActivity() {
     if (!routeGenerationStillCurrent(myGen)) return
     const w = TIME_WINDOWS[currentWindowIdx]
     activityGraphContainer.replaceChildren(el('div', { class: 'loading' }, 'loading activity map…'))
-    activityMetaSlot.textContent = 'cross-session edges only · loading…'
+    setActivityMeta('cross-session edges only · loading…')
     const params = new URLSearchParams()
     let windowLabel = w.label
     if (w.sinceMs === 'custom') {
       if (customSinceMs === null || customUntilMs === null) {
         // User picked "custom range…" but hasn't applied bounds yet.
-        activityMetaSlot.textContent = 'cross-session edges only · pick from/to and apply'
+        setActivityMeta('cross-session edges only · pick from/to and apply')
         activityGraphContainer.replaceChildren(el('div', { class: 'empty' },
           'Pick from + to dates and click apply.',
         ))
@@ -1982,14 +2011,14 @@ async function renderIdentity(creatorKey) {
       activityGraphContainer.replaceChildren(el('div', { class: 'err-banner' },
         el('span', { class: 'label' }, 'activity-map error:'), ' ', activity._error,
       ))
-      activityMetaSlot.textContent = 'cross-session edges only · error'
+      setActivityMeta('cross-session edges only · error')
       return
     }
     if (!activity.graph || !activity.graph.nodes || activity.graph.nodes.length === 0) {
       activityGraphContainer.replaceChildren(el('div', { class: 'empty' },
         `No records in this window (${windowLabel}). Try a longer window.`,
       ))
-      activityMetaSlot.textContent = `cross-session edges only · ${windowLabel} · 0 records`
+      setActivityMeta(`cross-session edges only · ${windowLabel} · 0 records`)
       return
     }
     const graph = activity.graph
@@ -2001,7 +2030,7 @@ async function renderIdentity(creatorKey) {
     // identical record sets, which renders identical graphs even
     // though the requested windows differ. Surface that explicitly.
     const fetchMs = Date.now() - fetchStartedAt
-    activityMetaSlot.textContent = `cross-session edges only · ${windowLabel} · ${activity.record_count} record${activity.record_count === 1 ? '' : 's'}, ${graph.edges.length} edge${graph.edges.length === 1 ? '' : 's'} · fetched in ${fetchMs}ms` + (activity.truncated ? ' · TRUNCATED at 1000-record cap (try a narrower window)' : '')
+    setActivityMeta(`cross-session edges only · ${windowLabel} · ${activity.record_count} record${activity.record_count === 1 ? '' : 's'}, ${graph.edges.length} edge${graph.edges.length === 1 ? '' : 's'} · fetched in ${fetchMs}ms` + (activity.truncated ? ' · TRUNCATED at 1000-record cap (try a narrower window)' : ''))
 
     if (graph.edges.length === 0) {
       activityGraphContainer.replaceChildren(el('div', { class: 'empty' },
