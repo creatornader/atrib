@@ -1572,7 +1572,12 @@ function startViewRefresh() {
   viewRefreshHandle = setInterval(() => {
     if (document.hidden) return
     if (isOverviewRoute()) return  // overview has its own faster polling
-    route()
+    // Pass silent: true so route() skips the "loading…" blank state.
+    // Each render function builds its `root` off-screen and atomic-swaps
+    // via clearAndRender(root) at the end; with silent=true the existing
+    // content stays visible during the fetch, eliminating the periodic
+    // page flicker the unconditional loading-state replace produced.
+    route({ silent: true })
   }, VIEW_REFRESH_INTERVAL_MS)
 }
 function stopViewRefresh() {
@@ -3903,7 +3908,16 @@ let _routeGeneration = 0
 function currentRouteGeneration() { return _routeGeneration }
 function routeGenerationStillCurrent(captured) { return captured === _routeGeneration }
 
-async function route() {
+async function route(opts = {}) {
+  // opts.silent: when true, suppress the "loading…" blank state and
+  // leave existing page content visible during the fetch. Each render
+  // function builds its content off-screen and atomic-swaps via
+  // clearAndRender(root) at the end, so silent refreshes update in
+  // place without a visible flicker. Interval-triggered refreshes
+  // (startViewRefresh) pass silent: true; user-initiated navigations
+  // (hashchange, DOMContentLoaded) leave it false so the user gets
+  // immediate feedback that a new view is loading.
+  const silent = opts.silent === true
   _routeGeneration += 1
   const myGen = _routeGeneration
   renderEndpoints()
@@ -3918,7 +3932,9 @@ async function route() {
   } else {
     startViewRefresh()
   }
-  document.getElementById('app').replaceChildren(el('div', { class: 'empty' }, 'loading…'))
+  if (!silent) {
+    document.getElementById('app').replaceChildren(el('div', { class: 'empty' }, 'loading…'))
+  }
   const hash = location.hash.replace(/^#/, '')
 
   try {
@@ -3946,8 +3962,11 @@ async function route() {
   }
 }
 
-window.addEventListener('hashchange', route)
-window.addEventListener('DOMContentLoaded', route)
+// Wrap route() so the Event arg from addEventListener doesn't get treated
+// as the opts parameter (route(event) would see {} as truthy and silent
+// would coerce to false anyway, but the wrap makes the intent explicit).
+window.addEventListener('hashchange', () => route())
+window.addEventListener('DOMContentLoaded', () => route())
 </script>
 </body>
 </html>
