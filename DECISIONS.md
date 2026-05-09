@@ -3200,9 +3200,9 @@ The skeleton ([§2.12](atrib-spec.md#212-record-body-archive-layer)) defines the
 
 **Date:** 2026-05-09
 
-**Context:** The atrib specification grew from [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type) through [D070](#d070-record-body-archive-layer-placeholder-adr) over six weeks of intensive spec work. Sections written across many sessions varied in their treatment of normative vs informative status, cross-reference style, conformance-corpus binding, and pattern-subsection layout. Drift across these dimensions creates two costs. First, readers integrating against the spec face inconsistent claims: a `MUST` in one section means "verifier rejects on violation," in another section it means "implementations should agree but no test vector enforces." Second, the spec maintenance contract erodes: if [§3](atrib-spec.md#3-graph-query-interface) patterns follow one template and [§9](atrib-spec.md#9-runtime-integration-patterns) patterns follow another, future sections have no clear template to copy.
+**Context:** The atrib specification grew from [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type) through [D070](#d070-record-body-archive-layer-placeholder-adr) over six weeks of intensive spec work. Sections written across that stretch varied in their treatment of normative vs informative status, cross-reference style, conformance-corpus binding, and pattern-subsection layout. Drift across these dimensions creates two costs. First, readers integrating against the spec face inconsistent claims: a `MUST` in one section means "verifier rejects on violation," in another section it means "implementations should agree but no test vector enforces." Second, the spec maintenance contract erodes: if [§3](atrib-spec.md#3-graph-query-interface) patterns follow one template and [§9](atrib-spec.md#9-runtime-integration-patterns) patterns follow another, future sections have no clear template to copy.
 
-The [§9](atrib-spec.md#9-runtime-integration-patterns) + [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) work (2026-05-09) applied a consistent set of conventions across new spec material. Those conventions, applied informally, are the de facto standard. Without codification, future sections may drift away from them as new contributors or sessions adopt different defaults.
+The [§9](atrib-spec.md#9-runtime-integration-patterns) + [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) work applied a consistent set of conventions across new spec material. Those conventions, applied informally, are the de facto standard. Without codification, future sections may drift away from them as new contributors adopt different defaults.
 
 **Decision.** Adopt ten conventions as binding for new spec material and for substantive edits to existing spec material. Existing material that predates this ADR is grandfathered and migrated opportunistically, not by sweep.
 
@@ -3220,7 +3220,7 @@ The ten conventions:
 
 6. **Conformance corpus is jointly normative with Appendix A.** When a spec section ships a conformance corpus, the corpus and Appendix A test vectors are jointly normative; the spec body MUST declare which form is canonical for each case. Implementations conform when they pass both surfaces.
 
-7. **Prose audit on every push.** Spec material MUST pass the Layer A regex catalog and Layer B semantic audit per [D049](#d049-layered-leak-defense-regex--llm-semantic--cloud-audit--style-guide) before any push. The audit bans private-context vocabulary that erodes the spec's public-facing voice.
+7. **Prose audit on every push.** Spec material MUST pass the Layer A regex catalog and Layer B semantic audit per [D049](#d049-layered-leak-defense-regex--llm-semantic--cloud-audit--style-guide) before any push. The audit bans non-public vocabulary that erodes the spec's public-facing voice.
 
 8. **Sync triggers updated when sections change.** When a spec section is added, removed, or substantively changed, the `CLAUDE.md` sync-triggers table MUST gain a corresponding row naming the downstream surfaces (other spec sections, package READMEs, conformance corpora, scripts) the change propagates to.
 
@@ -3230,7 +3230,7 @@ The ten conventions:
 
 **Alternatives considered:**
 
-- *Keep the conventions informal.* Considered. The argument: drift has not yet been a documented problem, so codification is premature optimization. Rejected because the [§9](atrib-spec.md#9-runtime-integration-patterns) + [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) work was the first session where multiple convention dimensions interacted (status declaration + pattern subsection template + sync triggers + prose audit), and the conventions held only because one author applied them consistently across the same session. A future session with different defaults would silently drift, and the drift would be costly to repair after the fact.
+- *Keep the conventions informal.* Considered. The argument: drift has not yet been a documented problem, so codification is premature optimization. Rejected because the [§9](atrib-spec.md#9-runtime-integration-patterns) + [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) work was the first stretch of spec development where multiple convention dimensions interacted (status declaration + pattern subsection template + sync triggers + prose audit), and the conventions held only because they were applied consistently during that stretch. A future contributor with different defaults would silently drift, and the drift would be costly to repair after the fact.
 
 - *Adopt some conventions but not others.* Considered. Specifically, codify the load-bearing ones (RFC 2119, anchor links, prose audit, sync triggers) and leave the softer ones (pattern template, ADR template, status tags) informal. Rejected because partial codification creates ambiguity at the boundary: a reader cannot tell which conventions are binding without consulting both this ADR and an informal convention set elsewhere. Codifying all ten or none avoids the gray zone.
 
@@ -3244,7 +3244,7 @@ The ten conventions:
 
 - Future ADRs follow convention 9 (template) and convention 10 (architectural framing). The convention-9 template matches the structure [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) and [D070](#d070-record-body-archive-layer-placeholder-adr) use; no new structure is required.
 
-- A new `CLAUDE.md` sync-triggers row is added for [D071](#d071-spec-writing-conventions) itself: when conventions are revised, this ADR is the canonical source; downstream surfaces include `scripts/check-doc-sync.mjs` (if mechanical enforcement extends), the spec sections currently following the conventions, and any private stocktaking documents that referenced the prior informal status.
+- A new `CLAUDE.md` sync-triggers row is added for [D071](#d071-spec-writing-conventions) itself: when conventions are revised, this ADR is the canonical source; downstream surfaces include `scripts/check-doc-sync.mjs` (if mechanical enforcement extends), the spec sections currently following the conventions, and any documentation that referenced the prior informal status.
 
 **Cross-references:**
 
