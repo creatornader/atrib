@@ -472,8 +472,28 @@ async function handleCreatorGraph(
     }
   }
 
-  // Sort newest-first so a small `limit` retains the most recent activity.
-  allRecords.sort((a, b) => b.timestamp - a.timestamp)
+  // Slice direction. Two valid orderings depending on user intent:
+  //
+  //   - 'newest' (default): sort newest-first, slice [0..limit]. Right
+  //     for preset windows like "last 24h" / "last 7d" — the window is
+  //     anchored to NOW; truncation drops the oldest tail.
+  //
+  //   - 'oldest': sort oldest-first, slice [0..limit]. Right for custom
+  //     ranges where the user explicitly bounded both ends — truncation
+  //     should preserve the start of the window so the user sees what
+  //     happened from their picked start time forward, even if the
+  //     entire range overflows.
+  //
+  // Either way, the slice is contiguous (graph integrity preserved —
+  // CHAIN_PRECEDES edges stay intact). Stratified sampling would break
+  // the chain so it's not an option.
+  const direction = params.get('direction') === 'oldest' ? 'oldest' : 'newest'
+  const totalInWindow = allRecords.length
+  if (direction === 'oldest') {
+    allRecords.sort((a, b) => a.timestamp - b.timestamp)
+  } else {
+    allRecords.sort((a, b) => b.timestamp - a.timestamp)
+  }
   const windowedRecords = allRecords.slice(0, limit)
 
   const eventTypeFilter = params.get('event_type')
@@ -531,11 +551,26 @@ async function handleCreatorGraph(
       }
   filteredGraph.edge_count = filteredGraph.edges.length
 
+  // effective_window: the actual [first_ts, last_ts] range covered by
+  // the records we're returning. When the response is truncated and
+  // direction='oldest', this is [requested_since, last_returned_ts]
+  // — strictly inside the requested window, but a contiguous prefix.
+  // When direction='newest' and truncated, this is [first_returned_ts,
+  // requested_until_or_now] — a contiguous suffix.
+  // Lets the caller render: "you asked for X-Y, got X-Z (Y-Z dropped)"
+  // without computing it client-side.
+  const tsList = filteredRecords.map((r) => r.timestamp)
+  const effectiveWindow = tsList.length > 0
+    ? { since: Math.min(...tsList), until: Math.max(...tsList) }
+    : { since: null, until: null }
+
   sendJson(res, 200, {
     creator_key: creatorKey,
-    window: { since: window.since, until: window.until, limit },
+    window: { since: window.since, until: window.until, limit, direction },
     record_count: filteredRecords.length,
-    truncated: allRecords.length > limit,
+    total_in_window: totalInWindow,
+    truncated: totalInWindow > limit,
+    effective_window: effectiveWindow,
     intra_session_edges_filtered: !includeIntraSession,
     graph: filteredGraph,
   })
