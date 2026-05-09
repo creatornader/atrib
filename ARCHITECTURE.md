@@ -193,15 +193,26 @@ There are two emission paths for transaction records (Section 5.4.5, [D011](DECI
 
 ---
 
-## MCP framework adapters
+## Runtime integration patterns
 
-The SDK ships one core interceptor (`atrib()`) and one adapter helper per supported MCP framework. The interceptor handles record construction, signing, and log submission. The adapter handles the framework-specific plumbing to hook into tool call lifecycle events.
+atrib categorizes runtime integration into six first-class patterns ([D069](DECISIONS.md#d069-runtime-integration-patterns--first-class-peers-no-canonical-path), [§9](atrib-spec.md#9-runtime-integration-patterns)). None is canonical. A runtime builder picks the pattern its ergonomics support; multiple patterns can compose for one runtime.
+
+| Pattern | Where it fits | Reference implementation |
+|---|---|---|
+| 1. Lifecycle hooks | Runtimes that expose typed hook events with stdin-JSON IPC (Claude Code, Cursor, Codex CLI, Browser-Use, Augment Code, Pi/Earendil) | hook helper subprocessing `atrib-emit` |
+| 2. In-process MCP middleware | Runtimes that call tools through MCP servers (Goose, Continue, Cody, Claude Code MCP-served tools, opencode) | [`@atrib/mcp-wrap`](packages/mcp-wrap/), required for transaction records ([D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)) and `preCallTransform` ([D057](DECISIONS.md#d057-pre-call-signing-hook-precalltransform-for-cross-tool-causal-embedding)) |
+| 3. Callback / lifecycle handlers | Multi-agent SDKs with native callback APIs (LangGraph, CrewAI, AutoGen, Microsoft Agent Framework, Anthropic Agent SDK, smolagents, OpenAI Agents SDK, Vercel AI SDK, Flue, Google ADK) | [`@atrib/agent`](packages/agent/) framework adapters |
+| 4. OpenInference SpanProcessor | OpenInference-instrumented runtimes (transitive coverage of 33 Python instrumentations + 9 JS packages) | `@atrib/openinference-processor` (planned) |
+| 5. Post-hoc API import + consumer re-sign | Closed-loop runtimes that own the trace (Cursor Cloud Agents recommended first reference; also Devin, Manus, Operator, Bolt/v0/Lovable) | per-runtime adapters (planned) |
+| 6. Streaming interceptor | Real-time bidirectional protocols (OpenAI Realtime API, voice/multimodal harnesses) | not yet built |
+
+Patterns 1–3 ship reference implementations in atrib v1. Patterns 4–6 are documented with their conformance contract scope; reference implementations land per priority sequencing.
 
 ### Why each adapter is different
 
 Every MCP framework has a different integration surface. The Claude Agent SDK exposes an `McpServer` instance you can wrap directly. Cloudflare Agents has an `McpAgent` class with lifecycle hooks. Vercel AI SDK's `@ai-sdk/mcp` ships its own JSON-RPC implementation that is structurally incompatible with the standard `@modelcontextprotocol/sdk` Client. LangChain's `MultiServerMCPClient` wraps multiple connections and needs a different hook point.
 
-The project established a "source-read-first" principle early ([D018](DECISIONS.md#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow)): before writing an adapter, read the host framework's source code to find the correct integration point. All six shipped adapters were built this way, and every one had a different correct answer. The adapter helper signature varies because the host framework's surface varies -- that variation is forced by the host, not invented by atrib.
+The project established a "source-read-first" principle early ([D018](DECISIONS.md#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow)): before writing an adapter, read the host framework's source code to find the correct integration point. All six shipped Pattern #3 adapters were built this way, and every one had a different correct answer. The adapter helper signature varies because the host framework's surface varies -- that variation is forced by the host, not invented by atrib.
 
 ### Shipped adapters
 
