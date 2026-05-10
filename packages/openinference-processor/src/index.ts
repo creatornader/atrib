@@ -10,6 +10,15 @@ export type {
   AtribSpanSidecar,
 } from './atrib-span-processor.js'
 
+// Batch variant for production pipelines (mirrors OpenInferenceBatchSpanProcessor).
+export { AtribBatchSpanProcessor } from './atrib-batch-span-processor.js'
+export type {
+  AtribBatchSpanProcessorOptions,
+  AtribBatchSubmission,
+  AtribBatchEntry,
+  AtribBatchBufferConfig,
+} from './atrib-batch-span-processor.js'
+
 // Filter (mirrors @arizeai/openinference-vercel ergonomics).
 export {
   isOpenInferenceSpan,
