@@ -3,24 +3,27 @@
 /**
  * OpenInference span → atrib unsigned-record mapping.
  *
- * The OpenInference semantic conventions specify the canonical attribute
- * names this module reads:
+ * Maps three of the ten OpenInference span kinds to atrib records:
  *
- *   - `openinference.span.kind`  -- TOOL / LLM / AGENT / etc.
- *   - `tool.name`, `tool.id`, `tool.parameters`, `tool.json_schema`
- *   - `input.value`, `input.mime_type`, `output.value`, `output.mime_type`
- *   - `session.id`, `user.id`, `agent.name`
+ *   - **TOOL**     -> `tool_call` event_type. Tool name drives content_id.
+ *   - **LLM**      -> `observation` event_type. Model name drives content_id.
+ *   - **AGENT**    -> `observation` event_type. Agent name (or root span name)
+ *                     drives content_id.
  *
- * The LLM message-array attributes (`llm.input_messages.<i>...`,
- * `llm.output_messages.<i>...`) are flattened and not used here for the
- * first pass. A future extension can reconstruct LLM message shape if
- * useful for atrib-substrate fidelity. For now, we focus on TOOL spans
- * which map cleanly to atrib's `tool_call` event_type.
+ * The other seven kinds (EMBEDDING, CHAIN, RETRIEVER, RERANKER, GUARDRAIL,
+ * EVALUATOR, PROMPT) are recognized as OpenInference spans but skipped at
+ * v0.0.1. Each can be added later as a separate event_type or routed to
+ * `observation` with kind-specific content shapes.
  *
- * AGENT spans carry chain context (`agent.name`, `session.id`) but no
- * tool envelope; they are treated as informational and skipped at this
- * layer. A future extension could emit them as `observation` records
- * when the operator wants agent-boundary visibility on the substrate.
+ * Canonical attribute keys imported from `@arizeai/openinference-semantic-
+ * conventions` so schema upgrades in upstream package flow through
+ * automatically.
+ *
+ * Empirical fixtures captured from a real Vercel AI SDK v6 + NIM Qwen run
+ * live in `test/fixtures/`. The fixture-replay test asserts each canonical
+ * span shape replays to its documented mapping; if Vercel AI SDK or
+ * `@arizeai/openinference-vercel` changes attribute keys upstream, that
+ * test fails before consumers are affected.
  */
 
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base'
@@ -28,6 +31,7 @@ import { SemanticConventions } from '@arizeai/openinference-semantic-conventions
 import {
   type UnsignedAtribRecord,
   EVENT_TYPE_TOOL_CALL_URI,
+  EVENT_TYPE_OBSERVATION_URI,
   computeContentId,
   genesisChainRoot,
 } from '@atrib/mcp'
@@ -41,6 +45,11 @@ const INPUT_VALUE_ATTR = SemanticConventions.INPUT_VALUE
 const OUTPUT_VALUE_ATTR = SemanticConventions.OUTPUT_VALUE
 const SESSION_ID_ATTR = SemanticConventions.SESSION_ID
 const AGENT_NAME_ATTR = SemanticConventions.AGENT_NAME
+const LLM_MODEL_NAME_ATTR = SemanticConventions.LLM_MODEL_NAME
+
+/** Attribute key for the LLM-output tool_call id, when the model returns a tool_call. */
+const LLM_OUTPUT_TOOL_CALL_ID_ATTR =
+  'llm.output_messages.0.message.tool_calls.0.tool_call.id'
 
 export type SpanToRecordContext = {
   /**
@@ -50,10 +59,12 @@ export type SpanToRecordContext = {
    */
   readonly creatorKey: string
   /**
-   * MCP server URL used in `content_id` derivation. The OpenInference
+   * Server URL used in `content_id` derivation. The OpenInference
    * convention does not carry this; it must be supplied by the caller.
-   * Atrib's content_id derivation requires (server_url, tool_name) per
-   * the canonical pattern used by @atrib/mcp middleware.
+   * For TOOL spans the content_id is derived from `(serverUrl, tool.name)`;
+   * for LLM spans from `(serverUrl, "llm:" + model_name)`; for AGENT spans
+   * from `(serverUrl, "agent:" + agent_name)`. The leaf prefix keeps the
+   * three namespaces distinct on a single operator's server URL.
    */
   readonly serverUrl: string
   /**
@@ -86,9 +97,9 @@ export type SpanMappingResult =
  * record. The caller is responsible for signing (via @atrib/mcp's
  * `signRecord`) and submission to the log.
  *
- * Returns `{ ok: false }` when the span is not an OpenInference span,
- * not a TOOL kind, or missing the minimum attribute set required to
- * construct a tool_call record.
+ * Returns `{ ok: false }` for non-OpenInference spans, kinds not yet
+ * supported (EMBEDDING/CHAIN/RETRIEVER/RERANKER/GUARDRAIL/EVALUATOR/
+ * PROMPT), and TOOL/LLM/AGENT spans missing the minimum attribute set.
  */
 export function spanToUnsignedRecord(
   span: ReadableSpan,
@@ -96,31 +107,92 @@ export function spanToUnsignedRecord(
 ): SpanMappingResult {
   const kind = getOpenInferenceSpanKind(span)
   if (kind === undefined) return { ok: false, reason: 'not an openinference span' }
-  if (kind !== 'TOOL') return { ok: false, reason: `kind ${kind} not yet mapped (TOOL only)` }
 
+  switch (kind) {
+    case 'TOOL':
+      return mapToolSpan(span, ctx, kind)
+    case 'LLM':
+      return mapLlmSpan(span, ctx, kind)
+    case 'AGENT':
+      return mapAgentSpan(span, ctx, kind)
+    default:
+      return {
+        ok: false,
+        reason: `kind ${kind} not yet mapped (TOOL/LLM/AGENT only at v0.0.1)`,
+      }
+  }
+}
+
+function mapToolSpan(
+  span: ReadableSpan,
+  ctx: SpanToRecordContext,
+  kind: 'TOOL',
+): SpanMappingResult {
   const toolName = readStringAttr(span, TOOL_NAME_ATTR)
   if (toolName === undefined || toolName.length === 0) {
-    return { ok: false, reason: 'missing tool.name attribute' }
+    return { ok: false, reason: 'missing tool.name attribute on TOOL span' }
   }
+  const record = buildRecord(span, ctx, {
+    contentLeaf: toolName,
+    eventType: EVENT_TYPE_TOOL_CALL_URI,
+  })
+  return { ok: true, record, kind }
+}
 
+function mapLlmSpan(
+  span: ReadableSpan,
+  ctx: SpanToRecordContext,
+  kind: 'LLM',
+): SpanMappingResult {
+  const modelName = readStringAttr(span, LLM_MODEL_NAME_ATTR)
+  if (modelName === undefined || modelName.length === 0) {
+    return { ok: false, reason: 'missing llm.model_name attribute on LLM span' }
+  }
+  const record = buildRecord(span, ctx, {
+    contentLeaf: `llm:${modelName}`,
+    eventType: EVENT_TYPE_OBSERVATION_URI,
+  })
+  return { ok: true, record, kind }
+}
+
+function mapAgentSpan(
+  span: ReadableSpan,
+  ctx: SpanToRecordContext,
+  kind: 'AGENT',
+): SpanMappingResult {
+  // AGENT spans don't always carry agent.name (Vercel AI SDK v6 omits it
+  // by default). Fall back to the span's own name as the namespace leaf.
+  const agentName = readStringAttr(span, AGENT_NAME_ATTR) ?? span.name
+  if (agentName === undefined || agentName.length === 0) {
+    return { ok: false, reason: 'AGENT span has no agent.name and no span.name' }
+  }
+  const record = buildRecord(span, ctx, {
+    contentLeaf: `agent:${agentName}`,
+    eventType: EVENT_TYPE_OBSERVATION_URI,
+  })
+  return { ok: true, record, kind }
+}
+
+function buildRecord(
+  span: ReadableSpan,
+  ctx: SpanToRecordContext,
+  what: { contentLeaf: string; eventType: string },
+): UnsignedAtribRecord {
   const sessionAttr = readStringAttr(span, SESSION_ID_ATTR)
   const traceIdHex = span.spanContext().traceId
   const contextId = ctx.contextId ?? sessionAttr ?? traceIdHex
   const chainRoot = ctx.chainRoot ?? genesisChainRoot(contextId)
   const timestamp = ctx.timestamp ?? hrTimeToMs(span.startTime)
-  const contentId = computeContentId(ctx.serverUrl, toolName)
-
-  const record: UnsignedAtribRecord = {
+  const contentId = computeContentId(ctx.serverUrl, what.contentLeaf)
+  return {
     spec_version: 'atrib/1.0',
     content_id: contentId,
     creator_key: ctx.creatorKey,
     chain_root: chainRoot,
-    event_type: EVENT_TYPE_TOOL_CALL_URI,
+    event_type: what.eventType,
     context_id: contextId,
     timestamp,
   }
-
-  return { ok: true, record, kind }
 }
 
 /**
@@ -130,6 +202,19 @@ export function spanToUnsignedRecord(
  */
 export function readAgentName(span: ReadableSpan): string | undefined {
   return readStringAttr(span, AGENT_NAME_ATTR)
+}
+
+/**
+ * Convenience: extract the LLM-output tool_call id when present. Empirical
+ * source for cross-span `informed_by` derivation: a TOOL span's
+ * `tool_call.id` matches the LLM span's
+ * `llm.output_messages.<i>.message.tool_calls.<j>.tool_call.id` (verified
+ * against captured Vercel AI SDK v6 fixtures). v0.0.1 exposes the value
+ * as sidecar metadata so downstream callers can build informed_by edges
+ * across LLM↔TOOL records; v0.1.0 will derive them automatically.
+ */
+export function readLlmOutputToolCallId(span: ReadableSpan): string | undefined {
+  return readStringAttr(span, LLM_OUTPUT_TOOL_CALL_ID_ATTR)
 }
 
 /**

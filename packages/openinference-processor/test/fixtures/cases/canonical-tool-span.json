@@ -1,0 +1,38 @@
+{
+  "name": "canonical-tool-span",
+  "description": "Canonical OpenInference TOOL span emitted by Vercel AI SDK for a tool execution. Maps to atrib tool_call record.",
+  "span": {
+    "name": "ai.toolCall atrib-fixture-capture",
+    "attributes": {
+      "operation.name": "ai.toolCall atrib-fixture-capture",
+      "resource.name": "atrib-fixture-capture",
+      "ai.operationId": "ai.toolCall",
+      "ai.telemetry.functionId": "atrib-fixture-capture",
+      "ai.toolCall.name": "get_weather",
+      "ai.toolCall.id": "chatcmpl-tool-bfdc8f28e47f8813",
+      "ai.toolCall.args": "{\"city\":\"Austin\"}",
+      "ai.toolCall.result": "\"clear, 64F in Austin\"",
+      "tool_call.id": "chatcmpl-tool-bfdc8f28e47f8813",
+      "tool.name": "get_weather",
+      "tool.parameters": "{\"city\":\"Austin\"}",
+      "input.value": "{\"city\":\"Austin\"}",
+      "input.mime_type": "application/json",
+      "output.value": "\"clear, 64F in Austin\"",
+      "output.mime_type": "text/plain",
+      "openinference.span.kind": "TOOL"
+    },
+    "status": {
+      "code": 1
+    },
+    "kind": 0
+  },
+  "expected_atrib_mapping": {
+    "v0_0_1_behavior": "signed",
+    "atrib_event_type": "https://atrib.dev/v1/types/tool_call",
+    "context_id_source": "trace_id (no session.id present on Vercel AI SDK v6 TOOL spans)",
+    "tool_name_field": "tool.name",
+    "input_value_field": "input.value",
+    "output_value_field": "output.value",
+    "tool_call_id_for_future_informed_by": "tool_call.id"
+  }
+}

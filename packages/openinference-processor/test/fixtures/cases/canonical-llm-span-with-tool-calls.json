@@ -1,0 +1,75 @@
+{
+  "name": "canonical-llm-span-with-tool-calls",
+  "description": "Canonical OpenInference LLM span emitted when the model returns a tool_call. The llm.output_messages tool_call.id is the natural source of informed_by derivation.",
+  "span": {
+    "name": "ai.generateText.doGenerate atrib-fixture-capture",
+    "attributes": {
+      "operation.name": "ai.generateText.doGenerate atrib-fixture-capture",
+      "resource.name": "atrib-fixture-capture",
+      "ai.operationId": "ai.generateText.doGenerate",
+      "ai.telemetry.functionId": "atrib-fixture-capture",
+      "ai.model.provider": "nim.chat",
+      "ai.model.id": "qwen/qwen3-next-80b-a3b-instruct",
+      "ai.settings.maxRetries": 2,
+      "ai.request.headers.user-agent": "ai/6.0.177",
+      "ai.prompt.messages": "[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"What is the weather in Austin? Use the get_weather tool.\"}]}]",
+      "ai.prompt.tools": [
+        "{\"type\":\"function\",\"name\":\"get_weather\",\"description\":\"Look up the current weather for a city.\",\"inputSchema\":{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"additionalProperties\":false}}"
+      ],
+      "ai.prompt.toolChoice": "{\"type\":\"auto\"}",
+      "gen_ai.system": "nim.chat",
+      "gen_ai.request.model": "qwen/qwen3-next-80b-a3b-instruct",
+      "ai.response.finishReason": "tool-calls",
+      "ai.response.toolCalls": "[{\"toolCallId\":\"chatcmpl-tool-bfdc8f28e47f8813\",\"toolName\":\"get_weather\",\"input\":\"{\\\"city\\\": \\\"Austin\\\"}\"}]",
+      "ai.response.id": "chatcmpl-916120abf9864bcc",
+      "ai.response.model": "qwen/qwen3-next-80b-a3b-instruct",
+      "ai.response.timestamp": "2026-05-10T05:56:34.000Z",
+      "ai.response.providerMetadata": "{\"nim\":{}}",
+      "ai.usage.inputTokens": 184,
+      "ai.usage.inputTokenDetails.noCacheTokens": 184,
+      "ai.usage.inputTokenDetails.cacheReadTokens": 0,
+      "ai.usage.outputTokens": 20,
+      "ai.usage.outputTokenDetails.textTokens": 20,
+      "ai.usage.outputTokenDetails.reasoningTokens": 0,
+      "ai.usage.totalTokens": 204,
+      "ai.usage.reasoningTokens": 0,
+      "ai.usage.cachedInputTokens": 0,
+      "gen_ai.response.finish_reasons": [
+        "tool-calls"
+      ],
+      "gen_ai.response.id": "chatcmpl-916120abf9864bcc",
+      "gen_ai.response.model": "qwen/qwen3-next-80b-a3b-instruct",
+      "gen_ai.usage.input_tokens": 184,
+      "gen_ai.usage.output_tokens": 20,
+      "llm.output_messages.0.message.role": "assistant",
+      "llm.output_messages.0.message.tool_calls.0.tool_call.function.name": "get_weather",
+      "llm.output_messages.0.message.tool_calls.0.tool_call.function.arguments": "\"{\\\"city\\\": \\\"Austin\\\"}\"",
+      "llm.output_messages.0.message.tool_calls.0.tool_call.id": "chatcmpl-tool-bfdc8f28e47f8813",
+      "llm.input_messages.0.message.contents.0.message_content.type": "text",
+      "llm.input_messages.0.message.contents.0.message_content.text": "What is the weather in Austin? Use the get_weather tool.",
+      "llm.input_messages.0.message.role": "user",
+      "llm.model_name": "qwen/qwen3-next-80b-a3b-instruct",
+      "llm.invocation_parameters": "{\"model\":\"qwen/qwen3-next-80b-a3b-instruct\"}",
+      "llm.token_count.prompt": 184,
+      "llm.token_count.completion": 20,
+      "output.value": "[{\"toolCallId\":\"chatcmpl-tool-bfdc8f28e47f8813\",\"toolName\":\"get_weather\",\"input\":\"{\\\"city\\\": \\\"Austin\\\"}\"}]",
+      "output.mime_type": "application/json",
+      "input.value": "[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"What is the weather in Austin? Use the get_weather tool.\"}]}]",
+      "input.mime_type": "application/json",
+      "openinference.span.kind": "LLM",
+      "llm.token_count.total": 204
+    },
+    "status": {
+      "code": 1
+    },
+    "kind": 0
+  },
+  "expected_atrib_mapping": {
+    "v0_0_1_behavior": "signed",
+    "atrib_event_type": "https://atrib.dev/v1/types/observation",
+    "context_id_source": "trace_id (no session.id)",
+    "content_leaf_format": "llm:<llm.model_name>",
+    "informed_by_seed_field": "llm.output_messages.0.message.tool_calls.0.tool_call.id",
+    "future_informed_by_target": "the TOOL record whose tool_call.id matches this seed"
+  }
+}

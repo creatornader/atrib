@@ -55,13 +55,17 @@ provider.addSpanProcessor(processor)
 
 ## What gets signed
 
-The first version maps `openinference.span.kind === 'TOOL'` spans to atrib `tool_call` records. The mapping reads:
+v0.0.1 maps three of the ten OpenInference span kinds:
 
-- `tool.name` -> tool identity for `content_id` derivation
-- `session.id` -> `context_id` (falls back to OTel trace_id)
-- `agent.name`, `input.value`, `output.value` -> sidecar metadata
+| Kind | atrib event_type | content_leaf |
+|---|---|---|
+| `TOOL` | `tool_call` | `tool.name` |
+| `LLM` | `observation` | `llm:<llm.model_name>` |
+| `AGENT` | `observation` | `agent:<agent.name OR span.name fallback>` |
 
-LLM, AGENT, EMBEDDING, RETRIEVER, CHAIN, RERANKER, GUARDRAIL, EVALUATOR, and PROMPT spans are recognized as OpenInference spans but not yet mapped to records. A future extension may emit them as `observation` event_type records when the operator wants agent-boundary visibility on the substrate.
+All three derive `context_id` from `session.id` if present, else the OTel `trace_id`. Sidecar metadata captures `agent.name`, `input.value`, `output.value`, and -- for LLM spans whose output is a tool call -- `llm.output_messages.<i>.message.tool_calls.<j>.tool_call.id` (the empirical seed for future LLM->TOOL `informed_by` derivation).
+
+EMBEDDING, RETRIEVER, CHAIN, RERANKER, GUARDRAIL, EVALUATOR, and PROMPT spans are recognized as OpenInference but skipped at v0.0.1. Each can be added incrementally as a separate event_type or routed to `observation` with kind-specific content shapes.
 
 ## Composition with other OTel pipelines
 
@@ -78,16 +82,16 @@ Per the atrib spec [§5.8 degradation contract](../../atrib-spec.md#58-degradati
 
 ## Status
 
-`v0.0.1` -- TOOL-span mapping shipped with 11 unit tests + composition pilot validated against `@arizeai/openinference-vercel`'s reference SpanProcessor on a shared TracerProvider. Attribute keys imported from `@arizeai/openinference-semantic-conventions` for canonical schema correctness. Runnable integration example at `packages/integration/examples/openinference/`. Not yet published to npm.
+`v0.0.1` -- TOOL + LLM + AGENT span mappings shipped with 22 tests (12 unit + 10 fixture-replay) + composition pilot validated end-to-end against real Vercel AI SDK v6 + NVIDIA NIM-served Qwen 3.5 + `@arizeai/openinference-vercel`'s reference SpanProcessor on a shared TracerProvider. Live pilot signs all 4 spans of a single tool-using `generateText` call (LLM + TOOL + LLM + AGENT) producing 2 distinct event_types (`observation` + `tool_call`). Attribute keys imported from `@arizeai/openinference-semantic-conventions` for canonical schema correctness. Runnable integration example at `packages/integration/examples/openinference/` (offline-runnable by default; live model-driven path enabled via `ATRIB_OPENINFERENCE_RUN_LIVE=1` + `NVIDIA_API_KEY`). Conformance fixtures in `test/fixtures/` capture four canonical span shapes (TOOL, two LLMs, AGENT) live-captured from a real run -- the fixture-replay test catches upstream attribute-schema drift before it reaches consumers. Not yet published to npm.
 
-Roadmap:
+Roadmap (each item references concrete fixture data in `test/fixtures/`):
 
-- LLM-span mapping (sign LLM message exchanges as observations)
-- AGENT-span mapping (emit observations at agent-boundary spans for multi-agent traces)
-- Batch variant (`AtribBatchSpanProcessor`) mirroring `OpenInferenceBatchSpanProcessor`
-- Args/result hash extraction per [§8.3](../../atrib-spec.md#83-salted-commitment-posture) salted-commitment posture
-- `informed_by` derivation from `graph.node.parent_id` (LangGraph) and `tool_call_id` (OpenAI handoffs)
-- Conformance corpus per [D071](../../DECISIONS.md#d071-spec-writing-conventions) convention 6 (current package-level test fixtures cover canonical TOOL/LLM/AGENT shapes; spec-level corpus lands when first downstream consumer requires it)
+- **`informed_by` derivation** from `tool_call.id` shared between LLM-with-tool-calls span and TOOL span (sidecar surfaces it via `readLlmOutputToolCallId`; fixture-replay test asserts the empirical equality). Auto-wiring from sidecar -> record body lands in v0.1.0. Plus `graph.node.parent_id` for LangGraph.
+- **Trace-level chain composition**: in v0.0.1, each Vercel AI SDK span signs into its own context_id (one per child span's traceId). v0.1.0 will follow `parentSpanContext.traceId` upward to fold all spans of a single agent run into one chain.
+- **Batch variant** (`AtribBatchSpanProcessor`) mirroring `OpenInferenceBatchSpanProcessor`
+- **Args/result hash extraction** per [§8.3](../../atrib-spec.md#83-salted-commitment-posture) salted-commitment posture
+- **Remaining 7 OpenInference kinds** (EMBEDDING, RETRIEVER, CHAIN, RERANKER, GUARDRAIL, EVALUATOR, PROMPT) -- ship per use case; current behavior returns "kind X not yet mapped" skip
+- **Spec-level conformance corpus** per [D071](../../DECISIONS.md#d071-spec-writing-conventions) convention 6 (current package-level fixtures are the empirical foundation; spec-level promotion lands when first downstream consumer requires it)
 
 ## License
 

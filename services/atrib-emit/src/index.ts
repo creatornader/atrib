@@ -58,7 +58,7 @@ const EmitInput = z.object({
     "'https://atrib.dev/v1/types/observation', '...annotation', '...revision'. " +
     'Extension URIs in any namespace OK.',
   ),
-  content: z.record(z.unknown()).describe(
+  content: z.record(z.string(), z.unknown()).describe(
     'Semantic content of the cognitive event. Shape varies per event_type. ' +
     "For observation: { what: string, why_noted?: string, topics?: string[] }. " +
     "For annotation: { annotates: 'sha256:...', importance: 'critical'|'high'|'medium'|'low'|'noise', summary: string, topics?: string[] }. " +

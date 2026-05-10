@@ -1,0 +1,48 @@
+{
+  "name": "canonical-agent-span-root",
+  "description": "Canonical OpenInference AGENT span (root span) for the full generateText call.",
+  "span": {
+    "name": "ai.generateText atrib-fixture-capture",
+    "attributes": {
+      "operation.name": "ai.generateText atrib-fixture-capture",
+      "resource.name": "atrib-fixture-capture",
+      "ai.operationId": "ai.generateText",
+      "ai.telemetry.functionId": "atrib-fixture-capture",
+      "ai.model.provider": "nim.chat",
+      "ai.model.id": "qwen/qwen3-next-80b-a3b-instruct",
+      "ai.settings.maxRetries": 2,
+      "ai.request.headers.user-agent": "ai/6.0.177",
+      "ai.prompt": "{\"prompt\":\"What is the weather in Austin? Use the get_weather tool.\"}",
+      "ai.response.finishReason": "stop",
+      "ai.response.text": "The weather in Austin is clear with a temperature of 64\u00b0F.",
+      "ai.response.providerMetadata": "{\"nim\":{}}",
+      "ai.usage.inputTokens": 409,
+      "ai.usage.inputTokenDetails.noCacheTokens": 409,
+      "ai.usage.inputTokenDetails.cacheReadTokens": 0,
+      "ai.usage.outputTokens": 36,
+      "ai.usage.outputTokenDetails.textTokens": 36,
+      "ai.usage.outputTokenDetails.reasoningTokens": 0,
+      "ai.usage.totalTokens": 445,
+      "ai.usage.reasoningTokens": 0,
+      "ai.usage.cachedInputTokens": 0,
+      "input.value": "{\"prompt\":\"What is the weather in Austin? Use the get_weather tool.\"}",
+      "input.mime_type": "application/json",
+      "output.value": "The weather in Austin is clear with a temperature of 64\u00b0F.",
+      "output.mime_type": "text/plain",
+      "llm.model_name": "qwen/qwen3-next-80b-a3b-instruct",
+      "llm.invocation_parameters": "{\"maxRetries\":2}",
+      "openinference.span.kind": "AGENT"
+    },
+    "status": {
+      "code": 1
+    },
+    "kind": 0
+  },
+  "expected_atrib_mapping": {
+    "v0_0_1_behavior": "signed",
+    "atrib_event_type": "https://atrib.dev/v1/types/observation",
+    "context_id_source": "trace_id (no session.id)",
+    "content_leaf_format": "agent:<agent.name OR span.name fallback>",
+    "fallback_note": "Vercel AI SDK v6 AGENT spans omit agent.name; mapper falls back to span.name"
+  }
+}

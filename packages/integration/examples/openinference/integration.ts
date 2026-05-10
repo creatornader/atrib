@@ -42,6 +42,9 @@ import {
   type AtribRecord,
 } from '@atrib/mcp'
 import { AtribSpanProcessor } from '@atrib/openinference-processor'
+import { generateText, tool, stepCountIs } from 'ai'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import { z } from 'zod'
 
 async function main() {
   // 1. Resolve the operator's atrib identity. In production this comes from
@@ -106,38 +109,83 @@ async function main() {
   // `trace.getTracer(...)` automatically.
   const tracer = provider.getTracer('atrib-openinference-pilot')
 
-  // 5. Emit a synthetic OpenInference TOOL span matching the canonical
-  //    schema Vercel AI SDK + openinference-instrumentation-vercel emits.
-  //    In a real run this fires automatically when streamText/generateText
-  //    invokes a tool; the snippet below documents the attribute shape.
-  const span = tracer.startSpan('search_web')
-  span.setAttribute(SemanticConventions.OPENINFERENCE_SPAN_KIND, 'TOOL')
-  span.setAttribute(SemanticConventions.TOOL_NAME, 'search_web')
-  span.setAttribute(SemanticConventions.SESSION_ID, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
-  span.setAttribute(SemanticConventions.AGENT_NAME, 'Researcher')
-  span.setAttribute(SemanticConventions.INPUT_VALUE, '{"query":"vercel ai sdk openinference"}')
-  span.setAttribute(SemanticConventions.OUTPUT_VALUE, '[{"title":"...","url":"..."}]')
-  span.setStatus({ code: SpanStatusCode.OK })
-  span.end()
+  // 5a. SYNTHETIC PATH (default, offline-runnable). Emit a synthetic
+  //     OpenInference TOOL span matching the canonical schema Vercel AI
+  //     SDK + @arizeai/openinference-vercel produce. Documents the
+  //     attribute contract without requiring a model provider.
+  if (process.env.ATRIB_OPENINFERENCE_RUN_LIVE !== '1') {
+    const span = tracer.startSpan('search_web')
+    span.setAttribute(SemanticConventions.OPENINFERENCE_SPAN_KIND, 'TOOL')
+    span.setAttribute(SemanticConventions.TOOL_NAME, 'search_web')
+    span.setAttribute(SemanticConventions.SESSION_ID, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+    span.setAttribute(SemanticConventions.AGENT_NAME, 'Researcher')
+    span.setAttribute(SemanticConventions.INPUT_VALUE, '{"query":"vercel ai sdk openinference"}')
+    span.setAttribute(SemanticConventions.OUTPUT_VALUE, '[{"title":"...","url":"..."}]')
+    span.setStatus({ code: SpanStatusCode.OK })
+    span.end()
+  }
+
+  // 5b. LIVE PATH (set ATRIB_OPENINFERENCE_RUN_LIVE=1). Real Vercel AI
+  //     SDK call to NIM-served Qwen with a tool the model invokes. The
+  //     AI SDK's `experimental_telemetry: { isEnabled: true }` produces
+  //     spans through the global tracer; this script reads them via the
+  //     local provider since both processors are wired here. Requires
+  //     NVIDIA_API_KEY in env.
+  if (process.env.ATRIB_OPENINFERENCE_RUN_LIVE === '1') {
+    const apiKey = process.env.NVIDIA_API_KEY
+    if (!apiKey) throw new Error('NVIDIA_API_KEY required for live path')
+    const nim = createOpenAICompatible({
+      name: 'nim',
+      baseURL: 'https://integrate.api.nvidia.com/v1',
+      apiKey,
+    })
+
+    // Register provider globally so AI SDK's telemetry hooks find it.
+    provider.register()
+
+    console.log('live: calling generateText with NIM Qwen + 1 tool...')
+    const result = await generateText({
+      model: nim('qwen/qwen3-next-80b-a3b-instruct'),
+      // Use stopWhen to give the model space for: text -> tool call -> text.
+      stopWhen: stepCountIs(3),
+      tools: {
+        get_weather: tool({
+          description: 'Look up the current weather for a city.',
+          inputSchema: z.object({ city: z.string() }),
+          execute: async ({ city }) => `clear, 64F in ${city}`,
+        }),
+      },
+      prompt: "What's the weather in Austin? Use the get_weather tool.",
+      experimental_telemetry: {
+        isEnabled: true,
+        functionId: 'atrib-openinference-pilot',
+        recordInputs: true,
+        recordOutputs: true,
+      },
+    })
+    console.log(`live: AI SDK call complete. text=${result.text.slice(0, 80)}...`)
+  }
 
   // 6. Both processors are async; flush before reading.
   await new Promise((r) => setImmediate(r))
   await new Promise((r) => setImmediate(r))
+  await new Promise((r) => setTimeout(r, 100))
 
-  // 7. Verify the atrib record is well-formed and signature-valid.
-  if (submittedRecords.length !== 1) {
+  // 7. Verify all atrib records are well-formed and signature-valid.
+  if (submittedRecords.length === 0) {
     throw new Error(
-      `expected 1 atrib record, got ${submittedRecords.length}. ` +
-        `the OpenInference span did not flow through atrib's filter.`,
+      `expected at least 1 atrib record, got 0. ` +
+        `the OpenInference TOOL span did not flow through atrib's filter.`,
     )
   }
-  const record = submittedRecords[0]!
-  const valid = await verifyRecord(record)
+  for (const record of submittedRecords) {
+    const valid = await verifyRecord(record)
+    if (!valid) throw new Error(`record signature invalid: ${record.signature}`)
+  }
   console.log(
-    `atrib: record verified=${valid} ` +
-      `event_type=${record.event_type} ` +
-      `context_id=${record.context_id} ` +
-      `creator_key=${record.creator_key.slice(0, 8)}...`,
+    `atrib: ${submittedRecords.length} record(s) verified. ` +
+      `event_types=${[...new Set(submittedRecords.map((r) => r.event_type.split('/').pop()))].join(',')} ` +
+      `context_ids=${[...new Set(submittedRecords.map((r) => r.context_id.slice(0, 8)))].join(',')}`,
   )
 
   // 8. Cleanup.

@@ -202,7 +202,7 @@ describe('AtribSpanProcessor end-to-end', () => {
     expect(await verifyRecord(record)).toBe(true)
   })
 
-  it('skips non-TOOL spans without throwing', async () => {
+  it('skips spans missing required attributes for their kind without throwing', async () => {
     const submitted: AtribRecord[] = []
     const processor = await makeProcessor((signed) => {
       submitted.push(signed)
@@ -212,15 +212,54 @@ describe('AtribSpanProcessor end-to-end', () => {
     provider.addSpanProcessor(processor)
     const tracer = provider.getTracer('test')
 
+    // LLM span without llm.model_name -> skipped
     const llmSpan = tracer.startSpan('llm-step')
     llmSpan.setAttribute('openinference.span.kind', 'LLM')
     llmSpan.end()
 
+    // Non-OpenInference span -> skipped
     const plainSpan = tracer.startSpan('non-openinference')
     plainSpan.end()
 
+    // Unsupported kind (EMBEDDING) -> skipped
+    const embedSpan = tracer.startSpan('embed-step')
+    embedSpan.setAttribute('openinference.span.kind', 'EMBEDDING')
+    embedSpan.end()
+
     await new Promise((resolve) => setImmediate(resolve))
     expect(submitted).toHaveLength(0)
+  })
+
+  it('signs valid LLM and AGENT spans alongside TOOL spans', async () => {
+    const submitted: AtribRecord[] = []
+    const processor = await makeProcessor((signed) => {
+      submitted.push(signed)
+    })
+
+    const provider = new BasicTracerProvider()
+    provider.addSpanProcessor(processor)
+    const tracer = provider.getTracer('test')
+
+    const llmSpan = tracer.startSpan('llm')
+    llmSpan.setAttribute('openinference.span.kind', 'LLM')
+    llmSpan.setAttribute('llm.model_name', 'qwen3.5')
+    llmSpan.end()
+
+    const toolSpan = tracer.startSpan('tool')
+    toolSpan.setAttribute('openinference.span.kind', 'TOOL')
+    toolSpan.setAttribute('tool.name', 'get_weather')
+    toolSpan.end()
+
+    const agentSpan = tracer.startSpan('agent')
+    agentSpan.setAttribute('openinference.span.kind', 'AGENT')
+    agentSpan.end()
+
+    await new Promise((resolve) => setImmediate(resolve))
+    await new Promise((resolve) => setImmediate(resolve))
+
+    expect(submitted).toHaveLength(3)
+    const eventTypes = submitted.map((r) => r.event_type.split('/').pop()).sort()
+    expect(eventTypes).toEqual(['observation', 'observation', 'tool_call'])
   })
 
   it('catches submit errors and never throws to the OTel pipeline', async () => {
