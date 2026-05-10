@@ -23,9 +23,16 @@ mcp__atrib-emit__emit({
                                      // committed on-chain via content_id derived from event_type leaf.
 
   // Optional
-  context_id?: string,          // 32-hex. If omitted, atrib-emit auto-chains: it reads the
-                                // wrapper's local mirror and inherits the most-recent record's
-                                // context_id (or generates a fresh genesis if no mirror).
+  context_id?: string,          // 32-hex. STRONGLY RECOMMENDED. Producers (cron jobs, watchers,
+                                // hooks) should thread a stable per-session or per-job context_id.
+                                // If omitted, atrib-emit applies the [§1.2.3.1](../../atrib-spec.md#1231-multi-producer-chain-composition)
+                                // [D067](../../DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract)
+                                // resolution cascade (caller > env-tail > mirror inheritance
+                                // filtered to same context_id > fresh isolate); records signed
+                                // without any of those signals land as a fresh-orphan with the
+                                // warning `synthesized orphan context_id ... (caller passed no
+                                // context_id; fix runtime to thread session_id per D072)` per
+                                // [D072](../../DECISIONS.md#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail).
   informed_by?: string[],       // sha256:<64-hex> record_hashes that informed this event.
                                 // Sorted lexicographically before signing per §1.2.5.
   chain_root?: string,          // sha256:<64-hex>. Caller-managed chain_root, the hash of the
@@ -114,20 +121,25 @@ Three files do the work:
 
 Per [§5.8](../../atrib-spec.md#58-degradation-contract) degradation contract: nothing in `atrib-emit` throws to the agent. Missing key → warning in the response. Sign failure → warning. Network failure → submission queued for retry.
 
-## autoChain inheritance from the wrapper
+## Chain context resolution (post-[D067](../../DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract) / [D072](../../DECISIONS.md#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail))
 
-When `context_id` is omitted, atrib-emit reads the wrapper's local mirror under `~/.atrib/records/` (override with `ATRIB_AUTOCHAIN_SOURCE`) and inherits the most-recent record's `context_id`, chaining its own emit on top of that record's hash. This is the cognitive-feedback-loop convention: explicit observations, annotations, and revisions chain seamlessly with the agent's mechanical tool calls in the same session, and a verifier sees one coherent chain per `context_id`.
+atrib-emit delegates to `@atrib/mcp`'s [`inheritChainContext`](../../packages/mcp/src/mirror.ts) helper, the single source of truth for [multi-producer chain composition](../../atrib-spec.md#1231-multi-producer-chain-composition) per [D067](../../DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract). The resolver cascades through five tiers in this exact order:
 
-Resolution order:
-When the caller supplies both `context_id` and `chain_root`, atrib-emit uses both verbatim. This path is used by consumers that manage chain state themselves, such as nightly observation pipelines emitting a sequence of records under one context_id with explicit chain_root threading.
+1. **Caller-supplied verbatim**: when both `context_id` and `chain_root` are passed, atrib-emit uses them verbatim. Used by consumers that manage chain state themselves (nightly observation pipelines, multi-record watcher runs).
+2. **Caller `context_id` only**: atrib-emit synthesizes a genesis `chain_root` per [§1.2.3](../../atrib-spec.md#123-chain_root-for-genesis-records). Fresh chain initiated under the named context.
+3. **Inbound propagation token**: when an upstream agent passed a context handoff via `ATRIB_CHAIN_TAIL_<context_id>` env var, atrib-emit adopts that context_id + its tail's chain_root.
+4. **Mirror-file inheritance** (filtered): atrib-emit reads `~/.atrib/records/` (override with `ATRIB_AUTOCHAIN_SOURCE`) and inherits chain_root from the most-recent record **whose context_id matches the caller's**. Without a caller context_id, this tier is skipped (per [D072](../../DECISIONS.md#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail), atrib-emit no longer absorbs context-less records into the mirror tail's session, which would silently merge unrelated sessions).
+5. **Fresh-orphan synthesis**: when no prior tier produced a context_id, atrib-emit generates a random 16-byte context_id with a fresh genesis chain_root and surfaces the warning `synthesized orphan context_id <hex> (caller passed no context_id; fix runtime to thread session_id per D072)`. The warning is the substrate's way of pointing at the upstream miswire so the producer's call site can be patched.
 
-When the caller supplies only `context_id`, atrib-emit synthesizes a genesis `chain_root` for that context_id, initiating a fresh chain.
+### Producer ergonomics: how to thread a stable context_id
 
-When no `context_id` is supplied but a wrapper mirror is present, atrib-emit inherits the most recent record's `context_id` and chains on top.
+The right shape depends on whether the producer is a discrete-session emitter or a continuous-session emitter:
 
-When neither `context_id` nor a wrapper mirror is present, atrib-emit generates a fresh genesis with a random 16-byte context_id.
+- **Discrete sessions** (each producer invocation is a logical new session — e.g. a nightly batch watcher, an ad-hoc script run): generate a fresh UUID at the top of the run and thread it through every emit in that run. Watchers that produce a chain of records under one logical session typically maintain `chain_state` and call `chain_state.setdefault("ctx", fresh_context_id())` once per run.
+- **Continuous sessions** (every invocation is part of the same long-lived logical session — e.g. a periodic heartbeat cron, a long-running daemon's beacon emissions): derive a deterministic context_id from a stable seed via `sha256("<unique-job-name>")[:32]`. The shell idiom is `printf '%s' '<unique-job-name>' | shasum -a 256 | cut -c1-32`. Every fire chains into one coherent session-of-records without a state file.
+- **Inbound handoff** (records signed in response to an external agent's request): adopt the caller's context_id verbatim from inbound trace context (W3C `traceparent` / `tracestate` per [§1.5](../../atrib-spec.md#15-context-propagation-w3c-trace-context-and-baggage)) so cross-agent chains compose. This is what `@atrib/mcp` middleware does automatically.
 
-Both line shapes are accepted at read time: bare `AtribRecord` (the wrapper's convention) and `{record, proof, written_at}` envelope (atrib-emit's storage convention). When inheritance fires, the response's `warnings` array carries `inherited context_id from wrapper mirror: <id>` so the agent can confirm the session it landed in.
+Both line shapes are accepted at read time: bare `AtribRecord` (the wrapper's convention) and `{record, proof, written_at}` envelope (atrib-emit's storage convention).
 
 ## What v1 does NOT do
 
