@@ -210,6 +210,14 @@ type RecallRecordCompact = {
   timestamp: number
   signature_verified: boolean
   session_token?: string
+  /**
+   * §8.2 disclosed tool name. Included in compact mode when present so a
+   * caller filtering by tool_name sees the value back in the response (the
+   * common pattern: filter by tool_name -> render results, want the name
+   * visible). Records without tool_name disclosure (the §8.1 default
+   * posture) omit this field as they always do.
+   */
+  tool_name?: string
 }
 
 type RecallRecordFull = AtribRecord & { signature_verified: boolean }
@@ -262,6 +270,7 @@ function compactify(records: RecallRecordFull[]): RecallRecordCompact[] {
       signature_verified: r.signature_verified,
     }
     if (r.session_token) out.session_token = r.session_token
+    if (r.tool_name) out.tool_name = r.tool_name
     return out
   })
 }
