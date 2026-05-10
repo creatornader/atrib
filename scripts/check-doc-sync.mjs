@@ -712,7 +712,7 @@ if (JSON_MODE) {
   } else {
     console.log(`doc-sync: ${fails.length} failure(s), ${passes.length} pass(es)`)
     console.log()
-    console.log('To fix: see CLAUDE.md "Sync triggers" table for which docs each kind of change requires.')
+    console.log('To fix: see DOC-SYNC-TRIGGERS.md for which docs each kind of change requires.')
   }
 }
 
