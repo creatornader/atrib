@@ -34,7 +34,12 @@ import {
   type AtribRecord,
   signRecord,
 } from '@atrib/mcp'
-import { spanToUnsignedRecord, readIoValues, readAgentName } from './span-to-record.js'
+import {
+  spanToUnsignedRecord,
+  readIoValues,
+  readAgentName,
+  readLlmOutputToolCallId,
+} from './span-to-record.js'
 import { isOpenInferenceSpan } from './openinference-filter.js'
 
 export type AtribSpanSidecar = {
@@ -46,6 +51,14 @@ export type AtribSpanSidecar = {
   readonly input?: string
   readonly output?: string
   readonly agentName?: string
+  /**
+   * For LLM spans whose output is a tool call, the tool_call.id from
+   * `llm.output_messages.<i>.message.tool_calls.<j>.tool_call.id`.
+   * Matches the corresponding TOOL span's `tool_call.id` -- the
+   * empirical seed for future `informed_by` derivation between LLM and
+   * TOOL atrib records.
+   */
+  readonly llmOutputToolCallId?: string
   readonly traceId: string
   readonly spanId: string
 }
@@ -165,10 +178,12 @@ export class AtribSpanProcessor implements SpanProcessor {
 
     const io = readIoValues(span)
     const agentName = readAgentName(span)
+    const llmOutputToolCallId = readLlmOutputToolCallId(span)
     const sidecar: AtribSpanSidecar = {
       ...(io.input !== undefined ? { input: io.input } : {}),
       ...(io.output !== undefined ? { output: io.output } : {}),
       ...(agentName !== undefined ? { agentName } : {}),
+      ...(llmOutputToolCallId !== undefined ? { llmOutputToolCallId } : {}),
       traceId: span.spanContext().traceId,
       spanId: span.spanContext().spanId,
     }

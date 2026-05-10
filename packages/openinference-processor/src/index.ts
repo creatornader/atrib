@@ -24,5 +24,6 @@ export {
   spanToUnsignedRecord,
   readAgentName,
   readIoValues,
+  readLlmOutputToolCallId,
 } from './span-to-record.js'
 export type { SpanToRecordContext, SpanMappingResult } from './span-to-record.js'

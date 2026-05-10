@@ -61,7 +61,7 @@ export const WrapConfigSchema = z.object({
      * wrappers that need to forward a config file the upstream reads (e.g.
      * AGENT_BRIDGE_URL, AGENT_BRIDGE_KEY).
      */
-    env: z.record(z.string()).optional(),
+    env: z.record(z.string(), z.string()).optional(),
   }),
 
   /**
@@ -90,7 +90,7 @@ export const WrapConfigSchema = z.object({
    * Per-tool overrides keyed by tool name. Tools not listed get default
    * behavior (signed as tool_call records, no receipt injection).
    */
-  tools: z.record(ToolOverrideSchema).optional(),
+  tools: z.record(z.string(), ToolOverrideSchema).optional(),
 
   /**
    * File paths. Both default to `~/.atrib/{logs,records}/<name>.{log,jsonl}`.

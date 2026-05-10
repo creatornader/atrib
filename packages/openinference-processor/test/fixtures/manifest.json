@@ -1,0 +1,42 @@
+{
+  "schema": "atrib-openinference-fixtures/v0.0.1",
+  "captured_at": "2026-05-10T05:56:00Z",
+  "framework": "Vercel AI SDK v6.0.177",
+  "instrumentation": "@arizeai/openinference-vercel@2.7.4",
+  "model_provider": "NVIDIA NIM",
+  "model_id": "qwen/qwen3-next-80b-a3b-instruct",
+  "capture_method": "live `generateText` call captured via `OpenInferenceSimpleSpanProcessor` + custom exporter",
+  "scenario": {
+    "prompt": "What is the weather in Austin? Use the get_weather tool.",
+    "tools": ["get_weather"],
+    "result": "model invokes get_weather, receives result, produces text answer; 4 OpenInference spans emitted in order: LLM (with tool_calls in output) -> TOOL (the tool execution) -> LLM (final answer) -> AGENT (root span over all of it)"
+  },
+  "cases": [
+    {
+      "file": "cases/canonical-tool-span.json",
+      "name": "canonical-tool-span",
+      "description": "Canonical OpenInference TOOL span emitted by Vercel AI SDK + @arizeai/openinference-vercel for a synchronous tool call. Carries tool.name, tool.parameters, tool_call.id, input/output values + mime types, openinference.span.kind=TOOL. Maps cleanly to atrib tool_call record."
+    },
+    {
+      "file": "cases/canonical-llm-span-with-tool-calls.json",
+      "name": "canonical-llm-span-with-tool-calls",
+      "description": "Canonical OpenInference LLM span emitted when the model returns a tool_call instead of plain text. The `llm.output_messages.0.message.tool_calls.0.tool_call.id` matches the immediately-following TOOL span's tool_call.id -- this is the natural source of atrib `informed_by` derivation between LLM and TOOL records. v0.0.1 returns `kind LLM not yet mapped`; future LLM-span mapping should reference this fixture."
+    },
+    {
+      "file": "cases/canonical-llm-span-final-answer.json",
+      "name": "canonical-llm-span-final-answer",
+      "description": "Canonical OpenInference LLM span for the final answer step (after the tool result was fed back to the model). Output is plain text; finish_reason=stop. v0.0.1 returns `kind LLM not yet mapped`."
+    },
+    {
+      "file": "cases/canonical-agent-span-root.json",
+      "name": "canonical-agent-span-root",
+      "description": "Canonical OpenInference AGENT span emitted as the root for the entire generateText call. Holds session/user context that descendants inherit. v0.0.1 returns `kind AGENT not yet mapped`; future AGENT-span mapping should reference this fixture for multi-agent boundary record emission per spec multi-agent amplification thesis."
+    }
+  ],
+  "notes": [
+    "Vercel AI SDK v6 emits both `gen_ai.*` (OTel GenAI semconv) AND `ai.*` (Vercel-specific) attributes in addition to the OpenInference `openinference.*`, `tool.*`, `llm.*`, `input.*`, `output.*`, `session.*` keys. atrib's adapter reads only the OpenInference-canonical keys; Vercel-specific keys are ignored.",
+    "Tool spans do NOT carry `agent.name` -- that lives only on AGENT spans. Sidecar metadata in atrib reads it as optional.",
+    "Tool spans do NOT carry `session.id` from Vercel AI SDK v6 by default. atrib's adapter falls back to the OTel trace_id, which makes the TOOL+LLM+AGENT chain share a context_id naturally (they all share a trace).",
+    "The `tool_call.id` field on the TOOL span matches the corresponding `llm.output_messages.<i>.message.tool_calls.<j>.tool_call.id` on the preceding LLM span. This is the empirical basis for future `informed_by` derivation between LLM and TOOL atrib records."
+  ]
+}

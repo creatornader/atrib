@@ -1,0 +1,77 @@
+{
+  "name": "canonical-llm-span-final-answer",
+  "description": "Canonical OpenInference LLM span for final-answer step (text response, no tool_calls).",
+  "span": {
+    "name": "ai.generateText.doGenerate atrib-fixture-capture",
+    "attributes": {
+      "operation.name": "ai.generateText.doGenerate atrib-fixture-capture",
+      "resource.name": "atrib-fixture-capture",
+      "ai.operationId": "ai.generateText.doGenerate",
+      "ai.telemetry.functionId": "atrib-fixture-capture",
+      "ai.model.provider": "nim.chat",
+      "ai.model.id": "qwen/qwen3-next-80b-a3b-instruct",
+      "ai.settings.maxRetries": 2,
+      "ai.request.headers.user-agent": "ai/6.0.177",
+      "ai.prompt.messages": "[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"What is the weather in Austin? Use the get_weather tool.\"}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"toolCallId\":\"chatcmpl-tool-bfdc8f28e47f8813\",\"toolName\":\"get_weather\",\"input\":{\"city\":\"Austin\"}}]},{\"role\":\"tool\",\"content\":[{\"type\":\"tool-result\",\"toolCallId\":\"chatcmpl-tool-bfdc8f28e47f8813\",\"toolName\":\"get_weather\",\"output\":{\"type\":\"text\",\"value\":\"clear, 64F in Austin\"}}]}]",
+      "ai.prompt.tools": [
+        "{\"type\":\"function\",\"name\":\"get_weather\",\"description\":\"Look up the current weather for a city.\",\"inputSchema\":{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"additionalProperties\":false}}"
+      ],
+      "ai.prompt.toolChoice": "{\"type\":\"auto\"}",
+      "gen_ai.system": "nim.chat",
+      "gen_ai.request.model": "qwen/qwen3-next-80b-a3b-instruct",
+      "ai.response.finishReason": "stop",
+      "ai.response.text": "The weather in Austin is clear with a temperature of 64\u00b0F.",
+      "ai.response.id": "chatcmpl-adfa8d6ebe5c827b",
+      "ai.response.model": "qwen/qwen3-next-80b-a3b-instruct",
+      "ai.response.timestamp": "2026-05-10T05:56:34.000Z",
+      "ai.response.providerMetadata": "{\"nim\":{}}",
+      "ai.usage.inputTokens": 225,
+      "ai.usage.inputTokenDetails.noCacheTokens": 225,
+      "ai.usage.inputTokenDetails.cacheReadTokens": 0,
+      "ai.usage.outputTokens": 16,
+      "ai.usage.outputTokenDetails.textTokens": 16,
+      "ai.usage.outputTokenDetails.reasoningTokens": 0,
+      "ai.usage.totalTokens": 241,
+      "ai.usage.reasoningTokens": 0,
+      "ai.usage.cachedInputTokens": 0,
+      "gen_ai.response.finish_reasons": [
+        "stop"
+      ],
+      "gen_ai.response.id": "chatcmpl-adfa8d6ebe5c827b",
+      "gen_ai.response.model": "qwen/qwen3-next-80b-a3b-instruct",
+      "gen_ai.usage.input_tokens": 225,
+      "gen_ai.usage.output_tokens": 16,
+      "output.value": "The weather in Austin is clear with a temperature of 64\u00b0F.",
+      "output.mime_type": "text/plain",
+      "llm.input_messages.0.message.contents.0.message_content.type": "text",
+      "llm.input_messages.0.message.contents.0.message_content.text": "What is the weather in Austin? Use the get_weather tool.",
+      "llm.input_messages.0.message.role": "user",
+      "llm.input_messages.1.message.contents.0.message_content.type": "tool-call",
+      "llm.input_messages.1.message.tool_calls.0.tool_call.id": "chatcmpl-tool-bfdc8f28e47f8813",
+      "llm.input_messages.1.message.tool_calls.0.tool_call.function.name": "get_weather",
+      "llm.input_messages.1.message.tool_calls.0.tool_call.function.arguments": "{\"city\":\"Austin\"}",
+      "llm.input_messages.1.message.role": "assistant",
+      "llm.input_messages.2.message.role": "tool",
+      "llm.input_messages.2.message.content": "{\"type\":\"text\",\"value\":\"clear, 64F in Austin\"}",
+      "llm.input_messages.2.message.tool_call_id": "chatcmpl-tool-bfdc8f28e47f8813",
+      "llm.model_name": "qwen/qwen3-next-80b-a3b-instruct",
+      "llm.invocation_parameters": "{\"model\":\"qwen/qwen3-next-80b-a3b-instruct\"}",
+      "llm.token_count.prompt": 225,
+      "llm.token_count.completion": 16,
+      "input.value": "[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"What is the weather in Austin? Use the get_weather tool.\"}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"toolCallId\":\"chatcmpl-tool-bfdc8f28e47f8813\",\"toolName\":\"get_weather\",\"input\":{\"city\":\"Austin\"}}]},{\"role\":\"tool\",\"content\":[{\"type\":\"tool-result\",\"toolCallId\":\"chatcmpl-tool-bfdc8f28e47f8813\",\"toolName\":\"get_weather\",\"output\":{\"type\":\"text\",\"value\":\"clear, 64F in Austin\"}}]}]",
+      "input.mime_type": "application/json",
+      "openinference.span.kind": "LLM",
+      "llm.token_count.total": 241
+    },
+    "status": {
+      "code": 1
+    },
+    "kind": 0
+  },
+  "expected_atrib_mapping": {
+    "v0_0_1_behavior": "signed",
+    "atrib_event_type": "https://atrib.dev/v1/types/observation",
+    "context_id_source": "trace_id (no session.id)",
+    "content_leaf_format": "llm:<llm.model_name>"
+  }
+}
