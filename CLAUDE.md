@@ -21,7 +21,7 @@ atrib/
   README.md                    # Public-facing project description (customer entry point)
   CLAUDE.md                    # THIS FILE: hub doc, conventions, invariants
   atrib-spec.md                # The single source of truth for the protocol
-  DECISIONS.md                 # Architectural decision log (D001-D075; D070 + D073 are placeholder ADRs for the Record Body Archive Layer per §2.12 and the `handoff` event_type byte respectively; D071 codifies spec writing conventions; D072 governs orphan handling; D074 + D075 capture the git-trailer integration and compose-not-override hook config patterns). A "Pending decisions" section at the end (forward-looking pattern) tracks forward-looking decisions awaiting action (P002, P004, P005, P008, P009, P010).
+  DECISIONS.md                 # Architectural decision log (D001-D075; D070 + D073 are placeholder ADRs for the Record Body Archive Layer per §2.12 and the `handoff` event_type byte respectively; D071 codifies spec writing conventions; D072 governs orphan handling; D074 + D075 capture the git-trailer integration and compose-not-override hook config patterns). A "Pending decisions" section at the end (forward-looking pattern) tracks forward-looking decisions awaiting action (P002, P004, P005, P008, P009, P010, P011).
   ARCHITECTURE.md              # Technical architecture overview: trust model, protocol layers, design decisions
   PRIOR-ART.md                 # Prior art & standards map: every spec/protocol atrib builds on, organized by layer
   METRICS.md                   # Tiered metrics framework + lifecycle states + quarterly evolution review for the dogfood experiment
