@@ -1,0 +1,185 @@
+// SPDX-License-Identifier: Apache-2.0
+
+/**
+ * `AtribSpanProcessor` -- consumes OpenInference-shaped OpenTelemetry
+ * spans and emits signed atrib records.
+ *
+ * Mirrors the public ergonomics of `@arizeai/openinference-vercel`'s
+ * `OpenInferenceSimpleSpanProcessor` so callers can swap or compose them
+ * with minimal friction. Differences:
+ *
+ *   - Atrib's processor is a producer: it transforms each TOOL span into
+ *     a signed AtribRecord and forwards to a caller-supplied submission
+ *     callback. The Arize processor is a consumer (forwards spans to an
+ *     OTLP exporter).
+ *   - Atrib's processor requires an Ed25519 private key + creator_key +
+ *     server_url at construction time. The Arize processor needs none.
+ *   - Atrib's processor never throws to the OTel pipeline. Per atrib §5.8
+ *     degradation contract, all errors are caught and logged with the
+ *     `atrib:` prefix; the original span continues unaffected.
+ *
+ * This is a "simple" processor: it processes each span on `onEnd` without
+ * batching. A future `AtribBatchSpanProcessor` would batch submissions to
+ * the log to reduce per-record HTTP overhead, mirroring the Arize batch
+ * variant's role.
+ */
+
+import type {
+  ReadableSpan,
+  Span,
+  SpanProcessor,
+} from '@opentelemetry/sdk-trace-base'
+import type { Context } from '@opentelemetry/api'
+import {
+  type AtribRecord,
+  signRecord,
+} from '@atrib/mcp'
+import { spanToUnsignedRecord, readIoValues, readAgentName } from './span-to-record.js'
+import { isOpenInferenceSpan } from './openinference-filter.js'
+
+export type AtribSpanSidecar = {
+  /**
+   * Span attributes the caller may want to capture in the local mirror
+   * but not in the public record. The atrib spec §1.2 record format does
+   * not carry args/result inline.
+   */
+  readonly input?: string
+  readonly output?: string
+  readonly agentName?: string
+  readonly traceId: string
+  readonly spanId: string
+}
+
+export type AtribSubmission = (
+  signed: AtribRecord,
+  sidecar: AtribSpanSidecar,
+) => void | Promise<void>
+
+export type AtribSpanProcessorOptions = {
+  /**
+   * Base64url-encoded Ed25519 32-byte private key. Used to sign every
+   * emitted record. Owned by the caller; never logged or surfaced.
+   */
+  readonly privateKey: Uint8Array
+  /**
+   * Base64url-encoded Ed25519 32-byte public key. Embedded in each
+   * signed record's `creator_key` field. The caller is responsible for
+   * deriving this from `privateKey` (e.g., via @atrib/mcp's
+   * `getPublicKey`) and passing it explicitly to avoid one async call
+   * per span.
+   */
+  readonly creatorKey: string
+  /**
+   * Server URL used in `content_id` derivation. Should reflect the agent
+   * runtime's identity rather than an upstream tool server, since
+   * OpenInference spans typically describe the agent's call into a tool
+   * (the agent IS the local server).
+   */
+  readonly serverUrl: string
+  /**
+   * Submission callback invoked for each signed record. Caller routes to
+   * the atrib log via @atrib/mcp's `createSubmissionQueue` or a custom
+   * pipeline. Errors thrown from this callback are caught and logged;
+   * they do NOT propagate to the OTel pipeline.
+   */
+  readonly submit: AtribSubmission
+  /**
+   * Optional: override the default span filter. Default is
+   * `isOpenInferenceSpan`. Useful if the caller wants to additionally
+   * filter on `agent.name`, `service.name`, or other attributes before
+   * any signing work happens.
+   */
+  readonly filter?: (span: ReadableSpan) => boolean
+  /**
+   * Optional: override the chain_root resolver. Default uses the genesis
+   * chain_root derived from the resolved context_id. Production callers
+   * should typically supply a function that consults a chain-tail mirror
+   * (e.g., @atrib/mcp's `resolveChainRoot`) to produce contiguous chains
+   * across spans within the same context.
+   */
+  readonly resolveChainRoot?: (contextId: string) => string | Promise<string>
+  /**
+   * Optional: log diagnostic messages to stderr. Default false.
+   * Per §5.8, atrib failures are caught silently to avoid affecting the
+   * OTel pipeline; this flag surfaces them for development.
+   */
+  readonly debug?: boolean
+}
+
+export class AtribSpanProcessor implements SpanProcessor {
+  private readonly opts: AtribSpanProcessorOptions
+  private shutdownRequested = false
+
+  constructor(opts: AtribSpanProcessorOptions) {
+    this.opts = opts
+  }
+
+  onStart(_span: Span, _parentContext: Context): void {
+    // Atrib emits at end-of-span (when input + output are both present).
+    // No-op on start.
+  }
+
+  onEnd(span: ReadableSpan): void {
+    if (this.shutdownRequested) return
+
+    const filter = this.opts.filter ?? isOpenInferenceSpan
+    if (!filter(span)) return
+
+    // Fire-and-forget: any failure is caught and logged. Per §5.8 atrib
+    // never affects the primary tool call. The OTel pipeline is the
+    // primary; atrib is an attached observer.
+    void this.process(span).catch((err) => this.logError('process', err))
+  }
+
+  shutdown(): Promise<void> {
+    this.shutdownRequested = true
+    return Promise.resolve()
+  }
+
+  forceFlush(): Promise<void> {
+    // Simple processor has no buffer to flush. Batch variant would drain
+    // pending submissions here.
+    return Promise.resolve()
+  }
+
+  private async process(span: ReadableSpan): Promise<void> {
+    const mappingCtx = {
+      creatorKey: this.opts.creatorKey,
+      serverUrl: this.opts.serverUrl,
+      ...(this.opts.resolveChainRoot
+        ? { chainRoot: await this.opts.resolveChainRoot(span.spanContext().traceId) }
+        : {}),
+    }
+
+    const result = spanToUnsignedRecord(span, mappingCtx)
+    if (!result.ok) {
+      if (this.opts.debug) this.logError('skip', new Error(result.reason))
+      return
+    }
+
+    const recordWithPlaceholder = {
+      ...result.record,
+      signature: '',
+    } as AtribRecord
+    const signed = await signRecord(recordWithPlaceholder, this.opts.privateKey)
+
+    const io = readIoValues(span)
+    const agentName = readAgentName(span)
+    const sidecar: AtribSpanSidecar = {
+      ...(io.input !== undefined ? { input: io.input } : {}),
+      ...(io.output !== undefined ? { output: io.output } : {}),
+      ...(agentName !== undefined ? { agentName } : {}),
+      traceId: span.spanContext().traceId,
+      spanId: span.spanContext().spanId,
+    }
+
+    await this.opts.submit(signed, sidecar)
+  }
+
+  private logError(stage: string, err: unknown): void {
+    if (!this.opts.debug) return
+    const msg = err instanceof Error ? err.message : String(err)
+    // eslint-disable-next-line no-console
+    console.error(`atrib:openinference:${stage} ${msg}`)
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "name": "@atrib/openinference-processor",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "description": "OpenTelemetry SpanProcessor that consumes OpenInference-shaped spans and emits signed atrib records. Pattern #4 of atrib's six runtime integration patterns (spec §9). Transitively reaches every framework with OpenInference instrumentation: OpenAI Agents SDK, Claude Agent SDK, LangChain, Vercel AI, CrewAI, LlamaIndex, DSPy, MCP, Microsoft Agent Framework, Bedrock AgentCore, smolagents, Pydantic AI, Agno, and 20+ more (see https://github.com/Arize-ai/openinference).",
+  "author": "atrib <hello@atrib.dev>",
+  "license": "Apache-2.0",
+  "homepage": "https://atrib.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/atrib-dev/atrib.git",
+    "directory": "packages/openinference-processor"
+  },
+  "keywords": [
+    "atrib",
+    "attribution",
+    "verifiable",
+    "opentelemetry",
+    "openinference",
+    "span-processor",
+    "agent-observability",
+    "signed-trace",
+    "merkle-log"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@atrib/mcp": "workspace:*",
+    "@noble/hashes": "^2.2.0"
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-trace-base": "^1.27.0"
+  },
+  "devDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-trace-base": "^1.27.0",
+    "@types/node": "^25.6.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
