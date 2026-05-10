@@ -155,6 +155,32 @@ export function loadRecordsFromDir(dir: string): { records: AtribRecord[]; files
 interface RecallArgs {
   context_id?: string
   event_type?: 'tool_call' | 'transaction'
+  /**
+   * Optional exact match on `record.content_id` (`sha256:<64-hex>`). Per spec
+   * §1.2.2, content_id is `sha256(serverUrl + ":" + toolName)`. Filtering by
+   * content_id groups all records emitted by the same tool on the same MCP
+   * server. Useful for "all calls to this tool, ever." Coarser than tool_name
+   * because two tools on different servers share no content_id even if their
+   * names match.
+   */
+  content_id?: string
+  /**
+   * Optional exact match on the §8.2 disclosed `tool_name`. Records that did
+   * NOT opt in to tool-name disclosure (the §8.1 default posture) carry no
+   * tool_name field and are excluded from results when this filter is set.
+   * Use this to query by human-readable name (e.g. tool_name="Edit") across
+   * MCP servers, when the producer disclosed it.
+   */
+  tool_name?: string
+  /**
+   * Optional exact match on `record.args_hash` (`sha256:<64-hex>`). Per spec
+   * §8.3, args_hash commits to canonical args bytes. Salted (D045) and plain
+   * forms hash identically on the wire; this filter does not distinguish
+   * them. Most useful for replay detection (same args, same hash) and for
+   * agent-side keyed lookup when the agent computes a probe hash over a
+   * normalized {tool, target} dict.
+   */
+  args_hash?: string
   limit?: number
   offset?: number
   /**
@@ -282,6 +308,9 @@ export async function recall(
     const targetUri = EVENT_TYPE_SHORT_TO_URI[args.event_type] ?? args.event_type
     filtered = filtered.filter((r) => r.event_type === targetUri)
   }
+  if (args.content_id) filtered = filtered.filter((r) => r.content_id === args.content_id)
+  if (args.tool_name) filtered = filtered.filter((r) => r.tool_name === args.tool_name)
+  if (args.args_hash) filtered = filtered.filter((r) => r.args_hash === args.args_hash)
 
   // Newest first, the agent typically wants its most-recent provable
   // actions, not the genesis of the log.
@@ -321,22 +350,24 @@ export async function recall(
 
 const server = new McpServer({
   name: 'atrib-recall',
-  version: '0.3.0',
+  version: '0.4.0',
 })
 
 server.registerTool(
   'recall_my_attribution_history',
   {
     description:
-      "Return signed atrib records from the local mirror, the agent's own past, with each record's " +
+      "Return signed atrib records from the local mirror. The agent's own past, with each record's " +
       'Ed25519 signature verified locally. By default the response is compact (no signature bytes) and ' +
-      'includes only records that passed signature verification, both can be opted out of with ' +
+      'includes only records that passed signature verification; both can be opted out of with ' +
       'compact=false and include_unverified=true respectively. Local signature verification proves ' +
       '"this record was signed by that creator_key"; it does NOT prove log inclusion (fetch a log ' +
-      'inclusion proof to confirm). Filter by context_id (specific trace) or event_type ' +
-      '(tool_call|transaction); omit filters for cross-trace history. Results are sorted newest-first. ' +
-      'Pagination uses offset; new records appended between calls invalidate offset stability, see ' +
-      'the pagination_caveat in the response. The filtered_out_by_verification field reports how many ' +
+      'inclusion proof to confirm). Filter by context_id (specific trace), event_type ' +
+      '(tool_call|transaction), content_id (specific tool on specific server), tool_name (disclosed ' +
+      'name per §8.2), or args_hash (canonical-args commitment per §8.3). Filters are AND-combined; ' +
+      'omit all of them for cross-trace history. Results are sorted newest-first. Pagination uses ' +
+      'offset; new records appended between calls invalidate offset stability. See the ' +
+      'pagination_caveat in the response. The filtered_out_by_verification field reports how many ' +
       'records were dropped due to signature failures (always 0 when include_unverified=true).',
     inputSchema: {
       context_id: z
@@ -350,6 +381,31 @@ server.registerTool(
         .enum(['tool_call', 'transaction'])
         .optional()
         .describe('Optional filter to a single event kind. Most calls leave this unset.'),
+      content_id: z
+        .string()
+        .optional()
+        .describe(
+          'Optional exact match on record.content_id (sha256:<64-hex>). Per spec §1.2.2, content_id ' +
+            'is sha256(serverUrl + ":" + toolName), so filtering groups all records emitted by the same ' +
+            'tool on the same MCP server. Coarser than tool_name (different servers, same name -> ' +
+            'different content_id).',
+        ),
+      tool_name: z
+        .string()
+        .optional()
+        .describe(
+          'Optional exact match on the §8.2 disclosed tool_name. Records that did NOT opt in to ' +
+            'tool-name disclosure (the §8.1 default posture) carry no tool_name field and are excluded ' +
+            'from results when this filter is set.',
+        ),
+      args_hash: z
+        .string()
+        .optional()
+        .describe(
+          'Optional exact match on record.args_hash (sha256:<64-hex>). Per spec §8.3, args_hash commits ' +
+            'to canonical args bytes (salted or plain; both forms hash identically on the wire). Most ' +
+            'useful for replay detection or agent-side keyed lookup over a normalized probe hash.',
+        ),
       limit: z.number().optional().describe('Page size, default 25, max 200.'),
       offset: z
         .number()
