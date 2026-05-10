@@ -52,6 +52,27 @@ export interface BuildEmitRecordInput {
    * reaching here. Format: "sha256:" + 64 lowercase hex.
    */
   revises?: string | undefined
+  /**
+   * Optional §8.2 tool_name disclosure. Lets emit-signed records carry the
+   * verbatim or transformed tool name for downstream consumers (e.g.
+   * `recall_my_attribution_history` filtering by tool_name). Pass through
+   * unchanged: the caller picks the disclosure form (verbatim string,
+   * opaque alias, or hashed). Absence indicates the §8.1 default posture
+   * (no tool-name disclosure). Validators reject mixed structural forms;
+   * see middleware.ts disclosure pipeline for canonical shapes.
+   */
+  toolName?: string | undefined
+  /**
+   * Optional §8.3 args_hash commitment. Lets emit-signed records carry a
+   * commitment to canonical args bytes for downstream consumers (e.g.
+   * `recall_my_attribution_history` filtering by args_hash, or replay
+   * detection). Format: "sha256:" + 64 lowercase hex. Absence indicates
+   * the §8.1 default posture (no args commitment surfaced). Salted vs
+   * plain forms hash identically on the wire; the salt (when used) is
+   * carried in the separate args_salt field which this signer does not
+   * yet surface.
+   */
+  argsHash?: string | undefined
 }
 
 /**
@@ -84,8 +105,10 @@ export async function buildAndSignEmitRecord(
     signature: '',
     ...(informedBySorted ? { informed_by: informedBySorted } : {}),
     ...(input.annotates ? { annotates: input.annotates } : {}),
+    ...(input.argsHash ? { args_hash: input.argsHash } : {}),
     ...(input.provenanceToken ? { provenance_token: input.provenanceToken } : {}),
     ...(input.revises ? { revises: input.revises } : {}),
+    ...(input.toolName ? { tool_name: input.toolName } : {}),
   } as AtribRecord
 
   return signRecord(record, input.privateKey)

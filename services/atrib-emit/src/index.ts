@@ -100,6 +100,19 @@ const EmitInput = z.object({
     'atrib-emit enforces the require/forbid invariant per §1.2.9 (validators MUST reject ' +
     'violations) and returns a warnings-only response rather than signing a malformed record.',
   ),
+  tool_name: z.string().min(1).max(64).optional().describe(
+    'Optional §8.2 tool_name disclosure. Verbatim or transformed name (verbatim, opaque, ' +
+    'or hashed per §8.2). Lets emit-signed records carry the tool name for downstream ' +
+    'consumers (e.g. recall_my_attribution_history filtering by tool_name). Absence ' +
+    'indicates the §8.1 default posture (no disclosure).',
+  ),
+  args_hash: z.string().regex(SHA256_REF_PATTERN).optional().describe(
+    'Optional §8.3 args_hash commitment. Format: "sha256:" + 64 lowercase hex. Lets ' +
+    'emit-signed records carry a commitment to canonical args bytes for downstream ' +
+    'consumers (e.g. recall filtering by args_hash, or replay detection). Salted vs ' +
+    'plain forms hash identically on the wire; the salt (when used) is carried in the ' +
+    'separate args_salt field, which this surface does not yet expose.',
+  ),
 })
 
 type EmitOutput = {
@@ -285,6 +298,8 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
       provenanceToken: input.provenance_token,
       annotates: input.annotates,
       revises: input.revises,
+      toolName: input.tool_name,
+      argsHash: input.args_hash,
     })
   } catch (e) {
     return emptyOutput(contextId, [

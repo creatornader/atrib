@@ -114,6 +114,53 @@ describe('buildAndSignEmitRecord', () => {
     expect(record).not.toHaveProperty('provenance_token')
   })
 
+  it('carries tool_name when supplied (§8.2 disclosure)', async () => {
+    const seed = await freshKey()
+    const record = await buildAndSignEmitRecord({
+      privateKey: seed,
+      eventType: 'https://atrib.dev/v1/types/tool_call',
+      contextId: 'c'.repeat(32),
+      chainRoot: 'sha256:' + 'd'.repeat(64),
+      content: { tool: 'Edit', target: 'src/foo.py' },
+      toolName: 'Edit',
+    })
+
+    const r = record as AtribRecord & { tool_name?: string }
+    expect(r.tool_name).toBe('Edit')
+    expect(await verifyRecord(record)).toBe(true)
+  })
+
+  it('carries args_hash when supplied (§8.3 commitment)', async () => {
+    const seed = await freshKey()
+    const probeHash = 'sha256:' + 'e'.repeat(64)
+    const record = await buildAndSignEmitRecord({
+      privateKey: seed,
+      eventType: 'https://atrib.dev/v1/types/tool_call',
+      contextId: 'c'.repeat(32),
+      chainRoot: 'sha256:' + 'd'.repeat(64),
+      content: { tool: 'Edit', target: 'src/foo.py' },
+      argsHash: probeHash,
+    })
+
+    const r = record as AtribRecord & { args_hash?: string }
+    expect(r.args_hash).toBe(probeHash)
+    expect(await verifyRecord(record)).toBe(true)
+  })
+
+  it('omits tool_name and args_hash when not supplied (presence affects JCS)', async () => {
+    const seed = await freshKey()
+    const record = await buildAndSignEmitRecord({
+      privateKey: seed,
+      eventType: 'https://atrib.dev/v1/types/observation',
+      contextId: '3'.repeat(32),
+      chainRoot: 'sha256:' + '4'.repeat(64),
+      content: { what: 'no disclosure' },
+    })
+
+    expect(record).not.toHaveProperty('tool_name')
+    expect(record).not.toHaveProperty('args_hash')
+  })
+
   it('record_hash is stable for identical inputs at the same timestamp', async () => {
     // Sanity: canonicalization should be deterministic for non-time-dependent
     // fields. We can't pin Date.now() through buildAndSignEmitRecord without
