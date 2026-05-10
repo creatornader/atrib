@@ -78,15 +78,16 @@ Per the atrib spec [§5.8 degradation contract](../../atrib-spec.md#58-degradati
 
 ## Status
 
-`v0.0.1` -- TOOL-span mapping shipped with smoke tests. Not yet published to npm.
+`v0.0.1` -- TOOL-span mapping shipped with 11 unit tests + composition pilot validated against `@arizeai/openinference-vercel`'s reference SpanProcessor on a shared TracerProvider. Attribute keys imported from `@arizeai/openinference-semantic-conventions` for canonical schema correctness. Runnable integration example at `packages/integration/examples/openinference/`. Not yet published to npm.
 
 Roadmap:
 
 - LLM-span mapping (sign LLM message exchanges as observations)
+- AGENT-span mapping (emit observations at agent-boundary spans for multi-agent traces)
 - Batch variant (`AtribBatchSpanProcessor`) mirroring `OpenInferenceBatchSpanProcessor`
 - Args/result hash extraction per [§8.3](../../atrib-spec.md#83-salted-commitment-posture) salted-commitment posture
 - `informed_by` derivation from `graph.node.parent_id` (LangGraph) and `tool_call_id` (OpenAI handoffs)
-- Conformance corpus per [D071](../../DECISIONS.md#d071-spec-writing-conventions) convention 6
+- Conformance corpus per [D071](../../DECISIONS.md#d071-spec-writing-conventions) convention 6 (current package-level test fixtures cover canonical TOOL/LLM/AGENT shapes; spec-level corpus lands when first downstream consumer requires it)
 
 ## License
 
