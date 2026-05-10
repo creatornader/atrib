@@ -3394,6 +3394,76 @@ The substrate guarantees the record exists, was signed by the named creator, and
 
 ---
 
+## D076: Long-lived atrib-emit daemon (opt-in) + spawn-per-emit fallback
+
+**Date:** 2026-05-10
+
+**Promoted from:** P011 (long-lived atrib-emit vs spawn-per-hook fork model). The original deferred-decision entry is removed from the Pending decisions section by this ADR; see git history prior to this commit for the source text.
+
+**Context.**
+
+The current producer architecture spawns a fresh `atrib-emit` subprocess per emit invocation. The hook script (or sign_record sidecar, or watcher emit call) creates a `StdioClientTransport`, which spawns `atrib-emit`, performs the JSON-RPC initialize handshake, calls the `emit` tool, and tears down. A 15-second inner timeout (`ATRIB_EMIT_TIMEOUT_MS`) bounds connect + tool-call latency; the wrapping subprocess.run timeout at 18s gives a 3-second margin for shutdown.
+
+Two empirical findings make spawn-per-emit unviable as the only option:
+
+1. **Burst-pressure failure (original P011 data, 2026-05-09):** 29 `[layer=sessionend] atrib-emit connect timed out after 15000ms` errors clustered in a 33-minute window. Under burst load (rapid session opens/closes during nested-session work), the per-spawn fork plus MCP handshake exceeds 15 seconds, dropping the sessionend annotations that would otherwise mark session boundaries.
+
+2. **Steady-state spawn cost (replay measurement, 2026-05-10):** per-phase timing instrumentation in the producer-side sidecar revealed connect = 250–385ms, call = 73–134ms, close = 233–370ms, total = 557–1079ms per emit on a healthy system. Connect alone (subprocess spawn + MCP initialize) accounts for 30–40% of every emit's wall time. At watcher scale (96 commits processed in one nightly cron), this is ~27 seconds of pure spawn cost on every clean run, before any pathological timeout.
+
+The 2026-05-10 nightly cascade (a downstream consumer emitting 30+ structurally-invalid annotations when the upstream watcher had silently failed) is unrelated to this decision, [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) orphan handling plus the consumer-side skip-when-orphaned guard plus the circuit-breaker discrimination already addressed it. P011 is the orthogonal question: even when nothing fails, spawn-per-emit imposes a fixed tax that scales linearly with emit volume and creates a sharp burst-pressure failure mode.
+
+**Decision.** atrib-emit gains an opt-in long-lived daemon mode; producers (sign_record, hook scripts, watchers) prefer the daemon when reachable and fall back to spawn-per-emit when not. Spawn-per-emit remains the default to preserve operational simplicity for first-time users and isolated invocations.
+
+Daemon shape:
+
+1. **Boot:** `atrib-emit --daemon --socket <path>` runs as a single long-lived process bound to one creator key, listening on a Unix domain socket. The socket path is the lifecycle-coordination point; daemon owners (sync scripts, login shells, supervisor scripts) manage start/stop.
+
+2. **Client opt-in:** clients check `ATRIB_EMIT_DAEMON_SOCKET=<path>`. If set AND the socket is reachable AND the JSON-RPC initialize succeeds within a short connect deadline (1s), the client uses the socket transport. Otherwise the client falls back to spawn-per-emit transparently. No client-side config change is required if the env var is unset, existing callers keep working unchanged.
+
+3. **Wire format:** JSON-RPC over Unix socket carrying the same MCP tool-call envelope the stdio path uses. Reusing the wire format avoids divergent code in atrib-emit between the daemon and the per-spawn handler, both route through the same `handleEmit` in `services/atrib-emit/src/index.ts`.
+
+4. **Single creator-key invariant:** one daemon serves one creator key (matching atrib-emit's existing "one key per process" design from the same file). Multi-creator setups run multiple daemons on distinct sockets, OR fall back to spawn-per-emit for the secondary creators. The daemon does NOT multiplex creator keys.
+
+5. **Lifecycle and failure modes:** daemon crash → next client falls back to spawn-per-emit. Daemon hangs → client times out at the 1s connect deadline and falls back. Stale socket file → daemon unlinks-and-retries on boot. Daemon owner is responsible for graceful shutdown (SIGTERM handler drains the submission queue then exits).
+
+**Alternatives considered:**
+
+- *Mandate daemon mode (no spawn fallback).* Rejected. Forces operators to manage daemon lifecycle for one-shot use cases (`atrib-emit < record.json` from a script, ad-hoc CLI invocations, CI). Spawn-per-emit's operational simplicity is genuine; the daemon is for hot paths.
+- *Raise `ATRIB_EMIT_TIMEOUT_MS` to mask burst-pressure timeouts.* Rejected. Masks the symptom, wastes helper runtime on doomed waits, and doesn't address the steady-state spawn cost. Each retry forks again, worsening contention.
+- *Per-conversation worker spawned by the first hook and reused for the session lifetime.* Rejected as the only mode (kept available implicitly via the daemon shape, a per-session daemon is a special case of `--socket` scoping). Per-conversation worker doesn't help cron / watcher / scheduled-producer use cases where there is no session.
+- *Connection pooling on the client side without a daemon.* Rejected. The client (sign_record sidecar, hook script) is short-lived itself; pooling within a process gives no amortization across invocations.
+
+**Consequences:**
+
+- atrib-emit gains a `--daemon` mode and a Unix socket transport. The existing stdio transport is unchanged; both transports route through the same `handleEmit` path so behavior is byte-identical.
+- The producer-side sidecar (sign_record.mjs and any future cousin) gains daemon-detection: if `ATRIB_EMIT_DAEMON_SOCKET` is set, connect via socket; else spawn. Failure to reach the daemon falls back silently, no caller-visible behavior change.
+- Mirror file appends remain single-writer when the daemon owns the file (no contention). When clients fall back to spawn-per-emit, the spawn writes the mirror line directly (unchanged from the current path).
+- The submission queue's retry budget (`MAX_WINDOW_MS = 30s`) lives in the daemon for daemon-mode emits, surviving across many tool calls. In spawn-per-emit, the queue dies with the subprocess and pending records are lost on transient log failures (current behavior, retained).
+- Cron / scheduled producers can opt into daemon mode by booting one daemon at the start of a run and tearing it down at the end. Expected effect: ~27 seconds of spawn cost reclaimed per 96-emit run, sessionend-burst drop rate brought to zero in the windows where it matters.
+- Layer 2 hook configurations may set `ATRIB_EMIT_DAEMON_SOCKET` in their environment if a per-session daemon is desired; this composes with [D075](#d075-compose-not-override-hook-config-layering) (compose-not-override hook config layering), the env-var binding is layer-compatible.
+- Verifier-side behavior is unchanged. The wire format of signed records is identical regardless of daemon vs spawn; verification does not need to know.
+
+**Migration plan:** four sequential workstreams.
+
+- **Daemon mode.** Add `--daemon` and `--socket` flags to `services/atrib-emit/src/main.ts`. Add Unix socket server transport that delegates to the same `handleEmit`. Existing stdio path unchanged. Unit tests cover both transports.
+
+- **Client-side opt-in.** Update sign_record-shaped sidecars to check `ATRIB_EMIT_DAEMON_SOCKET`, attempt socket connect with a 1s deadline, fall back to spawn on any failure. The producer-side timing instrumentation already shipped is the measurement surface.
+
+- **Dogfood enablement.** Cron / scheduled producers boot one daemon at the start of the run, export `ATRIB_EMIT_DAEMON_SOCKET`, run all sub-producers (which transparently use the daemon), tear it down. Long-running interactive sessions may also boot a per-session daemon if the latency win is desired.
+
+- **Measurement.** Compare per-emit timing before vs after dogfood enablement using the existing instrumentation. Acceptance criterion: median emit time drops from ~700ms to <100ms; sessionend-burst drop rate stays at zero across a 7-day observation window.
+
+Spec amendments are not required for this ADR, the wire format is unchanged, and [§9](atrib-spec.md#9-runtime-integration-patterns) Pattern #1 (lifecycle hooks) and Pattern #2 (MCP middleware) are agnostic about how producers reach atrib-emit.
+
+**Cross-references:**
+
+- [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail), orphan handling. Burst-pressure timeouts produce orphan-shaped fallouts; the daemon eliminates the burst pressure, complementing the downstream containment that handling provides.
+- [D075](#d075-compose-not-override-hook-config-layering), compose-not-override hook config layering. Operators wiring `ATRIB_EMIT_DAEMON_SOCKET` env binding into hook configs do so under the compose recommendation.
+- [§9](atrib-spec.md#9-runtime-integration-patterns), runtime integration patterns. This ADR is producer-side architecture; the patterns themselves are unaffected.
+- Producer-side per-phase timing instrumentation, the empirical data behind the steady-state spawn cost finding above.
+
+---
+
 ## D075: Compose-not-override hook config layering
 
 **Date:** 2026-05-09
@@ -3439,25 +3509,6 @@ This is a producer-side recommendation, not a normative spec constraint. atrib d
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
-
-## P011: long-lived atrib-emit process vs the spawn-per-hook fork model
-
-**Source:** Triage of 29 `[layer=sessionend] atrib-emit connect timed out after 15000ms` errors clustered in a 33-minute window. The hook architecture spawns a fresh `atrib-emit` subprocess per invocation via `StdioClientTransport`. Under burst load the per-spawn fork plus MCP handshake exceeds the 15-second connect budget, dropping the sessionend annotation that would otherwise mark the session boundary.
-
-**The decision in question:** should the hook architecture move from spawn-per-invocation to a shared long-lived `atrib-emit` process that all hook subprocesses connect to over a local IPC channel? Or is spawn-per-hook an acceptable trade-off given silent failure and bounded downstream impact?
-
-**Considerations.**
-
-- Spawn-per-hook is operationally simple. No process lifecycle to manage, no socket path, no restart semantics, no upgrade-while-running concerns.
-- Under burst load the spawn cost amortizes badly. The Layer 2a and 2b PostToolUse tool_call records were unaffected, but the sessionend annotations that should have anchored those sessions structurally never made it to the log.
-- Alternatives short of a daemon: raise `ATRIB_EMIT_TIMEOUT_MS` (masks the symptom and wastes helper runtime); add retry-with-backoff (each retry forks again, worsening contention); per-conversation worker spawned on first hook and reused for session lifetime; full shared worker with a local IPC channel.
-- A shared worker would also amortize the per-spawn mirror re-read cost that every hook pays when initializing the autoChain seed.
-
-**Likely outcome (not committed):** accept; adopt a per-conversation or fully shared worker. The observed failure rate is bounded since burst pressure resolves itself once child-session churn settles, and the operational simplicity of spawn-per-hook is genuine. Defer until either the steady-state miss rate exceeds an acceptable bound (rough threshold: > 0.5% of expected sessionend annotations missing over a 7-day window), or a downstream consumer starts depending on every sessionend annotation landing (recall filter on `inheritedFrom`, substrate-health surface separating drop-rate from drop-burst, benchmark recording fidelity, future per-creator timeline UI).
-
-**Reopening criteria.** First of: sustained burst-pattern repetition outside transient system pressure; a recall / trace / summarize feature requiring every sessionend annotation; a benchmark or pitch artifact measuring sessionend annotation completeness; a different hook surface where per-spawn cost is felt directly by the calling agent (e.g., a synchronous hook that cannot be detached).
-
-**ADR number** will be assigned when acted on. Do not pre-allocate.
 
 ## P009: middleware orphan-flagging consistency with [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail)
 
