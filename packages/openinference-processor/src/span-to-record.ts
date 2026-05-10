@@ -24,6 +24,7 @@
  */
 
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base'
+import { SemanticConventions } from '@arizeai/openinference-semantic-conventions'
 import {
   type UnsignedAtribRecord,
   EVENT_TYPE_TOOL_CALL_URI,
@@ -35,11 +36,11 @@ import {
   type OpenInferenceSpanKind,
 } from './openinference-filter.js'
 
-const TOOL_NAME_ATTR = 'tool.name' as const
-const INPUT_VALUE_ATTR = 'input.value' as const
-const OUTPUT_VALUE_ATTR = 'output.value' as const
-const SESSION_ID_ATTR = 'session.id' as const
-const AGENT_NAME_ATTR = 'agent.name' as const
+const TOOL_NAME_ATTR = SemanticConventions.TOOL_NAME
+const INPUT_VALUE_ATTR = SemanticConventions.INPUT_VALUE
+const OUTPUT_VALUE_ATTR = SemanticConventions.OUTPUT_VALUE
+const SESSION_ID_ATTR = SemanticConventions.SESSION_ID
+const AGENT_NAME_ATTR = SemanticConventions.AGENT_NAME
 
 export type SpanToRecordContext = {
   /**

@@ -17,8 +17,9 @@
  */
 
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base'
+import { SemanticConventions } from '@arizeai/openinference-semantic-conventions'
 
-export const OPENINFERENCE_SPAN_KIND_ATTR = 'openinference.span.kind' as const
+export const OPENINFERENCE_SPAN_KIND_ATTR = SemanticConventions.OPENINFERENCE_SPAN_KIND
 
 export type OpenInferenceSpanKind =
   | 'LLM'
