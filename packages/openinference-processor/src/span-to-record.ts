@@ -46,10 +46,16 @@ const OUTPUT_VALUE_ATTR = SemanticConventions.OUTPUT_VALUE
 const SESSION_ID_ATTR = SemanticConventions.SESSION_ID
 const AGENT_NAME_ATTR = SemanticConventions.AGENT_NAME
 const LLM_MODEL_NAME_ATTR = SemanticConventions.LLM_MODEL_NAME
+const EMBEDDING_MODEL_NAME_ATTR = 'embedding.model_name'
+const RERANKER_MODEL_NAME_ATTR = 'reranker.model_name'
+const RETRIEVAL_MODEL_NAME_ATTR = 'retrieval.model_name'
 
 /** Attribute key for the LLM-output tool_call id, when the model returns a tool_call. */
 const LLM_OUTPUT_TOOL_CALL_ID_ATTR =
   'llm.output_messages.0.message.tool_calls.0.tool_call.id'
+
+/** Attribute key for a TOOL span's own tool_call id (matches the LLM emission). */
+const TOOL_CALL_ID_ATTR = 'tool_call.id'
 
 export type SpanToRecordContext = {
   /**
@@ -115,12 +121,72 @@ export function spanToUnsignedRecord(
       return mapLlmSpan(span, ctx, kind)
     case 'AGENT':
       return mapAgentSpan(span, ctx, kind)
+    case 'EMBEDDING':
+      return mapModelKindSpan(span, ctx, kind, 'embedding', EMBEDDING_MODEL_NAME_ATTR)
+    case 'RETRIEVER':
+      return mapModelKindSpan(span, ctx, kind, 'retriever', RETRIEVAL_MODEL_NAME_ATTR)
+    case 'RERANKER':
+      return mapModelKindSpan(span, ctx, kind, 'reranker', RERANKER_MODEL_NAME_ATTR)
+    case 'CHAIN':
+      return mapNamedKindSpan(span, ctx, kind, 'chain')
+    case 'GUARDRAIL':
+      return mapNamedKindSpan(span, ctx, kind, 'guardrail')
+    case 'EVALUATOR':
+      return mapNamedKindSpan(span, ctx, kind, 'evaluator')
+    case 'PROMPT':
+      return mapNamedKindSpan(span, ctx, kind, 'prompt')
     default:
       return {
         ok: false,
-        reason: `kind ${kind} not yet mapped (TOOL/LLM/AGENT only at v0.0.1)`,
+        reason: `kind ${kind as string} not recognized`,
       }
   }
+}
+
+/**
+ * Generic mapper for kinds that namespace by model name (EMBEDDING /
+ * RETRIEVER / RERANKER). Falls back to span.name when no model name
+ * attribute is present.
+ */
+function mapModelKindSpan(
+  span: ReadableSpan,
+  ctx: SpanToRecordContext,
+  kind: 'EMBEDDING' | 'RETRIEVER' | 'RERANKER',
+  prefix: string,
+  modelAttrKey: string,
+): SpanMappingResult {
+  const modelName = readStringAttr(span, modelAttrKey) ?? span.name
+  if (modelName === undefined || modelName.length === 0) {
+    return { ok: false, reason: `${kind} span has no ${modelAttrKey} and no span.name` }
+  }
+  const record = buildRecord(span, ctx, {
+    contentLeaf: `${prefix}:${modelName}`,
+    eventType: EVENT_TYPE_OBSERVATION_URI,
+  })
+  return { ok: true, record, kind }
+}
+
+/**
+ * Generic mapper for kinds that namespace by span name only (CHAIN /
+ * GUARDRAIL / EVALUATOR / PROMPT). These OpenInference kinds don't
+ * carry a stable model_name attribute; the span's own name is the
+ * natural namespace leaf.
+ */
+function mapNamedKindSpan(
+  span: ReadableSpan,
+  ctx: SpanToRecordContext,
+  kind: 'CHAIN' | 'GUARDRAIL' | 'EVALUATOR' | 'PROMPT',
+  prefix: string,
+): SpanMappingResult {
+  const name = span.name
+  if (name === undefined || name.length === 0) {
+    return { ok: false, reason: `${kind} span has no span.name` }
+  }
+  const record = buildRecord(span, ctx, {
+    contentLeaf: `${prefix}:${name}`,
+    eventType: EVENT_TYPE_OBSERVATION_URI,
+  })
+  return { ok: true, record, kind }
 }
 
 function mapToolSpan(
@@ -209,12 +275,19 @@ export function readAgentName(span: ReadableSpan): string | undefined {
  * source for cross-span `informed_by` derivation: a TOOL span's
  * `tool_call.id` matches the LLM span's
  * `llm.output_messages.<i>.message.tool_calls.<j>.tool_call.id` (verified
- * against captured Vercel AI SDK v6 fixtures). v0.0.1 exposes the value
- * as sidecar metadata so downstream callers can build informed_by edges
- * across LLM↔TOOL records; v0.1.0 will derive them automatically.
+ * against captured Vercel AI SDK v6 fixtures).
  */
 export function readLlmOutputToolCallId(span: ReadableSpan): string | undefined {
   return readStringAttr(span, LLM_OUTPUT_TOOL_CALL_ID_ATTR)
+}
+
+/**
+ * Convenience: extract a TOOL span's own `tool_call.id`. The matching
+ * LLM span's `llm.output_messages.<i>.message.tool_calls.<j>.tool_call.id`
+ * carries the same value -- the basis for auto `informed_by` derivation.
+ */
+export function readToolCallId(span: ReadableSpan): string | undefined {
+  return readStringAttr(span, TOOL_CALL_ID_ATTR)
 }
 
 /**

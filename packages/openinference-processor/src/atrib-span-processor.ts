@@ -33,14 +33,23 @@ import type { Context } from '@opentelemetry/api'
 import {
   type AtribRecord,
   signRecord,
+  canonicalRecord,
+  sha256,
+  hexEncode,
 } from '@atrib/mcp'
 import {
   spanToUnsignedRecord,
   readIoValues,
   readAgentName,
   readLlmOutputToolCallId,
+  readToolCallId,
 } from './span-to-record.js'
 import { isOpenInferenceSpan } from './openinference-filter.js'
+import { InformedByTracker, type InformedByTrackerOptions } from './informed-by-tracker.js'
+import {
+  deriveArgsResultHashFields,
+  type ArgsResultHashPosture,
+} from './args-result-hash.js'
 
 export type AtribSpanSidecar = {
   /**
@@ -117,14 +126,53 @@ export type AtribSpanProcessorOptions = {
    * OTel pipeline; this flag surfaces them for development.
    */
   readonly debug?: boolean
+  /**
+   * Optional: enable automatic `informed_by` derivation between LLM and
+   * TOOL records. When enabled, the processor maintains a per-trace
+   * `tool_call.id -> record_hash` map. An LLM record whose output
+   * contains a tool_call registers its record_hash under the tool_call.id;
+   * the corresponding TOOL record (which carries the same tool_call.id)
+   * inherits an `informed_by: [<llm_record_hash>]` edge before signing.
+   * Defaults to false for backward compatibility; v0.1.0 callers should
+   * enable. See `InformedByTrackerOptions` for memory bounds.
+   */
+  readonly autoInformedBy?: boolean
+  /**
+   * Optional: pass an existing InformedByTracker to share across multiple
+   * processors (e.g. simple + batch composing). When omitted with
+   * `autoInformedBy: true`, the processor creates a private tracker.
+   */
+  readonly informedByTracker?: InformedByTracker
+  /**
+   * Optional: tracker memory-bound config. Ignored when `informedByTracker`
+   * is supplied (the supplied tracker's bounds win).
+   */
+  readonly informedByTrackerOptions?: InformedByTrackerOptions
+  /**
+   * Optional: args/result hash posture per spec §8.3 (D045). Default
+   * 'none' preserves the §8.1 default privacy posture (no commitment to
+   * args/result bytes). 'plain' emits sha256(canonical_args_bytes) and
+   * sha256(canonical_result_bytes); 'salted' adds 16-byte random salts.
+   * Verifiers given the salt + original bytes can re-derive the hash to
+   * confirm what the agent committed to. Choose per threat model.
+   */
+  readonly argsResultHashPosture?: ArgsResultHashPosture
 }
 
 export class AtribSpanProcessor implements SpanProcessor {
   private readonly opts: AtribSpanProcessorOptions
+  private readonly tracker: InformedByTracker | null
   private shutdownRequested = false
 
   constructor(opts: AtribSpanProcessorOptions) {
     this.opts = opts
+    if (opts.autoInformedBy === true) {
+      this.tracker =
+        opts.informedByTracker ??
+        new InformedByTracker(opts.informedByTrackerOptions ?? {})
+    } else {
+      this.tracker = null
+    }
   }
 
   onStart(_span: Span, _parentContext: Context): void {
@@ -170,21 +218,64 @@ export class AtribSpanProcessor implements SpanProcessor {
       return
     }
 
+    const traceId = span.spanContext().traceId
+    const toolCallId = readToolCallId(span)
+    const llmOutputToolCallId = readLlmOutputToolCallId(span)
+
+    // For TOOL spans with a tool_call.id matching a previously-tracked
+    // LLM emission, derive the informed_by edge BEFORE signing (the
+    // signature covers informed_by per JCS canonical form).
+    let unsignedRecord = result.record
+    if (
+      this.tracker !== null &&
+      result.kind === 'TOOL' &&
+      toolCallId !== undefined
+    ) {
+      const llmRecordHash = this.tracker.lookup(traceId, toolCallId)
+      if (llmRecordHash !== undefined) {
+        unsignedRecord = { ...unsignedRecord, informed_by: [llmRecordHash] }
+      }
+    }
+
+    if (
+      this.opts.argsResultHashPosture !== undefined &&
+      this.opts.argsResultHashPosture !== 'none'
+    ) {
+      const ioForHash = readIoValues(span)
+      const hashFields = deriveArgsResultHashFields(
+        this.opts.argsResultHashPosture,
+        ioForHash,
+      )
+      unsignedRecord = { ...unsignedRecord, ...hashFields }
+    }
+
     const recordWithPlaceholder = {
-      ...result.record,
+      ...unsignedRecord,
       signature: '',
     } as AtribRecord
     const signed = await signRecord(recordWithPlaceholder, this.opts.privateKey)
 
+    // For LLM spans whose output emitted a tool_call, register this
+    // record's hash so the corresponding TOOL span (which fires next)
+    // can pick it up as informed_by. The record_hash is sha256 of the
+    // canonical signed record per spec §1.4.
+    if (
+      this.tracker !== null &&
+      result.kind === 'LLM' &&
+      llmOutputToolCallId !== undefined
+    ) {
+      const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(signed)))}`
+      this.tracker.recordLlmToolCallEmission(traceId, llmOutputToolCallId, recordHash)
+    }
+
     const io = readIoValues(span)
     const agentName = readAgentName(span)
-    const llmOutputToolCallId = readLlmOutputToolCallId(span)
     const sidecar: AtribSpanSidecar = {
       ...(io.input !== undefined ? { input: io.input } : {}),
       ...(io.output !== undefined ? { output: io.output } : {}),
       ...(agentName !== undefined ? { agentName } : {}),
       ...(llmOutputToolCallId !== undefined ? { llmOutputToolCallId } : {}),
-      traceId: span.spanContext().traceId,
+      traceId,
       spanId: span.spanContext().spanId,
     }
 

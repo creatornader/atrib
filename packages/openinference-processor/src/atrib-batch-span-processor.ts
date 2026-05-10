@@ -36,10 +36,27 @@ import type {
   SpanProcessor,
 } from '@opentelemetry/sdk-trace-base'
 import type { Context } from '@opentelemetry/api'
-import { type AtribRecord, signRecord } from '@atrib/mcp'
-import { spanToUnsignedRecord, readIoValues, readAgentName, readLlmOutputToolCallId } from './span-to-record.js'
+import {
+  type AtribRecord,
+  signRecord,
+  canonicalRecord,
+  sha256,
+  hexEncode,
+} from '@atrib/mcp'
+import {
+  spanToUnsignedRecord,
+  readIoValues,
+  readAgentName,
+  readLlmOutputToolCallId,
+  readToolCallId,
+} from './span-to-record.js'
 import { isOpenInferenceSpan } from './openinference-filter.js'
 import type { AtribSpanSidecar } from './atrib-span-processor.js'
+import { InformedByTracker, type InformedByTrackerOptions } from './informed-by-tracker.js'
+import {
+  deriveArgsResultHashFields,
+  type ArgsResultHashPosture,
+} from './args-result-hash.js'
 
 export type AtribBatchEntry = {
   readonly signed: AtribRecord
@@ -121,6 +138,22 @@ export type AtribBatchSpanProcessorOptions = {
    * Optional: log diagnostic messages to stderr. Default false.
    */
   readonly debug?: boolean
+  /**
+   * Optional: enable automatic `informed_by` derivation. Same semantics
+   * as `AtribSpanProcessor.autoInformedBy`. When sharing across simple
+   * + batch processors, pass the same `informedByTracker` instance to
+   * both.
+   */
+  readonly autoInformedBy?: boolean
+  /** Optional shared tracker (see AtribSpanProcessor docs). */
+  readonly informedByTracker?: InformedByTracker
+  /** Optional tracker memory bounds (ignored when informedByTracker is supplied). */
+  readonly informedByTrackerOptions?: InformedByTrackerOptions
+  /**
+   * Optional: args/result hash posture per spec §8.3 (D045). See
+   * `AtribSpanProcessorOptions.argsResultHashPosture`.
+   */
+  readonly argsResultHashPosture?: ArgsResultHashPosture
 }
 
 export class AtribBatchSpanProcessor implements SpanProcessor {
@@ -129,6 +162,7 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
   private readonly maxExportBatchSize: number
   private readonly scheduledDelayMillis: number
   private readonly exportTimeoutMillis: number
+  private readonly tracker: InformedByTracker | null
 
   private queue: AtribBatchEntry[] = []
   private flushTimer: ReturnType<typeof setTimeout> | null = null
@@ -144,6 +178,13 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
     this.maxExportBatchSize = cfg.maxExportBatchSize ?? DEFAULT_MAX_EXPORT_BATCH_SIZE
     this.scheduledDelayMillis = cfg.scheduledDelayMillis ?? DEFAULT_SCHEDULED_DELAY_MILLIS
     this.exportTimeoutMillis = cfg.exportTimeoutMillis ?? DEFAULT_EXPORT_TIMEOUT_MILLIS
+    if (opts.autoInformedBy === true) {
+      this.tracker =
+        opts.informedByTracker ??
+        new InformedByTracker(opts.informedByTrackerOptions ?? {})
+    } else {
+      this.tracker = null
+    }
   }
 
   onStart(_span: Span, _parentContext: Context): void {
@@ -206,18 +247,54 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
       return
     }
 
-    const recordWithPlaceholder = { ...result.record, signature: '' } as AtribRecord
+    const traceId = span.spanContext().traceId
+    const toolCallId = readToolCallId(span)
+    const llmOutputToolCallId = readLlmOutputToolCallId(span)
+
+    let unsignedRecord = result.record
+    if (
+      this.tracker !== null &&
+      result.kind === 'TOOL' &&
+      toolCallId !== undefined
+    ) {
+      const llmRecordHash = this.tracker.lookup(traceId, toolCallId)
+      if (llmRecordHash !== undefined) {
+        unsignedRecord = { ...unsignedRecord, informed_by: [llmRecordHash] }
+      }
+    }
+
+    if (
+      this.opts.argsResultHashPosture !== undefined &&
+      this.opts.argsResultHashPosture !== 'none'
+    ) {
+      const ioForHash = readIoValues(span)
+      const hashFields = deriveArgsResultHashFields(
+        this.opts.argsResultHashPosture,
+        ioForHash,
+      )
+      unsignedRecord = { ...unsignedRecord, ...hashFields }
+    }
+
+    const recordWithPlaceholder = { ...unsignedRecord, signature: '' } as AtribRecord
     const signed = await signRecord(recordWithPlaceholder, this.opts.privateKey)
+
+    if (
+      this.tracker !== null &&
+      result.kind === 'LLM' &&
+      llmOutputToolCallId !== undefined
+    ) {
+      const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(signed)))}`
+      this.tracker.recordLlmToolCallEmission(traceId, llmOutputToolCallId, recordHash)
+    }
 
     const io = readIoValues(span)
     const agentName = readAgentName(span)
-    const llmOutputToolCallId = readLlmOutputToolCallId(span)
     const sidecar: AtribSpanSidecar = {
       ...(io.input !== undefined ? { input: io.input } : {}),
       ...(io.output !== undefined ? { output: io.output } : {}),
       ...(agentName !== undefined ? { agentName } : {}),
       ...(llmOutputToolCallId !== undefined ? { llmOutputToolCallId } : {}),
-      traceId: span.spanContext().traceId,
+      traceId,
       spanId: span.spanContext().spanId,
     }
 

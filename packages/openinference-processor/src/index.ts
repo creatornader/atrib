@@ -34,6 +34,7 @@ export {
   readAgentName,
   readIoValues,
   readLlmOutputToolCallId,
+  readToolCallId,
 } from './span-to-record.js'
 export type { SpanToRecordContext, SpanMappingResult } from './span-to-record.js'
 
@@ -42,3 +43,14 @@ export {
   verifyOpenTelemetryContextPropagation,
   ContextPropagationError,
 } from './preflight.js'
+
+// informed_by tracker (shared across simple + batch processors when both wired).
+export { InformedByTracker } from './informed-by-tracker.js'
+export type { InformedByTrackerOptions } from './informed-by-tracker.js'
+
+// Args/result hash extraction per spec §8.3.
+export { deriveArgsResultHashFields } from './args-result-hash.js'
+export type {
+  ArgsResultHashPosture,
+  ArgsResultHashFields,
+} from './args-result-hash.js'

@@ -221,10 +221,10 @@ describe('AtribSpanProcessor end-to-end', () => {
     const plainSpan = tracer.startSpan('non-openinference')
     plainSpan.end()
 
-    // Unsupported kind (EMBEDDING) -> skipped
-    const embedSpan = tracer.startSpan('embed-step')
-    embedSpan.setAttribute('openinference.span.kind', 'EMBEDDING')
-    embedSpan.end()
+    // Unrecognized kind (synthesized invalid value) -> skipped
+    const bogusSpan = tracer.startSpan('bogus-step')
+    bogusSpan.setAttribute('openinference.span.kind', 'NOT_A_REAL_KIND')
+    bogusSpan.end()
 
     await new Promise((resolve) => setImmediate(resolve))
     expect(submitted).toHaveLength(0)
