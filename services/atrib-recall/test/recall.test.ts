@@ -27,6 +27,8 @@ interface RecordOverrides {
   timestamp?: number
   content_id?: string
   session_token?: string
+  tool_name?: string
+  args_hash?: string
 }
 
 async function makeSigned(overrides: RecordOverrides = {}): Promise<AtribRecord> {
@@ -44,6 +46,8 @@ async function makeSigned(overrides: RecordOverrides = {}): Promise<AtribRecord>
     timestamp: overrides.timestamp ?? 1700000000000,
     signature: '',
     ...(overrides.session_token ? { session_token: overrides.session_token } : {}),
+    ...(overrides.tool_name ? { tool_name: overrides.tool_name } : {}),
+    ...(overrides.args_hash ? { args_hash: overrides.args_hash } : {}),
   }
   return signRecord(record as AtribRecord, KEY)
 }
@@ -169,6 +173,75 @@ describe('recall', () => {
 
     expect((await recall({ event_type: 'transaction' }, recordFile)).total).toBe(1)
     expect((await recall({ event_type: 'tool_call' }, recordFile)).total).toBe(2)
+  })
+
+  it('filters by content_id (exact match)', async () => {
+    const cidA = `sha256:${'a'.repeat(64)}`
+    const cidB = `sha256:${'b'.repeat(64)}`
+    const records = [
+      await makeSigned({ timestamp: 1, content_id: cidA }),
+      await makeSigned({ timestamp: 2, content_id: cidB }),
+      await makeSigned({ timestamp: 3, content_id: cidA }),
+    ]
+    writeFileSync(recordFile, records.map((r) => JSON.stringify(r)).join('\n'))
+
+    expect((await recall({ content_id: cidA }, recordFile)).total).toBe(2)
+    expect((await recall({ content_id: cidB }, recordFile)).total).toBe(1)
+    expect((await recall({ content_id: `sha256:${'9'.repeat(64)}` }, recordFile)).total).toBe(0)
+  })
+
+  it('filters by tool_name (excludes records without tool_name disclosure)', async () => {
+    const records = [
+      await makeSigned({ timestamp: 1, content_id: `sha256:${'a'.repeat(64)}`, tool_name: 'Edit' }),
+      await makeSigned({ timestamp: 2, content_id: `sha256:${'b'.repeat(64)}`, tool_name: 'Bash' }),
+      await makeSigned({ timestamp: 3, content_id: `sha256:${'c'.repeat(64)}` }), // no tool_name
+      await makeSigned({ timestamp: 4, content_id: `sha256:${'d'.repeat(64)}`, tool_name: 'Edit' }),
+    ]
+    writeFileSync(recordFile, records.map((r) => JSON.stringify(r)).join('\n'))
+
+    expect((await recall({ tool_name: 'Edit' }, recordFile)).total).toBe(2)
+    expect((await recall({ tool_name: 'Bash' }, recordFile)).total).toBe(1)
+    expect((await recall({ tool_name: 'Read' }, recordFile)).total).toBe(0)
+    // Sanity: total without filter is 4 (the no-tool_name record is included).
+    expect((await recall({}, recordFile)).total).toBe(4)
+  })
+
+  it('filters by args_hash (exact match)', async () => {
+    const hashA = `sha256:${'1'.repeat(64)}`
+    const hashB = `sha256:${'2'.repeat(64)}`
+    const records = [
+      await makeSigned({ timestamp: 1, content_id: `sha256:${'a'.repeat(64)}`, args_hash: hashA }),
+      await makeSigned({ timestamp: 2, content_id: `sha256:${'b'.repeat(64)}`, args_hash: hashB }),
+      await makeSigned({ timestamp: 3, content_id: `sha256:${'c'.repeat(64)}` }), // no args_hash
+    ]
+    writeFileSync(recordFile, records.map((r) => JSON.stringify(r)).join('\n'))
+
+    expect((await recall({ args_hash: hashA }, recordFile)).total).toBe(1)
+    expect((await recall({ args_hash: hashB }, recordFile)).total).toBe(1)
+    expect((await recall({ args_hash: `sha256:${'9'.repeat(64)}` }, recordFile)).total).toBe(0)
+  })
+
+  it('AND-combines content_id + tool_name + args_hash filters', async () => {
+    const cidA = `sha256:${'a'.repeat(64)}`
+    const hashA = `sha256:${'1'.repeat(64)}`
+    const records = [
+      // Matches all three
+      await makeSigned({ timestamp: 1, content_id: cidA, tool_name: 'Edit', args_hash: hashA }),
+      // Matches content_id + tool_name only
+      await makeSigned({ timestamp: 2, content_id: cidA, tool_name: 'Edit', args_hash: `sha256:${'2'.repeat(64)}` }),
+      // Matches content_id only
+      await makeSigned({ timestamp: 3, content_id: cidA, tool_name: 'Bash', args_hash: hashA }),
+      // Matches none
+      await makeSigned({ timestamp: 4, content_id: `sha256:${'b'.repeat(64)}`, tool_name: 'Read' }),
+    ]
+    writeFileSync(recordFile, records.map((r) => JSON.stringify(r)).join('\n'))
+
+    const all = await recall({ content_id: cidA, tool_name: 'Edit', args_hash: hashA }, recordFile)
+    expect(all.total).toBe(1)
+    expect(all.records[0]!.timestamp).toBe(1)
+
+    const contentAndTool = await recall({ content_id: cidA, tool_name: 'Edit' }, recordFile)
+    expect(contentAndTool.total).toBe(2)
   })
 
   it('respects limit and offset for pagination', async () => {
