@@ -27,3 +27,9 @@ export {
   readLlmOutputToolCallId,
 } from './span-to-record.js'
 export type { SpanToRecordContext, SpanMappingResult } from './span-to-record.js'
+
+// Preflight verification (recommended at app startup).
+export {
+  verifyOpenTelemetryContextPropagation,
+  ContextPropagationError,
+} from './preflight.js'

@@ -69,12 +69,45 @@ EMBEDDING, RETRIEVER, CHAIN, RERANKER, GUARDRAIL, EVALUATOR, and PROMPT spans ar
 
 ## Composition with other OTel pipelines
 
-`AtribSpanProcessor` is additive. Add it to your tracer provider alongside any existing exporters (Langfuse OTLP receiver, Phoenix collector, Datadog, etc.). Each processor sees every span; atrib filters for OpenInference TOOL spans and signs them; other processors continue unaffected.
+`AtribSpanProcessor` is additive. Add it to your tracer provider alongside any existing exporters (Langfuse OTLP receiver, Phoenix collector, Datadog, etc.). Each processor sees every span; atrib filters for OpenInference spans and signs them; other processors continue unaffected.
 
 ```ts
 provider.addSpanProcessor(new SimpleSpanProcessor(otlpExporter)) // your existing pipeline
 provider.addSpanProcessor(atribProcessor)                         // adds verifiable substrate
 ```
+
+## Required: register an async context manager
+
+For Node.js consumers using the bare `BasicTracerProvider`: register `AsyncHooksContextManager` BEFORE the tracer provider, otherwise Vercel AI SDK (and similar instrumented frameworks) emit each async-boundary-crossing span as its own root with a fresh trace_id. Atrib then signs each into its own context_id, breaking session chain composition.
+
+```ts
+import { AsyncHooksContextManager } from '@opentelemetry/context-async-hooks'
+import { context } from '@opentelemetry/api'
+
+const ctxManager = new AsyncHooksContextManager()
+ctxManager.enable()
+context.setGlobalContextManager(ctxManager)
+// ... then construct your TracerProvider + processors
+```
+
+Pipelines using `NodeSDK` from `@opentelemetry/sdk-node` already register a context manager by default; this only applies to bare `BasicTracerProvider` setups. Empirically: a single `generateText` Vercel AI SDK call with this manager produces 1 trace_id across all 4 spans (LLM/TOOL/LLM/AGENT); without it, 4 distinct trace_ids.
+
+### Preflight verification (recommended)
+
+The package exports `verifyOpenTelemetryContextPropagation()` -- a deterministic startup test that opens a root span, crosses an async boundary, opens a child span inside the root's context, and verifies the child shares the root's `trace_id`. If propagation is broken, it throws `ContextPropagationError` with actionable fix instructions BEFORE any production work runs.
+
+```ts
+import {
+  AtribSpanProcessor,
+  verifyOpenTelemetryContextPropagation,
+} from '@atrib/openinference-processor'
+
+// At app startup, after configuring your TracerProvider:
+await verifyOpenTelemetryContextPropagation()
+// If this throws, you have a misconfiguration. Fix per error message.
+```
+
+Calling this is the difference between catching the bug at startup vs. silently emitting fragmented atrib chains in production. Strongly recommended for any deployment using `BasicTracerProvider` directly.
 
 ## §5.8 degradation contract
 
@@ -82,12 +115,11 @@ Per the atrib spec [§5.8 degradation contract](../../atrib-spec.md#58-degradati
 
 ## Status
 
-`v0.0.1` -- TOOL + LLM + AGENT span mappings shipped with 22 tests (12 unit + 10 fixture-replay) + composition pilot validated end-to-end against real Vercel AI SDK v6 + NVIDIA NIM-served Qwen 3.5 + `@arizeai/openinference-vercel`'s reference SpanProcessor on a shared TracerProvider. Live pilot signs all 4 spans of a single tool-using `generateText` call (LLM + TOOL + LLM + AGENT) producing 2 distinct event_types (`observation` + `tool_call`). Attribute keys imported from `@arizeai/openinference-semantic-conventions` for canonical schema correctness. Runnable integration example at `packages/integration/examples/openinference/` (offline-runnable by default; live model-driven path enabled via `ATRIB_OPENINFERENCE_RUN_LIVE=1` + `NVIDIA_API_KEY`). Conformance fixtures in `test/fixtures/` capture four canonical span shapes (TOOL, two LLMs, AGENT) live-captured from a real run -- the fixture-replay test catches upstream attribute-schema drift before it reaches consumers. Not yet published to npm.
+`v0.0.1` -- TOOL + LLM + AGENT span mappings shipped with 22 tests (12 unit + 10 fixture-replay) + composition pilot validated end-to-end against real Vercel AI SDK v6 + NVIDIA NIM-served Qwen 3.5 + `@arizeai/openinference-vercel`'s reference SpanProcessor on a shared TracerProvider. Live pilot signs all 4 spans of a single tool-using `generateText` call (LLM + TOOL + LLM + AGENT) producing 2 distinct event_types (`observation` + `tool_call`) into ONE shared context_id (with the required AsyncHooksContextManager registered, see "Required: register an async context manager" below). Attribute keys imported from `@arizeai/openinference-semantic-conventions` for canonical schema correctness. Runnable integration example at `packages/integration/examples/openinference/` (offline-runnable by default; live model-driven path enabled via `ATRIB_OPENINFERENCE_RUN_LIVE=1` + `NVIDIA_API_KEY`). Conformance fixtures in `test/fixtures/` capture four canonical span shapes (TOOL, two LLMs, AGENT) live-captured from a real run -- the fixture-replay test catches upstream attribute-schema drift before it reaches consumers. Not yet published to npm.
 
 Roadmap (each item references concrete fixture data in `test/fixtures/`):
 
 - **`informed_by` derivation** from `tool_call.id` shared between LLM-with-tool-calls span and TOOL span (sidecar surfaces it via `readLlmOutputToolCallId`; fixture-replay test asserts the empirical equality). Auto-wiring from sidecar -> record body lands in v0.1.0. Plus `graph.node.parent_id` for LangGraph.
-- **Trace-level chain composition**: in v0.0.1, each Vercel AI SDK span signs into its own context_id (one per child span's traceId). v0.1.0 will follow `parentSpanContext.traceId` upward to fold all spans of a single agent run into one chain.
 - **Batch variant** (`AtribBatchSpanProcessor`) mirroring `OpenInferenceBatchSpanProcessor`
 - **Args/result hash extraction** per [§8.3](../../atrib-spec.md#83-salted-commitment-posture) salted-commitment posture
 - **Remaining 7 OpenInference kinds** (EMBEDDING, RETRIEVER, CHAIN, RERANKER, GUARDRAIL, EVALUATOR, PROMPT) -- ship per use case; current behavior returns "kind X not yet mapped" skip

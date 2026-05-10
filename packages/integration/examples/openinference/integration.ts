@@ -28,7 +28,8 @@
  */
 
 import { BasicTracerProvider } from '@opentelemetry/sdk-trace-base'
-import { SpanStatusCode } from '@opentelemetry/api'
+import { AsyncHooksContextManager } from '@opentelemetry/context-async-hooks'
+import { context, SpanStatusCode } from '@opentelemetry/api'
 import {
   OpenInferenceSimpleSpanProcessor,
   isOpenInferenceSpan,
@@ -41,12 +42,33 @@ import {
   verifyRecord,
   type AtribRecord,
 } from '@atrib/mcp'
-import { AtribSpanProcessor } from '@atrib/openinference-processor'
+import {
+  AtribSpanProcessor,
+  verifyOpenTelemetryContextPropagation,
+} from '@atrib/openinference-processor'
 import { generateText, tool, stepCountIs } from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { z } from 'zod'
 
 async function main() {
+  // 0. Register the async-hooks context manager BEFORE any tracer-provider
+  //    setup. Without this, Vercel AI SDK's child spans (LLM/TOOL/LLM/AGENT
+  //    of a single `generateText` call) lose their parent-context across
+  //    async boundaries and emit as 4 separate trace_ids -- which means
+  //    atrib's adapter signs each as its own context_id, breaking session
+  //    chain composition. With it, all 4 spans share one trace_id and
+  //    therefore one atrib context_id. Empirically verified: with this
+  //    line removed, distinct traces = 4; with it, distinct traces = 1.
+  const ctxManager = new AsyncHooksContextManager()
+  ctxManager.enable()
+  context.setGlobalContextManager(ctxManager)
+
+  // 0b. Preflight: verify trace context actually propagates across async
+  //     boundaries. If step 0 was skipped or misconfigured, this throws
+  //     ContextPropagationError with actionable fix instructions before
+  //     any actual work is signed.
+  await verifyOpenTelemetryContextPropagation()
+
   // 1. Resolve the operator's atrib identity. In production this comes from
   //    Keychain or an env var (see @atrib/cli for key management).
   const privateKeyB64 = process.env.ATRIB_PRIVATE_KEY

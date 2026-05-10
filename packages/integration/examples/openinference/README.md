@@ -16,13 +16,31 @@ ATRIB_PRIVATE_KEY=<base64url-32-bytes> \
   pnpm tsx integration.ts
 ```
 
-The example uses a synthetic OpenInference span constructed manually so it runs offline without a model provider. For a real end-to-end run with Vercel AI SDK + a real model:
+For a real model-driven run against NVIDIA NIM-served Qwen 3.5:
 
 ```bash
-pnpm add ai @ai-sdk/openai-compatible @arizeai/openinference-vercel @opentelemetry/api @opentelemetry/sdk-trace-base
-# then follow https://github.com/Arize-ai/openinference/tree/main/js/packages/openinference-vercel/examples
-# and add `AtribSpanProcessor` to the same TracerProvider's `spanProcessors` array
+ATRIB_PRIVATE_KEY=<base64url-32-bytes> \
+  ATRIB_OPENINFERENCE_RUN_LIVE=1 \
+  NVIDIA_API_KEY=<your-key> \
+  pnpm tsx integration.ts
 ```
+
+## Critical setup: the async-hooks context manager
+
+The example registers `AsyncHooksContextManager` BEFORE creating the TracerProvider. Without it, Vercel AI SDK's child spans (LLM/TOOL/LLM/AGENT of a single `generateText` call) lose parent-context across async boundaries and each becomes its own root span with a fresh trace_id. Atrib's adapter then signs each as its own context_id -- breaking session chain composition.
+
+Empirical observation: without `AsyncHooksContextManager`, a single `generateText` call produces 4 distinct trace_ids (one per child span). With it, all 4 spans share one trace_id and therefore one atrib context_id. The change is one block at the top of the script:
+
+```ts
+import { AsyncHooksContextManager } from '@opentelemetry/context-async-hooks'
+import { context } from '@opentelemetry/api'
+
+const ctxManager = new AsyncHooksContextManager()
+ctxManager.enable()
+context.setGlobalContextManager(ctxManager)
+```
+
+Any production pipeline using Node's OpenTelemetry SDK should already be doing this (it's the default in `NodeSDK` from `@opentelemetry/sdk-node`); this caveat applies to bare `BasicTracerProvider` setups.
 
 ## What the substrate sees
 
