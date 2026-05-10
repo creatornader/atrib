@@ -221,6 +221,21 @@ describe('recall', () => {
     expect((await recall({ args_hash: `sha256:${'9'.repeat(64)}` }, recordFile)).total).toBe(0)
   })
 
+  it('passes tool_name through compact mode (when disclosed)', async () => {
+    const records = [
+      await makeSigned({ timestamp: 1, content_id: `sha256:${'a'.repeat(64)}`, tool_name: 'Edit' }),
+      await makeSigned({ timestamp: 2, content_id: `sha256:${'b'.repeat(64)}` }), // no tool_name
+    ]
+    writeFileSync(recordFile, records.map((r) => JSON.stringify(r)).join('\n'))
+
+    const result = await recall({ compact: true }, recordFile)
+    expect(result.returned).toBe(2)
+    const withTool = result.records.find((r) => r.timestamp === 1)
+    const without = result.records.find((r) => r.timestamp === 2)
+    expect(withTool && 'tool_name' in withTool ? withTool.tool_name : undefined).toBe('Edit')
+    expect(without && 'tool_name' in without ? without.tool_name : undefined).toBeUndefined()
+  })
+
   it('AND-combines content_id + tool_name + args_hash filters', async () => {
     const cidA = `sha256:${'a'.repeat(64)}`
     const hashA = `sha256:${'1'.repeat(64)}`
