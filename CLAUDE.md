@@ -34,6 +34,7 @@ atrib/
     mcp-wrap/                  # @atrib/mcp-wrap: generic config-driven MCP wrapper (public). Library + binary. Wraps any upstream MCP server with @atrib/mcp middleware so every tool call is signed and logged. Multiplies coverage to ~30 MCPs at zero per-server code cost. Library surface (`wrap`, `parseConfig`, `buildPreCallTransform`, `resolveKey`, helpers) for in-tree wrappers; `atrib-wrap` binary reads $ATRIB_WRAP_CONFIG or ~/.atrib/wrap-config.json.
     directory/                 # @atrib/directory: AKD-backed identity-claim directory SDK (public). Bundles wasm/ artifacts built from packages/directory-bridge.
     directory-bridge/          # atrib-directory-bridge: Rust crate wrapping facebook/akd via wasm-bindgen. Source-only; build artifacts ship inside @atrib/directory.
+    openinference-processor/   # @atrib/openinference-processor: OpenTelemetry SpanProcessor consuming OpenInference-shaped spans and emitting signed atrib records. Reference impl of spec §9 Pattern #4. Mirrors @arizeai/openinference-vercel ergonomics so callers compose it alongside their OpenInference pipeline; one adapter transitively reaches every framework with OpenInference instrumentation (OpenAI Agents SDK, Claude Agent SDK, LangChain, Vercel AI, CrewAI, LlamaIndex, DSPy, MCP, Microsoft Agent Framework, Bedrock AgentCore, smolagents, Pydantic AI, Agno, +20 more). Peer deps on @opentelemetry/api + @opentelemetry/sdk-trace-base.
     log-dev/                   # @atrib/log-dev: in-memory dev Merkle log stub (PRIVATE, dev only)
     integration/               # @atrib/integration: cross-package tests + runnable framework examples (private)
       examples/
@@ -150,8 +151,8 @@ These are non-negotiable. They come from the founding conversation and are the l
 
 ### Monorepo
 
-This is a TypeScript monorepo with **twelve workspace packages**:
-- **Six core public packages** (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`, `@atrib/cli`, `@atrib/mcp-wrap`, `@atrib/directory`)
+This is a TypeScript monorepo with **thirteen workspace packages**:
+- **Seven core public packages** (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`, `@atrib/cli`, `@atrib/mcp-wrap`, `@atrib/directory`, `@atrib/openinference-processor`)
 - **Four cognitive-primitive MCP servers** (`@atrib/emit`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`) — published to npm with binaries
 - **Two private workspace packages** (`@atrib/log-dev`, `@atrib/integration`)
 
