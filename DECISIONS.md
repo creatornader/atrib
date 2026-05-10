@@ -3440,6 +3440,25 @@ This is a producer-side recommendation, not a normative spec constraint. atrib d
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
 
+## P011: long-lived atrib-emit process vs the spawn-per-hook fork model
+
+**Source:** Triage of 29 `[layer=sessionend] atrib-emit connect timed out after 15000ms` errors clustered in a 33-minute window. The hook architecture spawns a fresh `atrib-emit` subprocess per invocation via `StdioClientTransport`. Under burst load the per-spawn fork plus MCP handshake exceeds the 15-second connect budget, dropping the sessionend annotation that would otherwise mark the session boundary.
+
+**The decision in question:** should the hook architecture move from spawn-per-invocation to a shared long-lived `atrib-emit` process that all hook subprocesses connect to over a local IPC channel? Or is spawn-per-hook an acceptable trade-off given silent failure and bounded downstream impact?
+
+**Considerations.**
+
+- Spawn-per-hook is operationally simple. No process lifecycle to manage, no socket path, no restart semantics, no upgrade-while-running concerns.
+- Under burst load the spawn cost amortizes badly. The Layer 2a and 2b PostToolUse tool_call records were unaffected, but the sessionend annotations that should have anchored those sessions structurally never made it to the log.
+- Alternatives short of a daemon: raise `ATRIB_EMIT_TIMEOUT_MS` (masks the symptom and wastes helper runtime); add retry-with-backoff (each retry forks again, worsening contention); per-conversation worker spawned on first hook and reused for session lifetime; full shared worker with a local IPC channel.
+- A shared worker would also amortize the per-spawn mirror re-read cost that every hook pays when initializing the autoChain seed.
+
+**Likely outcome (not committed):** accept; adopt a per-conversation or fully shared worker. The observed failure rate is bounded since burst pressure resolves itself once child-session churn settles, and the operational simplicity of spawn-per-hook is genuine. Defer until either the steady-state miss rate exceeds an acceptable bound (rough threshold: > 0.5% of expected sessionend annotations missing over a 7-day window), or a downstream consumer starts depending on every sessionend annotation landing (recall filter on `inheritedFrom`, substrate-health surface separating drop-rate from drop-burst, benchmark recording fidelity, future per-creator timeline UI).
+
+**Reopening criteria.** First of: sustained burst-pattern repetition outside transient system pressure; a recall / trace / summarize feature requiring every sessionend annotation; a benchmark or pitch artifact measuring sessionend annotation completeness; a different hook surface where per-spawn cost is felt directly by the calling agent (e.g., a synchronous hook that cannot be detached).
+
+**ADR number** will be assigned when acted on. Do not pre-allocate.
+
 ## P009: middleware orphan-flagging consistency with [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail)
 
 **Source:** Audit pass 2026-05-09 after [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) shipped. The middleware's MCP-traffic-handling path in `packages/mcp/src/middleware.ts` synthesizes a `context_id` (random or `stableContextId` under `autoChain`) when no inbound atrib token, no `traceparent`, and no caller value are available. This path produces real per-call records but does NOT mark them with `inheritedFrom = 'fresh-orphan'` because the middleware's signing path doesn't go through `inheritChainContext`.
