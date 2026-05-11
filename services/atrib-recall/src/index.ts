@@ -596,15 +596,109 @@ server.registerTool(
             'response (their count is reported in filtered_out_by_verification). Set to true to ' +
             'include them - useful when investigating tampered or partial mirror state.',
         ),
+      // ─── New in 0.5.0-alpha: schema accepted; enforcement in flight. Each ───
+      //    of the seven params below is currently STUB-ACCEPTED: the schema
+      //    validates the value and the handler ignores it (returns the same
+      //    results it would return without the param). The response payload
+      //    includes a layer_1_warnings array listing which stub-accepted
+      //    params were silently ignored, so callers can detect the pre-impl
+      //    state without having to read source. Full enforcement implementation
+      //    lands in upcoming releases.
+      min_importance: z
+        .enum(['critical', 'high', 'medium', 'low', 'noise'])
+        .optional()
+        .describe(
+          'Stub-accepted (0.5.0-alpha): schema validates; handler does not yet filter. Future release ' +
+            'enforces minimum annotation-derived importance (records ranked by max(annotation.importance) ' +
+            'where annotations are records pointing at this record). Records with no annotations have ' +
+            'importance=0 and will be excluded once enforcement lands.',
+        ),
+      topic_tags: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Stub-accepted (0.5.0-alpha): schema validates; handler does not yet filter. Future release ' +
+            'enforces OR-match against annotation topic tags - records kept if at least one annotation ' +
+            'pointing at them carries at least one of the listed topics.',
+        ),
+      include_revised: z
+        .boolean()
+        .optional()
+        .describe(
+          'Stub-accepted (0.5.0-alpha): schema validates; handler does not yet filter. Default false ' +
+            'when enforcement lands. When true, hides records superseded by revision records pointing ' +
+            'at them via the revises field.',
+        ),
+      min_signers: z
+        .number()
+        .optional()
+        .describe(
+          'Stub-accepted (0.5.0-alpha): schema validates; handler does not yet filter. Future release ' +
+            'enforces minimum count of distinct cross-attesting signers per the cross-attestation rule. ' +
+            'Useful for transaction records that must carry at least 2 signers; also useful as a ' +
+            'credibility filter when querying multi-agent substrate.',
+        ),
+      rank_by: z
+        .enum(['timestamp', 'relevance', 'causal_distance'])
+        .optional()
+        .describe(
+          'Stub-accepted (0.5.0-alpha): schema validates; handler always uses timestamp ordering until ' +
+            'enforcement lands. Future release: timestamp (default, newest first), relevance (Park et ' +
+            'al. weighted-sum scoring with annotation-derived importance), or causal_distance (BFS ' +
+            'shortest path in the derived graph from rank_anchor).',
+        ),
+      rank_anchor: z
+        .string()
+        .optional()
+        .describe(
+          'Stub-accepted (0.5.0-alpha): schema validates; handler ignores until rank_by enforcement ' +
+            'lands. The anchor for non-timestamp rank_by modes - either a record_hash for ' +
+            'causal_distance ranking or a free-form text query for relevance ranking.',
+        ),
+      toc: z
+        .boolean()
+        .optional()
+        .describe(
+          'Stub-accepted (0.5.0-alpha): schema validates; handler returns the standard compact response ' +
+            'shape. Future release returns the table-of-contents entry shape (record_hash, tool_name, ' +
+            'summary, importance, topic_tags, timestamp, superseded_by) at ~40-80 tokens per entry, ' +
+            'designed for SessionStart auto-injected scaffold.',
+        ),
     },
   },
   async (args) => {
+    // Layer 1 stub-acceptance: detect new-in-0.5.0-alpha params, run the
+    // existing 0.4.0 recall path (which ignores them), and return the
+    // result with a layer_1_warnings array listing exactly which stub-
+    // accepted params were silently ignored. Callers can detect the
+    // pre-implementation state without having to read source.
+    const a = args as RecallArgs & Record<string, unknown>
+    const stubAcceptedKeys = [
+      'min_importance',
+      'topic_tags',
+      'include_revised',
+      'min_signers',
+      'rank_by',
+      'rank_anchor',
+      'toc',
+    ] as const
+    const ignored = stubAcceptedKeys.filter((k) => a[k] !== undefined)
     const result = await recall(args as RecallArgs)
+    const augmented = ignored.length > 0
+      ? {
+          ...result,
+          layer_1_warnings: ignored.map((k) => ({
+            param: k,
+            status: 'stub-accepted',
+            note: `Layer 1 param '${k}' was supplied; handler ignored it (full enforcement lands in upcoming release). Result reflects 0.4.0 behavior as if the param was not set.`,
+          })),
+        }
+      : result
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(result, null, 2),
+          text: JSON.stringify(augmented, null, 2),
         },
       ],
     }
