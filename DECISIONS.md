@@ -3517,7 +3517,7 @@ A run is **POSITIVE** if pass^k_delta ≥ 20 percentage points AND the secondary
 
 ### Cross-references
 
-- [P019](#p019-pass^k-as-the-primary-track-b-reporting-metric-k3-default) - the Pending decision this ADR promotes from. P019 entry retired below; the live entries in the Pending section now skip P019 (P018, P020, P021 remain).
+- P019 (retired upon promotion to this ADR) - the Pending decision this ADR promotes from. The P019 entry was removed from the Pending decisions section per the existing promotion convention ([D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) retired P011 the same way). The live entries in the Pending section now skip P019; P018, P020, P021 remain in the eval framework subset.
 - [P018](#p018-adopt-inspect-ai-as-the-track-b-harness-baseline) - Inspect AI harness adoption. The harness pilot may not be done at first-Track-B-run time; pass^k spec is independent of the harness choice. Either Inspect AI or the bespoke fallback computes pass^k identically.
 - [P020](#p020-extend-the-substrate-correctness-conformance-corpus-to-wycheproof-equivalent-coverage) - conformance corpus extension. Substrate-correctness eval; not affected by this metric change.
 - [P021](#p021-publish-a-behavior-impact-paired-benchmark-suite-as-an-atrib-artifact) - Suite B publishable benchmark. Will use pass^k as primary metric per this ADR; quarterly snapshots report pass^k_delta per task class.
