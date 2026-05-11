@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * @atrib/recall, recall_my_attribution_history MCP server.
+ * @atrib/recall - recall_my_attribution_history MCP server.
  *
  * Exposes a single tool to the host agent: recall_my_attribution_history.
  * Reads signed-record jsonl mirrors (per spec §5.9), VERIFIES the Ed25519
@@ -11,9 +11,9 @@
  * or partial mirror state.
  *
  * Mirror discovery (in priority order):
- *   1. ATRIB_RECORD_FILE, single explicit jsonl file. Back-compat with
+ *   1. ATRIB_RECORD_FILE - single explicit jsonl file. Back-compat with
  *      pre-0.4.0 callers that pinned a specific producer's mirror.
- *   2. ATRIB_MIRROR_DIR, directory; recall reads every `*.jsonl` inside.
+ *   2. ATRIB_MIRROR_DIR - directory; recall reads every `*.jsonl` inside.
  *      Default: ~/.atrib/records (the spec §5.9 well-known mirror namespace).
  *
  * Two on-disk shapes are accepted, matching D062 / spec §5.9:
@@ -27,9 +27,9 @@
  * should fetch the inclusion proof from the log API.
  *
  * Configuration via environment variables:
- *   ATRIB_RECORD_FILE, single explicit file (overrides directory scan).
- *   ATRIB_MIRROR_DIR, directory to scan. Default: ~/.atrib/records.
- *   ATRIB_LOG_ORIGIN, origin used in human-readable messages.
+ *   ATRIB_RECORD_FILE - single explicit file (overrides directory scan).
+ *   ATRIB_MIRROR_DIR - directory to scan. Default: ~/.atrib/records.
+ *   ATRIB_LOG_ORIGIN - origin used in human-readable messages.
  *                        Default: log.atrib.dev
  */
 
@@ -39,6 +39,8 @@ import {
   verifyRecord,
   EVENT_TYPE_TOOL_CALL_URI,
   EVENT_TYPE_TRANSACTION_URI,
+  EVENT_TYPE_ANNOTATION_URI,
+  EVENT_TYPE_REVISION_URI,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 
@@ -50,7 +52,38 @@ import type { AtribRecord } from '@atrib/mcp'
 const EVENT_TYPE_SHORT_TO_URI: Record<string, string> = {
   tool_call: EVENT_TYPE_TOOL_CALL_URI,
   transaction: EVENT_TYPE_TRANSACTION_URI,
+  annotation: EVENT_TYPE_ANNOTATION_URI,
+  revision: EVENT_TYPE_REVISION_URI,
 }
+
+// Layer 1 importance grading (per the recall semantic surface design). The five
+// canonical importance levels carried in annotation content per D058. The
+// numeric scale (linear 5..1) is the Park et al. weighting input; the
+// string form is what annotators actually emit. Exported so subsequent
+// commits implementing aggregation + ranking can import the same scale
+// without re-declaring it.
+export type ImportanceLabel = 'critical' | 'high' | 'medium' | 'low' | 'noise'
+export const IMPORTANCE_NUMERIC: Record<ImportanceLabel, number> = {
+  critical: 5,
+  high: 4,
+  medium: 3,
+  low: 2,
+  noise: 1,
+}
+
+// Layer 1 ranking weights per the recall semantic surface design. Park et al. 2023
+// "Generative Agents" defaults; tunable via env for experiment-time
+// per-axis sensitivity studies. Values must sum to 1.0; the implementation
+// does not enforce this but the operator-facing default does. Exported so
+// future releases implementing the parkScore function can import them.
+export const ATRIB_RECALL_ALPHA = parseFloat(process.env.ATRIB_RECALL_ALPHA ?? '0.3')
+export const ATRIB_RECALL_BETA = parseFloat(process.env.ATRIB_RECALL_BETA ?? '0.3')
+export const ATRIB_RECALL_GAMMA = parseFloat(process.env.ATRIB_RECALL_GAMMA ?? '0.4')
+
+// Recency time constant (in days) for the exponential-decay scoring
+// component. 7-day default per design; longer windows favor older records,
+// shorter windows favor very-recent records. Tunable per experiment.
+export const ATRIB_RECALL_TAU_DAYS = parseFloat(process.env.ATRIB_RECALL_TAU_DAYS ?? '7')
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -118,7 +151,7 @@ export function loadRecords(path: string): AtribRecord[] {
  * mirror namespace; every producer running under one identity writes a
  * file there with the convention `<producer>-<agent>.jsonl`. Scanning the
  * directory unifies recall across producers without recall having to know
- * the naming scheme, any producer that follows §5.9 just shows up.
+ * the naming scheme - any producer that follows §5.9 just shows up.
  */
 export function loadRecordsFromDir(dir: string): { records: AtribRecord[]; files: string[] } {
   if (!existsSync(dir)) return { records: [], files: [] }
@@ -145,7 +178,7 @@ export function loadRecordsFromDir(dir: string): { records: AtribRecord[]; files
     } else {
       // Surface empty/unreadable files too so the operator can see them in
       // the response if they care, but only if the file existed (which it
-      // does, readdirSync returned it).
+      // does - readdirSync returned it).
       files.push(full)
     }
   }
@@ -154,7 +187,7 @@ export function loadRecordsFromDir(dir: string): { records: AtribRecord[]; files
 
 interface RecallArgs {
   context_id?: string
-  event_type?: 'tool_call' | 'transaction'
+  event_type?: 'tool_call' | 'transaction' | 'annotation' | 'revision'
   /**
    * Optional exact match on `record.content_id` (`sha256:<64-hex>`). Per spec
    * §1.2.2, content_id is `sha256(serverUrl + ":" + toolName)`. Filtering by
@@ -181,6 +214,65 @@ interface RecallArgs {
    * normalized {tool, target} dict.
    */
   args_hash?: string
+  /**
+   * Layer 1 filter (NEW in 0.5.0): minimum annotation importance. Records
+   * are ranked by max(annotation.importance) where annotations are D058
+   * records pointing at this record. Records with no annotations at all
+   * have importance=0 and are EXCLUDED from results when min_importance is
+   * set. Use this to surface only records the agent or its critique loop
+   * has marked as worth attention.
+   */
+  min_importance?: ImportanceLabel
+  /**
+   * Layer 1 filter (NEW in 0.5.0): OR-match against annotation topic tags.
+   * Records are kept if AT LEAST ONE annotation pointing at them carries
+   * AT LEAST ONE of the listed topics. Records with no annotations or no
+   * topic-overlap are excluded. Topics come from D058 annotation content.
+   */
+  topic_tags?: string[]
+  /**
+   * Layer 1 filter (NEW in 0.5.0): hide records superseded by D059 revision
+   * records. Default false (records remain visible even if a later revision
+   * supersedes them; the response carries `superseded_by` so the agent can
+   * see). Set true to filter superseded records out of the response entirely.
+   */
+  include_revised?: boolean
+  /**
+   * Layer 1 filter (NEW in 0.5.0): minimum count of distinct cross-attesting
+   * signers per D052. Useful for transaction records that must carry >= 2
+   * signers; also useful as a credibility filter when querying multi-agent
+   * substrate. Records below the threshold are excluded.
+   */
+  min_signers?: number
+  /**
+   * Layer 1 ranking (NEW in 0.5.0): how to order results before paging.
+   * 'timestamp' (default, backward-compatible): newest first.
+   * 'relevance': Park et al. 2023 weighted-sum scoring with annotation-derived
+   * importance (NO embedding component until Layer 2 ships; falls back to BM25
+   * over summary+topics if rank_anchor query is provided).
+   * 'causal_distance': BFS shortest path in the §3.2.4 derived graph from
+   * `rank_anchor` (which must be a record_hash). Edge weights per design.
+   */
+  rank_by?: 'timestamp' | 'relevance' | 'causal_distance'
+  /**
+   * Layer 1 ranking (NEW in 0.5.0): the anchor for non-timestamp rank_by
+   * modes. For rank_by='causal_distance', this MUST be a record_hash
+   * (`sha256:<64-hex>`); records are ranked by BFS shortest path from
+   * the anchor. For rank_by='relevance' with an optional query string,
+   * pass the query here as a free-form text string (Layer 2 will use it
+   * for embedding similarity; Layer 1 falls back to BM25-style scoring
+   * over summary+topics).
+   */
+  rank_anchor?: string
+  /**
+   * New in 0.5.0: table-of-contents response shape. When true,
+   * each record returned is a one-line entry shape (record_hash, tool_name,
+   * summary, importance, topic_tags, timestamp, superseded_by). Cheap to
+   * scan, ~40-80 tokens per entry; agent expands on demand via
+   * `recall(content_id=..., compact=false)` or `recall_walk(...)`. Used at
+   * SessionStart for the auto-injected scaffold.
+   */
+  toc?: boolean
   limit?: number
   offset?: number
   /**
@@ -198,10 +290,28 @@ interface RecallArgs {
 }
 
 /**
+ * Aggregated annotation summary attached to a record per Layer 1.
+ * max_importance is the maximum across all D058 annotations pointing at
+ * this record (or undefined if none). topics is the union of all annotation
+ * topic_tags arrays. Both are computed by aggregateAnnotationsByRecord
+ * over the loaded mirror.
+ */
+type AnnotationSummary = {
+  max_importance?: ImportanceLabel
+  topics?: string[]
+  summary?: string
+}
+
+/**
  * The shape returned to the agent. Each record is annotated with
- * signature_verified, true if the local Ed25519 signature check passed.
+ * signature_verified - true if the local Ed25519 signature check passed.
  * In compact mode the heavy fields (signature, content_id, chain_root,
  * spec_version) are dropped; the verified status is preserved.
+ *
+ * Layer 1 (0.5.0) adds optional `annotations` (max_importance + topics from
+ * any D058 annotations pointing at this record) and `superseded_by` (record
+ * hashes of any D059 revision records whose `revises` field equals this
+ * record's hash).
  */
 type RecallRecordCompact = {
   event_type: AtribRecord['event_type']
@@ -218,9 +328,33 @@ type RecallRecordCompact = {
    * posture) omit this field as they always do.
    */
   tool_name?: string
+  /** New in 0.5.0: aggregated annotation summary. */
+  annotations?: AnnotationSummary
+  /** New in 0.5.0: record hashes of D059 revisions superseding this record. */
+  superseded_by?: string[]
 }
 
-type RecallRecordFull = AtribRecord & { signature_verified: boolean }
+/**
+ * TOC entry: the smallest cheap-to-scan shape (~40-80 tokens). Used at
+ * SessionStart auto-inject to surface a candidate set the agent can
+ * expand on demand via recall(content_id=...) or recall_walk. Exported
+ * for future releases that wire `toc=true` through the recall handler.
+ */
+export type RecallRecordToc = {
+  record_hash?: string
+  tool_name?: string
+  summary?: string
+  importance?: ImportanceLabel
+  topic_tags?: string[]
+  timestamp: number
+  superseded_by?: string[]
+}
+
+type RecallRecordFull = AtribRecord & {
+  signature_verified: boolean
+  annotations?: AnnotationSummary
+  superseded_by?: string[]
+}
 
 export interface RecallResult {
   total: number
@@ -321,7 +455,7 @@ export async function recall(
   if (args.tool_name) filtered = filtered.filter((r) => r.tool_name === args.tool_name)
   if (args.args_hash) filtered = filtered.filter((r) => r.args_hash === args.args_hash)
 
-  // Newest first, the agent typically wants its most-recent provable
+  // Newest first - the agent typically wants its most-recent provable
   // actions, not the genesis of the log.
   filtered.sort((a, b) => b.timestamp - a.timestamp)
 
@@ -359,8 +493,31 @@ export async function recall(
 
 const server = new McpServer({
   name: 'atrib-recall',
-  version: '0.4.0',
+  version: '0.5.0-alpha',
 })
+
+// The recall semantic surface (as defined in the public protocol specification).
+// Five distinct MCP tools; only `recall_my_attribution_history` is the
+// existing 0.4.0 tool with backward-compatible additive optional params.
+// The four new tools below are STUBBED in 0.5.0-alpha: they register
+// with full schemas so callers see the surface, but their handlers
+// return a "Layer 1 in progress" message until future releases land
+// the underlying annotation aggregation, BFS, and BM25 fallback. This
+// staging keeps the current single-tool flow working while the design
+// surface is published for downstream wiring.
+const LAYER_1_IN_PROGRESS_MESSAGE = (toolName: string) =>
+  JSON.stringify(
+    {
+      status: 'layer-1-in-progress',
+      tool: toolName,
+      message:
+        'This tool is registered as part of Layer 1 of the recall semantic surface. The schema is stable; the handler implementation lands in upcoming releases. Until then, this tool returns this notice. Use `recall_my_attribution_history` for now; that tool retains full functionality and is gaining additive Layer 1 filters (min_importance, topic_tags, include_revised, min_signers, rank_by, rank_anchor, toc) on the same release cadence.',
+      design_reference:
+        'the recall semantic surface as specified in the public ATRIB protocol documentation',
+    },
+    null,
+    2,
+  )
 
 server.registerTool(
   'recall_my_attribution_history',
@@ -420,7 +577,7 @@ server.registerTool(
         .number()
         .optional()
         .describe(
-          'Pagination offset, default 0. Note: not stable when new records land between calls, see ' +
+          'Pagination offset, default 0. Note: not stable when new records land between calls - see ' +
             'pagination_caveat in the response.',
         ),
       compact: z
@@ -437,7 +594,7 @@ server.registerTool(
         .describe(
           'Default false. When false, records with signature_verified=false are dropped from the ' +
             'response (their count is reported in filtered_out_by_verification). Set to true to ' +
-            'include them, useful when investigating tampered or partial mirror state.',
+            'include them - useful when investigating tampered or partial mirror state.',
         ),
     },
   },
@@ -452,6 +609,99 @@ server.registerTool(
       ],
     }
   },
+)
+
+// ─── Layer 1 stub tools (0.5.0-alpha; full impl lands in upcoming releases) ───
+//
+// All four tools below register with full schemas so callers can wire against
+// the surface NOW. Their handlers return LAYER_1_IN_PROGRESS_MESSAGE until
+// future releases land the underlying annotation aggregation, BFS, and
+// BM25 fallback logic. The schemas are stable; the handlers are stubs.
+
+server.registerTool(
+  'recall_walk',
+  {
+    description:
+      "Walk the §3.2.4 derived graph from a starting record_hash. Returns records reachable via the requested edge types up to the given depth. Useful for tracing causal ancestry or tracking what records were informed_by a key decision. Initial schema registration; full implementation will be delivered in a future release.",
+    inputSchema: {
+      from_record_hash: z
+        .string()
+        .describe(
+          "Starting record hash (sha256:<64-hex>). The walk begins from this record and expands through the §3.2.4 derived graph.",
+        ),
+      edge_types: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Optional list of edge types to follow. Default: all 9 edge types (CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL, CONVERGES_ON, CROSS_SESSION, INFORMED_BY, PROVENANCE_OF, ANNOTATES, REVISES).",
+        ),
+      depth: z
+        .number()
+        .optional()
+        .describe("BFS depth (default 3). Higher values may return many records; consider paginating downstream."),
+    },
+  },
+  async () => ({
+    content: [{ type: 'text', text: LAYER_1_IN_PROGRESS_MESSAGE('recall_walk') }],
+  }),
+)
+
+server.registerTool(
+  'recall_annotations',
+  {
+    description:
+      "Return all D058 annotation records pointing at the given record_hash. Each annotation carries importance + topic_tags + summary in its content. Useful for surfacing the agent's prior critique on a record before re-attempting a similar action. Initial schema registration; full implementation will be delivered in a future release.",
+    inputSchema: {
+      record_hash: z
+        .string()
+        .describe(
+          "Record hash (sha256:<64-hex>) of the record whose annotations should be retrieved. Annotations are D058 records whose content.annotates field equals this hash.",
+        ),
+    },
+  },
+  async () => ({
+    content: [{ type: 'text', text: LAYER_1_IN_PROGRESS_MESSAGE('recall_annotations') }],
+  }),
+)
+
+server.registerTool(
+  'recall_revisions',
+  {
+    description:
+      "Return the D059 revision chain for the given record_hash. Shows whether the record has been superseded by a later revision, and the prior_position / new_position / reason from each revision in the chain. Useful for checking whether a position the agent previously held has been revised before acting on it. Initial schema registration; full implementation will be delivered in a future release.",
+    inputSchema: {
+      record_hash: z
+        .string()
+        .describe(
+          "Record hash (sha256:<64-hex>) of the record whose revision chain should be retrieved. Revisions are D059 records whose content.revises field equals this hash (or chain back to it).",
+        ),
+    },
+  },
+  async () => ({
+    content: [{ type: 'text', text: LAYER_1_IN_PROGRESS_MESSAGE('recall_revisions') }],
+  }),
+)
+
+server.registerTool(
+  'recall_by_content',
+  {
+    description:
+      "Free-form text search over the agent's signed past. Returns top-k records by hybrid retrieval (BM25 over summary+topics in Layer 1; sqlite-vec embedding similarity in Layer 2 once shipped), reranked by Layer 1's annotation-derived importance and recency signals. Useful when the agent has no specific filter and needs to ask 'what do I know about X?'. Initial schema registration; full implementation will be delivered in a future release.",
+    inputSchema: {
+      query: z
+        .string()
+        .describe(
+          "Free-form text query. Layer 1 matches against record summaries and topic tags via BM25; Layer 2 (sqlite-vec sidecar, separate ship) adds embedding similarity over the same indexed text.",
+        ),
+      k: z
+        .number()
+        .optional()
+        .describe("Top-k results to return (default 10). Final ordering uses Park et al. weighted-sum scoring with annotation-derived importance."),
+    },
+  },
+  async () => ({
+    content: [{ type: 'text', text: LAYER_1_IN_PROGRESS_MESSAGE('recall_by_content') }],
+  }),
 )
 
 const transport = new StdioServerTransport()

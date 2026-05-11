@@ -91,7 +91,7 @@ class McpClient {
       this.pending.set(id, resolveResp)
       const payload = JSON.stringify({ jsonrpc: '2.0', id, method, params })
       this.child.stdin.write(payload + '\n')
-      // 4 second per-call timeout, plenty for local stdio.
+      // 4 second per-call timeout - plenty for local stdio.
       setTimeout(() => {
         if (this.pending.has(id)) {
           this.pending.delete(id)
@@ -111,7 +111,7 @@ class McpClient {
       },
       0,
     )
-    // notifications/initialized has no response per spec, fire-and-forget.
+    // notifications/initialized has no response per spec - fire-and-forget.
     this.child.stdin.write(
       JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }) + '\n',
     )
@@ -153,8 +153,20 @@ describe('MCP protocol surface', () => {
       const res = await client.send('tools/list', {}, 1)
       expect(res.error).toBeUndefined()
       const tools = (res.result as { tools: { name: string }[] }).tools
-      expect(tools).toHaveLength(1)
-      expect(tools[0]!.name).toBe('recall_my_attribution_history')
+      // Layer 1 (0.5.0-alpha) registers the existing recall_my_attribution_history
+      // tool plus four new stub tools (recall_walk, recall_annotations,
+      // recall_revisions, recall_by_content). Stubs return a "Layer 1 in progress"
+      // notice; full handler implementation lands in subsequent commits during
+      // the May 17 sprint.
+      expect(tools).toHaveLength(5)
+      const names = tools.map((t) => t.name).sort()
+      expect(names).toEqual([
+        'recall_annotations',
+        'recall_by_content',
+        'recall_my_attribution_history',
+        'recall_revisions',
+        'recall_walk',
+      ])
     } finally {
       client.close()
     }
