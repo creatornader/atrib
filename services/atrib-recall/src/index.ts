@@ -794,7 +794,7 @@ server.registerTool(
   'recall_annotations',
   {
     description:
-      "Return all D058 annotation records pointing at the given record_hash. Each annotation carries importance + topic_tags + summary in its content. Useful for surfacing the agent's prior critique on a record before re-attempting a similar action. Initial schema registration; full implementation will be delivered in a future release.",
+      "Return the aggregated annotation summary for a record: maximum annotation importance across all D058 annotation records pointing at it, the union of their topic_tags, and the most recent summary string. Useful for surfacing the agent's prior critique on a record before re-attempting a similar action. Returns null annotations field when no annotation points at the record.",
     inputSchema: {
       record_hash: z
         .string()
@@ -803,16 +803,30 @@ server.registerTool(
         ),
     },
   },
-  async () => ({
-    content: [{ type: 'text', text: LAYER_1_IN_PROGRESS_MESSAGE('recall_annotations') }],
-  }),
+  async (args) => {
+    const { loaded } = discoverLoaded()
+    const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
+    const summary = annotationsByRecord.get(args.record_hash) ?? null
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            { record_hash: args.record_hash, annotations: summary },
+            null,
+            2,
+          ),
+        },
+      ],
+    }
+  },
 )
 
 server.registerTool(
   'recall_revisions',
   {
     description:
-      "Return the D059 revision chain for the given record_hash. Shows whether the record has been superseded by a later revision, and the prior_position / new_position / reason from each revision in the chain. Useful for checking whether a position the agent previously held has been revised before acting on it. Initial schema registration; full implementation will be delivered in a future release.",
+      "Return the D059 revision chain for a record. Walks revises edges forward from the given record_hash, surfacing each revision in turn. The chain is the linked list of revisions where each revision's revises field points at the prior entry. Useful for checking whether a position the agent previously held has been revised before acting on it. Returns an empty chain when no revision points at the record.",
     inputSchema: {
       record_hash: z
         .string()
@@ -821,11 +835,46 @@ server.registerTool(
         ),
     },
   },
-  async () => ({
-    content: [{ type: 'text', text: LAYER_1_IN_PROGRESS_MESSAGE('recall_revisions') }],
-  }),
+  async (args) => {
+    const { loaded } = discoverLoaded()
+    const revisionsByRecord = aggregateRevisionsByRecord(loaded)
+    // Walk the chain forward: the input record may be revised by R1;
+    // R1 may be revised by R2; collect them in order. Bounded by the
+    // mirror size (no cycles since timestamps are monotonic per
+    // signer; defensive seen-set anyway).
+    const chain: string[] = []
+    const seen = new Set<string>()
+    let current = args.record_hash
+    while (!seen.has(current)) {
+      seen.add(current)
+      const next = revisionsByRecord.get(current)
+      if (!next || next.length === 0) break
+      // Each entry in the map's value array is a revision pointing at
+      // `current`. Convention: the chain follows the first-by-timestamp
+      // revision; agents wanting the full sibling fan-out (parallel
+      // revisions at the same target) should call recall_my_attribution_history
+      // with event_type=revision and inspect their revises field manually.
+      const revHash = next[0]!
+      chain.push(revHash)
+      current = revHash
+    }
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            { record_hash: args.record_hash, revision_chain: chain },
+            null,
+            2,
+          ),
+        },
+      ],
+    }
+  },
 )
 
+// recall_walk + recall_by_content remain stubs (need BFS over §3.2.4 derived
+// graph and BM25 over summary+topics respectively).
 server.registerTool(
   'recall_by_content',
   {
