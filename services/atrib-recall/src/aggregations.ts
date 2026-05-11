@@ -28,6 +28,7 @@ import {
   sha256,
   hexEncode,
   EVENT_TYPE_ANNOTATION_URI,
+  EVENT_TYPE_REVISION_URI,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
@@ -260,6 +261,54 @@ export function aggregateAnnotationsByRecord(
     if (bin.topics.size > 0) summary.topics = [...bin.topics].sort()
     if (bin.summary !== undefined) summary.summary = bin.summary
     out.set(target, summary)
+  }
+  return out
+}
+
+/**
+ * Walk loaded records, identify D059 revision records, and bin them by
+ * `content.revises` target. Returns Map<target_record_hash,
+ * revision_record_hashes[]>. The value array contains the record_hashes
+ * of every revision pointing at the target (immediate revisions only;
+ * chain traversal is the caller's responsibility, the recall_revisions
+ * handler walks the chain by recursing on each revision's own hash).
+ *
+ * The returned value array is ordered by revision timestamp ascending so
+ * the caller sees revisions in the order they were issued. Ties resolve
+ * to mirror-iteration order.
+ *
+ * Revision records WITHOUT a `_local.content` sidecar are skipped per the
+ * §8.1 bare-record posture, without content, the `revises` target is
+ * unknowable. Revision records WITH content but no `revises` field are
+ * also skipped (the revision is malformed).
+ *
+ * Spec references:
+ *   - D059: revision event_type byte 0x06, URI form revision
+ *   - §8.3: salted-commitment posture (body lives in _local; log has only content_id)
+ *   - §1.2.4: event_type URI form (required for revision records)
+ */
+export function aggregateRevisionsByRecord(
+  loaded: LoadedRecord[],
+): Map<string, string[]> {
+  type Entry = { hash: string; ts: number }
+  const bins = new Map<string, Entry[]>()
+
+  for (const lr of loaded) {
+    if (lr.record.event_type !== EVENT_TYPE_REVISION_URI) continue
+    if (lr.content === undefined || lr.content === null) continue
+    if (typeof lr.content !== 'object') continue
+    const c = lr.content as { revises?: unknown }
+    if (typeof c.revises !== 'string' || c.revises.length === 0) continue
+    const target = c.revises
+    const list = bins.get(target) ?? []
+    list.push({ hash: lr.record_hash, ts: lr.record.timestamp })
+    bins.set(target, list)
+  }
+
+  const out = new Map<string, string[]>()
+  for (const [target, entries] of bins) {
+    entries.sort((a, b) => a.ts - b.ts)
+    out.set(target, entries.map((e) => e.hash))
   }
   return out
 }
