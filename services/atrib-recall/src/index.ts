@@ -93,7 +93,16 @@ import {
   aggregateRevisionsByRecord,
   discoverLoaded,
 } from './aggregations.js'
-import type { AnnotationSummary as AggAnnotationSummary } from './aggregations.js'
+import type { AnnotationSummary as AggAnnotationSummary, LoadedRecord } from './aggregations.js'
+import {
+  recencyScore,
+  importanceScore,
+  parkScore,
+  buildBM25Index,
+  bm25Score,
+  tokenize,
+  indexableTextFromAnnotation,
+} from './scoring.js'
 
 const ATRIB_RECORD_FILE = process.env.ATRIB_RECORD_FILE
 const ATRIB_MIRROR_DIR = process.env.ATRIB_MIRROR_DIR ?? join(
@@ -381,6 +390,65 @@ export interface RecallResult {
   records: RecallRecordFull[] | RecallRecordCompact[]
 }
 
+/**
+ * Sort `filtered` in-place by Park et al. parkScore descending. Builds
+ * the BM25 index over each loaded record's annotation summary + topics
+ * (the indexable Layer 1 text per the design); when rank_anchor is a
+ * non-empty string, treats it as the query and adds the relevance
+ * component. When rank_anchor is empty or a record_hash (the
+ * causal_distance shape), relevance is 0 for every record and the score
+ * collapses to alpha*recency + beta*importance.
+ *
+ * Uses now=Date.now() inside the function so the recall response reflects
+ * the moment of evaluation. Determinism is preserved at the per-call
+ * level (two recall() calls in the same millisecond produce identical
+ * scores given identical input).
+ */
+function rankByRelevance(
+  filtered: LoadedRecord[],
+  annotationsByRecord: Map<string, AnnotationSummary>,
+  rankAnchor: string | undefined,
+): void {
+  const now = Date.now()
+  // Treat rank_anchor as a free-form query unless it parses as a record_hash
+  // (sha256:<64-hex>). Future: when rank_by='causal_distance' wires up,
+  // record_hash anchors go to the BFS path; here, record_hash anchors
+  // contribute 0 relevance (recency + importance only).
+  const looksLikeRecordHash =
+    typeof rankAnchor === 'string' && /^sha256:[0-9a-f]{64}$/.test(rankAnchor)
+  const queryTokens =
+    rankAnchor && !looksLikeRecordHash ? tokenize(rankAnchor) : []
+
+  // Build the BM25 index over the filtered set's indexable text. Index
+  // construction is O(total token count); for Layer 1 corpus sizes this
+  // is negligible (a few hundred records × tens of tokens each).
+  const corpus = filtered.map((lr) => ({
+    id: lr.record_hash,
+    tokens: indexableTextFromAnnotation(annotationsByRecord.get(lr.record_hash)),
+  }))
+  const idx = buildBM25Index(corpus)
+
+  const scores = new Map<string, number>()
+  for (const lr of filtered) {
+    const r = recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS)
+    const i = importanceScore(annotationsByRecord.get(lr.record_hash))
+    const rel = queryTokens.length > 0
+      ? bm25Score(idx, lr.record_hash, queryTokens)
+      : 0
+    scores.set(
+      lr.record_hash,
+      parkScore(r, i, rel, ATRIB_RECALL_ALPHA, ATRIB_RECALL_BETA, ATRIB_RECALL_GAMMA),
+    )
+  }
+  filtered.sort((a, b) => {
+    const sa = scores.get(a.record_hash) ?? 0
+    const sb = scores.get(b.record_hash) ?? 0
+    if (sb !== sa) return sb - sa
+    // Stable tie-break on timestamp newest-first.
+    return b.record.timestamp - a.record.timestamp
+  })
+}
+
 async function annotateVerification(
   loaded: { record: AtribRecord; record_hash: string }[],
   annotationsByRecord: Map<string, AnnotationSummary>,
@@ -504,9 +572,16 @@ export async function recall(
     })
   }
 
-  // Newest first - the agent typically wants its most-recent provable
-  // actions, not the genesis of the log.
-  filtered.sort((a, b) => b.record.timestamp - a.record.timestamp)
+  // Sort: timestamp (default, newest first) or Park et al. relevance.
+  // rank_by='causal_distance' is still stub-accepted (needs BFS over the
+  // §3.2.4 derived graph; lands in the next commit).
+  if (args.rank_by === 'relevance') {
+    rankByRelevance(filtered, annotationsByRecord, args.rank_anchor)
+  } else {
+    // Newest first - the agent typically wants its most-recent provable
+    // actions, not the genesis of the log.
+    filtered.sort((a, b) => b.record.timestamp - a.record.timestamp)
+  }
 
   const offset = Math.max(0, args.offset ?? 0)
   const limit = Math.max(1, Math.min(200, args.limit ?? 25))
@@ -692,18 +767,19 @@ server.registerTool(
         .enum(['timestamp', 'relevance', 'causal_distance'])
         .optional()
         .describe(
-          'Stub-accepted (current ship): schema validates; handler always uses timestamp ordering until ' +
-            'enforcement lands. Future release: timestamp (default, newest first), relevance (Park et ' +
-            'al. weighted-sum scoring with annotation-derived importance), or causal_distance (BFS ' +
-            'shortest path in the derived graph from rank_anchor).',
+          'Result ordering. timestamp (default): newest first. relevance: Park et al. weighted-sum ' +
+            'scoring over recency + annotation-derived importance + BM25 relevance against rank_anchor ' +
+            '(treated as a free-form query when not a record_hash; otherwise relevance component is 0). ' +
+            'causal_distance: BFS shortest path in the derived graph from rank_anchor — still ' +
+            'stub-accepted (ignored; falls back to timestamp) until BFS over the §3.2.4 graph ships.',
         ),
       rank_anchor: z
         .string()
         .optional()
         .describe(
-          'Stub-accepted (current ship): schema validates; handler ignores until rank_by enforcement ' +
-            'lands. The anchor for non-timestamp rank_by modes - either a record_hash for ' +
-            'causal_distance ranking or a free-form text query for relevance ranking.',
+          'Anchor for non-timestamp rank_by modes. For rank_by=relevance: free-form text query for the ' +
+            'BM25 component (matched against annotation summary + topics of each candidate). For ' +
+            'rank_by=causal_distance: record_hash to BFS from (still stub-accepted).',
         ),
       toc: z
         .boolean()
@@ -722,17 +798,21 @@ server.registerTool(
     // result with a layer_1_warnings array listing exactly which stub-
     // accepted params were silently ignored. Callers can detect the
     // pre-implementation state without having to read source.
-    // Stub-accepted params: schema validates; handler ignores. Each entry
-    // here will be removed when the underlying behavior ships. The four
-    // filter params (min_importance, topic_tags, include_revised,
-    // min_signers) were stub-accepted in 0.5.0-alpha; enforcement landed
-    // alongside the annotation + revision aggregation modules. Still
-    // stub-accepted: rank_by + rank_anchor (need Park et al. scoring and
-    // BFS over the §3.2.4 derived graph), toc (needs the compact toc
-    // response shape).
+    // Stub-accepted params: schema validates; handler doesn't fully enforce.
+    // Each entry here will be removed when the underlying behavior ships.
+    // rank_by='relevance' is enforced (Park et al. scoring over recency +
+    // importance + BM25 relevance); rank_by='causal_distance' is still
+    // stub-accepted (needs BFS over the §3.2.4 derived graph). rank_anchor
+    // is forwarded to the relevance ranker as a free-form BM25 query, and
+    // is still stub-accepted for the causal_distance shape. toc still
+    // needs the compact response shape.
     const a = args as RecallArgs & Record<string, unknown>
-    const stubAcceptedKeys = ['rank_by', 'rank_anchor', 'toc'] as const
-    const ignored = stubAcceptedKeys.filter((k) => a[k] !== undefined)
+    const ignored: string[] = []
+    if (a.rank_by === 'causal_distance') ignored.push('rank_by')
+    if (a.rank_anchor !== undefined && a.rank_by === 'causal_distance') {
+      ignored.push('rank_anchor')
+    }
+    if (a.toc !== undefined) ignored.push('toc')
     const result = await recall(args as RecallArgs)
     const augmented = ignored.length > 0
       ? {
