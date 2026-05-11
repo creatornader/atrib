@@ -503,7 +503,7 @@ const server = new McpServer({
 // The recall semantic surface (as defined in the public protocol specification).
 // Five distinct MCP tools; only `recall_my_attribution_history` is the
 // existing 0.4.0 tool with backward-compatible additive optional params.
-// The four new tools below are STUBBED in 0.5.0-alpha: they register
+// The four new tools below are STUBBED in the current ship: they register
 // with full schemas so callers see the surface, but their handlers
 // return a "Layer 1 in progress" message until future releases land
 // the underlying annotation aggregation, BFS, and BM25 fallback. This
@@ -600,7 +600,7 @@ server.registerTool(
             'response (their count is reported in filtered_out_by_verification). Set to true to ' +
             'include them - useful when investigating tampered or partial mirror state.',
         ),
-      // ─── New in 0.5.0-alpha: schema accepted; enforcement in flight. Each ───
+      // ─── New schema params: accepted now; enforcement in flight. Each ───
       //    of the seven params below is currently STUB-ACCEPTED: the schema
       //    validates the value and the handler ignores it (returns the same
       //    results it would return without the param). The response payload
@@ -612,7 +612,7 @@ server.registerTool(
         .enum(['critical', 'high', 'medium', 'low', 'noise'])
         .optional()
         .describe(
-          'Stub-accepted (0.5.0-alpha): schema validates; handler does not yet filter. Future release ' +
+          'Stub-accepted (current ship): schema validates; handler does not yet filter. Future release ' +
             'enforces minimum annotation-derived importance (records ranked by max(annotation.importance) ' +
             'where annotations are records pointing at this record). Records with no annotations have ' +
             'importance=0 and will be excluded once enforcement lands.',
@@ -621,7 +621,7 @@ server.registerTool(
         .array(z.string())
         .optional()
         .describe(
-          'Stub-accepted (0.5.0-alpha): schema validates; handler does not yet filter. Future release ' +
+          'Stub-accepted (current ship): schema validates; handler does not yet filter. Future release ' +
             'enforces OR-match against annotation topic tags - records kept if at least one annotation ' +
             'pointing at them carries at least one of the listed topics.',
         ),
@@ -629,7 +629,7 @@ server.registerTool(
         .boolean()
         .optional()
         .describe(
-          'Stub-accepted (0.5.0-alpha): schema validates; handler does not yet filter. Default false ' +
+          'Stub-accepted (current ship): schema validates; handler does not yet filter. Default false ' +
             'when enforcement lands. When true, hides records superseded by revision records pointing ' +
             'at them via the revises field.',
         ),
@@ -637,7 +637,7 @@ server.registerTool(
         .number()
         .optional()
         .describe(
-          'Stub-accepted (0.5.0-alpha): schema validates; handler does not yet filter. Future release ' +
+          'Stub-accepted (current ship): schema validates; handler does not yet filter. Future release ' +
             'enforces minimum count of distinct cross-attesting signers per the cross-attestation rule. ' +
             'Useful for transaction records that must carry at least 2 signers; also useful as a ' +
             'credibility filter when querying multi-agent substrate.',
@@ -646,7 +646,7 @@ server.registerTool(
         .enum(['timestamp', 'relevance', 'causal_distance'])
         .optional()
         .describe(
-          'Stub-accepted (0.5.0-alpha): schema validates; handler always uses timestamp ordering until ' +
+          'Stub-accepted (current ship): schema validates; handler always uses timestamp ordering until ' +
             'enforcement lands. Future release: timestamp (default, newest first), relevance (Park et ' +
             'al. weighted-sum scoring with annotation-derived importance), or causal_distance (BFS ' +
             'shortest path in the derived graph from rank_anchor).',
@@ -655,7 +655,7 @@ server.registerTool(
         .string()
         .optional()
         .describe(
-          'Stub-accepted (0.5.0-alpha): schema validates; handler ignores until rank_by enforcement ' +
+          'Stub-accepted (current ship): schema validates; handler ignores until rank_by enforcement ' +
             'lands. The anchor for non-timestamp rank_by modes - either a record_hash for ' +
             'causal_distance ranking or a free-form text query for relevance ranking.',
         ),
@@ -663,7 +663,7 @@ server.registerTool(
         .boolean()
         .optional()
         .describe(
-          'Stub-accepted (0.5.0-alpha): schema validates; handler returns the standard compact response ' +
+          'Stub-accepted (current ship): schema validates; handler returns the standard compact response ' +
             'shape. Future release returns the table-of-contents entry shape (record_hash, tool_name, ' +
             'summary, importance, topic_tags, timestamp, superseded_by) at ~40-80 tokens per entry, ' +
             'designed for SessionStart auto-injected scaffold.',
@@ -671,7 +671,7 @@ server.registerTool(
     },
   },
   async (args) => {
-    // Layer 1 stub-acceptance: detect new-in-0.5.0-alpha params, run the
+    // Layer 1 stub-acceptance: detect newly-accepted Layer 1 params, run the
     // existing 0.4.0 recall path (which ignores them), and return the
     // result with a layer_1_warnings array listing exactly which stub-
     // accepted params were silently ignored. Callers can detect the
@@ -709,7 +709,7 @@ server.registerTool(
   },
 )
 
-// ─── Layer 1 stub tools (0.5.0-alpha; full impl lands in upcoming releases) ───
+// ─── Layer 1 stub tools (current ship; full impl lands in upcoming releases) ───
 //
 // All four tools below register with full schemas so callers can wire against
 // the surface NOW. Their handlers return LAYER_1_IN_PROGRESS_MESSAGE until
