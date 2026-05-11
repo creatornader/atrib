@@ -154,10 +154,9 @@ describe('MCP protocol surface', () => {
       expect(res.error).toBeUndefined()
       const tools = (res.result as { tools: { name: string }[] }).tools
       // Layer 1 registers five tools: the existing recall_my_attribution_history
-      // plus four siblings. recall_annotations, recall_revisions, and recall_walk
-      // are functional (lookups against aggregation maps + BFS over the local
-      // derived graph). recall_by_content remains a stub awaiting BM25 wire-up
-      // through the MCP surface.
+      // plus four siblings, recall_annotations, recall_revisions, recall_walk,
+      // recall_by_content, all functional and exposing the cognitive surface
+      // beyond base filter-and-page.
       expect(tools).toHaveLength(5)
       const names = tools.map((t) => t.name).sort()
       expect(names).toEqual([
@@ -283,6 +282,109 @@ describe('MCP protocol surface', () => {
         topics: ['security'],
         summary: 'flagged for review',
       })
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_my_attribution_history returns TOC shape when toc=true', async () => {
+    const r = await makeSigned(1700000000000)
+    writeFileSync(recordFile, JSON.stringify(r))
+    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_my_attribution_history',
+          arguments: { toc: true },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        total: number
+        returned: number
+        records: Array<{ record_hash?: string; timestamp: number; event_type?: string }>
+        layer_1_warnings?: unknown[]
+      }
+      expect(payload.total).toBe(1)
+      expect(payload.returned).toBe(1)
+      const entry = payload.records[0]!
+      expect(entry.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(entry.timestamp).toBe(1700000000000)
+      // TOC drops the heavy AtribRecord fields.
+      expect(entry.event_type).toBeUndefined()
+      // toc is no longer stub-accepted; layer_1_warnings is not surfaced.
+      expect(payload.layer_1_warnings).toBeUndefined()
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_by_content ranks records by Park et al. weighted-sum against a query', async () => {
+    const { computeRecordHash } = await import('../src/aggregations.js')
+    const target = await makeSigned(1700000000000)
+    const targetHash = computeRecordHash(target)
+    const pub = await getPublicKey(KEY)
+    const anno = await signRecord({
+      spec_version: 'atrib/1.0',
+      event_type: 'https://atrib.dev/v1/types/annotation',
+      context_id: CTX,
+      creator_key: base64urlEncode(pub),
+      chain_root: genesisChainRoot(CTX),
+      content_id: `sha256:${'a'.repeat(64)}`,
+      timestamp: 1700000001000,
+      signature: '',
+    } as AtribRecord, KEY)
+    writeFileSync(
+      recordFile,
+      [
+        JSON.stringify(target),
+        JSON.stringify({
+          record: anno,
+          _local: {
+            content: {
+              annotates: targetHash,
+              importance: 'high',
+              topic_tags: ['security'],
+              summary: 'authentication bypass found',
+            },
+          },
+        }),
+      ].join('\n'),
+    )
+    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: { query: 'authentication bypass', k: 5 },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        query: string
+        k: number
+        count: number
+        results: Array<{
+          record_hash: string
+          score: number
+          components: { recency: number; importance: number; relevance: number }
+        }>
+      }
+      expect(payload.query).toBe('authentication bypass')
+      expect(payload.k).toBe(5)
+      // The annotated target should rank above the un-annotated annotation
+      // record itself (annotated record has importance + relevance signal).
+      const top = payload.results[0]
+      expect(top?.record_hash).toBe(targetHash)
+      expect(top?.components.relevance).toBeGreaterThan(0)
     } finally {
       client.close()
     }
