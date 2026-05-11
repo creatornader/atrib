@@ -154,10 +154,10 @@ describe('MCP protocol surface', () => {
       expect(res.error).toBeUndefined()
       const tools = (res.result as { tools: { name: string }[] }).tools
       // Layer 1 registers five tools: the existing recall_my_attribution_history
-      // plus four siblings: recall_walk + recall_by_content are stubs returning a
-      // "Layer 1 in progress" notice; recall_annotations + recall_revisions are
-      // implemented as direct lookups against the annotation/revision aggregation
-      // maps.
+      // plus four siblings. recall_annotations, recall_revisions, and recall_walk
+      // are functional (lookups against aggregation maps + BFS over the local
+      // derived graph). recall_by_content remains a stub awaiting BM25 wire-up
+      // through the MCP surface.
       expect(tools).toHaveLength(5)
       const names = tools.map((t) => t.name).sort()
       expect(names).toEqual([
@@ -283,6 +283,55 @@ describe('MCP protocol surface', () => {
         topics: ['security'],
         summary: 'flagged for review',
       })
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_walk walks chain-precedes edges from an anchor', async () => {
+    const { canonicalRecord, sha256, hexEncode } = await import('@atrib/mcp')
+    const chainRootFor = (r: AtribRecord) =>
+      `sha256:${hexEncode(sha256(canonicalRecord(r)))}`
+    const { computeRecordHash } = await import('../src/aggregations.js')
+    const r1 = await makeSigned(1700000000000)
+    const r1Hash = computeRecordHash(r1)
+    const pub = await getPublicKey(KEY)
+    const r2 = await signRecord({
+      spec_version: 'atrib/1.0',
+      event_type: EVENT_TYPE_TOOL_CALL_URI,
+      context_id: CTX,
+      creator_key: base64urlEncode(pub),
+      chain_root: chainRootFor(r1),
+      content_id: `sha256:${'2'.repeat(64)}`,
+      timestamp: 1700000001000,
+      signature: '',
+    } as AtribRecord, KEY)
+    const r2Hash = computeRecordHash(r2)
+    writeFileSync(
+      recordFile,
+      [JSON.stringify(r1), JSON.stringify(r2)].join('\n'),
+    )
+    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_walk',
+          arguments: { from_record_hash: r1Hash, depth: 2 },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        from_record_hash: string
+        count: number
+        walk: Array<{ record_hash: string; distance: number }>
+      }
+      expect(payload.from_record_hash).toBe(r1Hash)
+      expect(payload.count).toBe(1)
+      expect(payload.walk[0]).toEqual({ record_hash: r2Hash, distance: 1 })
     } finally {
       client.close()
     }

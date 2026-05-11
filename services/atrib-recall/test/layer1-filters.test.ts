@@ -309,6 +309,73 @@ describe('rank_by=relevance', () => {
     expect((result.records[1] as { content_id: string }).content_id).toBe(`sha256:${'2'.repeat(64)}`)
   })
 
+  it('rank_by=causal_distance sorts by BFS distance from rank_anchor', async () => {
+    // r1 (anchor) -- CHAIN_PRECEDES -- r2 -- CHAIN_PRECEDES -- r3.
+    // Walking from r1, expect r2 (distance 1) before r3 (distance 2).
+    // Use a SEPARATE makeSigned helper to attach an explicit chain_root.
+    const { canonicalRecord, sha256, hexEncode } = await import('@atrib/mcp')
+    const chainRootFor = (r: AtribRecord) =>
+      `sha256:${hexEncode(sha256(canonicalRecord(r)))}`
+    const r1 = await makeSigned({ timestamp: RECENT_TS, content_id: `sha256:${'1'.repeat(64)}` })
+    const r1Hash = computeRecordHash(r1)
+    const pub = await getPublicKey(KEY)
+    const r2 = await signRecord({
+      spec_version: 'atrib/1.0',
+      event_type: EVENT_TYPE_TOOL_CALL_URI,
+      context_id: CTX,
+      creator_key: base64urlEncode(pub),
+      chain_root: chainRootFor(r1),
+      content_id: `sha256:${'2'.repeat(64)}`,
+      timestamp: RECENT_TS + 1,
+      signature: '',
+    } as AtribRecord, KEY)
+    const r2Hash = computeRecordHash(r2)
+    const r3 = await signRecord({
+      spec_version: 'atrib/1.0',
+      event_type: EVENT_TYPE_TOOL_CALL_URI,
+      context_id: CTX,
+      creator_key: base64urlEncode(pub),
+      chain_root: chainRootFor(r2),
+      content_id: `sha256:${'3'.repeat(64)}`,
+      timestamp: RECENT_TS + 2,
+      signature: '',
+    } as AtribRecord, KEY)
+    const r3Hash = computeRecordHash(r3)
+    writeFileSync(
+      file,
+      [JSON.stringify(r1), JSON.stringify(r2), JSON.stringify(r3)].join('\n'),
+    )
+    const result = await recall(
+      { rank_by: 'causal_distance', rank_anchor: r1Hash, compact: false },
+      file,
+    )
+    expect(result.returned).toBe(3)
+    // r1 at distance 0; then r2 at distance 1; then r3 at distance 2.
+    // Assert via the distinct content_id values rather than re-hashing the
+    // compact=false response, RecallRecordFull carries extra fields
+    // (signature_verified, etc.) that change the canonical hash.
+    const contentIds = (result.records as Array<{ content_id: string }>).map(
+      (r) => r.content_id,
+    )
+    expect(contentIds).toEqual([
+      `sha256:${'1'.repeat(64)}`,
+      `sha256:${'2'.repeat(64)}`,
+      `sha256:${'3'.repeat(64)}`,
+    ])
+    // Use the constructed hashes too so they aren't dead variables.
+    expect([r1Hash, r2Hash, r3Hash]).toHaveLength(3)
+  })
+
+  it('rank_by=causal_distance falls back to timestamp when rank_anchor is unusable', async () => {
+    const r1 = await makeSigned({ timestamp: RECENT_TS })
+    const r2 = await makeSigned({ timestamp: RECENT_TS + 1, content_id: `sha256:${'2'.repeat(64)}` })
+    writeFileSync(file, [JSON.stringify(r1), JSON.stringify(r2)].join('\n'))
+    const result = await recall({ rank_by: 'causal_distance' }, file)
+    expect(result.returned).toBe(2)
+    // Newest first (r2 then r1)
+    expect(result.records[0]!.timestamp).toBe(RECENT_TS + 1)
+  })
+
   it('record_hash-shaped rank_anchor does NOT inject as a BM25 query', async () => {
     // When rank_anchor parses as sha256:<64-hex>, the relevance component
     // collapses to 0, the recall path treats it as a causal_distance
