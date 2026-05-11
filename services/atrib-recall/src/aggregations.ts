@@ -136,7 +136,8 @@ export function loadLoaded(path: string): LoadedRecord[] {
 
 /**
  * Mirror-discovery variant of `loadLoaded` that scans a directory of
- * `*.jsonl` files. Files that don't exist or aren't readable are silently
+ * `*.jsonl` files. See loadRecordsFromDir in index.ts for the bare
+ * AtribRecord equivalent. Files that don't exist or aren't readable are silently
  * skipped (a file rotated mid-scan shouldn't error the whole call).
  * Returns the union of loaded entries plus the list of files scanned.
  */
@@ -165,6 +166,26 @@ export function loadLoadedFromDir(
     if (partial.length > 0) loaded.push(...partial)
   }
   return { loaded, files }
+}
+
+/**
+ * LoadedRecord variant of `discoverRecords` in index.ts. Same priority
+ * order: explicit `recordFile` arg > ATRIB_RECORD_FILE env > ATRIB_MIRROR_DIR
+ * scan. Re-evaluates env vars on each call so test harnesses that mutate
+ * process.env per-test get the value they set.
+ */
+export function discoverLoaded(
+  recordFile?: string,
+): { loaded: LoadedRecord[]; files: string[] } {
+  const envFile = process.env.ATRIB_RECORD_FILE
+  const envDir =
+    process.env.ATRIB_MIRROR_DIR ??
+    join(process.env.HOME ?? '', '.atrib', 'records')
+  const explicit = recordFile ?? envFile
+  if (explicit) {
+    return { loaded: loadLoaded(explicit), files: [explicit] }
+  }
+  return loadLoadedFromDir(envDir)
 }
 
 /**
