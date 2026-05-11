@@ -13,7 +13,7 @@
   "files": [
     "dist"
   ],
-  "description": "OpenTelemetry SpanProcessor that consumes OpenInference-shaped spans and emits signed atrib records. Pattern #4 of atrib's six runtime integration patterns (spec §9). Transitively reaches every framework with OpenInference instrumentation: OpenAI Agents SDK, Claude Agent SDK, LangChain, Vercel AI, CrewAI, LlamaIndex, DSPy, MCP, Microsoft Agent Framework, Bedrock AgentCore, smolagents, Pydantic AI, Agno, and 20+ more (see https://github.com/Arize-ai/openinference).",
+  "description": "OpenTelemetry SpanProcessor for atrib. Reads OpenInference-shaped spans and emits signed atrib records on a parallel pipeline. One integration reaches every framework with OpenInference instrumentation.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",

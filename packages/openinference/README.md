@@ -81,7 +81,7 @@ Two SpanProcessor variants ship in v0.0.1:
 | `AtribSpanProcessor` | Low-throughput interactive agents. Lower latency between span end and record submission. | `submit(signed, sidecar)` per span |
 | `AtribBatchSpanProcessor` | Production pipelines emitting many spans/sec. Reduces per-record HTTP overhead via queue + size/time-based flush. | `submit(batch: Array<{signed, sidecar}>)` per batch |
 
-Batch buffer config knobs (all defaulted): `maxQueueSize` (2048), `maxExportBatchSize` (512), `scheduledDelayMillis` (5000), `exportTimeoutMillis` (30000). Per [§5.8](../../atrib-spec.md#58-degradation-contract) degradation contract: when the queue overflows `maxQueueSize` the oldest record is dropped (operator pipeline never blocks); `getDroppedRecordCount()` exposes the counter for observability.
+Batch buffer config knobs (all defaulted): `maxQueueSize` (2048), `maxExportBatchSize` (512), `scheduledDelayMillis` (5000), `exportTimeoutMillis` (30000). Per [§5.8](../../atrib-spec.md#58-degradation-contract) degradation contract: when the queue overflows `maxQueueSize` the oldest record is dropped so the host pipeline never blocks; `getDroppedRecordCount()` exposes the counter for observability.
 
 ```ts
 import { AtribBatchSpanProcessor } from '@atrib/openinference'
@@ -147,14 +147,33 @@ Calling this is the difference between catching the bug at startup vs. silently 
 
 Per the atrib spec [§5.8 degradation contract](../../atrib-spec.md#58-degradation-contract): atrib failures must never affect the primary tool call or agent response. This processor honors that contract by catching every error from span mapping, signing, and submission. Errors are logged with the `atrib:openinference:` prefix when `debug: true`; otherwise silent.
 
+## What this does NOT do
+
+- **No tool response capture.** Spans carry whatever the OpenInference instrumentation provided. atrib signs that span shape verbatim; it does not enrich tool outputs.
+- **No log-inclusion verification.** Local signing produces a record; the configured `submit` callback is responsible for log commitment. Re-verification of log inclusion is the consumer's job ([§2.6.1](../../atrib-spec.md#261-submit-entry) inclusion proof flow).
+- **No re-instrumentation.** This package consumes OpenInference spans; it does not instrument frameworks. Use `@arizeai/openinference-*` instrumentations (or your framework's native OpenInference integration) to produce the spans.
+- **No graph derivation.** Emits flat records. The atrib log + graph-node service derive the [§3.2.4](../../atrib-spec.md#324-edge-derivation-rules) graph from the record set.
+
 ## Status
 
-`v0.0.1` -- All 10 OpenInference span kinds mapped (TOOL/LLM/AGENT/EMBEDDING/RETRIEVER/RERANKER/CHAIN/GUARDRAIL/EVALUATOR/PROMPT) shipped with 62 tests + composition pilot validated end-to-end against real Vercel AI SDK v6 + NVIDIA NIM-served Qwen 3.5 + `@arizeai/openinference-vercel`'s reference SpanProcessor on a shared TracerProvider. Live pilot signs all 4 spans of a single tool-using `generateText` call (LLM + TOOL + LLM + AGENT) producing 2 distinct event_types (`observation` + `tool_call`) into ONE shared context_id (with the required AsyncHooksContextManager registered, see "Required: register an async context manager" below). Both Simple and Batch SpanProcessor variants ship. Auto `informed_by` derivation between LLM and TOOL records via shared `InformedByTracker`. Args/result hash extraction per spec [§8.3](../../atrib-spec.md#83-salted-commitment-posture) ([D045](../../DECISIONS.md#d045-privacy-postures-normative-spec-section) salted-commitment posture) with three modes: `none` / `plain` / `salted`. Preflight verification helper catches misconfigured context propagation at startup. Attribute keys imported from `@arizeai/openinference-semantic-conventions` for canonical schema correctness. Runnable integration example at `packages/integration/examples/openinference/` (offline-runnable by default; live model-driven path enabled via `ATRIB_OPENINFERENCE_RUN_LIVE=1` + `NVIDIA_API_KEY`). Conformance fixtures in `test/fixtures/` capture four canonical span shapes (TOOL, two LLMs, AGENT) live-captured from a real run -- the fixture-replay test catches upstream attribute-schema drift before it reaches consumers. Not yet published to npm.
+`v0.0.1` covers:
+
+- All 10 OpenInference span kinds mapped: `TOOL` -> `tool_call`; `LLM` / `AGENT` / `EMBEDDING` / `RETRIEVER` / `RERANKER` / `CHAIN` / `GUARDRAIL` / `EVALUATOR` / `PROMPT` -> `observation`.
+- Both Simple and Batch SpanProcessor variants.
+- Auto `informed_by` derivation between LLM and TOOL records via shared `InformedByTracker`.
+- Args/result hash extraction per spec [§8.3](../../atrib-spec.md#83-salted-commitment-posture) ([D045](../../DECISIONS.md#d045-privacy-postures-normative-spec-section) salted-commitment posture) with three modes: `none` / `plain` / `salted`.
+- Preflight verification helper that catches misconfigured context propagation at startup.
+- Attribute keys imported from `@arizeai/openinference-semantic-conventions` for canonical schema correctness.
+- 62 unit tests + composition pilot validated end-to-end against real Vercel AI SDK v6 + NVIDIA NIM-served Qwen 3.5 + `@arizeai/openinference-vercel`'s reference SpanProcessor on a shared TracerProvider.
+- Runnable integration example at `packages/integration/examples/openinference/` (offline by default; live model-driven path enabled via `ATRIB_OPENINFERENCE_RUN_LIVE=1` + `NVIDIA_API_KEY`).
+- Conformance fixtures in `test/fixtures/` capture four canonical span shapes (TOOL, two LLMs, AGENT) live-captured from a real run. The fixture-replay test catches upstream attribute-schema drift before it reaches consumers.
+
+Pilot evidence: a single tool-using `generateText` call produces 4 spans (LLM + TOOL + LLM + AGENT) that sign to 2 distinct event_types (`observation` + `tool_call`) under ONE shared `context_id`, given the required `AsyncHooksContextManager` is registered (see "Required: register an async context manager" above).
 
 Roadmap:
 
-- **LangGraph `graph.node.parent_id` informed_by derivation** -- multi-graph-node `informed_by` edges (LLM->TOOL pair already covered automatically via `tool_call.id` matching).
-- **Spec-level conformance corpus** per [D071](../../DECISIONS.md#d071-spec-writing-conventions) convention 6 (current package-level fixtures at `test/fixtures/` are the empirical foundation; spec-level promotion lands when first downstream consumer requires it).
+- **LangGraph `graph.node.parent_id` informed_by derivation.** Multi-graph-node `informed_by` edges. The LLM->TOOL pair is already covered automatically via `tool_call.id` matching.
+- **Spec-level conformance corpus** per [D071](../../DECISIONS.md#d071-spec-writing-conventions) convention 6. Current package-level fixtures at `test/fixtures/` are the empirical foundation; spec-level promotion lands when a first downstream consumer requires it.
 
 ## License
 
