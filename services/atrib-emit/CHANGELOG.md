@@ -1,5 +1,15 @@
 # @atrib/emit
 
+## 0.6.0
+
+### Minor Changes
+
+- fdba64d: `emit` tool gains two optional inputs: `tool_name` ([§8.2](../atrib-spec.md#82-opaque-name-posture) disclosure) and `args_hash` ([§8.3](../atrib-spec.md#83-salted-commitment-posture) commitment). When supplied, these are carried verbatim into the signed AtribRecord per the JCS canonical form, matching what `@atrib/mcp` middleware emits when its disclosure pipeline is enabled. Mirrors the matching `content_id` / `tool_name` / `args_hash` filters added to `@atrib/recall` so that an emit-side producer and a recall-side consumer can agree on `(tool_name, args_hash)` as the matching key for "same tool on same target" queries. Backward-compatible (additive); existing callers unaffected.
+
+### Patch Changes
+
+- 28c1765: `@atrib/emit` README: replace stale pre-[D072](../DECISIONS.md#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) "atrib-emit auto-chains from the wrapper mirror when context*id is absent" guidance with the post-[D067](../DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract) / post-[D072](../DECISIONS.md#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) five-tier resolution cascade and a producer-ergonomics recipe table covering discrete-session (fresh UUID per run), continuous-session (deterministic seed via `sha256(jobname)[:32]`), inbound-handoff (W3C trace context), and multi-producer cross-process (`ATRIB_CHAIN_TAIL*<context_id>` env). The earlier narrative was technically misleading: post-[D072](../DECISIONS.md#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail), atrib-emit no longer absorbs context-less records into the mirror tail. A production incident involving orphan observations from a heartbeat-cron producer revealed that the prior README guidance led to incorrect behavior. This has been corrected to prevent recurrence for new producers (cron jobs, watchers, daemons, scripts).
+
 ## 0.4.5
 
 ### Patch Changes
