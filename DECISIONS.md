@@ -3720,3 +3720,71 @@ The `extractor_classification` field is redundant for records where event_type i
 **Likely outcome (not committed):** accept; small informative spec addition. Pairs with [P014](#p014-new-runtime-integration-pattern---sandboxed-execution-composition-where-the-signing-key-lives-when-the-agent-runs-in-a-sandbox), [P015](#p015-normative-must---signing-key-lives-outside-sandboxed-execution-environment-security), [P016](#p016-foundations-positioning-extension---atribs-location-below-loop--runtime--sandbox-everydev-mapping). The sandboxing recipe and example reference artifact demonstrate the composition.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P018: Adopt Inspect AI as the Track B harness baseline
+
+**Source:** evals landscape research from May 2026 (publicly cited frameworks from UK AISI and the broader 2026 agent-eval ecosystem). UK AISI's `UKGovernmentBEIS/inspect_ai` is the convergent open-source agent-eval harness as of mid-2026 (MIT, 5,571 commits, 200+ pre-built evals in the companion `inspect_evals` registry). It supports running Claude Code / Codex CLI as agent subjects, which is the integration shape Track B needs for the redesigned Pattern 1 v2 experiment.
+
+**The decision in question:** standardize on Inspect AI as the harness layer for Track B Pattern 1 v2 (and subsequent Track B patterns), replacing the bespoke scaffolding currently sketched in the private Track B experiment design. The atrib MCP wrapper sits underneath; Inspect orchestrates the agent, runs the task, scores the result. Specific commitment: pilot one task before committing fully (Inspect's agent-as-subject API may have rough edges with the atrib MCP wrapper).
+
+**Considerations.**
+- AISI maintenance signal is strong (5,571 commits, active releases). Reference harness for the broader 2026 agent-eval consensus.
+- Cleanly separates atrib's substrate from the eval logic above it. Inspect handles the run loop, sandboxing, scoring; atrib handles the trajectory recording.
+- Legible to external reviewers (AISI is the UK government's AI Safety Institute; their tooling is the closest thing to a regulatory-grade reference).
+- Alternatives rejected: bespoke harness (slow, less legible), Promptfoo (CLI-first, less expressive for trajectory eval), DeepEval (Python-only; atrib's current implementation footprint is TypeScript).
+- Risk: API rough edges; pilot one task (the lowest-effort Pattern 1 v2 sub-task) before committing the full experiment.
+
+**Likely outcome (not committed):** accept when E1 lands. The pilot validates the integration; full Pattern 1 v2 then runs on Inspect.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P019: pass^k as the primary Track B reporting metric (k=3 default)
+
+**Source:** evals landscape research from May 2026 (publicly cited methodology from Anthropic's January 2026 "Demystifying Evals for AI Agents" essay and the broader 2026 agent-eval reporting consensus). pass@k (succeeds at least once across k attempts) inflates apparent agent capability and diverges sharply from pass^k (succeeds every time across k attempts) starting around k=10. For verifiability claims, consistent success matters more than at-least-once success.
+
+**The decision in question:** specify pass^k as the primary Track B reporting metric, with k=3 as the default reporting tier, k=5 as the stretch tier, and k=10 as the reliability-grade tier. Reporting decision; not a tooling change. Updates to the private Track B experiment design lock the metric before any first-run results are published.
+
+**Considerations.**
+- Reporting decision; cost is essentially zero.
+- Aligns Track B with Anthropic's published methodology (the field's most-cited eval-discipline reference essay as of mid-2026) and with the broader 2026 reporting consensus.
+- Avoids the pass@k inflation trap that would make atrib look better than it is and would erode credibility on first independent verification attempt.
+- Pairs naturally with the end-state-evaluation methodology (already locked in the private Track B experiment design); both came from the same Anthropic essay cluster.
+- No alternative considered worth recording; pass@k as a primary metric in 2026 is a known anti-pattern.
+
+**Likely outcome (not committed):** accept when E3 lands. Reporting decision; one-line update to the experiment-design doc.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P020: Extend the substrate-correctness conformance corpus to Wycheproof-equivalent coverage
+
+**Source:** evals landscape research from May 2026 (publicly cited model from Google's `google/wycheproof` cryptography test suite, the canonical adversarial-input conformance corpus for cryptographic primitives). atrib's existing conformance corpus (at `spec/conformance/` for [§1.2.6](atrib-spec.md#126-provenance_token), [§1.4](atrib-spec.md#14-signing), [§1.9](atrib-spec.md#19-key-rotation-and-revocation), [§2.6.1](atrib-spec.md#261-submit-entry), [§3.4.7](atrib-spec.md#347-activity-map), [§4.6](atrib-spec.md#46-the-calculation-algorithm), [§6](atrib-spec.md#6-key-directory), [§6.3](atrib-spec.md#63-verifier-consultation)) is structurally analogous but does not yet cover the full adversarial-edge surface that a Wycheproof-equivalent corpus would.
+
+**The decision in question:** extend the conformance corpus to cover (a) property-based edge-derivation tests for [§3.2.4](atrib-spec.md#324-edge-derivation-rules), (b) adversarial-input vectors (malformed records, truncated bytes, bit-flipped signatures, JCS canonicalization edge cases), (c) [D067](#d067-multi-producer-chain-composition-precedence-contract) multi-producer race vectors (interleaved emissions, conflicting chain-tail claims, missing inbound tokens), (d) [D052](#d052-cross-attestation-requirement-for-transaction-records) cross-attestation positive/negative vectors (correct dual-signer bundles, single-signer transaction records that should flag, tampered counterparty signatures).
+
+**Considerations.**
+- Closes the gap between existing per-feature corpus coverage and the cryptography-conformance-grade corpus the verifiability claim requires.
+- Enables external verifier implementations (in any language) to validate atrib's substrate-correctness against an authoritative reference.
+- Independent of Track B Pattern 1 v2 work; can run in parallel.
+- Alternative rejected: rely on existing unit tests. They don't catch ordering correctness, they aren't legible as a published spec artifact, and they aren't replayable by a third-party verifier.
+- Pairs with the existing per-feature conformance corpora; this is corpus extension, not a new substrate.
+
+**Likely outcome (not committed):** accept when E2 lands. Approximately 3-5 days of focused corpus authoring.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P021: Publish a behavior-impact paired benchmark suite as an atrib artifact
+
+**Source:** evals landscape research from May 2026 (publicly cited model from SWE-bench / Terminal-Bench 2.0 / RE-Bench / GAIA leaderboards; specifically the lessons of the April 2026 contamination collapse). After Track B Pattern 1 v2 produces a non-null behavior-impact result, the next leverage point is converting that result into a publishable benchmark suite (Suite B) that any operator can run themselves to measure substrate-impact on their own agent stack.
+
+**The decision in question:** publish a curated paired-comparison behavior-impact benchmark (Suite B) as an atrib artifact. Each task is run twice (with-atrib vs without-atrib); the Suite reports pass^k delta. Cadence: quarterly snapshots with 30% task rotation (resists the contamination problem that broke SWE-bench Verified). The Suite's results are themselves verifiable atrib trajectories; the substrate validates itself.
+
+**Considerations.**
+- Eval-as-product surface; atrib's answer to SWE-bench Pro / Terminal-Bench 2.0 / RE-Bench in the publishable-benchmark space.
+- Resists the April 2026 contamination collapse by design (rotation + pre-published schedule).
+- Publishable artifact that operators can run, cite, and verify independently. Strengthens the verifiability story (the benchmark itself is signed).
+- Defer until E1-E5 have landed AND at least one Track B success has been published. Premature publication risks publishing a NULL or negative result, which is the wrong sequencing.
+- Alternative rejected: rely on existing benchmarks. None of them measure substrate-impact in a way that's robust to contamination.
+
+**Likely outcome (not committed):** accept when E6 ships. Approximately 2-3 weeks of focused work for the first quarterly snapshot.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
