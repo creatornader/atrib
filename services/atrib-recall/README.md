@@ -6,7 +6,11 @@ The consumer-side counterpart to `@atrib/emit`: emit produces signed records, re
 
 ## Tool surface
 
-The primary tool, fully implemented:
+Five MCP tools cover the cognitive surface of the local mirror.
+
+### `recall_my_attribution_history`
+
+The base filter-rank-page tool over the local mirror.
 
 ```typescript
 mcp__atrib-recall__recall_my_attribution_history({
@@ -26,30 +30,57 @@ mcp__atrib-recall__recall_my_attribution_history({
                                  // Set true ONLY when consuming the verbose mode AND explicitly
                                  // checking signature_verified per record.
 
-  // Layer 1 (additive, stub-accepted in current ship; full enforcement in
-  // an upcoming release). When supplied, the schema validates the value and
-  // the response includes a `layer_1_warnings` array listing each
-  // stub-accepted param so callers can detect the pre-impl state without
-  // reading source. Behavior is otherwise identical to the same call with
-  // these params omitted.
+  // Annotation- and revision-driven filters. Records with no incident
+  // annotation are excluded when min_importance or topic_tags is set;
+  // records that have a revision pointing at them surface superseded_by
+  // by default and are hidden when include_revised=true.
   min_importance?: 'critical' | 'high' | 'medium' | 'low' | 'noise',
-  topic_tags?: string[],
-  include_revised?: boolean,
-  min_signers?: number,
+  topic_tags?: string[],         // OR-match against annotation topic_tags.
+  include_revised?: boolean,     // True hides records superseded by a D059 revision.
+  min_signers?: number,          // Distinct-signer threshold; 1 for non-transaction records.
+
+  // Ranking.
   rank_by?: 'timestamp' | 'relevance' | 'causal_distance',
-  rank_anchor?: string,
-  toc?: boolean,
+                                 // 'timestamp' (default): newest first.
+                                 // 'relevance': Park et al. weighted-sum scoring (recency +
+                                 //   annotation-derived importance + BM25 against rank_anchor).
+                                 // 'causal_distance': BFS shortest-path from rank_anchor over
+                                 //   the local derived graph (CHAIN_PRECEDES, INFORMED_BY,
+                                 //   ANNOTATES, REVISES).
+  rank_anchor?: string,          // record_hash for causal_distance, free-form query for relevance.
+
+  // Response shape.
+  toc?: boolean,                 // Default false. True returns the ~40-80-token-per-entry
+                                 // table-of-contents shape (record_hash, tool_name, summary,
+                                 // importance, topic_tags, timestamp, superseded_by) suitable
+                                 // for SessionStart auto-injected scaffolds.
 })
 ```
 
-Returns a `RecallResult` with `total`, `returned`, `filtered_out_by_verification`, `record_file`, `log_origin`, `pagination_caveat`, `records` (compact or full per the flag), and (when any Layer 1 param is supplied) `layer_1_warnings`.
+Returns `{ total, returned, filtered_out_by_verification, record_files, record_file, log_origin, pagination_caveat, records }`. Each record carries `annotations` (when annotation records point at it) and `superseded_by` (when revision records point at it).
 
-Four additional MCP tools are registered as stubs (return a "Layer 1 in progress" notice; full handlers ship in an upcoming release). Their schemas are stable; downstream callers can wire against them now:
+### Sibling tools
 
-- `mcp__atrib-recall__recall_walk({ from_record_hash, edge_types?, depth? })` - BFS over the [§3.2.4](../../atrib-spec.md#324-edge-derivation-rules) derived graph.
-- `mcp__atrib-recall__recall_annotations({ record_hash })` - return all [D058](../../DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) annotation records pointing at the given record.
-- `mcp__atrib-recall__recall_revisions({ record_hash })` - return the [D059](../../DECISIONS.md#d059-promote-revision-to-atrib-normative-event_type-byte-0x06) revision chain for the given record.
-- `mcp__atrib-recall__recall_by_content({ query, k? })` - free-form text search; BM25 over summary + topics in current ship; sqlite-vec embedding similarity in a future Layer 2 ship.
+- `mcp__atrib-recall__recall_walk({ from_record_hash, edge_types?, depth? })` - walks the local derived graph from `from_record_hash` up to `depth` hops (default 3), returning each reachable record_hash + weighted distance. Edge types: CHAIN_PRECEDES (weight 1), INFORMED_BY (weight 1), ANNOTATES (weight 2), REVISES (weight 2). SESSION_PRECEDES, SESSION_PARALLEL, CONVERGES_ON, CROSS_SESSION, and PROVENANCE_OF are deferred to subsequent releases.
+
+- `mcp__atrib-recall__recall_annotations({ record_hash })` - returns the aggregated annotation summary (max_importance, union of topics, latest summary) for the target record. Returns `annotations: null` when no annotation points at the record.
+
+- `mcp__atrib-recall__recall_revisions({ record_hash })` - returns the forward revision chain for the target record. Each entry's revises field points at the prior entry; the chain follows the first-by-timestamp revision at each step. Sibling fan-out (parallel revisions of the same target) requires calling `recall_my_attribution_history` with event_type=revision and inspecting `content.revises` manually.
+
+- `mcp__atrib-recall__recall_by_content({ query, k? })` - BM25 free-form retrieval over each record's annotation summary + topic_tags, then reranked by Park et al. weighted-sum scoring (recency + importance + relevance). Default k=10, max 50. Records with no annotation contribute no relevance signal (will only surface via the recency + importance fallback). Layer 2 (sqlite-vec sidecar, separate ship) extends with embedding similarity over the same indexed text.
+
+### Tunable weights
+
+The Park et al. ranking weights and recency time constant are environment-tunable for per-axis sensitivity studies:
+
+| Env var | Default | Role |
+|---|---|---|
+| `ATRIB_RECALL_ALPHA` | 0.3 | Recency component weight |
+| `ATRIB_RECALL_BETA` | 0.3 | Importance component weight |
+| `ATRIB_RECALL_GAMMA` | 0.4 | Relevance (BM25) component weight |
+| `ATRIB_RECALL_TAU_DAYS` | 7 | Exponential-decay time constant for recency |
+
+The implementation does not enforce that alpha + beta + gamma sum to 1.0; the operator-facing defaults do.
 
 ## Trust scope
 
