@@ -153,11 +153,11 @@ describe('MCP protocol surface', () => {
       const res = await client.send('tools/list', {}, 1)
       expect(res.error).toBeUndefined()
       const tools = (res.result as { tools: { name: string }[] }).tools
-      // Layer 1 (0.5.0-alpha) registers the existing recall_my_attribution_history
-      // tool plus four new stub tools (recall_walk, recall_annotations,
-      // recall_revisions, recall_by_content). Stubs return a "Layer 1 in progress"
-      // notice; full handler implementation lands in subsequent commits during
-      // the May 17 sprint.
+      // Layer 1 registers five tools: the existing recall_my_attribution_history
+      // plus four siblings: recall_walk + recall_by_content are stubs returning a
+      // "Layer 1 in progress" notice; recall_annotations + recall_revisions are
+      // implemented as direct lookups against the annotation/revision aggregation
+      // maps.
       expect(tools).toHaveLength(5)
       const names = tools.map((t) => t.name).sort()
       expect(names).toEqual([
@@ -217,6 +217,131 @@ describe('MCP protocol surface', () => {
         res.error !== undefined ||
         (res.result as { isError?: boolean })?.isError === true
       expect(errored).toBe(true)
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_annotations returns the aggregated summary for a target record', async () => {
+    // Construct an annotation envelope pointing at a tool_call record; verify
+    // recall_annotations returns the AnnotationSummary via the MCP wire.
+    const target = await makeSigned(1700000000000)
+    const { computeRecordHash } = await import('../src/aggregations.js')
+    const targetHash = computeRecordHash(target)
+    const annoRecord = {
+      spec_version: 'atrib/1.0' as const,
+      event_type: 'https://atrib.dev/v1/types/annotation',
+      context_id: CTX,
+      creator_key: base64urlEncode(await getPublicKey(KEY)),
+      chain_root: genesisChainRoot(CTX),
+      content_id: `sha256:${'a'.repeat(64)}`,
+      timestamp: 1700000001000,
+      signature: '',
+    }
+    const annoSigned = await signRecord(annoRecord as AtribRecord, KEY)
+    writeFileSync(
+      recordFile,
+      [
+        JSON.stringify(target),
+        JSON.stringify({
+          record: annoSigned,
+          _local: {
+            content: {
+              annotates: targetHash,
+              importance: 'high',
+              topic_tags: ['security'],
+              summary: 'flagged for review',
+            },
+          },
+        }),
+      ].join('\n'),
+    )
+    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_annotations',
+          arguments: { record_hash: targetHash },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        record_hash: string
+        annotations: {
+          max_importance: string
+          topics: string[]
+          summary: string
+        } | null
+      }
+      expect(payload.record_hash).toBe(targetHash)
+      expect(payload.annotations).toEqual({
+        max_importance: 'high',
+        topics: ['security'],
+        summary: 'flagged for review',
+      })
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_revisions returns the linked chain of revisions', async () => {
+    // orig <- r1 <- r2 chain. Calling on orig should return [r1Hash, r2Hash].
+    const orig = await makeSigned(1700000000000)
+    const { computeRecordHash } = await import('../src/aggregations.js')
+    const origHash = computeRecordHash(orig)
+    const r1 = await signRecord({
+      spec_version: 'atrib/1.0',
+      event_type: 'https://atrib.dev/v1/types/revision',
+      context_id: CTX,
+      creator_key: base64urlEncode(await getPublicKey(KEY)),
+      chain_root: genesisChainRoot(CTX),
+      content_id: `sha256:${'b'.repeat(64)}`,
+      timestamp: 1700000001000,
+      signature: '',
+    } as AtribRecord, KEY)
+    const r1Hash = computeRecordHash(r1)
+    const r2 = await signRecord({
+      spec_version: 'atrib/1.0',
+      event_type: 'https://atrib.dev/v1/types/revision',
+      context_id: CTX,
+      creator_key: base64urlEncode(await getPublicKey(KEY)),
+      chain_root: genesisChainRoot(CTX),
+      content_id: `sha256:${'c'.repeat(64)}`,
+      timestamp: 1700000002000,
+      signature: '',
+    } as AtribRecord, KEY)
+    const r2Hash = computeRecordHash(r2)
+    writeFileSync(
+      recordFile,
+      [
+        JSON.stringify(orig),
+        JSON.stringify({ record: r1, _local: { content: { revises: origHash } } }),
+        JSON.stringify({ record: r2, _local: { content: { revises: r1Hash } } }),
+      ].join('\n'),
+    )
+    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_revisions',
+          arguments: { record_hash: origHash },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        record_hash: string
+        revision_chain: string[]
+      }
+      expect(payload.record_hash).toBe(origHash)
+      expect(payload.revision_chain).toEqual([r1Hash, r2Hash])
     } finally {
       client.close()
     }
