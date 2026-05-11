@@ -11,6 +11,7 @@ import {
   genesisChainRoot,
   EVENT_TYPE_TOOL_CALL_URI,
   EVENT_TYPE_ANNOTATION_URI,
+  EVENT_TYPE_REVISION_URI,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import {
@@ -18,6 +19,7 @@ import {
   loadLoaded,
   loadLoadedFromDir,
   aggregateAnnotationsByRecord,
+  aggregateRevisionsByRecord,
 } from '../src/aggregations.js'
 
 const KEY = new Uint8Array(32).fill(7)
@@ -281,5 +283,106 @@ describe('aggregateAnnotationsByRecord', () => {
     expect(out.size).toBe(2)
     expect(out.get(h1)!.max_importance).toBe('medium')
     expect(out.get(h2)!.max_importance).toBe('low')
+  })
+})
+
+describe('aggregateRevisionsByRecord', () => {
+  it('returns empty map when no records', () => {
+    expect(aggregateRevisionsByRecord([])).toEqual(new Map())
+  })
+
+  it('skips non-revision records', async () => {
+    const tc = await makeSigned()
+    const out = aggregateRevisionsByRecord([
+      { record: tc, record_hash: computeRecordHash(tc), content: { revises: 'irrelevant' } },
+    ])
+    expect(out.size).toBe(0)
+  })
+
+  it('skips revision records without _local.content (§8.1 bare posture)', async () => {
+    const rev = await makeSigned({ event_type: EVENT_TYPE_REVISION_URI })
+    const out = aggregateRevisionsByRecord([
+      { record: rev, record_hash: computeRecordHash(rev) },
+    ])
+    expect(out.size).toBe(0)
+  })
+
+  it('skips revisions without a revises target', async () => {
+    const rev = await makeSigned({ event_type: EVENT_TYPE_REVISION_URI })
+    const out = aggregateRevisionsByRecord([
+      {
+        record: rev,
+        record_hash: computeRecordHash(rev),
+        content: { reason: 'changed mind', new_position: 'X' },
+      },
+    ])
+    expect(out.size).toBe(0)
+  })
+
+  it('bins a single revision onto its target', async () => {
+    const orig = await makeSigned({ timestamp: 1 })
+    const origHash = computeRecordHash(orig)
+    const rev = await makeSigned({ event_type: EVENT_TYPE_REVISION_URI, timestamp: 2 })
+    const revHash = computeRecordHash(rev)
+    const out = aggregateRevisionsByRecord([
+      { record: orig, record_hash: origHash },
+      {
+        record: rev,
+        record_hash: revHash,
+        content: { revises: origHash, reason: 'updated', new_position: 'Y' },
+      },
+    ])
+    expect(out.size).toBe(1)
+    expect(out.get(origHash)).toEqual([revHash])
+  })
+
+  it('orders multiple revisions by timestamp ascending', async () => {
+    const orig = await makeSigned({ timestamp: 1 })
+    const origHash = computeRecordHash(orig)
+    const r1 = await makeSigned({ event_type: EVENT_TYPE_REVISION_URI, timestamp: 20 })
+    const r2 = await makeSigned({ event_type: EVENT_TYPE_REVISION_URI, timestamp: 10 })
+    const r3 = await makeSigned({ event_type: EVENT_TYPE_REVISION_URI, timestamp: 30 })
+    const h1 = computeRecordHash(r1)
+    const h2 = computeRecordHash(r2)
+    const h3 = computeRecordHash(r3)
+    const out = aggregateRevisionsByRecord([
+      { record: orig, record_hash: origHash },
+      { record: r1, record_hash: h1, content: { revises: origHash } },
+      { record: r2, record_hash: h2, content: { revises: origHash } },
+      { record: r3, record_hash: h3, content: { revises: origHash } },
+    ])
+    expect(out.get(origHash)).toEqual([h2, h1, h3])
+  })
+
+  it('groups revisions across distinct targets', async () => {
+    const t1 = await makeSigned({ timestamp: 1, content_id: `sha256:${'1'.repeat(64)}` })
+    const t2 = await makeSigned({ timestamp: 2, content_id: `sha256:${'2'.repeat(64)}` })
+    const h1 = computeRecordHash(t1)
+    const h2 = computeRecordHash(t2)
+    const rev1 = await makeSigned({ event_type: EVENT_TYPE_REVISION_URI, timestamp: 10 })
+    const rev2 = await makeSigned({ event_type: EVENT_TYPE_REVISION_URI, timestamp: 11 })
+    const out = aggregateRevisionsByRecord([
+      { record: rev1, record_hash: computeRecordHash(rev1), content: { revises: h1 } },
+      { record: rev2, record_hash: computeRecordHash(rev2), content: { revises: h2 } },
+    ])
+    expect(out.size).toBe(2)
+    expect(out.get(h1)).toEqual([computeRecordHash(rev1)])
+    expect(out.get(h2)).toEqual([computeRecordHash(rev2)])
+  })
+
+  it('captures revision chains (target may itself be a revision)', async () => {
+    const orig = await makeSigned({ timestamp: 1 })
+    const origHash = computeRecordHash(orig)
+    const r1 = await makeSigned({ event_type: EVENT_TYPE_REVISION_URI, timestamp: 10 })
+    const r1Hash = computeRecordHash(r1)
+    const r2 = await makeSigned({ event_type: EVENT_TYPE_REVISION_URI, timestamp: 20 })
+    const r2Hash = computeRecordHash(r2)
+    const out = aggregateRevisionsByRecord([
+      { record: orig, record_hash: origHash },
+      { record: r1, record_hash: r1Hash, content: { revises: origHash } },
+      { record: r2, record_hash: r2Hash, content: { revises: r1Hash } },
+    ])
+    expect(out.get(origHash)).toEqual([r1Hash])
+    expect(out.get(r1Hash)).toEqual([r2Hash])
   })
 })
