@@ -202,7 +202,7 @@ atrib categorizes runtime integration into six first-class patterns ([D069](DECI
 | 1. Lifecycle hooks | Runtimes that expose typed hook events with stdin-JSON IPC (Claude Code, Cursor, Codex CLI, Browser-Use, Augment Code, Pi/Earendil) | hook helper subprocessing `atrib-emit` |
 | 2. In-process MCP middleware | Runtimes that call tools through MCP servers (Goose, Continue, Cody, Claude Code MCP-served tools, opencode) | [`@atrib/mcp-wrap`](packages/mcp-wrap/), required for transaction records ([D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)) and `preCallTransform` ([D057](DECISIONS.md#d057-pre-call-signing-hook-precalltransform-for-cross-tool-causal-embedding)) |
 | 3. Callback / lifecycle handlers | Multi-agent SDKs with native callback APIs (LangGraph, CrewAI, AutoGen, Microsoft Agent Framework, Anthropic Agent SDK, smolagents, OpenAI Agents SDK, Vercel AI SDK, Flue, Google ADK) | [`@atrib/agent`](packages/agent/) framework adapters |
-| 4. OpenInference SpanProcessor | OpenInference-instrumented runtimes (transitive coverage of 33 Python instrumentations + 9 JS packages) | `@atrib/openinference-processor` (planned) |
+| 4. OpenInference SpanProcessor | OpenInference-instrumented runtimes (transitive coverage of 33 Python instrumentations + 9 JS packages) | `@atrib/openinference` (planned) |
 | 5. Post-hoc API import + consumer re-sign | Closed-loop runtimes that own the trace (Cursor Cloud Agents recommended first reference; also Devin, Manus, Operator, Bolt/v0/Lovable) | per-runtime adapters (planned) |
 | 6. Streaming interceptor | Real-time bidirectional protocols (OpenAI Realtime API, voice/multimodal harnesses) | not yet built |
 

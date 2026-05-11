@@ -1,7 +1,7 @@
 /**
  * atrib + OpenInference. runnable integration snippet.
  *
- * Demonstrates atrib's `@atrib/openinference-processor` composing alongside
+ * Demonstrates atrib's `@atrib/openinference` composing alongside
  * Arize's `@arizeai/openinference-vercel` reference SpanProcessor on a
  * shared OpenTelemetry TracerProvider. This is the canonical Pattern #4
  * shape from atrib-spec §9: one OpenInference instrumentation feeds two
@@ -45,7 +45,7 @@ import {
 import {
   AtribSpanProcessor,
   verifyOpenTelemetryContextPropagation,
-} from '@atrib/openinference-processor'
+} from '@atrib/openinference'
 import { generateText, tool, stepCountIs } from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { z } from 'zod'

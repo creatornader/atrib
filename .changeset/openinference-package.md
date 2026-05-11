@@ -1,8 +1,8 @@
 ---
-'@atrib/openinference-processor': minor
+'@atrib/openinference': minor
 ---
 
-New package: `@atrib/openinference-processor`. OpenTelemetry SpanProcessor that consumes [OpenInference](https://github.com/Arize-ai/openinference)-shaped spans and emits signed atrib records.
+New package: `@atrib/openinference`. OpenTelemetry SpanProcessor that consumes [OpenInference](https://github.com/Arize-ai/openinference)-shaped spans and emits signed atrib records.
 
 This is the reference implementation of [atrib-spec §9](../atrib-spec.md#9-runtime-integration-patterns) Pattern #4 (OpenTelemetry SpanProcessor). One adapter transitively covers every framework with OpenInference instrumentation: OpenAI Agents SDK, Claude Agent SDK, LangChain, Vercel AI, CrewAI, LlamaIndex, DSPy, MCP, Microsoft Agent Framework, Bedrock AgentCore, smolagents, Pydantic AI, Agno, and 20+ more.
 

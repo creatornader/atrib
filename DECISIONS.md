@@ -3112,7 +3112,7 @@ The original "wrap every MCP at zero per-server cost" framing positioned `@atrib
 | Lifecycle hooks | hook helper subprocessing the `atrib-emit` MCP | per-host hook scripts |
 | In-process MCP middleware | `@atrib/mcp-wrap` | `packages/mcp-wrap/` |
 | Callback / lifecycle handlers | `@atrib/agent` framework adapters per [D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow), [D024](#d024-langchain-js-mcp-adapter-not-docs-only-multiservermcpclient-needs-a-proper-helper-because-its-internal-client-references-are-private) | `packages/agent/src/adapters/` |
-| OpenInference SpanProcessor | `@atrib/openinference-processor` (planned) | new package |
+| OpenInference SpanProcessor | `@atrib/openinference` (planned) | new package |
 | Post-hoc API import | per-runtime adapters (planned, deferred per [D-V4-43](#d-v4-43-tracker)); Cursor Cloud Agents recommended as first reference target | likely `services/atrib-{runtime}-adapter/` |
 | Streaming interceptor | not yet built; deferred until a streaming runtime integration target is selected | likely a transform-stream library or per-protocol adapter |
 
@@ -3136,7 +3136,7 @@ The original "wrap every MCP at zero per-server cost" framing positioned `@atrib
 
 - `packages/agent/README.md` re-frames its adapter table under Pattern #3 (callback / lifecycle handlers). Each existing adapter ([D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow), [D024](#d024-langchain-js-mcp-adapter-not-docs-only-multiservermcpclient-needs-a-proper-helper-because-its-internal-client-references-are-private)) is one Pattern #3 instance.
 
-- A new package `@atrib/openinference-processor` is planned for Pattern #4 (separate ADR when the build lands). The OpenInference span schema is the integration boundary; the package reads `openinference.tool.name`, `openinference.input.value`, `openinference.output.value`, etc., and constructs AtribRecord content from each tool span on `onEnd`.
+- A new package `@atrib/openinference` is planned for Pattern #4. The OpenInference span schema is the integration boundary; the package reads `openinference.tool.name`, `openinference.input.value`, `openinference.output.value`, etc., and constructs AtribRecord content from each tool span on `onEnd`.
 
 - A reference implementation for Pattern #5 (post-hoc API import + operator re-sign) is deferred per [D-V4-43](#d-v4-43-tracker). The pattern is documented in [§9](atrib-spec.md#9-runtime-integration-patterns) so consumers can build their own; atrib's reference implementation lands when Devin or Operator API access becomes available + benchmarks unblock outward-facing work.
 

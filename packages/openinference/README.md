@@ -1,4 +1,4 @@
-# @atrib/openinference-processor
+# @atrib/openinference
 
 OpenTelemetry SpanProcessor that consumes [OpenInference](https://github.com/Arize-ai/openinference)-shaped spans and emits signed atrib records.
 
@@ -13,7 +13,7 @@ Where existing observability platforms (Phoenix, Langfuse, AgentOps, Helicone) *
 ## Install
 
 ```bash
-pnpm add @atrib/openinference-processor
+pnpm add @atrib/openinference
 ```
 
 Peer dependencies (install if not already in your OTel pipeline):
@@ -26,7 +26,7 @@ pnpm add @opentelemetry/api @opentelemetry/sdk-trace-base
 
 ```ts
 import { BasicTracerProvider } from '@opentelemetry/sdk-trace-base'
-import { AtribSpanProcessor } from '@atrib/openinference-processor'
+import { AtribSpanProcessor } from '@atrib/openinference'
 import { base64urlEncode, getPublicKey } from '@atrib/mcp'
 
 const privateKey = /* your 32-byte Ed25519 seed */
@@ -84,7 +84,7 @@ Two SpanProcessor variants ship in v0.0.1:
 Batch buffer config knobs (all defaulted): `maxQueueSize` (2048), `maxExportBatchSize` (512), `scheduledDelayMillis` (5000), `exportTimeoutMillis` (30000). Per [§5.8](../../atrib-spec.md#58-degradation-contract) degradation contract: when the queue overflows `maxQueueSize` the oldest record is dropped (operator pipeline never blocks); `getDroppedRecordCount()` exposes the counter for observability.
 
 ```ts
-import { AtribBatchSpanProcessor } from '@atrib/openinference-processor'
+import { AtribBatchSpanProcessor } from '@atrib/openinference'
 
 const processor = new AtribBatchSpanProcessor({
   privateKey, creatorKey, serverUrl,
@@ -134,7 +134,7 @@ The package exports `verifyOpenTelemetryContextPropagation()` -- a deterministic
 import {
   AtribSpanProcessor,
   verifyOpenTelemetryContextPropagation,
-} from '@atrib/openinference-processor'
+} from '@atrib/openinference'
 
 // At app startup, after configuring your TracerProvider:
 await verifyOpenTelemetryContextPropagation()

@@ -59,7 +59,7 @@ export type LoadedRecord = {
 /**
  * Compute the spec §2.3 record_hash for an AtribRecord: sha256 over the
  * JCS-canonical serialization including the signature field. Matches the
- * pattern in `packages/openinference-processor/test/informed-by.test.ts`
+ * pattern in `packages/openinference/test/informed-by.test.ts`
  * and the in-tree atrib-span-processor build output. Kept local to
  * atrib-recall for now, when a third caller appears, lift to `@atrib/mcp`.
  */

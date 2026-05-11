@@ -43,7 +43,7 @@ TracerProvider:
 
 If you are using NodeSDK from @opentelemetry/sdk-node, this is already done
 for you. The check above only fails for bare BasicTracerProvider setups.
-See @atrib/openinference-processor README for full guidance.`.trim()
+See @atrib/openinference README for full guidance.`.trim()
 
 /**
  * Verify that OpenTelemetry context propagates across async boundaries.
@@ -56,7 +56,7 @@ export async function verifyOpenTelemetryContextPropagation(
   provider?: TracerProvider,
 ): Promise<void> {
   const tracer = (provider ?? trace.getTracerProvider()).getTracer(
-    '@atrib/openinference-processor:preflight',
+    '@atrib/openinference:preflight',
   )
 
   const root = tracer.startSpan('atrib-preflight-root')
