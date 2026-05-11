@@ -493,7 +493,11 @@ export async function recall(
 
 const server = new McpServer({
   name: 'atrib-recall',
-  version: '0.5.0-alpha',
+  // Keep in sync with package.json. The Layer 1 stub scaffolding ships
+  // under the 0.4.0 surface (additive optional schema params + 4 stub
+  // tools that return "Layer 1 in progress" notice); the version bump
+  // happens via the queued changeset on next publication run.
+  version: '0.4.0',
 })
 
 // The recall semantic surface (as defined in the public protocol specification).
