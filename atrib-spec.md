@@ -4738,7 +4738,7 @@ Six integration patterns cover every runtime category surveyed in atrib's harnes
 
 **Causality formation.** OpenInference spans nest hierarchically (parent span = invoking agent, child span = tool call). atrib reads the span context to form `informed_by` edges. Cross-agent handoffs surface as `openinference.span.kind: "AGENT"` with linked spans; the adapter walks span links to construct the causal graph.
 
-**Reference implementation.** `@atrib/openinference-processor` (planned, build sequenced per [D-V4-43](DECISIONS.md#d-v4-43-tracker) priority ordering). The package exports `createAtribSpanProcessor({ keyResolver, logEndpoint })` returning a standard OpenTelemetry SpanProcessor. Operator wires it into their existing OTel `TracerProvider`.
+**Reference implementation.** `@atrib/openinference` (planned). The package exports `createAtribSpanProcessor({ keyResolver, logEndpoint })` returning a standard OpenTelemetry SpanProcessor. Callers wire it into their existing OTel `TracerProvider`.
 
 **Trade-offs.** Highest reach per LOC across the multi-agent SDK landscape (one integration → 8+ frameworks). OpenInference span schema is stable for the common attributes but evolving for newer ones; the adapter codes against the stable subset and falls through cleanly when extended attributes appear. Requires the runtime to be OpenInference-instrumented; non-instrumented runtimes need a different pattern.
 

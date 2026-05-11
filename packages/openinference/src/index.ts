@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// @atrib/openinference-processor. Public API.
+// @atrib/openinference. Public API.
 
 // Primary export: the SpanProcessor.
 export { AtribSpanProcessor } from './atrib-span-processor.js'

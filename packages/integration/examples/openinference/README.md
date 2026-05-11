@@ -4,7 +4,7 @@ Demonstrates the canonical Pattern #4 composition from atrib-spec [§9](../../..
 
 ## What this shows
 
-- **`@atrib/openinference-processor` composes alongside `@arizeai/openinference-vercel`**, the reference SpanProcessor for Vercel AI SDK's OpenInference instrumentation. They share one TracerProvider; each filters spans independently.
+- **`@atrib/openinference` composes alongside `@arizeai/openinference-vercel`**, the reference SpanProcessor for Vercel AI SDK's OpenInference instrumentation. They share one TracerProvider; each filters spans independently.
 - **The atrib processor signs every TOOL span** that carries the canonical `openinference.span.kind` attribute (and friends), producing an `AtribRecord` per tool invocation.
 - **The Arize processor stays unaffected** -- it continues exporting to whatever OTLP endpoint Phoenix / Langfuse / Datadog is listening on.
 - **No code changes to the agent or Vercel AI SDK** -- the integration is one `provider.addSpanProcessor` line away from any existing OpenInference pipeline.
