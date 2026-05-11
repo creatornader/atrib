@@ -59,8 +59,11 @@ Signature verification is local-only. A passing `signature_verified` proves the 
 
 | Env var | Required | Purpose |
 |---|---|---|
-| `ATRIB_RECORD_FILE` | optional | Path to the signed-record jsonl mirror to read. Default: `~/.atrib/records/mcp-wrap-claude-code.jsonl` |
+| `ATRIB_RECORD_FILE` | optional | Path to a single signed-record jsonl mirror to read. When set, overrides directory scanning. Back-compat with pre-0.4.0 callers that pinned a specific producer's mirror. No default. |
+| `ATRIB_MIRROR_DIR` | optional | Directory to scan; recall reads every `*.jsonl` inside. Default: `~/.atrib/records/` (the spec [§5.9](../../atrib-spec.md#59-local-mirror-conventions) well-known per-agent mirror namespace). When unset, this is the path used. |
 | `ATRIB_LOG_ORIGIN` | optional | Origin used in human-readable response messages. Default: `log.atrib.dev` |
+
+**Mirror discovery priority** (per spec [§5.9](../../atrib-spec.md#59-local-mirror-conventions)): if `ATRIB_RECORD_FILE` is set, recall reads that single file. Otherwise recall scans `ATRIB_MIRROR_DIR` and merges every `*.jsonl` inside. The directory-scan default unifies recall across producers without recall having to know per-producer naming conventions; any producer that follows the spec convention just shows up.
 
 ## Installation in an MCP host
 
