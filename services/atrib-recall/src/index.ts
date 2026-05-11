@@ -88,6 +88,12 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
+import {
+  aggregateAnnotationsByRecord,
+  aggregateRevisionsByRecord,
+  discoverLoaded,
+} from './aggregations.js'
+import type { AnnotationSummary as AggAnnotationSummary } from './aggregations.js'
 
 const ATRIB_RECORD_FILE = process.env.ATRIB_RECORD_FILE
 const ATRIB_MIRROR_DIR = process.env.ATRIB_MIRROR_DIR ?? join(
@@ -290,17 +296,12 @@ interface RecallArgs {
 }
 
 /**
- * Aggregated annotation summary attached to a record per Layer 1.
- * max_importance is the maximum across all D058 annotations pointing at
- * this record (or undefined if none). topics is the union of all annotation
- * topic_tags arrays. Both are computed by aggregateAnnotationsByRecord
- * over the loaded mirror.
+ * Aggregated annotation summary attached to a record per Layer 1. Same
+ * shape as the canonical AnnotationSummary exported from aggregations.ts;
+ * aliased here so the response types in this file don't have to drag the
+ * aggregations module into their import surface.
  */
-type AnnotationSummary = {
-  max_importance?: ImportanceLabel
-  topics?: string[]
-  summary?: string
-}
+type AnnotationSummary = AggAnnotationSummary
 
 /**
  * The shape returned to the agent. Each record is annotated with
@@ -380,16 +381,25 @@ export interface RecallResult {
   records: RecallRecordFull[] | RecallRecordCompact[]
 }
 
-async function annotateVerification(records: AtribRecord[]): Promise<RecallRecordFull[]> {
+async function annotateVerification(
+  loaded: { record: AtribRecord; record_hash: string }[],
+  annotationsByRecord: Map<string, AnnotationSummary>,
+  revisionsByRecord: Map<string, string[]>,
+): Promise<RecallRecordFull[]> {
   return Promise.all(
-    records.map(async (r) => {
+    loaded.map(async (lr) => {
       let ok = false
       try {
-        ok = await verifyRecord(r)
+        ok = await verifyRecord(lr.record)
       } catch {
         ok = false
       }
-      return { ...r, signature_verified: ok }
+      const out: RecallRecordFull = { ...lr.record, signature_verified: ok }
+      const ann = annotationsByRecord.get(lr.record_hash)
+      if (ann) out.annotations = ann
+      const supers = revisionsByRecord.get(lr.record_hash)
+      if (supers && supers.length > 0) out.superseded_by = supers
+      return out
     }),
   )
 }
@@ -405,6 +415,8 @@ function compactify(records: RecallRecordFull[]): RecallRecordCompact[] {
     }
     if (r.session_token) out.session_token = r.session_token
     if (r.tool_name) out.tool_name = r.tool_name
+    if (r.annotations) out.annotations = r.annotations
+    if (r.superseded_by) out.superseded_by = r.superseded_by
     return out
   })
 }
@@ -441,28 +453,65 @@ export async function recall(
   const compact = args.compact !== false
   const includeUnverified = args.include_unverified === true
 
-  const { records: all, files } = discoverRecords(recordFile)
+  const { loaded: all, files } = discoverLoaded(recordFile)
+  const annotationsByRecord = aggregateAnnotationsByRecord(all)
+  const revisionsByRecord = aggregateRevisionsByRecord(all)
+
   let filtered = all
-  if (args.context_id) filtered = filtered.filter((r) => r.context_id === args.context_id)
+  if (args.context_id) filtered = filtered.filter((lr) => lr.record.context_id === args.context_id)
   if (args.event_type) {
     // Schema accepts short form ('tool_call'|'transaction'); records carry
     // the URI form. Normalize before comparison; pass URIs through as-is so
     // a forward-compatible caller passing the URI directly still matches.
     const targetUri = EVENT_TYPE_SHORT_TO_URI[args.event_type] ?? args.event_type
-    filtered = filtered.filter((r) => r.event_type === targetUri)
+    filtered = filtered.filter((lr) => lr.record.event_type === targetUri)
   }
-  if (args.content_id) filtered = filtered.filter((r) => r.content_id === args.content_id)
-  if (args.tool_name) filtered = filtered.filter((r) => r.tool_name === args.tool_name)
-  if (args.args_hash) filtered = filtered.filter((r) => r.args_hash === args.args_hash)
+  if (args.content_id) filtered = filtered.filter((lr) => lr.record.content_id === args.content_id)
+  if (args.tool_name) filtered = filtered.filter((lr) => lr.record.tool_name === args.tool_name)
+  if (args.args_hash) filtered = filtered.filter((lr) => lr.record.args_hash === args.args_hash)
+
+  // Layer 1 filters (consume the annotation + revision aggregations).
+  if (args.min_importance) {
+    const minScore = IMPORTANCE_NUMERIC[args.min_importance]
+    filtered = filtered.filter((lr) => {
+      const ann = annotationsByRecord.get(lr.record_hash)
+      if (!ann || !ann.max_importance) return false
+      return IMPORTANCE_NUMERIC[ann.max_importance] >= minScore
+    })
+  }
+  if (args.topic_tags && args.topic_tags.length > 0) {
+    const wanted = new Set(args.topic_tags)
+    filtered = filtered.filter((lr) => {
+      const ann = annotationsByRecord.get(lr.record_hash)
+      return !!ann?.topics?.some((t) => wanted.has(t))
+    })
+  }
+  // include_revised is misnamed: `true` HIDES records that have revisions
+  // pointing at them. `false` / undefined keeps them visible (the default;
+  // they appear with superseded_by populated). See the schema description.
+  if (args.include_revised === true) {
+    filtered = filtered.filter((lr) => !revisionsByRecord.has(lr.record_hash))
+  }
+  // min_signers: distinct-signer count is signers?.length (transaction records
+  // per D052) or 1 (the implicit creator's single signature on every other
+  // event_type). Records below the threshold are excluded.
+  if (typeof args.min_signers === 'number') {
+    const min = args.min_signers
+    filtered = filtered.filter((lr) => {
+      const signersField = (lr.record as AtribRecord & { signers?: unknown[] }).signers
+      const count = Array.isArray(signersField) ? signersField.length : 1
+      return count >= min
+    })
+  }
 
   // Newest first - the agent typically wants its most-recent provable
   // actions, not the genesis of the log.
-  filtered.sort((a, b) => b.timestamp - a.timestamp)
+  filtered.sort((a, b) => b.record.timestamp - a.record.timestamp)
 
   const offset = Math.max(0, args.offset ?? 0)
   const limit = Math.max(1, Math.min(200, args.limit ?? 25))
   const page = filtered.slice(offset, offset + limit)
-  let verified = await annotateVerification(page)
+  let verified = await annotateVerification(page, annotationsByRecord, revisionsByRecord)
 
   // Apply verification filter post-paging so `total` reflects the unfiltered
   // count (matches user expectation of "how many records exist that match
@@ -612,35 +661,32 @@ server.registerTool(
         .enum(['critical', 'high', 'medium', 'low', 'noise'])
         .optional()
         .describe(
-          'Stub-accepted (current ship): schema validates; handler does not yet filter. Future release ' +
-            'enforces minimum annotation-derived importance (records ranked by max(annotation.importance) ' +
-            'where annotations are records pointing at this record). Records with no annotations have ' +
-            'importance=0 and will be excluded once enforcement lands.',
+          'Filter to records whose maximum annotation importance is at least this level. Annotation ' +
+            'importance comes from annotation records pointing at the record. Records with no ' +
+            'annotations at all are excluded when this filter is set.',
         ),
       topic_tags: z
         .array(z.string())
         .optional()
         .describe(
-          'Stub-accepted (current ship): schema validates; handler does not yet filter. Future release ' +
-            'enforces OR-match against annotation topic tags - records kept if at least one annotation ' +
-            'pointing at them carries at least one of the listed topics.',
+          'OR-match against annotation topic tags. Records are kept if at least one annotation pointing ' +
+            'at them carries at least one of the listed topics. Records with no annotations or no ' +
+            'topic overlap are excluded.',
         ),
       include_revised: z
         .boolean()
         .optional()
         .describe(
-          'Stub-accepted (current ship): schema validates; handler does not yet filter. Default false ' +
-            'when enforcement lands. When true, hides records superseded by revision records pointing ' +
-            'at them via the revises field.',
+          'Default false: revised records remain visible with superseded_by populated. Set true to hide ' +
+            'records that have been superseded by a revision record (revises field equals this record).',
         ),
       min_signers: z
         .number()
         .optional()
         .describe(
-          'Stub-accepted (current ship): schema validates; handler does not yet filter. Future release ' +
-            'enforces minimum count of distinct cross-attesting signers per the cross-attestation rule. ' +
-            'Useful for transaction records that must carry at least 2 signers; also useful as a ' +
-            'credibility filter when querying multi-agent substrate.',
+          'Minimum count of distinct signers. Transaction records carry a signers[] array (cross- ' +
+            'attestation); the count is its length. Non-transaction records have a single signature; ' +
+            'their count is 1. Records below the threshold are excluded.',
         ),
       rank_by: z
         .enum(['timestamp', 'relevance', 'causal_distance'])
@@ -676,16 +722,16 @@ server.registerTool(
     // result with a layer_1_warnings array listing exactly which stub-
     // accepted params were silently ignored. Callers can detect the
     // pre-implementation state without having to read source.
+    // Stub-accepted params: schema validates; handler ignores. Each entry
+    // here will be removed when the underlying behavior ships. The four
+    // filter params (min_importance, topic_tags, include_revised,
+    // min_signers) were stub-accepted in 0.5.0-alpha; enforcement landed
+    // alongside the annotation + revision aggregation modules. Still
+    // stub-accepted: rank_by + rank_anchor (need Park et al. scoring and
+    // BFS over the §3.2.4 derived graph), toc (needs the compact toc
+    // response shape).
     const a = args as RecallArgs & Record<string, unknown>
-    const stubAcceptedKeys = [
-      'min_importance',
-      'topic_tags',
-      'include_revised',
-      'min_signers',
-      'rank_by',
-      'rank_anchor',
-      'toc',
-    ] as const
+    const stubAcceptedKeys = ['rank_by', 'rank_anchor', 'toc'] as const
     const ignored = stubAcceptedKeys.filter((k) => a[k] !== undefined)
     const result = await recall(args as RecallArgs)
     const augmented = ignored.length > 0
