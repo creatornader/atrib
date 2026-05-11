@@ -353,8 +353,7 @@ type RecallRecordCompact = {
 /**
  * TOC entry: the smallest cheap-to-scan shape (~40-80 tokens). Used at
  * SessionStart auto-inject to surface a candidate set the agent can
- * expand on demand via recall(content_id=...) or recall_walk. Exported
- * for future releases that wire `toc=true` through the recall handler.
+ * expand on demand via recall(content_id=...) or recall_walk.
  */
 export type RecallRecordToc = {
   record_hash?: string
@@ -393,7 +392,7 @@ export interface RecallResult {
   record_file: string
   log_origin: string
   pagination_caveat: string
-  records: RecallRecordFull[] | RecallRecordCompact[]
+  records: RecallRecordFull[] | RecallRecordCompact[] | RecallRecordToc[]
 }
 
 /**
@@ -491,11 +490,26 @@ function rankByCausalDistance(
   })
 }
 
+/**
+ * Verified-record bundle carried through the pipeline. The flat
+ * AtribRecord-shaped `record` lets compactify + toc projection read all
+ * fields; `record_hash` is preserved separately so the toc shape can
+ * surface it without re-canonicalizing (and getting the wrong hash from
+ * the annotations / superseded_by fields).
+ */
+type VerifiedBundle = {
+  record: AtribRecord
+  record_hash: string
+  signature_verified: boolean
+  annotations?: AnnotationSummary
+  superseded_by?: string[]
+}
+
 async function annotateVerification(
   loaded: { record: AtribRecord; record_hash: string }[],
   annotationsByRecord: Map<string, AnnotationSummary>,
   revisionsByRecord: Map<string, string[]>,
-): Promise<RecallRecordFull[]> {
+): Promise<VerifiedBundle[]> {
   return Promise.all(
     loaded.map(async (lr) => {
       let ok = false
@@ -504,7 +518,11 @@ async function annotateVerification(
       } catch {
         ok = false
       }
-      const out: RecallRecordFull = { ...lr.record, signature_verified: ok }
+      const out: VerifiedBundle = {
+        record: lr.record,
+        record_hash: lr.record_hash,
+        signature_verified: ok,
+      }
       const ann = annotationsByRecord.get(lr.record_hash)
       if (ann) out.annotations = ann
       const supers = revisionsByRecord.get(lr.record_hash)
@@ -514,19 +532,31 @@ async function annotateVerification(
   )
 }
 
-function compactify(records: RecallRecordFull[]): RecallRecordCompact[] {
-  return records.map((r) => {
+function compactify(bundles: VerifiedBundle[]): RecallRecordCompact[] {
+  return bundles.map((b) => {
+    const r = b.record
     const out: RecallRecordCompact = {
       event_type: r.event_type,
       context_id: r.context_id,
       creator_key: r.creator_key,
       timestamp: r.timestamp,
-      signature_verified: r.signature_verified,
+      signature_verified: b.signature_verified,
     }
-    if (r.session_token) out.session_token = r.session_token
-    if (r.tool_name) out.tool_name = r.tool_name
-    if (r.annotations) out.annotations = r.annotations
-    if (r.superseded_by) out.superseded_by = r.superseded_by
+    const sessionToken = (r as AtribRecord & { session_token?: string }).session_token
+    const toolName = (r as AtribRecord & { tool_name?: string }).tool_name
+    if (sessionToken) out.session_token = sessionToken
+    if (toolName) out.tool_name = toolName
+    if (b.annotations) out.annotations = b.annotations
+    if (b.superseded_by) out.superseded_by = b.superseded_by
+    return out
+  })
+}
+
+function fullify(bundles: VerifiedBundle[]): RecallRecordFull[] {
+  return bundles.map((b) => {
+    const out = { ...b.record, signature_verified: b.signature_verified } as RecallRecordFull
+    if (b.annotations) out.annotations = b.annotations
+    if (b.superseded_by) out.superseded_by = b.superseded_by
     return out
   })
 }
@@ -642,7 +672,30 @@ export async function recall(
     filteredOutByVerification = before - verified.length
   }
 
-  const records = compact ? compactify(verified) : verified
+  // toc=true: ~40-80-token-per-entry shape suitable for SessionStart
+  // auto-injection. Pulls the cheap-to-scan fields and drops everything
+  // else. Implicit signature_verified is preserved-by-omission (only
+  // records that passed the verification filter make it here, unless
+  // the caller also set include_unverified=true).
+  const toc = args.toc === true
+  let records: RecallRecordFull[] | RecallRecordCompact[] | RecallRecordToc[]
+  if (toc) {
+    records = verified.map((b) => {
+      const out: RecallRecordToc = { timestamp: b.record.timestamp }
+      out.record_hash = b.record_hash
+      const toolName = (b.record as AtribRecord & { tool_name?: string }).tool_name
+      if (toolName) out.tool_name = toolName
+      if (b.annotations?.summary) out.summary = b.annotations.summary
+      if (b.annotations?.max_importance) out.importance = b.annotations.max_importance
+      if (b.annotations?.topics) out.topic_tags = b.annotations.topics
+      if (b.superseded_by) out.superseded_by = b.superseded_by
+      return out
+    })
+  } else if (compact) {
+    records = compactify(verified)
+  } else {
+    records = fullify(verified)
+  }
 
   return {
     total: filtered.length,
@@ -668,27 +721,12 @@ const server = new McpServer({
 })
 
 // The recall semantic surface (as defined in the public protocol specification).
-// Five distinct MCP tools; only `recall_my_attribution_history` is the
-// existing 0.4.0 tool with backward-compatible additive optional params.
-// The four new tools below are STUBBED in the current ship: they register
-// with full schemas so callers see the surface, but their handlers
-// return a "Layer 1 in progress" message until future releases land
-// the underlying annotation aggregation, BFS, and BM25 fallback. This
-// staging keeps the current single-tool flow working while the design
-// surface is published for downstream wiring.
-const LAYER_1_IN_PROGRESS_MESSAGE = (toolName: string) =>
-  JSON.stringify(
-    {
-      status: 'layer-1-in-progress',
-      tool: toolName,
-      message:
-        'This tool is registered as part of Layer 1 of the recall semantic surface. The schema is stable; the handler implementation lands in upcoming releases. Until then, this tool returns this notice. Use `recall_my_attribution_history` for now; that tool retains full functionality and is gaining additive Layer 1 filters (min_importance, topic_tags, include_revised, min_signers, rank_by, rank_anchor, toc) on the same release cadence.',
-      design_reference:
-        'the recall semantic surface as specified in the public ATRIB protocol documentation',
-    },
-    null,
-    2,
-  )
+// Five distinct MCP tools: recall_my_attribution_history is the base
+// filter-and-page tool; recall_annotations + recall_revisions return
+// aggregated annotation summaries / revision chains for a specific
+// record_hash; recall_walk traverses the local Layer 1 derived graph;
+// recall_by_content runs BM25 free-form retrieval over annotation
+// summaries + topic tags.
 
 server.registerTool(
   'recall_my_attribution_history',
@@ -829,10 +867,11 @@ server.registerTool(
         .boolean()
         .optional()
         .describe(
-          'Stub-accepted (current ship): schema validates; handler returns the standard compact response ' +
-            'shape. Future release returns the table-of-contents entry shape (record_hash, tool_name, ' +
-            'summary, importance, topic_tags, timestamp, superseded_by) at ~40-80 tokens per entry, ' +
-            'designed for SessionStart auto-injected scaffold.',
+          'Default false. When true, each returned record is the table-of-contents entry shape ' +
+            '(record_hash, tool_name, summary, importance, topic_tags, timestamp, superseded_by) at ' +
+            '~40-80 tokens per entry. Designed for SessionStart auto-injected scaffold and any other ' +
+            'cheap-to-scan candidate set the agent expands on demand via recall(content_id=...) or ' +
+            'recall_walk.',
         ),
     },
   },
@@ -842,16 +881,13 @@ server.registerTool(
     // result with a layer_1_warnings array listing exactly which stub-
     // accepted params were silently ignored. Callers can detect the
     // pre-implementation state without having to read source.
-    // Stub-accepted params: schema validates; handler doesn't fully enforce.
-    // Each entry here will be removed when the underlying behavior ships.
-    // rank_by='relevance' is enforced (Park et al. weighted sum over
-    // recency + annotation-derived importance + BM25 over annotation
-    // summary+topics). rank_by='causal_distance' is also enforced (BFS
-    // shortest path over Layer 1's derived graph). toc still needs the
-    // compact response shape.
-    const a = args as RecallArgs & Record<string, unknown>
+    // All seven Layer 1 surface parameters are now enforced
+    // (min_importance, topic_tags, include_revised, min_signers,
+    // rank_by, rank_anchor, toc). The layer_1_warnings array stays in
+    // the response shape (per the original wire contract) but is now
+    // always empty unless a future Layer extension lands more
+    // stub-accepted params.
     const ignored: string[] = []
-    if (a.toc !== undefined) ignored.push('toc')
     const result = await recall(args as RecallArgs)
     const augmented = ignored.length > 0
       ? {
@@ -874,12 +910,9 @@ server.registerTool(
   },
 )
 
-// ─── Layer 1 stub tools (current ship; full impl lands in upcoming releases) ───
-//
-// All four tools below register with full schemas so callers can wire against
-// the surface NOW. Their handlers return LAYER_1_IN_PROGRESS_MESSAGE until
-// future releases land the underlying annotation aggregation, BFS, and
-// BM25 fallback logic. The schemas are stable; the handlers are stubs.
+// ─── Layer 1 sibling tools ───
+// recall_walk, recall_annotations, recall_revisions, recall_by_content
+// expose the cognitive surface beyond the base filter-and-page tool.
 
 server.registerTool(
   'recall_walk',
@@ -1023,28 +1056,77 @@ server.registerTool(
   },
 )
 
-// recall_walk + recall_by_content remain stubs (need BFS over §3.2.4 derived
-// graph and BM25 over summary+topics respectively).
 server.registerTool(
   'recall_by_content',
   {
     description:
-      "Free-form text search over the agent's signed past. Returns top-k records by hybrid retrieval (BM25 over summary+topics in Layer 1; sqlite-vec embedding similarity in Layer 2 once shipped), reranked by Layer 1's annotation-derived importance and recency signals. Useful when the agent has no specific filter and needs to ask 'what do I know about X?'. Initial schema registration; full implementation will be delivered in a future release.",
+      "Free-form text search over the agent's signed past. Returns top-k records by hybrid retrieval: BM25 over each record's annotation summary + topics, then reranked by Park et al. weighted-sum scoring with annotation-derived importance and recency signals. Layer 2 (sqlite-vec sidecar, separate ship) extends with embedding similarity. Useful when the agent has no specific filter and needs to ask 'what do I know about X?'.",
     inputSchema: {
       query: z
         .string()
         .describe(
-          "Free-form text query. Layer 1 matches against record summaries and topic tags via BM25; Layer 2 (sqlite-vec sidecar, separate ship) adds embedding similarity over the same indexed text.",
+          "Free-form text query. Matches against each record's annotation summary + topic_tags via BM25. Records with no annotation contribute no relevance signal (will only surface via the recency + importance fallback).",
         ),
       k: z
         .number()
         .optional()
-        .describe("Top-k results to return (default 10). Final ordering uses Park et al. weighted-sum scoring with annotation-derived importance."),
+        .describe(
+          "Top-k results to return (default 10, max 50). Final ordering uses Park et al. weighted-sum scoring: alpha*recency + beta*importance + gamma*BM25_relevance. Weights are tunable via ATRIB_RECALL_ALPHA/BETA/GAMMA env vars.",
+        ),
     },
   },
-  async () => ({
-    content: [{ type: 'text', text: LAYER_1_IN_PROGRESS_MESSAGE('recall_by_content') }],
-  }),
+  async (args) => {
+    const { loaded } = discoverLoaded()
+    const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
+    const queryTokens = tokenize(args.query)
+    const corpus = loaded.map((lr) => ({
+      id: lr.record_hash,
+      tokens: indexableTextFromAnnotation(annotationsByRecord.get(lr.record_hash)),
+    }))
+    const idx = buildBM25Index(corpus)
+    const now = Date.now()
+    const scored = loaded.map((lr) => {
+      const r = recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS)
+      const i = importanceScore(annotationsByRecord.get(lr.record_hash))
+      const rel = queryTokens.length > 0
+        ? bm25Score(idx, lr.record_hash, queryTokens)
+        : 0
+      const score = parkScore(r, i, rel, ATRIB_RECALL_ALPHA, ATRIB_RECALL_BETA, ATRIB_RECALL_GAMMA)
+      return { lr, score, recency: r, importance: i, relevance: rel }
+    })
+    scored.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      return b.lr.record.timestamp - a.lr.record.timestamp
+    })
+    const k = Math.max(1, Math.min(50, args.k ?? 10))
+    const top = scored.slice(0, k)
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              query: args.query,
+              k,
+              count: top.length,
+              results: top.map(({ lr, score, recency, importance, relevance }) => ({
+                record_hash: lr.record_hash,
+                event_type: lr.record.event_type,
+                context_id: lr.record.context_id,
+                timestamp: lr.record.timestamp,
+                tool_name: (lr.record as AtribRecord & { tool_name?: string }).tool_name,
+                annotations: annotationsByRecord.get(lr.record_hash),
+                score,
+                components: { recency, importance, relevance },
+              })),
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    }
+  },
 )
 
 const transport = new StdioServerTransport()

@@ -78,7 +78,7 @@ describe('min_importance filter', () => {
     )
     const result = await recall({ min_importance: 'medium' }, file)
     expect(result.returned).toBe(1)
-    expect(result.records[0]!.event_type).toBe(EVENT_TYPE_TOOL_CALL_URI)
+    expect((result.records[0] as { event_type: string }).event_type).toBe(EVENT_TYPE_TOOL_CALL_URI)
   })
 
   it('excludes records that meet only a lower importance', async () => {
@@ -172,7 +172,9 @@ describe('include_revised filter', () => {
     )
     const result = await recall({}, file)
     expect(result.returned).toBe(2)
-    const origRecord = result.records.find((r) => r.event_type === EVENT_TYPE_TOOL_CALL_URI)
+    const origRecord = result.records.find(
+      (r) => (r as { event_type: string }).event_type === EVENT_TYPE_TOOL_CALL_URI,
+    ) as { superseded_by?: string[] } | undefined
     expect(origRecord?.superseded_by).toEqual([revHash])
   })
 
@@ -391,6 +393,78 @@ describe('rank_by=relevance', () => {
   })
 })
 
+describe('toc=true response shape', () => {
+  it('returns the TOC entry shape per record', async () => {
+    const target = await makeSigned({ timestamp: 1700000000000 })
+    const targetHash = computeRecordHash(target)
+    const anno = await makeSigned({
+      event_type: EVENT_TYPE_ANNOTATION_URI,
+      timestamp: 1700000001000,
+    })
+    writeFileSync(
+      file,
+      [
+        JSON.stringify(target),
+        envelope(anno, {
+          annotates: targetHash,
+          importance: 'high',
+          topic_tags: ['security', 'audit'],
+          summary: 'auth bypass',
+        }),
+      ].join('\n'),
+    )
+    const result = await recall({ toc: true, event_type: 'tool_call' }, file)
+    expect(result.returned).toBe(1)
+    const entry = result.records[0] as {
+      record_hash?: string
+      tool_name?: string
+      summary?: string
+      importance?: string
+      topic_tags?: string[]
+      timestamp: number
+      superseded_by?: string[]
+    }
+    expect(entry.record_hash).toBe(targetHash)
+    expect(entry.summary).toBe('auth bypass')
+    expect(entry.importance).toBe('high')
+    expect(entry.topic_tags).toEqual(['audit', 'security'])
+    expect(entry.timestamp).toBe(1700000000000)
+    // TOC entries DO NOT include the heavy AtribRecord fields.
+    expect((entry as { signature?: string }).signature).toBeUndefined()
+    expect((entry as { creator_key?: string }).creator_key).toBeUndefined()
+    expect((entry as { event_type?: string }).event_type).toBeUndefined()
+  })
+
+  it('omits optional fields when not present', async () => {
+    const lone = await makeSigned({ timestamp: 1700000000000 })
+    writeFileSync(file, JSON.stringify(lone))
+    const result = await recall({ toc: true }, file)
+    expect(result.returned).toBe(1)
+    const entry = result.records[0] as {
+      timestamp: number
+      summary?: string
+      importance?: string
+      topic_tags?: string[]
+      superseded_by?: string[]
+    }
+    expect(entry.timestamp).toBe(1700000000000)
+    expect(entry.summary).toBeUndefined()
+    expect(entry.importance).toBeUndefined()
+    expect(entry.topic_tags).toBeUndefined()
+    expect(entry.superseded_by).toBeUndefined()
+  })
+
+  it('layer_1_warnings is empty when toc=true (no longer stub-accepted)', async () => {
+    const lone = await makeSigned({ timestamp: 1700000000000 })
+    writeFileSync(file, JSON.stringify(lone))
+    // recall() doesn't surface layer_1_warnings directly; that's the MCP
+    // handler layer. Here we just exercise the recall() core to confirm
+    // toc=true doesn't error and produces TOC shape.
+    const result = await recall({ toc: true }, file)
+    expect(result.returned).toBe(1)
+  })
+})
+
 describe('response enrichment', () => {
   it('attaches annotations field when record has annotations', async () => {
     const target = await makeSigned({ timestamp: 1 })
@@ -410,7 +484,7 @@ describe('response enrichment', () => {
     )
     const result = await recall({ event_type: 'tool_call' }, file)
     expect(result.returned).toBe(1)
-    expect(result.records[0]!.annotations).toEqual({
+    expect((result.records[0] as { annotations?: unknown }).annotations).toEqual({
       max_importance: 'high',
       topics: ['security'],
       summary: 'auth bypass found',
@@ -421,7 +495,7 @@ describe('response enrichment', () => {
     const lone = await makeSigned()
     writeFileSync(file, JSON.stringify(lone))
     const result = await recall({}, file)
-    expect(result.records[0]!.annotations).toBeUndefined()
+    expect((result.records[0] as { annotations?: unknown }).annotations).toBeUndefined()
   })
 
   it('omits superseded_by field when record has no revisions', async () => {
