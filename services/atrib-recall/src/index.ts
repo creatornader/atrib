@@ -103,6 +103,12 @@ import {
   tokenize,
   indexableTextFromAnnotation,
 } from './scoring.js'
+import {
+  buildLocalGraph,
+  shortestDistances,
+  walkFrom,
+} from './graph.js'
+import type { EdgeType } from './graph.js'
 
 const ATRIB_RECORD_FILE = process.env.ATRIB_RECORD_FILE
 const ATRIB_MIRROR_DIR = process.env.ATRIB_MIRROR_DIR ?? join(
@@ -449,6 +455,42 @@ function rankByRelevance(
   })
 }
 
+/**
+ * Sort `filtered` in-place by BFS shortest-path distance from rank_anchor.
+ * The graph is built from the FULL `all` set (not just filtered) so the
+ * BFS can traverse through records that the post-filter pipeline would
+ * later drop — the agent's question is "what's causally near this
+ * anchor", not "what's causally near and also matches my filters".
+ *
+ * Records unreachable from rank_anchor are sorted to the end (Infinity
+ * distance) with a stable timestamp tie-break newest-first.
+ *
+ * If rank_anchor is missing or doesn't parse as a record_hash, the
+ * function leaves `filtered` in input order. (Callers passing a free-form
+ * query meant rank_by='relevance' instead; we don't second-guess.)
+ */
+function rankByCausalDistance(
+  filtered: LoadedRecord[],
+  all: LoadedRecord[],
+  rankAnchor: string | undefined,
+): void {
+  if (!rankAnchor || !/^sha256:[0-9a-f]{64}$/.test(rankAnchor)) {
+    // Fall back to timestamp newest-first when the anchor is unusable;
+    // matches the existing pre-Layer-1 default rather than leaving an
+    // arbitrary order.
+    filtered.sort((a, b) => b.record.timestamp - a.record.timestamp)
+    return
+  }
+  const graph = buildLocalGraph(all)
+  const dist = shortestDistances(graph, rankAnchor)
+  filtered.sort((a, b) => {
+    const da = dist.get(a.record_hash) ?? Number.POSITIVE_INFINITY
+    const db = dist.get(b.record_hash) ?? Number.POSITIVE_INFINITY
+    if (da !== db) return da - db
+    return b.record.timestamp - a.record.timestamp
+  })
+}
+
 async function annotateVerification(
   loaded: { record: AtribRecord; record_hash: string }[],
   annotationsByRecord: Map<string, AnnotationSummary>,
@@ -572,11 +614,12 @@ export async function recall(
     })
   }
 
-  // Sort: timestamp (default, newest first) or Park et al. relevance.
-  // rank_by='causal_distance' is still stub-accepted (needs BFS over the
-  // §3.2.4 derived graph; lands in the next commit).
+  // Sort: timestamp (default, newest first), Park et al. relevance, or
+  // BFS shortest-path causal distance from rank_anchor.
   if (args.rank_by === 'relevance') {
     rankByRelevance(filtered, annotationsByRecord, args.rank_anchor)
+  } else if (args.rank_by === 'causal_distance') {
+    rankByCausalDistance(filtered, all, args.rank_anchor)
   } else {
     // Newest first - the agent typically wants its most-recent provable
     // actions, not the genesis of the log.
@@ -770,8 +813,8 @@ server.registerTool(
           'Result ordering. timestamp (default): newest first. relevance: Park et al. weighted-sum ' +
             'scoring over recency + annotation-derived importance + BM25 relevance against rank_anchor ' +
             '(treated as a free-form query when not a record_hash; otherwise relevance component is 0). ' +
-            'causal_distance: BFS shortest path in the derived graph from rank_anchor — still ' +
-            'stub-accepted (ignored; falls back to timestamp) until BFS over the §3.2.4 graph ships.',
+            'causal_distance: BFS shortest path in the local derived graph from rank_anchor (a record_hash). ' +
+            'Records unreachable from the anchor sort to the end.',
         ),
       rank_anchor: z
         .string()
@@ -779,7 +822,8 @@ server.registerTool(
         .describe(
           'Anchor for non-timestamp rank_by modes. For rank_by=relevance: free-form text query for the ' +
             'BM25 component (matched against annotation summary + topics of each candidate). For ' +
-            'rank_by=causal_distance: record_hash to BFS from (still stub-accepted).',
+            'rank_by=causal_distance: record_hash to BFS from (sha256:<64-hex>); falls back to timestamp ' +
+            'newest-first when not a valid record_hash.',
         ),
       toc: z
         .boolean()
@@ -800,18 +844,13 @@ server.registerTool(
     // pre-implementation state without having to read source.
     // Stub-accepted params: schema validates; handler doesn't fully enforce.
     // Each entry here will be removed when the underlying behavior ships.
-    // rank_by='relevance' is enforced (Park et al. scoring over recency +
-    // importance + BM25 relevance); rank_by='causal_distance' is still
-    // stub-accepted (needs BFS over the §3.2.4 derived graph). rank_anchor
-    // is forwarded to the relevance ranker as a free-form BM25 query, and
-    // is still stub-accepted for the causal_distance shape. toc still
-    // needs the compact response shape.
+    // rank_by='relevance' is enforced (Park et al. weighted sum over
+    // recency + annotation-derived importance + BM25 over annotation
+    // summary+topics). rank_by='causal_distance' is also enforced (BFS
+    // shortest path over Layer 1's derived graph). toc still needs the
+    // compact response shape.
     const a = args as RecallArgs & Record<string, unknown>
     const ignored: string[] = []
-    if (a.rank_by === 'causal_distance') ignored.push('rank_by')
-    if (a.rank_anchor !== undefined && a.rank_by === 'causal_distance') {
-      ignored.push('rank_anchor')
-    }
     if (a.toc !== undefined) ignored.push('toc')
     const result = await recall(args as RecallArgs)
     const augmented = ignored.length > 0
@@ -846,28 +885,59 @@ server.registerTool(
   'recall_walk',
   {
     description:
-      "Walk the §3.2.4 derived graph from a starting record_hash. Returns records reachable via the requested edge types up to the given depth. Useful for tracing causal ancestry or tracking what records were informed_by a key decision. Initial schema registration; full implementation will be delivered in a future release.",
+      "Walk the local derived graph from a starting record_hash. Returns records reachable via the requested edge types up to the given hop depth, ordered by ascending weighted distance. Layer 1 covers four edge types: CHAIN_PRECEDES (weight 1), INFORMED_BY (weight 1), ANNOTATES (weight 2), REVISES (weight 2). SESSION_PRECEDES, SESSION_PARALLEL, CONVERGES_ON, CROSS_SESSION, and PROVENANCE_OF are deferred to subsequent releases. Useful for tracing the local causal neighborhood of a record before re-attempting a similar action.",
     inputSchema: {
       from_record_hash: z
         .string()
         .describe(
-          "Starting record hash (sha256:<64-hex>). The walk begins from this record and expands through the §3.2.4 derived graph.",
+          "Starting record hash (sha256:<64-hex>). The walk begins here and expands through the local derived graph.",
         ),
       edge_types: z
-        .array(z.string())
+        .array(z.enum(['CHAIN_PRECEDES', 'INFORMED_BY', 'ANNOTATES', 'REVISES']))
         .optional()
         .describe(
-          "Optional list of edge types to follow. Default: all 9 edge types (CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL, CONVERGES_ON, CROSS_SESSION, INFORMED_BY, PROVENANCE_OF, ANNOTATES, REVISES).",
+          "Optional list of Layer 1 edge types to follow. Default: all four. Unknown values are rejected by the schema.",
         ),
       depth: z
         .number()
         .optional()
-        .describe("BFS depth (default 3). Higher values may return many records; consider paginating downstream."),
+        .describe(
+          "Maximum hop count (NOT cumulative weight). Default 3. Higher values may return many records; paginate downstream if needed.",
+        ),
     },
   },
-  async () => ({
-    content: [{ type: 'text', text: LAYER_1_IN_PROGRESS_MESSAGE('recall_walk') }],
-  }),
+  async (args) => {
+    const { loaded } = discoverLoaded()
+    const graph = buildLocalGraph(loaded)
+    const edgeTypes = args.edge_types
+      ? new Set(args.edge_types as EdgeType[])
+      : undefined
+    const depth = typeof args.depth === 'number' ? args.depth : 3
+    const walk = walkFrom(graph, args.from_record_hash, edgeTypes, depth)
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              from_record_hash: args.from_record_hash,
+              edge_types: args.edge_types ?? [
+                'CHAIN_PRECEDES',
+                'INFORMED_BY',
+                'ANNOTATES',
+                'REVISES',
+              ],
+              depth,
+              count: walk.length,
+              walk,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    }
+  },
 )
 
 server.registerTool(
