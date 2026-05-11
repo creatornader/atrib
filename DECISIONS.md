@@ -3464,6 +3464,66 @@ Spec amendments are not required for this ADR, the wire format is unchanged, and
 
 ---
 
+## D077: pass^k as the primary Track B reporting metric (k=3 default)
+
+**Date:** 2026-05-10
+**Status:** Accepted; promoted from P019 (the placeholder Pending decision queued from the 2026-05-10 evals landscape research). The promotion lands together with the actual reporting-metric specification, which becomes the canonical metric for any Track B Pattern 1 v2 first-run result and forward.
+
+### Context
+
+Track B is the comparative-experiment track that converts atrib's substrate-correctness claim ("we have shipped a verifiable agent action protocol") into the funding-grade behavior-impact claim ("agents that reason from a past they can prove are measurably better than agents that don't"). The first run was retracted in May 2026 with a NULL result; the redesigned Track B experiment design was originally specified with a 1-attempt-per-task paired comparison reporting raw success rate plus five secondary metrics M1-M5.
+
+External evals landscape research from May 2026 identified pass^k as the field's converged primary reliability metric, codified by Anthropic's January 2026 "Demystifying Evals for AI Agents" essay. Quoted from that essay: pass@k (succeeds at least once across k attempts) inflates apparent agent capability and diverges sharply from pass^k (succeeds every time across k attempts) starting around k=10. For verifiability claims specifically, "succeeds reliably" matters more than "succeeds occasionally" - a substrate that occasionally helps an agent get the right answer is a thinner pitch than a substrate that reliably helps.
+
+The original 1-attempt-per-task design implicitly reports pass@1, which is identical to pass^1, but loses the reliability signal entirely. Adopting pass^k as the primary metric requires running k attempts per task per arm.
+
+### Decision
+
+Track B Pattern 1 v2 (and subsequent Track B patterns) report pass^k as the primary reporting metric, with the following tiers:
+
+- **k=3 default** for first-run Pattern 1 v2. Total runs become 60 (10 task instances × 2 arms × 3 attempts). At ~5-15 minutes per run on NIM Qwen 80B, total budget ~5-15 hours per arm or ~10-30 hours wall-clock; feasible in one focused day with parallelism.
+- **k=5 stretch** for second-run scaling (the n=50 follow-on if first-run is positive).
+- **k=10 reliability-grade** for any publication-grade or external-citation result. This tier produces the cleanest separation between "occasional success" and "reliable success" but requires 10× the compute of k=1.
+
+The primary headline reporting metric becomes:
+
+> **pass^k_delta = pass^k(treatment_arm) - pass^k(control_arm)**, in percentage points.
+
+A run is **POSITIVE** if pass^k_delta ≥ 20 percentage points AND the secondary signed-rank test on per-pair (treatment - control) deltas reaches p ≤ 0.10 on at least one of M1 (mistake_rate) or M3 (wall_clock_seconds). The 5 secondary metrics M1-M5 from the original design remain reported as supplementary signal but are no longer the load-bearing decision driver.
+
+### Rationale
+
+1. **Field consensus.** Anthropic's January 2026 essay is the most-cited eval-discipline reference essay as of mid-2026. The broader 2026 reporting consensus (Inspect AI, METR autonomy evaluations, recent OpenAI methodology) treats pass^k as the convergent primary metric. Reporting pass@k or raw success rate as the headline in 2026 is a known anti-pattern that signals methodological lag.
+2. **Verifiability claim alignment.** atrib's locked positioning ("verifiable agent actions / every action becomes signed context for the next / agents that reason from a past they can prove") rests on the substrate being reliably useful, not occasionally lucky. pass^k operationalizes that constraint: the substrate must help on k=3 attempts, not just one. This is the right metric for the claim atrib is making.
+3. **Funding-app credibility.** Applications citing pass@k or single-attempt success rates in 2026 will be discounted by reviewers familiar with the methodology consensus. Citing pass^k matches the field's expectations and pre-empts a class of dismissal vector.
+4. **Cheap to adopt.** The decision itself is reporting; the only operational cost is running k attempts per task per arm instead of 1. At k=3 this is a 3× compute multiplier on a workload that costs $0 (NIM free tier). No infrastructure changes needed.
+5. **Composes with end-state evaluation.** The original design's end-state evaluation methodology (per Anthropic Multi-agent Research System) is preserved unchanged. pass^k operates at the per-task aggregation level; end-state evaluation operates at the per-attempt level. They stack cleanly.
+
+### Alternatives rejected
+
+- **Keep pass@1 / single-attempt success rate.** Rejected as methodologically out-of-date. Inflates apparent capability; would not survive external review.
+- **pass@k.** Rejected per the Anthropic essay's specific argument: pass@k diverges sharply from pass^k starting at k=10 and rewards inconsistent agents that occasionally get the right answer. Wrong shape for atrib's verifiability claim.
+- **k=10 default for first run.** Rejected as too compute-heavy for the May 17 funding-app deadline window. k=10 reliability-grade is the right tier for publication; k=3 default is the right tier for first signal.
+- **Custom multi-attempt aggregation** (e.g., weighted average of pass@1 + pass^3). Rejected as bespoke; loses the field-consensus advantage that motivates the adoption.
+
+### Consequences
+
+- **Track B Pattern 1 v2 first run runs 60 attempts (10 task instances × 2 arms × 3 attempts), not 20.** Total NIM compute is 3× the original budget but remains feasible within a single focused day with parallelism.
+- **The Track B experiment design document (`track-b/experiment-design.md`) is updated** to reflect pass^k as the primary metric, k=3 default, and the multi-attempt run shape.
+- **The decision rule changes** from "≥ 20% improvement on at least 2 of 5 paired metrics with M1 or M3 included" to "pass^k_delta ≥ 20 percentage points AND signed-rank p ≤ 0.10 on at least one of M1 or M3." M1-M5 remain reported as supplementary signal.
+- **Per-run results documents** gain a new mandatory section: pass^k summary (treatment pass^k, control pass^k, delta in percentage points, by-attempt breakdown).
+- **Subsequent Track B patterns (Patterns 2, 3, 4, 5)** inherit the same primary metric. The cross-pattern reporting consistency makes the eventual Suite B publishable benchmark (per the [P021](#p021-publish-a-behavior-impact-paired-benchmark-suite-as-an-atrib-artifact) Pending decision) easier to ship.
+- **B1-B7 pilot subset** also adopts pass^k for the same reasons. The pilot will report pass^k_delta per benchmark.
+
+### Cross-references
+
+- [P019](#p019-pass^k-as-the-primary-track-b-reporting-metric-k3-default) - the Pending decision this ADR promotes from. P019 entry retired below; the live entries in the Pending section now skip P019 (P018, P020, P021 remain).
+- [P018](#p018-adopt-inspect-ai-as-the-track-b-harness-baseline) - Inspect AI harness adoption. The harness pilot may not be done at first-Track-B-run time; pass^k spec is independent of the harness choice. Either Inspect AI or the bespoke fallback computes pass^k identically.
+- [P020](#p020-extend-the-substrate-correctness-conformance-corpus-to-wycheproof-equivalent-coverage) - conformance corpus extension. Substrate-correctness eval; not affected by this metric change.
+- [P021](#p021-publish-a-behavior-impact-paired-benchmark-suite-as-an-atrib-artifact) - Suite B publishable benchmark. Will use pass^k as primary metric per this ADR; quarterly snapshots report pass^k_delta per task class.
+
+---
+
 ## D075: Compose-not-override hook config layering
 
 **Date:** 2026-05-09
@@ -3735,23 +3795,6 @@ The `extractor_classification` field is redundant for records where event_type i
 - Risk: API rough edges; pilot one task (the lowest-effort Pattern 1 v2 sub-task) before committing the full experiment.
 
 **Likely outcome (not committed):** accept when E1 lands. The pilot validates the integration; full Pattern 1 v2 then runs on Inspect.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-## P019: pass^k as the primary Track B reporting metric (k=3 default)
-
-**Source:** evals landscape research from May 2026 (publicly cited methodology from Anthropic's January 2026 "Demystifying Evals for AI Agents" essay and the broader 2026 agent-eval reporting consensus). pass@k (succeeds at least once across k attempts) inflates apparent agent capability and diverges sharply from pass^k (succeeds every time across k attempts) starting around k=10. For verifiability claims, consistent success matters more than at-least-once success.
-
-**The decision in question:** specify pass^k as the primary Track B reporting metric, with k=3 as the default reporting tier, k=5 as the stretch tier, and k=10 as the reliability-grade tier. Reporting decision; not a tooling change. Updates to the private Track B experiment design lock the metric before any first-run results are published.
-
-**Considerations.**
-- Reporting decision; cost is essentially zero.
-- Aligns Track B with Anthropic's published methodology (the field's most-cited eval-discipline reference essay as of mid-2026) and with the broader 2026 reporting consensus.
-- Avoids the pass@k inflation trap that would make atrib look better than it is and would erode credibility on first independent verification attempt.
-- Pairs naturally with the end-state-evaluation methodology (already locked in the private Track B experiment design); both came from the same Anthropic essay cluster.
-- No alternative considered worth recording; pass@k as a primary metric in 2026 is a known anti-pattern.
-
-**Likely outcome (not committed):** accept when E3 lands. Reporting decision; one-line update to the experiment-design doc.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 
