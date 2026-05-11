@@ -934,7 +934,7 @@ interface AtribOptions {
 
 The hook is fired post-sign (so the `signature` field is present), pre-submit (so persistence happens before any network attempt), and wrapped in try/catch with promise-rejection capture. The [§5.8](atrib-spec.md#58-degradation-contract) degradation contract is preserved: a `onRecord` observer that throws or rejects does not block the tool call, the attribution token in `_meta`, or the log submission.
 
-The first consumer is an MCP wrapper service (kept outside this repo during pre-launch validation) that uses `onRecord` to append records as one JSON per line at a local jsonl mirror under `~/.atrib/records/`.
+The first consumer is an MCP wrapper service that uses `onRecord` to append records as one JSON per line at a local jsonl mirror under `~/.atrib/records/`.
 
 **Alternatives considered.**
 
@@ -1205,7 +1205,7 @@ A second motivation: scheduled 90-day rotation is not viable today. If a creator
 **Date:** 2026-04-27
 **Status:** Accepted; spec [§6](atrib-spec.md#6-key-directory) drafted, implementation in an upcoming implementation phase
 
-**Context.** Atrib records carry `creator_key` as opaque base64url bytes. A verifier seeing such a record has no way to learn "who is this?" There is no canonical mapping from `creator_key` to identity. The post-B+C audit identified this as the most consequential infrastructure gap: without a directory, attribution is purely cryptographic and not semantically meaningful to anyone except the original signer.
+**Context.** Atrib records carry `creator_key` as opaque base64url bytes. A verifier seeing such a record has no way to learn "who is this?" There is no canonical mapping from `creator_key` to identity. An audit pass identified this as the most consequential infrastructure gap: without a directory, attribution is purely cryptographic and not semantically meaningful to anyone except the original signer.
 
 A neighbouring class of use cases has the same problem at a higher privacy bar: any directory whose `label → value` lookup is itself sensitive (for example, end-to-end-encrypted messaging where asking "what's user X's key?" would leak interest in user X to the directory operator).
 
@@ -1253,7 +1253,7 @@ A decision was needed on three questions: (1) AKD vs roll-our-own simpler struct
 
 4. *Host the directory in the same Tessera log.* Rejected because directory entries form a different per-label append-only structure than tlog-tiles' entry-indexed structure. Conflating them would force one of them into the wrong abstraction. They share the witness pattern but not the data model.
 
-5. *Defer directory until V2.* Rejected because the post-B+C audit identified it as load-bearing for the dogfood thesis. Without it, "agents reason from a past they can prove" is a cryptographic statement about bytes, not a semantic statement about identity.
+5. *Defer directory until V2.* Rejected because an audit pass identified it as load-bearing for the dogfood thesis. Without it, "agents reason from a past they can prove" is a cryptographic statement about bytes, not a semantic statement about identity.
 
 **Consequences.**
 
@@ -3226,7 +3226,7 @@ The ten conventions:
 
 9. **ADR template.** Every ADR in DECISIONS.md MUST include `Date`, `Context`, `Decision`, `Alternatives considered`, `Consequences`, `Cross-references` sections. Placeholder ADRs (forward-looking, awaiting the work that codifies the decision) MAY use a shorter form but MUST declare placeholder status explicitly.
 
-10. **Architectural framing, not session narrative.** ADRs MUST be written in the architectural register: what the constraint is, why it holds, what it rejects. ADRs MUST NOT use first-person session narrative or incident-framing language. The history that produced the decision belongs in commit messages and private handoffs, not in the ADR record itself.
+10. **Architectural framing, not session narrative.** ADRs MUST be written in the architectural register: what the constraint is, why it holds, what it rejects. ADRs MUST NOT use first-person session narrative or incident-framing language. The history that produced the decision belongs elsewhere, not in the ADR record itself.
 
 **Alternatives considered:**
 
@@ -3690,7 +3690,7 @@ The `extractor_classification` field is redundant for records where event_type i
 
 **Considerations.**
 - The substrate primitives are all shipped; this is a pattern documentation + reference example, not a substrate change.
-- Maps cleanly to the Track B Pattern 3 design (trust-or-don't routing) maintained in the private strategy archive; the spec section becomes the normative description and Pattern 3 becomes the empirical validation.
+- Maps cleanly to a previously-explored multi-agent orchestrator pattern (trust-or-don't routing); the spec section becomes the normative description and the prior exploration becomes the empirical validation.
 - A reference example (synthetic orchestrator + 2 workers, one honest one Sybil; orchestrator catches Sybil via atrib gating) is planned for the public demo repository.
 - Composes with [D067](#d067-multi-producer-chain-composition-precedence-contract) chain composition (each worker produces records under its own creator_key; chain-root resolution lets the orchestrator trace cross-agent provenance).
 - Composes with [P013](#p013-new-runtime-integration-pattern---hosted-runtime-adapter-sign-events-stored-by-hosted-runtimes-like-anthropic-managed-agents) (a hosted-runtime adapter signing events under its agent's atrib key produces the substrate this pattern queries).
@@ -3761,7 +3761,7 @@ The `extractor_classification` field is redundant for records where event_type i
 - Section should reference the EveryDev essay (TypeScript Agent Frameworks in 2026, May 2026) as the external taxonomy source AND the Anthropic Managed Agents essay (March 2026) as the architectural-alignment evidence.
 - Useful for future positioning content: blog posts, public-flip-eligible documentation, the eventual `atrib/ROADMAP.md` public-facing roadmap.
 
-**Likely outcome (not committed):** accept; small spec addition. Schedule alongside the public-flip un-freeze (targeted for May 2026) since the section becomes most-leveraged on public-facing surfaces.
+**Likely outcome (not committed):** accept; small spec addition. Schedule alongside the next public-facing documentation cycle since the section becomes most-leveraged on public-facing surfaces.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 
@@ -3785,7 +3785,7 @@ The `extractor_classification` field is redundant for records where event_type i
 
 **Source:** evals landscape research from May 2026 (publicly cited frameworks from UK AISI and the broader 2026 agent-eval ecosystem). UK AISI's `UKGovernmentBEIS/inspect_ai` is the convergent open-source agent-eval harness as of mid-2026 (MIT, 5,571 commits, 200+ pre-built evals in the companion `inspect_evals` registry). It supports running Claude Code / Codex CLI as agent subjects, which is the integration shape Track B needs for the redesigned Pattern 1 v2 experiment.
 
-**The decision in question:** standardize on Inspect AI as the harness layer for Track B Pattern 1 v2 (and subsequent Track B patterns), replacing the bespoke scaffolding currently sketched in the private Track B experiment design. The atrib MCP wrapper sits underneath; Inspect orchestrates the agent, runs the task, scores the result. Specific commitment: pilot one task before committing fully (Inspect's agent-as-subject API may have rough edges with the atrib MCP wrapper).
+**The decision in question:** standardize on Inspect AI as the harness layer for Track B Pattern 1 v2 (and subsequent Track B patterns), replacing earlier bespoke scaffolding. The atrib MCP wrapper sits underneath; Inspect orchestrates the agent, runs the task, scores the result. Specific commitment: pilot one task before committing fully (Inspect's agent-as-subject API may have rough edges with the atrib MCP wrapper).
 
 **Considerations.**
 - AISI maintenance signal is strong (5,571 commits, active releases). Reference harness for the broader 2026 agent-eval consensus.
