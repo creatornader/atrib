@@ -100,7 +100,21 @@ async function handleSummarize(
   const warnings: string[] = []
   const maxRecords = input.max_records ?? 50
 
-  if (!input.context_id && !input.record_hashes) {
+  // ATRIB_CONTEXT_ID env-var default: when the caller omitted context_id
+  // AND did not supply record_hashes, fall back to the env var if it
+  // carries a valid 32-hex value. Lets Inspect-style harnesses scope
+  // summarize to a per-arm context_id via the MCP env block (per D072's
+  // per-arm isolation contract). Explicit input.context_id always wins.
+  const envContextId = process.env['ATRIB_CONTEXT_ID']
+  const effectiveContextId =
+    input.context_id ??
+    (envContextId && HEX_32_PATTERN.test(envContextId) ? envContextId : undefined)
+  const effective: z.infer<typeof SummarizeInput> = {
+    ...input,
+    ...(effectiveContextId ? { context_id: effectiveContextId } : {}),
+  }
+
+  if (!effective.context_id && !effective.record_hashes) {
     warnings.push('one of context_id or record_hashes is required')
     return emptyOutput(warnings)
   }
@@ -115,7 +129,7 @@ async function handleSummarize(
 
   // Load local mirror once; filter to the requested set.
   const { byHash, newestFirst } = loadAllRecords()
-  const selected = selectRecords(input, byHash, newestFirst)
+  const selected = selectRecords(effective, byHash, newestFirst)
 
   if (selected.length === 0) {
     warnings.push('no records matched the request')

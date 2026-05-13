@@ -3566,6 +3566,41 @@ This is a producer-side recommendation, not a normative spec constraint. atrib d
 
 ---
 
+## D078: MCP servers honor `ATRIB_CONTEXT_ID` env as `context_id` default
+
+**Date:** 2026-05-12
+
+**Context.** The four atrib MCP servers (`@atrib/emit`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`) all accept an optional `context_id` argument on at least one of their tools. Until this ADR, none of them consulted `process.env.ATRIB_CONTEXT_ID` when the caller omitted the argument. The env var was silently ignored. Inspect-style harnesses ([P018](#p018-adopt-inspect-ai-as-the-track-b-harness-baseline)) typically pass per-run scope into spawned MCP subprocesses via the env block, not via every tool-call argument. The mismatch broke [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail)'s per-arm context_id isolation in Pattern 1 v2's 60-run paired sweep: treatment-arm recall queries scoped by context_id returned wrong-arm records because the env var was a no-op and atrib-emit synthesized fresh orphan contexts instead of inheriting the harness's per-run id.
+
+**Decision.** Each of the four servers reads `process.env.ATRIB_CONTEXT_ID` at tool-invocation time. When the value is a valid 32-hex string per spec [§1.2.3](atrib-spec.md#123-context_id) AND the caller did not supply `context_id` on the call, the env value is used as the effective `context_id`. Explicit caller arguments always win (explicit beats implicit). Invalid env values are ignored and the existing default behavior continues. The fallback is silent: the env value is treated as a caller-side default rather than a misconfiguration.
+
+Per-server effect:
+
+- **`@atrib/emit`.** The env-supplied `context_id` becomes the `callerContextId` passed to `inheritChainContext` (in `@atrib/mcp`'s mirror module). This converts a [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) `fresh-orphan` path into a legitimate caller-supplied path, threading the harness's per-run id through to the signed record.
+- **`@atrib/recall`.** The env value defaults the `context_id` filter on `recall_my_attribution_history`. Records signed under a different `context_id` are excluded from the result set, matching the per-arm isolation the harness wants.
+- **`@atrib/trace`.** A new optional `context_id` argument on the `trace` tool defaults to the env var. The walker treats `informed_by` edges that cross into a different `context_id` as dangling references, keeping the walk inside the requested scope. Existing callers that omit both the env var and the argument continue to walk cross-context.
+- **`@atrib/summarize`.** The env value defaults the `context_id` input on the `summarize` tool. The selection routine narrows to records sharing the scoped `context_id`.
+
+**Alternatives considered.**
+
+- *Plumb `ATRIB_CONTEXT_ID` into `@atrib/mcp`'s `inheritChainContext` directly.* Rejected for this ADR's scope. The producer-side mirror module already cascades through `ATRIB_CHAIN_TAIL_<context_id>` and mirror inheritance; adding a top-level env-var to that decision tree expands its surface and would require corresponding behavior in every other producer that uses the helper. Local server-level fallback keeps the change isolated to the four servers that need it.
+- *Add a warning when the env var triggers the fallback.* Rejected. The env value functions as a declared caller-side default; surfacing a warning would conflate intentional configuration with a misconfiguration. Callers wanting visibility can inspect the response `context_id` directly.
+- *Require an explicit argument from the harness.* Rejected. Inspect-style harnesses set per-run scope via the MCP subprocess env block; threading the argument through every tool call would require harness-side patching that defeats the substrate's "just works" promise.
+
+**Consequences.**
+
+- Pattern 1 v2's 60-run paired sweep can rely on per-arm context_id isolation by setting `ATRIB_CONTEXT_ID` once in each arm's env, with no further argument plumbing.
+- The four servers now have a uniform env-var contract for context scoping. The convention is documented in each server's README (deferred to the next docs pass; this ADR is the source of truth).
+- No spec change. The wire format of signed records is unchanged. `context_id` in records is identical regardless of whether the value originated from the argument or the env var.
+
+**Cross-references.**
+
+- [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) — per-arm context_id isolation; this ADR closes the runtime gap that made the harness-side contract unenforceable.
+- [P018](#p018-adopt-inspect-ai-as-the-track-b-harness-baseline) — Inspect AI as the Track B harness baseline; the env-block scoping pattern is Inspect's idiomatic shape.
+- [§1.2.3](atrib-spec.md#123-context_id) — `context_id` format; the env value is validated against the same 32-hex regex as the argument.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

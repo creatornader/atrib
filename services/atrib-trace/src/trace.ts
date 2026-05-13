@@ -54,6 +54,14 @@ export interface TraceResult {
 export interface TraceOptions {
   /** Hard cap on total visited nodes regardless of depth. Defaults to 200. */
   maxNodes?: number
+  /**
+   * When set, scope the walk to records that share this context_id. Edges
+   * crossing into a different context_id are treated as dangling: the
+   * upstream is real but lies outside the requested scope. Used by
+   * Inspect-style harnesses passing ATRIB_CONTEXT_ID to keep each arm's
+   * trace inside its own context.
+   */
+  contextId?: string
 }
 
 /**
@@ -76,6 +84,7 @@ export function traceBackward(
   options: TraceOptions = {},
 ): TraceResult {
   const maxNodes = options.maxNodes ?? 200
+  const contextId = options.contextId
   const warnings: string[] = []
   const visited = new Map<string, TraceVisited>()
   const dangling = new Set<string>()
@@ -95,6 +104,26 @@ export function traceBackward(
       truncated_by_depth: false,
       truncated_by_cap: false,
       warnings: [`start_hash ${startHash} not in local mirror`],
+    }
+  }
+
+  // context_id scope check: when the caller pinned a context_id, the start
+  // record itself must already live within it. Reject explicitly rather than
+  // silently returning an empty walk; the caller likely wants to know they
+  // pointed trace at the wrong record for the requested scope.
+  if (contextId && startIdx.record.context_id !== contextId) {
+    return {
+      start_hash: startHash,
+      direction: 'backward',
+      depth_requested: depth,
+      depth_reached: 0,
+      visited: [],
+      dangling: [],
+      truncated_by_depth: false,
+      truncated_by_cap: false,
+      warnings: [
+        `start_hash ${startHash} lives in context_id ${startIdx.record.context_id} but trace was scoped to ${contextId} (set ATRIB_CONTEXT_ID to override or omit context_id to walk cross-context)`,
+      ],
     }
   }
 
@@ -119,6 +148,17 @@ export function traceBackward(
       dangling.add(current.hash)
       // Tag the parent so caller can see which walkable record had a
       // dangling reference, but we don't visit further.
+      continue
+    }
+
+    // context_id scope filter: an upstream record that lives in a different
+    // context_id is treated as dangling from this walk's perspective. The
+    // record itself exists, but it sits outside the requested scope. This
+    // keeps per-arm trace results clean when ATRIB_CONTEXT_ID is set per
+    // D072 (cross-arm informed_by edges, if any leaked, do not pollute
+    // the walk).
+    if (contextId && idx.record.context_id !== contextId) {
+      dangling.add(current.hash)
       continue
     }
 

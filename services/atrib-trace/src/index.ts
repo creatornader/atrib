@@ -21,11 +21,19 @@ import { loadAllRecords } from './storage.js'
 import { traceBackward, type TraceVisited } from './trace.js'
 
 const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
+const HEX_32_PATTERN = /^[0-9a-f]{32}$/
 
 const TraceInput = z.object({
   record_hash: z.string().regex(SHA256_REF_PATTERN).describe(
     "The 'sha256:<64-hex>' record_hash to start from. Walks backward via " +
     'informed_by edges from this record.',
+  ),
+  context_id: z.string().regex(HEX_32_PATTERN).optional().describe(
+    'Optional 32-hex context_id scope. When set, edges crossing into a ' +
+    'different context_id surface as dangling rather than expanding the ' +
+    'walk. Defaults to process.env.ATRIB_CONTEXT_ID when valid; omit at ' +
+    'the env-var level to walk cross-context. Used by Inspect-style ' +
+    'harnesses to keep each arm\'s trace inside its own context per D072.',
   ),
   depth: z.number().int().min(1).max(10).optional().describe(
     'Maximum hop count from the starting record. Defaults to 3. Bounded ' +
@@ -149,8 +157,21 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
       const maxNodes = args.max_nodes ?? 200
       const compact = args.compact ?? true
 
+      // ATRIB_CONTEXT_ID env-var default: when the caller omitted
+      // context_id, fall back to the env var if it carries a valid
+      // 32-hex value. Lets Inspect-style harnesses scope the trace walk
+      // to a per-arm context_id via the MCP env block (per D072's
+      // per-arm isolation contract). Explicit args.context_id always wins.
+      const envContextId = process.env['ATRIB_CONTEXT_ID']
+      const contextId =
+        args.context_id ??
+        (envContextId && HEX_32_PATTERN.test(envContextId) ? envContextId : undefined)
+
       const { byHash } = loadAllRecords()
-      const result = traceBackward(args.record_hash, depth, byHash, { maxNodes })
+      const result = traceBackward(args.record_hash, depth, byHash, {
+        maxNodes,
+        ...(contextId ? { contextId } : {}),
+      })
       const danglingSet = new Set(result.dangling)
 
       const payload = compact
