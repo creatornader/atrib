@@ -1,21 +1,32 @@
 ---
 name: atrib
-version: 0.2.0
+version: 0.3.0
 description: |
   Use atrib as your literal substrate for memory, reasoning, and getting
   smarter over time — not as instrumentation that observes you from the
-  outside. Activate at every session start, before consequential decisions,
-  when claims need to be defendable later, when current reasoning
-  contradicts past records, when starting work that builds on prior
-  sessions, or when expressing confidence/uncertainty that should be
-  findable. Provides session-start ritual, pre-emit checklist, recall
-  patterns, informed_by discipline, code-shape examples for emit
-  (annotation / revision / observation), worked decision examples,
-  diagnostic patterns for catching practice gaps, and the multi-producer
-  composition story (wrapper + emit + nightly batch).
+  outside. atrib gives the agent six cognitive primitives (see [D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)): three
+  write tools (emit, annotate, revise) that produce signed records on
+  log.atrib.dev, and three read tools (recall, trace, summarize) that
+  query the resulting graph. Use them like commands in a shell.
+
+  Activate at every session start, before consequential decisions, when
+  claims need to be defendable later, when current reasoning contradicts
+  past records, when starting work that builds on prior sessions, or when
+  expressing confidence / uncertainty that should be findable. Provides
+  session-start ritual, the 6-primitive reference, code-shape examples
+  per primitive, informed_by discipline, diagnostic patterns, and the
+  multi-producer composition story.
 allowed-tools:
-  - mcp__atrib-recall__recall_my_attribution_history
   - mcp__atrib-emit__emit
+  - mcp__atrib-annotate__atrib-annotate
+  - mcp__atrib-revise__atrib-revise
+  - mcp__atrib-recall__recall_my_attribution_history
+  - mcp__atrib-recall__recall_by_content
+  - mcp__atrib-recall__recall_walk
+  - mcp__atrib-recall__recall_annotations
+  - mcp__atrib-recall__recall_revisions
+  - mcp__atrib-trace__trace
+  - mcp__atrib-summarize__summarize
   - Bash
   - Read
   - Write
@@ -26,15 +37,29 @@ allowed-tools:
 
 This skill teaches you to use atrib as substrate for your memory, reasoning, and the way you get smarter across sessions. When the substrate is operational on the host running you, what's missing is YOU using it deliberately at the moments that matter.
 
-If you're invoked in a Claude Code session and you're not emitting records during consequential work, **the substrate is fine but the practice is broken**. This skill is the fix.
+If you're invoked in a Claude Code session and you're not using atrib's primitives during consequential work, **the substrate is fine but the practice is broken**. This skill is the fix.
+
+## The six cognitive primitives ([D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface))
+
+atrib exposes exactly six agent-facing MCP tools. Each is monomorphic: one purpose, one narrow input schema, one composable output. Reach for them like you reach for `cat`, `grep`, `find` — when they're the right tool, use them.
+
+| Primitive | Verb | Use it when | Produces / returns |
+|---|---|---|---|
+| `atrib-emit` | RECORD | You notice something or conclude something. The present moment matters and future-you should find it. | A signed `observation` record. |
+| `atrib-annotate` | MARK | A past record matters more than it looked at the time. You want to tag it with importance / topics / a one-line gist for recall ranking. | A signed `annotation` record + an ANNOTATES edge to the target. |
+| `atrib-revise` | CHANGE-MIND | You now hold a position incompatible with a past claim of yours. Records are immutable; revision surfaces the change as a first-class node. | A signed `revision` record + a REVISES edge to the target. |
+| `atrib-recall` | LOOK-UP | You want to find prior records — yours, or shared ones. "Have I done this before?" "What's been said about X?" | Verified records, newest-first or ranked. Five sibling tools for query-shape variants. |
+| `atrib-trace` | LINEAGE | You have a record and want to walk its causal chain. "How did we get here?" | An informed_by walk from the starting record_hash, bounded by depth + context_id. |
+| `atrib-summarize` | DIGEST | You have many records and need a narrative. "Give me the gist of this context." | A condensed digest across N records. |
+
+Three of these (emit, annotate, revise) are **writes**: they sign records. Three (recall, trace, summarize) are **reads**: they query the graph without producing event_types. The full lifecycle policy for how this surface evolves lives in [D080](../../DECISIONS.md#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion); for the moment, the surface is closed at six.
 
 ## Status of the substrate (verify before relying)
 
 | Capability | Mechanism | How to verify it's operational |
 |---|---|---|
 | Auto-sign every wrapped MCP tool call | `@atrib/mcp` middleware composed by an MCP wrapper | Wrapped MCP tools available in the current process |
-| Sign explicit cognitive events (observation, annotation, revision) | `mcp__atrib-emit__emit` MCP tool, wired in `~/.claude.json` | Tool present in the current process |
-| Query own past with local Ed25519 verification | `mcp__atrib-recall__recall_my_attribution_history` | Tool present in the current process |
+| Six cognitive primitives ([D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)) | `mcp__atrib-emit__emit`, `mcp__atrib-annotate__atrib-annotate`, `mcp__atrib-revise__atrib-revise`, `mcp__atrib-recall__*` (5 siblings), `mcp__atrib-trace__trace`, `mcp__atrib-summarize__summarize` | All eight tools (six verbs; five recall siblings count as one verb) present in the current process |
 | Persist signed records to local mirrors | `~/.atrib/records/*.jsonl` (per-producer files) | `ls ~/.atrib/records/` |
 | Public log + browsable explorer | `https://log.atrib.dev/v1/stats` + `explore.atrib.dev` | `curl -s https://log.atrib.dev/v1/stats` |
 | Identity → key binding | `@atrib/directory` + `atrib publish-claim` CLI | `curl -s https://directory.atrib.dev/v6/lookup/<creator_key>` |

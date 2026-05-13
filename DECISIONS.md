@@ -3071,7 +3071,7 @@ The two endpoints answer different questions: provenance trace answers "what did
 - `services/graph-node/src/server.ts` adds a new `/v1/chain/{record_hash}` handler walking CHAIN_PRECEDES backward from the starting record. The walk terminates at the session's genesis record (where `chain_root = SHA-256(context_id)`).
 - `apps/dashboard/index.html` trace view renders both ancestor sections: "Provenance ancestors" (existing) and "Chain predecessors" (new), labeled so users can distinguish producer-claimed ancestry from substrate-derived ordering. The previous "no ancestors" message becomes "no provenance ancestors; see chain predecessors below" when one section is empty and the other has results.
 - No producer behavior change. `@atrib/mcp` does NOT auto-populate `informed_by` for tool_call records; that would invent a causal claim the producer has no evidence for, violating the structure-vs-claims invariant. Producers continue to set `informed_by` only when they have evidence (e.g., the cognitive extractor reading transcripts).
-- Future: a deeper extension of cognitive-primitive producers to set `informed_by` on observations based on transcript evidence is tracked as a follow-up under the existing P008 referent-matched emission pattern.
+- Future: a deeper extension of cognitive-primitive producers to set `informed_by` on observations based on transcript evidence is tracked as a follow-up under the existing [P008](#p008-referent-matched-revision-and-annotation-emission-from-the-cognitive-extractor) referent-matched emission pattern.
 
 **Cross-references.**
 - [§3.4.5](atrib-spec.md#345-get-v1tracerecord_hash) (provenance trace operation)
@@ -3142,7 +3142,7 @@ The original "wrap every MCP at zero per-server cost" framing positioned `@atrib
 
 - [D048](#d048-plug-and-play-enforcement-contract-for-adapters) conformance contract scope extends pattern-by-pattern. The existing `packages/agent/test/conformance.test.ts` covers Pattern #3; per-pattern conformance test surfaces are tracked as follow-ons (one per shipped adapter).
 
-- The runtime-adapter spec revival reframes the deferred P002 atrib-bridge prototype. P002's "proves substrate generalizes" goal is what [§9](atrib-spec.md#9-runtime-integration-patterns) makes structural. The atrib-bridge work continues as a Pattern #5 instance once a target runtime API is selected.
+- The runtime-adapter spec revival reframes the deferred [P002](#p002-agent-bridge-on-atrib-substrate) atrib-bridge prototype. [P002](#p002-agent-bridge-on-atrib-substrate)'s "proves substrate generalizes" goal is what [§9](atrib-spec.md#9-runtime-integration-patterns) makes structural. The atrib-bridge work continues as a Pattern #5 instance once a target runtime API is selected.
 
 **Cross-references:**
 
@@ -3517,7 +3517,7 @@ A run is **POSITIVE** if pass^k_delta ≥ 20 percentage points AND the secondary
 
 ### Cross-references
 
-- P019 (retired upon promotion to this ADR) - the Pending decision this ADR promotes from. The P019 entry was removed from the Pending decisions section per the existing promotion convention ([D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) retired P011 the same way). The live entries in the Pending section now skip P019; P018, P020, P021 remain in the eval framework subset.
+- P019 (retired upon promotion to this ADR) - the Pending decision this ADR promotes from. The P019 entry was removed from the Pending decisions section per the existing promotion convention ([D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) retired P011 the same way). The live entries in the Pending section now skip P019; [P018](#p018-adopt-inspect-ai-as-the-track-b-harness-baseline), [P020](#p020-extend-the-substrate-correctness-conformance-corpus-to-wycheproof-equivalent-coverage), [P021](#p021-publish-a-behavior-impact-paired-benchmark-suite-as-an-atrib-artifact) remain in the eval framework subset.
 - [P018](#p018-adopt-inspect-ai-as-the-track-b-harness-baseline) - Inspect AI harness adoption. The harness pilot may not be done at first-Track-B-run time; pass^k spec is independent of the harness choice. Either Inspect AI or the bespoke fallback computes pass^k identically.
 - [P020](#p020-extend-the-substrate-correctness-conformance-corpus-to-wycheproof-equivalent-coverage) - conformance corpus extension. Substrate-correctness eval; not affected by this metric change.
 - [P021](#p021-publish-a-behavior-impact-paired-benchmark-suite-as-an-atrib-artifact) - Suite B publishable benchmark. Will use pass^k as primary metric per this ADR; quarterly snapshots report pass^k_delta per task class.
@@ -3672,7 +3672,7 @@ The six primitives correspond to MCP packages, but the packages are not flat-equ
 @atrib/annotate  @atrib/revise                          (specialized forms that narrow emit's schema)
 ```
 
-`@atrib/emit` is the canonical record-signing tool: it owns key resolution, the build-and-sign composition, and JSONL mirror writing. `@atrib/annotate` and `@atrib/revise` are specialized forms — each depends on `@atrib/emit`, imports its key-loading and mirror-writing helpers, and exposes a narrow Zod schema that constrains input to the specialized event_type's shape. The three read packages depend only on `@atrib/mcp` (they do not sign records). This layering matches the IS-A relationship (annotate IS a constrained emit) without breaking the bash-standard for the agent-facing surface (each MCP tool remains monomorphic with one purpose). When the signing pipeline evolves (D072, D078, future cross-attestation), only `@atrib/emit` changes; annotate and revise inherit the fix automatically.
+`@atrib/emit` is the canonical record-signing tool: it owns key resolution, the build-and-sign composition, and JSONL mirror writing. `@atrib/annotate` and `@atrib/revise` are specialized forms — each depends on `@atrib/emit`, imports its key-loading and mirror-writing helpers, and exposes a narrow Zod schema that constrains input to the specialized event_type's shape. The three read packages depend only on `@atrib/mcp` (they do not sign records). This layering matches the IS-A relationship (annotate IS a constrained emit) without breaking the bash-standard for the agent-facing surface (each MCP tool remains monomorphic with one purpose). When the signing pipeline evolves ([D072](#d072-orphan-handling-synthesize-fresh-never-inherit-from-mirror-tail), [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default), future cross-attestation), only `@atrib/emit` changes; annotate and revise inherit the fix automatically.
 
 **Alternatives considered.**
 
@@ -3710,13 +3710,13 @@ The six primitives correspond to MCP packages, but the packages are not flat-equ
 
 The worked-example tension that triggered this ADR was `verify`. `@atrib/verify` exists as a published package and provides signature + canonical-form + chain + log-inclusion verification. Should it be cognitive primitive #7? Three single-agent use cases stand out: (1) local-mirror gap fill — fetch a record_hash from log.atrib.dev when local mirror lacks it; (2) integrity audit — re-verify recent records against the public log's fresh root; (3) external record_hash relay — a user pastes a hash, agent should fetch + verify. Cases 1 and 2 are single-agent scope; case 3 trends multi-agent.
 
-The boundary-drawing test in D079 (different cognitive purpose AND different required args AND different graph effect) is necessary but not sufficient. An operation that PASSES the boundary test might still belong as an extension on an existing primitive if its use case is rare, derivative, or theoretical. The boundary test answers "could this be a primitive?". The lifecycle policy answers "should it be one NOW?".
+The boundary-drawing test in [D079](#d079-the-six-core-cognitive-primitives-atribs-agent-facing-surface) (different cognitive purpose AND different required args AND different graph effect) is necessary but not sufficient. An operation that PASSES the boundary test might still belong as an extension on an existing primitive if its use case is rare, derivative, or theoretical. The boundary test answers "could this be a primitive?". The lifecycle policy answers "should it be one NOW?".
 
-**Decision.** Cognitive operations that pass the D079 boundary test enter the agent-facing surface in one of two postures:
+**Decision.** Cognitive operations that pass the [D079](#d079-the-six-core-cognitive-primitives-atribs-agent-facing-surface) boundary test enter the agent-facing surface in one of two postures:
 
 1. **Extension** — added as an optional parameter or shape variant on the closest existing primitive. The agent's tool surface count does not grow. Examples: `recall.origin: 'local' | 'remote' | 'both'`, `recall.verify_strength: 'signature' | 'inclusion'`. The primitive's narrow purpose is preserved; the variant is a setting on the same verb.
 
-2. **Dedicated primitive (new MCP)** — added as a new MCP package and a new agent-facing tool, with D079 amended to list it. The surface grows by one. Reserved for operations that are load-bearing in production and that agents reach for as a discrete mental operation.
+2. **Dedicated primitive (new MCP)** — added as a new MCP package and a new agent-facing tool, with [D079](#d079-the-six-core-cognitive-primitives-atribs-agent-facing-surface) amended to list it. The surface grows by one. Reserved for operations that are load-bearing in production and that agents reach for as a discrete mental operation.
 
 **The default posture is extension.** Promotion to dedicated primitive requires ALL of the following acceptance gates:
 
@@ -3724,10 +3724,10 @@ The boundary-drawing test in D079 (different cognitive purpose AND different req
 |---|---|---|
 | 1 | **Load-bearing use case in production.** Not theoretical. There is at least one shipped agent flow where this operation is called regularly and where its absence would degrade the agent's behavior. | Avoids surface bloat from speculative primitives. The boundary test alone admits too many candidates. |
 | 2 | **Spec event_type either exists or is being promoted.** For write operations: the new primitive corresponds to a spec event_type. For read operations: the operation has a graph effect or read pattern documented in [§3](atrib-spec.md#3-graph-query-interface) that the existing read trio cannot express cleanly. | Anchors the agent-facing surface to atrib's normative protocol. Primitives without spec backing are app-layer features, not protocol-layer ones. |
-| 3 | **Cognitive distinctness in agent reasoning.** When agents (or operators reading agent transcripts) describe what the agent did, the operation has its own name in natural language — not "a kind of recall" or "a flavor of emit". | The bash-standard test from D079. Each primitive earns its name by being how the agent thinks about the operation. |
-| 4 | **D079 amendment + new MCP package shipped together.** Promotion is not adopted piecemeal; the ADR text, the package source, and the changeset for the package version arrive in one commit. | Keeps the canonical-decision record and the implementation in lockstep. Without this, the surface is documented in one place and shipped in another. |
+| 3 | **Cognitive distinctness in agent reasoning.** When agents (or operators reading agent transcripts) describe what the agent did, the operation has its own name in natural language — not "a kind of recall" or "a flavor of emit". | The bash-standard test from [D079](#d079-the-six-core-cognitive-primitives-atribs-agent-facing-surface). Each primitive earns its name by being how the agent thinks about the operation. |
+| 4 | **[D079](#d079-the-six-core-cognitive-primitives-atribs-agent-facing-surface) amendment + new MCP package shipped together.** Promotion is not adopted piecemeal; the ADR text, the package source, and the changeset for the package version arrive in one commit. | Keeps the canonical-decision record and the implementation in lockstep. Without this, the surface is documented in one place and shipped in another. |
 
-When some gates are met but not all, the operation lives as an **extension** on the closest existing primitive. The extension is documented in D079's "Recall family shape variants" subsection (or the equivalent for the host primitive) and in the relevant MCP package's README. The extension MAY be the first step in the operation's eventual promotion to a dedicated primitive; staying as an extension is also a valid permanent posture.
+When some gates are met but not all, the operation lives as an **extension** on the closest existing primitive. The extension is documented in [D079](#d079-the-six-core-cognitive-primitives-atribs-agent-facing-surface)'s "Recall family shape variants" subsection (or the equivalent for the host primitive) and in the relevant MCP package's README. The extension MAY be the first step in the operation's eventual promotion to a dedicated primitive; staying as an extension is also a valid permanent posture.
 
 **Worked example: `verify`.**
 
@@ -3738,18 +3738,18 @@ When some gates are met but not all, the operation lives as an **extension** on 
 
 **Current posture for `verify`**: extension on `atrib-recall` via two optional parameters — `origin: 'local' | 'remote' | 'both'` and `verify_strength: 'signature' | 'inclusion'`. Local mirror gap-fill, integrity audit, and external-hash relay all collapse to recall calls with appropriate origin + strength.
 
-**Promotion trigger for `verify`**: gates 1 and 3 strengthen to "MET" when Pattern 3 multi-agent flows ship and agents-receiving-counterparty-claims becomes a routine path. At that point: write the D079 amendment promoting verify to primitive #7, ship `@atrib/verify-mcp` as a thin wrapper around the existing `@atrib/verify` package, add to SKILL.md, and the surface grows to seven. Recorded in pending decisions as [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation).
+**Promotion trigger for `verify`**: gates 1 and 3 strengthen to "MET" when Pattern 3 multi-agent flows ship and agents-receiving-counterparty-claims becomes a routine path. At that point: write the [D079](#d079-the-six-core-cognitive-primitives-atribs-agent-facing-surface) amendment promoting verify to primitive #7, ship `@atrib/verify-mcp` as a thin wrapper around the existing `@atrib/verify` package, add to SKILL.md, and the surface grows to seven. Recorded in pending decisions as [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation).
 
 **Alternatives considered.**
 
-- *Open the surface; admit any operation that passes the boundary test.* Rejected. The Letta finding cited in D079 (agent selection accuracy degrades past ~5-7 tools) makes surface bloat a real cost. Without acceptance gates, the primitive count drifts upward over project history without a forcing function for restraint.
-- *Close the surface permanently at six; no future primitives.* Rejected. The cognitive operations atrib will need to express will grow as multi-agent flows, payment protocols, and new event_types ship. A hard cap at six would force eventual workarounds (parameter-stuffing, polymorphic dispatch) that D079 explicitly rejected for the writes.
-- *Use the spec event_type promotion bar ([D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)) as the sole gate.* Rejected. Spec event_type promotion is a record-layer commitment (what the validator accepts, what the graph derivation rules cover). Cognitive primitive promotion is an agent-surface commitment (what the agent reaches for as a discrete tool). They overlap (primitive #2 atrib-annotate corresponds to event_type promotion D058), but they are not identical: read primitives like `recall` and `trace` have no event_type; capability-only operations like `verify` have spec backing but no event_type. Each layer needs its own promotion bar.
+- *Open the surface; admit any operation that passes the boundary test.* Rejected. The Letta finding cited in [D079](#d079-the-six-core-cognitive-primitives-atribs-agent-facing-surface) (agent selection accuracy degrades past ~5-7 tools) makes surface bloat a real cost. Without acceptance gates, the primitive count drifts upward over project history without a forcing function for restraint.
+- *Close the surface permanently at six; no future primitives.* Rejected. The cognitive operations atrib will need to express will grow as multi-agent flows, payment protocols, and new event_types ship. A hard cap at six would force eventual workarounds (parameter-stuffing, polymorphic dispatch) that [D079](#d079-the-six-core-cognitive-primitives-atribs-agent-facing-surface) explicitly rejected for the writes.
+- *Use the spec event_type promotion bar ([D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)) as the sole gate.* Rejected. Spec event_type promotion is a record-layer commitment (what the validator accepts, what the graph derivation rules cover). Cognitive primitive promotion is an agent-surface commitment (what the agent reaches for as a discrete tool). They overlap (primitive #2 atrib-annotate corresponds to event_type promotion [D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05)), but they are not identical: read primitives like `recall` and `trace` have no event_type; capability-only operations like `verify` have spec backing but no event_type. Each layer needs its own promotion bar.
 
 **Consequences.**
 
 - The agent-facing surface count grows by zero unless a candidate operation passes all four gates. Until then, candidates live as extensions on existing primitives or are deferred entirely.
-- D079's "closed at six for v1" remains intact in practice. The surface CAN grow but the gates are deliberately conservative.
+- [D079](#d079-the-six-core-cognitive-primitives-atribs-agent-facing-surface)'s "closed at six for v1" remains intact in practice. The surface CAN grow but the gates are deliberately conservative.
 - The `verify` operation has a documented current home (recall extensions) and a documented promotion path (Pattern 3 multi-agent activation). The ad-hoc "should this be a primitive?" debate is resolved.
 - Future primitive candidates (potential names that have appeared in discussion: `subscribe`, `notify`, `cite`, `propose`, `delegate`) all enter through this lifecycle. None are added without an ADR.
 
@@ -4043,13 +4043,13 @@ The `extractor_classification` field is redundant for records where event_type i
 
 **Source:** [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) (six-primitive surface, closed at six for v1) plus [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion) (extension-first, promotion-via-gates). Verify currently lives as a planned extension on `atrib-recall` (`origin: 'local' | 'remote' | 'both'`, `verify_strength: 'signature' | 'inclusion'`). The single-agent use cases (local-mirror gap fill, integrity audit, external-hash relay) are covered by the recall extension. Promotion to dedicated primitive is deferred until Pattern 3 multi-agent scope makes it load-bearing.
 
-**The decision in question:** ship `@atrib/verify-mcp` as cognitive primitive #7, amend D079 to include it in the surface, update SKILL.md and the SessionStart hook. Triggered when D080's acceptance gates 1 (load-bearing use case) and 3 (cognitive distinctness) both strengthen to MET via Pattern 3 multi-agent flows.
+**The decision in question:** ship `@atrib/verify-mcp` as cognitive primitive #7, amend [D079](#d079-the-six-core-cognitive-primitives-atribs-agent-facing-surface) to include it in the surface, update SKILL.md and the SessionStart hook. Triggered when [D080](#d080-primitive-lifecycle-extensions-first-dedicated-mcps-upon-promotion)'s acceptance gates 1 (load-bearing use case) and 3 (cognitive distinctness) both strengthen to MET via Pattern 3 multi-agent flows.
 
 **Considerations.**
 - The capability already exists in `@atrib/verify` package + `atrib verify` CLI; promotion is a matter of MCP-tool wrapping plus surface-documentation amendments, not new protocol work.
 - Multi-agent flows where agent B receives a record_hash from agent A through a structured protocol (A2A, MCP composition) are the canonical use case; verification before action is required for trust assessment.
 - Wraps the existing `@atrib/verify` package; no new spec event_type needed. Read-only operation, no graph effect distinct from recall's existing verification.
-- D080's gate 4 requires the D079 amendment + new MCP package + changeset to ship together.
+- [D080](#d080-primitive-lifecycle-extensions-first-dedicated-mcps-upon-promotion)'s gate 4 requires the [D079](#d079-the-six-core-cognitive-primitives-atribs-agent-facing-surface) amendment + new MCP package + changeset to ship together.
 
 **Likely outcome (not committed):** accept when Pattern 3 multi-agent thesis activation begins. Approximately 1-2 days of focused work (thin MCP wrapper + ADR amendment + scaffold updates).
 
@@ -4074,5 +4074,25 @@ Filter parameters under consideration: `creator_key`, `context_id`, `event_type`
 - Alternative rejected: webhooks-only. Requires every subscriber to host a public endpoint; high friction for individual operator integration. Webhooks could be added later as a third option.
 
 **Likely outcome (not committed):** accept when the first always-on consumer (a third-party cognitive runtime is the canonical trigger) starts blocking on log subscription. Implementation effort: SSE + filtering ~3-5 days of focused work in log-node; JSON Feed companion ~1 day on top. Integration testing with a real consumer doubles the timeline.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P024: Embedded spec viewer at atrib.dev (auto-updated from spec source)
+
+**Source:** Reader-experience gap surfaced 2026-05-13 when README links pointing at `atrib-spec.md` rendered correctly on GitHub (relative path resolves to the same repo) but 404'd on npmjs.com (resolved to `npmjs.com/atrib-spec.md...`). The immediate fix landed as commit `03c70eb`: convert all relative spec / DECISIONS links to absolute GitHub URLs. This works but kicks readers out to GitHub by default. The spec deserves a permanent canonical URL that doesn't depend on GitHub being the host.
+
+**The decision in question:** host the spec at `https://atrib.dev/spec` (or `https://docs.atrib.dev`) as an embedded markdown viewer. The viewer renders the same markdown source that lives in the repo, auto-publishes on push to main, and exposes a stable URL pattern (`/spec`, `/spec#section-id`) that READMEs and external citations link to instead of GitHub.
+
+**Considerations.**
+- Eliminates the GitHub-kickout for npm visitors. README links resolve to a viewer hosted on the project's own domain.
+- Auto-publish removes drift between "what's on GitHub" and "what the linked viewer shows". Push to main triggers a GitHub Actions job that re-renders the spec into the viewer's static assets and deploys.
+- Stable URL pattern: `/spec` for the document; `/spec#124-event_type-values` for a specific section. Matches how the spec markdown structures anchors at present (kebab-cased headings).
+- Embeddable: the viewer renders inside `atrib.dev`'s normal navigation, so readers see the project context (homepage, dashboard link, explorer link) alongside the spec. Better orientation than GitHub's raw markdown view.
+- Implementation candidates: (a) a static-site generator pass (mdBook, Docusaurus, VitePress) that builds on every main push; (b) a runtime markdown renderer on a Cloudflare Worker fetching the raw spec from GitHub on-demand (with cache invalidation on push); (c) a Vercel deployment of the same.
+- Alternative rejected: pure GitHub viewer (current state). Works but kicks readers to a third-party platform and exposes the rest of the atrib repo's directory listing. Not the canonical-URL experience.
+- Alternative rejected: PDF spec at `/spec.pdf`. Loses the section-anchor URL pattern that makes references useful (`#129-revises`, `#324-edge-derivation-rules`); breaks search.
+
+**Likely outcome (not committed):** accept after Track B Pattern 1 v2 produces a non-null result and the spec stabilizes enough that the auto-publish doesn't break links daily. Implementation effort: roughly 1-2 days for the static-site generator option plus the deploy pipeline.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.

@@ -45,7 +45,7 @@ All detection logic lives in `packages/agent/src/transaction.ts` and runs agains
 
 ### What each detector actually looks for on the wire
 
-These are the exact shapes the production `detectTransaction()` function in [`packages/agent/src/transaction.ts`](src/transaction.ts) matches against. Every shape below is covered by a unit test against a real spec fixture in [`packages/agent/test/fixtures/`](test/fixtures/), the customer-facing question "what does atrib actually detect" has a one-paragraph answer per protocol.
+These are the exact shapes the production `detectTransaction()` function in [`packages/agent/src/transaction.ts`](https://github.com/creatornader/atrib/blob/main/packages/agent/src/transaction.ts) matches against. Every shape below is covered by a unit test against a real spec fixture in [`packages/agent/test/fixtures/`](https://github.com/creatornader/atrib/blob/main/packages/agent/test/fixtures/), the customer-facing question "what does atrib actually detect" has a one-paragraph answer per protocol.
 
 #### ACP: Stripe / OpenAI Agentic Commerce Protocol
 
@@ -297,7 +297,7 @@ Each example directory contains a `README.md` with framework-specific rationale 
 
 ---
 
-## Failure model (spec [§5.8](../../atrib-spec.md#58-degradation-contract))
+## Failure model (spec [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract))
 
 The entire atrib integration is wrapped in defensive error handling at every adapter boundary. If any of the following fails, the original tool call continues normally and an `atrib:`-prefixed warning is logged:
 
