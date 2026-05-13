@@ -26,17 +26,17 @@ mcp__atrib-annotate__atrib-annotate({
 
 ## Writes
 
-Signs an `annotation` record per spec §1.2.4 (event_type `0x05`, promoted via D058) and persists it through the same pipeline `@atrib/emit` uses: same key resolution, same chain composition, same JSONL mirror at `ATRIB_MIRROR_FILE`. A verifier cannot distinguish annotation records signed via this tool from annotation records signed via `@atrib/emit`'s polymorphic surface; the wire format is identical.
+Signs an `annotation` record per spec [§1.2.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#124-event_type-values) (event_type `0x05`, promoted via [D058](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05)) and persists it through the same pipeline `@atrib/emit` uses: same key resolution, same chain composition, same JSONL mirror at `ATRIB_MIRROR_FILE`. A verifier cannot distinguish annotation records signed via this tool from annotation records signed via `@atrib/emit`'s polymorphic surface; the wire format is identical.
 
-The graph layer derives an ANNOTATES edge from the new record to the `annotates` target per spec §3.2.4 step 8. Recall pipelines that filter or rank by importance can use this edge to surface the annotation alongside its target.
+The graph layer derives an ANNOTATES edge from the new record to the `annotates` target per spec [§3.2.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#324-edge-derivation-rules) step 8. Recall pipelines that filter or rank by importance can use this edge to surface the annotation alongside its target.
 
 ## Behaviors
 
 - **Required-field enforcement**: `annotates`, `importance`, and `summary` are required. The Zod schema rejects calls missing any of these before the signing pipeline runs.
-- **Spec validators**: `annotates` is rejected on non-annotation event_types per spec §1.2.7 (the underlying `handleEmit` enforces this; the tool's narrow schema prevents it from happening here).
-- **Env-honoring**: `ATRIB_CONTEXT_ID` is honored as the default `context_id` per D078 when the caller omits the field.
-- **Multi-producer chain composition**: inherits chain state from the mirror or `ATRIB_CHAIN_TAIL_<context_id>` env per D067, the same way `@atrib/emit` does.
-- **Graceful degradation**: signing failures surface in `warnings`; never throws to the agent per spec §5.8.
+- **Spec validators**: `annotates` is rejected on non-annotation event_types per spec [§1.2.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#127-annotates) (the underlying `handleEmit` enforces this; the tool's narrow schema prevents it from happening here).
+- **Env-honoring**: `ATRIB_CONTEXT_ID` is honored as the default `context_id` per [D078](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default) when the caller omits the field.
+- **Multi-producer chain composition**: inherits chain state from the mirror or `ATRIB_CHAIN_TAIL_<context_id>` env per [D067](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract), the same way `@atrib/emit` does.
+- **Graceful degradation**: signing failures surface in `warnings`; never throws to the agent per spec [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract).
 
 ## Wire-up
 
@@ -59,15 +59,15 @@ Or run as a one-off subprocess via `pnpm --filter @atrib/annotate start`.
 - `ATRIB_MIRROR_FILE`: JSONL mirror destination (where the signed annotation persists).
 - `ATRIB_AUTOCHAIN_SOURCE`: optional cross-producer chain inheritance source.
 - `ATRIB_LOG_ENDPOINT`: log.atrib.dev override (e.g. for self-hosted log nodes).
-- `ATRIB_CONTEXT_ID`: default context_id per D078.
+- `ATRIB_CONTEXT_ID`: default context_id per [D078](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default).
 
 ## Relationship to @atrib/emit
 
-`@atrib/annotate` depends on `@atrib/emit` per the package layering documented in D079. Each is a monomorphic agent-facing tool with one narrow purpose, but the underlying signing, chain composition, and mirror-writing pipeline is shared via `@atrib/emit`'s `handleEmit` export. When the canonical write pipeline evolves (chain-composition fixes, env-honoring extensions, cross-attestation), `@atrib/annotate` inherits the change automatically.
+`@atrib/annotate` depends on `@atrib/emit` per the package layering documented in [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Each is a monomorphic agent-facing tool with one narrow purpose, but the underlying signing, chain composition, and mirror-writing pipeline is shared via `@atrib/emit`'s `handleEmit` export. When the canonical write pipeline evolves (chain-composition fixes, env-honoring extensions, cross-attestation), `@atrib/annotate` inherits the change automatically.
 
 ## Status
 
-Initial scaffold (v0.2.0). Cognitive primitive #2 per D079. Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/revise` covers the contradiction-handling primitive (revision event_type).
+Initial scaffold (v0.2.0). Cognitive primitive #2 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/revise` covers the contradiction-handling primitive (revision event_type).
 
 ## License
 
