@@ -3633,12 +3633,46 @@ The decomposition test for whether two operations are the same primitive or diff
 - *Discoverable.* Each primitive lives at `@atrib/<verb>` on npm with a tightly-scoped README. Future tools learn the verbs by reading six READMEs, not one polymorphic dispatch table.
 - *Stable.* The set is **closed at six** for atrib v1. Extension event_types ([D035](#d035-extensible-event_type-vocabulary-via-uri-typing)) may be added by consumers in their own namespaces but DO NOT add new primitives to atrib's normative agent surface; consumers wanting a new verb mint their own MCP package.
 
+**Three orthogonal cardinalities (do not conflate):**
+
+The "six" in this ADR is the agent-facing tool surface. It is not the same number as the spec's event_types, and it is not the same set as what appears on the explorer's graph node categories. Three cardinalities at play:
+
+1. **Six spec event_types** ([§1.2.4](atrib-spec.md#124-event_type-values)): `tool_call`, `transaction`, `observation`, `directory_anchor`, `annotation`, `revision`. Every signed atrib record carries one of these. The explorer surfaces all six as graph node categories.
+2. **Three agent-emittable event_types**: `observation`, `annotation`, `revision`. Only these are reachable from an agent-facing MCP tool at decision time; the other three (`tool_call`, `transaction`, `directory_anchor`) land in the graph through middleware or atrib-system, not through agent action.
+3. **Six cognitive primitives** (this ADR): three writes (`atrib-emit`, `atrib-annotate`, `atrib-revise`) corresponding one-to-one with the three agent-emittable event_types, plus three reads (`atrib-recall`, `atrib-trace`, `atrib-summarize`) that query the graph without producing event_types.
+
+| Spec event_type | Surfaces on explorer | Who signs it | Agent primitive (this ADR)? |
+|---|---|---|---|
+| `tool_call` (0x01) | ✓ | Wrapper / MCP middleware (auto) | No — middleware-emitted |
+| `transaction` (0x02) | ✓ | Commerce detector + counterparty | No — middleware-emitted, cross-attested |
+| `observation` (0x03) | ✓ | Agent via `atrib-emit` | **Yes — primitive #1** |
+| `directory_anchor` (0x04) | ✓ | atrib-system directory service | No — system-emitted |
+| `annotation` (0x05) | ✓ | Agent via `atrib-annotate` | **Yes — primitive #2** |
+| `revision` (0x06) | ✓ | Agent via `atrib-revise` | **Yes — primitive #3** |
+
+The reads (`recall`, `trace`, `summarize`) do not appear in the event_type table because they do not produce records. They consume the substrate the writes (and middleware) accumulate.
+
 **What is NOT a primitive (by deliberate choice):**
 
 - `tool_call` and `transaction` event_types: emitted by middleware / SDK, not by the agent at decision time. The agent doesn't reach for a tool to record these; the wrapper handles it.
 - `directory_anchor`: emitted by atrib-system directory services. Not an agent verb.
 - "decision" as a distinct primitive: the spec carries no `decision` event_type. The cognitive operation called "decision" in colloquial usage is an `observation` with structured `informed_by` (the agent declares which prior records shaped the conclusion). One primitive (`atrib-emit`), two usage patterns (empty `informed_by` = perception; populated `informed_by` = conclusion). Conflating these into separate primitives would multiply verbs without a graph-semantic justification.
 - Polymorphic dispatch (one tool, switch on event_type): rejected for the reasons above (Letta finding + bash-standard).
+
+**Implementation layering (package dependency shape):**
+
+The six primitives correspond to MCP packages, but the packages are not flat-equal in their dependency graph. The correct layering is:
+
+```
+@atrib/mcp                                        (signing primitives, chain composition,
+                                                   canonical-form serialization — the libc-equivalent)
+   ↑              ↑
+@atrib/emit       @atrib/recall, /trace, /summarize    (canonical write tool; read tools)
+   ↑      ↑
+@atrib/annotate  @atrib/revise                          (specialized forms that narrow emit's schema)
+```
+
+`@atrib/emit` is the canonical record-signing tool: it owns key resolution, the build-and-sign composition, and JSONL mirror writing. `@atrib/annotate` and `@atrib/revise` are specialized forms — each depends on `@atrib/emit`, imports its key-loading and mirror-writing helpers, and exposes a narrow Zod schema that constrains input to the specialized event_type's shape. The three read packages depend only on `@atrib/mcp` (they do not sign records). This layering matches the IS-A relationship (annotate IS a constrained emit) without breaking the bash-standard for the agent-facing surface (each MCP tool remains monomorphic with one purpose). When the signing pipeline evolves (D072, D078, future cross-attestation), only `@atrib/emit` changes; annotate and revise inherit the fix automatically.
 
 **Alternatives considered.**
 
