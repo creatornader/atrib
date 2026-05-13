@@ -59,7 +59,7 @@ Three of these (emit, annotate, revise) are **writes**: they sign records. Three
 | Capability | Mechanism | How to verify it's operational |
 |---|---|---|
 | Auto-sign every wrapped MCP tool call | `@atrib/mcp` middleware composed by an MCP wrapper | Wrapped MCP tools available in the current process |
-| Six cognitive primitives ([D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)) | `mcp__atrib-emit__emit`, `mcp__atrib-annotate__atrib-annotate`, `mcp__atrib-revise__atrib-revise`, `mcp__atrib-recall__*` (5 siblings), `mcp__atrib-trace__trace`, `mcp__atrib-summarize__summarize` | All eight tools (six verbs; five recall siblings count as one verb) present in the current process |
+| Six cognitive primitives ([D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)) | Six verbs across nine MCP tools: `atrib-emit`, `atrib-annotate`, `atrib-revise` (three writes, one tool each) + `atrib-recall` family (one verb, five sibling tools: `recall_my_attribution_history`, `recall_by_content`, `recall_walk`, `recall_annotations`, `recall_revisions`) + `atrib-trace`, `atrib-summarize` (two more reads, one tool each) | All nine MCP tools present in the current process |
 | Persist signed records to local mirrors | `~/.atrib/records/*.jsonl` (per-producer files) | `ls ~/.atrib/records/` |
 | Public log + browsable explorer | `https://log.atrib.dev/v1/stats` + `explore.atrib.dev` | `curl -s https://log.atrib.dev/v1/stats` |
 | Identity → key binding | `@atrib/directory` + `atrib publish-claim` CLI | `curl -s https://directory.atrib.dev/v6/lookup/<creator_key>` |
@@ -69,25 +69,30 @@ If any row of that table fails to verify in your session, the practice is moot �
 
 ## Session-start ritual (DO THIS BEFORE ANY WORK)
 
-The most common failure mode is forgetting to look. Before you do anything else in a Claude Code session in a repo connected to atrib:
+The most common failure mode is forgetting to look. An atrib SessionStart hook can auto-surface most of this at every boot (last 5 records, active session chain, high-importance annotations, cross-session anchors, substrate health, starter recall hints) when wired into your host. Read its output if present; that's most of the ritual already done.
+
+What still requires deliberate thought from you:
 
 ```
-1. mcp__atrib-recall__recall_my_attribution_history({ limit: 5 })
-   → orient: what did past-me do most recently? what context_id are
-     we continuing? are signatures verifying?
+1. Read the SessionStart hook output above (if present). The hook ran
+   when this conversation started.
+   • Active session chain? You're resuming mid-trace; continue it.
+   • High-importance records surfaced? Those are load-bearing context.
+   • Starter recall hints? Run one if a consequential decision is imminent.
+   • Substrate health warnings? Triage before substantive work.
 
-2. curl -s https://log.atrib.dev/v1/stats
-   → orient: when did the last record land on the public log?
-     If hours/days ago AND your session is about substantive work,
-     the dogfood loop is silent — you'll need to be the source.
+2. Mentally identify the conversation's likely write-primitive moments:
+   • atrib-emit: which decisions will I make that future-me should find?
+   • atrib-annotate: which past records should I mark as load-bearing?
+   • atrib-revise: do I disagree with any prior position from the hook output?
 
-3. Mentally identify your session's likely emit moments:
-   • What decision will I make in the current process that future-me should find?
-   • What claim will I publish (commit message, PR, briefing)?
-   • What might I revise from a past claim?
+3. (Optional) curl -s https://log.atrib.dev/v1/stats
+   → only if the hook didn't already report log staleness. If you see
+     a multi-hour gap during business hours, the dogfood loop has gone
+     silent — you're the source.
 ```
 
-Take ~30 seconds. The result of this ritual is a baseline you carry through the session.
+Take ~30 seconds. The result is a baseline you carry through the conversation.
 
 ## When to reach for each primitive
 
@@ -112,8 +117,8 @@ The decision tree at each moment of substantive work:
 
 **`atrib-recall`** (LOOK-UP): you want to find prior records. Use it when:
 - Starting any consequential decision: "have I done this before? what shaped it?"
-- Searching for records by content, topic, time window, or importance.
-- Resolving a `record_hash` reference into the actual record body and verification metadata.
+- Searching for records by `context_id`, `event_type`, `content_id`, `tool_name`, or `args_hash` (filters currently enforced as of `@atrib/recall@0.6.0`; importance / topic filters are stub-accepted at the time of writing, see `## How recall works` below).
+- Resolving a `record_hash` reference into the actual record body via the `recall_by_content` sibling tool, or walking from one via `recall_walk`.
 
 **`atrib-trace`** (LINEAGE): you have a record and want to walk its causal chain. Use it when:
 - "How did we get here?" — walk `informed_by` backward from the current record.
@@ -139,9 +144,12 @@ The default discipline: per-MCP-tool-call signing happens automatically via the 
 Before calling any write primitive:
 
 1. **Why am I signing this?** One-line answer. ("Future-me will need to find when I made the [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture) ambiguity decision.")
-2. **Which primitive fits?** Present-moment noting → `atrib-emit`. Marking a past record's importance → `atrib-annotate`. Superseding a prior position → `atrib-revise`.
+2. **Which primitive fits?** Each is monomorphic with a narrow required-field shape; the dedicated MCP tool's Zod schema rejects calls that confuse them:
+   - Present-moment noting / conclusion → `atrib-emit` (signs `observation`; `informed_by` optional)
+   - Marking a past record's importance / topics / summary → `atrib-annotate` (requires `annotates` + `importance` + `summary`)
+   - Superseding a prior position with reason → `atrib-revise` (requires `revises` + `prior_position` + `new_position` + `reason`)
 3. **Did anything I already signed inform this?** Query `atrib-recall` if unsure. Identify the SUBSET of records that ACTUALLY shaped this; that's `informed_by`. Not "everything I happened to query."
-4. **What importance signal does future-me need?** If this is one of the load-bearing records of the session, follow the emit with an `atrib-annotate` referencing it with `importance: high` or `critical`.
+4. **What importance signal does future-me need?** If this is one of the load-bearing records of the session, follow the emit with an `atrib-annotate` referencing the new record's hash with `importance: high` or `critical`.
 
 If you can't answer #1 in one line, you don't need to sign yet.
 
@@ -228,15 +236,28 @@ await mcp__atrib_emit__emit({
 
 ## How recall works
 
-`mcp__atrib-recall__recall_my_attribution_history` reads your local signed-record mirror, verifies each Ed25519 signature, and returns records newest-first.
+The `atrib-recall` primitive ships as five sibling tools, each for a different query shape ([D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) treats them as one conceptual verb):
+
+| Tool | Query shape | Use case |
+|---|---|---|
+| `recall_my_attribution_history` | filters over your full record set | "What did I do recently / in this trace / matching this filter?" |
+| `recall_by_content` | exact match on `content_id` | "Find every record about this specific tool-call shape" |
+| `recall_walk` | walk forward / backward from a record_hash | "Trace neighbors via informed_by / annotates / revises edges" |
+| `recall_annotations` | annotations pointing at a target | "What did past-me / others say about this record's importance?" |
+| `recall_revisions` | revisions superseding a target | "Has this position been revised since?" |
+
+All five read your local signed-record mirror, verify each Ed25519 signature, and return records newest-first by default.
+
+Currently enforced filters on `recall_my_attribution_history` (as of `@atrib/recall@0.6.0`):
 
 | Filter | Use case |
 |---|---|
 | `context_id: <32hex>` | "What did I do in this trace?" |
-| `event_type: 'transaction'` | "My recent transactions" (only `tool_call` and `transaction` are filterable in v0.2 of recall) |
-| no filters | "Everything I've ever signed" |
-| `compact: false` | Need full bytes for re-verification |
-| `include_unverified: true` | Investigating tampered or partial mirror state |
+| `event_type: 'tool_call' \| 'transaction'` | Filter by event kind (these two only; observation / annotation / revision filter coming) |
+| `content_id`, `tool_name`, `args_hash` | Exact-match probes per spec [§1.2.2](../../atrib-spec.md#122-content_id-derivation) / [§8.2](../../atrib-spec.md#82-opaque-name-posture) / [§8.3](../../atrib-spec.md#83-salted-commitment-posture) |
+| `limit`, `offset`, `compact`, `include_unverified` | Standard pagination + display + verification controls |
+
+Stub-accepted (in schema, currently ignored by handler — surfaces in `layer_1_warnings`): `min_importance`, `topic_tags`, `include_revised`, `min_signers`, `rank_by`, `rank_anchor`. Enforcement lands in upcoming `@atrib/recall` releases.
 
 Caveats:
 - `pagination_caveat` is real — if new records arrive between calls, offset shifts. For consistent multi-page traversal, capture timestamps from page 1 and re-page with a context_id or event_type filter.
@@ -266,7 +287,7 @@ You are one signer in a multi-producer system. The graph density that makes reca
 | Surface | Cadence | What it produces |
 |---|---|---|
 | Wrapped MCP server middleware | Per MCP tool call | `tool_call` records auto-signed during your session |
-| `mcp__atrib-emit__emit` (you, deliberately) | Whenever you call it | `observation` / `annotation` / `revision` records |
+| `atrib-emit` + `atrib-annotate` + `atrib-revise` (you, deliberately) | Whenever you call them | `observation` / `annotation` / `revision` records respectively, each via its dedicated tool per [D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) |
 | Scheduled background batches | Cron / launchd | Per-event observation records from watchers; per-annotation records from synthesis passes; chained via `informed_by` |
 | Always-on agent runtime (host-specific) | Continuous, when wired in | Records the agent's autonomous activity between interactive sessions |
 | Future scheduled-runtime layer | Cron + event-driven scheduler | Replaces nightly-batch-only emission with finer-grained scheduled cognitive work |
@@ -278,10 +299,10 @@ When you check `https://log.atrib.dev/v1/stats` mid-day and `newest_timestamp_ms
 ### "I think I'm signing but the log is silent"
 
 Check in this order:
-1. `curl -s https://log.atrib.dev/v1/stats` → if tree_size hasn't grown since your emit, submission may be queued or the log may be down.
-2. `ls -lt ~/.atrib/records/atrib-emit-claude-code.jsonl` → if mtime updated, the local mirror has it; submission is the bottleneck.
-3. `tail -1 ~/.atrib/records/atrib-emit-claude-code.jsonl | jq .` → confirm the bytes you intended.
-4. Re-emit with `--verbose` mental model and check the `warnings` array on the response — submission failures land there.
+1. `curl -s https://log.atrib.dev/v1/stats` → if tree_size hasn't grown since your write call, submission may be queued or the log may be down.
+2. `ls -lt ~/.atrib/records/` → check mtimes across all per-producer mirror files. The three write primitives (emit / annotate / revise) and the wrapper each persist to their own file by default (`ATRIB_MIRROR_FILE` env override applies per-process). If the mtime of the mirror for the primitive you just called is fresh, the local write landed; submission to the log is the bottleneck.
+3. `tail -1 <the-relevant-mirror>.jsonl | jq .` → confirm the bytes you intended.
+4. Re-call with verbose-mode mental model and check the `warnings` array on the response — submission failures, key-resolution issues, and chain-composition warnings all land there.
 
 ### "I'm in a session and atrib is going to be silent unless I act"
 
@@ -301,8 +322,8 @@ The graph contains records from multiple signers. When interpreting results:
 
 | Class | What they sign |
 |---|---|
-| You (wrapper's creator_key) | tool_call + emitted observations / annotations / revisions in your sessions |
-| Other Claude Code agents (different wrapper keys) | their own tool_call + emit records |
+| You (wrapper's creator_key) | tool_call (auto) + observations / annotations / revisions signed via the three dedicated write primitives |
+| Other Claude Code agents (different wrapper keys) | their own tool_call + write-primitive records |
 | Service identities | log-node signs checkpoints; directory-node signs anchors |
 | Transaction counterparties ([D052](../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)) | cross-attestation entries in `signers[]` of transaction records |
 | Test fixtures | claimed and labeled (e.g. `GX9rI…` is the public `fill(42)` test seed) |

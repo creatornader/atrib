@@ -36,7 +36,7 @@ import {
 const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
 const HEX_32_PATTERN = /^[0-9a-f]{32}$/
 
-const ReviseInput = z.object({
+export const ReviseInput = z.object({
   revises: z.string().regex(SHA256_REF_PATTERN).describe(
     "'sha256:<64-hex>' record_hash this revision supersedes per spec §1.2.9 / D059. " +
       'REQUIRED. The target record can be any prior record (yours or another agent\'s).',
