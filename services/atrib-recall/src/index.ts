@@ -118,6 +118,15 @@ const ATRIB_MIRROR_DIR = process.env.ATRIB_MIRROR_DIR ?? join(
 )
 const ATRIB_LOG_ORIGIN = process.env.ATRIB_LOG_ORIGIN ?? 'log.atrib.dev'
 
+// 32-hex context_id pattern per spec §1.2.3. Read once at module-init so
+// every recall invocation honors the same value (the env var is a per-run
+// declaration; changing it mid-process is not supported).
+const HEX_32_CONTEXT_ID = /^[0-9a-f]{32}$/
+const ATRIB_CONTEXT_ID_DEFAULT =
+  process.env.ATRIB_CONTEXT_ID && HEX_32_CONTEXT_ID.test(process.env.ATRIB_CONTEXT_ID)
+    ? process.env.ATRIB_CONTEXT_ID
+    : undefined
+
 /**
  * Pull the inner AtribRecord out of either on-disk shape (D062 envelope or
  * legacy bare record). Returns null when the line is neither shape or is
@@ -597,8 +606,14 @@ export async function recall(
   const annotationsByRecord = aggregateAnnotationsByRecord(all)
   const revisionsByRecord = aggregateRevisionsByRecord(all)
 
+  // Apply ATRIB_CONTEXT_ID env-var default when the caller omits the
+  // context_id filter. Lets Inspect-style harnesses scope recall to a
+  // per-arm context_id without threading it through every tool call;
+  // an explicit args.context_id always wins (explicit beats implicit).
+  const effectiveContextId = args.context_id ?? ATRIB_CONTEXT_ID_DEFAULT
+
   let filtered = all
-  if (args.context_id) filtered = filtered.filter((lr) => lr.record.context_id === args.context_id)
+  if (effectiveContextId) filtered = filtered.filter((lr) => lr.record.context_id === effectiveContextId)
   if (args.event_type) {
     // Schema accepts short form ('tool_call'|'transaction'); records carry
     // the URI form. Normalize before comparison; pass URIs through as-is so

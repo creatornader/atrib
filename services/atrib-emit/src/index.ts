@@ -258,6 +258,22 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
     ])
   }
 
+  // ATRIB_CONTEXT_ID env-var default: when the caller omitted context_id,
+  // fall back to process.env.ATRIB_CONTEXT_ID before the multi-producer
+  // composition path. This lets Inspect-style harnesses thread a
+  // deterministic per-run context_id into spawned atrib-emit subprocesses
+  // via the MCP env block (per D072's per-arm isolation contract). Only
+  // valid 32-hex values are honored; invalid values are ignored and the
+  // tool falls back to the existing inheritChainContext logic. The fallback
+  // is silent (no warning) because the env var represents the caller's
+  // declared intent; we surface mismatches only when the caller passed a
+  // different explicit context_id, in which case the explicit value wins
+  // per the standard "explicit beats implicit" precedence.
+  const envContextId = process.env['ATRIB_CONTEXT_ID']
+  const callerContextId =
+    input.context_id ??
+    (envContextId && HEX_32_PATTERN.test(envContextId) ? envContextId : undefined)
+
   // Multi-producer chain composition per spec §1.2.3 / D067. Single source
   // of truth in @atrib/mcp's inheritChainContext: caller-supplied verbatim
   // when both fields supplied, else cascade through env-tail (cross-producer
@@ -269,7 +285,7 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
   // load-bearing case; pre-fix this produced isolated genesis records
   // because atrib-emit's local resolver short-circuited on caller context.
   const chain = await inheritChainContext({
-    callerContextId: input.context_id,
+    callerContextId,
     callerChainRoot: input.chain_root,
     mirrorPath: readMirrorPath(),
     randomContextId,
