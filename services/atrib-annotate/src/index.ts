@@ -31,9 +31,9 @@ import {
 const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
 const HEX_32_PATTERN = /^[0-9a-f]{32}$/
 
-const Importance = z.enum(['critical', 'high', 'medium', 'low', 'noise'])
+export const Importance = z.enum(['critical', 'high', 'medium', 'low', 'noise'])
 
-const AnnotateInput = z.object({
+export const AnnotateInput = z.object({
   annotates: z.string().regex(SHA256_REF_PATTERN).describe(
     "'sha256:<64-hex>' record_hash this annotation describes per spec §1.2.7 / D058. " +
       'REQUIRED. The target record can be any prior record (yours or another agent\'s).',

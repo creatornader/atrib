@@ -1,12 +1,15 @@
 // @atrib/annotate basic correctness tests.
 //
-// Exercises the narrow Zod schema and the server-construction surface.
-// The underlying signing pipeline (handleEmit + buildAndSignEmitRecord)
-// is owned by @atrib/emit and tested there; the value @atrib/annotate
-// adds is the narrow input contract per D079, so that's what we test here.
+// Exercises the narrow Zod schema (AnnotateInput) and the server-construction
+// surface. The underlying signing pipeline (handleEmit + buildAndSignEmitRecord)
+// is owned by @atrib/emit and tested there; the value @atrib/annotate adds
+// is the narrow input contract per D079, so that's what we test here.
 
 import { describe, expect, it } from 'vitest'
-import { createAtribAnnotateServer } from '../src/index.js'
+import { AnnotateInput, createAtribAnnotateServer } from '../src/index.js'
+
+const VALID_HASH = 'sha256:' + 'a'.repeat(64)
+const VALID_CONTEXT = 'a'.repeat(32)
 
 describe('createAtribAnnotateServer', () => {
   it('returns an McpServer + flush handle', async () => {
@@ -19,70 +22,172 @@ describe('createAtribAnnotateServer', () => {
     expect(typeof server.flush).toBe('function')
     await server.flush()
   })
-
-  it('exposes the atrib-annotate tool', async () => {
-    const server = await createAtribAnnotateServer()
-    // Internal access to the registered tool list; just confirm something is
-    // wired without taking a deep dependency on the McpServer's private shape.
-    expect(server.mcp).toBeTruthy()
-    await server.flush()
-  })
 })
 
 describe('AnnotateInput schema (D079 narrow contract)', () => {
-  // The schema is defined inside src/index.ts; we re-derive it here
-  // structurally by exercising the createAtribAnnotateServer path. The
-  // narrow contract per D079 is what makes annotate distinct from a
-  // polymorphic emit, so these tests pin down the required-field shape.
+  // These tests exercise the actual exported Zod schema. They prove the
+  // schema rejects malformed input rather than just asserting my test
+  // data matches my test assertions (the bug shape from initial draft).
 
-  it('passes when annotates, importance, summary are all present', () => {
-    const input = {
-      annotates: 'sha256:' + 'a'.repeat(64),
+  it('accepts minimal valid input (annotates + importance + summary)', () => {
+    const parsed = AnnotateInput.parse({
+      annotates: VALID_HASH,
       importance: 'high',
       summary: 'a one-line gist',
+    })
+    expect(parsed.annotates).toBe(VALID_HASH)
+    expect(parsed.importance).toBe('high')
+    expect(parsed.summary).toBe('a one-line gist')
+  })
+
+  it('rejects missing annotates field', () => {
+    expect(() =>
+      AnnotateInput.parse({ importance: 'high', summary: 'gist' }),
+    ).toThrow()
+  })
+
+  it('rejects missing importance field', () => {
+    expect(() =>
+      AnnotateInput.parse({ annotates: VALID_HASH, summary: 'gist' }),
+    ).toThrow()
+  })
+
+  it('rejects missing summary field', () => {
+    expect(() =>
+      AnnotateInput.parse({ annotates: VALID_HASH, importance: 'high' }),
+    ).toThrow()
+  })
+
+  it('rejects malformed annotates (not sha256:<64-hex>)', () => {
+    const malformed = [
+      'sha256:' + 'A'.repeat(64), // uppercase
+      'sha256:' + 'a'.repeat(63), // too short
+      'sha256:' + 'a'.repeat(65), // too long
+      'not-a-hash',
+      'sha1:' + 'a'.repeat(40),
+      '',
+    ]
+    for (const v of malformed) {
+      expect(() =>
+        AnnotateInput.parse({ annotates: v, importance: 'high', summary: 'g' }),
+      ).toThrow()
     }
-    // Just confirm the shape compiles; full validator-roundtrip would
-    // require exporting the Zod schema, which we deliberately keep private.
-    expect(input.annotates).toMatch(/^sha256:[0-9a-f]{64}$/)
-    expect(['critical', 'high', 'medium', 'low', 'noise']).toContain(input.importance)
-    expect(input.summary.length).toBeGreaterThan(0)
   })
 
-  it('importance must be one of the 5 spec values', () => {
-    const valid = ['critical', 'high', 'medium', 'low', 'noise']
-    const invalid = ['urgent', 'HIGH', 'p0', '', 'normal']
-    for (const v of valid) {
-      expect(valid).toContain(v)
-    }
-    for (const v of invalid) {
-      expect(valid).not.toContain(v)
+  it('rejects unknown importance values', () => {
+    for (const bad of ['urgent', 'HIGH', 'p0', '', 'normal']) {
+      expect(() =>
+        AnnotateInput.parse({
+          annotates: VALID_HASH,
+          importance: bad,
+          summary: 'g',
+        }),
+      ).toThrow()
     }
   })
 
-  it('annotates must be sha256:<64-hex>', () => {
-    expect('sha256:' + 'a'.repeat(64)).toMatch(/^sha256:[0-9a-f]{64}$/)
-    expect('sha256:' + 'A'.repeat(64)).not.toMatch(/^sha256:[0-9a-f]{64}$/)
-    expect('not-a-hash').not.toMatch(/^sha256:[0-9a-f]{64}$/)
-    expect('sha256:' + 'a'.repeat(63)).not.toMatch(/^sha256:[0-9a-f]{64}$/)
+  it('accepts all 5 spec importance values', () => {
+    for (const ok of ['critical', 'high', 'medium', 'low', 'noise']) {
+      expect(() =>
+        AnnotateInput.parse({
+          annotates: VALID_HASH,
+          importance: ok,
+          summary: 'g',
+        }),
+      ).not.toThrow()
+    }
   })
 
-  it('context_id must be 32-hex when supplied', () => {
-    expect('a'.repeat(32)).toMatch(/^[0-9a-f]{32}$/)
-    expect('A'.repeat(32)).not.toMatch(/^[0-9a-f]{32}$/)
-    expect('a'.repeat(33)).not.toMatch(/^[0-9a-f]{32}$/)
+  it('rejects empty summary', () => {
+    expect(() =>
+      AnnotateInput.parse({
+        annotates: VALID_HASH,
+        importance: 'high',
+        summary: '',
+      }),
+    ).toThrow()
   })
 
-  it('topics array caps at 16 entries (graph-derivation soft limit)', () => {
-    const sixteen = Array(16).fill('topic-x')
-    const seventeen = Array(17).fill('topic-x')
-    expect(sixteen.length).toBeLessThanOrEqual(16)
-    expect(seventeen.length).toBeGreaterThan(16)
+  it('rejects summary > 2048 chars', () => {
+    expect(() =>
+      AnnotateInput.parse({
+        annotates: VALID_HASH,
+        importance: 'high',
+        summary: 'a'.repeat(2049),
+      }),
+    ).toThrow()
+    // 2048 exactly should pass.
+    expect(() =>
+      AnnotateInput.parse({
+        annotates: VALID_HASH,
+        importance: 'high',
+        summary: 'a'.repeat(2048),
+      }),
+    ).not.toThrow()
   })
 
-  it('summary caps at 2048 chars', () => {
-    const ok = 'a'.repeat(2048)
-    const tooBig = 'a'.repeat(2049)
-    expect(ok.length).toBeLessThanOrEqual(2048)
-    expect(tooBig.length).toBeGreaterThan(2048)
+  it('rejects topics array > 16 entries', () => {
+    expect(() =>
+      AnnotateInput.parse({
+        annotates: VALID_HASH,
+        importance: 'high',
+        summary: 'g',
+        topics: Array(17).fill('t'),
+      }),
+    ).toThrow()
+    expect(() =>
+      AnnotateInput.parse({
+        annotates: VALID_HASH,
+        importance: 'high',
+        summary: 'g',
+        topics: Array(16).fill('t'),
+      }),
+    ).not.toThrow()
+  })
+
+  it('accepts optional context_id when valid 32-hex', () => {
+    expect(() =>
+      AnnotateInput.parse({
+        annotates: VALID_HASH,
+        importance: 'high',
+        summary: 'g',
+        context_id: VALID_CONTEXT,
+      }),
+    ).not.toThrow()
+  })
+
+  it('rejects malformed context_id', () => {
+    for (const bad of ['A'.repeat(32), 'a'.repeat(31), 'a'.repeat(33), 'xyz']) {
+      expect(() =>
+        AnnotateInput.parse({
+          annotates: VALID_HASH,
+          importance: 'high',
+          summary: 'g',
+          context_id: bad,
+        }),
+      ).toThrow()
+    }
+  })
+
+  it('accepts informed_by array of sha256 refs', () => {
+    expect(() =>
+      AnnotateInput.parse({
+        annotates: VALID_HASH,
+        importance: 'high',
+        summary: 'g',
+        informed_by: [VALID_HASH, 'sha256:' + 'b'.repeat(64)],
+      }),
+    ).not.toThrow()
+  })
+
+  it('rejects informed_by entries that are not sha256:<64-hex>', () => {
+    expect(() =>
+      AnnotateInput.parse({
+        annotates: VALID_HASH,
+        importance: 'high',
+        summary: 'g',
+        informed_by: [VALID_HASH, 'not-a-hash'],
+      }),
+    ).toThrow()
   })
 })
