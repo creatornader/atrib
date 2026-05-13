@@ -336,6 +336,34 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@25.6.0)(tsx@4.21.0)
 
+  services/atrib-annotate:
+    dependencies:
+      '@atrib/emit':
+        specifier: workspace:*
+        version: link:../atrib-emit
+      '@atrib/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
+
   services/atrib-emit:
     dependencies:
       '@atrib/mcp':
@@ -388,6 +416,34 @@ importers:
       vitest:
         specifier: ^4.1.5
         version: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(vite@7.3.2(@types/node@22.19.17)(tsx@4.21.0))
+
+  services/atrib-revise:
+    dependencies:
+      '@atrib/emit':
+        specifier: workspace:*
+        version: link:../atrib-emit
+      '@atrib/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
 
   services/atrib-summarize:
     dependencies:

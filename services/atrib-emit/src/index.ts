@@ -381,3 +381,17 @@ function hashRecord(record: AtribRecord): string {
 // used in sign.ts; lets unit tests assert on the validation paths
 // without going through the McpServer transport surface.
 export const __test_only__ = { handleEmit }
+
+// ---- public helpers (D079, for atrib-annotate, atrib-revise, future specialized writers) ----
+//
+// These exports let downstream MCP packages depend on @atrib/emit as the
+// canonical record-signing surface and wrap it with a narrow schema. The
+// shape is: caller constructs a key + queue (or reuses atrib-emit's
+// resolveKey + createSubmissionQueue), parses its own narrow input into an
+// EmitInput shape, calls handleEmit, returns the EmitOutput.
+//
+// Stable as of @atrib/emit@0.8.0. Breaking changes here require a major bump.
+export { handleEmit, EmitInput }
+export type { EmitOutput }
+export { resolveKey } from './keys.js'
+export type { ResolvedKey } from './keys.js'

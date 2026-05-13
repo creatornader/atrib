@@ -4,6 +4,8 @@ packages:
   - 'services/graph-node'
   - 'services/directory-node'
   - 'services/atrib-emit'
+  - 'services/atrib-annotate'
+  - 'services/atrib-revise'
   - 'services/atrib-recall'
   - 'services/atrib-trace'
   - 'services/atrib-summarize'
