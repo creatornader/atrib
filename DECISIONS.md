@@ -4096,3 +4096,33 @@ Filter parameters under consideration: `creator_key`, `context_id`, `event_type`
 **Likely outcome (not committed):** accept after Track B Pattern 1 v2 produces a non-null result and the spec stabilizes enough that the auto-publish doesn't break links daily. Implementation effort: roughly 1-2 days for the static-site generator option plus the deploy pipeline.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P025: Parent-child agent representation — informed_by threading vs. dedicated handoff event_type
+
+**Source:** Architectural gap surfaced during multi-agent integration design. When a parent agent dispatches a subagent (e.g., a host-native Task tool, an A2A handoff, a LangGraph child node), an auto-signing wrapper produces a `tool_call` record on the parent side. But the subagent typically inherits the same signing key (so records sign under the SAME identity as the parent) and the same context_id (or a fresh-orphan one, depending on env passthrough) — there is no graph edge linking subagent records to the parent's spawn-tool_call record. Parent and child records appear as flat peers in the substrate. A prior multi-agent framework survey identified the same gap: "cross-agent handoff state shape and where the informed_by edge naturally forms per framework" is the load-bearing research question. The placeholder [D073](#d073-handoff-event_type-byte-placeholder-adr) already reserves byte `0x07` for a future `handoff` event_type pending a load-bearing producer.
+
+**The decision in question:** which of two layered options resolves parent-child agent representation:
+
+1. **Producer-side informed_by threading (no spec change).** When a parent agent spawns a subagent, the spawn-time env passes `ATRIB_PARENT_RECORD_HASH=<parent's Task tool_call record_hash>`. The subagent's MCP wrapper (or first signed record) auto-seeds `informed_by: [$ATRIB_PARENT_RECORD_HASH]`. Causal lineage threads via the existing [§1.2.5](atrib-spec.md#125-informed_by) primitive. Walking `atrib-trace` from a subagent record backward surfaces the parent's Task tool_call, which in turn surfaces the parent's prior reasoning chain.
+2. **Promote [D073](#d073-handoff-event_type-byte-placeholder-adr) to a substantive handoff event_type (spec change).** Subagent spawn produces a dedicated `handoff` record (event_type `0x07`) distinct from the parent's `tool_call` record. The handoff record carries explicit `parent_creator_key`, `child_creator_key`, `spawn_args`, and graph-derivation rules emit a SPAWNS edge per a new [§3.2.4](atrib-spec.md#324-edge-derivation-rules) row. Subagent records optionally carry `inherits_from: <handoff_hash>` or thread via `informed_by` as in option 1.
+
+**Considerations.**
+
+- *Option 1 cost*: producer-side env convention. Each agent's wrapper or harness adapter needs to read the env and seed `informed_by` on first emit. Implementable in the @atrib/mcp-wrap layer with no spec change. Recall + trace work unchanged. Multi-process subagents (cross-machine) need the env to travel via whatever IPC the host uses.
+- *Option 2 cost*: spec promotion via [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)'s bar. Adds an event_type, edge derivation rule, conformance corpus row. Producers need to know which event_type to emit when (parent's Task tool_call vs. dedicated handoff). Higher cost; clearer graph semantics for multi-agent flows.
+- *Option 1 limits*: parent-child remains a producer convention, not a protocol commitment. Two producers that disagree on the env-name convention produce graph-disconnected lineage. Mitigable by documenting the convention in @atrib/mcp-wrap's README and the runtime-adapter spec ([D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path)).
+- *Option 2 limits*: requires a load-bearing multi-agent producer to justify the promotion bar. Current Task subagent surfaces in single-process hosts (same signing key for parent + child) don't yet stress the protocol. Pattern 3 multi-agent flows ([P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation) territory) likely do.
+- *Same-identity edge case*: when parent + child sign under the same `creator_key` (single-process hosts where both inherit the same signing key from the parent process), the substrate-level distinction "which agent emitted this" collapses to "same identity, different process." Option 1's `informed_by` thread captures the relationship without needing identity to differ. Option 2's `handoff` record explicitly distinguishes parent and child even when keys match (via field-level `parent_creator_key` / `child_creator_key`, both set to the same value where appropriate).
+- *Composition with cross-attestation*: if subagent and parent eventually sign under different keys (e.g., separate-key agents in Pattern 3 multi-agent flows), option 2's handoff record fits naturally with the [D052](#d052-cross-attestation-requirement-for-transaction-records) pattern; option 1 still works but requires the cross-attestation logic to live on the producer side.
+
+**Likely outcome (not committed):** ship option 1 first (cheap producer-side convention; closes the immediate single-process subagent gap), retain option 2 as a future spec promotion gated on the first multi-agent producer that needs explicit handoff semantics. Both compose: a future `handoff` record can carry `informed_by` populated by option 1's convention. A prior multi-agent framework survey across LangGraph, CrewAI, AutoGen, smol-agents, Anthropic Agent SDK, Vercel AI SDK, and OpenAI Agents SDK concluded that `informed_by` is the natural cross-agent causality primitive — supporting option 1 as the baseline.
+
+**Cross-references.**
+
+- [D073](#d073-handoff-event_type-byte-placeholder-adr) — placeholder reserving event_type byte `0x07` for the future handoff promotion.
+- [§1.2.5](atrib-spec.md#125-informed_by) — existing `informed_by` primitive used by option 1.
+- [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) — runtime-adapter spec; documents per-framework conventions like option 1.
+- [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation) — verify-promotion gated on Pattern 3 multi-agent activation; same forcing function for option 2.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
