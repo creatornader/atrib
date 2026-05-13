@@ -1,6 +1,6 @@
 # `@atrib/cli`
 
-**The atrib operator CLI. Generate Ed25519 keypairs, manage them in macOS Keychain, and publish identity claims to the atrib directory (spec [§6](../../atrib-spec.md#6-key-directory)).**
+**The atrib operator CLI. Generate Ed25519 keypairs, manage them in macOS Keychain, and publish identity claims to the atrib directory (spec [§6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#6-key-directory)).**
 
 ```bash
 npx @atrib/cli keygen --keychain
@@ -42,7 +42,7 @@ Remove a Keychain entry. Operator-confirmable destructive operation.
 
 ### `publish-claim --keychain`
 
-Publish an `IdentityClaim` to the atrib directory (spec [§6.1](../../atrib-spec.md#61-identity-claim-format)), optionally with a [§6.7](../../atrib-spec.md#67-capability-declarations) capability envelope. The seed is read from Keychain, the claim is canonicalized + signed, and POST'd to `--directory URL` (defaults to `https://directory.atrib.dev/v6`).
+Publish an `IdentityClaim` to the atrib directory (spec [§6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#61-identity-claim-format)), optionally with a [§6.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#67-capability-declarations) capability envelope. The seed is read from Keychain, the claim is canonicalized + signed, and POST'd to `--directory URL` (defaults to `https://directory.atrib.dev/v6`).
 
 ```bash
 atrib publish-claim --keychain \
@@ -61,7 +61,7 @@ Capability envelope fields are optional; an empty envelope means "any tool, any 
 
 ### `revoke --keychain`
 
-Revoke a key per spec [§1.9](../../atrib-spec.md#19-key-rotation-and-revocation) (key rotation and revocation). Emits a `key_revocation` record to the log endpoint, signed by the key being retired.
+Revoke a key per spec [§1.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#19-key-rotation-and-revocation) (key rotation and revocation). Emits a `key_revocation` record to the log endpoint, signed by the key being retired.
 
 ## macOS Keychain integration
 

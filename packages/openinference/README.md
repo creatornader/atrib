@@ -2,7 +2,7 @@
 
 OpenTelemetry SpanProcessor that consumes [OpenInference](https://github.com/Arize-ai/openinference)-shaped spans and emits signed atrib records.
 
-This is **Pattern #4** of atrib's six runtime integration patterns ([atrib-spec §9](../../atrib-spec.md#9-runtime-integration-patterns)). One adapter transitively reaches every framework with OpenInference instrumentation: OpenAI Agents SDK, Claude Agent SDK, LangChain (and LangGraph), Vercel AI, CrewAI, LlamaIndex, DSPy, MCP, Microsoft Agent Framework, Bedrock AgentCore, smolagents, Pydantic AI, Agno, and 20+ more.
+This is **Pattern #4** of atrib's six runtime integration patterns ([atrib-spec §9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#9-runtime-integration-patterns)). One adapter transitively reaches every framework with OpenInference instrumentation: OpenAI Agents SDK, Claude Agent SDK, LangChain (and LangGraph), Vercel AI, CrewAI, LlamaIndex, DSPy, MCP, Microsoft Agent Framework, Bedrock AgentCore, smolagents, Pydantic AI, Agno, and 20+ more.
 
 ## Why this exists
 
@@ -81,7 +81,7 @@ Two SpanProcessor variants ship in v0.0.1:
 | `AtribSpanProcessor` | Low-throughput interactive agents. Lower latency between span end and record submission. | `submit(signed, sidecar)` per span |
 | `AtribBatchSpanProcessor` | Production pipelines emitting many spans/sec. Reduces per-record HTTP overhead via queue + size/time-based flush. | `submit(batch: Array<{signed, sidecar}>)` per batch |
 
-Batch buffer config knobs (all defaulted): `maxQueueSize` (2048), `maxExportBatchSize` (512), `scheduledDelayMillis` (5000), `exportTimeoutMillis` (30000). Per [§5.8](../../atrib-spec.md#58-degradation-contract) degradation contract: when the queue overflows `maxQueueSize` the oldest record is dropped so the host pipeline never blocks; `getDroppedRecordCount()` exposes the counter for observability.
+Batch buffer config knobs (all defaulted): `maxQueueSize` (2048), `maxExportBatchSize` (512), `scheduledDelayMillis` (5000), `exportTimeoutMillis` (30000). Per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation contract: when the queue overflows `maxQueueSize` the oldest record is dropped so the host pipeline never blocks; `getDroppedRecordCount()` exposes the counter for observability.
 
 ```ts
 import { AtribBatchSpanProcessor } from '@atrib/openinference'
@@ -145,14 +145,14 @@ Calling this is the difference between catching the bug at startup vs. silently 
 
 ## §5.8 degradation contract
 
-Per the atrib spec [§5.8 degradation contract](../../atrib-spec.md#58-degradation-contract): atrib failures must never affect the primary tool call or agent response. This processor honors that contract by catching every error from span mapping, signing, and submission. Errors are logged with the `atrib:openinference:` prefix when `debug: true`; otherwise silent.
+Per the atrib spec [§5.8 degradation contract](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract): atrib failures must never affect the primary tool call or agent response. This processor honors that contract by catching every error from span mapping, signing, and submission. Errors are logged with the `atrib:openinference:` prefix when `debug: true`; otherwise silent.
 
 ## What this does NOT do
 
 - **No tool response capture.** Spans carry whatever the OpenInference instrumentation provided. atrib signs that span shape verbatim; it does not enrich tool outputs.
-- **No log-inclusion verification.** Local signing produces a record; the configured `submit` callback is responsible for log commitment. Re-verification of log inclusion is the consumer's job ([§2.6.1](../../atrib-spec.md#261-submit-entry) inclusion proof flow).
+- **No log-inclusion verification.** Local signing produces a record; the configured `submit` callback is responsible for log commitment. Re-verification of log inclusion is the consumer's job ([§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry) inclusion proof flow).
 - **No re-instrumentation.** This package consumes OpenInference spans; it does not instrument frameworks. Use `@arizeai/openinference-*` instrumentations (or your framework's native OpenInference integration) to produce the spans.
-- **No graph derivation.** Emits flat records. The atrib log + graph-node service derive the [§3.2.4](../../atrib-spec.md#324-edge-derivation-rules) graph from the record set.
+- **No graph derivation.** Emits flat records. The atrib log + graph-node service derive the [§3.2.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#324-edge-derivation-rules) graph from the record set.
 
 ## Status
 
@@ -161,7 +161,7 @@ Per the atrib spec [§5.8 degradation contract](../../atrib-spec.md#58-degradati
 - All 10 OpenInference span kinds mapped: `TOOL` -> `tool_call`; `LLM` / `AGENT` / `EMBEDDING` / `RETRIEVER` / `RERANKER` / `CHAIN` / `GUARDRAIL` / `EVALUATOR` / `PROMPT` -> `observation`.
 - Both Simple and Batch SpanProcessor variants.
 - Auto `informed_by` derivation between LLM and TOOL records via shared `InformedByTracker`.
-- Args/result hash extraction per spec [§8.3](../../atrib-spec.md#83-salted-commitment-posture) ([D045](../../DECISIONS.md#d045-privacy-postures-normative-spec-section) salted-commitment posture) with three modes: `none` / `plain` / `salted`.
+- Args/result hash extraction per spec [§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture) ([D045](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d045-privacy-postures-normative-spec-section) salted-commitment posture) with three modes: `none` / `plain` / `salted`.
 - Preflight verification helper that catches misconfigured context propagation at startup.
 - Attribute keys imported from `@arizeai/openinference-semantic-conventions` for canonical schema correctness.
 - 62 unit tests + composition pilot validated end-to-end against real Vercel AI SDK v6 + NVIDIA NIM-served Qwen 3.5 + `@arizeai/openinference-vercel`'s reference SpanProcessor on a shared TracerProvider.
@@ -173,7 +173,7 @@ Pilot evidence: a single tool-using `generateText` call produces 4 spans (LLM + 
 Roadmap:
 
 - **LangGraph `graph.node.parent_id` informed_by derivation.** Multi-graph-node `informed_by` edges. The LLM->TOOL pair is already covered automatically via `tool_call.id` matching.
-- **Spec-level conformance corpus** per [D071](../../DECISIONS.md#d071-spec-writing-conventions) convention 6. Current package-level fixtures at `test/fixtures/` are the empirical foundation; spec-level promotion lands when a first downstream consumer requires it.
+- **Spec-level conformance corpus** per [D071](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d071-spec-writing-conventions) convention 6. Current package-level fixtures at `test/fixtures/` are the empirical foundation; spec-level promotion lands when a first downstream consumer requires it.
 
 ## License
 
