@@ -4054,3 +4054,25 @@ The `extractor_classification` field is redundant for records where event_type i
 **Likely outcome (not committed):** accept when Pattern 3 multi-agent thesis activation begins. Approximately 1-2 days of focused work (thin MCP wrapper + ADR amendment + scaffold updates).
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P023: Subscription surface for log.atrib.dev (SSE primary, JSON Feed companion)
+
+**Source:** Architectural gap surfaced 2026-05-13 in the always-on agent / importance-driven notification design conversation. Currently, consumers wanting to react to new atrib records in real-time must poll `/v1/stats` and fetch every record body, then filter locally. For an always-on consumer (e.g., an always-on cognitive runtime; future notification aggregators; cross-agent escalation receivers per [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion)'s Pattern 3 multi-agent scope), this is wasteful and high-latency. The substrate-driven-notification composition pattern (atrib provides signed importance, downstream consumer routes) depends on having a way to actually subscribe.
+
+**The decision in question:** add a subscription surface to `log.atrib.dev`. Server-Sent Events at `/v1/stream?<filters>` as the primary push mechanism (long-lived HTTP, low-latency, one-way, HTTP-native, every language has a client). Optional JSON Feed at `/v1/feed.json?<filters>` as the pull companion for consumers who can't hold long-lived connections (RSS-reader analog, cron-pollers, etc.).
+
+Filter parameters under consideration: `creator_key`, `context_id`, `event_type`, `topic`, `importance` (annotation records only), `since` (timestamp resume marker).
+
+**Considerations.**
+- Concrete use case: a downstream always-on cognitive runtime consumes annotation records with `importance ≥ high` and routes to operator-facing push. Without `/v1/stream`, the consumer polls `/v1/stats` and fetches everything new, filtering client-side. Inefficient and high-latency for sub-second response.
+- Implementation lands in the log-node service; record-stream filtering happens server-side from the tessera tile inventory.
+- Subscription surface is NOT a cognitive primitive per [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion). It's a service-layer feature of log.atrib.dev that downstream consumers (always-on runtimes, notification aggregators, cross-agent subscribers) consume. The agent itself does not reach for a "subscribe" tool; the harness or runtime does.
+- Backward-compatible: existing `/v1/stats` and `/v1/lookup/<hash>` endpoints unchanged. New endpoints additive.
+- Alternative rejected: pure RSS 2.0. XML-heavy, schema-rigid; doesn't fit atrib's record format cleanly. JSON Feed gets the universal-readability without the format pain.
+- Alternative rejected: WebSocket. Bidirectional channel atrib doesn't need; SSE is the right one-way push primitive.
+- Alternative rejected: webhooks-only. Requires every subscriber to host a public endpoint; high friction for individual operator integration. Webhooks could be added later as a third option.
+
+**Likely outcome (not committed):** accept when the first always-on consumer (a third-party cognitive runtime is the canonical trigger) starts blocking on log subscription. Implementation effort: SSE + filtering ~3-5 days of focused work in log-node; JSON Feed companion ~1 day on top. Integration testing with a real consumer doubles the timeline.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
