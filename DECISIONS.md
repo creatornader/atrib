@@ -4127,3 +4127,30 @@ Filter parameters under consideration: `creator_key`, `context_id`, `event_type`
 - [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), verify-promotion gated on Pattern 3 multi-agent activation; same forcing function for option 2.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P026: Multi-creator awareness in SessionStart context surface
+
+**Source:** Fidelity audit of multi-creator context requirements in atrib's agent-facing surface, specifically the SessionStart boot-context block. The Layer 1 context surface presently shows records signed under a single creator_key. As atrib multi-agent flows ship (Pattern 3) and cross-agent verification becomes routine, SessionStart should also surface records from other creator_keys whose work is relevant to the boot-time work context, so the agent boots into a multi-signer view, not just its own past.
+
+**The decision in question:** add a "multi-creator context" block to SessionStart that surfaces (a) records from trusted-set creator_keys whose topics overlap with the boot-time work context, (b) cross-attestation records ([D052](#d052-cross-attestation-requirement-for-transaction-records)) signed alongside, (c) handoff records ([D073](#d073-handoff-event_type-byte-placeholder-adr)) involving the booting agent. The single-creator surface is sufficient until those flows produce daily-traffic volume; promoting now would surface mostly-empty blocks and add hook complexity without payoff.
+
+**Considerations.**
+
+- Current practice during the single-agent phase is effectively single-signer ([D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)'s six primitives all fire under one creator_key). The substrate is multi-signer-capable, but routine work isn't yet multi-signer.
+- The hook reads from local mirror files. Multi-creator context would require either: (i) shipping the trusted-set's records to the local mirror via subscription, (ii) on-boot fetch from log.atrib.dev filtered by creator_key set + topics. Either path depends on [P023](#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion) (subscription surface) or a stable multi-key filter API.
+- The "trusted set" is itself a design question: operator-curated allowlist? directory-anchored claims? Pattern-3 flow participants only? No standard answer until multi-agent flow shape stabilizes.
+- Topic-aware filtering (already shipped in Block 3b/3d) extends naturally to multi-creator records, same scoring function, just a wider record source.
+
+**Likely outcome (not committed):** ship this when at least one of the following is real: (i) Pattern 3 multi-agent flow active in production, (ii) [P023](#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion) subscription surface shipped, (iii) an agent regularly operates in contexts where another agent's signed history is relevant to boot-time state. Until then, the single-creator surface is canonical.
+
+**Cross-references.**
+
+- [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), the six primitives whose surfacing this would extend across creator_keys.
+- [D052](#d052-cross-attestation-requirement-for-transaction-records), cross-attestation records this would surface.
+- [D073](#d073-handoff-event_type-byte-placeholder-adr), handoff event_type placeholder; multi-creator session resume is the canonical handoff consumer case.
+- [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), verify-promotion; Pattern 3 triggers both this and that.
+- [P023](#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion), subscription surface; load-bearing dependency.
+- [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type), parent-child agent representation; multi-creator boot context is the read-side analogue.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
