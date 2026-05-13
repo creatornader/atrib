@@ -3601,6 +3601,72 @@ Per-server effect:
 
 ---
 
+## D079: The six core cognitive primitives — atrib's agent-facing surface
+
+**Date:** 2026-05-13
+
+**Context.** The atrib spec defines six normative `event_type` URIs ([§1.2.4](atrib-spec.md#124-event_type-values)): `tool_call`, `transaction`, `observation`, `directory_anchor`, `annotation`, `revision`. The first two are wrapper/middleware-emitted; the fourth is atrib-system-emitted; only `observation`, `annotation`, and `revision` are emittable by agents at decision time. Until this ADR, the agent-facing API was un-locked: `@atrib/emit` accepted any of those three event_types behind one polymorphic tool whose `content` field changed shape based on a string enum; the `@atrib/recall` family shipped five sibling tools; `@atrib/trace` and `@atrib/summarize` each shipped one tool. The surface totalled eight MCP tools with mixed semantic granularity.
+
+Two empirical findings made the polymorphic shape a real risk for the Track B Pattern 1 experimental program:
+
+1. Letta's LoCoMo benchmark ([blog](https://www.letta.com/blog/benchmarking-ai-agent-memory)) showed agent-orchestrated filesystem-shaped primitives (`open`, `grep`, `semantic_search`) outperform specialized memory APIs. Letta's stated interpretation: post-training has made frontier models effective at filesystem-shaped tool surfaces, while specialized memory APIs with non-filesystem semantics underperform on the same tasks. A polymorphic `emit({event_type, content: {shape varies}})` has zero training-data analogue; a monomorphic `annotate({annotates, importance, summary})` reads as bash-like to the agent.
+2. Anthropic's official position on the Memory Tool and Claude Code converges on the same principle: narrow tools with clear singular purpose, scaffold-introduced at session start, agent-orchestrated thereafter ([Anthropic 2026, *Effective context engineering for AI agents*](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)).
+
+The decomposition test for whether two operations are the same primitive or different: do they have a different cognitive purpose the agent reasons about distinctly, a different required argument shape, or a different effect on the substrate graph? If any of those, they are different primitives.
+
+**Decision.** The atrib agent-facing cognitive surface is **exactly six primitives**. Each is a monomorphic MCP tool with one narrow purpose, one input schema, one graph effect. Each is a verb the agent reasons about as a discrete cognitive operation. The set is not extensible without a follow-on ADR; a seventh primitive requires the boundary-drawing test above to pass.
+
+| # | Primitive | Spec event_type | Read/write | Input shape | Graph effect | One-line purpose |
+|---|---|---|---|---|---|---|
+| 1 | `atrib-emit` | `observation` (0x03) | write | `{what, why_noted?, topics?, informed_by?[]}` | New OBSERVATION node; INFORMED_BY edges if `informed_by` populated | Record the present moment: a noting, a hypothesis, a conclusion drawn from prior records. |
+| 2 | `atrib-annotate` | `annotation` (0x05) | write | `{annotates, importance, summary, topics?}` | New ANNOTATION node + ANNOTATES edge to `annotates` | Mark a past record's importance / meaning without superseding it. |
+| 3 | `atrib-revise` | `revision` (0x06) | write | `{revises, prior_position, new_position, reason}` | New REVISION node + REVISES edge to `revises` | Supersede a prior position with a stated reason. The prior remains in the graph; the revision records the change. |
+| 4 | `atrib-recall` | (read) | read | filters (`event_type`, `topics`, time range, content query, `min_importance`, etc.) | None (read-only) | Find prior records. The query-shape variants ([§3.3](atrib-spec.md)) live behind one verb. |
+| 5 | `atrib-trace` | (read) | read | `{record_hash, depth, context_id?}` | None (read-only) | Walk INFORMED_BY backward from a record to surface its causal lineage. |
+| 6 | `atrib-summarize` | (read) | read | `{context_id, max_records, focus}` | None (read-only) | Condense N records into a narrative digest. |
+
+**Each primitive must meet the bash standard:**
+
+- *One thing.* If a primitive has an enum field that changes the shape of another field, that's two primitives glued together. Each verb gets its own MCP package and Zod schema with required fields specific to that verb.
+- *Narrow input.* `atrib-annotate` REQUIRES `annotates`; the schema rejects a call without it. `atrib-revise` REQUIRES `revises`. The agent cannot misuse one for the other.
+- *Composable output.* Write primitives return `record_hash`; read primitives return record arrays. The output of `atrib-recall` is the input of `atrib-trace` and `atrib-annotate`. The output of `atrib-trace` is the input of `atrib-summarize`.
+- *Discoverable.* Each primitive lives at `@atrib/<verb>` on npm with a tightly-scoped README. Future tools learn the verbs by reading six READMEs, not one polymorphic dispatch table.
+- *Stable.* The set is **closed at six** for atrib v1. Extension event_types ([D035](#d035-extensible-event_type-vocabulary-via-uri-typing)) may be added by consumers in their own namespaces but DO NOT add new primitives to atrib's normative agent surface; consumers wanting a new verb mint their own MCP package.
+
+**What is NOT a primitive (by deliberate choice):**
+
+- `tool_call` and `transaction` event_types: emitted by middleware / SDK, not by the agent at decision time. The agent doesn't reach for a tool to record these; the wrapper handles it.
+- `directory_anchor`: emitted by atrib-system directory services. Not an agent verb.
+- "decision" as a distinct primitive: the spec carries no `decision` event_type. The cognitive operation called "decision" in colloquial usage is an `observation` with structured `informed_by` (the agent declares which prior records shaped the conclusion). One primitive (`atrib-emit`), two usage patterns (empty `informed_by` = perception; populated `informed_by` = conclusion). Conflating these into separate primitives would multiply verbs without a graph-semantic justification.
+- Polymorphic dispatch (one tool, switch on event_type): rejected for the reasons above (Letta finding + bash-standard).
+
+**Alternatives considered.**
+
+- *Keep the polymorphic `@atrib/emit` as the sole write primitive.* Rejected. One tool with three content shapes selected by an enum is harder for the agent to reason about than three tools each with one fixed shape. The Letta finding and bash analogy both push against polymorphism at the agent surface.
+- *Ship eight primitives (split `atrib-recall` into the five sibling tools).* Rejected for the agent surface. The recall family's five physical tools (`recall_my_attribution_history`, `recall_walk`, `recall_annotations`, `recall_revisions`, `recall_by_content`) are query-shape variants of one verb the agent reasons about as "find prior records". Letta's leaderboard finding ([Letta leaderboard blog](https://www.letta.com/blog/letta-leaderboard)) is that weaker models over-use specialized memory tools when fewer tools are needed; collapsing the recall family to one verb is the lower-tool-count direction. The five physical tools may consolidate behind a unified `@atrib/recall` MCP in a future ADR; until then, the scaffold teaches them as one verb with shape variants.
+- *Ship seven primitives (split `observation` into `atrib-observe` + `atrib-decide`).* Rejected. The cognitive distinction between passive noticing and active concluding is captured by `informed_by` being empty vs. populated, not by separate event_types. The spec made this choice ([D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) explicitly distinguishes annotation from observation by the presence of a referent, NOT by activity-level); adding a `decision` event_type to the spec just to split the primitive would be design churn without a graph-semantic justification.
+- *Ship five primitives (collapse `annotate` and `revise` back into `emit`).* Rejected. annotation and revision have **required** referent fields (`annotates`, `revises`) and add **different edge types** to the graph (ANNOTATES vs REVISES per [§3.2.4](atrib-spec.md#324-edge-derivation-rules)). They fail the boundary-drawing test for "same primitive": different required args AND different graph effects.
+
+**Consequences.**
+
+- Paired-arm experimental designs that test consume-side vs producer-side surfaces (e.g. Track B's Pattern 1) use these six primitives as the agent-facing tool set; the canonical control vs treatment arm differentiator is the **read trio** (`recall`, `trace`, `summarize`) — control mounts the three write verbs, treatment mounts all six.
+- Two new MCP packages ship in the atrib v0.x release cycle: `@atrib/annotate` and `@atrib/revise`. Each is a thin wrapper around `@atrib/mcp`'s signing primitives with a narrow Zod schema that enforces the required referent field. The polymorphic `@atrib/emit` remains published for backward-compatibility but the agent-facing scaffold steers `event_type=annotation/revision` calls toward the dedicated tools.
+- The `@atrib/recall` family's five sibling tools are conceptually consolidated under one verb; a future ADR may consolidate them physically.
+- Documentation in atrib's CLAUDE.md, the spec's [§7](atrib-spec.md#7-harness-integration-patterns), and each MCP package's README references this ADR as the canonical statement of the agent-facing surface. Anything that adds a verb or splits an existing one is a spec-level change subject to [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary).
+- Future primitives (a seventh, eighth, etc.) require: (a) a new spec event_type promoted from extension namespace per [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary), (b) passing the boundary-drawing test (different cognitive purpose, different required args, different graph effect), and (c) a follow-on ADR that updates this surface.
+
+**Cross-references.**
+
+- [§1.2.4](atrib-spec.md#124-event_type-values) — normative event_type URI set; this ADR commits to which of those are agent-facing primitives.
+- [§3.2.4](atrib-spec.md#324-edge-derivation-rules) — graph edge derivation rules; ANNOTATES and REVISES edges are what make `annotate` and `revise` distinct from `emit`.
+- [D035](#d035-extensible-event_type-vocabulary-via-uri-typing) — extensible event_type vocabulary; extension event_types do not add primitives to atrib's normative surface.
+- [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) — bar for promoting extension to normative; any seventh primitive starts here.
+- [D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) — annotation event_type promotion; underlies `atrib-annotate`.
+- [D059](#d059-promote-revision-to-atrib-normative-event_type-byte-0x06) — revision event_type promotion; underlies `atrib-revise`.
+- [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default) — env-honoring across MCP servers; the six primitives inherit this contract.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
