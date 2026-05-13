@@ -1,7 +1,7 @@
 {
   "name": "@atrib/revise",
   "version": "0.2.0",
-  "description": "MCP server for atrib. Cognitive primitive #3 of D079: supersedes a prior position with a stated reason. Specialized form of @atrib/emit that narrows the schema to the revision event_type (spec §1.2.9 / D059).",
+  "description": "MCP server for atrib. Lets agents supersede a prior signed position with a stated reason. Adds a REVISES graph edge so the contradiction is a first-class node rather than a silent edit.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",

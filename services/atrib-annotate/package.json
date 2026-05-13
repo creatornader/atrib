@@ -1,7 +1,7 @@
 {
   "name": "@atrib/annotate",
   "version": "0.2.0",
-  "description": "MCP server for atrib. Cognitive primitive #2 of D079: marks a past record's importance and meaning. Specialized form of @atrib/emit that narrows the schema to the annotation event_type (spec §1.2.7 / D058).",
+  "description": "MCP server for atrib. Lets agents mark a past record's importance and meaning. Adds an ANNOTATES graph edge so recall surfaces weighted annotations ahead of flat scans.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
