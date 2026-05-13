@@ -3698,6 +3698,77 @@ The six primitives correspond to MCP packages, but the packages are not flat-equ
 - [D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) — annotation event_type promotion; underlies `atrib-annotate`.
 - [D059](#d059-promote-revision-to-atrib-normative-event_type-byte-0x06) — revision event_type promotion; underlies `atrib-revise`.
 - [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default) — env-honoring across MCP servers; the six primitives inherit this contract.
+- [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion) — primitive lifecycle (extension-first, promotion-via-gates); how the six grows to seven when load-bearing scope arrives.
+
+---
+
+## D080: Primitive lifecycle — extensions first, dedicated MCPs upon promotion
+
+**Date:** 2026-05-13
+
+**Context.** [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) locked the atrib agent-facing surface at six primitives (`atrib-emit`, `atrib-annotate`, `atrib-revise`, `atrib-recall`, `atrib-trace`, `atrib-summarize`) and committed to "closed at six for v1". But the project will continue to discover operations that LOOK primitive-like at varying capability levels: some are full cognitive verbs that deserve their own tool; others are query-shape variants or strength settings on an existing primitive; some are theoretical until a load-bearing use case materializes. Without a stated lifecycle policy, every such operation triggers an ad-hoc "is this a new primitive?" debate, and the answer drifts session-to-session.
+
+The worked-example tension that triggered this ADR was `verify`. `@atrib/verify` exists as a published package and provides signature + canonical-form + chain + log-inclusion verification. Should it be cognitive primitive #7? Three single-agent use cases stand out: (1) local-mirror gap fill — fetch a record_hash from log.atrib.dev when local mirror lacks it; (2) integrity audit — re-verify recent records against the public log's fresh root; (3) external record_hash relay — a user pastes a hash, agent should fetch + verify. Cases 1 and 2 are single-agent scope; case 3 trends multi-agent.
+
+The boundary-drawing test in D079 (different cognitive purpose AND different required args AND different graph effect) is necessary but not sufficient. An operation that PASSES the boundary test might still belong as an extension on an existing primitive if its use case is rare, derivative, or theoretical. The boundary test answers "could this be a primitive?". The lifecycle policy answers "should it be one NOW?".
+
+**Decision.** Cognitive operations that pass the D079 boundary test enter the agent-facing surface in one of two postures:
+
+1. **Extension** — added as an optional parameter or shape variant on the closest existing primitive. The agent's tool surface count does not grow. Examples: `recall.origin: 'local' | 'remote' | 'both'`, `recall.verify_strength: 'signature' | 'inclusion'`. The primitive's narrow purpose is preserved; the variant is a setting on the same verb.
+
+2. **Dedicated primitive (new MCP)** — added as a new MCP package and a new agent-facing tool, with D079 amended to list it. The surface grows by one. Reserved for operations that are load-bearing in production and that agents reach for as a discrete mental operation.
+
+**The default posture is extension.** Promotion to dedicated primitive requires ALL of the following acceptance gates:
+
+| # | Gate | Why it gates |
+|---|---|---|
+| 1 | **Load-bearing use case in production.** Not theoretical. There is at least one shipped agent flow where this operation is called regularly and where its absence would degrade the agent's behavior. | Avoids surface bloat from speculative primitives. The boundary test alone admits too many candidates. |
+| 2 | **Spec event_type either exists or is being promoted.** For write operations: the new primitive corresponds to a spec event_type. For read operations: the operation has a graph effect or read pattern documented in [§3](atrib-spec.md#3-graph-query-interface) that the existing read trio cannot express cleanly. | Anchors the agent-facing surface to atrib's normative protocol. Primitives without spec backing are app-layer features, not protocol-layer ones. |
+| 3 | **Cognitive distinctness in agent reasoning.** When agents (or operators reading agent transcripts) describe what the agent did, the operation has its own name in natural language — not "a kind of recall" or "a flavor of emit". | The bash-standard test from D079. Each primitive earns its name by being how the agent thinks about the operation. |
+| 4 | **D079 amendment + new MCP package shipped together.** Promotion is not adopted piecemeal; the ADR text, the package source, and the changeset for the package version arrive in one commit. | Keeps the canonical-decision record and the implementation in lockstep. Without this, the surface is documented in one place and shipped in another. |
+
+When some gates are met but not all, the operation lives as an **extension** on the closest existing primitive. The extension is documented in D079's "Recall family shape variants" subsection (or the equivalent for the host primitive) and in the relevant MCP package's README. The extension MAY be the first step in the operation's eventual promotion to a dedicated primitive; staying as an extension is also a valid permanent posture.
+
+**Worked example: `verify`.**
+
+- Gate 1 (load-bearing use case): NOT MET in current single-agent scope. The three single-agent use cases (mirror gap, integrity audit, external relay) are real but rare; recall-with-`origin: 'remote'` covers them. They become load-bearing in Pattern 3 multi-agent scope, where agents routinely receive record_hashes from counterparties and must verify before acting.
+- Gate 2 (spec backing): PARTIAL. `@atrib/verify` package exists and the verification operation is normative ([§1.4](atrib-spec.md#14-signing-and-verification), [§2.6](atrib-spec.md)). But it produces no graph effect; it's a read-side property of records that recall already exercises internally.
+- Gate 3 (cognitive distinctness): WEAK in single-agent ("verify my own record" reads as a redundant recall); STRONG in multi-agent ("verify this claim from agent B" reads as a discrete cognitive operation distinct from looking up your own past).
+- Gate 4 (paired shipping): N/A — the extension is the current posture.
+
+**Current posture for `verify`**: extension on `atrib-recall` via two optional parameters — `origin: 'local' | 'remote' | 'both'` and `verify_strength: 'signature' | 'inclusion'`. Local mirror gap-fill, integrity audit, and external-hash relay all collapse to recall calls with appropriate origin + strength.
+
+**Promotion trigger for `verify`**: gates 1 and 3 strengthen to "MET" when Pattern 3 multi-agent flows ship and agents-receiving-counterparty-claims becomes a routine path. At that point: write the D079 amendment promoting verify to primitive #7, ship `@atrib/verify-mcp` as a thin wrapper around the existing `@atrib/verify` package, add to SKILL.md, and the surface grows to seven. Recorded in pending decisions as [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation).
+
+**Alternatives considered.**
+
+- *Open the surface; admit any operation that passes the boundary test.* Rejected. The Letta finding cited in D079 (agent selection accuracy degrades past ~5-7 tools) makes surface bloat a real cost. Without acceptance gates, the primitive count drifts upward over project history without a forcing function for restraint.
+- *Close the surface permanently at six; no future primitives.* Rejected. The cognitive operations atrib will need to express will grow as multi-agent flows, payment protocols, and new event_types ship. A hard cap at six would force eventual workarounds (parameter-stuffing, polymorphic dispatch) that D079 explicitly rejected for the writes.
+- *Use the spec event_type promotion bar ([D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)) as the sole gate.* Rejected. Spec event_type promotion is a record-layer commitment (what the validator accepts, what the graph derivation rules cover). Cognitive primitive promotion is an agent-surface commitment (what the agent reaches for as a discrete tool). They overlap (primitive #2 atrib-annotate corresponds to event_type promotion D058), but they are not identical: read primitives like `recall` and `trace` have no event_type; capability-only operations like `verify` have spec backing but no event_type. Each layer needs its own promotion bar.
+
+**Consequences.**
+
+- The agent-facing surface count grows by zero unless a candidate operation passes all four gates. Until then, candidates live as extensions on existing primitives or are deferred entirely.
+- D079's "closed at six for v1" remains intact in practice. The surface CAN grow but the gates are deliberately conservative.
+- The `verify` operation has a documented current home (recall extensions) and a documented promotion path (Pattern 3 multi-agent activation). The ad-hoc "should this be a primitive?" debate is resolved.
+- Future primitive candidates (potential names that have appeared in discussion: `subscribe`, `notify`, `cite`, `propose`, `delegate`) all enter through this lifecycle. None are added without an ADR.
+
+**Substrate vs orchestration: where this ADR DOESN'T apply.**
+
+atrib's primitives are all substrate operations — they produce signed records (write side) or query the resulting graph (read side). Operations that are external side-effects with NO graph effect are orchestration-layer concerns, not candidates for atrib primitives. They are captured INDIRECTLY by the wrapper's auto-signing of `tool_call` records when the agent invokes the relevant tool, but they do not warrant dedicated atrib MCPs. Examples that DO NOT meet this ADR's gates regardless of use-case load:
+
+- **`notify`** (ping operator via push/slack/email/etc.) — produces no signed record of its own; the act-of-notifying is captured via auto-signed `tool_call` when the agent invokes the notification tool. The channel itself is below atrib's layer.
+- **`delegate`** (hand off work to another agent) — produces no graph node distinct from the tool_calls it triggers; multi-agent coordination has its own protocols (A2A, MCP composition) and atrib captures it via the resulting signed records.
+- **`wait` / `sleep` / `commit_payment`** — orchestration mechanics; substrate records the agent's intention via tool_call but the operations themselves are not substrate verbs.
+
+The test: if the candidate operation would land in the graph as anything other than a `tool_call` auto-emission, it's a substrate primitive candidate (subject to this ADR's gates). If it would only land as a `tool_call`, it's orchestration.
+
+**Cross-references.**
+
+- [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) — the six-primitive surface this ADR's lifecycle governs.
+- [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) — record-layer (spec event_type) promotion bar; complementary to but distinct from this ADR's surface-layer bar.
+- [§1.4](atrib-spec.md#14-signing-and-verification) + [§2.6](atrib-spec.md) — verification as a normative protocol operation; the substrate atrib-verify's package draws on.
+- [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation) — pending decision for verify's eventual promotion.
 
 ---
 
@@ -3964,5 +4035,22 @@ The `extractor_classification` field is redundant for records where event_type i
 - Alternative rejected: rely on existing benchmarks. None of them measure substrate-impact in a way that's robust to contamination.
 
 **Likely outcome (not committed):** accept when E6 ships. Approximately 2-3 weeks of focused work for the first quarterly snapshot.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P022: Promote verify to cognitive primitive #7 on Pattern 3 multi-agent activation
+
+**Source:** [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) (six-primitive surface, closed at six for v1) plus [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion) (extension-first, promotion-via-gates). Verify currently lives as a planned extension on `atrib-recall` (`origin: 'local' | 'remote' | 'both'`, `verify_strength: 'signature' | 'inclusion'`). The single-agent use cases (local-mirror gap fill, integrity audit, external-hash relay) are covered by the recall extension. Promotion to dedicated primitive is deferred until Pattern 3 multi-agent scope makes it load-bearing.
+
+**The decision in question:** ship `@atrib/verify-mcp` as cognitive primitive #7, amend D079 to include it in the surface, update SKILL.md and the SessionStart hook. Triggered when D080's acceptance gates 1 (load-bearing use case) and 3 (cognitive distinctness) both strengthen to MET via Pattern 3 multi-agent flows.
+
+**Considerations.**
+- The capability already exists in `@atrib/verify` package + `atrib verify` CLI; promotion is a matter of MCP-tool wrapping plus surface-documentation amendments, not new protocol work.
+- Multi-agent flows where agent B receives a record_hash from agent A through a structured protocol (A2A, MCP composition) are the canonical use case; verification before action is required for trust assessment.
+- Wraps the existing `@atrib/verify` package; no new spec event_type needed. Read-only operation, no graph effect distinct from recall's existing verification.
+- D080's gate 4 requires the D079 amendment + new MCP package + changeset to ship together.
+
+**Likely outcome (not committed):** accept when Pattern 3 multi-agent thesis activation begins. Approximately 1-2 days of focused work (thin MCP wrapper + ADR amendment + scaffold updates).
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
