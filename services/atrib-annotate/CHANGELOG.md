@@ -1,0 +1,12 @@
+# @atrib/annotate
+
+## 0.2.0
+
+### Minor Changes
+
+- 29641cb: [D079](../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface): ship `@atrib/annotate` and `@atrib/revise` as the dedicated MCP packages for atrib's cognitive primitives #2 (annotation) and #3 (revision). Each exposes one monomorphic MCP tool with a narrow Zod schema enforcing the spec's required fields per the annotation / revision event_types. Both packages depend on `@atrib/emit` for the canonical signing + chain composition + JSONL mirror pipeline; a verifier MUST NOT distinguish records signed via these tools from those signed via `@atrib/emit`'s polymorphic surface. `@atrib/emit` adds public exports for `handleEmit`, `resolveKey`, and the input/output types so downstream specialized writers can wrap the canonical pipeline cleanly.
+
+### Patch Changes
+
+- Updated dependencies [29641cb]
+  - @atrib/emit@0.8.0

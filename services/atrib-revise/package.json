@@ -1,6 +1,6 @@
 {
   "name": "@atrib/revise",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for atrib. Cognitive primitive #3 of D079: supersedes a prior position with a stated reason. Specialized form of @atrib/emit that narrows the schema to the revision event_type (spec §1.2.9 / D059).",
   "license": "Apache-2.0",
   "type": "module",
