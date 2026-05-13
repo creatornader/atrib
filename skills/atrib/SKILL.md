@@ -59,7 +59,7 @@ Three of these (emit, annotate, revise) are **writes**: they sign records. Three
 | Capability | Mechanism | How to verify it's operational |
 |---|---|---|
 | Auto-sign every wrapped MCP tool call | `@atrib/mcp` middleware composed by an MCP wrapper | Wrapped MCP tools available in the current process |
-| Six cognitive primitives ([D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)) | Six verbs across nine MCP tools: `atrib-emit`, `atrib-annotate`, `atrib-revise` (three writes, one tool each) + `atrib-recall` family (one verb, five sibling tools: `recall_my_attribution_history`, `recall_by_content`, `recall_walk`, `recall_annotations`, `recall_revisions`) + `atrib-trace`, `atrib-summarize` (two more reads, one tool each) | All nine MCP tools present in the current process |
+| Six cognitive primitives ([D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)) | Six verbs across ten MCP tools: `atrib-emit`, `atrib-annotate`, `atrib-revise` (three writes, one tool each) + `atrib-recall` family (one verb, five sibling tools: `recall_my_attribution_history`, `recall_by_content`, `recall_walk`, `recall_annotations`, `recall_revisions`) + `atrib-trace`, `atrib-summarize` (two more reads, one tool each) | All ten MCP tools present in the current process |
 | Persist signed records to local mirrors | `~/.atrib/records/*.jsonl` (per-producer files) | `ls ~/.atrib/records/` |
 | Public log + browsable explorer | `https://log.atrib.dev/v1/stats` + `explore.atrib.dev` | `curl -s https://log.atrib.dev/v1/stats` |
 | Identity → key binding | `@atrib/directory` + `atrib publish-claim` CLI | `curl -s https://directory.atrib.dev/v6/lookup/<creator_key>` |
