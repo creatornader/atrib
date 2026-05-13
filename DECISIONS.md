@@ -3342,6 +3342,7 @@ Until that ADR lands, producers requiring handoff semantics SHOULD emit records 
 - [§1.2.4](atrib-spec.md#124-event_type-values) (event_type URI table this ADR will eventually amend)
 - [§2.3.1](atrib-spec.md#231-entry-serialization) (byte mapping table this ADR will eventually amend)
 - [§9](atrib-spec.md#9-runtime-integration-patterns) (runtime integration patterns; multi-agent harnesses surface the handoff use case)
+- [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type), parent-child agent representation; layered design pairs the cheap producer-side `informed_by`-threading baseline with this ADR's eventual substantive promotion as option 2.
 
 ---
 

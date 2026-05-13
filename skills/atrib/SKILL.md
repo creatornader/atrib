@@ -137,7 +137,14 @@ The decision tree at each moment of substantive work:
 - Making trivial edits (typos, format-only changes, code style sweeps).
 - Doing pure computation (rendering, parsing, sweeping a known-good rule across many files).
 
-The default discipline: per-MCP-tool-call signing happens automatically via the wrapper for tools served through wrapped MCPs. **Claude Code builtin tools (Read, Edit, Bash, Write, Grep, Glob) bypass MCP entirely and are NOT auto-signed.** This is the single biggest practice trap. If your work consists mostly of builtin calls, code edits, file reads, bash, atrib will be silent on you UNLESS you explicitly emit.
+The default discipline depends on which auto-signing layers your host has wired:
+
+- **MCP-wrapper layer (canonical, host-agnostic).** Per-MCP-tool-call signing happens automatically via the `@atrib/mcp` middleware for any tool served through a wrapped MCP. Every host that runs `@atrib/mcp-wrap` (or equivalent) gets this for free.
+- **Host-native-tool layer (optional, host-specific).** Some hosts also auto-sign their native tool surface (the host's `Bash` / `Edit` / `Write` / `MultiEdit` / `Read` / `Glob` / `Grep` / `WebFetch` / `WebSearch` / `Task` / etc.) via a `PostToolUse`-style hook that signs each tool call as a `tool_call` record with verb-based importance grading. Whether this layer is wired is up to the host operator; the canonical reference implementation for Claude Code lives in `~/.claude/scripts/atrib-tool-signer-hook.mjs`.
+
+Verify which layers are live: read the SessionStart output (it surfaces signed-action counts split by producer). If only the MCP wrapper is wired, builtin-tool work is silent and you MUST emit explicitly to leave a trail. If both layers are wired, builtin tools are auto-signed at low/medium/high importance per verb + path-pattern + exit-code heuristics, and you only reach for the cognitive primitives at decision moments (not for every mechanical edit).
+
+Either way, the cognitive primitives (`atrib-emit` / `atrib-annotate` / `atrib-revise`) are for the WHY (your reasoning, your conclusions, your importance marks). The auto-signing layers are for the WHAT (which tool ran, against which path, with what result).
 
 ## Pre-write checklist (10 seconds before each emit / annotate / revise)
 
