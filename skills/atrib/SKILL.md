@@ -89,35 +89,59 @@ The most common failure mode is forgetting to look. Before you do anything else 
 
 Take ~30 seconds. The result of this ritual is a baseline you carry through the session.
 
-## When to invoke `mcp__atrib-emit__emit`
+## When to reach for each primitive
 
-YES, sign explicitly when:
+The decision tree at each moment of substantive work:
 
-- Making a consequential decision (architecture choice, plan revision, mutating action whose effect matters across time)
-- Making a claim you'll be expected to defend, cite, or revise later
-- Noticing something a future-you would want to find again
-- Encountering a contradiction between current intent and a past record (sign a `revision`, not a silent override)
-- Beginning work that builds on prior sessions (sign an observation declaring continuity)
-- Expressing confidence or uncertainty that should be findable later
-- Discovering a session-spanning pattern (annotation with `importance: high` and topics)
+**`atrib-emit`** (RECORD): you're noticing or concluding something the present moment matters for. Use it when:
+- Making a consequential decision (architecture choice, plan revision, mutating action that matters across time).
+- Making a claim you'll be expected to defend, cite, or revise later.
+- Noticing something a future-you would want to find again.
+- Beginning work that builds on prior sessions (sign an observation declaring continuity).
+- Expressing confidence or uncertainty that should be findable later.
 
-NO, skip explicit signing when:
+**`atrib-annotate`** (MARK): you're looking at a past record and realizing it matters more than it looked at the time. Use it when:
+- A past observation is load-bearing for the session you're in. Annotate with `importance: high` or `critical` so recall surfaces it ahead of flat scans.
+- You want to tag a record with topics future-self will search by.
+- The original `summary` field on a record undersold what it means in retrospect.
 
-- Reading docs or grepping for known strings
-- Running mechanical operations (tests, type-checks, formatters)
-- Making trivial edits (typos, format-only changes, code style sweeps)
-- Doing pure computation (rendering, parsing, sweeping a known-good rule across many files)
+**`atrib-revise`** (CHANGE-MIND): you now hold a position incompatible with a past claim of yours. Use it when:
+- Current evidence invalidates a prior conclusion. Revise the prior record with a stated `reason`.
+- A past commitment turned out wrong; the substrate stays honest only if the contradiction is a first-class node, not a silent overwrite.
+- Cross-session: catching up on past-self's records and disagreeing with one, revise, don't ignore.
+
+**`atrib-recall`** (LOOK-UP): you want to find prior records. Use it when:
+- Starting any consequential decision: "have I done this before? what shaped it?"
+- Searching for records by content, topic, time window, or importance.
+- Resolving a `record_hash` reference into the actual record body and verification metadata.
+
+**`atrib-trace`** (LINEAGE): you have a record and want to walk its causal chain. Use it when:
+- "How did we get here?", walk `informed_by` backward from the current record.
+- Debugging cross-session causality: which prior records led to a wrong conclusion?
+- Surfacing the reasoning chain when defending a claim to another agent or operator.
+
+**`atrib-summarize`** (DIGEST): you have many records and need a narrative. Use it when:
+- Resuming a long context_id with too many records to read individually.
+- Producing a high-level summary across a session for a handoff or commit message.
+- Reading another agent's session-graph at a glance before composing on top of it.
+
+### When NOT to invoke any of them
+
+- Reading docs or grepping for known strings (use `grep` or `Read` directly).
+- Running mechanical operations (tests, type-checks, formatters).
+- Making trivial edits (typos, format-only changes, code style sweeps).
+- Doing pure computation (rendering, parsing, sweeping a known-good rule across many files).
 
 The default discipline: per-MCP-tool-call signing happens automatically via the wrapper for tools served through wrapped MCPs. **Claude Code builtin tools (Read, Edit, Bash, Write, Grep, Glob) bypass MCP entirely and are NOT auto-signed.** This is the single biggest practice trap. If your work consists mostly of builtin calls, code edits, file reads, bash, atrib will be silent on you UNLESS you explicitly emit.
 
-## Pre-emit checklist (10 seconds before each emit)
+## Pre-write checklist (10 seconds before each emit / annotate / revise)
 
-Before calling `mcp__atrib-emit__emit`, ask:
+Before calling any write primitive:
 
-1. **Why am I signing this?** One-line answer. ("Future-me will need to find when I made the [§8.2](../../atrib-spec.md#82-opaque-name-posture) ambiguity decision.")
-2. **Did anything I already signed inform this?** Query `recall` if unsure. Identify the SUBSET of records that ACTUALLY shaped this decision; that's `informed_by`. Not "everything I happened to query."
-3. **Does this contradict a past claim of mine?** If yes, this is a `revision`, not an `observation`.
-4. **What importance signal does future-me need?** If this is one of the load-bearing records of the session, follow the emit with an `annotation` referencing it.
+1. **Why am I signing this?** One-line answer. ("Future-me will need to find when I made the [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture) ambiguity decision.")
+2. **Which primitive fits?** Present-moment noting → `atrib-emit`. Marking a past record's importance → `atrib-annotate`. Superseding a prior position → `atrib-revise`.
+3. **Did anything I already signed inform this?** Query `atrib-recall` if unsure. Identify the SUBSET of records that ACTUALLY shaped this; that's `informed_by`. Not "everything I happened to query."
+4. **What importance signal does future-me need?** If this is one of the load-bearing records of the session, follow the emit with an `atrib-annotate` referencing it with `importance: high` or `critical`.
 
 If you can't answer #1 in one line, you don't need to sign yet.
 
@@ -126,7 +150,8 @@ If you can't answer #1 in one line, you don't need to sign yet.
 ### Pattern 1: load-bearing observation + annotation
 
 ```typescript
-// Step 1: emit the observation describing what happened
+// Step 1: emit the observation describing what happened. Use atrib-emit for
+// present-moment notings and conclusions.
 const obs = await mcp__atrib_emit__emit({
   event_type: "https://atrib.dev/v1/types/observation",
   content: {
@@ -137,15 +162,14 @@ const obs = await mcp__atrib_emit__emit({
 })
 // → { record_hash: "sha256:abc123...", context_id: "...", warnings: [...] }
 
-// Step 2: annotate it as critical-importance for future retrieval
-await mcp__atrib_emit__emit({
-  event_type: "https://atrib.dev/v1/types/annotation",
-  content: {
-    annotates: obs.record_hash,
-    importance: "critical",
-    summary: "If you're investigating §8.2 form detection later, read this one.",
-    topics: ["D061", "§8.2"]
-  },
+// Step 2: mark it as critical-importance. Use atrib-annotate (D079 primitive
+// #2) with the dedicated tool; its narrow schema requires annotates +
+// importance + summary, preventing accidental polymorphic misuse.
+await mcp__atrib_annotate__atrib_annotate({
+  annotates: obs.record_hash,
+  importance: "critical",
+  summary: "If you're investigating §8.2 form detection later, read this one.",
+  topics: ["D061", "§8.2"],
   informed_by: [obs.record_hash]
 })
 ```
@@ -153,17 +177,18 @@ await mcp__atrib_emit__emit({
 ### Pattern 2: revision (current claim contradicts a past one)
 
 ```typescript
-// Discovered a prior claim was wrong after deeper investigation.
-await mcp__atrib_emit__emit({
-  event_type: "https://atrib.dev/v1/types/revision",
-  content: {
-    revises: "sha256:abc123…",
-    prior_position: "X is not built / does not exist",
-    new_position: "X IS operational; my earlier search was incomplete and missed the actual location.",
-    reason: "Cross-checked authoritative project docs; corrected framing."
-  },
+// Discovered a prior claim was wrong after deeper investigation. Use
+// atrib-revise (D079 primitive #3); its narrow schema requires revises +
+// prior_position + new_position + reason.
+await mcp__atrib_revise__atrib_revise({
+  revises: "sha256:abc123…",
+  prior_position: "X is not built / does not exist",
+  new_position: "X IS operational; my earlier search was incomplete and missed the actual location.",
+  reason: "Cross-checked authoritative project docs; corrected framing.",
   informed_by: ["sha256:abc123…"]
 })
+// The prior record remains immutable in the graph per spec §1.6; this
+// revision adds a REVISES edge that supersedes it.
 ```
 
 ### Pattern 3: cross-session continuity (provenance_token on genesis record)
@@ -325,8 +350,8 @@ That's the loop. The graph of YOUR signed history is your working memory. Use it
 
 These are honest gaps in the verification stack and producer-side cognitive surface. Be aware of which layers are operational vs warning-only vs not-yet-implemented:
 
-- **Operational**: Ed25519 signature, JCS canonical form, chain integrity within a context_id, log inclusion proof verification (when fetched), [§6.7](../../atrib-spec.md#67-capability-declarations) capability_check, [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) cross_attestation, [§8.2](../../atrib-spec.md#82-opaque-name-posture)/[§8.3](../../atrib-spec.md#83-salted-commitment-posture)/[§8.4](../../atrib-spec.md#84-coarsened-timing-posture) posture detection.
-- **Warning-only (per `project_phase3_followup_gaps`)**: [§6.3](../../atrib-spec.md#63-verifier-consultation-algorithm) verifier-consultation steps 1, 3, 4, 5, 7 surface explicit `IMPLEMENTATION-GAP` warnings rather than silently passing. These cover anchor freshness, witness coverage, directory checkpoint signature, append-only consistency, and AKD lookup proof validation.
-- **Not yet implemented**: cross-log replication / equivocation detection ([D050](../../DECISIONS.md#d050-cross-log-replication-for-equivocation-defense) / [§2.11](../../atrib-spec.md#211-cross-log-replication)), HKDF sub-agent identity derivation, periodic directory anchoring, emergency-key compromise path, `atrib-summarize` and `atrib-trace` MCP tools (would close the consumer side of the cognitive loop).
+- **Operational**: Ed25519 signature, JCS canonical form, chain integrity within a context_id, log inclusion proof verification (when fetched), [§6.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#67-capability-declarations) capability_check, [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) cross_attestation, [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture)/[§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture)/[§8.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#84-coarsened-timing-posture) posture detection. All six cognitive primitives ([D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)) shipped: `atrib-emit@0.8.0`, `atrib-annotate@0.2.0`, `atrib-revise@0.2.0`, `atrib-recall@0.6.0`, `atrib-trace@0.3.0`, `atrib-summarize@0.3.0`.
+- **Warning-only**: [§6.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#63-verifier-consultation-algorithm) verifier-consultation steps 1, 3, 4, 5, 7 surface explicit `IMPLEMENTATION-GAP` warnings rather than silently passing. These cover anchor freshness, witness coverage, directory checkpoint signature, append-only consistency, and AKD lookup proof validation.
+- **Not yet implemented**: cross-log replication / equivocation detection ([D050](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d050-cross-log-replication-for-equivocation-defense) / [§2.11](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#211-cross-log-replication)), HKDF sub-agent identity derivation, periodic directory anchoring, emergency-key compromise path. `@atrib/verify` exists as a package and CLI but is not yet exposed as an agent-facing primitive; this is deferred until multi-agent flows make it load-bearing per [P022](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation). A real-time subscription surface for `log.atrib.dev` (SSE / JSON Feed) is queued at [P023](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion); an embedded spec viewer at `atrib.dev` is queued at [P024](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p024-embedded-spec-viewer-at-atribdev-auto-updated-from-spec-source).
 
-The skill is the practice; the substrate is the mechanism. Both evolve. When this skill version (v0.2.0) feels stale, rewrite it again.
+The skill is the practice; the substrate is the mechanism. Both evolve. When this skill version (v0.3.0) feels stale, rewrite it again.
