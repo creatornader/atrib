@@ -302,6 +302,32 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
     )
   }
 
+  // ATRIB_PARENT_RECORD_HASH env-var seeding (P025 option 1, producer-side
+  // parent-child causality threading). When a parent producer spawns a child
+  // producer (multi-process subagent, cross-process delegate, framework worker
+  // node, etc.) and writes its parent's record_hash into this env, the child's
+  // first emit auto-prepends it to informed_by. Uses the existing §1.2.5
+  // primitive, no spec change. Only valid sha256:<64-hex> values are honored;
+  // anything else is silently ignored. Caller-passed informed_by entries take
+  // precedence in ordering (env-seed prepends, dedupe preserves first occurrence);
+  // sign.ts then sorts lexicographically per §1.2.5 before the canonical-bytes
+  // hash so the wire-level shape is order-independent. Limitations: single-
+  // process hosts where parent and child share env (e.g., Claude Code's Task
+  // tool) cannot use this convention naively because the parent's PostToolUse
+  // signature fires after the child has already emitted; those cases need
+  // retroactive annotation or option-2 promotion. See atrib/DECISIONS.md#p025.
+  const PARENT_HASH_PATTERN = /^sha256:[0-9a-f]{64}$/
+  const envParentHash = process.env['ATRIB_PARENT_RECORD_HASH']
+  const validParentHash =
+    typeof envParentHash === 'string' && PARENT_HASH_PATTERN.test(envParentHash)
+      ? envParentHash
+      : undefined
+  const effectiveInformedBy = validParentHash
+    ? Array.from(
+        new Set([validParentHash, ...(input.informed_by ?? [])]),
+      )
+    : input.informed_by
+
   let record
   try {
     record = await buildAndSignEmitRecord({
@@ -310,7 +336,7 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
       contextId,
       chainRoot,
       content: input.content,
-      informedBy: input.informed_by,
+      informedBy: effectiveInformedBy,
       provenanceToken: input.provenance_token,
       annotates: input.annotates,
       revises: input.revises,
