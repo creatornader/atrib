@@ -4154,3 +4154,60 @@ Filter parameters under consideration: `creator_key`, `context_id`, `event_type`
 - [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type) — parent-child agent representation; multi-creator boot context is the read-side analogue.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P027: Deployment architecture for host-side hook helpers — symlink-from-repo vs published CLI
+
+**Source:** Substrate-signing outage caused by a host-side hook helper losing access to its npm dependencies when the user-level symlink got redirected into a git worktree directory without a sibling `node_modules`. The outage was silent (the hook's stdout was 0; the detached helper crashed with `ERR_MODULE_NOT_FOUND` against `@modelcontextprotocol/sdk` and produced no records). The proximate fix was an installer guardrail refusing worktree paths; the underlying architecture coupling remains.
+
+The structural shape under Position 1: hook source files live in a deployment-side repo at `tools/claude-hooks/*.mjs`; the host points `~/.claude/scripts/<name>.mjs` symlinks at them; Node resolves their imports by walking up from each file's realpath looking for `node_modules`. Three implicit assumptions are co-load-bearing — (1) the realpath neighborhood carries the dependency install, (2) Node's CommonJS-style upward resolution remains stable, (3) symlinks never get redirected to a tree without the install. Any one breaking produces silent helper death because hooks fire detached and their failure modes are observable only in `~/.atrib/logs/mcp-signer.log` at boot-time substrate-health checks, not at fault time.
+
+The deeper conflation: the repo simultaneously holds the *source of truth for helper code* (where developers edit + version-control) and the *runtime deployment* (what hooks actually execute). Edit-in-place via symlinks is good for iteration; the same symlinks are the runtime's source of fragility.
+
+**The decision in question:** which deployment architecture for host-side hook helpers (the operator-installable thin glue between Claude Code / Cursor / similar host PostToolUse-style hooks and atrib's MCP signing servers):
+
+1. **Symlink-from-repo (status quo + installer guardrails).** Source lives in the repo's `tools/claude-hooks/`; user-level install creates symlinks pointing at the repo. Dependencies install once at the source location's sibling `node_modules`. Installer refuses to point symlinks at worktree paths (the catch added after the outage above). Edits propagate live; dev velocity high; deployment surface coupled to repo-checkout shape.
+2. **Published CLI (`@atrib/cli` on npm).** Atrib publishes a unified CLI with subcommands `atrib emit`, `atrib recall`, `atrib trace`, `atrib summarize`, `atrib annotate`, `atrib revise` (each subcommand backed by the corresponding `@atrib/<primitive>` package's signing logic). Operators install once: `npm install -g @atrib/cli`. Hook scripts under `~/.claude/scripts/` become ~10-line shell wrappers that `exec atrib emit --hook-mode < stdin`. The CLI is the runtime; the repo's `tools/claude-hooks/` retains source-of-truth for development but is no longer the deployment surface. Standard pattern matching `gh`, `tailwind`, `prettier`, the OpenTelemetry collector, etc.
+3. **Hybrid.** Keep `tools/claude-hooks/` for atrib-developers self-hosting (preserves edit-in-place velocity during atrib's own iteration). Publish the CLI for external operators. Two installation paths documented separately. Higher maintenance — two delivery channels for the same logic — but avoids forcing the velocity sacrifice while atrib's substrate is still rapidly iterating.
+
+**Considerations.**
+
+- The edit-in-place pattern (Position 1) is genuinely useful when atrib's substrate is being iterated in parallel with the hook layer. A typical iteration edits both a primitive's source AND the hook that integrates it, and live symlink propagation means subsequent invocations exercise the edits without a republish step. Position 2 forces a build-publish-reinstall loop into that cycle — real velocity cost, not theoretical.
+- Position 1's resilience scales poorly: every new helper introduces another dependency tree to manage. Migration cost compounds the longer Position 1 stays canonical. The current helper count (~8) is small enough to make migration cheap; a future world with 20+ helpers makes it large.
+- Position 2's resilience pattern is what every production-grade CLI tool converges on — published binary, stable PATH entry, integration shims are thin. Protocol-evolution risk (MCP spec changes, transport changes, signing-pipeline updates) absorbs into the CLI as one versioned surface instead of distributing across N helpers each carrying their own SDK pin.
+- Position 3 sounds like the diplomat's answer but doubles the surface area atrib has to keep working. Two installation paths means two failure modes and two sets of operator-facing docs. The maintenance tax is real.
+- Spec evolution (e.g., a future MCP transport change, or [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback)'s daemon mode landing) is easier to roll out across consumers when the consumers are versioned packages (Position 2) than when they're filesystem-anchored source files (Position 1).
+- The outage that prompted this ADR was silent for ~30 minutes; substrate-health visibility surfaces these gaps only at session boot. Operational robustness matters more as atrib's substrate becomes load-bearing for verifiable-reasoning claims in real-world flows (Pattern 3 multi-agent, [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation) verify-promotion territory).
+
+**Current posture:** Position 1 (status quo with installer guardrail). The substrate-signing-outage forensics produced exactly the kind of guardrail that closes the immediate failure mode (refuse-to-install-from-worktree). Position 1 is acceptable while atrib's substrate is in rapid iteration with a small developer surface.
+
+**Promotion path to Position 2.** Migrate when at least one of the following becomes true:
+
+1. **First external operator onboards** to atrib-as-substrate (not as repo) — symlink-from-repo doesn't generalize across operator machines and becomes a friction point.
+2. **Helper count crosses ~10**, OR a new helper's dependency tree conflicts with an existing one. Per-helper dependency management becomes the dominant cost.
+3. **Protocol evolution churn**: MCP transport or signing-pipeline changes start producing version-coordination drift across helpers. Centralizing the protocol surface in one published CLI flips from "nice to have" to "load-bearing for substrate stability."
+4. **A second silent outage** of the same class (hook helpers die without surfacing the failure to running sessions). One occurrence is operationally tolerable with the guardrail; a second indicates the architecture itself is the problem.
+
+**When promotion happens.** Ship `@atrib/cli` covering all six cognitive primitives as subcommands; replace `tools/claude-hooks/atrib-tool-emit-helper.mjs` and `atrib-tool-signer-hook.mjs` and the lifecycle helpers with thin shell scripts that exec the CLI; update the installer to drop the symlink-into-repo path entirely (in favor of `npm install -g @atrib/cli` as the single install step); deprecate the `tools/claude-hooks/node_modules/` sibling-install pattern. Keep `tools/claude-hooks/` as source for atrib-development.
+
+**Alternatives rejected.**
+
+- *Drop the SDK dependency from helpers entirely and hand-roll JSON-RPC.* Considered as a tactical mid-step. Rejected: shifts protocol-surface fragility from "one SDK version pinned" to "every helper maintains its own JSON-RPC client." Doesn't scale across helpers; doesn't address the deployment-architecture coupling that caused the outage.
+- *Bundle each helper into a single-file artifact via esbuild.* Considered. Rejected: adds a build step without addressing the source-vs-deployment conflation; bundle drift between editable source and shipped artifact creates its own class of "what's actually running?" confusion.
+- *Promote to Position 2 immediately, accepting the velocity cost.* Rejected for the current iteration phase. The substrate is changing fast enough that the build-publish-reinstall loop would slow forward progress without commensurate operational payoff yet.
+
+**Consequences.**
+
+- Position 1 remains canonical until a promotion gate trips. The installer-guardrail closes the worst foot-gun; further fragility is documented but not chased.
+- When Position 2 ships, hooks become host-independent: the same `~/.claude/scripts/atrib-tool-signer-hook.sh` script works on Cursor's hook surface (if Cursor's hooks are stdio-compatible), Codex CLI's, Zed's ACP — because the integration is "exec a stable command on PATH" rather than "symlink a source file with sibling node_modules."
+- A successful migration also addresses [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type) option-1's deployment concern (env-driven `informed_by` threading needs the receiver MCP server reachable from any subprocess; a published CLI on PATH satisfies that uniformly).
+
+**Cross-references.**
+
+- [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) — runtime integration patterns; Position 2's "hooks-call-CLI" pattern fits naturally as the canonical Pattern #2-equivalent (in-process MCP middleware) deployment shape.
+- [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) — long-lived emit daemon; the daemon's wire format is unchanged across Position 1 vs Position 2 (both invoke atrib-emit; only how the binary is located differs). Migration is independent.
+- [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation) — verify promotion: when verify-mcp ships as primitive #7, Position 2 makes adding `atrib verify` a one-subcommand addition rather than a new helper + node_modules.
+- [P023](#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion) — subscription surface; the always-on consumer pattern benefits from a stable CLI deployment for the same reasons.
+- [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type) — parent-child env threading; benefits from PATH-resolved CLI per consequences above.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
