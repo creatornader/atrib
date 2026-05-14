@@ -39,18 +39,18 @@ jobs:
     name: typos (spelling check)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # crate-ci/typos action; reads _typos.toml at repo root for
       # project-specific config (base64url + hex blob suppressions,
       # vendor proper nouns).
-      - uses: crate-ci/typos@v1.46.0
+      - uses: crate-ci/typos@v1.46.1
 
   gitleaks:
     name: gitleaks (credential pattern scan)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0  # full history so gitleaks scans every commit
 
@@ -84,7 +84,7 @@ jobs:
     name: TruffleHog (verified-secrets scan)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -101,7 +101,7 @@ jobs:
     # step will fail cleanly while the scan output still appears in the
     # workflow logs.
     if: github.event_name == 'schedule'
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.5
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8
     permissions:
       actions: read
       security-events: write

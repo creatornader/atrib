@@ -1,0 +1,32 @@
+# Dependabot configuration — keeps GitHub Actions versions current so we don't
+# hit another Node-runtime deprecation surprise like the 2026-06-02 Node 20
+# cutoff.
+#
+# Strategy: weekly PRs grouping all action bumps together (low PR noise), with
+# major-version bumps flagged so we read changelogs before merging. SHA-pinned
+# actions get their SHA re-pinned automatically by Dependabot when a new tag
+# version is detected (Dependabot understands the `# vN.N.N` comment
+# convention).
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch
+      actions-major:
+        update-types:
+          - major
+    commit-message:
+      prefix: ci
+      include: scope
+    labels:
+      - dependencies
+      - github-actions
