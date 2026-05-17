@@ -247,7 +247,7 @@ async function handleRequest(
     return handleTrace(res, store, traceMatch[1]!, new URL(`http://localhost${url}`).searchParams)
   }
 
-  // GET /v1/chain/:record_hash, substrate-derived causal chain walk per
+  // GET /v1/chain/:record_hash: substrate-derived causal chain walk per
   // spec §3.4.6 / D068. Walks CHAIN_PRECEDES backward from the starting
   // record, terminating at the session genesis (chain_root = SHA-256(context_id)).
   // Disjoint from /v1/trace which walks producer-claimed ancestry.
@@ -716,7 +716,7 @@ async function handleTrace(
   })
 }
 
-// /v1/chain/:record_hash, substrate-derived causal chain walk per §3.4.6.
+// /v1/chain/:record_hash: substrate-derived causal chain walk per §3.4.6.
 // Walks CHAIN_PRECEDES backward from the starting record, resolving each step
 // via record.chain_root (which carries the prior record's hex hash, prefixed
 // with "sha256:"). Terminates at the session's genesis record where chain_root

@@ -361,7 +361,7 @@ async function handle(
     return
   }
 
-  // GET /v6/anchors/<record_hash>, point lookup of an anchor body by hash.
+  // GET /v6/anchors/<record_hash>: point lookup of an anchor body by hash.
   // The record_hash format mirrors the `sha256:<64hex>` shape stored in the
   // log + carried in canonical record fields. Used by spec §6.3 step 1
   // verifiers after they discover an anchor commitment on the log via
@@ -385,7 +385,7 @@ async function handle(
     return
   }
 
-  // GET /v6/anchors?since=<ms>&limit=<n>, recent anchors in newest-first
+  // GET /v6/anchors?since=<ms>&limit=<n>: recent anchors in newest-first
   // order. Used by §6.3 step 1 verifiers walking back to find the anchor
   // closest to (but not after) a record's timestamp T, and by §6.3 step 5
   // verifiers walking back from the latest anchor to its predecessor for

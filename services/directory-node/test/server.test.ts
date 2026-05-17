@@ -226,7 +226,7 @@ describe('directory-node HTTP', () => {
 })
 
 // ===========================================================================
-// /v6/anchors (point lookup + recent list), body retrieval for §6.3 step 1.
+// /v6/anchors (point lookup + recent list): body retrieval for §6.3 step 1.
 //
 // Boots a stub log-node sink so emitDirectoryAnchor produces a record (which
 // the directory persists in its in-memory anchor history) regardless of log

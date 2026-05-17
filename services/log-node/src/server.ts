@@ -214,7 +214,7 @@ async function handleRequest(
     return handleCheckpoint(res, tree, signer)
   }
 
-  // GET /v1/pubkey, return the log's Ed25519 public key + key_id so verifiers
+  // GET /v1/pubkey: return the log's Ed25519 public key + key_id so verifiers
   // can check the C2SP signed-note signature on /v1/checkpoint without an
   // out-of-band trust root. Without this endpoint, third parties have no way
   // to verify the checkpoint signature and must trust the log on the root.
@@ -222,7 +222,7 @@ async function handleRequest(
     return handlePubkey(res, signer)
   }
 
-  // GET /v1/log-pubkey, same key as /v1/pubkey but in C2SP signed-note vkey
+  // GET /v1/log-pubkey: same key as /v1/pubkey but in C2SP signed-note vkey
   // format (text/plain). Spec §2.4.2 commits to this path; tools like
   // golang.org/x/mod/sumdb/note.NewVerifier consume vkey strings directly,
   // so we serve it canonically rather than forcing those tools to JSON-parse.
@@ -230,7 +230,7 @@ async function handleRequest(
     return handleLogPubkey(res, signer)
   }
 
-  // GET /v1/stats, aggregate counters over the current tree. Non-normative
+  // GET /v1/stats: aggregate counters over the current tree. Non-normative
   // operator-visibility convenience: tree size, distinct creator_keys,
   // timestamp range, and a count by event_type byte. Reads existing tree
   // state in a single pass; not part of spec §2.5.
@@ -238,7 +238,7 @@ async function handleRequest(
     return handleStats(res, tree)
   }
 
-  // GET /v1/recent, newest N decoded entries (default 20, max 100). Powers
+  // GET /v1/recent: newest N decoded entries (default 20, max 100). Powers
   // the public explorer's activity feed. Non-normative operator-visibility
   // helper, parallel to /v1/stats; not part of spec §2.5.
   // ?offset=N skips the N most-recent entries, lets the dashboard paginate
@@ -250,7 +250,7 @@ async function handleRequest(
     return handleRecent(res, tree, limit, offset)
   }
 
-  // GET /v1/lookup/<hex>, find an entry by its record_hash (32 bytes hex).
+  // GET /v1/lookup/<hex>: find an entry by its record_hash (32 bytes hex).
   // Returns the decoded entry. Linear scan; fine at current scale, indexed
   // lookup is a future optimization. Non-normative.
   const lookupMatch = req.url?.match(/^\/v1\/lookup\/([0-9a-fA-F]{64})$/)
@@ -258,7 +258,7 @@ async function handleRequest(
     return handleLookup(res, tree, lookupMatch[1]!.toLowerCase())
   }
 
-  // GET /v1/by-context/<hex>, list all entries for a context_id (16 bytes hex).
+  // GET /v1/by-context/<hex>: list all entries for a context_id (16 bytes hex).
   // Returns entries newest-first. Linear scan; non-normative explorer convenience.
   // Lets the dashboard render a session view using log data alone when graph-node
   // is unreachable or hasn't ingested.
@@ -267,7 +267,7 @@ async function handleRequest(
     return handleByContext(res, tree, byContextMatch[1]!.toLowerCase())
   }
 
-  // GET /v1/by-creator/<base64url>, list sessions for a creator_key (43 chars
+  // GET /v1/by-creator/<base64url>: list sessions for a creator_key (43 chars
   // base64url). Returns one entry per distinct context_id with node_count,
   // has_transaction, first_seen. Mirrors the shape of graph-node's
   // /v1/creators/<key>/sessions so the dashboard can fall back transparently.
