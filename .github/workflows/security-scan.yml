@@ -52,5 +52,8 @@ jobs:
         with:
           python-version: '3.12'
       - uses: pre-commit/action@v3.0.1
-        with:
-          extra_args: leakguard oss-twin-check --all-files
+        env:
+          # Skip the pre-existing hooks (they continue to run locally
+          # for contributors). CI gates only on the two NEW hooks this
+          # PR adds.
+          SKIP: gitleaks,trailing-whitespace,end-of-file-fixer,check-merge-conflict,check-yaml,check-json,check-added-large-files,prettier-check
