@@ -143,6 +143,8 @@ Runs a fake merchant, a fake agent, and a real Merkle log in a single process. T
 
 **Spec-defined but not implemented:** Witnessing ([§2.9](atrib-spec.md#29-witnessing-and-cosignatures), [D032](DECISIONS.md#d032-witnessing-posture-for-v1-spec-defined-no-implementation); first implementation deferred until an independent verifier exists). Cross-log replication ([§2.11](atrib-spec.md#211-cross-log-replication), [D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense); spec-defined; second log-node deployment + verifier multi-log proof bundles forthcoming). [§6.3](atrib-spec.md#63-verifier-consultation-algorithm) verifier consultation steps 1, 3, 4, 5, 7 (anchor + lookup-proof + append-only + emergency-key paths; AKD WASM bridge upstream gating).
 
+**Developer CLI for the public log surface:** [`atrib-log-pp-cli`](https://github.com/creatornader/atrib-log-pp-cli) is a [Printing-Press](https://github.com/mvanhorn/cli-printing-press)-generated Go CLI that wraps `log.atrib.dev` directly (signed checkpoint, recent entries, lookup by hash, by context, by creator, Merkle tile retrieval) with a local SQLite mirror + FTS5 + compound workflow commands. It is *complementary* to the `@atrib/*` MCP cognitive primitives, not a replacement: use the MCP primitives for agent cognitive work; use this CLI for human or script interaction with the public log API.
+
 ## Key generation
 
 ```bash
