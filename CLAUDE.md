@@ -45,7 +45,7 @@ atrib/
         langchain-js/          # MultiServerMCPClient + loadMcpTools example
   policies/                     # Attribution policy templates and guide (6 templates + README)
   skills/
-    atrib/SKILL.md             # The atrib practice doc, agent-facing guidance for using atrib from the inside out (memory, reasoning, getting smarter over time). Source of truth; symlinked to ~/.claude/skills/atrib/SKILL.md so any Claude Code session anywhere on the operator's machine discovers it.
+    atrib/SKILL.md             # The atrib practice doc, agent-facing guidance for using atrib from the inside out (memory, reasoning, getting smarter over time). Source of truth; symlinked to ~/.claude/skills/atrib/SKILL.md so any Claude Code session anywhere on the host machine discovers it.
   apps/
     dashboard/                  # Public explorer (D054 option 1): vanilla HTML/CSS/JS served from log-node's Docker image. Composes log + graph + directory read APIs into 6 views (overview, identity, session, action, anchoring, trace). Defaults to https://log.atrib.dev / graph.atrib.dev / directory.atrib.dev; URL params override for local services. Pure graph-rendering helpers extracted to `graph-utils.mjs` (sibling module, served at `/graph-utils.mjs` by log-node) so they're unit-testable without a browser; `test/graph-utils.test.mjs` exercises layout selection, degree computation, node-size encoding, bbox math, and Sigma 3 framed-default camera state.
   services/
