@@ -237,9 +237,9 @@ Framework adapters hook atrib INTO a host agent framework at runtime. **Protocol
 
 A protocol adapter has three canonical layers:
 
-1. **Registry**, a versioned source of truth for the protocol's on-chain actors (facilitators, relayers, merchants). Combines the protocol's canonical registry if one exists, facilitator self-declaration endpoints (e.g., x402's `/supported`), and an overlay for absent or undisclosed entries.
-2. **Scanner**, ecosystem-level aggregators that measure volume and activity. Methodology is protocol-specific (wallet-first, contract-first, event-pattern), but every adapter outputs `sender → {tx_count, value}` or equivalent.
-3. **Attribution**, maps scanned observations to the registry, surfacing an unattributed residual for forensic follow-up. Techniques are protocol-specific: witness calldata decoding (where binding exists), sender-pattern clustering, payTo correlation.
+1. **Registry**: a versioned source of truth for the protocol's on-chain actors (facilitators, relayers, merchants). Combines the protocol's canonical registry if one exists, facilitator self-declaration endpoints (e.g., x402's `/supported`), and an overlay for absent or undisclosed entries.
+2. **Scanner**: ecosystem-level aggregators that measure volume and activity. Methodology is protocol-specific (wallet-first, contract-first, event-pattern), but every adapter outputs `sender → {tx_count, value}` or equivalent.
+3. **Attribution**: maps scanned observations to the registry, surfacing an unattributed residual for forensic follow-up. Techniques are protocol-specific: witness calldata decoding (where binding exists), sender-pattern clustering, payTo correlation.
 
 Two observation surfaces exist per protocol and compose cleanly:
 

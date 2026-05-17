@@ -826,9 +826,9 @@ Runtime detection (already shipped in `@atrib/agent`, [D008](#d008-middleware-pa
 
 **Decision:** Establish **protocol adapters** as a first-class architectural pattern in atrib, parallel to framework adapters. Each adapter provides observability FOR a specific payment protocol's ecosystem and has three canonical layers:
 
-1. **Registry**, a versioned source of truth for which on-chain identifiers (wallets, signers, merchant accounts) belong to which protocol actor. Combines the protocol's canonical registry (when it exists), facilitator self-declaration endpoints (`/supported` for x402), and an overlay for entries absent or undisclosed in canonical sources.
-2. **Scanner**, on-chain (or off-chain) aggregators that measure ecosystem-level activity. For x402 that means Dune SQL contract-first queries today and HyperSync-backed bulk scans next. Methodology is protocol-specific (wallet-first vs contract-first vs event-pattern), but every adapter outputs the same shape: `sender → {tx_count, transfer_count, value}` or equivalent.
-3. **Attribution**, maps scanned observations to the registry's known actors, with an unattributed residual bucket. Attribution techniques are protocol-specific (witness decoding, sender-pattern clustering, payTo correlation) but every adapter emits `{attributed, unknown}` cleanly splittable output.
+1. **Registry**: a versioned source of truth for which on-chain identifiers (wallets, signers, merchant accounts) belong to which protocol actor. Combines the protocol's canonical registry (when it exists), facilitator self-declaration endpoints (`/supported` for x402), and an overlay for entries absent or undisclosed in canonical sources.
+2. **Scanner**: on-chain (or off-chain) aggregators that measure ecosystem-level activity. For x402 that means Dune SQL contract-first queries today and HyperSync-backed bulk scans next. Methodology is protocol-specific (wallet-first vs contract-first vs event-pattern), but every adapter outputs the same shape: `sender → {tx_count, transfer_count, value}` or equivalent.
+3. **Attribution**: maps scanned observations to the registry's known actors, with an unattributed residual bucket. Attribution techniques are protocol-specific (witness decoding, sender-pattern clustering, payTo correlation) but every adapter emits `{attributed, unknown}` cleanly splittable output.
 
 Two observation surfaces exist per protocol: **runtime** (via `@atrib/agent` framework adapters at an agent session) and **retrospective** (via protocol adapters across the entire ecosystem). They compose. A Cloudflare Agent using `@atrib/agent` to capture x402 payments at runtime participates in the same observability graph as the retrospective scan.
 
@@ -1441,8 +1441,8 @@ The `keystore: 'callback'` mode (designed and merged but not yet wired end-to-en
 **Decision.**
 
 1. **Three reference profiles.** atrib documents three operator profiles for HSM-backed signing, all using the same `keystore: 'callback'` middleware option:
-   - **AWS KMS**, `Sign` API call against a `KEY_USAGE: SIGN_VERIFY` key with `KEY_SPEC: ECC_NIST_P256` initially (deferring Ed25519 KMS support, which AWS announced in 2023 but staged region-by-region; this profile lists Ed25519 as the long-term target). Latency: ~30-50ms per sign. Cost: ~$0.03 per 10K signs.
-   - **HashiCorp Vault Transit**, `transit/sign/<key>` endpoint with `key_type: ed25519`. Latency: ~5-15ms when Vault is co-located. Cost: license-dependent; effectively free if Vault is already deployed.
+   - **AWS KMS**: `Sign` API call against a `KEY_USAGE: SIGN_VERIFY` key with `KEY_SPEC: ECC_NIST_P256` initially (deferring Ed25519 KMS support, which AWS announced in 2023 but staged region-by-region; this profile lists Ed25519 as the long-term target). Latency: ~30-50ms per sign. Cost: ~$0.03 per 10K signs.
+   - **HashiCorp Vault Transit**: `transit/sign/<key>` endpoint with `key_type: ed25519`. Latency: ~5-15ms when Vault is co-located. Cost: license-dependent; effectively free if Vault is already deployed.
    - **YubiHSM 2**, local-network HSM with PKCS#11 binding via `pkcs11js`. Latency: ~10ms. Cost: hardware capex (~$650 per unit) + zero ongoing.
 
 2. **Wrapper contract.** The `keystore: 'callback'` mode passes the canonical signing input (the bytes that would be signed by `signRecord`) and the public key (already known to the wrapper from prior bootstrapping) to the operator-supplied function:
@@ -2879,7 +2879,7 @@ Crash safety: every successful ingest appends a single LF-terminated line via O_
 **Context:** atrib's `chain_root` derivation per [§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records) requires that every non-genesis record point at a real ancestor's record_hash. Producer middleware (`@atrib/mcp`) already supports two paths to find the right `chain_root` for a new sign:
 
 1. **Inbound traceparent** ([§1.5.2](atrib-spec.md#152-http-transport-tracestate)), the spec-canonical W3C-tracestate-based propagation. Cross-process via the wire.
-2. **autoChain in-memory tail**, the most recent record this middleware instance signed for the given `context_id`. Within-process across multiple calls; survives process restarts when the caller seeds via `autoChainSeed`.
+2. **autoChain in-memory tail**: the most recent record this middleware instance signed for the given `context_id`. Within-process across multiple calls; survives process restarts when the caller seeds via `autoChainSeed`.
 
 Neither covers the case observed in production: a parent process spawns a *different middleware instance* (a separate producer type) as a child subprocess to sign records. The child has no traceparent and no autoChain seed for the parent's context, it sees an empty chain, marks itself genesis, and uses the synthetic-context-hash `chain_root` per [§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records).
 
@@ -3715,7 +3715,7 @@ The boundary-drawing test in [D079](#d079-the-six-core-cognitive-primitives--atr
 
 **Decision.** Cognitive operations that pass the [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) boundary test enter the agent-facing surface in one of two postures:
 
-1. **Extension**, added as an optional parameter or shape variant on the closest existing primitive. The agent's tool surface count does not grow. Examples: `recall.origin: 'local' | 'remote' | 'both'`, `recall.verify_strength: 'signature' | 'inclusion'`. The primitive's narrow purpose is preserved; the variant is a setting on the same verb.
+1. **Extension**: added as an optional parameter or shape variant on the closest existing primitive. The agent's tool surface count does not grow. Examples: `recall.origin: 'local' | 'remote' | 'both'`, `recall.verify_strength: 'signature' | 'inclusion'`. The primitive's narrow purpose is preserved; the variant is a setting on the same verb.
 
 2. **Dedicated primitive (new MCP)**, added as a new MCP package and a new agent-facing tool, with [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) amended to list it. The surface grows by one. Reserved for operations that are load-bearing in production and that agents reach for as a discrete mental operation.
 
@@ -3852,7 +3852,7 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 
 **Remaining work tracked separately:**
 
-- **Middleware-side multi-signer transaction signing**, `@atrib/mcp` currently signs transaction records with the standard single-signer path. Producing records with `signers[]` populated requires a counterparty-coordination protocol design (out-of-band? webhook? sign-then-merge?). Will be a follow-up ADR alongside the first protocol-adapter that needs it.
+- **Middleware-side multi-signer transaction signing**: `@atrib/mcp` currently signs transaction records with the standard single-signer path. Producing records with `signers[]` populated requires a counterparty-coordination protocol design (out-of-band? webhook? sign-then-merge?). Will be a follow-up ADR alongside the first protocol-adapter that needs it.
 - **`cross_log_*` verifier surface ([D050](#d050-cross-log-replication-for-equivocation-defense) / [§2.11](atrib-spec.md#211-cross-log-replication))**, BLOCKED on multi-log proof-bundle parsing infrastructure and a trusted-log-set config surface. No code surface added; the README's documented annotation remains aspirational. Will be re-opened when a second independent log node ships.
 
 **Pattern observed during the rollout.** Surfaces with constraint inputs already on the record (or supplied by the caller via the `identityClaim` option) implemented cleanly. Surfaces that needed new fields on the canonical record shape (tool_name, args_hash, result_hash) required upstream spec work first ([D061](#d061-add-tool_name-args_hash-result_hash-fields-to-§121)). The pattern set by [D044](#d044-provenance_token-field-for-cross-session-causal-anchoring)'s reconciliation (verify-record.ts + spec/conformance/<§> + verify test) is reusable for any remaining annotation when a real consumer surfaces.

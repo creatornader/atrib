@@ -42,7 +42,7 @@ After the tool's own handler returns successfully (`isError: false`), **before**
 After the response is sent (non-blocking; see invariant #4 below):
 
 7. **Submits the signed record to the log endpoint** with retry (exponential backoff, max 3 attempts, 30s window).
-8. **Caches the proof bundle on success**, or caches the signed record for `flush()` retry on failure.
+8. **Caches the proof bundle on success**: or caches the signed record for `flush()` retry on failure.
 
 ## Critical behaviors (degradation contract per spec [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract))
 
