@@ -7,7 +7,7 @@ name: security-scan
 # is gated to the scheduled run (Sunday 09:00 UTC) so PRs and pushes
 # stay fast.
 #
-# pre-commit job runs leakguard + oss-twin-check + the existing
+# pre-commit job runs textleaks + oss-twin-check + the existing
 # hygiene + prettier hooks at PR time as the CI-side enforcement of
 # the local hooks in .pre-commit-config.yaml.
 #
@@ -39,12 +39,12 @@ jobs:
       run-osv-scanner: ${{ github.event_name == 'schedule' }}
 
   pre-commit:
-    # Scoped to the two NEW hooks this PR adds (leakguard + oss-twin-check).
+    # Scoped to the two NEW hooks this PR adds (textleaks + oss-twin-check).
     # The existing prettier + hygiene hooks in .pre-commit-config.yaml run
     # locally for contributors but aren't enforced in CI here. Pre-existing
     # un-formatted files in the tree predate this PR and need a separate
     # cleanup pass to enforce in CI without breaking unrelated work.
-    name: pre-commit (leakguard + oss-twin-check)
+    name: pre-commit (textleaks + oss-twin-check)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

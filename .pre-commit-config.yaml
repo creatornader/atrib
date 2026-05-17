@@ -19,10 +19,10 @@ repos:
         args: ['--config', '.gitleaks.toml']
 
   # Narrative-leak detection (catalog-driven prose patterns)
-  - repo: https://github.com/creatornader/leakguard
-    rev: v0.1.1
+  - repo: https://github.com/creatornader/textleaks
+    rev: v0.2.0
     hooks:
-      - id: leakguard
+      - id: textleaks
 
   # Structural-leak detection (no private path in public tree)
   - repo: https://github.com/creatornader/oss-twin
