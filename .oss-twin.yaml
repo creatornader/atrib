@@ -1,0 +1,34 @@
+# oss-twin config for atrib.
+#
+# Declares the relationship between this public repo and its private
+# mirror. Source of truth for the project's leak-audit substrate
+# (patterns, style files, hook templates) lives in the private
+# mirror and is not part of this public tree.
+
+version: 1
+
+mirror:
+  path: ../atrib-internal
+  remote: git@github.com:creatornader/atrib-internal.git
+  visibility: private
+
+private_paths:
+  - docs/handoffs/
+  - docs/strategy/
+  - docs/plans/
+  - docs/research/
+  - docs/runbooks/
+  - services/log-deploy/
+  - tools/leak-audit/
+  - thoughts/
+  - .remember/
+
+mirror_scaffold:
+  - docs/
+  - docs/handoffs/
+  - docs/strategy/
+  - docs/plans/
+  - docs/research/
+  - docs/runbooks/
+  - services/log-deploy/
+  - tools/leak-audit/

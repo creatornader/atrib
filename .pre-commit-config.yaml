@@ -18,6 +18,18 @@ repos:
       - id: gitleaks
         args: ['--config', '.gitleaks.toml']
 
+  # Narrative-leak detection (catalog-driven prose patterns)
+  - repo: https://github.com/creatornader/leakguard
+    rev: v0.1.1
+    hooks:
+      - id: leakguard
+
+  # Structural-leak detection (no private path in public tree)
+  - repo: https://github.com/creatornader/oss-twin
+    rev: v0.1.1
+    hooks:
+      - id: oss-twin-check
+
   # Generic file hygiene
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
