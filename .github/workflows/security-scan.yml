@@ -1,26 +1,21 @@
 name: security-scan
 
-# Multi-tier security scanning for atrib.
+# Security scanning for atrib.
 #
-# Tier 1 (every push + PR):
-#   - typos:     spelling check across spec, ADRs, code comments
-#   - gitleaks:  pattern-based credential scanner
-#   - TruffleHog: verified-secrets scanner with live API confirmation
+# Caller for the reusable workflow at creatornader/oss-security-scan,
+# which runs typos + gitleaks + trufflehog + osv-scanner. OSV-Scanner
+# is gated to the scheduled run (Sunday 09:00 UTC) so PRs and pushes
+# stay fast.
 #
-# Tier 2 (schedule-only, deeper scans):
-#   - OSV-Scanner: transitive-dep CVE check across the OSV database.
-#                  Runs Sunday 09:00 UTC. Complements gitleaks
-#                  (credentials) + TruffleHog (live secrets) by covering
-#                  the third surface: known CVEs in lockfiles. Overlaps
-#                  Dependabot but uses a different database.
+# pre-commit job runs leakguard + oss-twin-check + the existing
+# hygiene + prettier hooks at PR time as the CI-side enforcement of
+# the local hooks in .pre-commit-config.yaml.
 #
-# Vale (prose-leak linter) is intentionally not in CI — local pre-commit
-# hook with a project-specific style configuration covers it. Layer B
-# (LLM semantic prose audit) is also local-only for cost reasons.
+# All run: blocks use no github.event.* inputs.
 #
-# OSSF Scorecard is documented in the public-flip runbook and will be
-# added when the repo is public (Scorecard scores public-repo signals;
-# private repos return N/A for most checks).
+# Vale (prose lint) and Layer B (LLM semantic prose audit) remain
+# local-only via the maintainer's pre-commit hooks; that's by design,
+# unchanged by this workflow.
 
 on:
   push:
@@ -28,81 +23,37 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # Sunday 09:00 UTC — full security sweep.
     - cron: '0 9 * * 0'
 
 permissions:
   contents: read
+  actions: read
+  security-events: write
 
 jobs:
-  typos:
-    name: typos (spelling check)
+  scan:
+    uses: creatornader/oss-security-scan/.github/workflows/oss-security-scan.yml@v0.1.0
+    with:
+      gitleaks-version: '8.30.1'
+      gitleaks-config: '.gitleaks.toml'
+      run-osv-scanner: ${{ github.event_name == 'schedule' }}
+
+  pre-commit:
+    # Scoped to the two NEW hooks this PR adds (leakguard + oss-twin-check).
+    # The existing prettier + hygiene hooks in .pre-commit-config.yaml run
+    # locally for contributors but aren't enforced in CI here. Pre-existing
+    # un-formatted files in the tree predate this PR and need a separate
+    # cleanup pass to enforce in CI without breaking unrelated work.
+    name: pre-commit (leakguard + oss-twin-check)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      # crate-ci/typos action; reads _typos.toml at repo root for
-      # project-specific config (base64url + hex blob suppressions,
-      # vendor proper nouns).
-      - uses: crate-ci/typos@v1.46.1
-
-  gitleaks:
-    name: gitleaks (credential pattern scan)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
-          fetch-depth: 0  # full history so gitleaks scans every commit
-
-      # We invoke gitleaks directly rather than via gitleaks-action@v2
-      # because the action's bundled gitleaks binary (8.24.3 as of
-      # 2026-05-04) does not honor [[allowlists]] semantics the same way
-      # newer versions do — even with GITLEAKS_CONFIG set and
-      # regexTarget=line, the conformance-corpus public-key fixtures
-      # still trigger generic-api-key flags. Pinning to 8.30+ (matches
-      # local pre-push hook version) restores allowlist behavior.
-      # Re-evaluate when gitleaks-action bumps its bundled binary.
-      #
-      # Inputs to this step are all CI-controlled constants: a literal
-      # release URL, a literal version, and github.workspace (the runner
-      # path). No user-controlled github.event.* fields flow into either
-      # run: command. Per the github.blog injection guide.
-      - name: Install gitleaks 8.30.1
+          python-version: '3.12'
+      - uses: pre-commit/action@v3.0.1
         env:
-          GITLEAKS_VERSION: 8.30.1
-        run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xz -C /tmp gitleaks
-          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
-          gitleaks version
-      - name: Run gitleaks (project config)
-        env:
-          GITLEAKS_CONFIG_PATH: ${{ github.workspace }}/.gitleaks.toml
-        run: gitleaks git --no-banner -c "$GITLEAKS_CONFIG_PATH"
-
-  trufflehog:
-    name: TruffleHog (verified-secrets scan)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          extra_args: --results=verified,unknown
-
-  osv-scanner:
-    name: OSV-Scanner (CVE scan, scheduled)
-    # Reusable workflow from google/osv-scanner-action. Runs full repo
-    # scan + uploads SARIF to GHAS Code Scanning. Code Scanning requires
-    # GitHub Pro for private repos — until the public flip, the upload
-    # step will fail cleanly while the scan output still appears in the
-    # workflow logs.
-    if: github.event_name == 'schedule'
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8
-    permissions:
-      actions: read
-      security-events: write
-      contents: read
+          # Skip the pre-existing hooks (they continue to run locally
+          # for contributors). CI gates only on the two NEW hooks this
+          # PR adds.
+          SKIP: gitleaks,trailing-whitespace,end-of-file-fixer,check-merge-conflict,check-yaml,check-json,check-added-large-files,prettier-check
