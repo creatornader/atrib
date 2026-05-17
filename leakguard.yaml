@@ -1,0 +1,61 @@
+# atrib's leakguard config.
+#
+# Extends the starter catalog shipped by leakguard. Patterns here are
+# ADDED to the starter's patterns. Exception: two classes are explicitly
+# REPLACED with empty patterns (see notes below).
+#
+# atrib also runs a more comprehensive leak-audit substrate locally
+# (the operator-private tools/leak-audit/ in atrib's private mirror).
+# This file is the public-side leakguard surface and intentionally
+# stays conservative: it catches the most obvious cross-project and
+# operator codenames that the existing substrate also catches, so
+# CI-side gating fires on the same surface even on contributor PRs
+# that don't go through the operator's local hooks.
+
+version: 1
+
+ignore_paths:
+  - README.md
+  - .pre-commit-config.yaml
+  - .oss-twin.yaml
+  - leakguard.yaml
+  - .gitignore
+  - .github/workflows/security-scan.yml
+  - .github/dependabot.yml
+
+classes:
+  - id: cross-project-codenames
+    patterns:
+      - '\bsahbi\b'
+      - '\bnagala\b'
+      - '\bsecond-brain\b'
+      - '\batrib-internal\b'
+      - '\batrib-private\b'
+      - '\bcomuser\b'
+      - '\bagent-bridge-atrib\b'
+
+  - id: operator-paths
+    patterns:
+      - '\bnaderhelmy\b'
+      - '/Users/naderhelmy/'
+
+  - id: private-wrapper-services
+    patterns:
+      - '\bagent-bridge-atrib\b'
+
+  # time-of-day-narration and session-state-framing are DISABLED for
+  # atrib because the spec + ADRs use "today", "in this session", and
+  # related phrases as legitimate protocol terminology (e.g.,
+  # "this session's chain_root", "today the only embedded directory
+  # is X"). atrib-internal/tools/leak-audit/ runs context-aware
+  # versions of these patterns via Vale + Layer B (LLM semantic
+  # judgement) which can distinguish protocol terminology from
+  # operator narration. The naive regex layer ships with leakguard
+  # would produce ~30 false positives per scan with no path to
+  # cleanly suppress in-context.
+  - id: time-of-day-narration
+    replace: true
+    patterns: []
+  - id: session-state-framing
+    replace: true
+    patterns: []

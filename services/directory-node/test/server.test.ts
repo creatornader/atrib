@@ -411,7 +411,7 @@ describe('directory-node persistence', () => {
     const dir = await mkdtemp(join(tmpdir(), 'atrib-dir-persist-'))
     const persistPath = join(dir, 'publishes.jsonl')
 
-    // Phase 1: boot, publish 2 claims, capture epoch + root_hash
+    // Step 1: boot, publish 2 claims, capture epoch + root_hash
     const a = await bindDirectoryServer(0, '127.0.0.1', {
       operatorPrivateKey: opKey,
       origin: 'directory.test.local/v6',
@@ -442,7 +442,7 @@ describe('directory-node persistence', () => {
     expect(beforeAnchor.epoch).toBe(2)
     await a.close()
 
-    // Phase 2: boot a fresh server with the same persistence path, expect replay
+    // Step 2: boot a fresh server with the same persistence path, expect replay
     const b = await bindDirectoryServer(0, '127.0.0.1', {
       operatorPrivateKey: opKey,
       origin: 'directory.test.local/v6',

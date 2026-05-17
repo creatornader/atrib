@@ -1,0 +1,35 @@
+# oss-twin config for atrib.
+#
+# Declares the relationship between the public atrib repo and its
+# private mirror at atrib-internal. Source of truth for the leak-audit
+# substrate (patterns.txt, Vale style, LLM Layer B, hook templates)
+# lives in atrib-internal at tools/leak-audit/ and never appears in
+# the public tree.
+
+version: 1
+
+mirror:
+  path: ../atrib-internal
+  remote: git@github.com:creatornader/atrib-internal.git
+  visibility: private
+
+private_paths:
+  - docs/handoffs/
+  - docs/strategy/
+  - docs/plans/
+  - docs/research/
+  - docs/runbooks/
+  - services/log-deploy/
+  - tools/leak-audit/
+  - thoughts/
+  - .remember/
+
+mirror_scaffold:
+  - docs/
+  - docs/handoffs/
+  - docs/strategy/
+  - docs/plans/
+  - docs/research/
+  - docs/runbooks/
+  - services/log-deploy/
+  - tools/leak-audit/
