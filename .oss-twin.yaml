@@ -1,10 +1,9 @@
 # oss-twin config for atrib.
 #
-# Declares the relationship between the public atrib repo and its
-# private mirror at atrib-internal. Source of truth for the leak-audit
-# substrate (patterns.txt, Vale style, LLM Layer B, hook templates)
-# lives in atrib-internal at tools/leak-audit/ and never appears in
-# the public tree.
+# Declares the relationship between this public repo and its private
+# mirror. Source of truth for the project's leak-audit substrate
+# (patterns, style files, hook templates) lives in the private
+# mirror and is not part of this public tree.
 
 version: 1
 

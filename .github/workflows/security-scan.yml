@@ -14,7 +14,7 @@ name: security-scan
 # All run: blocks use no github.event.* inputs.
 #
 # Vale (prose lint) and Layer B (LLM semantic prose audit) remain
-# local-only via the operator's pre-commit hooks; that's by design,
+# local-only via the maintainer's pre-commit hooks; that's by design,
 # unchanged by this workflow.
 
 on:

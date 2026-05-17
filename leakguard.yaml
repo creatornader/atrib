@@ -5,12 +5,11 @@
 # REPLACED with empty patterns (see notes below).
 #
 # atrib also runs a more comprehensive leak-audit substrate locally
-# (the operator-private tools/leak-audit/ in atrib's private mirror).
-# This file is the public-side leakguard surface and intentionally
-# stays conservative: it catches the most obvious cross-project and
-# operator codenames that the existing substrate also catches, so
-# CI-side gating fires on the same surface even on contributor PRs
-# that don't go through the operator's local hooks.
+# via a private mirror. This file is the public-side leakguard surface
+# and intentionally stays conservative: it catches the most obvious
+# cross-project codenames that the existing substrate also catches,
+# so CI-side gating fires on the same surface even on contributor PRs
+# that don't go through the local hooks.
 
 version: 1
 
