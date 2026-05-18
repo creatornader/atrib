@@ -20,9 +20,9 @@
 import * as ed from '@noble/ed25519'
 import { sha256 } from '@noble/hashes/sha2.js'
 
-// NOTE: ed.etc.sha512Sync must be set by the application entry point (index.ts)
+// NOTE: ed.hashes.sha512 must be wired by the application entry point (index.ts)
 // before calling any signing functions. It is NOT set here to avoid split
-// initialization responsibility. see @noble/ed25519 docs.
+// initialization responsibility. see @noble/ed25519 v3 docs.
 
 export interface CheckpointSigner {
   /** Sign a checkpoint and return the signed note string. */
