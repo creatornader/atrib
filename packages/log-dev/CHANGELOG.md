@@ -1,5 +1,13 @@
 # @atrib/log-dev
 
+## 0.1.10
+
+### Patch Changes
+
+- Updated dependencies [b89d7b8]
+  - @atrib/mcp@0.7.0
+  - @atrib/directory@0.2.0
+
 ## 0.1.9
 
 ### Patch Changes
