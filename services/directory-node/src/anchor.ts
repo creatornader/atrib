@@ -5,7 +5,7 @@
 // The anchor commits the directory's checkpoint root + epoch + origin to the
 // log; verifiers fetch the latest anchor in §6.3 step 1.
 
-import { sha256 } from '@noble/hashes/sha2'
+import { sha256 } from '@noble/hashes/sha2.js'
 import * as ed25519 from '@noble/ed25519'
 import canonicalize from 'canonicalize'
 

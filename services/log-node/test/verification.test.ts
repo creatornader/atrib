@@ -30,15 +30,15 @@ import type { AtribRecord } from '@atrib/mcp'
 import { parseCheckpointBody, parseSignatureLine } from '../src/checkpoint.js'
 import { startLogServer, type LogServer } from '../src/index.js'
 
-// Set up sync sha512 for @noble/ed25519
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
+// Set up sha512 for @noble/ed25519 (safe to call multiple times)
+ed.hashes.sha512 = sha512
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 async function makeSignedRecord(): Promise<{ record: AtribRecord; privateKey: Uint8Array }> {
-  const privateKey = ed.utils.randomPrivateKey()
+  const privateKey = ed.utils.randomSecretKey()
   const publicKeyBytes = await ed.getPublicKeyAsync(privateKey)
   const creatorKey = Buffer.from(publicKeyBytes).toString('base64url')
 
@@ -76,7 +76,7 @@ let server: LogServer
 let logPrivateKey: Uint8Array
 
 beforeAll(async () => {
-  logPrivateKey = ed.utils.randomPrivateKey()
+  logPrivateKey = ed.utils.randomSecretKey()
   server = await startLogServer({ port: 0, logPrivateKey })
 })
 

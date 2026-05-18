@@ -52,7 +52,7 @@ function assert(condition: boolean, message: string): asserts condition {
 async function main() {
   console.log(`Testing against ${LOG_URL}\n`)
 
-  const privateKey = ed.utils.randomPrivateKey()
+  const privateKey = ed.utils.randomSecretKey()
   const publicKeyBytes = await ed.getPublicKeyAsync(privateKey)
   const creatorKey = Buffer.from(publicKeyBytes).toString('base64url')
 

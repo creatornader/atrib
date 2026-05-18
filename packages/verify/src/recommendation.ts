@@ -12,9 +12,9 @@ import canonicalize from 'canonicalize'
 import { base64urlEncode, base64urlDecode } from '@atrib/mcp'
 import type { RecommendationDocument } from './types.js'
 
-// @noble/ed25519 v2 requires setting the sha512 sync function (same as @atrib/mcp)
-ed.etc.sha512Sync = (...m) => sha512(ed.etc.concatBytes(...m))
-ed.etc.sha512Async = async (...m) => sha512(ed.etc.concatBytes(...m))
+// @noble/ed25519 v3 needs sha512 wired via the hashes object (same as @atrib/mcp)
+ed.hashes.sha512 = sha512
+ed.hashes.sha512Async = (m) => Promise.resolve(sha512(m))
 
 /**
  * Compute the canonical signing input for a recommendation: JCS-canonicalize

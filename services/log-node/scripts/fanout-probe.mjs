@@ -5,7 +5,7 @@ import * as ed from '@noble/ed25519'
 import { sha256, sha512 } from '@noble/hashes/sha2.js'
 import { canonicalRecord, signRecord, base64urlEncode } from '@atrib/mcp'
 
-ed.etc.sha512Sync = (...m) => sha512(ed.etc.concatBytes(...m))
+ed.hashes.sha512 = sha512
 
 const seed = new Uint8Array(32)
 crypto.getRandomValues(seed)

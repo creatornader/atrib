@@ -36,7 +36,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import canonicalize from 'canonicalize'
 
-ed.etc.sha512Sync = (...m) => sha512(ed.etc.concatBytes(...m))
+ed.hashes.sha512 = sha512
 
 const LOG_ENDPOINT = (process.env.LOG_ENDPOINT ?? 'https://log.atrib.dev/v1').replace(/\/$/, '')
 const CHAIN_LENGTH = Number(process.env.CHAIN_LENGTH ?? 5)
@@ -118,7 +118,7 @@ async function main() {
   console.log(`record_file=${RECORD_FILE}`)
   console.log()
 
-  const privateKey = ed.utils.randomPrivateKey()
+  const privateKey = ed.utils.randomSecretKey()
   const publicKeyBytes = await ed.getPublicKeyAsync(privateKey)
   const creatorKey = b64url(publicKeyBytes)
   const contextId = toHex(randomBytes(16))

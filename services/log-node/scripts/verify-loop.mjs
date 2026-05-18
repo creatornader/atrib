@@ -71,8 +71,8 @@ import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
 import canonicalize from 'canonicalize'
 
-// @noble/ed25519 ^2 needs a sha512 sync helper for sync APIs; we use async.
-ed.etc.sha512Sync = (...m) => sha512(ed.etc.concatBytes(...m))
+// @noble/ed25519 v3 needs a sha512 helper for sync APIs; we use async.
+ed.hashes.sha512 = sha512
 
 const LOG_ENDPOINT = (process.env.LOG_ENDPOINT ?? 'https://log.atrib.dev/v1').replace(/\/$/, '')
 // ATRIB_PUBLIC_KEY (singular) and ATRIB_PUBLIC_KEYS (comma-separated, plural)

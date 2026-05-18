@@ -15,7 +15,7 @@ import type { AtribRecord } from '@atrib/mcp'
 import { startLogServer, type LogServer } from '../src/index.js'
 import crypto from 'crypto'
 
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
+ed.hashes.sha512 = sha512
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -76,10 +76,10 @@ describe('concurrent submissions', () => {
   let creatorKey: string
 
   beforeAll(async () => {
-    privateKey = ed.utils.randomPrivateKey()
+    privateKey = ed.utils.randomSecretKey()
     const publicKey = await ed.getPublicKeyAsync(privateKey)
     creatorKey = Buffer.from(publicKey).toString('base64url')
-    server = await startLogServer({ port: 0, logPrivateKey: ed.utils.randomPrivateKey() })
+    server = await startLogServer({ port: 0, logPrivateKey: ed.utils.randomSecretKey() })
   })
 
   afterAll(async () => {
@@ -229,11 +229,11 @@ describe('proof correctness under load', () => {
   let creatorKey: string
 
   beforeAll(async () => {
-    privateKey = ed.utils.randomPrivateKey()
+    privateKey = ed.utils.randomSecretKey()
     const publicKey = await ed.getPublicKeyAsync(privateKey)
     creatorKey = Buffer.from(publicKey).toString('base64url')
     // Fresh server for proof correctness tests
-    server = await startLogServer({ port: 0, logPrivateKey: ed.utils.randomPrivateKey() })
+    server = await startLogServer({ port: 0, logPrivateKey: ed.utils.randomSecretKey() })
   })
 
   afterAll(async () => {

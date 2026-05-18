@@ -21,7 +21,7 @@ import type { AtribRecord, EntryInput } from '../src/index.js'
 import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
 
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
+ed.hashes.sha512 = sha512
 
 const encoder = new TextEncoder()
 

@@ -36,14 +36,14 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@noble/ed25519": "^2.3.0",
+    "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
-    "canonicalize": "^2.1.0"
+    "canonicalize": "^3.0.0"
   },
   "devDependencies": {
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.8.0",
     "fast-check": "^4.8.0",
-    "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
   }
 }

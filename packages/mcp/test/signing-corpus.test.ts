@@ -27,7 +27,7 @@ import {
 } from '../src/index.js'
 import type { AtribRecord } from '../src/index.js'
 
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
+ed.hashes.sha512 = sha512
 
 interface SigningVector {
   name: string

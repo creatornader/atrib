@@ -31,8 +31,8 @@ import { createMerkleTree } from './tree.js'
 import { createCheckpointSigner } from './checkpoint.js'
 import { bindServer } from './server.js'
 
-// Set up sync sha512 for @noble/ed25519 (safe to call multiple times)
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
+// Set up sha512 for @noble/ed25519 (safe to call multiple times)
+ed.hashes.sha512 = sha512
 
 export interface LogServerOptions {
   port?: number
@@ -84,7 +84,7 @@ export async function startLogServer(options?: LogServerOptions): Promise<LogSer
   if (options?.logPrivateKey !== undefined) {
     privateKey = options.logPrivateKey
   } else {
-    privateKey = ed.utils.randomPrivateKey()
+    privateKey = ed.utils.randomSecretKey()
   }
 
   const publicKey = await ed.getPublicKeyAsync(privateKey)

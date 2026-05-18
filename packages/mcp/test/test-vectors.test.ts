@@ -12,8 +12,8 @@ import { describe, it, expect } from 'vitest'
 import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
 
-// Ensure sha512Sync is configured for @noble/ed25519 v2
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
+// Ensure sha512 is wired into the hashes object for @noble/ed25519 v3
+ed.hashes.sha512 = sha512
 
 import {
   base64urlEncode,
