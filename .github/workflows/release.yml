@@ -49,6 +49,11 @@ on:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
+# Default to read-only at the workflow level; each job grants only the writes
+# it needs (`contents: write`, `pull-requests: write`, `id-token: write`).
+permissions:
+  contents: read
+
 jobs:
   release:
     if: github.event_name == 'push'
