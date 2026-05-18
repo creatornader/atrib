@@ -1,7 +1,7 @@
 {
   "name": "@atrib/directory",
   "version": "0.2.0",
-  "description": "Identity-claim directory SDK for atrib. Publish, lookup, history, and proof-of-absence operations with cryptographic proofs per atrib spec §6.",
+  "description": "Identity-claim directory SDK for atrib. Publish, lookup, history, and proof-of-absence operations with cryptographic proofs per atrib spec \u00a76.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",
@@ -38,5 +38,10 @@
     "@types/node": "^25.8.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/creatornader/atrib.git",
+    "directory": "packages/directory"
   }
 }

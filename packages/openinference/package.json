@@ -19,7 +19,7 @@
   "homepage": "https://atrib.dev",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/atrib-dev/atrib.git",
+    "url": "git+https://github.com/creatornader/atrib.git",
     "directory": "packages/openinference"
   },
   "keywords": [
