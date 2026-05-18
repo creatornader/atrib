@@ -8,9 +8,11 @@ name: Dependabot auto-merge
 # Why this exists: per the operator's policy, security-patch PRs for
 # transitive deps should land continuously without per-PR review friction.
 # Manual review for these turns Dependabot into a backlog instead of a
-# safety net. The required CI checks on `main` (CI + gitleaks + TruffleHog)
-# already gate the merge; auto-merge just removes the human in the loop
-# for low-risk version bumps that pass those gates.
+# safety net. The 10 required CI checks on `main` (test, scan / gitleaks,
+# scan / TruffleHog, scan / typos, pre-commit textleaks+oss-twin-check,
+# CodeQL, Analyze actions, Analyze javascript-typescript, Analyze python,
+# Analyze rust) already gate the merge; auto-merge just removes the human
+# in the loop for low-risk version bumps that pass those gates.
 #
 # Configuration:
 # - Only PRs authored by dependabot[bot] are considered
