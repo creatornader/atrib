@@ -23,7 +23,10 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          # Align with release.yml: Node 24+ so CI runs against the same
+          # runtime used to publish. Node 22's bundled npm 10.x has OIDC
+          # publish quirks that release.yml's header explains.
+          node-version: '24'
           cache: 'pnpm'
 
       - run: pnpm install --frozen-lockfile
