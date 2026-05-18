@@ -1,5 +1,5 @@
 /**
- * atrib end-to-end demo. single-process runnable showcase.
+ * atrib end-to-end demo. single-process runnable demo.
  *
  * Run with:
  *   ATRIB_PRIVATE_KEY=$(node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))') \
