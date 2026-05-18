@@ -45,5 +45,10 @@
     "fast-check": "^4.8.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/creatornader/atrib.git",
+    "directory": "packages/mcp"
   }
 }
