@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
-    "@noble/ed25519": "^2.3.0",
+    "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
     "canonicalize": "^2.1.0"
   },

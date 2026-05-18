@@ -60,8 +60,8 @@ importers:
         specifier: workspace:*
         version: link:../verify
       '@noble/ed25519':
-        specifier: ^2.3.0
-        version: 2.3.0
+        specifier: ^3.1.0
+        version: 3.1.0
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.2.0
@@ -101,8 +101,8 @@ importers:
   packages/directory:
     dependencies:
       '@noble/ed25519':
-        specifier: ^2.3.0
-        version: 2.3.0
+        specifier: ^3.1.0
+        version: 3.1.0
       '@noble/hashes':
         specifier: ^1.8.0
         version: 1.8.0
@@ -160,8 +160,8 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
       '@noble/ed25519':
-        specifier: ^2.3.0
-        version: 2.3.0
+        specifier: ^3.1.0
+        version: 3.1.0
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.2.0
@@ -202,8 +202,8 @@ importers:
         specifier: workspace:*
         version: link:../mcp
       '@noble/ed25519':
-        specifier: ^2.3.0
-        version: 2.3.0
+        specifier: ^3.1.0
+        version: 3.1.0
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.2.0
@@ -224,8 +224,8 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
       '@noble/ed25519':
-        specifier: ^2.3.0
-        version: 2.3.0
+        specifier: ^3.1.0
+        version: 3.1.0
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.2.0
@@ -255,8 +255,8 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
       '@noble/ed25519':
-        specifier: ^2.3.0
-        version: 2.3.0
+        specifier: ^3.1.0
+        version: 3.1.0
       '@noble/hashes':
         specifier: ^1.8.0
         version: 1.8.0
@@ -314,8 +314,8 @@ importers:
         specifier: workspace:*
         version: link:../mcp
       '@noble/ed25519':
-        specifier: ^2.3.0
-        version: 2.3.0
+        specifier: ^3.1.0
+        version: 3.1.0
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.2.0
@@ -373,8 +373,8 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
       '@noble/ed25519':
-        specifier: ^2.3.0
-        version: 2.3.0
+        specifier: ^3.1.0
+        version: 3.1.0
       '@noble/hashes':
         specifier: ^1.8.0
         version: 1.8.0
@@ -504,8 +504,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/mcp
       '@noble/ed25519':
-        specifier: ^2.3.0
-        version: 2.3.0
+        specifier: ^3.1.0
+        version: 3.1.0
       '@noble/hashes':
         specifier: ^1.8.0
         version: 1.8.0
@@ -557,8 +557,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/mcp
       '@noble/ed25519':
-        specifier: ^2.3.0
-        version: 2.3.0
+        specifier: ^3.1.0
+        version: 3.1.0
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.2.0
@@ -1087,8 +1087,8 @@ packages:
       '@cfworker/json-schema':
         optional: true
 
-  '@noble/ed25519@2.3.0':
-    resolution: {integrity: sha512-M7dvXL2B92/M7dw9+gzuydL8qn/jiqNHaoR3Q+cb1q1GHV7uwE17WCyFMG+Y+TZb5izcaXk5TdJRrDUxHXL78A==}
+  '@noble/ed25519@3.1.0':
+    resolution: {integrity: sha512-pfcObRY3CtvwfaG9Mt5XqZdKmAQppl37tHUeuBhDUbiwJBCVY4/A4lbMvb1xKhMDx96AqAqZpMWuBX1HulhX4g==}
 
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
@@ -3008,7 +3008,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@noble/ed25519@2.3.0': {}
+  '@noble/ed25519@3.1.0': {}
 
   '@noble/hashes@1.8.0': {}
 
