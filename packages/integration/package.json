@@ -32,16 +32,16 @@
     "@arizeai/openinference-vercel": "^2.7.5",
     "@atrib/openinference": "workspace:^",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@noble/ed25519": "^2.3.0",
+    "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/context-async-hooks": "^2.7.1",
-    "@opentelemetry/sdk-trace-base": "^1.27.0",
+    "@opentelemetry/sdk-trace-base": "^2.7.1",
     "@opentelemetry/semantic-conventions": "^1.41.1",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.8.0",
     "ai": "^6.0.184",
-    "typescript": "^5.9.3",
-    "vitest": "^3.2.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6",
     "zod": "^4.4.3"
   }
 }
