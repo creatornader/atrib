@@ -9,7 +9,7 @@
  *   (default: https://log.atrib.dev/v1)
  *
  * Calls GET /v1/stats and renders the response with colored output and
- * percentage breakdowns. Designed for ad-hoc operator visibility, no
+ * percentage breakdowns. Designed for ad-hoc visibility into the deployed log, no
  * dependencies beyond node fetch.
  *
  * Exit code 0 on success, 1 if the endpoint is unreachable or returns
