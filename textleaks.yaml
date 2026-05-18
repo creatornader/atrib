@@ -4,7 +4,7 @@
 # ADDED to the starter's patterns. Exception: two classes are explicitly
 # REPLACED with empty patterns (see notes below).
 #
-# atrib also runs a broader leak-audit substrate locally
+# atrib also runs a more broader leak-audit substrate locally
 # via a private mirror. This file is the public-side textleaks surface
 # and intentionally stays conservative: it catches the most obvious
 # cross-project patterns that the existing substrate also catches,
