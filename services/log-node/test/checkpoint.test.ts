@@ -3,8 +3,8 @@ import * as ed from '@noble/ed25519'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { sha512 } from '@noble/hashes/sha2.js'
 
-// Set up sync sha512 for @noble/ed25519
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
+// Set up sha512 for @noble/ed25519 (safe to call multiple times)
+ed.hashes.sha512 = sha512
 
 import {
   formatCheckpointBody,

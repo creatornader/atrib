@@ -12,9 +12,9 @@ import { canonicalSigningInput } from './canon.js'
 import { isValidEventTypeUri } from './types.js'
 import type { AtribRecord } from './types.js'
 
-// @noble/ed25519 v2 requires setting the sha512 sync function
-ed.etc.sha512Sync = (...m) => sha512(ed.etc.concatBytes(...m))
-ed.etc.sha512Async = async (...m) => sha512(ed.etc.concatBytes(...m))
+// @noble/ed25519 v3 needs sha512 wired via the hashes object
+ed.hashes.sha512 = sha512
+ed.hashes.sha512Async = (m) => Promise.resolve(sha512(m))
 
 /**
  * Get the Ed25519 public key for a 32-byte private key.

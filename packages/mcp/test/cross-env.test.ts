@@ -24,7 +24,7 @@ import type { AtribRecord, EntryInput } from '../src/index.js'
 import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
 
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
+ed.hashes.sha512 = sha512
 
 describe('no Buffer dependency in production code paths', () => {
   // These tests work by using only Uint8Array and the package's own utilities.
@@ -75,7 +75,7 @@ describe('no Buffer dependency in production code paths', () => {
   })
 
   it('sign and verify record using only Uint8Array keys', async () => {
-    const privateKey = ed.utils.randomPrivateKey() // Returns Uint8Array
+    const privateKey = ed.utils.randomSecretKey() // Returns Uint8Array
     const publicKey = await ed.getPublicKeyAsync(privateKey) // Returns Uint8Array
     const creatorKey = base64urlEncode(publicKey) // Uses our base64url, not Buffer
 
@@ -101,7 +101,7 @@ describe('no Buffer dependency in production code paths', () => {
   })
 
   it('token encode/decode round-trips without Buffer', async () => {
-    const privateKey = ed.utils.randomPrivateKey()
+    const privateKey = ed.utils.randomSecretKey()
     const publicKey = await ed.getPublicKeyAsync(privateKey)
     const creatorKey = base64urlEncode(publicKey)
     const contextId = hexEncode(new Uint8Array(16).fill(0x11))

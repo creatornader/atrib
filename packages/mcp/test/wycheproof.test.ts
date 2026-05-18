@@ -14,7 +14,7 @@ import { sha512 } from '@noble/hashes/sha2.js'
 import { hexDecode } from '../src/hash.js'
 
 // Ensure sha512 is configured
-ed.etc.sha512Sync = (...m) => sha512(ed.etc.concatBytes(...m))
+ed.hashes.sha512 = sha512
 
 interface WycheproofTestVector {
   tcId: number

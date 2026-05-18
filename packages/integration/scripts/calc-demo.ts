@@ -33,7 +33,7 @@ import {
   type RecommendationDocument,
 } from '@atrib/verify'
 
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
+ed.hashes.sha512 = sha512
 
 function pickMostRecentRecordFile(): string {
   const dir = join(homedir(), '.atrib', 'records')
@@ -152,7 +152,7 @@ async function emitSettlementRecommendation(
 
   // For the demo, use an ephemeral merchant key to sign the recommendation.
   // In production this would be a known merchant key registered via §5.5.
-  const merchantSeed = ed.utils.randomPrivateKey()
+  const merchantSeed = ed.utils.randomSecretKey()
   const merchantPub = await ed.getPublicKeyAsync(merchantSeed)
   const merchantKey = Buffer.from(merchantPub).toString('base64url')
 

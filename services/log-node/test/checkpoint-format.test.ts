@@ -18,7 +18,7 @@ import {
   parseSignatureLine,
 } from '../src/checkpoint.js'
 
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
+ed.hashes.sha512 = sha512
 
 describe('C2SP signed-note format', () => {
   it('formatCheckpointBody produces origin\\nsize\\nbase64hash\\n', () => {
@@ -67,7 +67,7 @@ describe('C2SP signed-note format', () => {
 
 describe('checkpoint signer', () => {
   it('produces signed note with correct structure', async () => {
-    const privateKey = ed.utils.randomPrivateKey()
+    const privateKey = ed.utils.randomSecretKey()
     const publicKey = await ed.getPublicKeyAsync(privateKey)
     const signer = createCheckpointSigner(privateKey, publicKey, 'log.test.io')
 
@@ -86,7 +86,7 @@ describe('checkpoint signer', () => {
   })
 
   it('key ID is deterministic for same key and origin', async () => {
-    const privateKey = ed.utils.randomPrivateKey()
+    const privateKey = ed.utils.randomSecretKey()
     const publicKey = await ed.getPublicKeyAsync(privateKey)
 
     const signer1 = createCheckpointSigner(privateKey, publicKey, 'log.test.io')
@@ -96,7 +96,7 @@ describe('checkpoint signer', () => {
   })
 
   it('key ID differs for different origins', async () => {
-    const privateKey = ed.utils.randomPrivateKey()
+    const privateKey = ed.utils.randomSecretKey()
     const publicKey = await ed.getPublicKeyAsync(privateKey)
 
     const signer1 = createCheckpointSigner(privateKey, publicKey, 'log.a.io')
@@ -106,7 +106,7 @@ describe('checkpoint signer', () => {
   })
 
   it('key ID is 4 bytes (per spec §2.4.2)', async () => {
-    const privateKey = ed.utils.randomPrivateKey()
+    const privateKey = ed.utils.randomSecretKey()
     const publicKey = await ed.getPublicKeyAsync(privateKey)
     const signer = createCheckpointSigner(privateKey, publicKey, 'log.test.io')
 
@@ -114,7 +114,7 @@ describe('checkpoint signer', () => {
   })
 
   it('signature is valid Ed25519 over checkpoint body', async () => {
-    const privateKey = ed.utils.randomPrivateKey()
+    const privateKey = ed.utils.randomSecretKey()
     const publicKey = await ed.getPublicKeyAsync(privateKey)
     const signer = createCheckpointSigner(privateKey, publicKey, 'log.test.io')
 
@@ -134,7 +134,7 @@ describe('checkpoint signer', () => {
   })
 
   it('different tree sizes produce different signatures', async () => {
-    const privateKey = ed.utils.randomPrivateKey()
+    const privateKey = ed.utils.randomSecretKey()
     const publicKey = await ed.getPublicKeyAsync(privateKey)
     const signer = createCheckpointSigner(privateKey, publicKey, 'log.test.io')
 

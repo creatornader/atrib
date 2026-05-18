@@ -23,7 +23,7 @@ import type { AtribRecord } from '../src/index.js'
 import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
 
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
+ed.hashes.sha512 = sha512
 
 // ─────────────────────────────────────────────────────────────────────────────
 // base64url round-trip and adversarial inputs
@@ -253,7 +253,7 @@ describe('timestamp validation', () => {
 
 describe('verifyRecord edge cases', () => {
   it('rejects records with tampered signatures', async () => {
-    const privateKey = ed.utils.randomPrivateKey()
+    const privateKey = ed.utils.randomSecretKey()
     const publicKey = await ed.getPublicKeyAsync(privateKey)
     const creatorKey = Buffer.from(publicKey).toString('base64url')
     const contextId = 'a'.repeat(32)
@@ -279,8 +279,8 @@ describe('verifyRecord edge cases', () => {
   })
 
   it('rejects records with wrong creator_key', async () => {
-    const privateKey = ed.utils.randomPrivateKey()
-    const otherKey = ed.utils.randomPrivateKey()
+    const privateKey = ed.utils.randomSecretKey()
+    const otherKey = ed.utils.randomSecretKey()
     const otherPublic = await ed.getPublicKeyAsync(otherKey)
     const contextId = 'a'.repeat(32)
     const record: AtribRecord = {
@@ -298,7 +298,7 @@ describe('verifyRecord edge cases', () => {
   })
 
   it('verifies correctly signed records', async () => {
-    const privateKey = ed.utils.randomPrivateKey()
+    const privateKey = ed.utils.randomSecretKey()
     const publicKey = await ed.getPublicKeyAsync(privateKey)
     const creatorKey = Buffer.from(publicKey).toString('base64url')
     const contextId = 'a'.repeat(32)

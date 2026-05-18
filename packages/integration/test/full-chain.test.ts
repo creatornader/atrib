@@ -34,8 +34,8 @@ import type { AtribRecord, AtribServer, ProofBundle } from '@atrib/mcp'
 import { startLogServer, parseCheckpointBody, type LogServer } from '@atrib/log-node'
 import { createMockMcpServer } from '../src/test-harness.js'
 
-// Ensure sync sha512 is available for @noble/ed25519
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m))
+// Wire sha512 into @noble/ed25519 v3 hashes object
+ed.hashes.sha512 = sha512
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Test keys
@@ -91,7 +91,7 @@ describe('full-chain integration (real log, real crypto)', () => {
   let creatorPubB64: string
 
   beforeAll(async () => {
-    const logPrivateKey = ed.utils.randomPrivateKey()
+    const logPrivateKey = ed.utils.randomSecretKey()
     logServer = await startLogServer({ port: 0, logPrivateKey })
     creatorPubB64 = base64urlEncode(await getPublicKey(CREATOR_PRIVATE_KEY))
   })

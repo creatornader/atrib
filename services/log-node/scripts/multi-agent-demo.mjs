@@ -32,7 +32,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import canonicalize from 'canonicalize'
 
-ed.etc.sha512Sync = (...m) => sha512(ed.etc.concatBytes(...m))
+ed.hashes.sha512 = sha512
 
 const LOG_ENDPOINT = (process.env.LOG_ENDPOINT ?? 'https://log.atrib.dev/v1').replace(/\/$/, '')
 const PER_AGENT = Number(process.env.PER_AGENT ?? 3)
@@ -76,7 +76,7 @@ function persist(record) {
 }
 
 async function makeAgent(label) {
-  const privateKey = ed.utils.randomPrivateKey()
+  const privateKey = ed.utils.randomSecretKey()
   const publicKey = await ed.getPublicKeyAsync(privateKey)
   return { label, privateKey, publicKey, creatorKey: b64url(publicKey) }
 }
