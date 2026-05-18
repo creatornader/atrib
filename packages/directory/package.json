@@ -35,7 +35,7 @@
     "canonicalize": "^2.1.0"
   },
   "devDependencies": {
-    "@types/node": "^22.19.17",
+    "@types/node": "^25.8.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }
