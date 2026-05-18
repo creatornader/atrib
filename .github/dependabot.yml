@@ -60,9 +60,9 @@ updates:
         update-types:
           - minor
           - patch
-      # NOTE: no npm-major group, each major npm bump opens its own PR
-      # (reviewed individually since TypeScript/crypto/etc. majors have
-      # distinct breaking-change concerns).
+      npm-major:
+        update-types:
+          - major
     commit-message:
       prefix: deps
       include: scope
