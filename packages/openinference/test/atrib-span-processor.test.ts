@@ -36,9 +36,10 @@ async function makeProcessor(submit: (signed: AtribRecord) => void) {
 
 describe('isOpenInferenceSpan / getOpenInferenceSpanKind', () => {
   it('recognizes spans with the canonical kind attribute', () => {
-    const provider = new BasicTracerProvider()
     const exporter = new InMemorySpanExporter()
-    provider.addSpanProcessor(new SimpleSpanProcessor(exporter))
+    const provider = new BasicTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    })
     const tracer = provider.getTracer('test')
 
     const toolSpan = tracer.startSpan('search_web')
@@ -58,9 +59,10 @@ describe('isOpenInferenceSpan / getOpenInferenceSpanKind', () => {
   })
 
   it('rejects unknown kind values', () => {
-    const provider = new BasicTracerProvider()
     const exporter = new InMemorySpanExporter()
-    provider.addSpanProcessor(new SimpleSpanProcessor(exporter))
+    const provider = new BasicTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    })
     const tracer = provider.getTracer('test')
 
     const span = tracer.startSpan('unknown')
@@ -75,9 +77,10 @@ describe('isOpenInferenceSpan / getOpenInferenceSpanKind', () => {
 
 describe('spanToUnsignedRecord', () => {
   it('maps a TOOL span to a tool_call record with derived fields', async () => {
-    const provider = new BasicTracerProvider()
     const exporter = new InMemorySpanExporter()
-    provider.addSpanProcessor(new SimpleSpanProcessor(exporter))
+    const provider = new BasicTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    })
     const tracer = provider.getTracer('test')
 
     const span = tracer.startSpan('grep_files')
@@ -107,9 +110,10 @@ describe('spanToUnsignedRecord', () => {
   })
 
   it('skips spans without openinference kind', async () => {
-    const provider = new BasicTracerProvider()
     const exporter = new InMemorySpanExporter()
-    provider.addSpanProcessor(new SimpleSpanProcessor(exporter))
+    const provider = new BasicTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    })
     const tracer = provider.getTracer('test')
 
     const span = tracer.startSpan('plain')
@@ -126,9 +130,10 @@ describe('spanToUnsignedRecord', () => {
   })
 
   it('skips non-TOOL kinds at this version', async () => {
-    const provider = new BasicTracerProvider()
     const exporter = new InMemorySpanExporter()
-    provider.addSpanProcessor(new SimpleSpanProcessor(exporter))
+    const provider = new BasicTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    })
     const tracer = provider.getTracer('test')
 
     const span = tracer.startSpan('llm-call')
@@ -149,9 +154,10 @@ describe('spanToUnsignedRecord', () => {
   })
 
   it('rejects TOOL spans missing tool.name', async () => {
-    const provider = new BasicTracerProvider()
     const exporter = new InMemorySpanExporter()
-    provider.addSpanProcessor(new SimpleSpanProcessor(exporter))
+    const provider = new BasicTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    })
     const tracer = provider.getTracer('test')
 
     const span = tracer.startSpan('tool-no-name')
@@ -177,8 +183,7 @@ describe('AtribSpanProcessor end-to-end', () => {
       submitted.push(signed)
     })
 
-    const provider = new BasicTracerProvider()
-    provider.addSpanProcessor(processor)
+    const provider = new BasicTracerProvider({ spanProcessors: [processor] })
     const tracer = provider.getTracer('atrib-openinference-test')
 
     const span = tracer.startSpan('list_files')
@@ -208,8 +213,7 @@ describe('AtribSpanProcessor end-to-end', () => {
       submitted.push(signed)
     })
 
-    const provider = new BasicTracerProvider()
-    provider.addSpanProcessor(processor)
+    const provider = new BasicTracerProvider({ spanProcessors: [processor] })
     const tracer = provider.getTracer('test')
 
     // LLM span without llm.model_name -> skipped
@@ -236,8 +240,7 @@ describe('AtribSpanProcessor end-to-end', () => {
       submitted.push(signed)
     })
 
-    const provider = new BasicTracerProvider()
-    provider.addSpanProcessor(processor)
+    const provider = new BasicTracerProvider({ spanProcessors: [processor] })
     const tracer = provider.getTracer('test')
 
     const llmSpan = tracer.startSpan('llm')
@@ -275,8 +278,7 @@ describe('AtribSpanProcessor end-to-end', () => {
       debug: false,
     })
 
-    const provider = new BasicTracerProvider()
-    provider.addSpanProcessor(processor)
+    const provider = new BasicTracerProvider({ spanProcessors: [processor] })
     const tracer = provider.getTracer('test')
 
     expect(() => {
@@ -306,8 +308,7 @@ describe('AtribSpanProcessor end-to-end', () => {
         span.attributes['agent.name'] === 'Approved',
     })
 
-    const provider = new BasicTracerProvider()
-    provider.addSpanProcessor(processor)
+    const provider = new BasicTracerProvider({ spanProcessors: [processor] })
     const tracer = provider.getTracer('test')
 
     const allowed = tracer.startSpan('allowed')
@@ -334,8 +335,7 @@ describe('AtribSpanProcessor end-to-end', () => {
 
     await processor.shutdown()
 
-    const provider = new BasicTracerProvider()
-    provider.addSpanProcessor(processor)
+    const provider = new BasicTracerProvider({ spanProcessors: [processor] })
     const tracer = provider.getTracer('test')
 
     const span = tracer.startSpan('post-shutdown')
