@@ -10,6 +10,13 @@ on:
       - 'packages/log-dev/scripts/**'
       - 'spec/conformance/**'
 
+
+# Default to read-only GITHUB_TOKEN; jobs that need more (release.yml does)
+# specify their own permissions block. Closes CodeQL alert
+# actions/missing-workflow-permissions.
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest

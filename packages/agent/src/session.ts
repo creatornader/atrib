@@ -168,7 +168,7 @@ export function accumulateInboundContext(
     // about whitespace and accept the entry whether it's leftmost or not.
     for (const entry of responseMeta.tracestate.split(',')) {
       const trimmed = entry.trim()
-      const match = trimmed.match(/^atrib\s*=\s*(.*)$/)
+      const match = trimmed.match(/^atrib[ \t]{0,4}=[ \t]{0,4}(.*)$/)
       if (match && match[1] !== undefined) {
         decoded = decodeToken(match[1].trim())
         break

@@ -199,7 +199,7 @@ export function parseTracestateAtrib(tracestate: string): string | null {
   for (const entry of tracestate.split(',')) {
     const trimmed = entry.trim()
     // Be lenient about OWS around `=`: `atrib=value` and `atrib = value` both valid
-    const match = trimmed.match(/^atrib\s*=\s*(.*)$/)
+    const match = trimmed.match(/^atrib[ \t]{0,4}=[ \t]{0,4}(.*)$/)
     if (match && match[1] !== undefined) {
       return match[1].trim()
     }

@@ -1,0 +1,48 @@
+name: Dependabot auto-merge
+
+# Auto-approve + auto-merge Dependabot PRs that match high-trust criteria
+# (patch + minor version bumps for security-relevant ecosystems). Major
+# version bumps are NOT auto-merged: they get a Dependabot PR but require
+# manual review because semantic version theory holds that majors may break.
+#
+# Why this exists: per the operator's policy, security-patch PRs for
+# transitive deps should land continuously without per-PR review friction.
+# Manual review for these turns Dependabot into a backlog instead of a
+# safety net. The required CI checks on `main` (CI + gitleaks + TruffleHog)
+# already gate the merge; auto-merge just removes the human in the loop
+# for low-risk version bumps that pass those gates.
+#
+# Configuration:
+# - Only PRs authored by dependabot[bot] are considered
+# - Approval + auto-merge enabled for patch/minor updates
+# - Major updates labeled "major" by Dependabot get NO auto-action;
+#   require manual review
+#
+# Source: GitHub's official Dependabot auto-merge guide.
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@08eff52bf64351f401fb50d4972fa95b9f2c2d1b # v2.4.0
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Auto-approve + enable auto-merge (patch + minor only)
+        if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+        run: |
+          gh pr review --approve "$PR_URL"
+          gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

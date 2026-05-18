@@ -55,7 +55,7 @@ async function startLogStub(): Promise<LogStub> {
           )
         } catch (e) {
           res.writeHead(400, { 'content-type': 'application/json' })
-          res.end(JSON.stringify({ error: String(e) }))
+          res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }))
         }
       })
     } else {

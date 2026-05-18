@@ -1,12 +1,30 @@
-# Dependabot configuration, keeps GitHub Actions versions current so we don't
-# hit another Node-runtime deprecation surprise like the 2026-06-02 Node 20
-# cutoff.
+# Dependabot config for atrib.
 #
-# Strategy: weekly PRs grouping all action bumps together (low PR noise), with
-# major-version bumps flagged so we read changelogs before merging. SHA-pinned
-# actions get their SHA re-pinned automatically by Dependabot when a new tag
-# version is detected (Dependabot understands the `# vN.N.N` comment
-# convention).
+# Tracks four ecosystems matching atrib's dep surfaces:
+#
+# 1. github-actions, weekly grouped PR for action version drift. Catches
+#    Node-runtime deprecations (e.g., the 2026-06-02 Node 20 to 24 sweep)
+#    before they break CI.
+#
+# 2. npm, the pnpm-workspace TypeScript monorepo (13 workspace packages,
+#    86+ published @atrib/* packages). Weekly with minor/patch vs major
+#    split: minor/patch auto-mergeable, major reviewed manually.
+#
+# 3. cargo, the Rust bridge at packages/directory-bridge/ (compiled to
+#    WASM and shipped inside @atrib/directory). Security-relevant since
+#    the WASM binary lands in npm.
+#
+# 4. pre-commit, tracks rev: fields in .pre-commit-config.yaml. Primary
+#    consumers: creatornader/textleaks + creatornader/oss-twin hooks.
+#    Without this, internal-tool releases don't auto-PR into atrib and
+#    pins drift silently. (Pattern from the 2026-05-17 OSS pin-audit
+#    consolidation.)
+#
+# Strategy: minor/patch versions are auto-merge candidates (low risk,
+# security patches). Major versions get manually reviewed. SHA-pinned
+# actions get their SHA re-pinned automatically by Dependabot when a
+# new tag version is detected (Dependabot understands the `# vN.N.N`
+# comment convention).
 
 version: 2
 updates:
@@ -30,3 +48,62 @@ updates:
     labels:
       - dependencies
       - github-actions
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+      npm-major:
+        update-types:
+          - major
+    commit-message:
+      prefix: deps
+      include: scope
+    labels:
+      - dependencies
+      - npm
+
+  - package-ecosystem: cargo
+    directory: /packages/directory-bridge
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      cargo-minor-patch:
+        update-types:
+          - minor
+          - patch
+      cargo-major:
+        update-types:
+          - major
+    commit-message:
+      prefix: deps
+      include: scope
+    labels:
+      - dependencies
+      - rust
+
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      pre-commit:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+    labels:
+      - dependencies
+      - pre-commit
