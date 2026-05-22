@@ -3779,6 +3779,8 @@ The test: if the candidate operation would land in the graph as anything other t
 
 **Date:** 2026-05-22
 
+**Superseded later the same day by [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape).** [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape) preserves the in-process signing thesis (which is right) and replaces the *distribution* shape (npm-install `@atrib/emit` inside the hook source directory) with a globally-installed CLI binary that the hook spawns. The empirical failure mode that motivated [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape): a `node_modules/` under the hook source dir triggers Claude Code's hook subsystem to silently drop hooks while files are mutating, producing record-emission gaps. The byte-identicality and bounded-key-resolution claims of this ADR all carry over to [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape); only the integration shape changes.
+
 **Context.** A dogfood audit of the producer surface (prompted by Mario Zechner's "what if you don't need MCP" argument) found two coupled failures. The practice gap: across 14 days of the local mirror, the cognitive event types (observation / annotation / revision) were produced almost entirely by post-hoc session-end extractor batches and cron, not by deliberate in-session `atrib-emit` calls. The mechanism gap: the `atrib-emit` MCP server logged roughly 190 `connect timed out after 15000ms` failures per 24h, all tagged `[layer=sessionend]`, all `key=no-env`.
 
 Root cause of the mechanism gap: a hook-class producer (the Claude Code lifecycle and PostToolUse hooks) signs a record by spawning the `atrib-emit` binary as an MCP subprocess over a `StdioClientTransport`, then running the JSON-RPC initialize handshake. In a headless context with no `ATRIB_PRIVATE_KEY` in the environment, `atrib-emit`'s `resolveKey` falls through to a synchronous, unbounded `spawnSync('security', ...)` Keychain call. A locked login Keychain in that context blocks, which stalls the MCP init handshake, which trips the caller's 15s connect timeout. Spawn-per-emit re-pays this on every cold spawn.
@@ -3814,6 +3816,48 @@ The `atrib-emit` MCP server is retained unchanged as the interactive agent-facin
 - [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), the six-primitive MCP surface, retained as the interactive surface; its public-helpers block is the recipe `emitInProcess` packages.
 - [§5.8](atrib-spec.md#58-degradation-contract), the degradation contract; bounded key resolution falls through to pass-through instead of hanging.
 - [D067](#d067-multi-producer-chain-composition-precedence-contract), multi-producer chain composition; `emitInProcess` inherits it unchanged because it routes through `handleEmit`.
+
+---
+
+## D082: CLI binary distribution of emitInProcess (supersedes [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess)'s integration shape)
+
+**Date:** 2026-05-22
+
+**Context.** [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess) introduced `emitInProcess()` as the right primitive for hook-class producers, then proposed importing it directly from `@atrib/emit` inside the host's hook helper. Making the import resolve required a local `package.json` and `node_modules/` in the hook source directory.
+
+In production that arrangement produced a new failure mode the audit caught the same day. Claude Code's hook subsystem watches the hook source files and, while their containing directory was mutating (running `pnpm install`, regenerating symlinks, or refreshing the lockfile after a published `@atrib/emit` release), silently dropped PostToolUse and SessionEnd hook execution for roughly 29 minutes of active work. The user surfaced the gap by reading the live log via `explore.atrib.dev` (no records for two-plus hours despite continuous tool calls). A parallel installation event explained the cluster of misses. The mechanism was specific to the hook directory being a writable npm workspace; nothing about the import call itself was wrong.
+
+The deeper observation: a hook source directory is, from Claude Code's perspective, a *configuration surface*. Configuration surfaces should not also be npm install targets. Mixing the two couples the agent's signing reliability to the operator's package-management cadence.
+
+**Decision.** Ship `@atrib/emit` with a second binary, `atrib-emit-cli`, that wraps `emitInProcess` over a stdin/stdout JSON contract. The operator installs the package globally (`npm install -g @atrib/emit`), which lands the binary on `$PATH`. The hook helper spawns the binary instead of importing the library. Three properties survive from [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess):
+
+- **In-process signing**: the binary is itself a short-lived Node process that calls `emitInProcess`. Records are byte-identical to MCP-server-signed and middleware-signed records ([§1.3](atrib-spec.md#13-canonical-serialization), [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)). The transport changed; the canonical form did not.
+- **Bounded key resolution**: the `keys.ts` timeouts from [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess) still apply, because the binary uses the same `resolveKey` path.
+- **Hook-safe exit semantics**: the binary always exits 0 and writes its result as JSON to stdout, so the hook helper can route failures to a log line without disturbing the agent's tool call.
+
+The hook source directory drops `package.json`, `node_modules/`, and the `@atrib/emit` runtime dependency. The helper becomes a small shell-out: build the envelope, spawn `atrib-emit-cli`, log the JSON it returns. The atrib-emit MCP server remains the interactive surface ([D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) primitives), unchanged.
+
+**Alternatives considered.**
+
+- *Keep the [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess) in-place import.* Rejected. The failure mode is intrinsic to mixing an npm workspace with a Claude Code hook source directory; no amount of careful install sequencing fixes it because the operator cannot serialize all package mutations with hook firings. The CLI binary moves the install target to a global location, where mutations do not touch hook source.
+- *Implement the [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) daemon now.* Rejected for the second time. A daemon would solve the same observed-failure surface, but at the cost of a long-running socket, crash-recovery logic, stale-pid handling, and SIGTERM drain — none of which the spawn-per-emit CLI needs. The CLI is fewer moving parts than the daemon and fewer than the in-place import. [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) stays parked for producers that genuinely cannot sign in-process.
+- *Distribute the helper itself from `@atrib/emit`.* Rejected for this revision. The helper carries operator-specific conventions (envelope shape, log-path layout, auto-detect-`informed_by` scan kept in sync with `@atrib/mcp/refs.ts`) that belong in the operator's repo, not in the public package. The CLI surface is narrow and stable; the helper is host-specific glue.
+- *Use `npx @atrib/emit` per call.* Rejected. `npx` resolves through the network on cache miss and pays a much heavier spawn cost than a globally-installed binary. The CLI shim under `/opt/homebrew/bin` (or equivalent) costs roughly 50ms to spawn cold; `npx` costs many hundreds of milliseconds when its cache is incomplete and adds a network dependency.
+
+**Consequences.**
+
+- `@atrib/emit` adds an `atrib-emit-cli` `bin` entry and a `dist/cli.js` shipped from `src/cli.ts`. The CLI's contract: read a JSON envelope from stdin (`event_type`, `content`, optional `context_id`, `informed_by`, `annotates`, `revises`), call `emitInProcess`, write the result JSON to stdout, log diagnostics to stderr, exit 0. The contract is the same shape the [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess) helper already used internally; only the boundary moves.
+- Operators install `@atrib/emit` globally on machines that run Claude Code hooks. The package's README documents `npm install -g @atrib/emit` as the supported install path for the hook use case (the existing `mcp-emit` binary continues to work for the interactive MCP surface; both ship from the same package).
+- Host hook-source directories no longer declare a `package.json`. Existing `node_modules/` in legacy clones is one cleanup pass during the migration; subsequent clones never reproduce it.
+- [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess)'s primary code change (`emitInProcess` in `src/index.ts`) remains shipped and exported. The CLI is a thin caller, not a replacement.
+- No spec change. Same canonical form, same chain composition rules, same degradation contract.
+
+**Cross-references.**
+
+- [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess), the in-process-emit ADR this supersedes the integration shape of.
+- [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback), the daemon ADR; still rejected for the hook path. Still available for producers that genuinely cannot sign in-process.
+- [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), the six-primitive MCP interactive surface, unchanged.
+- [§5.8](atrib-spec.md#58-degradation-contract), degradation contract; the CLI returns a non-fatal warning on flush-deadline expiry instead of throwing.
 
 ---
 
