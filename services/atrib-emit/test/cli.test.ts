@@ -256,13 +256,13 @@ describe('atrib-emit-cli wire contract', () => {
     expect(r.code).toBe(0)
     const report = JSON.parse(r.stdout) as {
       ok: boolean
-      checks: { key: { ok: boolean }; log_endpoint: { ok: boolean; data?: { tree_size?: number } }; mirror_writeable: { ok: boolean } }
+      checks: { key: { ok: boolean }; log_endpoint: { ok: boolean; data?: { tree_size?: number } }; mirror_writable: { ok: boolean } }
     }
     expect(report.ok).toBe(true)
     expect(report.checks.key.ok).toBe(true)
     expect(report.checks.log_endpoint.ok).toBe(true)
     expect(report.checks.log_endpoint.data?.tree_size).toBe(42)
-    expect(report.checks.mirror_writeable.ok).toBe(true)
+    expect(report.checks.mirror_writable.ok).toBe(true)
   })
 
   it('doctor: exits 1 with diagnostic when log endpoint is unreachable', async () => {
@@ -290,7 +290,7 @@ describe('atrib-emit-cli wire contract', () => {
     expect(r.code).toBe(1)
     expect(r.stdout).toMatch(/key\s+key resolved/)
     expect(r.stdout).toMatch(/log_endpoint\s+log endpoint (reachable|unreachable)/)
-    expect(r.stdout).toMatch(/mirror_writeable\s+mirror parent (writeable|not writeable)/)
+    expect(r.stdout).toMatch(/mirror_writable\s+mirror parent (writable|not writable)/)
   })
 
   it('explicit `emit` subcommand: behaves identically to the default', async () => {

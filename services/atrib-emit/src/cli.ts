@@ -167,7 +167,7 @@ SUBCOMMANDS
                             per §5.8 degradation contract.
   doctor                    Substrate readiness check: verify a signing key is
                             resolvable, the log endpoint is reachable, and the
-                            local mirror path is writeable. Exits 0 if all
+                            local mirror path is writable. Exits 0 if all
                             checks pass, non-zero otherwise.
 
 GLOBAL OPTIONS
@@ -377,7 +377,7 @@ async function checkLogEndpoint(endpoint: string): Promise<CheckResult> {
   }
 }
 
-function checkMirrorWriteable(): CheckResult {
+function checkMirrorWritable(): CheckResult {
   const t0 = Date.now()
   const path =
     process.env['ATRIB_MIRROR_FILE'] ??
@@ -385,19 +385,19 @@ function checkMirrorWriteable(): CheckResult {
   const parent = dirname(path)
   try {
     // The mirror file itself may or may not exist; we care about the parent
-    // dir being writeable. Best-effort: if parent missing, that's a fail
+    // dir being writable. Best-effort: if parent missing, that's a fail
     // (signing path would create the file later but the runtime needs the dir).
     accessSync(parent, fsConstants.W_OK)
     return {
       ok: true,
-      detail: `mirror parent writeable (${parent})`,
+      detail: `mirror parent writable (${parent})`,
       timing_ms: Date.now() - t0,
       data: { path, parent },
     }
   } catch (e) {
     return {
       ok: false,
-      detail: `mirror parent not writeable: ${parent} (${e instanceof Error ? e.message : String(e)})`,
+      detail: `mirror parent not writable: ${parent} (${e instanceof Error ? e.message : String(e)})`,
       timing_ms: Date.now() - t0,
       data: { path, parent },
     }
@@ -410,7 +410,7 @@ interface DoctorReport {
   checks: {
     key: CheckResult
     log_endpoint: CheckResult
-    mirror_writeable: CheckResult
+    mirror_writable: CheckResult
   }
 }
 
@@ -419,12 +419,12 @@ async function runDoctor(opts: { logEndpoint?: string }): Promise<DoctorReport> 
   const [key, logEndpoint, mirror] = await Promise.all([
     checkKey(),
     checkLogEndpoint(endpoint),
-    Promise.resolve(checkMirrorWriteable()),
+    Promise.resolve(checkMirrorWritable()),
   ])
   return {
     ok: key.ok && logEndpoint.ok && mirror.ok,
     version: readPackageVersion(),
-    checks: { key, log_endpoint: logEndpoint, mirror_writeable: mirror },
+    checks: { key, log_endpoint: logEndpoint, mirror_writable: mirror },
   }
 }
 
@@ -437,7 +437,7 @@ function renderDoctorText(report: DoctorReport): string {
   }
   lines.push(fmt('key', report.checks.key))
   lines.push(fmt('log_endpoint', report.checks.log_endpoint))
-  lines.push(fmt('mirror_writeable', report.checks.mirror_writeable))
+  lines.push(fmt('mirror_writable', report.checks.mirror_writable))
   lines.push('')
   lines.push(report.ok ? 'All checks passed.' : 'One or more checks failed.')
   return lines.join('\n')
