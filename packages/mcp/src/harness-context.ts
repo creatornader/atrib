@@ -18,7 +18,7 @@
  * exists in the MCP child env, producing an orphan singleton chain that
  * is signed-but-uncomposable with the session's other records.
  *
- * Per D078's precedent the fallback is silent — harness env vars represent
+ * Per D078's precedent the fallback is silent: harness env vars represent
  * the spawning host's declared session scope, not a misconfiguration.
  * Invalid values produce undefined (not an error) so callers see the same
  * shape as "neither set."
@@ -46,8 +46,9 @@ export interface HarnessDiscovery {
 export const KNOWN_HARNESS_DISCOVERIES: readonly HarnessDiscovery[] = [
   // Claude Code: parent process exposes CLAUDE_CODE_SESSION_ID as a UUID
   // (e.g. "38af29c4-fc3a-4f88-8fec-392501b8a0a9"). Stripping the dashes and
-  // lowercasing yields a 32-hex context_id matching the derivation already
-  // used in atrib-internal's atrib-tool-signer-hook.mjs envelope path.
+  // lowercasing yields a 32-hex context_id matching the derivation any
+  // companion PostToolUse / lifecycle hook would apply when deriving
+  // context_id from the same envelope.
   {
     envVar: 'CLAUDE_CODE_SESSION_ID',
     parse: (value: string): string | null => {

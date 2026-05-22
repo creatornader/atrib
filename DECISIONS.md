@@ -3872,7 +3872,7 @@ The handoff pointed to threading per-session context_id into MCP server env bloc
 **Decision.** Each of the four servers reads from a shared `resolveEnvContextId()` helper in `@atrib/mcp`. The helper applies a fixed precedence:
 
 1. `ATRIB_CONTEXT_ID` if set and a valid 32-hex string ([D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default) intent: explicit operator/harness declaration).
-2. First valid match against `KNOWN_HARNESS_DISCOVERIES`, a static registry of `{ envVar, parse }` entries with per-harness derivation rules. The initial registry contains `CLAUDE_CODE_SESSION_ID` (UUID; dashes stripped + lowercased to produce a 32-hex context_id matching the same derivation already used in atrib-internal's `atrib-tool-signer-hook.mjs` envelope path).
+2. First valid match against `KNOWN_HARNESS_DISCOVERIES`, a static registry of `{ envVar, parse }` entries with per-harness derivation rules. The initial registry contains `CLAUDE_CODE_SESSION_ID` (UUID; dashes stripped + lowercased to produce a 32-hex context_id matching any companion PostToolUse hook's envelope-path derivation).
 3. `undefined`, signaling the caller's existing resolution chain (`inheritChainContext`, mirror tail, synthetic genesis) should proceed.
 
 Invalid values at any precedence level silently fall through. Harness env vars represent declared session scope, not misconfiguration; surfacing a warning would conflate intentional propagation with operator error.
