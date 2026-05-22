@@ -1,5 +1,12 @@
 # @atrib/revise
 
+## 0.2.7
+
+### Patch Changes
+
+- Updated dependencies [71a2344]
+  - @atrib/emit@0.13.0
+
 ## 0.2.6
 
 ### Patch Changes
