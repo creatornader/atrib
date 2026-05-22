@@ -24,7 +24,7 @@ Why atrib's graph records *structure*, not *causality interpreted from content*,
   - INFORMED_BY from `informed_by` array
   - ANNOTATES from `annotation` event_type ([D058](../../DECISIONS.md))
   - REVISES from `revision` event_type ([D059](../../DECISIONS.md))
-- Why this matters: the graph is a **fact layer**; weighting/distribution decisions live in the policy layer (§4). Pure separation.
+- Why this matters: the graph is a **fact layer**; weighting/distribution decisions live in the policy layer ([§4](../../atrib-spec.md#4-attribution-policy-format)). Pure separation.
 - Worked example: same set of records run through two implementations, show byte-identical edge output
 
 ## See also

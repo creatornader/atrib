@@ -19,7 +19,7 @@ The 10-layer trust stack — what each layer attests to, how it can fail, and wh
   2. Identity (does the key belong to the named entity? — leans on the directory)
   3. Capability (is this entity authorized for this kind of action?)
   4. Revocation (is the key still current?)
-  5. Cross-attestation (≥2 signers on transactions per §1.7.6)
+  5. Cross-attestation (≥2 signers on transactions per [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records))
   6. Tool-side attestation (did the tool also attest to what happened?)
   7. External evidence (does the world outside atrib corroborate?)
   8. Witnessing (independent cosigners on log checkpoints)
