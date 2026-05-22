@@ -31,6 +31,43 @@ atrib is the substrate. Consuming it well (surfacing an agent's history at sessi
 
 No custom cryptography. No content exposure unless the harness opts in. No trust required.
 
+## Try the demo
+
+One command, no setup beyond cloning. Generates a fresh key, spins up an in-process Merkle log, fake merchant, and fake agent, runs three tool calls plus one transaction, and prints what landed in the log.
+
+```bash
+ATRIB_PRIVATE_KEY=$(node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))') \
+  pnpm --filter @atrib/integration demo
+```
+
+Expected output:
+
+```
+[demo] starting dev log...
+[demo] dev log running at http://127.0.0.1:58958
+[demo] starting merchant tool server (fake search API)...
+[demo] starting agent client...
+[demo] agent connected to merchant
+
+[demo] step 1: agent calls 'search' for the first time (genesis)
+[log] +tool_call   ctx=7f71199d… chain=sha256:064692c27… idx=0
+
+[demo] step 2: agent calls 'search' again (chained from step 1)
+[log] +tool_call   ctx=7f71199d… chain=sha256:381c22ac6… idx=1
+
+[demo] step 3: agent observes a fake x402 payment receipt
+[log] +transaction ctx=7f71199d… chain=sha256:96ac3e962… idx=2
+
+[demo] final state
+[demo] 3 records in the log
+[demo]   2 tool_call records
+[demo]   1 transaction record
+[demo] chain length: 3
+[demo] done.
+```
+
+The signatures, chain hashes, and transaction detection are production code. Only the surrounding environment (merchant, agent, network) is stubbed.
+
 ## What atrib certifies, what it does not
 
 atrib certifies five structural axes of agent activity: who acted (identity), what they did (event_type), when (timestamp), in what order (chain ordering), and what the agent claims informed each action (the `informed_by` and `provenance_token` fields, surfaced as INFORMED_BY and PROVENANCE_OF graph edges).
@@ -69,7 +106,14 @@ atrib detects transaction events from all six simultaneously. It does not move m
 
 ## Quick start
 
-### Server side (tool creator)
+Pick the path that matches what you're doing:
+
+- Sign tool calls your MCP server handles: `@atrib/mcp` ([below](#sign-tool-calls-your-mcp-server))
+- Sign tool calls your agent makes: `@atrib/agent` ([below](#sign-tool-calls-your-agent))
+- Verify records someone else produced: `@atrib/verify` ([below](#verify-records-any-third-party))
+- See it run end-to-end first: [Try the demo](#try-the-demo)
+
+### Sign tool calls (your MCP server)
 
 ```typescript
 import { atrib } from '@atrib/mcp'
@@ -83,7 +127,7 @@ const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
 
 One line. Every successful tool call emits a signed attribution record, propagates W3C trace context, and submits to the log asynchronously.
 
-### Agent side (framework adapter)
+### Sign tool calls (your agent)
 
 `@atrib/agent` exports one interceptor plus a helper per framework. Setup is the same across all of them:
 
@@ -95,7 +139,7 @@ One line. Every successful tool call emits a signed attribution record, propagat
 | LangChain JS | [`packages/integration/examples/langchain-js/`](packages/integration/examples/langchain-js/) |
 | End-to-end demo | [`packages/integration/examples/end-to-end/`](packages/integration/examples/end-to-end/) |
 
-### Merchant side (verification)
+### Verify records (any third party)
 
 ```typescript
 import { AtribVerifier } from '@atrib/verify'
@@ -109,15 +153,6 @@ const result = await verifier.verify(recommendationDoc)
 ```
 
 Verification re-runs the [§4.6](atrib-spec.md#46-the-calculation-algorithm) calculation locally and compares the result. No trust in any intermediary.
-
-## Try the demo
-
-```bash
-ATRIB_PRIVATE_KEY=$(node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))') \
-  pnpm --filter @atrib/integration demo
-```
-
-Runs a fake merchant, a fake agent, and a real Merkle log in a single process. The signatures, chain hashes, and transaction detection are production code. Only the surrounding environment is stubbed.
 
 ## Packages
 
