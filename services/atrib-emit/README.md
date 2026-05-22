@@ -104,11 +104,19 @@ Records signed by either binary are byte-identical at the canonical-form level �
 
 ```bash
 npm install -g @atrib/emit   # puts both binaries on $PATH
+
+# Default: read envelope on stdin, sign, write EmitOutput JSON to stdout.
 echo '{"event_type":"https://atrib.dev/v1/types/observation","content":{"what":"hello"},"context_id":"deadbeef00000000deadbeef00000000"}' \
   | atrib-emit-cli --log-endpoint https://log.atrib.dev/v1/entries
+
+# Substrate-readiness check (text by default, --json for machine-readable):
+atrib-emit-cli doctor                  # exits 0 if key + log + mirror all ok, non-zero otherwise
+
+# Introspect the CLI's contract (subcommands, envelope schema, env vars, ADR refs):
+atrib-emit-cli --describe              # stable JSON description for agent / tooling discovery
 ```
 
-Exit code is always 0 per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract); failures surface as warnings inside the result JSON or as a stderr diagnostic line.
+Exit code on `emit` is always 0 per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract); failures surface as warnings inside the result JSON or as a stderr diagnostic line. `doctor` exits non-zero on failure — operator-facing diagnostic, not hook-safe.
 
 ## Installation in an MCP host
 

@@ -197,4 +197,115 @@ describe('atrib-emit-cli wire contract', () => {
     expect(out.warnings.some((w) => w.includes('invalid CLI arguments'))).toBe(true)
     expect(r.stderr).toContain('unknown argument')
   })
+
+  it('--describe: emits a stable JSON description of the CLI contract', async () => {
+    const r = await runCli(['--describe'], '')
+    expect(r.code).toBe(0)
+    const desc = JSON.parse(r.stdout) as {
+      name: string
+      version: string
+      subcommands: Record<string, { description: string; reads_stdin: boolean }>
+      options: Array<{ flag: string; takes_value: boolean }>
+      envelope_schema: { required: Record<string, string>; optional: Record<string, string> }
+      env_vars: Array<{ name: string }>
+    }
+    expect(desc.name).toBe('atrib-emit-cli')
+    expect(desc.version).toMatch(/^\d+\.\d+\.\d+/)
+    // Both subcommands must be discoverable
+    expect(desc.subcommands.emit).toBeDefined()
+    expect(desc.subcommands.doctor).toBeDefined()
+    expect(desc.subcommands.emit.reads_stdin).toBe(true)
+    expect(desc.subcommands.doctor.reads_stdin).toBe(false)
+    // Required envelope fields are listed
+    expect(desc.envelope_schema.required['event_type']).toBeDefined()
+    expect(desc.envelope_schema.required['content']).toBeDefined()
+    // Documented env vars include the load-bearing ones
+    const envNames = desc.env_vars.map((v) => v.name)
+    expect(envNames).toContain('ATRIB_PRIVATE_KEY')
+    expect(envNames).toContain('ATRIB_LOG_ENDPOINT')
+    expect(envNames).toContain('ATRIB_CONTEXT_ID')
+    // Options include --describe itself (self-documenting)
+    expect(desc.options.some((o) => o.flag === '--describe')).toBe(true)
+  })
+
+  it('doctor: exits 0 when all checks pass against a reachable log stub', async () => {
+    // Re-use the log stub from the happy-path test by overriding the endpoint.
+    // The log stub doesn't have /v1/checkpoint, so we point doctor at a route
+    // that returns 200 from any well-formed origin. Easier: spin a tiny stub
+    // that responds to /v1/checkpoint with a parseable signed-note.
+    const stubServer = createServer((req: IncomingMessage, res: ServerResponse) => {
+      if (req.url === '/v1/checkpoint') {
+        res.writeHead(200, { 'content-type': 'text/plain' })
+        res.end('log.atrib.dev/v1\n42\nfakefakefakefake\n\n— log.atrib.dev/v1 stubsig\n')
+        return
+      }
+      res.writeHead(404)
+      res.end()
+    })
+    await new Promise<void>((resolve) => stubServer.listen(0, '127.0.0.1', resolve))
+    const addr = stubServer.address()
+    if (!addr || typeof addr === 'string') throw new Error('no address')
+    const stubUrl = `http://127.0.0.1:${addr.port}/v1/entries`
+
+    const r = await runCli(['doctor', '--json', '--log-endpoint', stubUrl], '', {
+      ATRIB_PRIVATE_KEY: seedHex,
+      ATRIB_MIRROR_FILE: mirrorPath,
+    })
+    stubServer.close()
+
+    expect(r.code).toBe(0)
+    const report = JSON.parse(r.stdout) as {
+      ok: boolean
+      checks: { key: { ok: boolean }; log_endpoint: { ok: boolean; data?: { tree_size?: number } }; mirror_writable: { ok: boolean } }
+    }
+    expect(report.ok).toBe(true)
+    expect(report.checks.key.ok).toBe(true)
+    expect(report.checks.log_endpoint.ok).toBe(true)
+    expect(report.checks.log_endpoint.data?.tree_size).toBe(42)
+    expect(report.checks.mirror_writable.ok).toBe(true)
+  })
+
+  it('doctor: exits 1 with diagnostic when log endpoint is unreachable', async () => {
+    const r = await runCli(['doctor', '--json', '--log-endpoint', 'http://127.0.0.1:1/v1/entries'], '', {
+      ATRIB_PRIVATE_KEY: seedHex,
+      ATRIB_MIRROR_FILE: mirrorPath,
+    })
+    expect(r.code).toBe(1)
+    const report = JSON.parse(r.stdout) as {
+      ok: boolean
+      checks: { log_endpoint: { ok: boolean; detail: string } }
+    }
+    expect(report.ok).toBe(false)
+    expect(report.checks.log_endpoint.ok).toBe(false)
+    expect(report.checks.log_endpoint.detail).toMatch(/unreachable|fetch failed|ECONN/)
+  })
+
+  it('doctor: text output (default) names each check on its own line', async () => {
+    // Even if log is unreachable, doctor should still produce three readable lines.
+    const r = await runCli(['doctor', '--log-endpoint', 'http://127.0.0.1:1/v1/entries'], '', {
+      ATRIB_PRIVATE_KEY: seedHex,
+      ATRIB_MIRROR_FILE: mirrorPath,
+    })
+    // Doctor exits non-zero on failure; text still printed.
+    expect(r.code).toBe(1)
+    expect(r.stdout).toMatch(/key\s+key resolved/)
+    expect(r.stdout).toMatch(/log_endpoint\s+log endpoint (reachable|unreachable)/)
+    expect(r.stdout).toMatch(/mirror_writable\s+mirror parent (writable|not writable)/)
+  })
+
+  it('explicit `emit` subcommand: behaves identically to the default', async () => {
+    const envelope = {
+      event_type: 'https://atrib.dev/v1/types/observation',
+      content: { what: 'explicit-emit-subcommand', topics: ['cli-test'] },
+      context_id: 'aaaabbbbccccddddeeeeffff00001112',
+    }
+    const r = await runCli(['emit', '--log-endpoint', log.url], JSON.stringify(envelope), {
+      ATRIB_PRIVATE_KEY: seedHex,
+      ATRIB_MIRROR_FILE: mirrorPath,
+      ATRIB_AUTOCHAIN_SOURCE: mirrorPath,
+    })
+    expect(r.code).toBe(0)
+    const out = JSON.parse(r.stdout) as { record_hash: string }
+    expect(out.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+  })
 })
