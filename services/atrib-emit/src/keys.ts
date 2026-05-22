@@ -24,11 +24,36 @@
 //
 // Wrapper source of truth lives in the operator's internal repo; this
 // resolution chain must be kept in lockstep with that wrapper.
+//
+// Sources 3 and 4 shell out to external binaries (`security`, `op`) that
+// can block indefinitely in headless contexts: a locked login Keychain
+// has no GUI to unlock against, and `op read` waits on a biometric
+// approval no one will give in cron. Both spawnSync calls are bounded by
+// a timeout so resolveKey() always returns within a few seconds and the
+// caller fails fast into the §5.8 pass-through path instead of stalling
+// the atrib-emit MCP init handshake (the observed 15s connect timeout in
+// session-end / cron contexts). Tune via ATRIB_KEYCHAIN_TIMEOUT_MS and
+// ATRIB_OP_TIMEOUT_MS.
 
 import { readFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { userInfo } from 'node:os'
 import { base64urlDecode } from '@atrib/mcp'
+
+/**
+ * Upper bound on the `security find-generic-password` call. A healthy,
+ * unlocked Keychain answers in well under 100ms; the timeout exists to
+ * cap a *hung* Keychain (locked login keychain, headless context) so
+ * resolveKey falls through rather than stalling. Default 3s.
+ */
+const KEYCHAIN_TIMEOUT_MS = Number(process.env['ATRIB_KEYCHAIN_TIMEOUT_MS'] ?? '3000')
+
+/**
+ * Upper bound on the `op read` recovery call. Larger than the Keychain
+ * bound because `op read` may legitimately wait on an interactive Touch
+ * ID approval; still bounded so a headless invocation cannot hang. Default 10s.
+ */
+const OP_TIMEOUT_MS = Number(process.env['ATRIB_OP_TIMEOUT_MS'] ?? '10000')
 
 export interface ResolvedKey {
   privateKey: Uint8Array
@@ -71,8 +96,15 @@ export async function resolveKey(): Promise<ResolvedKey | null> {
       const result = spawnSync(
         'security',
         ['find-generic-password', '-a', account, '-s', service, '-w'],
-        { encoding: 'utf-8' },
+        { encoding: 'utf-8', timeout: KEYCHAIN_TIMEOUT_MS },
       )
+      if ((result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT') {
+        // Keychain subsystem is unresponsive (locked login keychain in a
+        // headless context). The second service would hang identically;
+        // stop retrying and fall through so the caller fails fast into
+        // §5.8 pass-through instead of paying the timeout twice.
+        break
+      }
       if (result.status === 0) {
         const seed = result.stdout.trim()
         if (seed.length > 0) {
@@ -92,7 +124,7 @@ export async function resolveKey(): Promise<ResolvedKey | null> {
     const opAccount = process.env['ATRIB_OP_ACCOUNT']
     if (opAccount) args.push('--account', opAccount)
     args.push(opReference)
-    const result = spawnSync('op', args, { encoding: 'utf-8' })
+    const result = spawnSync('op', args, { encoding: 'utf-8', timeout: OP_TIMEOUT_MS })
     if (result.status === 0) {
       // 1Password items often store seeds with a label prefix like
       // "ATRIB_PRIVATE_KEY=<seed>" so the operator can tell which field
