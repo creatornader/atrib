@@ -1,6 +1,6 @@
 {
   "name": "@atrib/verify",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,7 +13,7 @@
   "files": [
     "dist"
   ],
-  "description": "Verifier library for atrib. Independent signature, graph-derivation, and settlement-recommendation checks per atrib spec \u00a74.6.",
+  "description": "Verifier library for atrib. Independent signature, graph-derivation, and settlement-recommendation checks per atrib spec §4.6.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",

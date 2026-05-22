@@ -1,5 +1,13 @@
 # @atrib/agent
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [ec688d0]
+  - @atrib/mcp@0.8.0
+  - @atrib/verify@0.3.1
+
 ## 0.2.0
 
 ### Minor Changes
