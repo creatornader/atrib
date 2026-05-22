@@ -48,6 +48,10 @@ export { readMirrorTail, inheritChainContext } from './mirror.js'
 export type { ChainContext } from './mirror.js'
 export { encodeToken, decodeToken } from './token.js'
 
+// Harness session-id discovery (D083)
+export { resolveEnvContextId, KNOWN_HARNESS_DISCOVERIES } from './harness-context.js'
+export type { HarnessDiscovery } from './harness-context.js'
+
 // Context (for advanced usage)
 export {
   readInboundContext,

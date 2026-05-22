@@ -18,6 +18,7 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { resolveEnvContextId } from '@atrib/mcp'
 import { loadAllRecords, type IndexedRecord } from './storage.js'
 import { callLlm, resolveLlmConfig } from './llm.js'
 import { buildSystemPrompt, buildUserMessage } from './prompt.js'
@@ -100,15 +101,11 @@ async function handleSummarize(
   const warnings: string[] = []
   const maxRecords = input.max_records ?? 50
 
-  // ATRIB_CONTEXT_ID env-var default: when the caller omitted context_id
-  // AND did not supply record_hashes, fall back to the env var if it
-  // carries a valid 32-hex value. Lets Inspect-style harnesses scope
-  // summarize to a per-arm context_id via the MCP env block (per D072's
-  // per-arm isolation contract). Explicit input.context_id always wins.
-  const envContextId = process.env['ATRIB_CONTEXT_ID']
-  const effectiveContextId =
-    input.context_id ??
-    (envContextId && HEX_32_PATTERN.test(envContextId) ? envContextId : undefined)
+  // Env-var context_id default: when the caller omitted context_id AND did
+  // not supply record_hashes, fall back to @atrib/mcp's resolveEnvContextId
+  // (D078 + D083 precedence: ATRIB_CONTEXT_ID, then a registered harness
+  // env var like CLAUDE_CODE_SESSION_ID). Explicit input.context_id wins.
+  const effectiveContextId = input.context_id ?? resolveEnvContextId()
   const effective: z.infer<typeof SummarizeInput> = {
     ...input,
     ...(effectiveContextId ? { context_id: effectiveContextId } : {}),

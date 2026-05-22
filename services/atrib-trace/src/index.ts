@@ -17,6 +17,7 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { resolveEnvContextId } from '@atrib/mcp'
 import { loadAllRecords } from './storage.js'
 import { traceBackward, type TraceVisited } from './trace.js'
 
@@ -157,15 +158,11 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
       const maxNodes = args.max_nodes ?? 200
       const compact = args.compact ?? true
 
-      // ATRIB_CONTEXT_ID env-var default: when the caller omitted
-      // context_id, fall back to the env var if it carries a valid
-      // 32-hex value. Lets Inspect-style harnesses scope the trace walk
-      // to a per-arm context_id via the MCP env block (per D072's
-      // per-arm isolation contract). Explicit args.context_id always wins.
-      const envContextId = process.env['ATRIB_CONTEXT_ID']
-      const contextId =
-        args.context_id ??
-        (envContextId && HEX_32_PATTERN.test(envContextId) ? envContextId : undefined)
+      // Env-var context_id default: when the caller omitted context_id,
+      // fall back to @atrib/mcp's resolveEnvContextId (D078 + D083
+      // precedence: ATRIB_CONTEXT_ID, then a registered harness env var
+      // like CLAUDE_CODE_SESSION_ID). Explicit args.context_id always wins.
+      const contextId = args.context_id ?? resolveEnvContextId()
 
       const { byHash } = loadAllRecords()
       const result = traceBackward(args.record_hash, depth, byHash, {

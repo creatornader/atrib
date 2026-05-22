@@ -24,6 +24,7 @@ import {
   hexEncode,
   inheritChainContext,
   isValidEventTypeUri,
+  resolveEnvContextId,
   sha256,
   type AtribRecord,
   type ProofBundle,
@@ -258,21 +259,14 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
     ])
   }
 
-  // ATRIB_CONTEXT_ID env-var default: when the caller omitted context_id,
-  // fall back to process.env.ATRIB_CONTEXT_ID before the multi-producer
-  // composition path. This lets Inspect-style harnesses thread a
-  // deterministic per-run context_id into spawned atrib-emit subprocesses
-  // via the MCP env block (per D072's per-arm isolation contract). Only
-  // valid 32-hex values are honored; invalid values are ignored and the
-  // tool falls back to the existing inheritChainContext logic. The fallback
-  // is silent (no warning) because the env var represents the caller's
-  // declared intent; we surface mismatches only when the caller passed a
-  // different explicit context_id, in which case the explicit value wins
-  // per the standard "explicit beats implicit" precedence.
-  const envContextId = process.env['ATRIB_CONTEXT_ID']
-  const callerContextId =
-    input.context_id ??
-    (envContextId && HEX_32_PATTERN.test(envContextId) ? envContextId : undefined)
+  // Env-var context_id default: when the caller omitted context_id, fall back
+  // to @atrib/mcp's resolveEnvContextId, which applies the D078 + D083
+  // precedence: ATRIB_CONTEXT_ID first (explicit operator/harness intent),
+  // then a registered harness env var (e.g. CLAUDE_CODE_SESSION_ID). Both
+  // produce a validated 32-hex string or undefined; invalid values silently
+  // fall through to the existing inheritChainContext logic. Explicit
+  // input.context_id still wins per "explicit beats implicit."
+  const callerContextId = input.context_id ?? resolveEnvContextId()
 
   // Multi-producer chain composition per spec §1.2.3 / D067. Single source
   // of truth in @atrib/mcp's inheritChainContext: caller-supplied verbatim
