@@ -179,6 +179,14 @@ interface HandleEmitInput {
   input: z.infer<typeof EmitInput>
   key: ResolvedKey | null
   queue: SubmissionQueue
+  /**
+   * Producer label written to the sidecar's `_local.producer` field for
+   * cross-source disambiguation in mirror queries. Defaults to
+   * `'atrib-emit'` for the bare server path; specialized wrappers
+   * (`@atrib/annotate`, `@atrib/revise`) pass their own identity so
+   * downstream consumers can tell which surface signed each record.
+   */
+  producer?: string
 }
 
 /**
@@ -186,7 +194,7 @@ interface HandleEmitInput {
  * scope doc. Per §5.8 degradation: never throws to the agent; surfaces all
  * partial-failure conditions in `warnings`.
  */
-async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitOutput> {
+async function handleEmit({ input, key, queue, producer }: HandleEmitInput): Promise<EmitOutput> {
   const warnings: string[] = []
 
   if (!isValidEventTypeUri(input.event_type)) {
@@ -357,7 +365,7 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
   // envelope level, the signed record bytes are unchanged.
   await mirrorRecord(record, recordHash ? getProofFor(queue, recordHash) ?? null : null, {
     content: input.content,
-    producer: 'atrib-emit',
+    producer: producer ?? 'atrib-emit',
   })
 
   // Try to read a proof if the queue submitted synchronously and the log
@@ -417,6 +425,15 @@ export interface EmitInProcessOptions {
   /** Override the log endpoint (defaults to ATRIB_LOG_ENDPOINT or @atrib/mcp default). */
   logEndpoint?: string | undefined
   /**
+   * Producer label written to the sidecar's `_local.producer` field for
+   * cross-source disambiguation. Defaults to `'atrib-emit'`. Callers that
+   * represent a distinct surface should pass their own identifier (e.g.
+   * `'atrib-emit-cli'` for the CLI binary, `'atrib-annotate'` /
+   * `'atrib-revise'` for specialized cognitive primitives) so mirror
+   * consumers can bucket records by emitter without inspecting envelopes.
+   */
+  producer?: string
+  /**
    * Upper bound on the post-sign queue flush, in milliseconds. Default
    * 5000ms. The submission queue itself has a 30s retry budget against an
    * unreachable log (`MAX_WINDOW_MS` in `@atrib/mcp`); without this
@@ -469,7 +486,7 @@ export async function emitInProcess(
   const logEndpoint = options.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT']
   const flushDeadlineMs = options.flushDeadlineMs ?? DEFAULT_FLUSH_DEADLINE_MS
   const queue: SubmissionQueue = createSubmissionQueue(logEndpoint)
-  const result = await handleEmit({ input, key, queue })
+  const result = await handleEmit({ input, key, queue, producer: options.producer })
   // Drain before returning, bounded by flushDeadlineMs. The typical caller
   // is a detached hook process that exits right after this resolves; we
   // don't want the queue's 30s retry budget on an unreachable log to

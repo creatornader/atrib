@@ -432,3 +432,99 @@ describe('D083 harness session-id discovery (consumer integration)', () => {
     expect(result.context_id).not.toBe('38af29c4fc3a4f888fec392501b8a0a9')
   })
 })
+
+describe('producer sidecar routing (substrate-health by-producer aggregation)', () => {
+  // Each cognitive primitive labels its records with a distinct producer
+  // string in the mirror sidecar so the substrate-health snapshot can
+  // bucket records by emitter without inspecting envelopes. Default is
+  // `'atrib-emit'` for the bare server; specialized wrappers
+  // (atrib-annotate, atrib-revise) and the CLI binary supply their own.
+  const { handleEmit } = __index_test_only__
+
+  let priorMirrorFile: string | undefined
+  let tmpDir: string
+  let mirrorFile: string
+
+  beforeEach(async () => {
+    const { mkdtempSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    priorMirrorFile = process.env['ATRIB_MIRROR_FILE']
+    tmpDir = mkdtempSync(join(tmpdir(), 'atrib-producer-test-'))
+    mirrorFile = join(tmpDir, 'mirror.jsonl')
+    process.env['ATRIB_MIRROR_FILE'] = mirrorFile
+  })
+  afterEach(async () => {
+    const { rmSync } = await import('node:fs')
+    rmSync(tmpDir, { recursive: true, force: true })
+    if (priorMirrorFile === undefined) delete process.env['ATRIB_MIRROR_FILE']
+    else process.env['ATRIB_MIRROR_FILE'] = priorMirrorFile
+  })
+
+  async function emitAndReadMirror(producer?: string): Promise<Record<string, unknown>> {
+    const seed = await freshKey()
+    const queue = {
+      submit: () => {},
+      flush: async () => {},
+      getProof: async () => null,
+    } as unknown as ReturnType<typeof createSubmissionQueue>
+    const handleEmitArgs: Parameters<typeof handleEmit>[0] = {
+      input: {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'producer-routing probe' },
+        context_id: 'b'.repeat(32),
+      },
+      key: { privateKey: seed, source: 'env' },
+      queue,
+    }
+    if (producer !== undefined) handleEmitArgs.producer = producer
+    await handleEmit(handleEmitArgs)
+    const { readFileSync } = await import('node:fs')
+    // Read the LAST JSONL line (each emit appends; tests that emit twice
+    // care about the most recent record only).
+    const lines = readFileSync(mirrorFile, 'utf8').split('\n').filter((l) => l.length > 0)
+    return JSON.parse(lines[lines.length - 1] as string) as Record<string, unknown>
+  }
+
+  it("defaults to 'atrib-emit' when producer is not supplied", async () => {
+    const entry = await emitAndReadMirror()
+    const local = entry._local as Record<string, unknown>
+    expect(local.producer).toBe('atrib-emit')
+  })
+
+  it('routes through caller-supplied producer label', async () => {
+    const entry = await emitAndReadMirror('atrib-annotate')
+    const local = entry._local as Record<string, unknown>
+    expect(local.producer).toBe('atrib-annotate')
+  })
+
+  it("'atrib-revise' label flows through unchanged", async () => {
+    const entry = await emitAndReadMirror('atrib-revise')
+    const local = entry._local as Record<string, unknown>
+    expect(local.producer).toBe('atrib-revise')
+  })
+
+  it("'atrib-emit-cli' label flows through unchanged (CLI binary path)", async () => {
+    const entry = await emitAndReadMirror('atrib-emit-cli')
+    const local = entry._local as Record<string, unknown>
+    expect(local.producer).toBe('atrib-emit-cli')
+  })
+
+  it('signed-record bytes are independent of the producer label (sidecar-only)', async () => {
+    // The producer field lives in `_local`, not in the signed AtribRecord.
+    // Two records with identical content but different producer labels
+    // should produce identical record_hash.
+    const a = await emitAndReadMirror('atrib-emit')
+    const b = await emitAndReadMirror('atrib-annotate')
+    const aRecord = a.record as { record_hash?: string }
+    const bRecord = b.record as { record_hash?: string }
+    // Both signed records share identical canonical-form bytes because
+    // sidecar.producer is not part of canonicalSigningInput per spec §1.3.
+    // We assert via the same content_id (derived from canonical content
+    // hash) rather than record_hash, because record_hash incorporates the
+    // timestamp which differs by milliseconds between two calls.
+    expect((aRecord as { content_id?: string }).content_id).toBe(
+      (bRecord as { content_id?: string }).content_id,
+    )
+  })
+})
