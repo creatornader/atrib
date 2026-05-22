@@ -96,4 +96,26 @@ describe('resolveKey fail-fast', () => {
     // falling through. This pins the break as timeout-specific.
     expect(spawnSyncMock).toHaveBeenCalledTimes(2)
   })
+
+  it('bounds the op spawn with a numeric timeout when ATRIB_OP_REFERENCE is set', async () => {
+    // Keychain misses cleanly so resolution reaches the op recovery branch.
+    spawnSyncMock.mockImplementation((cmd: string) => {
+      if (cmd === 'security') return notFound()
+      // op gets the same not-found shape; we just want to assert the call
+      // was made with a numeric timeout option.
+      return notFound()
+    })
+    process.env['ATRIB_OP_REFERENCE'] = 'op://vault/item/field'
+    try {
+      await resolveKey()
+    } finally {
+      delete process.env['ATRIB_OP_REFERENCE']
+    }
+    const opCall = spawnSyncMock.mock.calls.find(
+      (c) => (c as unknown as [string])[0] === 'op',
+    ) as [string, string[], { timeout?: unknown }] | undefined
+    expect(opCall, 'op spawn should have been attempted').toBeDefined()
+    expect(typeof opCall![2].timeout).toBe('number')
+    expect(opCall![2].timeout as number).toBeGreaterThan(0)
+  })
 })
