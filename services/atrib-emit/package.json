@@ -1,6 +1,6 @@
 {
   "name": "@atrib/emit",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "MCP server for atrib. The producer-side cognitive primitive: lets agents sign explicit observations, annotations, and revisions beyond what middleware auto-signs.",
   "license": "Apache-2.0",
   "type": "module",
