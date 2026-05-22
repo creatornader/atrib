@@ -224,6 +224,7 @@ describe('atrib-emit-cli wire contract', () => {
     expect(envNames).toContain('ATRIB_PRIVATE_KEY')
     expect(envNames).toContain('ATRIB_LOG_ENDPOINT')
     expect(envNames).toContain('ATRIB_CONTEXT_ID')
+    expect(envNames).toContain('CLAUDE_CODE_SESSION_ID')
     // Options include --describe itself (self-documenting)
     expect(desc.options.some((o) => o.flag === '--describe')).toBe(true)
   })

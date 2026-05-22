@@ -369,3 +369,66 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (P025 option 1)', () => {
     expect(result.record_hash).not.toBe('sha256:unknown')
   })
 })
+
+describe('D083 harness session-id discovery (consumer integration)', () => {
+  // Asserts the cross-cutting integration: when handleEmit runs in a process
+  // that has no caller-supplied context_id and no ATRIB_CONTEXT_ID env, but
+  // does have a documented harness env var (CLAUDE_CODE_SESSION_ID), the
+  // signed record carries the derived 32-hex context_id. Covers the load-
+  // bearing path the substrate-health analysis surfaced 2026-05-22.
+  const { handleEmit } = __index_test_only__
+
+  let priorCtx: string | undefined
+  let priorClaude: string | undefined
+  beforeEach(() => {
+    priorCtx = process.env['ATRIB_CONTEXT_ID']
+    priorClaude = process.env['CLAUDE_CODE_SESSION_ID']
+  })
+  afterEach(() => {
+    if (priorCtx === undefined) delete process.env['ATRIB_CONTEXT_ID']
+    else process.env['ATRIB_CONTEXT_ID'] = priorCtx
+    if (priorClaude === undefined) delete process.env['CLAUDE_CODE_SESSION_ID']
+    else process.env['CLAUDE_CODE_SESSION_ID'] = priorClaude
+  })
+
+  async function emitWithoutCallerContextId() {
+    const seed = await freshKey()
+    const queue = {
+      submit: () => {},
+      flush: async () => {},
+      getProof: async () => null,
+    } as unknown as ReturnType<typeof createSubmissionQueue>
+    return handleEmit({
+      input: {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'D083 integration probe' },
+      },
+      key: { privateKey: seed, source: 'env' },
+      queue,
+    })
+  }
+
+  it('derives context_id from CLAUDE_CODE_SESSION_ID when ATRIB_CONTEXT_ID is unset', async () => {
+    delete process.env['ATRIB_CONTEXT_ID']
+    process.env['CLAUDE_CODE_SESSION_ID'] = '38af29c4-fc3a-4f88-8fec-392501b8a0a9'
+    const result = await emitWithoutCallerContextId()
+    expect(result.context_id).toBe('38af29c4fc3a4f888fec392501b8a0a9')
+  })
+
+  it('ATRIB_CONTEXT_ID wins when both env vars are valid (D078 precedence)', async () => {
+    process.env['ATRIB_CONTEXT_ID'] = '00000000000000000000000000000001'
+    process.env['CLAUDE_CODE_SESSION_ID'] = '38af29c4-fc3a-4f88-8fec-392501b8a0a9'
+    const result = await emitWithoutCallerContextId()
+    expect(result.context_id).toBe('00000000000000000000000000000001')
+  })
+
+  it('falls through to fresh genesis when neither env var is set', async () => {
+    delete process.env['ATRIB_CONTEXT_ID']
+    delete process.env['CLAUDE_CODE_SESSION_ID']
+    const result = await emitWithoutCallerContextId()
+    // 32-hex context_id was synthesized (matches §1.2.3 format), not the
+    // harness-derived value above.
+    expect(result.context_id).toMatch(/^[0-9a-f]{32}$/)
+    expect(result.context_id).not.toBe('38af29c4fc3a4f888fec392501b8a0a9')
+  })
+})

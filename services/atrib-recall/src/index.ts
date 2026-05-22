@@ -41,6 +41,7 @@ import {
   EVENT_TYPE_TRANSACTION_URI,
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_REVISION_URI,
+  resolveEnvContextId,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 
@@ -118,14 +119,10 @@ const ATRIB_MIRROR_DIR = process.env.ATRIB_MIRROR_DIR ?? join(
 )
 const ATRIB_LOG_ORIGIN = process.env.ATRIB_LOG_ORIGIN ?? 'log.atrib.dev'
 
-// 32-hex context_id pattern per spec §1.2.3. Read once at module-init so
-// every recall invocation honors the same value (the env var is a per-run
-// declaration; changing it mid-process is not supported).
-const HEX_32_CONTEXT_ID = /^[0-9a-f]{32}$/
-const ATRIB_CONTEXT_ID_DEFAULT =
-  process.env.ATRIB_CONTEXT_ID && HEX_32_CONTEXT_ID.test(process.env.ATRIB_CONTEXT_ID)
-    ? process.env.ATRIB_CONTEXT_ID
-    : undefined
+// Resolved once at module-init via @atrib/mcp's resolveEnvContextId
+// (D078 ATRIB_CONTEXT_ID + D083 harness-discovery precedence). Per-run
+// declaration; changing the env mid-process is not supported.
+const ATRIB_CONTEXT_ID_DEFAULT = resolveEnvContextId()
 
 /**
  * Pull the inner AtribRecord out of either on-disk shape (D062 envelope or

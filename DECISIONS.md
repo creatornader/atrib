@@ -3861,6 +3861,56 @@ The hook source directory drops `package.json`, `node_modules/`, and the `@atrib
 
 ---
 
+## D083: Harness session-id discovery extends [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default) for cognitive-primitive MCP servers
+
+**Date:** 2026-05-22
+
+**Context.** [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default) made the four cognitive-primitive MCP servers (`@atrib/emit`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`) honor `process.env.ATRIB_CONTEXT_ID` as a default when the caller omits `context_id`. That covers Inspect-style harnesses that explicitly thread per-run scope into spawned MCP children via the env block. It does NOT cover the steady-state Claude Code case: at session start Claude Code spawns MCP server children from `~/.claude.json` config; the env block is static and the operator does not typically set `ATRIB_CONTEXT_ID` per session. The substrate-health analysis 2026-05-22 surfaced the consequence empirically: ten fresh-orphan singleton chains in twenty-four hours from agent-initiated `atrib-annotate` calls under Claude Code, each producing a signed-but-uncomposable record because the MCP child had no parent env that knew the session's context_id.
+
+The handoff pointed to threading per-session context_id into MCP server env blocks. But static env blocks cannot hold per-session values, and operator-machine-local wrapper scripts violate the harness-agnostic abstraction: they hard-code one harness's session-id env var in a host-machine script that does not travel with the published packages. The structural shape is to make the cognitive-primitive MCP servers discover session-id env vars exposed by registered harnesses, the same way W3C trace-context propagates `traceparent` without each receiver hard-coding sender identities.
+
+**Decision.** Each of the four servers reads from a shared `resolveEnvContextId()` helper in `@atrib/mcp`. The helper applies a fixed precedence:
+
+1. `ATRIB_CONTEXT_ID` if set and a valid 32-hex string ([D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default) intent: explicit operator/harness declaration).
+2. First valid match against `KNOWN_HARNESS_DISCOVERIES`, a static registry of `{ envVar, parse }` entries with per-harness derivation rules. The initial registry contains `CLAUDE_CODE_SESSION_ID` (UUID; dashes stripped + lowercased to produce a 32-hex context_id matching any companion PostToolUse hook's envelope-path derivation).
+3. `undefined`, signaling the caller's existing resolution chain (`inheritChainContext`, mirror tail, synthetic genesis) should proceed.
+
+Invalid values at any precedence level silently fall through. Harness env vars represent declared session scope, not misconfiguration; surfacing a warning would conflate intentional propagation with operator error.
+
+Adding a new harness is a single registry entry. Per the spec's harness-agnostic abstraction, the registry is the public surface; consumers do not import per-harness logic.
+
+**Per-server effect (extending [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)).**
+
+- **`@atrib/emit`.** `handleEmit` now consults `resolveEnvContextId()` in place of the inline `ATRIB_CONTEXT_ID` lookup. The resolved value becomes `callerContextId` for `inheritChainContext`. Annotation and revision records produced via `@atrib/annotate` and `@atrib/revise` inherit the behavior transparently, since both delegate to `handleEmit` per [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)'s package layering.
+- **`@atrib/recall`.** Module-init `ATRIB_CONTEXT_ID_DEFAULT` now calls `resolveEnvContextId()`. Recall queries default to scoping by the session's context_id when no `context_id` argument is passed.
+- **`@atrib/trace`.** The per-call default for the `context_id` argument now reads `resolveEnvContextId()`. Trace walks scope to the session's context_id when neither the argument nor `ATRIB_CONTEXT_ID` is set.
+- **`@atrib/summarize`.** The per-call `effectiveContextId` resolution now reads `resolveEnvContextId()`. Summaries default to the session's context_id when neither argument nor `ATRIB_CONTEXT_ID` is set.
+
+**Alternatives considered.**
+
+- *Operator-machine wrapper script (`spawn-mcp-with-context.sh` in `~/.atrib/bin/`).* Rejected. Reversible and immediate, but operator-machine-local: every new operator re-derives the same orphan problem; the fix does not travel with the published `@atrib/emit` package. Hard-codes one harness's env var name in a host-machine script that violates the harness-agnostic abstraction. Composes poorly when a second harness joins; would require sibling wrappers per harness in operator config.
+- *Hard-coded `CLAUDE_CODE_SESSION_ID` lookup inside each server's index.ts.* Rejected. Bypasses the registry pattern. Each server's lookup logic would diverge over time as harness rules evolve. Forces every new harness to touch every server.
+- *Spec edit promoting harness-discovery to a normative requirement.* Rejected for this ADR. The signed-record wire format is unchanged. Discovery is a server-side default-resolution behavior, not a record-format obligation. A future spec section may codify the discovery registry as part of [§9](atrib-spec.md#9-integration-patterns), but per [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)'s precedent of "no spec change for runtime env-var behavior," this ADR stops at the package level.
+- *Warning when harness discovery triggers the fallback.* Rejected. The fallback is silent by parallel construction with [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default). Callers wanting visibility can inspect the response `context_id` directly.
+
+**Consequences.**
+
+- The ten-orphan-singleton-per-24h class disappears for Claude Code MCP children once `@atrib/emit@0.14.0`, `@atrib/recall@0.5.0`, `@atrib/trace@0.4.0`, `@atrib/summarize@0.4.0`, and `@atrib/mcp@0.8.0` are globally installed. The fix lands per package, not per machine.
+- Adding a new harness is a one-line registry entry in `packages/mcp/src/harness-context.ts`. Future [§9](atrib-spec.md#9-integration-patterns) integration patterns that land harness-aware context discovery should reference this ADR and add the registry entry as their implementation step.
+- Test files that exercise the env-default path now run in environments where harness env vars may leak from the parent process (e.g. `vitest run` under Claude Code). `@atrib/recall`'s and `@atrib/summarize`'s test setup files now clear `CLAUDE_CODE_SESSION_ID` and `ATRIB_CONTEXT_ID` before module evaluation so the baseline matches the documented unset-env behavior.
+- No spec change. The wire format of signed records is unchanged; the only behavior change is at default-resolution time.
+- Compatible with [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default) by extension: explicit `ATRIB_CONTEXT_ID` continues to win.
+
+**Cross-references.**
+
+- [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default), MCP servers honor `ATRIB_CONTEXT_ID` env; this ADR is its harness-aware extension.
+- [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail), per-arm context_id isolation; closing the steady-state orphan path for Claude Code aligns with the same intent.
+- [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), package layering; annotation and revision inherit via `handleEmit` delegation.
+- [P013](#p013-new-runtime-integration-pattern---hosted-runtime-adapter-sign-events-stored-by-hosted-runtimes-like-anthropic-managed-agents), forward pattern for hosted-runtime adapters; future entries in the discovery registry should reference each pattern's ADR.
+- [§1.2.3](atrib-spec.md#123-context_id), `context_id` format; harness-derived values are validated against the same 32-hex regex.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

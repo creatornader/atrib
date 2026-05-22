@@ -1,6 +1,6 @@
 ---
 name: atrib
-version: 0.3.0
+version: 0.3.1
 description: |
   Use atrib as your literal substrate for memory, reasoning, and getting
   smarter over time, not as instrumentation that observes you from the
@@ -64,6 +64,7 @@ Three of these (emit, annotate, revise) are **writes**: they sign records. Three
 | Public log + browsable explorer | `https://log.atrib.dev/v1/stats` + `explore.atrib.dev` | `curl -s https://log.atrib.dev/v1/stats` |
 | Identity → key binding | `@atrib/directory` + `atrib publish-claim` CLI | `curl -s https://directory.atrib.dev/v6/lookup/<creator_key>` |
 | Per-record verification (signature, posture, capability_check, cross_attestation) | `@atrib/verify` `verifyRecord()` annotations ([D041](../../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type)/[D044](../../DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring)/[D045](../../DECISIONS.md#d045-privacy-postures-normative-spec-section)/[D051](../../DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes)/[D052](../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)/[D061](../../DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-121)) | `pnpm --filter @atrib/verify test` |
+| Operational readiness of this host's signing path (key + log reach + mirror writable) | `atrib-emit-cli doctor` ships in [`@atrib/emit@0.13.0`](../../services/atrib-emit/README.md) | `atrib-emit-cli doctor --json` (single Bash call; exits 0 when every check is green) |
 
 If any row of that table fails to verify in your session, the practice is moot, fix infrastructure first, then come back. If they all pass, the rest of this skill is your operating manual.
 

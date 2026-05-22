@@ -273,6 +273,7 @@ function buildDescription(): CliDescription {
       { name: 'ATRIB_AUTOCHAIN_SOURCE', description: 'JSONL file path the inheritance reads from (chain composition).', required: false },
       { name: 'ATRIB_AGENT', description: 'Agent label used in the default mirror filename.', required: false },
       { name: 'ATRIB_CONTEXT_ID', description: 'Default 32-hex context_id when envelope omits one (D078).', required: false },
+      { name: 'CLAUDE_CODE_SESSION_ID', description: 'Harness-injected fallback (D083): UUID stripped + lowercased to a 32-hex context_id when ATRIB_CONTEXT_ID is unset. One entry in @atrib/mcp KNOWN_HARNESS_DISCOVERIES.', required: false },
     ],
     spec_references: [
       { section: '§1.3', url: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#13-canonical-serialization' },
