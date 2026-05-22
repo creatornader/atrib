@@ -162,6 +162,55 @@ describe('D081 byte-identicality: emitInProcess vs handleEmit', () => {
     }
   })
 
+  it('respects flushDeadlineMs against an unresponsive log (returns with a warning, does not hang)', async () => {
+    const seed = await fixedSeed()
+
+    // A "black hole" endpoint that accepts the connection but never
+    // writes a response, so the queue's retry budget would burn the
+    // full 30s waiting on submission. We confirm emitInProcess returns
+    // within the deadline budget + small slack, and that the record
+    // came back with a flush-deadline warning attached.
+    const blackHole: Server = createServer((_req, res) => {
+      // Accept the request, never end the response.
+      void res
+    })
+    await new Promise<void>((resolve) => blackHole.listen(0, '127.0.0.1', resolve))
+    const addr = blackHole.address()
+    if (!addr || typeof addr === 'string') throw new Error('no address')
+    const blackHoleUrl = `http://127.0.0.1:${addr.port}/v1/entries`
+
+    const t0 = Date.now()
+    const r = await emitInProcess(
+      {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'deadline-test' },
+      },
+      {
+        key: { privateKey: seed, source: 'env' },
+        logEndpoint: blackHoleUrl,
+        flushDeadlineMs: 200,
+      },
+    )
+    const elapsed = Date.now() - t0
+
+    // The deadline must actually fire: well under the queue's own 30s
+    // retry budget, with some slack for the queue's first attempt and
+    // the timer's resolution.
+    expect(elapsed).toBeLessThan(2000)
+    expect(r.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    // The flush-deadline warning surfaces; the record is otherwise valid.
+    expect(r.warnings.some((w) => w.includes('flush exceeded'))).toBe(true)
+
+    // Force-close: the submission queue's in-flight fetch still holds a
+    // socket open against this server (the queue has no AbortSignal yet),
+    // so blackHole.close() would wait on that connection. closeAllConnections
+    // hangs up the sockets first.
+    blackHole.closeAllConnections()
+    await new Promise<void>((resolve, reject) =>
+      blackHole.close((err) => (err ? reject(err) : resolve())),
+    )
+  })
+
   it('emitInProcess flushes the submission queue before returning', async () => {
     const seed = await fixedSeed()
     // No external flush: emitInProcess must drain itself. This is the
