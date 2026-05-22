@@ -1,6 +1,6 @@
 {
   "name": "@atrib/annotate",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "MCP server for atrib. Lets agents mark a past record's importance and meaning. Adds an ANNOTATES graph edge so recall surfaces weighted annotations ahead of flat scans.",
   "license": "Apache-2.0",
   "type": "module",
