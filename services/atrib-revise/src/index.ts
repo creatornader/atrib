@@ -138,6 +138,7 @@ export async function createAtribReviseServer(
         },
         key,
         queue,
+        producer: 'atrib-revise',
       })
       const out: ReviseOutput = {
         record_hash: result.record_hash,

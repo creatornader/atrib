@@ -134,6 +134,7 @@ export async function createAtribAnnotateServer(
         },
         key,
         queue,
+        producer: 'atrib-annotate',
       })
       const out: AnnotateOutput = {
         record_hash: result.record_hash,

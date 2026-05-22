@@ -253,6 +253,7 @@ function buildDescription(): CliDescription {
           'Genesis-record-only 22-char base64url cross-session anchor per spec §1.2.6 / D044.',
         tool_name: 'Disclosed tool name per §8.2 (optional disclosure posture).',
         args_hash: 'sha256:<64-hex> commitment to canonical args per §8.3 salted-commitment posture.',
+        producer: 'Producer label routed to mirror sidecar `_local.producer`. Defaults to "atrib-emit-cli"; hook helpers override with finer attribution (e.g. "claude-hooks-builtin-2b").',
       },
     },
     output_schema: {
@@ -455,6 +456,13 @@ interface RawEnvelope {
   provenance_token?: unknown
   tool_name?: unknown
   args_hash?: unknown
+  /**
+   * Producer label routed to the mirror sidecar's `_local.producer` field.
+   * When omitted, the CLI labels records `'atrib-emit-cli'`. Hook-class
+   * callers that want finer attribution (e.g. `'claude-hooks-builtin-2b'`,
+   * `'claude-hooks-mcp-2a'`) pass it here to override.
+   */
+  producer?: unknown
 }
 
 // The CLI's wire envelope mirrors what callers passed to the MCP-transport
@@ -568,7 +576,18 @@ export async function main(argv: readonly string[]): Promise<number> {
   }
 
   const args = buildEmitInput(envelope)
-  const options: { logEndpoint?: string; flushDeadlineMs?: number } = {}
+  // Identify CLI-signed records distinctly from MCP-server emits so the
+  // mirror's by-producer aggregation buckets hook-spawned signing apart
+  // from interactive tool calls. Hooks override via the envelope's
+  // top-level `producer` field when they need finer attribution
+  // (e.g. "claude-hooks-builtin-2b").
+  const envelopeProducer =
+    typeof envelope.producer === 'string' && envelope.producer.length > 0
+      ? envelope.producer
+      : 'atrib-emit-cli'
+  const options: { logEndpoint?: string; flushDeadlineMs?: number; producer: string } = {
+    producer: envelopeProducer,
+  }
   if (parsed.logEndpoint !== undefined) options.logEndpoint = parsed.logEndpoint
   if (parsed.flushDeadlineMs !== undefined) options.flushDeadlineMs = parsed.flushDeadlineMs
 
