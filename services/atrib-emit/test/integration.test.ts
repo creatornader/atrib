@@ -428,3 +428,54 @@ describe('emit end-to-end (sign → submit → mirror)', () => {
     expect(log.received.length).toBe(0)
   })
 })
+
+/**
+ * emitInProcess is the in-process entrypoint hooks use instead of spawning
+ * the atrib-emit binary over an MCP stdio transport. These tests pin its
+ * contract: it routes through the same handleEmit (records byte-identical
+ * to MCP-server-signed ones) and flushes the submission queue itself, so a
+ * detached hook process that exits right after the call still gets its
+ * record onto the log.
+ */
+describe('emitInProcess (in-process entrypoint)', () => {
+  it('signs, submits, flushes, and mirrors in a single call with no external flush', async () => {
+    const { seed, pubKey } = await fixedKey()
+    const { emitInProcess } = await import('../src/index.js')
+
+    const result = await emitInProcess(
+      {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'in-process-emit-test', topics: ['gap-a'] },
+      },
+      { key: { privateKey: seed, source: 'env' }, logEndpoint: log.url },
+    )
+
+    // EmitOutput shape.
+    expect(result.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(result.context_id).toMatch(/^[0-9a-f]{32}$/)
+    expect(Array.isArray(result.warnings)).toBe(true)
+
+    // The record reached the log WITHOUT any caller-side flush — emitInProcess
+    // drains the queue itself. This is the property the hook path depends on.
+    expect(log.received.length).toBe(1)
+    const landed = log.received[0]!
+    expect(landed.creator_key).toBe(pubKey)
+    expect(await verifyRecord(landed)).toBe(true)
+
+    // Returned record_hash matches what landed (same handleEmit path).
+    const landedHash = `sha256:${hexEncode(sha256(canonicalRecord(landed)))}`
+    expect(result.record_hash).toBe(landedHash)
+
+    // Mirror written by the same handleEmit call.
+    const lines = (await readFile(mirrorPath, 'utf-8')).trim().split('\n')
+    expect(lines.length).toBe(1)
+  })
+
+  it('throws on a malformed input, but not on operational failure', async () => {
+    const { emitInProcess } = await import('../src/index.js')
+    // Missing the required event_type field → EmitInput.parse rejects.
+    await expect(
+      emitInProcess({ content: { what: 'no event_type' } }),
+    ).rejects.toThrow()
+  })
+})

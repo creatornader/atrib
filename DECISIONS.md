@@ -3401,6 +3401,8 @@ The substrate guarantees the record exists, was signed by the named creator, and
 
 **Promoted from:** P011 (long-lived atrib-emit vs spawn-per-hook fork model). The original deferred-decision entry is removed from the Pending decisions section by this ADR; see git history prior to this commit for the source text.
 
+**Superseded for the hook path by [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess).** Hook-class producers sign in-process via `emitInProcess`, which removes the spawn cost this daemon existed to amortize. The daemon below remains valid only for a producer that genuinely cannot sign in-process.
+
 **Context.**
 
 The current producer architecture spawns a fresh `atrib-emit` subprocess per emit invocation. The hook script (or sign_record sidecar, or watcher emit call) creates a `StdioClientTransport`, which spawns `atrib-emit`, performs the JSON-RPC initialize handshake, calls the `emit` tool, and tears down. A 15-second inner timeout (`ATRIB_EMIT_TIMEOUT_MS`) bounds connect + tool-call latency; the wrapping subprocess.run timeout at 18s gives a 3-second margin for shutdown.
@@ -3770,6 +3772,48 @@ The test: if the candidate operation would land in the graph as anything other t
 - [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary), record-layer (spec event_type) promotion bar; complementary to but distinct from this ADR's surface-layer bar.
 - [§1.4](atrib-spec.md#14-signing-and-verification) + [§2.6](atrib-spec.md), verification as a normative protocol operation; the substrate atrib-verify's package draws on.
 - [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), pending decision for verify's eventual promotion.
+
+---
+
+## D081: In-process emit for hook-class producers (emitInProcess)
+
+**Date:** 2026-05-22
+
+**Context.** A dogfood audit of the producer surface (prompted by Mario Zechner's "what if you don't need MCP" argument) found two coupled failures. The practice gap: across 14 days of the local mirror, the cognitive event types (observation / annotation / revision) were produced almost entirely by post-hoc session-end extractor batches and cron, not by deliberate in-session `atrib-emit` calls. The mechanism gap: the `atrib-emit` MCP server logged roughly 190 `connect timed out after 15000ms` failures per 24h, all tagged `[layer=sessionend]`, all `key=no-env`.
+
+Root cause of the mechanism gap: a hook-class producer (the Claude Code lifecycle and PostToolUse hooks) signs a record by spawning the `atrib-emit` binary as an MCP subprocess over a `StdioClientTransport`, then running the JSON-RPC initialize handshake. In a headless context with no `ATRIB_PRIVATE_KEY` in the environment, `atrib-emit`'s `resolveKey` falls through to a synchronous, unbounded `spawnSync('security', ...)` Keychain call. A locked login Keychain in that context blocks, which stalls the MCP init handshake, which trips the caller's 15s connect timeout. Spawn-per-emit re-pays this on every cold spawn.
+
+The deeper issue: an MCP server is a heavy transport for a capability the caller already has in-process. A hook is itself a short-lived Node process; it can sign a record by calling a function. The MCP stdio handshake and the cold-start it implies exist only because the hook reached for the binary instead of the library. [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) proposed a long-lived daemon to keep that subprocess warm; [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) was never implemented. A daemon optimizes a subprocess hop that, for the hook path, should not exist.
+
+**Decision.** Hook-class producers, the producers that already run inside a short-lived Node process (the Claude Code lifecycle and PostToolUse hooks, watchers, batch jobs), sign in-process rather than spawning the `atrib-emit` binary over an MCP transport. Two changes land in `@atrib/emit`:
+
+- **`emitInProcess()`**: a new public entrypoint that packages the recipe the [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) public-helpers block documents (`resolveKey`, `createSubmissionQueue`, `handleEmit`) and flushes the submission queue before returning, since a hook process exits immediately after. It routes through the same `handleEmit` as `createAtribEmitServer`, so records are byte-identical regardless of whether they were signed by the MCP server, the wrapper, or in-process.
+- **Bounded key resolution**: `keys.ts` wraps its `security` and `op` spawns in a timeout (`ATRIB_KEYCHAIN_TIMEOUT_MS` default 3s, `ATRIB_OP_TIMEOUT_MS` default 10s) and short-circuits the second Keychain service on a timeout. Key resolution can no longer hang; in the worst case it returns null within a few seconds and the caller reaches the [§5.8](atrib-spec.md#58-degradation-contract) pass-through path.
+
+The `atrib-emit` MCP server is retained unchanged as the interactive agent-facing surface ([D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)'s six cognitive primitives). For an agent in a live session the server process is warm, and MCP is the right discovery mechanism: the tools appear in the agent's tool list without a separate README. This ADR narrows which producers use the MCP transport, not the transport's existence.
+
+**Relationship to [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback).** [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback)'s daemon was motivated by exactly the failure this ADR addresses; its text cites bringing the "sessionend-burst drop rate" to zero and amortizing per-run spawn cost. In-process signing removes that cost without a daemon: there is no subprocess, no socket lifecycle, no crash-recovery surface. [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) is therefore superseded for the hook path. It is not revoked: a long-lived daemon may still be the right answer for a producer that genuinely cannot sign in-process (a non-Node producer, or a cross-process coordination need at multi-host scale). For hook-class producers, this ADR is the chosen path.
+
+**Alternatives considered.**
+
+- *Implement the [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) daemon.* Rejected for the hook path. It keeps the MCP/JSON-RPC machinery and adds daemon lifecycle: socket management, crash recovery, stale-socket cleanup, a SIGTERM drain. In-process signing has none of that surface. The daemon is the MCP-preserving fix; the dogfood log indicates the MCP-eliminating fix is strictly fewer moving parts on this path.
+- *Reimplement the emit flow inside the hook script.* Rejected. Replicating `handleEmit` (key resolution, multi-producer chain composition via `inheritChainContext`, signing, mirror write, submission) in a standalone `.mjs` would create a second signing implementation that drifts from `atrib-emit`. `emitInProcess` keeps a single `handleEmit` path; the hook is a thin caller.
+- *Leave the hook on spawn-per-emit and only bound the timeout.* Rejected as the complete fix, kept as defense in depth. The bounded-timeout change ships regardless, since it also protects the MCP server's own `resolveKey`. But on its own it converts a 15s hang into a roughly 3s fall-through that still drops the record. In-process signing removes the failure mode rather than shortening it.
+
+**Consequences.**
+
+- `@atrib/emit` gains `emitInProcess` and `EmitInProcessOptions` as stable public exports, and `keys.ts` gains two tunable timeout envs. Both ship in the next `@atrib/emit` release.
+- The hook-side rewrite (the lifecycle and PostToolUse helper calling `emitInProcess` instead of spawning the binary) lands in the operator's hook repo and is gated on that release: the helper can only safely go in-process once the published `@atrib/emit` contains both the bounded key resolution and `emitInProcess`. Until then the hooks stay on the spawn path.
+- The immediate `[layer=sessionend]` timeout cluster was removed independently, in the hook repo, by making the lifecycle hook exit when a session signed no records of its own (it had been annotating non-agentic `claude` invocations such as the nightly `claude plugin update` cron). That fix is live; the in-process rewrite is the structural follow-up.
+- The practice gap (deliberate in-session emit) is downstream of the mechanism gap: a primitive that fails roughly 190 times a day cannot become a habit. Making emit reliable in-process is the precondition; the practice is expected to follow, not to be separately engineered.
+- No spec change. Records signed in-process are byte-identical to MCP-server-signed and wrapper-signed records; `handleEmit` is the single path.
+
+**Cross-references.**
+
+- [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback), the daemon ADR this supersedes for the hook path.
+- [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), the six-primitive MCP surface, retained as the interactive surface; its public-helpers block is the recipe `emitInProcess` packages.
+- [§5.8](atrib-spec.md#58-degradation-contract), the degradation contract; bounded key resolution falls through to pass-through instead of hanging.
+- [D067](#d067-multi-producer-chain-composition-precedence-contract), multi-producer chain composition; `emitInProcess` inherits it unchanged because it routes through `handleEmit`.
 
 ---
 

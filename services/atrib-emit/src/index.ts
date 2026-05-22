@@ -403,6 +403,52 @@ function hashRecord(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
 }
 
+export interface EmitInProcessOptions {
+  /** Override the resolved key (primarily for testing). */
+  key?: ResolvedKey
+  /** Override the log endpoint (defaults to ATRIB_LOG_ENDPOINT or @atrib/mcp default). */
+  logEndpoint?: string | undefined
+}
+
+/**
+ * Emit one cognitive event in-process, without an MCP transport.
+ *
+ * This is the canonical in-process entrypoint for callers that already
+ * run inside a short-lived Node process (lifecycle/PostToolUse hooks,
+ * watchers, batch jobs) and should NOT pay the cost of spawning the
+ * atrib-emit binary and running an MCP stdio handshake just to sign one
+ * record. It packages the recipe the D079 public-helpers block below
+ * documents — resolve key, build a submission queue, call handleEmit —
+ * and additionally flushes the queue before returning, because a hook
+ * process exits immediately afterward and a still-pending submission
+ * would be lost with it.
+ *
+ * Records are byte-identical to MCP-server-signed and wrapper-signed
+ * records: this routes through the same handleEmit path createAtribEmitServer
+ * uses. Per §5.8 it never throws for operational failures — a missing key
+ * or a queued-but-unconfirmed submission surfaces in EmitOutput.warnings.
+ * It DOES throw on a malformed input (EmitInput.parse), same as the MCP
+ * tool handler; callers catch and degrade.
+ */
+export async function emitInProcess(
+  rawInput: unknown,
+  options: EmitInProcessOptions = {},
+): Promise<EmitOutput> {
+  const input = EmitInput.parse(rawInput)
+  const key = options.key ?? (await resolveKey())
+  const logEndpoint = options.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT']
+  const queue: SubmissionQueue = createSubmissionQueue(logEndpoint)
+  const result = await handleEmit({ input, key, queue })
+  // Drain before returning: the typical caller is a detached hook process
+  // that exits right after this resolves. handleEmit submits asynchronously
+  // (spec invariant: never block the agent on log I/O), so without an
+  // explicit flush the record would be signed + mirrored but never reach
+  // the log. The hook already runs off the agent's critical path, so
+  // awaiting the flush here costs the agent nothing.
+  await queue.flush()
+  return result
+}
+
 // Test-only export of handleEmit. Mirrors the `__test_only__` pattern
 // used in sign.ts; lets unit tests assert on the validation paths
 // without going through the McpServer transport surface.
