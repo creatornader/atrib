@@ -408,7 +408,23 @@ export interface EmitInProcessOptions {
   key?: ResolvedKey
   /** Override the log endpoint (defaults to ATRIB_LOG_ENDPOINT or @atrib/mcp default). */
   logEndpoint?: string | undefined
+  /**
+   * Upper bound on the post-sign queue flush, in milliseconds. Default
+   * 5000ms. The submission queue itself has a 30s retry budget against an
+   * unreachable log (`MAX_WINDOW_MS` in `@atrib/mcp`); without this
+   * deadline, a network blip leaves a detached hook process blocked for
+   * up to 30s waiting on retries it cannot do anything about. Past the
+   * deadline emitInProcess returns the record with a `flush-deadline`
+   * warning attached: the record is signed, mirrored, and queued in
+   * memory for retry, but `log.atrib.dev` confirmation is not yet
+   * established. The hook's own mirror file holds the record either way.
+   * Set to a higher value for callers that can afford to wait (an
+   * interactive CLI, a service with its own backpressure).
+   */
+  flushDeadlineMs?: number
 }
+
+const DEFAULT_FLUSH_DEADLINE_MS = 5000
 
 /**
  * Emit one cognitive event in-process, without an MCP transport.
@@ -429,6 +445,12 @@ export interface EmitInProcessOptions {
  * or a queued-but-unconfirmed submission surfaces in EmitOutput.warnings.
  * It DOES throw on a malformed input (EmitInput.parse), same as the MCP
  * tool handler; callers catch and degrade.
+ *
+ * The flush is bounded by `flushDeadlineMs` (default 5s). If the log is
+ * unreachable, the submission queue's internal retry will overrun the
+ * deadline; emitInProcess then returns the record with a `flush-deadline`
+ * warning rather than blocking up to 30s. The record is still signed and
+ * mirrored locally; only the log-side confirmation is uncertain.
  */
 export async function emitInProcess(
   rawInput: unknown,
@@ -437,15 +459,23 @@ export async function emitInProcess(
   const input = EmitInput.parse(rawInput)
   const key = options.key ?? (await resolveKey())
   const logEndpoint = options.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT']
+  const flushDeadlineMs = options.flushDeadlineMs ?? DEFAULT_FLUSH_DEADLINE_MS
   const queue: SubmissionQueue = createSubmissionQueue(logEndpoint)
   const result = await handleEmit({ input, key, queue })
-  // Drain before returning: the typical caller is a detached hook process
-  // that exits right after this resolves. handleEmit submits asynchronously
-  // (spec invariant: never block the agent on log I/O), so without an
-  // explicit flush the record would be signed + mirrored but never reach
-  // the log. The hook already runs off the agent's critical path, so
-  // awaiting the flush here costs the agent nothing.
-  await queue.flush()
+  // Drain before returning, bounded by flushDeadlineMs. The typical caller
+  // is a detached hook process that exits right after this resolves; we
+  // don't want the queue's 30s retry budget on an unreachable log to
+  // stall that process. Racing the flush against a timeout lets the
+  // caller fall through with a warning instead.
+  const flushed = await Promise.race([
+    queue.flush().then(() => true as const),
+    new Promise<false>((resolve) => setTimeout(() => resolve(false), flushDeadlineMs)),
+  ])
+  if (!flushed) {
+    result.warnings.push(
+      `flush exceeded ${flushDeadlineMs}ms deadline; record signed and mirrored locally, log submission may still be in flight`,
+    )
+  }
   return result
 }
 
