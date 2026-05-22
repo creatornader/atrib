@@ -1,5 +1,12 @@
 # @atrib/log-dev
 
+## 0.1.11
+
+### Patch Changes
+
+- Updated dependencies [ec688d0]
+  - @atrib/mcp@0.8.0
+
 ## 0.1.10
 
 ### Patch Changes
