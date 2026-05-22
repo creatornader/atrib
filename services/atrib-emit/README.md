@@ -91,6 +91,25 @@ If a 1Password item stores the seed with a `ATRIB_PRIVATE_KEY=<value>` label pre
 | `ATRIB_CONTEXT_ID` | optional | 32-hex default `context_id` when the caller's input omits one. Lets per-arm experimental harnesses (and any spawner) thread a deterministic context_id into spawned `atrib-emit` subprocesses without modifying tool input. Invalid values fall through silently to the standard chain-composition path. Explicit `context_id` in the tool input always wins. |
 | `ATRIB_PARENT_RECORD_HASH` | optional | `sha256:<64-hex>` of a parent producer's record. When set to a valid value, `atrib-emit` auto-prepends it to the caller's `informed_by` array per [§1.2.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#125-informed_by), then dedupes via `Set`. Producers that spawn child processes (subagents, worker nodes, multi-agent framework children) set this to their parent's signed record_hash so causal lineage threads through the existing primitive, no spec change. Invalid values are silently ignored; valid caller-supplied `informed_by` entries that overlap with the env-seed are deduplicated. See the parent-child agent representation entry in `DECISIONS.md` for the layered design (this is the cheap producer-side baseline; a dedicated `handoff` event_type remains pending). |
 
+## Two binaries
+
+The package ships two binaries from the same `src/index.ts` signing path:
+
+- **`atrib-emit`** — the MCP server. Long-lived in an agent's MCP host (Claude Code, Claude Desktop). Surfaces the six [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) cognitive primitives to the agent at tool-discovery time. Use this for interactive in-session signing.
+- **`atrib-emit-cli`** — a thin command-line wrapper around `emitInProcess` per [D082](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape). Reads one JSON envelope on stdin, signs the record in-process, writes the `EmitOutput` JSON to stdout. Use this for hook-class producers (Claude Code PostToolUse + lifecycle hooks, watchers, batch jobs) that spawn a short-lived signer rather than holding an MCP server warm.
+
+Records signed by either binary are byte-identical at the canonical-form level — [§1.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#13-canonical-serialization) does not surface the transport.
+
+### atrib-emit-cli quick reference
+
+```bash
+npm install -g @atrib/emit   # puts both binaries on $PATH
+echo '{"event_type":"https://atrib.dev/v1/types/observation","content":{"what":"hello"},"context_id":"deadbeef00000000deadbeef00000000"}' \
+  | atrib-emit-cli --log-endpoint https://log.atrib.dev/v1/entries
+```
+
+Exit code is always 0 per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract); failures surface as warnings inside the result JSON or as a stderr diagnostic line.
+
 ## Installation in an MCP host
 
 For Claude Code or Claude Desktop, add to the MCP config:
@@ -114,11 +133,13 @@ Key resolution falls through to Keychain on macOS, so `ATRIB_PRIVATE_KEY` doesn'
 
 ## Architecture
 
-Three files do the work:
+Five files do the work:
 
-- `src/index.ts`, McpServer registration; the `emit` tool calls `handleEmit` which orchestrates sign + submit + mirror.
+- `src/index.ts`, McpServer registration + the `emitInProcess` library entrypoint ([D081](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d081-in-process-emit-for-hook-class-producers-emitinprocess)); the `emit` tool calls `handleEmit` which orchestrates sign + submit + mirror.
+- `src/main.ts`, MCP stdio binary entrypoint (`atrib-emit`); spins up the McpServer over stdio.
+- `src/cli.ts`, CLI binary entrypoint (`atrib-emit-cli`, [D082](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape)); reads a JSON envelope on stdin, calls `emitInProcess`, writes the result JSON to stdout. Exit code always 0 per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract).
 - `src/sign.ts`, Builds and signs the AtribRecord. Pure aside from the signing primitive itself; reuses `@atrib/mcp`'s `signRecord`, `computeContentId`, `getPublicKey`. Records produced by emit are byte-identical in canonical form to wrapper-signed records (verifier MUST NOT distinguish them).
-- `src/submit.ts`, wraps `@atrib/mcp`'s `createSubmissionQueue`. Same priority semantics as the wrapper (cognitive events use 'normal' priority).
+- `src/keys.ts`, Bounded key resolution ([D081](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d081-in-process-emit-for-hook-class-producers-emitinprocess)). `ATRIB_PRIVATE_KEY` (base64url) → `ATRIB_KEY_FILE` → macOS Keychain (`ATRIB_KEYCHAIN_TIMEOUT_MS` default 3s) → 1Password CLI (`ATRIB_OP_TIMEOUT_MS` default 10s). Timeouts prevent unbounded hangs in headless contexts.
 - `src/storage.ts`, Best-effort JSONL mirror of full record + proof, for local recall.
 
 Per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation contract: nothing in `atrib-emit` throws to the agent. Missing key → warning in the response. Sign failure → warning. Network failure → submission queued for retry.

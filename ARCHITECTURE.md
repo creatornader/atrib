@@ -199,7 +199,7 @@ atrib categorizes runtime integration into six first-class patterns ([D069](DECI
 
 | Pattern | Where it fits | Reference implementation |
 |---|---|---|
-| 1. Lifecycle hooks | Runtimes that expose typed hook events with stdin-JSON IPC (Claude Code, Cursor, Codex CLI, Browser-Use, Augment Code, Pi/Earendil) | hook helper subprocessing `atrib-emit` |
+| 1. Lifecycle hooks | Runtimes that expose typed hook events with stdin-JSON IPC (Claude Code, Cursor, Codex CLI, Browser-Use, Augment Code, Pi/Earendil) | hook helper spawning `atrib-emit-cli` ([D082](DECISIONS.md#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape)); the CLI calls `emitInProcess` ([D081](DECISIONS.md#d081-in-process-emit-for-hook-class-producers-emitinprocess)) over a stdin/stdout JSON contract |
 | 2. In-process MCP middleware | Runtimes that call tools through MCP servers (Goose, Continue, Cody, Claude Code MCP-served tools, opencode) | [`@atrib/mcp-wrap`](packages/mcp-wrap/), required for transaction records ([D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)) and `preCallTransform` ([D057](DECISIONS.md#d057-pre-call-signing-hook-precalltransform-for-cross-tool-causal-embedding)) |
 | 3. Callback / lifecycle handlers | Multi-agent SDKs with native callback APIs (LangGraph, CrewAI, AutoGen, Microsoft Agent Framework, Anthropic Agent SDK, smolagents, OpenAI Agents SDK, Vercel AI SDK, Flue, Google ADK) | [`@atrib/agent`](packages/agent/) framework adapters |
 | 4. OpenInference SpanProcessor | OpenInference-instrumented runtimes (transitive coverage of 33 Python instrumentations + 9 JS packages) | `@atrib/openinference` (planned) |
@@ -357,7 +357,10 @@ Standalone services (under `services/`):
 services/log-node     Production tlog (Tessera-style, Node.js)
 services/graph-node   Production graph derivation service
 services/directory-node  Production AKD-backed identity directory (per §6.2)
-services/atrib-emit   MCP server exposing the explicit `emit` tool
+services/atrib-emit   Two binaries: MCP server `atrib-emit` (interactive)
+  │                   and CLI `atrib-emit-cli` (D082, for hook-class
+  │                   producers). Both route through the same handleEmit
+  │                   path so records are byte-identical.
   └── Producer-side cognitive primitive, agent invokes when it wants to
       sign observations / annotations / revisions the wrapper doesn't
       auto-capture (built-in tool calls, reasoning steps). Records are

@@ -6,7 +6,8 @@
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "atrib-emit": "./dist/main.js"
+    "atrib-emit": "./dist/main.js",
+    "atrib-emit-cli": "./dist/cli.js"
   },
   "scripts": {
     "build": "rm -rf dist && tsc",
