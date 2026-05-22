@@ -3823,7 +3823,7 @@ The `atrib-emit` MCP server is retained unchanged as the interactive agent-facin
 
 **Date:** 2026-05-22
 
-**Context.** [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess) introduced `emitInProcess()` as the right primitive for hook-class producers, then proposed importing it directly from `@atrib/emit` inside the operator's hook helper at `~/repos/atrib-internal/tools/claude-hooks/atrib-tool-emit-helper.mjs`. Making the import resolve required a local `package.json` and `node_modules/` in the hook source directory.
+**Context.** [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess) introduced `emitInProcess()` as the right primitive for hook-class producers, then proposed importing it directly from `@atrib/emit` inside the host's hook helper. Making the import resolve required a local `package.json` and `node_modules/` in the hook source directory.
 
 In production that arrangement produced a new failure mode the audit caught the same day. Claude Code's hook subsystem watches the hook source files and, while their containing directory was mutating (running `pnpm install`, regenerating symlinks, or refreshing the lockfile after a published `@atrib/emit` release), silently dropped PostToolUse and SessionEnd hook execution for roughly 29 minutes of active work. The user surfaced the gap by reading the live log via `explore.atrib.dev` (no records for two-plus hours despite continuous tool calls). A parallel installation event explained the cluster of misses. The mechanism was specific to the hook directory being a writable npm workspace; nothing about the import call itself was wrong.
 
@@ -3848,7 +3848,7 @@ The hook source directory drops `package.json`, `node_modules/`, and the `@atrib
 
 - `@atrib/emit` adds an `atrib-emit-cli` `bin` entry and a `dist/cli.js` shipped from `src/cli.ts`. The CLI's contract: read a JSON envelope from stdin (`event_type`, `content`, optional `context_id`, `informed_by`, `annotates`, `revises`), call `emitInProcess`, write the result JSON to stdout, log diagnostics to stderr, exit 0. The contract is the same shape the [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess) helper already used internally; only the boundary moves.
 - Operators install `@atrib/emit` globally on machines that run Claude Code hooks. The package's README documents `npm install -g @atrib/emit` as the supported install path for the hook use case (the existing `mcp-emit` binary continues to work for the interactive MCP surface; both ship from the same package).
-- The hook source directory at `~/repos/atrib-internal/tools/claude-hooks/` no longer declares a `package.json`. Existing `node_modules/` in operator clones is one cleanup pass during the migration; subsequent clones never reproduce it.
+- Host hook-source directories no longer declare a `package.json`. Existing `node_modules/` in legacy clones is one cleanup pass during the migration; subsequent clones never reproduce it.
 - [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess)'s primary code change (`emitInProcess` in `src/index.ts`) remains shipped and exported. The CLI is a thin caller, not a replacement.
 - No spec change. Same canonical form, same chain composition rules, same degradation contract.
 
