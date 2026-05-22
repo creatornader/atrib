@@ -20,6 +20,17 @@ Three layers:
 | Payment rail (below atrib) | Move the money | x402, ACP, UCP, AP2, MPP |
 | Settlement (below the rail) | Land the funds | Banks, on-chain rails |
 
+## What atrib does NOT do
+
+atrib intentionally stays out of four adjacent concerns that the layers above and below handle:
+
+- **Authorization** of the actual transaction. Inherits from agent authorization standards (OAuth, capability tokens, signed delegation envelopes).
+- **Identity** of the entity executing the transaction. Inherits from agent identity standards (the [§6](../../atrib-spec.md#6-key-directory) directory, W3C DIDs, identity-claim envelopes).
+- **Custody** of funds. Banks, custodial wallets, on-chain accounts; atrib never touches money.
+- **Settlement** itself. The rail's job, then off-rail (banks, on-chain transfers, treasury payouts).
+
+These are bordering layers atrib composes with but does not subsume. Previous attempts at "agent commerce" that tried to be receipts plus payments plus identity plus authorization all at once ended up doing none of them well. atrib's scope is deliberately the receipts surface only.
+
 ## When the transaction record gets triggered
 
 Per [§1.7](../../atrib-spec.md#17-transaction-event-hooks), the trigger is a commerce protocol firing its completion signal. Each rail has a specific on-wire event atrib watches for:
@@ -60,7 +71,7 @@ A compromised single key cannot fabricate arbitrary transactions on someone else
 
 **Violations are flagged, not blocked.** Per [§5.8](../../atrib-spec.md#58-degradation-contract)'s degradation contract, atrib never breaks the underlying flow. Verifiers flag any transaction record with fewer than 2 verified signers as `cross_attestation_missing: true`. Strict settlement systems might refuse to act on flagged records; permissive ones might accept with a downgrade. The protocol provides the signal; policy decides the response.
 
-**Counterparty key discovery**: out-of-band — either through the [§6 directory](../../atrib-spec.md#6-public-key-directory), through payment-protocol-specific channels (x402 facilitator metadata, ACP order envelope, AP2 PaymentMandate signer field), or via consumer-arranged key exchange. The spec deliberately doesn't pin a discovery mechanism.
+**Counterparty key discovery**: out-of-band — either through the [§6 directory](../../atrib-spec.md#6-key-directory), through payment-protocol-specific channels (x402 facilitator metadata, ACP order envelope, AP2 PaymentMandate signer field), or via consumer-arranged key exchange. The spec deliberately doesn't pin a discovery mechanism.
 
 ## The full end-to-end flow
 
@@ -80,6 +91,17 @@ A compromised single key cannot fabricate arbitrary transactions on someone else
 | 12 | Merchant pays out creators per the distribution, using their own rails/treasury | Off-atrib |
 
 Steps 1, 2, 8, 9 apply to every event_type. Steps 3-7 + 10-12 are payment-specific.
+
+## Verification and calculation are two separate steps
+
+Steps 9 and 10 in the flow above answer different questions, even though they run on the same signed bytes. Keeping them distinct is what makes settlement auditable.
+
+| Question | Step | What it answers |
+|---|---|---|
+| "Is this real?" | 9 (verification) | Signatures valid? Cross-attestation present? Graph self-consistent? Records committed to the log? |
+| "Given that it's real, how should value be apportioned?" | 10 (calculation) | What fraction of the transaction belongs to which creator, per the agreed policy? |
+
+You can run #9 without #10 (just want to verify what happened). You can't run #10 without #9: calculating on unverified records means calculating on potentially-forged data. The [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) cross-attestation gate is the bouncer for #10; see the next section.
 
 ## §4.6 gating
 
