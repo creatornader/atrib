@@ -229,4 +229,35 @@ describe('D081 byte-identicality: emitInProcess vs handleEmit', () => {
     expect(log.received.length).toBe(1)
     expect(r.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
   })
+
+  it('populates log_index and drops the queued warning when flush completes successfully', async () => {
+    const seed = await fixedSeed()
+    // handleEmit reads the proof synchronously, before queue.submit's
+    // promise can resolve, so its result carries log_index=null and a
+    // "submission queued; proof not yet available" warning. emitInProcess
+    // awaits the flush AFTER handleEmit returns; this test pins that
+    // emitInProcess re-reads the proof post-flush and patches the result.
+    // Before this was wired, callers got log_index=null even when the
+    // record had already landed on the log — the warning was misleading
+    // and the local mirror's proof sidecar stayed empty.
+    const r = await emitInProcess(
+      {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'log_index-after-flush' },
+      },
+      { key: { privateKey: seed, source: 'env' }, logEndpoint: log.url },
+    )
+
+    // The stub assigns sequential indices starting at 0; the first record
+    // lands as log_index 0. The point is that it's NOT null.
+    expect(r.log_index).not.toBeNull()
+    expect(typeof r.log_index).toBe('number')
+    expect(Array.isArray(r.inclusion_proof)).toBe(true)
+
+    // The misleading "submission queued; proof not yet available" warning
+    // must NOT appear once the flush has confirmed delivery.
+    expect(
+      r.warnings.some((w) => w.startsWith('submission queued; proof not yet available')),
+    ).toBe(false)
+  })
 })
