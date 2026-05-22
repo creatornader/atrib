@@ -361,7 +361,7 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
   // consumers (recall, trace, summarize) can surface semantic context
   // alongside the cryptographic evidence. The sidecar lives at the
   // envelope level, the signed record bytes are unchanged.
-  await mirrorRecord(record, queue.getProof(recordHash ?? '') ?? null, {
+  await mirrorRecord(record, recordHash ? getProofFor(queue, recordHash) ?? null : null, {
     content: input.content,
     producer: 'atrib-emit',
   })
@@ -369,7 +369,7 @@ async function handleEmit({ input, key, queue }: HandleEmitInput): Promise<EmitO
   // Try to read a proof if the queue submitted synchronously and the log
   // returned one within the same tick. Most submissions return null here
   // and the proof shows up on a later poll via getProof.
-  const proof = recordHash ? queue.getProof(recordHash) ?? null : null
+  const proof = recordHash ? getProofFor(queue, recordHash) ?? null : null
 
   if (!proof) {
     warnings.push('submission queued; proof not yet available (poll the log later if needed)')
@@ -401,6 +401,20 @@ function randomContextId(): string {
 
 function hashRecord(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
+}
+
+/**
+ * `@atrib/mcp`'s submission queue caches proofs by *bare hex*, while
+ * everywhere else in atrib uses the spec §1.4.2 `sha256:<64-hex>` form.
+ * Strip the prefix when querying the cache. Without this bridge, every
+ * proof lookup returned undefined: handleEmit and emitInProcess both
+ * always reported `log_index: null` and a misleading "submission queued"
+ * warning, even when the record had already landed on the log.
+ */
+function getProofFor(queue: SubmissionQueue, recordHash: string): ProofBundle | undefined {
+  return queue.getProof(
+    recordHash.startsWith('sha256:') ? recordHash.slice('sha256:'.length) : recordHash,
+  )
 }
 
 export interface EmitInProcessOptions {
@@ -474,6 +488,22 @@ export async function emitInProcess(
   if (!flushed) {
     result.warnings.push(
       `flush exceeded ${flushDeadlineMs}ms deadline; record signed and mirrored locally, log submission may still be in flight`,
+    )
+    return result
+  }
+  // Flush completed within the deadline. handleEmit had to read the proof
+  // synchronously, before the submission promise could resolve, so its
+  // result carries `log_index: null` and a "submission queued; proof not
+  // yet available" warning. After flush the proof is in the queue's cache;
+  // re-read it and patch the result so callers see the proof they would
+  // get if they queried the log directly. The warning becomes misleading
+  // (the submission DID complete), so drop it.
+  const proof = getProofFor(queue, result.record_hash)
+  if (proof) {
+    result.log_index = proof.log_index
+    result.inclusion_proof = proof.inclusion_proof
+    result.warnings = result.warnings.filter(
+      (w) => !w.startsWith('submission queued; proof not yet available'),
     )
   }
   return result
