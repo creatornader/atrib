@@ -32,11 +32,12 @@ To cover:
 - The set is closed at six for v1; a seventh requires promotion of a new event_type per [D036](../../DECISIONS.md)
 - How the cognitive primitives compose: emit → annotate (mark the emit as important) → revise (later change mind about the emit)
 - The reads as graph-traversal verbs over the substrate
+- Distribution shape per [D081](../../DECISIONS.md) + [D082](../../DECISIONS.md): the WRITE primitives ship as both an MCP server (`atrib-emit`, long-lived stdio child for MCP-aware harnesses) and a CLI binary (`atrib-emit-cli`, short-lived spawn-per-call for hook-class producers like Claude Code's PostToolUse hooks). Records are byte-identical; only the integration shape differs.
 - Worked example: an agent reasoning about a past failure — uses recall to find prior records, trace to walk the causal chain, summarize to condense the relevant context, then emit a new observation reflecting what was learned
 
 ## See also
 
-- Decisions: [D079 The six core cognitive primitives](../../DECISIONS.md), [D036 Bar for promoting event_type](../../DECISIONS.md), [D058 ANNOTATES edge](../../DECISIONS.md), [D059 REVISES edge](../../DECISIONS.md)
+- Decisions: [D079 The six core cognitive primitives](../../DECISIONS.md), [D036 Bar for promoting event_type](../../DECISIONS.md), [D058 ANNOTATES edge](../../DECISIONS.md), [D059 REVISES edge](../../DECISIONS.md), [D081 In-process emit for hook-class producers](../../DECISIONS.md), [D082 atrib-emit-cli binary distribution](../../DECISIONS.md)
 - Concepts: [Graph derivation](05-graph-derivation.md) (the read primitives traverse the graph), [The chain](04-the-chain.md) (the write primitives extend it)
-- Services: `services/atrib-emit`, `services/atrib-annotate`, `services/atrib-revise`, `services/atrib-recall`, `services/atrib-trace`, `services/atrib-summarize`
+- Services: `services/atrib-emit` (ships two binaries: `atrib-emit` MCP server + `atrib-emit-cli` per [D082](../../DECISIONS.md)), `services/atrib-annotate`, `services/atrib-revise`, `services/atrib-recall`, `services/atrib-trace`, `services/atrib-summarize`
 - Skill: `skills/atrib/SKILL.md` (canonical agent-facing teaching doc)
