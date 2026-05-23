@@ -1,5 +1,13 @@
 # @atrib/annotate
 
+## 0.2.11
+
+### Patch Changes
+
+- Updated dependencies [64f3c86]
+  - @atrib/mcp@0.9.1
+  - @atrib/emit@0.14.2
+
 ## 0.2.10
 
 ### Patch Changes
