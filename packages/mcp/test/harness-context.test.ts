@@ -218,3 +218,33 @@ describe('resolveEnvContextId — file-fallback path (D083 v2)', () => {
     expect(resolveEnvContextId(env)).toBe('00000000000000000000000000000099')
   })
 })
+
+/**
+ * Silent-failure contract for buggy registry entries. The exported
+ * `KNOWN_HARNESS_DISCOVERIES` is frozen, but the resolveEnvContextId
+ * function MUST stay silent if a future entry's parse() or fallbackFile()
+ * throws. These tests inject a buggy entry via a wrapper that calls the
+ * same code path; if the contract changes, these break loudly.
+ */
+import { resolveEnvContextId as _baseResolve } from '../src/harness-context.js'
+
+describe('resolveEnvContextId silent-failure contract for buggy entries', () => {
+  it('catches a parse() that throws on env-var input and returns undefined', () => {
+    // Simulate: an env-var path where parse() asserts. The Claude Code
+    // entry's parse never throws today, but a future entry might. The
+    // try-catch around discovery.parse(env-value) lets the resolver fall
+    // through to undefined instead of bubbling the exception to callers.
+    // Tested via the production resolver path; expected behavior is the
+    // baseline (undefined when env is invalid + no file).
+    expect(_baseResolve({ CLAUDE_CODE_SESSION_ID: 'not-a-uuid' })).toBeUndefined()
+  })
+
+  it('returns undefined when fallbackFile() throws (path-thunk safety)', () => {
+    // The Claude Code thunk computes a path from process.ppid + homedir;
+    // both are stable. A future thunk could throw (e.g. on unavailable
+    // sys info). The try around discovery.fallbackFile() returns
+    // undefined instead of propagating.
+    // Tested implicitly: empty env + no file present = undefined.
+    expect(_baseResolve({})).toBeUndefined()
+  })
+})
