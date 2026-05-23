@@ -1,6 +1,6 @@
 ---
 name: atrib
-version: 0.3.2
+version: 0.3.3
 description: |
   Use atrib as your literal substrate for memory, reasoning, and getting
   smarter over time, not as instrumentation that observes you from the
@@ -128,6 +128,19 @@ The injection is raw signal: the host surfaces records that lexically overlap wi
 ```
 
 Why your host might wire this: the cognitive primitives are only useful if you actually invoke them at the right moments. A behavioral hypothesis under empirical test (as of 2026-05-22) is whether record surfacing inline at PreToolUse moves the post-fire cognitive-emit rate above zero. The lex_count scoring is intentionally substrate-minimum (no importance weighting, no recency decay, no semantic match) so the data collected measures whether the IDEA helps, not whether a specific opinion about scoring helps. If you ignore the injection and never reach for emit/annotate/revise after one, you are the negative result. If you read it and react when warranted, you are the positive result. Either outcome is useful; both inform what the next iteration looks like.
+
+### Surfacing does NOT replace active recall
+
+The section above covers what to do WHEN records are surfaced to you. It does not cover what to do when they are not, and the gap matters: a host's PreToolUse hook can only surface records that lexically overlap with a tool's input, and only at the moment a tool is about to fire. Several real cases fall outside that window:
+
+- **Planning or synthesizing between tool calls.** You are deciding the shape of a multi-step approach before any tool fires. No PreToolUse event, no surfacing. Pull your own context with `mcp__atrib-recall__recall_my_attribution_history` filtered by topics or by `context_id`.
+- **Walking a specific record's lineage.** You saw a `sha256:<hash>` surfaced in the injection or in the SessionStart block, but you need the ancestry chain, not just the one node. Use `mcp__atrib-trace__trace` from the record_hash.
+- **Cross-session deep dives.** "What did past-me think about X across multiple sessions?" The decision-guidance hook only scores against current local mirror records that share tokens with the current tool input. Cross-session memory needs `recall_my_attribution_history` without a `context_id` filter, or `recall_by_content` for content-shape matches.
+- **Verifying or expanding a truncated surfaced record.** The injection shows a 24-char hash prefix and ~140-char summary. If you need the full record (creator_key, signature, full content), `recall_walk` from the full record_hash gives you the node and its neighbors. Surfaced summaries are signal, not the record itself.
+- **Targeted annotation or revision queries.** `recall_annotations` to find every annotation on a target record (decide whether the existing annotations already cover what you would emit); `recall_revisions` to check whether a position has been revised since you saw it.
+- **Resuming a long context_id with many records.** Read individually is overkill; `mcp__atrib-summarize__summarize` produces a digest across N records.
+
+The full read-primitive guidance lives in "When to reach for each primitive" below; this section is a forward-pointer so the active-recall path is not lost in the shadow of the passive-surfacing one. The hook covers the common case; you cover everything else.
 
 ## When to reach for each primitive
 
