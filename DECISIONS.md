@@ -3957,6 +3957,60 @@ Writer responsibility lives in the operator's hook layer, not in `@atrib/mcp`. T
 - [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail), orphan handling; v2 closes the empirical orphan path for in-process MCP children.
 - [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), mirror sidecar shape; the producer label (`_local.producer`) already distinguishes hook-source vs MCP-child-source records, making the orphan-vs-correct-context split visible post-fix.
 
+## D084: Read-primitive instrumentation for empirical loop-closure measurement
+
+**Date:** 2026-05-23
+
+**Context.** The 2026-05-23 substrate audit looked at whether the cognitive loop the [atrib SKILL](skills/atrib/SKILL.md) prescribes (surfacing → read → write referencing the surfaced record → next-session surfacing of new write) actually closes in interactive Claude Code sessions. The only data on hand was the PreToolUse decision-guidance hook's `fires.jsonl` (Surface 5, shipped 2026-05-22 as the "substrate-minimum" baseline). That file captures what records the host surfaced at each tool-call moment, but not what the agent did with them. Cross-referencing fires against the signed-record mirror gave a loose temporal-correlation answer ("did any cognitive write happen within ten minutes of a fire?") but no causal one ("did a write reference any of the fire's top-k record hashes?").
+
+The handoff queued a "4th-pillar broadening" of three additional instrumentation surfaces plus a unified analyzer so the loop-closure question could be answered with all signals correlated rather than inferred from one source. Those four surfaces are this ADR's scope: Surface 6 (read primitives), Surface 7 (SessionStart), Surface 8 (cli-spawn transport), Surface 9 (the analyzer joining all four pillars + the signed-record mirror).
+
+**Decision.** Each instrumentation surface writes its own per-event jsonl file under `~/.atrib/state/`, owned by the producer that generates the event. The analyzer reads all five sources and never writes (it only reports). Path conventions:
+
+- `~/.atrib/state/decision-guidance/fires.jsonl` — Surface 5, pre-existing (the substrate-minimum hook's per-fire log).
+- `~/.atrib/state/read-primitives/calls.jsonl` — Surface 6, written by the read-primitive MCP servers (`@atrib/recall` family, `@atrib/trace`, `@atrib/summarize`) via the `logReadPrimitiveCall` helper shipped in `@atrib/mcp@0.10.0`.
+- `~/.atrib/state/session-start/surfaces.jsonl` — Surface 7, written by the host's SessionStart hook on every session boot.
+- `~/.atrib/state/cli-spawn/calls.jsonl` — Surface 8, written by the host's `atrib-tool-emit-helper` after each cli-spawn fires.
+- `~/.atrib/records/*.jsonl` — the signed-record mirror per [§5.9](atrib-spec.md#59-local-mirror-conventions), unchanged.
+
+Wire schemas are stable. Each entry carries a session-scoped key (`session_id` as 32-hex per [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)) so the analyzer can join across sources without per-format conversion. Silent-failure per [§5.8](atrib-spec.md#58-degradation-contract) governs every writer: instrumentation MUST NOT block the primary path of any tool call or hook fire.
+
+The analyzer (`atrib-internal/tools/claude-hooks/analyze-substrate.mjs`) reports five questions per run:
+
+1. Does PreToolUse surfacing drive reads? (fires top-k record-hash intersected with subsequent read-primitive sample-result-hashes)
+2. Does reading drive writes? (read sample-result-hashes intersected with subsequent write `informed_by` entries)
+3. Does SessionStart surfacing drive reads in the same session?
+4. Per-session totals across fires + reads + writes + writes-carrying-informed_by + informed_by-intersecting-surfaced.
+5. Cli-spawn transport health (p50/p90/p95 elapsed, error-class breakdown, cli-bin-source distribution).
+
+The Surface 6 helper exports two functions from `@atrib/mcp`: `logReadPrimitiveCall(primitive, args, handler, extractHashes)` wraps any read-primitive MCP handler with timing + query-shape + sampled-hash logging; `extractRecordHashesFromMcpResult(result)` is the default extractor that deep-walks an MCP tool response for `sha256:<64-hex>` references. Caller-supplied extractors override when a tighter path exists.
+
+`@atrib/recall`'s compact-mode response now always includes `record_hash`. The analyzer needs the primary key to correlate, and callers chaining other primitives (`recall_walk`, `recall_annotations`, `recall_revisions`, `trace`) previously had to fall back to verbose mode just to obtain the hash. Compact response is approximately seventy bytes larger per record. That cost is worth paying for a response that is actually chainable.
+
+**Alternatives considered.**
+
+- *In-band logging via signed observation records (one observation per read call).* Rejected. Would inflate the public Merkle log with per-call records that have no defensible business meaning. The signed log is for the agent's reasoning, not for transport telemetry. Surface 6 stays out-of-band.
+- *Single combined `~/.atrib/state/events.jsonl` with a `surface:` discriminator.* Rejected. Surfaces have different cadences and different writers; combining them creates coordination between producers that today have none. The five-file split keeps each producer's writer independent.
+- *Computing record-hash on the analyzer side via JCS canonicalization of mirror records.* Rejected for Surface 9 v1. Requires linking `@atrib/mcp` into a hook-layer script and re-canonicalizing the entire mirror per analyzer run. The signed records' `informed_by` field already carries full record-hash strings; the analyzer uses those directly and does not need to compute hashes itself for the correlations defined above.
+- *Aggregating per-call jsonl rows into pre-rolled metrics at write time.* Rejected. Pre-rolling forces a fixed metric set into the writer side; the analyzer's question set evolves faster than the metric definitions and would otherwise drift. Raw per-event jsonl plus a versioned analyzer is the simpler shape.
+
+**Consequences.**
+
+- The cognitive loop the SKILL prescribes becomes measurable. Before Surface 6, "are agents reading?" was answered by counting tool-use entries across all Claude Code transcripts (twelve lifetime reads against six thousand transcripts), but with no causal link to the records that were surfaced. After Surface 6 plus the analyzer, an interactive session that calls `mcp__atrib-recall__*` against a surfaced record-hash produces a measurable causal entry.
+- Surface 7's `block_byte_counts` map gives a stable per-block byte budget for the SessionStart hook. The labels are pinned by `SURFACE_7_BLOCK_NAMES` so analyzer consumers can target specific blocks (e.g. "how much byte share did pending-work signals take?") without parsing prose headings.
+- Surface 8's structured per-call jsonl is additive to the pre-existing text log in `~/.atrib/logs/mcp-signer.log`. The text log continues to write unchanged for tail-grep tooling; the jsonl is for analyzer joins.
+- Historical cli-spawn coverage starts from the Surface 8 ship date. The text log holds older data; a one-shot backfill script would grep it into the new jsonl format if retrospective analysis ever needs the long tail. Not done at ship time.
+- The Surface 6 wrapper is silent-failure: a write error in the instrumentation finally-block is swallowed, and the wrapped handler's result (or thrown error) propagates unchanged. This is the same posture [§5.8](atrib-spec.md#58-degradation-contract) applies to all atrib failure paths.
+- `@atrib/recall`'s compact response carries one new field (`record_hash`). Schema is additive; existing callers continue to work, and new callers gain the primary key without paying the verbose-mode cost.
+
+**Cross-references.**
+
+- [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), the cognitive primitives the loop is built on.
+- [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers), the session-id resolution Surface 6 uses to populate `session_id` in its jsonl.
+- [§5.8](atrib-spec.md#58-degradation-contract), the silent-failure contract.
+- [§5.9](atrib-spec.md#59-local-mirror-conventions), the mirror that Surface 9 reads as its primary write source.
+- The host-side surfaces (7, 8, 9) live in atrib-internal at `tools/claude-hooks/`. No spec change. The wire format of signed records is unchanged.
+
 ---
 
 # Pending decisions
