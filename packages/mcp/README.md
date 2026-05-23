@@ -120,6 +120,32 @@ In-process surrogate `McpServer` that forwards every tool call to an upstream MC
 
 For advanced use cases (custom transports, manual signing, recommendation calculation), the package also exports the cryptographic and serialization primitives directly: `signRecord`, `verifyRecord`, `canonicalRecord`, `computeContentId`, `genesisChainRoot`, `chainRoot`, `encodeToken`, `decodeToken`, `base64urlEncode`, `base64urlDecode`, `sha256`, `hexEncode`, `hexDecode`, plus the W3C trace-context helpers (`readInboundContext`, `writeOutboundContext`, `parseTracestateAtrib`, `parseBaggageAtribSession`, `extractTraceId`, `mergeTracestate`, `mergeBaggageAtribSession`), the harness session-id discovery helpers per [D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) (`resolveEnvContextId`, `KNOWN_HARNESS_DISCOVERIES`), and the submission queue itself (`createSubmissionQueue`).
 
+### Harness discovery: env-var + file-fallback ([D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) v1 + v2)
+
+`resolveEnvContextId` derives a default `context_id` for cognitive-primitive MCP servers (`@atrib/emit`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`) when the caller omits one. Precedence:
+
+1. `ATRIB_CONTEXT_ID` env ([D078](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default); explicit operator/harness intent).
+2. For each entry in `KNOWN_HARNESS_DISCOVERIES`:
+   - `discovery.envVar` in env ([D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) v1; per-session-spawn harnesses like Inspect arms).
+   - `discovery.fallbackFile()` readable + parseable ([D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) v2; startup-spawn harnesses like Claude Code).
+3. `undefined` (caller falls through to its own resolution chain).
+
+The `HarnessDiscovery` interface:
+
+```ts
+interface HarnessDiscovery {
+  envVar: string                        // documented env var name
+  fallbackFile?: () => string           // optional, returns per-instance state file path
+  parse(value: string): string | null   // env or file value → 32-hex or null
+}
+```
+
+The file-fallback path is for harnesses that spawn MCP children at process startup, before any per-session env exists. The harness's hook layer (operator-side) writes the state file from a session-aware context; the registry entry's `fallbackFile` thunk returns the matching path. File-read constraints: maximum 128 bytes, trimmed whitespace, silent failure on all errors.
+
+The included Claude Code entry uses `~/.claude/state/active-session-id-${process.ppid}` (per-PPID keyed so concurrent Claude Code instances don't collide). The matching writer is a SessionStart-equivalent hook in the host's hook layer; the writer reads `CLAUDE_CODE_SESSION_ID` from its env (Claude Code provides it to hook subprocesses) and writes the file atomically.
+
+Adding a new harness: add a registry entry. If the harness spawns MCP children per-session, set only `envVar`. If at startup, add `fallbackFile` and ship a corresponding writer in the harness's host integration (typically a SessionStart-equivalent hook).
+
 ## Serving well-known endpoints ([§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission), [§5.3.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#536-policy-exposure))
 
 For HTTP transports, the spec requires serving the policy document at `/.well-known/atrib-policy.json` and cached inclusion proofs at `/.well-known/atrib-proof/{record_hash}`. Two helpers make this easy.
