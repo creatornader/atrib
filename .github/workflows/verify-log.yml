@@ -12,11 +12,17 @@ on:
 permissions:
   contents: read
 
+# Opt into Node.js 24 for transitive JS actions (see ci.yml for rationale).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          token: ${{ github.token }}
 
       - uses: pnpm/action-setup@v6
 
