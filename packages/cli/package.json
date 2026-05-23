@@ -1,6 +1,6 @@
 {
   "name": "@atrib/cli",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "type": "module",
   "bin": {
     "atrib": "./dist/cli.js"
