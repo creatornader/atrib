@@ -12,7 +12,7 @@
  * That fix closed the orphan-singleton class for harnesses that spawn MCP
  * children per-session (inheriting the per-session env). It did NOT close
  * it for harnesses that spawn MCP children ONCE at process startup, before
- * any session exists — the per-session env never propagates to the
+ * any session exists. The per-session env never propagates to the
  * already-running child. Claude Code is the canonical example: MCP
  * children are spawned at Claude Code launch; CLAUDE_CODE_SESSION_ID is
  * created later, per-conversation, and never reaches the child's env.
@@ -89,10 +89,18 @@ export const KNOWN_HARNESS_DISCOVERIES: readonly HarnessDiscovery[] = [
   //         The hook has CLAUDE_CODE_SESSION_ID in env and process.ppid =
   //         Claude Code PID. The MCP child has process.ppid = Claude Code
   //         PID. Same key on both sides.
-  // Content: one line, either the raw UUID (with or without dashes) or
-  //         the already-stripped 32-hex form. parse() handles both.
+  // Content: the reference writer writes the raw UUID with dashes (one
+  //         line). parse() ALSO accepts the already-stripped 32-hex form
+  //         for hand-edits or alternate writers, but the canonical write
+  //         shape is the dashed UUID for operator-readability.
   // Per-PID keying isolates concurrent Claude Code instances (each
   //         spawns its own MCP children + its own SessionStart hook).
+  // Limitation: a single Claude Code instance serving multiple sessions
+  //         in sequence (e.g. via /clear) overwrites this file each time;
+  //         in-process MCP children read the most-recent session id.
+  //         If the agent needs to disambiguate per-call, it MUST thread
+  //         context_id explicitly. This is acceptable because Claude Code
+  //         today serves one active session per instance at a time.
   {
     envVar: 'CLAUDE_CODE_SESSION_ID',
     fallbackFile: () =>
@@ -147,13 +155,23 @@ export function resolveEnvContextId(
   const explicit = env['ATRIB_CONTEXT_ID']
   if (explicit && HEX_32.test(explicit)) return explicit
   for (const discovery of KNOWN_HARNESS_DISCOVERIES) {
+    // Env-var path. parse() may throw (a buggy or future discovery entry
+    // could ship a parser that asserts); catch so the silent-failure
+    // contract holds regardless of registry-entry quality.
     if (discovery.envVar !== '') {
       const value = env[discovery.envVar]
       if (value !== undefined) {
-        const parsed = discovery.parse(value)
-        if (parsed) return parsed
+        try {
+          const parsed = discovery.parse(value)
+          if (parsed) return parsed
+        } catch {
+          // fall through to file path; next discovery; or undefined
+        }
       }
     }
+    // File-fallback path. Both the path-thunk and parse() are
+    // try-wrapped so any registry-entry exception falls through to
+    // the next discovery or to undefined.
     if (discovery.fallbackFile !== undefined) {
       let path: string | null = null
       try {
@@ -164,8 +182,12 @@ export function resolveEnvContextId(
       if (path !== null) {
         const raw = readFallbackFile(path)
         if (raw !== null) {
-          const parsed = discovery.parse(raw)
-          if (parsed) return parsed
+          try {
+            const parsed = discovery.parse(raw)
+            if (parsed) return parsed
+          } catch {
+            // fall through
+          }
         }
       }
     }
