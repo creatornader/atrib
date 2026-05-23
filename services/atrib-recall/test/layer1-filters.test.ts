@@ -382,7 +382,11 @@ describe('rank_by=relevance', () => {
     // When rank_anchor parses as sha256:<64-hex>, the relevance component
     // collapses to 0, the recall path treats it as a causal_distance
     // anchor (still stub-accepted) rather than a free-form query.
-    const r = await makeSigned({ timestamp: RECENT_TS })
+    // Uses Date.now() for the timestamp so recency keeps the Park score
+    // above the Layer 1 v2 anti-noise threshold (a stale fixture would
+    // be suppressed by ATRIB_RECALL_NOISE_FLOOR; this test is about the
+    // rank_anchor parsing, not threshold behavior).
+    const r = await makeSigned({ timestamp: Date.now() })
     writeFileSync(file, JSON.stringify(r))
     const result = await recall(
       { rank_by: 'relevance', rank_anchor: `sha256:${'0'.repeat(64)}` },
@@ -390,6 +394,65 @@ describe('rank_by=relevance', () => {
     )
     expect(result.returned).toBe(1)
     // No throw, normal response shape returned.
+  })
+
+  it('anti-noise threshold suppresses results when top Park score is below ATRIB_RECALL_NOISE_FLOOR', async () => {
+    // Stale timestamp (no recency), no annotation (no importance), no
+    // BM25 query (no relevance). Park score collapses to ~0 < default
+    // floor of 0.15. Recall returns empty + quality='below_threshold'
+    // instead of low-confidence top-K.
+    const r = await makeSigned({ timestamp: RECENT_TS })
+    writeFileSync(file, JSON.stringify(r))
+    const result = await recall(
+      { rank_by: 'relevance', rank_anchor: 'nonexistent-token-xyz' },
+      file,
+    )
+    expect(result.returned).toBe(0)
+    expect(result.records).toEqual([])
+    expect((result as { quality?: string }).quality).toBe('below_threshold')
+    expect((result as { top_score?: number }).top_score).toBeLessThan(0.15)
+  })
+
+  it('anti-noise threshold does NOT suppress when results clear the floor', async () => {
+    // Fresh timestamp gives recency ~1.0; alpha*1.0 = 0.3 > 0.15 floor.
+    const r = await makeSigned({ timestamp: Date.now() })
+    writeFileSync(file, JSON.stringify(r))
+    const result = await recall(
+      { rank_by: 'relevance', rank_anchor: 'nonexistent-token-xyz' },
+      file,
+    )
+    expect(result.returned).toBe(1)
+    expect((result as { quality?: string }).quality).toBeUndefined()
+  })
+
+  it('anti-noise threshold does NOT apply to rank_by=timestamp', async () => {
+    // Default rank_by=timestamp never triggers the threshold; the floor
+    // applies only when the agent explicitly asks for relevance ranking.
+    const r = await makeSigned({ timestamp: RECENT_TS })
+    writeFileSync(file, JSON.stringify(r))
+    const result = await recall({}, file)
+    expect(result.returned).toBe(1)
+    expect((result as { quality?: string }).quality).toBeUndefined()
+  })
+})
+
+describe('Layer 1 v2 legibility fields in compact response', () => {
+  it('display_summary, display_producer, age fields are present on each record', async () => {
+    const r = await makeSigned({ timestamp: Date.now() })
+    writeFileSync(file, JSON.stringify(r))
+    const result = await recall({}, file)
+    expect(result.returned).toBe(1)
+    const rec = result.records[0] as {
+      display_summary?: string
+      display_producer?: string
+      age?: string
+    }
+    expect(typeof rec.display_summary).toBe('string')
+    expect(rec.display_summary!.length).toBeGreaterThan(0)
+    expect(typeof rec.display_producer).toBe('string')
+    expect(rec.display_producer).toMatch(/^(key:|[a-z])/)
+    expect(typeof rec.age).toBe('string')
+    expect(rec.age).toBe('just now')
   })
 })
 
