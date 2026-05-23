@@ -122,7 +122,7 @@ For advanced use cases (custom transports, manual signing, recommendation calcul
 
 ### Read-primitive instrumentation ([D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) Surface 6)
 
-`logReadPrimitiveCall` wraps any read-primitive MCP handler with per-call instrumentation so the unified analyzer (Surface 9 in `atrib-internal/tools/claude-hooks/analyze-substrate.mjs`) can correlate surfacing → reads → writes empirically. Each call appends one jsonl line to `~/.atrib/state/read-primitives/calls.jsonl`:
+`logReadPrimitiveCall` wraps any read-primitive MCP handler with per-call instrumentation so a host-side unified analyzer (Surface 9, an `analyze-substrate.mjs` script in the host integration's hook layer; not on npm) can correlate surfacing → reads → writes empirically. Each call appends one jsonl line to `~/.atrib/state/read-primitives/calls.jsonl`:
 
 ```ts
 import { logReadPrimitiveCall, extractRecordHashesFromMcpResult } from '@atrib/mcp'

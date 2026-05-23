@@ -3975,7 +3975,7 @@ The handoff queued a "4th-pillar broadening" of three additional instrumentation
 
 Wire schemas are stable. Each entry carries a session-scoped key (`session_id` as 32-hex per [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)) so the analyzer can join across sources without per-format conversion. Silent-failure per [§5.8](atrib-spec.md#58-degradation-contract) governs every writer: instrumentation MUST NOT block the primary path of any tool call or hook fire.
 
-The analyzer (`atrib-internal/tools/claude-hooks/analyze-substrate.mjs`) reports five questions per run:
+The unified analyzer (an `analyze-substrate.mjs` script that lives in the host integration's hook layer, not on npm) reports five questions per run:
 
 1. Does PreToolUse surfacing drive reads? (fires top-k record-hash intersected with subsequent read-primitive sample-result-hashes)
 2. Does reading drive writes? (read sample-result-hashes intersected with subsequent write `informed_by` entries)
@@ -4009,7 +4009,7 @@ The Surface 6 helper exports two functions from `@atrib/mcp`: `logReadPrimitiveC
 - [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers), the session-id resolution Surface 6 uses to populate `session_id` in its jsonl.
 - [§5.8](atrib-spec.md#58-degradation-contract), the silent-failure contract.
 - [§5.9](atrib-spec.md#59-local-mirror-conventions), the mirror that Surface 9 reads as its primary write source.
-- The host-side surfaces (7, 8, 9) live in atrib-internal at `tools/claude-hooks/`. No spec change. The wire format of signed records is unchanged.
+- The host-side surfaces (7, 8, 9) live in the host integration's hook layer (not on npm; operator-side). No spec change. The wire format of signed records is unchanged.
 
 ---
 
