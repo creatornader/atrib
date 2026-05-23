@@ -18,7 +18,11 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { resolveEnvContextId } from '@atrib/mcp'
+import {
+  resolveEnvContextId,
+  logReadPrimitiveCall,
+  extractRecordHashesFromMcpResult,
+} from '@atrib/mcp'
 import { loadAllRecords, type IndexedRecord } from './storage.js'
 import { callLlm, resolveLlmConfig } from './llm.js'
 import { buildSystemPrompt, buildUserMessage } from './prompt.js'
@@ -83,13 +87,19 @@ export async function createAtribSummarizeServer(): Promise<AtribSummarizeServer
         'flagged so the LLM can be honest about impoverished input.',
       inputSchema: SummarizeInput.shape,
     },
-    async (rawInput: z.infer<typeof SummarizeInput>) => {
-      const input = SummarizeInput.parse(rawInput)
-      const result = await handleSummarize(input)
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      }
-    },
+    async (rawInput: z.infer<typeof SummarizeInput>) =>
+      logReadPrimitiveCall(
+        'summarize',
+        rawInput,
+        async () => {
+          const input = SummarizeInput.parse(rawInput)
+          const result = await handleSummarize(input)
+          return {
+            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+          }
+        },
+        extractRecordHashesFromMcpResult,
+      ),
   )
 
   return { mcp }

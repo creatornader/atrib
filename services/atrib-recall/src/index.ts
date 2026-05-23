@@ -42,6 +42,8 @@ import {
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_REVISION_URI,
   resolveEnvContextId,
+  logReadPrimitiveCall,
+  extractRecordHashesFromMcpResult,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 
@@ -336,6 +338,13 @@ type AnnotationSummary = AggAnnotationSummary
  * record's hash).
  */
 type RecallRecordCompact = {
+  /**
+   * Record identifier: sha256:<64-hex>. Always included so callers can
+   * re-query (recall_walk, recall_annotations, recall_revisions, trace) or
+   * cite the result without recomputing the hash. Surface 6 instrumentation
+   * also samples this for fires.jsonl correlation.
+   */
+  record_hash: string
   event_type: AtribRecord['event_type']
   context_id: string
   creator_key: string
@@ -542,6 +551,7 @@ function compactify(bundles: VerifiedBundle[]): RecallRecordCompact[] {
   return bundles.map((b) => {
     const r = b.record
     const out: RecallRecordCompact = {
+      record_hash: b.record_hash,
       event_type: r.event_type,
       context_id: r.context_id,
       creator_key: r.creator_key,
@@ -887,39 +897,45 @@ server.registerTool(
         ),
     },
   },
-  async (args) => {
-    // Layer 1 stub-acceptance: detect newly-accepted Layer 1 params, run the
-    // existing 0.4.0 recall path (which ignores them), and return the
-    // result with a layer_1_warnings array listing exactly which stub-
-    // accepted params were silently ignored. Callers can detect the
-    // pre-implementation state without having to read source.
-    // All seven Layer 1 surface parameters are now enforced
-    // (min_importance, topic_tags, include_revised, min_signers,
-    // rank_by, rank_anchor, toc). The layer_1_warnings array stays in
-    // the response shape (per the original wire contract) but is now
-    // always empty unless a future Layer extension lands more
-    // stub-accepted params.
-    const ignored: string[] = []
-    const result = await recall(args as RecallArgs)
-    const augmented = ignored.length > 0
-      ? {
-          ...result,
-          layer_1_warnings: ignored.map((k) => ({
-            param: k,
-            status: 'stub-accepted',
-            note: `Layer 1 param '${k}' was supplied; handler ignored it (full enforcement lands in upcoming release). Result reflects 0.4.0 behavior as if the param was not set.`,
-          })),
+  async (args) =>
+    logReadPrimitiveCall(
+      'recall_my_attribution_history',
+      args,
+      async () => {
+        // Layer 1 stub-acceptance: detect newly-accepted Layer 1 params, run the
+        // existing 0.4.0 recall path (which ignores them), and return the
+        // result with a layer_1_warnings array listing exactly which stub-
+        // accepted params were silently ignored. Callers can detect the
+        // pre-implementation state without having to read source.
+        // All seven Layer 1 surface parameters are now enforced
+        // (min_importance, topic_tags, include_revised, min_signers,
+        // rank_by, rank_anchor, toc). The layer_1_warnings array stays in
+        // the response shape (per the original wire contract) but is now
+        // always empty unless a future Layer extension lands more
+        // stub-accepted params.
+        const ignored: string[] = []
+        const result = await recall(args as RecallArgs)
+        const augmented = ignored.length > 0
+          ? {
+              ...result,
+              layer_1_warnings: ignored.map((k) => ({
+                param: k,
+                status: 'stub-accepted',
+                note: `Layer 1 param '${k}' was supplied; handler ignored it (full enforcement lands in upcoming release). Result reflects 0.4.0 behavior as if the param was not set.`,
+              })),
+            }
+          : result
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(augmented, null, 2),
+            },
+          ],
         }
-      : result
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(augmented, null, 2),
-        },
-      ],
-    }
-  },
+      },
+      extractRecordHashesFromMcpResult,
+    ),
 )
 
 // ─── Layer 1 sibling tools ───
@@ -951,38 +967,44 @@ server.registerTool(
         ),
     },
   },
-  async (args) => {
-    const { loaded } = discoverLoaded()
-    const graph = buildLocalGraph(loaded)
-    const edgeTypes = args.edge_types
-      ? new Set(args.edge_types as EdgeType[])
-      : undefined
-    const depth = typeof args.depth === 'number' ? args.depth : 3
-    const walk = walkFrom(graph, args.from_record_hash, edgeTypes, depth)
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
+  async (args) =>
+    logReadPrimitiveCall(
+      'recall_walk',
+      args,
+      async () => {
+        const { loaded } = discoverLoaded()
+        const graph = buildLocalGraph(loaded)
+        const edgeTypes = args.edge_types
+          ? new Set(args.edge_types as EdgeType[])
+          : undefined
+        const depth = typeof args.depth === 'number' ? args.depth : 3
+        const walk = walkFrom(graph, args.from_record_hash, edgeTypes, depth)
+        return {
+          content: [
             {
-              from_record_hash: args.from_record_hash,
-              edge_types: args.edge_types ?? [
-                'CHAIN_PRECEDES',
-                'INFORMED_BY',
-                'ANNOTATES',
-                'REVISES',
-              ],
-              depth,
-              count: walk.length,
-              walk,
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  from_record_hash: args.from_record_hash,
+                  edge_types: args.edge_types ?? [
+                    'CHAIN_PRECEDES',
+                    'INFORMED_BY',
+                    'ANNOTATES',
+                    'REVISES',
+                  ],
+                  depth,
+                  count: walk.length,
+                  walk,
+                },
+                null,
+                2,
+              ),
             },
-            null,
-            2,
-          ),
-        },
-      ],
-    }
-  },
+          ],
+        }
+      },
+      extractRecordHashesFromMcpResult,
+    ),
 )
 
 server.registerTool(
@@ -998,23 +1020,29 @@ server.registerTool(
         ),
     },
   },
-  async (args) => {
-    const { loaded } = discoverLoaded()
-    const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
-    const summary = annotationsByRecord.get(args.record_hash) ?? null
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            { record_hash: args.record_hash, annotations: summary },
-            null,
-            2,
-          ),
-        },
-      ],
-    }
-  },
+  async (args) =>
+    logReadPrimitiveCall(
+      'recall_annotations',
+      args,
+      async () => {
+        const { loaded } = discoverLoaded()
+        const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
+        const summary = annotationsByRecord.get(args.record_hash) ?? null
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                { record_hash: args.record_hash, annotations: summary },
+                null,
+                2,
+              ),
+            },
+          ],
+        }
+      },
+      extractRecordHashesFromMcpResult,
+    ),
 )
 
 server.registerTool(
@@ -1030,42 +1058,48 @@ server.registerTool(
         ),
     },
   },
-  async (args) => {
-    const { loaded } = discoverLoaded()
-    const revisionsByRecord = aggregateRevisionsByRecord(loaded)
-    // Walk the chain forward: the input record may be revised by R1;
-    // R1 may be revised by R2; collect them in order. Bounded by the
-    // mirror size (no cycles since timestamps are monotonic per
-    // signer; defensive seen-set anyway).
-    const chain: string[] = []
-    const seen = new Set<string>()
-    let current = args.record_hash
-    while (!seen.has(current)) {
-      seen.add(current)
-      const next = revisionsByRecord.get(current)
-      if (!next || next.length === 0) break
-      // Each entry in the map's value array is a revision pointing at
-      // `current`. Convention: the chain follows the first-by-timestamp
-      // revision; agents wanting the full sibling fan-out (parallel
-      // revisions at the same target) should call recall_my_attribution_history
-      // with event_type=revision and inspect their revises field manually.
-      const revHash = next[0]!
-      chain.push(revHash)
-      current = revHash
-    }
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            { record_hash: args.record_hash, revision_chain: chain },
-            null,
-            2,
-          ),
-        },
-      ],
-    }
-  },
+  async (args) =>
+    logReadPrimitiveCall(
+      'recall_revisions',
+      args,
+      async () => {
+        const { loaded } = discoverLoaded()
+        const revisionsByRecord = aggregateRevisionsByRecord(loaded)
+        // Walk the chain forward: the input record may be revised by R1;
+        // R1 may be revised by R2; collect them in order. Bounded by the
+        // mirror size (no cycles since timestamps are monotonic per
+        // signer; defensive seen-set anyway).
+        const chain: string[] = []
+        const seen = new Set<string>()
+        let current = args.record_hash
+        while (!seen.has(current)) {
+          seen.add(current)
+          const next = revisionsByRecord.get(current)
+          if (!next || next.length === 0) break
+          // Each entry in the map's value array is a revision pointing at
+          // `current`. Convention: the chain follows the first-by-timestamp
+          // revision; agents wanting the full sibling fan-out (parallel
+          // revisions at the same target) should call recall_my_attribution_history
+          // with event_type=revision and inspect their revises field manually.
+          const revHash = next[0]!
+          chain.push(revHash)
+          current = revHash
+        }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                { record_hash: args.record_hash, revision_chain: chain },
+                null,
+                2,
+              ),
+            },
+          ],
+        }
+      },
+      extractRecordHashesFromMcpResult,
+    ),
 )
 
 server.registerTool(
@@ -1087,58 +1121,64 @@ server.registerTool(
         ),
     },
   },
-  async (args) => {
-    const { loaded } = discoverLoaded()
-    const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
-    const queryTokens = tokenize(args.query)
-    const corpus = loaded.map((lr) => ({
-      id: lr.record_hash,
-      tokens: indexableTextFromAnnotation(annotationsByRecord.get(lr.record_hash)),
-    }))
-    const idx = buildBM25Index(corpus)
-    const now = Date.now()
-    const scored = loaded.map((lr) => {
-      const r = recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS)
-      const i = importanceScore(annotationsByRecord.get(lr.record_hash))
-      const rel = queryTokens.length > 0
-        ? bm25Score(idx, lr.record_hash, queryTokens)
-        : 0
-      const score = parkScore(r, i, rel, ATRIB_RECALL_ALPHA, ATRIB_RECALL_BETA, ATRIB_RECALL_GAMMA)
-      return { lr, score, recency: r, importance: i, relevance: rel }
-    })
-    scored.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score
-      return b.lr.record.timestamp - a.lr.record.timestamp
-    })
-    const k = Math.max(1, Math.min(50, args.k ?? 10))
-    const top = scored.slice(0, k)
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
+  async (args) =>
+    logReadPrimitiveCall(
+      'recall_by_content',
+      args,
+      async () => {
+        const { loaded } = discoverLoaded()
+        const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
+        const queryTokens = tokenize(args.query)
+        const corpus = loaded.map((lr) => ({
+          id: lr.record_hash,
+          tokens: indexableTextFromAnnotation(annotationsByRecord.get(lr.record_hash)),
+        }))
+        const idx = buildBM25Index(corpus)
+        const now = Date.now()
+        const scored = loaded.map((lr) => {
+          const r = recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS)
+          const i = importanceScore(annotationsByRecord.get(lr.record_hash))
+          const rel = queryTokens.length > 0
+            ? bm25Score(idx, lr.record_hash, queryTokens)
+            : 0
+          const score = parkScore(r, i, rel, ATRIB_RECALL_ALPHA, ATRIB_RECALL_BETA, ATRIB_RECALL_GAMMA)
+          return { lr, score, recency: r, importance: i, relevance: rel }
+        })
+        scored.sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score
+          return b.lr.record.timestamp - a.lr.record.timestamp
+        })
+        const k = Math.max(1, Math.min(50, args.k ?? 10))
+        const top = scored.slice(0, k)
+        return {
+          content: [
             {
-              query: args.query,
-              k,
-              count: top.length,
-              results: top.map(({ lr, score, recency, importance, relevance }) => ({
-                record_hash: lr.record_hash,
-                event_type: lr.record.event_type,
-                context_id: lr.record.context_id,
-                timestamp: lr.record.timestamp,
-                tool_name: (lr.record as AtribRecord & { tool_name?: string }).tool_name,
-                annotations: annotationsByRecord.get(lr.record_hash),
-                score,
-                components: { recency, importance, relevance },
-              })),
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  query: args.query,
+                  k,
+                  count: top.length,
+                  results: top.map(({ lr, score, recency, importance, relevance }) => ({
+                    record_hash: lr.record_hash,
+                    event_type: lr.record.event_type,
+                    context_id: lr.record.context_id,
+                    timestamp: lr.record.timestamp,
+                    tool_name: (lr.record as AtribRecord & { tool_name?: string }).tool_name,
+                    annotations: annotationsByRecord.get(lr.record_hash),
+                    score,
+                    components: { recency, importance, relevance },
+                  })),
+                },
+                null,
+                2,
+              ),
             },
-            null,
-            2,
-          ),
-        },
-      ],
-    }
-  },
+          ],
+        }
+      },
+      extractRecordHashesFromMcpResult,
+    ),
 )
 
 const transport = new StdioServerTransport()
