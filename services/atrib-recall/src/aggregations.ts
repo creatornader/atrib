@@ -54,6 +54,14 @@ export type LoadedRecord = {
   record: AtribRecord
   record_hash: string
   content?: unknown
+  /**
+   * D062 `_local.producer` from the sidecar when present (e.g.
+   * "atrib-emit-cli", "claude-hooks-builtin-2b", "claude-code"). Used by
+   * Layer 1 v2 legibility to render a friendly creator label instead of
+   * the raw creator_key. Undefined when the line is bare (no envelope)
+   * or the producer field was not stamped at sign time.
+   */
+  producer?: string
 }
 
 /**
@@ -78,7 +86,7 @@ export function computeRecordHash(record: AtribRecord): string {
  */
 function extractLoaded(
   parsed: unknown,
-): { record: AtribRecord; content?: unknown } | null {
+): { record: AtribRecord; content?: unknown; producer?: string } | null {
   if (!parsed || typeof parsed !== 'object') return null
   const obj = parsed as Record<string, unknown>
   const envelopeRecord = (typeof obj.record === 'object' && obj.record !== null)
@@ -98,8 +106,16 @@ function extractLoaded(
   const record = candidate as unknown as AtribRecord
   if (envelopeRecord !== null) {
     const local = (obj._local as Record<string, unknown> | undefined) ?? undefined
-    if (local && 'content' in local) {
-      return { record, content: local.content }
+    if (local) {
+      const producer = typeof local.producer === 'string' ? local.producer : undefined
+      const hasContent = 'content' in local
+      if (hasContent || producer !== undefined) {
+        return {
+          record,
+          ...(hasContent && { content: local.content }),
+          ...(producer !== undefined && { producer }),
+        }
+      }
     }
   }
   return { record }
@@ -129,6 +145,7 @@ export function loadLoaded(path: string): LoadedRecord[] {
       record: extracted.record,
       record_hash: computeRecordHash(extracted.record),
       content: extracted.content,
+      producer: extracted.producer,
     })
   }
   return out

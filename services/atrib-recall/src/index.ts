@@ -87,6 +87,14 @@ export const ATRIB_RECALL_GAMMA = parseFloat(process.env.ATRIB_RECALL_GAMMA ?? '
 // component. 7-day default per design; longer windows favor older records,
 // shorter windows favor very-recent records. Tunable per experiment.
 export const ATRIB_RECALL_TAU_DAYS = parseFloat(process.env.ATRIB_RECALL_TAU_DAYS ?? '7')
+
+// Layer 1 v2 anti-noise threshold for rank_by='relevance'. When the top
+// Park score is below this floor, recall returns empty records + a
+// "below_threshold" quality signal rather than a low-confidence top-K.
+// 0.15 default is approximately alpha*0.5 (alpha=0.3 default) - the
+// score of "decent recency, no annotation, no topic, no BM25 hit." Below
+// that, results are effectively noise. Set to 0 to disable.
+export const ATRIB_RECALL_NOISE_FLOOR = parseFloat(process.env.ATRIB_RECALL_NOISE_FLOOR ?? '0.15')
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -112,6 +120,11 @@ import {
   walkFrom,
 } from './graph.js'
 import type { EdgeType } from './graph.js'
+import {
+  synthesizeDisplaySummary,
+  resolveDisplayProducer,
+  formatAge,
+} from './legibility.js'
 
 const ATRIB_RECORD_FILE = process.env.ATRIB_RECORD_FILE
 const ATRIB_MIRROR_DIR = process.env.ATRIB_MIRROR_DIR ?? join(
@@ -363,6 +376,26 @@ type RecallRecordCompact = {
   annotations?: AnnotationSummary
   /** New in 0.5.0: record hashes of D059 revisions superseding this record. */
   superseded_by?: string[]
+  /**
+   * New in 0.8.0 (Layer 1 v2 legibility): one-line human-legible
+   * description. Annotation summary if present, else per-event_type
+   * synthesis from record fields + _local.content, else generic
+   * fallback. Derived via legibility.synthesizeDisplaySummary.
+   */
+  display_summary?: string
+  /**
+   * New in 0.8.0 (Layer 1 v2 legibility): friendly producer label from
+   * _local.producer (e.g. "atrib-emit-cli"), else "key:<8hex>" fallback
+   * signaling raw key. Derived via legibility.resolveDisplayProducer.
+   */
+  display_producer?: string
+  /**
+   * New in 0.8.0 (Layer 1 v2 legibility): relative time string
+   * ("just now", "5m ago", "3d ago", absolute date for older than 30d).
+   * Computed at response time from record.timestamp. Derived via
+   * legibility.formatAge.
+   */
+  age?: string
 }
 
 /**
@@ -408,6 +441,21 @@ export interface RecallResult {
   log_origin: string
   pagination_caveat: string
   records: RecallRecordFull[] | RecallRecordCompact[] | RecallRecordToc[]
+  /**
+   * New in 0.8.0 (Layer 1 v2 anti-noise): present when rank_by='relevance'
+   * returned empty results because the top Park score was below
+   * ATRIB_RECALL_NOISE_FLOOR. Lets the caller distinguish "no records
+   * matched the filters" (returned=0, no quality field) from "records
+   * matched but none scored high enough to be useful" (returned=0,
+   * quality='below_threshold'). Omitted when results were returned.
+   */
+  quality?: 'below_threshold'
+  /**
+   * New in 0.8.0 (Layer 1 v2 anti-noise): the top Park score observed
+   * during this relevance ranking, present only when quality is set so
+   * the caller can see how close to the threshold the best result was.
+   */
+  top_score?: number
 }
 
 /**
@@ -428,7 +476,7 @@ function rankByRelevance(
   filtered: LoadedRecord[],
   annotationsByRecord: Map<string, AnnotationSummary>,
   rankAnchor: string | undefined,
-): void {
+): number {
   const now = Date.now()
   // Treat rank_anchor as a free-form query unless it parses as a record_hash
   // (sha256:<64-hex>). Future: when rank_by='causal_distance' wires up,
@@ -449,16 +497,16 @@ function rankByRelevance(
   const idx = buildBM25Index(corpus)
 
   const scores = new Map<string, number>()
+  let topScore = 0
   for (const lr of filtered) {
     const r = recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS)
     const i = importanceScore(annotationsByRecord.get(lr.record_hash))
     const rel = queryTokens.length > 0
       ? bm25Score(idx, lr.record_hash, queryTokens)
       : 0
-    scores.set(
-      lr.record_hash,
-      parkScore(r, i, rel, ATRIB_RECALL_ALPHA, ATRIB_RECALL_BETA, ATRIB_RECALL_GAMMA),
-    )
+    const s = parkScore(r, i, rel, ATRIB_RECALL_ALPHA, ATRIB_RECALL_BETA, ATRIB_RECALL_GAMMA)
+    scores.set(lr.record_hash, s)
+    if (s > topScore) topScore = s
   }
   filtered.sort((a, b) => {
     const sa = scores.get(a.record_hash) ?? 0
@@ -467,6 +515,12 @@ function rankByRelevance(
     // Stable tie-break on timestamp newest-first.
     return b.record.timestamp - a.record.timestamp
   })
+  // Return the top score so the caller can apply the anti-noise threshold
+  // (Layer 1 v2: suppress low-confidence top-K rather than train the agent
+  // to ignore recall results). Each Park component is in [0, 1] and the
+  // weights are operator-configured to sum to 1.0 by default, so topScore
+  // also lives in [0, 1] under normal config.
+  return topScore
 }
 
 /**
@@ -518,10 +572,14 @@ type VerifiedBundle = {
   signature_verified: boolean
   annotations?: AnnotationSummary
   superseded_by?: string[]
+  /** D062 `_local.content` carried through for Layer 1 v2 legibility. */
+  content?: unknown
+  /** D062 `_local.producer` carried through for Layer 1 v2 legibility. */
+  producer?: string
 }
 
 async function annotateVerification(
-  loaded: { record: AtribRecord; record_hash: string }[],
+  loaded: { record: AtribRecord; record_hash: string; content?: unknown; producer?: string }[],
   annotationsByRecord: Map<string, AnnotationSummary>,
   revisionsByRecord: Map<string, string[]>,
 ): Promise<VerifiedBundle[]> {
@@ -542,12 +600,14 @@ async function annotateVerification(
       if (ann) out.annotations = ann
       const supers = revisionsByRecord.get(lr.record_hash)
       if (supers && supers.length > 0) out.superseded_by = supers
+      if (lr.content !== undefined) out.content = lr.content
+      if (lr.producer !== undefined) out.producer = lr.producer
       return out
     }),
   )
 }
 
-function compactify(bundles: VerifiedBundle[]): RecallRecordCompact[] {
+function compactify(bundles: VerifiedBundle[], now: number = Date.now()): RecallRecordCompact[] {
   return bundles.map((b) => {
     const r = b.record
     const out: RecallRecordCompact = {
@@ -564,6 +624,12 @@ function compactify(bundles: VerifiedBundle[]): RecallRecordCompact[] {
     if (toolName) out.tool_name = toolName
     if (b.annotations) out.annotations = b.annotations
     if (b.superseded_by) out.superseded_by = b.superseded_by
+    // Layer 1 v2 legibility fields. Always populated (the helpers fall
+    // back to sentinels when source data is missing). Cheap to compute
+    // and the agent-side cost of opaque hashes is non-trivial.
+    out.display_summary = synthesizeDisplaySummary(r, b.content, b.annotations)
+    out.display_producer = resolveDisplayProducer(r, b.producer)
+    out.age = formatAge(r.timestamp, now)
     return out
   })
 }
@@ -668,14 +734,44 @@ export async function recall(
 
   // Sort: timestamp (default, newest first), Park et al. relevance, or
   // BFS shortest-path causal distance from rank_anchor.
+  let relevanceTopScore: number | undefined
   if (args.rank_by === 'relevance') {
-    rankByRelevance(filtered, annotationsByRecord, args.rank_anchor)
+    relevanceTopScore = rankByRelevance(filtered, annotationsByRecord, args.rank_anchor)
   } else if (args.rank_by === 'causal_distance') {
     rankByCausalDistance(filtered, all, args.rank_anchor)
   } else {
     // Newest first - the agent typically wants its most-recent provable
     // actions, not the genesis of the log.
     filtered.sort((a, b) => b.record.timestamp - a.record.timestamp)
+  }
+
+  // Layer 1 v2 anti-noise threshold: when rank_by='relevance' and the
+  // top Park score falls below ATRIB_RECALL_NOISE_FLOOR (default 0.15),
+  // return empty records + a "below_threshold" quality signal instead of
+  // a low-confidence top-K. The 0.15 default is approximately the score
+  // of "no annotation, no topic match, no BM25 hit, just decent recency"
+  // (alpha * 0.5 with alpha=0.3). Below that, results are effectively
+  // noise and training the agent to scan + dismiss them costs more than
+  // returning nothing.
+  if (
+    args.rank_by === 'relevance' &&
+    relevanceTopScore !== undefined &&
+    relevanceTopScore < ATRIB_RECALL_NOISE_FLOOR
+  ) {
+    return {
+      total: filtered.length,
+      returned: 0,
+      filtered_out_by_verification: 0,
+      record_files: files,
+      record_file: files[0] ?? '',
+      log_origin: ATRIB_LOG_ORIGIN,
+      pagination_caveat:
+        'offset is not stable when new records are appended. For consistent paging, capture the' +
+        ' first-page timestamps and re-page using a context_id or event_type filter instead.',
+      records: [],
+      quality: 'below_threshold',
+      top_score: relevanceTopScore,
+    }
   }
 
   const offset = Math.max(0, args.offset ?? 0)
