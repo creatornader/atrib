@@ -68,10 +68,40 @@ jobs:
       pull-requests: write
       id-token: write
     steps:
+      # Mint a GitHub App installation token to use in place of the default
+      # GITHUB_TOKEN. Required because GitHub's anti-loop policy blocks
+      # workflows triggered by GITHUB_TOKEN pushes from firing other
+      # workflows (push / pull_request events). The changesets-bot's
+      # Version Packages PR is opened with GITHUB_TOKEN by default, which
+      # means the required test + security-scan checks never run on it
+      # until someone closes + reopens the PR to retrigger them. App
+      # installation tokens are a non-GITHUB_TOKEN identity, so their
+      # pushes DO trigger downstream workflows.
+      #
+      # App: atrib-release-bot (https://github.com/settings/apps)
+      # Permissions: contents:write, pull-requests:write
+      # Installed on: creatornader/atrib only
+      # Secrets:
+      #   RELEASE_APP_ID         - the App's Client ID (the "Iv23li..."
+      #                            string shown on the App settings page).
+      #                            The action also accepts the numeric App
+      #                            ID, but GitHub recommends Client ID
+      #                            going forward (App ID may be deprecated
+      #                            in some interfaces). The action's
+      #                            `app-id` input name is historical; it
+      #                            handles both transparently.
+      #   RELEASE_APP_PRIVATE_KEY - the PEM contents (multiline)
+      - name: Mint GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v2.1.4
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          token: ${{ github.token }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -99,7 +129,7 @@ jobs:
           createGithubReleases: true
         env:
           NPM_CONFIG_PROVENANCE: "true"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
   snapshot:
     if: github.event_name == 'workflow_dispatch'
