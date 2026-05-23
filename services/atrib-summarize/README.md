@@ -54,6 +54,7 @@ When a record lacks a `_local` sidecar (legacy entry), the prompt includes a mar
 - **Honest input flagging**: a per-record line in the prompt marks records lacking semantic content; the system prompt instructs the LLM not to invent semantics.
 - **Network access only on LLM call**: storage reads are local. Tests use the same FORBIDDEN_HOSTS guard as the rest of the workspace to prevent fixture leakage.
 - **No retry on LLM failure**: surfaces the error in `warnings` and returns null narrative. Caller decides whether to retry with smaller `max_records` or different model.
+- **Instrumented (per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) Surface 6)**: every call writes a per-invocation jsonl entry to `~/.atrib/state/read-primitives/calls.jsonl` for the unified loop-closure analyzer. Includes `elapsed_ms` covering the full LLM round-trip plus `errored: true` on LLM failure paths. Silent-failure per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract); instrumentation never blocks the summarize response. `ATRIB_READ_PRIMITIVES_LOG` overrides the default path for tests.
 
 ## Wire-up
 

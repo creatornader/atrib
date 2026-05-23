@@ -47,6 +47,7 @@ When the envelope carries an optional `_local` sidecar (per the local-mirror sid
 - **Dangling-aware**: `informed_by` entries pointing at records not in the local mirror surface in `dangling` and do NOT advance the walk.
 - **Local-only (v1)**: reads only the local mirror. v2 will fall back to `log.atrib.dev/v1/lookup/<hash>` for hashes not in the local mirror.
 - **Backward-only (v1)**: walks `informed_by` upstream. Forward-walk (records that reference THIS one) is a v2 concern via the graph service.
+- **Instrumented (per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) Surface 6)**: every call writes a per-invocation jsonl entry to `~/.atrib/state/read-primitives/calls.jsonl` for the unified loop-closure analyzer. Silent-failure per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract); instrumentation never blocks the trace result. `ATRIB_READ_PRIMITIVES_LOG` overrides the default path for tests.
 
 ## Wire-up
 

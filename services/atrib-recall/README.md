@@ -25,7 +25,10 @@ mcp__atrib-recall__recall_my_attribution_history({
   limit?: number,                // Default 25, max 200.
   offset?: number,               // For pagination. Note pagination_caveat in the response.
   compact?: boolean,             // Default true - omits signature/content_id/chain_root/spec_version
-                                 // fields. Set false for full record bytes (re-verification).
+                                 // fields. `record_hash` is always included (so callers can chain
+                                 // recall_walk / recall_annotations / recall_revisions / trace
+                                 // from any result). Set false for full record bytes
+                                 // (re-verification).
   include_unverified?: boolean,  // Default false - drops records whose signature didn't verify.
                                  // Set true ONLY when consuming the verbose mode AND explicitly
                                  // checking signature_verified per record.
@@ -57,7 +60,9 @@ mcp__atrib-recall__recall_my_attribution_history({
 })
 ```
 
-Returns `{ total, returned, filtered_out_by_verification, record_files, record_file, log_origin, pagination_caveat, records }`. Each record carries `annotations` (when annotation records point at it) and `superseded_by` (when revision records point at it).
+Returns `{ total, returned, filtered_out_by_verification, record_files, record_file, log_origin, pagination_caveat, records }`. Each record carries `record_hash` (always, per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) — so the result is chainable into other primitives without a verbose-mode round-trip), `annotations` (when annotation records point at it), and `superseded_by` (when revision records point at it).
+
+Every call to this tool (and every sibling tool below) writes a per-call jsonl entry to `~/.atrib/state/read-primitives/calls.jsonl` for the unified loop-closure analyzer per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement). Silent-failure per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract); the tool response is unaffected by instrumentation failures. The `ATRIB_READ_PRIMITIVES_LOG` env var overrides the default path for tests.
 
 ### Sibling tools
 
