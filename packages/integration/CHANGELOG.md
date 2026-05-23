@@ -1,5 +1,17 @@
 # @atrib/integration
 
+## 0.0.12
+
+### Patch Changes
+
+- Updated dependencies [df7b3d3]
+  - @atrib/mcp@0.9.0
+  - @atrib/agent@0.2.2
+  - @atrib/log-dev@0.1.12
+  - @atrib/verify@0.3.2
+  - @atrib/graph-node@0.1.12
+  - @atrib/log-node@0.1.12
+
 ## 0.0.11
 
 ### Patch Changes

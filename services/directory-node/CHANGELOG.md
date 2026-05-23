@@ -1,5 +1,12 @@
 # @atrib/directory-node
 
+## 0.1.12
+
+### Patch Changes
+
+- Updated dependencies [df7b3d3]
+  - @atrib/mcp@0.9.0
+
 ## 0.1.11
 
 ### Patch Changes
