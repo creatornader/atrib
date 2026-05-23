@@ -3909,6 +3909,54 @@ Adding a new harness is a single registry entry. Per the spec's harness-agnostic
 - [P013](#p013-new-runtime-integration-pattern---hosted-runtime-adapter-sign-events-stored-by-hosted-runtimes-like-anthropic-managed-agents), forward pattern for hosted-runtime adapters; future entries in the discovery registry should reference each pattern's ADR.
 - [§1.2.3](atrib-spec.md#123-context_id), `context_id` format; harness-derived values are validated against the same 32-hex regex.
 
+**Update 2026-05-23 (v2): file-fallback for startup-spawn harnesses.**
+
+The original [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) (above; "v1") closed the orphan-singleton class for harnesses that spawn MCP children with the per-session env in scope (e.g. per-run Inspect arms). It did NOT close it for harnesses that spawn MCP children ONCE at process startup, before any session exists. Claude Code is the canonical example: the MCP server children listed in `~/.claude.json` are spawned at Claude Code launch; the per-session `CLAUDE_CODE_SESSION_ID` env var is created later, per conversation, and never propagates to the already-running children.
+
+The 2026-05-22 ship was empirically verified only via the `atrib-emit-cli` binary path (hook subprocess inherits the per-session env from Claude Code's hook execution context). The in-process MCP child path was not exercised; a post-restart verification on 2026-05-23 found every agent-initiated `mcp__atrib-emit__emit` / `mcp__atrib-annotate__atrib-annotate` / `mcp__atrib-revise__atrib-revise` call landing under a synthesized orphan context_id. Historical mirror inspection of `atrib-emit-claude-code.jsonl` found 74 distinct orphan context_ids across 4587 producer-labeled records, roughly one per Claude Code process lifetime — none linked to actual session chains.
+
+**Structural premise of v2.** The harness has a session-aware writer surface (the SessionStart hook) that DOES have per-session env in scope. The MCP child has no such surface, but can read a file. Move per-session state through a state file the writer maintains and the reader consults.
+
+**Decision (v2 additive).** Extend `HarnessDiscovery` with an optional `fallbackFile?: () => string` thunk returning a per-instance state file path. Extend `resolveEnvContextId`'s precedence to try the file when the env var is unset or invalid:
+
+1. `ATRIB_CONTEXT_ID` env (unchanged from [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)).
+2. For each `KNOWN_HARNESS_DISCOVERIES` entry, in order:
+   2a. `discovery.envVar` in env ([D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) v1; per-session-spawn harnesses).
+   2b. `discovery.fallbackFile()` readable + parseable ([D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) v2; startup-spawn harnesses).
+3. `undefined` (unchanged).
+
+File semantics:
+- Maximum 128 bytes per read (rejects oversized garbage without parsing).
+- Trimmed whitespace before `parse()`.
+- All read failures silent: never throws, returns the same shape as "neither set" (parallel construction with v1's silent-fallback discipline).
+
+Claude Code entry's `fallbackFile` thunk returns `~/.claude/state/active-session-id-${process.ppid}`. Per-PPID keying isolates concurrent Claude Code instances: each Claude Code's SessionStart hook and MCP children share the same `process.ppid` (Claude Code itself), so writer + reader resolve to the same file. Different Claude Code instances get different keys, no collision.
+
+Writer responsibility lives in the operator's hook layer, not in `@atrib/mcp`. The reference writer is a SessionStart hook that reads `CLAUDE_CODE_SESSION_ID` from its env (Claude Code provides it to hook subprocesses), takes `process.ppid` (Claude Code's PID), and writes the file atomically (temp file + rename, mode 0600) on every session start. Other harnesses adopt the convention by adding their own writer + their own discovery entry; the public surface is the `HarnessDiscovery` interface.
+
+**Alternatives considered (v2).**
+
+- *MCP protocol extension for per-call session context.* Rejected. Not under atrib's control; Anthropic-side change with indefinite timeline.
+- *Re-spawn MCP children per session.* Rejected. Architecturally violates MCP's "child = per-process" semantics; would force every MCP server to handle session lifecycle.
+- *Agent threads `context_id` on every MCP call.* Rejected. Defeats [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)'s no-config goal; load-bearing discipline that drifts over time. Workaround for now, not a structural fix.
+- *Global state file (`~/.claude/state/active-session-id`) instead of per-PPID.* Rejected. Two concurrent Claude Code instances would overwrite each other's session ids; the second-most-recent reader would see the wrong session.
+- *State file content = pre-derived 32-hex.* Rejected. The `parse()` function strips dashes + lowercases anyway. Writing the raw UUID lets the file remain operator-readable as a UUID, easier to debug.
+
+**Consequences (v2).**
+
+- The orphan-singleton class is closed for in-process Claude Code MCP children once `@atrib/mcp@0.9.0` ships AND the operator's SessionStart hook is updated AND Claude Code restarts. Library-side fix lands per package; writer-side fix lands per host.
+- The 74 historical orphan context_ids in `atrib-emit-claude-code.jsonl` from past sessions stay orphaned. Records are immutable; future sessions get correct context_ids; old ones don't.
+- Other startup-spawn harnesses (Cursor, Cline, similar) can adopt the file-fallback convention by extending their registry entry with a `fallbackFile` thunk and shipping a matching writer in their host integration. No additional spec change.
+- Operator can override the state directory via `ATRIB_ACTIVE_SESSION_STATE_DIR` (host-side hook env-var convention) for test or non-default-HOME setups.
+- The `HarnessDiscovery` interface change is backward-compatible: `fallbackFile` is optional; existing registry entries without it keep the v1 env-only behavior.
+- Consequence claim from [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) v1 ("the ten-orphan-singleton-per-24h class disappears for Claude Code MCP children once `@atrib/mcp@0.8.0` is globally installed") was overstated: the env-only fix only closed the class for harnesses that spawn MCP children per-session. v2 actually closes it for Claude Code.
+
+**Cross-references (v2).**
+
+- [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) v1 (above), original env-only shape.
+- [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail), orphan handling; v2 closes the empirical orphan path for in-process MCP children.
+- [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), mirror sidecar shape; the producer label (`_local.producer`) already distinguishes hook-source vs MCP-child-source records, making the orphan-vs-correct-context split visible post-fix.
+
 ---
 
 # Pending decisions

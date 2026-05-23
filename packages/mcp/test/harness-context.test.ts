@@ -1,10 +1,13 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import {
   resolveEnvContextId,
   KNOWN_HARNESS_DISCOVERIES,
 } from '../src/harness-context.js'
 
-describe('resolveEnvContextId', () => {
+describe('resolveEnvContextId — env-only paths (D078 + D083 v1)', () => {
   it('returns ATRIB_CONTEXT_ID when set and valid (D078 precedence)', () => {
     const env = { ATRIB_CONTEXT_ID: 'a1b2c3d4e5f60718293a4b5c6d7e8f90' }
     expect(resolveEnvContextId(env)).toBe('a1b2c3d4e5f60718293a4b5c6d7e8f90')
@@ -36,7 +39,9 @@ describe('resolveEnvContextId', () => {
     expect(resolveEnvContextId(env)).toBe('38af29c4fc3a4f888fec392501b8a0a9')
   })
 
-  it('rejects malformed CLAUDE_CODE_SESSION_ID silently', () => {
+  it('rejects malformed CLAUDE_CODE_SESSION_ID silently (env-only; no file)', () => {
+    // Empty env with no CLAUDE_CODE_SESSION_ID at all — file fallback also
+    // won't fire (the per-PPID path won't exist in a clean test env).
     const env = { CLAUDE_CODE_SESSION_ID: 'not-a-uuid' }
     expect(resolveEnvContextId(env)).toBeUndefined()
   })
@@ -84,5 +89,132 @@ describe('KNOWN_HARNESS_DISCOVERIES', () => {
         expect(result).toMatch(/^[0-9a-f]{32}$/)
       }
     }
+  })
+
+  it('Claude Code entry exposes a fallbackFile thunk', () => {
+    const claudeCode = KNOWN_HARNESS_DISCOVERIES.find(
+      (d) => d.envVar === 'CLAUDE_CODE_SESSION_ID',
+    )
+    expect(claudeCode?.fallbackFile).toBeTypeOf('function')
+    // Calling the thunk produces a path under ~/.claude/state/...
+    const path = claudeCode?.fallbackFile?.()
+    expect(path).toMatch(/\/\.claude\/state\/active-session-id-\d+$/)
+  })
+})
+
+/**
+ * D083 v2 file-fallback path. The Claude Code entry's fallbackFile thunk
+ * resolves to a per-PPID path. In tests we temp-direct an alternative
+ * discovery (via a private-to-test fixture path) and exercise the
+ * end-to-end env -> file -> parse flow.
+ *
+ * NOTE: we cannot easily mock the Claude Code entry's path (it's frozen
+ * in the readonly registry) without monkey-patching. Instead we test the
+ * file-read mechanics by writing to the actual per-PPID path the registry
+ * would resolve to, in a process-isolated tempdir setup.
+ *
+ * The test sets up its own temp HOME so the per-PPID path it generates
+ * points inside the tempdir, then asserts resolveEnvContextId reads it.
+ */
+describe('resolveEnvContextId — file-fallback path (D083 v2)', () => {
+  let tempHome: string
+  let prevHome: string | undefined
+
+  beforeEach(() => {
+    tempHome = mkdtempSync(join(tmpdir(), 'atrib-harness-test-'))
+    prevHome = process.env['HOME']
+    process.env['HOME'] = tempHome
+  })
+
+  afterEach(() => {
+    if (prevHome === undefined) delete process.env['HOME']
+    else process.env['HOME'] = prevHome
+    rmSync(tempHome, { recursive: true, force: true })
+  })
+
+  /** Helper: write the per-PPID file the Claude Code discovery thunk would
+   * resolve to, with the given content. */
+  function writeClaudeStateFile(content: string): void {
+    const claudeCode = KNOWN_HARNESS_DISCOVERIES.find(
+      (d) => d.envVar === 'CLAUDE_CODE_SESSION_ID',
+    )
+    if (!claudeCode?.fallbackFile) {
+      throw new Error('CLAUDE_CODE_SESSION_ID discovery missing fallbackFile')
+    }
+    const path = claudeCode.fallbackFile()
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, content)
+  }
+
+  it('falls back to state file when CLAUDE_CODE_SESSION_ID env is unset', () => {
+    writeClaudeStateFile('38af29c4-fc3a-4f88-8fec-392501b8a0a9\n')
+    // Empty env -> env-var path skipped -> file fallback fires
+    expect(resolveEnvContextId({})).toBe('38af29c4fc3a4f888fec392501b8a0a9')
+  })
+
+  it('accepts already-stripped 32-hex in state file', () => {
+    writeClaudeStateFile('38af29c4fc3a4f888fec392501b8a0a9')
+    expect(resolveEnvContextId({})).toBe('38af29c4fc3a4f888fec392501b8a0a9')
+  })
+
+  it('trims whitespace + newlines from state file content', () => {
+    writeClaudeStateFile('  38af29c4-fc3a-4f88-8fec-392501b8a0a9  \n\n')
+    expect(resolveEnvContextId({})).toBe('38af29c4fc3a4f888fec392501b8a0a9')
+  })
+
+  it('lowercases uppercase UUID from state file', () => {
+    writeClaudeStateFile('38AF29C4-FC3A-4F88-8FEC-392501B8A0A9')
+    expect(resolveEnvContextId({})).toBe('38af29c4fc3a4f888fec392501b8a0a9')
+  })
+
+  it('env wins over file when both are set and valid', () => {
+    writeClaudeStateFile('00000000-0000-0000-0000-000000000001')
+    const env = { CLAUDE_CODE_SESSION_ID: '38af29c4-fc3a-4f88-8fec-392501b8a0a9' }
+    expect(resolveEnvContextId(env)).toBe('38af29c4fc3a4f888fec392501b8a0a9')
+  })
+
+  it('falls through to file when env is set but invalid', () => {
+    writeClaudeStateFile('38af29c4-fc3a-4f88-8fec-392501b8a0a9')
+    const env = { CLAUDE_CODE_SESSION_ID: 'garbage' }
+    expect(resolveEnvContextId(env)).toBe('38af29c4fc3a4f888fec392501b8a0a9')
+  })
+
+  it('falls through to file when env is empty string', () => {
+    writeClaudeStateFile('38af29c4-fc3a-4f88-8fec-392501b8a0a9')
+    const env = { CLAUDE_CODE_SESSION_ID: '' }
+    expect(resolveEnvContextId(env)).toBe('38af29c4fc3a4f888fec392501b8a0a9')
+  })
+
+  it('returns undefined when neither env nor file is set', () => {
+    // No file written, no env set.
+    expect(resolveEnvContextId({})).toBeUndefined()
+  })
+
+  it('returns undefined for malformed file content (silent failure)', () => {
+    writeClaudeStateFile('not-a-uuid')
+    expect(resolveEnvContextId({})).toBeUndefined()
+  })
+
+  it('returns undefined for empty file (silent failure)', () => {
+    writeClaudeStateFile('')
+    expect(resolveEnvContextId({})).toBeUndefined()
+  })
+
+  it('returns undefined for whitespace-only file (silent failure)', () => {
+    writeClaudeStateFile('   \n\n   ')
+    expect(resolveEnvContextId({})).toBeUndefined()
+  })
+
+  it('rejects oversized state file (silent failure)', () => {
+    // File > 128 bytes is rejected without parsing — prevents accidentally
+    // reading a garbage GB-sized file at every cognitive-primitive call.
+    writeClaudeStateFile('38af29c4-fc3a-4f88-8fec-392501b8a0a9' + 'x'.repeat(200))
+    expect(resolveEnvContextId({})).toBeUndefined()
+  })
+
+  it('ATRIB_CONTEXT_ID still wins over file fallback', () => {
+    writeClaudeStateFile('38af29c4-fc3a-4f88-8fec-392501b8a0a9')
+    const env = { ATRIB_CONTEXT_ID: '00000000000000000000000000000099' }
+    expect(resolveEnvContextId(env)).toBe('00000000000000000000000000000099')
   })
 })
