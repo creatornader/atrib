@@ -122,7 +122,7 @@ describe('logReadPrimitiveCall', () => {
     const entry = JSON.parse(lines[0]!)
     expect(entry.primitive).toBe('trace')
     expect(entry.errored).toBe(true)
-    expect(entry.result_count).toBe(-1)
+    expect(entry.result_count).toBe(null)
     expect(entry.sample_result_hashes).toEqual([])
   })
 

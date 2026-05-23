@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// Surface 6 of the 4th-pillar substrate-instrumentation broadening (D084).
 
 /**
  * Read-primitive instrumentation (4th-pillar broadening, Surface 6).
@@ -53,8 +54,12 @@ export interface ReadPrimitiveCallLogEntry {
    * Captures query shape without leaking values. Sorted lex.
    */
   query_shape: string[]
-  /** Total candidate-record count returned. -1 if not extractable. */
-  result_count: number
+  /**
+   * Count of record_hash values found in the response. null when the
+   * handler errored OR the result shape is not extractable. The companion
+   * `errored` field distinguishes the two cases for analyzer consumers.
+   */
+  result_count: number | null
   /** Elapsed wall time in ms from handler entry to instrumentation write. */
   elapsed_ms: number
   /**
@@ -89,40 +94,36 @@ export async function logReadPrimitiveCall<TArgs, TResult>(
   const invoked_at = Date.now()
   let errored = false
   let result: TResult | undefined
-  let thrown: unknown
   try {
     result = await handler()
     return result
   } catch (e) {
     errored = true
-    thrown = e
+    // Re-throw is implicit: it resumes after the finally block runs.
     throw e
   } finally {
     try {
       const elapsed_ms = Date.now() - invoked_at
       const query_shape = computeQueryShape(args)
-      const sample_result_hashes = errored || !result
-        ? []
-        : extractHashes(result).slice(0, SAMPLE_HASH_LIMIT)
-      const result_count = errored || !result ? -1 : extractHashes(result).length
+      // Compute hashes once; custom extractors may walk the result tree
+      // (extractRecordHashesFromMcpResult does a full deep walk per call).
+      const hashes = errored || !result ? [] : extractHashes(result)
       const entry: ReadPrimitiveCallLogEntry = {
         invoked_at,
         session_id: resolveEnvContextId() ?? null,
         primitive,
         query_shape,
-        result_count,
+        result_count: errored || !result ? null : hashes.length,
         elapsed_ms,
-        sample_result_hashes,
+        sample_result_hashes: hashes.slice(0, SAMPLE_HASH_LIMIT),
         errored,
       }
       appendJsonlLine(resolveLogPath(), entry)
     } catch {
       // Silent-failure contract: instrumentation MUST NOT affect the
-      // primary tool path. Caller's handler result (or thrown error) is
-      // already locked in by the outer try/finally. Swallow.
+      // primary tool path. The handler's result (or thrown error) is
+      // already locked in by the outer try/catch. Swallow.
     }
-    // Re-throw is implicit: the outer throw above re-runs after finally.
-    void thrown
   }
 }
 

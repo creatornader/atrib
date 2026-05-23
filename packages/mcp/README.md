@@ -118,7 +118,48 @@ In-process surrogate `McpServer` that forwards every tool call to an upstream MC
 
 ### Lower-level primitives
 
-For advanced use cases (custom transports, manual signing, recommendation calculation), the package also exports the cryptographic and serialization primitives directly: `signRecord`, `verifyRecord`, `canonicalRecord`, `computeContentId`, `genesisChainRoot`, `chainRoot`, `encodeToken`, `decodeToken`, `base64urlEncode`, `base64urlDecode`, `sha256`, `hexEncode`, `hexDecode`, plus the W3C trace-context helpers (`readInboundContext`, `writeOutboundContext`, `parseTracestateAtrib`, `parseBaggageAtribSession`, `extractTraceId`, `mergeTracestate`, `mergeBaggageAtribSession`), the harness session-id discovery helpers per [D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) (`resolveEnvContextId`, `KNOWN_HARNESS_DISCOVERIES`), and the submission queue itself (`createSubmissionQueue`).
+For advanced use cases (custom transports, manual signing, recommendation calculation), the package also exports the cryptographic and serialization primitives directly: `signRecord`, `verifyRecord`, `canonicalRecord`, `computeContentId`, `genesisChainRoot`, `chainRoot`, `encodeToken`, `decodeToken`, `base64urlEncode`, `base64urlDecode`, `sha256`, `hexEncode`, `hexDecode`, plus the W3C trace-context helpers (`readInboundContext`, `writeOutboundContext`, `parseTracestateAtrib`, `parseBaggageAtribSession`, `extractTraceId`, `mergeTracestate`, `mergeBaggageAtribSession`), the harness session-id discovery helpers per [D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) (`resolveEnvContextId`, `KNOWN_HARNESS_DISCOVERIES`), the read-primitive instrumentation helpers per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) (`logReadPrimitiveCall`, `extractRecordHashesFromMcpResult`), and the submission queue itself (`createSubmissionQueue`).
+
+### Read-primitive instrumentation ([D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) Surface 6)
+
+`logReadPrimitiveCall` wraps any read-primitive MCP handler with per-call instrumentation so a host-side unified analyzer (Surface 9, an `analyze-substrate.mjs` script in the host integration's hook layer; not on npm) can correlate surfacing → reads → writes empirically. Each call appends one jsonl line to `~/.atrib/state/read-primitives/calls.jsonl`:
+
+```ts
+import { logReadPrimitiveCall, extractRecordHashesFromMcpResult } from '@atrib/mcp'
+
+server.registerTool('my_read_tool', { /* ... */ }, async (args) =>
+  logReadPrimitiveCall(
+    'my_read_tool',
+    args,
+    async () => handlerImpl(args),
+    extractRecordHashesFromMcpResult,  // or a tighter caller-supplied extractor
+  ),
+)
+```
+
+Wire schema (stable for analyzer consumption):
+
+```json
+{
+  "invoked_at":            1779527000000,
+  "session_id":            "ef8150a232f140739bec66122aeeda1a",
+  "primitive":             "recall_my_attribution_history",
+  "query_shape":           ["context_id", "limit"],
+  "result_count":          25,
+  "elapsed_ms":            312,
+  "sample_result_hashes":  ["sha256:...", "sha256:..."],
+  "errored":               false
+}
+```
+
+- `session_id` comes from `resolveEnvContextId()` (32-hex; matches read-primitive responses and fires.jsonl after strip).
+- `query_shape` lists the input keys the caller set (truthy values only); captures shape without leaking values.
+- `result_count` is the total record-hash count in the response, or `null` when the handler errored OR the result shape is not extractable. The companion `errored` field distinguishes the two cases.
+- `sample_result_hashes` caps at 10 entries; supplied extractor controls which hashes get sampled. The default `extractRecordHashesFromMcpResult` deep-walks the MCP tool response for any `sha256:<64-hex>` reference and dedupes.
+- Silent-failure per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract): instrumentation never blocks the primary tool path; write errors are swallowed.
+- `ATRIB_READ_PRIMITIVES_LOG` env var overrides the default jsonl path (used by tests).
+
+The three read-primitive servers (`@atrib/recall` family, `@atrib/trace`, `@atrib/summarize`) already wrap their handlers with this helper at version `@atrib/mcp@0.10.0+`. New read-primitive tools should follow the same pattern per the DOC-SYNC-TRIGGERS entry for Surface 6.
 
 ### Harness discovery: env-var + file-fallback ([D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) v1 + v2)
 
