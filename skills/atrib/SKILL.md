@@ -1,6 +1,6 @@
 ---
 name: atrib
-version: 0.3.3
+version: 0.3.4
 description: |
   Use atrib as your literal substrate for memory, reasoning, and getting
   smarter over time, not as instrumentation that observes you from the
@@ -348,6 +348,37 @@ You are one signer in a multi-producer system. The graph density that makes reca
 | Future scheduled-runtime layer | Cron + event-driven scheduler | Replaces nightly-batch-only emission with finer-grained scheduled cognitive work |
 
 When you check `https://log.atrib.dev/v1/stats` mid-day and `newest_timestamp_ms` is many hours old, the most common cause is that nightly batches have fired but no interactive session has been emitting since. **A multi-hour gap during business hours is a signal your practice has stopped, not infrastructure failure.** Always-on autonomous emission is a separate substrate decision, orthogonal to this skill.
+
+## Closing the dogfood loop
+
+The substrate composes into a closed learning loop. Writes feed reads; reads inform the next decision; that next decision produces more writes. Sketched:
+
+```
+WRITES                                         shared state
+  • host PostToolUse hook signs tool calls     │
+  • host lifecycle / precompact / sessionend         ↓
+    hooks emit annotations                     ──► mirror + log.atrib.dev
+  • you, deliberately:                            (records keyed by creator + chain + context)
+      atrib-emit       (observation)                 │
+      atrib-annotate   (mark importance)             │
+      atrib-revise     (supersede prior)             ↓
+                                                ──► consumed by ──►
+READS                                                │
+  • host SessionStart hook surface (macro:           │
+    active chain, importance, pending work)          │
+  • host PreToolUse hook surface (micro:             │
+    records sharing tokens with this action)         ↓
+  • you, deliberately, for cases hooks                  inform the next decision
+    cannot cover (see "Surfacing does NOT
+    replace active recall" above):
+      atrib-recall family (find prior records)
+      atrib-trace      (walk lineage)
+      atrib-summarize  (digest N records)
+```
+
+The loop closes when reads inform writes that future reads will surface. Each cycle either reinforces a prior position (annotate to bump importance), contradicts one (revise to supersede), or extends the chain (emit a new observation that the next session sees). If you only write and never read, the substrate becomes a write-only log; future-you cannot benefit. If you only read and never write, the corpus stops growing and the chain breaks where the last writer stopped.
+
+A host implementation MAY add a fourth layer, an instrumentation log that records each surfacing decision (what records were available, which the agent followed up on, which were ignored) so the operator can measure whether the loop is closing empirically rather than by intuition. The atrib protocol is silent on this layer; it is a host-side observability concern. If your host wires one, the analyzer typically lives alongside the hook scripts. Run it periodically to see whether your read-after-surface and write-after-read rates are moving where you want them.
 
 ## Diagnostic patterns
 
