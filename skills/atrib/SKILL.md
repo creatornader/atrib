@@ -1,6 +1,6 @@
 ---
 name: atrib
-version: 0.3.1
+version: 0.3.2
 description: |
   Use atrib as your literal substrate for memory, reasoning, and getting
   smarter over time, not as instrumentation that observes you from the
@@ -94,6 +94,40 @@ What still requires deliberate thought from you:
 ```
 
 Take ~30 seconds. The result is a baseline you carry through the conversation.
+
+## Decision-time injections (when your host surfaces prior records inline)
+
+Some hosts wire a PreToolUse hook that scores prior records against the about-to-fire tool input and injects the top matches inline before the tool runs. The injection looks like this:
+
+```
+[atrib] about to call <ToolName>. <N> prior signed records share tokens with this action:
+  1. [<event_type> score=<N>] sha256:<24-hex>…  <one-line summary>
+  2. [<event_type> score=<N>] sha256:<24-hex>…  <one-line summary>
+  3. [<event_type> score=<N>] sha256:<24-hex>…  <one-line summary>
+```
+
+The injection is raw signal: the host surfaces records that lexically overlap with what you are about to do. It deliberately does NOT prescribe what to do with them. That is your call, and the prescription lives here in the SKILL:
+
+```
+1. Read the surfaced records. Take ~5 seconds.
+2. For each one, ask: does this bear on the decision I am about to make?
+   • If a prior record holds a position incompatible with my current direction
+     → STOP. Call atrib-revise with revises=<full-record_hash>, name the prior position,
+       name the new one, name the reason. THEN proceed with the tool call (or change it).
+   • If I am extending a prior insight and the prior matters more than it looked
+     → atrib-annotate with annotates=<full-record_hash>, importance, one-line summary.
+       Optional but high-value.
+   • If my reasoning produced something genuinely new not in the records above
+     → atrib-emit (observation) so future-me finds it.
+   • If the surfaced records are not actually relevant (lexical overlap without
+     semantic relevance) → proceed with the tool call. The host's scoring is
+     lex_count only; false positives are expected at the substrate-minimum baseline.
+3. If you saw NO injection, that is also signal: either no prior records share
+   tokens with your action (fresh territory) or your host does not wire this
+   surface. Both are fine; proceed normally.
+```
+
+Why your host might wire this: the cognitive primitives are only useful if you actually invoke them at the right moments. A behavioral hypothesis under empirical test (as of 2026-05-22) is whether record surfacing inline at PreToolUse moves the post-fire cognitive-emit rate above zero. The lex_count scoring is intentionally substrate-minimum (no importance weighting, no recency decay, no semantic match) so the data collected measures whether the IDEA helps, not whether a specific opinion about scoring helps. If you ignore the injection and never reach for emit/annotate/revise after one, you are the negative result. If you read it and react when warranted, you are the positive result. Either outcome is useful; both inform what the next iteration looks like.
 
 ## When to reach for each primitive
 
