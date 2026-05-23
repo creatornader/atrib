@@ -33,7 +33,7 @@ No custom cryptography. No content exposure unless the harness opts in. No trust
 
 ## Try the demo
 
-One command, no setup beyond cloning. Generates a fresh key, spins up an in-process Merkle log, fake merchant, and fake agent, runs three tool calls plus one transaction, and prints what landed in the log.
+One command, no setup beyond cloning. Generates a fresh key, spins up an in-process Merkle log, fake merchant, and fake agent, runs two tool calls plus one transaction, and prints what landed in the log.
 
 ```bash
 ATRIB_PRIVATE_KEY=$(node -e 'console.log(Buffer.from(crypto.randomBytes(32)).toString("base64url"))') \
@@ -68,50 +68,13 @@ Expected output:
 
 The signatures, chain hashes, and transaction detection are production code. Only the surrounding environment (merchant, agent, network) is stubbed.
 
-## What atrib certifies, what it does not
-
-atrib certifies five structural axes of agent activity: who acted (identity), what they did (event_type), when (timestamp), in what order (chain ordering), and what the agent claims informed each action (the `informed_by` and `provenance_token` fields, surfaced as INFORMED_BY and PROVENANCE_OF graph edges).
-
-atrib does NOT certify that the agent's reasoning is truthful, that prior records actually influenced subsequent decisions, or that tool responses were real absent tool-side attestation. The substrate is content-preserving (commitments, not content) and disclosure-configurable: harnesses pick how much each record reveals via the privacy postures in spec [§8](atrib-spec.md#8-privacy-postures).
-
-This positioning is load-bearing. See spec [§3](atrib-spec.md#3-graph-query-interface) "What atrib chains, what it does not" for the detailed enumeration and spec [§7.6](atrib-spec.md#76-outcome-verification-patterns) for the outcome-verification patterns that close the tool-response gap.
-
-## Framework support
-
-| Framework | Adapter | Status |
-| --- | --- | --- |
-| **Raw `@modelcontextprotocol/sdk`** | `wrapMcpClient(client, interceptor, { serverUrl? })` | ✅ Shipped |
-| **Claude Agent SDK** (in-process, Case A) | Wrap `McpServer` with `atrib()` directly | ✅ Shipped |
-| **Claude Agent SDK** (third-party, Case B) | `createAtribProxy({ upstream, interceptor })` | ✅ Shipped |
-| **Cloudflare Agents** | `attributeCloudflareAgentMcp(agent, { interceptor, serverUrls })` | ✅ Shipped |
-| **Vercel AI SDK MCP** | `attributeVercelAiSdkMcp(mcpClient, { interceptor, serverUrl })` | ✅ Shipped |
-| **LangChain JS MCP** | `attributeLangchainMcp(multiClient, { interceptor, serverUrls })` | ✅ Shipped |
-| OpenAI Agents SDK | Planned (different transport architecture) | ⏳ |
-| Mastra | Planned (needs source verification) | ⏳ |
-
-Side-by-side quick-starts for each framework: [`packages/agent/README.md`](packages/agent/README.md).
-
-## Payment protocol detection
-
-atrib detects transaction events from all six simultaneously. It does not move money or enforce transactions.
-
-| Protocol | Sponsor | Detection signal | Spec ref |
-| --- | --- | --- | --- |
-| **ACP** | Stripe / OpenAI | `status === "completed"` + embedded `order` | [§1.7.1](atrib-spec.md#171-acp-agentic-commerce-protocol) |
-| **UCP** | Google / Shopify | Same as ACP + `ucp.version` envelope | [§1.7.2](atrib-spec.md#172-ucp-universal-commerce-protocol) |
-| **x402** | Coinbase | `PAYMENT-RESPONSE` HTTP header | [§1.7.3](atrib-spec.md#173-x402) |
-| **MPP** | Tempo Labs / Stripe | `Payment-Receipt` HTTP header | [§1.7.4](atrib-spec.md#174-mpp-machine-payments-protocol) |
-| **AP2** | Google | A2A DataPart with `PaymentMandate` | [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402) |
-| **a2a-x402** | Google | A2A task metadata `payment-completed` | [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402) |
-
 ## Quick start
 
-Pick the path that matches what you're doing:
+Now that you've seen the demo, pick the install path that matches what you're doing:
 
 - Sign tool calls your MCP server handles: `@atrib/mcp` ([below](#sign-tool-calls-your-mcp-server))
 - Sign tool calls your agent makes: `@atrib/agent` ([below](#sign-tool-calls-your-agent))
 - Verify records someone else produced: `@atrib/verify` ([below](#verify-records-any-third-party))
-- See it run end-to-end first: [Try the demo](#try-the-demo)
 
 ### Sign tool calls (your MCP server)
 
@@ -153,6 +116,42 @@ const result = await verifier.verify(recommendationDoc)
 ```
 
 Verification re-runs the [§4.6](atrib-spec.md#46-the-calculation-algorithm) calculation locally and compares the result. No trust in any intermediary.
+
+## What atrib certifies, what it does not
+
+atrib certifies five structural axes of agent activity: who acted (identity), what they did (event_type), when (timestamp), in what order (chain ordering), and what the agent claims informed each action (the `informed_by` and `provenance_token` fields, surfaced as INFORMED_BY and PROVENANCE_OF graph edges).
+
+atrib does NOT certify that the agent's reasoning is truthful, that prior records actually influenced subsequent decisions, or that tool responses were real absent tool-side attestation. The substrate is content-preserving (commitments, not content) and disclosure-configurable: harnesses pick how much each record reveals via the privacy postures in spec [§8](atrib-spec.md#8-privacy-postures).
+
+This positioning is load-bearing. See spec [§3](atrib-spec.md#3-graph-query-interface) "What atrib chains, what it does not" for the detailed enumeration and spec [§7.6](atrib-spec.md#76-outcome-verification-patterns) for the outcome-verification patterns that close the tool-response gap.
+
+## Framework support
+
+| Framework | Adapter | Status |
+| --- | --- | --- |
+| **Raw `@modelcontextprotocol/sdk`** | `wrapMcpClient(client, interceptor, { serverUrl? })` | ✅ Shipped |
+| **Claude Agent SDK** (in-process, Case A) | Wrap `McpServer` with `atrib()` directly | ✅ Shipped |
+| **Claude Agent SDK** (third-party, Case B) | `createAtribProxy({ upstream, interceptor })` | ✅ Shipped |
+| **Cloudflare Agents** | `attributeCloudflareAgentMcp(agent, { interceptor, serverUrls })` | ✅ Shipped |
+| **Vercel AI SDK MCP** | `attributeVercelAiSdkMcp(mcpClient, { interceptor, serverUrl })` | ✅ Shipped |
+| **LangChain JS MCP** | `attributeLangchainMcp(multiClient, { interceptor, serverUrls })` | ✅ Shipped |
+| OpenAI Agents SDK | Planned (different transport architecture) | ⏳ |
+| Mastra | Planned (needs source verification) | ⏳ |
+
+Side-by-side quick-starts for each framework: [`packages/agent/README.md`](packages/agent/README.md).
+
+## Payment protocol detection
+
+atrib detects transaction events from all six simultaneously. It does not move money or enforce transactions.
+
+| Protocol | Sponsor | Detection signal | Spec ref |
+| --- | --- | --- | --- |
+| **ACP** | Stripe / OpenAI | `status === "completed"` + embedded `order` | [§1.7.1](atrib-spec.md#171-acp-agentic-commerce-protocol) |
+| **UCP** | Google / Shopify | Same as ACP + `ucp.version` envelope | [§1.7.2](atrib-spec.md#172-ucp-universal-commerce-protocol) |
+| **x402** | Coinbase | `PAYMENT-RESPONSE` HTTP header | [§1.7.3](atrib-spec.md#173-x402) |
+| **MPP** | Tempo Labs / Stripe | `Payment-Receipt` HTTP header | [§1.7.4](atrib-spec.md#174-mpp-machine-payments-protocol) |
+| **AP2** | Google | A2A DataPart with `PaymentMandate` | [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402) |
+| **a2a-x402** | Google | A2A task metadata `payment-completed` | [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402) |
 
 ## Packages
 
