@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// Surface 6 of the 4th-pillar substrate-instrumentation broadening (D084).
 
 /**
  * Read-primitive instrumentation (4th-pillar broadening, Surface 6).
