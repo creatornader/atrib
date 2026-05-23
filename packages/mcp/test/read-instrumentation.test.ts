@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -177,13 +177,16 @@ describe('logReadPrimitiveCall', () => {
   })
 
   it('silently swallows write errors without affecting the handler', async () => {
-    // Point the log at an unwritable path; the handler MUST still return.
-    process.env.ATRIB_READ_PRIMITIVES_LOG = '/proc/zzz/invalid/calls.jsonl'
-    // Note: env vars are only read at module import. We can't re-import in
-    // vitest cleanly; this test verifies the silent-failure behavior holds
-    // by depending on the default constant. The contract is "instrumentation
-    // never throws"; we exercise the happy path here and rely on the
-    // try/finally + swallow-catch pattern's structural correctness.
+    // Point the log at a path whose parent is an EXISTING FILE, so the
+    // mkdirSync(parentDir, { recursive: true }) inside appendJsonlLine
+    // fails synchronously with ENOTDIR rather than EACCES/EROFS. Using
+    // /proc-rooted paths (the prior version of this test) caused the
+    // mkdirSync to behave inconsistently on Linux procfs — observed
+    // hanging the vitest worker in CI run 26327773270. Pointing at a
+    // file-as-directory is portable and fails fast on every platform.
+    const blockerFile = join(tmpDir, 'blocker-file')
+    writeFileSync(blockerFile, 'this is a file not a directory')
+    process.env.ATRIB_READ_PRIMITIVES_LOG = join(blockerFile, 'calls.jsonl')
     const sentinel = { content: [{ type: 'text', text: '{}' }] }
     const result = await logReadPrimitiveCall(
       'recall_revisions',
