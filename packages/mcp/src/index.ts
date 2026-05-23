@@ -52,6 +52,12 @@ export { encodeToken, decodeToken } from './token.js'
 export { resolveEnvContextId, KNOWN_HARNESS_DISCOVERIES } from './harness-context.js'
 export type { HarnessDiscovery } from './harness-context.js'
 
+// Read-primitive instrumentation (Surface 6 of 4th-pillar broadening). Used
+// by atrib-recall, atrib-trace, atrib-summarize to log each invocation to
+// ~/.atrib/state/read-primitives/calls.jsonl for unified-analyzer correlation.
+export { logReadPrimitiveCall, extractRecordHashesFromMcpResult } from './read-instrumentation.js'
+export type { ReadPrimitiveCallLogEntry } from './read-instrumentation.js'
+
 // Context (for advanced usage)
 export {
   readInboundContext,

@@ -17,7 +17,11 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { resolveEnvContextId } from '@atrib/mcp'
+import {
+  resolveEnvContextId,
+  logReadPrimitiveCall,
+  extractRecordHashesFromMcpResult,
+} from '@atrib/mcp'
 import { loadAllRecords } from './storage.js'
 import { traceBackward, type TraceVisited } from './trace.js'
 
@@ -153,45 +157,51 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
         'referenced via informed_by but not present in the local mirror).',
       inputSchema: TraceInput.shape,
     },
-    async (args: z.infer<typeof TraceInput>) => {
-      const depth = args.depth ?? 3
-      const maxNodes = args.max_nodes ?? 200
-      const compact = args.compact ?? true
+    async (args: z.infer<typeof TraceInput>) =>
+      logReadPrimitiveCall(
+        'trace',
+        args,
+        async () => {
+          const depth = args.depth ?? 3
+          const maxNodes = args.max_nodes ?? 200
+          const compact = args.compact ?? true
 
-      // Env-var context_id default: when the caller omitted context_id,
-      // fall back to @atrib/mcp's resolveEnvContextId (D078 + D083
-      // precedence: ATRIB_CONTEXT_ID, then a registered harness env var
-      // like CLAUDE_CODE_SESSION_ID). Explicit args.context_id always wins.
-      const contextId = args.context_id ?? resolveEnvContextId()
+          // Env-var context_id default: when the caller omitted context_id,
+          // fall back to @atrib/mcp's resolveEnvContextId (D078 + D083
+          // precedence: ATRIB_CONTEXT_ID, then a registered harness env var
+          // like CLAUDE_CODE_SESSION_ID). Explicit args.context_id always wins.
+          const contextId = args.context_id ?? resolveEnvContextId()
 
-      const { byHash } = loadAllRecords()
-      const result = traceBackward(args.record_hash, depth, byHash, {
-        maxNodes,
-        ...(contextId ? { contextId } : {}),
-      })
-      const danglingSet = new Set(result.dangling)
+          const { byHash } = loadAllRecords()
+          const result = traceBackward(args.record_hash, depth, byHash, {
+            maxNodes,
+            ...(contextId ? { contextId } : {}),
+          })
+          const danglingSet = new Set(result.dangling)
 
-      const payload = compact
-        ? {
-            start_hash: result.start_hash,
-            direction: result.direction,
-            depth_requested: result.depth_requested,
-            depth_reached: result.depth_reached,
-            visited: result.visited.map((v) => compactVisited(v, danglingSet, byHash)),
-            dangling: result.dangling,
-            truncated_by_depth: result.truncated_by_depth,
-            truncated_by_cap: result.truncated_by_cap,
-            warnings: result.warnings,
+          const payload = compact
+            ? {
+                start_hash: result.start_hash,
+                direction: result.direction,
+                depth_requested: result.depth_requested,
+                depth_reached: result.depth_reached,
+                visited: result.visited.map((v) => compactVisited(v, danglingSet, byHash)),
+                dangling: result.dangling,
+                truncated_by_depth: result.truncated_by_depth,
+                truncated_by_cap: result.truncated_by_cap,
+                warnings: result.warnings,
+              }
+            : {
+                ...result,
+                // Full records included
+              }
+
+          return {
+            content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
           }
-        : {
-            ...result,
-            // Full records included
-          }
-
-      return {
-        content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
-      }
-    },
+        },
+        extractRecordHashesFromMcpResult,
+      ),
   )
 
   return { mcp }

@@ -13,11 +13,22 @@ on:
 permissions:
   contents: read
 
+# Opt into Node.js 24 for transitive JS actions (actions/cache@v4 still
+# ships its bundled Node.js 20 runtime; setup-node@v6's cache: pnpm
+# invokes it transitively). GitHub forces this on 2026-06-02 and removes
+# Node 20 from runners on 2026-09-16. Setting it now removes the
+# deprecation warning + survives both deadlines without further changes.
+# https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          token: ${{ github.token }}
 
       - uses: pnpm/action-setup@v6
 
