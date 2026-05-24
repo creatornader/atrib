@@ -191,11 +191,24 @@ describe('MCP protocol surface', () => {
       expect(result.content).toHaveLength(1)
       const payload = JSON.parse(result.content[0]!.text) as {
         total: number
-        records: { signature_verified: boolean; context_id: string }[]
+        records: {
+          signature_verified: boolean
+          context_id: string
+          // Layer 1 v2 legibility fields on compact responses. Asserted
+          // here at the MCP wire layer in addition to the direct-recall()
+          // integration test in layer1-filters.test.ts, so that JSON
+          // serialization or transport-layer regressions get caught.
+          display_summary?: string
+          display_producer?: string
+          age?: string
+        }[]
       }
       expect(payload.total).toBe(1)
       expect(payload.records[0]!.signature_verified).toBe(true)
       expect(payload.records[0]!.context_id).toBe(CTX)
+      expect(typeof payload.records[0]!.display_summary).toBe('string')
+      expect(typeof payload.records[0]!.display_producer).toBe('string')
+      expect(typeof payload.records[0]!.age).toBe('string')
     } finally {
       client.close()
     }
