@@ -207,4 +207,17 @@ describe('formatAge', () => {
   it('returns "just now" exactly at now', () => {
     expect(formatAge(NOW, NOW)).toBe('just now')
   })
+
+  it('returns "unknown" for NaN timestamp (defensive)', () => {
+    expect(formatAge(NaN, NOW)).toBe('unknown')
+  })
+
+  it('returns "unknown" for NaN now (defensive)', () => {
+    expect(formatAge(NOW, NaN)).toBe('unknown')
+  })
+
+  it('returns "unknown" for Infinity timestamp (defensive)', () => {
+    expect(formatAge(Infinity, NOW)).toBe('unknown')
+    expect(formatAge(-Infinity, NOW)).toBe('unknown')
+  })
 })

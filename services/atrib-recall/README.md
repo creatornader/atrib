@@ -84,8 +84,25 @@ The Park et al. ranking weights and recency time constant are environment-tunabl
 | `ATRIB_RECALL_BETA` | 0.3 | Importance component weight |
 | `ATRIB_RECALL_GAMMA` | 0.4 | Relevance (BM25) component weight |
 | `ATRIB_RECALL_TAU_DAYS` | 7 | Exponential-decay time constant for recency |
+| `ATRIB_RECALL_NOISE_FLOOR` | 0.15 | Anti-noise threshold for `rank_by=relevance` (see below) |
 
 The implementation does not enforce that alpha + beta + gamma sum to 1.0; the operator-facing defaults do.
+
+### Legibility fields (added in 0.8.0)
+
+Compact recall responses carry three derived fields per record so the agent can scan results without dereferencing opaque hashes:
+
+| Field | Source |
+|---|---|
+| `display_summary` | Annotation summary if present, else per-event_type synthesis from record fields + `_local.content` (tool_call: `call <tool_name>(<args>)`; observation: first 80 chars of `what`; transaction: `<amount> to <merchant> via <protocol>`; annotation: `annotates <hash>: [<importance>] <summary>`; revision: `revises <hash>: <new_position>`; directory_anchor: `directory anchor <root>`; extension URI: tail). Capped at 120 chars. |
+| `display_producer` | `_local.producer` sidecar label (e.g. `atrib-emit-cli`, `claude-hooks-builtin-2b`). Falls back to `key:<8hex>` of the creator key. Answers **which local code signed the record**, not which human or organization. The complementary `display_signer` field (AKD-backed identity claim) is planned as a separate field; repurposing `display_producer` for AKD lookups would conflate two distinct trust signals. |
+| `age` | Relative time string (`just now`, `5m ago`, `3h ago`, `3d ago`, ISO date for older than 30 days). Returns `"unknown"` for non-finite timestamps. |
+
+`recall_by_content` and `recall_walk` carry the same fields starting in the 0.8.0 audit-pass-1 follow-up.
+
+### Anti-noise threshold for `rank_by=relevance`
+
+When `rank_by=relevance` produces a top Park score below `ATRIB_RECALL_NOISE_FLOOR` (default 0.15), recall returns empty records plus a `quality: "below_threshold"` signal and the observed `top_score`. The default 0.15 is approximately `alpha * 0.5` with the default `alpha=0.3`: the score of a record with decent recency but no annotation, no topic match, no BM25 hit. Below that, results are effectively noise. Set the env var to 0 to disable. Threshold applies only to relevance ranking; timestamp + causal_distance modes are unaffected.
 
 ## Trust scope
 

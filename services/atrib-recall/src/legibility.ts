@@ -135,12 +135,19 @@ export function synthesizeDisplaySummary(
  *   2. fallback "key:<8hex>" prefix of creator_key as a clear signal
  *      that no producer label was available
  *
- * Note: this answers "which local piece of code signed this record",
- * not "which human or organization signed this record". The latter is
- * a display_signer field backed by the AKD identity-claim directory
- * (queued for a follow-up release). Both fields are useful for
- * different scan tasks: producer for debugging the local pipeline,
- * signer for cross-operator trust and verifiable identity.
+ * Producer (this function) vs signer (the follow-up display_signer
+ * field) — DO NOT CONFLATE:
+ *   - display_producer = sidecar-only label of which LOCAL CODE signed
+ *     the record. Useful for debugging the local producer pipeline
+ *     ("atrib-emit-cli wrote this, not claude-hooks-builtin-2b").
+ *     Not verifiable. Not portable across operators.
+ *   - display_signer (planned) = AKD-backed identity-claim lookup for
+ *     which HUMAN OR ORGANIZATION holds the signing key. Verifiable.
+ *     Portable across operators. Lives in @atrib/directory.
+ * Repurposing display_producer for AKD lookup would break back-compat
+ * AND quietly conflate two distinct trust signals; if AKD-backed
+ * identity needs to surface, add display_signer as a NEW field, do
+ * not change this function's semantics.
  */
 export function resolveDisplayProducer(
   record: AtribRecord,
@@ -169,6 +176,11 @@ export function resolveDisplayProducer(
  *   future (timestamp > now) -> "future" (sentinel; should not happen)
  */
 export function formatAge(timestamp: number, now: number): string {
+  // Defensive: NaN / Infinity / non-finite inputs would later throw at
+  // new Date().toISOString() (RangeError "Invalid time value"). Return
+  // a sentinel instead so the recall response stays well-formed even if
+  // a malformed record makes it through the load path.
+  if (!Number.isFinite(timestamp) || !Number.isFinite(now)) return 'unknown'
   const diff = now - timestamp
   if (diff < 0) return 'future'
   if (diff < 60_000) return 'just now'

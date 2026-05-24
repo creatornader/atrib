@@ -429,11 +429,28 @@ describe('MCP protocol surface', () => {
       const payload = JSON.parse(result.content[0]!.text) as {
         from_record_hash: string
         count: number
-        walk: Array<{ record_hash: string; distance: number }>
+        walk: Array<{
+          record_hash: string
+          distance: number
+          // Layer 1 v2 legibility fields (added in 0.8.0+ when the loaded
+          // record can be joined back to the walked hash).
+          event_type?: string
+          timestamp?: number
+          display_summary?: string
+          display_producer?: string
+          age?: string
+        }>
       }
       expect(payload.from_record_hash).toBe(r1Hash)
       expect(payload.count).toBe(1)
-      expect(payload.walk[0]).toEqual({ record_hash: r2Hash, distance: 1 })
+      // Assert structural fields without locking the exact display values
+      // (those depend on test-fixture content + clock time).
+      const step = payload.walk[0]!
+      expect(step.record_hash).toBe(r2Hash)
+      expect(step.distance).toBe(1)
+      expect(typeof step.display_summary).toBe('string')
+      expect(typeof step.display_producer).toBe('string')
+      expect(typeof step.age).toBe('string')
     } finally {
       client.close()
     }
