@@ -118,7 +118,7 @@ In-process surrogate `McpServer` that forwards every tool call to an upstream MC
 
 ### Lower-level primitives
 
-For advanced use cases (custom transports, manual signing, recommendation calculation), the package also exports the cryptographic and serialization primitives directly: `signRecord`, `verifyRecord`, `canonicalRecord`, `computeContentId`, `genesisChainRoot`, `chainRoot`, `encodeToken`, `decodeToken`, `base64urlEncode`, `base64urlDecode`, `sha256`, `hexEncode`, `hexDecode`, plus the W3C trace-context helpers (`readInboundContext`, `writeOutboundContext`, `parseTracestateAtrib`, `parseBaggageAtribSession`, `extractTraceId`, `mergeTracestate`, `mergeBaggageAtribSession`), the harness session-id discovery helpers per [D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) (`resolveEnvContextId`, `KNOWN_HARNESS_DISCOVERIES`), the read-primitive instrumentation helpers per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) (`logReadPrimitiveCall`, `extractRecordHashesFromMcpResult`), and the submission queue itself (`createSubmissionQueue`).
+For advanced use cases (custom transports, manual signing, recommendation calculation), the package also exports the cryptographic and serialization primitives directly: `signRecord`, `verifyRecord`, `canonicalRecord`, `computeContentId`, `genesisChainRoot`, `chainRoot`, `encodeToken`, `decodeToken`, `base64urlEncode`, `base64urlDecode`, `sha256`, `hexEncode`, `hexDecode`, plus the W3C trace-context helpers (`readInboundContext`, `writeOutboundContext`, `parseTracestateAtrib`, `parseBaggageAtribSession`, `extractTraceId`, `mergeTracestate`, `mergeBaggageAtribSession`), the harness session-id discovery helpers per [D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) (`resolveEnvContextId`, `KNOWN_HARNESS_DISCOVERIES`), the read-primitive instrumentation helpers per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) (`logReadPrimitiveCall`, `extractRecordHashesFromMcpResult`), the normative content-shape extractors per [D086](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content) (`extractIndexableText`, per-event_type extractors and type defs — see the dedicated section below), and the submission queue itself (`createSubmissionQueue`).
 
 ### Read-primitive instrumentation ([D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) Surface 6)
 
@@ -160,6 +160,48 @@ Wire schema (stable for analyzer consumption):
 - `ATRIB_READ_PRIMITIVES_LOG` env var overrides the default jsonl path (used by tests).
 
 The three read-primitive servers (`@atrib/recall` family, `@atrib/trace`, `@atrib/summarize`) already wrap their handlers with this helper at version `@atrib/mcp@0.10.0+`. New read-primitive tools should follow the same pattern per the DOC-SYNC-TRIGGERS entry for Surface 6.
+
+### Normative content-shape contracts ([D086](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content))
+
+Per spec [§1.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#12-record-format), `AtribRecord` carries structural metadata only — the actual content body lives in the local mirror's [D062](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d062-local-mirror-sidecar-two-tier-private-local--public-canonical-persistence) sidecar at `_local.content`. The shape of that content varies per event_type (observation has `{ what, why_noted, topics }`; tool_call has `{ tool_name, args, result }`; etc.). Before [D086](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content), each consumer that wanted to read sidecar content reimplemented per-event_type parsing. The `content-shapes` module codifies the shape contract once so producers and consumers round-trip via the same definition.
+
+```ts
+import {
+  extractIndexableText,
+  type ObservationContent,
+  type AnnotationContent,
+  type RevisionContent,
+  type ToolCallContent,
+  type TransactionContent,
+  type DirectoryAnchorContent,
+  type ExtractIndexableTextOptions,
+  DEFAULT_FIELD_CAP,
+} from '@atrib/mcp'
+
+// Dispatch on the record's event_type URI; returns a flat string of indexable
+// text suitable for tokenization (BM25, embeddings) or display synthesis.
+const text = extractIndexableText(
+  record.event_type,        // 'https://atrib.dev/v1/types/observation' etc.
+  record.sidecar.content,   // typed as `unknown`; runtime shape-checking handles malformed input
+  { fieldCap: 2048 },       // optional; defaults to DEFAULT_FIELD_CAP
+)
+```
+
+Per-event_type extraction (also exported individually for callers that know the event_type at compile time):
+
+| event_type | Indexable fields | Function |
+|---|---|---|
+| `observation` | `what + why_noted + topics` | `extractObservationText(content, fieldCap)` |
+| `annotation` | `summary + topics` | `extractAnnotationText(content, fieldCap)` |
+| `revision` | `prior_position + new_position + reason + topics` | `extractRevisionText(content, fieldCap)` |
+| `tool_call` | `tool_name + args/input/arguments + result/output/response` (JSON-stringified, capped) | `extractToolCallText(content, fieldCap)` |
+| `transaction` | counterparty + memo + protocol fields | `extractTransactionText(content, fieldCap)` |
+| `directory_anchor` | `tree_root + epoch_id` | `extractDirectoryAnchorText(content, fieldCap)` |
+| extension URI | generic recursive string-walk (depth ≤ 4, `DEFAULT_FIELD_CAP=2048` per field) | (internal; falls out of `extractIndexableText` dispatch) |
+
+The shapes are normative — producers that emit these event_types are expected to write content matching the documented field names; consumers can rely on them. Extension URI producers SHOULD adopt one of the recognizable normative-shape field names (`what`, `why_noted`, `summary`, `description`, `topics`) so the generic walker picks them up naturally, OR call `atrib-annotate` on important records to lift them via the curator path. Per-field length caps prevent giant tool_call payloads from dominating the corpus; field-length defaults to `DEFAULT_FIELD_CAP` (2048 chars).
+
+`@atrib/recall@0.11.0+` uses `extractIndexableText` to build its BM25 corpus; before [D086](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content) it indexed only annotation summaries. `@atrib/trace@0.5.0+` uses the same shapes in `summarizeSidecar` to surface revision content alongside observation `what` and annotation `summary`.
 
 ### Harness discovery: env-var + file-fallback ([D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) v1 + v2)
 
