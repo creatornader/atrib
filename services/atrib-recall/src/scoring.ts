@@ -29,7 +29,8 @@
 
 import type { ImportanceLabel } from './index.js'
 import { IMPORTANCE_NUMERIC } from './index.js'
-import type { AnnotationSummary } from './aggregations.js'
+import type { AnnotationSummary, LoadedRecord } from './aggregations.js'
+import { extractIndexableText } from '@atrib/mcp'
 
 /**
  * Exponential-decay recency score. timestamp is milliseconds; tau is in
@@ -180,11 +181,15 @@ export function parkScore(
 }
 
 /**
- * Build the indexed-text view of a record for BM25: concatenation of the
- * record's annotation summary (when present) and topic_tags (when
- * present). Records with no annotation produce an empty token list. The
- * indexed text is deliberately short, Layer 1 BM25 is meant as a
- * lightweight fallback, not a full-text-search engine.
+ * Build BM25 tokens from an aggregated annotation (summary + topics).
+ * Kept for callers that only have annotation data and need the legacy
+ * shape. The current BM25 build path (`indexableTokensForRecord`) calls
+ * this internally as the annotation-augment step on top of the per-event_
+ * type record content extracted via `@atrib/mcp` `extractIndexableText`.
+ *
+ * Records with no annotation produce an empty token list. This helper
+ * deliberately does NOT touch record content; for the full corpus shape
+ * use `indexableTokensForRecord`.
  */
 export function indexableTextFromAnnotation(
   summary: AnnotationSummary | undefined,
@@ -194,6 +199,41 @@ export function indexableTextFromAnnotation(
   if (summary.summary) parts.push(summary.summary)
   if (summary.topics) parts.push(...summary.topics)
   return tokenize(parts.join(' '))
+}
+
+/**
+ * Build BM25 tokens for one loaded record. Per D086, the indexable
+ * corpus combines two sources:
+ *
+ *   1. Per-event_type record content from the D062 sidecar, extracted
+ *      via @atrib/mcp `extractIndexableText` against the record's
+ *      `event_type` URI. For observation: what + why_noted + topics.
+ *      For tool_call: tool_name + args excerpt + result excerpt. For
+ *      annotation: summary + topics. Etc. See @atrib/mcp/content-shapes
+ *      for the per-shape contract.
+ *
+ *   2. Any annotation summary + topics pointing at this record, when
+ *      present. Annotations act as a curation lift on top of raw
+ *      content; the same record indexed twice doesn't matter for BM25
+ *      term-frequency saturation (k1 controls the lift). Records with
+ *      no annotation still produce non-empty tokens from source (1) — the
+ *      pre-D086 floor was zero, which left most emits un-searchable.
+ *
+ * Source (1) tokens are deduplicated against source (2) at the token
+ * level by simple union: BM25's tf saturation makes a few extra
+ * duplicates harmless.
+ */
+export function indexableTokensForRecord(
+  loaded: LoadedRecord,
+  annotation: AnnotationSummary | undefined,
+): string[] {
+  const contentText = extractIndexableText(loaded.record.event_type, loaded.content)
+  const annotationTokens = indexableTextFromAnnotation(annotation)
+  if (!contentText) return annotationTokens
+  const contentTokens = tokenize(contentText)
+  return annotationTokens.length === 0
+    ? contentTokens
+    : contentTokens.concat(annotationTokens)
 }
 
 /**
