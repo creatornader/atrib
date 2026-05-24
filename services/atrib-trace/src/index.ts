@@ -23,7 +23,7 @@ import {
   extractRecordHashesFromMcpResult,
 } from '@atrib/mcp'
 import { loadAllRecords } from './storage.js'
-import { traceBackward, type TraceVisited } from './trace.js'
+import { traceBackward, traceForward, type TraceVisited } from './trace.js'
 
 const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
 const HEX_32_PATTERN = /^[0-9a-f]{32}$/
@@ -81,7 +81,13 @@ interface CompactVisited {
   sidecar_summary?: {
     tool_name?: string
     topics?: string[]
-    /** First 200 chars of `what` (observation) or summary (annotation). */
+    /**
+     * First 200 chars of the record's human-readable content, derived
+     * per event_type from the @atrib/mcp normative shapes (D086):
+     * observation `what`, annotation `summary`, revision `new_position`.
+     * For legacy records using non-normative names (`summary` on
+     * observation), falls back to `summary`.
+     */
     what?: string
     /** Annotation `importance` field when present. */
     importance?: string
@@ -89,8 +95,9 @@ interface CompactVisited {
   }
 }
 
-/** Pull a compact summary from the sidecar's content payload. */
-function summarizeSidecar(
+/** Pull a compact summary from the sidecar's content payload.
+ * Exported for unit testing of the per-event_type content-shape handling. */
+export function summarizeSidecar(
   loadedRecord: { local?: import('./storage.js').SidecarPayload } | undefined,
 ): CompactVisited['sidecar_summary'] {
   if (!loadedRecord?.local) return undefined
@@ -102,12 +109,28 @@ function summarizeSidecar(
   if (c && Array.isArray(c['topics'])) {
     out.topics = (c['topics'] as unknown[]).filter((t): t is string => typeof t === 'string').slice(0, 6)
   }
-  if (c && typeof c['what'] === 'string') {
-    const w = c['what']
-    out.what = w.length > 200 ? w.slice(0, 197) + '…' : w
-  } else if (c && typeof c['summary'] === 'string') {
-    const s = c['summary']
-    out.what = s.length > 200 ? s.slice(0, 197) + '…' : s
+  // Per-event_type human-readable text. The `what` slot here is generic
+  // (it's the human-scannable summary regardless of event_type); the
+  // priority order pulls the normative D086 field for each shape, with
+  // an explicit final fallback to `summary` for legacy records.
+  //   observation: content.what
+  //   annotation:  content.summary
+  //   revision:    content.new_position (D086-normative) — surface this
+  //                so trace consumers can read the agent's stance shift
+  //                without a separate recall call
+  //   legacy:      content.summary (catches pre-D086 extractor records)
+  if (c) {
+    let primary: string | undefined
+    if (typeof c['what'] === 'string') {
+      primary = c['what']
+    } else if (typeof c['new_position'] === 'string') {
+      primary = c['new_position']
+    } else if (typeof c['summary'] === 'string') {
+      primary = c['summary']
+    }
+    if (primary) {
+      out.what = primary.length > 200 ? primary.slice(0, 197) + '…' : primary
+    }
   }
   if (c && typeof c['importance'] === 'string') out.importance = c['importance']
   return Object.keys(out).length === 0 ? undefined : out
@@ -145,6 +168,28 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
     version: '0.1.0',
   })
 
+  // Shared shape: build a compact payload from a TraceResult.
+  function buildPayload(
+    result: ReturnType<typeof traceBackward>,
+    byHash: Map<string, import('./storage.js').IndexedRecord>,
+    compact: boolean,
+  ) {
+    const danglingSet = new Set(result.dangling)
+    return compact
+      ? {
+          start_hash: result.start_hash,
+          direction: result.direction,
+          depth_requested: result.depth_requested,
+          depth_reached: result.depth_reached,
+          visited: result.visited.map((v) => compactVisited(v, danglingSet, byHash)),
+          dangling: result.dangling,
+          truncated_by_depth: result.truncated_by_depth,
+          truncated_by_cap: result.truncated_by_cap,
+          warnings: result.warnings,
+        }
+      : { ...result }
+  }
+
   mcp.registerTool(
     'trace',
     {
@@ -154,7 +199,9 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
         'chain that led to it. Reads from the local signed-record mirror ' +
         '(~/.atrib/records/*.jsonl). Returns the records visited, parent links ' +
         'so the caller can reconstruct the tree, and dangling hashes (records ' +
-        'referenced via informed_by but not present in the local mirror).',
+        'referenced via informed_by but not present in the local mirror). ' +
+        'Sibling tool `trace_forward` walks the opposite direction (records ' +
+        'that cited THIS one via their informed_by).',
       inputSchema: TraceInput.shape,
     },
     async (args: z.infer<typeof TraceInput>) =>
@@ -177,27 +224,47 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
             maxNodes,
             ...(contextId ? { contextId } : {}),
           })
-          const danglingSet = new Set(result.dangling)
-
-          const payload = compact
-            ? {
-                start_hash: result.start_hash,
-                direction: result.direction,
-                depth_requested: result.depth_requested,
-                depth_reached: result.depth_reached,
-                visited: result.visited.map((v) => compactVisited(v, danglingSet, byHash)),
-                dangling: result.dangling,
-                truncated_by_depth: result.truncated_by_depth,
-                truncated_by_cap: result.truncated_by_cap,
-                warnings: result.warnings,
-              }
-            : {
-                ...result,
-                // Full records included
-              }
-
           return {
-            content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
+            content: [{ type: 'text', text: JSON.stringify(buildPayload(result, byHash, compact), null, 2) }],
+          }
+        },
+        extractRecordHashesFromMcpResult,
+      ),
+  )
+
+  // Sibling tool: forward walk (records that cited THIS one). Mirrors
+  // the trace input schema + response shape exactly so callers can use
+  // it interchangeably; only the direction of the walk differs.
+  mcp.registerTool(
+    'trace_forward',
+    {
+      title: 'trace informed_by chain forward',
+      description:
+        'Walk forward from a record_hash, surfacing the records that cited ' +
+        'it via their informed_by chain. The dual of `trace` (backward). ' +
+        'Answers "I made decision X, what did I do because of it?" Reads from ' +
+        'the local signed-record mirror (~/.atrib/records/*.jsonl). Returns ' +
+        'the records visited, parent links (which upstream record at the ' +
+        'prior level cited this one), and dangling hashes (rare; only if the ' +
+        'reverse index references a record missing from the mirror).',
+      inputSchema: TraceInput.shape,
+    },
+    async (args: z.infer<typeof TraceInput>) =>
+      logReadPrimitiveCall(
+        'trace_forward',
+        args,
+        async () => {
+          const depth = args.depth ?? 3
+          const maxNodes = args.max_nodes ?? 200
+          const compact = args.compact ?? true
+          const contextId = args.context_id ?? resolveEnvContextId()
+          const { byHash } = loadAllRecords()
+          const result = traceForward(args.record_hash, depth, byHash, {
+            maxNodes,
+            ...(contextId ? { contextId } : {}),
+          })
+          return {
+            content: [{ type: 'text', text: JSON.stringify(buildPayload(result, byHash, compact), null, 2) }],
           }
         },
         extractRecordHashesFromMcpResult,

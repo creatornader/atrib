@@ -163,6 +163,45 @@ describe('recall', () => {
     expect(result.total).toBe(2)
   })
 
+  it('filters by creator_key', async () => {
+    // Multi-signer mirror: two different creator_keys present.
+    const KEY2 = new Uint8Array(32).fill(0x99)
+    const pub1 = await getPublicKey(KEY)
+    const pub2 = await getPublicKey(KEY2)
+    const key1 = base64urlEncode(pub1)
+    const key2 = base64urlEncode(pub2)
+    const r1 = await makeSigned({ timestamp: 1, content_id: `sha256:${'a'.repeat(64)}` })
+    // For r2, sign under KEY2 by passing it via the optional 4th arg of makeSigned.
+    // makeSigned signs with KEY by default; we need a second signer so we
+    // sign manually with KEY2 using the same helper shape.
+    const ctx = 'a'.repeat(32)
+    const unsigned2 = {
+      spec_version: 'atrib/1.0' as const,
+      event_type: EVENT_TYPE_TOOL_CALL_URI,
+      context_id: ctx,
+      creator_key: key2,
+      chain_root: genesisChainRoot(ctx),
+      content_id: `sha256:${'b'.repeat(64)}`,
+      timestamp: 2,
+      signature: '',
+    }
+    const r2 = await signRecord(unsigned2 as AtribRecord, KEY2)
+    writeFileSync(recordFile, [JSON.stringify(r1), JSON.stringify(r2)].join('\n'))
+
+    // No filter → both records.
+    expect((await recall({}, recordFile)).total).toBe(2)
+    // Filter to creator 1 → only r1.
+    const onlyKey1 = await recall({ creator_key: key1 }, recordFile)
+    expect(onlyKey1.total).toBe(1)
+    expect((onlyKey1.records[0] as { creator_key: string }).creator_key).toBe(key1)
+    // Filter to creator 2 → only r2.
+    const onlyKey2 = await recall({ creator_key: key2 }, recordFile)
+    expect(onlyKey2.total).toBe(1)
+    expect((onlyKey2.records[0] as { creator_key: string }).creator_key).toBe(key2)
+    // Filter to a creator not in the mirror → empty.
+    expect((await recall({ creator_key: base64urlEncode(new Uint8Array(32).fill(0)) }, recordFile)).total).toBe(0)
+  })
+
   it('filters by event_type', async () => {
     const records = [
       await makeSigned({ event_type: EVENT_TYPE_TOOL_CALL_URI, timestamp: 1, content_id: `sha256:${'a'.repeat(64)}` }),

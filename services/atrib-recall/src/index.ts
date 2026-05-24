@@ -41,6 +41,8 @@ import {
   EVENT_TYPE_TRANSACTION_URI,
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_REVISION_URI,
+  EVENT_TYPE_OBSERVATION_URI,
+  EVENT_TYPE_DIRECTORY_ANCHOR_URI,
   resolveEnvContextId,
   logReadPrimitiveCall,
   extractRecordHashesFromMcpResult,
@@ -57,6 +59,8 @@ const EVENT_TYPE_SHORT_TO_URI: Record<string, string> = {
   transaction: EVENT_TYPE_TRANSACTION_URI,
   annotation: EVENT_TYPE_ANNOTATION_URI,
   revision: EVENT_TYPE_REVISION_URI,
+  observation: EVENT_TYPE_OBSERVATION_URI,
+  directory_anchor: EVENT_TYPE_DIRECTORY_ANCHOR_URI,
 }
 
 // Layer 1 importance grading (per the recall semantic surface design). The five
@@ -276,6 +280,15 @@ export function loadRecordsFromDir(dir: string): { records: AtribRecord[]; files
 
 interface RecallArgs {
   context_id?: string
+  /**
+   * Optional exact match on `record.creator_key` (Ed25519 public key,
+   * base64url-encoded). Filters the local mirror to records signed by
+   * one specific creator. The tool's name says "my attribution history"
+   * but the local mirror may hold records from other signers (multi-
+   * agent flows, transactions with counterparty signatures, etc.). Use
+   * this filter to scope strictly to your own past.
+   */
+  creator_key?: string
   event_type?: 'tool_call' | 'transaction' | 'annotation' | 'revision'
   /**
    * Optional exact match on `record.content_id` (`sha256:<64-hex>`). Per spec
@@ -745,6 +758,9 @@ export async function recall(
 
   let filtered = all
   if (effectiveContextId) filtered = filtered.filter((lr) => lr.record.context_id === effectiveContextId)
+  if (args.creator_key) {
+    filtered = filtered.filter((lr) => lr.record.creator_key === args.creator_key)
+  }
   if (args.event_type) {
     // Schema accepts short form ('tool_call'|'transaction'); records carry
     // the URI form. Normalize before comparison; pass URIs through as-is so
@@ -932,6 +948,17 @@ server.registerTool(
         .describe(
           'Optional trace identifier (32 hex chars). Limits results to records signed within this trace. ' +
             'Omit for cross-trace recall.',
+        ),
+      creator_key: z
+        .string()
+        .optional()
+        .describe(
+          "Optional exact match on record.creator_key (base64url-encoded Ed25519 public key, 43 chars). " +
+            "Filters the local mirror to records signed by this specific creator. Omit to see all signers " +
+            "present in the mirror; the tool name says 'my attribution history' but the mirror may contain " +
+            "records from other creators when multi-agent flows ship records into a shared mirror. Use " +
+            "your own creator_key (resolvable from the @atrib/cli key-show output, or `getPublicKey()` " +
+            "called on your seed) when you want to scope strictly to your own past.",
         ),
       event_type: z
         .enum(['tool_call', 'transaction'])
@@ -1230,7 +1257,7 @@ server.registerTool(
   'recall_revisions',
   {
     description:
-      "Return the D059 revision chain for a record. Walks revises edges forward from the given record_hash, surfacing each revision in turn. The chain is the linked list of revisions where each revision's revises field points at the prior entry. Useful for checking whether a position the agent previously held has been revised before acting on it. Returns an empty chain when no revision points at the record.",
+      "Return the D059 revision chain for a record, with per-entry content + sibling-fan-out awareness. Walks revises edges forward from the given record_hash, surfacing each revision in turn. Each entry carries the revision's record_hash, timestamp, and content (`new_position`, `reason`, `importance`) so the agent can read the chain inline without follow-up recall calls per entry. When more than one revision targets the same record, the chain follows the first-by-timestamp branch and lists the other branch heads as `sibling_hashes` on that entry so the agent learns about parallel revision branches (common in multi-agent flows). Useful for checking whether a position the agent previously held has been revised before acting on it. Returns an empty chain when no revision points at the record.",
     inputSchema: {
       record_hash: z
         .string()
@@ -1245,12 +1272,36 @@ server.registerTool(
       args,
       async () => {
         const { loaded } = discoverLoaded()
+        const byHash = new Map<string, LoadedRecord>()
+        for (const lr of loaded) byHash.set(lr.record_hash, lr)
         const revisionsByRecord = aggregateRevisionsByRecord(loaded)
         // Walk the chain forward: the input record may be revised by R1;
         // R1 may be revised by R2; collect them in order. Bounded by the
         // mirror size (no cycles since timestamps are monotonic per
-        // signer; defensive seen-set anyway).
-        const chain: string[] = []
+        // signer; defensive seen-set anyway). Each entry enriches the
+        // bare record_hash with the revision's per-event_type content
+        // fields (D086-normative: new_position, reason, importance), so
+        // the agent can read the chain without a separate recall call
+        // per revision.
+        type ChainEntry = {
+          record_hash: string
+          timestamp?: number
+          new_position?: string
+          reason?: string
+          importance?: string
+          /**
+           * Hashes of OTHER revisions pointing at the same target as this
+           * entry's parent step (sibling fan-out). Present only when more
+           * than one revision targeted the same record; the chain follows
+           * the first-by-timestamp branch and lists the rest here so the
+           * agent learns about parallel revision branches that exist but
+           * weren't traversed. Agents wanting to read a sibling chain
+           * should call `recall_revisions` recursively on the sibling's
+           * record_hash.
+           */
+          sibling_hashes?: string[]
+        }
+        const chain: ChainEntry[] = []
         const seen = new Set<string>()
         let current = args.record_hash
         while (!seen.has(current)) {
@@ -1258,12 +1309,28 @@ server.registerTool(
           const next = revisionsByRecord.get(current)
           if (!next || next.length === 0) break
           // Each entry in the map's value array is a revision pointing at
-          // `current`. Convention: the chain follows the first-by-timestamp
-          // revision; agents wanting the full sibling fan-out (parallel
-          // revisions at the same target) should call recall_my_attribution_history
-          // with event_type=revision and inspect their revises field manually.
+          // `current`. The chain follows the first-by-timestamp revision;
+          // the remaining entries are surfaced as `sibling_hashes` so the
+          // agent learns that branches exist without the chain shape
+          // having to explode into a tree.
           const revHash = next[0]!
-          chain.push(revHash)
+          const siblings = next.slice(1)
+          const revLr = byHash.get(revHash)
+          const entry: ChainEntry = { record_hash: revHash }
+          if (revLr) {
+            entry.timestamp = revLr.record.timestamp
+            const c = revLr.content
+            if (c && typeof c === 'object' && !Array.isArray(c)) {
+              const cObj = c as Record<string, unknown>
+              if (typeof cObj.new_position === 'string') entry.new_position = cObj.new_position
+              if (typeof cObj.reason === 'string') entry.reason = cObj.reason
+              if (typeof cObj.importance === 'string') entry.importance = cObj.importance
+            }
+          }
+          if (siblings.length > 0) {
+            entry.sibling_hashes = siblings
+          }
+          chain.push(entry)
           current = revHash
         }
         return {
@@ -1287,7 +1354,7 @@ server.registerTool(
   'recall_by_content',
   {
     description:
-      "Free-form text search over the agent's signed past. Returns top-k records by hybrid retrieval: BM25 over each record's annotation summary + topics, then reranked by Park et al. weighted-sum scoring with annotation-derived importance and recency signals. Layer 2 (sqlite-vec sidecar, separate ship) extends with embedding similarity. Useful when the agent has no specific filter and needs to ask 'what do I know about X?'.",
+      "Free-form text search over the agent's signed past. Returns top-k records by hybrid retrieval: BM25 over each record's per-event_type indexable text (observation `what + why_noted + topics`; tool_call `tool_name + args + result`; annotation `summary + topics`; revision `prior_position + new_position + reason + topics`; transaction counterparty + memo; directory_anchor tree_root; extension URIs via generic recursive string-walk per D086) plus the annotation summary + topics when present as a curator-quality lift. Reranked by Park et al. weighted-sum scoring with annotation-derived importance and recency signals; BM25 contribution clamped to [0, 1] so the documented Park-component bound is honored. Layer 2 (sqlite-vec sidecar, separate ship) extends with embedding similarity. Useful when the agent has no specific filter and needs to ask 'what do I know about X?'.",
     inputSchema: {
       query: z
         .string()
@@ -1357,6 +1424,255 @@ server.registerTool(
                       components: { recency, importance, relevance },
                     }
                   }),
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        }
+      },
+      extractRecordHashesFromMcpResult,
+    ),
+)
+
+// recall_session_chain: records in a context_id, ordered chronologically
+// (the natural traversal of the CHAIN_PRECEDES topology). Doable via
+// recall_my_attribution_history({context_id}) + a manual timestamp sort,
+// but agents naturally think "what happened in this session?" and this
+// gives them one call.
+server.registerTool(
+  'recall_session_chain',
+  {
+    description:
+      "Return all records in a context_id, ordered chronologically (oldest-first). The natural traversal of the CHAIN_PRECEDES topology for a single session/trace. Each entry carries record_hash, event_type, timestamp, display_summary (per-event_type human-readable text from D086), and producer label. Useful for 'what happened in this session?' without manually sorting filter results. Sibling tool to recall_my_attribution_history with built-in context_id scoping + chain-ascending order.",
+    inputSchema: {
+      context_id: z
+        .string()
+        .optional()
+        .describe(
+          "32-hex context_id. When omitted, falls back to @atrib/mcp's resolveEnvContextId (ATRIB_CONTEXT_ID env or D083-registered harness env like CLAUDE_CODE_SESSION_ID).",
+        ),
+      limit: z
+        .number()
+        .optional()
+        .describe(
+          "Maximum records to return (default 50, max 500). Truncated from the END of the chain (oldest-first ordering preserves the chain's start).",
+        ),
+    },
+  },
+  async (args) =>
+    logReadPrimitiveCall(
+      'recall_session_chain',
+      args,
+      async () => {
+        const ctx = args.context_id ?? resolveEnvContextId()
+        if (!ctx) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  { context_id: null, count: 0, records: [], warning: 'no context_id supplied or resolvable via env' },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          }
+        }
+        const { loaded } = discoverLoaded()
+        const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
+        const filtered = loaded
+          .filter((lr) => lr.record.context_id === ctx)
+          .sort((a, b) => a.record.timestamp - b.record.timestamp)
+        const limit = Math.max(1, Math.min(500, args.limit ?? 50))
+        const sliced = filtered.slice(0, limit)
+        const now = Date.now()
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  context_id: ctx,
+                  total: filtered.length,
+                  returned: sliced.length,
+                  truncated: filtered.length > sliced.length,
+                  records: sliced.map((lr) => {
+                    const ann = annotationsByRecord.get(lr.record_hash)
+                    return {
+                      record_hash: lr.record_hash,
+                      event_type: lr.record.event_type,
+                      timestamp: lr.record.timestamp,
+                      display_summary: synthesizeDisplaySummary(lr.record, lr.content, ann),
+                      display_producer: resolveDisplayProducer(lr.record, lr.producer),
+                      age: formatAge(lr.record.timestamp, now),
+                    }
+                  }),
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        }
+      },
+      extractRecordHashesFromMcpResult,
+    ),
+)
+
+// recall_orphans: records nothing else cites via informed_by. Useful for
+// "what decisions did I make and never act on?" — loose-end discovery.
+server.registerTool(
+  'recall_orphans',
+  {
+    description:
+      "Return records that are NOT cited by any other record via informed_by (loose ends — decisions or observations the agent made but never followed up on). Surfaces records whose record_hash does NOT appear in any other record's informed_by[] array within the local mirror. Optionally scoped to one context_id, one event_type, or one creator_key. Useful for the agent to discover dropped balls (e.g. 'I noted X but never built on it').",
+    inputSchema: {
+      context_id: z
+        .string()
+        .optional()
+        .describe(
+          "Optional 32-hex context_id to scope orphan-discovery to one session/trace.",
+        ),
+      event_type: z
+        .enum(['tool_call', 'transaction', 'annotation', 'revision', 'observation', 'directory_anchor'])
+        .optional()
+        .describe(
+          "Optional filter to one event_type. Most useful with 'observation' to find unfollowed noting/discovery events.",
+        ),
+      creator_key: z
+        .string()
+        .optional()
+        .describe(
+          "Optional exact match on record.creator_key (base64url). Filters orphan-discovery to records signed by one creator.",
+        ),
+      limit: z
+        .number()
+        .optional()
+        .describe("Maximum records to return (default 50, max 500), newest-first."),
+    },
+  },
+  async (args) =>
+    logReadPrimitiveCall(
+      'recall_orphans',
+      args,
+      async () => {
+        const { loaded } = discoverLoaded()
+        // Build the set of all record_hashes that appear in any record's
+        // informed_by field. Anything in `loaded` whose record_hash is
+        // NOT in this set is an orphan.
+        const cited = new Set<string>()
+        for (const lr of loaded) {
+          const ib = lr.record.informed_by
+          if (Array.isArray(ib)) {
+            for (const h of ib) if (typeof h === 'string') cited.add(h)
+          }
+        }
+        let orphans = loaded.filter((lr) => !cited.has(lr.record_hash))
+        if (args.context_id) {
+          orphans = orphans.filter((lr) => lr.record.context_id === args.context_id)
+        }
+        if (args.creator_key) {
+          orphans = orphans.filter((lr) => lr.record.creator_key === args.creator_key)
+        }
+        if (args.event_type) {
+          const targetUri = EVENT_TYPE_SHORT_TO_URI[args.event_type] ?? args.event_type
+          orphans = orphans.filter((lr) => lr.record.event_type === targetUri)
+        }
+        orphans.sort((a, b) => b.record.timestamp - a.record.timestamp)
+        const limit = Math.max(1, Math.min(500, args.limit ?? 50))
+        const sliced = orphans.slice(0, limit)
+        const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
+        const now = Date.now()
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  total: orphans.length,
+                  returned: sliced.length,
+                  truncated: orphans.length > sliced.length,
+                  records: sliced.map((lr) => {
+                    const ann = annotationsByRecord.get(lr.record_hash)
+                    return {
+                      record_hash: lr.record_hash,
+                      event_type: lr.record.event_type,
+                      context_id: lr.record.context_id,
+                      timestamp: lr.record.timestamp,
+                      display_summary: synthesizeDisplaySummary(lr.record, lr.content, ann),
+                      display_producer: resolveDisplayProducer(lr.record, lr.producer),
+                      age: formatAge(lr.record.timestamp, now),
+                    }
+                  }),
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        }
+      },
+      extractRecordHashesFromMcpResult,
+    ),
+)
+
+// recall_by_signer: aggregate the mirror by creator_key. Lets the agent
+// ask "who else is in this mirror?" before deciding whether to scope
+// queries with creator_key filters. Useful when the mirror is shared
+// across multi-agent flows (transactions with counterparty signers,
+// peer-shared records, etc.).
+server.registerTool(
+  'recall_by_signer',
+  {
+    description:
+      "Aggregate the local mirror by creator_key. Returns the distinct creators present + per-creator record count + latest record timestamp. Useful when the mirror is multi-signer (multi-agent flows, transactions with counterparty signers) and the agent wants to discover who else's records are in scope before deciding whether to filter with creator_key. Pure aggregation; no records returned directly — use recall_my_attribution_history with the creator_key filter to drill into one creator's records.",
+    inputSchema: {
+      min_records: z
+        .number()
+        .optional()
+        .describe("Optional minimum record count to include a creator in the result. Default 1 (include all)."),
+    },
+  },
+  async (args) =>
+    logReadPrimitiveCall(
+      'recall_by_signer',
+      args,
+      async () => {
+        const { loaded } = discoverLoaded()
+        type SignerStat = { creator_key: string; count: number; latest_timestamp: number; earliest_timestamp: number }
+        const byKey = new Map<string, SignerStat>()
+        for (const lr of loaded) {
+          const key = lr.record.creator_key
+          const existing = byKey.get(key)
+          if (existing) {
+            existing.count++
+            if (lr.record.timestamp > existing.latest_timestamp) existing.latest_timestamp = lr.record.timestamp
+            if (lr.record.timestamp < existing.earliest_timestamp) existing.earliest_timestamp = lr.record.timestamp
+          } else {
+            byKey.set(key, {
+              creator_key: key,
+              count: 1,
+              latest_timestamp: lr.record.timestamp,
+              earliest_timestamp: lr.record.timestamp,
+            })
+          }
+        }
+        const minRecords = Math.max(1, args.min_records ?? 1)
+        const stats = [...byKey.values()]
+          .filter((s) => s.count >= minRecords)
+          .sort((a, b) => b.count - a.count)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  total_signers: stats.length,
+                  total_records: loaded.length,
+                  signers: stats,
                 },
                 null,
                 2,

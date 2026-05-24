@@ -16,6 +16,11 @@ The base filter-rank-page tool over the local mirror.
 mcp__atrib-recall__recall_my_attribution_history({
   // All optional
   context_id?: string,           // 32-hex. Filter to records signed under this trace.
+  creator_key?: string,          // Ed25519 public key, base64url. Filter to records signed by this
+                                 // specific creator. The tool's name says "my history" but the local
+                                 // mirror may hold records from other signers (multi-agent flows,
+                                 // transactions with counterparty signatures, etc.); use this filter
+                                 // to scope strictly to your own past.
   event_type?: 'tool_call' | 'transaction' | 'annotation' | 'revision',
                                  // Filter to a single event kind. Short-form names are normalized
                                  // to the URI form.
@@ -70,9 +75,15 @@ Every call to this tool (and every sibling tool below) writes a per-call jsonl e
 
 - `mcp__atrib-recall__recall_annotations({ record_hash })` - returns the aggregated annotation summary (max_importance, union of topics, latest summary) for the target record. Returns `annotations: null` when no annotation points at the record.
 
-- `mcp__atrib-recall__recall_revisions({ record_hash })` - returns the forward revision chain for the target record. Each entry's revises field points at the prior entry; the chain follows the first-by-timestamp revision at each step. Sibling fan-out (parallel revisions of the same target) requires calling `recall_my_attribution_history` with event_type=revision and inspecting `content.revises` manually.
+- `mcp__atrib-recall__recall_revisions({ record_hash })` - returns the forward revision chain for the target record. Each chain entry carries `record_hash`, `timestamp`, and the [D086](../../DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content)-normative content fields (`new_position`, `reason`, `importance`) when present, so the agent can read the chain inline without follow-up `recall` calls per revision. The chain follows the first-by-timestamp revision at each step; when more than one revision targets the same record (sibling fan-out, common in multi-agent flows), the other branch heads are listed on that step's entry as `sibling_hashes`, so the agent can recursively call `recall_revisions` on a sibling to traverse a parallel branch instead of having to manually enumerate revisions via `recall_my_attribution_history`.
 
 - `mcp__atrib-recall__recall_by_content({ query, k? })` - BM25 free-form retrieval over each record's indexable text + the annotation summary + topic_tags (when present), then reranked by Park et al. weighted-sum scoring (recency + importance + relevance). Default k=10, max 50. Per [D086](../../DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content), "indexable text" is per-event_type record content from the [D062](../../DECISIONS.md#d062-local-mirror-sidecar-two-tier-private-local--public-canonical-persistence) sidecar (observation: `what + why_noted + topics`; tool_call: `tool_name + args excerpt + result excerpt`; annotation: `summary + topics`; revision: `prior_position + new_position + reason + topics`; transaction: counterparty + memo + protocol fields; directory_anchor: `tree_root + epoch_id`). Extension URIs fall back to a generic recursive string-walk (depth ≤ 4, field cap 2KB). BM25 contribution is clamped to [0, 1] in the parkScore site so the documented Park-component bound is honored. Layer 2 (sqlite-vec sidecar, separate ship) extends with embedding similarity over the same indexed text.
+
+- `mcp__atrib-recall__recall_session_chain({ context_id?, limit? })` - returns all records in a context_id, ordered chronologically (oldest-first). The natural traversal of the CHAIN_PRECEDES topology for a single session/trace. Each entry carries `record_hash`, `event_type`, `timestamp`, `display_summary`, `display_producer`, and `age`. When `context_id` is omitted, falls back to `resolveEnvContextId` (the same precedence as the other tools: `ATRIB_CONTEXT_ID` env, then a [D083](../../DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)-registered harness env like `CLAUDE_CODE_SESSION_ID`).
+
+- `mcp__atrib-recall__recall_orphans({ context_id?, event_type?, creator_key?, limit? })` - returns records that are NOT cited by any other record via `informed_by` (loose ends — decisions or observations the agent made but never followed up on). Optionally scoped to one context_id, one event_type, or one creator_key. Newest-first ordering. Useful for the agent to discover dropped balls (e.g. "I noted X but never built on it").
+
+- `mcp__atrib-recall__recall_by_signer({ min_records? })` - aggregates the local mirror by `creator_key`. Returns distinct creators present + per-creator record count + earliest/latest timestamp. Pure aggregation; no records returned directly — use `recall_my_attribution_history` with the `creator_key` filter to drill into one creator's records. Useful when the mirror is multi-signer.
 
 ### Tunable weights
 
