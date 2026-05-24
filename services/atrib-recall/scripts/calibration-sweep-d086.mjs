@@ -49,7 +49,7 @@ const idx = buildBM25Index(corpus)
 const REAL_QUERIES = [
   'validate email',
   'atrib recall',
-  'phase 2 experiment',
+  'controlled experiment design',
   'noise floor calibration',
   'BM25 corpus',
   'tool call',
