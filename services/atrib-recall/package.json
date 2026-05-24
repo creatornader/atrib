@@ -1,6 +1,6 @@
 {
   "name": "@atrib/recall",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "MCP server for atrib. Lets agents query their own provable past from the local signed-record mirror with per-record signature verification.",
   "type": "module",
   "main": "dist/index.js",
