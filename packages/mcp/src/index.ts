@@ -58,6 +58,32 @@ export type { HarnessDiscovery } from './harness-context.js'
 export { logReadPrimitiveCall, extractRecordHashesFromMcpResult } from './read-instrumentation.js'
 export type { ReadPrimitiveCallLogEntry } from './read-instrumentation.js'
 
+// Normative content-shape contracts for indexable-text extraction.
+// Codifies per-event_type shape definitions + the dispatch function used
+// by recall (BM25 corpus build), legibility (display synthesis), and
+// future consumers (audit tools, embedding pipelines, third-party clients).
+// Per-shape extractors are exported individually for callers that know
+// their event_type at compile time.
+export {
+  extractIndexableText,
+  extractObservationText,
+  extractAnnotationText,
+  extractRevisionText,
+  extractToolCallText,
+  extractTransactionText,
+  extractDirectoryAnchorText,
+  DEFAULT_FIELD_CAP,
+} from './content-shapes.js'
+export type {
+  ExtractIndexableTextOptions,
+  ObservationContent,
+  AnnotationContent,
+  RevisionContent,
+  ToolCallContent,
+  TransactionContent,
+  DirectoryAnchorContent,
+} from './content-shapes.js'
+
 // Context (for advanced usage)
 export {
   readInboundContext,

@@ -4057,6 +4057,73 @@ This ADR codifies the rationale for each calibration choice against a 2026-05-23
 - `services/atrib-recall/README.md`: customer-facing reference for the calibration defaults and the novel-in-field noise-floor behavior.
 - Survey citations: see the inline GitHub permalink in the `ALPHA=0.3` row above. The full two surveys (research papers + OSS source) were one-shot research artifacts; their cited URLs live in the session trace, not as separate checked-in research files.
 
+
+## D086: BM25 corpus extended from annotations to per-event_type record content
+
+**Date:** 2026-05-24
+
+**Context.** The Layer 1 v2 ship ([D085](#d085-recall-calibration-defaults-survey-grounded-rationale), PR #79, 2026-05-23) settled the recall scoring weights but inherited a deeper structural choice from earlier work: the BM25 corpus was built only from annotation summaries + topics (`indexableTextFromAnnotation` in `services/atrib-recall/src/scoring.ts`), never from the actual record content body. Records with no annotation pointing at them contributed an empty token list to the BM25 index, so `recall_by_content(query="X")` could find them only if a separate `atrib-annotate` call had attached a summary.
+
+Empirically against the operator's 2026-05-24 mirror (14,363 records), this meant near-zero records were searchable by content: the agent's `atrib-emit({what: "decided X because Y"})` records were structurally invisible to `recall_by_content` unless the operator separately annotated them. Audit found no design rationale — annotation-only indexing was a latent gap from atrib originally being a verifiable-attribution protocol (signed records for auditors) where annotations were the primary curated surface, with agent-memory features layered on later without revisiting the corpus shape.
+
+Comparable production memory systems (Mem0, memGPT/Letta, LangMem, Zep, OpenAI ChatGPT Memory) all index record CONTENT, not just curator-applied metadata. atrib's annotation-only indexing was an outlier that worked against the agent-memory use case.
+
+**Decision.** Extend the BM25 indexable corpus from `annotation summary + topics only` to `per-event_type record content + annotation summary + topics (when present)`. Lift the per-event_type extraction to `@atrib/mcp` as a normative protocol-level contract so producers and consumers round-trip via the same shape definition. Re-clamp BM25 contribution to [0, 1] in the parkScore call site so the documented Park-component bound is honored. Recalibrate `ATRIB_RECALL_NOISE_FLOOR` from 0.15 → 0.6 to track the corpus shift.
+
+**Shipped surfaces.**
+
+| Surface | Change |
+|---|---|
+| `packages/mcp/src/content-shapes.ts` (new) | Per-event_type type defs (`ObservationContent`, `AnnotationContent`, `RevisionContent`, `ToolCallContent`, `TransactionContent`, `DirectoryAnchorContent`) + `extractIndexableText(eventTypeUri, content, opts?)` dispatch. Generic recursive string-walk fallback for extension URIs (depth-capped at 4, field-length-capped via `DEFAULT_FIELD_CAP=2048`). 28 new unit tests in `packages/mcp/test/content-shapes.test.ts`. |
+| `services/atrib-recall/src/scoring.ts` | New `indexableTokensForRecord(loaded, annotation?)` builds tokens from `@atrib/mcp` `extractIndexableText` of the sidecar content, then concats annotation summary+topics when present. `indexableTextFromAnnotation` retained for callers that only have annotation data. 9 new integration tests in `services/atrib-recall/test/scoring.test.ts`. |
+| `services/atrib-recall/src/index.ts` | Both BM25 corpus-build call sites (`rankByRelevance` line ~533, `recall_by_content` line ~1295) switched from `indexableTextFromAnnotation` to `indexableTokensForRecord`. `rankByRelevance` parkScore site now clamps `rel = Math.min(rawBm25, 1)` to honor the [0, 1] Park-component bound. |
+| `ATRIB_RECALL_NOISE_FLOOR` default | 0.15 → 0.6. The prior floor was effectively a no-op against the new corpus (every record passes recency-only baseline of 0.3). New floor sits between the recent+annotated-only baseline (~0.55) and the empirical real-query minimum (0.6985) observed against the operator's mirror. |
+| `services/atrib-recall/test/layer1-filters.test.ts` | Existing `rank_by='relevance'` tests updated to use future timestamps (recency clamps to exactly 1.0) + critical annotations so fixtures clear the new floor organically. The dedicated noise-floor suppression test's assertion updated from `< 0.15` to `< 0.6`. |
+| `services/atrib-recall/scripts/calibration-sweep-d086.mjs` (new) | Empirical sweep against the local mirror; reports top_park distributions for real vs nonsense queries. Reproducible derivation evidence for the new floor. |
+
+**Survey findings, by calibration choice (deltas from [D085](#d085-recall-calibration-defaults-survey-grounded-rationale)).**
+
+| Choice | Pre-ship status | Post-ship derivation | Verdict |
+|---|---|---|---|
+| BM25 corpus shape | Annotation summary + topics only (sparse, ~99% records produce empty tokens) | Per-event_type record content via `@atrib/mcp` `extractIndexableText` + annotation augment when present | Mainstream alignment: Mem0/memGPT/LangMem/Zep all index record content. atrib was the outlier. |
+| BM25 clamp | None (raw unbounded score fed into parkScore; documented [0,1] bound honored accidentally because annotation-only corpus rarely produced big hits) | `rel = Math.min(rawBm25, 1)` at the parkScore call site | Restores documented invariant. Lossy at the saturated end but preserves ordering for the records that actually exceed the cap. |
+| NOISE_FLOOR | 0.15 (= `alpha * 0.5`, derived as "recency-only median-aged baseline") | 0.6 (sits between recent+annotated-only baseline 0.55 and empirical real-query min 0.6985 against 2026-05-24 mirror) | Prior floor is a no-op against the new corpus (everything passes). New floor catches the "active mirror, no meaningful relevance" case while preserving real queries. Tight ~0.01 empirical gap means the value is informed-bet, not measured; gold-standard sweep (queued in [D085](#d085-recall-calibration-defaults-survey-grounded-rationale)) will validate. |
+| ALPHA / BETA / GAMMA / TAU_DAYS | Unchanged from [D085](#d085-recall-calibration-defaults-survey-grounded-rationale) | Unchanged | Weight calibration is independent of corpus shape. With BM25 now firing routinely, GAMMA=0.4 ceiling is small relative to recency+importance baseline; deferred to the queued sweep. |
+
+**Extension URIs.** A first-class design concern. Extension event_type URIs (non-normative, minted by third parties in their own namespaces per [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)) cannot have shape-aware extractors at protocol level — the protocol can't dictate what a third-party event_type carries. This ADR provides three layered paths for extension URI indexing:
+
+1. **Generic recursive string-walk (default, no producer cooperation required).** Extension URI content is best-effort indexed via `extractExtensionText` in `content-shapes.ts`: recursive walk up to `MAX_WALK_DEPTH=4`, all primitive string values concatenated, each capped at `DEFAULT_FIELD_CAP=2048`. Works for any content shape; lossy because there's no per-field weighting and the walker indiscriminately includes non-content strings (timestamps, IDs, metadata). The depth cap bounds work on adversarial inputs.
+2. **Annotation as the bridge (existing primitive).** Extension producers can call `atrib-annotate` on their important records; the annotation summary + topics are indexed alongside the generic walk and act as a curator-quality lift. No new mechanism required; uses the same primitive operator-driven curation flows already use.
+3. **Producer-declared shape descriptors (future).** Out of scope here. An extension URI could in principle register a shape contract with the protocol so consumers look up the right per-field extractor by URI; this would require a protocol-level shape registry mechanism. Open question whether the demand justifies the additional surface area.
+
+The recommendation in `services/atrib-recall/README.md` is: **extension URI producers SHOULD adopt one of the recognizable normative-shape field names (`what`, `why_noted`, `summary`, `description`, `topics`) so the generic walker picks them up naturally, OR call `atrib-annotate` on important records to lift them via the curator path.** The generic walker is the path of least resistance; the explicit guidance prevents extension producers from silently assuming they get normative-event_type indexing fidelity.
+
+**Round-trip contract.** Per the [§1.2](atrib-spec.md#12-record-format) decision that `AtribRecord` is structural-only (no `content` field; content lives in the [D062](#d062-local-mirror-sidecar-two-tier-private-local--public-canonical-persistence) sidecar at `_local.content`), `extractIndexableText` operates on the sidecar payload. Producers (`@atrib/emit`, `@atrib/mcp` wrapper, `@atrib/annotate`, `@atrib/revise`, payment-protocol adapters) write content matching the normative shape definitions in `@atrib/mcp/content-shapes`; consumers (`@atrib/recall`, future audit tools, third-party clients in other languages) read content via the same shape contract. This codifies what was previously implicit (shapes documented as Zod schema descriptions inside `services/atrib-emit`, with no shared type surface).
+
+**Alternatives considered.**
+
+- *Auto-annotate on emit.* Have `@atrib/emit` auto-derive an annotation `summary` from `content.what` so the existing annotation-only corpus becomes non-empty. Rejected: hides what's happening (every emit silently creates a second signed record), couples emit semantics to indexing strategy, and only fixes observation shape (tool_call records still need their own treatment). Per-event_type extraction is the cleaner separation.
+- *Layer 2 sqlite-vec sidecar (semantic embedding search).* The natural production-memory parity move. Deferred: irrelevant to evaluate until the content corpus exists at all (this ADR is the prerequisite). The roadmap entry stays; shipping here unblocks evaluating whether Layer 2 is necessary on top of a proper BM25 corpus.
+- *Drop the noise floor entirely and return top-K always.* The mainstream field convention ([D085](#d085-recall-calibration-defaults-survey-grounded-rationale) survey: every comparable system does this). Rejected for the same reasons as in [D085](#d085-recall-calibration-defaults-survey-grounded-rationale): trust-the-absence is a deliberate atrib product principle, lowering hallucination risk from low-confidence context. The threshold behavior is retained; only the constant is rebased.
+- *Normalize BM25 by sum-of-idf or by max-per-query.* More principled bounding than the simple `min(rel, 1)` clamp. Deferred: a single-line clamp is enough to preserve the [0, 1] invariant here; a normalization scheme is a refinement worth piloting alongside the queued gold-standard sweep.
+
+**Consequences.**
+
+- `recall_by_content` becomes useful as designed: agents can find their own past emits without requiring a separate annotation pass. Closes the structural gap surfaced during a 2026-05-24 controlled-experiment design pass, where annotation-only indexing meant the substrate-equipped condition's second iteration had nothing to find even when the first iteration emitted.
+- Behavior change for callers: queries that previously returned empty (no annotation in corpus) now may return records. Token weight in agent context windows increases proportionally; callers using the existing `limit` parameter (default 10 for `recall_by_content` and `recall_my_attribution_history` per [D085](#d085-recall-calibration-defaults-survey-grounded-rationale)) are unaffected.
+- New `@atrib/mcp` exports (`extractIndexableText`, the six per-event_type extractors, `DEFAULT_FIELD_CAP`, content-shape type definitions). Additive; no removals.
+- `@atrib/recall` v0.11.0 (minor bump); `@atrib/mcp` v0.11.0 (minor bump). Both are additive: existing API unchanged.
+- The noise-floor recalibration is the only behavior change visible at the recall response shape. Callers depending on the 0.15 default to NOT trip suppression (i.e. relying on permissive behavior) will see more `quality:below_threshold` responses. The env var still overrides for callers that want to retain prior behavior.
+
+**Cross-references.**
+
+- [D085](#d085-recall-calibration-defaults-survey-grounded-rationale): the calibration ADR this one extends. [D085](#d085-recall-calibration-defaults-survey-grounded-rationale) set the weights; this ADR ships the corpus.
+- [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface): the six primitives whose round-trip indexing this ADR makes work end-to-end.
+- [§1.2](atrib-spec.md#12-record-format): the structural-only AtribRecord decision that puts content in the sidecar.
+- [§8.3](atrib-spec.md#83-salted-commitment-posture): the salted-commitment privacy posture this ADR does NOT touch (content stays in the local mirror; the public log still commits hashes only).
+- [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary): the extension-URI promotion bar that gates whether a third-party event_type ever gets normative shape-aware extraction.
+- `services/atrib-recall/scripts/calibration-sweep-d086.mjs`: reproducible empirical evidence for the new floor.
+
 ---
 
 # Pending decisions

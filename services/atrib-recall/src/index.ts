@@ -106,13 +106,31 @@ export const ATRIB_RECALL_TAU_DAYS = parseFloat(process.env.ATRIB_RECALL_TAU_DAY
 // Park score is below this floor, recall returns empty records + a
 // "below_threshold" quality signal rather than a low-confidence top-K.
 //
-// Default 0.15 derivation: each Park component (recency, importance,
-// relevance) is normalized to [0, 1]; ATRIB_RECALL_ALPHA defaults to
-// 0.3. A record with "decent recency (~0.5), no annotation (importance
-// 0), no topic match, no BM25 hit (relevance 0)" scores alpha * 0.5 =
-// 0.15 — right at the floor. Anything BELOW that is effectively pure
-// noise (stale records with no signal). The threshold trains the agent
-// "recall returns when it has something; trust the absence."
+// Default 0.6 derivation (D086 recalibration):
+//   - Pre-D086 the BM25 corpus was annotation-summary-only, leaving 99%+
+//     of records un-indexable for content queries. The previous floor of
+//     0.15 was derived as "alpha * 0.5 = recency-only median-aged
+//     record" under the assumption Park components stay in [0, 1].
+//   - D086 extends the BM25 corpus to per-event_type record content via
+//     `extractIndexableText` from @atrib/mcp. Empirically against the
+//     2026-05-24 operator mirror (14,363 records), 84.6% of records now
+//     produce non-zero indexable tokens (avg 75.6 tokens/doc), and the
+//     parkScore site clamps raw BM25 to [0, 1] so the documented Park-
+//     component bound is honored.
+//   - Calibration sweep (scripts/calibration-sweep-d086.mjs) measured:
+//       real-query top_park    min=0.6985  max=0.9549  avg=0.7971
+//       nonsense-query top_park min=0.5572  max=0.6895  avg=0.5704
+//     Recent + annotated records baseline at ~0.55 from alpha*1.0 +
+//     beta*importance alone (no BM25 needed). Pre-D086 floor of 0.15 is
+//     a no-op against the new corpus — every record passes.
+//   - 0.6 sits between the recent+annotated-only baseline (~0.55) and the
+//     real-query minimum (0.6985). It filters the "active mirror, no
+//     meaningful relevance" case while preserving real recall results.
+//     Some nonsense queries with incidental BM25 hits (up to 0.6895) will
+//     still pass; the tight ~0.01 empirical gap between real-min and
+//     nonsense-max means a higher floor would also kill the lowest-
+//     scoring real query. Final calibration deferred to the gold-standard
+//     sweep (queued post-D085).
 //
 // NOVEL IN FIELD: the 2026-05-23 survey of comparable systems (Park et
 // al., MemGPT/Letta, A-MEM, MemoryBank, Mem0, LangChain, LlamaIndex,
@@ -121,18 +139,9 @@ export const ATRIB_RECALL_TAU_DAYS = parseFloat(process.env.ATRIB_RECALL_TAU_DAY
 // field convention is "always return something, let the agent decide
 // it's noise." atrib's inversion is a deliberate protocol choice (lower
 // hallucination risk from low-confidence context); it should be
-// defended as innovation, not assumed convention. See ADR D085. The
-// derivation is internally consistent but empirically un-validated;
-// a gold-standard eval sweep is queued to either reaffirm or
-// recommend revising this floor.
-//
-// CAVEAT: on active mirrors with constant fresh tool-call activity, the
-// best record's recency component is ~1.0, so alpha * 1.0 = 0.3 > 0.15
-// and the floor never trips. The threshold catches the "stale mirror,
-// nothing relevant" case correctly per design, but not the "active
-// mirror, nonsense query" case. If ALPHA is changed, this default may
-// need to be revisited. Set the env var to 0 to disable entirely.
-export const ATRIB_RECALL_NOISE_FLOOR = parseFloat(process.env.ATRIB_RECALL_NOISE_FLOOR ?? '0.15')
+// defended as innovation, not assumed convention. See ADR D085 + D086.
+// Set the env var to 0 to disable entirely.
+export const ATRIB_RECALL_NOISE_FLOOR = parseFloat(process.env.ATRIB_RECALL_NOISE_FLOOR ?? '0.6')
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -150,7 +159,7 @@ import {
   buildBM25Index,
   bm25Score,
   tokenize,
-  indexableTextFromAnnotation,
+  indexableTokensForRecord,
 } from './scoring.js'
 import {
   buildLocalGraph,
@@ -525,12 +534,14 @@ function rankByRelevance(
   const queryTokens =
     rankAnchor && !looksLikeRecordHash ? tokenize(rankAnchor) : []
 
-  // Build the BM25 index over the filtered set's indexable text. Index
-  // construction is O(total token count); for Layer 1 corpus sizes this
-  // is negligible (a few hundred records × tens of tokens each).
+  // Build the BM25 index over the filtered set's indexable text. Per
+  // D086, indexable text is per-event_type record content (from the D062
+  // sidecar) augmented by any annotation summary + topics when present.
+  // Index construction is O(total token count); for Layer 1 corpus sizes
+  // (a few hundred records × tens of tokens each) this is negligible.
   const corpus = filtered.map((lr) => ({
     id: lr.record_hash,
-    tokens: indexableTextFromAnnotation(annotationsByRecord.get(lr.record_hash)),
+    tokens: indexableTokensForRecord(lr, annotationsByRecord.get(lr.record_hash)),
   }))
   const idx = buildBM25Index(corpus)
 
@@ -539,9 +550,18 @@ function rankByRelevance(
   for (const lr of filtered) {
     const r = recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS)
     const i = importanceScore(annotationsByRecord.get(lr.record_hash))
-    const rel = queryTokens.length > 0
+    // Raw bm25Score is unbounded (idf * tf-saturation per query term;
+    // can exceed 1.0 for queries with many matching terms against short
+    // docs). Clamp to [0, 1] so the Park-component bound documented in
+    // the scoring module is actually honored. Pre-D086 the annotation-
+    // only corpus made this clamp moot (most records produced 0); D086
+    // extends BM25 over record content so high-relevance hits routinely
+    // exceed 1.0 and would otherwise dominate parkScore and invalidate
+    // the noise-floor calibration.
+    const rawRel = queryTokens.length > 0
       ? bm25Score(idx, lr.record_hash, queryTokens)
       : 0
+    const rel = Math.min(rawRel, 1)
     const s = parkScore(r, i, rel, ATRIB_RECALL_ALPHA, ATRIB_RECALL_BETA, ATRIB_RECALL_GAMMA)
     scores.set(lr.record_hash, s)
     if (s > topScore) topScore = s
@@ -784,13 +804,15 @@ export async function recall(
   }
 
   // Layer 1 v2 anti-noise threshold: when rank_by='relevance' and the
-  // top Park score falls below ATRIB_RECALL_NOISE_FLOOR (default 0.15),
-  // return empty records + a "below_threshold" quality signal instead of
-  // a low-confidence top-K. The 0.15 default is approximately the score
-  // of "no annotation, no topic match, no BM25 hit, just decent recency"
-  // (alpha * 0.5 with alpha=0.3). Below that, results are effectively
-  // noise and training the agent to scan + dismiss them costs more than
-  // returning nothing.
+  // top Park score falls below ATRIB_RECALL_NOISE_FLOOR (default 0.6 per
+  // D086), return empty records + a "below_threshold" quality signal
+  // instead of a low-confidence top-K. The 0.6 default sits between the
+  // recent+annotated-only baseline (~0.55) and the real-query minimum
+  // (~0.70) observed empirically against the 2026-05-24 operator mirror.
+  // Below that, results are effectively noise and training the agent to
+  // scan + dismiss them costs more than returning nothing. See ADR D086
+  // for the full derivation + the constant declaration above for the
+  // calibration sweep details.
   if (
     args.rank_by === 'relevance' &&
     relevanceTopScore !== undefined &&
@@ -1290,7 +1312,7 @@ server.registerTool(
         const queryTokens = tokenize(args.query)
         const corpus = loaded.map((lr) => ({
           id: lr.record_hash,
-          tokens: indexableTextFromAnnotation(annotationsByRecord.get(lr.record_hash)),
+          tokens: indexableTokensForRecord(lr, annotationsByRecord.get(lr.record_hash)),
         }))
         const idx = buildBM25Index(corpus)
         const now = Date.now()

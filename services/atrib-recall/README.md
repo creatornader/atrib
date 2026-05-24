@@ -72,7 +72,7 @@ Every call to this tool (and every sibling tool below) writes a per-call jsonl e
 
 - `mcp__atrib-recall__recall_revisions({ record_hash })` - returns the forward revision chain for the target record. Each entry's revises field points at the prior entry; the chain follows the first-by-timestamp revision at each step. Sibling fan-out (parallel revisions of the same target) requires calling `recall_my_attribution_history` with event_type=revision and inspecting `content.revises` manually.
 
-- `mcp__atrib-recall__recall_by_content({ query, k? })` - BM25 free-form retrieval over each record's annotation summary + topic_tags, then reranked by Park et al. weighted-sum scoring (recency + importance + relevance). Default k=10, max 50. Records with no annotation contribute no relevance signal (will only surface via the recency + importance fallback). Layer 2 (sqlite-vec sidecar, separate ship) extends with embedding similarity over the same indexed text.
+- `mcp__atrib-recall__recall_by_content({ query, k? })` - BM25 free-form retrieval over each record's indexable text + the annotation summary + topic_tags (when present), then reranked by Park et al. weighted-sum scoring (recency + importance + relevance). Default k=10, max 50. Per [D086](../../DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content), "indexable text" is per-event_type record content from the [D062](../../DECISIONS.md#d062-local-mirror-sidecar-two-tier-private-local--public-canonical-persistence) sidecar (observation: `what + why_noted + topics`; tool_call: `tool_name + args excerpt + result excerpt`; annotation: `summary + topics`; revision: `prior_position + new_position + reason + topics`; transaction: counterparty + memo + protocol fields; directory_anchor: `tree_root + epoch_id`). Extension URIs fall back to a generic recursive string-walk (depth ≤ 4, field cap 2KB). BM25 contribution is clamped to [0, 1] in the parkScore site so the documented Park-component bound is honored. Layer 2 (sqlite-vec sidecar, separate ship) extends with embedding similarity over the same indexed text.
 
 ### Tunable weights
 
@@ -84,7 +84,7 @@ The Park et al. ranking weights and recency time constant are environment-tunabl
 | `ATRIB_RECALL_BETA` | 0.3 | Importance component weight |
 | `ATRIB_RECALL_GAMMA` | 0.4 | Relevance (BM25) component weight |
 | `ATRIB_RECALL_TAU_DAYS` | 7 | Exponential-decay time constant for recency |
-| `ATRIB_RECALL_NOISE_FLOOR` | 0.15 | Anti-noise threshold for `rank_by=relevance` (see below) |
+| `ATRIB_RECALL_NOISE_FLOOR` | 0.6 | Anti-noise threshold for `rank_by=relevance` (see below) |
 
 The implementation does not enforce that alpha + beta + gamma sum to 1.0; the operator-facing defaults do. See [D085](../../DECISIONS.md#d085-recall-calibration-defaults-survey-grounded-rationale) for the survey-grounded rationale: `ALPHA=0.3` matches CrewAI's `recency_weight=0.3` (the only normalized-weights peer in a 2026-05-23 OSS survey); `TAU_DAYS=7` produces a ~4.85-day half-life inside the field range and close to Park et al.'s ~5.75-day empirical anchor.
 

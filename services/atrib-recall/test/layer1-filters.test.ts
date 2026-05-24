@@ -229,18 +229,28 @@ describe('rank_by=relevance', () => {
     // Both records near present, so recency component is ~equal. The
     // critical-annotation record should rank above the un-annotated one
     // because beta*importance > 0 for the former and = 0 for the latter.
+    // Uses Date.now() + 60_000 (1 min in the future) so recencyScore
+    // clamps to EXACTLY 1.0 — `Date.now()` alone leaves recency
+    // infinitesimally below 1.0 when recall runs a few ms after fixture
+    // creation, and the resulting 0.5999... parkScore falls below the
+    // ATRIB_RECALL_NOISE_FLOOR=0.6 default by an IEEE-754 margin
+    // (recencyScore clamps negative ages to 0, returning exp(0)=1.0).
+    // With recency exactly 1.0 + critical annotation (importance=1.0),
+    // critRec.parkScore = 0.3*1.0 + 0.3*1.0 = 0.6, clearing the floor
+    // (suppression check is `< floor`, not `<=`).
+    const fresh = Date.now() + 60_000
     const critRec = await makeSigned({
-      timestamp: RECENT_TS,
+      timestamp: fresh,
       content_id: `sha256:${'1'.repeat(64)}`,
     })
     const plainRec = await makeSigned({
-      timestamp: RECENT_TS,
+      timestamp: fresh,
       content_id: `sha256:${'2'.repeat(64)}`,
     })
     const critHash = computeRecordHash(critRec)
     const anno = await makeSigned({
       event_type: EVENT_TYPE_ANNOTATION_URI,
-      timestamp: RECENT_TS + 1000,
+      timestamp: fresh + 1000,
       content_id: `sha256:${'a'.repeat(64)}`,
     })
     writeFileSync(
@@ -260,18 +270,21 @@ describe('rank_by=relevance', () => {
   })
 
   it('boosts records matching the rank_anchor query', async () => {
-    const r1 = await makeSigned({ timestamp: RECENT_TS, content_id: `sha256:${'1'.repeat(64)}` })
-    const r2 = await makeSigned({ timestamp: RECENT_TS, content_id: `sha256:${'2'.repeat(64)}` })
+    // Uses Date.now() so recency≈1.0 keeps top_score above
+    // ATRIB_RECALL_NOISE_FLOOR=0.6 even before the BM25 lift fires.
+    const now = Date.now()
+    const r1 = await makeSigned({ timestamp: now, content_id: `sha256:${'1'.repeat(64)}` })
+    const r2 = await makeSigned({ timestamp: now, content_id: `sha256:${'2'.repeat(64)}` })
     const h1 = computeRecordHash(r1)
     const h2 = computeRecordHash(r2)
     const a1 = await makeSigned({
       event_type: EVENT_TYPE_ANNOTATION_URI,
-      timestamp: RECENT_TS + 1,
+      timestamp: now + 1,
       content_id: `sha256:${'a'.repeat(64)}`,
     })
     const a2 = await makeSigned({
       event_type: EVENT_TYPE_ANNOTATION_URI,
-      timestamp: RECENT_TS + 2,
+      timestamp: now + 2,
       content_id: `sha256:${'b'.repeat(64)}`,
     })
     writeFileSync(
@@ -382,14 +395,33 @@ describe('rank_by=relevance', () => {
     // When rank_anchor parses as sha256:<64-hex>, the relevance component
     // collapses to 0, the recall path treats it as a causal_distance
     // anchor (still stub-accepted) rather than a free-form query.
-    // Uses Date.now() for the timestamp so recency keeps the Park score
-    // above the Layer 1 v2 anti-noise threshold (a stale fixture would
-    // be suppressed by ATRIB_RECALL_NOISE_FLOOR; this test is about the
-    // rank_anchor parsing, not threshold behavior).
-    const r = await makeSigned({ timestamp: Date.now() })
-    writeFileSync(file, JSON.stringify(r))
+    // Uses a future timestamp (recency clamps to exactly 1.0) + a
+    // critical annotation so the record clears the
+    // ATRIB_RECALL_NOISE_FLOOR=0.6 default (D086). Without the annotation,
+    // recency alone (alpha*1.0 = 0.3) falls below the floor; the test is
+    // about rank_anchor PARSING, not threshold behavior, so we lift the
+    // score above the floor to isolate the parser path.
+    const fresh = Date.now() + 60_000
+    const rec = await makeSigned({ timestamp: fresh })
+    const recHash = computeRecordHash(rec)
+    const anno = await makeSigned({
+      event_type: EVENT_TYPE_ANNOTATION_URI,
+      timestamp: fresh + 1,
+      content_id: `sha256:${'a'.repeat(64)}`,
+    })
+    writeFileSync(
+      file,
+      [
+        JSON.stringify(rec),
+        envelope(anno, { annotates: recHash, importance: 'critical' }),
+      ].join('\n'),
+    )
     const result = await recall(
-      { rank_by: 'relevance', rank_anchor: `sha256:${'0'.repeat(64)}` },
+      {
+        rank_by: 'relevance',
+        rank_anchor: `sha256:${'0'.repeat(64)}`,
+        event_type: 'tool_call',
+      },
       file,
     )
     expect(result.returned).toBe(1)
@@ -399,8 +431,8 @@ describe('rank_by=relevance', () => {
   it('anti-noise threshold suppresses results when top Park score is below ATRIB_RECALL_NOISE_FLOOR', async () => {
     // Stale timestamp (no recency), no annotation (no importance), no
     // BM25 query (no relevance). Park score collapses to ~0 < default
-    // floor of 0.15. Recall returns empty + quality='below_threshold'
-    // instead of low-confidence top-K.
+    // floor of 0.6 (D086 recalibration). Recall returns empty +
+    // quality='below_threshold' instead of low-confidence top-K.
     const r = await makeSigned({ timestamp: RECENT_TS })
     writeFileSync(file, JSON.stringify(r))
     const result = await recall(
@@ -410,15 +442,39 @@ describe('rank_by=relevance', () => {
     expect(result.returned).toBe(0)
     expect(result.records).toEqual([])
     expect((result as { quality?: string }).quality).toBe('below_threshold')
-    expect((result as { top_score?: number }).top_score).toBeLessThan(0.15)
+    expect((result as { top_score?: number }).top_score).toBeLessThan(0.6)
   })
 
   it('anti-noise threshold does NOT suppress when results clear the floor', async () => {
-    // Fresh timestamp gives recency ~1.0; alpha*1.0 = 0.3 > 0.15 floor.
-    const r = await makeSigned({ timestamp: Date.now() })
-    writeFileSync(file, JSON.stringify(r))
+    // Future timestamp clamps recency to exactly 1.0 (recencyScore
+    // clamps negative ages to 0, returning exp(0)=1.0); critical
+    // annotation gives importance=1.0. parkScore = 0.3*1.0 + 0.3*1.0 =
+    // 0.6, hitting the ATRIB_RECALL_NOISE_FLOOR=0.6 default. The
+    // suppression check uses strict-less-than (`top_score < floor`), so
+    // 0.6 passes through. Pre-D086 a fresh-recency-only record (0.3)
+    // also passed (old floor 0.15); under D086 recency alone is below
+    // the new floor — annotation is required to clear it.
+    const fresh = Date.now() + 60_000
+    const r = await makeSigned({ timestamp: fresh })
+    const rHash = computeRecordHash(r)
+    const anno = await makeSigned({
+      event_type: EVENT_TYPE_ANNOTATION_URI,
+      timestamp: fresh + 1,
+      content_id: `sha256:${'a'.repeat(64)}`,
+    })
+    writeFileSync(
+      file,
+      [
+        JSON.stringify(r),
+        envelope(anno, { annotates: rHash, importance: 'critical' }),
+      ].join('\n'),
+    )
     const result = await recall(
-      { rank_by: 'relevance', rank_anchor: 'nonexistent-token-xyz' },
+      {
+        rank_by: 'relevance',
+        rank_anchor: 'nonexistent-token-xyz',
+        event_type: 'tool_call',
+      },
       file,
     )
     expect(result.returned).toBe(1)
