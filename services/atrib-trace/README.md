@@ -4,17 +4,24 @@ MCP server exposing the `trace` tool, walks a record's `informed_by` chain backw
 
 Closes the consumer-side cognitive-loop primitive: recall returns raw records; trace returns the causal chain, so an agent asking "why did I do X?" can see "X was informed by Y, which was informed by Z" without manually walking `informed_by` hash-by-hash.
 
-## Tool
+## Tools
+
+Two bidirectional walk tools share the same input + response shape; only the walk direction differs:
 
 ```
-mcp__atrib-trace__trace({
+mcp__atrib-trace__trace({          // BACKWARD — what informed this?
   record_hash: "sha256:<64-hex>",  // start
   depth?: number,                   // hop cap (default 3, max 10)
   max_nodes?: number,               // safety cap (default 200, max 500)
   compact?: boolean                 // omit signature/content_id bytes (default true)
 })
+
+mcp__atrib-trace__trace_forward({  // FORWARD — what was informed by this?
+  record_hash, depth?, max_nodes?, compact?    // same schema as `trace`
+})
+
 → {
-  start_hash, direction: "backward",
+  start_hash, direction: "backward" | "forward",
   depth_requested, depth_reached,
   visited: [
     {
@@ -29,6 +36,10 @@ mcp__atrib-trace__trace({
   warnings
 }
 ```
+
+- `trace` walks `informed_by` BACKWARD (toward causal ancestors). Answers "what informed this record?"
+- `trace_forward` walks `informed_by` FORWARD (records that cited this one). Answers "I made decision X, what did I do because of it?" The dual of `trace`. Same input schema, same response shape.
+- For forward walks, `next_informed_by` carries the CHILDREN visited at the next hop (records citing this one) rather than this record's own informed_by — field name kept for shape-compat with `trace`.
 
 ## Reads
 
@@ -45,8 +56,8 @@ When the envelope carries an optional `_local` sidecar (per the local-mirror sid
 - **Cap-safe**: hits `max_nodes` → returns partial result with `truncated_by_cap: true`.
 - **Depth-safe**: hits `depth` → returns partial result with `truncated_by_depth: true`.
 - **Dangling-aware**: `informed_by` entries pointing at records not in the local mirror surface in `dangling` and do NOT advance the walk.
-- **Local-only (v1)**: reads only the local mirror. v2 will fall back to `log.atrib.dev/v1/lookup/<hash>` for hashes not in the local mirror.
-- **Backward-only (v1)**: walks `informed_by` upstream. Forward-walk (records that reference THIS one) is a v2 concern via the graph service.
+- **Local-only**: reads only the local mirror. A future ship will fall back to `log.atrib.dev/v1/lookup/<hash>` for hashes not in the local mirror.
+- **Bidirectional**: `trace` walks `informed_by` backward; `trace_forward` walks forward via a reverse index built per call from the same mirror (O(N) build, O(out-degree) per hop).
 - **Instrumented (per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) Surface 6)**: every call writes a per-invocation jsonl entry to `~/.atrib/state/read-primitives/calls.jsonl` for the unified loop-closure analyzer. Silent-failure per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract); instrumentation never blocks the trace result. `ATRIB_READ_PRIMITIVES_LOG` overrides the default path for tests.
 
 ## Wire-up

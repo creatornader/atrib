@@ -153,17 +153,22 @@ describe('MCP protocol surface', () => {
       const res = await client.send('tools/list', {}, 1)
       expect(res.error).toBeUndefined()
       const tools = (res.result as { tools: { name: string }[] }).tools
-      // Layer 1 registers five tools: the existing recall_my_attribution_history
-      // plus four siblings, recall_annotations, recall_revisions, recall_walk,
-      // recall_by_content, all functional and exposing the cognitive surface
-      // beyond base filter-and-page.
-      expect(tools).toHaveLength(5)
+      // Layer 1 registers eight tools: the existing recall_my_attribution_history
+      // plus siblings recall_annotations / recall_revisions / recall_walk /
+      // recall_by_content (the original four), plus the post-D086 audit-pass
+      // additions recall_session_chain / recall_orphans / recall_by_signer
+      // — all functional and exposing the cognitive surface beyond base
+      // filter-and-page.
+      expect(tools).toHaveLength(8)
       const names = tools.map((t) => t.name).sort()
       expect(names).toEqual([
         'recall_annotations',
         'recall_by_content',
+        'recall_by_signer',
         'recall_my_attribution_history',
+        'recall_orphans',
         'recall_revisions',
+        'recall_session_chain',
         'recall_walk',
       ])
     } finally {
@@ -532,12 +537,345 @@ describe('MCP protocol surface', () => {
       )
       expect(res.error).toBeUndefined()
       const result = res.result as { content: { type: string; text: string }[] }
+      // Post-D086 the chain entries carry per-revision content (record_hash,
+      // timestamp, and the D086-normative new_position/reason/importance
+      // fields when present) rather than bare hash strings; this test's
+      // fixtures only set `revises` in content (no new_position/reason/
+      // importance), so only record_hash + timestamp are populated.
       const payload = JSON.parse(result.content[0]!.text) as {
         record_hash: string
-        revision_chain: string[]
+        revision_chain: { record_hash: string; timestamp?: number }[]
       }
       expect(payload.record_hash).toBe(origHash)
-      expect(payload.revision_chain).toEqual([r1Hash, r2Hash])
+      expect(payload.revision_chain.map((e) => e.record_hash)).toEqual([r1Hash, r2Hash])
+      expect(payload.revision_chain[0]?.timestamp).toBe(1700000001000)
+      expect(payload.revision_chain[1]?.timestamp).toBe(1700000002000)
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_revisions surfaces per-revision content (new_position, reason, importance) when present', async () => {
+    // Same chain shape as above but with D086-normative revision content
+    // fields populated; each chain entry should carry them inline so the
+    // agent reads the chain without follow-up recall calls per revision.
+    const orig = await makeSigned(1700000000000)
+    const { computeRecordHash } = await import('../src/aggregations.js')
+    const origHash = computeRecordHash(orig)
+    const r1 = await signRecord({
+      spec_version: 'atrib/1.0',
+      event_type: 'https://atrib.dev/v1/types/revision',
+      context_id: CTX,
+      creator_key: base64urlEncode(await getPublicKey(KEY)),
+      chain_root: genesisChainRoot(CTX),
+      content_id: `sha256:${'1'.repeat(64)}`,
+      timestamp: 1700000001000,
+      signature: '',
+    } as AtribRecord, KEY)
+    const r1Hash = computeRecordHash(r1)
+    const r2 = await signRecord({
+      spec_version: 'atrib/1.0',
+      event_type: 'https://atrib.dev/v1/types/revision',
+      context_id: CTX,
+      creator_key: base64urlEncode(await getPublicKey(KEY)),
+      chain_root: genesisChainRoot(CTX),
+      content_id: `sha256:${'2'.repeat(64)}`,
+      timestamp: 1700000002000,
+      signature: '',
+    } as AtribRecord, KEY)
+    const r2Hash = computeRecordHash(r2)
+    writeFileSync(
+      recordFile,
+      [
+        JSON.stringify(orig),
+        JSON.stringify({
+          record: r1,
+          _local: {
+            content: {
+              revises: origHash,
+              new_position: 'accept localhost in non-strict mode',
+              reason: 'developer feedback during testing',
+              importance: 'high',
+            },
+          },
+        }),
+        JSON.stringify({
+          record: r2,
+          _local: {
+            content: {
+              revises: r1Hash,
+              new_position: 'also accept invalid TLDs in non-strict mode',
+              reason: 'aligning with WHATWG URL spec',
+              importance: 'medium',
+            },
+          },
+        }),
+      ].join('\n'),
+    )
+    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_revisions',
+          arguments: { record_hash: origHash },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        record_hash: string
+        revision_chain: {
+          record_hash: string
+          timestamp?: number
+          new_position?: string
+          reason?: string
+          importance?: string
+        }[]
+      }
+      expect(payload.revision_chain).toHaveLength(2)
+      expect(payload.revision_chain[0]).toMatchObject({
+        record_hash: r1Hash,
+        timestamp: 1700000001000,
+        new_position: 'accept localhost in non-strict mode',
+        reason: 'developer feedback during testing',
+        importance: 'high',
+      })
+      expect(payload.revision_chain[1]).toMatchObject({
+        record_hash: r2Hash,
+        timestamp: 1700000002000,
+        new_position: 'also accept invalid TLDs in non-strict mode',
+        reason: 'aligning with WHATWG URL spec',
+        importance: 'medium',
+      })
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_revisions exposes sibling_hashes when multiple revisions target the same record', async () => {
+    // Fork at the original: r1a (chosen by first-by-timestamp) AND r1b
+    // both revise orig. The chain should follow r1a; r1b should appear
+    // as the entry's `sibling_hashes`.
+    const orig = await makeSigned(1700000000000)
+    const { computeRecordHash } = await import('../src/aggregations.js')
+    const origHash = computeRecordHash(orig)
+    const r1a = await signRecord({
+      spec_version: 'atrib/1.0',
+      event_type: 'https://atrib.dev/v1/types/revision',
+      context_id: CTX,
+      creator_key: base64urlEncode(await getPublicKey(KEY)),
+      chain_root: genesisChainRoot(CTX),
+      content_id: `sha256:${'a'.repeat(64)}`,
+      timestamp: 1700000001000,
+      signature: '',
+    } as AtribRecord, KEY)
+    const r1aHash = computeRecordHash(r1a)
+    const r1b = await signRecord({
+      spec_version: 'atrib/1.0',
+      event_type: 'https://atrib.dev/v1/types/revision',
+      context_id: CTX,
+      creator_key: base64urlEncode(await getPublicKey(KEY)),
+      chain_root: genesisChainRoot(CTX),
+      content_id: `sha256:${'b'.repeat(64)}`,
+      timestamp: 1700000002000,
+      signature: '',
+    } as AtribRecord, KEY)
+    const r1bHash = computeRecordHash(r1b)
+    writeFileSync(
+      recordFile,
+      [
+        JSON.stringify(orig),
+        JSON.stringify({ record: r1a, _local: { content: { revises: origHash, new_position: 'branch A' } } }),
+        JSON.stringify({ record: r1b, _local: { content: { revises: origHash, new_position: 'branch B' } } }),
+      ].join('\n'),
+    )
+    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        { name: 'recall_revisions', arguments: { record_hash: origHash } },
+        2,
+      )
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        revision_chain: { record_hash: string; new_position?: string; sibling_hashes?: string[] }[]
+      }
+      expect(payload.revision_chain).toHaveLength(1)
+      expect(payload.revision_chain[0]?.record_hash).toBe(r1aHash)
+      expect(payload.revision_chain[0]?.new_position).toBe('branch A')
+      expect(payload.revision_chain[0]?.sibling_hashes).toEqual([r1bHash])
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_session_chain returns context_id records in chronological order', async () => {
+    const ctx1 = 'a'.repeat(32)
+    const ctx2 = 'b'.repeat(32)
+    const pub = await getPublicKey(KEY)
+    const ck = base64urlEncode(pub)
+    async function rec(ctx: string, ts: number, cid: string) {
+      return signRecord({
+        spec_version: 'atrib/1.0' as const,
+        event_type: EVENT_TYPE_TOOL_CALL_URI,
+        context_id: ctx,
+        creator_key: ck,
+        chain_root: genesisChainRoot(ctx),
+        content_id: cid,
+        timestamp: ts,
+        signature: '',
+      } as AtribRecord, KEY)
+    }
+    const records = [
+      await rec(ctx1, 3000, `sha256:${'c'.repeat(64)}`),
+      await rec(ctx2, 5000, `sha256:${'d'.repeat(64)}`),
+      await rec(ctx1, 1000, `sha256:${'a'.repeat(64)}`),
+      await rec(ctx1, 2000, `sha256:${'b'.repeat(64)}`),
+    ]
+    writeFileSync(recordFile, records.map((r) => JSON.stringify(r)).join('\n'))
+    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        { name: 'recall_session_chain', arguments: { context_id: ctx1 } },
+        2,
+      )
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        context_id: string
+        total: number
+        returned: number
+        records: { timestamp: number }[]
+      }
+      expect(payload.context_id).toBe(ctx1)
+      expect(payload.total).toBe(3)
+      expect(payload.records.map((r) => r.timestamp)).toEqual([1000, 2000, 3000])
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_orphans returns records that nothing else cites via informed_by', async () => {
+    // r1 is cited by r2 via informed_by; r3 is uncited (orphan).
+    const pub = await getPublicKey(KEY)
+    const ck = base64urlEncode(pub)
+    async function rec(cid: string, ts: number, informed_by?: string[]) {
+      return signRecord({
+        spec_version: 'atrib/1.0' as const,
+        event_type: EVENT_TYPE_TOOL_CALL_URI,
+        context_id: CTX,
+        creator_key: ck,
+        chain_root: genesisChainRoot(CTX),
+        content_id: cid,
+        timestamp: ts,
+        signature: '',
+        ...(informed_by && informed_by.length > 0 ? { informed_by } : {}),
+      } as AtribRecord, KEY)
+    }
+    const r1 = await rec(`sha256:${'1'.repeat(64)}`, 100)
+    const r1Hash = (await import('../src/aggregations.js')).computeRecordHash(r1)
+    const r2 = await rec(`sha256:${'2'.repeat(64)}`, 200, [r1Hash])
+    const r3 = await rec(`sha256:${'3'.repeat(64)}`, 300)
+    writeFileSync(
+      recordFile,
+      [JSON.stringify(r1), JSON.stringify(r2), JSON.stringify(r3)].join('\n'),
+    )
+    const r3Hash = (await import('../src/aggregations.js')).computeRecordHash(r3)
+    const r2Hash = (await import('../src/aggregations.js')).computeRecordHash(r2)
+
+    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        { name: 'recall_orphans', arguments: {} },
+        2,
+      )
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        total: number
+        records: { record_hash: string }[]
+      }
+      // r1 is cited (NOT orphan). r2 is uncited (orphan). r3 is uncited (orphan).
+      // Newest-first ordering: r3, r2.
+      expect(payload.total).toBe(2)
+      expect(payload.records.map((r) => r.record_hash)).toEqual([r3Hash, r2Hash])
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_by_signer aggregates the mirror by creator_key', async () => {
+    const KEY2 = new Uint8Array(32).fill(0x77)
+    const pub2 = await getPublicKey(KEY2)
+    const key2 = base64urlEncode(pub2)
+    const pub1 = await getPublicKey(KEY)
+    const key1 = base64urlEncode(pub1)
+    async function rec1(cid: string, ts: number) {
+      return signRecord({
+        spec_version: 'atrib/1.0' as const,
+        event_type: EVENT_TYPE_TOOL_CALL_URI,
+        context_id: CTX,
+        creator_key: key1,
+        chain_root: genesisChainRoot(CTX),
+        content_id: cid,
+        timestamp: ts,
+        signature: '',
+      } as AtribRecord, KEY)
+    }
+    // Two records signed by KEY (different timestamps), one signed by KEY2.
+    const r1 = await rec1(`sha256:${'a'.repeat(64)}`, 1000)
+    const r2 = await rec1(`sha256:${'b'.repeat(64)}`, 3000)
+    const ctx = 'b'.repeat(32)
+    const unsigned3 = {
+      spec_version: 'atrib/1.0' as const,
+      event_type: 'https://atrib.dev/v1/types/tool_call',
+      context_id: ctx,
+      creator_key: key2,
+      chain_root: genesisChainRoot(ctx),
+      content_id: `sha256:${'c'.repeat(64)}`,
+      timestamp: 2000,
+      signature: '',
+    }
+    const r3 = await signRecord(unsigned3 as AtribRecord, KEY2)
+    writeFileSync(
+      recordFile,
+      [JSON.stringify(r1), JSON.stringify(r2), JSON.stringify(r3)].join('\n'),
+    )
+    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        { name: 'recall_by_signer', arguments: {} },
+        2,
+      )
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        total_signers: number
+        total_records: number
+        signers: { creator_key: string; count: number; latest_timestamp: number; earliest_timestamp: number }[]
+      }
+      expect(payload.total_records).toBe(3)
+      expect(payload.total_signers).toBe(2)
+      // Sorted by count desc; KEY (2 records) before KEY2 (1).
+      expect(payload.signers[0]).toMatchObject({
+        creator_key: key1,
+        count: 2,
+        earliest_timestamp: 1000,
+        latest_timestamp: 3000,
+      })
+      expect(payload.signers[1]).toMatchObject({
+        creator_key: key2,
+        count: 1,
+        earliest_timestamp: 2000,
+        latest_timestamp: 2000,
+      })
     } finally {
       client.close()
     }
