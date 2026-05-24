@@ -91,9 +91,17 @@ export const ATRIB_RECALL_TAU_DAYS = parseFloat(process.env.ATRIB_RECALL_TAU_DAY
 // Layer 1 v2 anti-noise threshold for rank_by='relevance'. When the top
 // Park score is below this floor, recall returns empty records + a
 // "below_threshold" quality signal rather than a low-confidence top-K.
-// 0.15 default is approximately alpha*0.5 (alpha=0.3 default) - the
-// score of "decent recency, no annotation, no topic, no BM25 hit." Below
-// that, results are effectively noise. Set to 0 to disable.
+//
+// Default 0.15 derivation: each Park component (recency, importance,
+// relevance) is normalized to [0, 1]; ATRIB_RECALL_ALPHA defaults to
+// 0.3. A record with "decent recency (~0.5), no annotation (importance
+// 0), no topic match, no BM25 hit (relevance 0)" scores alpha * 0.5 =
+// 0.15 — right at the floor. Anything BELOW that is effectively pure
+// noise (stale records with no signal). The threshold trains the agent
+// "recall returns when it has something; trust the absence."
+//
+// If ALPHA is changed, this default may need to be revisited. Set the
+// env var to 0 to disable the threshold entirely.
 export const ATRIB_RECALL_NOISE_FLOOR = parseFloat(process.env.ATRIB_RECALL_NOISE_FLOOR ?? '0.15')
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -1075,6 +1083,28 @@ server.registerTool(
           : undefined
         const depth = typeof args.depth === 'number' ? args.depth : 3
         const walk = walkFrom(graph, args.from_record_hash, edgeTypes, depth)
+        // Layer 1 v2 legibility: join walked hashes back to their loaded
+        // records so each step in the walk carries a readable label
+        // instead of just a hash + distance. Builds the index once for
+        // O(N) lookup across the walk; for typical walks (depth=3, k<50)
+        // this is fast.
+        const byHash = new Map(loaded.map((lr) => [lr.record_hash, lr]))
+        const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
+        const now = Date.now()
+        const enriched = walk.map((step) => {
+          const lr = byHash.get(step.record_hash)
+          if (!lr) return step
+          const ann = annotationsByRecord.get(step.record_hash)
+          return {
+            record_hash: step.record_hash,
+            distance: step.distance,
+            event_type: lr.record.event_type,
+            timestamp: lr.record.timestamp,
+            display_summary: synthesizeDisplaySummary(lr.record, lr.content, ann),
+            display_producer: resolveDisplayProducer(lr.record, lr.producer),
+            age: formatAge(lr.record.timestamp, now),
+          }
+        })
         return {
           content: [
             {
@@ -1089,8 +1119,8 @@ server.registerTool(
                     'REVISES',
                   ],
                   depth,
-                  count: walk.length,
-                  walk,
+                  count: enriched.length,
+                  walk: enriched,
                 },
                 null,
                 2,
@@ -1255,16 +1285,23 @@ server.registerTool(
                   query: args.query,
                   k,
                   count: top.length,
-                  results: top.map(({ lr, score, recency, importance, relevance }) => ({
-                    record_hash: lr.record_hash,
-                    event_type: lr.record.event_type,
-                    context_id: lr.record.context_id,
-                    timestamp: lr.record.timestamp,
-                    tool_name: (lr.record as AtribRecord & { tool_name?: string }).tool_name,
-                    annotations: annotationsByRecord.get(lr.record_hash),
-                    score,
-                    components: { recency, importance, relevance },
-                  })),
+                  results: top.map(({ lr, score, recency, importance, relevance }) => {
+                    const ann = annotationsByRecord.get(lr.record_hash)
+                    return {
+                      record_hash: lr.record_hash,
+                      event_type: lr.record.event_type,
+                      context_id: lr.record.context_id,
+                      timestamp: lr.record.timestamp,
+                      tool_name: (lr.record as AtribRecord & { tool_name?: string }).tool_name,
+                      annotations: ann,
+                      // Layer 1 v2 legibility fields (parity with compactify).
+                      display_summary: synthesizeDisplaySummary(lr.record, lr.content, ann),
+                      display_producer: resolveDisplayProducer(lr.record, lr.producer),
+                      age: formatAge(lr.record.timestamp, now),
+                      score,
+                      components: { recency, importance, relevance },
+                    }
+                  }),
                 },
                 null,
                 2,
