@@ -1092,8 +1092,8 @@ server.registerTool(
         const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
         const now = Date.now()
         const enriched = walk.map((step) => {
-          const lr = byHash.get(step.record_hash)
-          if (!lr) return step
+          // walk derives from graph (built from `loaded`); byHash always has a hit.
+          const lr = byHash.get(step.record_hash)!
           const ann = annotationsByRecord.get(step.record_hash)
           return {
             record_hash: step.record_hash,
