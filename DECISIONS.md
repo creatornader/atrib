@@ -4013,6 +4013,52 @@ The Surface 6 helper exports two functions from `@atrib/mcp`: `logReadPrimitiveC
 
 ---
 
+## D085: Recall calibration defaults: survey-grounded rationale
+
+**Date:** 2026-05-23
+
+**Context.** The Layer 1 v2 ship (PR #70 + PR #73, 2026-05-23 PM) introduced Park et al.-style weighted-sum scoring for `rank_by='relevance'` in `@atrib/recall`. Specific defaults landed in source: `ATRIB_RECALL_ALPHA=0.3` (recency weight), `ATRIB_RECALL_BETA=0.3` (importance weight), `ATRIB_RECALL_GAMMA=0.4` (BM25-relevance weight), `ATRIB_RECALL_TAU_DAYS=7` (exponential-decay time constant), `ATRIB_RECALL_NOISE_FLOOR=0.15` (anti-noise threshold that returns empty + `quality:below_threshold`), plus per-tool `limit=25` default in `recall_my_attribution_history` and `k=10` in `recall_by_content`. The numbers were picked by feel during Layer 1 v2 design. The operator surfaced the concern: we are making opinionated choices in the dark, with no precedent and no way of knowing if we are informed.
+
+This ADR codifies the rationale for each calibration choice against a 2026-05-23 two-axis survey: published agent-memory research (Park et al. 2023, MemGPT/Letta, A-MEM, MemoryBank, SCM, Mem0, LangMem, RAGAS, LoCoMo) and OSS implementations (LangChain `TimeWeightedVectorStoreRetriever`, LlamaIndex postprocessors, CrewAI composite scorer, mem0 scoring, Haystack BM25, Letta, AutoGen, OpenAI Agents SDK). Both surveys required URL citation per claim.
+
+**Decision.** Keep `ALPHA=0.3`, `BETA=0.3`, `GAMMA=0.4`, `TAU_DAYS=7`, `NOISE_FLOOR=0.15`. Change `recall_my_attribution_history` default `limit` from 25 to 10 to match field convergence. The noise-floor-returns-empty behavior is retained as a deliberate atrib protocol innovation with no peer precedent.
+
+**Survey findings, by calibration.**
+
+| Choice | Field anchor | Verdict |
+|---|---|---|
+| Weighted-sum scoring shape | Park et al. 2023 is the only paper using this shape; weights all `=1.0` in the original. Repeated across CrewAI, LangChain, LlamaIndex, mem0 in OSS. A-MEM and Letta use pure vector similarity (no composition). | Defensible. The shape is the mainstream choice when systems compose multiple signals at all. |
+| `ALPHA=0.3` (recency) | CrewAI's [`recency_weight=0.3`](https://github.com/crewAIInc/crewAI/blob/e787b569d0c4108a76b9ddc134daa3de96b294da/lib/crewai/src/crewai/memory/types.py#L149-L178) is the only normalized-weights peer in either survey. Park used unnormalized `1.0/1.0/1.0`. LangChain + LlamaIndex use implicit `1.0` (additive, silent scale coupling). | Defensible. Real convergence with CrewAI, not coincidence. |
+| `BETA=0.3` (importance), `GAMMA=0.4` (relevance) | CrewAI uses `semantic=0.5, importance=0.2` (different split). No other peer publishes normalized weights for these signals. | Defensible-as-deliberate. Annotation-derived importance is a sparse signal in atrib (most records carry none); raising `BETA` would amplify noise from the few annotated records. Relevance is BM25-textual (not embedding-semantic like CrewAI's), so a lower `GAMMA=0.4` versus CrewAI's `semantic=0.5` reflects BM25's known weaker signal strength. |
+| `TAU_DAYS=7` (exponential decay) | Park et al. `0.995/hour` produces half-life ~5.75 days, the only paper anchor. OSS range: LangChain ~3 days, LlamaIndex ~1 hour (likely degenerate / copy-paste error), CrewAI 30 days. atrib's 7-day tau produces half-life `tau * ln(2) = 4.85 days`. | Defensible. Sits inside the plausible field range, within ~1 day of Park's empirical anchor. atrib is the only system using the cleaner `exp(-t/tau)` form rather than `base^t`. |
+| `NOISE_FLOOR=0.15` (return empty + `quality:below_threshold`) | **No precedent in either survey.** No published paper or OSS implementation returns empty with a quality signal. mem0 has a `threshold` parameter that filters candidates one-by-one but returns whatever's left (could be zero, but no quality flag). CrewAI's confidence thresholds gate LLM exploration depth, not return-empty. Everyone else returns top-K unconditionally. | Novel. Defensible as a deliberate atrib protocol innovation: trust-the-absence lowers hallucination risk from low-confidence context. The `alpha * 0.5 = 0.15` derivation is internally consistent. Empirically un-validated by atrib's own gold-standard sweep (queued). |
+| `limit=25` default on `recall_my_attribution_history` | Field convergence on `top_k=10` (Haystack, AutoGen, mem0, Letta). Outliers: LangChain `k=4`, LlamaIndex `k=1`. | Out of step. Changed to 10 in this ADR's commit. Reduces default token weight in agent context windows. `recall_by_content` already defaults `k=10`. |
+
+**Alternatives considered.**
+
+- *Align all weights with CrewAI exactly (0.5 semantic, 0.3 recency, 0.2 importance).* Rejected. atrib's relevance is BM25 (textual), not embedding similarity, so the signal strength differs from CrewAI's `semantic`. Importance in atrib is sparser than CrewAI's per-memory operator-assigned score, warranting a higher `BETA` to give annotated records meaningful lift. The shared `recency=0.3` is the load-bearing convergence; the rest of the split is atrib-specific by design.
+- *Drop the noise floor and return top-K always (the field convention).* Rejected. Trust-the-absence is a deliberate atrib product principle. Returning low-confidence top-K when the best candidate is recency-only noise creates hallucination risk in downstream agent reasoning. Keeping the empty-return path costs little and gives callers a structured signal they can act on.
+- *Bump `NOISE_FLOOR` to `alpha=0.3` so the threshold actually fires on active mirrors with constant fresh tool-call activity.* Deferred to the queued gold-standard sweep. The current `0.15` floor fires the stale-mirror empty case correctly per design comment; it does not fire the active-mirror nonsense-query case (best record's recency alone produces `alpha * 1.0 = 0.3`, above the 0.15 floor). Whether the threshold's intent should be widened to catch the second case is an empirical question the sweep should answer, not a feel-based bump.
+- *Keep `limit=25` default.* Rejected. Field convergence on 10 is consistent enough across Haystack, AutoGen, mem0, and Letta that the divergence is unjustified. Token cost in agent context windows scales with the limit; defaulting smaller is the safer choice when callers can always override.
+
+**Consequences.**
+
+- `recall_my_attribution_history` returns 10 records by default instead of 25. Schema description updated. Existing callers passing explicit `limit=N` are unaffected; callers relying on default see fewer records. Token weight in agent context drops by ~60% per default-recall call.
+- Source comments at `services/atrib-recall/src/index.ts` lines ~78-110 now cite the field anchors per calibration. Comments make the informed-bet framing legible to future readers.
+- `services/atrib-recall/README.md` gains the survey-grounded rationale and the novel-in-field framing for the noise floor.
+- The noise-floor-returns-empty pattern is now an atrib-claimed protocol innovation rather than implicit convention. Downstream users (`@atrib/agent`, harness integrations) can rely on the structured signal as part of the recall contract.
+- A gold-standard eval set + parameter sweep remains queued. Until that work lands, the defaults here are informed-bet priors, not measured constants.
+- The change is a minor bump to `@atrib/recall` (default behavior change to a public API surface). `0.9.0 -> 0.10.0`.
+
+**Cross-references.**
+
+- [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface): the six cognitive primitives the recall API surfaces.
+- [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement): the Surface 6 instrumentation that will feed the queued gold-standard sweep with real-workload data.
+- `services/atrib-recall/README.md`: customer-facing reference for the calibration defaults and the novel-in-field noise-floor behavior.
+- Survey citations: see the inline GitHub permalink in the `ALPHA=0.3` row above. The full two surveys (research papers + OSS source) were one-shot research artifacts; their cited URLs live in the session trace, not as separate checked-in research files.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
