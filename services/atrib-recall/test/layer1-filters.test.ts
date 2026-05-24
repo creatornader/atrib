@@ -454,6 +454,38 @@ describe('Layer 1 v2 legibility fields in compact response', () => {
     expect(typeof rec.age).toBe('string')
     expect(rec.age).toBe('just now')
   })
+
+  it('end-to-end: _local.producer in D062 envelope flows through to display_producer', async () => {
+    // Closes the audit-pass-1 e2e gap: producer-sidecar-to-display.
+    // Each step is unit-tested in isolation (extractLoaded extracts the
+    // producer; resolveDisplayProducer formats it; compactify reads
+    // bundle.producer). This test exercises the full chain with a real
+    // D062 envelope written to disk.
+    const r = await makeSigned({ timestamp: Date.now() })
+    const envelopeLine = JSON.stringify({
+      record: r,
+      _local: {
+        producer: 'audit-pass-1-test-producer',
+      },
+    })
+    writeFileSync(file, envelopeLine)
+    const result = await recall({}, file)
+    expect(result.returned).toBe(1)
+    const rec = result.records[0] as { display_producer?: string }
+    expect(rec.display_producer).toBe('audit-pass-1-test-producer')
+  })
+
+  it('end-to-end: missing _local.producer falls back to key:<8hex>', async () => {
+    // Sister test of the above: confirm the fallback chain works when
+    // the sidecar is absent OR doesn't carry a producer field.
+    const r = await makeSigned({ timestamp: Date.now() })
+    // Bare record (no envelope), so no _local at all.
+    writeFileSync(file, JSON.stringify(r))
+    const result = await recall({}, file)
+    expect(result.returned).toBe(1)
+    const rec = result.records[0] as { display_producer?: string }
+    expect(rec.display_producer).toMatch(/^key:[0-9a-zA-Z_-]{8}$/)
+  })
 })
 
 describe('toc=true response shape', () => {

@@ -376,6 +376,13 @@ describe('MCP protocol surface', () => {
           record_hash: string
           score: number
           components: { recency: number; importance: number; relevance: number }
+          // Layer 1 v2 legibility fields extended to recall_by_content
+          // in the audit-pass-1 follow-up (0.9.0). The shape should match
+          // recall_my_attribution_history compact responses so agents see
+          // consistent surfaces across the recall tool family.
+          display_summary?: string
+          display_producer?: string
+          age?: string
         }>
       }
       expect(payload.query).toBe('authentication bypass')
@@ -385,6 +392,14 @@ describe('MCP protocol surface', () => {
       const top = payload.results[0]
       expect(top?.record_hash).toBe(targetHash)
       expect(top?.components.relevance).toBeGreaterThan(0)
+      // Audit-pass-1: every result carries the legibility fields. Top hit
+      // is the annotated target; display_summary should surface the
+      // annotation summary verbatim (annotation summary wins the synthesis
+      // fallback chain when present).
+      expect(typeof top?.display_summary).toBe('string')
+      expect(top?.display_summary).toBe('authentication bypass found')
+      expect(typeof top?.display_producer).toBe('string')
+      expect(typeof top?.age).toBe('string')
     } finally {
       client.close()
     }
