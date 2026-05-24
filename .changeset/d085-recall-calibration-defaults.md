@@ -1,5 +1,0 @@
----
-'@atrib/recall': minor
----
-
-[D085](./DECISIONS.md#d085-recall-calibration-defaults-survey-grounded-rationale) calibration defaults: change `recall_my_attribution_history` default `limit` from 25 to 10 to match field convergence (Haystack, AutoGen, mem0, Letta all default `top_k=10`). Reduces default token weight in agent context windows by ~60% per recall call. Existing callers passing explicit `limit=N` are unaffected. Schema description updated. Source comments at `services/atrib-recall/src/index.ts` lines ~78-110 now cite survey anchors per calibration (`ALPHA=0.3` matches CrewAI's `recency_weight=0.3`; `TAU_DAYS=7` produces ~4.85-day half-life inside the field range and near Park et al.'s ~5.75-day empirical anchor). The novel-in-field `NOISE_FLOOR=0.15` empty-return behavior is now flagged as a deliberate atrib protocol innovation rather than implicit convention. See [D085 in DECISIONS.md](./DECISIONS.md#d085-recall-calibration-defaults-survey-grounded-rationale) for the survey citations and the empirical-validation path (a queued gold-standard sweep).
