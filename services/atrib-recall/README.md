@@ -22,7 +22,7 @@ mcp__atrib-recall__recall_my_attribution_history({
   content_id?: string,           // sha256:... exact match on §1.2.2 content_id.
   tool_name?: string,            // §8.2 disclosed tool name; records without disclosure excluded.
   args_hash?: string,            // sha256:... §8.3 args_hash exact match.
-  limit?: number,                // Default 25, max 200.
+  limit?: number,                // Default 10, max 200. (D085: matches field convention.)
   offset?: number,               // For pagination. Note pagination_caveat in the response.
   compact?: boolean,             // Default true - omits signature/content_id/chain_root/spec_version
                                  // fields. `record_hash` is always included (so callers can chain
@@ -86,7 +86,7 @@ The Park et al. ranking weights and recency time constant are environment-tunabl
 | `ATRIB_RECALL_TAU_DAYS` | 7 | Exponential-decay time constant for recency |
 | `ATRIB_RECALL_NOISE_FLOOR` | 0.15 | Anti-noise threshold for `rank_by=relevance` (see below) |
 
-The implementation does not enforce that alpha + beta + gamma sum to 1.0; the operator-facing defaults do.
+The implementation does not enforce that alpha + beta + gamma sum to 1.0; the operator-facing defaults do. See [D085](../../DECISIONS.md#d085-recall-calibration-defaults-survey-grounded-rationale) for the survey-grounded rationale: `ALPHA=0.3` matches CrewAI's `recency_weight=0.3` (the only normalized-weights peer in a 2026-05-23 OSS survey); `TAU_DAYS=7` produces a ~4.85-day half-life inside the field range and close to Park et al.'s ~5.75-day empirical anchor.
 
 ### Legibility fields (added in 0.8.0)
 
@@ -103,6 +103,8 @@ Compact recall responses carry three derived fields per record so the agent can 
 ### Anti-noise threshold for `rank_by=relevance`
 
 When `rank_by=relevance` produces a top Park score below `ATRIB_RECALL_NOISE_FLOOR` (default 0.15), recall returns empty records plus a `quality: "below_threshold"` signal and the observed `top_score`. The default 0.15 is approximately `alpha * 0.5` with the default `alpha=0.3`: the score of a record with decent recency but no annotation, no topic match, no BM25 hit. Below that, results are effectively noise. Set the env var to 0 to disable. Threshold applies only to relevance ranking; timestamp + causal_distance modes are unaffected.
+
+**Novel in field.** The 2026-05-23 survey of comparable systems (Park et al., MemGPT/Letta, A-MEM, MemoryBank, Mem0, LangChain, LlamaIndex, CrewAI, Haystack, AutoGen) found no published or OSS implementation that returns "empty + quality:below_threshold" rather than top-K. The field convention is "always return something, let the agent decide it's noise." atrib's inversion is a deliberate protocol choice (lower hallucination risk from low-confidence context). See [D085](../../DECISIONS.md#d085-recall-calibration-defaults-survey-grounded-rationale) for the full survey. A caveat the derivation does not address: on active mirrors with constant fresh tool-call activity, the best record's recency component is ~1.0, so `alpha * 1.0 = 0.3` exceeds the 0.15 floor and the threshold never trips. The floor catches "stale mirror, nothing relevant" correctly per design, but not "active mirror, nonsense query." A gold-standard eval sweep is queued to either reaffirm or recommend revising this floor.
 
 ## Trust scope
 

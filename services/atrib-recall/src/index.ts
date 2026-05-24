@@ -75,17 +75,31 @@ export const IMPORTANCE_NUMERIC: Record<ImportanceLabel, number> = {
 }
 
 // Layer 1 ranking weights per the recall semantic surface design. Park et al. 2023
-// "Generative Agents" defaults; tunable via env for experiment-time
-// per-axis sensitivity studies. Values must sum to 1.0; the implementation
-// does not enforce this but the operator-facing default does. Exported so
-// future releases implementing the parkScore function can import them.
+// Weight defaults inspired by Park et al. 2023 "Generative Agents"
+// (recency + importance + relevance composition). Values sum to 1.0;
+// the implementation does not enforce this, but the operator-facing
+// default does. Tunable per experiment via env vars; exported so future
+// releases can import the same defaults.
+//
+// The recency weight (0.3) matches CrewAI's recency_weight=0.3 in their
+// composite memory scorer (the only normalized-weights peer found in a
+// 2026-05-23 survey of OSS implementations; LangChain + LlamaIndex use
+// unweighted additive composition, which silently couples scales). Beta
+// and gamma split the remaining 0.7 with relevance favored over
+// importance (0.4 vs 0.3) because annotation-derived importance is
+// already a sparse signal: most records carry none, so a higher beta
+// would amplify noise from the few that do. See ADR D085 for the
+// survey-grounded rationale.
 export const ATRIB_RECALL_ALPHA = parseFloat(process.env.ATRIB_RECALL_ALPHA ?? '0.3')
 export const ATRIB_RECALL_BETA = parseFloat(process.env.ATRIB_RECALL_BETA ?? '0.3')
 export const ATRIB_RECALL_GAMMA = parseFloat(process.env.ATRIB_RECALL_GAMMA ?? '0.4')
 
 // Recency time constant (in days) for the exponential-decay scoring
-// component. 7-day default per design; longer windows favor older records,
-// shorter windows favor very-recent records. Tunable per experiment.
+// component, applied as exp(-age_days / tau). 7-day default produces a
+// half-life of tau * ln(2) ~= 4.85 days, close to Park et al.'s
+// 0.995/hour decay (half-life ~5.75 days) and inside the OSS-survey
+// range (LangChain ~3 days, CrewAI 30 days). Tunable per experiment.
+// See ADR D085 for survey context.
 export const ATRIB_RECALL_TAU_DAYS = parseFloat(process.env.ATRIB_RECALL_TAU_DAYS ?? '7')
 
 // Layer 1 v2 anti-noise threshold for rank_by='relevance'. When the top
@@ -100,8 +114,24 @@ export const ATRIB_RECALL_TAU_DAYS = parseFloat(process.env.ATRIB_RECALL_TAU_DAY
 // noise (stale records with no signal). The threshold trains the agent
 // "recall returns when it has something; trust the absence."
 //
-// If ALPHA is changed, this default may need to be revisited. Set the
-// env var to 0 to disable the threshold entirely.
+// NOVEL IN FIELD: the 2026-05-23 survey of comparable systems (Park et
+// al., MemGPT/Letta, A-MEM, MemoryBank, Mem0, LangChain, LlamaIndex,
+// CrewAI, Haystack, AutoGen) found no published or OSS implementation
+// that returns "empty + quality:below_threshold" rather than top-K. The
+// field convention is "always return something, let the agent decide
+// it's noise." atrib's inversion is a deliberate protocol choice (lower
+// hallucination risk from low-confidence context); it should be
+// defended as innovation, not assumed convention. See ADR D085. The
+// derivation is internally consistent but empirically un-validated;
+// a gold-standard eval sweep is queued to either reaffirm or
+// recommend revising this floor.
+//
+// CAVEAT: on active mirrors with constant fresh tool-call activity, the
+// best record's recency component is ~1.0, so alpha * 1.0 = 0.3 > 0.15
+// and the floor never trips. The threshold catches the "stale mirror,
+// nothing relevant" case correctly per design, but not the "active
+// mirror, nonsense query" case. If ALPHA is changed, this default may
+// need to be revisited. Set the env var to 0 to disable entirely.
 export const ATRIB_RECALL_NOISE_FLOOR = parseFloat(process.env.ATRIB_RECALL_NOISE_FLOOR ?? '0.15')
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -783,7 +813,10 @@ export async function recall(
   }
 
   const offset = Math.max(0, args.offset ?? 0)
-  const limit = Math.max(1, Math.min(200, args.limit ?? 25))
+  // Default limit 10 matches the field convention (Haystack, AutoGen,
+  // mem0, Letta all default top_k=10). Was 25 before D085; changed to
+  // reduce default token weight in agent context windows.
+  const limit = Math.max(1, Math.min(200, args.limit ?? 10))
   const page = filtered.slice(offset, offset + limit)
   let verified = await annotateVerification(page, annotationsByRecord, revisionsByRecord)
 
@@ -907,7 +940,7 @@ server.registerTool(
             'to canonical args bytes (salted or plain; both forms hash identically on the wire). Most ' +
             'useful for replay detection or agent-side keyed lookup over a normalized probe hash.',
         ),
-      limit: z.number().optional().describe('Page size, default 25, max 200.'),
+      limit: z.number().optional().describe('Page size, default 10, max 200.'),
       offset: z
         .number()
         .optional()
