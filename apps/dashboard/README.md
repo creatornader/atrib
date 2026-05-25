@@ -59,6 +59,8 @@ CORS is configured on log-node, graph-node, and directory-node (`Access-Control-
 
 `#/about` is the static explainer for these views. It is not counted as a data view.
 
+Detail views use two different summary patterns. A status row answers whether the view is ready to inspect and what caveats apply. A metric row answers what data shape was loaded. The session view uses both: source/graph/transaction/reference readiness first, then signed records, graph nodes, edges, participants, and composition.
+
 ## Graph surfaces
 
 Of the seven dashboard views above, the trace, session, identity, and demo views render Sigma DAGs in the current implementation; the others are non-graph views. The identity activity map was added with [§3.4.7](../../atrib-spec.md#347-get-v1creatorscreator_keygraph) / [D068](../../DECISIONS.md#d068-trace-operations-split--provenance-trace-vs-causal-chain). Per [D066](../../DECISIONS.md#d066-dashboard-graph-viz-library-set-sigmajs--dagre--graphology--cosmosgl-lazy-loaded-cdn-no-build-step) consequences, additional graph surfaces are planned but not yet built:

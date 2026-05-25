@@ -2052,6 +2052,47 @@ function formatNodeScope(summary) {
   return `${summary.totalNodeCount.toLocaleString()} nodes (${pieces.join(', ')})`
 }
 
+function formatReferenceStatus(usingFallback, nodeSummary, referenceEdgeCounts) {
+  if (usingFallback) {
+    return {
+      value: 'not evaluated',
+      note: 'Graph edges are unavailable in this log-derived view.',
+      tone: 'info',
+    }
+  }
+
+  const refSummary = formatReferenceSummary(referenceEdgeCounts)
+  const refLinkCount = referenceEdgeCounts.external + referenceEdgeCounts.missing + referenceEdgeCounts.unresolved
+  if (!refSummary && nodeSummary.referenceNodeCount === 0) {
+    return {
+      value: 'self-contained',
+      note: 'No references point outside this rendered session.',
+      tone: 'ok',
+    }
+  }
+  if (!refSummary) {
+    return {
+      value: 'reference nodes',
+      note: 'Reference placeholders are present, but no dangling reference links were returned.',
+      tone: 'info',
+    }
+  }
+
+  if (referenceEdgeCounts.missing > 0) {
+    return {
+      value: 'some missing',
+      note: `${refSummary}. Missing refs are referenced by records but not indexed here.`,
+      tone: 'warn',
+    }
+  }
+
+  return {
+    value: 'external context',
+    note: `${refSummary} ${refLinkCount === 1 ? 'points' : 'point'} outside this rendered session.`,
+    tone: 'info',
+  }
+}
+
 function eventTypeInfo(eventType, creatorKey = null, eventTypeUri = null) {
   let key = eventType || 'unknown'
   let rawKey = key
@@ -2322,8 +2363,8 @@ function detailStatusItem(label, value, note, tone = 'info') {
   )
 }
 
-function renderDetailStatus(items) {
-  return el('section', { class: 'detail-status', 'aria-label': 'Verification status' },
+function renderDetailStatus(items, ariaLabel = 'Verification status') {
+  return el('section', { class: 'detail-status', 'aria-label': ariaLabel },
     ...items.map((item) => detailStatusItem(item.label, item.value, item.note, item.tone)),
   )
 }
@@ -3743,7 +3784,7 @@ async function renderSession(contextId) {
   }))
 
   root.append(el('section', { class: 'detail-path', 'aria-label': 'Session page path' },
-    detailPathStep('01', 'Read the summary', 'Start with counts, participants, composition, and transaction state.'),
+    detailPathStep('01', 'Check readiness', 'Start with source, graph availability, transaction state, and references.'),
     detailPathStep('02', 'Inspect structure', 'Use the graph to see chain, convergence, annotation, and revision edges.'),
     detailPathStep('03', 'Open records', 'Drop into individual receipts when a row needs proof or raw JSON.'),
   ))
@@ -3805,6 +3846,8 @@ async function renderSession(contextId) {
   await resolveIdentities(recordNodes.map(n => n.creator_key).filter(Boolean))
   if (!routeGenerationStillCurrent(myGen)) return
   const hasEdges = graph.edges && graph.edges.length > 0
+  const referenceEdgeCounts = summarizeReferenceEdges(graph.edges)
+  const referenceStatus = formatReferenceStatus(usingFallback, nodeSummary, referenceEdgeCounts)
 
   // Composition breakdown across the session. Surfaces the event-type
   // diversity that the bare "transaction: none" stat hides. Signed record
@@ -3840,13 +3883,13 @@ async function renderSession(contextId) {
 
   root.append(renderDetailStatus([
     {
-      label: 'records',
-      value: String(nodeSummary.recordNodeCount),
-      note: usingFallback ? 'Signed records loaded directly from the log.' : 'Signed records returned for this session.',
-      tone: 'ok',
+      label: 'source',
+      value: usingFallback ? 'log fallback' : 'graph-node',
+      note: usingFallback ? 'Records are log-backed; edges are not shown.' : 'Graph derived from log-backed records.',
+      tone: usingFallback ? 'info' : 'ok',
     },
     {
-      label: 'structure',
+      label: 'graph',
       value: hasEdges ? 'graph ready' : 'records only',
       note: hasEdges ? 'Deterministic edges are available below.' : 'No graph edges are available for this session view.',
       tone: hasEdges ? 'ok' : 'info',
@@ -3858,17 +3901,17 @@ async function renderSession(contextId) {
       tone: hasTx ? 'ok' : 'info',
     },
     {
-      label: 'participants',
-      value: String(participantCount),
-      note: 'Distinct creator keys on signed records in this context.',
-      tone: 'info',
+      label: 'references',
+      value: referenceStatus.value,
+      note: referenceStatus.note,
+      tone: referenceStatus.tone,
     },
-  ]))
+  ], 'Session readiness'))
 
   root.append(el('div', { class: 'pulse-strip' },
-    pulseStat('nodes', String(nodeSummary.totalNodeCount), `${nodeSummary.recordNodeCount} records${nodeSummary.referenceNodeCount > 0 ? `, ${nodeSummary.referenceNodeCount} references` : ''}`),
-    pulseStat('edges', String(graph.edge_count ?? graph.edges?.length ?? 0)),
-    pulseStat('transaction', hasTx ? 'present' : 'none', hasTx ? 'session converges on a transaction' : 'no transaction record (typical for non-commerce sessions)'),
+    pulseStat('signed records', String(nodeSummary.recordNodeCount), 'real log-backed records'),
+    pulseStat('graph nodes', String(nodeSummary.totalNodeCount), `${nodeSummary.recordNodeCount} records${nodeSummary.referenceNodeCount > 0 ? `, ${nodeSummary.referenceNodeCount} references` : ''}`),
+    pulseStat('edges', String(graph.edge_count ?? graph.edges?.length ?? 0), hasEdges ? 'deterministic graph links' : 'none in this view'),
     pulseStat('participants', String(participantCount), 'signed-record identities'),
     pulseStat('composition', sortedTypes.length > 0 ? compositionPieces : '—', 'record types and reference nodes', true),
   ))
@@ -3915,7 +3958,7 @@ async function renderSession(contextId) {
       el('span', { class: 'legend-label' }, 'edges'),
       edgeLegendRow,
     )
-    const referenceSummary = formatReferenceSummary(summarizeReferenceEdges(graph.edges))
+    const referenceSummary = formatReferenceSummary(referenceEdgeCounts)
     const meta = `${formatNodeScope(nodeSummary)} · ${graph.edges.length} edges${referenceSummary ? ` · ${referenceSummary}` : ''} · §3.2.4`
 
     root.append(el('section', { class: 'panel flush' },
@@ -4021,7 +4064,7 @@ async function renderSession(contextId) {
   // type / source / target visually, but the table preserves whether a
   // synthetic reference target is external, missing, or unresolved.
   if (hasEdges) {
-    const referenceSummary = formatReferenceSummary(summarizeReferenceEdges(graph.edges))
+    const referenceSummary = formatReferenceSummary(referenceEdgeCounts)
     const renderTarget = e => e.dangling
       ? (() => {
           const status = graphReferenceStatus(e)
