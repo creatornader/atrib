@@ -2700,6 +2700,7 @@ async function renderDemo() {
   let clearGraphSelection = null
   let selectGraphNode = null
   let inspectorPinned = false
+  let demoLayoutMode = 'timeline'
   let graphSignature = computeDemoGraphSignature(graph)
   const token = demoReplayToken
   const visibleNodeIds = new Set()
@@ -2738,8 +2739,8 @@ async function renderDemo() {
       _activeSigmaInstance = null
     }
     const { sigma, fitCameraToGraph, selectNode, clearSelection } = await renderSigmaDAG(graphContainer, graph, {
-      layoutMode: 'timeline',
-      demoBranchLanes: true,
+      layoutMode: demoLayoutMode,
+      demoBranchLanes: demoLayoutMode === 'timeline',
       nodeSize: 13,
       focalSize: 18,
       isNodeVisible: (nodeId) => (nodeIndexById.get(nodeId) ?? Infinity) < visibleCount,
@@ -2756,6 +2757,13 @@ async function renderDemo() {
     selectGraphNode = selectNode
     clearGraphSelection = clearSelection
     attachCameraControls(graphContainer, fitCameraToGraph, sigma)
+    attachLayoutSwitcher(graphContainer, demoLayoutMode, (mode) => {
+      demoLayoutMode = mode
+      inspectorPinned = false
+      renderDemoGraph().catch((e) => {
+        renderGraphRenderError(graphContainer, e)
+      })
+    })
     updateReplayReadout()
   }
   try {
