@@ -172,6 +172,24 @@ describe('LLM config resolution', () => {
       rmSync(home, { recursive: true, force: true })
     }
   })
+
+  it('does not select Cloudflare from a URL substring', () => {
+    const home = mkdtempSync(join(tmpdir(), 'atrib-summarize-home-'))
+    try {
+      process.env['HOME'] = home
+      process.env['ATRIB_SUMMARIZE_BASE_URL'] = 'https://cloudflare.com.evil.test/v1'
+      const secretsDir = join(home, '.atrib', 'secrets')
+      mkdirSync(secretsDir, { recursive: true })
+      writeFileSync(join(secretsDir, 'cloudflare-api-key'), 'cached-cf-key')
+      writeFileSync(join(secretsDir, 'nvidia-api-key'), 'cached-nvidia-key')
+
+      const cfg = resolveLlmConfig()
+
+      expect(cfg?.apiKey).toBe('cached-nvidia-key')
+    } finally {
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('callLlm', () => {

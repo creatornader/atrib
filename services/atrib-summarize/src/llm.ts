@@ -45,11 +45,24 @@ function firstSecret(...values: (string | undefined)[]): string {
   return ''
 }
 
+function hostnameFor(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).hostname.toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+function hostnameMatches(hostname: string, domain: string): boolean {
+  return hostname === domain || hostname.endsWith(`.${domain}`)
+}
+
 function providerApiKey(baseUrl: string): string {
-  if (baseUrl.includes('cerebras.ai')) {
+  const hostname = hostnameFor(baseUrl)
+  if (hostnameMatches(hostname, 'cerebras.ai')) {
     return firstSecret(process.env['CEREBRAS_API_KEY'], readCacheSecret('cerebras-api-key'))
   }
-  if (baseUrl.includes('cloudflare.com')) {
+  if (hostnameMatches(hostname, 'cloudflare.com')) {
     return firstSecret(process.env['CLOUDFLARE_API_KEY'], readCacheSecret('cloudflare-api-key'))
   }
   return firstSecret(
