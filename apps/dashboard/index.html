@@ -4920,38 +4920,12 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     if (!activeNode || !activeNeighborhood) return
 
     focusCtx.save()
-    focusCtx.lineCap = 'round'
-    focusCtx.lineJoin = 'round'
-    for (const edgeKey of activeNeighborhood.edges) {
-      if (!gx.hasEdge(edgeKey)) continue
-      const source = graphNodePoint(gx.source(edgeKey))
-      const target = graphNodePoint(gx.target(edgeKey))
-      if (!source || !target) continue
-      const edgeAttrs = gx.getEdgeAttributes(edgeKey)
-      focusCtx.strokeStyle = edgeAttrs.color || _cssVar('--accent', '#7dd3fc')
-      focusCtx.globalAlpha = 0.92
-      focusCtx.lineWidth = Math.max(1.4, (edgeAttrs.size ?? edgeSize) * 2.1)
-      focusCtx.beginPath()
-      focusCtx.moveTo(source.x, source.y)
-      focusCtx.lineTo(target.x, target.y)
-      focusCtx.stroke()
-    }
-
-    focusCtx.globalAlpha = 1
-    for (const nodeId of activeNeighborhood.nodes) {
-      const point = graphNodePoint(nodeId)
-      if (!point) continue
-      const attrs = gx.getNodeAttributes(nodeId)
-      const isHovered = nodeId === activeNode
-      const radius = Math.max(isHovered ? 5 : 4, Math.min(18, (attrs.size ?? 4) * (isHovered ? 1.38 : 1.18)))
-      focusCtx.fillStyle = attrs.color || _cssVar('--accent', '#7dd3fc')
-      focusCtx.strokeStyle = _cssVar('--surface', '#111827')
-      focusCtx.lineWidth = isHovered ? 2.2 : 1.6
-      focusCtx.beginPath()
-      focusCtx.arc(point.x, point.y, radius, 0, Math.PI * 2)
-      focusCtx.fill()
-      focusCtx.stroke()
-    }
+    // Let Sigma own graph geometry. Earlier this overlay repainted focused
+    // edges and node fills, but the overlay projection can differ from
+    // Sigma's WebGL pass by a few pixels during hover/camera movement. The
+    // doubled node fills read as dark inner disks, and overlay edges cut
+    // through highlighted nodes. Reducers already raise and resize focused
+    // nodes and edges, so the overlay only draws readable labels.
     drawFocusLabels(rect, activeNode, activeNeighborhood)
     focusCtx.restore()
   }
