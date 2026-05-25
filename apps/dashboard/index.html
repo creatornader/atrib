@@ -1495,6 +1495,14 @@
     animation: demoStepIn 800ms ease-out;
     background: color-mix(in srgb, var(--accent-subtle) 38%, var(--surface));
   }
+  .demo-step[role='button'] {
+    cursor: pointer;
+  }
+  .demo-step[role='button']:hover,
+  .demo-step[role='button']:focus-visible {
+    outline: none;
+    background: color-mix(in srgb, var(--accent-subtle) 28%, var(--surface));
+  }
   .demo-step .when {
     color: var(--text-3);
     font: 11px/1.4 var(--font-mono);
@@ -1526,6 +1534,50 @@
     height: 100%;
     min-height: 520px;
   }
+  .demo-inspector {
+    position: absolute;
+    left: 14px;
+    bottom: 14px;
+    z-index: 8;
+    width: min(390px, calc(100% - 28px));
+    padding: 12px;
+    background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+  }
+  .demo-inspector[hidden] { display: none; }
+  .demo-inspector .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .demo-inspector .title {
+    color: var(--text);
+    font: 600 12px/1.2 var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .demo-inspector .close {
+    padding: 3px 7px;
+    color: var(--text-3);
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    border-radius: 3px;
+    font: 11px/1 var(--font-sans);
+  }
+  .demo-inspector .close:hover { color: var(--text); border-color: var(--border); }
+  .demo-inspector .details {
+    display: grid;
+    grid-template-columns: 74px minmax(0, 1fr);
+    gap: 7px 10px;
+    margin: 0;
+    font-size: 12px;
+  }
+  .demo-inspector dt { color: var(--text-3); }
+  .demo-inspector dd { margin: 0; min-width: 0; color: var(--text); overflow-wrap: anywhere; }
   .demo-status {
     display: inline-flex;
     align-items: center;
@@ -1554,6 +1606,7 @@
     .demo-graph-frame { max-height: none; height: auto; }
     .demo-graph-frame,
     .demo-graph-frame .trace-graph { min-height: 460px; }
+    .demo-inspector { position: static; width: auto; margin: 12px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .demo-step.live,
@@ -2456,7 +2509,13 @@ function chooseDemoContext(entries) {
 
 function demoStepRow(node, isLive) {
   const hash = graphNodeRecordHash(node)
-  return el('article', { class: isLive ? 'demo-step live' : 'demo-step' },
+  const attrs = {
+    class: isLive ? 'demo-step live' : 'demo-step',
+    role: 'button',
+    tabindex: '0',
+    'data-node-id': node.id,
+  }
+  return el('article', attrs,
     el('div', { class: 'when', ...(node.timestamp ? { 'data-ts': String(node.timestamp) } : {}) },
       node.timestamp ? timeAgo(node.timestamp) : 'queued'),
     el('div', { class: 'main' },
@@ -2471,11 +2530,57 @@ function demoStepRow(node, isLive) {
 }
 
 function renderDemoTimeline(container, nodes, visibleCount) {
-  const visible = nodes.slice(0, visibleCount)
-  container.replaceChildren(...visible.map((node, index) =>
-    demoStepRow(node, index === visible.length - 1),
-  ))
+  const priorCount = container._demoVisibleCount ?? 0
+  const mustReset = priorCount > visibleCount || !container._demoTimelineInitialized
+  if (mustReset) {
+    container.replaceChildren()
+    container._demoVisibleCount = 0
+    container._demoTimelineInitialized = true
+  }
+  for (const row of container.querySelectorAll('.demo-step.live')) row.classList.remove('live')
+  const start = container._demoVisibleCount ?? 0
+  for (let i = start; i < visibleCount; i += 1) {
+    const node = nodes[i]
+    if (node) container.append(demoStepRow(node, i === visibleCount - 1))
+  }
+  const last = container.lastElementChild
+  if (last && last.classList?.contains('demo-step')) last.classList.add('live')
+  container._demoVisibleCount = visibleCount
   container.scrollTop = container.scrollHeight
+}
+
+function renderDemoInspector(container, node, onClear = null, title = 'selected record') {
+  if (!node) {
+    container.hidden = true
+    container.replaceChildren()
+    return
+  }
+  const hash = graphNodeRecordHash(node)
+  const tsMs = nodeTimestamp(node)
+  container.hidden = false
+  container.replaceChildren(
+    el('div', { class: 'top' },
+      el('div', { class: 'title' }, title),
+      el('button', {
+        class: 'close',
+        type: 'button',
+        'aria-label': 'Clear selected record',
+        onclick: () => {
+          if (onClear) onClear()
+          renderDemoInspector(container, null, onClear)
+        },
+      }, 'clear'),
+    ),
+    el('dl', { class: 'details' },
+      el('dt', {}, 'event'), el('dd', {}, renderEventChip(node.event_type, node.creator_key, node.event_type_uri)),
+      el('dt', {}, 'identity'), el('dd', {}, node.creator_key ? renderIdentityLabel(node.creator_key) : 'unknown'),
+      el('dt', {}, 'when'), el('dd', {}, tsMs ? timeAgo(tsMs) : 'queued'),
+      el('dt', {}, 'record'), el('dd', {},
+        hash
+          ? el('a', { class: 'mono', href: `#/action/${hash}` }, shorten(hash, 16, 8))
+          : el('span', { class: 'mono' }, shorten(node.id || 'unknown', 16, 8))),
+    ),
+  )
 }
 
 async function renderDemo() {
@@ -2489,6 +2594,7 @@ async function renderDemo() {
     el('div', { class: 'empty' }, 'loading signed agent actions…'))
   const graphContainer = el('div', { class: 'trace-graph', id: 'demo-live-graph' },
     el('div', { class: 'loading' }, 'loading graph replay…'))
+  const inspector = el('aside', { class: 'demo-inspector', hidden: '', 'aria-live': 'polite' })
   const meta = el('span', { class: 'meta' }, 'warming up')
   root.append(
     el('section', { class: 'demo-panel' },
@@ -2503,7 +2609,7 @@ async function renderDemo() {
         el('h2', {}, 'living graph'),
         meta,
       ),
-      el('div', { class: 'demo-graph-frame' }, graphContainer),
+      el('div', { class: 'demo-graph-frame' }, graphContainer, inspector),
     ),
   )
   clearAndRender(root)
@@ -2562,9 +2668,13 @@ async function renderDemo() {
   if (!routeGenerationStillCurrent(myGen)) return
 
   let visibleCount = Math.min(3, graph.nodes.length)
+  let clearGraphSelection = null
+  let selectGraphNode = null
+  let inspectorPinned = false
   const token = demoReplayToken
   const visibleNodeIds = new Set()
   const nodeIndexById = new Map(graph.nodes.map((node, index) => [node.id, index]))
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]))
   const syncVisibleNodes = () => {
     visibleNodeIds.clear()
     for (let i = 0; i < visibleCount; i += 1) {
@@ -2572,11 +2682,38 @@ async function renderDemo() {
       if (node) visibleNodeIds.add(node.id)
     }
   }
+  const selectDemoNode = (node) => {
+    inspectorPinned = true
+    if (selectGraphNode) selectGraphNode(node.id)
+    renderDemoInspector(inspector, node, () => {
+      inspectorPinned = false
+      if (clearGraphSelection) clearGraphSelection()
+    }, 'selected record')
+  }
+  const selectTimelineRow = (target) => {
+    const start = target?.nodeType === 3 ? target.parentElement : target
+    const row = start?.closest?.('.demo-step[data-node-id]')
+    if (!row) return
+    const node = nodeById.get(row.dataset.nodeId)
+    if (node) selectDemoNode(node)
+  }
+  timeline.addEventListener('click', (event) => selectTimelineRow(event.target))
+  timeline.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    const row = event.target?.closest?.('.demo-step[data-node-id]')
+    if (!row) return
+    event.preventDefault()
+    selectTimelineRow(row)
+  })
   const updateReplayReadout = () => {
     syncVisibleNodes()
     const visibleEdges = graph.edges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)).length
     meta.textContent = `${sourceLabel} · ${visibleNodeIds.size} nodes · ${visibleEdges} edges`
     renderDemoTimeline(timeline, graph.nodes, visibleCount)
+    if (!inspectorPinned) {
+      const latestNode = graph.nodes[Math.max(0, visibleCount - 1)]
+      if (latestNode) renderDemoInspector(inspector, latestNode, null, 'latest record')
+    }
   }
   syncVisibleNodes()
   graphContainer.replaceChildren()
@@ -2585,14 +2722,24 @@ async function renderDemo() {
     _activeSigmaInstance = null
   }
   try {
-    const { sigma, fitCameraToGraph } = await renderSigmaDAG(graphContainer, graph, {
+    const { sigma, fitCameraToGraph, selectNode, clearSelection } = await renderSigmaDAG(graphContainer, graph, {
       layoutMode: 'timeline',
       demoBranchLanes: true,
       nodeSize: 13,
       focalSize: 18,
       isNodeVisible: (nodeId) => (nodeIndexById.get(nodeId) ?? Infinity) < visibleCount,
+      onNodeClick: (_nodeId, sourceRecord, controls) => {
+        inspectorPinned = true
+        clearGraphSelection = controls?.clearSelection || null
+        renderDemoInspector(inspector, sourceRecord, () => {
+          inspectorPinned = false
+          if (clearGraphSelection) clearGraphSelection()
+        }, 'selected record')
+      },
     })
     _activeSigmaInstance = sigma
+    selectGraphNode = selectNode
+    clearGraphSelection = clearSelection
     attachCameraControls(graphContainer, fitCameraToGraph, sigma)
     updateReplayReadout()
   } catch (e) {
@@ -4552,6 +4699,8 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   // topology lookup; tests cover its behavior.
   let _hoveredNode = null
   let _hoveredNeighborhood = null
+  let _selectedNode = null
+  let _selectedNeighborhood = null
   let _hoverIntentTimer = null
   let _pointerDown = false
   let _lastPointer = { x: 16, y: 16 }
@@ -4596,12 +4745,14 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     _focusOverlayFrame = null
     const rect = resizeFocusOverlay()
     focusCtx.clearRect(0, 0, rect.width, rect.height)
-    if (!_hoveredNode || !_hoveredNeighborhood) return
+    const activeNode = _hoveredNode || _selectedNode
+    const activeNeighborhood = _hoveredNeighborhood || _selectedNeighborhood
+    if (!activeNode || !activeNeighborhood) return
 
     focusCtx.save()
     focusCtx.lineCap = 'round'
     focusCtx.lineJoin = 'round'
-    for (const edgeKey of _hoveredNeighborhood.edges) {
+    for (const edgeKey of activeNeighborhood.edges) {
       if (!gx.hasEdge(edgeKey)) continue
       const source = graphNodePoint(gx.source(edgeKey))
       const target = graphNodePoint(gx.target(edgeKey))
@@ -4617,11 +4768,11 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     }
 
     focusCtx.globalAlpha = 1
-    for (const nodeId of _hoveredNeighborhood.nodes) {
+    for (const nodeId of activeNeighborhood.nodes) {
       const point = graphNodePoint(nodeId)
       if (!point) continue
       const attrs = gx.getNodeAttributes(nodeId)
-      const isHovered = nodeId === _hoveredNode
+      const isHovered = nodeId === activeNode
       const radius = Math.max(isHovered ? 5 : 4, Math.min(18, (attrs.size ?? 4) * (isHovered ? 1.38 : 1.18)))
       focusCtx.fillStyle = attrs.color || _cssVar('--accent', '#7dd3fc')
       focusCtx.strokeStyle = _cssVar('--surface', '#111827')
@@ -4672,8 +4823,29 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     if (!_hoveredNode && !_hoveredNeighborhood) return
     _hoveredNode = null
     _hoveredNeighborhood = null
-    clearFocusOverlay()
+    if (_selectedNode && _selectedNeighborhood) {
+      scheduleFocusOverlayDraw()
+    } else {
+      clearFocusOverlay()
+    }
     sigmaInstance.refresh({ skipIndexation: true })
+  }
+  const clearSelectedFocus = () => {
+    _selectedNode = null
+    _selectedNeighborhood = null
+    if (_hoveredNode && _hoveredNeighborhood) {
+      scheduleFocusOverlayDraw()
+    } else {
+      clearFocusOverlay()
+    }
+    sigmaInstance.refresh({ skipIndexation: true })
+  }
+  const selectGraphNode = (nodeId) => {
+    if (!nodeId || !gx.hasNode(nodeId)) return
+    _selectedNode = nodeId
+    _selectedNeighborhood = computeNeighborhood(gx, nodeId)
+    sigmaInstance.refresh({ skipIndexation: true })
+    scheduleFocusOverlayDraw()
   }
   const _camera = sigmaInstance.getCamera()
   const _onCameraUpdated = () => scheduleFocusOverlayDraw()
@@ -4686,14 +4858,16 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     if (isNodeVisible && !isNodeVisible(nodeId, attrs._node)) {
       return { ...attrs, hidden: true, label: '', zIndex: _DIM_NODE_Z }
     }
-    if (!_hoveredNode || !_hoveredNeighborhood) {
+    const activeNode = _hoveredNode || _selectedNode
+    const activeNeighborhood = _hoveredNeighborhood || _selectedNeighborhood
+    if (!activeNode || !activeNeighborhood) {
       const isFocal = attrs._isFocal === true || attrs._eventType === 'transaction'
       return isFocal
         ? { ...attrs, label: '', size: attrs.size * 1.06, zIndex: Math.max(attrs.zIndex ?? 0, 20) }
         : { ...attrs, label: '', zIndex: attrs.zIndex ?? 10 }
     }
-    if (_hoveredNeighborhood.nodes.has(nodeId)) {
-      return nodeId === _hoveredNode
+    if (activeNeighborhood.nodes.has(nodeId)) {
+      return nodeId === activeNode
         ? { ...attrs, label: '', size: attrs.size * 1.22, zIndex: _HOVER_NODE_Z }
         : { ...attrs, label: '', size: attrs.size * 1.08, zIndex: _FOCUS_NODE_Z }
     }
@@ -4718,10 +4892,12 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     const zoomScale = Math.sqrt(Math.max(ratio, 0.01))
     const baseSize = attrs.size ?? 0.5
     const scaledSize = baseSize * zoomScale
-    if (!_hoveredNode || !_hoveredNeighborhood) {
+    const activeNode = _hoveredNode || _selectedNode
+    const activeNeighborhood = _hoveredNeighborhood || _selectedNeighborhood
+    if (!activeNode || !activeNeighborhood) {
       return { ...attrs, size: scaledSize, zIndex: attrs.zIndex ?? 5 }
     }
-    if (_hoveredNeighborhood.edges.has(edgeKey)) {
+    if (activeNeighborhood.edges.has(edgeKey)) {
       return { ...attrs, size: Math.max(scaledSize * 1.45, scaledSize + 0.35), zIndex: _FOCUS_EDGE_Z }
     }
     return { ...attrs, color: _DIM_EDGE_COLOR, size: Math.max(0.2, scaledSize * 0.4), zIndex: _DIM_EDGE_Z }
@@ -4768,8 +4944,8 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   }
 
   // Default click → drill into the matching action view. Caller can override
-  // (e.g., a session view might prefer to highlight in-place rather than
-  // navigate). Callback signature: (nodeId, sourceRecord) => void.
+  // (e.g., the demo view keeps users in place and renders an inspector).
+  // Callback signature: (nodeId, sourceRecord, controls) => void.
   const handleClick = onNodeClick || ((nodeId, sourceRecord) => {
     if (sourceRecord && sourceRecord.record_hash) {
       location.hash = `#/action/${sourceRecord.record_hash}`
@@ -4780,7 +4956,8 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   })
   sigmaInstance.on('clickNode', ({ node }) => {
     const attrs = gx.getNodeAttributes(node)
-    handleClick(node, attrs._node)
+    selectGraphNode(node)
+    handleClick(node, attrs._node, { clearSelection: clearSelectedFocus })
   })
 
   /**
@@ -4816,7 +4993,14 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   // returned so the reset button can return to the framed view if
   // the user has scrolled / panned / zoomed.
 
-  return { sigma: sigmaInstance, graph: gx, fitCameraToGraph, resolvedMode: layoutMode }
+  return {
+    sigma: sigmaInstance,
+    graph: gx,
+    fitCameraToGraph,
+    resolvedMode: layoutMode,
+    selectNode: selectGraphNode,
+    clearSelection: clearSelectedFocus,
+  }
 }
 
 // Pair-aware legend population for any graph view. Two-row layout:
