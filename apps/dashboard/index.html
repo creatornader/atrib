@@ -4740,6 +4740,62 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     const attrs = gx.getNodeAttributes(nodeId)
     return sigmaInstance.graphToViewport({ x: attrs.x, y: attrs.y })
   }
+  const rectsOverlap = (a, b, pad = 4) =>
+    a.x < b.x + b.w + pad &&
+    a.x + a.w + pad > b.x &&
+    a.y < b.y + b.h + pad &&
+    a.y + a.h + pad > b.y
+  const roundedRectPath = (ctx, x, y, w, h, r) => {
+    const radius = Math.min(r, w / 2, h / 2)
+    ctx.beginPath()
+    ctx.moveTo(x + radius, y)
+    ctx.lineTo(x + w - radius, y)
+    ctx.quadraticCurveTo(x + w, y, x + w, y + radius)
+    ctx.lineTo(x + w, y + h - radius)
+    ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h)
+    ctx.lineTo(x + radius, y + h)
+    ctx.quadraticCurveTo(x, y + h, x, y + h - radius)
+    ctx.lineTo(x, y + radius)
+    ctx.quadraticCurveTo(x, y, x + radius, y)
+    ctx.closePath()
+  }
+  const graphNodeFocusLabel = (nodeId, isActive) => {
+    const attrs = gx.getNodeAttributes(nodeId)
+    const kind = attrs._kindLabel || graphNodeKindLabel(attrs._eventType)
+    return isActive && attrs._hashLabel ? `${kind} ${attrs._hashLabel}` : kind
+  }
+  const drawFocusLabels = (rect, activeNode, activeNeighborhood) => {
+    const occupied = []
+    const nodeIds = [activeNode, ...[...activeNeighborhood.nodes].filter((nodeId) => nodeId !== activeNode)]
+    focusCtx.save()
+    focusCtx.font = '600 11px ' + _cssVar('--font-sans', 'system-ui')
+    focusCtx.textBaseline = 'middle'
+    for (const nodeId of nodeIds.slice(0, 8)) {
+      const point = graphNodePoint(nodeId)
+      if (!point) continue
+      const attrs = gx.getNodeAttributes(nodeId)
+      const isActive = nodeId === activeNode
+      const label = graphNodeFocusLabel(nodeId, isActive)
+      const width = Math.min(isActive ? 190 : 120, Math.ceil(focusCtx.measureText(label).width) + 18)
+      const height = isActive ? 24 : 21
+      let x = point.x + Math.min(18, Math.max(8, (attrs.size ?? 5) + 8))
+      if (x + width > rect.width - 8) x = point.x - width - 14
+      x = Math.max(8, Math.min(rect.width - width - 8, x))
+      const y = Math.max(8, Math.min(rect.height - height - 8, point.y - height / 2))
+      const box = { x, y, w: width, h: height }
+      if (!isActive && occupied.some((taken) => rectsOverlap(box, taken))) continue
+      occupied.push(box)
+      roundedRectPath(focusCtx, x, y, width, height, 5)
+      focusCtx.fillStyle = isActive ? 'rgba(24, 27, 34, 0.96)' : 'rgba(17, 24, 39, 0.92)'
+      focusCtx.strokeStyle = isActive ? _cssVar('--accent', '#7dd3fc') : _cssVar('--border', '#2d3038')
+      focusCtx.lineWidth = isActive ? 1.2 : 1
+      focusCtx.fill()
+      focusCtx.stroke()
+      focusCtx.fillStyle = isActive ? _cssVar('--text', '#f4f4f5') : _cssVar('--text-2', '#a0a3ab')
+      focusCtx.fillText(label, x + 9, y + height / 2, width - 18)
+    }
+    focusCtx.restore()
+  }
   const drawFocusOverlay = () => {
     _focusOverlayFrame = null
     const rect = resizeFocusOverlay()
@@ -4781,6 +4837,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
       focusCtx.fill()
       focusCtx.stroke()
     }
+    drawFocusLabels(rect, activeNode, activeNeighborhood)
     focusCtx.restore()
   }
   const scheduleFocusOverlayDraw = () => {
