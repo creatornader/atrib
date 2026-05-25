@@ -147,9 +147,9 @@ export interface DecodedToken {
 }
 
 /**
- * Atrib normative event_type URIs (spec 1.2.4).
+ * atrib normative event_type URIs (spec 1.2.4).
  *
- * event_type is an absolute URI, not a closed enum. Atrib publishes a small
+ * event_type is an absolute URI, not a closed enum. atrib publishes a small
  * canonical core vocabulary; consumers MAY mint extension URIs in their own
  * namespaces. See D035 for the URI-typing rationale and D036 for the bar to
  * promote an extension URI to atrib normative status.
@@ -175,7 +175,7 @@ export const EVENT_TYPE_ANNOTATION_URI = 'https://atrib.dev/v1/types/annotation'
 // should weight as the current position.
 export const EVENT_TYPE_REVISION_URI = 'https://atrib.dev/v1/types/revision'
 
-/** Atrib normative event_type URI set (spec 1.2.4). */
+/** atrib normative event_type URI set (spec 1.2.4). */
 export const NORMATIVE_EVENT_TYPE_URIS = new Set([
   EVENT_TYPE_TOOL_CALL_URI,
   EVENT_TYPE_TRANSACTION_URI,

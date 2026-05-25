@@ -28,7 +28,7 @@ export type EventType = 'tool_call' | 'transaction' | 'observation' | 'directory
 
 /**
  * Map an attribution record's event_type URI to a graph-layer short label.
- * Atrib normative URIs map to their canonical short label; everything else
+ * atrib normative URIs map to their canonical short label; everything else
  * collapses to `'extension'` (the graph-layer opaque-typed category).
  */
 export function graphLabelFromEventTypeUri(uri: string): EventType {
@@ -92,7 +92,7 @@ export interface GraphNode {
   event_type: EventType
   /**
    * The original event_type URI from the underlying record (§1.2.4), or
-   * null for synthetic nodes (gap_node). Atrib normative URIs are present
+   * null for synthetic nodes (gap_node). atrib normative URIs are present
    * as their canonical strings; extension URIs are preserved verbatim.
    * Graph clients that need to filter by URI rather than short label use
    * this field.

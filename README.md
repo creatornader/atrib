@@ -215,7 +215,7 @@ Store the output as `ATRIB_PRIVATE_KEY`. The public key is derived at runtime.
 
 ## Product design
 
-[`DESIGN.md`](DESIGN.md) is the source of truth for Atrib's public product surfaces: website, explorer, docs, package README patterns, share images, and user-facing reliability states. It records the current state, target direction, tokens, components, writing rules, and remaining design backlog.
+[`DESIGN.md`](DESIGN.md) is the source of truth for atrib's public product surfaces: website, explorer, docs, package README patterns, share images, and user-facing reliability states. It records the current state, target direction, tokens, components, writing rules, and remaining design backlog.
 
 ## More
 

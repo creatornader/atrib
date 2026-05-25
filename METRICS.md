@@ -1,4 +1,4 @@
-# Atrib Metrics
+# atrib metrics
 
 How we measure whether the dogfood experiment is working.
 

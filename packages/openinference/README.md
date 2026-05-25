@@ -112,7 +112,7 @@ provider.addSpanProcessor(atribProcessor)                         // adds verifi
 
 ## Required: register an async context manager
 
-For Node.js consumers using the bare `BasicTracerProvider`: register `AsyncHooksContextManager` BEFORE the tracer provider, otherwise Vercel AI SDK (and similar instrumented frameworks) emit each async-boundary-crossing span as its own root with a fresh trace_id. Atrib then signs each into its own context_id, breaking session chain composition.
+For Node.js consumers using the bare `BasicTracerProvider`: register `AsyncHooksContextManager` BEFORE the tracer provider, otherwise Vercel AI SDK (and similar instrumented frameworks) emit each async-boundary-crossing span as its own root with a fresh trace_id. atrib then signs each into its own context_id, breaking session chain composition.
 
 ```ts
 import { AsyncHooksContextManager } from '@opentelemetry/context-async-hooks'

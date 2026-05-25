@@ -7,7 +7,7 @@
  * Without an active context manager registered (the default state for a
  * bare BasicTracerProvider), spans crossing an `await` boundary lose
  * their parent context and emit as fresh root spans with distinct
- * trace_ids. Atrib's adapter then signs each into its own context_id,
+ * trace_ids. atrib's adapter then signs each into its own context_id,
  * breaking session chain composition.
  *
  * This helper performs a deterministic two-span test: opens a root span,

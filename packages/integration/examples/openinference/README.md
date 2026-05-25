@@ -27,7 +27,7 @@ ATRIB_PRIVATE_KEY=<base64url-32-bytes> \
 
 ## Critical setup: the async-hooks context manager
 
-The example registers `AsyncHooksContextManager` BEFORE creating the TracerProvider. Without it, Vercel AI SDK's child spans (LLM/TOOL/LLM/AGENT of a single `generateText` call) lose parent-context across async boundaries and each becomes its own root span with a fresh trace_id. Atrib's adapter then signs each as its own context_id -- breaking session chain composition.
+The example registers `AsyncHooksContextManager` BEFORE creating the TracerProvider. Without it, Vercel AI SDK's child spans (LLM/TOOL/LLM/AGENT of a single `generateText` call) lose parent-context across async boundaries and each becomes its own root span with a fresh trace_id. atrib's adapter then signs each as its own context_id -- breaking session chain composition.
 
 Empirical observation: without `AsyncHooksContextManager`, a single `generateText` call produces 4 distinct trace_ids (one per child span). With it, all 4 spans share one trace_id and therefore one atrib context_id. The change is one block at the top of the script:
 

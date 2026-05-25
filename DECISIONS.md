@@ -1205,7 +1205,7 @@ A second motivation: scheduled 90-day rotation is not viable today. If a creator
 **Date:** 2026-04-27
 **Status:** Accepted; spec [§6](atrib-spec.md#6-key-directory) drafted, implementation in an upcoming implementation phase
 
-**Context.** Atrib records carry `creator_key` as opaque base64url bytes. A verifier seeing such a record has no way to learn "who is this?" There is no canonical mapping from `creator_key` to identity. An audit pass identified this as the most consequential infrastructure gap: without a directory, attribution is purely cryptographic and not semantically meaningful to anyone except the original signer.
+**Context.** atrib records carry `creator_key` as opaque base64url bytes. A verifier seeing such a record has no way to learn "who is this?" There is no canonical mapping from `creator_key` to identity. An audit pass identified this as the most consequential infrastructure gap: without a directory, attribution is purely cryptographic and not semantically meaningful to anyone except the original signer.
 
 A neighbouring class of use cases has the same problem at a higher privacy bar: any directory whose `label → value` lookup is itself sensitive (for example, end-to-end-encrypted messaging where asking "what's user X's key?" would leak interest in user X to the directory operator).
 
@@ -1249,7 +1249,7 @@ A decision was needed on three questions: (1) AKD vs roll-our-own simpler struct
 
 2. *Build a custom directory protocol.* Rejected because AKD is mature, audited, and reused by Meta in production for WhatsApp key transparency. Reinventing it is unjustified scope.
 
-3. *Atrib uses unblinded forever; downstream privacy-preserving consumers fork to a different library.* Rejected because the two configurations share a substantive amount of operational infrastructure (witness model, append-only proof, rotation handling). Forking would mean maintaining two implementations of the same Merkle structure.
+3. *atrib uses unblinded forever; downstream privacy-preserving consumers fork to a different library.* Rejected because the two configurations share a substantive amount of operational infrastructure (witness model, append-only proof, rotation handling). Forking would mean maintaining two implementations of the same Merkle structure.
 
 4. *Host the directory in the same Tessera log.* Rejected because directory entries form a different per-label append-only structure than tlog-tiles' entry-indexed structure. Conflating them would force one of them into the wrong abstraction. They share the witness pattern but not the data model.
 
@@ -1367,7 +1367,7 @@ A type is eligible for promotion to atrib's normative URI namespace when the fol
 
 3. **Filterable benefit at the log-byte level.** Verifiers running real queries gain meaningfully more from byte-level filtering than from content fetch + parse. A primitive that's queried frequently across the consumer base (e.g., regulators querying for "transactions") clears this; a primitive of interest mainly to one consumer's tooling does not.
 
-4. **Atrib protocol load-bearing OR observably canonical in extension form.** Either atrib's own [§3](atrib-spec.md#3-graph-query-interface) graph derivation or [§4](atrib-spec.md#4-attribution-policy-format) calculation depends on distinguishing this primitive (load-bearing), or the same extension URI has been independently adopted by multiple consumer categories with consistent semantics across them (observably canonical). The first is rare and decisive; the second is the more common path.
+4. **atrib protocol load-bearing OR observably canonical in extension form.** Either atrib's own [§3](atrib-spec.md#3-graph-query-interface) graph derivation or [§4](atrib-spec.md#4-attribution-policy-format) calculation depends on distinguishing this primitive (load-bearing), or the same extension URI has been independently adopted by multiple consumer categories with consistent semantics across them (observably canonical). The first is rare and decisive; the second is the more common path.
 
 5. **Promotion is non-disruptive.** The primitive's wire and graph behavior under its extension URI is consistent with what its normative URI would be. Consumers using the extension URI before promotion can swap to the normative URI without changing their semantics. If promotion would change behavior in a way existing extension users have to migrate around, the bar is not met (or the change is not a promotion, it is a redesign).
 
@@ -1465,7 +1465,7 @@ The `keystore: 'callback'` mode (designed and merged but not yet wired end-to-en
 
 1. *Operator-managed RFC 7468 PEM file with passphrase-encrypted seed.* Rejected, passphrase has the same memory-residency problem as the bare seed once decrypted, and adds a UX layer (passphrase prompt) that breaks unattended deployments.
 
-2. *Atrib bundles its own HSM client per backend.* Rejected, proliferates dependencies and makes atrib responsible for HSM SDK upgrade cycles. The callback mode lets operators bring their own client.
+2. *atrib bundles its own HSM client per backend.* Rejected, proliferates dependencies and makes atrib responsible for HSM SDK upgrade cycles. The callback mode lets operators bring their own client.
 
 3. *Bootstrap from cloud-provider IMDS.* Rejected as the default path because it ties atrib to specific cloud environments. Documented as "additional pattern: AWS Lambda may use IMDSv2 to fetch a session-scoped KMS key" but not the headline.
 
@@ -2394,13 +2394,13 @@ This labeling artifact is symptomatic of a real spec gap: the URI is normatively
 
 **Evaluation against [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary).**
 
-1. **Architecture-agnostic in practice.** Does NOT clear under the cross-category-adoption reading. Today the only emitter is atrib's own reference directory. This is the indicator that's weakest, but the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) text on indicator 4 explicitly admits "Atrib protocol load-bearing" as an alternative path, "rare and decisive." `directory_anchor` is the canonical example of that path.
+1. **Architecture-agnostic in practice.** Does NOT clear under the cross-category-adoption reading. Today the only emitter is atrib's own reference directory. This is the indicator that's weakest, but the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) text on indicator 4 explicitly admits "atrib protocol load-bearing" as an alternative path, "rare and decisive." `directory_anchor` is the canonical example of that path.
 
 2. **Structurally distinct from existing normative types.** Holds. `directory_anchor` is not a `tool_call` (no caller-supplied arguments, no MCP tool invocation). Not a `transaction` (no commerce protocol detection). Not an `observation` (the directory is not "perceiving its environment"; it is committing its own state). The closest neighbor is `observation`, but `observation` carries "the agent received this from outside"; `directory_anchor` carries "this service committed its internal state at this moment." Different semantic shape.
 
 3. **Filterable benefit at the log-byte level.** Holds. [§6.3](atrib-spec.md#63-verifier-consultation-algorithm) step 7 (AKD consistency check) is a real verifier query that needs all directory_anchor records for a given directory key. Without a byte slot, verifiers fetch the content of every `0xFF` entry from the directory's `creator_key` and parse the URI. With a byte slot, the same query is a byte filter on the binary entry.
 
-4. **Atrib protocol load-bearing.** Holds, decisively. [§6.2.4](atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log) requires the emission. [§6.3](atrib-spec.md#63-verifier-consultation-algorithm) step 7 requires consumption. [§3.2.4](atrib-spec.md#324-edge-derivation-rules) graph derivation excludes `directory_anchor` from session edges (system commitments are not session participants). Three normative spec sections distinguish the type today.
+4. **atrib protocol load-bearing.** Holds, decisively. [§6.2.4](atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log) requires the emission. [§6.3](atrib-spec.md#63-verifier-consultation-algorithm) step 7 requires consumption. [§3.2.4](atrib-spec.md#324-edge-derivation-rules) graph derivation excludes `directory_anchor` from session edges (system commitments are not session participants). Three normative spec sections distinguish the type today.
 
 5. **Promotion is non-disruptive.** Holds. The URI does not change. Existing directory_anchor records (signed before the byte allocation, encoded as `0xFF`) remain valid: the URI in the record content is the authoritative type per [§2.3.1](atrib-spec.md#231-entry-serialization)'s "byte mapping is a fast-path filter; the authoritative type is the URI." New records get the new byte. Verifiers wanting complete directory_anchor queries during the transition window filter by URI (always works) rather than by byte (works only for post-promotion records). Once the pre-promotion records age out of operational interest, byte filtering suffices.
 
@@ -4559,7 +4559,7 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 **The decision in question:** which deployment architecture for host-side hook helpers (the operator-installable thin glue between Claude Code / Cursor / similar host PostToolUse-style hooks and atrib's MCP signing servers):
 
 1. **Symlink-from-repo (status quo + installer guardrails).** Source lives in the repo's `tools/claude-hooks/`; user-level install creates symlinks pointing at the repo. Dependencies install once at the source location's sibling `node_modules`. Installer refuses to point symlinks at worktree paths (the catch added after the outage above). Edits propagate live; dev velocity high; deployment surface coupled to repo-checkout shape.
-2. **Published CLI (`@atrib/cli` on npm).** Atrib publishes a unified CLI with subcommands `atrib emit`, `atrib recall`, `atrib trace`, `atrib summarize`, `atrib annotate`, `atrib revise` (each subcommand backed by the corresponding `@atrib/<primitive>` package's signing logic). Operators install once: `npm install -g @atrib/cli`. Hook scripts under `~/.claude/scripts/` become ~10-line shell wrappers that `exec atrib emit --hook-mode < stdin`. The CLI is the runtime; the repo's `tools/claude-hooks/` retains source-of-truth for development but is no longer the deployment surface. Standard pattern matching `gh`, `tailwind`, `prettier`, the OpenTelemetry collector, etc.
+2. **Published CLI (`@atrib/cli` on npm).** atrib publishes a unified CLI with subcommands `atrib emit`, `atrib recall`, `atrib trace`, `atrib summarize`, `atrib annotate`, `atrib revise` (each subcommand backed by the corresponding `@atrib/<primitive>` package's signing logic). Operators install once: `npm install -g @atrib/cli`. Hook scripts under `~/.claude/scripts/` become ~10-line shell wrappers that `exec atrib emit --hook-mode < stdin`. The CLI is the runtime; the repo's `tools/claude-hooks/` retains source-of-truth for development but is no longer the deployment surface. Standard pattern matching `gh`, `tailwind`, `prettier`, the OpenTelemetry collector, etc.
 3. **Hybrid.** Keep `tools/claude-hooks/` for atrib-developers self-hosting (preserves edit-in-place velocity during atrib's own iteration). Publish the CLI for external operators. Two installation paths documented separately. Higher maintenance, two delivery channels for the same logic, but avoids forcing the velocity sacrifice while atrib's substrate is still rapidly iterating.
 
 **Considerations.**

@@ -292,7 +292,7 @@ export function readToolCallId(span: ReadableSpan): string | undefined {
 
 /**
  * Convenience: extract input/output value as string when present. Both
- * attributes can be JSON-encoded payloads, plain text, or absent. Atrib's
+ * attributes can be JSON-encoded payloads, plain text, or absent. atrib's
  * record format does not carry args/result inline (per §8.1 default
  * privacy posture); these are exposed here for callers that want to use
  * them in sidecar metadata or §8.3 args_hash computation.

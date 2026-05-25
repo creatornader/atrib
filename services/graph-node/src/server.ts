@@ -26,7 +26,7 @@ import { buildRevocationRegistry, graphLabelFromEventTypeUri } from '@atrib/veri
 import type { GraphResponse, MinimalRecord, RevocationEntry } from '@atrib/verify'
 
 // Normalize an event_type query parameter to the short label form used by
-// graph-node nodes. Atrib normative URIs map via graphLabelFromEventTypeUri;
+// graph-node nodes. atrib normative URIs map via graphLabelFromEventTypeUri;
 // extension URIs and short labels pass through unchanged so the caller can
 // compare against either node.event_type (short label) or node.event_type_uri.
 //
