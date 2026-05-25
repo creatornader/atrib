@@ -45,7 +45,6 @@ import {
   EVENT_TYPE_DIRECTORY_ANCHOR_URI,
   resolveEnvContextId,
   logReadPrimitiveCall,
-  extractRecordHashesFromMcpResult,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 
@@ -477,6 +476,8 @@ type RecallRecordFull = AtribRecord & {
   signature_verified: boolean
   annotations?: AnnotationSummary
   superseded_by?: string[]
+  local_content?: unknown
+  local_producer?: string
 }
 
 export interface RecallResult {
@@ -710,8 +711,44 @@ function fullify(bundles: VerifiedBundle[]): RecallRecordFull[] {
     const out = { ...b.record, signature_verified: b.signature_verified } as RecallRecordFull
     if (b.annotations) out.annotations = b.annotations
     if (b.superseded_by) out.superseded_by = b.superseded_by
+    if (b.content !== undefined) out.local_content = b.content
+    if (b.producer !== undefined) out.local_producer = b.producer
     return out
   })
+}
+
+function extractRecordHashFieldsFromMcpResult(result: unknown): string[] {
+  const seen = new Set<string>()
+  const pattern = /^sha256:[0-9a-f]{64}$/
+  const content = (result as { content?: unknown })?.content
+  const text =
+    Array.isArray(content) && typeof (content[0] as { text?: unknown } | undefined)?.text === 'string'
+      ? ((content[0] as { text: string }).text)
+      : undefined
+  let root: unknown = result
+  if (text) {
+    try {
+      root = JSON.parse(text)
+    } catch {
+      root = result
+    }
+  }
+  walk(root)
+  return Array.from(seen)
+
+  function walk(node: unknown): void {
+    if (node === null || node === undefined) return
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item)
+      return
+    }
+    if (typeof node !== 'object') return
+    const obj = node as Record<string, unknown>
+    if (typeof obj.record_hash === 'string' && pattern.test(obj.record_hash)) {
+      seen.add(obj.record_hash)
+    }
+    for (const value of Object.values(obj)) walk(value)
+  }
 }
 
 /**
@@ -1120,7 +1157,7 @@ server.registerTool(
           ],
         }
       },
-      extractRecordHashesFromMcpResult,
+      extractRecordHashFieldsFromMcpResult,
     ),
 )
 
@@ -1211,7 +1248,7 @@ server.registerTool(
           ],
         }
       },
-      extractRecordHashesFromMcpResult,
+      extractRecordHashFieldsFromMcpResult,
     ),
 )
 
@@ -1249,7 +1286,7 @@ server.registerTool(
           ],
         }
       },
-      extractRecordHashesFromMcpResult,
+      extractRecordHashFieldsFromMcpResult,
     ),
 )
 
@@ -1346,7 +1383,7 @@ server.registerTool(
           ],
         }
       },
-      extractRecordHashesFromMcpResult,
+      extractRecordHashFieldsFromMcpResult,
     ),
 )
 
@@ -1432,7 +1469,7 @@ server.registerTool(
           ],
         }
       },
-      extractRecordHashesFromMcpResult,
+      extractRecordHashFieldsFromMcpResult,
     ),
 )
 
@@ -1458,6 +1495,12 @@ server.registerTool(
         .optional()
         .describe(
           "Maximum records to return (default 50, max 500). Truncated from the END of the chain (oldest-first ordering preserves the chain's start).",
+        ),
+      include_content: z
+        .boolean()
+        .optional()
+        .describe(
+          'When true, include D062 local mirror body as local_content on each returned record. Defaults false to keep the session chain cheap.',
         ),
     },
   },
@@ -1501,7 +1544,20 @@ server.registerTool(
                   truncated: filtered.length > sliced.length,
                   records: sliced.map((lr) => {
                     const ann = annotationsByRecord.get(lr.record_hash)
-                    return {
+                    const entry: {
+                      record_hash: string
+                      event_type: AtribRecord['event_type']
+                      timestamp: number
+                      display_summary: string
+                      display_producer: string
+                      age: string
+                      informed_by?: string[]
+                      tool_name?: string
+                      args_hash?: string
+                      result_hash?: string
+                      local_content?: unknown
+                      local_producer?: string
+                    } = {
                       record_hash: lr.record_hash,
                       event_type: lr.record.event_type,
                       timestamp: lr.record.timestamp,
@@ -1509,6 +1565,23 @@ server.registerTool(
                       display_producer: resolveDisplayProducer(lr.record, lr.producer),
                       age: formatAge(lr.record.timestamp, now),
                     }
+                    const informedBy = (lr.record as AtribRecord & { informed_by?: string[] }).informed_by
+                    const toolName = (lr.record as AtribRecord & { tool_name?: string }).tool_name
+                    const argsHash = (lr.record as AtribRecord & { args_hash?: string }).args_hash
+                    const resultHash = (lr.record as AtribRecord & { result_hash?: string }).result_hash
+                    if (Array.isArray(informedBy) && informedBy.length > 0) {
+                      entry.informed_by = informedBy
+                    }
+                    if (toolName) entry.tool_name = toolName
+                    if (argsHash) entry.args_hash = argsHash
+                    if (resultHash) entry.result_hash = resultHash
+                    if (args.include_content === true && lr.content !== undefined) {
+                      entry.local_content = lr.content
+                    }
+                    if (args.include_content === true && lr.producer !== undefined) {
+                      entry.local_producer = lr.producer
+                    }
+                    return entry
                   }),
                 },
                 null,
@@ -1518,7 +1591,7 @@ server.registerTool(
           ],
         }
       },
-      extractRecordHashesFromMcpResult,
+      extractRecordHashFieldsFromMcpResult,
     ),
 )
 
@@ -1615,7 +1688,7 @@ server.registerTool(
           ],
         }
       },
-      extractRecordHashesFromMcpResult,
+      extractRecordHashFieldsFromMcpResult,
     ),
 )
 
@@ -1681,7 +1754,7 @@ server.registerTool(
           ],
         }
       },
-      extractRecordHashesFromMcpResult,
+      extractRecordHashFieldsFromMcpResult,
     ),
 )
 

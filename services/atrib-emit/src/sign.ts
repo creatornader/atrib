@@ -73,6 +73,11 @@ export interface BuildEmitRecordInput {
    * yet surface.
    */
   argsHash?: string | undefined
+  /**
+   * Optional §8.3 result_hash commitment. Same posture semantics and wire
+   * format as args_hash, but commits to the tool result bytes.
+   */
+  resultHash?: string | undefined
 }
 
 /**
@@ -107,6 +112,7 @@ export async function buildAndSignEmitRecord(
     ...(input.annotates ? { annotates: input.annotates } : {}),
     ...(input.argsHash ? { args_hash: input.argsHash } : {}),
     ...(input.provenanceToken ? { provenance_token: input.provenanceToken } : {}),
+    ...(input.resultHash ? { result_hash: input.resultHash } : {}),
     ...(input.revises ? { revises: input.revises } : {}),
     ...(input.toolName ? { tool_name: input.toolName } : {}),
   } as AtribRecord
