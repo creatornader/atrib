@@ -749,35 +749,58 @@
     height: 600px;
     background: var(--surface);
   }
-  /* Reset-camera button: float over the graph in the top-right corner.
+  .trace-graph canvas {
+    display: block;
+    cursor: grab;
+  }
+  .trace-graph.is-dragging canvas { cursor: grabbing; }
+  /* Camera controls: float over the graph in the top-right corner.
      Subtle by default so it doesn't compete with the graph content;
      strengthens on hover so it's findable when needed. Same color
      vocabulary as the search button. */
-  .graph-camera-reset {
+  .graph-camera-controls {
     position: absolute;
     top: 8px;
     right: 8px;
     z-index: 5;
+    display: inline-flex;
+    align-items: stretch;
+    overflow: hidden;
     background: var(--surface-2, var(--surface));
-    color: var(--text-2);
     border: 1px solid var(--border, rgba(255,255,255,0.08));
-    padding: 6px 10px;
     border-radius: var(--radius-sm);
+    opacity: 0.6;
+    transition-property: opacity;
+    transition-duration: 120ms;
+    transition-timing-function: ease;
+  }
+  .graph-camera-controls:hover {
+    opacity: 1;
+  }
+  .graph-camera-controls button {
+    min-width: 34px;
+    min-height: 34px;
+    background: transparent;
+    color: var(--text-2);
+    border: 0;
+    border-right: 1px solid var(--border, rgba(255,255,255,0.08));
+    padding: 0 10px;
     cursor: pointer;
     font: 500 11px/1 var(--font-sans);
     letter-spacing: 0.02em;
-    opacity: 0.6;
-    transition: all 120ms ease;
+    transition-property: background-color, color;
+    transition-duration: 120ms;
+    transition-timing-function: ease;
   }
-  .graph-camera-reset:hover {
-    opacity: 1;
+  .graph-camera-controls button:last-child { border-right: 0; }
+  .graph-camera-controls button:hover {
     background: var(--accent);
     color: var(--bg);
-    border-color: var(--accent);
   }
-  .graph-camera-reset:focus-visible {
+  .graph-camera-controls button:active { transform: scale(0.96); }
+  .graph-camera-controls button:focus-visible {
     outline: 2px solid var(--accent);
-    outline-offset: 2px;
+    outline-offset: -2px;
   }
   /* Layout-mode switcher: top-left of the graph. Three-button group
      ('timeline', 'organic', 'cluster') so users can compare layouts
@@ -795,7 +818,9 @@
     border-radius: var(--radius-sm);
     overflow: hidden;
     opacity: 0.65;
-    transition: opacity 120ms ease;
+    transition-property: opacity;
+    transition-duration: 120ms;
+    transition-timing-function: ease;
   }
   .graph-layout-switcher:hover { opacity: 1; }
   .graph-layout-switcher button {
@@ -807,7 +832,9 @@
     cursor: pointer;
     font: 500 11px/1 var(--font-sans);
     letter-spacing: 0.02em;
-    transition: all 120ms ease;
+    transition-property: background-color, color;
+    transition-duration: 120ms;
+    transition-timing-function: ease;
   }
   .graph-layout-switcher button:last-child { border-right: none; }
   .graph-layout-switcher button:hover {
@@ -842,7 +869,41 @@
     max-width: 640px;
     text-align: left;
   }
-  .trace-graph canvas { display: block; }
+  .graph-node-tooltip {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 6;
+    max-width: 260px;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate3d(16px, 16px, 0);
+    background: color-mix(in srgb, var(--surface-2) 94%, black);
+    color: var(--text-1, var(--text));
+    border: 1px solid var(--border, rgba(255,255,255,0.08));
+    border-radius: var(--radius-sm);
+    box-shadow:
+      0 10px 26px rgba(0, 0, 0, 0.26),
+      0 2px 8px rgba(0, 0, 0, 0.18);
+    padding: 8px 10px;
+    font: 12px/1.35 var(--font-sans);
+    transition-property: opacity, transform;
+    transition-duration: 120ms;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+  .graph-node-tooltip.visible { opacity: 1; }
+  .graph-node-tooltip .kind {
+    display: block;
+    color: var(--text-1, var(--text));
+    font-weight: 600;
+  }
+  .graph-node-tooltip .hash {
+    display: block;
+    margin-top: 3px;
+    color: var(--text-3);
+    font: 11px/1.3 var(--font-mono);
+    overflow-wrap: anywhere;
+  }
 
   .trace-truncation {
     margin: 16px 0 0;
@@ -2226,7 +2287,7 @@ async function renderIdentity(creatorKey) {
       }
       const { sigma, fitCameraToGraph, resolvedMode } = await renderSigmaDAG(activityGraphContainer, graph, { layoutMode: mode })
       _activeSigmaInstance = sigma
-      attachCameraResetButton(activityGraphContainer, fitCameraToGraph)
+      attachCameraControls(activityGraphContainer, fitCameraToGraph, sigma)
       attachLayoutSwitcher(activityGraphContainer, resolvedMode, renderActivity)
     }
     await renderActivity(_activityLayoutMode)
@@ -2632,7 +2693,7 @@ async function renderSession(contextId) {
         layoutMode: mode,
       })
       _activeSigmaInstance = sigma
-      attachCameraResetButton(graphContainer, fitCameraToGraph)
+      attachCameraControls(graphContainer, fitCameraToGraph, sigma)
       attachLayoutSwitcher(graphContainer, resolvedMode, renderSessionGraph)
     }
     await renderSessionGraph(_sessionLayoutMode)
@@ -2784,8 +2845,10 @@ async function loadForceAtlas2() {
   if (_fa2Module) return _fa2Module
   // Dynamic import: bundlers + browsers both honor this for ESM URLs.
   // The default export is the synchronous-positions function; named
-  // exports include `inferSettings` and an `assign` helper.
-  _fa2Module = await import(/* @vite-ignore */ FA2_ESM_URL)
+  // exports include `inferSettings` and an `assign` helper. esm.sh exposes
+  // those helpers as properties on default for this CommonJS package.
+  const mod = await import(/* @vite-ignore */ FA2_ESM_URL)
+  _fa2Module = mod.inferSettings && mod.assign ? mod : mod.default
   return _fa2Module
 }
 
@@ -2849,6 +2912,26 @@ function eventTypeColor(eventType) {
   }
   return _cssVar(map[eventType] || '--muted', '#9ca3af')
 }
+function graphNodeKindLabel(eventType) {
+  const labels = {
+    tool_call: 'tool call',
+    transaction: 'transaction',
+    observation: 'observation',
+    annotation: 'annotation',
+    revision: 'revision',
+    directory_anchor: 'directory anchor',
+    extension: 'extension record',
+    gap_node: 'unresolved reference',
+    dangling_node: 'unresolved reference',
+  }
+  return labels[eventType] || (eventType ? eventType.replaceAll('_', ' ') : 'record')
+}
+function graphNodeRecordHash(node) {
+  if (!node) return ''
+  if (node.record_hash) return node.record_hash
+  if (!node.id) return ''
+  return node.id.startsWith('sha256:') ? node.id : `sha256:${node.id}`
+}
 // Edge color is keyed by edge_type, distinct vocabulary from node event_type.
 // All entries resolve via dedicated `--edge-*` tokens defined in :root; the
 // CSS records which edges intentionally alias a node color (ANNOTATES, REVISES,
@@ -2903,31 +2986,59 @@ function edgeTypeColor(edgeType) {
 const FA2_ITERATIONS = 200
 
 /**
- * Attach a "reset" camera button overlay to a graph container. Idempotent:
- * removes any prior reset button before inserting the new one, so re-renders
- * (route refetch, dashboard auto-refresh) don't stack duplicate buttons.
- *
- * The container must be `position: relative` (or fixed/absolute); the
- * button positions absolutely top-right via the .graph-camera-reset class.
- * Click handler calls fitCameraToGraph() which animates the camera back
- * to the framed view.
+ * Attach camera controls to a graph container. Idempotent: removes any prior
+ * controls before inserting the new group, so route refreshes do not stack
+ * duplicate buttons.
  */
-function attachCameraResetButton(container, fitCameraToGraph) {
-  // Remove any prior reset button so re-renders don't duplicate.
-  const prior = container.querySelector(':scope > .graph-camera-reset')
+function attachCameraControls(container, fitCameraToGraph, sigmaInstance) {
+  const prior = container.querySelector(':scope > .graph-camera-controls')
   if (prior) prior.remove()
-  const btn = el('button', {
+  const wrap = el('div', {
+    class: 'graph-camera-controls',
+    role: 'group',
+    'aria-label': 'Graph camera controls',
+  })
+  const animateCameraTo = (state, duration = 180) => {
+    const camera = sigmaInstance && sigmaInstance.getCamera()
+    if (!camera) return
+    if (typeof camera.animate === 'function') {
+      camera.animate(state, { duration })
+    } else {
+      camera.setState(state)
+    }
+  }
+  const zoomBy = (factor) => {
+    const camera = sigmaInstance && sigmaInstance.getCamera()
+    if (!camera) return
+    const state = camera.getState()
+    const ratio = Math.max(0.025, Math.min(2.5, state.ratio * factor))
+    animateCameraTo({ ...state, ratio }, 180)
+  }
+  const zoomOut = el('button', {
+    type: 'button',
+    title: 'Zoom out',
+    'aria-label': 'Zoom out',
+  }, '-')
+  const reset = el('button', {
     class: 'graph-camera-reset',
     type: 'button',
     title: 'Reset camera to fit graph',
     'aria-label': 'Reset camera to fit graph',
-  }, '↺ reset')
-  btn.addEventListener('click', () => {
+  }, 'reset')
+  const zoomIn = el('button', {
+    type: 'button',
+    title: 'Zoom in',
+    'aria-label': 'Zoom in',
+  }, '+')
+  zoomOut.addEventListener('click', () => zoomBy(1.35))
+  zoomIn.addEventListener('click', () => zoomBy(0.74))
+  reset.addEventListener('click', () => {
     try { fitCameraToGraph(true) } catch (e) {
       console.warn('[atrib-dashboard] camera reset failed:', e)
     }
   })
-  container.appendChild(btn)
+  wrap.append(zoomOut, reset, zoomIn)
+  container.appendChild(wrap)
 }
 
 /**
@@ -3054,21 +3165,24 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     const degree = degreeByNodeId.get(n.id) ?? 0
     const centrality = degree / centralityDenom
     const size = computeNodeSizeFromCentrality(n, isFocal, centrality, nodeSize, focalSize)
-    const labelHash = n.record_hash || (n.id ? (n.id.startsWith('sha256:') ? n.id : `sha256:${n.id}`) : '')
-    const label = `${n.event_type || '?'} · ${shorten(labelHash, 8, 4)}`
+    const labelHash = graphNodeRecordHash(n)
+    const kindLabel = graphNodeKindLabel(n.event_type)
 
     gx.addNode(n.id, {
       x: 0, y: 0,
       size,
       color,
-      label,
+      label: '',
       _node: n,
       _isFocal: isFocal,
       _degree: degree,
+      _eventType: n.event_type,
+      _kindLabel: kindLabel,
+      _hashLabel: labelHash ? shorten(labelHash, 8, 4) : '',
     })
     if (dgx) {
       // Dagre node sizes are pixel boxes for layout spacing only.
-      dgx.setNode(n.id, { width: Math.max(60, label.length * 7), height: 28 })
+      dgx.setNode(n.id, { width: Math.max(42, kindLabel.length * 6), height: 28 })
     }
   }
 
@@ -3259,21 +3373,26 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     }
   }
 
+  gx.forEachNode((nodeId, attrs) => {
+    if (attrs.type) gx.removeNodeAttribute(nodeId, 'type')
+  })
+
   const sigmaInstance = new Sigma(gx, container, {
     renderEdgeLabels: false,
     defaultEdgeType: 'arrow',
     edgeProgramClasses,
+    defaultNodeType: 'circle',
+    nodeProgramClasses: {
+      circle: Sigma.rendering.NodeCircleProgram,
+      point: Sigma.rendering.NodePointProgram,
+    },
     defaultNodeColor: _cssVar('--muted', '#9ca3af'),
     labelColor: { color: _cssVar('--text-2', '#a0a3ab') },
-    labelSize: 11,
-    // Only paint a label once the node renders at ≥6px on screen.
-    // At fit-to-graph zoom, a 327-node timeline has nodes at ~3px so
-    // labels were stacking into illegible noise. As the user zooms in
-    // past ~3x, nodes pass the threshold and labels appear.
-    labelRenderedSizeThreshold: 6,
-    // Density gate kept low so even past the size threshold, only the
-    // most prominent labels in a viewport region show (not every node).
-    labelDensity: 0.07,
+    labelSize: 10,
+    // Dense graph labels live in the DOM tooltip below. Canvas labels have
+    // no background and overlap badly in session timelines, so keep them off.
+    labelRenderedSizeThreshold: 1e9,
+    labelDensity: 0,
     edgeLabelColor: { color: _cssVar('--text-3', '#6a6e78') },
     // Keep edges visible during pan/zoom. The graph is the product here:
     // hiding links while moving leaves users with a cloud of disconnected
@@ -3303,14 +3422,39 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   let _hoveredNeighborhood = null
   let _hoverIntentTimer = null
   let _pointerDown = false
+  let _lastPointer = { x: 16, y: 16 }
   const _DIM_NODE_COLOR = _cssVar('--text-3', '#6a6e78')
   const _DIM_EDGE_COLOR = _cssVar('--border', '#2d3038')
+  const tooltip = el('div', { class: 'graph-node-tooltip', 'aria-hidden': 'true' })
+  container.appendChild(tooltip)
   const clearHoverIntent = () => {
     if (_hoverIntentTimer) window.clearTimeout(_hoverIntentTimer)
     _hoverIntentTimer = null
   }
+  const setTooltipPosition = (event) => {
+    const rect = container.getBoundingClientRect()
+    const x = Math.min(rect.width - 24, Math.max(8, event.clientX - rect.left + 14))
+    const y = Math.min(rect.height - 24, Math.max(8, event.clientY - rect.top + 14))
+    _lastPointer = { x, y }
+    tooltip.style.transform = `translate3d(${x}px, ${y}px, 0)`
+  }
+  const showNodeTooltip = (nodeId) => {
+    const attrs = gx.getNodeAttributes(nodeId)
+    const source = attrs._node || {}
+    const hash = graphNodeRecordHash(source)
+    tooltip.replaceChildren(
+      el('span', { class: 'kind' }, attrs._kindLabel || graphNodeKindLabel(source.event_type)),
+      hash ? el('span', { class: 'hash' }, shorten(hash, 13, 6)) : null,
+    )
+    tooltip.style.transform = `translate3d(${_lastPointer.x}px, ${_lastPointer.y}px, 0)`
+    tooltip.classList.add('visible')
+  }
+  const hideNodeTooltip = () => {
+    tooltip.classList.remove('visible')
+  }
   const clearHoverFocus = () => {
     clearHoverIntent()
+    hideNodeTooltip()
     if (!_hoveredNode && !_hoveredNeighborhood) return
     _hoveredNode = null
     _hoveredNeighborhood = null
@@ -3320,18 +3464,16 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   const _interactionAbort = new AbortController()
   container._atribGraphInteractionAbort = _interactionAbort
   sigmaInstance.setSetting('nodeReducer', (nodeId, attrs) => {
-    // Labels OFF by default, Sigma's text rendering has no background
-    // pill or styling, so dense graphs render labels overlapping into
-    // illegible noise. On hover, labels appear for the hovered node + its
-    // 1-hop neighbors (handled in the next branch). Focal nodes
-    // (transactions and explicit foci passed via isFocalNode) keep their
-    // labels visible at all times so the eye has anchor points.
+    // Labels stay off in the canvas. The pointer tooltip handles readable
+    // text, while nodes and edges carry the structure.
     if (!_hoveredNode || !_hoveredNeighborhood) {
-      const isFocal = attrs.isFocal === true || attrs.event_type === 'transaction'
-      return isFocal ? attrs : { ...attrs, label: '' }
+      const isFocal = attrs._isFocal === true || attrs._eventType === 'transaction'
+      return isFocal ? { ...attrs, label: '', size: attrs.size * 1.06 } : { ...attrs, label: '' }
     }
     if (_hoveredNeighborhood.nodes.has(nodeId)) {
-      return nodeId === _hoveredNode ? { ...attrs, size: attrs.size * 1.18 } : attrs
+      return nodeId === _hoveredNode
+        ? { ...attrs, label: '', size: attrs.size * 1.18 }
+        : { ...attrs, label: '' }
     }
     return { ...attrs, color: _DIM_NODE_COLOR, label: '', size: Math.max(2.5, attrs.size * 0.72) }
   })
@@ -3360,6 +3502,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
       if (_pointerDown) return
       _hoveredNode = node
       _hoveredNeighborhood = computeNeighborhood(gx, node)
+      showNodeTooltip(node)
       sigmaInstance.refresh({ skipIndexation: true })
     }, 80)
   })
@@ -3368,21 +3511,26 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   })
   container.addEventListener('pointerdown', (event) => {
     _pointerDown = true
+    container.classList.add('is-dragging')
     clearHoverFocus()
     if (event.pointerId != null && typeof container.setPointerCapture === 'function') {
       try { container.setPointerCapture(event.pointerId) } catch {}
     }
-  }, { signal: _interactionAbort.signal })
+  }, { signal: _interactionAbort.signal, capture: true })
+  container.addEventListener('pointermove', setTooltipPosition, { signal: _interactionAbort.signal, passive: true })
   window.addEventListener('pointerup', () => {
     _pointerDown = false
+    container.classList.remove('is-dragging')
   }, { signal: _interactionAbort.signal })
   window.addEventListener('pointercancel', () => {
     _pointerDown = false
+    container.classList.remove('is-dragging')
   }, { signal: _interactionAbort.signal })
   const _killSigma = sigmaInstance.kill.bind(sigmaInstance)
   sigmaInstance.kill = () => {
     _interactionAbort.abort()
     clearHoverIntent()
+    hideNodeTooltip()
     _killSigma()
   }
 
@@ -4016,7 +4164,7 @@ async function renderTrace(rawHash) {
       layoutMode: mode,
     })
     _activeSigmaInstance = sigma
-    attachCameraResetButton(graphContainer, fitCameraToGraph)
+    attachCameraControls(graphContainer, fitCameraToGraph, sigma)
     attachLayoutSwitcher(graphContainer, resolvedMode, renderTraceGraph)
   }
   await renderTraceGraph(_traceLayoutMode)
