@@ -12,7 +12,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
@@ -755,6 +755,91 @@ describe('MCP protocol surface', () => {
       expect(payload.context_id).toBe(ctx1)
       expect(payload.total).toBe(3)
       expect(payload.records.map((r) => r.timestamp)).toEqual([1000, 2000, 3000])
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_session_chain can return D062 local content when requested', async () => {
+    const ctx = 'c'.repeat(32)
+    const pub = await getPublicKey(KEY)
+    const record = await signRecord({
+      spec_version: 'atrib/1.0' as const,
+      event_type: EVENT_TYPE_TOOL_CALL_URI,
+      context_id: ctx,
+      creator_key: base64urlEncode(pub),
+      chain_root: genesisChainRoot(ctx),
+      content_id: `sha256:${'e'.repeat(64)}`,
+      timestamp: 1700000000000,
+      signature: '',
+      tool_name: 'phase2_config_parser_diagnostics',
+      args_hash: `sha256:${'1'.repeat(64)}`,
+      result_hash: `sha256:${'2'.repeat(64)}`,
+      informed_by: [`sha256:${'3'.repeat(64)}`],
+    } as AtribRecord, KEY)
+    writeFileSync(
+      recordFile,
+      JSON.stringify({
+        record,
+        _local: {
+          content: { tool_name: 'python_atrib', result: 'edge decisions' },
+          producer: 'test-producer',
+        },
+      }),
+    )
+    const readLog = join(tmp, 'read-primitives.jsonl')
+    const client = new McpClient({
+      ATRIB_RECORD_FILE: recordFile,
+      ATRIB_READ_PRIMITIVES_LOG: readLog,
+    })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_session_chain',
+          arguments: { context_id: ctx, include_content: true },
+        },
+        2,
+      )
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        records: Array<{
+          record_hash: string
+          tool_name?: string
+          args_hash?: string
+          result_hash?: string
+          informed_by?: string[]
+          local_content?: unknown
+          local_producer?: string
+        }>
+      }
+      expect(payload.records[0]?.tool_name).toBe(
+        'phase2_config_parser_diagnostics',
+      )
+      expect(payload.records[0]?.args_hash).toBe(`sha256:${'1'.repeat(64)}`)
+      expect(payload.records[0]?.result_hash).toBe(`sha256:${'2'.repeat(64)}`)
+      expect(payload.records[0]?.informed_by).toEqual([
+        `sha256:${'3'.repeat(64)}`,
+      ])
+      expect(payload.records[0]?.local_content).toEqual({
+        tool_name: 'python_atrib',
+        result: 'edge decisions',
+      })
+      expect(payload.records[0]?.local_producer).toBe('test-producer')
+      const logRows = readFileSync(readLog, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as { sample_result_hashes?: string[] })
+      expect(logRows.at(-1)?.sample_result_hashes).toEqual([
+        payload.records[0]?.record_hash,
+      ])
+      expect(logRows.at(-1)?.sample_result_hashes).not.toContain(
+        `sha256:${'1'.repeat(64)}`,
+      )
+      expect(logRows.at(-1)?.sample_result_hashes).not.toContain(
+        `sha256:${'2'.repeat(64)}`,
+      )
     } finally {
       client.close()
     }

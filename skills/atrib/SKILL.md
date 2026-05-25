@@ -398,6 +398,10 @@ Check `https://log.atrib.dev/v1/stats newest_timestamp_ms`. If the gap to now is
 
 Sign a `revision` record per Pattern 2 above. Set `informed_by: [<the past record_hash>]`. Set `revises: <the past record_hash>` in `content`. Don't silently override.
 
+### "I'm repairing something and there is a diagnostic record"
+
+Start from the diagnostic/outcome record, not from a broad session dump. Call `mcp__atrib-trace__trace` with `record_hash: <diagnostic_record_hash>`, a bounded `depth`, and `include_content: true` when available. The diagnostic record is evidence about the action it evaluates through `informed_by`; in a repair/refinement task, its failed cases' expected/actual fields are the repair target, while the traced ancestor is the prior behavior being corrected. Cite only the `record_hash` values that informed the fix.
+
 ### "I queried recall and got 25 records, what's informed_by?"
 
 Read 25, identify the 1–3 that ACTUALLY changed your next action, declare ONLY those. The graph is only useful if `informed_by` is precise. "Every record I happened to see" is noise.

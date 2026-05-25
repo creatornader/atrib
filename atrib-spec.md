@@ -4358,7 +4358,33 @@ This pattern uses existing primitives (observation records per [D042](DECISIONS.
 
 The verifier's trust shifts from "agent says the tool returned X" to "the tool itself attests it returned X" (Pattern A) or "the world independently confirms the outcome occurred" (Pattern B). Neither is normative; both are documented patterns consumers adopt as their threat model requires.
 
-### 7.7 What the patterns DO NOT do
+### 7.7 Signed diagnostic outcome + causal trace replay
+
+Repair and refinement tasks often need more than a record of what the agent did. They need a signed account of what happened when that prior action was evaluated, linked back to the action it evaluated, so a later agent can replay the causal evidence without reading the whole session.
+
+**The pattern.**
+
+1. The harness signs the implementation or action record as usual.
+2. The harness runs a diagnostic, evaluator, verifier, test suite, or external check against that action.
+3. The harness signs the diagnostic outcome as a `tool_call` record. The diagnostic record's `informed_by` field references the implementation/action record hash it evaluated. Its `tool_name` identifies the evaluator, `args_hash` commits to the diagnostic input, and `result_hash` commits to the diagnostic outcome.
+4. The local mirror body for the diagnostic record SHOULD include enough structured detail for a consumer to act without guessing: suite id, pass/fail counts, per-case names, inputs, expected values, actual values, and error or diagnostic text when present.
+5. A later repair/refinement step calls `atrib-trace` starting from the diagnostic record hash with a bounded depth and `include_content=true`. The trace returns the diagnostic outcome plus the implementation/action ancestor through the existing `informed_by` edge.
+
+**Consumer interpretation.**
+
+In repair and refinement contexts, a diagnostic outcome record is evidence about the action it evaluates. When the diagnostic record's expected/actual outcome conflicts with the implementation/action ancestor, the consumer SHOULD treat the diagnostic outcome as the repair target and the ancestor as the prior behavior being evaluated. This is not a new graph rule and does not change attribution weights; it is a consumer-side evidence rule for interpreting a signed causal chain.
+
+This rule is generic. It applies to tests, validators, linters, external verifiers, transaction-status checks, and other outcome-producing evaluators. Harnesses SHOULD express the task class ("repair", "refinement", "regression follow-up", "audit replay") plainly to the agent so the agent knows how to use the evidence. That is different from bespoke prompt nudging: the substrate shape and the precedence rule stay stable across tasks.
+
+**Why no new event type.**
+
+A diagnostic outcome is still an observed tool action for v1 purposes: an evaluator was run with inputs and produced a result. The existing `tool_call` event type plus `tool_name`, `args_hash`, `result_hash`, local mirror content, and `informed_by` linkage are sufficient. A dedicated diagnostic event type would need evidence that downstream consumers require distinct graph derivation or settlement behavior, which this pattern does not require.
+
+**What this does not claim.**
+
+This pattern does not prove the diagnostic is true unless the diagnostic tool or an external witness also attests the result per [§7.6](#76-outcome-verification-patterns). It proves the harness signed an outcome record and linked it to the evaluated action. Consumers decide how much to trust the evaluator.
+
+### 7.8 What the patterns DO NOT do
 
 **They do not validate log inclusion.** Local signature verification proves "this record was signed by that creator_key." It does not prove "this record was committed to log.atrib.dev." A harness that needs the inclusion guarantee fetches an inclusion proof from the log per [§2](#2-merkle-log-protocol).
 

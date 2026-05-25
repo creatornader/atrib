@@ -2,11 +2,11 @@
 
 MCP server for atrib. Lets agents query their own provable past from the local signed-record mirror with per-record signature verification.
 
-The consumer-side counterpart to `@atrib/emit`: emit produces signed records, recall reads them back and exposes them to the agent through five MCP tools. Each returned record carries a `signature_verified` boolean so a poorly-written agent treats tampered records as such.
+The consumer-side counterpart to `@atrib/emit`: emit produces signed records, recall reads them back and exposes them to the agent through seven MCP tools. Each returned record carries a `signature_verified` boolean so a poorly-written agent treats tampered records as such.
 
 ## Tool surface
 
-Five MCP tools cover the cognitive surface of the local mirror.
+Seven MCP tools cover the cognitive surface of the local mirror.
 
 ### `recall_my_attribution_history`
 
@@ -79,7 +79,7 @@ Every call to this tool (and every sibling tool below) writes a per-call jsonl e
 
 - `mcp__atrib-recall__recall_by_content({ query, k? })` - BM25 free-form retrieval over each record's indexable text + the annotation summary + topic_tags (when present), then reranked by Park et al. weighted-sum scoring (recency + importance + relevance). Default k=10, max 50. Per [D086](../../DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content), "indexable text" is per-event_type record content from the [D062](../../DECISIONS.md#d062-local-mirror-sidecar-two-tier-private-local--public-canonical-persistence) sidecar (observation: `what + why_noted + topics`; tool_call: `tool_name + args excerpt + result excerpt`; annotation: `summary + topics`; revision: `prior_position + new_position + reason + topics`; transaction: counterparty + memo + protocol fields; directory_anchor: `tree_root + epoch_id`). Extension URIs fall back to a generic recursive string-walk (depth ≤ 4, field cap 2KB). BM25 contribution is clamped to [0, 1] in the parkScore site so the documented Park-component bound is honored. Layer 2 (sqlite-vec sidecar, separate ship) extends with embedding similarity over the same indexed text.
 
-- `mcp__atrib-recall__recall_session_chain({ context_id?, limit? })` - returns all records in a context_id, ordered chronologically (oldest-first). The natural traversal of the CHAIN_PRECEDES topology for a single session/trace. Each entry carries `record_hash`, `event_type`, `timestamp`, `display_summary`, `display_producer`, and `age`. When `context_id` is omitted, falls back to `resolveEnvContextId` (the same precedence as the other tools: `ATRIB_CONTEXT_ID` env, then a [D083](../../DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)-registered harness env like `CLAUDE_CODE_SESSION_ID`).
+- `mcp__atrib-recall__recall_session_chain({ context_id?, limit?, include_content? })` - returns all records in a context_id, ordered chronologically (oldest-first). The natural traversal of the CHAIN_PRECEDES topology for a single session/trace. Each entry carries `record_hash`, `event_type`, `timestamp`, `display_summary`, `display_producer`, `age`, plus signed causal/tool fields when present (`informed_by`, `tool_name`, `args_hash`, `result_hash`). When `include_content` is true, each entry also includes the [D062](../../DECISIONS.md#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) local mirror body as `local_content` and the local producer label as `local_producer`. Defaults false to keep the session chain cheap. When `context_id` is omitted, falls back to `resolveEnvContextId` (the same precedence as the other tools: `ATRIB_CONTEXT_ID` env, then a [D083](../../DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)-registered harness env like `CLAUDE_CODE_SESSION_ID`).
 
 - `mcp__atrib-recall__recall_orphans({ context_id?, event_type?, creator_key?, limit? })` - returns records that are NOT cited by any other record via `informed_by` (loose ends — decisions or observations the agent made but never followed up on). Optionally scoped to one context_id, one event_type, or one creator_key. Newest-first ordering. Useful for the agent to discover dropped balls (e.g. "I noted X but never built on it").
 

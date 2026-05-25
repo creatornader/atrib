@@ -85,6 +85,7 @@ function renderRecord(r: IndexedRecord): string {
     if (sc.toolName) out.push(`tool: ${sc.toolName}`)
     const c = sc.content as Record<string, unknown> | undefined
     if (c) {
+      if (typeof c['tool_name'] === 'string') out.push(`tool: ${c['tool_name']}`)
       if (typeof c['what'] === 'string') out.push(`what: ${c['what']}`)
       if (typeof c['why_noted'] === 'string') out.push(`why_noted: ${c['why_noted']}`)
       if (typeof c['summary'] === 'string') out.push(`summary: ${c['summary']}`)
@@ -92,13 +93,15 @@ function renderRecord(r: IndexedRecord): string {
       if (typeof c['prior_position'] === 'string') out.push(`prior_position: ${c['prior_position']}`)
       if (typeof c['new_position'] === 'string') out.push(`new_position: ${c['new_position']}`)
       if (typeof c['reason'] === 'string') out.push(`reason: ${c['reason']}`)
+      if (c['args']) out.push(`args (truncated): ${JSON.stringify(c['args']).slice(0, 1200)}`)
+      if (c['result']) out.push(`result (truncated): ${JSON.stringify(c['result']).slice(0, 1200)}`)
       if (Array.isArray(c['topics'])) {
         out.push(`topics: ${(c['topics'] as unknown[]).filter((x): x is string => typeof x === 'string').join(', ')}`)
       }
     }
     // Tool-call sidecar may have args/result; keep brief to control prompt size.
-    if (sc.args) out.push(`args (truncated): ${JSON.stringify(sc.args).slice(0, 300)}`)
-    if (sc.result) out.push(`result (truncated): ${JSON.stringify(sc.result).slice(0, 300)}`)
+    if (sc.args) out.push(`args (truncated): ${JSON.stringify(sc.args).slice(0, 1200)}`)
+    if (sc.result) out.push(`result (truncated): ${JSON.stringify(sc.result).slice(0, 1200)}`)
   } else {
     out.push('(no semantic sidecar available, record predates local-mirror sidecar pattern; only cryptographic metadata is present)')
   }

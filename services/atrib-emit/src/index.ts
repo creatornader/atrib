@@ -114,6 +114,12 @@ const EmitInput = z.object({
     'plain forms hash identically on the wire; the salt (when used) is carried in the ' +
     'separate args_salt field, which this surface does not yet expose.',
   ),
+  result_hash: z.string().regex(SHA256_REF_PATTERN).optional().describe(
+    'Optional §8.3 result_hash commitment. Format: "sha256:" + 64 lowercase hex. Lets ' +
+    'emit-signed records carry a commitment to canonical result bytes for downstream ' +
+    'consumers. Salted vs plain forms hash identically on the wire; the salt (when used) ' +
+    'is carried in the separate result_salt field, which this surface does not yet expose.',
+  ),
 })
 
 type EmitOutput = {
@@ -344,6 +350,7 @@ async function handleEmit({ input, key, queue, producer }: HandleEmitInput): Pro
       revises: input.revises,
       toolName: input.tool_name,
       argsHash: input.args_hash,
+      resultHash: input.result_hash,
     })
   } catch (e) {
     return emptyOutput(contextId, [

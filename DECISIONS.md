@@ -4126,6 +4126,45 @@ The recommendation in `services/atrib-recall/README.md` is: **extension URI prod
 
 ---
 
+## D087: Signed diagnostic outcome + causal trace replay as canonical repair pattern
+
+**Date:** 2026-05-25
+
+**Context.** Phase 2's first clean behavior-impact result (P0, 2026-05-25) showed that when a harness signs an implementation record, signs a diagnostic outcome record that is causally linked to that implementation via `informed_by`, and surfaces both through `atrib-recall`, a later agent step improves versus the same setup without recall. The next locked result (P1, 2026-05-25) narrowed the read surface from whole-session recall to `atrib-trace` rooted at the diagnostic record; the improvement survived. The important correction during P1 was consumer semantics: the model initially traced the right records but sometimes preserved old implementation behavior over the diagnostic expected/actual failures. Adding a generic repair rule ("diagnostic outcome evidence overrides the implementation ancestor it evaluates") made the result stable.
+
+**Decision.** Formalize "signed diagnostic outcome + causal trace replay" as the canonical atrib usage pattern for repair/refinement tasks. The pattern is:
+
+1. Sign the implementation/action record.
+2. Sign a diagnostic/evaluator `tool_call` record whose `informed_by` references the implementation/action record.
+3. Put actionable diagnostic detail in the [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) local mirror body: suite id, pass/fail counts, per-case input, expected, actual, and diagnostic/error text.
+4. In the next repair/refinement step, consume the evidence with `atrib-trace` from the diagnostic record hash, bounded by depth and scoped by context_id when appropriate.
+5. Interpret conflicts using a generic consumer rule: diagnostic outcome fields describe how the ancestor behaved under evaluation, so expected/actual deltas are the repair target when the task is repair/refinement.
+
+This is a pattern-level decision, not a wire-format change. Diagnostic outcomes use the existing `tool_call` event type with `tool_name`, `args_hash`, `result_hash`, [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) local mirror content, and `informed_by`. The graph remains structural; no new edge type or weighting rule is introduced.
+
+**Alternatives considered.**
+
+- *Dedicated diagnostic event_type.* Rejected for now. The current need is consumer interpretation of an evaluator tool_call, not new graph derivation. Promotion would need a distinct cognitive purpose and graph effect per [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary).
+- *Whole-session recall as the canonical pattern.* Rejected as too broad. P0 proved recall can work, but P1 showed the more precise primitive is a causal trace rooted at the diagnostic record.
+- *Rely on spontaneous agent use of the six primitives.* Rejected as the next proof step. Empirical read/write primitive adoption is near zero in current agent runs, so the durable pattern must work through harness-mediated consumption before testing how much agency can be handed back.
+- *Treat diagnostic precedence as task-specific prompt magic.* Rejected. The rule is generic evidence semantics for repair/refinement tasks: an outcome record evaluates its `informed_by` ancestor.
+
+**Consequences.**
+
+- `@atrib/trace` and `@atrib/recall` need to preserve signed tool fields (`tool_name`, `args_hash`, `result_hash`, `informed_by`) and optionally surface [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) local mirror content so agents can act on diagnostic detail without confusing commitment hashes for records.
+- Harnesses testing behavior impact should prefer trace-rooted diagnostic replay over broad transcript summaries, because the independent variable is clearer: the agent consumed a signed diagnostic chain.
+- The next Phase 2 experiments should be ablations around this pattern: full trace + precedence semantics, diagnostic-only trace, implementation-only trace, and full trace without the precedence rule.
+- This pattern strengthens the inward-facing value proposition without claiming spontaneous cognitive-primitive adoption yet. It says the substrate improves behavior when a harness writes and replays signed diagnostic evidence correctly.
+
+**Cross-references.**
+
+- [§7.7](atrib-spec.md#77-signed-diagnostic-outcome--causal-trace-replay), the informative spec pattern.
+- [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), especially `atrib-trace` as the causal replay primitive.
+- [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), instrumentation for measuring whether reads happen and which hashes were returned.
+- [D086](#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content), sidecar content extraction that makes diagnostic bodies legible to read primitives.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
