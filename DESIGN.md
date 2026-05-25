@@ -1,0 +1,528 @@
+# Atrib Design System
+
+Version: 0.2
+Status: active working design contract
+Last updated: 2026-05-25
+
+## Purpose
+
+Atrib makes agent activity verifiable. The design system should make that idea feel concrete: not a vague AI platform, not a crypto dashboard, not an observability clone. The interface should feel like a signed receipt becoming part of a chain.
+
+This document is the design source of truth for the public Atrib product surface: the website, explorer, protocol docs, package READMEs, share images, and operator-facing status/error states that users see. It has two jobs:
+
+- Record what the surfaces do today.
+- Define the product design state Atrib is moving toward.
+
+Do not treat this as only an inventory. A useful design system preserves the current truth while making the next truth harder to lose.
+
+## Source Synthesis
+
+This direction synthesizes five input streams:
+
+- Current Atrib surfaces: `atrib.dev`, `explore.atrib.dev`, protocol docs, package docs, the public explorer, and CI/deploy status surfaces.
+- Atrib product language: "Verifiable agent actions", "Every action becomes signed context for the next", and "Agents that reason from a past they can prove."
+- Design bookmark research across the configured private Bird account aliases on 2026-05-25: 4,358 fetched bookmarks and 173 strict design-system matches. High-signal references included `DESIGN.md`, `taste.md`, Hallmark, Kami, AXI, and design-skill workflows.
+- Prior work in the sibling `atrib-web` repo, where the first website-oriented Atrib design contract was drafted.
+- Local design skills: interface-design for product specificity, Hallmark for anti-generic structure, baseline-ui for technical UI quality, web interface guidelines for accessibility, and make-interfaces-feel-better for interaction detail.
+
+The shared lesson from the best sources: a design system is not only tokens and components. It is a reasoning surface for future design work. It should explain why the system looks this way, what to preserve, what to avoid, and what still needs to become true.
+
+## Audience
+
+Primary:
+
+- Agent framework builders deciding whether to add Atrib.
+- Tool and MCP server authors who need proof of who called what.
+- Protocol-minded developers who care about signatures, logs, and causality.
+
+Secondary:
+
+- Auditors, merchants, and other agents that need to verify a record.
+- Standards people comparing Atrib to trace context, Merkle logs, and payment rails.
+
+The reader is technical and impatient. They want exactness, not hype.
+
+## Product Position
+
+Canonical headline:
+
+```text
+Verifiable agent actions.
+```
+
+Canonical sub-line:
+
+```text
+Every action becomes signed context for the next.
+```
+
+Canonical tagline:
+
+```text
+Agents that reason from a past they can prove.
+```
+
+Use these lines exactly unless the protocol positioning changes in `CLAUDE.md`, `README.md`, and `atrib-spec.md` in the same change.
+
+## Design Intent
+
+Scene: a developer is checking whether an agent really did what it claims. The room is dim, the screen is a record surface, and every colored mark should imply evidence rather than decoration.
+
+Feel:
+
+- Quiet, precise, technical.
+- Warm enough to avoid cold observability sameness.
+- Dense where data is being inspected.
+- Sparse where the protocol thesis needs to land.
+
+Avoid:
+
+- Generic AI gradients.
+- Crypto-neon spectacle.
+- Enterprise trust-washing.
+- Decorative cards that do not help verification.
+- Claims that outpace the current product.
+
+## Current State
+
+The current system has a usable foundation, but it is uneven across surfaces.
+
+Working today:
+
+- The landing page has the right core position: verifiable agent actions.
+- The palette is mostly disciplined: near-black canvas, warm off-white text, amber evidence mark, restrained borders.
+- The explorer has the right product center: search, recent records, graph inspection, and verification surfaces.
+- Explorer overview language now avoids exposing raw checkpoint jargon as primary user meaning.
+- The live log outage exposed and fixed a real production issue, and smoke checks now enforce latency budgets for public log routes.
+- The code examples and standards section make adoption feel concrete.
+- Mobile overflow and keyboard entry points have explicit guardrails.
+
+Still underdesigned:
+
+- The landing page and explorer feel related, but not yet like one product.
+- The explorer has product structure, but its hierarchy still reads closer to an internal tool than a public verification surface.
+- The receipt chain is present as an idea, but not yet strong enough as a visual grammar across all surfaces.
+- Docs and package READMEs do not yet carry the same visual and writing system.
+- Share images, launch graphics, and social previews are not governed by this system yet.
+- CI smoke now catches slow endpoints, but the product does not yet keep historical latency trends or alert routes.
+
+## North Star
+
+Atrib should feel like the canonical place to inspect signed agent activity.
+
+The product should make three things legible within a few seconds:
+
+- What was signed.
+- What it was chained to.
+- How to verify it without trusting Atrib.
+
+The strongest version of the system is not a prettier dark dashboard. It is a receipt-native interface language: seals, hashes, event labels, proofs, graph paths, and raw records arranged so a technical person can move from claim to evidence without losing context.
+
+North-star qualities:
+
+- Evidence before explanation.
+- Chain structure over decorative network art.
+- Exact proof language over broad trust language.
+- One calm accent used as the signed-artifact marker.
+- Dense inspector views, but generous thesis moments.
+- Public surfaces that feel open-source and protocol-native, not enterprise SaaS.
+
+## Product Surface Map
+
+Landing page:
+
+- Job: explain why the protocol exists and route builders into explorer, install, spec, or GitHub.
+- Current focus: tighter hero, explorer-first CTA, better proof copy.
+- Target state: first viewport should feel like looking at a signed receipt entering a public log.
+
+Explorer:
+
+- Job: inspect records, sessions, identities, graph structure, anchoring, and traces.
+- Current focus: mobile safety, accessible search, visible graph edges, clearer action states.
+- Target state: verification workflow should be the spine. Search result to record detail to graph to raw proof should feel like one investigation.
+
+Protocol docs:
+
+- Job: define the technical truth.
+- Current focus: correctness and completeness.
+- Target state: docs should borrow the same evidence language and component patterns where useful, especially for diagrams, record examples, and verifier steps.
+
+Package READMEs:
+
+- Job: help builders install the right integration.
+- Current focus: package-specific accuracy.
+- Target state: every README should follow the same adoption rhythm: install, wrap or sign, verify, inspect.
+
+Share images:
+
+- Job: make the product recognizable in feeds.
+- Current focus: functional social cards.
+- Target state: amber seal, hash fragments, and receipt-chain framing should make Atrib recognizable before the text is read.
+
+Status and reliability surfaces:
+
+- Job: make product health understandable when Atrib's public surfaces fail or slow down.
+- Current focus: scheduled smoke checks and post-deploy smoke checks.
+- Target state: public and operator-facing states should distinguish unreachable, slow, stale, and unverified. They should name what users can try next.
+
+## Execution Backlog
+
+### Phase 1: Align The Public Surfaces
+
+- [x] Create a design contract that covers landing and explorer-adjacent patterns in `atrib-web`.
+- [x] Promote the design contract into this repo as `DESIGN.md`.
+- [x] Add a public header with explorer, spec, and GitHub routes.
+- [x] Make explorer the primary public CTA.
+- [x] Tighten landing copy around signed receipts and verifier checks.
+- [x] Add explorer overview verification path: find claim, read receipt, trace chain.
+- [x] Add action-detail receipt panel before raw JSON.
+- [x] Add identity and session page paths so detail views explain how to read themselves.
+- [x] Define event-chip colors, labels, and density rules for every record type.
+- [x] Add explorer detail-view hierarchy rules: subject header, verification status, graph, raw JSON, related records.
+- [x] Bring explorer tokens closer to this document without losing dense product affordances.
+
+### Phase 2: Make The Receipt Chain A System
+
+- [ ] Design one reusable receipt component for landing examples, explorer details, and docs.
+- [ ] Define graph legend and edge-treatment rules across explorer and diagrams.
+- [ ] Add visual rules for `informed_by`, `provenance_token`, annotations, and revisions.
+- [ ] Standardize hash truncation, copy affordances, and raw-record disclosure.
+- [ ] Create empty, loading, and error states for public verification flows.
+
+### Phase 3: Explorer Information Architecture
+
+- [ ] Re-audit overview cells and labels against user meaning, not internal field names.
+- [ ] Rework action detail so a non-protocol reader can answer: what happened, who signed it, what proves it, and what came before.
+- [ ] Decide whether "explorer", "public log", "verifier", or another term names the surface best.
+- [ ] Add a plain-language proof status model for verified, unverifiable, stale, unreachable, and partial states.
+- [ ] Check mobile detail views at 320, 375, 390, and 414px.
+
+### Phase 4: Carry The System Into Documentation
+
+- [ ] Create README writing patterns for install, sign, verify, inspect.
+- [ ] Update package READMEs to use the same verbs and proof language.
+- [ ] Add diagram rules for protocol docs.
+- [ ] Define how much visual design belongs in docs versus the explorer.
+
+### Phase 5: Reliability And Observability
+
+- [x] Add public log smoke checks for reachability.
+- [x] Add latency budgets to public log smoke checks.
+- [ ] Track latency history for public endpoints instead of only pass/fail.
+- [ ] Add alert routing for scheduled smoke failures.
+- [ ] Add lightweight process metrics for log-node event-loop and request latency.
+- [ ] Decide whether a benchmark endpoint, periodic benchmark job, or private Fly check is the right production hardening layer.
+
+### Phase 6: Launch And Share Surfaces
+
+- [ ] Govern Open Graph and social-card composition with this system.
+- [ ] Create a launch graphic pattern based on the amber seal and receipt chain.
+- [ ] Add examples for screenshots, blog diagrams, and short demos.
+- [ ] Check share images at mobile feed sizes, not only full resolution.
+
+## Open Design Questions
+
+- Should the explorer feel warmer like the landing page, or slightly cooler because it is a dense inspection tool?
+- Does the amber seal represent any signed artifact, or only records that have passed verification?
+- Should the public site show live explorer data in the hero, or keep the hero static until the explorer is more polished?
+- What is the right public name for the explorer: explorer, public log, verifier, or something else?
+- How much protocol vocabulary should appear before the first install command?
+- Should reliability states be part of the public explorer, an operator-only surface, or both?
+
+## Signature Element
+
+The signature element is the receipt chain:
+
+- A small amber seal marks signed artifacts.
+- Hairline connectors show that records form a chain.
+- Monospace hash fragments and event labels sit inside restrained surfaces.
+- Live explorer data should look like evidence, not a marketing demo.
+
+This signature must appear in at least five places across a public surface: brand mark, hero status pill, code block header, section divider, explorer event chips, graph legend, receipt/action detail, or CTA panel.
+
+## Tokens
+
+### Colors
+
+```yaml
+colors:
+  background:
+    value: '#0a0a0a'
+    purpose: 'Primary canvas. Near-black, not pure black.'
+  explorer-background:
+    value: '#0a0b0e'
+    purpose: 'Explorer canvas. Slightly cooler for dense data views.'
+  surface:
+    value: '#131210'
+    purpose: 'Landing page panels and code blocks.'
+  surface-raised:
+    value: '#1c1a17'
+    purpose: 'Headers and surfaces one level above panels.'
+  explorer-surface:
+    value: '#14161a'
+    purpose: 'Explorer panels, feeds, and stats.'
+  foreground:
+    value: '#f5f4ee'
+    purpose: 'Primary text. Warm off-white, never pure white.'
+  muted:
+    value: '#8a877e'
+    purpose: 'Tertiary landing text and metadata.'
+  muted-foreground:
+    value: '#b8b5ac'
+    purpose: 'Secondary landing copy.'
+  border:
+    value: '#2d2a25'
+    purpose: 'Default landing structure.'
+  border-strong:
+    value: '#423e36'
+    purpose: 'Important landing panel edges.'
+  accent:
+    value: '#e8a04f'
+    purpose: 'Signed receipt mark on the landing page.'
+  explorer-accent:
+    value: '#fcd34d'
+    purpose: 'Live explorer status, active nav, and primary action.'
+  success:
+    value: '#34d399'
+    purpose: 'Verified, live, or healthy states.'
+  warning:
+    value: '#fbbf24'
+    purpose: 'Slow, stale, or partial states.'
+  error:
+    value: '#f87171'
+    purpose: 'Verification failures or destructive states.'
+```
+
+Rules:
+
+- Use accent color as evidence, not confetti.
+- Keep accent under 10% of a product UI viewport.
+- Product data color may use multiple hues only when categories need separation.
+- Explorer implementation should expose product token names first, then map dense inspector aliases like `--bg`, `--surface`, and `--text` onto them.
+- Never use purple-blue gradients as brand expression.
+- Never use pure `#000` or `#fff`.
+
+### Typography
+
+```yaml
+typography:
+  sans:
+    family: 'Inter'
+    purpose: 'Readable product and landing copy.'
+  mono:
+    family: 'IoskeleyMono'
+    purpose: 'Hashes, commands, record labels, and protocol details.'
+  display:
+    family: 'Inter'
+    purpose: 'Large protocol statements with restrained weight.'
+```
+
+Rules:
+
+- Headings use balanced wrapping.
+- Body copy stays between 55 and 75 characters on desktop.
+- Mobile copy should be intentionally narrower, around 30 to 36 characters.
+- Data numbers use tabular numerals.
+- Letter spacing stays `0` unless a local all-caps protocol label needs spacing for scanability.
+
+### Spacing
+
+```yaml
+spacing:
+  xs: '4px'
+  sm: '8px'
+  md: '16px'
+  lg: '24px'
+  xl: '32px'
+  section-mobile: '80px'
+  section-desktop: '112px'
+```
+
+Rules:
+
+- Use 8px rhythm for controls and panels.
+- Page sections can breathe; inspector views should be denser.
+- Fixed-format elements must have stable widths or overflow behavior.
+
+### Radius
+
+```yaml
+radii:
+  control: '5px'
+  panel: '8px'
+  large-panel: '12px'
+```
+
+Rules:
+
+- Keep cards at 8px or less unless the existing component uses 12px for a large framed diagram.
+- Nested radii must be concentric: outer radius equals inner radius plus padding.
+
+### Motion
+
+```yaml
+motion:
+  interaction-duration: '120ms'
+  feedback-duration: '150ms'
+  diagram-duration-max: '200ms'
+  easing: 'ease-out'
+```
+
+Rules:
+
+- Motion must explain causality or state change.
+- Animate transform and opacity. Avoid width, height, top, left, margin, and padding.
+- Respect `prefers-reduced-motion`.
+- Explorer graphs should keep structural context visible while users move through them.
+
+## Components
+
+### Brand Header
+
+Purpose: orient the visitor immediately.
+
+Requirements:
+
+- Brand mark uses the amber seal.
+- Primary links: explorer, spec, GitHub.
+- Header must fit mobile without horizontal page overflow.
+- Public site header and explorer header should feel related, not identical.
+
+### Code Block
+
+Purpose: make adoption feel small and concrete.
+
+Requirements:
+
+- Header row names the file or command.
+- Copy button has visible feedback and an accessible label.
+- Code must not force horizontal page overflow on mobile.
+- Use the receipt seal dot in command headers.
+
+### Receipt/Event Chip
+
+Purpose: label signed activity with enough color to scan.
+
+Requirements:
+
+- Color communicates event type.
+- Label text must remain readable without color alone.
+- Each chip should have a stable width or wrapping strategy in dense views.
+- Canonical labels: tool call, observation, annotation, revision, transaction, directory anchor, extension.
+- Dense views put the count first: `3 tool calls`, not `tool_call 3`.
+- Receipts use the noun form: `tool call record`, `revision record`, `signed record` when unknown.
+
+### Explorer Search
+
+Purpose: route a known identifier to the right view.
+
+Requirements:
+
+- Accept creator key, context id, or record hash.
+- Search button has `type="button"` and a clear accessible label.
+- Placeholder may truncate on mobile, but help text must name the accepted inputs.
+
+### Graph View
+
+Purpose: show structure, not decorative network art.
+
+Requirements:
+
+- Edges stay visible during movement.
+- Hover emphasizes neighborhood without erasing the rest of the graph.
+- Legend explains node and edge meaning near the graph.
+- Empty, loading, and error states must say what the user can do next.
+
+### Reliability State
+
+Purpose: tell a user whether a product surface is live, slow, stale, unreachable, or partially verified.
+
+Requirements:
+
+- Do not collapse slow and unreachable into the same message.
+- When the log is slow, keep the last good data visible and label it stale.
+- When a proof cannot be verified, name which check is missing: signature, inclusion proof, checkpoint, directory lookup, or graph lookup.
+- User-facing copy should say what can be tried next: retry, inspect raw record, open the log endpoint, or wait for the next poll.
+
+## Writing
+
+Voice:
+
+- Direct.
+- Exact.
+- Builder-facing.
+- No inflated trust claims.
+
+Good:
+
+- "Verify the signature, inclusion proof, and checkpoint."
+- "Paste a record hash."
+- "Install either package, the other, or both."
+- "The log is reachable but slow."
+
+Bad:
+
+- "Universal trust layer."
+- "Revolutionary attribution."
+- "Secure by design" without naming the mechanism.
+- "Latest checkpoint" as a standalone user-facing label.
+
+Patterns:
+
+- Lead with the object being verified.
+- Prefer verbs: sign, chain, verify, inspect, settle.
+- Explain trust by naming independent checks.
+- Do not restate the heading in the paragraph below it.
+- Avoid exposing protocol nouns as primary UI labels unless the UI also explains their user meaning.
+
+## Layout
+
+Landing:
+
+- First viewport: brand, protocol headline, sub-line, install path, explorer/spec/GitHub routes.
+- Middle: why the protocol exists, how the layer fits, what it works with.
+- End: standards and installation.
+
+Explorer:
+
+- First viewport: live status, plain-language explanation, search, key stats, recent activity.
+- Detail views: subject header, verification state, graph or record body, raw JSON when needed.
+- Detail pages use this order: subject header, verification status, readable evidence, related records, raw JSON disclosure.
+- Raw JSON starts closed unless it is the primary object being inspected.
+
+Mobile:
+
+- No horizontal page overflow at 320, 375, 390, or 414px.
+- Long hashes and code either wrap carefully or scroll inside their own framed element.
+- Primary actions are at least 40px tall.
+
+## Current Gaps
+
+These are the remaining gaps from the May 25 design and production-hardening sessions:
+
+1. **Design system execution:** This document now exists in the repo, but most surfaces still need to be audited and brought into line with it.
+2. **Explorer UI polish:** The overview language improved, but the explorer still needs a full information-architecture pass around what users should understand first.
+3. **Latency observability beyond smoke:** Scheduled smoke catches slow endpoints now. It does not store trend history or route alerts yet.
+4. **Production log hardening:** The Merkle hot path is fixed. The service still needs better event-loop and request-latency visibility.
+5. **Design-source synthesis:** Bookmark research is captured here at the finding level. The individual references are private operator context and should not be pasted into public artifacts without explicit approval.
+6. **Website/content pass:** The site needs a focused branch for copy, layout, and proof-first adoption flow.
+7. **Prettier debt:** Repo-wide formatting cleanup remains tracked separately in GitHub issue #23.
+
+## Next Execution Slice
+
+Start with the explorer because it is the product surface where design quality and protocol comprehension meet.
+
+Recommended slice:
+
+- Create a surface inventory for the explorer overview, action detail, identity, session, trace, anchoring, demo, and about views.
+- For each view, record current user job, current friction, target hierarchy, and component changes.
+- Implement the smallest high-confidence UI update from that inventory, preferably action detail or overview proof status.
+- Verify with desktop and mobile screenshots before merge.
+
+## Design Decisions Log
+
+| Date       | Decision                                                      | Rationale                                                                                                                |
+| ---------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| 2026-05-25 | Use the receipt chain as Atrib's signature design element     | It is specific to the product and maps directly to signed records, hashes, proof, and causality.                         |
+| 2026-05-25 | Keep this file as the repo design source of truth             | The explorer and protocol surfaces live in this repo, so design guidance must not live only in the sibling website repo. |
+| 2026-05-25 | Treat latency and stale data states as design-system concerns | A public verification surface fails users when it hides whether data is slow, stale, unreachable, or unverified.         |

@@ -6,6 +6,8 @@ This is **option 1 of a three-stage build** per [D054](../../DECISIONS.md#d054-u
 
 Option 2 (Vite/Next.js SPA) ships when dogfood metrics produce useful signal. Option 3 (block-explorer-grade with search indexing + real-time updates) ships after the broader implementation work completes.
 
+The explorer follows the product design contract in [`../../DESIGN.md`](../../DESIGN.md). Update that file with any change to view hierarchy, proof-status language, event chips, graph treatment, empty/loading/error states, or user-facing reliability states.
+
 ## Use it locally
 
 ```bash

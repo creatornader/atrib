@@ -213,9 +213,14 @@ Store the output as `ATRIB_PRIVATE_KEY`. The public key is derived at runtime.
 4. **No central arbiter of value.** Trust from math and open spec, not from trusting atrib.
 5. **The protocol is open. The product is commercial.** Spec, signing libraries, calculation algorithm, and log software are open. Anyone can self-host. atrib operates a hosted service as a commercial product built on the open protocol.
 
+## Product design
+
+[`DESIGN.md`](DESIGN.md) is the source of truth for Atrib's public product surfaces: website, explorer, docs, package README patterns, share images, and user-facing reliability states. It records the current state, target direction, tokens, components, writing rules, and remaining design backlog.
+
 ## More
 
 - [Policy templates and guide](policies/README.md)
+- [Product design system](DESIGN.md)
 - [Architecture and trust model](ARCHITECTURE.md)
 - [Prior art and standards map](PRIOR-ART.md)
 - [Decision log](DECISIONS.md)
