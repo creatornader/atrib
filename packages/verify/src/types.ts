@@ -86,6 +86,24 @@ export type VerificationState =
    */
   | 'revoked_after_revocation'
 
+export type ReferenceStatus =
+  /**
+   * The referenced record exists in the graph service, but it was outside
+   * the current response scope.
+   */
+  | 'external'
+  /**
+   * The graph service could not find the referenced record in its global
+   * store.
+   */
+  | 'missing'
+  /**
+   * The graph response did not have a global reference resolver available.
+   * Older or offline graph builders can only say the target was absent from
+   * the resolved set.
+   */
+  | 'unresolved'
+
 /** A node in the attribution graph (§3.5.2). */
 export interface GraphNode {
   id: string
@@ -106,6 +124,22 @@ export interface GraphNode {
   log_index: number | null
   verification_state: VerificationState
   is_genesis: boolean
+  /**
+   * Present on synthetic reference placeholders. `external` means the target
+   * exists globally but was outside the current response scope; `missing`
+   * means the graph service could not find the target globally.
+   */
+  reference_status?: ReferenceStatus
+  /** Full record hash for a synthetic reference placeholder when available. */
+  reference_hash?: string
+  /** Provenance token for a synthetic provenance placeholder when available. */
+  reference_token?: string
+  /** Context id of the referenced record when `reference_status` is external. */
+  reference_context_id?: string | null
+  /** Event type of the referenced record when `reference_status` is external. */
+  reference_event_type?: EventType | null
+  /** Log index of the referenced record when `reference_status` is external. */
+  reference_log_index?: number | null
 }
 
 /** An edge in the attribution graph (§3.5.3). */
@@ -120,9 +154,24 @@ export interface GraphEdge {
    * record in the resolved set. Per spec §3.2.4 steps 6 + 7, dangling
    * references MUST be surfaced as edges (not silently dropped) so verifiers
    * can see what the agent claimed even when the upstream isn't accessible.
-   * Only INFORMED_BY and PROVENANCE_OF edges can be dangling.
+   * INFORMED_BY, PROVENANCE_OF, ANNOTATES, and REVISES edges can be dangling.
    */
   dangling?: boolean
+  /**
+   * Classification for a dangling edge target. Older graph builders may omit
+   * this and only set `dangling: true`.
+   */
+  reference_status?: ReferenceStatus
+  /** Full record hash for a dangling record-hash reference when available. */
+  reference_hash?: string
+  /** Provenance token for a dangling provenance reference when available. */
+  reference_token?: string
+  /** Context id of the referenced record when `reference_status` is external. */
+  reference_context_id?: string | null
+  /** Event type of the referenced record when `reference_status` is external. */
+  reference_event_type?: EventType | null
+  /** Log index of the referenced record when `reference_status` is external. */
+  reference_log_index?: number | null
   /**
    * Optional reason annotation. Currently used by PROVENANCE_OF dangling
    * edges with the value `"no_token_source_in_record_set"` per spec §3.2.4

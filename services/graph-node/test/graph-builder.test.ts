@@ -279,6 +279,71 @@ describe('buildGraph (section 3.2.4)', () => {
       expect(danglingNode!.event_type).toBe('dangling_node')
     })
 
+    it('classifies an out-of-scope INFORMED_BY target as external when the resolver finds it', async () => {
+      const upstream = await makeRecord({
+        context_id: 'b'.repeat(32),
+        timestamp: 1000,
+        content_id: `sha256:${'3'.repeat(64)}`,
+      })
+      const upstreamHash = hexEncode(sha256(canonicalRecord(upstream)))
+      const consumer = await makeRecord({
+        context_id: CONTEXT_ID,
+        timestamp: 2000,
+        content_id: `sha256:${'4'.repeat(64)}`,
+        informed_by: [`sha256:${upstreamHash}`],
+      })
+
+      const graph = await buildGraph([consumer], [], {
+        resolveRecordReference: (hash) => hash === upstreamHash
+          ? {
+              record_hash: `sha256:${upstreamHash}`,
+              event_type: 'tool_call',
+              event_type_uri: upstream.event_type,
+              creator_key: upstream.creator_key,
+              context_id: upstream.context_id,
+              timestamp: upstream.timestamp,
+              log_index: 42,
+            }
+          : null,
+      })
+
+      const edge = graph.edges.find((e) => e.type === 'INFORMED_BY')!
+      expect(edge.dangling).toBe(true)
+      expect(edge.reference_status).toBe('external')
+      expect(edge.reference_hash).toBe(`sha256:${upstreamHash}`)
+      expect(edge.reference_context_id).toBe(upstream.context_id)
+      expect(edge.reference_event_type).toBe('tool_call')
+      expect(edge.reference_log_index).toBe(42)
+      expect(edge.reason).toBe('target_out_of_scope')
+
+      const placeholder = graph.nodes.find((n) => n.id === edge.target)!
+      expect(placeholder.event_type).toBe('dangling_node')
+      expect(placeholder.reference_status).toBe('external')
+      expect(placeholder.reference_hash).toBe(`sha256:${upstreamHash}`)
+      expect(placeholder.context_id).toBe(upstream.context_id)
+      expect(placeholder.log_index).toBe(42)
+    })
+
+    it('classifies an unresolved INFORMED_BY target as missing when the resolver cannot find it', async () => {
+      const missing = `sha256:${'9'.repeat(64)}`
+      const consumer = await makeRecord({
+        timestamp: 1000,
+        informed_by: [missing],
+      })
+
+      const graph = await buildGraph([consumer], [], {
+        resolveRecordReference: () => null,
+      })
+
+      const edge = graph.edges.find((e) => e.type === 'INFORMED_BY')!
+      expect(edge.dangling).toBe(true)
+      expect(edge.reference_status).toBe('missing')
+      expect(edge.reference_hash).toBe(missing)
+      expect(edge.reason).toBe('target_not_found')
+      const placeholder = graph.nodes.find((n) => n.id === edge.target)!
+      expect(placeholder.reference_status).toBe('missing')
+    })
+
     it('emits one INFORMED_BY edge per entry in the array (multi-source)', async () => {
       const u1 = await makeRecord({ timestamp: 1000, content_id: `sha256:${'a'.repeat(64)}` })
       const u2 = await makeRecord({ timestamp: 1500, content_id: `sha256:${'b'.repeat(64)}` })

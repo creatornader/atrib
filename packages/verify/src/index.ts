@@ -59,6 +59,7 @@ export type {
   EdgeType,
   GapNode,
   VerificationState,
+  ReferenceStatus,
   PolicyDocument,
   PolicyConstraints,
   EdgeWeights,

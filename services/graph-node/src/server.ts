@@ -349,6 +349,12 @@ function compactGraphForExplorer(graph: GraphResponse): unknown {
       context_id: node.context_id,
       timestamp: node.timestamp,
       verification_state: node.verification_state,
+      reference_status: node.reference_status,
+      reference_hash: node.reference_hash,
+      reference_token: node.reference_token,
+      reference_context_id: node.reference_context_id,
+      reference_event_type: node.reference_event_type,
+      reference_log_index: node.reference_log_index,
     })),
     edges: graph.edges.map((edge) => {
       const compactEdge: {
@@ -357,6 +363,12 @@ function compactGraphForExplorer(graph: GraphResponse): unknown {
         target: string
         directed: boolean
         dangling?: boolean
+        reference_status?: typeof edge.reference_status
+        reference_hash?: string
+        reference_token?: string
+        reference_context_id?: string | null
+        reference_event_type?: typeof edge.reference_event_type
+        reference_log_index?: number | null
         reason?: string
       } = {
         type: edge.type,
@@ -365,6 +377,12 @@ function compactGraphForExplorer(graph: GraphResponse): unknown {
         directed: edge.directed,
       }
       if (edge.dangling !== undefined) compactEdge.dangling = edge.dangling
+      if (edge.reference_status !== undefined) compactEdge.reference_status = edge.reference_status
+      if (edge.reference_hash !== undefined) compactEdge.reference_hash = edge.reference_hash
+      if (edge.reference_token !== undefined) compactEdge.reference_token = edge.reference_token
+      if (edge.reference_context_id !== undefined) compactEdge.reference_context_id = edge.reference_context_id
+      if (edge.reference_event_type !== undefined) compactEdge.reference_event_type = edge.reference_event_type
+      if (edge.reference_log_index !== undefined) compactEdge.reference_log_index = edge.reference_log_index
       if (edge.reason !== undefined) compactEdge.reason = edge.reason
       return compactEdge
     }),
@@ -373,6 +391,38 @@ function compactGraphForExplorer(graph: GraphResponse): unknown {
 
 function logIndexLookup(store: RecordStore): (hashHex: string) => number | null {
   return (hashHex: string) => store.getLogIndex(hashHex)
+}
+
+function recordReferenceLookup(store: RecordStore) {
+  return (hashHex: string) => {
+    const stored = store.getRecordByHash(hashHex)
+    if (!stored) return null
+    return {
+      record_hash: stored.record_hash,
+      event_type: graphLabelFromEventTypeUri(stored.record.event_type),
+      event_type_uri: stored.record.event_type,
+      creator_key: stored.record.creator_key,
+      context_id: stored.record.context_id,
+      timestamp: stored.record.timestamp,
+      log_index: stored.log_index,
+    }
+  }
+}
+
+function provenanceReferenceLookup(store: RecordStore) {
+  return (token16: string, sourceContextId: string) => {
+    const stored = store.getRecordByToken16(token16, sourceContextId)
+    if (!stored) return null
+    return {
+      record_hash: stored.record_hash,
+      event_type: graphLabelFromEventTypeUri(stored.record.event_type),
+      event_type_uri: stored.record.event_type,
+      creator_key: stored.record.creator_key,
+      context_id: stored.record.context_id,
+      timestamp: stored.record.timestamp,
+      log_index: stored.log_index,
+    }
+  }
 }
 
 async function handleGraph(
@@ -416,6 +466,8 @@ async function handleGraph(
     revocations: buildRegistryCached(store),
     logIndexLookup: logIndexLookup(store),
     compactIntraSessionEdges,
+    resolveRecordReference: recordReferenceLookup(store),
+    resolveProvenanceReference: provenanceReferenceLookup(store),
   })
   const body = shape === 'compact' ? compactGraphForExplorer(graph) : graph
   setCachedGraph(store, cacheKey, body)
@@ -438,6 +490,8 @@ async function handleNodes(
   const graph = await buildGraph(records, gapNodes, {
     revocations: buildRegistryCached(store),
     logIndexLookup: logIndexLookup(store),
+    resolveRecordReference: recordReferenceLookup(store),
+    resolveProvenanceReference: provenanceReferenceLookup(store),
   })
 
   let nodes = graph.nodes
@@ -474,6 +528,8 @@ async function handleTransaction(
   const graph = await buildGraph(records, [], {
     revocations: buildRegistryCached(store),
     logIndexLookup: logIndexLookup(store),
+    resolveRecordReference: recordReferenceLookup(store),
+    resolveProvenanceReference: provenanceReferenceLookup(store),
   })
   const txNode = graph.nodes.find((n) => n.event_type === 'transaction')
 
@@ -634,6 +690,8 @@ async function handleCreatorGraph(
     revocations: buildRegistryCached(store),
     logIndexLookup: logIndexLookup(store),
     compactIntraSessionEdges: !includeIntraSession,
+    resolveRecordReference: recordReferenceLookup(store),
+    resolveProvenanceReference: provenanceReferenceLookup(store),
   })
 
   const filteredGraph = includeIntraSession
@@ -798,6 +856,8 @@ async function handleTrace(
     includeCrossSession: true,
     revocations: buildRegistryCached(store),
     logIndexLookup: logIndexLookup(store),
+    resolveRecordReference: recordReferenceLookup(store),
+    resolveProvenanceReference: provenanceReferenceLookup(store),
   })
 
   sendJson(res, 200, {
@@ -880,6 +940,8 @@ async function handleChain(
     includeCrossSession: false,
     revocations: buildRegistryCached(store),
     logIndexLookup: logIndexLookup(store),
+    resolveRecordReference: recordReferenceLookup(store),
+    resolveProvenanceReference: provenanceReferenceLookup(store),
   })
 
   sendJson(res, 200, {

@@ -14,7 +14,8 @@
     "verify-log": "node scripts/verify-loop.mjs",
     "chain-demo": "node scripts/chain-demo.mjs",
     "metrics": "node scripts/metrics.mjs",
-    "log:stats": "node scripts/log-stats.mjs"
+    "log:stats": "node scripts/log-stats.mjs",
+    "replay-proof-null": "node scripts/replay-proof-null-from-mirror.mjs"
   },
   "dependencies": {
     "@atrib/directory": "workspace:*",
