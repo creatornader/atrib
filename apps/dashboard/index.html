@@ -2152,7 +2152,7 @@ async function renderOverview() {
     pulseStat('signed records', '—'),
     pulseStat('signing identities', '—'),
     pulseStat('latest record', '—'),
-    pulseStat('log snapshot', '—'),
+    pulseStat('proof status', '—'),
   ))
 
   root.append(el('section', { style: 'margin-bottom: 32px;' },
@@ -2342,18 +2342,18 @@ function updatePulseStrip(stats, checkpoint, recent = null) {
   const treeSize = stats.tree_size ?? null
   const checkpointTreeMatches = cp.treeSize !== null && treeSize !== null && cp.treeSize === treeSize
   const snapshotSub = cp.rootHash
-    ? `${formatCount(cp.treeSize)} records anchored${checkpointTreeMatches ? '' : ' at checkpoint'}`
+    ? `${formatCount(cp.treeSize)} records protected${checkpointTreeMatches ? '' : ' at snapshot'}`
     : cp.error || 'checkpoint unavailable'
   const snapshotTitle = cp.rootHash
-    ? `Signed log checkpoint from ${cp.origin || 'log'} at tree size ${formatCount(cp.treeSize)}. Open anchoring details for the Merkle root.`
+    ? `Signed log snapshot from ${cp.origin || 'log'} at tree size ${formatCount(cp.treeSize)}. Open anchoring details for the checkpoint proof.`
     : 'Open anchoring details'
   strip.replaceChildren(
     pulseStat('signed records', formatCount(stats.tree_size), 'committed to the log'),
     pulseStat('signing identities', formatCount(stats.distinct_signers), 'distinct creator_keys'),
     latestRecordStat(recent, stats),
     pulseStat(
-      'log snapshot',
-      cp.rootHash ? 'signed' : '—',
+      'proof status',
+      cp.rootHash ? 'signed snapshot' : '—',
       snapshotSub,
       { href: '#/anchoring', title: snapshotTitle },
     ),
