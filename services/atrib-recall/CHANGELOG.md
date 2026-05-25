@@ -1,5 +1,12 @@
 # @atrib/recall
 
+## Unreleased
+
+### Patch Changes
+
+- `recall_session_chain` now surfaces signed causal/tool fields (`informed_by`, `tool_name`, `args_hash`, `result_hash`) on each entry and accepts `include_content: true` to return the [D062](../../DECISIONS.md#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) local mirror body as `local_content` plus `local_producer`. This lets mediated-recall harnesses provide the next agent with the record chain and the local outcome context without falling back to ad hoc transcript text.
+- Read-primitive instrumentation now extracts only actual `record_hash` fields from MCP results. This prevents `args_hash`, `result_hash`, and other `sha256:` commitments from being miscounted as recalled record hashes.
+
 ## 0.12.0
 
 ### Minor Changes

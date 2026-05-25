@@ -3,8 +3,9 @@
 /**
  * Local mirror reader for atrib-trace.
  *
- * Reads every *.jsonl mirror under ~/.atrib/records/ and normalizes to bare
- * AtribRecord shape regardless of producer (wrapper-signed or emit envelope).
+ * Reads either one ATRIB_RECORD_FILE mirror or every *.jsonl mirror under
+ * ~/.atrib/records/ and normalizes to bare AtribRecord shape regardless of
+ * producer (wrapper-signed or emit envelope).
  *
  * Builds an in-memory index by record_hash so trace can walk informed_by
  * chains in O(1) per hop. The hash key is sha256:<64-hex> (the same form
@@ -13,7 +14,7 @@
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { canonicalRecord, hexEncode, sha256, type AtribRecord, type OnRecordSidecar } from '@atrib/mcp'
 
 export interface IndexedRecord {
@@ -41,6 +42,7 @@ export interface SidecarPayload extends OnRecordSidecar {
   producer?: string
 }
 
+const RECORDS_FILE = process.env.ATRIB_RECORD_FILE
 const RECORDS_DIR = process.env.ATRIB_RECORDS_DIR ?? join(homedir(), '.atrib', 'records')
 
 /**
@@ -58,17 +60,21 @@ export function loadAllRecords(dir: string = RECORDS_DIR): {
   const byHash = new Map<string, IndexedRecord>()
   const all: IndexedRecord[] = []
 
-  if (!existsSync(dir)) return { byHash, newestFirst: [] }
-
-  let files: string[] = []
-  try {
-    files = readdirSync(dir).filter((f) => f.endsWith('.jsonl'))
-  } catch {
-    return { byHash, newestFirst: [] }
+  const paths: { path: string; source: string }[] = []
+  if (RECORDS_FILE) {
+    paths.push({ path: RECORDS_FILE, source: basename(RECORDS_FILE) })
+  } else {
+    if (!existsSync(dir)) return { byHash, newestFirst: [] }
+    try {
+      for (const fname of readdirSync(dir).filter((f) => f.endsWith('.jsonl'))) {
+        paths.push({ path: join(dir, fname), source: fname })
+      }
+    } catch {
+      return { byHash, newestFirst: [] }
+    }
   }
 
-  for (const fname of files) {
-    const path = join(dir, fname)
+  for (const { path, source } of paths) {
     try {
       const raw = readFileSync(path, 'utf8')
       for (const line of raw.split('\n')) {
@@ -92,7 +98,7 @@ export function loadAllRecords(dir: string = RECORDS_DIR): {
           const indexed: IndexedRecord = {
             record: rec,
             record_hash: `sha256:${hashHex}`,
-            source: fname,
+            source,
           }
           // Lift the `_local` sidecar onto the indexed record when present.
           // Legacy bare-record entries have no sidecar; that's OK, consumers

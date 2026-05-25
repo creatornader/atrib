@@ -1,5 +1,14 @@
 # @atrib/trace
 
+## Unreleased
+
+### Patch Changes
+
+- `trace` and `trace_forward` now accept `include_content: true`, returning [D062](../../DECISIONS.md#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) `local_content` and `local_producer` on compact visited records while also surfacing signed causal/tool fields (`informed_by`, `tool_name`, `args_hash`, `result_hash`). This supports harness-mediated causal replay where an agent needs the rich local diagnostic body without losing the `informed_by` traversal shape.
+- `trace` and `trace_forward` now accept `depth: 0` to return only the start record. This makes diagnostic-only and implementation-only ablations possible without bypassing the trace primitive.
+- `ATRIB_RECORD_FILE` is now honored as an explicit single-mirror override, matching `@atrib/recall`'s experiment harness path. `ATRIB_RECORDS_DIR` remains the directory override for multi-file mirrors.
+- Read-primitive instrumentation now samples only actual `record_hash` fields, preventing `args_hash`, `result_hash`, and local-content hashes from being counted as traced records.
+
 ## 0.5.0
 
 ### Minor Changes

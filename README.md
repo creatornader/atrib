@@ -17,6 +17,8 @@ The substrate is the load-bearing piece. The four uses below are downstream cons
 
 atrib is the substrate. Consuming it well (surfacing an agent's history at session start, exposing recall tools the agent can call, persisting signed records locally for replay) is the job of an agent harness or runtime. atrib does not prescribe a harness. The substrate is independently useful to any harness (Claude Code, Cursor, custom agent products, in-house agent runtimes) that wants to give its agent the contextual awareness verifiable history makes possible.
 
+One canonical harness pattern is signed diagnostic outcome + causal trace replay: sign the action, sign the diagnostic outcome that evaluates it with `informed_by` back to the action, then let the next repair step call `atrib-trace` from the diagnostic record. This keeps "what happened" and "what it supersedes" in one verifiable chain without requiring a whole-session transcript dump.
+
 ## How it works
 
 - Each record is signed by the actor's Ed25519 key and JCS-canonicalized

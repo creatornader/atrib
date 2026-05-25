@@ -13,7 +13,11 @@ import {
 } from '@atrib/mcp'
 import { traceBackward, traceForward, buildReverseInformedByIndex } from '../src/trace.js'
 import type { IndexedRecord } from '../src/storage.js'
-import { summarizeSidecar } from '../src/index.js'
+import {
+  compactVisited,
+  extractRecordHashFieldsFromMcpResult,
+  summarizeSidecar,
+} from '../src/index.js'
 
 const SEED = new Uint8Array(32).fill(0x42)
 const REFERENCE_TIME_MS = Date.now()
@@ -72,6 +76,20 @@ describe('traceBackward', () => {
     expect(result.visited[0]!.depth).toBe(0)
     expect(result.visited[0]!.parent_hashes).toEqual([])
     expect(result.dangling).toEqual([])
+  })
+
+  it('supports depth=0 to return only the start record', async () => {
+    const upstream = await buildSigned('01', 2000)
+    const downstream = await buildSigned('02', 1000, [upstream.record_hash])
+    const idx = indexize([upstream, downstream])
+
+    const result = traceBackward(downstream.record_hash, 0, idx)
+
+    expect(result.visited).toHaveLength(1)
+    expect(result.visited[0]!.record_hash).toBe(downstream.record_hash)
+    expect(result.depth_reached).toBe(0)
+    expect(result.truncated_by_depth).toBe(true)
+    expect(result.visited.find((v) => v.record_hash === upstream.record_hash)).toBeUndefined()
   })
 
   it('walks one hop when depth=1 and start has informed_by', async () => {
@@ -254,6 +272,77 @@ describe('summarizeSidecar — per-event_type content shape handling (D086)', ()
   })
 })
 
+describe('compact trace payload', () => {
+  it('can include signed tool fields and D062 local content', async () => {
+    const upstream = await buildSigned('01', 2000)
+    const downstream = await buildSigned('02', 1000, [upstream.record_hash])
+    ;(downstream.record as AtribRecord & { tool_name?: string; args_hash?: string; result_hash?: string }).tool_name =
+      'diagnostic_config_parser_probe'
+    ;(downstream.record as AtribRecord & { tool_name?: string; args_hash?: string; result_hash?: string }).args_hash =
+      `sha256:${'1'.repeat(64)}`
+    ;(downstream.record as AtribRecord & { tool_name?: string; args_hash?: string; result_hash?: string }).result_hash =
+      `sha256:${'2'.repeat(64)}`
+    const byHash = indexize([upstream, downstream])
+    byHash.set(downstream.record_hash, {
+      ...byHash.get(downstream.record_hash)!,
+      local: {
+        content: {
+          passed: false,
+          cases: [{ name: 'quoted value preserves interior', passed: false }],
+        },
+        producer: 'diagnostic-harness',
+      },
+    })
+    const payload = compactVisited(
+      {
+        depth: 0,
+        record_hash: downstream.record_hash,
+        parent_hashes: [],
+        record: downstream.record,
+        source: 'mirror.jsonl',
+        next_informed_by: [upstream.record_hash],
+      },
+      new Set(),
+      byHash,
+      true,
+    )
+
+    expect(payload.tool_name).toBe('diagnostic_config_parser_probe')
+    expect(payload.args_hash).toBe(`sha256:${'1'.repeat(64)}`)
+    expect(payload.result_hash).toBe(`sha256:${'2'.repeat(64)}`)
+    expect(payload.informed_by).toEqual([upstream.record_hash])
+    expect(payload.local_content).toEqual({
+      passed: false,
+      cases: [{ name: 'quoted value preserves interior', passed: false }],
+    })
+    expect(payload.local_producer).toBe('diagnostic-harness')
+  })
+
+  it('read instrumentation samples only record_hash fields', () => {
+    const recordHash = `sha256:${'a'.repeat(64)}`
+    const argsHash = `sha256:${'b'.repeat(64)}`
+    const resultHash = `sha256:${'c'.repeat(64)}`
+    const mcpResult = {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            visited: [
+              {
+                record_hash: recordHash,
+                args_hash: argsHash,
+                result_hash: resultHash,
+                local_content: { tested_code_hash: `sha256:${'d'.repeat(64)}` },
+              },
+            ],
+          }),
+        },
+      ],
+    }
+    expect(extractRecordHashFieldsFromMcpResult(mcpResult)).toEqual([recordHash])
+  })
+})
+
 describe('buildReverseInformedByIndex', () => {
   it('returns an empty map for empty index', () => {
     const idx = new Map<string, IndexedRecord>()
@@ -317,6 +406,20 @@ describe('traceForward', () => {
     expect(result.visited).toHaveLength(1)
     expect(result.visited[0]?.record_hash).toBe(lone.record_hash)
     expect(result.visited[0]?.next_informed_by).toEqual([])
+  })
+
+  it('supports depth=0 to return only the start record on forward walks', async () => {
+    const parent = await buildSigned('a', 100)
+    const child = await buildSigned('b', 50, [parent.record_hash])
+    const idx = indexize([parent, child])
+
+    const result = traceForward(parent.record_hash, 0, idx)
+
+    expect(result.visited).toHaveLength(1)
+    expect(result.visited[0]?.record_hash).toBe(parent.record_hash)
+    expect(result.depth_reached).toBe(0)
+    expect(result.truncated_by_depth).toBe(true)
+    expect(result.visited.find((v) => v.record_hash === child.record_hash)).toBeUndefined()
   })
 
   it('walks one hop when depth=1 and one child cites the start', async () => {

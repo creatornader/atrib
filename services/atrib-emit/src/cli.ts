@@ -23,7 +23,8 @@
 //       "session_token":"<base64url>"?,
 //       "provenance_token": "<base64url>"?,
 //       "tool_name":    "..."?,
-//       "args_hash":    "sha256:..."?
+//       "args_hash":    "sha256:..."?,
+//       "result_hash":  "sha256:..."?
 //     }
 //
 //   stdout: one JSON object — the EmitOutput shape emitInProcess returns.
@@ -181,7 +182,8 @@ GLOBAL OPTIONS
 
 ENVELOPE FIELDS (emit, read from stdin as one JSON object)
   event_type, content (required); context_id, informed_by, annotates,
-  revises, session_token, provenance_token, tool_name, args_hash (optional).
+  revises, session_token, provenance_token, tool_name, args_hash,
+  result_hash (optional).
 
 OUTPUT
   emit: EmitOutput JSON on stdout, always exit 0.
@@ -253,6 +255,8 @@ function buildDescription(): CliDescription {
           'Genesis-record-only 22-char base64url cross-session anchor per spec §1.2.6 / D044.',
         tool_name: 'Disclosed tool name per §8.2 (optional disclosure posture).',
         args_hash: 'sha256:<64-hex> commitment to canonical args per §8.3 salted-commitment posture.',
+        result_hash:
+          'sha256:<64-hex> commitment to canonical result bytes per §8.3 salted-commitment posture.',
         producer: 'Producer label routed to mirror sidecar `_local.producer`. Defaults to "atrib-emit-cli"; hook helpers override with finer attribution (e.g. "claude-hooks-builtin-2b").',
       },
     },
@@ -456,6 +460,7 @@ interface RawEnvelope {
   provenance_token?: unknown
   tool_name?: unknown
   args_hash?: unknown
+  result_hash?: unknown
   /**
    * Producer label routed to the mirror sidecar's `_local.producer` field.
    * When omitted, the CLI labels records `'atrib-emit-cli'`. Hook-class
@@ -480,6 +485,7 @@ function buildEmitInput(envelope: RawEnvelope): Record<string, unknown> {
   if (envelope.provenance_token !== undefined) out['provenance_token'] = envelope.provenance_token
   if (envelope.tool_name !== undefined) out['tool_name'] = envelope.tool_name
   if (envelope.args_hash !== undefined) out['args_hash'] = envelope.args_hash
+  if (envelope.result_hash !== undefined) out['result_hash'] = envelope.result_hash
   return out
 }
 
