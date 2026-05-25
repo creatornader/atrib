@@ -772,7 +772,7 @@ describe('MCP protocol surface', () => {
       content_id: `sha256:${'e'.repeat(64)}`,
       timestamp: 1700000000000,
       signature: '',
-      tool_name: 'phase2_config_parser_diagnostics',
+      tool_name: 'diagnostic_config_parser_probe',
       args_hash: `sha256:${'1'.repeat(64)}`,
       result_hash: `sha256:${'2'.repeat(64)}`,
       informed_by: [`sha256:${'3'.repeat(64)}`],
@@ -815,7 +815,7 @@ describe('MCP protocol surface', () => {
         }>
       }
       expect(payload.records[0]?.tool_name).toBe(
-        'phase2_config_parser_diagnostics',
+        'diagnostic_config_parser_probe',
       )
       expect(payload.records[0]?.args_hash).toBe(`sha256:${'1'.repeat(64)}`)
       expect(payload.records[0]?.result_hash).toBe(`sha256:${'2'.repeat(64)}`)

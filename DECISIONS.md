@@ -4130,7 +4130,7 @@ The recommendation in `services/atrib-recall/README.md` is: **extension URI prod
 
 **Date:** 2026-05-25
 
-**Context.** Phase 2's first clean behavior-impact result (P0, 2026-05-25) showed that when a harness signs an implementation record, signs a diagnostic outcome record that is causally linked to that implementation via `informed_by`, and surfaces both through `atrib-recall`, a later agent step improves versus the same setup without recall. The next locked result (P1, 2026-05-25) narrowed the read surface from whole-session recall to `atrib-trace` rooted at the diagnostic record; the improvement survived. The important correction during P1 was consumer semantics: the model initially traced the right records but sometimes preserved old implementation behavior over the diagnostic expected/actual failures. Adding a generic repair rule ("diagnostic outcome evidence overrides the implementation ancestor it evaluates") made the result stable.
+**Context.** The first clean behavior-impact repair result (P0, 2026-05-25) showed that when a harness signs an implementation record, signs a diagnostic outcome record that is causally linked to that implementation via `informed_by`, and surfaces both through `atrib-recall`, a later agent step improves versus the same setup without recall. The next locked result (P1, 2026-05-25) narrowed the read surface from whole-session recall to `atrib-trace` rooted at the diagnostic record; the improvement survived. The important correction during P1 was consumer semantics: the model initially traced the right records but sometimes preserved old implementation behavior over the diagnostic expected/actual failures. Adding a generic repair rule ("diagnostic outcome evidence overrides the implementation ancestor it evaluates") made the result stable.
 
 **Decision.** Formalize "signed diagnostic outcome + causal trace replay" as the canonical atrib usage pattern for repair/refinement tasks. The pattern is:
 
@@ -4153,7 +4153,7 @@ This is a pattern-level decision, not a wire-format change. Diagnostic outcomes 
 
 - `@atrib/trace` and `@atrib/recall` need to preserve signed tool fields (`tool_name`, `args_hash`, `result_hash`, `informed_by`) and optionally surface [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) local mirror content so agents can act on diagnostic detail without confusing commitment hashes for records.
 - Harnesses testing behavior impact should prefer trace-rooted diagnostic replay over broad transcript summaries, because the independent variable is clearer: the agent consumed a signed diagnostic chain.
-- The next Phase 2 experiments should be ablations around this pattern: full trace + precedence semantics, diagnostic-only trace, implementation-only trace, and full trace without the precedence rule.
+- The next behavior-impact experiments should be ablations around this pattern: full trace + precedence semantics, diagnostic-only trace, implementation-only trace, and full trace without the precedence rule.
 - This pattern strengthens the inward-facing value proposition without claiming spontaneous cognitive-primitive adoption yet. It says the substrate improves behavior when a harness writes and replays signed diagnostic evidence correctly.
 
 **Cross-references.**

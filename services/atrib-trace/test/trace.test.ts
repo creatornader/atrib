@@ -277,7 +277,7 @@ describe('compact trace payload', () => {
     const upstream = await buildSigned('01', 2000)
     const downstream = await buildSigned('02', 1000, [upstream.record_hash])
     ;(downstream.record as AtribRecord & { tool_name?: string; args_hash?: string; result_hash?: string }).tool_name =
-      'phase2_config_parser_diagnostics'
+      'diagnostic_config_parser_probe'
     ;(downstream.record as AtribRecord & { tool_name?: string; args_hash?: string; result_hash?: string }).args_hash =
       `sha256:${'1'.repeat(64)}`
     ;(downstream.record as AtribRecord & { tool_name?: string; args_hash?: string; result_hash?: string }).result_hash =
@@ -290,7 +290,7 @@ describe('compact trace payload', () => {
           passed: false,
           cases: [{ name: 'quoted value preserves interior', passed: false }],
         },
-        producer: 'phase2-diagnostic-harness',
+        producer: 'diagnostic-harness',
       },
     })
     const payload = compactVisited(
@@ -307,7 +307,7 @@ describe('compact trace payload', () => {
       true,
     )
 
-    expect(payload.tool_name).toBe('phase2_config_parser_diagnostics')
+    expect(payload.tool_name).toBe('diagnostic_config_parser_probe')
     expect(payload.args_hash).toBe(`sha256:${'1'.repeat(64)}`)
     expect(payload.result_hash).toBe(`sha256:${'2'.repeat(64)}`)
     expect(payload.informed_by).toEqual([upstream.record_hash])
@@ -315,7 +315,7 @@ describe('compact trace payload', () => {
       passed: false,
       cases: [{ name: 'quoted value preserves interior', passed: false }],
     })
-    expect(payload.local_producer).toBe('phase2-diagnostic-harness')
+    expect(payload.local_producer).toBe('diagnostic-harness')
   })
 
   it('read instrumentation samples only record_hash fields', () => {
