@@ -1009,6 +1009,23 @@
     color: var(--text-3);
     font: 12.5px/1.45 var(--font-sans);
   }
+  .proof-note {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-subtle);
+    display: grid;
+    gap: 10px;
+  }
+  .proof-note h3 {
+    margin: 0 0 3px;
+    color: var(--text);
+    font: 600 12px/1.2 var(--font-sans);
+  }
+  .proof-note p {
+    margin: 0;
+    color: var(--text-3);
+    font: 12.5px/1.45 var(--font-sans);
+  }
   @media (max-width: 760px) {
     .receipt { grid-template-columns: 1fr; }
     .receipt-main,
@@ -4130,6 +4147,16 @@ async function renderAction(recordHash) {
         ),
         proofStep('Committed to log', `Entry index ${entry.log_index ?? entry.index ?? 'unknown'} is in the public Merkle log.`),
         proofStep('Traceable context', entry.context_id ? 'The context id links this record to its workflow.' : 'No context id was returned for this lookup.', Boolean(entry.context_id)),
+      ),
+      el('div', { class: 'proof-note' },
+        el('div', {},
+          el('h3', {}, 'What this proves'),
+          el('p', {}, 'This record hash was accepted by the public log for this signer, at this log index, with this event type and timestamp.'),
+        ),
+        el('div', {},
+          el('h3', {}, 'What it does not prove'),
+          el('p', {}, 'It does not prove the real-world truth of the tool result or identity claim. Those require external evidence or directory context.'),
+        ),
       ),
     ),
   ))
