@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { leafHash as computeLeafHash, computeRoot, computeInclusionProof } from '@atrib/mcp'
+import { leafHash as computeLeafHash, nodeHash } from '@atrib/mcp'
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
@@ -9,16 +9,16 @@ import { ENTRY_SIZE } from './entry.js'
 /**
  * Append-only Merkle tree backed by RFC 6962 functions from @atrib/mcp.
  *
- * Stores raw entry bytes so they can be passed directly to computeRoot and
- * computeInclusionProof. those functions call leafHash() internally, so we
- * must NOT pass pre-hashed values to them (that would double-hash).
+ * Stores raw entry bytes for tile/lookup endpoints and cached subtree hashes
+ * for root and proof generation.
  *
- * Leaf hashes are cached on append for O(1) access via leafHash(index).
+ * Leaf hashes and complete power-of-two subtree hashes are cached on append,
+ * so root() and inclusionProof() do not recompute the full tree on every
+ * submission or checkpoint.
  *
- * PERFORMANCE NOTE: Root computation and proof generation are O(n) per call,
- * recomputing the entire tree from leaf hashes. This is correct and fast
- * enough for launch scale (<100K entries). For production scale, cache
- * intermediate node hashes and update only the O(log n) path on append.
+ * PERFORMANCE NOTE: Root computation and proof generation use the cached
+ * complete-subtree levels below. This keeps submit/checkpoint latency bounded
+ * as the persistent log grows.
  */
 export interface MerkleTree {
   /** Append an entry. Returns the 0-based log index assigned to this entry. */
@@ -63,8 +63,36 @@ export interface MerkleTreeOptions {
 export function createMerkleTree(options?: MerkleTreeOptions): MerkleTree {
   // Raw entry bytes. passed to computeRoot / computeInclusionProof.
   const rawEntries: Uint8Array[] = []
-  // Cached leaf hashes. computed once on append, returned via leafHash().
-  const leafHashes: Uint8Array[] = []
+  // Complete subtree hashes by level. level 0 is leaf hashes, level 1 is
+  // 2-leaf subtrees, level 2 is 4-leaf subtrees, and so on. A level entry is
+  // present only when that complete power-of-two block exists.
+  const levels: Uint8Array[][] = [[]]
+
+  function appendInMemory(entryBytes: Uint8Array): number {
+    const index = rawEntries.length
+    rawEntries.push(entryBytes)
+
+    let hash = computeLeafHash(entryBytes)
+    let level = 0
+    let levelIndex = index
+
+    while (true) {
+      const nodes = levels[level] ?? (levels[level] = [])
+      nodes[levelIndex] = hash
+
+      if (levelIndex % 2 === 0) break
+
+      const left = nodes[levelIndex - 1]
+      if (!left) {
+        throw new Error(`MerkleTree.append: missing left sibling at level ${level}, index ${levelIndex - 1}`)
+      }
+      hash = nodeHash(left, hash)
+      level += 1
+      levelIndex = Math.floor(levelIndex / 2)
+    }
+
+    return index
+  }
 
   const persistPath = options?.persistencePath
   if (persistPath && existsSync(persistPath)) {
@@ -75,9 +103,7 @@ export function createMerkleTree(options?: MerkleTreeOptions): MerkleTree {
       )
     }
     for (let off = 0; off < buf.length; off += ENTRY_SIZE) {
-      const entry = new Uint8Array(buf.subarray(off, off + ENTRY_SIZE))
-      rawEntries.push(entry)
-      leafHashes.push(computeLeafHash(entry))
+      appendInMemory(new Uint8Array(buf.subarray(off, off + ENTRY_SIZE)))
     }
   } else if (persistPath) {
     // Make sure the parent directory exists so the first append doesn't fail.
@@ -91,8 +117,7 @@ export function createMerkleTree(options?: MerkleTreeOptions): MerkleTree {
 
     append(entryBytes: Uint8Array): number {
       const index = rawEntries.length
-      rawEntries.push(entryBytes)
-      leafHashes.push(computeLeafHash(entryBytes))
+      appendInMemory(entryBytes)
       // Persist before returning so a successful append always means the
       // entry is on disk. Crash before this line: the entry was never
       // accepted; after this line: the entry will replay on next startup.
@@ -106,7 +131,7 @@ export function createMerkleTree(options?: MerkleTreeOptions): MerkleTree {
       if (rawEntries.length === 0) {
         throw new Error('MerkleTree.root: tree is empty')
       }
-      return computeRoot(rawEntries)
+      return rangeRootFromLevels(levels, 0, rawEntries.length)
     },
 
     inclusionProof(index: number): Uint8Array[] {
@@ -118,10 +143,11 @@ export function createMerkleTree(options?: MerkleTreeOptions): MerkleTree {
           `MerkleTree.inclusionProof: index ${index} out of range [0, ${rawEntries.length})`,
         )
       }
-      return computeInclusionProof(index, rawEntries)
+      return inclusionProofFromLevels(levels, index, 0, rawEntries.length)
     },
 
     leafHash(index: number): Uint8Array {
+      const leafHashes = levels[0] ?? []
       if (!Number.isInteger(index) || index < 0 || index >= leafHashes.length) {
         throw new Error(
           `MerkleTree.leafHash: index ${index} out of range [0, ${leafHashes.length})`,
@@ -139,4 +165,65 @@ export function createMerkleTree(options?: MerkleTreeOptions): MerkleTree {
       return rawEntries[index] as Uint8Array
     },
   }
+}
+
+function largestPowerOfTwoLessThan(n: number): number {
+  if (n < 2) {
+    throw new Error('largestPowerOfTwoLessThan: n must be >= 2')
+  }
+  if (n - 1 < 0x80000000) {
+    return 1 << (31 - Math.clz32(n - 1))
+  }
+  return 2 ** Math.floor(Math.log2(n - 1))
+}
+
+function isPowerOfTwo(n: number): boolean {
+  return n > 0 && Number.isInteger(Math.log2(n))
+}
+
+function powerLevel(size: number): number {
+  return Math.log2(size)
+}
+
+function rangeRootFromLevels(levels: Uint8Array[][], start: number, size: number): Uint8Array {
+  if (size < 1) {
+    throw new Error('MerkleTree.rangeRoot: empty range')
+  }
+  if (isPowerOfTwo(size)) {
+    const level = powerLevel(size)
+    const index = start / size
+    if (!Number.isInteger(index)) {
+      throw new Error(`MerkleTree.rangeRoot: misaligned range start ${start} for size ${size}`)
+    }
+    const hash = levels[level]?.[index]
+    if (!hash) {
+      throw new Error(`MerkleTree.rangeRoot: missing subtree at level ${level}, index ${index}`)
+    }
+    return hash
+  }
+  const k = largestPowerOfTwoLessThan(size)
+  return nodeHash(
+    rangeRootFromLevels(levels, start, k),
+    rangeRootFromLevels(levels, start + k, size - k),
+  )
+}
+
+function inclusionProofFromLevels(
+  levels: Uint8Array[][],
+  index: number,
+  start: number,
+  size: number,
+): Uint8Array[] {
+  if (size === 1) return []
+
+  const k = largestPowerOfTwoLessThan(size)
+  if (index < k) {
+    const proof = inclusionProofFromLevels(levels, index, start, k)
+    proof.push(rangeRootFromLevels(levels, start + k, size - k))
+    return proof
+  }
+
+  const proof = inclusionProofFromLevels(levels, index - k, start + k, size - k)
+  proof.push(rangeRootFromLevels(levels, start, k))
+  return proof
 }

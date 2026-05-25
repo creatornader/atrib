@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { leafHash, verifyInclusion, computeRoot } from '@atrib/mcp'
+import { leafHash, verifyInclusion, computeRoot, computeInclusionProof } from '@atrib/mcp'
 import { createMerkleTree } from '../src/tree.js'
 import { ENTRY_SIZE } from '../src/entry.js'
 
@@ -72,6 +72,22 @@ describe('MerkleTree', () => {
       const lh = tree.leafHash(i)
       const valid = verifyInclusion(i, tree.size, lh, proof, root)
       expect(valid).toBe(true)
+    }
+  })
+
+  it('matches the reference RFC 6962 root and proof bytes across tree sizes', () => {
+    const entries: Uint8Array[] = []
+    const tree = createMerkleTree()
+
+    for (let size = 1; size <= 33; size++) {
+      const e = new Uint8Array([size, size * 3, size * 7])
+      entries.push(e)
+      tree.append(e)
+
+      expect(tree.root()).toEqual(computeRoot(entries))
+      for (let i = 0; i < size; i++) {
+        expect(tree.inclusionProof(i)).toEqual(computeInclusionProof(i, entries))
+      }
     }
   })
 
