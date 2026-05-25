@@ -340,6 +340,59 @@ export function clusterSeedPositions(nodes, options = {}) {
 }
 
 /**
+ * Build a small chronological replay graph from log `/recent` entries.
+ * This is a dashboard-only fallback for demo playback when graph-node
+ * cannot return a ready session graph. It does not change graph APIs.
+ */
+export function buildReplayGraphFromEntries(entries, options = {}) {
+  const limit = Number.isFinite(options.limit) ? Math.max(0, Math.floor(options.limit)) : 18
+  const usable = Array.isArray(entries)
+    ? entries.filter((entry) => entry?.record_hash && entry?.context_id)
+    : []
+  const sorted = usable
+    .slice()
+    .sort((a, b) => {
+      const at = typeof a.timestamp_ms === 'number' ? a.timestamp_ms : 0
+      const bt = typeof b.timestamp_ms === 'number' ? b.timestamp_ms : 0
+      if (at !== bt) return at - bt
+      return String(a.record_hash).localeCompare(String(b.record_hash))
+    })
+    .slice(-limit)
+
+  const nodes = sorted.map((entry) => ({
+    id: entry.record_hash,
+    record_hash: entry.record_hash,
+    event_type: entry.event_type,
+    creator_key: entry.creator_key,
+    context_id: entry.context_id,
+    timestamp: entry.timestamp_ms,
+    verification_state: 'log_committed',
+  }))
+
+  const edges = []
+  const lastByContext = new Map()
+  for (const node of nodes) {
+    const prior = lastByContext.get(node.context_id)
+    if (prior) {
+      edges.push({
+        source: prior.id,
+        target: node.id,
+        type: 'CHAIN_PRECEDES',
+      })
+    }
+    lastByContext.set(node.context_id, node)
+  }
+
+  return {
+    nodes,
+    edges,
+    node_count: nodes.length,
+    edge_count: edges.length,
+    replay: true,
+  }
+}
+
+/**
  * The Sigma 3 framed-graph default camera state.
  *
  * We learned the hard way (see commit fe3f04e): Sigma 3's camera

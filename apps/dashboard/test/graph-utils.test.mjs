@@ -32,12 +32,22 @@ import {
   computeNodeSizeFromCentrality,
   computeGraphBBox,
   computeNeighborhood,
+  buildReplayGraphFromEntries,
 } from '../graph-utils.mjs'
 
 // Helper: build a graphData wire-format object.
 function graph(nodes, edges) { return { nodes, edges } }
 function n(id, event_type = 'tool_call') { return { id, event_type } }
 function e(source, target, type = 'CHAIN_PRECEDES') { return { source, target, type } }
+function recent(recordHash, contextId, timestampMs, eventType = 'tool_call') {
+  return {
+    record_hash: recordHash,
+    context_id: contextId,
+    timestamp_ms: timestampMs,
+    event_type: eventType,
+    creator_key: 'creator',
+  }
+}
 
 describe('HIERARCHICAL_EDGE_TYPES', () => {
   it('contains all edge types the spec defines as hierarchical', () => {
@@ -577,5 +587,49 @@ describe('clusterSeedPositions', () => {
     const dist = Math.hypot(a.x - b.x, a.y - b.y)
     // Same cluster, so within intraClusterRadius * 2 (default 200 * 2 = 400)
     expect(dist).toBeLessThan(500)
+  })
+})
+
+describe('buildReplayGraphFromEntries', () => {
+  it('builds chronological nodes and same-context chain edges', () => {
+    const replay = buildReplayGraphFromEntries([
+      recent('b', 'ctx1', 2000),
+      recent('a', 'ctx1', 1000),
+      recent('c', 'ctx2', 3000),
+      recent('d', 'ctx1', 4000),
+    ])
+
+    expect(replay.nodes.map((node) => node.id)).toEqual(['a', 'b', 'c', 'd'])
+    expect(replay.edges).toEqual([
+      { source: 'a', target: 'b', type: 'CHAIN_PRECEDES' },
+      { source: 'b', target: 'd', type: 'CHAIN_PRECEDES' },
+    ])
+    expect(replay.node_count).toBe(4)
+    expect(replay.edge_count).toBe(2)
+    expect(replay.replay).toBe(true)
+  })
+
+  it('keeps the newest entries when a limit is supplied', () => {
+    const replay = buildReplayGraphFromEntries([
+      recent('a', 'ctx', 1000),
+      recent('b', 'ctx', 2000),
+      recent('c', 'ctx', 3000),
+    ], { limit: 2 })
+
+    expect(replay.nodes.map((node) => node.id)).toEqual(['b', 'c'])
+    expect(replay.edges).toEqual([
+      { source: 'b', target: 'c', type: 'CHAIN_PRECEDES' },
+    ])
+  })
+
+  it('drops malformed entries instead of creating broken graph edges', () => {
+    const replay = buildReplayGraphFromEntries([
+      { record_hash: 'missing-context', timestamp_ms: 1000 },
+      { context_id: 'ctx', timestamp_ms: 2000 },
+      recent('ok', 'ctx', 3000),
+    ])
+
+    expect(replay.nodes.map((node) => node.id)).toEqual(['ok'])
+    expect(replay.edges).toEqual([])
   })
 })

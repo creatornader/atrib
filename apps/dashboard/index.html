@@ -307,6 +307,23 @@
   }
   body > header nav a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
   body > header nav a.active { color: var(--accent); background: var(--accent-subtle); }
+  @media (max-width: 520px) {
+    body > header {
+      gap: 10px;
+      padding: 10px 12px;
+      align-items: flex-start;
+    }
+    body > header .brand .sub { display: none; }
+    body > header nav {
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 2px;
+    }
+    body > header nav a {
+      padding: 7px 8px;
+      font-size: 12px;
+    }
+  }
 
   /* ─── Layout ──────────────────────────────────────────────────────────── */
 
@@ -1403,6 +1420,132 @@
   .graph-legend .swatch.edge.session_precedes { color: var(--edge-session-precedes); }
   .graph-legend .swatch.edge.session_parallel { color: var(--edge-session-parallel); }
   .graph-legend .swatch.edge.cross_session    { color: var(--edge-cross-session); }
+
+  /* ─── Live demo mode ────────────────────────────────────────────────── */
+
+  body.demo-route main {
+    max-width: none;
+    padding: 0 16px 48px;
+  }
+  body.demo-route footer { display: none; }
+  .demo-shell {
+    display: grid;
+    grid-template-columns: minmax(300px, 0.72fr) minmax(0, 1.28fr);
+    gap: 16px;
+    min-height: calc(100vh - 84px);
+    padding-top: 16px;
+  }
+  .demo-panel {
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .demo-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--surface-2);
+  }
+  .demo-panel-head h1,
+  .demo-panel-head h2 {
+    margin: 0;
+    color: var(--text);
+    font: 600 13px/1 var(--font-sans);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .demo-panel-head .meta {
+    color: var(--text-3);
+    font: 12px/1.2 var(--font-mono);
+  }
+  .demo-agent-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    max-height: calc(100vh - 158px);
+    overflow: auto;
+    background: var(--border-subtle);
+  }
+  .demo-step {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 12px;
+    padding: 13px 14px;
+    background: var(--surface);
+  }
+  .demo-step.live {
+    animation: demoStepIn 800ms ease-out;
+    background: color-mix(in srgb, var(--accent-subtle) 38%, var(--surface));
+  }
+  .demo-step .when {
+    color: var(--text-3);
+    font: 11px/1.4 var(--font-mono);
+    white-space: nowrap;
+  }
+  .demo-step .main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .demo-step .summary {
+    color: var(--text);
+    font: 500 13px/1.35 var(--font-sans);
+    overflow-wrap: anywhere;
+  }
+  .demo-step .hash {
+    color: var(--text-3);
+    font: 11px/1.35 var(--font-mono);
+    overflow-wrap: anywhere;
+  }
+  .demo-graph-frame {
+    position: relative;
+    height: calc(100vh - 158px);
+    min-height: 520px;
+    background: var(--surface);
+  }
+  .demo-graph-frame .trace-graph {
+    height: 100%;
+    min-height: 520px;
+  }
+  .demo-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ok);
+    font: 500 11px/1 var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .demo-status::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6);
+    animation: pulse 2s infinite;
+  }
+  @keyframes demoStepIn {
+    0% { transform: translateY(8px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  @media (max-width: 900px) {
+    .demo-shell { grid-template-columns: 1fr; }
+    .demo-agent-feed,
+    .demo-graph-frame { max-height: none; height: auto; }
+    .demo-graph-frame,
+    .demo-graph-frame .trace-graph { min-height: 460px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .demo-step.live,
+    .demo-status::before { animation: none; }
+  }
 </style>
 </head>
 <body>
@@ -1419,6 +1562,7 @@
   </div>
   <nav id="nav">
     <a href="#/" data-route="overview">overview</a>
+    <a href="#/demo" data-route="demo">demo</a>
     <a href="#/anchoring" data-route="anchoring">anchoring</a>
     <a href="#/about" data-route="about">about</a>
   </nav>
@@ -1467,7 +1611,8 @@ import {
   computeNodeSizeFromCentrality,
   computeGraphBBox,
   computeNeighborhood,
-} from './graph-utils.mjs?v=2026-05-25-parallel-edge-gate'
+  buildReplayGraphFromEntries,
+} from './graph-utils.mjs?v=2026-05-25-demo-replay'
 
 /*
  * atrib explorer, D054 option 1.
@@ -2191,6 +2336,222 @@ function populateQuickLinks(entries) {
   wrap.replaceChildren(...links)
 }
 
+// ─── Demo mode: agent timeline + living graph replay ─────────────────────
+
+let demoReplayHandle = null
+let demoReplayToken = 0
+
+function stopDemoReplay() {
+  if (demoReplayHandle) {
+    clearInterval(demoReplayHandle)
+    demoReplayHandle = null
+  }
+  demoReplayToken += 1
+}
+
+function nodeTimestamp(node) {
+  const value = node?.timestamp ?? node?.timestamp_ms
+  return typeof value === 'number' ? value : Date.parse(value || 0) || 0
+}
+
+function normalizeDemoGraph(graph) {
+  const nodes = Array.isArray(graph?.nodes)
+    ? graph.nodes
+        .filter((node) => node?.id)
+        .map((node) => ({
+          ...node,
+          record_hash: graphNodeRecordHash(node),
+          timestamp: nodeTimestamp(node),
+          verification_state: node.verification_state || 'log_committed',
+        }))
+    : []
+  const nodeIds = new Set(nodes.map((node) => node.id))
+  const edges = Array.isArray(graph?.edges)
+    ? graph.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+    : []
+  return {
+    ...graph,
+    nodes,
+    edges,
+    node_count: nodes.length,
+    edge_count: edges.length,
+  }
+}
+
+function chooseDemoContext(entries) {
+  const counts = new Map()
+  for (const entry of entries) {
+    if (!entry.context_id) continue
+    counts.set(entry.context_id, (counts.get(entry.context_id) ?? 0) + 1)
+  }
+  let best = null
+  for (const [contextId, count] of counts) {
+    if (!best || count > best.count) best = { contextId, count }
+  }
+  return best?.contextId || entries.find((entry) => entry.context_id)?.context_id || null
+}
+
+function subsetGraphForReplay(graph, visibleNodeIds) {
+  const visible = new Set(visibleNodeIds)
+  const nodes = graph.nodes.filter((node) => visible.has(node.id))
+  const edges = graph.edges.filter((edge) => visible.has(edge.source) && visible.has(edge.target))
+  return {
+    ...graph,
+    nodes,
+    edges,
+    node_count: nodes.length,
+    edge_count: edges.length,
+  }
+}
+
+function demoStepRow(node, isLive) {
+  const hash = graphNodeRecordHash(node)
+  return el('article', { class: isLive ? 'demo-step live' : 'demo-step' },
+    el('div', { class: 'when', ...(node.timestamp ? { 'data-ts': String(node.timestamp) } : {}) },
+      node.timestamp ? timeAgo(node.timestamp) : 'queued'),
+    el('div', { class: 'main' },
+      el('div', {}, renderEventChip(node.event_type, node.creator_key, node.event_type_uri)),
+      el('div', { class: 'summary' },
+        graphNodeKindLabel(node.event_type),
+        node.creator_key ? ' by ' : '',
+        node.creator_key ? renderIdentityLabel(node.creator_key) : null),
+      hash ? el('a', { class: 'hash', href: `#/action/${hash}` }, shorten(hash, 14, 6)) : null,
+    ),
+  )
+}
+
+function renderDemoTimeline(container, nodes, visibleCount) {
+  const visible = nodes.slice(0, visibleCount)
+  container.replaceChildren(...visible.map((node, index) =>
+    demoStepRow(node, index === visible.length - 1),
+  ))
+  container.scrollTop = container.scrollHeight
+}
+
+async function renderDemo() {
+  setActiveNav('demo')
+  stopDemoReplay()
+  stopPolling()
+  const ep = endpoints()
+  const myGen = currentRouteGeneration()
+  const root = el('div', { class: 'demo-shell' })
+  const timeline = el('div', { class: 'demo-agent-feed' },
+    el('div', { class: 'empty' }, 'loading signed agent actions…'))
+  const graphContainer = el('div', { class: 'trace-graph', id: 'demo-live-graph' },
+    el('div', { class: 'loading' }, 'loading graph replay…'))
+  const meta = el('span', { class: 'meta' }, 'warming up')
+  root.append(
+    el('section', { class: 'demo-panel' },
+      el('div', { class: 'demo-panel-head' },
+        el('h1', {}, 'agent session'),
+        el('span', { class: 'demo-status' }, 'live replay'),
+      ),
+      timeline,
+    ),
+    el('section', { class: 'demo-panel' },
+      el('div', { class: 'demo-panel-head' },
+        el('h2', {}, 'living graph'),
+        meta,
+      ),
+      el('div', { class: 'demo-graph-frame' }, graphContainer),
+    ),
+  )
+  clearAndRender(root)
+
+  const recent = await fetchMaybe(`${ep.log}/recent?limit=80`)
+  if (!routeGenerationStillCurrent(myGen)) return
+  if (recent._error || !recent.entries?.length) {
+    timeline.replaceChildren(el('div', { class: 'empty' }, recent._error || 'No recent signed actions returned.'))
+    graphContainer.replaceChildren(el('div', { class: 'err-banner' },
+      el('span', { class: 'label' }, 'log error:'), recent._error || 'empty recent feed'))
+    return
+  }
+
+  const contextId = chooseDemoContext(recent.entries)
+  const contextEntries = contextId
+    ? recent.entries.filter((entry) => entry.context_id === contextId)
+    : recent.entries
+  await resolveIdentities(contextEntries.map((entry) => entry.creator_key).filter(Boolean))
+  if (!routeGenerationStillCurrent(myGen)) return
+
+  const graphResult = contextId ? await fetchMaybe(`${ep.graph}/graph/${contextId}?shape=compact`) : null
+  if (!routeGenerationStillCurrent(myGen)) return
+  let graph = null
+  let sourceLabel = 'graph-node'
+  if (graphResult && !graphResult._error && Array.isArray(graphResult.nodes) && graphResult.nodes.length > 1) {
+    graph = normalizeDemoGraph(graphResult)
+  }
+  if (!graph || graph.edges.length === 0) {
+    graph = normalizeDemoGraph(buildReplayGraphFromEntries(contextEntries.length > 1 ? contextEntries : recent.entries, { limit: 24 }))
+    sourceLabel = 'log replay'
+  }
+  if (graph.nodes.length === 0) {
+    graphContainer.replaceChildren(el('div', { class: 'empty' }, 'No graphable records found.'))
+    return
+  }
+
+  graph.nodes.sort((a, b) => nodeTimestamp(a) - nodeTimestamp(b))
+  const maxNodes = Math.min(24, graph.nodes.length)
+  const nodes = graph.nodes.slice(Math.max(0, graph.nodes.length - maxNodes))
+  const nodeIds = new Set(nodes.map((node) => node.id))
+  graph = {
+    ...graph,
+    nodes,
+    edges: graph.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target)),
+  }
+  graph.node_count = graph.nodes.length
+  graph.edge_count = graph.edges.length
+
+  try {
+    await loadGraphLibs()
+  } catch (e) {
+    graphContainer.replaceChildren(el('div', { class: 'err-banner' },
+      el('span', { class: 'label' }, 'graph library load error:'), ' ', e.message))
+    return
+  }
+  if (!routeGenerationStillCurrent(myGen)) return
+
+  let visibleCount = Math.min(3, graph.nodes.length)
+  let painting = false
+  const token = demoReplayToken
+  const paint = async () => {
+    if (painting || token !== demoReplayToken || !routeGenerationStillCurrent(myGen)) return
+    painting = true
+    const visibleIds = graph.nodes.slice(0, visibleCount).map((node) => node.id)
+    const visibleGraph = subsetGraphForReplay(graph, visibleIds)
+    meta.textContent = `${sourceLabel} · ${visibleGraph.nodes.length} nodes · ${visibleGraph.edges.length} edges`
+    renderDemoTimeline(timeline, graph.nodes, visibleCount)
+    graphContainer.replaceChildren()
+    if (_activeSigmaInstance) {
+      try { _activeSigmaInstance.kill() } catch {}
+      _activeSigmaInstance = null
+    }
+    try {
+      const { sigma, fitCameraToGraph, resolvedMode } = await renderSigmaDAG(graphContainer, visibleGraph, {
+        layoutMode: 'timeline',
+        nodeSize: 13,
+        focalSize: 18,
+      })
+      _activeSigmaInstance = sigma
+      attachCameraControls(graphContainer, fitCameraToGraph, sigma)
+    } catch (e) {
+      renderGraphRenderError(graphContainer, e)
+    } finally {
+      painting = false
+    }
+  }
+
+  await paint()
+  demoReplayHandle = setInterval(async () => {
+    if (visibleCount < graph.nodes.length) {
+      visibleCount += 1
+    } else {
+      visibleCount = Math.min(3, graph.nodes.length)
+    }
+    await paint()
+  }, 1400)
+}
+
 // ─── Polling ─────────────────────────────────────────────────────────────
 
 function isOverviewRoute() {
@@ -2213,7 +2574,7 @@ function isOverviewRoute() {
 // state (action, trace, anchoring) keep silent-refresh.
 function isUserStatefulRoute() {
   const h = location.hash.replace(/^#/, '')
-  return h.startsWith('/identity/') || h.startsWith('/session/')
+  return h.startsWith('/identity/') || h.startsWith('/session/') || h === '/demo'
 }
 
 // Per-view soft refresh: every active view (action, trace, anchoring)
@@ -5076,7 +5437,7 @@ function renderAbout() {
       ),
       el('p', {}, 'Agents prove what they did. Consumers verify what was actually done. Auditors don\'t have to trust any operator.'),
 
-      el('h2', {}, 'Six views'),
+      el('h2', {}, 'Seven views'),
       el('h3', {}, 'Overview (this page)'),
       el('p', {}, 'A live feed of the most recent signed actions, updating every 5 seconds. Every row is a real record from a real atrib-instrumented agent.'),
 
@@ -5093,6 +5454,10 @@ function renderAbout() {
       el('h3', {}, 'Action'),
       el('p', {},
         'A single signed record. The action view shows the hash, identity, session, timestamp, verification state, and the raw JSON.'),
+
+      el('h3', {}, 'Demo'),
+      el('p', {},
+        'A live walkthrough view that pairs a concise agent-session timeline with a replaying graph. It prefers graph-node data for the busiest recent session, then falls back to a log-derived replay when graph data is unavailable.'),
 
       el('h3', {}, 'Trace'),
       el('p', {},
@@ -5171,6 +5536,10 @@ async function route(opts = {}) {
   const silent = opts.silent === true
   _routeGeneration += 1
   const myGen = _routeGeneration
+  const hash = location.hash.replace(/^#/, '')
+  const isDemoRoute = hash === '/demo'
+  document.body.classList.toggle('demo-route', isDemoRoute)
+  if (!isDemoRoute) stopDemoReplay()
   renderEndpoints()
   if (!isOverviewRoute()) stopPolling()
   // Cross-view soft refresh: turn ON for non-overview views, OFF when on
@@ -5186,10 +5555,10 @@ async function route(opts = {}) {
   if (!silent) {
     document.getElementById('app').replaceChildren(el('div', { class: 'empty' }, 'loading…'))
   }
-  const hash = location.hash.replace(/^#/, '')
 
   try {
     if (!hash || hash === '/' || hash === '/overview')      return await renderOverview()
+    if (hash === '/demo')                                   return await renderDemo()
     if (hash.startsWith('/identity/'))                       return await renderIdentity(hash.slice('/identity/'.length))
     if (hash.startsWith('/session/'))                        return await renderSession(hash.slice('/session/'.length))
     if (hash.startsWith('/action/'))                         return await renderAction(hash.slice('/action/'.length))
