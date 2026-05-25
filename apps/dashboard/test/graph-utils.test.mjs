@@ -35,6 +35,9 @@ import {
   normalizeGraphRecordHash,
   graphNodeActionHash,
   graphReferenceStatus,
+  isGraphReferenceNode,
+  summarizeGraphNodes,
+  summarizeReferenceEdges,
   graphNodeLegendEntry,
   buildReplayGraphFromEntries,
   computeDemoGraphSignature,
@@ -252,6 +255,49 @@ describe('reference node helpers', () => {
       key: 'observation',
       className: 'observation',
       label: 'observation',
+    })
+  })
+
+  it('keeps signed record nodes distinct from synthetic reference nodes', () => {
+    const nodes = [
+      n('tool-1', 'tool_call'),
+      n('tool-2', 'tool_call'),
+      n('annotation-1', 'annotation'),
+      { id: 'dangling-a', event_type: 'dangling_node', reference_status: 'external' },
+      { id: 'dangling-b', event_type: 'dangling_node', reference_status: 'external' },
+      { id: 'dangling-c', event_type: 'dangling_node', reference_status: 'missing' },
+    ]
+
+    expect(isGraphReferenceNode(nodes[0])).toBe(false)
+    expect(isGraphReferenceNode(nodes[3])).toBe(true)
+    expect(summarizeGraphNodes(nodes)).toEqual({
+      totalNodeCount: 6,
+      recordNodeCount: 3,
+      referenceNodeCount: 3,
+      countByEventType: {
+        tool_call: 2,
+        annotation: 1,
+      },
+      countByReferenceStatus: {
+        external: 2,
+        missing: 1,
+        unresolved: 0,
+      },
+    })
+  })
+
+  it('counts reference links separately from reference nodes', () => {
+    const edges = [
+      { source: 'a', target: 'dangling-a', type: 'INFORMED_BY', dangling: true, reference_status: 'external' },
+      { source: 'b', target: 'dangling-a', type: 'ANNOTATES', dangling: true, reference_status: 'external' },
+      { source: 'c', target: 'dangling-b', type: 'REVISES', dangling: true, reference_status: 'missing' },
+      { source: 'a', target: 'b', type: 'CHAIN_PRECEDES' },
+    ]
+
+    expect(summarizeReferenceEdges(edges)).toEqual({
+      external: 2,
+      missing: 1,
+      unresolved: 0,
     })
   })
 })
