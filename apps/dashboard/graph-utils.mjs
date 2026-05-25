@@ -142,14 +142,54 @@ export function referenceStatusLabel(status) {
   return 'unresolved reference'
 }
 
+export function isGraphReferenceNode(node) {
+  if (!node) return false
+  return node.event_type === 'dangling_node' || node.event_type === 'gap_node' || Boolean(node.reference_status)
+}
+
+export function summarizeGraphNodes(nodes = []) {
+  const countByEventType = {}
+  const countByReferenceStatus = { external: 0, missing: 0, unresolved: 0 }
+  let recordNodeCount = 0
+  let referenceNodeCount = 0
+
+  for (const node of nodes) {
+    if (isGraphReferenceNode(node)) {
+      referenceNodeCount += 1
+      countByReferenceStatus[graphReferenceStatus(node)] += 1
+      continue
+    }
+    recordNodeCount += 1
+    const eventType = node?.event_type || 'unknown'
+    countByEventType[eventType] = (countByEventType[eventType] ?? 0) + 1
+  }
+
+  return {
+    totalNodeCount: nodes.length,
+    recordNodeCount,
+    referenceNodeCount,
+    countByEventType,
+    countByReferenceStatus,
+  }
+}
+
+export function summarizeReferenceEdges(edges = []) {
+  const counts = { external: 0, missing: 0, unresolved: 0 }
+  for (const edge of edges) {
+    if (!edge || edge.dangling !== true) continue
+    const status = graphReferenceStatus(edge)
+    counts[status] += 1
+  }
+  return counts
+}
+
 /**
  * Return the action route hash for a graph node, or the empty string when the
  * node is a non-clickable synthetic placeholder.
  */
 export function graphNodeActionHash(node) {
   if (!node) return ''
-  const isReferenceNode = node.event_type === 'dangling_node' || node.event_type === 'gap_node' || Boolean(node.reference_status)
-  if (isReferenceNode) {
+  if (isGraphReferenceNode(node)) {
     if (graphReferenceStatus(node) !== 'external') return ''
     return normalizeGraphRecordHash(node.reference_hash || node.id)
   }
