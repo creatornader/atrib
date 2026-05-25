@@ -3510,12 +3510,10 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     clearHoverFocus()
   })
   container.addEventListener('pointerdown', (event) => {
+    if (!(event.target instanceof HTMLCanvasElement)) return
     _pointerDown = true
     container.classList.add('is-dragging')
     clearHoverFocus()
-    if (event.pointerId != null && typeof container.setPointerCapture === 'function') {
-      try { container.setPointerCapture(event.pointerId) } catch {}
-    }
   }, { signal: _interactionAbort.signal, capture: true })
   container.addEventListener('pointermove', setTooltipPosition, { signal: _interactionAbort.signal, passive: true })
   window.addEventListener('pointerup', () => {
