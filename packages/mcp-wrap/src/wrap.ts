@@ -107,6 +107,7 @@ export async function wrap(
       // Wrapper users get the auto-detect "for free"; raw @atrib/mcp consumers
       // (without mcp-wrap) opt in explicitly.
       autoDetectInformedByFromArgs: true,
+      ...(config.disclosure ? { disclosure: config.disclosure } : {}),
       // Persists the signed record + optional pre-sign sidecar. The sidecar
       // carries the upstream tool name + raw args + raw result so consumers
       // like atrib-trace and atrib-summarize can surface semantic context.

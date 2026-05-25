@@ -61,6 +61,31 @@ describe('parseConfig', () => {
     expect(config.tools?.['checkout']?.transactionTool).toBe(true)
   })
 
+  it('parses disclosure controls', () => {
+    const config = parseConfig({
+      ...MINIMAL,
+      disclosure: {
+        tool_name: 'verbatim',
+        args: 'plain-sha256',
+        result: 'salted-sha256',
+      },
+    })
+    expect(config.disclosure).toEqual({
+      tool_name: 'verbatim',
+      args: 'plain-sha256',
+      result: 'salted-sha256',
+    })
+  })
+
+  it('rejects invalid disclosure controls', () => {
+    expect(() =>
+      parseConfig({
+        ...MINIMAL,
+        disclosure: { args: 'md5' },
+      }),
+    ).toThrow()
+  })
+
   it('rejects empty name', () => {
     expect(() => parseConfig({ ...MINIMAL, name: '' })).toThrow()
   })

@@ -45,6 +45,10 @@ and no env var, the wrapper reads `~/.atrib/wrap-config.json`.
   "serverUrl": "mcp://agent-bridge.local",
   "logEndpoint": "https://log.atrib.dev/v1/entries",
   "autoChain": true,
+  "disclosure": {
+    "tool_name": "verbatim",
+    "args": "plain-sha256"
+  },
   "tools": {
     "post_context": { "injectReceiptId": true },
     "checkout":     { "transactionTool": true }
@@ -62,6 +66,7 @@ and no env var, the wrapper reads `~/.atrib/wrap-config.json`.
 | `serverUrl`       | yes      | (no default)                              | Canonical URL for `content_id` derivation per spec [§1.2.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#122-content_id-derivation). Path segment for `agent` is appended automatically.                                 |
 | `logEndpoint`     | no       | `https://log.atrib.dev/v1/entries`        | Submission endpoint. Override for local development against `@atrib/log-dev` or a local log-node.                                                |
 | `autoChain`       | no       | `true`                                    | Chain successive tool calls within this wrapper's process lifetime. Required for CHAIN_PRECEDES edges from stdio hosts.                        |
+| `disclosure`      | no       | `{}`                                      | Optional [§8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#8-security-considerations-and-threat-model) disclosure dials passed to `@atrib/mcp`: `tool_name` (`omit`, `verbatim`, `hashed`), `args` (`omit`, `plain-sha256`, `salted-sha256`), and `result` (`omit`, `plain-sha256`, `salted-sha256`). |
 | `tools[<name>]`   | no       | (none)                                    | Per-tool overrides. `transactionTool: true` emits a `transaction` event_type record. `injectReceiptId: true` enables [D057](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d057-pre-call-signing-hook-precalltransform-for-cross-tool-causal-embedding) preCallTransform.    |
 | `logFile`         | no       | `~/.atrib/logs/<name>-<agent>.log`        | Wrapper debug log (jsonl). Set to `""` to disable.                                                                                              |
 | `recordFile`      | no       | `~/.atrib/records/<name>-<agent>.jsonl`   | Signed-record mirror (jsonl). Set to `""` to disable.                                                                                           |
@@ -89,12 +94,16 @@ For each tool call through the wrapped MCP:
 1. Wrapper signs the record (Ed25519 over the JCS-canonical record).
 2. Optionally injects the [§1.5.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#152-http-transport-tracestate) receipt token into the upstream args
    (when `tools[<name>].injectReceiptId === true`).
-3. Forwards to the upstream MCP server.
-4. On success, persists the signed record to the local jsonl mirror
+3. Optionally adds signed `tool_name`, `args_hash`, and `result_hash`
+   fields when `disclosure` asks for them. `result_hash` is omitted on
+   tools using `injectReceiptId`, because those records are signed before
+   the upstream result exists.
+4. Forwards to the upstream MCP server.
+5. On success, persists the signed record to the local jsonl mirror
    (closes the chain seed → pubkey → record signature → log inclusion
    verification path).
-5. Submits to the log endpoint via the priority queue.
-6. autoChain bookkeeping advances so the next call links to this one.
+6. Submits to the log endpoint via the priority queue.
+7. autoChain bookkeeping advances so the next call links to this one.
 
 Records are byte-identical to those signed by `@atrib/agent` or any other
 caller of `@atrib/mcp` middleware. The wrapper is a transport, not a
