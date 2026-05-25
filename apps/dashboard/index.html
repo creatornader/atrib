@@ -622,6 +622,19 @@
     display: flex; flex-direction: column; gap: 6px;
     min-width: 0;
   }
+  .pulse-strip a.stat {
+    color: inherit;
+    text-decoration: none;
+    transition-property: background-color;
+    transition-duration: 120ms;
+    transition-timing-function: ease;
+  }
+  .pulse-strip a.stat:hover {
+    background: var(--surface-hover);
+  }
+  .pulse-strip a.stat:hover .value {
+    color: var(--accent);
+  }
   .pulse-strip .stat .label {
     font: 500 11px/1 var(--font-sans);
     color: var(--text-3);
@@ -1677,6 +1690,10 @@ function shorten(s, head = 6, tail = 4) {
   return `${s.slice(0, head)}…${s.slice(-tail)}`
 }
 
+function formatCount(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() : '—'
+}
+
 function timeAgo(ms) {
   if (!ms || typeof ms !== 'number') return '—'
   const diff = Date.now() - ms
@@ -2062,10 +2079,10 @@ async function renderOverview() {
   root.append(renderEventKey())
 
   root.append(el('div', { class: 'pulse-strip', id: 'pulse-strip' },
-    pulseStat('signed actions', '—'),
-    pulseStat('identities', '—'),
-    pulseStat('latest action', '—'),
-    pulseStat('latest checkpoint', '—'),
+    pulseStat('signed records', '—'),
+    pulseStat('signing identities', '—'),
+    pulseStat('latest record', '—'),
+    pulseStat('checkpoint root', '—'),
   ))
 
   root.append(el('section', { style: 'margin-bottom: 32px;' },
@@ -2118,7 +2135,7 @@ async function renderOverview() {
     fetchTextMaybe(`${ep.log}/checkpoint`),
   ])
 
-  updatePulseStrip(stats, checkpoint)
+  updatePulseStrip(stats, checkpoint, recent)
 
   if (recent._error || !recent.entries) {
     document.getElementById('feed-body').replaceChildren(
@@ -2189,15 +2206,57 @@ function renderRawJsonPanel(title, meta, payload, options = {}) {
   )
 }
 
-function pulseStat(label, value, sub = null, wide = false) {
-  return el('div', { class: wide ? 'stat wide' : 'stat' },
+function pulseStat(label, value, sub = null, options = {}) {
+  const attrs = {
+    class: options.wide ? 'stat wide' : 'stat',
+    ...(options.title ? { title: options.title } : {}),
+  }
+  const tag = options.href ? 'a' : 'div'
+  if (options.href) attrs.href = options.href
+  return el(tag, attrs,
     el('span', { class: 'label' }, label),
     el('span', { class: 'value' }, value),
     sub ? el('span', { class: 'sub' }, sub) : null,
   )
 }
 
-function updatePulseStrip(stats, checkpoint) {
+function parseCheckpointSummary(checkpoint) {
+  if (checkpoint._error || !checkpoint.text) {
+    return { origin: null, treeSize: null, rootHash: null, error: checkpoint._error || null }
+  }
+  const lines = checkpoint.text.split('\n')
+  const origin = lines[0] || null
+  const treeSizeText = lines[1] || ''
+  const rootHash = lines[2] || null
+  const treeSize = /^\d+$/.test(treeSizeText.trim()) ? parseInt(treeSizeText.trim(), 10) : null
+  return { origin, treeSize, rootHash, error: null }
+}
+
+function latestRecordStat(recent, stats) {
+  const latest = recent && Array.isArray(recent.entries) ? recent.entries[0] : null
+  if (latest) {
+    const info = eventTypeInfo(latest.event_type, latest.creator_key, latest.event_type_uri)
+    const age = latest.timestamp_ms ? timeAgo(latest.timestamp_ms) : 'time unknown'
+    const hash = latest.record_hash ? shorten(latest.record_hash, 8, 4) : null
+    return pulseStat(
+      'latest record',
+      info.label,
+      hash ? `${age} · ${hash}` : age,
+      latest.record_hash
+        ? { href: `#/action/${latest.record_hash}`, title: 'Open the newest record in the log' }
+        : {},
+    )
+  }
+  if (recent && recent._error) {
+    return pulseStat('latest record', 'unavailable', recent._error)
+  }
+  if (stats.newest_timestamp_ms) {
+    return pulseStat('latest record', timeAgo(stats.newest_timestamp_ms), isoTime(stats.newest_timestamp_ms))
+  }
+  return pulseStat('latest record', '—', 'no records yet')
+}
+
+function updatePulseStrip(stats, checkpoint, recent = null) {
   const strip = document.getElementById('pulse-strip')
   if (!strip) return
   if (stats._error) {
@@ -2208,19 +2267,22 @@ function updatePulseStrip(stats, checkpoint) {
     ))
     return
   }
-  let cpSize = null, cpAge = '—'
-  if (!checkpoint._error && checkpoint.text) {
-    const sizeLine = checkpoint.text.split('\n')[1]
-    if (sizeLine && /^\d+$/.test(sizeLine.trim())) cpSize = parseInt(sizeLine.trim(), 10)
-    cpAge = stats.newest_timestamp_ms ? timeAgo(stats.newest_timestamp_ms) : '—'
-  }
+  const cp = parseCheckpointSummary(checkpoint)
+  const treeSize = stats.tree_size ?? null
+  const checkpointTreeMatches = cp.treeSize !== null && treeSize !== null && cp.treeSize === treeSize
+  const checkpointSub = cp.rootHash
+    ? `${checkpointTreeMatches ? 'matches' : 'tree size'} ${formatCount(cp.treeSize)} · signed note`
+    : cp.error || 'checkpoint unavailable'
   strip.replaceChildren(
-    pulseStat('signed actions', String(stats.tree_size ?? '—'), 'committed to the log'),
-    pulseStat('signing identities', String(stats.distinct_signers ?? '—'), 'distinct creator_keys'),
-    pulseStat('latest action', stats.newest_timestamp_ms ? timeAgo(stats.newest_timestamp_ms) : '—',
-      stats.newest_timestamp_ms ? isoTime(stats.newest_timestamp_ms) : null),
-    pulseStat('latest checkpoint', cpAge,
-      cpSize !== null ? `tree size ${cpSize}` : null),
+    pulseStat('signed records', formatCount(stats.tree_size), 'committed to the log'),
+    pulseStat('signing identities', formatCount(stats.distinct_signers), 'distinct creator_keys'),
+    latestRecordStat(recent, stats),
+    pulseStat(
+      'checkpoint root',
+      cp.rootHash ? shorten(cp.rootHash, 10, 6) : '—',
+      checkpointSub,
+      cp.origin ? { title: `Signed checkpoint from ${cp.origin}` } : {},
+    ),
   )
 }
 
@@ -2617,7 +2679,7 @@ function startPolling() {
       fetchMaybe(`${ep.log}/stats`),
       fetchTextMaybe(`${ep.log}/checkpoint`),
     ])
-    updatePulseStrip(stats, checkpoint)
+    updatePulseStrip(stats, checkpoint, recent)
     if (recent._error || !recent.entries) return
     if (recent.entries.length === 0) return
     if (recent.entries[0].record_hash === lastFeedTopHash) return
