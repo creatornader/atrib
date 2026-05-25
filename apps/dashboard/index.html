@@ -993,10 +993,11 @@ import {
   resolveLayoutMode,
   clusterSeedPositions,
   computeNodeDegrees,
+  hasParallelEdges,
   computeNodeSizeFromCentrality,
   computeGraphBBox,
   computeNeighborhood,
-} from './graph-utils.mjs?v=2026-05-08-density-sizing'
+} from './graph-utils.mjs?v=2026-05-25-parallel-edge-gate'
 
 /*
  * atrib explorer, D054 option 1.
@@ -2348,7 +2349,7 @@ async function renderSession(contextId) {
   // log is the source of truth; the graph is a derived view that may be
   // unreachable, behind on ingestion, or unable to serve a particular
   // session size. fallbackReason distinguishes the cases for the banner.
-  let graph = await fetchMaybe(`${ep.graph}/graph/${contextId}`)
+  let graph = await fetchMaybe(`${ep.graph}/graph/${contextId}?shape=compact`)
   if (!routeGenerationStillCurrent(myGen)) return
   let usingFallback = false
   let fallbackReason = null  // 'not-ingested' | 'graph-error' | null
@@ -3205,55 +3206,57 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   // type='arrow'. For curved edges, compute a per-edge curvature index so
   // they fan symmetrically around the straight line.
   let edgeProgramClasses = { arrow: ProminentArrowProgram }
-  try {
-    const edgeCurve = await loadEdgeCurve()
-    // The package's canonical helper. After this call, parallel edges have
-    // a `parallelIndex` and `parallelMaxIndex` attribute; we read those.
-    if (typeof edgeCurve.indexParallelEdgesIndex === 'function') {
-      edgeCurve.indexParallelEdgesIndex(gx, { edgeIndexAttribute: 'parallelIndex', edgeMaxIndexAttribute: 'parallelMaxIndex' })
-    }
-    // Promote any edge with parallelMaxIndex > 0 to type='curved'.
-    let curvedCount = 0
-    gx.forEachEdge((edgeKey, attrs) => {
-      const maxIdx = attrs.parallelMaxIndex
-      if (typeof maxIdx === 'number' && maxIdx > 0) {
-        // Curvature: -0.4..+0.4 spread across parallelMaxIndex+1 lanes.
-        const idx = attrs.parallelIndex ?? 0
-        const lanes = maxIdx + 1
-        // Map idx ∈ [0, maxIdx] to curvature ∈ [-0.4, +0.4]. When lanes=2,
-        // idx=0 → -0.2, idx=1 → +0.2. When lanes=3, idx=0 → -0.4, 1 → 0, 2 → +0.4.
-        const curvature = lanes > 1 ? (idx / maxIdx - 0.5) * 0.8 : 0
-        gx.setEdgeAttribute(edgeKey, 'type', 'curved')
-        gx.setEdgeAttribute(edgeKey, 'curvature', curvature)
-        curvedCount++
+  if (hasParallelEdges(graphData.edges)) {
+    try {
+      const edgeCurve = await loadEdgeCurve()
+      // The package's canonical helper. After this call, parallel edges have
+      // a `parallelIndex` and `parallelMaxIndex` attribute; we read those.
+      if (typeof edgeCurve.indexParallelEdgesIndex === 'function') {
+        edgeCurve.indexParallelEdgesIndex(gx, { edgeIndexAttribute: 'parallelIndex', edgeMaxIndexAttribute: 'parallelMaxIndex' })
       }
-    })
-    if (curvedCount > 0 && typeof edgeCurve.createEdgeCurveProgram === 'function') {
-      // @sigma/edge-curve@3.1.0 exports `createEdgeCurveProgram(options)`
-      // as the canonical factory. The `arrowHead` option opts the program
-      // into directed-curve rendering. Critically, the option object MUST
-      // include `extremity: 'target'`, that's the flag that says "draw
-      // an arrow head at the target end." Without it, the program renders
-      // a curve with no arrow at all (verified by reading the bundle:
-      // `EdgeCurvedArrowProgram = createEdgeCurveProgram({ arrowHead: oe })`
-      // where `oe` is sigma's DEFAULT_EDGE_ARROW_HEAD_PROGRAM_OPTIONS,
-      // which includes extremity:'target' alongside the proportion ratios).
-      edgeProgramClasses.curved = edgeCurve.createEdgeCurveProgram({
-        arrowHead: {
-          extremity: 'target',
-          lengthToThicknessRatio: 7,
-          widenessToThicknessRatio: 5,
-        },
+      // Promote any edge with parallelMaxIndex > 0 to type='curved'.
+      let curvedCount = 0
+      gx.forEachEdge((edgeKey, attrs) => {
+        const maxIdx = attrs.parallelMaxIndex
+        if (typeof maxIdx === 'number' && maxIdx > 0) {
+          // Curvature: -0.4..+0.4 spread across parallelMaxIndex+1 lanes.
+          const idx = attrs.parallelIndex ?? 0
+          const lanes = maxIdx + 1
+          // Map idx ∈ [0, maxIdx] to curvature ∈ [-0.4, +0.4]. When lanes=2,
+          // idx=0 → -0.2, idx=1 → +0.2. When lanes=3, idx=0 → -0.4, 1 → 0, 2 → +0.4.
+          const curvature = lanes > 1 ? (idx / maxIdx - 0.5) * 0.8 : 0
+          gx.setEdgeAttribute(edgeKey, 'type', 'curved')
+          gx.setEdgeAttribute(edgeKey, 'curvature', curvature)
+          curvedCount++
+        }
       })
-    } else if (curvedCount > 0 && edgeCurve.EdgeCurvedArrowProgram) {
-      edgeProgramClasses.curved = edgeCurve.EdgeCurvedArrowProgram
-    } else if (curvedCount > 0 && edgeCurve.default) {
-      edgeProgramClasses.curved = edgeCurve.default
+      if (curvedCount > 0 && typeof edgeCurve.createEdgeCurveProgram === 'function') {
+        // @sigma/edge-curve@3.1.0 exports `createEdgeCurveProgram(options)`
+        // as the canonical factory. The `arrowHead` option opts the program
+        // into directed-curve rendering. Critically, the option object MUST
+        // include `extremity: 'target'`, that's the flag that says "draw
+        // an arrow head at the target end." Without it, the program renders
+        // a curve with no arrow at all (verified by reading the bundle:
+        // `EdgeCurvedArrowProgram = createEdgeCurveProgram({ arrowHead: oe })`
+        // where `oe` is sigma's DEFAULT_EDGE_ARROW_HEAD_PROGRAM_OPTIONS,
+        // which includes extremity:'target' alongside the proportion ratios).
+        edgeProgramClasses.curved = edgeCurve.createEdgeCurveProgram({
+          arrowHead: {
+            extremity: 'target',
+            lengthToThicknessRatio: 7,
+            widenessToThicknessRatio: 5,
+          },
+        })
+      } else if (curvedCount > 0 && edgeCurve.EdgeCurvedArrowProgram) {
+        edgeProgramClasses.curved = edgeCurve.EdgeCurvedArrowProgram
+      } else if (curvedCount > 0 && edgeCurve.default) {
+        edgeProgramClasses.curved = edgeCurve.default
+      }
+    } catch (e) {
+      // CDN failure or module-shape mismatch: keep all edges straight,
+      // log the warning, don't break the view.
+      console.warn('[atrib-dashboard] edge-curve unavailable; rendering parallel edges as overlapping straight lines:', e)
     }
-  } catch (e) {
-    // CDN failure or module-shape mismatch: keep all edges straight,
-    // log the warning, don't break the view.
-    console.warn('[atrib-dashboard] edge-curve unavailable; rendering parallel edges as overlapping straight lines:', e)
   }
 
   const sigmaInstance = new Sigma(gx, container, {

@@ -90,6 +90,22 @@ export function computeNodeDegrees(edges) {
 }
 
 /**
+ * Return true when any two edges share the same directed source/target pair.
+ * The dashboard only needs the curved-edge renderer in this case; otherwise
+ * loading @sigma/edge-curve adds network and module work without changing the
+ * rendered graph.
+ */
+export function hasParallelEdges(edges) {
+  const seen = new Set()
+  for (const e of edges) {
+    const key = `${e.source}\u0000${e.target}`
+    if (seen.has(key)) return true
+    seen.add(key)
+  }
+  return false
+}
+
+/**
  * Compute normalized degree centrality from a graphology graph.
  * Output values are in [0, 1] where 1 = node connected to every other
  * node. Equivalent to `graphology-metrics`'s `degreeCentrality(g)`

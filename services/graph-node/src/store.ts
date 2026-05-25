@@ -34,6 +34,8 @@ export interface RecordStore {
    * any session, so the registry must scan globally.
    */
   getAllRecords(): { record: AtribRecord; log_index: number | null }[]
+  /** Count of distinct records in the store. Used for cheap cache invalidation. */
+  getRecordCount(): number
   /** log_index for a specific record_hash, or null if unknown. */
   getLogIndex(recordHashHex: string): number | null
 }
@@ -165,6 +167,10 @@ export function createRecordStore(): RecordStore {
         record,
         log_index: logIndexByHash.get(recordHash) ?? null,
       }))
+    },
+
+    getRecordCount(): number {
+      return allRecords.length
     },
 
     getLogIndex(recordHashHex: string): number | null {
