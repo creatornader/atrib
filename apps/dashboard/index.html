@@ -119,6 +119,9 @@
     --et-dangling: #92400e;
     --et-dangling-subtle: rgba(146, 64, 14, 0.12);
     --et-dangling-border: rgba(146, 64, 14, 0.3);
+    --ref-external: #9ca3af;
+    --ref-missing: var(--err);
+    --ref-unresolved: var(--warn);
     /* Annotation event_type (D058, byte 0x05): the recall-fidelity
        primitive. Annotations are commentary records pointing at any
        prior record via the `annotates` field. Distinct color from
@@ -876,6 +879,9 @@
   .chip.event-revision         { background: var(--et-revision-subtle);   color: var(--et-revision);   border-color: var(--et-revision-border); }
   .chip.event-system           { background: var(--et-system-subtle);    color: var(--et-system);    border-color: var(--et-system-border); }
   .chip.event-dangling_node    { background: var(--et-dangling-subtle);  color: var(--et-dangling);  border-color: var(--et-dangling-border); }
+  .chip.ref-external           { background: var(--muted-subtle);        color: var(--ref-external); border-color: rgba(156, 163, 175, 0.25); }
+  .chip.ref-missing            { background: var(--err-subtle);          color: var(--ref-missing);  border-color: var(--err-border); }
+  .chip.ref-unresolved         { background: var(--warn-subtle);         color: var(--ref-unresolved); border-color: var(--warn-border); }
   .chip.event-reserved         { background: var(--err-subtle);          color: var(--err);          border-color: var(--err-border); }
 
   .badge {
@@ -1444,6 +1450,10 @@
   .graph-legend .swatch.node.directory_anchor  { color: var(--et-system); }
   .graph-legend .swatch.node.extension         { color: var(--muted); }
   .graph-legend .swatch.node.gap_node          { color: var(--et-dangling); }
+  .graph-legend .swatch.node.dangling_node     { color: var(--et-dangling); }
+  .graph-legend .swatch.node.external_reference { color: var(--ref-external); }
+  .graph-legend .swatch.node.missing_reference  { color: var(--ref-missing); }
+  .graph-legend .swatch.node.unresolved_reference { color: var(--ref-unresolved); }
   .graph-legend .swatch.edge.informed_by      { color: var(--edge-ancestry); }
   .graph-legend .swatch.edge.provenance_of    { color: var(--edge-ancestry); }
   .graph-legend .swatch.edge.annotates        { color: var(--edge-annotates); }
@@ -1712,10 +1722,15 @@ import {
   computeNodeSizeFromCentrality,
   computeGraphBBox,
   computeNeighborhood,
+  normalizeGraphRecordHash,
+  graphNodeActionHash,
+  graphReferenceStatus,
+  referenceStatusLabel,
+  graphNodeLegendEntry,
   buildReplayGraphFromEntries,
   computeDemoGraphSignature,
   computeDemoLaneOffset,
-} from './graph-utils.mjs?v=2026-05-25-demo-refresh'
+} from './graph-utils.mjs?v=2026-05-25-reference-ui'
 
 /*
  * atrib explorer, D054 option 1.
@@ -2006,24 +2021,16 @@ function pluralEventLabel(label, count) {
   return `${label}s`
 }
 
-function referenceStatusLabel(status) {
-  if (status === 'external') return 'external reference'
-  if (status === 'missing') return 'missing reference'
-  return 'unresolved reference'
-}
-
 function referenceHashFromId(id) {
-  if (typeof id !== 'string') return ''
-  if (id.startsWith('dangling:sha256:')) return id.slice('dangling:'.length)
-  return ''
+  return normalizeGraphRecordHash(id)
 }
 
 function referenceHashFromNode(node) {
-  return node?.reference_hash || referenceHashFromId(node?.id)
+  return normalizeGraphRecordHash(node?.reference_hash || node?.id)
 }
 
 function referenceHashFromEdge(edge) {
-  return edge?.reference_hash || referenceHashFromId(edge?.target)
+  return normalizeGraphRecordHash(edge?.reference_hash || edge?.target)
 }
 
 function summarizeReferenceEdges(edges = []) {
@@ -3927,14 +3934,15 @@ async function renderSession(contextId) {
       n.event_type === 'dangling_node'
         ? (() => {
             const refHash = referenceHashFromNode(n)
-            const status = n.reference_status || 'unresolved'
+            const status = graphReferenceStatus(n)
             const label = refHash || n.id
             const attrs = {
               class: 'mono',
               title: `${referenceStatusLabel(status)} (synthetic placeholder)`,
             }
-            return status === 'external' && refHash
-              ? el('a', { href: `#/action/${refHash}` }, el('span', attrs, shorten(label, 13, 4)))
+            const actionHash = graphNodeActionHash(n)
+            return actionHash
+              ? el('a', { href: `#/action/${actionHash}` }, el('span', attrs, shorten(label, 13, 4)))
               : el('span', attrs, shorten(label, 13, 4))
           })()
         : el('a', { href: `#/action/${n.id}` },
@@ -3997,10 +4005,10 @@ async function renderSession(contextId) {
     const referenceSummary = formatReferenceSummary(summarizeReferenceEdges(graph.edges))
     const renderTarget = e => e.dangling
       ? (() => {
-          const status = e.reference_status || 'unresolved'
+          const status = graphReferenceStatus(e)
           const refHash = referenceHashFromEdge(e)
           const label = refHash || e.target
-          const chip = el('span', { class: 'chip event-dangling_node', style: 'margin-left: 6px;' }, status === 'external' ? 'external' : status)
+          const chip = el('span', { class: `chip ref-${status}`, style: 'margin-left: 6px;' }, status === 'external' ? 'external' : status)
           const attrs = { class: 'mono', title: e.reason || referenceStatusLabel(status) }
           return status === 'external' && refHash
             ? el('span', attrs,
@@ -4099,8 +4107,24 @@ async function renderAction(recordHash) {
   // 60s, which would otherwise stomp on this render's late awaits.
   const myGen = currentRouteGeneration()
   const root = el('div')
-  const hashHex = recordHash.startsWith('sha256:') ? recordHash.slice(7) : recordHash
-  const fullHash = recordHash.startsWith('sha256:') ? recordHash : `sha256:${recordHash}`
+  const fullHash = normalizeGraphRecordHash(recordHash)
+  if (!fullHash) {
+    root.append(el('section', { class: 'panel' },
+      el('div', { class: 'err-banner' },
+        el('span', { class: 'label' }, 'invalid action route:'), ' ',
+        recordHash || 'missing record hash',
+      ),
+      el('p', { style: 'color: var(--text-3); font-size: 13px; margin: 0;' },
+        'This route does not point to a canonical sha256 record hash. Synthetic graph placeholders are not log records.',
+      ),
+    ))
+    clearAndRender(root)
+    return
+  }
+  if (fullHash !== recordHash) {
+    location.replace(`#\/action/${fullHash}`)
+  }
+  const hashHex = fullHash.slice('sha256:'.length)
 
   root.append(viewHeader({
     crumb: 'action',
@@ -4330,7 +4354,15 @@ function _cssVar(name, fallback) {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
   return v || fallback
 }
-function eventTypeColor(eventType) {
+function eventTypeColor(eventType, node = null) {
+  if (eventType === 'dangling_node' || eventType === 'gap_node') {
+    const refMap = {
+      external: '--ref-external',
+      missing: '--ref-missing',
+      unresolved: '--ref-unresolved',
+    }
+    return _cssVar(refMap[graphReferenceStatus(node)] || '--ref-unresolved', '#fbbf24')
+  }
   const map = {
     tool_call: '--info',
     transaction: '--accent',
@@ -4354,17 +4386,12 @@ function graphNodeKindLabel(eventType, node = null) {
     directory_anchor: 'directory anchor',
     extension: 'extension record',
     gap_node: 'unresolved reference',
-    dangling_node: referenceStatusLabel(node?.reference_status || 'unresolved'),
+    dangling_node: referenceStatusLabel(graphReferenceStatus(node)),
   }
   return labels[eventType] || (eventType ? eventType.replaceAll('_', ' ') : 'record')
 }
 function graphNodeRecordHash(node) {
-  if (!node) return ''
-  if (node.reference_hash) return node.reference_hash
-  if (node.record_hash) return node.record_hash
-  if (!node.id) return ''
-  if (node.id.startsWith('dangling:sha256:')) return node.id.slice('dangling:'.length)
-  return node.id.startsWith('sha256:') ? node.id : `sha256:${node.id}`
+  return normalizeGraphRecordHash(node)
 }
 // Edge color is keyed by edge_type, distinct vocabulary from node event_type.
 // All entries resolve via dedicated `--edge-*` tokens defined in :root; the
@@ -4603,7 +4630,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
 
   for (const n of graphData.nodes) {
     const isFocal = isFocalNode(n)
-    const color = eventTypeColor(n.event_type)
+    const color = eventTypeColor(n.event_type, n)
     const degree = degreeByNodeId.get(n.id) ?? 0
     const centrality = degree / centralityDenom
     const size = computeNodeSizeFromCentrality(n, isFocal, centrality, nodeSize, focalSize)
@@ -4847,6 +4874,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     // no background and overlap badly in session timelines, so keep them off.
     labelRenderedSizeThreshold: 1e9,
     labelDensity: 0,
+    defaultDrawNodeHover: () => {},
     edgeLabelColor: { color: _cssVar('--text-3', '#6a6e78') },
     // Keep edges visible during pan/zoom. The graph is the product here:
     // hiding links while moving leaves users with a cloud of disconnected
@@ -5184,12 +5212,8 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   // (e.g., the demo view keeps users in place and renders an inspector).
   // Callback signature: (nodeId, sourceRecord, controls) => void.
   const handleClick = onNodeClick || ((nodeId, sourceRecord) => {
-    if (sourceRecord && sourceRecord.record_hash) {
-      location.hash = `#/action/${sourceRecord.record_hash}`
-    } else if (sourceRecord && sourceRecord.id) {
-      const id = sourceRecord.id.startsWith('sha256:') ? sourceRecord.id : `sha256:${sourceRecord.id}`
-      location.hash = `#/action/${id}`
-    }
+    const actionHash = graphNodeActionHash(sourceRecord)
+    if (actionHash) location.hash = `#/action/${actionHash}`
   })
   sigmaInstance.on('clickNode', ({ node }) => {
     const attrs = gx.getNodeAttributes(node)
@@ -5255,17 +5279,30 @@ function populateGraphLegend(nodeLegendRow, edgeLegendRow, graphData) {
   const pairedNodeSet = new Set(PAIRS.map((p) => p[0]))
   const pairedEdgeSet = new Set(PAIRS.map((p) => p[1]))
 
-  const presentNodeKinds = new Set(graphData.nodes.map((n) => n.event_type).filter(Boolean))
+  const presentNodeEntries = new Map()
+  for (const node of graphData.nodes) {
+    const entry = graphNodeLegendEntry(node)
+    if (!presentNodeEntries.has(entry.key)) presentNodeEntries.set(entry.key, entry)
+  }
+  const presentNodeKinds = new Set(presentNodeEntries.keys())
   const presentEdgeTypes = new Set(graphData.edges.map((e) => e.type))
 
   const activePairs = PAIRS.filter(([n, e]) =>
     presentNodeKinds.has(n) || presentEdgeTypes.has(e),
   )
 
-  const nodeKindOrder = ['tool_call', 'observation', 'directory_anchor', 'extension', 'gap_node']
-  const presentUnpairedNodes = nodeKindOrder.filter((k) =>
-    !pairedNodeSet.has(k) && presentNodeKinds.has(k),
+  const nodeKindOrder = ['tool_call', 'observation', 'directory_anchor', 'extension', 'external_reference', 'missing_reference', 'unresolved_reference', 'gap_node']
+  const presentUnpairedNodes = nodeKindOrder.map((k) => presentNodeEntries.get(k)).filter((entry) =>
+    entry &&
+    !pairedNodeSet.has(entry.key) &&
+    presentNodeKinds.has(entry.key),
   )
+  for (const entry of presentNodeEntries.values()) {
+    if (pairedNodeSet.has(entry.key)) continue
+    if (nodeKindOrder.includes(entry.key)) continue
+    presentUnpairedNodes.push(entry)
+  }
+  const presentUnpairedNodeEntries = presentUnpairedNodes
 
   const edgeKindOrder = [
     ['INFORMED_BY', 'informed_by'],
@@ -5289,10 +5326,10 @@ function populateGraphLegend(nodeLegendRow, edgeLegendRow, graphData) {
         nodeKind))
     }
   })
-  if (presentUnpairedNodes.length > 0) {
+  if (presentUnpairedNodeEntries.length > 0) {
     const tail = el('div', { class: 'legend-tail', style: `grid-column: ${tailCol};` })
-    presentUnpairedNodes.forEach((kind) => {
-      tail.append(el('span', { class: `swatch node ${kind}` }, kind))
+    presentUnpairedNodeEntries.forEach((entry) => {
+      tail.append(el('span', { class: `swatch node ${entry.className}` }, entry.label))
     })
     nodeSwatches.push(tail)
   }

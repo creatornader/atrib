@@ -105,6 +105,74 @@ export function hasParallelEdges(edges) {
   return false
 }
 
+const FULL_RECORD_HASH_RE = /^sha256:[0-9a-f]{64}$/i
+const BARE_RECORD_HASH_RE = /^[0-9a-f]{64}$/i
+
+/**
+ * Normalize any action-route-ish value into the canonical `sha256:<hex>`
+ * record hash form. Synthetic graph reference ids are display ids, not log
+ * lookup ids, so this strips stale `dangling:` wrappers before validation.
+ */
+export function normalizeGraphRecordHash(value) {
+  let raw = ''
+  if (typeof value === 'string') {
+    raw = value
+  } else if (value && typeof value === 'object') {
+    raw = value.reference_hash || value.record_hash || value.id || ''
+  }
+  raw = String(raw || '').trim()
+  if (!raw) return ''
+
+  while (raw.startsWith('sha256:dangling:')) raw = raw.slice('sha256:dangling:'.length)
+  while (raw.startsWith('dangling:')) raw = raw.slice('dangling:'.length)
+
+  if (FULL_RECORD_HASH_RE.test(raw)) return `sha256:${raw.slice('sha256:'.length).toLowerCase()}`
+  if (BARE_RECORD_HASH_RE.test(raw)) return `sha256:${raw.toLowerCase()}`
+  return ''
+}
+
+export function graphReferenceStatus(value) {
+  const status = value?.reference_status
+  return status === 'external' || status === 'missing' ? status : 'unresolved'
+}
+
+export function referenceStatusLabel(status) {
+  if (status === 'external') return 'external reference'
+  if (status === 'missing') return 'missing reference'
+  return 'unresolved reference'
+}
+
+/**
+ * Return the action route hash for a graph node, or the empty string when the
+ * node is a non-clickable synthetic placeholder.
+ */
+export function graphNodeActionHash(node) {
+  if (!node) return ''
+  const isReferenceNode = node.event_type === 'dangling_node' || node.event_type === 'gap_node' || Boolean(node.reference_status)
+  if (isReferenceNode) {
+    if (graphReferenceStatus(node) !== 'external') return ''
+    return normalizeGraphRecordHash(node.reference_hash || node.id)
+  }
+  return normalizeGraphRecordHash(node.record_hash || node.id)
+}
+
+export function graphNodeLegendEntry(node) {
+  const eventType = node?.event_type || 'unknown'
+  if (eventType === 'dangling_node' || eventType === 'gap_node') {
+    const status = graphReferenceStatus(node)
+    return {
+      key: `${status}_reference`,
+      className: `${status}_reference`,
+      label: referenceStatusLabel(status),
+    }
+  }
+  return {
+    key: eventType,
+    className: eventType,
+    label: String(eventType).replaceAll('_', ' '),
+  }
+}
+
 /**
  * Compute normalized degree centrality from a graphology graph.
  * Output values are in [0, 1] where 1 = node connected to every other

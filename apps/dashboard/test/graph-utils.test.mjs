@@ -32,6 +32,10 @@ import {
   computeNodeSizeFromCentrality,
   computeGraphBBox,
   computeNeighborhood,
+  normalizeGraphRecordHash,
+  graphNodeActionHash,
+  graphReferenceStatus,
+  graphNodeLegendEntry,
   buildReplayGraphFromEntries,
   computeDemoGraphSignature,
   computeDemoLaneOffset,
@@ -191,6 +195,64 @@ describe('hasParallelEdges', () => {
 
   it('returns false for an empty edge list', () => {
     expect(hasParallelEdges([])).toBe(false)
+  })
+})
+
+describe('reference node helpers', () => {
+  const hash = 'c4882e8857bcc190da97f8419dac44b680fb03f683a87ee51a56103e186a7587'
+
+  it('normalizes malformed synthetic action routes back to the referenced record hash', () => {
+    expect(normalizeGraphRecordHash(`sha256:dangling:sha256:${hash}`)).toBe(`sha256:${hash}`)
+    expect(normalizeGraphRecordHash(`dangling:sha256:${hash}`)).toBe(`sha256:${hash}`)
+    expect(normalizeGraphRecordHash(hash)).toBe(`sha256:${hash}`)
+  })
+
+  it('does not turn non-record reference tokens into action hashes', () => {
+    expect(normalizeGraphRecordHash('dangling:provenance:abc123')).toBe('')
+    expect(normalizeGraphRecordHash('sha256:dangling:provenance:abc123')).toBe('')
+    expect(normalizeGraphRecordHash('not-a-hash')).toBe('')
+  })
+
+  it('only makes external reference placeholders clickable', () => {
+    expect(graphNodeActionHash({
+      event_type: 'dangling_node',
+      reference_status: 'external',
+      reference_hash: `sha256:${hash}`,
+    })).toBe(`sha256:${hash}`)
+
+    expect(graphNodeActionHash({
+      event_type: 'dangling_node',
+      reference_status: 'missing',
+      reference_hash: `sha256:${hash}`,
+      id: `dangling:sha256:${hash}`,
+    })).toBe('')
+  })
+
+  it('keeps normal record nodes clickable by id or record_hash', () => {
+    expect(graphNodeActionHash({ event_type: 'tool_call', id: `sha256:${hash}` })).toBe(`sha256:${hash}`)
+    expect(graphNodeActionHash({ event_type: 'tool_call', record_hash: `sha256:${hash}` })).toBe(`sha256:${hash}`)
+  })
+
+  it('classifies reference statuses and legend entries for distinct visual treatment', () => {
+    expect(graphReferenceStatus({ reference_status: 'external' })).toBe('external')
+    expect(graphReferenceStatus({ reference_status: 'missing' })).toBe('missing')
+    expect(graphReferenceStatus({ reference_status: 'wat' })).toBe('unresolved')
+
+    expect(graphNodeLegendEntry({ event_type: 'dangling_node', reference_status: 'external' })).toEqual({
+      key: 'external_reference',
+      className: 'external_reference',
+      label: 'external reference',
+    })
+    expect(graphNodeLegendEntry({ event_type: 'dangling_node', reference_status: 'missing' })).toEqual({
+      key: 'missing_reference',
+      className: 'missing_reference',
+      label: 'missing reference',
+    })
+    expect(graphNodeLegendEntry({ event_type: 'observation' })).toEqual({
+      key: 'observation',
+      className: 'observation',
+      label: 'observation',
+    })
   })
 })
 
