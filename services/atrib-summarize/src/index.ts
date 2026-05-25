@@ -129,7 +129,7 @@ async function handleSummarize(
   const llmCfg = resolveLlmConfig(input.model)
   if (!llmCfg) {
     warnings.push(
-      'no LLM API key resolved (set ATRIB_SUMMARIZE_API_KEY or NVIDIA_API_KEY); cannot synthesize',
+      'no LLM API key resolved (set ATRIB_SUMMARIZE_API_KEY, NVIDIA_API_KEY, or ~/.atrib/secrets/nvidia-api-key); cannot synthesize',
     )
     return emptyOutput(warnings)
   }

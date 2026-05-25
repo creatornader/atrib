@@ -30,14 +30,22 @@ mcp__atrib-summarize__summarize({
 
 OpenAI-compatible HTTP. Defaults to NVIDIA NIM with `qwen/qwen3.5-397b-a17b`. Override via env or per-call `model` input:
 
-| Env var | Default |
-|---|---|
-| `ATRIB_SUMMARIZE_API_KEY` | (fallback to `NVIDIA_API_KEY` then `NVIDIA_NIM_API_KEY`) |
-| `ATRIB_SUMMARIZE_BASE_URL` | `https://integrate.api.nvidia.com/v1` |
-| `ATRIB_SUMMARIZE_MODEL` | `qwen/qwen3.5-397b-a17b` |
-| `ATRIB_SUMMARIZE_MAX_TOKENS` | `4000` |
-| `ATRIB_SUMMARIZE_TEMPERATURE` | `0.3` |
-| `ATRIB_SUMMARIZE_TIMEOUT_MS` | `120000` |
+| Env var                       | Default                               |
+| ----------------------------- | ------------------------------------- |
+| `ATRIB_SUMMARIZE_API_KEY`     | fallback to provider env/cache        |
+| `ATRIB_SUMMARIZE_BASE_URL`    | `https://integrate.api.nvidia.com/v1` |
+| `ATRIB_SUMMARIZE_MODEL`       | `qwen/qwen3.5-397b-a17b`              |
+| `ATRIB_SUMMARIZE_MAX_TOKENS`  | `4000`                                |
+| `ATRIB_SUMMARIZE_TEMPERATURE` | `0.3`                                 |
+| `ATRIB_SUMMARIZE_TIMEOUT_MS`  | `120000`                              |
+
+Provider env/cache fallback:
+
+| Provider URL contains      | Env var              | Cache file                            |
+| -------------------------- | -------------------- | ------------------------------------- |
+| `integrate.api.nvidia.com` | `NVIDIA_API_KEY`     | `~/.atrib/secrets/nvidia-api-key`     |
+| `api.cerebras.ai`          | `CEREBRAS_API_KEY`   | `~/.atrib/secrets/cerebras-api-key`   |
+| `cloudflare.com`           | `CLOUDFLARE_API_KEY` | `~/.atrib/secrets/cloudflare-api-key` |
 
 Without an API key, the tool returns a warnings-only response per the [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) graceful-degradation contract.
 
@@ -66,11 +74,14 @@ Add to your MCP host config:
     "command": "node",
     "args": ["/path/to/atrib-summarize/dist/main.js"],
     "env": {
-      "NVIDIA_API_KEY": "..."
+      "ATRIB_SUMMARIZE_MODEL": "qwen/qwen3.5-397b-a17b"
     }
   }
 }
 ```
+
+The API key can live in the host env or in the cache file above. Do not
+write secret values into shared MCP config.
 
 ## Status
 
