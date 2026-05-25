@@ -77,6 +77,11 @@ jobs:
 
               while IFS= read -r path; do
                 case "$path" in
+                  .dockerignore)
+                    log_node=true
+                    graph_node=true
+                    directory_node=true
+                    ;;
                   services/log-node/*|apps/dashboard/*)
                     log_node=true
                     ;;
