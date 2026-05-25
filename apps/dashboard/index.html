@@ -38,22 +38,36 @@
    */
 
   :root {
+    /* Product token aliases, kept in sync with atrib-web/DESIGN.md. */
+    --color-background: #0a0a0a;
+    --color-explorer-background: #0a0b0e;
+    --color-surface: #131210;
+    --color-surface-raised: #1c1a17;
+    --color-explorer-surface: #14161a;
+    --color-foreground: #f5f4ee;
+    --color-muted: #8a877e;
+    --color-muted-foreground: #b8b5ac;
+    --color-border: #2d2a25;
+    --color-border-strong: #423e36;
+    --color-accent: #e8a04f;
+    --color-explorer-accent: #fcd34d;
+
     /* Surface */
-    --bg: #0a0b0e;
-    --surface: #14161a;
+    --bg: var(--color-explorer-background);
+    --surface: var(--color-explorer-surface);
     --surface-2: #1b1d22;
     --surface-hover: #1f2128;
     --border: #262930;
     --border-subtle: #1d2026;
 
     /* Text */
-    --text: #ededef;
-    --text-2: #a0a3ab;
-    --text-3: #6a6e78;
-    --text-4: #44474f;
+    --text: var(--color-foreground);
+    --text-2: #a7a59e;
+    --text-3: #77766f;
+    --text-4: #4d4c48;
 
     /* Brand: amber, evoking wax seal / signed / highlighted */
-    --accent: #fcd34d;
+    --accent: var(--color-explorer-accent);
     --accent-strong: #fde68a;
     --accent-subtle: rgba(252, 211, 77, 0.12);
     --accent-border: rgba(252, 211, 77, 0.3);
@@ -169,13 +183,19 @@
   }
 
   * { box-sizing: border-box; }
-  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: clip;
+  }
   html, body {
     margin: 0; padding: 0;
     background: var(--bg);
     color: var(--text);
     font: 15px/1.55 var(--font-sans);
     font-feature-settings: 'cv11', 'ss01', 'ss03';
+    overflow-x: clip;
+    min-width: 0;
   }
 
   ::selection { background: var(--accent); color: var(--bg); }
@@ -187,6 +207,25 @@
   a { color: var(--accent); text-decoration: none; transition: color 120ms ease; }
   a:hover { color: var(--accent-strong); text-decoration: underline; text-underline-offset: 2px; }
   a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+  .skip-link {
+    position: fixed;
+    left: 16px;
+    top: 16px;
+    z-index: 1000;
+    transform: translateY(-140%);
+    border-radius: var(--radius-sm);
+    background: var(--text);
+    color: var(--bg);
+    padding: 10px 14px;
+    font: 600 13px/1 var(--font-sans);
+  }
+  .skip-link:focus,
+  .skip-link:focus-visible {
+    transform: translateY(0);
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
 
   code {
     font: 12.5px/1.4 var(--font-mono);
@@ -218,6 +257,8 @@
     border-radius: var(--radius-sm);
     overflow-x: auto;
     max-height: 420px;
+    max-width: 100%;
+    min-width: 0;
     color: var(--text-2);
   }
 
@@ -226,6 +267,7 @@
 
   body > header {
     display: flex; align-items: center; justify-content: space-between;
+    gap: 16px;
     padding: 14px max(20px, calc((100vw - var(--container)) / 2 + 20px));
     border-bottom: 1px solid var(--border);
     background: rgba(10, 11, 14, 0.85);
@@ -233,10 +275,11 @@
     -webkit-backdrop-filter: saturate(180%) blur(12px);
     position: sticky; top: 0; z-index: 50;
   }
-  body > header .brand { display: flex; align-items: center; gap: 10px; }
+  body > header .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
   body > header .brand a {
     color: var(--text); font: 600 16px/1 var(--font-sans);
     letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px;
+    flex-shrink: 0;
   }
   body > header .brand a:hover { text-decoration: none; color: var(--accent-strong); }
   body > header .brand .seal {
@@ -249,10 +292,17 @@
     padding-left: 10px; border-left: 1px solid var(--border);
     margin-left: 2px;
   }
-  body > header nav { display: flex; gap: 4px; align-items: center; }
+  body > header nav {
+    display: flex; gap: 4px; align-items: center;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  body > header nav::-webkit-scrollbar { display: none; }
   body > header nav a {
     color: var(--text-2); font: 500 13px/1 var(--font-sans);
     padding: 8px 12px; border-radius: var(--radius-sm);
+    flex-shrink: 0;
     transition: background 120ms ease, color 120ms ease;
   }
   body > header nav a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
@@ -261,9 +311,10 @@
   /* ─── Layout ──────────────────────────────────────────────────────────── */
 
   main {
-    max-width: var(--container);
+    width: min(100%, var(--container));
     margin: 0 auto;
     padding: 0 20px 80px;
+    min-width: 0;
   }
 
   .stack { display: flex; flex-direction: column; gap: 32px; }
@@ -288,6 +339,26 @@
   }
   .panel .panel-head .meta { font: 12px/1 var(--font-mono); color: var(--text-3); }
   .panel .panel-body { padding: 20px; }
+  details.raw-panel > summary {
+    list-style: none;
+    cursor: pointer;
+  }
+  .raw-panel { margin-top: 24px; }
+  details.raw-panel > summary::-webkit-details-marker { display: none; }
+  .raw-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-2);
+    font: 500 12px/1 var(--font-sans);
+    text-transform: none;
+  }
+  .raw-toggle::before { content: "open"; }
+  details.raw-panel[open] .raw-toggle::before { content: "close"; }
   /* Mobile horizontal-scroll fix for tables and graphs inside flush panels.
      The .panel.flush rule above sets overflow:hidden so rounded corners clip
      correctly. On narrow viewports that would also clip wide tables (the
@@ -308,6 +379,7 @@
     padding: 64px 0 48px;
     text-align: left;
     max-width: 880px;
+    min-width: 0;
   }
   .hero .eyebrow {
     display: inline-flex; align-items: center; gap: 8px;
@@ -336,6 +408,8 @@
     letter-spacing: -0.025em;
     color: var(--text);
     margin: 0 0 18px;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
   }
   .hero h1 .accent { color: var(--accent); }
   .hero .lede {
@@ -355,7 +429,9 @@
     padding: 7px 12px;
     font: 500 13px/1 var(--font-sans);
     border-radius: var(--radius-sm);
-    transition: all 120ms ease;
+    transition-property: background, border-color, color;
+    transition-duration: 120ms;
+    transition-timing-function: ease;
   }
   .hero .quick-links a:hover {
     background: var(--surface-hover); color: var(--text);
@@ -364,6 +440,152 @@
   }
   .hero .quick-links a .arrow { color: var(--text-3); transition: color 120ms ease; }
   .hero .quick-links a:hover .arrow { color: var(--accent); }
+
+  .verification-path {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--border-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin: 0 0 32px;
+  }
+  .verification-path .step {
+    background: var(--surface);
+    padding: 18px 20px;
+    min-width: 0;
+  }
+  .verification-path .step .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: var(--accent-subtle);
+    border: 1px solid var(--accent-border);
+    color: var(--accent);
+    font: 600 11px/1 var(--font-mono);
+    margin-bottom: 12px;
+  }
+  .verification-path .step h2 {
+    margin: 0 0 6px;
+    font: 600 14px/1.25 var(--font-sans);
+    color: var(--text);
+  }
+  .verification-path .step p {
+    margin: 0;
+    color: var(--text-3);
+    font: 13px/1.5 var(--font-sans);
+    text-wrap: pretty;
+  }
+  .event-key {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--border-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin: -8px 0 32px;
+  }
+  .event-key .item {
+    background: var(--surface);
+    padding: 14px 16px;
+    min-width: 0;
+  }
+  .event-key p {
+    margin: 8px 0 0;
+    color: var(--text-3);
+    font: 12.5px/1.45 var(--font-sans);
+    text-wrap: pretty;
+  }
+  .detail-status {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--border-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin: -8px 0 24px;
+  }
+  .detail-status .item {
+    background: var(--surface);
+    padding: 16px 18px;
+    min-width: 0;
+  }
+  .detail-status .label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--text-3);
+    font: 600 11px/1 var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 8px;
+  }
+  .detail-status .label::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--info);
+    box-shadow: 0 0 0 2px var(--info-subtle);
+    flex: 0 0 auto;
+  }
+  .detail-status .item.ok .label::before {
+    background: var(--ok);
+    box-shadow: 0 0 0 2px var(--ok-subtle);
+  }
+  .detail-status .item.warn .label::before {
+    background: var(--warn);
+    box-shadow: 0 0 0 2px var(--warn-subtle);
+  }
+  .detail-status .value {
+    color: var(--text);
+    font: 600 15px/1.25 var(--font-sans);
+    overflow-wrap: anywhere;
+  }
+  .detail-status .note {
+    margin-top: 6px;
+    color: var(--text-3);
+    font: 12.5px/1.45 var(--font-sans);
+    text-wrap: pretty;
+  }
+  .detail-path {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--border-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin: -8px 0 24px;
+  }
+  .detail-path .step {
+    background: var(--surface);
+    padding: 14px 16px;
+    min-width: 0;
+  }
+  .detail-path .step .num {
+    display: inline-block;
+    color: var(--accent);
+    font: 600 11px/1 var(--font-mono);
+    margin-bottom: 8px;
+  }
+  .detail-path .step h2 {
+    margin: 0 0 5px;
+    color: var(--text);
+    font: 600 13px/1.25 var(--font-sans);
+  }
+  .detail-path .step p {
+    margin: 0;
+    color: var(--text-3);
+    font: 12.5px/1.45 var(--font-sans);
+    text-wrap: pretty;
+  }
 
   /* ─── System pulse strip (demoted stats) ─────────────────────────────── */
 
@@ -381,6 +603,7 @@
     background: var(--surface);
     padding: 18px 22px;
     display: flex; flex-direction: column; gap: 6px;
+    min-width: 0;
   }
   .pulse-strip .stat .label {
     font: 500 11px/1 var(--font-sans);
@@ -404,8 +627,55 @@
   .pulse-strip .stat.wide { grid-column: 1 / -1; }
 
   @media (max-width: 720px) {
+    main {
+      max-width: 100vw;
+      padding-left: 20px;
+      padding-right: 20px;
+    }
+    body > header {
+      padding: 14px 20px;
+    }
+    body > header .brand .sub {
+      display: none;
+    }
     .pulse-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .hero h1 { font-size: 32px; }
+    .verification-path { grid-template-columns: 1fr; }
+    .event-key { grid-template-columns: 1fr; }
+    .detail-status { grid-template-columns: 1fr; }
+    .detail-path { grid-template-columns: 1fr; }
+    .hero,
+    .pulse-strip,
+    .verification-path,
+    .event-key,
+    .detail-status,
+    .detail-path,
+    .search-wrap,
+    .feed-wrap {
+      width: calc(100vw - 40px);
+      max-width: 100%;
+    }
+    .hero .lede {
+      max-width: 32ch;
+      overflow-wrap: break-word;
+    }
+    .pulse-strip .stat { padding: 16px 14px; }
+    .pulse-strip .stat .label,
+    .pulse-strip .stat .sub {
+      overflow-wrap: anywhere;
+    }
+    .search-wrap {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 52px;
+      width: 100%;
+    }
+    .search-wrap input {
+      width: 100%;
+      font-size: 13px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .hero { padding-top: 48px; }
+    .hero h1 { font-size: 30px; }
   }
 
   /* ─── Search ─────────────────────────────────────────────────────────── */
@@ -427,6 +697,7 @@
     padding: 12px 14px;
     font: 14px/1 var(--font-mono);
     min-width: 0;
+    width: 100%;
   }
   .search-wrap input:focus { outline: none; }
   .search-wrap input::placeholder { color: var(--text-4); }
@@ -439,7 +710,10 @@
     cursor: pointer;
     font: 600 13px/1 var(--font-sans);
     letter-spacing: 0.01em;
-    transition: all 120ms ease;
+    min-width: 48px;
+    transition-property: background, color, transform;
+    transition-duration: 120ms;
+    transition-timing-function: ease;
   }
   .search-wrap button:hover { background: var(--accent-strong); }
   .search-help {
@@ -465,7 +739,9 @@
     cursor: pointer;
     font: 500 12px/1 var(--font-sans);
     letter-spacing: 0.02em;
-    transition: all 120ms ease;
+    transition-property: background, border-color, color;
+    transition-duration: 120ms;
+    transition-timing-function: ease;
   }
   .load-more:hover { background: var(--surface-hover); color: var(--text); border-color: var(--accent); }
 
@@ -584,6 +860,127 @@
   .badge.dim   { background: var(--muted-subtle); color: var(--muted); border-color: rgba(156, 163, 175, 0.2); }
 
   .verify-badges { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+
+  .receipt {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+    gap: 1px;
+    background: var(--border-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-top: 24px;
+  }
+  .receipt-main,
+  .receipt-proof {
+    background: var(--surface);
+    min-width: 0;
+  }
+  .receipt-main { padding: 24px; }
+  .receipt-proof { padding: 20px; }
+  .receipt-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent);
+    font: 600 11px/1 var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 14px;
+  }
+  .receipt-kicker::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-subtle);
+  }
+  .receipt-main h2 {
+    margin: 0 0 12px;
+    font: 600 22px/1.2 var(--font-sans);
+    letter-spacing: -0.015em;
+    color: var(--text);
+  }
+  .receipt-main .hash {
+    display: block;
+    color: var(--text-2);
+    font: 13px/1.5 var(--font-mono);
+    overflow-wrap: anywhere;
+    margin-bottom: 10px;
+  }
+  .receipt-summary {
+    margin: 0 0 18px;
+    color: var(--text-3);
+    font: 13px/1.5 var(--font-sans);
+    max-width: 62ch;
+  }
+  .receipt-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 18px;
+  }
+  .receipt-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    padding: 8px 11px;
+    font: 500 13px/1 var(--font-sans);
+  }
+  .receipt-link:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent-border);
+    color: var(--text);
+    text-decoration: none;
+  }
+  .proof-list {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+  }
+  .proof-step {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+  }
+  .proof-step .mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: var(--ok-subtle);
+    border: 1px solid var(--ok-border);
+    color: var(--ok);
+    font: 700 12px/1 var(--font-sans);
+  }
+  .proof-step.dim .mark {
+    background: var(--muted-subtle);
+    border-color: rgba(156, 163, 175, 0.2);
+    color: var(--muted);
+  }
+  .proof-step strong {
+    display: block;
+    color: var(--text);
+    font: 600 13px/1.25 var(--font-sans);
+    margin-bottom: 3px;
+  }
+  .proof-step span {
+    display: block;
+    color: var(--text-3);
+    font: 12.5px/1.45 var(--font-sans);
+  }
+  @media (max-width: 760px) {
+    .receipt { grid-template-columns: 1fr; }
+    .receipt-main,
+    .receipt-proof { padding: 18px; }
+  }
 
   /* ─── Identity label ─────────────────────────────────────────────────── */
 
@@ -797,7 +1194,8 @@
     cursor: pointer;
     font: 500 11px/1 var(--font-sans);
     letter-spacing: 0.02em;
-    transition-property: background-color, color;
+    opacity: 0.6;
+    transition-property: background-color, border-color, color, opacity;
     transition-duration: 120ms;
     transition-timing-function: ease;
   }
@@ -1008,6 +1406,8 @@
 </style>
 </head>
 <body>
+
+<a class="skip-link" href="#app">Skip to explorer</a>
 
 <header>
   <div class="brand">
@@ -1283,38 +1683,143 @@ function atribSystemSignerKind(creatorKey) {
   return null
 }
 
-function renderEventChip(eventType, creatorKey, eventTypeUri = null) {
-  if (eventType === 'extension') {
-    // Prefer the URI when graph-node served it: shows the actual leaf
-    // segment (e.g. "directory_anchor") rather than collapsing every
-    // non-byte-slotted type to one label.
-    if (typeof eventTypeUri === 'string' && eventTypeUri.startsWith('https://atrib.dev/v1/types/')) {
-      const leaf = eventTypeUri.slice('https://atrib.dev/v1/types/'.length)
-      return el('span', {
-        class: `chip event-${leaf}`,
-        title: `${eventTypeUri} (atrib normative type; pre-D056 records encoded as 0xFF)`,
-      }, leaf)
+const EVENT_TYPE_ORDER = ['tool_call', 'observation', 'annotation', 'revision', 'transaction', 'directory_anchor', 'extension']
+
+const EVENT_TYPE_INFO = {
+  tool_call: {
+    label: 'tool call',
+    noun: 'tool call record',
+    description: 'An agent invoked a tool or MCP method.',
+  },
+  transaction: {
+    label: 'transaction',
+    noun: 'transaction record',
+    description: 'Commerce or settlement activity closed over the chain.',
+  },
+  observation: {
+    label: 'observation',
+    noun: 'observation record',
+    description: 'The agent wrote an explicit note or conclusion.',
+  },
+  directory_anchor: {
+    label: 'directory anchor',
+    noun: 'directory anchor record',
+    description: 'The identity directory committed a new state anchor.',
+  },
+  annotation: {
+    label: 'annotation',
+    noun: 'annotation record',
+    description: 'The agent marked an earlier record with importance, topics, or a summary.',
+  },
+  revision: {
+    label: 'revision',
+    noun: 'revision record',
+    description: 'The agent superseded an earlier position with a stated reason.',
+  },
+  system: {
+    label: 'atrib system',
+    noun: 'atrib system record',
+    description: 'A system-level atrib event before a dedicated byte slot.',
+  },
+  extension: {
+    label: 'extension',
+    noun: 'extension record',
+    description: 'A URI-defined event outside the core byte vocabulary.',
+  },
+  dangling_node: {
+    label: 'gap',
+    noun: 'gap node',
+    description: 'A referenced record was not available in this graph response.',
+  },
+  reserved: {
+    label: 'reserved',
+    noun: 'reserved event',
+    description: 'A reserved or unknown byte appeared in the log entry.',
+  },
+  unknown: {
+    label: 'unknown',
+    noun: 'signed record',
+    description: 'The endpoint did not return an event type.',
+  },
+}
+
+function humanEventLabel(value) {
+  return String(value || 'unknown').replace(/_/g, ' ')
+}
+
+function pluralEventLabel(label, count) {
+  if (count === 1) return label
+  if (label.endsWith('y')) return `${label.slice(0, -1)}ies`
+  if (label.endsWith('s')) return label
+  return `${label}s`
+}
+
+function eventTypeInfo(eventType, creatorKey = null, eventTypeUri = null) {
+  let key = eventType || 'unknown'
+  let rawKey = key
+  let uri = typeof eventTypeUri === 'string' ? eventTypeUri : null
+
+  if (key === 'extension' && uri && uri.startsWith('https://atrib.dev/v1/types/')) {
+    const leaf = uri.slice('https://atrib.dev/v1/types/'.length)
+    if (EVENT_TYPE_INFO[leaf]) {
+      key = leaf
+      rawKey = leaf
+    } else {
+      const label = humanEventLabel(leaf)
+      return {
+        key: 'system',
+        rawKey: leaf,
+        label,
+        noun: `${label} record`,
+        description: `A URI-defined atrib event: ${uri}.`,
+        uri,
+      }
     }
-    // /v1/recent only carries the byte. Use the signer's directory claim
-    // to recover the specific atrib-system type, falling back to a generic
-    // "atrib system" label for unknown atrib-namespace signers.
-    if (creatorKey) {
-      const kind = atribSystemSignerKind(creatorKey)
-      if (kind === 'directory_anchor') {
-        return el('span', {
-          class: 'chip event-directory_anchor',
-          title: 'directory_anchor record (§6.2.4). Pre-D056 record encoded with byte 0xFF; post-D056 records use byte 0x04.',
-        }, 'directory_anchor')
-      }
-      if (kind === 'system') {
-        return el('span', {
-          class: 'chip event-system',
-          title: 'atrib-namespace event_type without a dedicated byte slot in the log entry (§2.3.1 reserves 0x05-0xFE for future atrib normative additions). Open the record for the full URI.',
-        }, 'atrib system')
-      }
+  } else if (key === 'extension' && creatorKey) {
+    const systemKind = atribSystemSignerKind(creatorKey)
+    if (systemKind) {
+      key = systemKind
+      rawKey = systemKind
     }
   }
-  return el('span', { class: `chip event-${eventType || 'extension'}` }, eventType || 'extension')
+
+  const base = EVENT_TYPE_INFO[key]
+  if (base) return { key, rawKey, uri, ...base }
+
+  const label = humanEventLabel(key)
+  return {
+    key: 'extension',
+    rawKey,
+    label,
+    noun: `${label} record`,
+    description: 'A non-core event type returned by this endpoint.',
+    uri,
+  }
+}
+
+function renderEventKey() {
+  const keys = ['tool_call', 'observation', 'annotation', 'revision', 'transaction', 'directory_anchor']
+  return el('section', { class: 'event-key', 'aria-label': 'Event type key' },
+    ...keys.map((key) => {
+      const info = eventTypeInfo(key)
+      return el('div', { class: 'item' },
+        renderEventChip(key),
+        el('p', {}, info.description),
+      )
+    }),
+  )
+}
+
+function renderEventChip(eventType, creatorKey, eventTypeUri = null) {
+  const info = eventTypeInfo(eventType, creatorKey, eventTypeUri)
+  const rawSuffix = info.rawKey && info.rawKey !== info.key ? ` Raw type: ${info.rawKey}.` : ''
+  const uriSuffix = info.uri ? ` URI: ${info.uri}.` : ''
+  const title = `${info.noun}: ${info.description}${rawSuffix}${uriSuffix}`
+  return el('span', {
+    class: `chip event-${info.key}`,
+    title,
+    'aria-label': `Event type: ${info.label}. ${info.description}`,
+  }, info.label)
 }
 
 // ─── Verification badges ─────────────────────────────────────────────────
@@ -1332,6 +1837,16 @@ function renderVerifyBadges(creatorKey) {
       ? el('span', { class: 'badge ok', title: 'Creator key has a directory claim binding it to a name (§6.1)' }, '✓ id')
       : el('span', { class: 'badge dim', title: 'No directory claim for this creator key. Optional per §6.1; the signature is still valid.' }, '○ id'),
     el('span', { class: 'badge ok', title: 'Entry is in the public Merkle log (§2.3)' }, '✓ log'),
+  )
+}
+
+function proofStep(title, body, ok = true) {
+  return el('div', { class: ok ? 'proof-step' : 'proof-step dim' },
+    el('span', { class: 'mark', 'aria-hidden': 'true' }, ok ? '✓' : '○'),
+    el('span', {},
+      el('strong', {}, title),
+      el('span', {}, body),
+    ),
   )
 }
 
@@ -1382,16 +1897,24 @@ async function renderOverview() {
       'live · public · verifiable',
     ),
     el('h1', {},
-      'The public log of ',
-      el('span', { class: 'accent' }, 'provable AI agent actions'),
+      'Inspect ',
+      el('span', { class: 'accent' }, 'signed agent activity'),
       '.',
     ),
     el('p', { class: 'lede' },
-      'Every line below is a real action taken by an AI agent. Each one is signed with the agent\'s Ed25519 key and committed to a public Merkle log. You can verify all of it yourself, no central authority, no operator you have to trust. ',
+      'Search by key, session, or record hash. Open a receipt, check the signature and log entry, then trace what informed it. ',
       el('a', { href: '#/about' }, 'How does this work?'),
     ),
     el('div', { class: 'quick-links', id: 'quick-links' }),
   ))
+
+  root.append(el('section', { class: 'verification-path', 'aria-label': 'Verification path' },
+    verificationPathStep('01', 'Find the claim', 'Paste a creator key, context id, or record hash to land on the right evidence surface.'),
+    verificationPathStep('02', 'Read the receipt', 'Each record shows event type, signer identity, session, timestamp, and log index.'),
+    verificationPathStep('03', 'Trace the chain', 'Walk backward through informed_by, annotations, revisions, and provenance edges.'),
+  ))
+
+  root.append(renderEventKey())
 
   root.append(el('div', { class: 'pulse-strip', id: 'pulse-strip' },
     pulseStat('signed actions', '—'),
@@ -1405,12 +1928,14 @@ async function renderOverview() {
       el('input', {
         type: 'search',
         id: 'search',
+        name: 'record-search',
+        'aria-label': 'Search by creator key, context id, or record hash',
         placeholder: 'Search by creator_key, context_id, or record_hash…',
         autocomplete: 'off',
         spellcheck: 'false',
         onkeydown: (e) => { if (e.key === 'Enter') doSearch() },
       }),
-      el('button', { onclick: doSearch }, 'go'),
+      el('button', { type: 'button', 'aria-label': 'Search records', onclick: doSearch }, 'go'),
     ),
     el('p', { class: 'search-help' },
       'Paste a ',
@@ -1473,6 +1998,50 @@ async function renderOverview() {
   }
 
   startPolling()
+}
+
+function verificationPathStep(num, title, body) {
+  return el('article', { class: 'step' },
+    el('span', { class: 'num' }, num),
+    el('h2', {}, title),
+    el('p', {}, body),
+  )
+}
+
+function detailPathStep(num, title, body) {
+  return el('article', { class: 'step' },
+    el('span', { class: 'num' }, num),
+    el('h2', {}, title),
+    el('p', {}, body),
+  )
+}
+
+function detailStatusItem(label, value, note, tone = 'info') {
+  return el('div', { class: `item ${tone}` },
+    el('span', { class: 'label' }, label),
+    el('div', { class: 'value' }, value),
+    note ? el('p', { class: 'note' }, note) : null,
+  )
+}
+
+function renderDetailStatus(items) {
+  return el('section', { class: 'detail-status', 'aria-label': 'Verification status' },
+    ...items.map((item) => detailStatusItem(item.label, item.value, item.note, item.tone)),
+  )
+}
+
+function renderRawJsonPanel(title, meta, payload, options = {}) {
+  const open = options.open === true
+  return el('details', { class: 'panel flush raw-panel', ...(open ? { open: '' } : {}) },
+    el('summary', { class: 'panel-head' },
+      el('h2', {}, title),
+      el('span', { class: 'meta' }, meta),
+      el('span', { class: 'raw-toggle', 'aria-hidden': 'true' }),
+    ),
+    el('div', { class: 'panel-body', style: 'padding: 0;' },
+      el('pre', { style: 'border: none; border-radius: 0; max-height: 600px;' }, JSON.stringify(payload, null, 2)),
+    ),
+  )
 }
 
 function pulseStat(label, value, sub = null, wide = false) {
@@ -1764,10 +2333,37 @@ async function renderIdentity(creatorKey) {
     ],
   }))
 
+  root.append(el('section', { class: 'detail-path', 'aria-label': 'Identity page path' },
+    detailPathStep('01', 'Check the claim', 'See whether this key published a directory claim. Missing claims do not invalidate signatures.'),
+    detailPathStep('02', 'Review sessions', 'Find the workflows this signer participated in and inspect their records.'),
+    detailPathStep('03', 'Map activity', 'Use the cross-session graph to see handoffs and provenance relationships.'),
+  ))
+
+  const lookup = await resolveIdentity(creatorKey)
+  root.append(renderDetailStatus([
+    {
+      label: 'claim',
+      value: lookup._error ? 'directory error' : lookup.found ? 'found' : 'optional',
+      note: lookup.found ? `Directory version ${lookup.version}, epoch ${lookup.epoch}.` : 'A missing claim does not invalidate signed records.',
+      tone: lookup._error ? 'warn' : lookup.found ? 'ok' : 'info',
+    },
+    {
+      label: 'signer key',
+      value: 'Ed25519',
+      note: 'The public key is the identity surface for verification.',
+      tone: 'ok',
+    },
+    {
+      label: 'evidence',
+      value: 'sessions below',
+      note: 'Use session rows and the activity map to inspect related records.',
+      tone: 'info',
+    },
+  ]))
+
   const stack = el('div', { class: 'stack' })
   root.append(stack)
 
-  const lookup = await resolveIdentity(creatorKey)
   stack.append(el('section', { class: 'panel flush' },
     el('div', { class: 'panel-head' },
       el('h2', {},
@@ -1907,7 +2503,7 @@ async function renderIdentity(creatorKey) {
       'aria-controls': `sessions-body-${creatorKey.slice(0, 12)}`,
       style: [
         'background: transparent',
-        'border: 1px solid var(--bd-2)',
+        'border: 1px solid var(--border)',
         'color: var(--text-2)',
         'padding: 3px 10px',
         'border-radius: 3px',
@@ -1970,7 +2566,7 @@ async function renderIdentity(creatorKey) {
   let customSinceMs = null
   let customUntilMs = null
   const windowSelect = el('select', {
-    style: 'background: var(--surface-2); color: var(--text-1); border: 1px solid var(--bd-2); padding: 4px 8px; border-radius: 3px; font-family: var(--font-mono); font-size: 12px;',
+    style: 'background: var(--surface-2); color: var(--text); border: 1px solid var(--border); padding: 4px 8px; border-radius: 3px; font-family: var(--font-mono); font-size: 12px;',
     onchange: (ev) => {
       currentWindowIdx = parseInt(ev.target.value, 10)
       const isCustom = TIME_WINDOWS[currentWindowIdx].sinceMs === 'custom'
@@ -1986,16 +2582,16 @@ async function renderIdentity(creatorKey) {
   const isoLocal = (ms) => new Date(ms - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
   const sinceInput = el('input', {
     type: 'datetime-local',
-    style: 'background: var(--surface-2); color: var(--text-1); border: 1px solid var(--bd-2); padding: 3px 6px; border-radius: 3px; font-family: var(--font-mono); font-size: 12px; color-scheme: dark;',
+    style: 'background: var(--surface-2); color: var(--text); border: 1px solid var(--border); padding: 3px 6px; border-radius: 3px; font-family: var(--font-mono); font-size: 12px; color-scheme: dark;',
     value: isoLocal(Date.now() - 24 * 60 * 60 * 1000),
   })
   const untilInput = el('input', {
     type: 'datetime-local',
-    style: 'background: var(--surface-2); color: var(--text-1); border: 1px solid var(--bd-2); padding: 3px 6px; border-radius: 3px; font-family: var(--font-mono); font-size: 12px; color-scheme: dark;',
+    style: 'background: var(--surface-2); color: var(--text); border: 1px solid var(--border); padding: 3px 6px; border-radius: 3px; font-family: var(--font-mono); font-size: 12px; color-scheme: dark;',
     value: isoLocal(Date.now()),
   })
   const applyCustomBtn = el('button', {
-    style: 'background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); padding: 3px 12px; border-radius: 3px; font-size: 12px; cursor: pointer;',
+    style: 'background: var(--accent-subtle); color: var(--accent); border: 1px solid var(--accent-border); padding: 3px 12px; border-radius: 3px; font-size: 12px; cursor: pointer;',
     onclick: () => {
       const since = new Date(sinceInput.value).getTime()
       const until = new Date(untilInput.value).getTime()
@@ -2039,7 +2635,7 @@ async function renderIdentity(creatorKey) {
       'margin: 0 12px 12px',
       'padding: 10px 12px',
       'background: var(--surface-2)',
-      'border: 1px solid var(--bd-2)',
+      'border: 1px solid var(--border)',
       'border-radius: 4px',
       'color: var(--text-2)',
       'font-size: 12px',
@@ -2123,7 +2719,7 @@ async function renderIdentity(creatorKey) {
     for (const row of rows) {
       if (!row) continue
       const lineStyle = row.emphasis === 'warn'
-        ? 'color: var(--warning, #f59e0b); font-weight: 500;'
+        ? 'color: var(--warn); font-weight: 500;'
         : 'color: var(--text-2);'
       const labelStyle = 'color: var(--text-3); display: inline-block; min-width: 132px;'
       children.push(el('div', { style: lineStyle },
@@ -2294,10 +2890,14 @@ async function renderIdentity(creatorKey) {
         try { _activeSigmaInstance.kill() } catch {}
         _activeSigmaInstance = null
       }
-      const { sigma, fitCameraToGraph, resolvedMode } = await renderSigmaDAG(activityGraphContainer, graph, { layoutMode: mode })
-      _activeSigmaInstance = sigma
-      attachCameraControls(activityGraphContainer, fitCameraToGraph, sigma)
-      attachLayoutSwitcher(activityGraphContainer, resolvedMode, renderActivity)
+      try {
+        const { sigma, fitCameraToGraph, resolvedMode } = await renderSigmaDAG(activityGraphContainer, graph, { layoutMode: mode })
+        _activeSigmaInstance = sigma
+        attachCameraControls(activityGraphContainer, fitCameraToGraph, sigma)
+        attachLayoutSwitcher(activityGraphContainer, resolvedMode, renderActivity)
+      } catch (e) {
+        renderGraphRenderError(activityGraphContainer, e)
+      }
     }
     await renderActivity(_activityLayoutMode)
     populateGraphLegend(activityNodeLegend, activityEdgeLegend, graph)
@@ -2318,10 +2918,9 @@ function renderCompositionChips(s) {
       ? el('span', { class: 'badge ok' }, '✓ tx')
       : el('span', { class: 'meta', style: 'color: var(--text-4);' }, '—')
   }
-  const ORDER = ['tool_call', 'observation', 'annotation', 'revision', 'transaction', 'directory_anchor', 'extension']
   const chips = []
   const keys = Object.keys(counts).sort((a, b) => {
-    const ai = ORDER.indexOf(a), bi = ORDER.indexOf(b)
+    const ai = EVENT_TYPE_ORDER.indexOf(a), bi = EVENT_TYPE_ORDER.indexOf(b)
     if (ai === -1 && bi === -1) return a.localeCompare(b)
     if (ai === -1) return 1
     if (bi === -1) return -1
@@ -2330,11 +2929,14 @@ function renderCompositionChips(s) {
   for (const k of keys) {
     const n = counts[k]
     if (!n) continue
+    const info = eventTypeInfo(k)
+    const label = pluralEventLabel(info.label, n)
     chips.push(el('span', {
-      class: `chip event-${k}`,
+      class: `chip event-${info.key}`,
       style: 'font-size: 11px; padding: 1px 6px; margin-right: 4px;',
-      title: `${n} ${k} record${n === 1 ? '' : 's'}`,
-    }, `${k} ${n}`))
+      title: `${n} ${pluralEventLabel(info.noun, n)}. ${info.description}`,
+      'aria-label': `${n} ${label}`,
+    }, `${n} ${label}`))
   }
   return el('span', { style: 'display: inline-flex; flex-wrap: wrap; gap: 2px;' }, ...chips)
 }
@@ -2412,6 +3014,12 @@ async function renderSession(contextId) {
     ],
   }))
 
+  root.append(el('section', { class: 'detail-path', 'aria-label': 'Session page path' },
+    detailPathStep('01', 'Read the summary', 'Start with counts, participants, composition, and transaction state.'),
+    detailPathStep('02', 'Inspect structure', 'Use the graph to see chain, convergence, annotation, and revision edges.'),
+    detailPathStep('03', 'Open records', 'Drop into individual receipts when a row needs proof or raw JSON.'),
+  ))
+
   // Try graph first; fall back to log-derived nodes when graph-node either
   // hasn't ingested the requested context_id OR fails to respond (5xx,
   // timeout, 502 on very large contexts where buildGraph hits a CPU
@@ -2466,13 +3074,11 @@ async function renderSession(contextId) {
   const hasTx = graph.has_transaction || graph.nodes.some(n => n.event_type === 'transaction')
   await resolveIdentities(graph.nodes.map(n => n.creator_key).filter(Boolean))
   if (!routeGenerationStillCurrent(myGen)) return
+  const hasEdges = graph.edges && graph.edges.length > 0
 
   // Composition breakdown across the session. Surfaces the event-type
   // diversity that the bare "transaction: none" stat hides. Each piece
-  // is colored with the canonical event-type palette (eventTypeColor
-  // resolves the CSS variable per type, including the directory_anchor
-  // -> --et-system special case). Underscore -> space and s-pluralize
-  // produce human-readable labels ("4 tool_call" -> "4 tool calls").
+  // uses the same vocabulary as receipts, tables, and overview chips.
   const eventTypeCounts = {}
   for (const n of graph.nodes) {
     const et = n.event_type || 'unknown'
@@ -2485,11 +3091,40 @@ async function renderSession(contextId) {
   for (let i = 0; i < sortedTypes.length; i++) {
     const [type, count] = sortedTypes[i]
     if (i > 0) compositionPieces.push(' · ')
-    const display = type.replace(/_/g, ' ') + (count === 1 ? '' : 's')
+    const info = eventTypeInfo(type)
+    const display = pluralEventLabel(info.label, count)
     compositionPieces.push(el('span', {
-      style: `color: ${eventTypeColor(type)}`,
+      style: `color: ${eventTypeColor(info.key)}`,
+      title: info.description,
     }, `${count} ${display}`))
   }
+
+  root.append(renderDetailStatus([
+    {
+      label: 'records',
+      value: String(graph.node_count ?? graph.nodes.length),
+      note: usingFallback ? 'Loaded directly from the log.' : 'Loaded from graph-node with log-backed records.',
+      tone: 'ok',
+    },
+    {
+      label: 'structure',
+      value: hasEdges ? 'graph ready' : 'records only',
+      note: hasEdges ? 'Deterministic edges are available below.' : 'No graph edges are available for this session view.',
+      tone: hasEdges ? 'ok' : 'info',
+    },
+    {
+      label: 'transaction',
+      value: hasTx ? 'present' : 'none',
+      note: hasTx ? 'This session contains a transaction record.' : 'Common for non-commerce workflows.',
+      tone: hasTx ? 'ok' : 'info',
+    },
+    {
+      label: 'participants',
+      value: String(new Set(graph.nodes.map(n => n.creator_key).filter(Boolean)).size),
+      note: 'Distinct creator keys found in this context.',
+      tone: 'info',
+    },
+  ]))
 
   root.append(el('div', { class: 'pulse-strip' },
     pulseStat('nodes', String(graph.node_count ?? graph.nodes.length)),
@@ -2522,8 +3157,6 @@ async function renderSession(contextId) {
     }
     root.append(banner)
   }
-
-  const hasEdges = graph.edges && graph.edges.length > 0
 
   // Graph panel (only when graph-node returned edges; built but not rendered
   // until after the synchronous root structure is in place, Sigma needs
@@ -2697,13 +3330,17 @@ async function renderSession(contextId) {
         try { _activeSigmaInstance.kill() } catch {}
         _activeSigmaInstance = null
       }
-      const { sigma, fitCameraToGraph, resolvedMode } = await renderSigmaDAG(graphContainer, graph, {
-        isFocalNode: (n) => n.event_type === 'transaction',
-        layoutMode: mode,
-      })
-      _activeSigmaInstance = sigma
-      attachCameraControls(graphContainer, fitCameraToGraph, sigma)
-      attachLayoutSwitcher(graphContainer, resolvedMode, renderSessionGraph)
+      try {
+        const { sigma, fitCameraToGraph, resolvedMode } = await renderSigmaDAG(graphContainer, graph, {
+          isFocalNode: (n) => n.event_type === 'transaction',
+          layoutMode: mode,
+        })
+        _activeSigmaInstance = sigma
+        attachCameraControls(graphContainer, fitCameraToGraph, sigma)
+        attachLayoutSwitcher(graphContainer, resolvedMode, renderSessionGraph)
+      } catch (e) {
+        renderGraphRenderError(graphContainer, e)
+      }
     }
     await renderSessionGraph(_sessionLayoutMode)
     populateGraphLegend(nodeLegendRow, edgeLegendRow, graph)
@@ -2763,16 +3400,44 @@ async function renderAction(recordHash) {
 
   if (entry.creator_key) await resolveIdentity(entry.creator_key)
 
-  root.append(el('section', { class: 'panel flush' },
-    el('div', { class: 'panel-head' },
-      el('h2', {}, 'log entry'),
-      el('span', { class: 'meta' },
-        entry.log_index !== undefined ? `index ${entry.log_index}` : ''),
-    ),
-    el('div', { class: 'panel-body' },
+  const identityOk = entry.creator_key && identityCache.get(entry.creator_key)?.found === true
+  const eventInfo = eventTypeInfo(entry.event_type, entry.creator_key, entry.event_type_uri)
+  root.append(renderDetailStatus([
+    {
+      label: 'signature',
+      value: 'accepted',
+      note: 'The log accepted this entry after Ed25519 verification.',
+      tone: 'ok',
+    },
+    {
+      label: 'identity',
+      value: identityOk ? 'claimed' : 'optional',
+      note: identityOk ? 'Directory claim found for this creator key.' : 'No claim found. The signature can still verify.',
+      tone: identityOk ? 'ok' : 'info',
+    },
+    {
+      label: 'log entry',
+      value: String(entry.log_index ?? entry.index ?? 'unknown'),
+      note: 'Index in the public Merkle log.',
+      tone: 'ok',
+    },
+    {
+      label: 'trace',
+      value: entry.context_id ? 'available' : 'missing',
+      note: entry.context_id ? 'Open the session or ancestry view for context.' : 'No context id was returned for this lookup.',
+      tone: entry.context_id ? 'ok' : 'warn',
+    },
+  ]))
+
+  root.append(el('section', { class: 'receipt', 'aria-label': 'Verification receipt' },
+    el('div', { class: 'receipt-main' },
+      el('span', { class: 'receipt-kicker' }, 'verification receipt'),
+      el('h2', {}, eventInfo.noun),
+      el('span', { class: 'hash' }, fullHash),
+      el('p', { class: 'receipt-summary' }, eventInfo.description),
       el('dl', { class: 'kv' },
         el('dt', {}, 'event_type'),
-        el('dd', {}, renderEventChip(entry.event_type, entry.creator_key)),
+        el('dd', {}, renderEventChip(entry.event_type, entry.creator_key, entry.event_type_uri)),
         el('dt', {}, 'identity'),
         el('dd', {}, entry.creator_key ? renderIdentityLabel(entry.creator_key, { short: false }) : '—'),
         el('dt', {}, 'session'),
@@ -2783,33 +3448,37 @@ async function renderAction(recordHash) {
         el('dd', {}, entry.timestamp_ms
           ? el('span', {}, timeAgo(entry.timestamp_ms), ' · ', el('span', { class: 'mono' }, isoTime(entry.timestamp_ms)))
           : '—'),
-        el('dt', {}, 'verification'),
-        el('dd', {}, entry.creator_key ? renderVerifyBadges(entry.creator_key) : '—'),
         el('dt', {}, 'log_index'),
         el('dd', {}, el('span', { class: 'mono' }, String(entry.log_index ?? entry.index ?? '—'))),
+      ),
+      el('div', { class: 'receipt-meta' },
+        entry.context_id
+          ? el('a', { class: 'receipt-link', href: `#/session/${entry.context_id}` }, 'Open session')
+          : null,
+        entry.creator_key
+          ? el('a', { class: 'receipt-link', href: `#/identity/${entry.creator_key}` }, 'Inspect identity')
+          : null,
+        el('a', { class: 'receipt-link', href: `#/trace/${fullHash}` }, 'Trace ancestry'),
+      ),
+    ),
+    el('aside', { class: 'receipt-proof', 'aria-label': 'Proof checks' },
+      el('span', { class: 'receipt-kicker' }, 'proof checks'),
+      el('div', { class: 'proof-list' },
+        proofStep('Signature accepted', 'The log accepted this entry only after Ed25519 verification.'),
+        proofStep(
+          identityOk ? 'Identity claim found' : 'Identity claim optional',
+          identityOk
+            ? 'The creator key has a directory claim bound to a name.'
+            : 'No directory claim was found. The signature can still be valid.',
+          Boolean(identityOk),
+        ),
+        proofStep('Committed to log', `Entry index ${entry.log_index ?? entry.index ?? 'unknown'} is in the public Merkle log.`),
+        proofStep('Traceable context', entry.context_id ? 'The context id links this record to its workflow.' : 'No context id was returned for this lookup.', Boolean(entry.context_id)),
       ),
     ),
   ))
 
-  root.append(el('p', {
-    style: 'margin: 16px 0 0; color: var(--text-2); font-size: 14px;',
-  },
-    el('a',
-      { href: `#/trace/${fullHash}`, style: 'color: var(--accent); border-bottom: 1px dotted var(--accent); text-decoration: none;' },
-      '→ trace ancestry',
-    ),
-    ' · backward walk via informed_by, annotates, revises (D041, D058, D059)',
-  ))
-
-  root.append(el('section', { class: 'panel flush', style: 'margin-top: 24px;' },
-    el('div', { class: 'panel-head' },
-      el('h2', {}, 'raw record'),
-      el('span', { class: 'meta' }, 'as returned by /v1/lookup'),
-    ),
-    el('div', { class: 'panel-body', style: 'padding: 0;' },
-      el('pre', { style: 'border: none; border-radius: 0; max-height: 600px;' }, JSON.stringify(entry, null, 2)),
-    ),
-  ))
+  root.append(renderRawJsonPanel('raw record', 'as returned by /v1/lookup', entry))
 
   clearAndRender(root)
 }
@@ -2875,11 +3544,22 @@ async function loadEdgeCurve() {
   return _edgeCurveModule
 }
 let _graphLibsPromise = null
+function canRenderWebGL() {
+  const canvas = document.createElement('canvas')
+  return Boolean(
+    canvas.getContext('webgl2') ||
+    canvas.getContext('webgl') ||
+    canvas.getContext('experimental-webgl'),
+  )
+}
 function loadGraphLibs() {
   if (_graphLibsPromise) return _graphLibsPromise
   _graphLibsPromise = (async () => {
     // graphology + dagre have no inter-dependency; load in parallel.
     await Promise.all([loadScript(GRAPH_LIBS[0]), loadScript(GRAPH_LIBS[1])])
+    if (!canRenderWebGL()) {
+      throw new Error('WebGL is unavailable in this browser, so the graph canvas cannot render.')
+    }
     // Sigma's UMD references graphology globally; load it last.
     await loadScript(GRAPH_LIBS[2])
   })().catch((e) => {
@@ -3088,6 +3768,13 @@ function attachLayoutSwitcher(container, currentMode, onChange) {
     wrap.appendChild(btn)
   }
   container.appendChild(wrap)
+}
+
+function renderGraphRenderError(container, error) {
+  container.replaceChildren(el('div', { class: 'err-banner' },
+    el('span', { class: 'label' }, 'graph render error:'), ' ',
+    error && error.message ? error.message : String(error),
+  ))
 }
 
 async function renderSigmaDAG(container, graphData, options = {}) {
@@ -3877,12 +4564,12 @@ function appendChainSection(root, chainResult, fullHash) {
   for (const node of nodes) {
     const isStart = node.record_hash === fullHash || node.id === fullHash
     const recordHash = node.record_hash || node.id || ''
-    list.append(el('li', { style: 'padding: 8px 0; border-bottom: 1px solid var(--bd-2); display: flex; align-items: center; gap: 12px; flex-wrap: wrap;' },
+    list.append(el('li', { style: 'padding: 8px 0; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; gap: 12px; flex-wrap: wrap;' },
       isStart
-        ? el('span', { class: 'chip', style: 'background: var(--accent-soft); color: var(--accent);' }, 'start')
+        ? el('span', { class: 'chip', style: 'background: var(--accent-subtle); color: var(--accent); border-color: var(--accent-border);' }, 'start')
         : null,
       renderEventChip(node.event_type, node.creator_key, node.event_type_uri),
-      el('a', { href: `#/action/${recordHash}`, class: 'mono', style: 'color: var(--text-1);' },
+      el('a', { href: `#/action/${recordHash}`, class: 'mono', style: 'color: var(--text);' },
         shorten(recordHash, 14, 6),
       ),
       node.timestamp
@@ -4259,14 +4946,18 @@ async function renderTrace(rawHash) {
       try { _activeSigmaInstance.kill() } catch {}
       _activeSigmaInstance = null
     }
-    const { sigma, fitCameraToGraph, resolvedMode } = await renderSigmaDAG(graphContainer, graph, {
-      isFocalNode: (n) =>
-        (n.record_hash === fullHash) || (n.id === hashHex) || (n.id === fullHash),
-      layoutMode: mode,
-    })
-    _activeSigmaInstance = sigma
-    attachCameraControls(graphContainer, fitCameraToGraph, sigma)
-    attachLayoutSwitcher(graphContainer, resolvedMode, renderTraceGraph)
+    try {
+      const { sigma, fitCameraToGraph, resolvedMode } = await renderSigmaDAG(graphContainer, graph, {
+        isFocalNode: (n) =>
+          (n.record_hash === fullHash) || (n.id === hashHex) || (n.id === fullHash),
+        layoutMode: mode,
+      })
+      _activeSigmaInstance = sigma
+      attachCameraControls(graphContainer, fitCameraToGraph, sigma)
+      attachLayoutSwitcher(graphContainer, resolvedMode, renderTraceGraph)
+    } catch (e) {
+      renderGraphRenderError(graphContainer, e)
+    }
   }
   await renderTraceGraph(_traceLayoutMode)
 }
