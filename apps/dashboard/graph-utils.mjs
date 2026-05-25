@@ -393,6 +393,34 @@ export function buildReplayGraphFromEntries(entries, options = {}) {
 }
 
 /**
+ * Deterministic visual lane offset for the live demo replay.
+ *
+ * The demo route must not invent edges, but chain-only sessions still
+ * look lifeless when every node sits on the same horizontal baseline.
+ * This helper gives each event family a lane and adds a tiny wave for
+ * long same-type chains, so growth reads as branching without changing
+ * the graph structure.
+ */
+export function computeDemoLaneOffset(node, index, totalNodes = 0) {
+  const eventType = node?.event_type || 'unknown'
+  const laneByEventType = {
+    transaction: 0,
+    tool_call: 0,
+    observation: -72,
+    annotation: -112,
+    revision: 112,
+    directory_anchor: 72,
+    dangling_node: 132,
+  }
+  const baseLane = laneByEventType[eventType] ?? 0
+  const wave = ((Math.max(0, index) % 5) - 2) * 18
+  const arc = totalNodes > 1
+    ? Math.sin((Math.max(0, index) / Math.max(1, totalNodes - 1)) * Math.PI) * 22
+    : 0
+  return baseLane + wave + arc
+}
+
+/**
  * The Sigma 3 framed-graph default camera state.
  *
  * We learned the hard way (see commit fe3f04e): Sigma 3's camera

@@ -1625,7 +1625,8 @@ import {
   computeGraphBBox,
   computeNeighborhood,
   buildReplayGraphFromEntries,
-} from './graph-utils.mjs?v=2026-05-25-demo-replay'
+  computeDemoLaneOffset,
+} from './graph-utils.mjs?v=2026-05-25-demo-lanes'
 
 /*
  * atrib explorer, D054 option 1.
@@ -2591,6 +2592,7 @@ async function renderDemo() {
     try {
       const { sigma, fitCameraToGraph, resolvedMode } = await renderSigmaDAG(graphContainer, visibleGraph, {
         layoutMode: 'timeline',
+        demoBranchLanes: true,
         nodeSize: 13,
         focalSize: 18,
       })
@@ -4333,6 +4335,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     // Dagre LR: horizontal ribbon. Time flows left → right; branches
     // (INFORMED_BY, ANNOTATES, REVISES) go up/down vertically.
     dagre.layout(dgx)
+    const timelineOrder = []
     gx.forEachNode((nodeId) => {
       const dnode = dgx.node(nodeId)
       if (dnode) {
@@ -4340,8 +4343,18 @@ async function renderSigmaDAG(container, graphData, options = {}) {
         // both timeline and organic seed paths so the orientation
         // reads correctly.
         gx.mergeNodeAttributes(nodeId, { x: dnode.x, y: -dnode.y })
+        timelineOrder.push({ id: nodeId, x: dnode.x })
       }
     })
+    if (options.demoBranchLanes) {
+      timelineOrder.sort((a, b) => a.x - b.x || String(a.id).localeCompare(String(b.id)))
+      for (let i = 0; i < timelineOrder.length; i += 1) {
+        const { id } = timelineOrder[i]
+        const node = gx.getNodeAttribute(id, '_node')
+        const currentY = gx.getNodeAttribute(id, 'y')
+        gx.mergeNodeAttributes(id, { y: currentY + computeDemoLaneOffset(node, i, timelineOrder.length) })
+      }
+    }
   } else if (layoutMode === 'organic') {
     // Dagre TB seed → FA2 relaxation. Dagre gives every node a
     // sensible starting position based on topological depth; FA2

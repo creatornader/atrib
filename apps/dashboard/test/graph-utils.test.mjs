@@ -33,6 +33,7 @@ import {
   computeGraphBBox,
   computeNeighborhood,
   buildReplayGraphFromEntries,
+  computeDemoLaneOffset,
 } from '../graph-utils.mjs'
 
 // Helper: build a graphData wire-format object.
@@ -631,5 +632,20 @@ describe('buildReplayGraphFromEntries', () => {
 
     expect(replay.nodes.map((node) => node.id)).toEqual(['ok'])
     expect(replay.edges).toEqual([])
+  })
+})
+
+describe('computeDemoLaneOffset', () => {
+  it('puts annotation and revision records on opposite lanes', () => {
+    expect(computeDemoLaneOffset(n('a', 'annotation'), 2, 5)).toBeLessThan(0)
+    expect(computeDemoLaneOffset(n('r', 'revision'), 2, 5)).toBeGreaterThan(0)
+  })
+
+  it('adds a deterministic wave to same-type chains', () => {
+    const offsets = Array.from({ length: 6 }, (_, i) =>
+      computeDemoLaneOffset(n(`t${i}`, 'tool_call'), i, 6))
+    expect(new Set(offsets).size).toBeGreaterThan(1)
+    expect(offsets).toEqual(Array.from({ length: 6 }, (_, i) =>
+      computeDemoLaneOffset(n(`t${i}`, 'tool_call'), i, 6)))
   })
 })
