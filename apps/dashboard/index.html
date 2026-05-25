@@ -505,7 +505,7 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius);
     overflow: hidden;
-    margin: -8px 0 32px;
+    margin: 32px 0 0;
   }
   .event-key .item {
     background: var(--surface);
@@ -640,6 +640,9 @@
     color: var(--text-3);
     text-transform: uppercase; letter-spacing: 0.08em;
   }
+  .pulse-strip .stat.ok .value { color: var(--ok); }
+  .pulse-strip .stat.warn .value { color: var(--warn); }
+  .pulse-strip .stat.err .value { color: var(--err); }
   .pulse-strip .stat .value {
     font: 600 22px/1.1 var(--font-sans);
     letter-spacing: -0.015em;
@@ -2110,7 +2113,7 @@ function doSearch() {
   else if (/^[0-9a-f]{32}$/.test(q))                location.hash = `#/session/${q}`
   else if (/^sha256:[0-9a-f]{64}$/.test(q))         location.hash = `#/action/${q}`
   else if (/^[0-9a-f]{64}$/.test(q))                location.hash = `#/action/sha256:${q}`
-  else alert('Not a recognized format.\n\nExpected one of:\n• creator_key (43 chars base64url)\n• context_id (32 hex chars)\n• record_hash (64 hex chars, optionally sha256: prefixed)')
+  else alert('Not a recognized format.\n\nExpected one of:\n• creator key (43 chars base64url)\n• session id (32 hex chars)\n• record hash (64 hex chars, optionally sha256: prefixed)')
 }
 
 // ─── Overview: hero, pulse strip, search, activity feed ──────────────────
@@ -2134,25 +2137,23 @@ async function renderOverview() {
       '.',
     ),
     el('p', { class: 'lede' },
-      'Search by key, session, or record hash. Open a receipt, check the signature and log entry, then trace what informed it. ',
+      'Search by creator key, session id, or record hash. Open a receipt, check the signature and log entry, then trace what informed it. ',
       el('a', { href: '#/about' }, 'How does this work?'),
     ),
     el('div', { class: 'quick-links', id: 'quick-links' }),
   ))
 
-  root.append(el('section', { class: 'verification-path', 'aria-label': 'Verification path' },
-    verificationPathStep('01', 'Find the claim', 'Paste a creator key, context id, or record hash to land on the right evidence surface.'),
-    verificationPathStep('02', 'Read the receipt', 'Each record shows event type, signer identity, session, timestamp, and log index.'),
-    verificationPathStep('03', 'Trace the chain', 'Walk backward through informed_by, annotations, revisions, and provenance edges.'),
+  root.append(el('div', { class: 'pulse-strip', id: 'pulse-strip' },
+    pulseStat('log health', '—'),
+    pulseStat('protected history', '—'),
+    pulseStat('signing actors', '—'),
+    pulseStat('proof status', '—'),
   ))
 
-  root.append(renderEventKey())
-
-  root.append(el('div', { class: 'pulse-strip', id: 'pulse-strip' },
-    pulseStat('signed records', '—'),
-    pulseStat('signing identities', '—'),
-    pulseStat('latest record', '—'),
-    pulseStat('proof status', '—'),
+  root.append(el('section', { class: 'verification-path', 'aria-label': 'Verification path' },
+    verificationPathStep('01', 'Find the claim', 'Paste a creator key, session id, or record hash to land on the right evidence surface.'),
+    verificationPathStep('02', 'Read the receipt', 'Each record shows event type, signer identity, session, timestamp, and log index.'),
+    verificationPathStep('03', 'Trace the chain', 'Walk backward through informed_by, annotations, revisions, and provenance edges.'),
   ))
 
   root.append(el('section', { style: 'margin-bottom: 32px;' },
@@ -2161,8 +2162,8 @@ async function renderOverview() {
         type: 'search',
         id: 'search',
         name: 'record-search',
-        'aria-label': 'Search by creator key, context id, or record hash',
-        placeholder: 'Search by creator_key, context_id, or record_hash…',
+        'aria-label': 'Search by creator key, session id, or record hash',
+        placeholder: 'Search by creator key, session id, or record hash…',
         autocomplete: 'off',
         spellcheck: 'false',
         onkeydown: (e) => { if (e.key === 'Enter') doSearch() },
@@ -2171,22 +2172,22 @@ async function renderOverview() {
     ),
     el('p', { class: 'search-help' },
       'Paste a ',
-      el('code', {}, '43-char creator_key'),
+      el('code', {}, '43-char creator key'),
       ', ',
-      el('code', {}, '32-hex context_id'),
+      el('code', {}, '32-hex session id'),
       ', or ',
-      el('code', {}, 'sha256:…'),
-      ' record hash. We\'ll route you to the right view.',
+      el('code', {}, 'sha256:… record hash'),
+      '. We\'ll route you to the right view.',
     ),
   ))
 
   root.append(el('section', { class: 'feed-wrap' },
     el('div', { class: 'feed-head' },
       el('h2', {},
-        'live activity',
+        'recent signed records',
         el('span', { class: 'live-tag' },
           el('span', { class: 'dot' }),
-          'updating',
+          'polling',
         ),
       ),
       el('span', { class: 'meta', id: 'feed-meta' }, 'loading…'),
@@ -2196,6 +2197,8 @@ async function renderOverview() {
     ),
     el('div', { id: 'feed-loadmore', style: 'margin-top: 12px; text-align: center;' }),
   ))
+
+  root.append(renderEventKey())
 
   clearAndRender(root)
 
@@ -2219,7 +2222,7 @@ async function renderOverview() {
     document.getElementById('feed-body').replaceChildren(
       el('div', { class: 'empty' },
         el('span', { class: 'icon' }, '○'),
-        'No signed actions yet. As soon as an agent signs and submits, you\'ll see it here.',
+        'No signed records yet. As soon as an agent signs and submits, you\'ll see it here.',
       ),
     )
     document.getElementById('feed-meta').textContent = 'empty'
@@ -2279,7 +2282,7 @@ function renderRawJsonPanel(title, meta, payload, options = {}) {
 function pulseStat(label, value, sub = null, options = {}) {
   const opts = typeof options === 'boolean' ? { wide: options } : options
   const attrs = {
-    class: opts.wide ? 'stat wide' : 'stat',
+    class: ['stat', opts.wide ? 'wide' : '', opts.tone || ''].filter(Boolean).join(' '),
     ...(opts.title ? { title: opts.title } : {}),
   }
   const tag = opts.href ? 'a' : 'div'
@@ -2303,28 +2306,31 @@ function parseCheckpointSummary(checkpoint) {
   return { origin, treeSize, rootHash, error: null }
 }
 
-function latestRecordStat(recent, stats) {
+function logHealthStat(recent, stats) {
   const latest = recent && Array.isArray(recent.entries) ? recent.entries[0] : null
   if (latest) {
     const info = eventTypeInfo(latest.event_type, latest.creator_key, latest.event_type_uri)
     const age = latest.timestamp_ms ? timeAgo(latest.timestamp_ms) : 'time unknown'
+    const ageMs = typeof latest.timestamp_ms === 'number' ? Date.now() - latest.timestamp_ms : Infinity
+    const value = ageMs <= 10 * 60 * 1000 ? 'live' : ageMs <= 60 * 60 * 1000 ? 'active' : 'quiet'
+    const tone = value === 'quiet' ? 'warn' : 'ok'
     const hash = latest.record_hash ? shorten(latest.record_hash, 8, 4) : null
     return pulseStat(
-      'latest record',
-      info.label,
-      hash ? `${age} · ${hash}` : age,
+      'log health',
+      value,
+      hash ? `newest ${info.label} ${age} · ${hash}` : `newest ${info.label} ${age}`,
       latest.record_hash
-        ? { href: `#/action/${latest.record_hash}`, title: 'Open the newest record in the log' }
-        : {},
+        ? { href: `#/action/${latest.record_hash}`, title: 'Open the newest record in the log', tone }
+        : { tone },
     )
   }
   if (recent && recent._error) {
-    return pulseStat('latest record', 'unavailable', recent._error)
+    return pulseStat('log health', 'unavailable', recent._error, { tone: 'err' })
   }
   if (stats.newest_timestamp_ms) {
-    return pulseStat('latest record', timeAgo(stats.newest_timestamp_ms), isoTime(stats.newest_timestamp_ms))
+    return pulseStat('log health', 'active', `newest record ${timeAgo(stats.newest_timestamp_ms)}`, { tone: 'ok' })
   }
-  return pulseStat('latest record', '—', 'no records yet')
+  return pulseStat('log health', '—', 'no records yet')
 }
 
 function updatePulseStrip(stats, checkpoint, recent = null) {
@@ -2348,14 +2354,14 @@ function updatePulseStrip(stats, checkpoint, recent = null) {
     ? `Signed snapshot from ${cp.origin || 'the log'} at tree size ${formatCount(cp.treeSize)}. Open anchoring details for the checkpoint proof.`
     : 'Open anchoring details'
   strip.replaceChildren(
-    pulseStat('signed records', formatCount(stats.tree_size), 'committed to the log'),
-    pulseStat('signing identities', formatCount(stats.distinct_signers), 'distinct creator_keys'),
-    latestRecordStat(recent, stats),
+    logHealthStat(recent, stats),
+    pulseStat('protected history', formatCount(stats.tree_size), 'signed records committed'),
+    pulseStat('signing actors', formatCount(stats.distinct_signers), 'creator keys with records'),
     pulseStat(
       'proof status',
       cp.rootHash ? 'signed snapshot' : '—',
       snapshotSub,
-      { href: '#/anchoring', title: snapshotTitle },
+      { href: '#/anchoring', title: snapshotTitle, tone: cp.rootHash ? 'ok' : 'warn' },
     ),
   )
 }
@@ -2372,17 +2378,17 @@ function renderFeed(entries, withAnimation, treeSize = null) {
   const meta = document.getElementById('feed-meta')
   if (meta) {
     const totalSuffix = feedTreeSize > 0 ? ` of ${feedTreeSize.toLocaleString()}` : ''
-    meta.textContent = `showing ${entries.length}${totalSuffix} signed actions, newest first`
+    meta.textContent = `showing ${entries.length}${totalSuffix} signed records, newest first`
   }
 
   const tbl = el('table', { class: 'feed' },
     el('thead', {}, el('tr', {},
       el('th', {}, 'event'),
-      el('th', {}, 'action'),
+      el('th', {}, 'record'),
       el('th', {}, 'identity'),
       el('th', {}, 'session'),
       el('th', { class: 'shrink' }, 'when'),
-      el('th', {}, 'verification'),
+      el('th', {}, 'trust checks'),
     )),
     el('tbody', {},
       ...entries.map((e, idx) => {
@@ -2457,7 +2463,7 @@ function populateQuickLinks(entries) {
   // renders the literal text "null". Filter optional links explicitly.
   const links = [
     el('a', { href: `#/action/${linkable.record_hash}` },
-      'See a recent action ', el('span', { class: 'arrow' }, '→'),
+      'Open a recent record ', el('span', { class: 'arrow' }, '→'),
     ),
     linkable.context_id && el('a', { href: `#/session/${linkable.context_id}` },
       'Browse a recent session ', el('span', { class: 'arrow' }, '→'),
