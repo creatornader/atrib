@@ -1,4 +1,4 @@
-# Atrib Design System
+# atrib design system
 
 Version: 0.2
 Status: active working design contract
@@ -6,39 +6,46 @@ Last updated: 2026-05-25
 
 ## Purpose
 
-Atrib makes agent activity verifiable. The design system should make that idea feel concrete: not a vague AI platform, not a crypto dashboard, not an observability clone. The interface should feel like a signed receipt becoming part of a chain.
+atrib makes agent activity verifiable. The design system should make that idea feel concrete: not a vague AI platform, not a crypto dashboard, not an observability clone. The interface should feel like a signed receipt becoming part of a chain.
 
-This document is the design source of truth for the public Atrib product surface: the website, explorer, protocol docs, package READMEs, share images, and operator-facing status/error states that users see. It has two jobs:
+This document is the design source of truth for the public atrib product surface: the website, explorer, protocol docs, package READMEs, share images, and operator-facing status/error states that users see. It has two jobs:
 
 - Record what the surfaces do today.
-- Define the product design state Atrib is moving toward.
+- Define the product design state atrib is moving toward.
 
 Do not treat this as only an inventory. A useful design system preserves the current truth while making the next truth harder to lose.
 
 ## Source Synthesis
 
-This direction synthesizes five input streams:
+This direction synthesizes six input streams:
 
-- Current Atrib surfaces: `atrib.dev`, `explore.atrib.dev`, protocol docs, package docs, the public explorer, and CI/deploy status surfaces.
-- Atrib product language: "Verifiable agent actions", "Every action becomes signed context for the next", and "Agents that reason from a past they can prove."
-- Design bookmark research across the configured private Bird account aliases on 2026-05-25: 4,358 fetched bookmarks and 173 strict design-system matches. High-signal references included `DESIGN.md`, `taste.md`, Hallmark, Kami, AXI, and design-skill workflows.
-- Prior work in the sibling `atrib-web` repo, where the first website-oriented Atrib design contract was drafted.
+- Current atrib surfaces: `atrib.dev`, `explore.atrib.dev`, protocol docs, package docs, the public explorer, and CI/deploy status surfaces.
+- atrib product language: "Verifiable agent actions", "Every action becomes signed context for the next", and "Agents that reason from a past they can prove."
+- Design-reference synthesis from 2026-05-25, reduced to product principles rather than copied references.
+- Public writing about agent-readable design rules, including Google Labs' Stitch `DESIGN.md` notes.
+- Prior work in the sibling `atrib-web` repo, where the first website-oriented atrib design contract was drafted.
 - Local design skills: interface-design for product specificity, Hallmark for anti-generic structure, baseline-ui for technical UI quality, web interface guidelines for accessibility, and make-interfaces-feel-better for interaction detail.
 
 The shared lesson from the best sources: a design system is not only tokens and components. It is a reasoning surface for future design work. It should explain why the system looks this way, what to preserve, what to avoid, and what still needs to become true.
+
+Research handling:
+
+- Keep unpublished source details and raw research lists out of public artifacts unless explicitly approved.
+- Public sources can be cited when they help readers understand the design-system shape.
+- Research-derived guidance should appear as distilled product principles, backlog items, and design decisions.
 
 ## Audience
 
 Primary:
 
-- Agent framework builders deciding whether to add Atrib.
+- Agent framework builders deciding whether to add atrib.
 - Tool and MCP server authors who need proof of who called what.
 - Protocol-minded developers who care about signatures, logs, and causality.
 
 Secondary:
 
 - Auditors, merchants, and other agents that need to verify a record.
-- Standards people comparing Atrib to trace context, Merkle logs, and payment rails.
+- Standards people comparing atrib to trace context, Merkle logs, and payment rails.
 
 The reader is technical and impatient. They want exactness, not hype.
 
@@ -108,13 +115,13 @@ Still underdesigned:
 
 ## North Star
 
-Atrib should feel like the canonical place to inspect signed agent activity.
+atrib should feel like the canonical place to inspect signed agent activity.
 
 The product should make three things legible within a few seconds:
 
 - What was signed.
 - What it was chained to.
-- How to verify it without trusting Atrib.
+- How to verify it without trusting atrib.
 
 The strongest version of the system is not a prettier dark dashboard. It is a receipt-native interface language: seals, hashes, event labels, proofs, graph paths, and raw records arranged so a technical person can move from claim to evidence without losing context.
 
@@ -157,11 +164,11 @@ Share images:
 
 - Job: make the product recognizable in feeds.
 - Current focus: functional social cards.
-- Target state: amber seal, hash fragments, and receipt-chain framing should make Atrib recognizable before the text is read.
+- Target state: amber seal, hash fragments, and receipt-chain framing should make atrib recognizable before the text is read.
 
 Status and reliability surfaces:
 
-- Job: make product health understandable when Atrib's public surfaces fail or slow down.
+- Job: make product health understandable when atrib's public surfaces fail or slow down.
 - Current focus: scheduled smoke checks and post-deploy smoke checks.
 - Target state: public and operator-facing states should distinguish unreachable, slow, stale, and unverified. They should name what users can try next.
 
@@ -521,7 +528,7 @@ These are the remaining gaps from the May 25 design and production-hardening ses
 2. **Explorer UI polish:** The overview language improved, but the explorer still needs a full information-architecture pass around what users should understand first.
 3. **Latency observability beyond smoke:** Scheduled smoke catches slow endpoints now. It does not store trend history or route alerts yet.
 4. **Production log hardening:** The Merkle hot path is fixed. The service still needs better event-loop and request-latency visibility.
-5. **Design-source synthesis:** Bookmark research is captured here at the finding level. The individual references are private operator context and should not be pasted into public artifacts without explicit approval.
+5. **Research-source hygiene:** Prior research is captured here at the principle level. Raw links and unpublished reference lists stay out of public artifacts unless explicitly approved.
 6. **Website/content pass:** The site needs a focused branch for copy, layout, and proof-first adoption flow.
 7. **Prettier debt:** Repo-wide formatting cleanup remains tracked separately in GitHub issue #23.
 
@@ -540,6 +547,10 @@ Recommended slice:
 
 | Date       | Decision                                                      | Rationale                                                                                                                |
 | ---------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| 2026-05-25 | Use the receipt chain as Atrib's signature design element     | It is specific to the product and maps directly to signed records, hashes, proof, and causality.                         |
+| 2026-05-25 | Use the receipt chain as atrib's signature design element     | It is specific to the product and maps directly to signed records, hashes, proof, and causality.                         |
 | 2026-05-25 | Keep this file as the repo design source of truth             | The explorer and protocol surfaces live in this repo, so design guidance must not live only in the sibling website repo. |
 | 2026-05-25 | Treat latency and stale data states as design-system concerns | A public verification surface fails users when it hides whether data is slow, stale, unreachable, or unverified.         |
+
+## Public References
+
+- Google Labs, "Stitch: Design.md": `DESIGN.md` files give agents the reasoning behind a design system and help validate implementation choices against design rules and accessibility constraints. <https://blog.google/innovation-and-ai/models-and-research/google-labs/stitch-design-md/>

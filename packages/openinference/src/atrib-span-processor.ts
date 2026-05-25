@@ -8,13 +8,13 @@
  * `OpenInferenceSimpleSpanProcessor` so callers can swap or compose them
  * with minimal friction. Differences:
  *
- *   - Atrib's processor is a producer: it transforms each TOOL span into
+ *   - atrib's processor is a producer: it transforms each TOOL span into
  *     a signed AtribRecord and forwards to a caller-supplied submission
  *     callback. The Arize processor is a consumer (forwards spans to an
  *     OTLP exporter).
- *   - Atrib's processor requires an Ed25519 private key + creator_key +
+ *   - atrib's processor requires an Ed25519 private key + creator_key +
  *     server_url at construction time. The Arize processor needs none.
- *   - Atrib's processor never throws to the OTel pipeline. Per atrib §5.8
+ *   - atrib's processor never throws to the OTel pipeline. Per atrib §5.8
  *     degradation contract, all errors are caught and logged with the
  *     `atrib:` prefix; the original span continues unaffected.
  *
@@ -176,7 +176,7 @@ export class AtribSpanProcessor implements SpanProcessor {
   }
 
   onStart(_span: Span, _parentContext: Context): void {
-    // Atrib emits at end-of-span (when input + output are both present).
+    // atrib emits at end-of-span (when input + output are both present).
     // No-op on start.
   }
 

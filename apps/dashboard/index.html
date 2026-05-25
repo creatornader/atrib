@@ -101,7 +101,7 @@
     --et-extension: var(--muted);
     --et-extension-subtle: var(--muted-subtle);
     --et-extension-border: rgba(156, 163, 175, 0.25);
-    /* Atrib-system event types (e.g. directory_anchor, byte 0x04 per D056).
+    /* atrib-system event types (e.g. directory_anchor, byte 0x04 per D056).
        Pink sits well outside both the agent-action triad (blue tool_call,
        amber transaction, purple observation) and the verification-badge
        greens, so infrastructure events read as a clearly distinct category.
@@ -4215,7 +4215,7 @@ async function loadForceAtlas2() {
 
 // @sigma/edge-curve, quadratic Bézier edge renderer with auto-fanning of
 // parallel edges (different curvatures so multi-edges between same pair
-// don't visually overlap). Atrib has ~9 edge types and CONVERGES_ON +
+// don't visually overlap). atrib has ~9 edge types and CONVERGES_ON +
 // CHAIN_PRECEDES often connect the same node pair; the straight-line
 // renderer collapses them to a single visible line and loses information.
 // Loaded once per session on first graph render.
@@ -4701,7 +4701,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     widenessToThicknessRatio: 5,
   })
 
-  // @sigma/edge-curve registration. Atrib's graph has multi-edges between
+  // @sigma/edge-curve registration. atrib's graph has multi-edges between
   // the same node pair (e.g., CHAIN_PRECEDES + CONVERGES_ON connecting a
   // transaction to its contributors). The straight-line renderer collapses
   // them to a single visible line and loses information; edge-curve fans

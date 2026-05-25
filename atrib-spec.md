@@ -511,7 +511,7 @@ The decision tree (consumer-facing; producers MUST emit the event_type that matc
    - YES, the new claim supersedes the prior position (the agent no longer holds it) → `revision`. REQUIRES `revises` per [§1.2.9](#129-revises).
    - YES, the new claim comments on, weights, summarizes, or tags the prior record without overturning it → `annotation`. REQUIRES `annotates` per [§1.2.7](#127-annotates).
    - NO (standalone noting, no specific prior record being targeted) → `observation`.
-5. **Otherwise?** → mint or use an extension URI in your namespace per [D035](DECISIONS.md#d035-extensible-event_type-vocabulary-via-uri-typing). Atrib does not gate extension URIs.
+5. **Otherwise?** → mint or use an extension URI in your namespace per [D035](DECISIONS.md#d035-extensible-event_type-vocabulary-via-uri-typing). atrib does not gate extension URIs.
 
 **Common confusion: observation vs annotation.** The structural distinction is *referent*. If the record points at a specific prior record (`annotates` set), it's an annotation. If the record is a standalone noting that may reference sources via `informed_by` but does not pick out a single prior record as its target, it's an observation. A discovery the agent makes during work, with no specific prior record being commented on, is an observation (Example D). A summary of "the trace covered topic Y" pointing at the trace's chain-tail is an annotation (Example F).
 
@@ -752,10 +752,10 @@ In practice this means:
 
 **Recommended discipline (not enforced).** Consumers minting extension URIs SHOULD:
 
-1. Use a domain or `urn:` namespace they own, so the URI identifies a stable owner. Atrib does not validate ownership.
+1. Use a domain or `urn:` namespace they own, so the URI identifies a stable owner. atrib does not validate ownership.
 2. Use a versioned path (e.g., `https://example.com/atrib/v1/types/observation`) so the URI's semantics can evolve under new versions without breaking earlier records.
-3. Publish a human-readable schema document at the URI (or at a related URL) so verifiers that want to interpret the type's content can resolve it. Atrib does not require resolution to succeed; resolution is opt-in.
-4. Treat URIs as opaque identifiers. Two URIs that differ in any byte (including trailing slashes, case, or query parameters) are distinct types. Atrib does not normalize URIs before comparison.
+3. Publish a human-readable schema document at the URI (or at a related URL) so verifiers that want to interpret the type's content can resolve it. atrib does not require resolution to succeed; resolution is opt-in.
+4. Treat URIs as opaque identifiers. Two URIs that differ in any byte (including trailing slashes, case, or query parameters) are distinct types. atrib does not normalize URIs before comparison.
 
 **Validation procedure.** Given a candidate URI string `U`:
 
@@ -766,7 +766,7 @@ In practice this means:
 5. If the scheme is `http` or `https`, verify the URI contains a non-empty host (between the `//` and the next `/`, `?`, or end of string). If not, reject.
 6. Verify `U` does not contain `#`. If it does, reject.
 
-A URI passing all six steps is syntactically valid for use as `event_type`. Atrib normative URIs all pass these checks; conformance fixtures (§spec/conformance/1.4-extension/) include both passing and failing examples for verifier testing.
+A URI passing all six steps is syntactically valid for use as `event_type`. atrib normative URIs all pass these checks; conformance fixtures (§spec/conformance/1.4-extension/) include both passing and failing examples for verifier testing.
 
 **Recognition versus validation.** Validation per this section determines whether a record is structurally well-formed and signature-verifiable. Recognition (whether the URI is in atrib's normative set, in a known extension namespace, or completely unknown) is a separate concern handled at the application layer. Verifiers MAY surface recognition as informational metadata in their output (`event_type_recognized`, `event_type_namespace`, etc.) but MUST NOT use recognition to gate verification.
 
@@ -4176,7 +4176,7 @@ Implementations MUST pass all vectors in [`spec/conformance/6/`](spec/conformanc
 
 **Identity verification beyond signature.** The protocol records claims but does not enforce that subjects are who they say they are. Trust comes from the underlying mechanism (DNS for `domain_verified`, the DID method for `did_resolved`), not from atrib.
 
-**Privacy of unblinded mode.** Atrib's directory is public by design. Anyone can enumerate registered creator_keys and their claims. This matches the public log model. The VRF-blinded variant of AKD is available for downstream consumers (separate spec) where label-to-value lookup must be hidden from the directory operator.
+**Privacy of unblinded mode.** atrib's directory is public by design. Anyone can enumerate registered creator_keys and their claims. This matches the public log model. The VRF-blinded variant of AKD is available for downstream consumers (separate spec) where label-to-value lookup must be hidden from the directory operator.
 
 **Directory-key rotation.** The directory operator's signing key has the same rotation problem as the log key. Same V2 deferral.
 

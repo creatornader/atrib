@@ -60,7 +60,7 @@ export interface EntryInput {
 
 /**
  * Map an event_type URI to the byte slot used by the binary log entry (spec 2.3.1).
- * Atrib normative URIs map to dedicated bytes; everything else maps to 0xFF (extension).
+ * atrib normative URIs map to dedicated bytes; everything else maps to 0xFF (extension).
  */
 export function eventTypeUriToByte(uri: string): number {
   switch (uri) {

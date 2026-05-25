@@ -188,7 +188,7 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
   }
 
   onStart(_span: Span, _parentContext: Context): void {
-    // No-op. Atrib emits at end-of-span.
+    // No-op. atrib emits at end-of-span.
   }
 
   onEnd(span: ReadableSpan): void {
