@@ -28,6 +28,14 @@ export const ToolOverrideSchema = z.object({
 
 export type ToolOverride = z.infer<typeof ToolOverrideSchema>
 
+export const DisclosureSchema = z.object({
+  tool_name: z.enum(['omit', 'verbatim', 'hashed']).optional(),
+  args: z.enum(['omit', 'plain-sha256', 'salted-sha256']).optional(),
+  result: z.enum(['omit', 'plain-sha256', 'salted-sha256']).optional(),
+})
+
+export type DisclosureConfig = z.infer<typeof DisclosureSchema>
+
 export const WrapConfigSchema = z.object({
   /**
    * Logical name for THIS wrapped server. Used in:
@@ -91,6 +99,17 @@ export const WrapConfigSchema = z.object({
    * behavior (signed as tool_call records, no receipt injection).
    */
   tools: z.record(z.string(), ToolOverrideSchema).optional(),
+
+  /**
+   * Optional signed disclosure controls passed through to @atrib/mcp.
+   * Defaults preserve §8.1: no tool_name, args_hash, or result_hash.
+   *
+   * `result` disclosure is incompatible with tools that use
+   * `injectReceiptId`, because those records are signed before the upstream
+   * result exists. @atrib/mcp logs a warning and omits result_hash on that
+   * pre-call path.
+   */
+  disclosure: DisclosureSchema.optional(),
 
   /**
    * File paths. Both default to `~/.atrib/{logs,records}/<name>.{log,jsonl}`.
