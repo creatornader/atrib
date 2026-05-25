@@ -147,7 +147,24 @@ describe('buildAndSignEmitRecord', () => {
     expect(await verifyRecord(record)).toBe(true)
   })
 
-  it('omits tool_name and args_hash when not supplied (presence affects JCS)', async () => {
+  it('carries result_hash when supplied (§8.3 commitment)', async () => {
+    const seed = await freshKey()
+    const probeHash = 'sha256:' + 'f'.repeat(64)
+    const record = await buildAndSignEmitRecord({
+      privateKey: seed,
+      eventType: 'https://atrib.dev/v1/types/tool_call',
+      contextId: 'c'.repeat(32),
+      chainRoot: 'sha256:' + 'd'.repeat(64),
+      content: { tool: 'Edit', target: 'src/foo.py' },
+      resultHash: probeHash,
+    })
+
+    const r = record as AtribRecord & { result_hash?: string }
+    expect(r.result_hash).toBe(probeHash)
+    expect(await verifyRecord(record)).toBe(true)
+  })
+
+  it('omits tool_name, args_hash, and result_hash when not supplied (presence affects JCS)', async () => {
     const seed = await freshKey()
     const record = await buildAndSignEmitRecord({
       privateKey: seed,
@@ -159,6 +176,7 @@ describe('buildAndSignEmitRecord', () => {
 
     expect(record).not.toHaveProperty('tool_name')
     expect(record).not.toHaveProperty('args_hash')
+    expect(record).not.toHaveProperty('result_hash')
   })
 
   it('record_hash is stable for identical inputs at the same timestamp', async () => {

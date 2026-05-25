@@ -20,7 +20,6 @@ import { z } from 'zod'
 import {
   resolveEnvContextId,
   logReadPrimitiveCall,
-  extractRecordHashesFromMcpResult,
 } from '@atrib/mcp'
 import { loadAllRecords } from './storage.js'
 import { traceBackward, traceForward, type TraceVisited } from './trace.js'
@@ -40,8 +39,9 @@ const TraceInput = z.object({
     'the env-var level to walk cross-context. Used by Inspect-style ' +
     'harnesses to keep each arm\'s trace inside its own context per D072.',
   ),
-  depth: z.number().int().min(1).max(10).optional().describe(
-    'Maximum hop count from the starting record. Defaults to 3. Bounded ' +
+  depth: z.number().int().min(0).max(10).optional().describe(
+    'Maximum hop count from the starting record. Use 0 to return only ' +
+    'the start record. Defaults to 3. Bounded ' +
     'at 10 to keep responses tractable; deeper chains should be walked ' +
     'in pieces by re-rooting at a returned upstream hash.',
   ),
@@ -54,6 +54,11 @@ const TraceInput = z.object({
     'When true (the default), per-record output omits signature/content_id/' +
     'spec_version/chain_root to keep the response small. Set false for full ' +
     'record bytes (useful for re-verification).',
+  ),
+  include_content: z.boolean().optional().describe(
+    'When true and compact=true, include the D062 local mirror body as ' +
+    'local_content and local_producer on each visited record. Defaults false ' +
+    'so trace stays cheap for ordinary causal walks.',
   ),
 })
 
@@ -93,6 +98,14 @@ interface CompactVisited {
     importance?: string
     producer?: string
   }
+  /** Signed structural disclosures, surfaced when present on the record. */
+  informed_by?: string[]
+  tool_name?: string
+  args_hash?: string
+  result_hash?: string
+  /** D062 local mirror body, included only when include_content=true. */
+  local_content?: unknown
+  local_producer?: string
 }
 
 /** Pull a compact summary from the sidecar's content payload.
@@ -136,13 +149,15 @@ export function summarizeSidecar(
   return Object.keys(out).length === 0 ? undefined : out
 }
 
-function compactVisited(
+export function compactVisited(
   v: TraceVisited,
   danglingSet: Set<string>,
   byHash: Map<string, import('./storage.js').IndexedRecord>,
+  includeContent: boolean,
 ): CompactVisited {
   const indexed = byHash.get(v.record_hash)
-  return {
+  const record = v.record
+  const out: CompactVisited = {
     depth: v.depth,
     record_hash: v.record_hash,
     parent_hashes: v.parent_hashes,
@@ -155,6 +170,57 @@ function compactVisited(
     next_resolved: v.next_informed_by.filter((h) => !danglingSet.has(h)),
     next_dangling: v.next_informed_by.filter((h) => danglingSet.has(h)),
     ...(summarizeSidecar(indexed) ? { sidecar_summary: summarizeSidecar(indexed) } : {}),
+  }
+  if (record) {
+    const informedBy = (record as typeof record & { informed_by?: string[] }).informed_by
+    const toolName = (record as typeof record & { tool_name?: string }).tool_name
+    const argsHash = (record as typeof record & { args_hash?: string }).args_hash
+    const resultHash = (record as typeof record & { result_hash?: string }).result_hash
+    if (Array.isArray(informedBy) && informedBy.length > 0) out.informed_by = informedBy
+    if (toolName) out.tool_name = toolName
+    if (argsHash) out.args_hash = argsHash
+    if (resultHash) out.result_hash = resultHash
+  }
+  if (includeContent && indexed?.local?.content !== undefined) {
+    out.local_content = indexed.local.content
+  }
+  if (includeContent && indexed?.local?.producer !== undefined) {
+    out.local_producer = indexed.local.producer
+  }
+  return out
+}
+
+export function extractRecordHashFieldsFromMcpResult(result: unknown): string[] {
+  const seen = new Set<string>()
+  const pattern = /^sha256:[0-9a-f]{64}$/
+  const content = (result as { content?: unknown })?.content
+  const text =
+    Array.isArray(content) && typeof (content[0] as { text?: unknown } | undefined)?.text === 'string'
+      ? ((content[0] as { text: string }).text)
+      : undefined
+  let root: unknown = result
+  if (text) {
+    try {
+      root = JSON.parse(text)
+    } catch {
+      root = result
+    }
+  }
+  walk(root)
+  return Array.from(seen)
+
+  function walk(node: unknown): void {
+    if (node === null || node === undefined) return
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item)
+      return
+    }
+    if (typeof node !== 'object') return
+    const obj = node as Record<string, unknown>
+    if (typeof obj.record_hash === 'string' && pattern.test(obj.record_hash)) {
+      seen.add(obj.record_hash)
+    }
+    for (const value of Object.values(obj)) walk(value)
   }
 }
 
@@ -173,6 +239,7 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
     result: ReturnType<typeof traceBackward>,
     byHash: Map<string, import('./storage.js').IndexedRecord>,
     compact: boolean,
+    includeContent: boolean,
   ) {
     const danglingSet = new Set(result.dangling)
     return compact
@@ -181,7 +248,7 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
           direction: result.direction,
           depth_requested: result.depth_requested,
           depth_reached: result.depth_reached,
-          visited: result.visited.map((v) => compactVisited(v, danglingSet, byHash)),
+          visited: result.visited.map((v) => compactVisited(v, danglingSet, byHash, includeContent)),
           dangling: result.dangling,
           truncated_by_depth: result.truncated_by_depth,
           truncated_by_cap: result.truncated_by_cap,
@@ -212,6 +279,7 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
           const depth = args.depth ?? 3
           const maxNodes = args.max_nodes ?? 200
           const compact = args.compact ?? true
+          const includeContent = args.include_content ?? false
 
           // Env-var context_id default: when the caller omitted context_id,
           // fall back to @atrib/mcp's resolveEnvContextId (D078 + D083
@@ -225,10 +293,10 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
             ...(contextId ? { contextId } : {}),
           })
           return {
-            content: [{ type: 'text', text: JSON.stringify(buildPayload(result, byHash, compact), null, 2) }],
+            content: [{ type: 'text', text: JSON.stringify(buildPayload(result, byHash, compact, includeContent), null, 2) }],
           }
         },
-        extractRecordHashesFromMcpResult,
+        extractRecordHashFieldsFromMcpResult,
       ),
   )
 
@@ -257,6 +325,7 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
           const depth = args.depth ?? 3
           const maxNodes = args.max_nodes ?? 200
           const compact = args.compact ?? true
+          const includeContent = args.include_content ?? false
           const contextId = args.context_id ?? resolveEnvContextId()
           const { byHash } = loadAllRecords()
           const result = traceForward(args.record_hash, depth, byHash, {
@@ -264,10 +333,10 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
             ...(contextId ? { contextId } : {}),
           })
           return {
-            content: [{ type: 'text', text: JSON.stringify(buildPayload(result, byHash, compact), null, 2) }],
+            content: [{ type: 'text', text: JSON.stringify(buildPayload(result, byHash, compact, includeContent), null, 2) }],
           }
         },
-        extractRecordHashesFromMcpResult,
+        extractRecordHashFieldsFromMcpResult,
       ),
   )
 
