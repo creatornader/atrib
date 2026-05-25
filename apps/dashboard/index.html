@@ -2345,7 +2345,7 @@ function updatePulseStrip(stats, checkpoint, recent = null) {
     ? `${formatCount(cp.treeSize)} records protected${checkpointTreeMatches ? '' : ' at snapshot'}`
     : cp.error || 'checkpoint unavailable'
   const snapshotTitle = cp.rootHash
-    ? `Signed log snapshot from ${cp.origin || 'log'} at tree size ${formatCount(cp.treeSize)}. Open anchoring details for the checkpoint proof.`
+    ? `Signed snapshot from ${cp.origin || 'the log'} at tree size ${formatCount(cp.treeSize)}. Open anchoring details for the checkpoint proof.`
     : 'Open anchoring details'
   strip.replaceChildren(
     pulseStat('signed records', formatCount(stats.tree_size), 'committed to the log'),
