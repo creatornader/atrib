@@ -101,6 +101,19 @@ All hashes in the response are standard base64 (RFC 4648 §4, with padding), mat
 
 Returns the latest signed checkpoint as `text/plain` in C2SP signed-note format. Includes the current tree size and root hash signed by the log's Ed25519 key.
 
+## Operator recovery
+
+Producer mirrors can contain entries shaped as `{ record, proof: null, _local }` when a record was signed and mirrored locally but log submission exceeded the producer flush deadline. Use the proof-null replay script to audit those records and append only the ones absent from the log.
+
+The script is scan-only by default. Set `SUBMIT=1` to append missing records.
+
+```bash
+pnpm --filter @atrib/log-node replay-proof-null
+
+SUBMIT=1 RECORD_HASH=sha256:<64-hex> \
+  pnpm --filter @atrib/log-node replay-proof-null
+```
+
 ## Tests
 
 38 tests across 5 files covering entry serialization, Merkle tree correctness, checkpoint signing and parsing, HTTP server behavior, and end-to-end proof verification.

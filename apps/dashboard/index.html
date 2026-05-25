@@ -1979,9 +1979,9 @@ const EVENT_TYPE_INFO = {
     description: 'A URI-defined event outside the core byte vocabulary.',
   },
   dangling_node: {
-    label: 'gap',
-    noun: 'gap node',
-    description: 'A referenced record was not available in this graph response.',
+    label: 'reference',
+    noun: 'reference placeholder',
+    description: 'A referenced record is outside this graph response or missing from the log.',
   },
   reserved: {
     label: 'reserved',
@@ -2004,6 +2004,46 @@ function pluralEventLabel(label, count) {
   if (label.endsWith('y')) return `${label.slice(0, -1)}ies`
   if (label.endsWith('s')) return label
   return `${label}s`
+}
+
+function referenceStatusLabel(status) {
+  if (status === 'external') return 'external reference'
+  if (status === 'missing') return 'missing reference'
+  return 'unresolved reference'
+}
+
+function referenceHashFromId(id) {
+  if (typeof id !== 'string') return ''
+  if (id.startsWith('dangling:sha256:')) return id.slice('dangling:'.length)
+  return ''
+}
+
+function referenceHashFromNode(node) {
+  return node?.reference_hash || referenceHashFromId(node?.id)
+}
+
+function referenceHashFromEdge(edge) {
+  return edge?.reference_hash || referenceHashFromId(edge?.target)
+}
+
+function summarizeReferenceEdges(edges = []) {
+  const counts = { external: 0, missing: 0, unresolved: 0 }
+  for (const edge of edges) {
+    if (!edge || edge.dangling !== true) continue
+    const status = edge.reference_status || 'unresolved'
+    if (status === 'external') counts.external += 1
+    else if (status === 'missing') counts.missing += 1
+    else counts.unresolved += 1
+  }
+  return counts
+}
+
+function formatReferenceSummary(counts) {
+  const parts = []
+  if (counts.external > 0) parts.push(`${counts.external} external ${counts.external === 1 ? 'ref' : 'refs'}`)
+  if (counts.missing > 0) parts.push(`${counts.missing} missing ${counts.missing === 1 ? 'ref' : 'refs'}`)
+  if (counts.unresolved > 0) parts.push(`${counts.unresolved} unresolved ${counts.unresolved === 1 ? 'ref' : 'refs'}`)
+  return parts.join(' · ')
 }
 
 function eventTypeInfo(eventType, creatorKey = null, eventTypeUri = null) {
@@ -3849,8 +3889,8 @@ async function renderSession(contextId) {
       el('span', { class: 'legend-label' }, 'edges'),
       edgeLegendRow,
     )
-    const danglingCount = graph.edges.filter((e) => e.dangling === true).length
-    const meta = `${graph.nodes.length} nodes · ${graph.edges.length} edges${danglingCount > 0 ? ` · ${danglingCount} dangling` : ''} · §3.2.4`
+    const referenceSummary = formatReferenceSummary(summarizeReferenceEdges(graph.edges))
+    const meta = `${graph.nodes.length} nodes · ${graph.edges.length} edges${referenceSummary ? ` · ${referenceSummary}` : ''} · §3.2.4`
 
     root.append(el('section', { class: 'panel flush' },
       el('div', { class: 'panel-head' },
@@ -3885,7 +3925,18 @@ async function renderSession(contextId) {
     el('td', {}, renderEventChip(n.event_type, n.creator_key, n.event_type_uri)),
     el('td', {},
       n.event_type === 'dangling_node'
-        ? el('span', { class: 'mono', title: 'unresolved reference (synthetic placeholder)' }, shorten(n.id, 13, 4))
+        ? (() => {
+            const refHash = referenceHashFromNode(n)
+            const status = n.reference_status || 'unresolved'
+            const label = refHash || n.id
+            const attrs = {
+              class: 'mono',
+              title: `${referenceStatusLabel(status)} (synthetic placeholder)`,
+            }
+            return status === 'external' && refHash
+              ? el('a', { href: `#/action/${refHash}` }, el('span', attrs, shorten(label, 13, 4)))
+              : el('span', attrs, shorten(label, 13, 4))
+          })()
         : el('a', { href: `#/action/${n.id}` },
             el('span', { class: 'mono' }, shorten(n.id, 13, 4)),
           )),
@@ -3940,23 +3991,31 @@ async function renderSession(contextId) {
   ))
 
   // Edges table, only when graph-node returned edges. The graph encodes
-  // type / source / target visually, but the table preserves the per-edge
-  // dangling marker (§3.2.4 step 6/7) which the current Sigma rendering
-  // doesn't visually distinguish (left for a later polish pass).
+  // type / source / target visually, but the table preserves whether a
+  // synthetic reference target is external, missing, or unresolved.
   if (hasEdges) {
-    const danglingCount = graph.edges.filter((e) => e.dangling === true).length
+    const referenceSummary = formatReferenceSummary(summarizeReferenceEdges(graph.edges))
     const renderTarget = e => e.dangling
-      ? el('span', { class: 'mono', title: e.reason || 'dangling reference' },
-          shorten(e.target, 10, 4),
-          el('span', { class: 'chip event-dangling_node', style: 'margin-left: 6px;' }, 'dangling'))
+      ? (() => {
+          const status = e.reference_status || 'unresolved'
+          const refHash = referenceHashFromEdge(e)
+          const label = refHash || e.target
+          const chip = el('span', { class: 'chip event-dangling_node', style: 'margin-left: 6px;' }, status === 'external' ? 'external' : status)
+          const attrs = { class: 'mono', title: e.reason || referenceStatusLabel(status) }
+          return status === 'external' && refHash
+            ? el('span', attrs,
+                el('a', { href: `#/action/${refHash}` }, shorten(label, 10, 4)),
+                chip)
+            : el('span', attrs, shorten(label, 10, 4), chip)
+        })()
       : el('a', { href: `#/action/${e.target}` },
           el('span', { class: 'mono' }, shorten(e.target, 10, 4)))
     root.append(el('section', { class: 'feed-wrap', style: 'margin-top: 24px;' },
       el('div', { class: 'feed-head' },
         el('h2', {}, `edges (${graph.edges.length})`),
         el('span', { class: 'meta' },
-          danglingCount > 0
-            ? `9 deterministic types per §3.2.3, ${danglingCount} dangling`
+          referenceSummary
+            ? `9 deterministic types per §3.2.3, ${referenceSummary}`
             : '9 deterministic types per §3.2.3'),
       ),
       el('div', {},
@@ -4281,10 +4340,11 @@ function eventTypeColor(eventType) {
     directory_anchor: '--et-system',
     extension: '--muted',
     gap_node: '--et-dangling',
+    dangling_node: '--et-dangling',
   }
   return _cssVar(map[eventType] || '--muted', '#9ca3af')
 }
-function graphNodeKindLabel(eventType) {
+function graphNodeKindLabel(eventType, node = null) {
   const labels = {
     tool_call: 'tool call',
     transaction: 'transaction',
@@ -4294,14 +4354,16 @@ function graphNodeKindLabel(eventType) {
     directory_anchor: 'directory anchor',
     extension: 'extension record',
     gap_node: 'unresolved reference',
-    dangling_node: 'unresolved reference',
+    dangling_node: referenceStatusLabel(node?.reference_status || 'unresolved'),
   }
   return labels[eventType] || (eventType ? eventType.replaceAll('_', ' ') : 'record')
 }
 function graphNodeRecordHash(node) {
   if (!node) return ''
+  if (node.reference_hash) return node.reference_hash
   if (node.record_hash) return node.record_hash
   if (!node.id) return ''
+  if (node.id.startsWith('dangling:sha256:')) return node.id.slice('dangling:'.length)
   return node.id.startsWith('sha256:') ? node.id : `sha256:${node.id}`
 }
 // Edge color is keyed by edge_type, distinct vocabulary from node event_type.
@@ -4546,7 +4608,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     const centrality = degree / centralityDenom
     const size = computeNodeSizeFromCentrality(n, isFocal, centrality, nodeSize, focalSize)
     const labelHash = graphNodeRecordHash(n)
-    const kindLabel = graphNodeKindLabel(n.event_type)
+    const kindLabel = graphNodeKindLabel(n.event_type, n)
 
     gx.addNode(n.id, {
       x: 0, y: 0,

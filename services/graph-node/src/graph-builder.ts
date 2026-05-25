@@ -35,6 +35,8 @@ import type {
   GraphResponse,
   GapNode,
   VerificationState,
+  EventType,
+  ReferenceStatus,
 } from '@atrib/verify'
 import { graphLabelFromEventTypeUri, applyRevocation } from '@atrib/verify'
 import type { RevocationEntry } from '@atrib/verify'
@@ -91,6 +93,27 @@ export interface BuildGraphOptions {
    * preserves the load-bearing temporal links across chain boundaries.
    */
   compactIntraSessionEdges?: boolean
+  /**
+   * Optional global lookup for record-hash references that are outside the
+   * current graph response. When supplied, synthetic reference placeholders
+   * can distinguish external records from truly missing records.
+   */
+  resolveRecordReference?: (recordHashHex: string) => ReferenceTarget | null
+  /**
+   * Optional global lookup for provenance_token references that are outside
+   * the current graph response.
+   */
+  resolveProvenanceReference?: (token16: string, sourceContextId: string) => ReferenceTarget | null
+}
+
+export interface ReferenceTarget {
+  record_hash: string
+  event_type: EventType
+  event_type_uri: string | null
+  creator_key: string | null
+  context_id: string
+  timestamp: number
+  log_index: number | null
 }
 
 /** Build an attribution graph from records and gap nodes. */
@@ -377,28 +400,71 @@ export async function buildGraph(
     }
   }
 
-  // Per §3.2.4 step 6 + 7: lazy creation of synthetic dangling nodes for
-  // unresolved INFORMED_BY / PROVENANCE_OF references. Created at most once
-  // per missing reference; subsequent edges to the same dangling target
-  // reuse the same node.
-  const ensureDanglingNode = (id: string): void => {
+  // Per §3.2.4 steps 6-9: lazy creation of synthetic reference nodes for
+  // targets absent from the current resolved set. If the caller supplies a
+  // global resolver, the placeholder can tell clients whether the target is
+  // merely out-of-scope or genuinely missing from the graph service.
+  const ensureReferenceNode = (
+    id: string,
+    status: ReferenceStatus,
+    ref: { hash?: string; token?: string },
+    target?: ReferenceTarget,
+  ): void => {
     if (nodeById.has(id)) return
     const node: GraphNode = {
       id,
       event_type: 'dangling_node',
       event_type_uri: null,
       content_id: null,
-      creator_key: null,
+      creator_key: target?.creator_key ?? null,
       chain_root: null,
-      context_id: '',
-      timestamp: 0,
-      log_index: null,
-      verification_state: 'unsigned',
+      context_id: target?.context_id ?? '',
+      timestamp: target?.timestamp ?? 0,
+      log_index: target?.log_index ?? null,
+      verification_state: target
+        ? (target.log_index === null ? 'signature_valid' : 'log_committed')
+        : 'unsigned',
       is_genesis: false,
+      reference_status: status,
+      ...(ref.hash ? { reference_hash: ref.hash } : {}),
+      ...(ref.token ? { reference_token: ref.token } : {}),
+      reference_context_id: target?.context_id ?? null,
+      reference_event_type: target?.event_type ?? null,
+      reference_log_index: target?.log_index ?? null,
     }
     nodes.push(node)
     nodeById.set(id, node)
   }
+
+  const classifyRecordReference = (refHash: string): { status: ReferenceStatus; target?: ReferenceTarget; reason?: string } => {
+    const target = options.resolveRecordReference?.(refHash)
+    if (target) return { status: 'external', target, reason: 'target_out_of_scope' }
+    if (options.resolveRecordReference) return { status: 'missing', reason: 'target_not_found' }
+    return { status: 'unresolved' }
+  }
+
+  const classifyProvenanceReference = (token16: string, sourceContextId: string): { status: ReferenceStatus; target?: ReferenceTarget; reason?: string } => {
+    const target = options.resolveProvenanceReference?.(token16, sourceContextId)
+    if (target) return { status: 'external', target, reason: 'target_out_of_scope' }
+    if (options.resolveProvenanceReference) return { status: 'missing', reason: 'target_not_found' }
+    return { status: 'unresolved', reason: 'no_token_source_in_record_set' }
+  }
+
+  const danglingEdgeFields = (
+    status: ReferenceStatus,
+    ref: { hash?: string; token?: string },
+    target?: ReferenceTarget,
+    reason?: string,
+  ): Pick<GraphEdge, 'dangling' | 'reference_status' | 'reference_hash' | 'reference_token' | 'reference_context_id' | 'reference_event_type' | 'reference_log_index' | 'reason'> => ({
+    dangling: true,
+    reference_status: status,
+    ...(ref.hash ? { reference_hash: ref.hash } : {}),
+    ...(ref.token ? { reference_token: ref.token } : {}),
+    reference_context_id: target?.context_id ?? null,
+    reference_event_type: target?.event_type ?? null,
+    reference_log_index: target?.log_index ?? null,
+    ...(reason ? { reason } : {}),
+  })
 
   // Step 6: INFORMED_BY (D041, spec §3.2.4)
   // For each record A with a non-empty informed_by array, create one
@@ -418,13 +484,14 @@ export async function buildGraph(
         edges.push({ type: 'INFORMED_BY', source: sourceId, target: targetId, directed: true })
       } else {
         const danglingId = `dangling:${ref}`
-        ensureDanglingNode(danglingId)
+        const classified = classifyRecordReference(refHash)
+        ensureReferenceNode(danglingId, classified.status, { hash: ref }, classified.target)
         edges.push({
           type: 'INFORMED_BY',
           source: sourceId,
           target: danglingId,
           directed: true,
-          dangling: true,
+          ...danglingEdgeFields(classified.status, { hash: ref }, classified.target, classified.reason),
         })
       }
     }
@@ -459,14 +526,19 @@ export async function buildGraph(
       })
     } else {
       const danglingId = `dangling:provenance:${provenanceToken}`
-      ensureDanglingNode(danglingId)
+      const classified = classifyProvenanceReference(provenanceToken, record.context_id)
+      ensureReferenceNode(danglingId, classified.status, { token: provenanceToken }, classified.target)
       edges.push({
         type: 'PROVENANCE_OF',
         source: sourceId,
         target: danglingId,
         directed: true,
-        dangling: true,
-        reason: 'no_token_source_in_record_set',
+        ...danglingEdgeFields(
+          classified.status,
+          { token: provenanceToken },
+          classified.target,
+          classified.reason ?? 'no_token_source_in_record_set',
+        ),
       })
     }
   }
@@ -493,13 +565,14 @@ export async function buildGraph(
       edges.push({ type: 'ANNOTATES', source: sourceId, target: targetId, directed: true })
     } else {
       const danglingId = `dangling:${annotates}`
-      ensureDanglingNode(danglingId)
+      const classified = classifyRecordReference(targetHash)
+      ensureReferenceNode(danglingId, classified.status, { hash: annotates }, classified.target)
       edges.push({
         type: 'ANNOTATES',
         source: sourceId,
         target: danglingId,
         directed: true,
-        dangling: true,
+        ...danglingEdgeFields(classified.status, { hash: annotates }, classified.target, classified.reason),
       })
     }
   }
@@ -527,13 +600,14 @@ export async function buildGraph(
       edges.push({ type: 'REVISES', source: sourceId, target: targetId, directed: true })
     } else {
       const danglingId = `dangling:${revises}`
-      ensureDanglingNode(danglingId)
+      const classified = classifyRecordReference(targetHash)
+      ensureReferenceNode(danglingId, classified.status, { hash: revises }, classified.target)
       edges.push({
         type: 'REVISES',
         source: sourceId,
         target: danglingId,
         directed: true,
-        dangling: true,
+        ...danglingEdgeFields(classified.status, { hash: revises }, classified.target, classified.reason),
       })
     }
   }

@@ -5,9 +5,15 @@
  * Indexes records by context_id and creator_key for fast lookups.
  */
 
-import { canonicalRecord, sha256, hexEncode } from '@atrib/mcp'
+import { canonicalRecord, sha256, hexEncode, base64urlEncode } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import type { GapNode } from './graph-builder.js'
+
+export interface StoredRecordReference {
+  record: AtribRecord
+  record_hash: string
+  log_index: number | null
+}
 
 export interface RecordStore {
   /**
@@ -38,6 +44,10 @@ export interface RecordStore {
   getRecordCount(): number
   /** log_index for a specific record_hash, or null if unknown. */
   getLogIndex(recordHashHex: string): number | null
+  /** Stored record for a specific record_hash, or null if absent. */
+  getRecordByHash(recordHashHex: string): StoredRecordReference | null
+  /** Stored record whose first 16 hash bytes match a provenance token. */
+  getRecordByToken16(token16: string, excludeContextId?: string): StoredRecordReference | null
 }
 
 export interface SessionSummary {
@@ -72,13 +82,16 @@ export function createRecordStore(): RecordStore {
   // node in the graph, which §3.2.4 derivation then connects with extra edges.
   const seenRecordHashes = new Set<string>()
   const logIndexByHash = new Map<string, number>()
+  const recordByHash = new Map<string, { record: AtribRecord; recordHash: string; token16: string }>()
+  const hashesByToken16 = new Map<string, string[]>()
   // Insertion order is the iteration order; flat list mirrors what the log
   // would return. Enables global scans (e.g. for the revocation registry).
-  const allRecords: { record: AtribRecord; recordHash: string }[] = []
+  const allRecords: { record: AtribRecord; recordHash: string; token16: string }[] = []
 
   return {
     addRecord(record: AtribRecord, logIndex?: number): boolean {
-      const recordHash = hexEncode(sha256(canonicalRecord(record)))
+      const digest = sha256(canonicalRecord(record))
+      const recordHash = hexEncode(digest)
       if (seenRecordHashes.has(recordHash)) {
         // If the record was previously ingested without a log_index but is
         // now being re-ingested WITH one (e.g., backfill), record the index.
@@ -89,7 +102,12 @@ export function createRecordStore(): RecordStore {
       }
       seenRecordHashes.add(recordHash)
       if (typeof logIndex === 'number') logIndexByHash.set(recordHash, logIndex)
-      allRecords.push({ record, recordHash })
+      const token16 = base64urlEncode(digest.slice(0, 16))
+      allRecords.push({ record, recordHash, token16 })
+      recordByHash.set(recordHash, { record, recordHash, token16 })
+      const tokenHashes = hashesByToken16.get(token16) ?? []
+      tokenHashes.push(recordHash)
+      hashesByToken16.set(token16, tokenHashes)
 
       const list = byContext.get(record.context_id) ?? []
       list.push(record)
@@ -175,6 +193,31 @@ export function createRecordStore(): RecordStore {
 
     getLogIndex(recordHashHex: string): number | null {
       return logIndexByHash.get(recordHashHex) ?? null
+    },
+
+    getRecordByHash(recordHashHex: string): StoredRecordReference | null {
+      const stored = recordByHash.get(recordHashHex)
+      if (!stored) return null
+      return {
+        record: stored.record,
+        record_hash: `sha256:${stored.recordHash}`,
+        log_index: logIndexByHash.get(stored.recordHash) ?? null,
+      }
+    },
+
+    getRecordByToken16(token16: string, excludeContextId?: string): StoredRecordReference | null {
+      const hashes = hashesByToken16.get(token16) ?? []
+      for (const hash of hashes) {
+        const stored = recordByHash.get(hash)
+        if (!stored) continue
+        if (excludeContextId && stored.record.context_id === excludeContextId) continue
+        return {
+          record: stored.record,
+          record_hash: `sha256:${stored.recordHash}`,
+          log_index: logIndexByHash.get(stored.recordHash) ?? null,
+        }
+      }
+      return null
     },
   }
 }

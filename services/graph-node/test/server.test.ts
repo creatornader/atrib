@@ -7,10 +7,14 @@ import {
   signRecord,
   getPublicKey,
   genesisChainRoot,
+  canonicalRecord,
+  sha256,
+  hexEncode,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 
 const TEST_KEY = new Uint8Array(32).fill(42)
+const SECOND_TEST_KEY = new Uint8Array(32).fill(43)
 const CONTEXT_ID = 'b'.repeat(32)
 
 async function makeRecord(overrides: Partial<{
@@ -18,8 +22,11 @@ async function makeRecord(overrides: Partial<{
   event_type: string
   timestamp: number
   content_id: string
+  informed_by: string[]
+  key: Uint8Array
 }> = {}) {
-  const pk = await getPublicKey(TEST_KEY)
+  const key = overrides.key ?? TEST_KEY
+  const pk = await getPublicKey(key)
   const record = {
     spec_version: 'atrib/1.0' as const,
     content_id: overrides.content_id ?? `sha256:${'c'.repeat(64)}`,
@@ -29,8 +36,9 @@ async function makeRecord(overrides: Partial<{
     context_id: overrides.context_id ?? CONTEXT_ID,
     timestamp: overrides.timestamp ?? Date.now(),
     signature: '',
+    ...(overrides.informed_by ? { informed_by: overrides.informed_by } : {}),
   }
-  return signRecord(record, TEST_KEY)
+  return signRecord(record, key)
 }
 
 describe('graph-node server (section 3.4)', () => {
@@ -83,6 +91,57 @@ describe('graph-node server (section 3.4)', () => {
     expect(body.nodes[0].chain_root).toBeUndefined()
     expect(body.nodes[0].log_index).toBeUndefined()
     expect(body.nodes[0].is_genesis).toBeUndefined()
+  })
+
+  it('GET /v1/graph/:context_id classifies out-of-session references as external', async () => {
+    const externalCtx = '8'.repeat(32)
+    const localCtx = '9'.repeat(32)
+    const external = await makeRecord({
+      key: SECOND_TEST_KEY,
+      context_id: externalCtx,
+      timestamp: 10_000,
+      content_id: `sha256:${'8'.repeat(64)}`,
+    })
+    const externalHash = hexEncode(sha256(canonicalRecord(external)))
+    const local = await makeRecord({
+      key: SECOND_TEST_KEY,
+      context_id: localCtx,
+      timestamp: 20_000,
+      content_id: `sha256:${'9'.repeat(64)}`,
+      informed_by: [`sha256:${externalHash}`],
+    })
+
+    for (const [record, index] of [[external, 200], [local, 201]] as const) {
+      const post = await fetch(`${url}/v1/ingest`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-atrib-log-index': String(index) },
+        body: JSON.stringify(record),
+      })
+      expect(post.ok).toBe(true)
+    }
+
+    const res = await fetch(`${url}/v1/graph/${localCtx}?shape=compact`)
+    expect(res.ok).toBe(true)
+    const body = await res.json()
+    const edge = body.edges.find((e: { type: string }) => e.type === 'INFORMED_BY')
+    expect(edge).toMatchObject({
+      dangling: true,
+      reference_status: 'external',
+      reference_hash: `sha256:${externalHash}`,
+      reference_context_id: externalCtx,
+      reference_event_type: 'tool_call',
+      reference_log_index: 200,
+      reason: 'target_out_of_scope',
+    })
+    const placeholder = body.nodes.find((n: { id: string }) => n.id === edge.target)
+    expect(placeholder).toMatchObject({
+      event_type: 'dangling_node',
+      reference_status: 'external',
+      reference_hash: `sha256:${externalHash}`,
+      reference_context_id: externalCtx,
+      reference_event_type: 'tool_call',
+      reference_log_index: 200,
+    })
   })
 
   it('GET /v1/graph/:context_id/nodes returns nodes only', async () => {
