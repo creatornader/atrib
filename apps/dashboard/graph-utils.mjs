@@ -393,6 +393,23 @@ export function buildReplayGraphFromEntries(entries, options = {}) {
 }
 
 /**
+ * Stable signature for deciding whether a demo graph's structure changed.
+ * Node and edge order do not matter; only node ids and edge triples do.
+ */
+export function computeDemoGraphSignature(graph) {
+  const nodes = Array.isArray(graph?.nodes)
+    ? graph.nodes.map((node) => node.id).sort().join('|')
+    : ''
+  const edges = Array.isArray(graph?.edges)
+    ? graph.edges
+        .map((edge) => `${edge.source}>${edge.target}:${edge.type}`)
+        .sort()
+        .join('|')
+    : ''
+  return `${nodes}::${edges}`
+}
+
+/**
  * Deterministic visual lane offset for the live demo replay.
  *
  * The demo route must not invent edges, but chain-only sessions still

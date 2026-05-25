@@ -33,6 +33,7 @@ import {
   computeGraphBBox,
   computeNeighborhood,
   buildReplayGraphFromEntries,
+  computeDemoGraphSignature,
   computeDemoLaneOffset,
 } from '../graph-utils.mjs'
 
@@ -632,6 +633,28 @@ describe('buildReplayGraphFromEntries', () => {
 
     expect(replay.nodes.map((node) => node.id)).toEqual(['ok'])
     expect(replay.edges).toEqual([])
+  })
+})
+
+describe('computeDemoGraphSignature', () => {
+  it('returns the same signature when node and edge order changes', () => {
+    const a = {
+      nodes: [n('b'), n('a')],
+      edges: [e('a', 'b', 'CHAIN_PRECEDES'), e('b', 'a', 'ANNOTATES')],
+    }
+    const b = {
+      nodes: [n('a'), n('b')],
+      edges: [e('b', 'a', 'ANNOTATES'), e('a', 'b', 'CHAIN_PRECEDES')],
+    }
+    expect(computeDemoGraphSignature(a)).toBe(computeDemoGraphSignature(b))
+  })
+
+  it('changes when a new node or edge enters the demo graph', () => {
+    const base = graph([n('a'), n('b')], [e('a', 'b')])
+    const withNode = graph([n('a'), n('b'), n('c')], [e('a', 'b')])
+    const withEdge = graph([n('a'), n('b'), n('c')], [e('a', 'b'), e('b', 'c')])
+    expect(computeDemoGraphSignature(base)).not.toBe(computeDemoGraphSignature(withNode))
+    expect(computeDemoGraphSignature(withNode)).not.toBe(computeDemoGraphSignature(withEdge))
   })
 })
 

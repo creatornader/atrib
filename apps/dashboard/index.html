@@ -1681,8 +1681,9 @@ import {
   computeGraphBBox,
   computeNeighborhood,
   buildReplayGraphFromEntries,
+  computeDemoGraphSignature,
   computeDemoLaneOffset,
-} from './graph-utils.mjs?v=2026-05-25-demo-lanes'
+} from './graph-utils.mjs?v=2026-05-25-demo-refresh'
 
 /*
  * atrib explorer, D054 option 1.
@@ -2458,12 +2459,20 @@ function populateQuickLinks(entries) {
 // ─── Demo mode: agent timeline + living graph replay ─────────────────────
 
 let demoReplayHandle = null
+let demoRefreshHandle = null
 let demoReplayToken = 0
+const DEMO_RECENT_LIMIT = 80
+const DEMO_REPLAY_LIMIT = 24
+const DEMO_LIVE_REFRESH_MS = 6000
 
 function stopDemoReplay() {
   if (demoReplayHandle) {
     clearInterval(demoReplayHandle)
     demoReplayHandle = null
+  }
+  if (demoRefreshHandle) {
+    clearInterval(demoRefreshHandle)
+    demoRefreshHandle = null
   }
   demoReplayToken += 1
 }
@@ -2629,7 +2638,7 @@ async function renderDemo() {
   )
   clearAndRender(root)
 
-  const recent = await fetchMaybe(`${ep.log}/recent?limit=80`)
+  const recent = await fetchMaybe(`${ep.log}/recent?limit=${DEMO_RECENT_LIMIT}`)
   if (!routeGenerationStillCurrent(myGen)) return
   if (recent._error || !recent.entries?.length) {
     timeline.replaceChildren(el('div', { class: 'empty' }, recent._error || 'No recent signed actions returned.'))
@@ -2639,6 +2648,7 @@ async function renderDemo() {
   }
 
   const contextId = chooseDemoContext(recent.entries)
+  let latestRecentEntries = recent.entries
   const contextEntries = contextId
     ? recent.entries.filter((entry) => entry.context_id === contextId)
     : recent.entries
@@ -2653,7 +2663,7 @@ async function renderDemo() {
     graph = normalizeDemoGraph(graphResult)
   }
   if (!graph || graph.edges.length === 0) {
-    graph = normalizeDemoGraph(buildReplayGraphFromEntries(contextEntries.length > 1 ? contextEntries : recent.entries, { limit: 24 }))
+    graph = normalizeDemoGraph(buildReplayGraphFromEntries(contextEntries.length > 1 ? contextEntries : recent.entries, { limit: DEMO_REPLAY_LIMIT }))
     sourceLabel = 'log replay'
   }
   if (graph.nodes.length === 0) {
@@ -2661,17 +2671,21 @@ async function renderDemo() {
     return
   }
 
-  graph.nodes.sort((a, b) => nodeTimestamp(a) - nodeTimestamp(b))
-  const maxNodes = Math.min(24, graph.nodes.length)
-  const nodes = graph.nodes.slice(Math.max(0, graph.nodes.length - maxNodes))
-  const nodeIds = new Set(nodes.map((node) => node.id))
-  graph = {
-    ...graph,
-    nodes,
-    edges: graph.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target)),
+  const trimDemoGraph = (candidate) => {
+    const sortedNodes = candidate.nodes.slice().sort((a, b) => nodeTimestamp(a) - nodeTimestamp(b))
+    const maxNodes = Math.min(DEMO_REPLAY_LIMIT, sortedNodes.length)
+    const nodes = sortedNodes.slice(Math.max(0, sortedNodes.length - maxNodes))
+    const nodeIds = new Set(nodes.map((node) => node.id))
+    const edges = candidate.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+    return {
+      ...candidate,
+      nodes,
+      edges,
+      node_count: nodes.length,
+      edge_count: edges.length,
+    }
   }
-  graph.node_count = graph.nodes.length
-  graph.edge_count = graph.edges.length
+  graph = trimDemoGraph(graph)
 
   try {
     await loadGraphLibs()
@@ -2686,9 +2700,10 @@ async function renderDemo() {
   let clearGraphSelection = null
   let selectGraphNode = null
   let inspectorPinned = false
+  let graphSignature = computeDemoGraphSignature(graph)
   const token = demoReplayToken
   const visibleNodeIds = new Set()
-  const nodeIndexById = new Map(graph.nodes.map((node, index) => [node.id, index]))
+  let nodeIndexById = new Map(graph.nodes.map((node, index) => [node.id, index]))
   const syncVisibleNodes = () => {
     visibleNodeIds.clear()
     for (let i = 0; i < visibleCount; i += 1) {
@@ -2714,13 +2729,14 @@ async function renderDemo() {
       if (latestNode) renderDemoInspector(inspector, latestNode, null, 'latest record')
     }
   }
-  syncVisibleNodes()
-  graphContainer.replaceChildren()
-  if (_activeSigmaInstance) {
-    try { _activeSigmaInstance.kill() } catch {}
-    _activeSigmaInstance = null
-  }
-  try {
+  const renderDemoGraph = async () => {
+    nodeIndexById = new Map(graph.nodes.map((node, index) => [node.id, index]))
+    syncVisibleNodes()
+    graphContainer.replaceChildren()
+    if (_activeSigmaInstance) {
+      try { _activeSigmaInstance.kill() } catch {}
+      _activeSigmaInstance = null
+    }
     const { sigma, fitCameraToGraph, selectNode, clearSelection } = await renderSigmaDAG(graphContainer, graph, {
       layoutMode: 'timeline',
       demoBranchLanes: true,
@@ -2741,6 +2757,9 @@ async function renderDemo() {
     clearGraphSelection = clearSelection
     attachCameraControls(graphContainer, fitCameraToGraph, sigma)
     updateReplayReadout()
+  }
+  try {
+    await renderDemoGraph()
   } catch (e) {
     renderGraphRenderError(graphContainer, e)
     return
@@ -2756,6 +2775,46 @@ async function renderDemo() {
     updateReplayReadout()
     _activeSigmaInstance.refresh({ skipIndexation: true })
   }, 1400)
+
+  demoRefreshHandle = setInterval(async () => {
+    if (token !== demoReplayToken || !routeGenerationStillCurrent(myGen) || document.hidden) return
+    const nextRecent = await fetchMaybe(`${ep.log}/recent?limit=${DEMO_RECENT_LIMIT}`)
+    if (token !== demoReplayToken || !routeGenerationStillCurrent(myGen)) return
+    if (nextRecent._error || !Array.isArray(nextRecent.entries) || nextRecent.entries.length === 0) return
+    if (nextRecent.entries[0]?.record_hash === latestRecentEntries[0]?.record_hash) return
+    latestRecentEntries = nextRecent.entries
+    const nextContextEntries = contextId
+      ? nextRecent.entries.filter((entry) => entry.context_id === contextId)
+      : nextRecent.entries
+    await resolveIdentities(nextContextEntries.map((entry) => entry.creator_key).filter(Boolean))
+    if (token !== demoReplayToken || !routeGenerationStillCurrent(myGen)) return
+    let nextGraph = null
+    let nextSourceLabel = sourceLabel
+    const nextGraphResult = contextId ? await fetchMaybe(`${ep.graph}/graph/${contextId}?shape=compact`) : null
+    if (token !== demoReplayToken || !routeGenerationStillCurrent(myGen)) return
+    if (nextGraphResult && !nextGraphResult._error && Array.isArray(nextGraphResult.nodes) && nextGraphResult.nodes.length > 1) {
+      nextGraph = normalizeDemoGraph(nextGraphResult)
+      nextSourceLabel = 'graph-node'
+    }
+    if (!nextGraph || nextGraph.edges.length === 0) {
+      nextGraph = normalizeDemoGraph(buildReplayGraphFromEntries(nextContextEntries.length > 1 ? nextContextEntries : nextRecent.entries, { limit: DEMO_REPLAY_LIMIT }))
+      nextSourceLabel = 'log replay'
+    }
+    nextGraph = trimDemoGraph(nextGraph)
+    const nextSignature = computeDemoGraphSignature(nextGraph)
+    if (nextSignature === graphSignature || nextGraph.nodes.length === 0) return
+    const priorVisibleCount = visibleCount
+    graph = nextGraph
+    sourceLabel = nextSourceLabel
+    graphSignature = nextSignature
+    visibleCount = Math.min(Math.max(priorVisibleCount, 3), graph.nodes.length)
+    inspectorPinned = false
+    try {
+      await renderDemoGraph()
+    } catch (e) {
+      console.warn('[atrib-dashboard] live demo refresh skipped:', e)
+    }
+  }, DEMO_LIVE_REFRESH_MS)
 }
 
 // ─── Polling ─────────────────────────────────────────────────────────────
