@@ -2454,19 +2454,6 @@ function chooseDemoContext(entries) {
   return best?.contextId || entries.find((entry) => entry.context_id)?.context_id || null
 }
 
-function subsetGraphForReplay(graph, visibleNodeIds) {
-  const visible = new Set(visibleNodeIds)
-  const nodes = graph.nodes.filter((node) => visible.has(node.id))
-  const edges = graph.edges.filter((edge) => visible.has(edge.source) && visible.has(edge.target))
-  return {
-    ...graph,
-    nodes,
-    edges,
-    node_count: nodes.length,
-    edge_count: edges.length,
-  }
-}
-
 function demoStepRow(node, isLive) {
   const hash = graphNodeRecordHash(node)
   return el('article', { class: isLive ? 'demo-step live' : 'demo-step' },
@@ -2575,44 +2562,53 @@ async function renderDemo() {
   if (!routeGenerationStillCurrent(myGen)) return
 
   let visibleCount = Math.min(3, graph.nodes.length)
-  let painting = false
   const token = demoReplayToken
-  const paint = async () => {
-    if (painting || token !== demoReplayToken || !routeGenerationStillCurrent(myGen)) return
-    painting = true
-    const visibleIds = graph.nodes.slice(0, visibleCount).map((node) => node.id)
-    const visibleGraph = subsetGraphForReplay(graph, visibleIds)
-    meta.textContent = `${sourceLabel} · ${visibleGraph.nodes.length} nodes · ${visibleGraph.edges.length} edges`
-    renderDemoTimeline(timeline, graph.nodes, visibleCount)
-    graphContainer.replaceChildren()
-    if (_activeSigmaInstance) {
-      try { _activeSigmaInstance.kill() } catch {}
-      _activeSigmaInstance = null
-    }
-    try {
-      const { sigma, fitCameraToGraph, resolvedMode } = await renderSigmaDAG(graphContainer, visibleGraph, {
-        layoutMode: 'timeline',
-        demoBranchLanes: true,
-        nodeSize: 13,
-        focalSize: 18,
-      })
-      _activeSigmaInstance = sigma
-      attachCameraControls(graphContainer, fitCameraToGraph, sigma)
-    } catch (e) {
-      renderGraphRenderError(graphContainer, e)
-    } finally {
-      painting = false
+  const visibleNodeIds = new Set()
+  const nodeIndexById = new Map(graph.nodes.map((node, index) => [node.id, index]))
+  const syncVisibleNodes = () => {
+    visibleNodeIds.clear()
+    for (let i = 0; i < visibleCount; i += 1) {
+      const node = graph.nodes[i]
+      if (node) visibleNodeIds.add(node.id)
     }
   }
+  const updateReplayReadout = () => {
+    syncVisibleNodes()
+    const visibleEdges = graph.edges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)).length
+    meta.textContent = `${sourceLabel} · ${visibleNodeIds.size} nodes · ${visibleEdges} edges`
+    renderDemoTimeline(timeline, graph.nodes, visibleCount)
+  }
+  syncVisibleNodes()
+  graphContainer.replaceChildren()
+  if (_activeSigmaInstance) {
+    try { _activeSigmaInstance.kill() } catch {}
+    _activeSigmaInstance = null
+  }
+  try {
+    const { sigma, fitCameraToGraph } = await renderSigmaDAG(graphContainer, graph, {
+      layoutMode: 'timeline',
+      demoBranchLanes: true,
+      nodeSize: 13,
+      focalSize: 18,
+      isNodeVisible: (nodeId) => (nodeIndexById.get(nodeId) ?? Infinity) < visibleCount,
+    })
+    _activeSigmaInstance = sigma
+    attachCameraControls(graphContainer, fitCameraToGraph, sigma)
+    updateReplayReadout()
+  } catch (e) {
+    renderGraphRenderError(graphContainer, e)
+    return
+  }
 
-  await paint()
-  demoReplayHandle = setInterval(async () => {
+  demoReplayHandle = setInterval(() => {
+    if (token !== demoReplayToken || !routeGenerationStillCurrent(myGen) || !_activeSigmaInstance) return
     if (visibleCount < graph.nodes.length) {
       visibleCount += 1
     } else {
       visibleCount = Math.min(3, graph.nodes.length)
     }
-    await paint()
+    updateReplayReadout()
+    _activeSigmaInstance.refresh({ skipIndexation: true })
   }, 1400)
 }
 
@@ -4222,6 +4218,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     // scales linearly with zoom while node radius scales at sqrt(ratio).
     edgeSizeOpt = 1.0,
     onNodeClick = null,
+    isNodeVisible = null,
   } = options
 
   // Density-adaptive node sizing. With baseSize=10 and many nodes laid
@@ -4686,6 +4683,9 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   sigmaInstance.setSetting('nodeReducer', (nodeId, attrs) => {
     // Labels stay off in the canvas. The pointer tooltip handles readable
     // text, while nodes and edges carry the structure.
+    if (isNodeVisible && !isNodeVisible(nodeId, attrs._node)) {
+      return { ...attrs, hidden: true, label: '', zIndex: _DIM_NODE_Z }
+    }
     if (!_hoveredNode || !_hoveredNeighborhood) {
       const isFocal = attrs._isFocal === true || attrs._eventType === 'transaction'
       return isFocal
@@ -4700,6 +4700,15 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     return { ...attrs, color: _DIM_NODE_COLOR, label: '', size: Math.max(1.8, attrs.size * 0.5), zIndex: _DIM_NODE_Z }
   })
   sigmaInstance.setSetting('edgeReducer', (edgeKey, attrs) => {
+    if (isNodeVisible) {
+      const source = gx.source(edgeKey)
+      const target = gx.target(edgeKey)
+      const sourceAttrs = gx.getNodeAttributes(source)
+      const targetAttrs = gx.getNodeAttributes(target)
+      if (!isNodeVisible(source, sourceAttrs._node) || !isNodeVisible(target, targetAttrs._node)) {
+        return { ...attrs, hidden: true, zIndex: _DIM_EDGE_Z }
+      }
+    }
     // Counter Sigma's linear edge-thickness scaling at deep zoom: nodes
     // scale at sqrt(ratio) but edges scale at 1/ratio, so edges visually
     // overtake nodes as you zoom in. Scale edge size by sqrt(ratio) so
