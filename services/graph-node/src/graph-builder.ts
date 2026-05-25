@@ -109,6 +109,19 @@ export async function buildGraph(
     const bKey = `${b.context_id}:${b.content_id}`
     return aKey < bKey ? -1 : aKey > bKey ? 1 : 0
   })
+  const recordInfo = sorted.map((record) => {
+    const canonical = canonicalRecord(record)
+    const digest = sha256(canonical)
+    const hash = hexEncode(digest)
+    return {
+      record,
+      hash,
+      nodeId: `sha256:${hash}`,
+      token16: base64urlEncode(digest.slice(0, 16)),
+    }
+  })
+  const infoByRecord = new Map(recordInfo.map((info) => [info.record, info]))
+  const infoByNodeId = new Map(recordInfo.map((info) => [info.nodeId, info]))
 
   // Build node map: record_hash -> GraphNode
   const nodes: GraphNode[] = []
@@ -116,11 +129,7 @@ export async function buildGraph(
   // Map canonical hash (hex) to node ID for chain_root lookups
   const hashToNodeId = new Map<string, string>()
 
-  for (const record of sorted) {
-    const canonical = canonicalRecord(record)
-    const hash = hexEncode(sha256(canonical))
-    const nodeId = `sha256:${hash}`
-
+  for (const { record, hash, nodeId } of recordInfo) {
     // Verify signature for verification_state
     let verificationState: VerificationState = 'signature_valid'
     try {
@@ -352,20 +361,14 @@ export async function buildGraph(
   if (includeCrossSession) {
     const txNodes = nodes.filter((n) => n.event_type === 'transaction')
     for (const txNode of txNodes) {
-      const txRecord = sorted.find((r) => {
-        const h = hexEncode(sha256(canonicalRecord(r)))
-        return `sha256:${h}` === txNode.id
-      })
+      const txRecord = infoByNodeId.get(txNode.id)?.record
       if (!txRecord || !('session_token' in txRecord) || !txRecord.session_token) continue
 
       for (const otherNode of nodes) {
         if (otherNode.context_id === txNode.context_id) continue
         if (otherNode.event_type !== 'tool_call') continue
 
-        const otherRecord = sorted.find((r) => {
-          const h = hexEncode(sha256(canonicalRecord(r)))
-          return `sha256:${h}` === otherNode.id
-        })
+        const otherRecord = infoByNodeId.get(otherNode.id)?.record
         if (!otherRecord || !('session_token' in otherRecord)) continue
         if (otherRecord.session_token !== txRecord.session_token) continue
 
@@ -405,7 +408,7 @@ export async function buildGraph(
   for (const record of sorted) {
     const informedBy = record.informed_by
     if (!Array.isArray(informedBy) || informedBy.length === 0) continue
-    const sourceHash = hexEncode(sha256(canonicalRecord(record)))
+    const sourceHash = infoByRecord.get(record)!.hash
     const sourceId = `sha256:${sourceHash}`
     for (const ref of informedBy) {
       if (typeof ref !== 'string' || !ref.startsWith('sha256:')) continue
@@ -437,15 +440,13 @@ export async function buildGraph(
     const provenanceToken = record.provenance_token
     if (typeof provenanceToken !== 'string' || provenanceToken.length === 0) continue
     if (record.chain_root !== genesisChainRoot(record.context_id)) continue
-    const sourceHash = hexEncode(sha256(canonicalRecord(record)))
+    const sourceHash = infoByRecord.get(record)!.hash
     const sourceId = `sha256:${sourceHash}`
     let resolvedTargetId: string | undefined
-    for (const candidate of sorted) {
-      if (candidate.context_id === record.context_id) continue
-      const candidateBytes = sha256(canonicalRecord(candidate))
-      const candidateToken = base64urlEncode(candidateBytes.slice(0, 16))
-      if (candidateToken === provenanceToken) {
-        resolvedTargetId = `sha256:${hexEncode(candidateBytes)}`
+    for (const candidate of recordInfo) {
+      if (candidate.record.context_id === record.context_id) continue
+      if (candidate.token16 === provenanceToken) {
+        resolvedTargetId = candidate.nodeId
         break
       }
     }
@@ -484,7 +485,7 @@ export async function buildGraph(
     if (record.event_type !== 'https://atrib.dev/v1/types/annotation') continue
     const annotates = record.annotates
     if (typeof annotates !== 'string' || !annotates.startsWith('sha256:')) continue
-    const sourceHash = hexEncode(sha256(canonicalRecord(record)))
+    const sourceHash = infoByRecord.get(record)!.hash
     const sourceId = `sha256:${sourceHash}`
     const targetHash = annotates.slice('sha256:'.length)
     const targetId = hashToNodeId.get(targetHash)
@@ -518,7 +519,7 @@ export async function buildGraph(
     if (record.event_type !== 'https://atrib.dev/v1/types/revision') continue
     const revises = record.revises
     if (typeof revises !== 'string' || !revises.startsWith('sha256:')) continue
-    const sourceHash = hexEncode(sha256(canonicalRecord(record)))
+    const sourceHash = infoByRecord.get(record)!.hash
     const sourceId = `sha256:${sourceHash}`
     const targetHash = revises.slice('sha256:'.length)
     const targetId = hashToNodeId.get(targetHash)
@@ -563,4 +564,3 @@ function groupByContextId(nodes: GraphNode[]): Map<string, GraphNode[]> {
   }
   return map
 }
-

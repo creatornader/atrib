@@ -26,6 +26,7 @@ import {
   resolveLayoutMode,
   clusterSeedPositions,
   computeNodeDegrees,
+  hasParallelEdges,
   degreeCentralityFromGraph,
   computeNodeSize,
   computeNodeSizeFromCentrality,
@@ -157,6 +158,27 @@ describe('computeNodeDegrees', () => {
 
   it('returns an empty Map for an empty edge list', () => {
     expect(computeNodeDegrees([]).size).toBe(0)
+  })
+})
+
+describe('hasParallelEdges', () => {
+  it('returns true when two edges share a directed source and target', () => {
+    expect(hasParallelEdges([
+      e('a', 'b', 'CHAIN_PRECEDES'),
+      e('a', 'b', 'INFORMED_BY'),
+    ])).toBe(true)
+  })
+
+  it('returns false for reverse-direction and unrelated edges', () => {
+    expect(hasParallelEdges([
+      e('a', 'b', 'CHAIN_PRECEDES'),
+      e('b', 'a', 'INFORMED_BY'),
+      e('a', 'c', 'ANNOTATES'),
+    ])).toBe(false)
+  })
+
+  it('returns false for an empty edge list', () => {
+    expect(hasParallelEdges([])).toBe(false)
   })
 })
 

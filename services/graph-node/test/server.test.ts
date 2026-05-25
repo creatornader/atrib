@@ -69,6 +69,22 @@ describe('graph-node server (section 3.4)', () => {
     expect(body.edges.length).toBeGreaterThan(0)
   })
 
+  it('GET /v1/graph/:context_id?shape=compact omits verifier-only node fields', async () => {
+    const res = await fetch(`${url}/v1/graph/${CONTEXT_ID}?shape=compact`)
+    expect(res.ok).toBe(true)
+    const body = await res.json()
+    expect(body.spec_version).toBe('atrib/1.0')
+    expect(body.node_count).toBe(2)
+    expect(body.nodes).toHaveLength(2)
+    expect(body.edges.length).toBeGreaterThan(0)
+    expect(body.nodes[0].id).toMatch(/^sha256:/)
+    expect(body.nodes[0].creator_key).toBeTruthy()
+    expect(body.nodes[0].content_id).toBeUndefined()
+    expect(body.nodes[0].chain_root).toBeUndefined()
+    expect(body.nodes[0].log_index).toBeUndefined()
+    expect(body.nodes[0].is_genesis).toBeUndefined()
+  })
+
   it('GET /v1/graph/:context_id/nodes returns nodes only', async () => {
     const res = await fetch(`${url}/v1/graph/${CONTEXT_ID}/nodes`)
     expect(res.ok).toBe(true)

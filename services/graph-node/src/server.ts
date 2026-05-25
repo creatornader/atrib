@@ -23,7 +23,7 @@ import type { AtribRecord } from '@atrib/mcp'
 import { buildGraph } from './graph-builder.js'
 import { createRecordStore, type RecordStore } from './store.js'
 import { buildRevocationRegistry, graphLabelFromEventTypeUri } from '@atrib/verify'
-import type { MinimalRecord } from '@atrib/verify'
+import type { GraphResponse, MinimalRecord, RevocationEntry } from '@atrib/verify'
 
 // Normalize an event_type query parameter to the short label form used by
 // graph-node nodes. Atrib normative URIs map via graphLabelFromEventTypeUri;
@@ -270,7 +270,7 @@ async function handleRequest(
  * key_revocation records can affect any session (a key revoked in one
  * session retires it for ALL sessions), so the scan must be global.
  */
-function buildRegistry(store: RecordStore): ReturnType<typeof buildRevocationRegistry> {
+function buildRegistry(store: RecordStore): Map<string, RevocationEntry> {
   const all = store.getAllRecords()
   // The store holds AtribRecord objects, but key_revocation records
   // carry extra fields (revoked_key, revocation_reason, successor_key,
@@ -290,6 +290,85 @@ function buildRegistry(store: RecordStore): ReturnType<typeof buildRevocationReg
     }
   })
   return buildRevocationRegistry(minimal)
+}
+
+const revocationRegistryCache = new WeakMap<RecordStore, {
+  recordCount: number
+  registry: Map<string, RevocationEntry>
+}>()
+
+function buildRegistryCached(store: RecordStore): Map<string, RevocationEntry> {
+  const recordCount = store.getRecordCount()
+  const cached = revocationRegistryCache.get(store)
+  if (cached && cached.recordCount === recordCount) return cached.registry
+
+  const registry = buildRegistry(store)
+  revocationRegistryCache.set(store, { recordCount, registry })
+  return registry
+}
+
+const GRAPH_RESPONSE_CACHE_MAX = 50
+const graphResponseCache = new WeakMap<RecordStore, Map<string, {
+  recordCount: number
+  graph: unknown
+}>>()
+
+function getCachedGraph(store: RecordStore, key: string): unknown | null {
+  const cached = graphResponseCache.get(store)?.get(key)
+  if (!cached) return null
+  return cached.recordCount === store.getRecordCount() ? cached.graph : null
+}
+
+function setCachedGraph(store: RecordStore, key: string, graph: unknown): void {
+  let byKey = graphResponseCache.get(store)
+  if (!byKey) {
+    byKey = new Map()
+    graphResponseCache.set(store, byKey)
+  }
+  if (!byKey.has(key) && byKey.size >= GRAPH_RESPONSE_CACHE_MAX) {
+    const oldest = byKey.keys().next().value
+    if (oldest) byKey.delete(oldest)
+  }
+  byKey.set(key, { recordCount: store.getRecordCount(), graph })
+}
+
+function compactGraphForExplorer(graph: GraphResponse): unknown {
+  return {
+    spec_version: graph.spec_version,
+    context_id: graph.context_id,
+    generated_at: graph.generated_at,
+    node_count: graph.node_count,
+    edge_count: graph.edge_count,
+    has_transaction: graph.has_transaction,
+    cross_session_count: graph.cross_session_count,
+    nodes: graph.nodes.map((node) => ({
+      id: node.id,
+      event_type: node.event_type,
+      event_type_uri: node.event_type_uri,
+      creator_key: node.creator_key,
+      context_id: node.context_id,
+      timestamp: node.timestamp,
+      verification_state: node.verification_state,
+    })),
+    edges: graph.edges.map((edge) => {
+      const compactEdge: {
+        type: typeof edge.type
+        source: string
+        target: string
+        directed: boolean
+        dangling?: boolean
+        reason?: string
+      } = {
+        type: edge.type,
+        source: edge.source,
+        target: edge.target,
+        directed: edge.directed,
+      }
+      if (edge.dangling !== undefined) compactEdge.dangling = edge.dangling
+      if (edge.reason !== undefined) compactEdge.reason = edge.reason
+      return compactEdge
+    }),
+  }
 }
 
 function logIndexLookup(store: RecordStore): (hashHex: string) => number | null {
@@ -317,15 +396,31 @@ async function handleGraph(
   // full pairwise spec §3.2.4 derivation pass ?compact=false.
   const compactParam = params.get('compact')
   const compactIntraSessionEdges = compactParam !== 'false'
+  const includeGapNodes = params.get('include_gap_nodes') !== 'false'
+  const includeCrossSession = params.get('include_cross_session') !== 'false'
+  const shape = params.get('shape') === 'compact' ? 'compact' : 'full'
+  const cacheKey = JSON.stringify({
+    endpoint: 'graph',
+    contextId,
+    includeGapNodes,
+    includeCrossSession,
+    compactIntraSessionEdges,
+    shape,
+  })
+  const cachedGraph = getCachedGraph(store, cacheKey)
+  if (cachedGraph) return sendJson(res, 200, cachedGraph)
+
   const graph = await buildGraph(records, gapNodes, {
-    includeGapNodes: params.get('include_gap_nodes') !== 'false',
-    includeCrossSession: params.get('include_cross_session') !== 'false',
-    revocations: buildRegistry(store),
+    includeGapNodes,
+    includeCrossSession,
+    revocations: buildRegistryCached(store),
     logIndexLookup: logIndexLookup(store),
     compactIntraSessionEdges,
   })
+  const body = shape === 'compact' ? compactGraphForExplorer(graph) : graph
+  setCachedGraph(store, cacheKey, body)
 
-  sendJson(res, 200, graph)
+  sendJson(res, 200, body)
 }
 
 async function handleNodes(
@@ -341,7 +436,7 @@ async function handleNodes(
   const records = store.getRecordsByContextId(contextId)
   const gapNodes = store.getGapNodesByContextId(contextId)
   const graph = await buildGraph(records, gapNodes, {
-    revocations: buildRegistry(store),
+    revocations: buildRegistryCached(store),
     logIndexLookup: logIndexLookup(store),
   })
 
@@ -377,7 +472,7 @@ async function handleTransaction(
 
   const records = store.getRecordsByContextId(contextId)
   const graph = await buildGraph(records, [], {
-    revocations: buildRegistry(store),
+    revocations: buildRegistryCached(store),
     logIndexLookup: logIndexLookup(store),
   })
   const txNode = graph.nodes.find((n) => n.event_type === 'transaction')
@@ -536,7 +631,7 @@ async function handleCreatorGraph(
   const graph = await buildGraph(filteredRecords, [], {
     includeGapNodes: false,
     includeCrossSession: true,
-    revocations: buildRegistry(store),
+    revocations: buildRegistryCached(store),
     logIndexLookup: logIndexLookup(store),
     compactIntraSessionEdges: !includeIntraSession,
   })
@@ -701,7 +796,7 @@ async function handleTrace(
   const graph = await buildGraph(collected, [], {
     includeGapNodes: false,
     includeCrossSession: true,
-    revocations: buildRegistry(store),
+    revocations: buildRegistryCached(store),
     logIndexLookup: logIndexLookup(store),
   })
 
@@ -783,7 +878,7 @@ async function handleChain(
   const graph = await buildGraph(collected, [], {
     includeGapNodes: false,
     includeCrossSession: false,
-    revocations: buildRegistry(store),
+    revocations: buildRegistryCached(store),
     logIndexLookup: logIndexLookup(store),
   })
 
