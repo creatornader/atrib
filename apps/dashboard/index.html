@@ -753,6 +753,15 @@
     display: block;
     cursor: grab;
   }
+  .trace-graph .graph-focus-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    cursor: inherit;
+  }
   .trace-graph.is-dragging canvas { cursor: grabbing; }
   /* Camera controls: float over the graph in the top-right corner.
      Subtle by default so it doesn't compete with the graph content;
@@ -3172,6 +3181,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
       x: 0, y: 0,
       size,
       color,
+      zIndex: isFocal ? 20 : 10,
       label: '',
       _node: n,
       _isFocal: isFocal,
@@ -3198,6 +3208,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
       gx.addEdgeWithKey(key, e.source, e.target, {
         size: edgeSize,
         color,
+        zIndex: 5,
         type: 'arrow',
         label: e.type,
         _edge: e,
@@ -3400,6 +3411,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     // only optimizing for frame time. Labels can still drop while moving.
     hideEdgesOnMove: false,
     hideLabelsOnMove: true,
+    zIndex: true,
   })
 
   // For long chain-shaped layouts (timeline mode w/ many nodes) the
@@ -3425,11 +3437,93 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   let _lastPointer = { x: 16, y: 16 }
   const _DIM_NODE_COLOR = _cssVar('--text-3', '#6a6e78')
   const _DIM_EDGE_COLOR = _cssVar('--border', '#2d3038')
+  const _DIM_NODE_Z = 1
+  const _DIM_EDGE_Z = 0
+  const _FOCUS_EDGE_Z = 40
+  const _FOCUS_NODE_Z = 60
+  const _HOVER_NODE_Z = 80
   const tooltip = el('div', { class: 'graph-node-tooltip', 'aria-hidden': 'true' })
   container.appendChild(tooltip)
+  const focusOverlay = el('canvas', { class: 'graph-focus-overlay', 'aria-hidden': 'true' })
+  container.appendChild(focusOverlay)
+  const focusCtx = focusOverlay.getContext('2d')
+  let _focusOverlayFrame = null
+  if (container._atribGraphInteractionAbort) container._atribGraphInteractionAbort.abort()
+  const _interactionAbort = new AbortController()
+  container._atribGraphInteractionAbort = _interactionAbort
   const clearHoverIntent = () => {
     if (_hoverIntentTimer) window.clearTimeout(_hoverIntentTimer)
     _hoverIntentTimer = null
+  }
+  const resizeFocusOverlay = () => {
+    const rect = container.getBoundingClientRect()
+    const dpr = Math.max(1, window.devicePixelRatio || 1)
+    const width = Math.max(1, Math.round(rect.width * dpr))
+    const height = Math.max(1, Math.round(rect.height * dpr))
+    if (focusOverlay.width !== width || focusOverlay.height !== height) {
+      focusOverlay.width = width
+      focusOverlay.height = height
+    }
+    focusCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    return rect
+  }
+  const graphNodePoint = (nodeId) => {
+    if (!gx.hasNode(nodeId) || typeof sigmaInstance.graphToViewport !== 'function') return null
+    const attrs = gx.getNodeAttributes(nodeId)
+    return sigmaInstance.graphToViewport({ x: attrs.x, y: attrs.y })
+  }
+  const drawFocusOverlay = () => {
+    _focusOverlayFrame = null
+    const rect = resizeFocusOverlay()
+    focusCtx.clearRect(0, 0, rect.width, rect.height)
+    if (!_hoveredNode || !_hoveredNeighborhood) return
+
+    focusCtx.save()
+    focusCtx.lineCap = 'round'
+    focusCtx.lineJoin = 'round'
+    for (const edgeKey of _hoveredNeighborhood.edges) {
+      if (!gx.hasEdge(edgeKey)) continue
+      const source = graphNodePoint(gx.source(edgeKey))
+      const target = graphNodePoint(gx.target(edgeKey))
+      if (!source || !target) continue
+      const edgeAttrs = gx.getEdgeAttributes(edgeKey)
+      focusCtx.strokeStyle = edgeAttrs.color || _cssVar('--accent', '#7dd3fc')
+      focusCtx.globalAlpha = 0.92
+      focusCtx.lineWidth = Math.max(1.4, (edgeAttrs.size ?? edgeSize) * 2.1)
+      focusCtx.beginPath()
+      focusCtx.moveTo(source.x, source.y)
+      focusCtx.lineTo(target.x, target.y)
+      focusCtx.stroke()
+    }
+
+    focusCtx.globalAlpha = 1
+    for (const nodeId of _hoveredNeighborhood.nodes) {
+      const point = graphNodePoint(nodeId)
+      if (!point) continue
+      const attrs = gx.getNodeAttributes(nodeId)
+      const isHovered = nodeId === _hoveredNode
+      const radius = Math.max(isHovered ? 5 : 4, Math.min(18, (attrs.size ?? 4) * (isHovered ? 1.38 : 1.18)))
+      focusCtx.fillStyle = attrs.color || _cssVar('--accent', '#7dd3fc')
+      focusCtx.strokeStyle = _cssVar('--surface', '#111827')
+      focusCtx.lineWidth = isHovered ? 2.2 : 1.6
+      focusCtx.beginPath()
+      focusCtx.arc(point.x, point.y, radius, 0, Math.PI * 2)
+      focusCtx.fill()
+      focusCtx.stroke()
+    }
+    focusCtx.restore()
+  }
+  const scheduleFocusOverlayDraw = () => {
+    if (_focusOverlayFrame) return
+    _focusOverlayFrame = window.requestAnimationFrame(drawFocusOverlay)
+  }
+  const clearFocusOverlay = () => {
+    if (_focusOverlayFrame) {
+      window.cancelAnimationFrame(_focusOverlayFrame)
+      _focusOverlayFrame = null
+    }
+    const rect = resizeFocusOverlay()
+    focusCtx.clearRect(0, 0, rect.width, rect.height)
   }
   const setTooltipPosition = (event) => {
     const rect = container.getBoundingClientRect()
@@ -3458,24 +3552,29 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     if (!_hoveredNode && !_hoveredNeighborhood) return
     _hoveredNode = null
     _hoveredNeighborhood = null
+    clearFocusOverlay()
     sigmaInstance.refresh({ skipIndexation: true })
   }
-  if (container._atribGraphInteractionAbort) container._atribGraphInteractionAbort.abort()
-  const _interactionAbort = new AbortController()
-  container._atribGraphInteractionAbort = _interactionAbort
+  const _camera = sigmaInstance.getCamera()
+  const _onCameraUpdated = () => scheduleFocusOverlayDraw()
+  if (_camera && typeof _camera.on === 'function') _camera.on('updated', _onCameraUpdated)
+  window.addEventListener('resize', scheduleFocusOverlayDraw, { signal: _interactionAbort.signal, passive: true })
+  resizeFocusOverlay()
   sigmaInstance.setSetting('nodeReducer', (nodeId, attrs) => {
     // Labels stay off in the canvas. The pointer tooltip handles readable
     // text, while nodes and edges carry the structure.
     if (!_hoveredNode || !_hoveredNeighborhood) {
       const isFocal = attrs._isFocal === true || attrs._eventType === 'transaction'
-      return isFocal ? { ...attrs, label: '', size: attrs.size * 1.06 } : { ...attrs, label: '' }
+      return isFocal
+        ? { ...attrs, label: '', size: attrs.size * 1.06, zIndex: Math.max(attrs.zIndex ?? 0, 20) }
+        : { ...attrs, label: '', zIndex: attrs.zIndex ?? 10 }
     }
     if (_hoveredNeighborhood.nodes.has(nodeId)) {
       return nodeId === _hoveredNode
-        ? { ...attrs, label: '', size: attrs.size * 1.18 }
-        : { ...attrs, label: '' }
+        ? { ...attrs, label: '', size: attrs.size * 1.22, zIndex: _HOVER_NODE_Z }
+        : { ...attrs, label: '', size: attrs.size * 1.08, zIndex: _FOCUS_NODE_Z }
     }
-    return { ...attrs, color: _DIM_NODE_COLOR, label: '', size: Math.max(2.5, attrs.size * 0.72) }
+    return { ...attrs, color: _DIM_NODE_COLOR, label: '', size: Math.max(1.8, attrs.size * 0.5), zIndex: _DIM_NODE_Z }
   })
   sigmaInstance.setSetting('edgeReducer', (edgeKey, attrs) => {
     // Counter Sigma's linear edge-thickness scaling at deep zoom: nodes
@@ -3488,12 +3587,12 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     const baseSize = attrs.size ?? 0.5
     const scaledSize = baseSize * zoomScale
     if (!_hoveredNode || !_hoveredNeighborhood) {
-      return { ...attrs, size: scaledSize }
+      return { ...attrs, size: scaledSize, zIndex: attrs.zIndex ?? 5 }
     }
     if (_hoveredNeighborhood.edges.has(edgeKey)) {
-      return { ...attrs, size: Math.max(scaledSize * 1.25, scaledSize + 0.2) }
+      return { ...attrs, size: Math.max(scaledSize * 1.45, scaledSize + 0.35), zIndex: _FOCUS_EDGE_Z }
     }
-    return { ...attrs, color: _DIM_EDGE_COLOR, size: Math.max(0.35, scaledSize * 0.6) }
+    return { ...attrs, color: _DIM_EDGE_COLOR, size: Math.max(0.2, scaledSize * 0.4), zIndex: _DIM_EDGE_Z }
   })
   sigmaInstance.on('enterNode', ({ node }) => {
     clearHoverIntent()
@@ -3504,6 +3603,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
       _hoveredNeighborhood = computeNeighborhood(gx, node)
       showNodeTooltip(node)
       sigmaInstance.refresh({ skipIndexation: true })
+      scheduleFocusOverlayDraw()
     }, 80)
   })
   sigmaInstance.on('leaveNode', () => {
@@ -3527,8 +3627,11 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   const _killSigma = sigmaInstance.kill.bind(sigmaInstance)
   sigmaInstance.kill = () => {
     _interactionAbort.abort()
+    if (_camera && typeof _camera.off === 'function') _camera.off('updated', _onCameraUpdated)
+    clearFocusOverlay()
     clearHoverIntent()
     hideNodeTooltip()
+    focusOverlay.remove()
     _killSigma()
   }
 
