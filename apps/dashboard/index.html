@@ -2152,7 +2152,7 @@ async function renderOverview() {
     pulseStat('signed records', '—'),
     pulseStat('signing identities', '—'),
     pulseStat('latest record', '—'),
-    pulseStat('checkpoint root', '—'),
+    pulseStat('log snapshot', '—'),
   ))
 
   root.append(el('section', { style: 'margin-bottom: 32px;' },
@@ -2277,12 +2277,13 @@ function renderRawJsonPanel(title, meta, payload, options = {}) {
 }
 
 function pulseStat(label, value, sub = null, options = {}) {
+  const opts = typeof options === 'boolean' ? { wide: options } : options
   const attrs = {
-    class: options.wide ? 'stat wide' : 'stat',
-    ...(options.title ? { title: options.title } : {}),
+    class: opts.wide ? 'stat wide' : 'stat',
+    ...(opts.title ? { title: opts.title } : {}),
   }
-  const tag = options.href ? 'a' : 'div'
-  if (options.href) attrs.href = options.href
+  const tag = opts.href ? 'a' : 'div'
+  if (opts.href) attrs.href = opts.href
   return el(tag, attrs,
     el('span', { class: 'label' }, label),
     el('span', { class: 'value' }, value),
@@ -2340,18 +2341,21 @@ function updatePulseStrip(stats, checkpoint, recent = null) {
   const cp = parseCheckpointSummary(checkpoint)
   const treeSize = stats.tree_size ?? null
   const checkpointTreeMatches = cp.treeSize !== null && treeSize !== null && cp.treeSize === treeSize
-  const checkpointSub = cp.rootHash
-    ? `${checkpointTreeMatches ? 'matches' : 'tree size'} ${formatCount(cp.treeSize)} · signed note`
+  const snapshotSub = cp.rootHash
+    ? `${formatCount(cp.treeSize)} records anchored${checkpointTreeMatches ? '' : ' at checkpoint'}`
     : cp.error || 'checkpoint unavailable'
+  const snapshotTitle = cp.rootHash
+    ? `Signed log checkpoint from ${cp.origin || 'log'} at tree size ${formatCount(cp.treeSize)}. Open anchoring details for the Merkle root.`
+    : 'Open anchoring details'
   strip.replaceChildren(
     pulseStat('signed records', formatCount(stats.tree_size), 'committed to the log'),
     pulseStat('signing identities', formatCount(stats.distinct_signers), 'distinct creator_keys'),
     latestRecordStat(recent, stats),
     pulseStat(
-      'checkpoint root',
-      cp.rootHash ? shorten(cp.rootHash, 10, 6) : '—',
-      checkpointSub,
-      cp.origin ? { title: `Signed checkpoint from ${cp.origin}` } : {},
+      'log snapshot',
+      cp.rootHash ? 'signed' : '—',
+      snapshotSub,
+      { href: '#/anchoring', title: snapshotTitle },
     ),
   )
 }
