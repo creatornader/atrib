@@ -1488,18 +1488,21 @@
     display: grid;
     grid-template-columns: 92px minmax(0, 1fr);
     gap: 12px;
+    width: 100%;
     padding: 13px 14px;
+    border: 0;
     background: var(--surface);
+    text-align: left;
   }
   .demo-step.live {
     animation: demoStepIn 800ms ease-out;
     background: color-mix(in srgb, var(--accent-subtle) 38%, var(--surface));
   }
-  .demo-step[role='button'] {
+  .demo-step[type='button'] {
     cursor: pointer;
   }
-  .demo-step[role='button']:hover,
-  .demo-step[role='button']:focus-visible {
+  .demo-step[type='button']:hover,
+  .demo-step[type='button']:focus-visible {
     outline: none;
     background: color-mix(in srgb, var(--accent-subtle) 28%, var(--surface));
   }
@@ -2507,15 +2510,27 @@ function chooseDemoContext(entries) {
   return best?.contextId || entries.find((entry) => entry.context_id)?.context_id || null
 }
 
-function demoStepRow(node, isLive) {
+function demoStepRow(node, isLive, onSelect = null) {
   const hash = graphNodeRecordHash(node)
   const attrs = {
     class: isLive ? 'demo-step live' : 'demo-step',
-    role: 'button',
-    tabindex: '0',
+    type: 'button',
     'data-node-id': node.id,
   }
-  return el('article', attrs,
+  if (onSelect) {
+    attrs.onclick = (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      onSelect(node)
+    }
+    attrs.onkeydown = (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return
+      event.preventDefault()
+      event.stopPropagation()
+      onSelect(node)
+    }
+  }
+  return el('button', attrs,
     el('div', { class: 'when', ...(node.timestamp ? { 'data-ts': String(node.timestamp) } : {}) },
       node.timestamp ? timeAgo(node.timestamp) : 'queued'),
     el('div', { class: 'main' },
@@ -2523,13 +2538,13 @@ function demoStepRow(node, isLive) {
       el('div', { class: 'summary' },
         graphNodeKindLabel(node.event_type),
         node.creator_key ? ' by ' : '',
-        node.creator_key ? renderIdentityLabel(node.creator_key) : null),
-      hash ? el('a', { class: 'hash', href: `#/action/${hash}` }, shorten(hash, 14, 6)) : null,
+        node.creator_key ? renderIdentityLabel(node.creator_key, { withLink: false }) : null),
+      hash ? el('span', { class: 'hash' }, shorten(hash, 14, 6)) : null,
     ),
   )
 }
 
-function renderDemoTimeline(container, nodes, visibleCount) {
+function renderDemoTimeline(container, nodes, visibleCount, onSelect = null) {
   const priorCount = container._demoVisibleCount ?? 0
   const mustReset = priorCount > visibleCount || !container._demoTimelineInitialized
   if (mustReset) {
@@ -2541,7 +2556,7 @@ function renderDemoTimeline(container, nodes, visibleCount) {
   const start = container._demoVisibleCount ?? 0
   for (let i = start; i < visibleCount; i += 1) {
     const node = nodes[i]
-    if (node) container.append(demoStepRow(node, i === visibleCount - 1))
+    if (node) container.append(demoStepRow(node, i === visibleCount - 1, onSelect))
   }
   const last = container.lastElementChild
   if (last && last.classList?.contains('demo-step')) last.classList.add('live')
@@ -2674,7 +2689,6 @@ async function renderDemo() {
   const token = demoReplayToken
   const visibleNodeIds = new Set()
   const nodeIndexById = new Map(graph.nodes.map((node, index) => [node.id, index]))
-  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]))
   const syncVisibleNodes = () => {
     visibleNodeIds.clear()
     for (let i = 0; i < visibleCount; i += 1) {
@@ -2690,26 +2704,11 @@ async function renderDemo() {
       if (clearGraphSelection) clearGraphSelection()
     }, 'selected record')
   }
-  const selectTimelineRow = (target) => {
-    const start = target?.nodeType === 3 ? target.parentElement : target
-    const row = start?.closest?.('.demo-step[data-node-id]')
-    if (!row) return
-    const node = nodeById.get(row.dataset.nodeId)
-    if (node) selectDemoNode(node)
-  }
-  timeline.addEventListener('click', (event) => selectTimelineRow(event.target))
-  timeline.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return
-    const row = event.target?.closest?.('.demo-step[data-node-id]')
-    if (!row) return
-    event.preventDefault()
-    selectTimelineRow(row)
-  })
   const updateReplayReadout = () => {
     syncVisibleNodes()
     const visibleEdges = graph.edges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)).length
     meta.textContent = `${sourceLabel} · ${visibleNodeIds.size} nodes · ${visibleEdges} edges`
-    renderDemoTimeline(timeline, graph.nodes, visibleCount)
+    renderDemoTimeline(timeline, graph.nodes, visibleCount, selectDemoNode)
     if (!inspectorPinned) {
       const latestNode = graph.nodes[Math.max(0, visibleCount - 1)]
       if (latestNode) renderDemoInspector(inspector, latestNode, null, 'latest record')
