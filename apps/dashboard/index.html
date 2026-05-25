@@ -4818,6 +4818,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   let _hoverIntentTimer = null
   let _pointerDown = false
   let _lastPointer = { x: 16, y: 16 }
+  let _lastPointerInGraph = { x: 16, y: 16 }
   const _DIM_NODE_COLOR = _cssVar('--text-3', '#6a6e78')
   const _DIM_EDGE_COLOR = _cssVar('--border', '#2d3038')
   const _DIM_NODE_Z = 1
@@ -4879,9 +4880,19 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     const kind = attrs._kindLabel || graphNodeKindLabel(attrs._eventType)
     return isActive && attrs._hashLabel ? `${kind} ${attrs._hashLabel}` : kind
   }
-  const drawFocusLabels = (rect, activeNode, activeNeighborhood) => {
+  const drawFocusLabels = (rect, activeNode, activeNeighborhood, options = {}) => {
+    const includeActiveLabel = options.includeActiveLabel !== false
     const occupied = []
-    const nodeIds = [activeNode, ...[...activeNeighborhood.nodes].filter((nodeId) => nodeId !== activeNode)]
+    if (!includeActiveLabel) {
+      const point = graphNodePoint(activeNode)
+      if (point) {
+        const attrs = gx.getNodeAttributes(activeNode)
+        const radius = Math.max(18, (attrs.size ?? 5) + 16)
+        occupied.push({ x: point.x - radius, y: point.y - radius, w: radius * 2, h: radius * 2 })
+      }
+    }
+    const relatedNodeIds = [...activeNeighborhood.nodes].filter((nodeId) => nodeId !== activeNode)
+    const nodeIds = includeActiveLabel ? [activeNode, ...relatedNodeIds] : relatedNodeIds
     focusCtx.save()
     focusCtx.font = '600 11px ' + _cssVar('--font-sans', 'system-ui')
     focusCtx.textBaseline = 'middle'
@@ -4926,7 +4937,10 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     // doubled node fills read as dark inner disks, and overlay edges cut
     // through highlighted nodes. Reducers already raise and resize focused
     // nodes and edges, so the overlay only draws readable labels.
-    drawFocusLabels(rect, activeNode, activeNeighborhood)
+    // On hover, the cursor-following tooltip is the active node label.
+    // Keep anchored labels for highlighted neighbors, and for selected nodes
+    // where there is no cursor tooltip.
+    drawFocusLabels(rect, activeNode, activeNeighborhood, { includeActiveLabel: !_hoveredNode })
     focusCtx.restore()
   }
   const scheduleFocusOverlayDraw = () => {
@@ -4941,12 +4955,28 @@ async function renderSigmaDAG(container, graphData, options = {}) {
     const rect = resizeFocusOverlay()
     focusCtx.clearRect(0, 0, rect.width, rect.height)
   }
-  const setTooltipPosition = (event) => {
+  const positionTooltipAt = (point) => {
     const rect = container.getBoundingClientRect()
-    const x = Math.min(rect.width - 24, Math.max(8, event.clientX - rect.left + 14))
-    const y = Math.min(rect.height - 24, Math.max(8, event.clientY - rect.top + 14))
+    const gap = 14
+    const inset = 8
+    const tooltipWidth = Math.min(tooltip.offsetWidth || 220, Math.max(80, rect.width - inset * 2))
+    const tooltipHeight = Math.min(tooltip.offsetHeight || 52, Math.max(40, rect.height - inset * 2))
+    let x = point.x + gap
+    let y = point.y + gap
+    if (x + tooltipWidth > rect.width - inset) x = point.x - tooltipWidth - gap
+    if (y + tooltipHeight > rect.height - inset) y = point.y - tooltipHeight - gap
+    x = Math.max(inset, Math.min(rect.width - tooltipWidth - inset, x))
+    y = Math.max(inset, Math.min(rect.height - tooltipHeight - inset, y))
     _lastPointer = { x, y }
     tooltip.style.transform = `translate3d(${x}px, ${y}px, 0)`
+  }
+  const setTooltipPosition = (event) => {
+    const rect = container.getBoundingClientRect()
+    _lastPointerInGraph = {
+      x: Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
+      y: Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
+    }
+    positionTooltipAt(_lastPointerInGraph)
   }
   const showNodeTooltip = (nodeId) => {
     const attrs = gx.getNodeAttributes(nodeId)
@@ -4956,8 +4986,8 @@ async function renderSigmaDAG(container, graphData, options = {}) {
       el('span', { class: 'kind' }, attrs._kindLabel || graphNodeKindLabel(source.event_type)),
       hash ? el('span', { class: 'hash' }, shorten(hash, 13, 6)) : null,
     )
-    tooltip.style.transform = `translate3d(${_lastPointer.x}px, ${_lastPointer.y}px, 0)`
     tooltip.classList.add('visible')
+    positionTooltipAt(_lastPointerInGraph)
   }
   const hideNodeTooltip = () => {
     tooltip.classList.remove('visible')
