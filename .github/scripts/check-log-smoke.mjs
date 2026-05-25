@@ -1,6 +1,8 @@
 const maxTtfbMs = readPositiveInt('LOG_SMOKE_MAX_TTFB_MS', 3000)
 const maxTotalMs = readPositiveInt('LOG_SMOKE_MAX_TOTAL_MS', 5000)
 const timeoutMs = readPositiveInt('LOG_SMOKE_FETCH_TIMEOUT_MS', 10000)
+const maxAttempts = readPositiveInt('LOG_SMOKE_ATTEMPTS', 3)
+const retryDelayMs = readPositiveInt('LOG_SMOKE_RETRY_DELAY_MS', 2000)
 
 const endpoints = [
   {
@@ -50,16 +52,33 @@ for (const endpoint of endpoints) {
   results.push(await checkEndpoint(endpoint))
 }
 
-console.log(`log smoke passed: max_ttfb=${maxTtfbMs}ms max_total=${maxTotalMs}ms`)
+console.log(
+  `log smoke passed: max_ttfb=${maxTtfbMs}ms max_total=${maxTotalMs}ms attempts=${maxAttempts}`,
+)
 for (const result of results) {
   console.log(
     `${result.name}: status=${result.status} ttfb=${result.ttfbMs.toFixed(0)}ms total=${result.totalMs.toFixed(
       0,
-    )}ms bytes=${result.bytes}`,
+    )}ms bytes=${result.bytes} attempt=${result.attempt}`,
   )
 }
 
 async function checkEndpoint(endpoint) {
+  let lastError
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await checkEndpointOnce(endpoint, attempt)
+    } catch (error) {
+      lastError = error
+      if (attempt === maxAttempts) break
+      console.warn(`${endpoint.name} attempt ${attempt} failed: ${error.message}; retrying`)
+      await sleep(retryDelayMs)
+    }
+  }
+  throw lastError
+}
+
+async function checkEndpointOnce(endpoint, attempt) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
   const started = performance.now()
@@ -93,10 +112,15 @@ async function checkEndpoint(endpoint) {
       ttfbMs,
       totalMs,
       bytes: Buffer.byteLength(body),
+      attempt,
     }
   } finally {
     clearTimeout(timeout)
   }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function readPositiveInt(name, fallback) {
