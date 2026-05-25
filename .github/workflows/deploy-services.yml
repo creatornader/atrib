@@ -1,0 +1,166 @@
+name: Deploy services
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Service to deploy
+        required: true
+        default: changed
+        type: choice
+        options:
+          - changed
+          - log-node
+          - graph-node
+          - directory-node
+          - all
+
+concurrency: deploy-services-${{ github.event.workflow_run.head_sha || github.sha }}
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  changes:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      log_node: ${{ steps.changed.outputs.log_node }}
+      graph_node: ${{ steps.changed.outputs.graph_node }}
+      directory_node: ${{ steps.changed.outputs.directory_node }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 2
+
+      - id: changed
+        name: Detect changed services
+        shell: bash
+        env:
+          SERVICE: ${{ inputs.service || 'changed' }}
+        run: |
+          set -euo pipefail
+
+          log_node=false
+          graph_node=false
+          directory_node=false
+
+          case "$SERVICE" in
+            all)
+              log_node=true
+              graph_node=true
+              directory_node=true
+              ;;
+            log-node)
+              log_node=true
+              ;;
+            graph-node)
+              graph_node=true
+              ;;
+            directory-node)
+              directory_node=true
+              ;;
+            changed)
+              if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+                changed_files="$(git diff --name-only HEAD^ HEAD)"
+              else
+                changed_files="$(git show --name-only --format= HEAD)"
+              fi
+
+              while IFS= read -r path; do
+                case "$path" in
+                  services/log-node/*|apps/dashboard/*)
+                    log_node=true
+                    ;;
+                  services/graph-node/*)
+                    graph_node=true
+                    ;;
+                  services/directory-node/*)
+                    directory_node=true
+                    ;;
+                  packages/mcp/*|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json)
+                    log_node=true
+                    graph_node=true
+                    directory_node=true
+                    ;;
+                  packages/directory/*)
+                    log_node=true
+                    directory_node=true
+                    ;;
+                  packages/verify/*)
+                    graph_node=true
+                    ;;
+                esac
+              done <<< "$changed_files"
+              ;;
+            *)
+              echo "Unknown service: $SERVICE" >&2
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "log_node=$log_node"
+            echo "graph_node=$graph_node"
+            echo "directory_node=$directory_node"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "log-node=$log_node"
+          echo "graph-node=$graph_node"
+          echo "directory-node=$directory_node"
+
+  deploy-log-node:
+    needs: changes
+    if: needs.changes.outputs.log_node == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+
+      - name: Deploy log-node
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy -c services/log-node/fly.toml --remote-only
+
+  deploy-graph-node:
+    needs: changes
+    if: needs.changes.outputs.graph_node == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+
+      - name: Deploy graph-node
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy -c services/graph-node/fly.toml --remote-only
+
+  deploy-directory-node:
+    needs: changes
+    if: needs.changes.outputs.directory_node == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+
+      - name: Deploy directory-node
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy -c services/directory-node/fly.toml --remote-only
