@@ -12,38 +12,12 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
       - name: Check public log endpoints
         shell: bash
-        run: |
-          set -euo pipefail
-
-          curl --fail --show-error --silent \
-            --connect-timeout 5 --max-time 20 \
-            https://atrib-log.fly.dev/v1/pubkey >/tmp/atrib-log-pubkey.json
-
-          curl --fail --show-error --silent \
-            --connect-timeout 5 --max-time 20 \
-            https://log.atrib.dev/v1/stats >/tmp/atrib-log-stats.json
-
-          curl --fail --show-error --silent \
-            --connect-timeout 5 --max-time 20 \
-            https://explore.atrib.dev/ >/tmp/atrib-explore.html
-
-          node - <<'NODE'
-          const { readFileSync } = require('node:fs')
-
-          const pubkey = JSON.parse(readFileSync('/tmp/atrib-log-pubkey.json', 'utf8'))
-          if (pubkey.origin !== 'log.atrib.dev/v1' || typeof pubkey.public_key !== 'string') {
-            throw new Error('Unexpected /v1/pubkey response')
-          }
-
-          const stats = JSON.parse(readFileSync('/tmp/atrib-log-stats.json', 'utf8'))
-          if (!Number.isInteger(stats.tree_size) || stats.tree_size < 1) {
-            throw new Error('Unexpected /v1/stats tree_size')
-          }
-
-          const explorer = readFileSync('/tmp/atrib-explore.html', 'utf8')
-          if (!explorer.includes('<title>atrib explorer') || !explorer.includes('https://log.atrib.dev/v1')) {
-            throw new Error('Explorer HTML did not contain the expected shell')
-          }
-          NODE
+        run: node .github/scripts/check-log-smoke.mjs

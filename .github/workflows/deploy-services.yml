@@ -2,7 +2,7 @@ name: Deploy services
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ['CI']
     branches: [main]
     types: [completed]
   workflow_dispatch:
@@ -131,6 +131,10 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
 
       - name: Deploy log-node
@@ -140,30 +144,7 @@ jobs:
 
       - name: Smoke test public log endpoints
         shell: bash
-        run: |
-          set -euo pipefail
-
-          curl --fail --show-error --silent \
-            --connect-timeout 5 --max-time 20 \
-            https://atrib-log.fly.dev/v1/pubkey >/tmp/atrib-log-pubkey.json
-
-          curl --fail --show-error --silent \
-            --connect-timeout 5 --max-time 20 \
-            https://log.atrib.dev/v1/stats >/tmp/atrib-log-stats.json
-
-          node - <<'NODE'
-          const { readFileSync } = require('node:fs')
-
-          const pubkey = JSON.parse(readFileSync('/tmp/atrib-log-pubkey.json', 'utf8'))
-          if (pubkey.origin !== 'log.atrib.dev/v1' || typeof pubkey.public_key !== 'string') {
-            throw new Error('Unexpected /v1/pubkey response')
-          }
-
-          const stats = JSON.parse(readFileSync('/tmp/atrib-log-stats.json', 'utf8'))
-          if (!Number.isInteger(stats.tree_size) || stats.tree_size < 1) {
-            throw new Error('Unexpected /v1/stats tree_size')
-          }
-          NODE
+        run: node .github/scripts/check-log-smoke.mjs
 
   deploy-graph-node:
     needs: changes
