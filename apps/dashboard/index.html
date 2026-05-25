@@ -5437,7 +5437,7 @@ function renderAbout() {
       ),
       el('p', {}, 'Agents prove what they did. Consumers verify what was actually done. Auditors don\'t have to trust any operator.'),
 
-      el('h2', {}, 'Six views'),
+      el('h2', {}, 'Seven views'),
       el('h3', {}, 'Overview (this page)'),
       el('p', {}, 'A live feed of the most recent signed actions, updating every 5 seconds. Every row is a real record from a real atrib-instrumented agent.'),
 
@@ -5454,6 +5454,10 @@ function renderAbout() {
       el('h3', {}, 'Action'),
       el('p', {},
         'A single signed record. The action view shows the hash, identity, session, timestamp, verification state, and the raw JSON.'),
+
+      el('h3', {}, 'Demo'),
+      el('p', {},
+        'A live walkthrough view that pairs a concise agent-session timeline with a replaying graph. It prefers graph-node data for the busiest recent session, then falls back to a log-derived replay when graph data is unavailable.'),
 
       el('h3', {}, 'Trace'),
       el('p', {},

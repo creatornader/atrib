@@ -305,7 +305,7 @@ The atrib stack runs across two repositories with distinct deployment platforms.
 | Subdomain | Source repo | Platform | Purpose |
 |---|---|---|---|
 | `atrib.dev` | [`atrib-web`](https://github.com/creatornader/atrib-web) | Vercel (Next.js) | Marketing landing page |
-| `explore.atrib.dev` | [`atrib`](https://github.com/creatornader/atrib) at `apps/dashboard/` | Fly.io (host-routed via log-node) | Public block explorer (six views: overview, identity, session, action, trace, anchoring) |
+| `explore.atrib.dev` | [`atrib`](https://github.com/creatornader/atrib) at `apps/dashboard/` | Fly.io (host-routed via log-node) | Public block explorer (seven views: overview, identity, session, action, demo, trace, anchoring) |
 | `log.atrib.dev` | [`atrib`](https://github.com/creatornader/atrib) at `services/log-node/` | Fly.io | Tessera-backed Merkle log API (spec [§2](atrib-spec.md#2-merkle-log-protocol)) |
 | `graph.atrib.dev` | [`atrib`](https://github.com/creatornader/atrib) at `services/graph-node/` | Fly.io | Graph query API (spec [§3](atrib-spec.md#3-graph-query-interface)) |
 | `directory.atrib.dev` | [`atrib`](https://github.com/creatornader/atrib) at `services/directory-node/` | Fly.io | AKD-backed identity-claim directory (spec [§6](atrib-spec.md#6-key-directory)) |
