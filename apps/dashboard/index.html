@@ -287,8 +287,9 @@
   }
   body > header .brand a:hover { text-decoration: none; color: var(--accent-strong); }
   body > header .brand .seal {
-    display: block; width: 24px; height: 24px;
-    border-radius: 4px;
+    display: block; width: 20px; height: 20px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(232, 160, 79, 0.16), inset 0 -2px 4px rgba(0, 0, 0, 0.28);
   }
   body > header .brand .sub {
     color: var(--text-3); font: 12px/1 var(--font-mono);
@@ -1666,7 +1667,7 @@
 <header>
   <div class="brand">
     <a href="#/">
-      <img class="seal" src="/static/icon.svg" width="24" height="24" alt="" aria-hidden="true">
+      <img class="seal" src="/static/nav-mark.svg" width="20" height="20" alt="" aria-hidden="true">
       <span>atrib</span>
     </a>
     <span class="sub" id="brand-sub">explorer</span>
