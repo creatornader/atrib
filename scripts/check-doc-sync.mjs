@@ -190,7 +190,7 @@ function checkNodeTypeCount() {
 // ─── Check 3: dashboard view count consistency ─────────────────────────────
 //
 // Ground truth: route handlers in apps/dashboard/index.html. The router
-// branches with `if (hash.startsWith('/x/'))` or `if (hash === '/x')`. Count
+// branches with `if (routePath.startsWith('/x/'))` or `if (routePath === '/x')`. Count
 // distinct top-level data views (everything except `/about`, which is meta:
 // it explains the views, it isn't itself a view of substrate data).
 //
@@ -200,11 +200,11 @@ function checkNodeTypeCount() {
 function checkDashboardViewCount() {
   const check = 'dashboard-view-count'
   const html = read('apps/dashboard/index.html')
-  const routePattern = /if \(hash(?:\.startsWith\('\/(\w+)\/?'?\)|\s*===\s*'\/(\w+)')/g
+  const routePattern = /if \((?:routePath|hash)(?:\.startsWith\('\/([A-Za-z0-9_-]+)\/?'?\)|\s*===\s*'\/([A-Za-z0-9_-]+)')/g
   const routes = new Set()
   // The default `/` overview route is matched separately by the
   // empty/`/`/`/overview` branch.
-  if (/hash === '\/overview'|hash === '\/'/.test(html)) routes.add('overview')
+  if (/(?:routePath|hash) === '\/overview'|(?:routePath|hash) === '\/'/.test(html)) routes.add('overview')
   for (const m of html.matchAll(routePattern)) {
     const r = m[1] || m[2]
     if (r && r !== 'about') routes.add(r)

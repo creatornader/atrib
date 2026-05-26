@@ -606,12 +606,16 @@ describe('GET /dashboard', () => {
   })
 
   it('serves the YC demo page and trace bundle from the dashboard root', async () => {
-    const html = await fetch(`${server.url}/yc-demo.html`)
+    const html = await fetch(`${server.url}/yc-demo`)
     expect(html.status).toBe(200)
     expect(html.headers.get('content-type')).toContain('text/html')
     const body = await html.text()
     expect(body).toMatch(/demo: signed context changes action/)
     expect(body).toMatch(/yc-demo-trace-bundle\.json/)
+
+    const legacyHtml = await fetch(`${server.url}/yc-demo.html`)
+    expect(legacyHtml.status).toBe(200)
+    expect(legacyHtml.headers.get('content-type')).toContain('text/html')
 
     const bundle = await fetch(`${server.url}/yc-demo-trace-bundle.json`)
     expect(bundle.status).toBe(200)
@@ -656,6 +660,31 @@ describe('GET /dashboard', () => {
     expect(got.status).toBe(200)
     expect(got.ct).toContain('text/html')
     expect(got.body).toMatch(/<!doctype html>/i)
+  })
+
+  it('serves dashboard path routes when Host=explore.atrib.dev', async () => {
+    const u = new URL(server.url)
+    for (const path of ['/overview', '/demo', '/anchoring', '/about', '/session/0123456789abcdef0123456789abcdef']) {
+      const got = await new Promise<{ status: number; ct: string; body: string }>((resolve, reject) => {
+        const req = httpRequest({
+          method: 'GET', hostname: u.hostname, port: u.port, path,
+          headers: { host: 'explore.atrib.dev' },
+        }, (res: IncomingMessage) => {
+          const chunks: Buffer[] = []
+          res.on('data', (c: Buffer) => chunks.push(c))
+          res.on('end', () => resolve({
+            status: res.statusCode ?? 0,
+            ct: res.headers['content-type'] ?? '',
+            body: Buffer.concat(chunks).toString('utf-8'),
+          }))
+        })
+        req.on('error', reject)
+        req.end()
+      })
+      expect(got.status).toBe(200)
+      expect(got.ct).toContain('text/html')
+      expect(got.body).toMatch(/<!doctype html>/i)
+    }
   })
 
   it('returns service-info JSON (not the dashboard) at root when Host=log.atrib.dev', async () => {

@@ -119,6 +119,12 @@ export async function bindServer(
 
 type AcquireLock = () => { wait: Promise<void>; release: () => void }
 
+function isDashboardRoutePath(urlPath: string | undefined): boolean {
+  if (!urlPath) return false
+  if (urlPath === '/overview' || urlPath === '/demo' || urlPath === '/anchoring' || urlPath === '/about') return true
+  return /^\/(?:identity|session|action|trace)\/[^/]+$/.test(urlPath)
+}
+
 async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
@@ -137,11 +143,8 @@ async function handleRequest(
   // /?v=2026-05-01 (commonly used to bypass browser/CDN caches) still hit
   // the dashboard route rather than falling through to a 404.
   const urlPath = (req.url ?? '').split('?')[0]
-  if (
-    req.method === 'GET' &&
-    (urlPath === '/' || urlPath === '') &&
-    req.headers.host?.startsWith('explore.atrib.dev')
-  ) {
+  const isExplorerHost = req.headers.host?.startsWith('explore.atrib.dev') === true
+  if (req.method === 'GET' && isExplorerHost && ((urlPath === '/' || urlPath === '') || isDashboardRoutePath(urlPath))) {
     return handleDashboard(res)
   }
 
@@ -320,9 +323,9 @@ async function handleRequest(
   }
 
   // YC demo recording surface. This is a dashboard-root artifact, not the
-  // live `#/demo` route. Keep it allowlisted so the explorer can host the
+  // live /demo route. Keep it allowlisted so the explorer can host the
   // stable recording page without turning apps/dashboard into a file server.
-  if (req.method === 'GET' && urlPath === '/yc-demo.html') {
+  if (req.method === 'GET' && (urlPath === '/yc-demo' || urlPath === '/yc-demo/' || urlPath === '/yc-demo.html')) {
     return handleDashboardRootFile(res, 'yc-demo.html', 'text/html; charset=utf-8', 60)
   }
   if (req.method === 'GET' && urlPath === '/yc-demo-trace-bundle.json') {

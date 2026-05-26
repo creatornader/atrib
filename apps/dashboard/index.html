@@ -1666,17 +1666,17 @@
 
 <header>
   <div class="brand">
-    <a href="#/">
+    <a href="/">
       <img class="seal" src="/static/nav-mark.svg" width="20" height="20" alt="" aria-hidden="true">
       <span>atrib</span>
     </a>
     <span class="sub" id="brand-sub">explorer</span>
   </div>
   <nav id="nav">
-    <a href="#/" data-route="overview">overview</a>
-    <a href="#/demo" data-route="demo">live replay</a>
-    <a href="#/anchoring" data-route="anchoring">anchoring</a>
-    <a href="#/about" data-route="about">about</a>
+    <a href="/" data-route="overview">overview</a>
+    <a href="/demo" data-route="demo">live replay</a>
+    <a href="/anchoring" data-route="anchoring">anchoring</a>
+    <a href="/about" data-route="about">about</a>
   </nav>
 </header>
 
@@ -1693,7 +1693,7 @@
       <a href="https://github.com/creatornader/atrib" target="_blank" rel="noopener">github.com/creatornader/atrib</a>
       <a href="https://github.com/creatornader/atrib/blob/main/atrib-spec.md" target="_blank" rel="noopener">atrib-spec.md</a>
       <a href="https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d054-unified-public-explorer-vs-per-service-admin-uis" target="_blank" rel="noopener">D054 (this explorer)</a>
-      <a href="#/about">what is this?</a>
+      <a href="/about">what is this?</a>
     </div>
   </div>
 </footer>
@@ -1734,19 +1734,19 @@ import {
   buildReplayGraphFromEntries,
   computeDemoGraphSignature,
   computeDemoLaneOffset,
-} from './graph-utils.mjs?v=2026-05-25-graph-counts'
+} from '/graph-utils.mjs?v=2026-05-25-graph-counts'
 
 /*
  * atrib explorer, D054 option 1.
  * Single-file vanilla JS. Read-only public surface composing log + graph + directory.
- * Routes (URL hash):
- *   #/                              overview (live activity feed + system pulse + search)
- *   #/identity/<creator_key>        identity view
- *   #/session/<context_id>          session view
- *   #/action/<record_hash>          action view
- *   #/trace/<record_hash>           provenance trace view (ancestor DAG)
- *   #/anchoring                     log + directory anchoring details
- *   #/about                         what atrib is, how to read this
+ * Routes:
+ *   /                              overview (live activity feed + system pulse + search)
+ *   /identity/<creator_key>        identity view
+ *   /session/<context_id>          session view
+ *   /action/<record_hash>          action view
+ *   /trace/<record_hash>           provenance trace view (ancestor DAG)
+ *   /anchoring                     log + directory anchoring details
+ *   /about                         what atrib is, how to read this
  */
 
 const DEFAULTS = {
@@ -1757,6 +1757,40 @@ const DEFAULTS = {
 
 const POLL_INTERVAL_MS = 5000
 const RECENT_LIMIT = 25
+
+const STATIC_ROUTES = new Set(['/', '/overview', '/demo', '/anchoring', '/about'])
+const DETAIL_ROUTE_PREFIXES = ['/identity/', '/session/', '/action/', '/trace/']
+
+function normalizeRoutePath(value) {
+  let path = String(value || '').trim()
+  if (!path) return '/'
+  if (path.startsWith('#')) path = path.slice(1)
+  if (!path.startsWith('/')) path = `/${path}`
+  path = path.replace(/\/{2,}/g, '/')
+  if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1)
+  if (path === '/dashboard' || path === '/dashboard.html') return '/'
+  return path
+}
+
+function isExplorerRoutePath(path) {
+  const normalized = normalizeRoutePath(path)
+  return STATIC_ROUTES.has(normalized) || DETAIL_ROUTE_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+}
+
+function currentRoutePath() {
+  const hashPath = location.hash.startsWith('#/') ? normalizeRoutePath(location.hash.slice(1)) : ''
+  const routePath = hashPath || normalizeRoutePath(location.pathname)
+  if (hashPath) {
+    history.replaceState(null, '', `${routePath}${location.search || ''}`)
+  }
+  return routePath
+}
+
+function navigateToRoute(path) {
+  const nextPath = normalizeRoutePath(path)
+  history.pushState(null, '', `${nextPath}${location.search || ''}`)
+  route()
+}
 
 function endpoints() {
   const q = new URLSearchParams(location.search)
@@ -1907,7 +1941,7 @@ function renderIdentityLabel(creatorKey, opts = {}) {
     )
   }
   return withLink
-    ? el('a', { href: `#/identity/${creatorKey}`, style: 'text-decoration: none;' }, inner)
+    ? el('a', { href: `/identity/${creatorKey}`, style: 'text-decoration: none;' }, inner)
     : inner
 }
 
@@ -2220,10 +2254,10 @@ function setActiveNav(routeName) {
 function doSearch() {
   const q = document.getElementById('search').value.trim()
   if (!q) return
-  if (/^[A-Za-z0-9_-]{43}$/.test(q))                location.hash = `#/identity/${q}`
-  else if (/^[0-9a-f]{32}$/.test(q))                location.hash = `#/session/${q}`
-  else if (/^sha256:[0-9a-f]{64}$/.test(q))         location.hash = `#/action/${q}`
-  else if (/^[0-9a-f]{64}$/.test(q))                location.hash = `#/action/sha256:${q}`
+  if (/^[A-Za-z0-9_-]{43}$/.test(q))                navigateToRoute(`/identity/${q}`)
+  else if (/^[0-9a-f]{32}$/.test(q))                navigateToRoute(`/session/${q}`)
+  else if (/^sha256:[0-9a-f]{64}$/.test(q))         navigateToRoute(`/action/${q}`)
+  else if (/^[0-9a-f]{64}$/.test(q))                navigateToRoute(`/action/sha256:${q}`)
   else alert('Not a recognized format.\n\nExpected one of:\n• creator key (43 chars base64url)\n• session id (32 hex chars)\n• record hash (64 hex chars, optionally sha256: prefixed)')
 }
 
@@ -2249,7 +2283,7 @@ async function renderOverview() {
     ),
     el('p', { class: 'lede' },
       'Search by creator key, session id, or record hash. Open a receipt, check the signature and log entry, then trace what informed it. ',
-      el('a', { href: '#/about' }, 'How does this work?'),
+      el('a', { href: '/about' }, 'How does this work?'),
     ),
     el('div', { class: 'quick-links', id: 'quick-links' }),
   ))
@@ -2431,7 +2465,7 @@ function logHealthStat(recent, stats) {
       value,
       hash ? `newest ${info.label} ${age} · ${hash}` : `newest ${info.label} ${age}`,
       latest.record_hash
-        ? { href: `#/action/${latest.record_hash}`, title: 'Open the newest record in the log', tone }
+        ? { href: `/action/${latest.record_hash}`, title: 'Open the newest record in the log', tone }
         : { tone },
     )
   }
@@ -2472,7 +2506,7 @@ function updatePulseStrip(stats, checkpoint, recent = null) {
       'proof status',
       cp.rootHash ? 'signed snapshot' : '—',
       snapshotSub,
-      { href: '#/anchoring', title: snapshotTitle, tone: cp.rootHash ? 'ok' : 'warn' },
+      { href: '/anchoring', title: snapshotTitle, tone: cp.rootHash ? 'ok' : 'warn' },
     ),
   )
 }
@@ -2506,11 +2540,11 @@ function renderFeed(entries, withAnimation, treeSize = null) {
         const isNew = withAnimation && lastFeedTopHash !== null && idx === 0 && e.record_hash !== lastFeedTopHash
         return el('tr', { class: isNew ? 'new' : '' },
           el('td', {}, renderEventChip(e.event_type, e.creator_key)),
-          el('td', {}, el('a', { href: `#/action/${e.record_hash}` },
+          el('td', {}, el('a', { href: `/action/${e.record_hash}` },
             el('span', { class: 'mono' }, shorten(e.record_hash, 13, 4)),
           )),
           el('td', {}, renderIdentityLabel(e.creator_key)),
-          el('td', {}, el('a', { href: `#/session/${e.context_id}` },
+          el('td', {}, el('a', { href: `/session/${e.context_id}` },
             el('span', { class: 'mono' }, shorten(e.context_id, 8, 4)),
           )),
           el('td', { class: 'shrink', title: isoTime(e.timestamp_ms), 'data-ts': String(e.timestamp_ms) }, timeAgo(e.timestamp_ms)),
@@ -2573,19 +2607,19 @@ function populateQuickLinks(entries) {
   // replaceChildren coerces non-Node args via String(), so passing JS null
   // renders the literal text "null". Filter optional links explicitly.
   const links = [
-    el('a', { href: '/yc-demo.html' },
+    el('a', { href: '/yc-demo' },
       'Watch the signed-context demo ', el('span', { class: 'arrow' }, '→'),
     ),
-    el('a', { href: `#/action/${linkable.record_hash}` },
+    el('a', { href: `/action/${linkable.record_hash}` },
       'Open a recent record ', el('span', { class: 'arrow' }, '→'),
     ),
-    linkable.context_id && el('a', { href: `#/session/${linkable.context_id}` },
+    linkable.context_id && el('a', { href: `/session/${linkable.context_id}` },
       'Browse a recent session ', el('span', { class: 'arrow' }, '→'),
     ),
-    linkable.creator_key && el('a', { href: `#/identity/${linkable.creator_key}` },
+    linkable.creator_key && el('a', { href: `/identity/${linkable.creator_key}` },
       'Inspect an identity ', el('span', { class: 'arrow' }, '→'),
     ),
-    txn && el('a', { href: `#/action/${txn.record_hash}` },
+    txn && el('a', { href: `/action/${txn.record_hash}` },
         'See a transaction ', el('span', { class: 'arrow' }, '→'),
       ),
   ].filter(Boolean)
@@ -2737,7 +2771,7 @@ function renderDemoInspector(container, node, onClear = null, title = 'selected 
       el('dt', {}, 'when'), el('dd', {}, tsMs ? timeAgo(tsMs) : 'queued'),
       el('dt', {}, 'record'), el('dd', {},
         hash
-          ? el('a', { class: 'mono', href: `#/action/${hash}` }, shorten(hash, 16, 8))
+          ? el('a', { class: 'mono', href: `/action/${hash}` }, shorten(hash, 16, 8))
           : el('span', { class: 'mono' }, shorten(node.id || 'unknown', 16, 8))),
     ),
   )
@@ -2964,7 +2998,7 @@ async function renderDemo() {
 // ─── Polling ─────────────────────────────────────────────────────────────
 
 function isOverviewRoute() {
-  const h = location.hash.replace(/^#/, '')
+  const h = currentRoutePath()
   return !h || h === '/' || h === '/overview'
 }
 
@@ -2982,7 +3016,7 @@ function isOverviewRoute() {
 // (dropdown change, layout toggle, browser reload). Views without user
 // state (action, trace, anchoring) keep silent-refresh.
 function isUserStatefulRoute() {
-  const h = location.hash.replace(/^#/, '')
+  const h = currentRoutePath()
   return h.startsWith('/identity/') || h.startsWith('/session/') || h === '/demo'
 }
 
@@ -3073,7 +3107,7 @@ document.addEventListener('visibilitychange', () => {
 function viewHeader({ crumb, title, subject, explainer }) {
   return el('header', { class: 'view-header' },
     el('span', { class: 'crumb' },
-      el('a', { href: '#/', style: 'color: var(--text-3);' }, 'explorer'),
+      el('a', { href: '/', style: 'color: var(--text-3);' }, 'explorer'),
       ' / ',
       crumb,
     ),
@@ -3242,7 +3276,7 @@ async function renderIdentity(creatorKey) {
         el('tbody', {},
           ...sessions.sessions.map(s => el('tr', {},
             el('td', {},
-              el('a', { href: `#/session/${s.context_id}` },
+              el('a', { href: `/session/${s.context_id}` },
                 el('span', { class: 'mono' }, shorten(s.context_id, 10, 6)),
               ),
               ' ',
@@ -3448,7 +3482,7 @@ async function renderIdentity(creatorKey) {
         el('code', {}, 'SESSION_PRECEDES'),
         ' / ', el('code', {}, 'SESSION_PARALLEL'),
         ') is excluded by default per spec §3.4.7 to keep the cross-session signal visible. Each per-session DAG is at ',
-        el('code', {}, '#/session/<context_id>'),
+        el('code', {}, '/session/<context_id>'),
         '.',
       ),
       el('div', { style: 'margin: 0 12px 12px; display: flex; align-items: center; gap: 8px;' },
@@ -3632,7 +3666,7 @@ async function renderIdentity(creatorKey) {
     if (graph.edges.length === 0) {
       activityGraphContainer.replaceChildren(el('div', { class: 'empty' },
         'No cross-session edges in this window. Each record\'s session DAG is at ',
-        el('code', {}, '#/session/<context_id>'),
+        el('code', {}, '/session/<context_id>'),
         '.',
       ))
       populateGraphLegend(activityNodeLegend, activityEdgeLegend, graph)
@@ -4014,10 +4048,10 @@ async function renderSession(contextId) {
             }
             const actionHash = graphNodeActionHash(n)
             return actionHash
-              ? el('a', { href: `#/action/${actionHash}` }, el('span', attrs, shorten(label, 13, 4)))
+              ? el('a', { href: `/action/${actionHash}` }, el('span', attrs, shorten(label, 13, 4)))
               : el('span', attrs, shorten(label, 13, 4))
           })()
-        : el('a', { href: `#/action/${n.id}` },
+        : el('a', { href: `/action/${n.id}` },
             el('span', { class: 'mono' }, shorten(n.id, 13, 4)),
           )),
     el('td', {}, n.creator_key ? renderIdentityLabel(n.creator_key) : '—'),
@@ -4084,11 +4118,11 @@ async function renderSession(contextId) {
           const attrs = { class: 'mono', title: e.reason || referenceStatusLabel(status) }
           return status === 'external' && refHash
             ? el('span', attrs,
-                el('a', { href: `#/action/${refHash}` }, shorten(label, 10, 4)),
+                el('a', { href: `/action/${refHash}` }, shorten(label, 10, 4)),
                 chip)
             : el('span', attrs, shorten(label, 10, 4), chip)
         })()
-      : el('a', { href: `#/action/${e.target}` },
+      : el('a', { href: `/action/${e.target}` },
           el('span', { class: 'mono' }, shorten(e.target, 10, 4)))
     root.append(el('section', { class: 'feed-wrap', style: 'margin-top: 24px;' },
       el('div', { class: 'feed-head' },
@@ -4108,7 +4142,7 @@ async function renderSession(contextId) {
           el('tbody', {},
             ...graph.edges.map(e => el('tr', {},
               el('td', {}, el('code', {}, e.type)),
-              el('td', {}, el('a', { href: `#/action/${e.source}` }, el('span', { class: 'mono' }, shorten(e.source, 10, 4)))),
+              el('td', {}, el('a', { href: `/action/${e.source}` }, el('span', { class: 'mono' }, shorten(e.source, 10, 4)))),
               el('td', {}, renderTarget(e)),
             )),
           ),
@@ -4270,7 +4304,7 @@ async function renderAction(recordHash) {
         el('dd', {}, entry.creator_key ? renderIdentityLabel(entry.creator_key, { short: false }) : '—'),
         el('dt', {}, 'session'),
         el('dd', {}, entry.context_id
-          ? el('a', { href: `#/session/${entry.context_id}` }, el('span', { class: 'mono' }, entry.context_id))
+          ? el('a', { href: `/session/${entry.context_id}` }, el('span', { class: 'mono' }, entry.context_id))
           : '—'),
         el('dt', {}, 'timestamp'),
         el('dd', {}, entry.timestamp_ms
@@ -4281,12 +4315,12 @@ async function renderAction(recordHash) {
       ),
       el('div', { class: 'receipt-meta' },
         entry.context_id
-          ? el('a', { class: 'receipt-link', href: `#/session/${entry.context_id}` }, 'Open session')
+          ? el('a', { class: 'receipt-link', href: `/session/${entry.context_id}` }, 'Open session')
           : null,
         entry.creator_key
-          ? el('a', { class: 'receipt-link', href: `#/identity/${entry.creator_key}` }, 'Inspect identity')
+          ? el('a', { class: 'receipt-link', href: `/identity/${entry.creator_key}` }, 'Inspect identity')
           : null,
-        el('a', { class: 'receipt-link', href: `#/trace/${fullHash}` }, 'Trace ancestry'),
+        el('a', { class: 'receipt-link', href: `/trace/${fullHash}` }, 'Trace ancestry'),
       ),
     ),
     el('aside', { class: 'receipt-proof', 'aria-label': 'Proof checks' },
@@ -5285,7 +5319,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   // Callback signature: (nodeId, sourceRecord, controls) => void.
   const handleClick = onNodeClick || ((nodeId, sourceRecord) => {
     const actionHash = graphNodeActionHash(sourceRecord)
-    if (actionHash) location.hash = `#/action/${actionHash}`
+    if (actionHash) navigateToRoute(`/action/${actionHash}`)
   })
   sigmaInstance.on('clickNode', ({ node }) => {
     const attrs = gx.getNodeAttributes(node)
@@ -5544,7 +5578,7 @@ function appendChainSection(root, chainResult, fullHash) {
         ? el('span', { class: 'chip', style: 'background: var(--accent-subtle); color: var(--accent); border-color: var(--accent-border);' }, 'start')
         : null,
       renderEventChip(node.event_type, node.creator_key, node.event_type_uri),
-      el('a', { href: `#/action/${recordHash}`, class: 'mono', style: 'color: var(--text);' },
+      el('a', { href: `/action/${recordHash}`, class: 'mono', style: 'color: var(--text);' },
         shorten(recordHash, 14, 6),
       ),
       node.timestamp
@@ -5598,7 +5632,7 @@ async function renderTrace(rawHash) {
   const myGen = currentRouteGeneration()
 
   // Tear down any prior Sigma instance from a previous render. Sigma
-  // attaches canvas + event listeners that leak across hashchange.
+  // attaches canvas + event listeners that leak across route changes.
   if (_activeSigmaInstance) {
     try { _activeSigmaInstance.kill() } catch {}
     _activeSigmaInstance = null
@@ -5675,7 +5709,7 @@ async function renderTrace(rawHash) {
   const controls = el('div', { class: 'trace-controls' },
     el('label', {}, 'start'),
     el('span', { class: 'start-link' },
-      el('a', { href: `#/action/${fullHash}` },
+      el('a', { href: `/action/${fullHash}` },
         el('span', { class: 'mono' }, shorten(fullHash, 14, 6)),
       ),
     ),
@@ -5683,7 +5717,7 @@ async function renderTrace(rawHash) {
     depthInput,
     depthReadout,
     el('span', { class: 'actions' },
-      el('a', { href: `#/action/${fullHash}` }, 'open record →'),
+      el('a', { href: `/action/${fullHash}` }, 'open record →'),
     ),
   )
 
@@ -5771,12 +5805,12 @@ async function renderTrace(rawHash) {
           ),
           el('div', {},
             el('a', {
-              href: location.hash, // self-link forces re-fetch via route()
+              href: currentRoutePath(), // self-link forces re-fetch via route()
               onclick: (ev) => { ev.preventDefault(); route() },
               style: 'color: var(--accent); border-bottom: 1px dotted var(--accent); text-decoration: none; margin-right: 16px;',
             }, '↻ retry'),
             el('a', {
-              href: `#/action/${fullHash}`,
+              href: `/action/${fullHash}`,
               style: 'color: var(--text-2); border-bottom: 1px dotted var(--text-3); text-decoration: none;',
             }, 'view the record directly →'),
           ),
@@ -5793,7 +5827,7 @@ async function renderTrace(rawHash) {
           el('dd', {}, renderIdentityLabel(logProbe.creator_key, { short: false })),
           el('dt', {}, 'session'),
           el('dd', {}, logProbe.context_id
-            ? el('a', { href: `#/session/${logProbe.context_id}` }, el('span', { class: 'mono' }, logProbe.context_id))
+            ? el('a', { href: `/session/${logProbe.context_id}` }, el('span', { class: 'mono' }, logProbe.context_id))
             : '—'),
           el('dt', {}, 'timestamp'),
           el('dd', {}, logProbe.timestamp_ms
@@ -5873,7 +5907,7 @@ async function renderTrace(rawHash) {
       el('dd', {}, startNode.creator_key ? renderIdentityLabel(startNode.creator_key, { short: false }) : '—'),
       el('dt', {}, 'session'),
       el('dd', {}, startNode.context_id
-        ? el('a', { href: `#/session/${startNode.context_id}` }, el('span', { class: 'mono' }, startNode.context_id))
+        ? el('a', { href: `/session/${startNode.context_id}` }, el('span', { class: 'mono' }, startNode.context_id))
         : '—'),
       el('dt', {}, 'timestamp'),
       el('dd', {}, startNode.timestamp
@@ -6127,7 +6161,7 @@ function renderAbout() {
 // Generation token guards against late-async-fetch render races. Each
 // route() invocation increments _routeGeneration; render functions can
 // capture the current generation at entry and compare against the live
-// counter before any post-fetch DOM write. Mid-fetch hashchange (the user
+// counter before any post-fetch DOM write. Mid-fetch route changes (the user
 // navigates from /trace to /session before the trace's parallel fetches
 // complete) bumps the generation, so the trace's late .then() callbacks
 // no-op via routeGenerationStillCurrent() instead of stomping on the
@@ -6145,13 +6179,13 @@ async function route(opts = {}) {
   // clearAndRender(root) at the end, so silent refreshes update in
   // place without a visible flicker. Interval-triggered refreshes
   // (startViewRefresh) pass silent: true; user-initiated navigations
-  // (hashchange, DOMContentLoaded) leave it false so the user gets
+  // (hashchange, popstate, DOMContentLoaded) leave it false so the user gets
   // immediate feedback that a new view is loading.
   const silent = opts.silent === true
   _routeGeneration += 1
   const myGen = _routeGeneration
-  const hash = location.hash.replace(/^#/, '')
-  const isDemoRoute = hash === '/demo'
+  const routePath = currentRoutePath()
+  const isDemoRoute = routePath === '/demo'
   document.body.classList.toggle('demo-route', isDemoRoute)
   if (!isDemoRoute) stopDemoReplay()
   renderEndpoints()
@@ -6171,19 +6205,19 @@ async function route(opts = {}) {
   }
 
   try {
-    if (!hash || hash === '/' || hash === '/overview')      return await renderOverview()
-    if (hash === '/demo')                                   return await renderDemo()
-    if (hash.startsWith('/identity/'))                       return await renderIdentity(hash.slice('/identity/'.length))
-    if (hash.startsWith('/session/'))                        return await renderSession(hash.slice('/session/'.length))
-    if (hash.startsWith('/action/'))                         return await renderAction(hash.slice('/action/'.length))
-    if (hash.startsWith('/trace/'))                          return await renderTrace(hash.slice('/trace/'.length))
-    if (hash === '/anchoring')                               return await renderAnchoring()
-    if (hash === '/about')                                   return renderAbout()
+    if (!routePath || routePath === '/' || routePath === '/overview') return await renderOverview()
+    if (routePath === '/demo')                                      return await renderDemo()
+    if (routePath.startsWith('/identity/'))                         return await renderIdentity(routePath.slice('/identity/'.length))
+    if (routePath.startsWith('/session/'))                          return await renderSession(routePath.slice('/session/'.length))
+    if (routePath.startsWith('/action/'))                           return await renderAction(routePath.slice('/action/'.length))
+    if (routePath.startsWith('/trace/'))                            return await renderTrace(routePath.slice('/trace/'.length))
+    if (routePath === '/anchoring')                                 return await renderAnchoring()
+    if (routePath === '/about')                                     return renderAbout()
 
     if (!routeGenerationStillCurrent(myGen)) return // stale render
     document.getElementById('app').replaceChildren(el('div', { class: 'panel' },
       el('h2', {}, 'unknown route'),
-      el('p', {}, 'Try ', el('a', { href: '#/' }, 'overview'), '.'),
+      el('p', {}, 'Try ', el('a', { href: '/' }, 'overview'), '.'),
     ))
   } catch (e) {
     if (!routeGenerationStillCurrent(myGen)) return // user navigated; do not paint
@@ -6191,15 +6225,28 @@ async function route(opts = {}) {
       el('div', { class: 'err-banner' },
         el('span', { class: 'label' }, 'unhandled error:'), e?.message || String(e),
       ),
-      el('p', {}, 'Return to ', el('a', { href: '#/' }, 'overview'), '.'),
+      el('p', {}, 'Return to ', el('a', { href: '/' }, 'overview'), '.'),
     ))
   }
 }
+
+document.addEventListener('click', (ev) => {
+  const anchor = ev.target.closest?.('a[href]')
+  if (!anchor || anchor.target || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.defaultPrevented) return
+  const href = anchor.getAttribute('href')
+  if (!href) return
+  const url = new URL(href, location.href)
+  if (url.origin !== location.origin || !isExplorerRoutePath(url.pathname)) return
+  ev.preventDefault()
+  history.pushState(null, '', `${normalizeRoutePath(url.pathname)}${url.search}`)
+  route()
+})
 
 // Wrap route() so the Event arg from addEventListener doesn't get treated
 // as the opts parameter (route(event) would see {} as truthy and silent
 // would coerce to false anyway, but the wrap makes the intent explicit).
 window.addEventListener('hashchange', () => route())
+window.addEventListener('popstate', () => route())
 window.addEventListener('DOMContentLoaded', () => route())
 </script>
 </body>
