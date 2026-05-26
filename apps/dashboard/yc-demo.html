@@ -72,7 +72,14 @@
       align-items: center;
       gap: 12px;
       min-width: 0;
+      color: var(--fg);
       font-weight: 700;
+      text-decoration: none;
+    }
+
+    .brand:hover {
+      color: var(--accent-strong);
+      text-decoration: none;
     }
 
     .mark {
@@ -687,11 +694,11 @@
 <body>
   <div class="shell">
     <header>
-      <div class="brand">
+      <a class="brand" href="/" aria-label="atrib explorer home">
         <img class="mark" src="/static/nav-mark.svg" width="20" height="20" alt="" aria-hidden="true">
         <span>atrib</span>
         <small>demo: signed context changes action</small>
-      </div>
+      </a>
       <div class="controls" aria-label="Playback controls">
         <nav class="demo-links" aria-label="Related atrib surfaces">
           <a href="/">explorer</a>
