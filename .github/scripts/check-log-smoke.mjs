@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 const maxTtfbMs = readPositiveInt('LOG_SMOKE_MAX_TTFB_MS', 3000)
 const maxTotalMs = readPositiveInt('LOG_SMOKE_MAX_TOTAL_MS', 5000)
 const timeoutMs = readPositiveInt('LOG_SMOKE_FETCH_TIMEOUT_MS', 10000)
@@ -46,10 +48,44 @@ const endpoints = [
   },
 ]
 
+const assetGroups = [
+  {
+    name: 'favicon-parity',
+    expectedContentTypes: ['image/x-icon', 'image/vnd.microsoft.icon'],
+    assets: [
+      { name: 'marketing', url: 'https://atrib.dev/favicon.ico' },
+      { name: 'explorer-root', url: 'https://explore.atrib.dev/favicon.ico' },
+      { name: 'explorer-static', url: 'https://explore.atrib.dev/static/favicon.ico' },
+    ],
+  },
+  {
+    name: 'touch-icon-parity',
+    expectedContentTypes: ['image/png'],
+    assets: [
+      { name: 'marketing', url: 'https://atrib.dev/apple-touch-icon.png' },
+      { name: 'explorer-static', url: 'https://explore.atrib.dev/static/apple-touch-icon.png' },
+    ],
+  },
+  {
+    name: 'opengraph-parity',
+    expectedContentTypes: ['image/png'],
+    assets: [
+      { name: 'marketing', url: 'https://atrib.dev/opengraph-image.png' },
+      { name: 'cdn', url: 'https://cdn.atrib.dev/opengraph-image.png' },
+      { name: 'explorer-static', url: 'https://explore.atrib.dev/static/opengraph-image.png' },
+    ],
+  },
+]
+
 const results = []
 
 for (const endpoint of endpoints) {
   results.push(await checkEndpoint(endpoint))
+}
+
+const assetResults = []
+for (const group of assetGroups) {
+  assetResults.push(await checkAssetParity(group))
 }
 
 console.log(
@@ -61,6 +97,90 @@ for (const result of results) {
       0,
     )}ms bytes=${result.bytes} attempt=${result.attempt}`,
   )
+}
+for (const result of assetResults) {
+  console.log(
+    `${result.name}: hash=${result.hash} assets=${result.assets.map((asset) => `${asset.name}:${asset.status}`).join(',')}`,
+  )
+}
+
+async function checkAssetParity(group) {
+  const assets = []
+  for (const asset of group.assets) {
+    assets.push(await checkAssetEndpoint(asset, group.expectedContentTypes))
+  }
+
+  const [first, ...rest] = assets
+  const mismatched = rest.find((asset) => asset.hash !== first.hash)
+  if (mismatched) {
+    throw new Error(
+      `${group.name} hash mismatch: ${first.name}=${first.hash} ${mismatched.name}=${mismatched.hash}`,
+    )
+  }
+
+  return { name: group.name, hash: first.hash, assets }
+}
+
+async function checkAssetEndpoint(asset, expectedContentTypes) {
+  let lastError
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await checkAssetEndpointOnce(asset, expectedContentTypes, attempt)
+    } catch (error) {
+      lastError = error
+      if (attempt === maxAttempts) break
+      console.warn(`${asset.name} asset attempt ${attempt} failed: ${error.message}; retrying`)
+      await sleep(retryDelayMs)
+    }
+  }
+  throw lastError
+}
+
+async function checkAssetEndpointOnce(asset, expectedContentTypes, attempt) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  const started = performance.now()
+
+  try {
+    const response = await fetch(asset.url, { signal: controller.signal })
+    const headersAt = performance.now()
+    const bytes = Buffer.from(await response.arrayBuffer())
+    const completed = performance.now()
+
+    const ttfbMs = headersAt - started
+    const totalMs = completed - started
+
+    if (!response.ok) {
+      throw new Error(`${asset.name} returned HTTP ${response.status}`)
+    }
+
+    if (ttfbMs > maxTtfbMs) {
+      throw new Error(`${asset.name} TTFB ${ttfbMs.toFixed(0)}ms exceeded ${maxTtfbMs}ms`)
+    }
+
+    if (totalMs > maxTotalMs) {
+      throw new Error(`${asset.name} total ${totalMs.toFixed(0)}ms exceeded ${maxTotalMs}ms`)
+    }
+
+    const contentType = response.headers.get('content-type') || ''
+    if (!expectedContentTypes.some((expected) => contentType.includes(expected))) {
+      throw new Error(
+        `${asset.name} content-type ${contentType} did not include ${expectedContentTypes.join(' or ')}`,
+      )
+    }
+
+    return {
+      name: asset.name,
+      status: response.status,
+      hash: createHash('sha256').update(bytes).digest('hex'),
+      ttfbMs,
+      totalMs,
+      bytes: bytes.length,
+      attempt,
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 async function checkEndpoint(endpoint) {

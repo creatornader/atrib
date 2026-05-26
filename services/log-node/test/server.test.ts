@@ -161,7 +161,7 @@ describe('GET /v1/pubkey', () => {
     // 32-byte Ed25519 pubkey base64url-encodes to 43 chars (no padding)
     expect((body.public_key as string).length).toBe(43)
     // 4-byte key_id hex-encodes to 8 chars
-    expect((body.key_id as string)).toMatch(/^[0-9a-f]{8}$/)
+    expect(body.key_id as string).toMatch(/^[0-9a-f]{8}$/)
   })
 
   it('published key_id matches the keyHash embedded in checkpoint signatures', async () => {
@@ -206,10 +206,7 @@ describe('GET /v1/pubkey', () => {
     expect(parsed).not.toBeNull()
 
     const pkBytes = new Uint8Array(
-      Buffer.from(
-        (pubkey.public_key as string).replace(/-/g, '+').replace(/_/g, '/'),
-        'base64',
-      ),
+      Buffer.from((pubkey.public_key as string).replace(/-/g, '+').replace(/_/g, '/'), 'base64'),
     )
 
     const ok = await ed.verifyAsync(parsed!.signature, new TextEncoder().encode(body), pkBytes)
@@ -359,7 +356,9 @@ describe('graph fanout', () => {
     const received: { headers: Record<string, string | string[] | undefined>; body: string }[] = []
     const mockServer = createServer((req, res) => {
       let body = ''
-      req.on('data', (c: Buffer) => { body += c.toString('utf-8') })
+      req.on('data', (c: Buffer) => {
+        body += c.toString('utf-8')
+      })
       req.on('end', () => {
         received.push({ headers: { ...req.headers }, body })
         res.statusCode = 200
@@ -399,7 +398,10 @@ describe('graph fanout', () => {
 
   it('still responds 200 to submit when fanout endpoint is unreachable', async () => {
     const { startLogServer } = await import('../src/index.js')
-    const srv = await startLogServer({ port: 0, graphFanoutEndpoint: 'http://127.0.0.1:1/unreachable' })
+    const srv = await startLogServer({
+      port: 0,
+      graphFanoutEndpoint: 'http://127.0.0.1:1/unreachable',
+    })
     const record = await makeSignedRecord()
     const res = await fetch(`${srv.url}/v1/entries`, {
       method: 'POST',
@@ -415,21 +417,31 @@ describe('graph fanout', () => {
 describe('append-only design (T8)', () => {
   it('DELETE /v1/entries returns 405 with Allow header', async () => {
     const u = new URL(server.url)
-    const got = await new Promise<{ status: number; allow: string; body: string }>((resolve, reject) => {
-      const req = httpRequest({
-        method: 'DELETE', hostname: u.hostname, port: u.port, path: '/v1/entries',
-      }, (res: IncomingMessage) => {
-        const chunks: Buffer[] = []
-        res.on('data', (c: Buffer) => chunks.push(c))
-        res.on('end', () => resolve({
-          status: res.statusCode ?? 0,
-          allow: String(res.headers['allow'] ?? ''),
-          body: Buffer.concat(chunks).toString('utf-8'),
-        }))
-      })
-      req.on('error', reject)
-      req.end()
-    })
+    const got = await new Promise<{ status: number; allow: string; body: string }>(
+      (resolve, reject) => {
+        const req = httpRequest(
+          {
+            method: 'DELETE',
+            hostname: u.hostname,
+            port: u.port,
+            path: '/v1/entries',
+          },
+          (res: IncomingMessage) => {
+            const chunks: Buffer[] = []
+            res.on('data', (c: Buffer) => chunks.push(c))
+            res.on('end', () =>
+              resolve({
+                status: res.statusCode ?? 0,
+                allow: String(res.headers['allow'] ?? ''),
+                body: Buffer.concat(chunks).toString('utf-8'),
+              }),
+            )
+          },
+        )
+        req.on('error', reject)
+        req.end()
+      },
+    )
     expect(got.status).toBe(405)
     expect(got.allow).toBe('POST')
     expect(got.body).toMatch(/append-only/i)
@@ -438,9 +450,18 @@ describe('append-only design (T8)', () => {
   it('DELETE /v1/entries/<index> returns 405', async () => {
     const u = new URL(server.url)
     const got = await new Promise<number>((resolve, reject) => {
-      const req = httpRequest({
-        method: 'DELETE', hostname: u.hostname, port: u.port, path: '/v1/entries/0',
-      }, (res: IncomingMessage) => { res.resume(); resolve(res.statusCode ?? 0) })
+      const req = httpRequest(
+        {
+          method: 'DELETE',
+          hostname: u.hostname,
+          port: u.port,
+          path: '/v1/entries/0',
+        },
+        (res: IncomingMessage) => {
+          res.resume()
+          resolve(res.statusCode ?? 0)
+        },
+      )
       req.on('error', reject)
       req.end()
     })
@@ -454,7 +475,7 @@ describe('GET /v1/recent', () => {
     for (let i = 0; i < 3; i++) await post(server.url, await makeSignedRecord())
     const res = await fetch(`${server.url}/v1/recent?limit=10`)
     expect(res.status).toBe(200)
-    const body = await res.json() as {
+    const body = (await res.json()) as {
       tree_size: number
       returned: number
       entries: Array<{
@@ -478,7 +499,14 @@ describe('GET /v1/recent', () => {
     expect(e.creator_key).toMatch(/^[A-Za-z0-9_-]{43}$/)
     expect(e.context_id).toMatch(/^[0-9a-f]{32}$/)
     expect(typeof e.timestamp_ms).toBe('number')
-    expect(['tool_call', 'transaction', 'observation', 'directory_anchor', 'extension', 'reserved']).toContain(e.event_type)
+    expect([
+      'tool_call',
+      'transaction',
+      'observation',
+      'directory_anchor',
+      'extension',
+      'reserved',
+    ]).toContain(e.event_type)
   })
 
   it('clamps limit between 1 and 100', async () => {
@@ -486,17 +514,25 @@ describe('GET /v1/recent', () => {
     expect(tooBig.status).toBe(200)
     const tooSmall = await fetch(`${server.url}/v1/recent?limit=0`)
     expect(tooSmall.status).toBe(200)
-    const bigBody = await tooBig.json() as { entries: unknown[] }
+    const bigBody = (await tooBig.json()) as { entries: unknown[] }
     expect(bigBody.entries.length).toBeLessThanOrEqual(100)
   })
 
   it('paginates older entries via offset', async () => {
     for (let i = 0; i < 6; i++) await post(server.url, await makeSignedRecord())
-    const page1 = await fetch(`${server.url}/v1/recent?limit=3&offset=0`).then(r => r.json()) as {
-      tree_size: number; offset: number; entries: Array<{ index: number }>
+    const page1 = (await fetch(`${server.url}/v1/recent?limit=3&offset=0`).then((r) =>
+      r.json(),
+    )) as {
+      tree_size: number
+      offset: number
+      entries: Array<{ index: number }>
     }
-    const page2 = await fetch(`${server.url}/v1/recent?limit=3&offset=3`).then(r => r.json()) as {
-      tree_size: number; offset: number; entries: Array<{ index: number }>
+    const page2 = (await fetch(`${server.url}/v1/recent?limit=3&offset=3`).then((r) =>
+      r.json(),
+    )) as {
+      tree_size: number
+      offset: number
+      entries: Array<{ index: number }>
     }
     expect(page1.offset).toBe(0)
     expect(page2.offset).toBe(3)
@@ -512,12 +548,12 @@ describe('GET /v1/lookup/<hex>', () => {
     const record = await makeSignedRecord()
     await post(server.url, record)
     const recent = await fetch(`${server.url}/v1/recent?limit=10`)
-    const body = await recent.json() as { entries: Array<{ record_hash: string }> }
+    const body = (await recent.json()) as { entries: Array<{ record_hash: string }> }
     const target = body.entries[0]!
     const hashHex = target.record_hash.slice(7) // strip 'sha256:'
     const lookup = await fetch(`${server.url}/v1/lookup/${hashHex}`)
     expect(lookup.status).toBe(200)
-    const found = await lookup.json() as { record_hash: string }
+    const found = (await lookup.json()) as { record_hash: string }
     expect(found.record_hash).toBe(target.record_hash)
   })
 
@@ -533,11 +569,15 @@ describe('GET /v1/by-context/<hex>', () => {
     await post(server.url, await makeSignedRecord())
     await post(server.url, await makeSignedRecord())
     const recent = await fetch(`${server.url}/v1/recent?limit=3`)
-    const recentBody = await recent.json() as { entries: Array<{ context_id: string }> }
+    const recentBody = (await recent.json()) as { entries: Array<{ context_id: string }> }
     const ctx = recentBody.entries[0]!.context_id
     const r = await fetch(`${server.url}/v1/by-context/${ctx}`)
     expect(r.status).toBe(200)
-    const body = await r.json() as { context_id: string; count: number; entries: Array<{ index: number; context_id: string }> }
+    const body = (await r.json()) as {
+      context_id: string
+      count: number
+      entries: Array<{ index: number; context_id: string }>
+    }
     expect(body.context_id).toBe(ctx)
     expect(body.count).toBeGreaterThanOrEqual(1)
     for (const e of body.entries) expect(e.context_id).toBe(ctx)
@@ -587,14 +627,17 @@ describe('GET /dashboard', () => {
     const favicon = await fetch(`${server.url}/favicon.ico`)
     expect(favicon.status).toBe(200)
     expect(favicon.headers.get('content-type')).toContain('image/x-icon')
+    expect(favicon.headers.get('cache-control')).toBe('public, max-age=60')
 
     const versionedFavicon = await fetch(`${server.url}/favicon.ico?v=0ee8876`)
     expect(versionedFavicon.status).toBe(200)
     expect(versionedFavicon.headers.get('content-type')).toContain('image/x-icon')
+    expect(versionedFavicon.headers.get('cache-control')).toBe('public, max-age=60')
 
     const staticFavicon = await fetch(`${server.url}/static/favicon.ico`)
     expect(staticFavicon.status).toBe(200)
     expect(staticFavicon.headers.get('content-type')).toContain('image/x-icon')
+    expect(staticFavicon.headers.get('cache-control')).toBe('public, max-age=86400, immutable')
 
     const icon = await fetch(`${server.url}/static/apple-touch-icon.png`)
     expect(icon.status).toBe(200)
@@ -621,7 +664,7 @@ describe('GET /dashboard', () => {
     const bundle = await fetch(`${server.url}/yc-demo-trace-bundle.json`)
     expect(bundle.status).toBe(200)
     expect(bundle.headers.get('content-type')).toContain('application/json')
-    const json = await bundle.json() as { schema: string; records: unknown[] }
+    const json = (await bundle.json()) as { schema: string; records: unknown[] }
     expect(json.schema).toBe('atrib-yc-living-graph-trace-bundle-v1')
     expect(json.records.length).toBeGreaterThan(0)
   })
@@ -642,22 +685,32 @@ describe('GET /dashboard', () => {
   it('serves dashboard at root when Host=explore.atrib.dev (D054)', async () => {
     // Node fetch silently drops the Host header; use node:http to set it.
     const u = new URL(server.url)
-    const got = await new Promise<{ status: number; ct: string; body: string }>((resolve, reject) => {
-      const req = httpRequest({
-        method: 'GET', hostname: u.hostname, port: u.port, path: '/',
-        headers: { host: 'explore.atrib.dev' },
-      }, (res: IncomingMessage) => {
-        const chunks: Buffer[] = []
-        res.on('data', (c: Buffer) => chunks.push(c))
-        res.on('end', () => resolve({
-          status: res.statusCode ?? 0,
-          ct: res.headers['content-type'] ?? '',
-          body: Buffer.concat(chunks).toString('utf-8'),
-        }))
-      })
-      req.on('error', reject)
-      req.end()
-    })
+    const got = await new Promise<{ status: number; ct: string; body: string }>(
+      (resolve, reject) => {
+        const req = httpRequest(
+          {
+            method: 'GET',
+            hostname: u.hostname,
+            port: u.port,
+            path: '/',
+            headers: { host: 'explore.atrib.dev' },
+          },
+          (res: IncomingMessage) => {
+            const chunks: Buffer[] = []
+            res.on('data', (c: Buffer) => chunks.push(c))
+            res.on('end', () =>
+              resolve({
+                status: res.statusCode ?? 0,
+                ct: res.headers['content-type'] ?? '',
+                body: Buffer.concat(chunks).toString('utf-8'),
+              }),
+            )
+          },
+        )
+        req.on('error', reject)
+        req.end()
+      },
+    )
     expect(got.status).toBe(200)
     expect(got.ct).toContain('text/html')
     expect(got.body).toMatch(/<!doctype html>/i)
@@ -665,23 +718,39 @@ describe('GET /dashboard', () => {
 
   it('serves dashboard path routes when Host=explore.atrib.dev', async () => {
     const u = new URL(server.url)
-    for (const path of ['/overview', '/demo', '/anchoring', '/about', '/session/0123456789abcdef0123456789abcdef']) {
-      const got = await new Promise<{ status: number; ct: string; body: string }>((resolve, reject) => {
-        const req = httpRequest({
-          method: 'GET', hostname: u.hostname, port: u.port, path,
-          headers: { host: 'explore.atrib.dev' },
-        }, (res: IncomingMessage) => {
-          const chunks: Buffer[] = []
-          res.on('data', (c: Buffer) => chunks.push(c))
-          res.on('end', () => resolve({
-            status: res.statusCode ?? 0,
-            ct: res.headers['content-type'] ?? '',
-            body: Buffer.concat(chunks).toString('utf-8'),
-          }))
-        })
-        req.on('error', reject)
-        req.end()
-      })
+    for (const path of [
+      '/overview',
+      '/demo',
+      '/anchoring',
+      '/about',
+      '/session/0123456789abcdef0123456789abcdef',
+    ]) {
+      const got = await new Promise<{ status: number; ct: string; body: string }>(
+        (resolve, reject) => {
+          const req = httpRequest(
+            {
+              method: 'GET',
+              hostname: u.hostname,
+              port: u.port,
+              path,
+              headers: { host: 'explore.atrib.dev' },
+            },
+            (res: IncomingMessage) => {
+              const chunks: Buffer[] = []
+              res.on('data', (c: Buffer) => chunks.push(c))
+              res.on('end', () =>
+                resolve({
+                  status: res.statusCode ?? 0,
+                  ct: res.headers['content-type'] ?? '',
+                  body: Buffer.concat(chunks).toString('utf-8'),
+                }),
+              )
+            },
+          )
+          req.on('error', reject)
+          req.end()
+        },
+      )
       expect(got.status).toBe(200)
       expect(got.ct).toContain('text/html')
       expect(got.body).toMatch(/<!doctype html>/i)
@@ -697,22 +766,32 @@ describe('GET /dashboard', () => {
     // by content-type assertion below, dashboard would be text/html, the
     // service-info is application/json.
     const u = new URL(server.url)
-    const got = await new Promise<{ status: number, ct: string, body: string }>((resolve, reject) => {
-      const req = httpRequest({
-        method: 'GET', hostname: u.hostname, port: u.port, path: '/',
-        headers: { host: 'log.atrib.dev' },
-      }, (res: IncomingMessage) => {
-        const chunks: Buffer[] = []
-        res.on('data', (c: Buffer) => chunks.push(c))
-        res.on('end', () => resolve({
-          status: res.statusCode ?? 0,
-          ct: String(res.headers['content-type'] ?? ''),
-          body: Buffer.concat(chunks).toString('utf-8'),
-        }))
-      })
-      req.on('error', reject)
-      req.end()
-    })
+    const got = await new Promise<{ status: number; ct: string; body: string }>(
+      (resolve, reject) => {
+        const req = httpRequest(
+          {
+            method: 'GET',
+            hostname: u.hostname,
+            port: u.port,
+            path: '/',
+            headers: { host: 'log.atrib.dev' },
+          },
+          (res: IncomingMessage) => {
+            const chunks: Buffer[] = []
+            res.on('data', (c: Buffer) => chunks.push(c))
+            res.on('end', () =>
+              resolve({
+                status: res.statusCode ?? 0,
+                ct: String(res.headers['content-type'] ?? ''),
+                body: Buffer.concat(chunks).toString('utf-8'),
+              }),
+            )
+          },
+        )
+        req.on('error', reject)
+        req.end()
+      },
+    )
     expect(got.status).toBe(200)
     expect(got.ct).toContain('application/json')
     expect(got.body).not.toMatch(/<!doctype html>/i)

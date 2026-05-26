@@ -19,7 +19,7 @@ The complete protocol specification is in `atrib-spec.md` ([§0](atrib-spec.md#0
 ```
 atrib/
   .github/
-    scripts/check-log-smoke.mjs # Shared public log smoke checker for deploy and scheduled workflows. Checks response shape plus TTFB/total latency budgets for pubkey, stats, recent, and explorer shell.
+    scripts/check-log-smoke.mjs # Shared public log smoke checker for deploy and scheduled workflows. Checks response shape plus TTFB/total latency budgets for pubkey, stats, recent, explorer shell, and live marketing/explorer asset parity.
   README.md                    # Public-facing project description (customer entry point)
   CLAUDE.md                    # THIS FILE: hub doc, conventions, invariants
   DESIGN.md                    # Product design system source of truth: current state, target state, tokens, components, surface backlog
