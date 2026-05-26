@@ -1673,7 +1673,7 @@
   </div>
   <nav id="nav">
     <a href="#/" data-route="overview">overview</a>
-    <a href="#/demo" data-route="demo">demo</a>
+    <a href="#/demo" data-route="demo">live replay</a>
     <a href="#/anchoring" data-route="anchoring">anchoring</a>
     <a href="#/about" data-route="about">about</a>
   </nav>
@@ -2205,7 +2205,13 @@ function setActiveNav(routeName) {
     a.classList.toggle('active', a.dataset.route === routeName)
   }
   const sub = document.getElementById('brand-sub')
-  if (sub) sub.textContent = routeName === 'overview' ? 'explorer' : (routeName || 'explorer')
+  if (sub) {
+    sub.textContent = routeName === 'overview'
+      ? 'explorer'
+      : routeName === 'demo'
+        ? 'live replay'
+        : (routeName || 'explorer')
+  }
 }
 
 // ─── Search routing ──────────────────────────────────────────────────────
@@ -2566,6 +2572,9 @@ function populateQuickLinks(entries) {
   // replaceChildren coerces non-Node args via String(), so passing JS null
   // renders the literal text "null". Filter optional links explicitly.
   const links = [
+    el('a', { href: '/yc-demo.html' },
+      'Watch the signed-context demo ', el('span', { class: 'arrow' }, '→'),
+    ),
     el('a', { href: `#/action/${linkable.record_hash}` },
       'Open a recent record ', el('span', { class: 'arrow' }, '→'),
     ),
@@ -2749,14 +2758,14 @@ async function renderDemo() {
   root.append(
     el('section', { class: 'demo-panel demo-timeline-panel' },
       el('div', { class: 'demo-panel-head' },
-        el('h1', {}, 'agent session'),
-        el('span', { class: 'demo-status' }, 'live replay'),
+        el('h1', {}, 'live recent-action replay'),
+        el('span', { class: 'demo-status' }, 'public log'),
       ),
       timeline,
     ),
     el('section', { class: 'demo-panel demo-graph-panel' },
       el('div', { class: 'demo-panel-head' },
-        el('h2', {}, 'living graph'),
+        el('h2', {}, 'signed activity graph'),
         meta,
       ),
       el('div', { class: 'demo-graph-frame' }, graphContainer, inspector),
