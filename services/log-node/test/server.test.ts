@@ -583,6 +583,16 @@ describe('GET /dashboard', () => {
     expect(body).toMatch(/selectLayout/)
   })
 
+  it('serves dashboard brand assets from /static', async () => {
+    const icon = await fetch(`${server.url}/static/apple-touch-icon.png`)
+    expect(icon.status).toBe(200)
+    expect(icon.headers.get('content-type')).toContain('image/png')
+
+    const socialCard = await fetch(`${server.url}/static/opengraph-image.png`)
+    expect(socialCard.status).toBe(200)
+    expect(socialCard.headers.get('content-type')).toContain('image/png')
+  })
+
   it('serves the YC demo page and trace bundle from the dashboard root', async () => {
     const html = await fetch(`${server.url}/yc-demo.html`)
     expect(html.status).toBe(200)
