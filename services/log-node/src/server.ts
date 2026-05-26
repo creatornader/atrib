@@ -83,7 +83,7 @@ export async function bindServer(
     // CORS for browser-based dashboards (D054). All log read endpoints serve public data
     // per spec §0; browser cross-origin reads are explicitly permitted.
     res.setHeader('access-control-allow-origin', '*')
-    res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS')
+    res.setHeader('access-control-allow-methods', 'GET, HEAD, POST, OPTIONS')
     res.setHeader('access-control-allow-headers', 'content-type, x-atrib-priority')
     if (req.method === 'OPTIONS') {
       res.statusCode = 204
@@ -130,6 +130,10 @@ export async function bindServer(
 
 type AcquireLock = () => { wait: Promise<void>; release: () => void }
 
+function isGetOrHead(method: string | undefined): boolean {
+  return method === 'GET' || method === 'HEAD'
+}
+
 function isDashboardRoutePath(urlPath: string | undefined): boolean {
   if (!urlPath) return false
   if (
@@ -161,12 +165,13 @@ async function handleRequest(
   // the dashboard route rather than falling through to a 404.
   const urlPath = (req.url ?? '').split('?')[0]
   const isExplorerHost = req.headers.host?.startsWith('explore.atrib.dev') === true
+  const isHead = req.method === 'HEAD'
   if (
-    req.method === 'GET' &&
+    isGetOrHead(req.method) &&
     isExplorerHost &&
     (urlPath === '/' || urlPath === '' || isDashboardRoutePath(urlPath))
   ) {
-    return handleDashboard(res)
+    return handleDashboard(res, isHead)
   }
 
   // Service-info index for the bare hostname when NOT served over
@@ -322,21 +327,21 @@ async function handleRequest(
   // apps/dashboard/index.html in the repo and is bundled into the image by
   // the Dockerfile. /dashboard, /dashboard/, /dashboard.html all alias.
   if (
-    req.method === 'GET' &&
+    isGetOrHead(req.method) &&
     (urlPath === '/dashboard' || urlPath === '/dashboard/' || urlPath === '/dashboard.html')
   ) {
-    return handleDashboard(res)
+    return handleDashboard(res, isHead)
   }
 
   // D054: dashboard static assets, favicon, apple-touch-icon, og image.
   // Bundled by the Dockerfile from apps/dashboard/static/. Served from both
   // explore.atrib.dev and log.atrib.dev so the HTML's <link> tags resolve
   // regardless of which hostname loads the explorer.
-  if (req.method === 'GET' && urlPath === '/favicon.ico') {
-    return handleStaticAsset(res, 'favicon.ico', 'image/x-icon', 60, false)
+  if (isGetOrHead(req.method) && urlPath === '/favicon.ico') {
+    return handleStaticAsset(res, 'favicon.ico', 'image/x-icon', 60, false, isHead)
   }
   const staticMatch = req.url?.match(/^\/static\/([A-Za-z0-9._-]+)$/)
-  if (req.method === 'GET' && staticMatch) {
+  if (isGetOrHead(req.method) && staticMatch) {
     const name = staticMatch[1]!
     const contentType = name.endsWith('.svg')
       ? 'image/svg+xml'
@@ -345,24 +350,25 @@ async function handleRequest(
         : name.endsWith('.ico')
           ? 'image/x-icon'
           : 'application/octet-stream'
-    return handleStaticAsset(res, name, contentType)
+    return handleStaticAsset(res, name, contentType, 86400, true, isHead)
   }
 
   // YC demo recording surface. This is a dashboard-root artifact, not the
   // live /demo route. Keep it allowlisted so the explorer can host the
   // stable recording page without turning apps/dashboard into a file server.
   if (
-    req.method === 'GET' &&
+    isGetOrHead(req.method) &&
     (urlPath === '/yc-demo' || urlPath === '/yc-demo/' || urlPath === '/yc-demo.html')
   ) {
-    return handleDashboardRootFile(res, 'yc-demo.html', 'text/html; charset=utf-8', 60)
+    return handleDashboardRootFile(res, 'yc-demo.html', 'text/html; charset=utf-8', 60, isHead)
   }
-  if (req.method === 'GET' && urlPath === '/yc-demo-trace-bundle.json') {
+  if (isGetOrHead(req.method) && urlPath === '/yc-demo-trace-bundle.json') {
     return handleDashboardRootFile(
       res,
       'yc-demo-trace-bundle.json',
       'application/json; charset=utf-8',
       60,
+      isHead,
     )
   }
 
@@ -375,8 +381,8 @@ async function handleRequest(
   // Match the URL pathname only (urlPath is computed above) so cache-
   // bust query strings (./graph-utils.mjs?v=...) still resolve.
   const mjsMatch = (urlPath ?? '').match(/^\/([A-Za-z0-9_-]+\.mjs)$/)
-  if (req.method === 'GET' && mjsMatch) {
-    return handleDashboardModule(res, mjsMatch[1]!)
+  if (isGetOrHead(req.method) && mjsMatch) {
+    return handleDashboardModule(res, mjsMatch[1]!, isHead)
   }
 
   sendJson(res, 404, {
@@ -479,12 +485,14 @@ async function loadDashboard(): Promise<Buffer | null> {
   }
 }
 
-async function handleDashboard(res: ServerResponse): Promise<void> {
+async function handleDashboard(res: ServerResponse, isHead = false): Promise<void> {
   const html = await loadDashboard()
   if (!html) {
     res.statusCode = 503
     res.setHeader('content-type', 'text/plain; charset=utf-8')
-    res.end(`atrib explorer: dashboard not bundled (looked at ${DASHBOARD_PATH})\n`)
+    const body = `atrib explorer: dashboard not bundled (looked at ${DASHBOARD_PATH})\n`
+    res.setHeader('content-length', Buffer.byteLength(body))
+    res.end(isHead ? undefined : body)
     return
   }
   res.statusCode = 200
@@ -493,7 +501,7 @@ async function handleDashboard(res: ServerResponse): Promise<void> {
   // Short cache so the operator can ship dashboard tweaks without a long stale
   // window, but long enough to make repeated visits cheap.
   res.setHeader('cache-control', 'public, max-age=60')
-  res.end(html)
+  res.end(isHead ? undefined : html)
 }
 
 // Static-asset cache: small set of files (favicon, apple-touch-icon, etc.),
@@ -522,6 +530,7 @@ async function handleDashboardRootFile(
   name: string,
   contentType: string,
   maxAgeSeconds: number,
+  isHead = false,
 ): Promise<void> {
   let bytes = rootFileCache.get(name)
   if (!bytes) {
@@ -532,7 +541,9 @@ async function handleDashboardRootFile(
     } catch {
       res.statusCode = 404
       res.setHeader('content-type', 'text/plain; charset=utf-8')
-      res.end(`dashboard file not found: ${name}\n`)
+      const body = `dashboard file not found: ${name}\n`
+      res.setHeader('content-length', Buffer.byteLength(body))
+      res.end(isHead ? undefined : body)
       return
     }
   }
@@ -540,10 +551,14 @@ async function handleDashboardRootFile(
   res.setHeader('content-type', contentType)
   res.setHeader('content-length', bytes.length)
   res.setHeader('cache-control', `public, max-age=${maxAgeSeconds}`)
-  res.end(bytes)
+  res.end(isHead ? undefined : bytes)
 }
 
-async function handleDashboardModule(res: ServerResponse, name: string): Promise<void> {
+async function handleDashboardModule(
+  res: ServerResponse,
+  name: string,
+  isHead = false,
+): Promise<void> {
   let bytes = moduleCache.get(name)
   if (!bytes) {
     try {
@@ -554,7 +569,9 @@ async function handleDashboardModule(res: ServerResponse, name: string): Promise
     } catch {
       res.statusCode = 404
       res.setHeader('content-type', 'text/plain; charset=utf-8')
-      res.end(`module not found: ${name}\n`)
+      const body = `module not found: ${name}\n`
+      res.setHeader('content-length', Buffer.byteLength(body))
+      res.end(isHead ? undefined : body)
       return
     }
   }
@@ -564,7 +581,7 @@ async function handleDashboardModule(res: ServerResponse, name: string): Promise
   // Modest cache so a hotfix to the .mjs is picked up after redeploy
   // within minutes; immutable would require a cache-bust query param.
   res.setHeader('cache-control', 'public, max-age=300')
-  res.end(bytes)
+  res.end(isHead ? undefined : bytes)
 }
 
 async function handleStaticAsset(
@@ -573,6 +590,7 @@ async function handleStaticAsset(
   contentType: string,
   maxAgeSeconds = 86400,
   immutable = true,
+  isHead = false,
 ): Promise<void> {
   let bytes = staticCache.get(name)
   if (!bytes) {
@@ -582,7 +600,9 @@ async function handleStaticAsset(
     } catch {
       res.statusCode = 404
       res.setHeader('content-type', 'text/plain; charset=utf-8')
-      res.end(`asset not found: ${name}\n`)
+      const body = `asset not found: ${name}\n`
+      res.setHeader('content-length', Buffer.byteLength(body))
+      res.end(isHead ? undefined : body)
       return
     }
   }
@@ -595,7 +615,7 @@ async function handleStaticAsset(
     ? `public, max-age=${maxAgeSeconds}, immutable`
     : `public, max-age=${maxAgeSeconds}`
   res.setHeader('cache-control', cacheControl)
-  res.end(bytes)
+  res.end(isHead ? undefined : bytes)
 }
 
 // Decode entry layout per spec §2.3.1:
