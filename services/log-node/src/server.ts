@@ -305,7 +305,7 @@ async function handleRequest(
   // Bundled by the Dockerfile from apps/dashboard/static/. Served from both
   // explore.atrib.dev and log.atrib.dev so the HTML's <link> tags resolve
   // regardless of which hostname loads the explorer.
-  if (req.method === 'GET' && req.url === '/favicon.ico') {
+  if (req.method === 'GET' && urlPath === '/favicon.ico') {
     return handleStaticAsset(res, 'favicon.ico', 'image/x-icon')
   }
   const staticMatch = req.url?.match(/^\/static\/([A-Za-z0-9._-]+)$/)

@@ -588,6 +588,10 @@ describe('GET /dashboard', () => {
     expect(favicon.status).toBe(200)
     expect(favicon.headers.get('content-type')).toContain('image/x-icon')
 
+    const versionedFavicon = await fetch(`${server.url}/favicon.ico?v=0ee8876`)
+    expect(versionedFavicon.status).toBe(200)
+    expect(versionedFavicon.headers.get('content-type')).toContain('image/x-icon')
+
     const staticFavicon = await fetch(`${server.url}/static/favicon.ico`)
     expect(staticFavicon.status).toBe(200)
     expect(staticFavicon.headers.get('content-type')).toContain('image/x-icon')

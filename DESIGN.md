@@ -177,7 +177,7 @@ Share images:
 - Job: make the product recognizable in feeds.
 - Current focus: shared social-card and touch-icon bytes across the marketing site and explorer.
 - Target state: amber seal, graph fragments, and receipt-chain framing should make atrib recognizable before the text is read.
-- Asset contract: `atrib-web/scripts/generate-brand-assets.mjs` generates the marketing social card and touch icons; `apps/dashboard/static/opengraph-image.png` and `apps/dashboard/static/apple-touch-icon.png` must remain byte-identical copies of those generated assets until the two repos share a packaged asset pipeline. Browser favicons must also stay aligned: `apps/dashboard/static/favicon.ico` is copied from `atrib-web/app/favicon.ico`, and `/favicon.ico` serves those ICO bytes rather than the SVG icon.
+- Asset contract: `atrib-web/scripts/generate-brand-assets.mjs` generates the marketing social card and touch icons; `apps/dashboard/static/opengraph-image.png` and `apps/dashboard/static/apple-touch-icon.png` must remain byte-identical copies of those generated assets until the two repos share a packaged asset pipeline. Browser favicons must also stay aligned: `apps/dashboard/static/favicon.ico` is copied from `atrib-web/app/favicon.ico`, and the explorer links a versioned `/favicon.ico?v=<hash>` URL so CDN caches cannot pin stale icon bytes.
 
 Status and reliability surfaces:
 
