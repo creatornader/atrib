@@ -110,7 +110,7 @@ Still underdesigned:
 - The explorer has product structure, but its hierarchy still reads closer to an internal tool than a public verification surface.
 - The receipt chain is present as an idea, but not yet strong enough as a visual grammar across all surfaces.
 - Docs and package READMEs do not yet carry the same visual and writing system.
-- Share images, launch graphics, and social previews are not governed by this system yet.
+- Open Graph and touch-icon assets now use the same amber seal, near-black canvas, and signed-graph language across `atrib.dev` and `explore.atrib.dev`.
 - CI smoke now catches slow endpoints, but the product does not yet keep historical latency trends or alert routes.
 
 ## North Star
@@ -175,8 +175,9 @@ Package READMEs:
 Share images:
 
 - Job: make the product recognizable in feeds.
-- Current focus: functional social cards.
-- Target state: amber seal, hash fragments, and receipt-chain framing should make atrib recognizable before the text is read.
+- Current focus: shared social-card and touch-icon bytes across the marketing site and explorer.
+- Target state: amber seal, graph fragments, and receipt-chain framing should make atrib recognizable before the text is read.
+- Asset contract: `atrib-web/scripts/generate-brand-assets.mjs` generates the marketing social card and touch icons; `apps/dashboard/static/opengraph-image.png` and `apps/dashboard/static/apple-touch-icon.png` must remain byte-identical copies of those generated assets until the two repos share a packaged asset pipeline.
 
 Status and reliability surfaces:
 
@@ -251,7 +252,7 @@ This inventory is grounded in `apps/dashboard/index.html` as of 2026-05-25. Upda
 
 ### Launch and share surfaces
 
-- [ ] Govern Open Graph and social-card composition with this system.
+- [x] Govern Open Graph and social-card composition with this system.
 - [ ] Create a launch graphic pattern based on the amber seal and receipt chain.
 - [ ] Add examples for screenshots, blog diagrams, and short demos.
 - [ ] Check share images at mobile feed sizes, not only full resolution.

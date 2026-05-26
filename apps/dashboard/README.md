@@ -37,6 +37,8 @@ The YC recording demo is hosted as a separate stable artifact at `https://explor
 
 `explore.atrib.dev` (not `dashboard.atrib.dev`) is intentional: `explore` reads as block-explorer; `dashboard.atrib.dev` is reserved for the auth-gated personal dashboard product that ships separately.
 
+The explorer's Open Graph card and touch icon live under `apps/dashboard/static/`. They are byte-identical copies of the assets generated in `atrib-web` by `pnpm assets`; keep the hashes aligned so `atrib.dev` and `explore.atrib.dev` do not present different brands in feeds or browser chrome.
+
 When option 2 (Vite/Next.js SPA) lands, it gets its own hosting (likely Cloudflare Pages); the inline log-node route stays as a fallback.
 
 CORS is configured on log-node, graph-node, and directory-node (`Access-Control-Allow-Origin: *` on all read endpoints) so the explorer can also be loaded from any other origin during local development.
