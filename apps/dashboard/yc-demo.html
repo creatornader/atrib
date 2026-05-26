@@ -1,0 +1,1240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>atrib YC demo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090a0c;
+      --panel: #14161b;
+      --panel-2: #191c23;
+      --line: #292e39;
+      --text: #f4f1e8;
+      --muted: #9aa2ad;
+      --soft: #697281;
+      --gold: #f0c349;
+      --blue: #72a9ff;
+      --green: #67d391;
+      --rose: #ff7d90;
+      --purple: #b58cff;
+      --cyan: #67d9df;
+      --amber: #f6c76b;
+      --shadow: rgba(0, 0, 0, 0.38);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 20% 0%, rgba(240, 195, 73, 0.08), transparent 24%), var(--bg);
+      color: var(--text);
+      overflow: hidden;
+      letter-spacing: 0;
+    }
+
+    button {
+      font: inherit;
+      color: inherit;
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+    }
+
+    .shell {
+      height: 100vh;
+      display: grid;
+      grid-template-rows: 56px 1fr;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(9, 10, 12, 0.88);
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      font-weight: 700;
+    }
+
+    .mark {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 34% 28%, #fff2a8 0 20%, var(--gold) 38%, #937129 100%);
+      box-shadow: 0 0 0 2px rgba(240, 195, 73, 0.18), 0 0 24px rgba(240, 195, 73, 0.25);
+      flex: 0 0 auto;
+    }
+
+    .brand small {
+      color: var(--muted);
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .icon-button {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .icon-button:hover,
+    .icon-button:focus-visible {
+      outline: none;
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    .stage {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(300px, 0.78fr) minmax(620px, 1.82fr);
+      gap: 16px;
+      padding: 16px;
+    }
+
+    .pane {
+      min-width: 0;
+      min-height: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)), var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 18px 50px var(--shadow);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: 54px 1fr;
+    }
+
+    .pane-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02);
+    }
+
+    .pane-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 800;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--green);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+    }
+
+    .status::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 18px currentColor;
+    }
+
+    .session {
+      min-height: 0;
+      overflow: auto;
+      padding: 12px;
+      scroll-behavior: smooth;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 54px minmax(0, 1fr);
+      gap: 10px;
+      padding: 12px 4px 14px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 420ms ease, transform 420ms ease;
+    }
+
+    .step.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .time {
+      color: var(--soft);
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      padding-top: 3px;
+      text-align: right;
+    }
+
+    .step-main { min-width: 0; }
+    .who {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      margin-bottom: 7px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 8px;
+      border-radius: 5px;
+      border: 1px solid currentColor;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      white-space: nowrap;
+      background: rgba(255,255,255,0.05);
+    }
+
+    .chip.observation { color: var(--purple); }
+    .chip.function { color: var(--amber); }
+    .chip.request { color: var(--gold); }
+    .chip.tool_call { color: var(--blue); }
+    .chip.revision { color: var(--rose); }
+    .chip.mailbox { color: var(--cyan); }
+    .chip.read { color: var(--amber); }
+    .chip.result { color: var(--green); }
+
+    .actor {
+      min-width: 0;
+      color: var(--muted);
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .summary {
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.35;
+      margin-bottom: 8px;
+    }
+
+    .details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+    }
+
+    .details span {
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .graph-wrap {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      background:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 42px 42px;
+    }
+
+    .graph-wrap.inspecting .node.visible:not(.selected):not(.related) {
+      opacity: 0.18;
+    }
+
+    .graph-wrap.inspecting .edge.visible:not(.selected):not(.related) {
+      opacity: 0.1;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .edge {
+      fill: none;
+      stroke-width: 2.4;
+      stroke-linecap: butt;
+      opacity: 0;
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+      transition: opacity 260ms ease, stroke-dashoffset 780ms cubic-bezier(.2,.8,.2,1);
+    }
+
+    .edge.visible {
+      opacity: 1;
+      stroke-dashoffset: 0;
+    }
+
+    .edge.dim {
+      stroke-width: 1.8;
+    }
+
+    .edge.visible.demoted { opacity: 0.22; }
+
+    .edge.visible.related {
+      opacity: 0.72;
+    }
+
+    .edge.visible.selected {
+      opacity: 1;
+      stroke-width: 4px;
+      filter: drop-shadow(0 0 10px rgba(103, 211, 145, 0.3));
+    }
+
+    .edge.hot {
+      stroke-width: 3.2;
+      filter: drop-shadow(0 0 8px rgba(103, 211, 145, 0.22));
+    }
+
+    .edge.demo {
+      stroke-width: 2;
+      filter: none;
+    }
+
+    .edge.read {
+      stroke-width: 2;
+      filter: drop-shadow(0 0 6px rgba(246, 199, 107, 0.16));
+    }
+
+    .node {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 360ms ease;
+    }
+
+    .node.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .node.visible.demoted { opacity: 0.36; }
+
+    .node.visible.related {
+      opacity: 0.72;
+    }
+
+    .node.visible.selected {
+      opacity: 1;
+    }
+
+    .node.visible.selected .ring {
+      r: 31px;
+      stroke-width: 3.5px;
+      filter: drop-shadow(0 0 16px rgba(103, 211, 145, 0.36));
+    }
+
+    .node.function-node .ring {
+      fill: rgba(246, 199, 107, 0.08);
+      stroke-dasharray: 7 5;
+    }
+
+    .node.hero.visible .ring {
+      r: 34px;
+      stroke-width: 4px;
+      filter: drop-shadow(0 0 24px rgba(246, 199, 107, 0.44));
+    }
+
+    .node.hero.visible.selected .ring {
+      r: 38px;
+      filter: drop-shadow(0 0 28px rgba(246, 199, 107, 0.56));
+    }
+
+    .node.interactive {
+      cursor: pointer;
+      outline: none;
+    }
+
+    .node.interactive:focus-visible .ring {
+      stroke: #fff;
+    }
+
+    .node.hot .ring {
+      stroke-width: 3;
+      filter: drop-shadow(0 0 14px rgba(103, 211, 145, 0.48));
+    }
+
+    .node text {
+      font-size: 11px;
+      fill: var(--text);
+      paint-order: stroke;
+      stroke: rgba(9,10,12,0.88);
+      stroke-width: 4px;
+      stroke-linejoin: round;
+      pointer-events: none;
+    }
+
+    .node .sub {
+      fill: var(--muted);
+      font-size: 9px;
+    }
+
+    .node .sub2 {
+      fill: var(--muted);
+      font-size: 8px;
+    }
+
+    .node .signer-box {
+      stroke: rgba(255,255,255,0.18);
+      stroke-width: 1px;
+      rx: 5px;
+      filter: drop-shadow(0 6px 10px rgba(0,0,0,0.22));
+    }
+
+    .node .signer-label {
+      fill: #08100d;
+      font-size: 10px;
+      font-weight: 900;
+      stroke: none;
+      paint-order: normal;
+    }
+
+    .ring {
+      fill: var(--panel-2);
+      r: 0;
+      stroke-width: 2.2;
+      transition: r 520ms cubic-bezier(.17,.84,.33,1.28);
+    }
+
+    .node.visible .ring {
+      r: 26px;
+    }
+
+    .legend {
+      position: absolute;
+      left: 14px;
+      bottom: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      max-width: calc(100% - 420px);
+      color: var(--muted);
+      font-size: 11px;
+      pointer-events: none;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 6px;
+      background: rgba(9,10,12,0.72);
+    }
+
+    .swatch {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .swatch.dashed {
+      background: transparent;
+      border: 1px dashed currentColor;
+    }
+
+    .metric {
+      position: absolute;
+      right: 14px;
+      bottom: 14px;
+      width: min(360px, calc(100% - 28px));
+      padding: 14px;
+      border: 1px solid rgba(103, 211, 145, 0.26);
+      border-radius: 8px;
+      background: rgba(12, 16, 18, 0.84);
+      box-shadow: 0 14px 40px rgba(0,0,0,0.34);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 360ms ease, transform 360ms ease;
+    }
+
+    .metric.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .metric strong {
+      display: block;
+      color: var(--green);
+      font-size: 28px;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .metric p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .node-card {
+      position: absolute;
+      left: 18px;
+      top: 18px;
+      width: min(310px, calc(100% - 36px));
+      padding: 12px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      background: rgba(9, 10, 12, 0.9);
+      box-shadow: 0 14px 34px rgba(0,0,0,0.34);
+      opacity: 0;
+      transform: translateY(-6px);
+      pointer-events: auto;
+      transition: opacity 160ms ease, transform 160ms ease;
+      z-index: 2;
+    }
+
+    .node-card.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .node-card .eyebrow {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .node-card strong {
+      display: block;
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.25;
+      margin-bottom: 5px;
+    }
+
+    .node-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .node-card .card-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .node-card .card-meta span {
+      padding: 4px 6px;
+      border-radius: 5px;
+      background: rgba(255,255,255,0.06);
+      color: var(--muted);
+      font-size: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    .node-card .card-meta span.ok {
+      color: var(--green);
+      background: rgba(103, 211, 145, 0.1);
+    }
+
+    .node-card .card-meta span.warn {
+      color: var(--amber);
+      background: rgba(246, 199, 107, 0.1);
+    }
+
+    .record-proof {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .record-proof summary {
+      color: var(--green);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .record-proof pre {
+      max-height: 180px;
+      overflow: auto;
+      margin: 8px 0 0;
+      padding: 8px;
+      border-radius: 6px;
+      background: rgba(0,0,0,0.24);
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 860px) {
+      body { overflow: auto; }
+      .shell {
+        min-height: 100vh;
+        height: auto;
+        width: 100%;
+        grid-template-rows: 56px auto;
+      }
+      header {
+        padding: 0 12px;
+        gap: 10px;
+      }
+      .brand { gap: 9px; }
+      .brand small { display: none; }
+      .controls { flex: 0 0 auto; }
+      .stage {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(310px, 42vh) minmax(520px, 58vh);
+        padding: 12px;
+        gap: 12px;
+      }
+      .legend { max-width: calc(100% - 28px); }
+      .metric {
+        top: 14px;
+        left: 14px;
+        right: 14px;
+        bottom: auto;
+        width: auto;
+        padding: 12px;
+      }
+      .metric strong { font-size: 22px; }
+      .metric p { font-size: 12px; }
+      .node-card {
+        top: 150px;
+        left: 14px;
+        right: 14px;
+        width: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand">
+        <span class="mark" aria-hidden="true"></span>
+        <span>atrib</span>
+        <small>YC demo: verified context for a policy change</small>
+      </div>
+      <div class="controls" aria-label="Playback controls">
+        <button class="icon-button" id="play" type="button" title="Play or pause" aria-label="Play or pause">&gt;</button>
+        <button class="icon-button" id="restart" type="button" title="Restart" aria-label="Restart">R</button>
+      </div>
+    </header>
+    <main class="stage">
+      <section class="pane" aria-label="Agent session">
+        <div class="pane-head">
+          <div class="pane-title">agent session</div>
+          <div class="status" id="status">ready</div>
+        </div>
+        <div class="session" id="session"></div>
+      </section>
+      <section class="pane" aria-label="Living graph">
+        <div class="pane-head">
+          <div class="pane-title">living graph</div>
+          <div class="status" id="graph-status">0 records</div>
+        </div>
+        <div class="graph-wrap">
+          <svg id="graph" viewBox="0 0 1000 620" role="img" aria-label="Signed causal graph growing over time">
+            <defs>
+              <marker id="arrow-green" markerWidth="18" markerHeight="18" viewBox="0 0 18 18" refX="14" refY="9" orient="auto" markerUnits="userSpaceOnUse">
+                <path d="M2.4,3 L16.5,9 L2.4,15 z" fill="#67d391"></path>
+              </marker>
+              <marker id="arrow-amber" markerWidth="15" markerHeight="15" viewBox="0 0 15 15" refX="11.8" refY="7.5" orient="auto" markerUnits="userSpaceOnUse">
+                <path d="M2,2.7 L13.6,7.5 L2,12.3 z" fill="#f6c76b"></path>
+              </marker>
+              <marker id="arrow-rose" markerWidth="15" markerHeight="15" viewBox="0 0 15 15" refX="11.8" refY="7.5" orient="auto" markerUnits="userSpaceOnUse">
+                <path d="M2,2.7 L13.6,7.5 L2,12.3 z" fill="#ff7d90"></path>
+              </marker>
+              <marker id="arrow-dim" markerWidth="13" markerHeight="13" viewBox="0 0 13 13" refX="10" refY="6.5" orient="auto" markerUnits="userSpaceOnUse">
+                <path d="M2,2.5 L12,6.5 L2,10.5 z" fill="#697281"></path>
+              </marker>
+            </defs>
+            <g id="dim-edges"></g>
+            <g id="hot-edges"></g>
+            <g id="dim-nodes"></g>
+            <g id="hot-nodes"></g>
+          </svg>
+          <div class="legend" aria-hidden="true">
+            <span style="color: var(--amber)"><i class="swatch dashed"></i>function</span>
+            <span style="color: var(--purple)"><i class="swatch"></i>observation</span>
+            <span style="color: var(--blue)"><i class="swatch"></i>diagnostic</span>
+            <span style="color: var(--rose)"><i class="swatch"></i>revision</span>
+            <span style="color: var(--cyan)"><i class="swatch"></i>Agent B inbox</span>
+            <span style="color: var(--green)"><i class="swatch"></i>signed link</span>
+            <span style="color: var(--amber)"><i class="swatch dashed"></i>read / flow</span>
+            <span style="color: #f6c76b"><i class="swatch"></i>signed by A</span>
+            <span style="color: #9ee7ff"><i class="swatch"></i>signed by B</span>
+          </div>
+          <div class="metric" id="metric">
+            <strong>Agent B recall changes action</strong>
+            <p>Agent B reads the signed past, selects Policy v2, then writes new signed records from that context.</p>
+          </div>
+          <div class="node-card" id="node-card" aria-hidden="true"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    let nodes = [
+      { id: 'request', x: 42, y: 310, kind: 'function', type: 'function', title: 'request', sub: 'function', sub2: 'starts work', actor: 'you', signed: false, color: '#f6c76b', hot: true, note: 'This is the user request that starts the agent session. It is shown as a function, not as a signed atrib record.' },
+      { id: 'impl', x: 126, y: 310, type: 'observation', title: 'support router', sub: 'signed action', signer: 'A', color: '#b58cff', hot: true },
+      { id: 'policyV1', x: 250, y: 420, type: 'tool_call', title: 'Policy v1', sub: 'privacy -> legal', signer: 'A', color: '#72a9ff', hot: false },
+      { id: 'policyV2', x: 250, y: 230, type: 'tool_call', title: 'Policy v2', sub: 'privacy -> privacy team', signer: 'A', color: '#72a9ff', hot: true },
+      { id: 'revision', x: 405, y: 310, type: 'revision', title: 'revision', sub: 'revises Policy v1', sub2: 'informed by v2', signer: 'A', color: '#ff7d90', hot: true },
+      { id: 'qWrongTarget', x: 590, y: 95, type: 'mailbox', title: 'inbox msg', sub: 'target: Agent C', sub2: 'reject', signer: 'A', color: '#67d9df', hot: false, note: 'Rejected before trace replay because this message was addressed to another agent.' },
+      { id: 'qWrongTopic', x: 590, y: 215, type: 'mailbox', title: 'inbox msg', sub: 'topic: billing', sub2: 'reject', signer: 'A', color: '#67d9df', hot: false, note: 'Rejected because the request is about privacy routing, not billing.' },
+      { id: 'qPolicyV1', x: 590, y: 470, type: 'mailbox', title: 'inbox msg', sub: 'target/topic OK', sub2: 'stale Policy v1', signer: 'A', color: '#67d9df', hot: false, note: 'Valid message for Agent B, but its trace points to Policy v1 after Policy v2 superseded it.' },
+      { id: 'qPolicyV2', x: 590, y: 335, type: 'mailbox', title: 'inbox msg', sub: 'target/topic OK', sub2: 'current Policy v2', signer: 'A', color: '#67d9df', hot: true, note: 'Selected because target and topic match, and the revision marks Policy v2 as current.' },
+      { id: 'filter', x: 735, y: 335, kind: 'function', type: 'function', title: 'Agent B recall', sub: 'function read', sub2: 'selects Policy v2', actor: 'Agent B', signed: false, color: '#f6c76b', hot: true, hero: true, note: 'This is a recall function, not a signed record. Agent B uses it to verify the signed past, reject mismatches, and select the current Policy v2 trace.' },
+      { id: 'decision', x: 825, y: 335, type: 'observation', title: 'route decision', sub: 'privacy -> team', sub2: 'from Policy v2', signer: 'B', color: '#b58cff', hot: true, note: 'After recall, Agent B writes the signed routing decision. The selected trace becomes context for the next action.' },
+      { id: 'outcome', x: 920, y: 335, type: 'observation', title: 'memory update', sub: 'Policy v2 used', sub2: 'future context', signer: 'B', color: '#67d391', hot: true, note: 'Agent B records the corrected result so the next agent can start from the verified path.' },
+    ];
+
+    let edges = [
+      { id: 'eRequest', source: 'request', target: 'impl', label: 'STARTS', layer: 'demo', hot: true },
+      { id: 'ePolicyV1', source: 'impl', target: 'policyV1', label: 'SIGNED_AFTER', layer: 'demo', hot: false },
+      { id: 'ePolicyV2', source: 'impl', target: 'policyV2', label: 'SIGNED_AFTER', layer: 'demo', hot: true },
+      { id: 'eRevision', source: 'revision', target: 'policyV2', label: 'INFORMED_BY', layer: 'signed', hot: true },
+      { id: 'eRevises', source: 'revision', target: 'policyV1', label: 'REVISES', layer: 'signed', hot: false, color: '#ff7d90', back: true },
+      { id: 'eWrongTarget', source: 'revision', target: 'qWrongTarget', label: 'HANDOFF', layer: 'demo', hot: false },
+      { id: 'eWrongTopic', source: 'revision', target: 'qWrongTopic', label: 'HANDOFF', layer: 'demo', hot: false },
+      { id: 'eStaleQueue', source: 'policyV1', target: 'qPolicyV1', label: 'HANDOFF', layer: 'demo', hot: false },
+      { id: 'eCurrentQueue', source: 'revision', target: 'qPolicyV2', label: 'HANDOFF', layer: 'demo', hot: true },
+      { id: 'eReadWrongTarget', source: 'filter', target: 'qWrongTarget', label: 'CHECK_TARGET', layer: 'read', hot: false },
+      { id: 'eReadWrongTopic', source: 'filter', target: 'qWrongTopic', label: 'CHECK_TOPIC', layer: 'read', hot: false },
+      { id: 'eReadPolicyV1', source: 'filter', target: 'qPolicyV1', label: 'CHECK_FRESHNESS', layer: 'read', hot: false },
+      { id: 'eSelected', source: 'filter', target: 'qPolicyV2', label: 'SELECTED_TRACE', layer: 'read', hot: true },
+      { id: 'eRecallDecision', source: 'filter', target: 'decision', label: 'PRODUCES', layer: 'demo', hot: true },
+      { id: 'eFilterDecision', source: 'decision', target: 'qPolicyV2', label: 'INFORMED_BY', layer: 'signed', hot: true, arc: -86 },
+      { id: 'eOutcome', source: 'outcome', target: 'decision', label: 'INFORMED_BY', layer: 'signed', hot: true },
+    ];
+
+    let steps = [
+      { t: '00:00', type: 'function', actor: 'request', summary: 'Ask the agent to route a customer privacy request after a policy change.', detail: ['function=request', 'no signed record yet'], reveal: ['request'] },
+      { t: '00:07', type: 'observation', actor: 'agent A', summary: 'Signs the support-ticket router as an action record.', detail: ['record=sha256:6817d8...8020', 'event=observation'], reveal: ['impl', 'eRequest'] },
+      { t: '00:15', type: 'tool_call', actor: 'policy check', summary: 'Signs Policy v1 evidence: privacy requests used to route to legal.', detail: ['record=sha256:e155df...5733', 'policy=Policy v1'], reveal: ['policyV1', 'ePolicyV1'] },
+      { t: '00:26', type: 'tool_call', actor: 'policy check', summary: 'Signs Policy v2 evidence: privacy requests now route to the privacy team.', detail: ['record=sha256:591273...daee', 'policy=Policy v2'], reveal: ['policyV2', 'ePolicyV2'] },
+      { t: '00:37', type: 'revision', actor: 'agent A', summary: 'Writes a revision record. Policy v1 stays visible, but Policy v2 is the current position.', detail: ['revises=Policy v1', 'informed_by=Policy v2'], reveal: ['revision', 'eRevision', 'eRevises'], demote: ['policyV1', 'ePolicyV1'] },
+      { t: '00:49', type: 'function', actor: 'agent B recall', summary: 'Runs verified recall over its inbox. First candidate is rejected: it targets Agent C.', detail: ['function=atrib recall+trace', 'check=target', 'result=rejected'], reveal: ['filter', 'qWrongTarget', 'eWrongTarget', 'eReadWrongTarget'], demote: ['qWrongTarget', 'eWrongTarget', 'eReadWrongTarget'] },
+      { t: '00:56', type: 'function', actor: 'agent B recall', summary: 'Continues the cognitive read. The second signed message is rejected: the topic is billing.', detail: ['function=atrib recall+trace', 'check=topic', 'result=rejected'], reveal: ['qWrongTopic', 'eWrongTopic', 'eReadWrongTopic'], demote: ['qWrongTopic', 'eWrongTopic', 'eReadWrongTopic'] },
+      { t: '01:03', type: 'function', actor: 'agent B recall', summary: 'Keeps the Policy v1 message as valid history, but ranks it lower because it is stale.', detail: ['function=atrib recall+trace', 'freshness=stale'], reveal: ['qPolicyV1', 'eStaleQueue', 'eReadPolicyV1'], demote: ['qPolicyV1', 'eStaleQueue', 'eReadPolicyV1'] },
+      { t: '01:10', type: 'function', actor: 'agent B recall', summary: 'The cognitive read lands: Policy v2 is the current verified trace.', detail: ['function=atrib recall+trace', 'selected=Policy v2'], reveal: ['qPolicyV2', 'eCurrentQueue', 'eSelected'] },
+      { t: '01:18', type: 'observation', actor: 'agent B', summary: 'Writes a signed route decision from the recalled Policy v2 trace.', detail: ['record=route decision', 'informed_by=selected inbox msg'], reveal: ['decision', 'eRecallDecision', 'eFilterDecision'] },
+      { t: '01:28', type: 'result', actor: 'routing check', summary: 'Records the corrected result and routes to the privacy team in all three locked runs.', detail: ['informed_by=route decision', 'selected Policy v2=3/3'], reveal: ['outcome', 'eOutcome'], metric: true },
+    ];
+
+    let nodeById = new Map(nodes.map((node) => [node.id, node]));
+    let recordByNodeId = new Map();
+    let verificationByNodeId = new Map();
+    let signedEdgeProofs = new Map();
+    let traceMeta = { loaded: false, verifiedRecords: 0, totalRecords: 0 };
+    const sessionEl = document.getElementById('session');
+    const playButton = document.getElementById('play');
+    const restartButton = document.getElementById('restart');
+    const statusEl = document.getElementById('status');
+    const graphStatusEl = document.getElementById('graph-status');
+    const metricEl = document.getElementById('metric');
+    const graphWrapEl = document.querySelector('.graph-wrap');
+    const nodeCardEl = document.getElementById('node-card');
+    const groups = {
+      dimEdges: document.getElementById('dim-edges'),
+      hotEdges: document.getElementById('hot-edges'),
+      dimNodes: document.getElementById('dim-nodes'),
+      hotNodes: document.getElementById('hot-nodes'),
+    };
+
+    let playing = false;
+    let stepIndex = 0;
+    let timer = null;
+    let lastToggleAt = -Infinity;
+    const visible = new Set();
+
+    function chipClass(type) {
+      if (type === 'mailbox') return 'mailbox';
+      if (type === 'result') return 'result';
+      return type;
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function canonicalize(value) {
+      if (value === null || typeof value !== 'object') return JSON.stringify(value);
+      if (Array.isArray(value)) return `[${value.map(canonicalize).join(',')}]`;
+      return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalize(value[key])}`).join(',')}}`;
+    }
+
+    function base64urlToBytes(value) {
+      const padded = `${value}${'='.repeat((4 - (value.length % 4)) % 4)}`;
+      const base64 = padded.replace(/-/g, '+').replace(/_/g, '/');
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+
+    function bytesToHex(bytes) {
+      return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function sha256Hex(text) {
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+      return bytesToHex(new Uint8Array(digest));
+    }
+
+    function shortRecordHash(recordHash) {
+      if (!recordHash) return 'none';
+      return `${recordHash.slice(0, 13)}...${recordHash.slice(-4)}`;
+    }
+
+    async function verifyEnvelope(envelope) {
+      try {
+        const canonical = canonicalize(envelope.payload);
+        const hash = `sha256:${await sha256Hex(canonical)}`;
+        const hashMatches = hash === envelope.record_hash;
+        const key = await crypto.subtle.importKey(
+          'spki',
+          base64urlToBytes(envelope.payload.creator_key),
+          { name: 'Ed25519' },
+          false,
+          ['verify'],
+        );
+        let signatureValid = false;
+        try {
+          signatureValid = await crypto.subtle.verify(
+            { name: 'Ed25519' },
+            key,
+            base64urlToBytes(envelope.signature),
+            new TextEncoder().encode(canonical),
+          );
+        } catch {
+          signatureValid = await crypto.subtle.verify(
+            'Ed25519',
+            key,
+            base64urlToBytes(envelope.signature),
+            new TextEncoder().encode(canonical),
+          );
+        }
+        return {
+          hashMatches,
+          signatureValid,
+          verified: hashMatches && signatureValid,
+          shortHash: shortRecordHash(envelope.record_hash),
+        };
+      } catch (error) {
+        return {
+          hashMatches: false,
+          signatureValid: false,
+          verified: false,
+          shortHash: shortRecordHash(envelope?.record_hash),
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+
+    function validateSignedEdges() {
+      signedEdgeProofs = new Map();
+      for (const edge of edges.filter((item) => item.layer === 'signed')) {
+        const sourceRecord = recordByNodeId.get(edge.source);
+        const targetRecord = recordByNodeId.get(edge.target);
+        let verified = false;
+        let reason = 'missing signed record';
+        if (sourceRecord && targetRecord && edge.label === 'INFORMED_BY') {
+          verified = Array.isArray(sourceRecord.payload.informed_by)
+            && sourceRecord.payload.informed_by.includes(targetRecord.record_hash);
+          reason = verified ? 'payload.informed_by includes target hash' : 'target hash missing from informed_by';
+        } else if (sourceRecord && targetRecord && edge.label === 'REVISES') {
+          verified = sourceRecord.payload.revises === targetRecord.record_hash;
+          reason = verified ? 'payload.revises equals target hash' : 'target hash missing from revises';
+        } else if (sourceRecord && targetRecord) {
+          reason = `unsupported signed edge label ${edge.label}`;
+        }
+        signedEdgeProofs.set(edge.id, { verified, reason });
+      }
+    }
+
+    async function loadTraceBundle() {
+      try {
+        const response = await fetch('./yc-demo-trace-bundle.json', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`trace bundle HTTP ${response.status}`);
+        const bundle = await response.json();
+        nodes = bundle.nodes;
+        edges = bundle.edges;
+        steps = bundle.steps;
+        nodeById = new Map(nodes.map((node) => [node.id, node]));
+        recordByNodeId = new Map((bundle.records || []).map((record) => [record.node_id, record]));
+        verificationByNodeId = new Map();
+
+        for (const record of bundle.records || []) {
+          verificationByNodeId.set(record.node_id, await verifyEnvelope(record));
+        }
+        validateSignedEdges();
+
+        const verifiedRecords = Array.from(verificationByNodeId.values()).filter((item) => item.verified).length;
+        const signedEdges = Array.from(signedEdgeProofs.values());
+        traceMeta = {
+          loaded: true,
+          contextId: bundle.context_id,
+          verifiedRecords,
+          totalRecords: recordByNodeId.size,
+          signedEdgesVerified: signedEdges.filter((item) => item.verified).length,
+          signedEdgesTotal: signedEdges.length,
+        };
+      } catch (error) {
+        traceMeta = {
+          loaded: false,
+          verifiedRecords: 0,
+          totalRecords: 0,
+          error: error instanceof Error ? error.message : String(error),
+        };
+        console.warn('Trace bundle unavailable, using inline fallback data.', traceMeta.error);
+      }
+      window.demoTraceMeta = traceMeta;
+      document.documentElement.dataset.traceLoaded = String(traceMeta.loaded);
+      document.documentElement.dataset.verifiedRecords = `${traceMeta.verifiedRecords}/${traceMeta.totalRecords}`;
+      document.documentElement.dataset.verifiedSignedEdges = `${traceMeta.signedEdgesVerified || 0}/${traceMeta.signedEdgesTotal || 0}`;
+    }
+
+    function makeStep(step) {
+      const el = document.createElement('article');
+      el.className = 'step';
+      el.innerHTML = `
+        <div class="time">${step.t}</div>
+        <div class="step-main">
+          <div class="who">
+            <span class="chip ${chipClass(step.type)}">${step.type.replace('_', ' ')}</span>
+            <span class="actor">${step.actor}</span>
+          </div>
+          <div class="summary">${step.summary}</div>
+          <div class="details">${step.detail.map((item) => `<span>${item}</span>`).join('')}</div>
+        </div>
+      `;
+      return el;
+    }
+
+    function pathFor(edge) {
+      const a = nodeById.get(edge.source);
+      const b = nodeById.get(edge.target);
+      if (edge.back) {
+        const midX = (a.x + b.x) / 2;
+        return `M ${a.x - 34} ${a.y + 10} C ${midX} ${a.y + 145}, ${midX} ${b.y + 90}, ${b.x + 34} ${b.y + 12}`;
+      }
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      const ux = dx / distance;
+      const uy = dy / distance;
+      const nodeRadius = b.hero ? 38 : 30;
+      const sourceRadius = a.hero ? 38 : 30;
+      const startX = a.x + (ux * sourceRadius);
+      const startY = a.y + (uy * sourceRadius);
+      const endX = b.x - (ux * nodeRadius);
+      const endY = b.y - (uy * nodeRadius);
+      if (edge.arc) {
+        const c1 = startX + (dx * 0.32);
+        const c2 = endX - (dx * 0.32);
+        return `M ${startX} ${startY} C ${c1} ${startY + edge.arc}, ${c2} ${endY + edge.arc}, ${endX} ${endY}`;
+      }
+      const segmentDistance = Math.hypot(endX - startX, endY - startY) || 1;
+      const handle = Math.min(88, Math.max(12, segmentDistance * 0.45));
+      const c1 = startX + (ux * handle);
+      const c1Y = startY + (uy * handle);
+      const c2 = endX - (ux * handle);
+      const c2Y = endY - (uy * handle);
+      return `M ${startX} ${startY} C ${c1} ${c1Y}, ${c2} ${c2Y}, ${endX} ${endY}`;
+    }
+
+    function edgeColor(edge) {
+      if (edge.color) return edge.color;
+      if (edge.layer === 'demo' || edge.layer === 'read') return edge.hot ? '#f6c76b' : '#697281';
+      return edge.hot ? '#67d391' : '#697281';
+    }
+
+    function markerFor(edge) {
+      if (edge.color === '#ff7d90') return 'arrow-rose';
+      if (edge.layer === 'demo' || edge.layer === 'read') return edge.hot ? 'arrow-amber' : 'arrow-dim';
+      return edge.hot ? 'arrow-green' : 'arrow-dim';
+    }
+
+    function drawGraph() {
+      for (const group of Object.values(groups)) group.replaceChildren();
+
+      for (const edge of edges) {
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('id', edge.id);
+        path.setAttribute('class', `edge ${edge.layer || 'signed'} ${edge.hot ? 'hot' : ''}`);
+        path.setAttribute('d', pathFor(edge));
+        path.setAttribute('pathLength', '1');
+        path.setAttribute('stroke', edgeColor(edge));
+        path.setAttribute('marker-end', `url(#${markerFor(edge)})`);
+        (edge.hot ? groups.hotEdges : groups.dimEdges).append(path);
+      }
+
+      for (const node of nodes) {
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('id', node.id);
+        g.setAttribute('class', `node interactive ${node.hot ? 'hot' : ''} ${node.hero ? 'hero' : ''} ${node.kind === 'function' ? 'function-node' : 'record-node'}`);
+        g.setAttribute('transform', `translate(${node.x} ${node.y})`);
+        g.setAttribute('tabindex', '-1');
+        g.setAttribute('role', 'button');
+        g.setAttribute('aria-label', `${node.title}: ${node.sub}`);
+        const signerFill = node.signer === 'B' ? '#9ee7ff' : '#f6c76b';
+        const signerBadge = node.signer && node.signed !== false ? `
+          <rect class="signer-box" x="-9" y="-38" width="18" height="18" rx="5" fill="${signerFill}"></rect>
+          <text class="signer-label" text-anchor="middle" x="0" y="-25">${node.signer}</text>
+        ` : '';
+        const sub2 = node.sub2 ? `<text class="sub2" text-anchor="middle" y="79">${node.sub2}</text>` : '';
+        g.innerHTML = `
+          <circle class="ring" r="0" stroke="${node.color}"></circle>
+          ${signerBadge}
+          <text text-anchor="middle" y="50">${node.title}</text>
+          <text class="sub" text-anchor="middle" y="67">${node.sub}</text>
+          ${sub2}
+        `;
+        (node.hot ? groups.hotNodes : groups.dimNodes).append(g);
+      }
+
+      for (const node of nodes) {
+        const el = document.getElementById(node.id);
+        el.addEventListener('mouseenter', () => inspectNode(node.id));
+        el.addEventListener('focus', () => inspectNode(node.id));
+        el.addEventListener('click', (event) => {
+          event.stopPropagation();
+          inspectNode(node.id);
+        });
+        el.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            event.stopPropagation();
+            inspectNode(node.id);
+          }
+        });
+      }
+    }
+
+    function inspectNode(nodeId) {
+      if (!visible.has(nodeId)) return;
+      const node = nodeById.get(nodeId);
+      const relatedEdges = edges.filter((edge) => edge.source === nodeId || edge.target === nodeId);
+      const relatedNodeIds = new Set([nodeId]);
+      for (const edge of relatedEdges) {
+        relatedNodeIds.add(edge.source);
+        relatedNodeIds.add(edge.target);
+      }
+
+      graphWrapEl.classList.add('inspecting');
+      for (const item of document.querySelectorAll('.node.selected, .node.related, .edge.selected, .edge.related')) {
+        item.classList.remove('selected', 'related');
+      }
+
+      for (const id of relatedNodeIds) {
+        const el = document.getElementById(id);
+        if (el && visible.has(id)) el.classList.add(id === nodeId ? 'selected' : 'related');
+      }
+      for (const edge of relatedEdges) {
+        const el = document.getElementById(edge.id);
+        if (el && visible.has(edge.id)) el.classList.add(edge.hot ? 'selected' : 'related');
+      }
+
+      const actorMeta = node.signed === false
+        ? `function=${node.title}`
+        : `signed=${node.signer ? `Agent ${node.signer}` : 'system'}`;
+      const secondMeta = node.signed === false ? `run_by=${node.actor || 'agent'}` : node.sub;
+      const note = node.note || `${node.title} is a signed ${node.type === 'tool_call' ? 'diagnostic' : node.type} record in the trace.`;
+      const record = recordByNodeId.get(nodeId);
+      const verification = verificationByNodeId.get(nodeId);
+      const outgoingSignedEdges = edges.filter((edge) => edge.source === nodeId && edge.layer === 'signed');
+      const verifiedOutgoing = outgoingSignedEdges.filter((edge) => signedEdgeProofs.get(edge.id)?.verified).length;
+      const linkMeta = outgoingSignedEdges.length
+        ? `<span class="${verifiedOutgoing === outgoingSignedEdges.length ? 'ok' : 'warn'}">links=${verifiedOutgoing}/${outgoingSignedEdges.length}</span>`
+        : '';
+      const proof = record ? {
+        record_hash: record.record_hash,
+        signature: `${record.signature.slice(0, 18)}...${record.signature.slice(-8)}`,
+        creator: record.payload.creator,
+        event_type: record.payload.event_type.replace('https://atrib.dev/v1/types/', ''),
+        timestamp_ms: record.payload.timestamp_ms,
+        chain_root: record.payload.chain_root,
+        informed_by: record.payload.informed_by,
+        revises: record.payload.revises,
+        content: record.payload.content,
+      } : null;
+      const proofHtml = proof ? `
+        <details class="record-proof">
+          <summary>Signed record proof</summary>
+          <pre>${escapeHtml(JSON.stringify(proof, null, 2))}</pre>
+        </details>
+      ` : '';
+      const recordMeta = record ? `
+        <span class="${verification?.verified ? 'ok' : 'warn'}">sig=${verification?.verified ? 'verified' : 'failed'}</span>
+        <span class="${verification?.hashMatches ? 'ok' : 'warn'}">hash=${verification?.shortHash || shortRecordHash(record.record_hash)}</span>
+        <span>chain=${shortRecordHash(record.payload.chain_root)}</span>
+        ${linkMeta}
+      ` : '<span class="warn">not signed</span>';
+      nodeCardEl.innerHTML = `
+        <div class="eyebrow">${escapeHtml(node.type.replace('_', ' '))}</div>
+        <strong>${escapeHtml(node.title)}</strong>
+        <p>${escapeHtml(note)}</p>
+        <div class="card-meta">
+          <span>${escapeHtml(actorMeta)}</span>
+          <span>${escapeHtml(secondMeta)}</span>
+          ${node.sub2 ? `<span>${escapeHtml(node.sub2)}</span>` : ''}
+          ${recordMeta}
+        </div>
+        ${proofHtml}
+      `;
+      nodeCardEl.classList.add('visible');
+      nodeCardEl.setAttribute('aria-hidden', 'false');
+    }
+
+    function clearInspection() {
+      graphWrapEl.classList.remove('inspecting');
+      nodeCardEl.classList.remove('visible');
+      nodeCardEl.setAttribute('aria-hidden', 'true');
+      for (const item of document.querySelectorAll('.node.selected, .node.related, .edge.selected, .edge.related')) {
+        item.classList.remove('selected', 'related');
+      }
+    }
+
+    function setVisible(ids, demoteIds = []) {
+      for (const id of ids || []) visible.add(id);
+      for (const id of visible) {
+        const el = document.getElementById(id);
+        if (el) {
+          el.classList.add('visible');
+          if (el.classList.contains('node')) el.setAttribute('tabindex', '0');
+        }
+      }
+      for (const id of demoteIds || []) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('demoted');
+      }
+      const recordCount = nodes.filter((node) => visible.has(node.id) && node.kind !== 'function').length;
+      const functionCount = nodes.filter((node) => visible.has(node.id) && node.kind === 'function').length;
+      const visibleEdges = edges.filter((edge) => visible.has(edge.id));
+      const signedLinkCount = visibleEdges.filter((edge) => edge.layer === 'signed').length;
+      const flowLinkCount = visibleEdges.length - signedLinkCount;
+      const functionLabel = functionCount ? ` + ${functionCount} function${functionCount === 1 ? '' : 's'}` : '';
+      const flowLabel = flowLinkCount ? ` + ${flowLinkCount} flow` : '';
+      const compactStatus = window.matchMedia('(max-width: 860px)').matches;
+      graphStatusEl.textContent = compactStatus
+        ? `${recordCount} records · ${signedLinkCount} signed`
+        : `${recordCount} records${functionLabel} · ${signedLinkCount} signed${flowLabel}`;
+    }
+
+    function showStep() {
+      if (stepIndex >= steps.length) {
+        playing = false;
+        statusEl.textContent = 'complete';
+        playButton.textContent = '>';
+        return;
+      }
+      const step = steps[stepIndex];
+      const row = makeStep(step);
+      sessionEl.append(row);
+      requestAnimationFrame(() => row.classList.add('visible'));
+      sessionEl.scrollTop = sessionEl.scrollHeight;
+      setVisible(step.reveal, step.demote);
+      if (step.metric) metricEl.classList.add('visible');
+      stepIndex += 1;
+      statusEl.textContent = 'playing';
+      timer = setTimeout(showStep, stepIndex === 1 ? 700 : 1350);
+    }
+
+    function play() {
+      const now = performance.now();
+      if (now - lastToggleAt < 1200) return;
+      lastToggleAt = now;
+      if (playing) {
+        playing = false;
+        statusEl.textContent = 'paused';
+        playButton.textContent = '>';
+        clearTimeout(timer);
+        return;
+      }
+      playing = true;
+      playButton.textContent = '||';
+      showStep();
+    }
+
+    function restart() {
+      clearTimeout(timer);
+      playing = false;
+      stepIndex = 0;
+      visible.clear();
+      sessionEl.replaceChildren();
+      metricEl.classList.remove('visible');
+      statusEl.textContent = 'ready';
+      graphStatusEl.textContent = '0 records';
+      playButton.textContent = '>';
+      for (const item of document.querySelectorAll('.visible')) item.classList.remove('visible');
+      for (const item of document.querySelectorAll('.demoted')) item.classList.remove('demoted');
+      for (const item of document.querySelectorAll('.node')) item.setAttribute('tabindex', '-1');
+      clearInspection();
+    }
+
+    async function init() {
+      await loadTraceBundle();
+      drawGraph();
+      playButton.addEventListener('click', play);
+      restartButton.addEventListener('click', restart);
+      graphWrapEl.addEventListener('click', (event) => {
+        if (!event.target.closest('.node') && !event.target.closest('.node-card')) clearInspection();
+      });
+      window.addEventListener('keydown', (event) => {
+        if (event.key === ' ') {
+          event.preventDefault();
+          play();
+        }
+        if (event.key.toLowerCase() === 'r') restart();
+      });
+      setTimeout(play, 650);
+    }
+
+    init();
+  </script>
+</body>
+</html>
