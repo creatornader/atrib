@@ -1,0 +1,710 @@
+{
+  "schema": "atrib-yc-living-graph-trace-bundle-v1",
+  "generated_at": "2026-05-25T23:00:00.000Z",
+  "context_id": "yc-demo-policy-change-2026-05-25",
+  "description": "Signed replay trace for the atrib YC living graph demo.",
+  "nodes": [
+    {
+      "id": "request",
+      "x": 42,
+      "y": 310,
+      "kind": "function",
+      "type": "function",
+      "title": "request",
+      "sub": "function",
+      "sub2": "starts work",
+      "actor": "you",
+      "signed": false,
+      "color": "#f6c76b",
+      "hot": true,
+      "note": "This is the user request that starts the agent session. It is shown as a function, not as a signed atrib record."
+    },
+    {
+      "id": "impl",
+      "x": 126,
+      "y": 310,
+      "type": "observation",
+      "title": "support router",
+      "sub": "signed action",
+      "signer": "A",
+      "color": "#b58cff",
+      "hot": true
+    },
+    {
+      "id": "policyV1",
+      "x": 250,
+      "y": 420,
+      "type": "tool_call",
+      "title": "Policy v1",
+      "sub": "privacy -> legal",
+      "signer": "A",
+      "color": "#72a9ff",
+      "hot": false
+    },
+    {
+      "id": "policyV2",
+      "x": 250,
+      "y": 230,
+      "type": "tool_call",
+      "title": "Policy v2",
+      "sub": "privacy -> privacy team",
+      "signer": "A",
+      "color": "#72a9ff",
+      "hot": true
+    },
+    {
+      "id": "revision",
+      "x": 405,
+      "y": 310,
+      "type": "revision",
+      "title": "revision",
+      "sub": "revises Policy v1",
+      "sub2": "informed by v2",
+      "signer": "A",
+      "color": "#ff7d90",
+      "hot": true
+    },
+    {
+      "id": "qWrongTarget",
+      "x": 590,
+      "y": 95,
+      "type": "mailbox",
+      "title": "inbox msg",
+      "sub": "target: Agent C",
+      "sub2": "reject",
+      "signer": "A",
+      "color": "#67d9df",
+      "hot": false,
+      "note": "Rejected before trace replay because this message was addressed to another agent."
+    },
+    {
+      "id": "qWrongTopic",
+      "x": 590,
+      "y": 215,
+      "type": "mailbox",
+      "title": "inbox msg",
+      "sub": "topic: billing",
+      "sub2": "reject",
+      "signer": "A",
+      "color": "#67d9df",
+      "hot": false,
+      "note": "Rejected because the request is about privacy routing, not billing."
+    },
+    {
+      "id": "qPolicyV1",
+      "x": 590,
+      "y": 470,
+      "type": "mailbox",
+      "title": "inbox msg",
+      "sub": "target/topic OK",
+      "sub2": "stale Policy v1",
+      "signer": "A",
+      "color": "#67d9df",
+      "hot": false,
+      "note": "Valid message for Agent B, but its trace points to Policy v1 after Policy v2 superseded it."
+    },
+    {
+      "id": "qPolicyV2",
+      "x": 590,
+      "y": 335,
+      "type": "mailbox",
+      "title": "inbox msg",
+      "sub": "target/topic OK",
+      "sub2": "current Policy v2",
+      "signer": "A",
+      "color": "#67d9df",
+      "hot": true,
+      "note": "Selected because target and topic match, and the revision marks Policy v2 as current."
+    },
+    {
+      "id": "filter",
+      "x": 735,
+      "y": 335,
+      "kind": "function",
+      "type": "function",
+      "title": "Agent B recall",
+      "sub": "function read",
+      "sub2": "selects Policy v2",
+      "actor": "Agent B",
+      "signed": false,
+      "color": "#f6c76b",
+      "hot": true,
+      "hero": true,
+      "note": "This is a recall function, not a signed record. Agent B uses it to verify the signed past, reject mismatches, and select the current Policy v2 trace."
+    },
+    {
+      "id": "decision",
+      "x": 825,
+      "y": 335,
+      "type": "observation",
+      "title": "route decision",
+      "sub": "privacy -> team",
+      "sub2": "from Policy v2",
+      "signer": "B",
+      "color": "#b58cff",
+      "hot": true,
+      "note": "After recall, Agent B writes the signed routing decision. The selected trace becomes context for the next action."
+    },
+    {
+      "id": "outcome",
+      "x": 920,
+      "y": 335,
+      "type": "observation",
+      "title": "memory update",
+      "sub": "Policy v2 used",
+      "sub2": "future context",
+      "signer": "B",
+      "color": "#67d391",
+      "hot": true,
+      "note": "Agent B records the corrected result so the next agent can start from the verified path."
+    }
+  ],
+  "edges": [
+    {
+      "id": "eRequest",
+      "source": "request",
+      "target": "impl",
+      "label": "STARTS",
+      "layer": "demo",
+      "hot": true
+    },
+    {
+      "id": "ePolicyV1",
+      "source": "impl",
+      "target": "policyV1",
+      "label": "SIGNED_AFTER",
+      "layer": "demo",
+      "hot": false
+    },
+    {
+      "id": "ePolicyV2",
+      "source": "impl",
+      "target": "policyV2",
+      "label": "SIGNED_AFTER",
+      "layer": "demo",
+      "hot": true
+    },
+    {
+      "id": "eRevision",
+      "source": "revision",
+      "target": "policyV2",
+      "label": "INFORMED_BY",
+      "layer": "signed",
+      "hot": true
+    },
+    {
+      "id": "eRevises",
+      "source": "revision",
+      "target": "policyV1",
+      "label": "REVISES",
+      "layer": "signed",
+      "hot": false,
+      "color": "#ff7d90",
+      "back": true
+    },
+    {
+      "id": "eWrongTarget",
+      "source": "revision",
+      "target": "qWrongTarget",
+      "label": "HANDOFF",
+      "layer": "demo",
+      "hot": false
+    },
+    {
+      "id": "eWrongTopic",
+      "source": "revision",
+      "target": "qWrongTopic",
+      "label": "HANDOFF",
+      "layer": "demo",
+      "hot": false
+    },
+    {
+      "id": "eStaleQueue",
+      "source": "policyV1",
+      "target": "qPolicyV1",
+      "label": "HANDOFF",
+      "layer": "demo",
+      "hot": false
+    },
+    {
+      "id": "eCurrentQueue",
+      "source": "revision",
+      "target": "qPolicyV2",
+      "label": "HANDOFF",
+      "layer": "demo",
+      "hot": true
+    },
+    {
+      "id": "eReadWrongTarget",
+      "source": "filter",
+      "target": "qWrongTarget",
+      "label": "CHECK_TARGET",
+      "layer": "read",
+      "hot": false
+    },
+    {
+      "id": "eReadWrongTopic",
+      "source": "filter",
+      "target": "qWrongTopic",
+      "label": "CHECK_TOPIC",
+      "layer": "read",
+      "hot": false
+    },
+    {
+      "id": "eReadPolicyV1",
+      "source": "filter",
+      "target": "qPolicyV1",
+      "label": "CHECK_FRESHNESS",
+      "layer": "read",
+      "hot": false
+    },
+    {
+      "id": "eSelected",
+      "source": "filter",
+      "target": "qPolicyV2",
+      "label": "SELECTED_TRACE",
+      "layer": "read",
+      "hot": true
+    },
+    {
+      "id": "eRecallDecision",
+      "source": "filter",
+      "target": "decision",
+      "label": "PRODUCES",
+      "layer": "demo",
+      "hot": true
+    },
+    {
+      "id": "eFilterDecision",
+      "source": "decision",
+      "target": "qPolicyV2",
+      "label": "INFORMED_BY",
+      "layer": "signed",
+      "hot": true,
+      "arc": -86
+    },
+    {
+      "id": "eOutcome",
+      "source": "outcome",
+      "target": "decision",
+      "label": "INFORMED_BY",
+      "layer": "signed",
+      "hot": true
+    }
+  ],
+  "steps": [
+    {
+      "t": "00:00",
+      "type": "function",
+      "actor": "request",
+      "summary": "Ask the agent to route a customer privacy request after a policy change.",
+      "detail": [
+        "function=request",
+        "no signed record yet"
+      ],
+      "reveal": [
+        "request"
+      ]
+    },
+    {
+      "t": "00:07",
+      "type": "observation",
+      "actor": "agent A",
+      "summary": "Signs the support-ticket router as an action record.",
+      "detail": [
+        "record=sha256:6817d8...8020",
+        "event=observation"
+      ],
+      "reveal": [
+        "impl",
+        "eRequest"
+      ]
+    },
+    {
+      "t": "00:15",
+      "type": "tool_call",
+      "actor": "policy check",
+      "summary": "Signs Policy v1 evidence: privacy requests used to route to legal.",
+      "detail": [
+        "record=sha256:e155df...5733",
+        "policy=Policy v1"
+      ],
+      "reveal": [
+        "policyV1",
+        "ePolicyV1"
+      ]
+    },
+    {
+      "t": "00:26",
+      "type": "tool_call",
+      "actor": "policy check",
+      "summary": "Signs Policy v2 evidence: privacy requests now route to the privacy team.",
+      "detail": [
+        "record=sha256:591273...daee",
+        "policy=Policy v2"
+      ],
+      "reveal": [
+        "policyV2",
+        "ePolicyV2"
+      ]
+    },
+    {
+      "t": "00:37",
+      "type": "revision",
+      "actor": "agent A",
+      "summary": "Writes a revision record. Policy v1 stays visible, but Policy v2 is the current position.",
+      "detail": [
+        "revises=Policy v1",
+        "informed_by=Policy v2"
+      ],
+      "reveal": [
+        "revision",
+        "eRevision",
+        "eRevises"
+      ],
+      "demote": [
+        "policyV1",
+        "ePolicyV1"
+      ]
+    },
+    {
+      "t": "00:49",
+      "type": "function",
+      "actor": "agent B recall",
+      "summary": "Runs verified recall over its inbox. First candidate is rejected: it targets Agent C.",
+      "detail": [
+        "function=atrib recall+trace",
+        "check=target",
+        "result=rejected"
+      ],
+      "reveal": [
+        "filter",
+        "qWrongTarget",
+        "eWrongTarget",
+        "eReadWrongTarget"
+      ],
+      "demote": [
+        "qWrongTarget",
+        "eWrongTarget",
+        "eReadWrongTarget"
+      ]
+    },
+    {
+      "t": "00:56",
+      "type": "function",
+      "actor": "agent B recall",
+      "summary": "Continues the cognitive read. The second signed message is rejected: the topic is billing.",
+      "detail": [
+        "function=atrib recall+trace",
+        "check=topic",
+        "result=rejected"
+      ],
+      "reveal": [
+        "qWrongTopic",
+        "eWrongTopic",
+        "eReadWrongTopic"
+      ],
+      "demote": [
+        "qWrongTopic",
+        "eWrongTopic",
+        "eReadWrongTopic"
+      ]
+    },
+    {
+      "t": "01:03",
+      "type": "function",
+      "actor": "agent B recall",
+      "summary": "Keeps the Policy v1 message as valid history, but ranks it lower because it is stale.",
+      "detail": [
+        "function=atrib recall+trace",
+        "freshness=stale"
+      ],
+      "reveal": [
+        "qPolicyV1",
+        "eStaleQueue",
+        "eReadPolicyV1"
+      ],
+      "demote": [
+        "qPolicyV1",
+        "eStaleQueue",
+        "eReadPolicyV1"
+      ]
+    },
+    {
+      "t": "01:10",
+      "type": "function",
+      "actor": "agent B recall",
+      "summary": "The cognitive read lands: Policy v2 is the current verified trace.",
+      "detail": [
+        "function=atrib recall+trace",
+        "selected=Policy v2"
+      ],
+      "reveal": [
+        "qPolicyV2",
+        "eCurrentQueue",
+        "eSelected"
+      ]
+    },
+    {
+      "t": "01:18",
+      "type": "observation",
+      "actor": "agent B",
+      "summary": "Writes a signed route decision from the recalled Policy v2 trace.",
+      "detail": [
+        "record=route decision",
+        "informed_by=selected inbox msg"
+      ],
+      "reveal": [
+        "decision",
+        "eRecallDecision",
+        "eFilterDecision"
+      ]
+    },
+    {
+      "t": "01:28",
+      "type": "result",
+      "actor": "routing check",
+      "summary": "Records the corrected result and routes to the privacy team in all three locked runs.",
+      "detail": [
+        "informed_by=route decision",
+        "selected Policy v2=3/3"
+      ],
+      "reveal": [
+        "outcome",
+        "eOutcome"
+      ],
+      "metric": true
+    }
+  ],
+  "records": [
+    {
+      "node_id": "impl",
+      "record_hash": "sha256:6817d840971ad493a2d4b73b4cbd2e9b822182b575d04fb03abf1fcb18db8020",
+      "signature": "qNreBlD2Meu1o24cHOucBKICiVyp7qOamTBhZOEUSIle7XDmMVzWkkgWPvpj8tsmLtuImLG9R4hBPHWPaawADA",
+      "signed_bytes": "jcs(payload)",
+      "payload": {
+        "schema": "atrib-demo-signed-record-v1",
+        "version": 1,
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "yc-demo-policy-change-2026-05-25",
+        "timestamp_ms": 1779750007000,
+        "chain_root": "sha256:9bcf0330b2732eb2c0019cfda64f27afcefe996aa3ec6d3b87bd12a5d2965394",
+        "creator": "Agent A",
+        "creator_key": "MCowBQYDK2VwAyEA60UePWqvMHRgv6l_CscePwTWMvEmI3VXM8_9IYU7UWI",
+        "content": {
+          "title": "support router",
+          "summary": "Agent A starts the support routing task for a customer privacy request.",
+          "result": "router-created"
+        }
+      }
+    },
+    {
+      "node_id": "policyV1",
+      "record_hash": "sha256:e155df63a3d0773d49a734fa5fd9ae8c4a5567de01cd8775159c28b1c5f25733",
+      "signature": "jSpKcaC7cHz7vFZxCvhbvQEqHXdXzbbIci1yxwiTRNkjrljuBpwjGS4WLqDeRalORNQ2Ojvzc3MDw9f21f9kCg",
+      "signed_bytes": "jcs(payload)",
+      "payload": {
+        "schema": "atrib-demo-signed-record-v1",
+        "version": 1,
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "yc-demo-policy-change-2026-05-25",
+        "timestamp_ms": 1779750015000,
+        "chain_root": "sha256:6817d840971ad493a2d4b73b4cbd2e9b822182b575d04fb03abf1fcb18db8020",
+        "creator": "Agent A",
+        "creator_key": "MCowBQYDK2VwAyEA60UePWqvMHRgv6l_CscePwTWMvEmI3VXM8_9IYU7UWI",
+        "content": {
+          "title": "Policy v1",
+          "tool": "policy.check",
+          "route": "privacy -> legal",
+          "summary": "Earlier policy routed privacy requests to legal."
+        }
+      }
+    },
+    {
+      "node_id": "policyV2",
+      "record_hash": "sha256:591273abfbc40acfd7e5e54de258beeaef959cc0e15ab396f61cb893aecfdaee",
+      "signature": "mCCtNvDrHhfCXmJmePRGldpXOc4uGMTXnHOsgRW_8OV0mbHqbP1PYxvWYe-jxjEhJjOX4q_fPt9hB-6DQXa1DA",
+      "signed_bytes": "jcs(payload)",
+      "payload": {
+        "schema": "atrib-demo-signed-record-v1",
+        "version": 1,
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "yc-demo-policy-change-2026-05-25",
+        "timestamp_ms": 1779750026000,
+        "chain_root": "sha256:e155df63a3d0773d49a734fa5fd9ae8c4a5567de01cd8775159c28b1c5f25733",
+        "creator": "Agent A",
+        "creator_key": "MCowBQYDK2VwAyEA60UePWqvMHRgv6l_CscePwTWMvEmI3VXM8_9IYU7UWI",
+        "content": {
+          "title": "Policy v2",
+          "tool": "policy.check",
+          "route": "privacy -> privacy team",
+          "summary": "Updated policy routes privacy requests to the privacy team."
+        }
+      }
+    },
+    {
+      "node_id": "revision",
+      "record_hash": "sha256:fdf420058da8a0ed7d5ce88bad65f81719e23e29d0bd2da324fababd205bc5b0",
+      "signature": "mIIKAmoGdw97EOCGRDHI_kY7hV8LJB4L68zmHL-csuXHwmz81fWLrmKl349MQHKVpLe71pWRdkjPsOZjlqxQAg",
+      "signed_bytes": "jcs(payload)",
+      "payload": {
+        "schema": "atrib-demo-signed-record-v1",
+        "version": 1,
+        "event_type": "https://atrib.dev/v1/types/revision",
+        "context_id": "yc-demo-policy-change-2026-05-25",
+        "timestamp_ms": 1779750037000,
+        "chain_root": "sha256:591273abfbc40acfd7e5e54de258beeaef959cc0e15ab396f61cb893aecfdaee",
+        "creator": "Agent A",
+        "creator_key": "MCowBQYDK2VwAyEA60UePWqvMHRgv6l_CscePwTWMvEmI3VXM8_9IYU7UWI",
+        "content": {
+          "title": "revision",
+          "prior_position": "Policy v1 routes privacy requests to legal.",
+          "new_position": "Policy v2 routes privacy requests to the privacy team.",
+          "reason": "Policy v2 supersedes Policy v1 for privacy routing."
+        },
+        "informed_by": [
+          "sha256:591273abfbc40acfd7e5e54de258beeaef959cc0e15ab396f61cb893aecfdaee"
+        ],
+        "revises": "sha256:e155df63a3d0773d49a734fa5fd9ae8c4a5567de01cd8775159c28b1c5f25733"
+      }
+    },
+    {
+      "node_id": "qWrongTarget",
+      "record_hash": "sha256:d59e284ece951bbaa602cf88fcbf122c876e2274355b8d37934b0f8ecf075c8d",
+      "signature": "JIDOBlDUmcWs9jpF4yP9gcN0iIVDkereDgHerNJwbhkzQGkgHxB_J29dWGtkaqZAN1m3cJtiKbeK4jHXv_eLCg",
+      "signed_bytes": "jcs(payload)",
+      "payload": {
+        "schema": "atrib-demo-signed-record-v1",
+        "version": 1,
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "yc-demo-policy-change-2026-05-25",
+        "timestamp_ms": 1779750049000,
+        "chain_root": "sha256:fdf420058da8a0ed7d5ce88bad65f81719e23e29d0bd2da324fababd205bc5b0",
+        "creator": "Agent A",
+        "creator_key": "MCowBQYDK2VwAyEA60UePWqvMHRgv6l_CscePwTWMvEmI3VXM8_9IYU7UWI",
+        "content": {
+          "title": "inbox msg",
+          "target": "Agent C",
+          "topic": "privacy-routing",
+          "decision": "reject"
+        }
+      }
+    },
+    {
+      "node_id": "qWrongTopic",
+      "record_hash": "sha256:abfb2ba1b74f103c4c2f0e806a55dc7491bb0d08220cfec3cb54c7b11cea03a3",
+      "signature": "LIGAVYFxoZIqYq8nPq0bzTVIozM-0X01_2UaJ0voAZPGqNcP21cj4orYR_CAJLSXiFgi5MOQ7f8J-sPcM4GmBg",
+      "signed_bytes": "jcs(payload)",
+      "payload": {
+        "schema": "atrib-demo-signed-record-v1",
+        "version": 1,
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "yc-demo-policy-change-2026-05-25",
+        "timestamp_ms": 1779750056000,
+        "chain_root": "sha256:d59e284ece951bbaa602cf88fcbf122c876e2274355b8d37934b0f8ecf075c8d",
+        "creator": "Agent A",
+        "creator_key": "MCowBQYDK2VwAyEA60UePWqvMHRgv6l_CscePwTWMvEmI3VXM8_9IYU7UWI",
+        "content": {
+          "title": "inbox msg",
+          "target": "Agent B",
+          "topic": "billing",
+          "decision": "reject"
+        }
+      }
+    },
+    {
+      "node_id": "qPolicyV1",
+      "record_hash": "sha256:078e25480aa87f89012c358f2aa0679b38445b046974b4c7e3a793ea33a90724",
+      "signature": "83BHOfcAsZt4Vrol8qtI79TzDS9-XgaO85SPAElnQkLP7wd1NU8OdllpE_uQsRdxq_hXtM8jkeHsKKbSY5YLAw",
+      "signed_bytes": "jcs(payload)",
+      "payload": {
+        "schema": "atrib-demo-signed-record-v1",
+        "version": 1,
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "yc-demo-policy-change-2026-05-25",
+        "timestamp_ms": 1779750063000,
+        "chain_root": "sha256:abfb2ba1b74f103c4c2f0e806a55dc7491bb0d08220cfec3cb54c7b11cea03a3",
+        "creator": "Agent A",
+        "creator_key": "MCowBQYDK2VwAyEA60UePWqvMHRgv6l_CscePwTWMvEmI3VXM8_9IYU7UWI",
+        "content": {
+          "title": "inbox msg",
+          "target": "Agent B",
+          "topic": "privacy-routing",
+          "trace": "Policy v1",
+          "freshness": "stale"
+        }
+      }
+    },
+    {
+      "node_id": "qPolicyV2",
+      "record_hash": "sha256:f781ddd96418d8631eec3974a7e64884aee29fd02b4e11c5bc41e1ea2566d705",
+      "signature": "FLPr2bbSFsVGRW2EGlLr17kj7FZZXPAezlnL8Dn6LbVVE80WgQA6xS09CePTrbWhSsxq8RoQKcA39OYUY7V7Dg",
+      "signed_bytes": "jcs(payload)",
+      "payload": {
+        "schema": "atrib-demo-signed-record-v1",
+        "version": 1,
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "yc-demo-policy-change-2026-05-25",
+        "timestamp_ms": 1779750070000,
+        "chain_root": "sha256:078e25480aa87f89012c358f2aa0679b38445b046974b4c7e3a793ea33a90724",
+        "creator": "Agent A",
+        "creator_key": "MCowBQYDK2VwAyEA60UePWqvMHRgv6l_CscePwTWMvEmI3VXM8_9IYU7UWI",
+        "content": {
+          "title": "inbox msg",
+          "target": "Agent B",
+          "topic": "privacy-routing",
+          "trace": "Policy v2",
+          "freshness": "current"
+        }
+      }
+    },
+    {
+      "node_id": "decision",
+      "record_hash": "sha256:5ada98f3d3741c68651cfd8b998dd31a3029da1e65c5a6525aea5029da0a0bd1",
+      "signature": "sECCaK_nzRfkEr2-6pIl3bb2B2-vbQe0KELMXsJG49P57cVZrX7tntTDbFi8vqUkPcWGzIPlLd0NEaAHPqEYDw",
+      "signed_bytes": "jcs(payload)",
+      "payload": {
+        "schema": "atrib-demo-signed-record-v1",
+        "version": 1,
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "yc-demo-policy-change-2026-05-25",
+        "timestamp_ms": 1779750078000,
+        "chain_root": "sha256:f781ddd96418d8631eec3974a7e64884aee29fd02b4e11c5bc41e1ea2566d705",
+        "creator": "Agent B",
+        "creator_key": "MCowBQYDK2VwAyEAX5K17ShG18i4t9SCv0htB3PKWYo9H9Su0wNkTIBAAW8",
+        "content": {
+          "title": "route decision",
+          "route": "privacy -> privacy team",
+          "selected_trace": "Policy v2"
+        },
+        "informed_by": [
+          "sha256:f781ddd96418d8631eec3974a7e64884aee29fd02b4e11c5bc41e1ea2566d705"
+        ]
+      }
+    },
+    {
+      "node_id": "outcome",
+      "record_hash": "sha256:e765d432a14b638ae24c4e64004f1b890da0a4cadf374e14a0e96c6480eb5245",
+      "signature": "ee-uxLzBCFg0O6wZjCeHMm6mnhDcOxv1B9HXKtL1HZg_cvCq9Tlo-N9Zk2cxGWOX9jIKFZqnpw6m8OKW88IWCg",
+      "signed_bytes": "jcs(payload)",
+      "payload": {
+        "schema": "atrib-demo-signed-record-v1",
+        "version": 1,
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "yc-demo-policy-change-2026-05-25",
+        "timestamp_ms": 1779750088000,
+        "chain_root": "sha256:5ada98f3d3741c68651cfd8b998dd31a3029da1e65c5a6525aea5029da0a0bd1",
+        "creator": "Agent B",
+        "creator_key": "MCowBQYDK2VwAyEAX5K17ShG18i4t9SCv0htB3PKWYo9H9Su0wNkTIBAAW8",
+        "content": {
+          "title": "memory update",
+          "result": "Policy v2 used",
+          "next_context": "future support routing"
+        },
+        "informed_by": [
+          "sha256:5ada98f3d3741c68651cfd8b998dd31a3029da1e65c5a6525aea5029da0a0bd1"
+        ]
+      }
+    }
+  ]
+}

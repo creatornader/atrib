@@ -318,6 +318,17 @@ async function handleRequest(
       'application/octet-stream'
     return handleStaticAsset(res, name, contentType)
   }
+
+  // YC demo recording surface. This is a dashboard-root artifact, not the
+  // live `#/demo` route. Keep it allowlisted so the explorer can host the
+  // stable recording page without turning apps/dashboard into a file server.
+  if (req.method === 'GET' && urlPath === '/yc-demo.html') {
+    return handleDashboardRootFile(res, 'yc-demo.html', 'text/html; charset=utf-8', 60)
+  }
+  if (req.method === 'GET' && urlPath === '/yc-demo-trace-bundle.json') {
+    return handleDashboardRootFile(res, 'yc-demo-trace-bundle.json', 'application/json; charset=utf-8', 60)
+  }
+
   // Sibling ES modules imported by index.html (e.g. graph-utils.mjs).
   // These live next to the HTML in apps/dashboard/ and are extracted
   // pure helpers that need to be unit-testable without a browser.
@@ -467,6 +478,34 @@ const staticCache = new Map<string, Buffer>()
  * unchanged between deploys.
  */
 const moduleCache = new Map<string, Buffer>()
+const rootFileCache = new Map<string, Buffer>()
+
+async function handleDashboardRootFile(
+  res: ServerResponse,
+  name: string,
+  contentType: string,
+  maxAgeSeconds: number,
+): Promise<void> {
+  let bytes = rootFileCache.get(name)
+  if (!bytes) {
+    try {
+      const here = dirname(fileURLToPath(import.meta.url))
+      bytes = await readFile(join(here, '..', '..', '..', 'apps', 'dashboard', name))
+      rootFileCache.set(name, bytes)
+    } catch {
+      res.statusCode = 404
+      res.setHeader('content-type', 'text/plain; charset=utf-8')
+      res.end(`dashboard file not found: ${name}\n`)
+      return
+    }
+  }
+  res.statusCode = 200
+  res.setHeader('content-type', contentType)
+  res.setHeader('content-length', bytes.length)
+  res.setHeader('cache-control', `public, max-age=${maxAgeSeconds}`)
+  res.end(bytes)
+}
+
 async function handleDashboardModule(res: ServerResponse, name: string): Promise<void> {
   let bytes = moduleCache.get(name)
   if (!bytes) {

@@ -583,6 +583,22 @@ describe('GET /dashboard', () => {
     expect(body).toMatch(/selectLayout/)
   })
 
+  it('serves the YC demo page and trace bundle from the dashboard root', async () => {
+    const html = await fetch(`${server.url}/yc-demo.html`)
+    expect(html.status).toBe(200)
+    expect(html.headers.get('content-type')).toContain('text/html')
+    const body = await html.text()
+    expect(body).toMatch(/YC demo: verified context for a policy change/)
+    expect(body).toMatch(/yc-demo-trace-bundle\.json/)
+
+    const bundle = await fetch(`${server.url}/yc-demo-trace-bundle.json`)
+    expect(bundle.status).toBe(200)
+    expect(bundle.headers.get('content-type')).toContain('application/json')
+    const json = await bundle.json() as { schema: string; records: unknown[] }
+    expect(json.schema).toBe('atrib-yc-living-graph-trace-bundle-v1')
+    expect(json.records.length).toBeGreaterThan(0)
+  })
+
   it('returns 404 for an unknown sibling .mjs', async () => {
     const res = await fetch(`${server.url}/does-not-exist.mjs`)
     expect(res.status).toBe(404)

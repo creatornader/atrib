@@ -33,6 +33,8 @@ Live at **https://explore.atrib.dev/**.
 
 log-node serves the dashboard inline. The Dockerfile copies `apps/dashboard/index.html` into the image at build time; the server reads it once at startup, caches in memory, and returns it with `Cache-Control: public, max-age=60`. When the request hostname is `explore.atrib.dev`, log-node returns the dashboard at `/`; for any other hostname (e.g. `log.atrib.dev`) it preserves API behavior at `/v1/*` and returns a JSON 404 hint at `/`. The dashboard is also accessible at `https://log.atrib.dev/dashboard` as a fallback.
 
+The YC recording demo is hosted as a separate stable artifact at `https://explore.atrib.dev/yc-demo.html`. It intentionally does not replace `#/demo`, which remains the live recent-action replay.
+
 `explore.atrib.dev` (not `dashboard.atrib.dev`) is intentional: `explore` reads as block-explorer; `dashboard.atrib.dev` is reserved for the auth-gated personal dashboard product that ships separately.
 
 When option 2 (Vite/Next.js SPA) lands, it gets its own hosting (likely Cloudflare Pages); the inline log-node route stays as a fallback.
