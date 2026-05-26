@@ -8,23 +8,21 @@
     :root {
       color-scheme: dark;
       --color-background: #0a0a0a;
-      --color-explorer-background: #0a0b0e;
       --color-surface: #131210;
       --color-surface-raised: #1c1a17;
-      --color-explorer-surface: #14161a;
       --color-foreground: #f5f4ee;
       --color-muted: #8a877e;
       --color-muted-foreground: #b8b5ac;
       --color-border: #2d2a25;
       --color-border-strong: #423e36;
       --color-accent: #e8a04f;
-      --bg: var(--color-explorer-background);
-      --panel: var(--color-explorer-surface);
-      --panel-2: #1b1d22;
-      --line: #262930;
+      --bg: var(--color-background);
+      --panel: var(--color-surface);
+      --panel-2: var(--color-surface-raised);
+      --line: var(--color-border);
       --text: var(--color-foreground);
       --muted: var(--color-muted-foreground);
-      --soft: #77766f;
+      --soft: var(--color-muted);
       --gold: var(--color-accent);
       --blue: #60a5fa;
       --green: #34d399;
@@ -80,9 +78,7 @@
     .mark {
       width: 20px;
       height: 20px;
-      border-radius: 50%;
-      background: radial-gradient(circle at 34% 28%, #ffe2ad 0 18%, var(--gold) 42%, #7a4f24 100%);
-      box-shadow: 0 0 0 2px rgba(232, 160, 79, 0.18), 0 0 24px rgba(232, 160, 79, 0.2);
+      border-radius: 4px;
       flex: 0 0 auto;
     }
 
@@ -691,7 +687,7 @@
   <div class="shell">
     <header>
       <div class="brand">
-        <span class="mark" aria-hidden="true"></span>
+        <img class="mark" src="/static/icon.svg" width="20" height="20" alt="" aria-hidden="true">
         <span>atrib</span>
         <small>demo: signed context changes action</small>
       </div>
