@@ -185,6 +185,16 @@
       transform: translateY(0);
     }
 
+    .step.interactive {
+      cursor: pointer;
+      outline: none;
+    }
+
+    .step.interactive:hover,
+    .step.interactive:focus-visible {
+      background: rgba(255, 255, 255, 0.025);
+    }
+
     .time {
       color: var(--soft);
       font-variant-numeric: tabular-nums;
@@ -940,7 +950,20 @@
 
     function makeStep(step) {
       const el = document.createElement('article');
-      el.className = 'step';
+      const inspectId = step.inspect || (step.reveal || []).find((id) => nodeById.has(id));
+      el.className = `step${inspectId ? ' interactive' : ''}`;
+      if (inspectId) {
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('role', 'button');
+        el.setAttribute('aria-label', `Inspect ${nodeById.get(inspectId).title} in graph`);
+        el.addEventListener('click', () => inspectNode(inspectId, { pin: true }));
+        el.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            inspectNode(inspectId, { pin: true });
+          }
+        });
+      }
       el.innerHTML = `
         <div class="time">${step.t}</div>
         <div class="step-main">
@@ -1040,23 +1063,27 @@
       for (const node of nodes) {
         const el = document.getElementById(node.id);
         el.addEventListener('mouseenter', () => inspectNode(node.id));
-        el.addEventListener('focus', () => inspectNode(node.id));
+        el.addEventListener('mouseleave', () => clearHoverInspection());
+        el.addEventListener('focus', () => inspectNode(node.id, { pin: true }));
         el.addEventListener('click', (event) => {
           event.stopPropagation();
-          inspectNode(node.id);
+          inspectNode(node.id, { pin: true });
         });
         el.addEventListener('keydown', (event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
             event.stopPropagation();
-            inspectNode(node.id);
+            inspectNode(node.id, { pin: true });
           }
         });
       }
     }
 
-    function inspectNode(nodeId) {
+    let pinnedInspection = false;
+
+    function inspectNode(nodeId, options = {}) {
       if (!visible.has(nodeId)) return;
+      pinnedInspection = options.pin === true;
       const node = nodeById.get(nodeId);
       const relatedEdges = edges.filter((edge) => edge.source === nodeId || edge.target === nodeId);
       const relatedNodeIds = new Set([nodeId]);
@@ -1130,7 +1157,12 @@
       nodeCardEl.setAttribute('aria-hidden', 'false');
     }
 
+    function clearHoverInspection() {
+      if (!pinnedInspection) clearInspection();
+    }
+
     function clearInspection() {
+      pinnedInspection = false;
       graphWrapEl.classList.remove('inspecting');
       nodeCardEl.classList.remove('visible');
       nodeCardEl.setAttribute('aria-hidden', 'true');
