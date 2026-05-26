@@ -584,6 +584,14 @@ describe('GET /dashboard', () => {
   })
 
   it('serves dashboard brand assets from /static', async () => {
+    const favicon = await fetch(`${server.url}/favicon.ico`)
+    expect(favicon.status).toBe(200)
+    expect(favicon.headers.get('content-type')).toContain('image/x-icon')
+
+    const staticFavicon = await fetch(`${server.url}/static/favicon.ico`)
+    expect(staticFavicon.status).toBe(200)
+    expect(staticFavicon.headers.get('content-type')).toContain('image/x-icon')
+
     const icon = await fetch(`${server.url}/static/apple-touch-icon.png`)
     expect(icon.status).toBe(200)
     expect(icon.headers.get('content-type')).toContain('image/png')
