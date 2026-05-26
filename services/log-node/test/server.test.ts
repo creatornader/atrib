@@ -612,6 +612,7 @@ describe('GET /dashboard', () => {
     const body = await html.text()
     expect(body).toMatch(/demo: signed context changes action/)
     expect(body).toMatch(/yc-demo-trace-bundle\.json/)
+    expect(body).toMatch(/<a class="brand" href="\/" aria-label="atrib explorer home">/)
 
     const legacyHtml = await fetch(`${server.url}/yc-demo.html`)
     expect(legacyHtml.status).toBe(200)
