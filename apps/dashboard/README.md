@@ -1,6 +1,6 @@
 # atrib explorer (option 1)
 
-Public read-only inspection surface over [`log.atrib.dev`](https://log.atrib.dev/v1), [`graph.atrib.dev`](https://graph.atrib.dev/v1), and [`directory.atrib.dev`](https://directory.atrib.dev/v6). Composes data from the three services into seven views: overview, identity (by `creator_key`), session (by `context_id`), action (by `record_hash`), demo, trace (provenance ancestry by `record_hash`), anchoring.
+Public read-only inspection surface over [`log.atrib.dev`](https://log.atrib.dev/v1), [`graph.atrib.dev`](https://graph.atrib.dev/v1), and [`directory.atrib.dev`](https://directory.atrib.dev/v6). Composes data from the three services into seven views: overview, identity (by `creator_key`), session (by `context_id`), action (by `record_hash`), live replay, trace (provenance ancestry by `record_hash`), anchoring.
 
 This is **option 1 of a three-stage build** per [D054](../../DECISIONS.md#d054-unified-public-explorer-vs-per-service-admin-uis): single HTML file, no build step, no framework, vanilla JavaScript with `fetch` against the public APIs.
 
@@ -33,7 +33,7 @@ Live at **https://explore.atrib.dev/**.
 
 log-node serves the dashboard inline. The Dockerfile copies `apps/dashboard/index.html` into the image at build time; the server reads it once at startup, caches in memory, and returns it with `Cache-Control: public, max-age=60`. When the request hostname is `explore.atrib.dev`, log-node returns the dashboard at `/`; for any other hostname (e.g. `log.atrib.dev`) it preserves API behavior at `/v1/*` and returns a JSON 404 hint at `/`. The dashboard is also accessible at `https://log.atrib.dev/dashboard` as a fallback.
 
-The YC recording demo is hosted as a separate stable artifact at `https://explore.atrib.dev/yc-demo.html`. It intentionally does not replace `#/demo`, which remains the live recent-action replay.
+The YC recording demo is hosted as a separate stable artifact at `https://explore.atrib.dev/yc-demo.html`. It intentionally does not replace `#/demo`, which is now labeled as the live recent-action replay.
 
 `explore.atrib.dev` (not `dashboard.atrib.dev`) is intentional: `explore` reads as block-explorer; `dashboard.atrib.dev` is reserved for the auth-gated personal dashboard product that ships separately.
 
@@ -55,7 +55,7 @@ CORS is configured on log-node, graph-node, and directory-node (`Access-Control-
 | `#/identity/<creator_key>` | base64url 43-char Ed25519 pubkey | directory `/v6/lookup` + `/v6/history`; graph `/v1/creators/<key>/sessions` + `/v1/creators/<key>/graph` | ✅ activity-map DAG (cross-session edges) with time-window selector |
 | `#/session/<context_id>` | 32-hex context_id | graph `/v1/graph/<id>` (fallback: log `/v1/by-context/<id>`) | ✅ session DAG (dagre or circular layout per [D066](../../DECISIONS.md#d066-dashboard-graph-viz-library-set-sigmajs--dagre--graphology--cosmosgl-lazy-loaded-cdn-no-build-step) adaptive selector); records-only table when no edges |
 | `#/action/<record_hash>` | `sha256:<64-hex>` or just `<64-hex>` | log `/v1/lookup/<hex>` | ❌ |
-| `#/demo` | (none) | log `/v1/recent` + graph `/v1/graph/<context_id>` when available | ✅ live replay graph paired with a concise agent-session timeline |
+| `#/demo` | (none) | log `/v1/recent` + graph `/v1/graph/<context_id>` when available | ✅ live recent-action replay graph paired with a concise agent-session timeline |
 | `#/trace/<record_hash>` | `sha256:<64-hex>` or just `<64-hex>` | graph `/v1/trace/<hex>` + `/v1/chain/<hex>` merged | ✅ provenance-ancestry DAG (all 9 edge types when present) + chain-timeline list |
 | `#/anchoring` | (none) | log `/v1/stats` + `/v1/checkpoint` + directory `/v6/anchor` | ❌ |
 
@@ -72,7 +72,7 @@ Of the seven dashboard views above, the trace, session, identity, and demo views
 | Trace view (`#/trace/<hash>`) | ✅ Live | Sigma + dagre | All 9 edge types when present (4 producer-claimed + 5 substrate-derived). Pairs with chain-timeline list section. |
 | Session DAG (`#/session/<id>`) | ✅ Live | Sigma + dagre/circular | Adaptive layout per [D066](../../DECISIONS.md#d066-dashboard-graph-viz-library-set-sigmajs--dagre--graphology--cosmosgl-lazy-loaded-cdn-no-build-step): dagre when hierarchical edges + edges < 2000; circular fallback for large all-pairs sessions. Intra-session edges are emitted under graph-node's compaction rule per [§3.4.1.1](../../atrib-spec.md#3411-intra-session-edge-compaction): SESSION_PRECEDES / SESSION_PARALLEL between transitively-chained records are skipped (CHAIN_PRECEDES already encodes their order), and across chain components only adjacent-in-time pairs are emitted. The reduction is information-preserving and folds a 1484-record fully-chained session from ~1.1M candidate edges to N-1 chain edges. |
 | Identity activity map (`#/identity/<key>`) | ✅ Live | Sigma + dagre | Cross-session edges only by default (intra-session edges filtered per [§3.4.7](../../atrib-spec.md#347-get-v1creatorscreator_keygraph)). Time-window selector (last 6h / 24h / 7d / 30d / all time). |
-| Live demo replay (`#/demo`) | ✅ Live | Sigma + dagre | Selects the busiest recent session, renders a concise agent timeline, and animates nodes and edges into view. Falls back to a tested log-derived replay graph if graph-node has no usable graph for the session. |
+| Live recent-action replay (`#/demo`) | ✅ Live | Sigma + dagre | Selects the busiest recent session, renders a concise agent timeline, and animates nodes and edges into view. Falls back to a tested log-derived replay graph if graph-node has no usable graph for the session. |
 | Transaction settlement view | 📋 Planned | Sigma + dagre | Either a new `#/transaction/<hash>` route or an upgraded action view when `event_type=transaction`. Renders `CONVERGES_ON` edges from contributing records to the transaction node. |
 | Cross-creator network | 📋 Planned | Sigma (small) / cosmos.gl (large) | Two or more `creator_key`s + records they jointly informed/annotated/revised. No route assigned yet. |
 | Global view | 📋 Planned | cosmos.gl | The 100k+ node scale view at `#/global`, second renderer beyond Sigma. Same `{nodes, edges}` data adapter. |

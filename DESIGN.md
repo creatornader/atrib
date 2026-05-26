@@ -148,6 +148,18 @@ Explorer:
 - Current focus: mobile safety, accessible search, visible graph edges, clearer action states.
 - Target state: verification workflow should be the spine. Search result to record detail to graph to raw proof should feel like one investigation.
 
+YC demo:
+
+- Job: show, in one stable reviewer-facing artifact, that signed causal history changes downstream agent behavior.
+- Current focus: `https://explore.atrib.dev/yc-demo.html`, a scripted signed-context graph where Agent B selects current Policy v2 and writes new signed records from that context.
+- Target state: visually and linguistically belongs to the same family as the website and explorer, while remaining stable enough for recordings and funding reviewers.
+
+Live replay:
+
+- Job: show recent public-log activity as an animated graph.
+- Current focus: `https://explore.atrib.dev/#/demo`, now labeled as live recent-action replay so it does not compete with the stable YC demo.
+- Target state: makes live substrate activity legible without looking like a separate demo product.
+
 Protocol docs:
 
 - Job: define the technical truth.
@@ -184,7 +196,7 @@ This inventory is grounded in `apps/dashboard/index.html` as of 2026-05-25. Upda
 | Session `#/session/<context_id>`    | Read one agent workflow as a sequence and graph.                                       | Fallback states are honest but too implementation-heavy, especially when graph-node errors or large sessions produce sparse views.                           | Readiness row (source, graph, transaction, references), structural stats, graph when useful, signed records table, fallback reason. | Rewrite graph fallback copy around user meaning: graph unavailable, log records still trustworthy.                            |
 | Trace `#/trace/<record_hash>`       | Walk backward from a record through provenance and chain ancestry.                     | The split between provenance trace and causal chain is technically correct but heavy for first-time readers.                                                 | Starting record, provenance ancestry, linear chain, edge legend, direct action link.            | Add a small "two ways backward" explainer before the graph. Keep spec references secondary.                                   |
 | Anchoring `#/anchoring`             | Check signed checkpoint and directory anchor state.                                    | Anchoring is the most protocol-heavy view. It risks sounding like internal implementation unless it names what a checkpoint lets a verifier do.              | Protected history, checkpoint, directory anchor, endpoint state, raw proof material.            | Rename labels around verifier jobs: "history checkpoint", "directory state anchor", "latest protected tree".                  |
-| Demo `#/demo`                       | See a live replay of recent signed agent activity.                                     | It is useful as motion, but it can read as spectacle unless the selected records map back to verification.                                                   | Selected session, timeline, replay graph, selected record inspector, action links.              | Make the inspector more receipt-like. Add a clear link from replay state to the action receipt.                               |
+| Live replay `#/demo`                | See a live replay of recent signed agent activity.                                     | It is useful as motion, but it can read as spectacle unless the selected records map back to verification. It must not be confused with the stable YC demo.    | Selected session, timeline, replay graph, selected record inspector, action links.              | Make the inspector more receipt-like. Add a clear link from replay state to the action receipt.                               |
 | About `#/about`                     | Learn what each view means and how to verify records.                                  | It covers the basics, but it should become the glossary for the design language: receipt, signer, log, proof, trace, anchor.                                 | What this is, seven views, core vocabulary, manual verification steps.                          | Add a compact glossary and link terms back into view headers.                                                                 |
 
 ## Execution Backlog

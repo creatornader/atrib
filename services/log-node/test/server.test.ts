@@ -588,7 +588,7 @@ describe('GET /dashboard', () => {
     expect(html.status).toBe(200)
     expect(html.headers.get('content-type')).toContain('text/html')
     const body = await html.text()
-    expect(body).toMatch(/YC demo: verified context for a policy change/)
+    expect(body).toMatch(/demo: signed context changes action/)
     expect(body).toMatch(/yc-demo-trace-bundle\.json/)
 
     const bundle = await fetch(`${server.url}/yc-demo-trace-bundle.json`)
