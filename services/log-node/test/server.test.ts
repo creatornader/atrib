@@ -603,6 +603,14 @@ describe('GET /dashboard', () => {
     expect(body).toMatch(/atrib/i)
   })
 
+  it('serves dashboard HEAD requests with the same headers and no body', async () => {
+    const res = await fetch(`${server.url}/dashboard`, { method: 'HEAD' })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/html')
+    expect(Number(res.headers.get('content-length'))).toBeGreaterThan(0)
+    expect(await res.text()).toBe('')
+  })
+
   it('aliases /dashboard.html and /dashboard/', async () => {
     const a = await fetch(`${server.url}/dashboard.html`)
     const b = await fetch(`${server.url}/dashboard/`)
@@ -648,6 +656,15 @@ describe('GET /dashboard', () => {
     expect(socialCard.headers.get('content-type')).toContain('image/png')
   })
 
+  it('serves static asset HEAD requests with the same headers and no body', async () => {
+    const res = await fetch(`${server.url}/static/opengraph-image.png`, { method: 'HEAD' })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('image/png')
+    expect(res.headers.get('cache-control')).toBe('public, max-age=86400, immutable')
+    expect(Number(res.headers.get('content-length'))).toBeGreaterThan(0)
+    expect(await res.text()).toBe('')
+  })
+
   it('serves the YC demo page and trace bundle from the dashboard root', async () => {
     const html = await fetch(`${server.url}/yc-demo`)
     expect(html.status).toBe(200)
@@ -667,6 +684,20 @@ describe('GET /dashboard', () => {
     const json = (await bundle.json()) as { schema: string; records: unknown[] }
     expect(json.schema).toBe('atrib-yc-living-graph-trace-bundle-v1')
     expect(json.records.length).toBeGreaterThan(0)
+  })
+
+  it('serves the YC demo HEAD routes with the same headers and no body', async () => {
+    const html = await fetch(`${server.url}/yc-demo`, { method: 'HEAD' })
+    expect(html.status).toBe(200)
+    expect(html.headers.get('content-type')).toContain('text/html')
+    expect(Number(html.headers.get('content-length'))).toBeGreaterThan(0)
+    expect(await html.text()).toBe('')
+
+    const bundle = await fetch(`${server.url}/yc-demo-trace-bundle.json`, { method: 'HEAD' })
+    expect(bundle.status).toBe(200)
+    expect(bundle.headers.get('content-type')).toContain('application/json')
+    expect(Number(bundle.headers.get('content-length'))).toBeGreaterThan(0)
+    expect(await bundle.text()).toBe('')
   })
 
   it('returns 404 for an unknown sibling .mjs', async () => {
@@ -754,6 +785,43 @@ describe('GET /dashboard', () => {
       expect(got.status).toBe(200)
       expect(got.ct).toContain('text/html')
       expect(got.body).toMatch(/<!doctype html>/i)
+    }
+  })
+
+  it('serves explorer path HEAD routes when Host=explore.atrib.dev', async () => {
+    const u = new URL(server.url)
+    for (const path of ['/demo', '/yc-demo', '/session/0123456789abcdef0123456789abcdef']) {
+      const got = await new Promise<{ status: number; ct: string; len: string; body: string }>(
+        (resolve, reject) => {
+          const req = httpRequest(
+            {
+              method: 'HEAD',
+              hostname: u.hostname,
+              port: u.port,
+              path,
+              headers: { host: 'explore.atrib.dev' },
+            },
+            (res: IncomingMessage) => {
+              const chunks: Buffer[] = []
+              res.on('data', (c: Buffer) => chunks.push(c))
+              res.on('end', () =>
+                resolve({
+                  status: res.statusCode ?? 0,
+                  ct: res.headers['content-type'] ?? '',
+                  len: res.headers['content-length'] ?? '',
+                  body: Buffer.concat(chunks).toString('utf-8'),
+                }),
+              )
+            },
+          )
+          req.on('error', reject)
+          req.end()
+        },
+      )
+      expect(got.status).toBe(200)
+      expect(got.ct).toContain('text/html')
+      expect(Number(got.len)).toBeGreaterThan(0)
+      expect(got.body).toBe('')
     }
   })
 
