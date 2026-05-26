@@ -4,6 +4,16 @@ on:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Check scope
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - health
+          - assets
 
 permissions:
   contents: read
@@ -20,4 +30,6 @@ jobs:
 
       - name: Check public log endpoints
         shell: bash
+        env:
+          LOG_SMOKE_SCOPE: ${{ github.event_name == 'schedule' && 'health' || inputs.scope || 'all' }}
         run: node .github/scripts/check-log-smoke.mjs

@@ -5,6 +5,7 @@ const maxTotalMs = readPositiveInt('LOG_SMOKE_MAX_TOTAL_MS', 5000)
 const timeoutMs = readPositiveInt('LOG_SMOKE_FETCH_TIMEOUT_MS', 10000)
 const maxAttempts = readPositiveInt('LOG_SMOKE_ATTEMPTS', 3)
 const retryDelayMs = readPositiveInt('LOG_SMOKE_RETRY_DELAY_MS', 2000)
+const scope = readScope()
 
 const endpoints = [
   {
@@ -79,17 +80,21 @@ const assetGroups = [
 
 const results = []
 
-for (const endpoint of endpoints) {
-  results.push(await checkEndpoint(endpoint))
+if (scope !== 'assets') {
+  for (const endpoint of endpoints) {
+    results.push(await checkEndpoint(endpoint))
+  }
 }
 
 const assetResults = []
-for (const group of assetGroups) {
-  assetResults.push(await checkAssetParity(group))
+if (scope !== 'health') {
+  for (const group of assetGroups) {
+    assetResults.push(await checkAssetParity(group))
+  }
 }
 
 console.log(
-  `log smoke passed: max_ttfb=${maxTtfbMs}ms max_total=${maxTotalMs}ms attempts=${maxAttempts}`,
+  `log smoke passed: scope=${scope} max_ttfb=${maxTtfbMs}ms max_total=${maxTotalMs}ms attempts=${maxAttempts}`,
 )
 for (const result of results) {
   console.log(
@@ -165,7 +170,9 @@ async function checkAssetEndpointOnce(asset, expectedContentTypes, attempt) {
     const contentType = response.headers.get('content-type') || ''
     if (!expectedContentTypes.some((expected) => contentType.includes(expected))) {
       throw new Error(
-        `${asset.name} content-type ${contentType} did not include ${expectedContentTypes.join(' or ')}`,
+        `${asset.name} content-type ${contentType || '<none>'} did not include ${expectedContentTypes.join(
+          ' or ',
+        )} (${asset.url}; ${formatResponseDiagnostics(response)})`,
       )
     }
 
@@ -255,4 +262,21 @@ function readPositiveInt(name, fallback) {
   }
 
   return parsed
+}
+
+function readScope() {
+  const value = process.env.LOG_SMOKE_SCOPE ?? 'all'
+  if (value === 'all' || value === 'health' || value === 'assets') {
+    return value
+  }
+
+  throw new Error('LOG_SMOKE_SCOPE must be all, health, or assets')
+}
+
+function formatResponseDiagnostics(response) {
+  return [
+    `cache-control=${response.headers.get('cache-control') || '<none>'}`,
+    `cf-cache-status=${response.headers.get('cf-cache-status') || '<none>'}`,
+    `fly-request-id=${response.headers.get('fly-request-id') || '<none>'}`,
+  ].join(' ')
 }
