@@ -17,7 +17,14 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { canonicalRecord, validateSubmission, verifyRecord, hexEncode, nodeHash, base64urlEncode } from '@atrib/mcp'
+import {
+  canonicalRecord,
+  validateSubmission,
+  verifyRecord,
+  hexEncode,
+  nodeHash,
+  base64urlEncode,
+} from '@atrib/mcp'
 import type { AtribRecord, ProofBundle } from '@atrib/mcp'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { serializeEntry } from './entry.js'
@@ -66,7 +73,9 @@ export async function bindServer(
   function acquireSubmitLock(): { wait: Promise<void>; release: () => void } {
     const prev = submitQueue
     let release!: () => void
-    submitQueue = new Promise<void>((r) => { release = r })
+    submitQueue = new Promise<void>((r) => {
+      release = r
+    })
     return { wait: prev, release }
   }
 
@@ -81,15 +90,17 @@ export async function bindServer(
       res.end()
       return
     }
-    handleRequest(req, res, tree, signer, proofCache, acquireSubmitLock, graphFanoutEndpoint).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error('atrib-log-node: request handler crashed', err)
-      if (!res.headersSent) {
-        res.statusCode = 500
-        res.setHeader('content-type', 'application/json')
-        res.end(JSON.stringify({ error: 'internal error' }))
-      }
-    })
+    handleRequest(req, res, tree, signer, proofCache, acquireSubmitLock, graphFanoutEndpoint).catch(
+      (err) => {
+        // eslint-disable-next-line no-console
+        console.error('atrib-log-node: request handler crashed', err)
+        if (!res.headersSent) {
+          res.statusCode = 500
+          res.setHeader('content-type', 'application/json')
+          res.end(JSON.stringify({ error: 'internal error' }))
+        }
+      },
+    )
   })
 
   // Protect against Slowloris and slow-request DoS attacks
@@ -121,7 +132,13 @@ type AcquireLock = () => { wait: Promise<void>; release: () => void }
 
 function isDashboardRoutePath(urlPath: string | undefined): boolean {
   if (!urlPath) return false
-  if (urlPath === '/overview' || urlPath === '/demo' || urlPath === '/anchoring' || urlPath === '/about') return true
+  if (
+    urlPath === '/overview' ||
+    urlPath === '/demo' ||
+    urlPath === '/anchoring' ||
+    urlPath === '/about'
+  )
+    return true
   return /^\/(?:identity|session|action|trace)\/[^/]+$/.test(urlPath)
 }
 
@@ -144,7 +161,11 @@ async function handleRequest(
   // the dashboard route rather than falling through to a 404.
   const urlPath = (req.url ?? '').split('?')[0]
   const isExplorerHost = req.headers.host?.startsWith('explore.atrib.dev') === true
-  if (req.method === 'GET' && isExplorerHost && ((urlPath === '/' || urlPath === '') || isDashboardRoutePath(urlPath))) {
+  if (
+    req.method === 'GET' &&
+    isExplorerHost &&
+    (urlPath === '/' || urlPath === '' || isDashboardRoutePath(urlPath))
+  ) {
     return handleDashboard(res)
   }
 
@@ -204,12 +225,15 @@ async function handleRequest(
     res.statusCode = 405
     res.setHeader('allow', 'POST')
     res.setHeader('content-type', 'application/problem+json')
-    res.end(JSON.stringify({
-      type: 'https://atrib.dev/problems/append-only',
-      title: 'Method Not Allowed',
-      status: 405,
-      detail: 'The atrib log is append-only by design. Records cannot be deleted via the API. See ARCHITECTURE.md and §1.8.',
-    }))
+    res.end(
+      JSON.stringify({
+        type: 'https://atrib.dev/problems/append-only',
+        title: 'Method Not Allowed',
+        status: 405,
+        detail:
+          'The atrib log is append-only by design. Records cannot be deleted via the API. See ARCHITECTURE.md and §1.8.',
+      }),
+    )
     return
   }
 
@@ -309,27 +333,37 @@ async function handleRequest(
   // explore.atrib.dev and log.atrib.dev so the HTML's <link> tags resolve
   // regardless of which hostname loads the explorer.
   if (req.method === 'GET' && urlPath === '/favicon.ico') {
-    return handleStaticAsset(res, 'favicon.ico', 'image/x-icon')
+    return handleStaticAsset(res, 'favicon.ico', 'image/x-icon', 60, false)
   }
   const staticMatch = req.url?.match(/^\/static\/([A-Za-z0-9._-]+)$/)
   if (req.method === 'GET' && staticMatch) {
     const name = staticMatch[1]!
-    const contentType =
-      name.endsWith('.svg') ? 'image/svg+xml' :
-      name.endsWith('.png') ? 'image/png' :
-      name.endsWith('.ico') ? 'image/x-icon' :
-      'application/octet-stream'
+    const contentType = name.endsWith('.svg')
+      ? 'image/svg+xml'
+      : name.endsWith('.png')
+        ? 'image/png'
+        : name.endsWith('.ico')
+          ? 'image/x-icon'
+          : 'application/octet-stream'
     return handleStaticAsset(res, name, contentType)
   }
 
   // YC demo recording surface. This is a dashboard-root artifact, not the
   // live /demo route. Keep it allowlisted so the explorer can host the
   // stable recording page without turning apps/dashboard into a file server.
-  if (req.method === 'GET' && (urlPath === '/yc-demo' || urlPath === '/yc-demo/' || urlPath === '/yc-demo.html')) {
+  if (
+    req.method === 'GET' &&
+    (urlPath === '/yc-demo' || urlPath === '/yc-demo/' || urlPath === '/yc-demo.html')
+  ) {
     return handleDashboardRootFile(res, 'yc-demo.html', 'text/html; charset=utf-8', 60)
   }
   if (req.method === 'GET' && urlPath === '/yc-demo-trace-bundle.json') {
-    return handleDashboardRootFile(res, 'yc-demo-trace-bundle.json', 'application/json; charset=utf-8', 60)
+    return handleDashboardRootFile(
+      res,
+      'yc-demo-trace-bundle.json',
+      'application/json; charset=utf-8',
+      60,
+    )
   }
 
   // Sibling ES modules imported by index.html (e.g. graph-utils.mjs).
@@ -533,7 +567,13 @@ async function handleDashboardModule(res: ServerResponse, name: string): Promise
   res.end(bytes)
 }
 
-async function handleStaticAsset(res: ServerResponse, name: string, contentType: string): Promise<void> {
+async function handleStaticAsset(
+  res: ServerResponse,
+  name: string,
+  contentType: string,
+  maxAgeSeconds = 86400,
+  immutable = true,
+): Promise<void> {
   let bytes = staticCache.get(name)
   if (!bytes) {
     try {
@@ -549,8 +589,12 @@ async function handleStaticAsset(res: ServerResponse, name: string, contentType:
   res.statusCode = 200
   res.setHeader('content-type', contentType)
   res.setHeader('content-length', bytes.length)
-  // Long cache: static assets ship with the image; new versions deploy with new image.
-  res.setHeader('cache-control', 'public, max-age=86400, immutable')
+  // Static assets ship with the image. Bare browser probe paths stay short
+  // cached because they cannot be cache-busted when a stale response leaks.
+  const cacheControl = immutable
+    ? `public, max-age=${maxAgeSeconds}, immutable`
+    : `public, max-age=${maxAgeSeconds}`
+  res.setHeader('cache-control', cacheControl)
   res.end(bytes)
 }
 
@@ -561,7 +605,10 @@ async function handleStaticAsset(res: ServerResponse, name: string, contentType:
 //   [65-80]  context_id (16 bytes)
 //   [81-88]  timestamp_ms (u64 big-endian)
 //   [89]     event_type byte
-function decodeEntry(bytes: Uint8Array, index: number): {
+function decodeEntry(
+  bytes: Uint8Array,
+  index: number,
+): {
   index: number
   record_hash: string
   creator_key: string
@@ -573,14 +620,21 @@ function decodeEntry(bytes: Uint8Array, index: number): {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const eventByte = bytes[89]!
   const eventLabel =
-    eventByte === 0x01 ? 'tool_call' :
-    eventByte === 0x02 ? 'transaction' :
-    eventByte === 0x03 ? 'observation' :
-    eventByte === 0x04 ? 'directory_anchor' :
-    eventByte === 0x05 ? 'annotation' :
-    eventByte === 0x06 ? 'revision' :
-    eventByte === 0xff ? 'extension' :
-    'reserved'
+    eventByte === 0x01
+      ? 'tool_call'
+      : eventByte === 0x02
+        ? 'transaction'
+        : eventByte === 0x03
+          ? 'observation'
+          : eventByte === 0x04
+            ? 'directory_anchor'
+            : eventByte === 0x05
+              ? 'annotation'
+              : eventByte === 0x06
+                ? 'revision'
+                : eventByte === 0xff
+                  ? 'extension'
+                  : 'reserved'
   return {
     index,
     record_hash: 'sha256:' + hexEncode(bytes.subarray(1, 33)),
@@ -663,7 +717,8 @@ function handleByCreator(res: ServerResponse, tree: MerkleTree, creatorKey: stri
       has_transaction: false,
     }
     cur.node_count += 1
-    cur.count_by_event_type[decoded.event_type] = (cur.count_by_event_type[decoded.event_type] ?? 0) + 1
+    cur.count_by_event_type[decoded.event_type] =
+      (cur.count_by_event_type[decoded.event_type] ?? 0) + 1
     if (decoded.event_type === 'transaction') cur.has_transaction = true
     if (decoded.timestamp_ms < cur.first_seen) cur.first_seen = decoded.timestamp_ms
     if (decoded.timestamp_ms > cur.last_seen) cur.last_seen = decoded.timestamp_ms
@@ -674,7 +729,12 @@ function handleByCreator(res: ServerResponse, tree: MerkleTree, creatorKey: stri
   sendJson(res, 200, { creator_key: creatorKey, count: list.length, sessions: list })
 }
 
-function handleRecent(res: ServerResponse, tree: MerkleTree, limit: number, offset: number = 0): void {
+function handleRecent(
+  res: ServerResponse,
+  tree: MerkleTree,
+  limit: number,
+  offset: number = 0,
+): void {
   const size = tree.size
   // Newest-first window: skip the `offset` most-recent entries, then take `limit`.
   const end = Math.max(0, size - offset)
@@ -697,7 +757,16 @@ function handleStats(res: ServerResponse, tree: MerkleTree): void {
   const signers = new Set<string>()
   let oldestTs: number | null = null
   let newestTs: number | null = null
-  const eventTypeCounts = { tool_call: 0, transaction: 0, observation: 0, directory_anchor: 0, annotation: 0, revision: 0, extension: 0, reserved: 0 }
+  const eventTypeCounts = {
+    tool_call: 0,
+    transaction: 0,
+    observation: 0,
+    directory_anchor: 0,
+    annotation: 0,
+    revision: 0,
+    extension: 0,
+    reserved: 0,
+  }
 
   for (let i = 0; i < size; i++) {
     const e = tree.entryBytes(i)
@@ -851,7 +920,12 @@ async function handleSubmit(
 
 const FANOUT_TIMEOUT_MS = 5000
 
-function fanoutToGraph(endpoint: string, record: AtribRecord, recordHashHex: string, logIndex: number): void {
+function fanoutToGraph(
+  endpoint: string,
+  record: AtribRecord,
+  recordHashHex: string,
+  logIndex: number,
+): void {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), FANOUT_TIMEOUT_MS)
   fetch(endpoint, {
@@ -864,18 +938,22 @@ function fanoutToGraph(endpoint: string, record: AtribRecord, recordHashHex: str
     },
     body: JSON.stringify(record),
     signal: ctrl.signal,
-  }).then((r) => {
-    clearTimeout(timer)
-    if (!r.ok) {
-      // eslint-disable-next-line no-console
-      console.warn(`atrib-log: graph fanout for ${recordHashHex.slice(0, 12)}… returned ${r.status}`)
-    }
-  }).catch((err: unknown) => {
-    clearTimeout(timer)
-    const msg = err instanceof Error ? err.message : String(err)
-    // eslint-disable-next-line no-console
-    console.warn(`atrib-log: graph fanout for ${recordHashHex.slice(0, 12)}… failed: ${msg}`)
   })
+    .then((r) => {
+      clearTimeout(timer)
+      if (!r.ok) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `atrib-log: graph fanout for ${recordHashHex.slice(0, 12)}… returned ${r.status}`,
+        )
+      }
+    })
+    .catch((err: unknown) => {
+      clearTimeout(timer)
+      const msg = err instanceof Error ? err.message : String(err)
+      // eslint-disable-next-line no-console
+      console.warn(`atrib-log: graph fanout for ${recordHashHex.slice(0, 12)}… failed: ${msg}`)
+    })
 }
 
 async function handleCheckpoint(
@@ -908,12 +986,7 @@ async function handleCheckpoint(
  * Level 0 = leaf hashes, higher levels = internal node hashes.
  * Each tile contains up to TILE_SIZE (256) concatenated 32-byte hashes.
  */
-function handleTile(
-  res: ServerResponse,
-  tree: MerkleTree,
-  level: number,
-  index: number,
-): void {
+function handleTile(res: ServerResponse, tree: MerkleTree, level: number, index: number): void {
   if (tree.size === 0) {
     sendJson(res, 404, { error: 'no entries yet' })
     return
@@ -932,7 +1005,7 @@ function handleTile(
       hashes.push(tree.leafHash(i))
     }
     const data = concatBytes(hashes)
-    const isFull = (end - start) === TILE_SIZE
+    const isFull = end - start === TILE_SIZE
     sendBinary(res, data, isFull)
     return
   }
@@ -970,7 +1043,7 @@ function handleTile(
 
   const hashes = currentLevel.slice(start, end)
   const data = concatBytes(hashes)
-  const isFull = (end - start) === TILE_SIZE
+  const isFull = end - start === TILE_SIZE
   sendBinary(res, data, isFull)
 }
 
@@ -978,11 +1051,7 @@ function handleTile(
  * §2.5.3: Serve an entry bundle (raw entry bytes with uint16 length prefixes).
  * Bundle N contains entries at positions [N*256, (N+1)*256).
  */
-function handleEntryBundle(
-  res: ServerResponse,
-  tree: MerkleTree,
-  index: number,
-): void {
+function handleEntryBundle(res: ServerResponse, tree: MerkleTree, index: number): void {
   if (tree.size === 0) {
     sendJson(res, 404, { error: 'no entries yet' })
     return
@@ -1008,7 +1077,7 @@ function handleEntryBundle(
   }
 
   const data = concatBytes(chunks)
-  const isFull = (end - start) === TILE_SIZE
+  const isFull = end - start === TILE_SIZE
   sendBinary(res, data, isFull)
 }
 
