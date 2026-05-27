@@ -4,7 +4,7 @@ This example shows how to add atrib attribution to a Cloudflare-deployed applica
 
 | Surface                                | What it does                                                                                         | atrib integration                                                                                                                                                                     |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`McpAgent`** (server-side)           | Builds an MCP server that runs as a Durable Object on Cloudflare. You define tools on `this.server`. | One-line `atrib(this.server, options)` from `@atrib/mcp`. Same primitive that works for Claude Agent SDK Case A.                                                                      |
+| **`McpAgent`** (server-side)           | Builds an MCP server that runs as a Durable Object on Cloudflare. You define tools on `this.server`. | One-line `atrib(this.server, options)` from `@atrib/mcp/worker` in Workers. Same primitive as `@atrib/mcp` in Node-like hosts.                                                        |
 | **`Agent.addMcpServer`** (client-side) | Your Agent connects out to one or more upstream MCP servers via HTTP.                                | One-line `attributeCloudflareAgentMcp(this, { interceptor })` from `@atrib/agent`. Wraps each connection's underlying `Client` so calls carry atrib/W3C context, consume upstream tokens, record gap nodes, and emit fallback transaction records when commerce closes. |
 
 Both integrations are zero-deploy: no extra Worker, no proxy hop, no architectural change to your app.
@@ -14,6 +14,8 @@ Both integrations are zero-deploy: no extra Worker, no proxy hop, no architectur
 ## Why this works without a Cloudflare-specific package
 
 `McpAgent` exposes `this.server` as a real `McpServer` from `@modelcontextprotocol/sdk`; the same class atrib's existing middleware wraps. When `McpAgent.serve()` routes a request to your Durable Object, the underlying call lands at `McpServer.server.setRequestHandler(CallToolRequestSchema, ...)`, which is exactly the chokepoint our middleware monkey-patches.
+
+In a Worker, import from `@atrib/mcp/worker`. The package root also exports Node-only helpers for stdio proxying, local mirror reads, and host-side instrumentation. The Worker subpath keeps those modules out of the Cloudflare bundle.
 
 `Agent.addMcpServer` uses an internal `MCPClientManager` whose `callTool({ serverId, name, arguments })` method delegates straight to `mcpConnections[serverId].client.callTool(...)` (verified at `agents@0.9.0` `dist/client-BwgM3cRz.js:1444`). The `client` field is publicly exposed on `MCPClientConnection`, so we can wrap it in place after `addMcpServer` runs. Subsequent tool calls go through atrib's interceptor for context propagation, inbound attribution-token consumption, unsigned gap-node tracking, and agent-side fallback transaction emission when the response matches a known commerce close signal.
 
@@ -29,7 +31,7 @@ Your Worker exposes tools that other agents can call. Add atrib in **one line** 
 // src/index.ts
 import { McpAgent } from 'agents/mcp'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { atrib } from '@atrib/mcp'
+import { atrib } from '@atrib/mcp/worker'
 import { z } from 'zod'
 
 interface Env {
@@ -107,6 +109,24 @@ That's the entire integration. Each Durable Object instance (one per session) ca
 - **After** (retroactive wrap, also supported): `registerTool` installs the dispatcher first, then `atrib()` reaches into the underlying server's `_requestHandlers` map and rewrites the dispatcher in place.
 
 Both work; see `packages/mcp/src/middleware.ts:258` for the retroactive-wrap implementation that was added in commit `c450672`. The example above puts `atrib()` after the tool registrations because it reads more naturally in `init()`, but you can swap the order without changing behavior.
+
+### Live Worker proof
+
+The runnable proof at [`live-worker-proof/`](live-worker-proof/) deploys a real Cloudflare `McpAgent` Durable Object, writes a diagnostic row into DO SQLite, recalls that row, captures signed atrib records in the DO, and verifies those records against `log.atrib.dev`.
+
+Latest clean run:
+
+```text
+pnpm --filter @atrib/cloudflare-live-proof proof
+worker_url: written to the ignored run artifact
+context_id: e59be437e0bcf5391863b8464ba0cfb6
+verified records:
+  22832 sha256:99f88337e8905ada32a8f61037538cde1d49f3e5f6921001d61a8865bac26925 record_outcome
+  22833 sha256:1667ce43254a940d7c22bab4d547337042c942c7b20ae396b569aa2c8b1f209e recall_outcomes
+  22834 sha256:097e417b80a26361a3d9c537c19056b799c1ac49c53fecb69d3d997a7d6db0fa flush_atrib_queue
+```
+
+The proof runner verifies each listed record's hash, Ed25519 signature, and Merkle inclusion proof. The public `/v1/by-context/e59be437e0bcf5391863b8464ba0cfb6` query returned five total `tool_call` entries because `list_signed_records` and the final flush are also signed after the DO returns the first three records.
 
 ---
 

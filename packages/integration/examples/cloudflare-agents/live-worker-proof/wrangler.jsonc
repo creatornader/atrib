@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "atrib-cloudflare-live-proof",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ProofMcp",
+        "class_name": "ProofMcp"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ProofMcp"]
+    }
+  ],
+  "vars": {
+    "ATRIB_LOG_ENDPOINT": "https://log.atrib.dev/v1/entries"
+  },
+  "secrets": {
+    "required": ["ATRIB_PRIVATE_KEY"]
+  }
+}

@@ -83,7 +83,11 @@ export function resolveChainRoot(opts: {
   if (opts.autoChainTailHex) {
     return `sha256:${opts.autoChainTailHex}`
   }
-  const env = opts.env ?? process.env
+  const env =
+    opts.env ??
+    (typeof process !== 'undefined'
+      ? process.env
+      : ({} as NodeJS.ProcessEnv))
   const envTail = env[`ATRIB_CHAIN_TAIL_${opts.contextId}`]
   if (envTail && /^sha256:[0-9a-f]{64}$/.test(envTail)) {
     return envTail
