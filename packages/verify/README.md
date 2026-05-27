@@ -109,12 +109,12 @@ const result = await verifyRecord(record, {
 
 Each pending annotation is its own ADR scope when external consumers need it.
 
-### `verifyAp2ViEvidence(bundle, options?): Ap2ViEvidenceVerification`
+### `verifyAp2ViEvidence(...)` and `verifyAp2ViEvidenceAsync(...)`
 
 AP2 / Verifiable Intent evidence checking for merchants and auditors. This runs outside the transaction detector path. It does not alter the graph, the settlement calculation, or record validity. It answers a narrower question: did the AP2 receipts and VI mandate chain form a coherent evidence bundle?
 
 ```typescript
-import { verifyAp2ViEvidence } from '@atrib/verify'
+import { verifyAp2ViEvidence, verifyAp2ViEvidenceAsync } from '@atrib/verify'
 
 const result = verifyAp2ViEvidence({
   trustedIssuerKeys: [issuerJwk],
@@ -135,14 +135,38 @@ const result = verifyAp2ViEvidence({
 })
 ```
 
+Use the async verifier when AP2 receipts arrive as compact signed JWTs:
+
+```typescript
+const result = await verifyAp2ViEvidenceAsync(
+  {
+    receiptJwtIssuers: [
+      {
+        issuer: 'https://verifier.example',
+        audience: 'merchant:checkout',
+        metadataUrl: 'https://verifier.example/.well-known/ap2',
+      },
+    ],
+    ap2: {
+      paymentReceiptJwt,
+      closedPaymentMandate,
+    },
+  },
+  { receiptJwtPolicy: 'require' },
+)
+```
+
 Checks performed when evidence is present:
 
 - AP2 PaymentReceipt / CheckoutReceipt success, required fields, and `reference` binding to a closed mandate serialization or explicit closed-mandate hash.
+- Compact AP2 receipt JWT verification with `jose`, using trusted local JWKS, `jwksUrl`, or verifier metadata containing inline `jwks` or `jwks_uri`.
 - VI SD-JWT parsing for L1, L2, L3 payment, and L3 checkout credentials.
 - ES256 signatures: L1 via trusted issuer keys, L2 via L1 `cnf.jwk`, L3 via the L2 delegated agent key.
 - `sd_hash` links, disclosure digest links, autonomous L2 `cnf.jwk` consistency, and final checkout/payment binding.
 
 The default signature policy is `require`. Missing keys or invalid signatures make `valid` false while still returning a structured result. Use `signaturePolicy: "best-effort"` for structural triage where issuer keys are not yet available.
+
+The default receipt JWT policy is also `require`. Invalid receipt JWTs make `valid` false. Use `receiptJwtPolicy: "best-effort"` when decoded receipt objects are already available and JWT verification is an advisory signal.
 
 ### `calculate(options): Promise<RecommendationDocument>`
 
@@ -157,7 +181,8 @@ For advanced use (custom calculators, alternative signing flows), the package al
 - `isValidPolicy(doc)`: schema check for `PolicyDocument`
 - `signRecommendation(unsigned, privateKey)`: JCS + Ed25519 signing
 - `verifyRecommendationSignature(doc, publicKey)`: signature verification
-- `verifyAp2ViEvidence(bundle, options?)`: AP2 / VI receipt and mandate-chain evidence checking
+- `verifyAp2ViEvidence(bundle, options?)`: decoded AP2 / VI receipt and mandate-chain evidence checking
+- `verifyAp2ViEvidenceAsync(bundle, options?)`: compact AP2 receipt JWT verification plus the decoded evidence checks
 - `recommendationSigningInput(doc)`: the canonical bytes that get signed
 - `distributionsMatch(a, b)`: float-tolerant equality (within `1e-9` per recipient)
 - `fetchGraph(endpoint, contextId, treeSize?)`, `fetchSessionPolicyRecord`, `fetchPolicyDocument`
@@ -185,7 +210,7 @@ The merchant's payment pipeline never crashes because of an atrib problem. It ju
 
 ## Test coverage
 
-312 tests across 21 test files covering the [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm, graph endpoint client, JCS canonicalization, Ed25519 signing, settlement recommendations, policy templates, policy builder, calculation edge cases, property-based testing with fast-check, AP2 / VI evidence checking, and full `verify()` / `calculate()` paths including [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation.
+320 tests across 21 test files covering the [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm, graph endpoint client, JCS canonicalization, Ed25519 signing, settlement recommendations, policy templates, policy builder, calculation edge cases, property-based testing with fast-check, AP2 / VI evidence checking, and full `verify()` / `calculate()` paths including [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation.
 
 Run them with `pnpm --filter @atrib/verify test`.
 

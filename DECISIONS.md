@@ -4262,6 +4262,46 @@ The default signature policy is `require`. Missing keys or invalid signatures fa
 
 ---
 
+## D090: AP2 receipt JWT verification uses jose in @atrib/verify
+
+**Date:** 2026-05-27
+
+**Supersedes:** P028, removed from Pending decisions when this ADR codified the decision.
+
+**Context.** [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) kept AP2 receipt JWT decoding out of `detectTransaction()`. [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) added verifier-side AP2 / VI evidence checks, but the first implementation accepted decoded receipt objects only. That left signed AP2 receipt JWTs in a split state: `@atrib/agent` could detect their presence as a transaction signal, while `@atrib/verify` could not yet verify their issuer signature or extract their payload.
+
+**Decision.** Add `verifyAp2ViEvidenceAsync()` to `@atrib/verify` for compact AP2 receipt JWT verification. The existing synchronous `verifyAp2ViEvidence()` remains the decoded-object path. The async path verifies signed CheckoutReceipt and PaymentReceipt JWTs with `jose`, then feeds the decoded payload into the same AP2 receipt checks from [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify).
+
+Receipt JWT verification accepts caller-supplied trust roots through `receiptJwtIssuers`. Each issuer can provide:
+
+1. local `jwks` keys;
+2. a `jwksUrl`;
+3. a verifier `metadataUrl` whose JSON carries inline `jwks` or a `jwks_uri`.
+
+The verifier enforces ES256, issuer matching when `issuer` is configured, optional audience matching, AP2 receipt required fields, and `reference` binding to the closed mandate serialization or explicit closed-mandate hash. The default `receiptJwtPolicy` is `require`, so invalid receipt JWTs make `valid` false. `receiptJwtPolicy: "best-effort"` converts receipt JWT failures to warnings for callers that already have decoded receipt objects and only want advisory signature status.
+
+**Alternatives considered.**
+
+- *Change `verifyAp2ViEvidence()` to become async.* Rejected. Existing callers and tests use the synchronous decoded-object verifier. A separate async function keeps the hot local path stable and names the network-capable path clearly.
+- *Keep using Node crypto directly for receipt JWTs.* Rejected. `jose` already handles compact JWT parsing, JOSE header validation, JWKS key selection, remote JWKS, claim checks, and ES256 verification. Reimplementing that surface would create avoidable protocol drift.
+- *Allow untrusted issuer discovery from the JWT `iss` claim alone.* Rejected. The verifier must start from a caller-supplied trust root. A signed receipt from an unknown issuer is still untrusted.
+
+**Consequences.**
+
+- `@atrib/verify` now declares `jose` as a direct dependency.
+- AP2 receipt JWT verification remains off the transaction detector path.
+- `verifyAp2ViEvidenceAsync()` can verify local JWKS keys and verifier metadata with inline `jwks` or `jwks_uri`.
+- The result shape now carries optional per-receipt `jwt` status: `verified`, `issuer`, `kid`, `alg`, `jwksSource`, and an error code when verification fails.
+- Tests cover successful local JWKS verification, verifier metadata resolution, `jwks_uri` resolution, wrong-key rejection, audience mismatch, expiry, tampered payloads, and best-effort decoded receipt fallback.
+
+**Cross-references.**
+
+- [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt), AP2 receipt detection boundary.
+- [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), decoded-object AP2 / VI evidence checks.
+- [§5.5.4](atrib-spec.md#554-ap2--verifiable-intent-evidence-checks), updated verifier surface.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -4702,24 +4742,6 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 
 
-## P028: AP2 receipt JWT verification and verifier metadata discovery
-
-**Source:** AP2 / Verifiable Intent implementation gap audit after [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) and [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) landed. The current verifier checks receipt objects and local AP2 receipt bindings, but it does not yet verify a compact AP2 receipt JWT against verifier metadata or a remote key source.
-
-**The decision in question:** should `@atrib/verify` grow an AP2 verifier profile that verifies compact CheckoutReceipt / PaymentReceipt JWTs, resolves verifier keys from configured JWKS or AP2 verifier metadata, enforces issuer and audience constraints, validates receipt expiry where present, and returns the evidence as annotations on the same verifier result shape?
-
-**Considerations.**
-
-- Keep this off the middleware critical path. `detectTransaction()` should continue to detect successful receipt shapes only; issuer lookup and JOSE verification belong in verifier-side evidence checks.
-- The API needs a caller-supplied trust root. Remote discovery without an allowlist would create a false sense of verification.
-- The verifier should support static fixture keys first, then remote JWKS with cache control and network-failure warnings.
-- AP2 receipt JWT support should land with negative tests for wrong issuer, wrong key, expired receipt, missing `kid`, and tampered payload.
-
-**Likely outcome (not committed):** accept. Add AP2 receipt JWT verification to `@atrib/verify` once a real AP2 verifier or reference metadata source is used in tests.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-
 ## P029: Full SD-JWT / VC conformance for Verifiable Intent
 
 **Source:** AP2 / Verifiable Intent implementation gap audit after [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) landed. The first verifier implementation parses SD-JWT strings, checks disclosures, validates ES256 signatures, and verifies the AP2-specific mandate chain. It does not claim full SD-JWT VC conformance.
@@ -4821,7 +4843,7 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 - The default test suite must stay offline. Live interop should be opt-in, skipped unless explicit environment variables are present.
 - A containerized reference stack is preferred if the AP2 project ships one. It keeps CI deterministic and avoids depending on public services.
 - The harness should emit artifacts that can be promoted into local fixtures when AP2 changes shape.
-- This is the natural place to test remote JWKS, receipt JWT validation, and verifier metadata discovery from [P028](#p028-ap2-receipt-jwt-verification-and-verifier-metadata-discovery).
+- This is the natural place to test remote JWKS, receipt JWT validation, and verifier metadata discovery from [D090](#d090-ap2-receipt-jwt-verification-uses-jose-in-atribverify).
 
 **Likely outcome (not committed):** accept once an AP2 reference implementation or stable sandbox is available. Keep it outside the default local test path.
 

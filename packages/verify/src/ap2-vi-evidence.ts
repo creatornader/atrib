@@ -3,6 +3,15 @@
 import canonicalize from 'canonicalize'
 import { createPublicKey, verify as verifyEcdsa } from 'node:crypto'
 import { base64urlDecode, base64urlEncode, sha256 } from '@atrib/mcp'
+import {
+  createLocalJWKSet,
+  createRemoteJWKSet,
+  customFetch,
+  decodeJwt,
+  decodeProtectedHeader,
+  jwtVerify,
+} from 'jose'
+import type { JWK, JSONWebKeySet, JWTVerifyGetKey, JWTVerifyOptions } from 'jose'
 
 export type ViCredentialLayer = 'L1' | 'L2' | 'L3_PAYMENT' | 'L3_CHECKOUT'
 export type ViMode = 'immediate' | 'autonomous' | 'unknown'
@@ -16,10 +25,20 @@ export interface ViCredentialInput {
 export interface Ap2EvidenceInput {
   paymentReceipt?: unknown
   checkoutReceipt?: unknown
+  paymentReceiptJwt?: string
+  checkoutReceiptJwt?: string
   closedPaymentMandate?: string
   closedCheckoutMandate?: string
   closedPaymentMandateHash?: string
   closedCheckoutMandateHash?: string
+}
+
+export interface Ap2ReceiptJwtIssuer {
+  issuer?: string
+  audience?: string | string[]
+  jwks?: JsonWebKey[] | { keys: JsonWebKey[] }
+  jwksUrl?: string
+  metadataUrl?: string
 }
 
 export interface Ap2ViEvidenceBundle {
@@ -28,13 +47,17 @@ export interface Ap2ViEvidenceBundle {
     credentials?: ViCredentialInput[]
   }
   trustedIssuerKeys?: JsonWebKey[]
+  receiptJwtIssuers?: Ap2ReceiptJwtIssuer[]
 }
 
 export interface VerifyAp2ViEvidenceOptions {
   trustedIssuerKeys?: JsonWebKey[]
+  receiptJwtIssuers?: Ap2ReceiptJwtIssuer[]
+  receiptJwtPolicy?: 'require' | 'best-effort'
   signaturePolicy?: 'require' | 'best-effort'
   nowSeconds?: number
   clockSkewSeconds?: number
+  fetch?: typeof fetch
 }
 
 export interface SignatureCheck {
@@ -60,6 +83,17 @@ export interface Ap2ReceiptCheck {
   reference: string | null
   referenceOk: boolean | null
   missingFields: string[]
+  jwt?: Ap2ReceiptJwtCheck
+}
+
+export interface Ap2ReceiptJwtCheck {
+  present: boolean
+  verified: boolean
+  issuer: string | null
+  kid: string | null
+  alg: string | null
+  jwksSource: 'static' | 'jwks_url' | 'metadata' | null
+  error?: string
 }
 
 export interface Ap2EvidenceCheck {
@@ -104,6 +138,15 @@ interface ParsedCredential {
   mandateValues: JsonRecord[]
 }
 
+type ReceiptKind = 'payment' | 'checkout'
+
+interface ReceiptJwtVerification {
+  check: Ap2ReceiptJwtCheck
+  payload?: JsonRecord
+  errors: string[]
+  warnings: string[]
+}
+
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
 
@@ -117,6 +160,12 @@ function isString(value: unknown): value is string {
 
 function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isJsonWebKeySet(value: unknown): value is { keys: JsonWebKey[] } {
+  return (
+    isRecord(value) && Array.isArray(value['keys']) && value['keys'].every((key) => isRecord(key))
+  )
 }
 
 function hashAscii(value: string): string {
@@ -209,6 +258,11 @@ function sameJson(left: unknown, right: unknown): boolean {
   return leftCanonical !== null && leftCanonical === rightCanonical
 }
 
+function normalizeJwks(value: JsonWebKey[] | { keys: JsonWebKey[] }): JSONWebKeySet {
+  const keys = Array.isArray(value) ? value : value.keys
+  return { keys: keys as JWK[] }
+}
+
 function verifyJwtSignature(parsed: ParsedCredential, publicJwk: JsonWebKey): boolean {
   const key = createPublicKey({ key: publicJwk, format: 'jwk' })
   return verifyEcdsa(
@@ -222,6 +276,87 @@ function verifyJwtSignature(parsed: ParsedCredential, publicJwk: JsonWebKey): bo
 function findIssuerKey(kid: string | null, keys: JsonWebKey[]): JsonWebKey | undefined {
   if (kid === null) return keys[0]
   return keys.find((key) => getKid(key) === kid)
+}
+
+function receiptJwtError(kind: ReceiptKind, code: string): string {
+  return `ap2_${kind}_receipt_jwt_${code}`
+}
+
+function addReceiptJwtFailure(
+  verification: ReceiptJwtVerification,
+  kind: ReceiptKind,
+  code: string,
+  policy: 'require' | 'best-effort',
+): void {
+  const error = receiptJwtError(kind, code)
+  verification.check.error = error
+  if (policy === 'require') verification.errors.push(error)
+  else verification.warnings.push(error)
+}
+
+function findReceiptJwtIssuer(
+  issuer: string | null,
+  issuers: Ap2ReceiptJwtIssuer[],
+): Ap2ReceiptJwtIssuer | undefined {
+  if (issuer !== null) {
+    const exact = issuers.find((candidate) => candidate.issuer === issuer)
+    if (exact) return exact
+  }
+  return issuers.find((candidate) => candidate.issuer === undefined)
+}
+
+async function fetchJson(url: string, fetchImpl: typeof fetch | undefined): Promise<unknown> {
+  const fetchFn = fetchImpl ?? globalThis.fetch
+  if (typeof fetchFn !== 'function') throw new Error('fetch_unavailable')
+  const response = await fetchFn(url)
+  if (!response.ok) throw new Error('metadata_fetch_failed')
+  return response.json()
+}
+
+async function resolveReceiptJwtKey(
+  issuer: Ap2ReceiptJwtIssuer,
+  fetchImpl: typeof fetch | undefined,
+): Promise<{ getKey: JWTVerifyGetKey; source: Ap2ReceiptJwtCheck['jwksSource'] }> {
+  const remoteOptions = fetchImpl ? { [customFetch]: fetchImpl } : undefined
+
+  if (issuer.jwks) {
+    return {
+      getKey: createLocalJWKSet(normalizeJwks(issuer.jwks)),
+      source: 'static',
+    }
+  }
+
+  if (issuer.jwksUrl) {
+    return {
+      getKey: createRemoteJWKSet(new URL(issuer.jwksUrl), remoteOptions),
+      source: 'jwks_url',
+    }
+  }
+
+  if (issuer.metadataUrl) {
+    const metadata = await fetchJson(issuer.metadataUrl, fetchImpl)
+    if (!isRecord(metadata)) throw new Error('metadata_invalid')
+
+    const inlineJwks = metadata['jwks']
+    if (isJsonWebKeySet(inlineJwks)) {
+      return {
+        getKey: createLocalJWKSet(normalizeJwks(inlineJwks)),
+        source: 'metadata',
+      }
+    }
+
+    const jwksUri = metadata['jwks_uri']
+    if (isString(jwksUri)) {
+      return {
+        getKey: createRemoteJWKSet(new URL(jwksUri), remoteOptions),
+        source: 'metadata',
+      }
+    }
+
+    throw new Error('metadata_jwks_missing')
+  }
+
+  throw new Error('key_source_missing')
 }
 
 function expectedTyp(layer: ViCredentialLayer, typ: string | null): boolean {
@@ -289,6 +424,91 @@ function checkReceipt(
     reference,
     referenceOk,
     missingFields,
+  }
+}
+
+function emptyJwtReceiptCheck(jwt: Ap2ReceiptJwtCheck): Ap2ReceiptCheck {
+  return {
+    present: true,
+    status: null,
+    success: false,
+    reference: null,
+    referenceOk: null,
+    missingFields: ['receipt_object'],
+    jwt,
+  }
+}
+
+async function verifyReceiptJwt(
+  kind: ReceiptKind,
+  receiptJwt: string,
+  issuers: Ap2ReceiptJwtIssuer[],
+  policy: 'require' | 'best-effort',
+  nowSeconds: number,
+  clockSkewSeconds: number,
+  fetchImpl: typeof fetch | undefined,
+): Promise<ReceiptJwtVerification> {
+  const verification: ReceiptJwtVerification = {
+    check: {
+      present: true,
+      verified: false,
+      issuer: null,
+      kid: null,
+      alg: null,
+      jwksSource: null,
+    },
+    errors: [],
+    warnings: [],
+  }
+
+  try {
+    const header = decodeProtectedHeader(receiptJwt)
+    const payload = decodeJwt(receiptJwt)
+    const issuer = isString(payload.iss) ? payload.iss : null
+
+    verification.check.alg = isString(header.alg) ? header.alg : null
+    verification.check.kid = isString(header.kid) ? header.kid : null
+    verification.check.issuer = issuer
+
+    if (header.alg !== 'ES256') {
+      addReceiptJwtFailure(verification, kind, 'alg_unsupported', policy)
+      return verification
+    }
+
+    const issuerConfig = findReceiptJwtIssuer(issuer, issuers)
+    if (!issuerConfig) {
+      addReceiptJwtFailure(verification, kind, 'issuer_untrusted', policy)
+      return verification
+    }
+
+    const key = await resolveReceiptJwtKey(issuerConfig, fetchImpl)
+    verification.check.jwksSource = key.source
+
+    const verifyOptions: JWTVerifyOptions = {
+      algorithms: ['ES256'],
+      clockTolerance: clockSkewSeconds,
+      currentDate: new Date(nowSeconds * 1000),
+    }
+    if (issuerConfig.audience !== undefined) verifyOptions.audience = issuerConfig.audience
+    if (issuerConfig.issuer !== undefined) verifyOptions.issuer = issuerConfig.issuer
+
+    const verified = await jwtVerify(receiptJwt, key.getKey, verifyOptions)
+
+    verification.check.verified = true
+    verification.payload = verified.payload as JsonRecord
+    return verification
+  } catch (error) {
+    const code = error instanceof Error && error.message ? error.message : 'invalid'
+    addReceiptJwtFailure(
+      verification,
+      kind,
+      code === 'fetch_unavailable' ? 'metadata_fetch_unavailable' : 'invalid',
+      policy,
+    )
+    if (code !== 'invalid' && code !== 'fetch_unavailable') {
+      verification.warnings.push(`${receiptJwtError(kind, 'detail')}:${code}`)
+    }
+    return verification
   }
 }
 
@@ -586,5 +806,92 @@ export function verifyAp2ViEvidence(
     },
     errors: [...new Set(errors)],
     warnings: [...new Set(warnings)],
+  }
+}
+
+export async function verifyAp2ViEvidenceAsync(
+  bundle: Ap2ViEvidenceBundle,
+  options: VerifyAp2ViEvidenceOptions = {},
+): Promise<Ap2ViEvidenceVerification> {
+  const ap2: Ap2EvidenceInput = { ...bundle.ap2 }
+  const receiptJwtIssuers = options.receiptJwtIssuers ?? bundle.receiptJwtIssuers ?? []
+  const receiptJwtPolicy = options.receiptJwtPolicy ?? 'require'
+  const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000)
+  const clockSkewSeconds = options.clockSkewSeconds ?? 300
+  const jwtErrors: string[] = []
+  const jwtWarnings: string[] = []
+
+  const paymentJwt = ap2.paymentReceiptJwt
+    ? await verifyReceiptJwt(
+        'payment',
+        ap2.paymentReceiptJwt,
+        receiptJwtIssuers,
+        receiptJwtPolicy,
+        nowSeconds,
+        clockSkewSeconds,
+        options.fetch,
+      )
+    : undefined
+  if (paymentJwt) {
+    jwtErrors.push(...paymentJwt.errors)
+    jwtWarnings.push(...paymentJwt.warnings)
+    if (paymentJwt.payload) {
+      if (ap2.paymentReceipt !== undefined && !sameJson(ap2.paymentReceipt, paymentJwt.payload)) {
+        const code = receiptJwtError('payment', 'payload_mismatch')
+        if (receiptJwtPolicy === 'require') jwtErrors.push(code)
+        else jwtWarnings.push(code)
+      }
+      ap2.paymentReceipt = paymentJwt.payload
+    }
+  }
+
+  const checkoutJwt = ap2.checkoutReceiptJwt
+    ? await verifyReceiptJwt(
+        'checkout',
+        ap2.checkoutReceiptJwt,
+        receiptJwtIssuers,
+        receiptJwtPolicy,
+        nowSeconds,
+        clockSkewSeconds,
+        options.fetch,
+      )
+    : undefined
+  if (checkoutJwt) {
+    jwtErrors.push(...checkoutJwt.errors)
+    jwtWarnings.push(...checkoutJwt.warnings)
+    if (checkoutJwt.payload) {
+      if (
+        ap2.checkoutReceipt !== undefined &&
+        !sameJson(ap2.checkoutReceipt, checkoutJwt.payload)
+      ) {
+        const code = receiptJwtError('checkout', 'payload_mismatch')
+        if (receiptJwtPolicy === 'require') jwtErrors.push(code)
+        else jwtWarnings.push(code)
+      }
+      ap2.checkoutReceipt = checkoutJwt.payload
+    }
+  }
+
+  const result = verifyAp2ViEvidence({ ...bundle, ap2 }, options)
+
+  if (paymentJwt) {
+    if (result.ap2.paymentReceipt) result.ap2.paymentReceipt.jwt = paymentJwt.check
+    else result.ap2.paymentReceipt = emptyJwtReceiptCheck(paymentJwt.check)
+  }
+  if (checkoutJwt) {
+    if (result.ap2.checkoutReceipt) result.ap2.checkoutReceipt.jwt = checkoutJwt.check
+    else result.ap2.checkoutReceipt = emptyJwtReceiptCheck(checkoutJwt.check)
+  }
+
+  const errors = [...new Set([...result.errors, ...jwtErrors])]
+  const warnings = [...new Set([...result.warnings, ...jwtWarnings])]
+  const hasAp2Receipt =
+    result.ap2.paymentReceipt?.present === true || result.ap2.checkoutReceipt?.present === true
+
+  return {
+    ...result,
+    valid: errors.length === 0 && (!hasAp2Receipt || result.transactionAccepted),
+    errors,
+    warnings,
   }
 }

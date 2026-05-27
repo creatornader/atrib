@@ -181,7 +181,7 @@ atrib detects transaction events from six agent commerce protocols simultaneousl
 
 The design principle: detect, don't implement. atrib pattern-matches on tool call responses to identify when a transaction occurred. It doesn't initiate payments, move money, hold funds, or enforce settlement. The detection logic for all six protocols is in `@atrib/agent`'s `transaction.ts` and runs simultaneously. You don't choose a payment protocol at install time.
 
-AP2 has a second verifier-side surface. `@atrib/agent` treats successful CheckoutReceipt or PaymentReceipt as the transaction close signal. `@atrib/verify` can then inspect AP2 / Verifiable Intent evidence after detection: receipt references, VI SD-JWT signatures, `sd_hash` links, disclosure digests, delegated agent keys, and checkout/payment hash binding. That keeps authorization checks out of the detector while still giving merchants dispute-grade evidence.
+AP2 has a second verifier-side surface. `@atrib/agent` treats successful CheckoutReceipt or PaymentReceipt as the transaction close signal. `@atrib/verify` can then inspect AP2 / Verifiable Intent evidence after detection: signed receipt JWTs, receipt references, VI SD-JWT signatures, `sd_hash` links, disclosure digests, delegated agent keys, and checkout/payment hash binding. That keeps authorization checks out of the detector while still giving merchants dispute-grade evidence.
 
 Why this matters:
 

@@ -113,7 +113,7 @@ Decoded receipt objects are detected when they carry `status: "Success"` and the
 
 Mandate-only payloads are not detected, including `vct: "mandate.payment.1"` and `vct: "mandate.checkout.1"`. Mandates authorize a future action; they do not prove the verifier accepted it.
 
-Verifier-side AP2 / Verifiable Intent checks live in `@atrib/verify`, not this detector. Use `verifyAp2ViEvidence()` when a merchant or auditor needs to validate AP2 receipt references, VI SD-JWT signatures, `sd_hash` links, disclosure digests, delegated agent keys, and checkout/payment binding after detection.
+Verifier-side AP2 / Verifiable Intent checks live in `@atrib/verify`, not this detector. Use `verifyAp2ViEvidence()` for decoded receipts or `verifyAp2ViEvidenceAsync()` for compact signed receipt JWTs when a merchant or auditor needs to validate AP2 receipt references, VI SD-JWT signatures, `sd_hash` links, disclosure digests, delegated agent keys, and checkout/payment binding after detection.
 
 The older AP2 v0.1 DataPart shape remains supported as a compatibility fallback:
 
