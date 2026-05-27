@@ -1,5 +1,11 @@
 # @atrib/mcp
 
+## 0.12.0
+
+### Minor Changes
+
+- ee37209: Add a Worker-safe `@atrib/mcp/worker` entrypoint for Cloudflare Workers and other runtimes that cannot bundle Node-only helpers.
+
 ## 0.11.1
 
 ### Patch Changes
