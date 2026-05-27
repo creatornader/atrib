@@ -1070,14 +1070,14 @@ Implementations MUST NOT detect AP2 mandate-only payloads as transaction events.
 
 Verifier-side AP2 / Verifiable Intent evidence checks SHOULD run off the middleware critical path. A verifier that receives AP2 and VI evidence SHOULD check:
 
-1. receipt success and `reference` binding to the closed mandate serialization or an explicit closed-mandate hash;
+1. receipt success, compact receipt JWT signature when present, and `reference` binding to the closed mandate serialization or an explicit closed-mandate hash;
 2. VI L1 / L2 / L3 SD-JWT signatures, using trusted issuer keys for L1, the L1 `cnf.jwk` for L2, and delegated L2 agent keys for L3;
 3. `sd_hash` links across the delegation chain;
 4. SD-JWT disclosure digest links through `_sd` or `delegate_payload`;
 5. autonomous-mode consistency: the open checkout and open payment mandates bind the same `cnf.jwk`;
 6. final checkout/payment binding: `checkout_hash` matches `checkout_jwt`, and PaymentMandate `transaction_id` matches the checkout hash.
 
-Failure in this evidence stage MUST NOT undo or block the transaction detector. It is a verifier signal for settlement, audit, and dispute workflows. The reference TypeScript surface is `@atrib/verify` `verifyAp2ViEvidence()`; see [§5.5.4](#554-ap2--verifiable-intent-evidence-checks) and [D089](DECISIONS.md#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify).
+Failure in this evidence stage MUST NOT undo or block the transaction detector. It is a verifier signal for settlement, audit, and dispute workflows. The reference TypeScript surfaces are `@atrib/verify` `verifyAp2ViEvidence()` for decoded evidence and `verifyAp2ViEvidenceAsync()` for compact signed receipt JWTs; see [§5.5.4](#554-ap2--verifiable-intent-evidence-checks), [D089](DECISIONS.md#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), and [D090](DECISIONS.md#d090-ap2-receipt-jwt-verification-uses-jose-in-atribverify).
 
 Implementations SHOULD embed the `context_id` in the agent protocol envelope where the host supports metadata. Until AP2 standardizes an atrib-specific metadata field, the `context_id` MUST also travel via `params._meta.atrib` per [§1.5.2](#152-http-transport-tracestate), [§1.5.3](#153-http-fallback-x-atrib-chain), and [§1.5.3.1](#1531-context-id-header-x-atrib-context).
 
@@ -3832,7 +3832,7 @@ The verifier fetches the graph for the given `context_id`, applies the specified
 `@atrib/verify` also exposes a local AP2 / Verifiable Intent evidence checker. This is not part of the [§4.6](#46-the-calculation-algorithm) settlement calculation and does not change graph derivation. It is a verifier-side signal for merchants, auditors, and dispute tooling that want to inspect AP2 authorization evidence after a transaction has been detected.
 
 ```
-import { verifyAp2ViEvidence } from '@atrib/verify'
+import { verifyAp2ViEvidence, verifyAp2ViEvidenceAsync } from '@atrib/verify'
 
 const result = verifyAp2ViEvidence({
   trustedIssuerKeys: [issuerJwk],
@@ -3851,6 +3851,23 @@ const result = verifyAp2ViEvidence({
     ],
   },
 })
+
+const jwtResult = await verifyAp2ViEvidenceAsync(
+  {
+    receiptJwtIssuers: [
+      {
+        issuer: 'https://verifier.example',
+        audience: 'merchant:checkout',
+        metadataUrl: 'https://verifier.example/.well-known/ap2',
+      },
+    ],
+    ap2: {
+      paymentReceiptJwt,
+      closedPaymentMandate,
+    },
+  },
+  { receiptJwtPolicy: 'require' },
+)
 ```
 
 The result shape is:
@@ -3860,7 +3877,18 @@ The result shape is:
   valid: true,
   transactionAccepted: true,
   ap2: {
-    paymentReceipt: { success: true, referenceOk: true, missingFields: [] },
+    paymentReceipt: {
+      success: true,
+      referenceOk: true,
+      missingFields: [],
+      jwt: {
+        verified: true,
+        issuer: 'https://verifier.example',
+        kid: 'receipt-key-1',
+        alg: 'ES256',
+        jwksSource: 'metadata',
+      },
+    },
     checkoutReceipt: { success: true, referenceOk: true, missingFields: [] },
   },
   vi: {
@@ -3878,6 +3906,8 @@ The result shape is:
 ```
 
 The default signature policy is `require`: missing keys or invalid signatures make `valid` false while still returning a structured result. Callers that only need structural triage MAY pass `signaturePolicy: "best-effort"`, in which case missing-key checks become warnings.
+
+For compact AP2 receipt JWTs, callers MUST provide a trust root through `receiptJwtIssuers`. Each issuer entry MAY provide local `jwks`, a `jwksUrl`, or a `metadataUrl` whose JSON contains inline `jwks` or `jwks_uri`. The async verifier enforces ES256, configured issuer, optional audience, registered JWT expiry and not-before claims when present, AP2 receipt fields, and mandate `reference` binding. The default `receiptJwtPolicy` is `require`; `receiptJwtPolicy: "best-effort"` turns JWT verification failures into warnings when decoded receipt objects are already available.
 
 ---
 

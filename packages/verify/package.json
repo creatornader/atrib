@@ -36,7 +36,8 @@
     "@atrib/mcp": "workspace:*",
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
-    "canonicalize": "^3.0.0"
+    "canonicalize": "^3.0.0",
+    "jose": "6.2.3"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

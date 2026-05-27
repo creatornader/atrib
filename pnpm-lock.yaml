@@ -323,6 +323,9 @@ importers:
       canonicalize:
         specifier: ^3.0.0
         version: 3.0.0
+      jose:
+        specifier: 6.2.3
+        version: 6.2.3
     devDependencies:
       '@types/node':
         specifier: ^25.9.1
