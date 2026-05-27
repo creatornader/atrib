@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Adapter: attribute MCP tool calls flowing through a Cloudflare Agent.
+ * Adapter: route Cloudflare Agent MCP client calls through atrib's agent
+ * interceptor.
  *
  * Cloudflare's `agents` package exposes two MCP integration surfaces:
  *
@@ -23,7 +24,11 @@
  * This file is the helper for surface (2). It walks `agent.mcp.mcpConnections`
  * after the agent has finished registering its upstream MCP servers and
  * replaces each connection's `client` field with one wrapped by `wrapMcpClient`.
- * Subsequent tool calls go through atrib's interceptor lifecycle.
+ * Subsequent tool calls carry atrib/W3C context, consume upstream attribution
+ * tokens, record unsigned gap nodes, and emit agent-side fallback transaction
+ * records when a response matches a known commerce close signal. Ordinary
+ * tool_call records still come from the upstream MCP server when it is wrapped
+ * with `@atrib/mcp`.
  *
  * Usage:
  *
@@ -54,7 +59,8 @@
  * Per spec §5.8 (degradation contract), if any single connection fails to wrap
  * (missing `client` field, unexpected shape), the helper logs a warning with
  * the `atrib:` prefix and skips it without throwing. The agent's tool calls
- * continue to work. they just won't be attributed for that connection.
+ * continue to work. they just won't carry agent-side atrib context or fallback
+ * transaction detection for that connection.
  */
 
 import { wrapMcpClient, type MinimalMcpClient } from './mcp-client.js'
@@ -101,7 +107,7 @@ export interface CloudflareAgentLike {
 
 /** Options for `attributeCloudflareAgentMcp`. */
 export interface AttributeCloudflareAgentMcpOptions {
-  /** The atrib interceptor that should observe tool calls on this agent. */
+  /** The atrib interceptor that should observe MCP client calls on this agent. */
   interceptor: ToolCallInterceptor
 
   /**
@@ -118,9 +124,9 @@ export interface AttributeCloudflareAgentMcpOptions {
 }
 
 /**
- * Wrap every currently-connected MCP client on a Cloudflare Agent with atrib
- * attribution. Returns the number of connections wrapped (excluding ones that
- * were already wrapped). Idempotent. safe to call multiple times.
+ * Wrap every currently-connected MCP client on a Cloudflare Agent with atrib's
+ * agent interceptor. Returns the number of connections wrapped (excluding ones
+ * that were already wrapped). Idempotent. safe to call multiple times.
  *
  * Call this in `onStart()` after your `addMcpServer()` calls. If you add more
  * MCP servers later (in a message handler, after OAuth, etc.), call again.
