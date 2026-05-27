@@ -1,5 +1,15 @@
 # @atrib/agent
 
+## 0.2.7
+
+### Patch Changes
+
+- 0f42a05: Fix Cloudflare Agent MCP server URL resolution so `attributeCloudflareAgentMcp` can use stored server rows and server-name overrides for generated connection ids.
+- Updated dependencies [01c91cd]
+- Updated dependencies [ee37209]
+  - @atrib/verify@0.3.7
+  - @atrib/mcp@0.12.0
+
 ## 0.2.6
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @atrib/verify
 
+## 0.3.7
+
+### Patch Changes
+
+- 01c91cd: Add optional reference status metadata to graph nodes and edges so clients can distinguish external references from missing references.
+- Updated dependencies [ee37209]
+  - @atrib/mcp@0.12.0
+
 ## 0.3.6
 
 ### Patch Changes

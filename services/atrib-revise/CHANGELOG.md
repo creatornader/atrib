@@ -1,5 +1,13 @@
 # @atrib/revise
 
+## 0.2.15
+
+### Patch Changes
+
+- Updated dependencies [ee37209]
+  - @atrib/mcp@0.12.0
+  - @atrib/emit@0.14.6
+
 ## 0.2.14
 
 ### Patch Changes
