@@ -100,7 +100,7 @@ One line. Every successful tool call emits a signed attribution record, propagat
 | --- | --- |
 | Vercel AI SDK + AI Gateway | [`packages/integration/examples/vercel-ai-sdk/`](packages/integration/examples/vercel-ai-sdk/) |
 | Claude Agent SDK (Case A + Case B) | [`packages/integration/examples/claude-agent-sdk/`](packages/integration/examples/claude-agent-sdk/) |
-| Cloudflare Agents | [`packages/integration/examples/cloudflare-agents/`](packages/integration/examples/cloudflare-agents/) |
+| Cloudflare Agents | [`packages/integration/examples/cloudflare-agents/`](packages/integration/examples/cloudflare-agents/) including [`live-worker-proof`](packages/integration/examples/cloudflare-agents/live-worker-proof/) |
 | LangChain JS | [`packages/integration/examples/langchain-js/`](packages/integration/examples/langchain-js/) |
 | End-to-end demo | [`packages/integration/examples/end-to-end/`](packages/integration/examples/end-to-end/) |
 
@@ -167,6 +167,8 @@ atrib detects transaction events from all six simultaneously. It does not move m
 | [`@atrib/directory`](packages/directory/README.md) | AKD-backed identity-claim directory SDK. Bundles WASM artifacts from the Rust bridge. |
 | [`@atrib/openinference`](packages/openinference/README.md) | OpenTelemetry SpanProcessor consuming OpenInference-shaped spans and emitting signed atrib records. Reference impl of spec [§9](atrib-spec.md#9-runtime-integration-patterns) Pattern #4; one adapter transitively covers every framework with OpenInference instrumentation. |
 | [`@atrib/emit`](services/atrib-emit/README.md) | Cognitive-primitive MCP server: signs observations, annotations, revisions the wrapper doesn't auto-capture. |
+| [`@atrib/annotate`](services/atrib-annotate/README.md) | Cognitive-primitive MCP server: marks past records' importance, topics, and summary. |
+| [`@atrib/revise`](services/atrib-revise/README.md) | Cognitive-primitive MCP server: supersedes a prior position with a stated reason. |
 | [`@atrib/recall`](services/atrib-recall/README.md) | Cognitive-primitive MCP server: queries the local mirror for an agent's own past records. |
 | [`@atrib/trace`](services/atrib-trace/README.md) | Cognitive-primitive MCP server: walks `informed_by` / `annotates` / `revises` edges backward to reconstruct causal chains. |
 | [`@atrib/summarize`](services/atrib-summarize/README.md) | Cognitive-primitive MCP server: reads N records and synthesizes a narrative via an OpenAI-compatible LLM. |

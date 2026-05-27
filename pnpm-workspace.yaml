@@ -1,5 +1,6 @@
 packages:
   - 'packages/*'
+  - 'packages/integration/examples/cloudflare-agents/live-worker-proof'
   - 'services/log-node'
   - 'services/graph-node'
   - 'services/directory-node'
