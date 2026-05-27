@@ -159,6 +159,9 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 
 **Date:** 2026-04-06
 **Context:** Cross-spec verification for AP2 (Google Agent Payments Protocol). The original SDK and the original spec [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402) both assumed AP2 would use W3C Verifiable Credentials with `type === 'VerifiableCredential'` and `credentialSubject.type === 'PaymentMandate'` to express a Payment Mandate. When verified against the actual AP2 v0.1 specification at `github.com/google-agentic-commerce/ap2`, this turned out to be wrong. AP2 v0.1 does not use W3C VCs at all.
+
+**Update (2026-05-27):** [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) supersedes this ADR for current AP2 v0.2 integrations. This ADR remains the compatibility rationale for older AP2 v0.1 DataPart deployments.
+
 **What the real AP2 spec says:**
 
 - AP2 is built on top of A2A (Agent2Agent). The wire format for a Payment Mandate is an A2A `Message` containing one or more `parts`, where the `kind: "data"` part has a `data` object with the key `ap2.mandates.PaymentMandate` and the AP2 PaymentMandate schema as its value.
@@ -4165,6 +4168,100 @@ This is a pattern-level decision, not a wire-format change. Diagnostic outcomes 
 
 ---
 
+## D088: AP2 v0.2 transaction hook is the successful receipt
+
+**Date:** 2026-05-27
+
+**Context.** A May 2026 review of FIDO's Verifiable Intent / AP2 framing and the current `google-agentic-commerce/AP2` repository found that atrib's AP2 model had drifted. [D017](#d017-ap2-v01-uses-a2a-dataparts-not-w3c-verifiable-credentials) was correct for AP2 v0.1: a `parts[].data["ap2.mandates.PaymentMandate"]` A2A DataPart was the best available close signal. AP2 v0.2 now separates authorization from outcome more clearly. Checkout Mandates and Payment Mandates authorize the agent action. Checkout Receipts and Payment Receipts are verifier-signed outcomes.
+
+That distinction matters for atrib because `transaction` is the [§4.6](atrib-spec.md#46-the-calculation-algorithm) closing event. Treating a mandate as the transaction closes the attribution chain before the merchant, payment processor, or verifier has accepted the action. It also blurs AP2's own evidence model: mandates answer "was the agent authorized?", while receipts answer "what did the verifier decide?"
+
+**Decision.** For current AP2 integrations, atrib detects transactions from successful AP2 receipts, not mandate-only payloads.
+
+The AP2 detector now treats these as `protocol: 'AP2'` transaction signals:
+
+1. A decoded Payment Receipt object with `status: "Success"` and the required AP2 payment receipt fields.
+2. A decoded Checkout Receipt object with `status: "Success"` and the required AP2 checkout receipt fields.
+3. An AP2 sample result envelope with `status: "success"` plus a compact signed `payment_receipt` or `checkout_receipt` JWT field.
+
+The detector does not decode signed receipt JWTs on the hot path. Header/payload verification and richer receipt extraction belong in a higher-fidelity AP2 adapter or verifier path, not in the low-latency transaction detector.
+
+The detector MUST NOT treat AP2 mandate-only payloads as transaction events. This includes v0.2 SD-JWT `vct` values such as `mandate.payment.1`, `mandate.checkout.1`, `mandate.payment.open.1`, and `mandate.checkout.open.1`.
+
+The older AP2 v0.1 DataPart path remains a compatibility fallback. The legacy W3C VC fallback for research forks also remains, but it is not the current AP2 signal.
+
+**Alternatives considered.**
+
+- *Keep `PaymentMandate` as the AP2 transaction hook.* Rejected. It preserves compatibility but closes the chain at authorization time, before verifier acceptance.
+- *Decode and verify AP2 receipt JWTs inside `detectTransaction`.* Rejected. The detector should stay a shape detector. Verification needs keys, issuer policy, and error reporting that do not belong on the middleware critical path.
+- *Require both Checkout Receipt and Payment Receipt before detecting.* Considered. AP2 completion normally returns both, but deployed tool surfaces may expose one before the other. A successful Payment Receipt is enough to prove payment outcome. A successful Checkout Receipt is enough for checkout acceptance where payment processing is already upstream of the returned result. Higher-fidelity settlement tooling can require both when available.
+- *Remove the v0.1 DataPart fallback immediately.* Rejected. Existing integrations and fixtures still use the v0.1 shape. Keeping the fallback is additive and does not weaken the v0.2 rule because v0.2 mandate `vct` payloads are explicitly rejected.
+
+**Consequences.**
+
+- [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402) now documents AP2 v0.2 receipts as the primary hook, with v0.1 DataPart and legacy VC fallbacks separated.
+- `@atrib/agent` gained AP2 v0.2 receipt fixtures and tests for successful receipt objects, signed receipt result envelopes, mandate-only rejection, and error receipt rejection.
+- [PRIOR-ART.md](PRIOR-ART.md) now describes AP2 as a receipt-based hook rather than a PaymentMandate hook.
+- The attribution graph remains structural. This decision changes which AP2 observable shape produces a `transaction` node; it does not add an AP2-specific edge type.
+- Cross-attestation remains a separate requirement per [D052](#d052-cross-attestation-requirement-for-transaction-records). AP2 receipts can supply counterparty evidence, but the transaction record still needs the `signers` array when the multi-signer path is implemented.
+
+**Cross-references.**
+
+- [D017](#d017-ap2-v01-uses-a2a-dataparts-not-w3c-verifiable-credentials), the older AP2 v0.1 detector decision that remains as a fallback.
+- [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402), updated AP2 hook text.
+- [D052](#d052-cross-attestation-requirement-for-transaction-records), transaction records require multiple signers.
+
+---
+
+## D089: AP2 / Verifiable Intent evidence checks live in @atrib/verify
+
+**Date:** 2026-05-27
+
+**Context.** [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) deliberately kept the AP2 transaction detector conservative. The detector fires on successful CheckoutReceipt or PaymentReceipt shapes, keeps the AP2 v0.1 DataPart fallback, and does not decode mandates or receipt JWTs in the middleware path.
+
+That leaves a second verifier question: after a transaction is detected, what evidence should a merchant, auditor, or settlement tool check to decide whether the AP2 action was authorized by Verifiable Intent and accepted by the AP2 verifier?
+
+FIDO's Verifiable Intent framing and the current AP2 v0.2 documents point to an SD-JWT delegation chain, not a WebAuthn assertion payload. The relevant verifier evidence is: L1 issuer credential, L2 user mandate, optional L3 agent mandate, `sd_hash` links, disclosure digests, `cnf.jwk` delegation keys, AP2 checkout/payment hash binding, and successful AP2 receipts.
+
+**Decision.** Add `verifyAp2ViEvidence()` to `@atrib/verify` as a local AP2 / Verifiable Intent evidence checker. It is off the transaction detector path and returns a result object with `valid`, `transactionAccepted`, AP2 receipt checks, VI credential checks, warnings, and errors.
+
+The checker performs these validations when the evidence is present:
+
+1. AP2 receipt success and required-field checks for PaymentReceipt and CheckoutReceipt.
+2. AP2 receipt `reference` binding against supplied closed-mandate serializations or explicit closed-mandate hashes.
+3. VI SD-JWT parsing for L1, L2, L3 payment, and L3 checkout credentials.
+4. ES256 signature checks. L1 uses caller-supplied trusted issuer keys. L2 uses the user key from L1 `cnf.jwk`. L3 uses the agent key delegated in L2 open mandates.
+5. `sd_hash` checks from L2 to L1 and from L3 to the supplied parent presentation.
+6. Disclosure digest checks against `_sd` and `delegate_payload`.
+7. Autonomous-mode delegation checks: open checkout and open payment mandates must bind the same agent key.
+8. Final checkout/payment binding: CheckoutMandate `checkout_hash` must match `checkout_jwt`, and PaymentMandate `transaction_id` must match the checkout hash.
+
+The default signature policy is `require`. Missing keys or invalid signatures fail the evidence result, but the function still returns normally per the degradation contract. Callers that only want structural triage can pass `signaturePolicy: "best-effort"`.
+
+**Alternatives considered.**
+
+- *Extend `detectTransaction()` to decode and verify VI/AP2 evidence.* Rejected. It would put issuer-key lookup, JOSE parsing, and dispute-grade error reporting on the middleware critical path.
+- *Add a new package for AP2 / VI.* Rejected. The work is verifier-side evidence checking, and `@atrib/verify` already owns merchant and auditor verification surfaces.
+- *Treat VI as WebAuthn-specific evidence.* Rejected. Verifiable Intent may be bootstrapped by FIDO credentials, but the AP2-visible evidence format is an SD-JWT mandate chain.
+- *Only check AP2 receipts and leave VI for a future adapter.* Rejected. That would leave the authorization half of AP2 unmodeled and repeat the [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) split without closing it.
+
+**Consequences.**
+
+- `@atrib/agent` stays conservative: AP2 mandates remain authorization evidence, not transaction close signals.
+- `@atrib/verify` gains a first AP2 / VI evidence surface without changing settlement calculation or graph derivation.
+- AP2 / VI fixtures under `packages/agent/test/fixtures/ap2/` now include signed VI immediate evidence and an autonomous split-agent failure case.
+- `@atrib/verify` tests cover signed immediate evidence, autonomous `cnf.jwk` mismatch rejection, and malformed-evidence degradation.
+- `@atrib/integration` adds an AP2 / VI e2e test that runs `detectTransaction()` and `verifyAp2ViEvidence()` together, proving the detector and verifier paths compose without coupling them.
+
+**Cross-references.**
+
+- [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt), the detector boundary this ADR extends.
+- [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402), AP2 transaction hook and verifier evidence guidance.
+- [§5.5.4](atrib-spec.md#554-ap2--verifiable-intent-evidence-checks), `@atrib/verify` AP2 / VI evidence surface.
+- [D052](#d052-cross-attestation-requirement-for-transaction-records), transaction records still require multiple signers.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -4601,5 +4698,149 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 - [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), verify promotion: when verify-mcp ships as primitive #7, Position 2 makes adding `atrib verify` a one-subcommand addition rather than a new helper + node_modules.
 - [P023](#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion), subscription surface; the always-on consumer pattern benefits from a stable CLI deployment for the same reasons.
 - [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type), parent-child env threading; benefits from PATH-resolved CLI per consequences above.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P028: AP2 receipt JWT verification and verifier metadata discovery
+
+**Source:** AP2 / Verifiable Intent implementation gap audit after [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) and [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) landed. The current verifier checks receipt objects and local AP2 receipt bindings, but it does not yet verify a compact AP2 receipt JWT against verifier metadata or a remote key source.
+
+**The decision in question:** should `@atrib/verify` grow an AP2 verifier profile that verifies compact CheckoutReceipt / PaymentReceipt JWTs, resolves verifier keys from configured JWKS or AP2 verifier metadata, enforces issuer and audience constraints, validates receipt expiry where present, and returns the evidence as annotations on the same verifier result shape?
+
+**Considerations.**
+
+- Keep this off the middleware critical path. `detectTransaction()` should continue to detect successful receipt shapes only; issuer lookup and JOSE verification belong in verifier-side evidence checks.
+- The API needs a caller-supplied trust root. Remote discovery without an allowlist would create a false sense of verification.
+- The verifier should support static fixture keys first, then remote JWKS with cache control and network-failure warnings.
+- AP2 receipt JWT support should land with negative tests for wrong issuer, wrong key, expired receipt, missing `kid`, and tampered payload.
+
+**Likely outcome (not committed):** accept. Add AP2 receipt JWT verification to `@atrib/verify` once a real AP2 verifier or reference metadata source is used in tests.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P029: Full SD-JWT / VC conformance for Verifiable Intent
+
+**Source:** AP2 / Verifiable Intent implementation gap audit after [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) landed. The first verifier implementation parses SD-JWT strings, checks disclosures, validates ES256 signatures, and verifies the AP2-specific mandate chain. It does not claim full SD-JWT VC conformance.
+
+**The decision in question:** should `@atrib/verify` adopt a dedicated SD-JWT / VC implementation for Verifiable Intent once the candidate dependency passes local fixtures and spec vectors?
+
+**Considerations.**
+
+- The current parser is intentionally small. It is good for local evidence checks and bad as a long-term SD-JWT conformance surface.
+- The dependency must support issuer-signed SD-JWT parsing, disclosure digest validation, holder binding or key binding where needed, and deterministic failure reporting.
+- The package boundary matters. The SD-JWT dependency should sit inside `@atrib/verify`; it should not leak into `@atrib/agent` or middleware.
+- Conformance tests should include IETF SD-JWT / SD-JWT VC vectors when available, plus AP2-specific VI chains from `packages/agent/test/fixtures/ap2/`.
+
+**Likely outcome (not committed):** accept after dependency selection. Replace or wrap the local parser with a vetted SD-JWT / VC library and keep the existing public result shape stable.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P030: AP2 / VI mandate constraint evaluation
+
+**Source:** AP2 / Verifiable Intent implementation gap audit after [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) landed. The verifier now checks the cryptographic chain and final checkout / payment hash binding. It does not evaluate whether a purchase stays inside the user-declared mandate constraints.
+
+**The decision in question:** should `@atrib/verify` include an AP2 / VI constraint evaluator that checks merchant allowlists, payee binding, amount ceilings, currency, SKU or category limits, time windows, and agent delegation bounds against the final AP2 receipt and mandate payloads?
+
+**Considerations.**
+
+- Constraint checks are evidence checks, not graph derivation. They must not add AP2-specific graph edges.
+- The evaluator needs deterministic rules and clear failure messages. A generic policy language may be useful, but only if it preserves AP2's typed mandate fields.
+- Currency and amount checks need exact decimal handling. Floating point math is not acceptable for payment constraints.
+- The fixture matrix should cover in-bounds and out-of-bounds cases for immediate and autonomous flows.
+
+**Likely outcome (not committed):** accept in stages. Start with typed AP2 fields that are visible in current fixtures, then widen as AP2 reference examples expose more constraint shapes.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P031: Autonomous AP2 / VI fixture corpus and negative matrix
+
+**Source:** AP2 / Verifiable Intent implementation gap audit after [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) landed. Current tests cover signed immediate evidence, receipt detection, malformed evidence, and one autonomous `cnf.jwk` mismatch. The autonomous flow needs a broader success and failure corpus before it can act as a verifier profile.
+
+**The decision in question:** should `packages/agent/test/fixtures/ap2/` become the canonical AP2 / VI evidence corpus for immediate and autonomous flows, with both positive and negative cases consumed by `@atrib/agent`, `@atrib/verify`, and `@atrib/integration`?
+
+**Considerations.**
+
+- Positive autonomous fixtures need L1 issuer credential, L2 user mandate, L3 checkout mandate, L3 payment mandate, successful checkout receipt, successful payment receipt, and final hash bindings.
+- Negative fixtures should include tampered L2 signature, tampered L3 signature, disclosure digest mismatch, `sd_hash` mismatch, wrong L3 agent key, wrong checkout hash, wrong transaction id, wrong receipt reference, expired credential, and missing issuer key.
+- The corpus should be deterministic and locally generated. Tests must not depend on live AP2 services except in a separate interop job.
+- Fixture docs should state which cases are AP2 reference-derived and which are synthetic.
+
+**Likely outcome (not committed):** accept. Expand the existing AP2 fixture directory into the shared local corpus before wiring live AP2 interop.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P032: AP2 / VI evidence integration with record verification flows
+
+**Source:** AP2 / Verifiable Intent implementation gap audit after [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) landed. `verifyAp2ViEvidence()` is exported, but `verifyRecord()` and `AtribVerifier.verify()` do not yet attach AP2 / VI evidence annotations to transaction verification results.
+
+**The decision in question:** should `@atrib/verify` accept AP2 / VI evidence alongside a transaction record and merge the evidence result into the standard per-record verifier output?
+
+**Considerations.**
+
+- The evidence object should be caller-supplied. The signed atrib record currently commits to transaction payload hashes, not full AP2 / VI bodies.
+- Verification must remain tiered. A transaction record can have a valid atrib signature and still have AP2 evidence warnings or failures.
+- The result shape should expose AP2 / VI as an optional evidence block rather than changing `valid` semantics for all transactions.
+- This should pair with tests proving `verifyRecord()` still handles non-AP2 transaction records unchanged.
+
+**Likely outcome (not committed):** accept after the standalone evidence checker stabilizes. Add optional AP2 / VI evidence input to the verifier without making AP2 evidence mandatory for all transaction records.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P033: AP2-specific transaction content_id derivation
+
+**Source:** AP2 / Verifiable Intent implementation gap audit after [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) landed. AP2 receipt detection can identify a successful transaction, but the current `content_id` derivation still follows the generic MCP server URL plus tool name path unless the producer supplies richer transaction identity.
+
+**The decision in question:** should `@atrib/agent` derive AP2 transaction `content_id` from stable AP2 fields such as checkout hash, payment transaction id, order id, receipt reference, merchant origin, or verifier identity when present?
+
+**Considerations.**
+
+- `content_id` must stay stable across equivalent observers. If two agents see the same AP2 payment, they should derive the same transaction identity where the evidence allows it.
+- The derivation needs a fallback ladder. Not every AP2 response exposes all fields.
+- The chosen fields must not leak more private data than the existing transaction metadata posture allows. Hashing canonical AP2 identity fields may be the right shape.
+- Conformance vectors should document the ladder so external producers can match it bit-for-bit.
+
+**Likely outcome (not committed):** accept with a conservative ladder. Use AP2 receipt / mandate identifiers when they are present and fall back to the existing generic content_id path otherwise.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P034: Live AP2 interoperability harness
+
+**Source:** AP2 / Verifiable Intent implementation gap audit after [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) and [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) landed. Local fixtures prove the detector and verifier compose, but they do not prove atrib works against a real AP2 participant or reference implementation.
+
+**The decision in question:** should `@atrib/integration` add a live or containerized AP2 interop harness that runs an AP2 checkout / payment flow, captures the receipts and VI credentials, emits an atrib transaction record, and verifies the AP2 / VI evidence end to end?
+
+**Considerations.**
+
+- The default test suite must stay offline. Live interop should be opt-in, skipped unless explicit environment variables are present.
+- A containerized reference stack is preferred if the AP2 project ships one. It keeps CI deterministic and avoids depending on public services.
+- The harness should emit artifacts that can be promoted into local fixtures when AP2 changes shape.
+- This is the natural place to test remote JWKS, receipt JWT validation, and verifier metadata discovery from [P028](#p028-ap2-receipt-jwt-verification-and-verifier-metadata-discovery).
+
+**Likely outcome (not committed):** accept once an AP2 reference implementation or stable sandbox is available. Keep it outside the default local test path.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P035: Cross-attestation wiring from AP2 receipts into transaction signers
+
+**Source:** AP2 / Verifiable Intent implementation gap audit after [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) and [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) landed. [D052](#d052-cross-attestation-requirement-for-transaction-records) requires transaction records to carry at least two signers, but current AP2 transaction emission still follows the normal single-producer signing path.
+
+**The decision in question:** should AP2 receipt evidence provide the counterparty attestation needed to populate transaction `signers[]`, and if so, how does `@atrib/agent` collect and merge the agent signature with verifier or merchant receipt signatures over the same canonical transaction record bytes?
+
+**Considerations.**
+
+- AP2 receipt signatures prove the AP2 verifier or merchant accepted the transaction. They are not automatically signatures over the atrib record. Mapping them into `signers[]` requires a clear canonicalization and counterparty-signature story.
+- One option is two-layer evidence: `signers[]` remains only signatures over the atrib record, while AP2 receipt signatures sit in the optional AP2 evidence block. This keeps [D052](#d052-cross-attestation-requirement-for-transaction-records) strict and avoids confusing receipt acceptance with atrib co-signing.
+- Another option is an adapter that asks the verifier or merchant to sign the atrib transaction record after receipt issuance. That gives true cross-attestation but needs protocol support outside atrib.
+- The verifier should keep flagging AP2 transaction records with `cross_attestation_missing: true` until true multi-signer transaction records exist.
+
+**Likely outcome (not committed):** defer true `signers[]` population until an AP2 participant can sign the atrib record bytes. In the meantime, expose AP2 receipt signatures as external evidence, not as [D052](#d052-cross-attestation-requirement-for-transaction-records) cross-attestation.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.

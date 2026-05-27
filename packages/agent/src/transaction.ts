@@ -6,21 +6,23 @@
  * Detects transaction events from response shapes for ACP, UCP, x402, MPP,
  * AP2, and heuristic tool name matching.
  *
- * Protocol shape sources (verified 2026-04-06):
+ * Protocol shape sources (verified 2026-05-27):
  * - ACP: github.com/agentic-commerce-protocol/agentic-commerce-protocol
  *        rfcs/rfc.agentic_checkout.md
  * - UCP: github.com/universal-commerce-protocol/ucp
  *        docs/specification/checkout-rest.md (version 2026-01-11)
- * - AP2: github.com/google-agentic-commerce/ap2 (v0.1). A2A Message with a
- *        DataPart containing the key `ap2.mandates.PaymentMandate`. AP2 does
- *        NOT currently use W3C Verifiable Credentials despite earlier drafts
- *        of this code and the atrib spec assuming it would.
+ * - AP2: github.com/google-agentic-commerce/AP2 (v0.2). Current AP2 uses
+ *        SD-JWT Mandates for authorization and signed CheckoutReceipt /
+ *        PaymentReceipt JWTs for acceptance. Detection fires on successful
+ *        receipt shapes, not mandate-only payloads. The legacy v0.1 A2A
+ *        DataPart key `ap2.mandates.PaymentMandate` remains supported as a
+ *        compatibility fallback.
  * - a2a-x402: github.com/google-agentic-commerce/a2a-x402. extension that
  *        layers x402 crypto payments over A2A. Detection signal is
  *        `status.message.metadata["x402.payment.status"] === "payment-completed"`
  *        with at least one `success: true` entry in
  *        `status.message.metadata["x402.payment.receipts"]`. Both shapes are
- *        reported as `protocol: 'AP2'` since a2a-x402 IS the AP2 crypto path.
+ *        reported as `protocol: 'AP2'` since a2a-x402 is the AP2 crypto path.
  * - x402: github.com/coinbase/x402. response header `PAYMENT-RESPONSE` (v2)
  *        or `X-PAYMENT-RESPONSE` (v1 legacy). Value is base64-encoded JSON
  *        with shape { success: bool, transaction, network, payer, requirements }.
@@ -30,7 +32,7 @@
  *        Value is base64url-nopad JSON with required field { status: "success",
  *        method, timestamp, reference }.
  *
- * x402 and MPP are DIFFERENT protocols that use DIFFERENT headers. Earlier
+ * x402 and MPP are different protocols that use different headers. Earlier
  * versions of this code conflated them on a fictitious shared `Payment-Receipt`
  * header. see DECISIONS.md D016 for the verification trail.
  */
@@ -58,6 +60,102 @@ const HEURISTIC_KEYWORDS = [
   'purchase',
   'checkout',
 ]
+
+const AP2_PAYMENT_RECEIPT_KEYS = ['ap2.PaymentReceipt', 'payment_receipt'] as const
+const AP2_CHECKOUT_RECEIPT_KEYS = ['ap2.CheckoutReceipt', 'checkout_receipt'] as const
+const AP2_RECEIPT_SCAN_LIMIT = 80
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string'
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0
+}
+
+function hasAp2SuccessStatus(record: Record<string, unknown>): boolean {
+  return record['status'] === 'Success' || record['status'] === 'success'
+}
+
+function looksLikeCompactJwt(value: unknown): value is string {
+  return isNonEmptyString(value) && value.split('.').length === 3
+}
+
+function isAp2PaymentReceiptObject(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  return (
+    value['status'] === 'Success' &&
+    isString(value['iss']) &&
+    typeof value['iat'] === 'number' &&
+    isNonEmptyString(value['reference']) &&
+    isNonEmptyString(value['payment_id']) &&
+    isNonEmptyString(value['psp_confirmation_id']) &&
+    isNonEmptyString(value['network_confirmation_id'])
+  )
+}
+
+function isAp2CheckoutReceiptObject(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  return (
+    value['status'] === 'Success' &&
+    isString(value['iss']) &&
+    typeof value['iat'] === 'number' &&
+    isNonEmptyString(value['reference']) &&
+    isNonEmptyString(value['order_id'])
+  )
+}
+
+function hasAp2ReceiptField(
+  record: Record<string, unknown>,
+  keys: readonly string[],
+  isReceiptObject: (value: unknown) => boolean,
+): boolean {
+  for (const key of keys) {
+    const value = record[key]
+    if (isReceiptObject(value)) return true
+    if (hasAp2SuccessStatus(record) && looksLikeCompactJwt(value)) return true
+  }
+  return false
+}
+
+function containsAp2V02Receipt(value: unknown): boolean {
+  const queue: unknown[] = [value]
+  const seen = new Set<object>()
+  let scanned = 0
+
+  while (queue.length > 0 && scanned < AP2_RECEIPT_SCAN_LIMIT) {
+    const current = queue.shift()
+    scanned += 1
+
+    if (Array.isArray(current)) {
+      for (const item of current) queue.push(item)
+      continue
+    }
+    if (!isRecord(current)) continue
+    if (seen.has(current)) continue
+    seen.add(current)
+
+    if (isAp2PaymentReceiptObject(current) || isAp2CheckoutReceiptObject(current)) {
+      return true
+    }
+    if (
+      hasAp2ReceiptField(current, AP2_PAYMENT_RECEIPT_KEYS, isAp2PaymentReceiptObject) ||
+      hasAp2ReceiptField(current, AP2_CHECKOUT_RECEIPT_KEYS, isAp2CheckoutReceiptObject)
+    ) {
+      return true
+    }
+
+    for (const nested of Object.values(current)) {
+      if (isRecord(nested) || Array.isArray(nested)) queue.push(nested)
+    }
+  }
+
+  return false
+}
 
 /**
  * Detect whether a tool call response contains a transaction signal (§5.4.5).
@@ -118,7 +216,21 @@ export function detectTransaction(
     }
   }
 
-  // AP2 v0.1. PaymentMandate Message inside an A2A DataPart.
+  // AP2 v0.2. Successful CheckoutReceipt / PaymentReceipt is the close signal.
+  // Mandates authorize the action and are kept out of transaction detection.
+  // Sources:
+  // - docs/ap2/specification.md: Checkout/Payment Receipt returned on completion
+  // - code/sdk/schemas/ap2/payment_receipt.json
+  // - code/sdk/schemas/ap2/checkout_receipt.json
+  // Shapes:
+  // - { status: "success", payment_receipt: "<signed JWT>" }
+  // - { status: "success", checkout_receipt: "<signed JWT>" }
+  // - { parts: [{ kind: "data", data: { "ap2.PaymentReceipt": { status: "Success", ... } } }] }
+  if (resp && containsAp2V02Receipt(resp)) {
+    return { detected: true, protocol: 'AP2', checkoutUrl: null }
+  }
+
+  // AP2 v0.1 compatibility. PaymentMandate Message inside an A2A DataPart.
   // Source: github.com/google-agentic-commerce/ap2 docs/specification.md
   // Shape: { ..., parts: [{ kind: "data", data: { "ap2.mandates.PaymentMandate": {...} } }, ...] }
   if (resp) {

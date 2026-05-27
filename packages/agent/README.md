@@ -36,7 +36,7 @@ All detection logic lives in `packages/agent/src/transaction.ts` and runs agains
 | **UCP**. Universal Commerce Protocol | `github.com/universal-commerce-protocol/ucp`                | Same shape as ACP + top-level `ucp.version` envelope                                                                          | [§1.7.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#172-ucp-universal-commerce-protocol)                               |
 | **x402**                              | Coinbase. `github.com/coinbase/x402`                       | HTTP `PAYMENT-RESPONSE` header (v2) or legacy `X-PAYMENT-RESPONSE` (v1) on the 200 response                                   | [§1.7.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#173-x402)                               |
 | **MPP**. Machine Payments Protocol   | Tempo Labs / Stripe; IETF `draft-ryan-httpauth-payment-01` | HTTP `Payment-Receipt` header on 200 success response                                                                         | [§1.7.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#174-mpp-machine-payments-protocol)                               |
-| **AP2**. Agent Payments Protocol     | Google; `github.com/google-agentic-commerce/ap2`           | A2A Message with DataPart containing `ap2.mandates.PaymentMandate`                                                            | [§1.7.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#175-ap2-and-a2a-x402)                               |
+| **AP2**. Agentic Payment Protocol    | Google; `github.com/google-agentic-commerce/AP2`           | Successful AP2 `PaymentReceipt` or `CheckoutReceipt`; v0.1 `ap2.mandates.PaymentMandate` remains a fallback                  | [§1.7.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#175-ap2-and-a2a-x402)                               |
 | **a2a-x402**                          | Google. `github.com/google-agentic-commerce/a2a-x402`      | A2A task `status.message.metadata["x402.payment.status"] === "payment-completed"` + `receipts[].success === true`             | [§1.7.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#175-ap2-and-a2a-x402) (reported as AP2 crypto path) |
 
 **The linking mechanism is the same across all six:** the session `context_id` (16-byte anchor, equal to the W3C OTel trace-id by default) travels with the outbound payment request; via `X-atrib-Context` HTTP header for protocols that don't expose a free-form metadata field, or via `params._meta.atrib` for any payment protocol running over MCP transport. When the merchant's side sees the payment-completed signal, atrib writes a transaction record with that `context_id`, and the attribution graph can reconstruct the full chain from contributing tool calls → transaction → settlement.
@@ -97,9 +97,25 @@ HTTP/1.1 200 OK
 Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIn0
 ```
 
-#### AP2: Google Agent Payments Protocol (v0.1)
+#### AP2: Google Agentic Payment Protocol (v0.2)
 
-Detected from an A2A `Message` containing a `DataPart` whose `data` object has the literal key `"ap2.mandates.PaymentMandate"`. AP2 v0.1 does **not** use W3C Verifiable Credentials despite earlier drafts assuming it would (a legacy VC fallback is kept for research forks).
+Detected from successful AP2 receipts. Current AP2 uses Checkout and Payment Mandates for authorization, then returns signed Checkout Receipts and Payment Receipts when a verifier accepts or rejects the mandate. atrib treats the successful receipt as the transaction close signal.
+
+Decoded receipt objects are detected when they carry `status: "Success"` and the required AP2 fields. Signed receipt JWTs are detected in AP2 sample result envelopes when the envelope has `status: "success"` plus `payment_receipt` or `checkout_receipt`.
+
+```json
+{
+  "status": "success",
+  "order_id": "order_123",
+  "checkout_receipt": "eyJhbGciOiJFUzI1NiJ9.eyJzdGF0dXMiOiJTdWNjZXNzIn0.signature"
+}
+```
+
+Mandate-only payloads are not detected, including `vct: "mandate.payment.1"` and `vct: "mandate.checkout.1"`. Mandates authorize a future action; they do not prove the verifier accepted it.
+
+Verifier-side AP2 / Verifiable Intent checks live in `@atrib/verify`, not this detector. Use `verifyAp2ViEvidence()` when a merchant or auditor needs to validate AP2 receipt references, VI SD-JWT signatures, `sd_hash` links, disclosure digests, delegated agent keys, and checkout/payment binding after detection.
+
+The older AP2 v0.1 DataPart shape remains supported as a compatibility fallback:
 
 ```json
 {
@@ -119,7 +135,7 @@ Detected from an A2A `Message` containing a `DataPart` whose `data` object has t
 }
 ```
 
-`IntentMandate` and `CartMandate` are **not** detected; they are upstream funnel events, not transaction events. Only `PaymentMandate` closes the chain.
+`IntentMandate` and `CartMandate` are still not detected; they are upstream funnel events, not transaction events.
 
 #### a2a-x402: Google AP2 crypto path
 

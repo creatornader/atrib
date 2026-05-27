@@ -1,0 +1,43 @@
+{
+  "trustedIssuerKeys": [
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "N-9LosuyCp_qrtzY3RY8c3cPMHa94-dQ6J3MTo9YF_4",
+      "y": "lp3wkyC2n9heI8AYlIBSmMqcCQdhAuoOoGKX-i9srCM",
+      "kid": "iss-1"
+    }
+  ],
+  "ap2": {
+    "paymentReceipt": {
+      "status": "Success",
+      "iss": "pisp",
+      "iat": 3,
+      "reference": "rAbJwh47ZbzXR9bayQ02VuDerQPyCvcRTQw-Txt5Acw",
+      "payment_id": "pay",
+      "psp_confirmation_id": "psp",
+      "network_confirmation_id": "net"
+    },
+    "checkoutReceipt": {
+      "status": "Success",
+      "iss": "m",
+      "iat": 3,
+      "reference": "PN1H_NAbMyyFKRtJOJoMIoCqzAfZASzCA2XYOZMSXls",
+      "order_id": "ord"
+    },
+    "closedPaymentMandate": "WyJwIix7InZjdCI6Im1hbmRhdGUucGF5bWVudC4xIiwicGF5bWVudF9hbW91bnQiOnsiY3VycmVuY3kiOiJVU0QiLCJhbW91bnQiOjEyM30sInBheWVlIjp7Im5hbWUiOiJNIn0sInRyYW5zYWN0aW9uX2lkIjoic0M2cENKUzAxaERzRDRrY3FURnpwWVVyLWdjOWY0SzhrN1NNNmhvOUJDWSJ9XQ",
+    "closedCheckoutMandate": "WyJjIix7InZjdCI6Im1hbmRhdGUuY2hlY2tvdXQuMSIsImNoZWNrb3V0X2p3dCI6ImNoZWNrb3V0Lmp3dC5zaWciLCJjaGVja291dF9oYXNoIjoic0M2cENKUzAxaERzRDRrY3FURnpwWVVyLWdjOWY0SzhrN1NNNmhvOUJDWSJ9XQ"
+  },
+  "vi": {
+    "credentials": [
+      {
+        "layer": "L1",
+        "sdJwt": "eyJhbGciOiJFUzI1NiIsInR5cCI6InNkK2p3dCIsImtpZCI6Imlzcy0xIn0.eyJpc3MiOiJpc3MiLCJzdWIiOiJ1IiwiaWF0IjoxLCJleHAiOjk5OTk5OTk5OTksInZjdCI6ImNyZWRlbnRpYWwucHJvdmlkZXIuMSIsImNuZiI6eyJqd2siOnsia3R5IjoiRUMiLCJjcnYiOiJQLTI1NiIsIngiOiI1bUhzZ0NWQU1GZzlKRVJXMzFvajNVZ29yZFQtX08zMVRjWWNjT2tKRGhNIiwieSI6IjMzR2dyaDkySGk0aTJBTjAtMWJ0cFJ2cUR4ZHZ4Z3JhS0I2Yi1meGpYRHMiLCJraWQiOiJ1c3ItMSJ9fX0.ItDYjyerHl-pb1gHoO_wNalyOi11BoxQaEvZM-HbZ84jtg-B9paL_-w9ktRo2Ni94N7np-A5WBbrprcSK2hw4g"
+      },
+      {
+        "layer": "L2",
+        "sdJwt": "eyJhbGciOiJFUzI1NiIsInR5cCI6ImtiLXNkLWp3dCIsImtpZCI6InVzci0xIn0.eyJub25jZSI6Im4iLCJhdWQiOiJuZXQiLCJpYXQiOjIsImV4cCI6OTk5OTk5OTk5OSwic2RfaGFzaCI6Im50aTBkMHFzd29jRllSc3RMM0JidnpEVVpjT1VUdnY5aXNHN19xTmxRV1UiLCJfc2RfYWxnIjoic2hhLTI1NiIsIl9zZCI6WyJQTjFIX05BYk15eUZLUnRKT0pvTUlvQ3F6QWZaQVN6Q0EyWFlPWk1TWGxzIiwickFiSndoNDdaYnpYUjliYXlRMDJWdURlclFQeUN2Y1JUUXctVHh0NUFjdyJdLCJkZWxlZ2F0ZV9wYXlsb2FkIjpbeyIuLi4iOiJQTjFIX05BYk15eUZLUnRKT0pvTUlvQ3F6QWZaQVN6Q0EyWFlPWk1TWGxzIn0seyIuLi4iOiJyQWJKd2g0N1pielhSOWJheVEwMlZ1RGVyUVB5Q3ZjUlRRdy1UeHQ1QWN3In1dfQ.7noFvh1jojSajAHq31mKHiibFUSMXUT7feNtKDg9dUK34_sm5nR0eSiaW5itOOEbopw8kle2BGRcOr2DMlL_FQ~WyJjIix7InZjdCI6Im1hbmRhdGUuY2hlY2tvdXQuMSIsImNoZWNrb3V0X2p3dCI6ImNoZWNrb3V0Lmp3dC5zaWciLCJjaGVja291dF9oYXNoIjoic0M2cENKUzAxaERzRDRrY3FURnpwWVVyLWdjOWY0SzhrN1NNNmhvOUJDWSJ9XQ~WyJwIix7InZjdCI6Im1hbmRhdGUucGF5bWVudC4xIiwicGF5bWVudF9hbW91bnQiOnsiY3VycmVuY3kiOiJVU0QiLCJhbW91bnQiOjEyM30sInBheWVlIjp7Im5hbWUiOiJNIn0sInRyYW5zYWN0aW9uX2lkIjoic0M2cENKUzAxaERzRDRrY3FURnpwWVVyLWdjOWY0SzhrN1NNNmhvOUJDWSJ9XQ~"
+      }
+    ]
+  }
+}

@@ -6,6 +6,9 @@ import acpOrderCreateFixture from './fixtures/acp/order_create_event.json'
 import acpOrderUpdateFixture from './fixtures/acp/order_update_event.json'
 import ucpCompletedFixture from './fixtures/ucp/checkout_session_completed.json'
 import ap2PaymentMandateFixture from './fixtures/ap2/payment_mandate_message.json'
+import ap2PaymentReceiptArtifactFixture from './fixtures/ap2/payment_receipt_artifact.json'
+import ap2PaymentReceiptResultFixture from './fixtures/ap2/payment_receipt_result.json'
+import ap2CheckoutReceiptResultFixture from './fixtures/ap2/checkout_receipt_result.json'
 import a2aX402PaymentCompletedFixture from './fixtures/ap2/a2a_x402_payment_completed.json'
 
 describe('detectTransaction', () => {
@@ -150,8 +153,26 @@ describe('detectTransaction', () => {
   })
 
   describe('AP2 detection', () => {
+    it('detects an AP2 v0.2 PaymentReceipt artifact', () => {
+      // Source: google-agentic-commerce/AP2 code/sdk/schemas/ap2/payment_receipt.json
+      const result = detectTransaction('payment_tool', ap2PaymentReceiptArtifactFixture)
+      expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
+    })
+
+    it('detects an AP2 v0.2 payment receipt JWT result', () => {
+      // Source: google-agentic-commerce/AP2 samples return { status, payment_receipt }.
+      const result = detectTransaction('payment_tool', ap2PaymentReceiptResultFixture)
+      expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
+    })
+
+    it('detects an AP2 v0.2 checkout receipt JWT result', () => {
+      // Source: google-agentic-commerce/AP2 samples return { status, checkout_receipt }.
+      const result = detectTransaction('checkout_tool', ap2CheckoutReceiptResultFixture)
+      expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
+    })
+
     it('detects a real AP2 PaymentMandate Message (A2A DataPart)', () => {
-      // Source: github.com/google-agentic-commerce/ap2 docs/specification.md
+      // Source: github.com/google-agentic-commerce/ap2 docs/specification.md v0.1
       const result = detectTransaction('payment_tool', ap2PaymentMandateFixture)
       expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
     })
@@ -194,6 +215,51 @@ describe('detectTransaction', () => {
         ],
       }
       const result = detectTransaction('cart_tool', cartMandate)
+      expect(result.detected).toBe(false)
+    })
+
+    it('does NOT detect an AP2 v0.2 Payment Mandate SD-JWT payload', () => {
+      const paymentMandate = {
+        issuer_signed_jwt: {
+          payload: {
+            vct: 'mandate.payment.1',
+            transaction_id: 'checkout_hash_123',
+          },
+        },
+        disclosures: [],
+      }
+      const result = detectTransaction('credential_tool', paymentMandate)
+      expect(result.detected).toBe(false)
+    })
+
+    it('does NOT detect an AP2 v0.2 error receipt', () => {
+      const errorReceipt = {
+        parts: [
+          {
+            kind: 'data',
+            data: {
+              'ap2.PaymentReceipt': {
+                status: 'Error',
+                iss: 'example-pisp.com',
+                iat: 1772020800,
+                reference: 'closed-payment-mandate-hash',
+                payment_id: 'pay_123',
+                error: 'invalid_mandate',
+                error_description: 'The mandate did not authorize this payment.',
+              },
+            },
+          },
+        ],
+      }
+      const result = detectTransaction('payment_tool', errorReceipt)
+      expect(result.detected).toBe(false)
+    })
+
+    it('does NOT detect an AP2 receipt JWT field without success status', () => {
+      const pendingReceipt = {
+        payment_receipt: 'eyJhbGciOiJFUzI1NiJ9.eyJzdGF0dXMiOiJTdWNjZXNzIn0.signature',
+      }
+      const result = detectTransaction('credential_tool', pendingReceipt)
       expect(result.detected).toBe(false)
     })
 

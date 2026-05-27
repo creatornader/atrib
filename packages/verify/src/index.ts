@@ -39,6 +39,23 @@ export { fetchGraph, fetchSessionPolicyRecord, fetchPolicyDocument } from './gra
 export { buildRevocationRegistry, applyRevocation } from './revocations.js'
 export type { RevocationEntry, RevocationReason, MinimalRecord } from './revocations.js'
 
+// AP2 / Verifiable Intent evidence checks. Off the settlement critical path.
+export { verifyAp2ViEvidence } from './ap2-vi-evidence.js'
+export type {
+  Ap2EvidenceCheck,
+  Ap2EvidenceInput,
+  Ap2ReceiptCheck,
+  Ap2ViEvidenceBundle,
+  Ap2ViEvidenceVerification,
+  SignatureCheck,
+  VerifyAp2ViEvidenceOptions,
+  ViCredentialCheck,
+  ViCredentialInput,
+  ViCredentialLayer,
+  ViEvidenceCheck,
+  ViMode,
+} from './ap2-vi-evidence.js'
+
 // Identity resolution (§6.3 9-step verifier consultation)
 export { resolveIdentity } from './resolve-identity.js'
 export type {
