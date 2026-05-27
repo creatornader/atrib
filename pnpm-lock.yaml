@@ -194,6 +194,40 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  packages/integration/examples/cloudflare-agents/live-client-proof:
+    dependencies:
+      '@atrib/agent':
+        specifier: workspace:*
+        version: link:../../../../agent
+      '@atrib/mcp':
+        specifier: workspace:*
+        version: link:../../../../mcp
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      agents:
+        specifier: ^0.13.3
+        version: 0.13.3(@babel/core@7.29.7)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260527.1)(ai@6.0.191(zod@4.4.3))(react@19.2.6)(rolldown@1.0.2)(vite@7.3.2(@types/node@25.9.1)(tsx@4.22.3))(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20260527.1
+        version: 4.20260527.1
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      wrangler:
+        specifier: ^4.95.0
+        version: 4.95.0(@cloudflare/workers-types@4.20260527.1)
+
   packages/integration/examples/cloudflare-agents/live-worker-proof:
     dependencies:
       '@atrib/mcp':

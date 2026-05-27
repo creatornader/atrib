@@ -45,6 +45,7 @@ atrib/
         claude-agent-sdk/      # Case A + Case B examples
         cloudflare-agents/     # McpAgent + Agent examples
           live-worker-proof/   # Real Cloudflare Worker + Durable Object proof for server-side MCP signing and prior-action recall.
+          live-client-proof/   # Real Cloudflare Agent.addMcpServer proof for client-side wrapping and fallback transaction signing.
         vercel-ai-sdk/         # createMCPClient + AI Gateway example
         langchain-js/          # MultiServerMCPClient + loadMcpTools example
   policies/                     # Attribution policy templates and guide (6 templates + README)
@@ -73,7 +74,7 @@ atrib/
       6/                       # Public-key directory conformance corpus (test vectors for §6, D034). Skeleton; fixtures land alongside the directory implementation.
 ```
 
-Public packages are intended for npm publication. Private workspace packages and services (`log-dev`, `integration`, `cloudflare-live-proof`, `log-node`, `graph-node`, `directory-node`, `dashboard`) are fixtures, proof harnesses, deployed services, or product surfaces with `private: true` in their `package.json` so they cannot be accidentally published. The `directory-bridge` Rust crate is source-only, its WASM build artifacts ship inside `@atrib/directory` (see [`packages/directory-bridge/README.md`](packages/directory-bridge/README.md) for the build procedure).
+Public packages are intended for npm publication. Private workspace packages and services (`log-dev`, `integration`, `cloudflare-live-proof`, `cloudflare-live-client-proof`, `log-node`, `graph-node`, `directory-node`, `dashboard`) are fixtures, proof harnesses, deployed services, or product surfaces with `private: true` in their `package.json` so they cannot be accidentally published. The `directory-bridge` Rust crate is source-only, its WASM build artifacts ship inside `@atrib/directory` (see [`packages/directory-bridge/README.md`](packages/directory-bridge/README.md) for the build procedure).
 
 ## Hub doc
 
@@ -167,13 +168,13 @@ Read `DESIGN.md` before making visual, UI writing, explorer, website, share-imag
 
 ### Monorepo
 
-This is a TypeScript monorepo with **twenty workspace packages**:
+This is a TypeScript monorepo with **twenty-one workspace packages**:
 - **Seven core public packages** (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`, `@atrib/cli`, `@atrib/mcp-wrap`, `@atrib/directory`, `@atrib/openinference`)
 - **Six cognitive-primitive MCP servers** (`@atrib/emit`, `@atrib/annotate`, `@atrib/revise`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`) - published to npm with binaries
 - **Two private test/example packages** (`@atrib/log-dev`, `@atrib/integration`)
 - **Three private deployed-service packages** (`@atrib/log-node`, `@atrib/graph-node`, `@atrib/directory-node`)
 - **One private product-surface package** (`@atrib/dashboard`)
-- **One private live-proof package** (`@atrib/cloudflare-live-proof`)
+- **Two private live-proof packages** (`@atrib/cloudflare-live-proof`, `@atrib/cloudflare-live-client-proof`)
 
 Plus a Rust crate (`atrib-directory-bridge`, source-only; built artifacts ship inside `@atrib/directory`). Uses pnpm workspaces and turborepo for the TypeScript builds; the Rust bridge is built once via `wasm-pack` and the resulting WASM artifacts are checked into `packages/directory/wasm/`. Three deployable services not on npm: `services/log-node`, `services/graph-node`, `services/directory-node`.
 

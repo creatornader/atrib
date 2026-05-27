@@ -17,7 +17,7 @@ Both integrations are zero-deploy: no extra Worker, no proxy hop, no architectur
 
 In a Worker, import from `@atrib/mcp/worker`. The package root also exports Node-only helpers for stdio proxying, local mirror reads, and host-side instrumentation. The Worker subpath keeps those modules out of the Cloudflare bundle.
 
-`Agent.addMcpServer` uses an internal `MCPClientManager` whose `callTool({ serverId, name, arguments })` method delegates straight to `mcpConnections[serverId].client.callTool(...)` (verified at `agents@0.9.0` `dist/client-BwgM3cRz.js:1444`). The `client` field is publicly exposed on `MCPClientConnection`, so we can wrap it in place after `addMcpServer` runs. Subsequent tool calls go through atrib's interceptor for context propagation, inbound attribution-token consumption, unsigned gap-node tracking, and agent-side fallback transaction emission when the response matches a known commerce close signal.
+`Agent.addMcpServer` uses an internal `MCPClientManager` whose `callTool({ serverId, name, arguments })` method delegates straight to `mcpConnections[serverId].client.callTool(...)` (verified at `agents@0.13.3`). The `client` field is publicly exposed on `MCPClientConnection`, so we can wrap it in place after `addMcpServer` runs. Subsequent tool calls go through atrib's interceptor for context propagation, inbound attribution-token consumption, unsigned gap-node tracking, and agent-side fallback transaction emission when the response matches a known commerce close signal.
 
 See `DECISIONS.md` [D022](../../../../DECISIONS.md#d022-cloudflare-agents-adapter-mcpagent-server-side-is-zero-code-agent-client-side-uses-attributecloudflareagentmcp-not-createatribproxy) for the full architectural rationale.
 
@@ -204,6 +204,24 @@ ai SDK execute callback
 ```
 
 The key insight is that `attributeCloudflareAgentMcp` replaces the `client` field on each `MCPClientConnection` in place. `MCPClientManager.callTool` reads `mcpConnections[serverId].client` at invocation time, so subsequent calls automatically use the wrapped version.
+
+### Live client proof
+
+The runnable proof at [`live-client-proof/`](live-client-proof/) deploys a real Cloudflare `Agent` Durable Object, connects it to an upstream `McpAgent` through `Agent.addMcpServer`, wraps the connection with `attributeCloudflareAgentMcp`, and verifies the fallback transaction record against `log.atrib.dev`.
+
+The proof runner checks that the upstream MCP tool observed atrib trace metadata, that the unwrapped upstream produced an unsigned gap node, and that the agent emitted a signed transaction record with a valid public log inclusion proof.
+
+```text
+pnpm --filter @atrib/cloudflare-live-client-proof proof
+```
+
+Latest clean run:
+
+```text
+context_id: 9918dd8064998e04c07c72635fc496ee
+verified record:
+  22871 sha256:a1a9d277f65b2c1195d5bec6395b60b242cac76cfe826fdbb334ae4f1bbd7f01 transaction
+```
 
 ### What if I need to support a stdio upstream from a Cloudflare Agent?
 

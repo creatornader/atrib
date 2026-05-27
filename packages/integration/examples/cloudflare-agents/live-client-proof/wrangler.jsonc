@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "atrib-cloudflare-live-client-proof",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "UpstreamMcp",
+        "class_name": "UpstreamMcp",
+      },
+      {
+        "name": "ClientProofAgent",
+        "class_name": "ClientProofAgent",
+      },
+      {
+        "name": "CaptureAgent",
+        "class_name": "CaptureAgent",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["UpstreamMcp", "ClientProofAgent", "CaptureAgent"],
+    },
+  ],
+  "secrets": {
+    "required": ["ATRIB_PRIVATE_KEY"],
+  },
+}

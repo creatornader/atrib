@@ -100,7 +100,7 @@ One line. Every successful tool call emits a signed attribution record, propagat
 | --- | --- |
 | Vercel AI SDK + AI Gateway | [`packages/integration/examples/vercel-ai-sdk/`](packages/integration/examples/vercel-ai-sdk/) |
 | Claude Agent SDK (Case A + Case B) | [`packages/integration/examples/claude-agent-sdk/`](packages/integration/examples/claude-agent-sdk/) |
-| Cloudflare Agents | [`packages/integration/examples/cloudflare-agents/`](packages/integration/examples/cloudflare-agents/) including [`live-worker-proof`](packages/integration/examples/cloudflare-agents/live-worker-proof/) |
+| Cloudflare Agents | [`packages/integration/examples/cloudflare-agents/`](packages/integration/examples/cloudflare-agents/) including [`live-worker-proof`](packages/integration/examples/cloudflare-agents/live-worker-proof/) and [`live-client-proof`](packages/integration/examples/cloudflare-agents/live-client-proof/) |
 | LangChain JS | [`packages/integration/examples/langchain-js/`](packages/integration/examples/langchain-js/) |
 | End-to-end demo | [`packages/integration/examples/end-to-end/`](packages/integration/examples/end-to-end/) |
 

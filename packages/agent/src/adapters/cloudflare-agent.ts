@@ -16,10 +16,10 @@
  *   2. **Client-side `Agent.addMcpServer`**. your `Agent` (or `AIChatAgent`)
  *      connects to one or more upstream MCP servers via `this.addMcpServer(name, url)`.
  *      Cloudflare's `MCPClientManager` constructs an `@modelcontextprotocol/sdk`
- *      Client per upstream and stores it on `agent.mcp.mcpConnections[name].client`.
+ *      Client per upstream and stores it on `agent.mcp.mcpConnections[id].client`.
  *      Tool invocations flow through `MCPClientManager.callTool()` which
- *      delegates straight to `mcpConnections[serverId].client.callTool(...)`
- *      (verified against `agents@0.9.0` `dist/client-BwgM3cRz.js` line 1444).
+ *      delegates straight to `mcpConnections[serverId].client.callTool(...)`.
+ *      Verified against `agents@0.13.3`.
  *
  * This file is the helper for surface (2). It walks `agent.mcp.mcpConnections`
  * after the agent has finished registering its upstream MCP servers and
@@ -102,6 +102,11 @@ export interface CloudflareAgentLike {
         url?: URL | string
       }
     >
+    listServers?: () => Array<{
+      id: string
+      name: string
+      server_url?: string | null
+    }>
   }
 }
 
@@ -111,10 +116,11 @@ export interface AttributeCloudflareAgentMcpOptions {
   interceptor: ToolCallInterceptor
 
   /**
-   * Optional override map of server name → canonical serverUrl. If a server
-   * name appears here, the helper passes that URL as the `serverUrl` option
-   * to `wrapMcpClient`. If a server name is missing from this map, the helper
-   * derives serverUrl from the connection's own `url.origin`.
+   * Optional override map of server id or server name → canonical serverUrl.
+   * If a key appears here, the helper passes that URL as the `serverUrl`
+   * option to `wrapMcpClient`. If a key is missing from this map, the helper
+   * derives serverUrl from Cloudflare's stored server row, then from the
+   * connection's own `url`.
    *
    * Override when the upstream URL the agent connects to is not the canonical
    * URL you want to record in attribution records (e.g. you're hitting a
@@ -146,10 +152,30 @@ export function attributeCloudflareAgentMcp(
 
   let wrapped = 0
 
-  for (const [name, conn] of Object.entries(connections)) {
+  const serversById = new Map<string, { name: string; server_url: string | null | undefined }>()
+  try {
+    const servers = agent.mcp.listServers?.()
+    if (Array.isArray(servers)) {
+      for (const server of servers) {
+        if (typeof server.id === 'string') {
+          serversById.set(server.id, {
+            name: server.name,
+            server_url: server.server_url,
+          })
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(
+      'atrib: failed to read Cloudflare MCP server list, falling back to connection URLs',
+      err,
+    )
+  }
+
+  for (const [connectionId, conn] of Object.entries(connections)) {
     try {
       if (!conn || !isMinimalMcpClient(conn.client)) {
-        console.warn(`atrib: connection '${name}' has no client field, skipping`)
+        console.warn(`atrib: connection '${connectionId}' has no client field, skipping`)
         continue
       }
 
@@ -158,12 +184,18 @@ export function attributeCloudflareAgentMcp(
         continue
       }
 
-      // Derive serverUrl: explicit override > connection.url.origin > undefined
-      let serverUrl: string | undefined = options.serverUrls?.[name]
+      // Derive serverUrl:
+      // explicit override by id > explicit override by server name >
+      // Cloudflare stored server row > connection URL > undefined.
+      const server = serversById.get(connectionId)
+      let serverUrl: string | undefined =
+        options.serverUrls?.[connectionId] ??
+        (server?.name ? options.serverUrls?.[server.name] : undefined) ??
+        (typeof server?.server_url === 'string' ? server.server_url : undefined)
       if (!serverUrl && conn.url) {
         try {
           const u = conn.url instanceof URL ? conn.url : new URL(conn.url)
-          serverUrl = u.origin
+          serverUrl = u.href
         } catch {
           // URL parse failed; let wrapMcpClient fall back to no serverUrl
         }
@@ -189,7 +221,7 @@ export function attributeCloudflareAgentMcp(
     } catch (err) {
       // §5.8 degradation contract: never let a single bad connection break
       // the whole agent. Log and continue.
-      console.warn(`atrib: failed to wrap MCP connection '${name}', skipping:`, err)
+      console.warn(`atrib: failed to wrap MCP connection '${connectionId}', skipping:`, err)
     }
   }
 
