@@ -5,7 +5,7 @@ This example shows how to add atrib attribution to a Cloudflare-deployed applica
 | Surface                                | What it does                                                                                         | atrib integration                                                                                                                                                                     |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`McpAgent`** (server-side)           | Builds an MCP server that runs as a Durable Object on Cloudflare. You define tools on `this.server`. | One-line `atrib(this.server, options)` from `@atrib/mcp`. Same primitive that works for Claude Agent SDK Case A.                                                                      |
-| **`Agent.addMcpServer`** (client-side) | Your Agent connects out to one or more upstream MCP servers via HTTP.                                | One-line `attributeCloudflareAgentMcp(this, { interceptor })` from `@atrib/agent`. Wraps each connection's underlying `Client` so subsequent tool calls flow through the interceptor. |
+| **`Agent.addMcpServer`** (client-side) | Your Agent connects out to one or more upstream MCP servers via HTTP.                                | One-line `attributeCloudflareAgentMcp(this, { interceptor })` from `@atrib/agent`. Wraps each connection's underlying `Client` so calls carry atrib/W3C context, consume upstream tokens, record gap nodes, and emit fallback transaction records when commerce closes. |
 
 Both integrations are zero-deploy: no extra Worker, no proxy hop, no architectural change to your app.
 
@@ -15,7 +15,7 @@ Both integrations are zero-deploy: no extra Worker, no proxy hop, no architectur
 
 `McpAgent` exposes `this.server` as a real `McpServer` from `@modelcontextprotocol/sdk`; the same class atrib's existing middleware wraps. When `McpAgent.serve()` routes a request to your Durable Object, the underlying call lands at `McpServer.server.setRequestHandler(CallToolRequestSchema, ...)`, which is exactly the chokepoint our middleware monkey-patches.
 
-`Agent.addMcpServer` uses an internal `MCPClientManager` whose `callTool({ serverId, name, arguments })` method delegates straight to `mcpConnections[serverId].client.callTool(...)` (verified at `agents@0.9.0` `dist/client-BwgM3cRz.js:1444`). The `client` field is publicly exposed on `MCPClientConnection`, so we can wrap it in place after `addMcpServer` runs and every subsequent tool call goes through atrib's interceptor.
+`Agent.addMcpServer` uses an internal `MCPClientManager` whose `callTool({ serverId, name, arguments })` method delegates straight to `mcpConnections[serverId].client.callTool(...)` (verified at `agents@0.9.0` `dist/client-BwgM3cRz.js:1444`). The `client` field is publicly exposed on `MCPClientConnection`, so we can wrap it in place after `addMcpServer` runs. Subsequent tool calls go through atrib's interceptor for context propagation, inbound attribution-token consumption, unsigned gap-node tracking, and agent-side fallback transaction emission when the response matches a known commerce close signal.
 
 See `DECISIONS.md` [D022](../../../../DECISIONS.md#d022-cloudflare-agents-adapter-mcpagent-server-side-is-zero-code-agent-client-side-uses-attributecloudflareagentmcp-not-createatribproxy) for the full architectural rationale.
 
@@ -144,8 +144,10 @@ export class WeatherChatAgent extends Agent<Env> {
     // 2. ★ ATRIB: one line to wrap every connected MCP client ★
     // After this call, every tool invoked via this.mcp.getAITools() goes
     // through the interceptor's onBeforeToolCall / onAfterToolResponse
-    // lifecycle. The wrap is idempotent. Safe to call again if you add
-    // more servers later.
+    // lifecycle. Ordinary tool_call records come from the upstream MCP
+    // server when it is wrapped with @atrib/mcp; this client-side wrapper
+    // emits fallback transaction records when commerce closes.
+    // The wrap is idempotent. Safe to call again if you add more servers later.
     const wrappedCount = attributeCloudflareAgentMcp(this, {
       interceptor: this.interceptor,
     })
@@ -210,11 +212,13 @@ If `ATRIB_PRIVATE_KEY` is omitted, atrib operates in pass-through mode with a co
 After deploying either example:
 
 - **Surface 1 (McpAgent)**: every successful `tools/call` to your Worker emits a signed atrib record. Records share a `context_id` per MCP session and chain via `chain_root` references. Each Durable Object instance (per-session) constructs its own submission queue; that's per the spec's session model.
-- **Surface 2 (Agent)**: every tool call your Agent makes to an upstream MCP server emits a signed atrib record on the agent side. The upstream's response is unchanged from the agent's perspective. If the upstream is also atrib-instrumented (using `@atrib/mcp`), you'll get records from both sides forming a verifiable chain.
+- **Surface 2 (Agent)**: every tool call your Agent makes to an upstream MCP server carries atrib/W3C context and can consume upstream attribution tokens. If the upstream is atrib-instrumented with `@atrib/mcp`, ordinary tool calls are signed upstream and form a verifiable chain with the agent's context. If the upstream is not wrapped, the agent records an unsigned gap node locally, and it emits a signed fallback `transaction` record when the response matches ACP, UCP, x402, MPP, AP2, or the checkout heuristic. The upstream response is unchanged from the agent's perspective.
 
 If you don't see records, check:
 
 1. `creatorKey` is set and is a valid 32-byte base64url string
 2. `serverUrl` is set on the server side (it's required for unambiguous content_id derivation)
 3. `merchantDomain` and `serverUrls` are set on the agent side (they drive policy negotiation in `onBeforeToolCall`)
-4. `logEndpoint` is reachable from the Worker runtime (Cloudflare's outbound fetch is allowed by default but check any firewall rules)
+4. For ordinary upstream tool-call records, the upstream MCP server is wrapped with `@atrib/mcp`
+5. For agent-side fallback records, the response shape matches one of the transaction detectors in `@atrib/agent`
+6. `logEndpoint` is reachable from the Worker runtime (Cloudflare's outbound fetch is allowed by default but check any firewall rules)
