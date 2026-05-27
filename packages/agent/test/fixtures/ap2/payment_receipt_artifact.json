@@ -1,0 +1,34 @@
+{
+  "kind": "task",
+  "id": "task-ap2-payment-receipt",
+  "status": {
+    "state": "completed",
+    "message": {
+      "kind": "message",
+      "role": "agent",
+      "parts": [{ "kind": "text", "text": "Payment receipt returned." }]
+    }
+  },
+  "artifacts": [
+    {
+      "index": 0,
+      "parts": [
+        {
+          "kind": "data",
+          "data": {
+            "ap2.PaymentReceipt": {
+              "status": "Success",
+              "iss": "example-pisp.com",
+              "iat": 1772020800,
+              "reference": "closed-payment-mandate-hash",
+              "payment_id": "pay_123",
+              "psp_confirmation_id": "psp_123",
+              "network_confirmation_id": "net_123"
+            }
+          }
+        }
+      ],
+      "lastChunk": true
+    }
+  ]
+}

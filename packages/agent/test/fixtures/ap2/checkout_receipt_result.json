@@ -1,0 +1,5 @@
+{
+  "status": "success",
+  "order_id": "order_123",
+  "checkout_receipt": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdGF0dXMiOiJTdWNjZXNzIiwib3JkZXJfaWQiOiJvcmRlcl8xMjMifQ.signature"
+}

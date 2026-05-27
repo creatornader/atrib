@@ -162,6 +162,55 @@ describe('MPP detection corpus', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('AP2 detection corpus', () => {
+  it('detects AP2 v0.2 PaymentReceipt object in an A2A artifact', () => {
+    const response = {
+      artifacts: [
+        {
+          parts: [
+            {
+              kind: 'data',
+              data: {
+                'ap2.PaymentReceipt': {
+                  status: 'Success',
+                  iss: 'example-pisp.com',
+                  iat: 1772020800,
+                  reference: 'closed-payment-mandate-hash',
+                  payment_id: 'pay_123',
+                  psp_confirmation_id: 'psp_123',
+                  network_confirmation_id: 'net_123',
+                },
+              },
+            },
+          ],
+        },
+      ],
+    }
+    const result = detectTransaction('agent_payment', response)
+    expect(result.detected).toBe(true)
+    expect(result.protocol).toBe('AP2')
+  })
+
+  it('detects AP2 v0.2 payment receipt JWT result', () => {
+    const response = {
+      status: 'success',
+      payment_receipt: 'eyJhbGciOiJFUzI1NiJ9.eyJzdGF0dXMiOiJTdWNjZXNzIn0.signature',
+    }
+    const result = detectTransaction('agent_payment', response)
+    expect(result.detected).toBe(true)
+    expect(result.protocol).toBe('AP2')
+  })
+
+  it('detects AP2 v0.2 checkout receipt JWT result', () => {
+    const response = {
+      status: 'success',
+      order_id: 'order_123',
+      checkout_receipt: 'eyJhbGciOiJFUzI1NiJ9.eyJzdGF0dXMiOiJTdWNjZXNzIn0.signature',
+    }
+    const result = detectTransaction('agent_checkout', response)
+    expect(result.detected).toBe(true)
+    expect(result.protocol).toBe('AP2')
+  })
+
   it('detects PaymentMandate in A2A DataPart', () => {
     const response = {
       parts: [
@@ -190,6 +239,36 @@ describe('AP2 detection corpus', () => {
       ],
     }
     const result = detectTransaction('agent_cart', response)
+    expect(result.detected).toBe(false)
+  })
+
+  it('does not detect AP2 v0.2 mandate vct payloads as transactions', () => {
+    const response = {
+      issuer_signed_jwt: {
+        payload: {
+          vct: 'mandate.payment.1',
+          transaction_id: 'checkout_hash_123',
+        },
+      },
+      disclosures: [],
+    }
+    const result = detectTransaction('agent_mandate', response)
+    expect(result.detected).toBe(false)
+  })
+
+  it('does not detect AP2 v0.2 error receipts', () => {
+    const response = {
+      'ap2.PaymentReceipt': {
+        status: 'Error',
+        iss: 'example-pisp.com',
+        iat: 1772020800,
+        reference: 'closed-payment-mandate-hash',
+        payment_id: 'pay_123',
+        error: 'invalid_mandate',
+        error_description: 'The mandate did not authorize this payment.',
+      },
+    }
+    const result = detectTransaction('agent_payment', response)
     expect(result.detected).toBe(false)
   })
 })

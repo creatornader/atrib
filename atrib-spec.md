@@ -1057,13 +1057,69 @@ Content-Type: application/json
 
 #### 1.7.5 AP2 and a2a-x402
 
-AP2 (Agent Payments Protocol) is Google's open protocol at `github.com/google-agentic-commerce/ap2`, version v0.1, extension URI `https://github.com/google-agentic-commerce/ap2/tree/v0.1`. **AP2 v0.1 does NOT use W3C Verifiable Credentials.** Earlier drafts of this specification assumed it would; that assumption was incorrect. The real wire format is an A2A (Agent2Agent) Message with a DataPart whose `data` object contains the key `ap2.mandates.PaymentMandate`.
+AP2 (Agentic Payment Protocol) is Google's open protocol at `github.com/google-agentic-commerce/AP2`, version v0.2. Current AP2 uses Checkout Mandates and Payment Mandates for authorization, then returns signed Checkout Receipts and Payment Receipts when a verifier accepts or rejects the mandate. The transaction event hook is the successful receipt, not the mandate itself.
 
-The PaymentMandate is the transaction event. (`IntentMandate` and `CartMandate` represent earlier funnel stages, intent capture and cart commitment respectively, and MUST NOT be detected as transaction events.) Implementations SHOULD embed the `context_id` in the agent extension fields where supported by the host A2A implementation; until AP2 standardizes a metadata field for it, the `context_id` MUST also travel via `params._meta.atrib` per [§1.5.2](#152-http-transport-tracestate), [§1.5.3](#153-http-fallback-x-atrib-chain), and [§1.5.3.1](#1531-context-id-header-x-atrib-context).
+Detection MUST fire on either of these AP2 v0.2 success signals:
+
+1. A Payment Receipt with `status: "Success"` and the AP2 payment receipt fields (`iss`, `iat`, `reference`, `payment_id`, `psp_confirmation_id`, `network_confirmation_id`).
+2. A Checkout Receipt with `status: "Success"` and the AP2 checkout receipt fields (`iss`, `iat`, `reference`, `order_id`).
+
+When the signed receipt is returned as a compact JWT rather than a decoded object, implementations MAY detect the AP2 sample result envelope: `status: "success"` plus a `payment_receipt` or `checkout_receipt` compact JWT field. Detection does not need to decode the JWT. Verification and content extraction belong to a verifier-side evidence stage, not the detector.
+
+Implementations MUST NOT detect AP2 mandate-only payloads as transaction events. This includes closed mandate `vct` values such as `mandate.payment.1` and `mandate.checkout.1`, and open mandate values such as `mandate.payment.open.1` and `mandate.checkout.open.1`. Mandates authorize a future action. Receipts prove the verifier's result.
+
+Verifier-side AP2 / Verifiable Intent evidence checks SHOULD run off the middleware critical path. A verifier that receives AP2 and VI evidence SHOULD check:
+
+1. receipt success and `reference` binding to the closed mandate serialization or an explicit closed-mandate hash;
+2. VI L1 / L2 / L3 SD-JWT signatures, using trusted issuer keys for L1, the L1 `cnf.jwk` for L2, and delegated L2 agent keys for L3;
+3. `sd_hash` links across the delegation chain;
+4. SD-JWT disclosure digest links through `_sd` or `delegate_payload`;
+5. autonomous-mode consistency: the open checkout and open payment mandates bind the same `cnf.jwk`;
+6. final checkout/payment binding: `checkout_hash` matches `checkout_jwt`, and PaymentMandate `transaction_id` matches the checkout hash.
+
+Failure in this evidence stage MUST NOT undo or block the transaction detector. It is a verifier signal for settlement, audit, and dispute workflows. The reference TypeScript surface is `@atrib/verify` `verifyAp2ViEvidence()`; see [§5.5.4](#554-ap2--verifiable-intent-evidence-checks) and [D089](DECISIONS.md#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify).
+
+Implementations SHOULD embed the `context_id` in the agent protocol envelope where the host supports metadata. Until AP2 standardizes an atrib-specific metadata field, the `context_id` MUST also travel via `params._meta.atrib` per [§1.5.2](#152-http-transport-tracestate), [§1.5.3](#153-http-fallback-x-atrib-chain), and [§1.5.3.1](#1531-context-id-header-x-atrib-context).
 
 ```jsonc
-// AP2 v0.1 PaymentMandate Message (A2A DataPart shape)
-// Source: github.com/google-agentic-commerce/ap2 docs/specification.md
+// AP2 v0.2 PaymentReceipt artifact
+// Source: google-agentic-commerce/AP2 code/sdk/schemas/ap2/payment_receipt.json
+{
+  "kind": "task",
+  "artifacts": [
+    {
+      "parts": [
+        {
+          "kind": "data",
+          "data": {
+            "ap2.PaymentReceipt": {
+              "status": "Success", // detection signal
+              "iss": "example-pisp.com",
+              "iat": 1772020800,
+              "reference": "closed-payment-mandate-hash",
+              "payment_id": "pay_123",
+              "psp_confirmation_id": "psp_123",
+              "network_confirmation_id": "net_123"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+
+// AP2 v0.2 sample result envelope with a signed receipt JWT
+{
+  "status": "success", // first detection signal
+  "order_id": "order_123",
+  "checkout_receipt": "<compact signed receipt JWT>" // second detection signal
+}
+```
+
+Older AP2 v0.1 deployments used an A2A (Agent2Agent) Message with a DataPart whose `data` object contains the key `ap2.mandates.PaymentMandate`. Implementations MAY keep this compatibility fallback. If they do, they MUST NOT detect `IntentMandate` or `CartMandate`.
+
+```jsonc
+// AP2 v0.1 compatibility fallback
 {
   "messageId": "b5951b1a-8d5b-4ad3-a06f-92bf74e76589",
   "contextId": "sample-payment-context",
@@ -1092,7 +1148,7 @@ The PaymentMandate is the transaction event. (`IntentMandate` and `CartMandate` 
 }
 ```
 
-**a2a-x402** (`github.com/google-agentic-commerce/a2a-x402`) is the AP2 extension for crypto payments via x402. When the merchant agent settles a payment on-chain it returns an A2A task whose `status.message.metadata` carries `x402.payment.status: "payment-completed"` and a `x402.payment.receipts` array with at least one entry where `success: true`. atrib reports this as `protocol: 'AP2'` because a2a-x402 IS the AP2 crypto path; it is not a separate protocol.
+**a2a-x402** (`github.com/google-agentic-commerce/a2a-x402`) is the AP2 extension for crypto payments via x402. When the merchant agent settles a payment on-chain it returns an A2A task whose `status.message.metadata` carries `x402.payment.status: "payment-completed"` and a `x402.payment.receipts` array with at least one entry where `success: true`. atrib reports this as `protocol: 'AP2'` because a2a-x402 is the AP2 crypto path; it is not a separate protocol.
 
 ```jsonc
 // a2a-x402 payment-completed task message
@@ -1142,7 +1198,7 @@ For backward compatibility with research forks of AP2 that may have implemented 
 }
 ```
 
-Implementations MAY skip the legacy fallback if they target only AP2 v0.1 deployments.
+Implementations MAY skip the v0.1 and legacy VC fallbacks if they target only AP2 v0.2 deployments.
 
 #### 1.7.6 Cross-attestation requirement for transaction records
 
@@ -1171,7 +1227,7 @@ The legacy top-level `signature` field is OPTIONAL on transaction records and SH
 
 **Minimum required signers.** atrib's normative minimum is 2: typically the agent that initiated the transaction and the counterparty (the merchant or settlement party). Records with fewer than 2 verified signers MUST be flagged by verifiers with `cross_attestation_missing: true`.
 
-**Counterparty key discovery.** Counterparty keys are discovered out-of-band: via the [§6](#6-key-directory) directory lookup of the merchant's published identity, via payment-protocol-specific channels (x402 facilitator metadata, ACP order envelope, AP2 PaymentMandate signer field, and so on), or via consumer-arranged key exchange. atrib does not specify the discovery mechanism; the spec only requires the keys be present in the record.
+**Counterparty key discovery.** Counterparty keys are discovered out-of-band: via the [§6](#6-key-directory) directory lookup of the merchant's published identity, via payment-protocol-specific channels (x402 facilitator metadata, ACP order envelope, AP2 receipt issuer or verifier key material, and so on), or via consumer-arranged key exchange. atrib does not specify the discovery mechanism; the spec only requires the keys be present in the record.
 
 **Other event types unaffected.** This requirement applies only to `transaction`. tool_call, observation, and extension records continue to use single-signer signatures via the top-level `signature` field.
 
@@ -3290,6 +3346,7 @@ Contents
   - [5.5.1 Init interface](#551-init-interface-2)
   - [5.5.2 Verifying a settlement recommendation](#552-verifying-a-settlement-recommendation)
   - [5.5.3 Post-hoc calculation (no agent SDK)](#553-post-hoc-calculation-no-agent-sdk)
+  - [5.5.4 AP2 / Verifiable Intent evidence checks](#554-ap2--verifiable-intent-evidence-checks)
 - [5.6 Key Management](#56-key-management)
   - [5.6.1 Key generation](#561-key-generation)
   - [5.6.2 Environment variable convention](#562-environment-variable-convention)
@@ -3621,8 +3678,16 @@ function detectTransaction(toolName, response, headers):
   if (lower['payment-receipt']):
     return { detected: true, protocol: 'MPP' }
 
-  // AP2 v0.1: PaymentMandate Message inside an A2A DataPart.
-  // Source: github.com/google-agentic-commerce/ap2 docs/specification.md
+  // AP2 v0.2: successful CheckoutReceipt or PaymentReceipt.
+  // Source: google-agentic-commerce/AP2 receipt schemas and sample agents.
+  // Mandate-only payloads are not transaction events.
+  if (containsSuccessfulAp2PaymentReceipt(response)
+      || containsSuccessfulAp2CheckoutReceipt(response)
+      || hasAp2SuccessEnvelopeWithReceiptJwt(response)):
+    return { detected: true, protocol: 'AP2' }
+
+  // AP2 v0.1 compatibility: PaymentMandate Message inside an A2A DataPart.
+  // Source: github.com/google-agentic-commerce/ap2 docs/specification.md v0.1
   if (Array.isArray(response?.parts)):
     for (part in response.parts):
       if (typeof part?.data === 'object'
@@ -3668,7 +3733,11 @@ When a transaction is detected, the middleware emits a `transaction` attribution
 
 - **ACP / UCP:** use `order.permalink_url` from the completion response as the server_url, with tool_name `"checkout"`. If the response is an `order_create` / `order_update` webhook event, use `data.permalink_url`. If neither is available (e.g., the merchant returned a minimal completion without an order URL), fall back to the MCP server URL of the tool that was called.
 
-- **x402 / MPP:** use the HTTP endpoint URL that returned the `Payment-Receipt` header as the server_url, with tool_name `"checkout"`.
+- **x402:** use the HTTP endpoint URL that returned the `PAYMENT-RESPONSE` header as the server_url, with tool_name `"checkout"`.
+
+- **MPP:** use the HTTP endpoint URL that returned the `Payment-Receipt` header as the server_url, with tool_name `"checkout"`.
+
+- **AP2 / a2a-x402:** use the MCP server URL of the tool that returned the successful AP2 receipt as the server_url, with tool_name `"checkout"`, unless a higher-fidelity AP2 adapter has already mapped the receipt's `order_id` or `payment_id` to a merchant checkout URL.
 
 - **Heuristic:** use the MCP server URL of the tool that was called as the server_url, with the actual tool_name. This is the weakest case; the content_id identifies the tool, not the checkout endpoint specifically.
 
@@ -3757,6 +3826,58 @@ const recommendation = await verifier.calculate({
 ```
 
 The verifier fetches the graph for the given `context_id`, applies the specified policy, runs the algorithm, and returns a signed recommendation. This path corresponds directly to Rule 7 of [§4.5.2](#452-conflict-resolution).
+
+#### 5.5.4 AP2 / Verifiable Intent Evidence Checks
+
+`@atrib/verify` also exposes a local AP2 / Verifiable Intent evidence checker. This is not part of the [§4.6](#46-the-calculation-algorithm) settlement calculation and does not change graph derivation. It is a verifier-side signal for merchants, auditors, and dispute tooling that want to inspect AP2 authorization evidence after a transaction has been detected.
+
+```
+import { verifyAp2ViEvidence } from '@atrib/verify'
+
+const result = verifyAp2ViEvidence({
+  trustedIssuerKeys: [issuerJwk],
+  ap2: {
+    paymentReceipt,
+    checkoutReceipt,
+    closedPaymentMandate,
+    closedCheckoutMandate,
+  },
+  vi: {
+    credentials: [
+      { layer: 'L1', sdJwt: issuerCredential },
+      { layer: 'L2', sdJwt: userMandate },
+      { layer: 'L3_PAYMENT', sdJwt: agentPaymentMandate, parentPresentation },
+      { layer: 'L3_CHECKOUT', sdJwt: agentCheckoutMandate, parentPresentation },
+    ],
+  },
+})
+```
+
+The result shape is:
+
+```
+{
+  valid: true,
+  transactionAccepted: true,
+  ap2: {
+    paymentReceipt: { success: true, referenceOk: true, missingFields: [] },
+    checkoutReceipt: { success: true, referenceOk: true, missingFields: [] },
+  },
+  vi: {
+    mode: 'immediate' | 'autonomous' | 'unknown',
+    credentials: [
+      { layer: 'L1', signature: { status: 'verified' }, sdHashOk: true },
+      { layer: 'L2', signature: { status: 'verified' }, disclosuresOk: true },
+    ],
+    delegationOk: true,
+    checkoutPaymentBindingOk: true,
+  },
+  errors: [],
+  warnings: [],
+}
+```
+
+The default signature policy is `require`: missing keys or invalid signatures make `valid` false while still returning a structured result. Callers that only need structural triage MAY pass `signaturePolicy: "best-effort"`, in which case missing-key checks become warnings.
 
 ---
 
@@ -4232,7 +4353,7 @@ A verifier that has resolved a record's `creator_key` to an identity claim with 
 2. Check the record's content against the envelope:
    - If `tool_names` is present, the record's `tool_name` MUST be in the list (for tool_call records).
    - If `event_types` is present, the record's `event_type` URI MUST be in the list.
-   - For transaction records, if `max_amount` and/or `counterparties` are present, the verifier MUST resolve the transaction amount and counterparty from the protocol-specific transaction event the record commits to (per [§1.7](#17-transaction-event-hooks)'s payment-protocol definitions: ACP order envelope, UCP envelope, x402 PAYMENT-RESPONSE header, MPP Payment-Receipt, AP2 PaymentMandate, a2a-x402 receipts). The resolved amount MUST NOT exceed `max_amount`; the resolved counterparty MUST be in the `counterparties` allowlist. When the protocol-specific event is not available out-of-band, the verifier MUST flag the check as `unresolvable: true` rather than passing or failing silently.
+   - For transaction records, if `max_amount` and/or `counterparties` are present, the verifier MUST resolve the transaction amount and counterparty from the protocol-specific transaction event the record commits to (per [§1.7](#17-transaction-event-hooks)'s payment-protocol definitions: ACP order envelope, UCP envelope, x402 PAYMENT-RESPONSE header, MPP Payment-Receipt, AP2 CheckoutReceipt or PaymentReceipt, a2a-x402 receipts). The resolved amount MUST NOT exceed `max_amount`; the resolved counterparty MUST be in the `counterparties` allowlist. When the protocol-specific event is not available out-of-band, the verifier MUST flag the check as `unresolvable: true` rather than passing or failing silently.
    - If `expires_at` is present and the record's timestamp is after it, the envelope is expired (treated as having no constraint and flagged separately).
 3. Surface the result as `capability_check: { envelope: CapabilityEnvelope | null, in_envelope: bool, mismatches: string[], unresolvable: bool }` on the verification output.
 
@@ -4836,7 +4957,7 @@ A runtime builder picks based on:
 - **[UCP]** Universal Commerce Protocol, version 2026-01-11, https://github.com/universal-commerce-protocol/ucp
 - **[x402]** x402 HTTP Payment Protocol, https://x402.org (v2, April 2026)
 - **[MPP]** Machine Payments Protocol, IETF draft-ryan-httpauth-payment-01, March 2026, https://mpp.dev
-- **[AP2]** Agent Payments Protocol v0.1, https://github.com/google-agentic-commerce/ap2
+- **[AP2]** Agentic Payment Protocol v0.2, https://github.com/google-agentic-commerce/AP2
 - **[a2a-x402]** A2A Payment Extension v0.1, https://github.com/google-agentic-commerce/a2a-x402
 - **[MCP]** Model Context Protocol Specification, version 2025-11-25, https://modelcontextprotocol.io/specification/2025-11-25/
 - **[Tessera]** Transparency-dev Tessera, https://github.com/transparency-dev/tessera

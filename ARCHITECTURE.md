@@ -176,10 +176,12 @@ atrib detects transaction events from six agent commerce protocols simultaneousl
 | UCP                     | Same as ACP + top-level `ucp.version` envelope            | Checkout completion response |
 | x402 (Coinbase)         | `PAYMENT-RESPONSE` HTTP header                            | Tool call response headers   |
 | MPP (Tempo Labs/Stripe) | `Payment-Receipt` HTTP header                             | Tool call response headers   |
-| AP2 (Google)            | A2A DataPart with `ap2.mandates.PaymentMandate`           | A2A task response            |
+| AP2 (Google)            | Successful CheckoutReceipt or PaymentReceipt              | A2A task or tool response    |
 | a2a-x402 (Google)       | `metadata["x402.payment.status"] === "payment-completed"` | A2A task metadata            |
 
 The design principle: detect, don't implement. atrib pattern-matches on tool call responses to identify when a transaction occurred. It doesn't initiate payments, move money, hold funds, or enforce settlement. The detection logic for all six protocols is in `@atrib/agent`'s `transaction.ts` and runs simultaneously. You don't choose a payment protocol at install time.
+
+AP2 has a second verifier-side surface. `@atrib/agent` treats successful CheckoutReceipt or PaymentReceipt as the transaction close signal. `@atrib/verify` can then inspect AP2 / Verifiable Intent evidence after detection: receipt references, VI SD-JWT signatures, `sd_hash` links, disclosure digests, delegated agent keys, and checkout/payment hash binding. That keeps authorization checks out of the detector while still giving merchants dispute-grade evidence.
 
 Why this matters:
 
@@ -342,7 +344,7 @@ Versioned URL paths (`/v1/checkpoint`, `/v6/lookup/<key>`) are immutable: once a
   └── Framework adapters: one per supported MCP framework
 
 @atrib/verify         Merchant verification library
-  └── Runs §4.6 calculation locally, verifies settlement recommendations
+  └── Runs §4.6 calculation locally, verifies settlement recommendations and AP2 / VI evidence
 
 @atrib/log-dev        In-memory dev log stub (private, never deploy)
   └── Implements §2.6 submission API for local testing
