@@ -1,0 +1,26 @@
+{
+  "name": "@atrib/cloudflare-live-client-proof",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Live Cloudflare Agent.addMcpServer proof for atrib client attribution.",
+  "scripts": {
+    "build": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/verify build && pnpm --filter @atrib/agent build && tsc --noEmit",
+    "deploy": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/verify build && pnpm --filter @atrib/agent build && wrangler deploy --secrets-file .tmp/secrets.json",
+    "proof": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/verify build && pnpm --filter @atrib/agent build && tsx scripts/run-live-client-proof.ts"
+  },
+  "dependencies": {
+    "@atrib/agent": "workspace:*",
+    "@atrib/mcp": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "agents": "^0.13.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260527.1",
+    "@types/node": "^25.9.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.95.0"
+  }
+}

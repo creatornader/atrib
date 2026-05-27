@@ -7,8 +7,9 @@
  * runtime, etc.). Instead we construct a minimal structural mock that mirrors
  * the public shape we depend on:
  *
- *   agent.mcp.mcpConnections[name].client      . @modelcontextprotocol/sdk Client
- *   agent.mcp.mcpConnections[name].url         . URL
+ *   agent.mcp.mcpConnections[id].client        . @modelcontextprotocol/sdk Client
+ *   agent.mcp.mcpConnections[id].url           . URL
+ *   agent.mcp.listServers()                    . stored id/name/server_url rows
  *
  * The mock client implements the MinimalMcpClient interface (just `callTool`).
  * After the helper runs, we invoke the wrapped client's callTool and verify
@@ -24,11 +25,11 @@
  *   6. Mid-loop failures (e.g. a connection that throws on access) don't
  *      break attribution for OTHER connections
  *
- * Verified against `agents@0.9.0` shape:
+ * Verified against `agents@0.13.3` shape:
  *   - `MCPClientManager.callTool({ serverId, name, arguments })` delegates
- *     to `mcpConnections[serverId].client.callTool(...)` (dist/client-BwgM3cRz.js:1444)
+ *     to `mcpConnections[serverId].client.callTool(...)`
  *   - `MCPClientConnection.client` is a public field
- *     (dist/index-BtHngIIG.d.ts:496)
+ *   - `MCPClientManager.listServers()` exposes the persisted server rows
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -38,6 +39,7 @@ import {
   type CloudflareAgentLike,
 } from '../src/adapters/cloudflare-agent.js'
 import type { MinimalMcpClient } from '../src/adapters/mcp-client.js'
+import type { ToolCallInterceptor } from '../src/middleware.js'
 import { base64urlEncode } from '@atrib/mcp'
 
 const AGENT_KEY = base64urlEncode(new Uint8Array(32).fill(99))
@@ -61,11 +63,31 @@ function makeFakeClient(onCall: (params: unknown) => unknown): MinimalMcpClient 
 /** Build a structural Cloudflare Agent mock with the named connections. */
 function makeFakeAgent(
   connections: Record<string, { client: MinimalMcpClient; url?: URL | string }>,
+  servers: Array<{ id: string; name: string; server_url?: string | null }> = [],
 ): CloudflareAgentLike {
   return {
     mcp: {
       mcpConnections: connections,
+      listServers: () => servers,
     },
+  }
+}
+
+function makeCapturingInterceptor(seenServerUrls: string[]): ToolCallInterceptor {
+  return {
+    async onBeforeToolCall(_toolName, meta) {
+      return meta
+    },
+    onAfterToolResponse(_toolName, _response, _responseMeta, options) {
+      seenServerUrls.push(options?.serverUrl ?? '')
+    },
+    getSessionPolicyRecord() {
+      return null
+    },
+    getGapNodes() {
+      return []
+    },
+    async flush() {},
   }
 }
 
@@ -247,5 +269,70 @@ describe('attributeCloudflareAgentMcp', () => {
     expect(typeof params._meta?.traceparent).toBe('string')
 
     await interceptor.flush()
+  })
+
+  it('accepts server name overrides for generated Cloudflare connection ids', async () => {
+    const seenServerUrls: string[] = []
+    const agent = makeFakeAgent(
+      {
+        abc123: {
+          client: makeFakeClient(() => ({
+            content: [{ type: 'text', text: 'ok' }],
+          })),
+          url: new URL('https://fallback.example.com/mcp'),
+        },
+      },
+      [
+        {
+          id: 'abc123',
+          name: 'checkout',
+          server_url: 'https://staging.example.com/upstream-mcp',
+        },
+      ],
+    )
+
+    attributeCloudflareAgentMcp(agent, {
+      interceptor: makeCapturingInterceptor(seenServerUrls),
+      serverUrls: { checkout: 'https://prod.example.com/checkout-mcp' },
+    })
+
+    await agent.mcp.mcpConnections.abc123!.client.callTool({
+      name: 'complete_checkout',
+      arguments: {},
+    })
+
+    expect(seenServerUrls).toEqual(['https://prod.example.com/checkout-mcp'])
+  })
+
+  it('uses Cloudflare stored server URLs before connection URL fallback', async () => {
+    const seenServerUrls: string[] = []
+    const agent = makeFakeAgent(
+      {
+        xyz789: {
+          client: makeFakeClient(() => ({
+            content: [{ type: 'text', text: 'ok' }],
+          })),
+          url: new URL('https://fallback.example.com/mcp'),
+        },
+      },
+      [
+        {
+          id: 'xyz789',
+          name: 'checkout',
+          server_url: 'https://worker.example.com/upstream-mcp',
+        },
+      ],
+    )
+
+    attributeCloudflareAgentMcp(agent, {
+      interceptor: makeCapturingInterceptor(seenServerUrls),
+    })
+
+    await agent.mcp.mcpConnections.xyz789!.client.callTool({
+      name: 'complete_checkout',
+      arguments: {},
+    })
+
+    expect(seenServerUrls).toEqual(['https://worker.example.com/upstream-mcp'])
   })
 })
