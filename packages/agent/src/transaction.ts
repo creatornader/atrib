@@ -37,6 +37,9 @@
  * header. see DECISIONS.md D016 for the verification trail.
  */
 
+import canonicalize from 'canonicalize'
+import { hexEncode, sha256 } from '@atrib/mcp'
+
 export type TransactionProtocol = 'ACP' | 'UCP' | 'x402' | 'MPP' | 'AP2' | 'heuristic'
 
 export interface TransactionDetection {
@@ -46,10 +49,17 @@ export interface TransactionDetection {
    * For Path 2 content_id derivation (§5.4.5):
    * - ACP/UCP: the order permalink URL from the response (if present)
    * - x402/MPP: not available here (caller must use HTTP endpoint URL)
-   * - AP2: not available here (caller uses MCP server URL)
+   * - AP2: usually null because AP2 identity is carried in `contentId`
    * - Heuristic: not available here (caller uses MCP server URL)
    */
   checkoutUrl: string | null
+  /**
+   * Optional protocol-specific content_id. AP2 can expose stable receipt or
+   * mandate identifiers directly in the response; the detector hashes the
+   * canonical identity ladder and returns the final content_id here. Null
+   * means the caller should keep the generic §5.4.5 fallback.
+   */
+  contentId: string | null
 }
 
 const HEURISTIC_KEYWORDS = [
@@ -64,6 +74,12 @@ const HEURISTIC_KEYWORDS = [
 const AP2_PAYMENT_RECEIPT_KEYS = ['ap2.PaymentReceipt', 'payment_receipt'] as const
 const AP2_CHECKOUT_RECEIPT_KEYS = ['ap2.CheckoutReceipt', 'checkout_receipt'] as const
 const AP2_RECEIPT_SCAN_LIMIT = 80
+const textEncoder = new TextEncoder()
+
+interface Ap2ContentIdCandidate {
+  contentId: string
+  priority: number
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -75,6 +91,39 @@ function isString(value: unknown): value is string {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0
+}
+
+function detection(
+  protocol: TransactionProtocol,
+  checkoutUrl: string | null = null,
+  contentId: string | null = null,
+): TransactionDetection {
+  return { detected: true, protocol, checkoutUrl, contentId }
+}
+
+function noDetection(): TransactionDetection {
+  return { detected: false, protocol: null, checkoutUrl: null, contentId: null }
+}
+
+function sha256Utf8(value: string): string {
+  return `sha256:${hexEncode(sha256(textEncoder.encode(value)))}`
+}
+
+function ap2ContentId(source: string, fields: Record<string, string>): string | null {
+  const canonical = canonicalize({
+    protocol: 'AP2',
+    version: 1,
+    source,
+    fields,
+  })
+  if (!canonical) return null
+  return sha256Utf8(canonical)
+}
+
+function ap2ObjectHash(value: unknown): string | null {
+  const canonical = canonicalize(value)
+  if (!canonical) return null
+  return sha256Utf8(canonical)
 }
 
 function hasAp2SuccessStatus(record: Record<string, unknown>): boolean {
@@ -109,23 +158,70 @@ function isAp2CheckoutReceiptObject(value: unknown): boolean {
   )
 }
 
-function hasAp2ReceiptField(
-  record: Record<string, unknown>,
-  keys: readonly string[],
-  isReceiptObject: (value: unknown) => boolean,
-): boolean {
-  for (const key of keys) {
-    const value = record[key]
-    if (isReceiptObject(value)) return true
-    if (hasAp2SuccessStatus(record) && looksLikeCompactJwt(value)) return true
-  }
-  return false
+function ap2PaymentReceiptCandidate(value: unknown): Ap2ContentIdCandidate | null {
+  if (!isAp2PaymentReceiptObject(value) || !isRecord(value)) return null
+  const contentId = ap2ContentId('payment_receipt', {
+    iss: value['iss'] as string,
+    reference: value['reference'] as string,
+    payment_id: value['payment_id'] as string,
+    psp_confirmation_id: value['psp_confirmation_id'] as string,
+    network_confirmation_id: value['network_confirmation_id'] as string,
+  })
+  return contentId ? { contentId, priority: 10 } : null
 }
 
-function containsAp2V02Receipt(value: unknown): boolean {
+function ap2CheckoutReceiptCandidate(value: unknown): Ap2ContentIdCandidate | null {
+  if (!isAp2CheckoutReceiptObject(value) || !isRecord(value)) return null
+  const contentId = ap2ContentId('checkout_receipt', {
+    iss: value['iss'] as string,
+    reference: value['reference'] as string,
+    order_id: value['order_id'] as string,
+  })
+  return contentId ? { contentId, priority: 30 } : null
+}
+
+function ap2ReceiptJwtCandidate(
+  value: unknown,
+  source: 'payment_receipt_jwt' | 'checkout_receipt_jwt',
+): Ap2ContentIdCandidate | null {
+  if (!looksLikeCompactJwt(value)) return null
+  const contentId = ap2ContentId(source, { jwt_hash: sha256Utf8(value) })
+  if (!contentId) return null
+  return { contentId, priority: source === 'payment_receipt_jwt' ? 20 : 40 }
+}
+
+function ap2ReceiptFieldCandidate(
+  record: Record<string, unknown>,
+  keys: readonly string[],
+  objectCandidate: (value: unknown) => Ap2ContentIdCandidate | null,
+  jwtSource: 'payment_receipt_jwt' | 'checkout_receipt_jwt',
+): Ap2ContentIdCandidate | null {
+  for (const key of keys) {
+    const value = record[key]
+    const object = objectCandidate(value)
+    if (object) return object
+    if (hasAp2SuccessStatus(record)) {
+      const jwt = ap2ReceiptJwtCandidate(value, jwtSource)
+      if (jwt) return jwt
+    }
+  }
+  return null
+}
+
+function chooseBetterAp2Candidate(
+  current: Ap2ContentIdCandidate | null,
+  candidate: Ap2ContentIdCandidate | null,
+): Ap2ContentIdCandidate | null {
+  if (!candidate) return current
+  if (!current || candidate.priority < current.priority) return candidate
+  return current
+}
+
+function findAp2V02ReceiptContentId(value: unknown): string | null {
   const queue: unknown[] = [value]
   const seen = new Set<object>()
   let scanned = 0
+  let best: Ap2ContentIdCandidate | null = null
 
   while (queue.length > 0 && scanned < AP2_RECEIPT_SCAN_LIMIT) {
     const current = queue.shift()
@@ -139,22 +235,53 @@ function containsAp2V02Receipt(value: unknown): boolean {
     if (seen.has(current)) continue
     seen.add(current)
 
-    if (isAp2PaymentReceiptObject(current) || isAp2CheckoutReceiptObject(current)) {
-      return true
-    }
-    if (
-      hasAp2ReceiptField(current, AP2_PAYMENT_RECEIPT_KEYS, isAp2PaymentReceiptObject) ||
-      hasAp2ReceiptField(current, AP2_CHECKOUT_RECEIPT_KEYS, isAp2CheckoutReceiptObject)
-    ) {
-      return true
-    }
+    best = chooseBetterAp2Candidate(best, ap2PaymentReceiptCandidate(current))
+    best = chooseBetterAp2Candidate(best, ap2CheckoutReceiptCandidate(current))
+    best = chooseBetterAp2Candidate(
+      best,
+      ap2ReceiptFieldCandidate(
+        current,
+        AP2_PAYMENT_RECEIPT_KEYS,
+        ap2PaymentReceiptCandidate,
+        'payment_receipt_jwt',
+      ),
+    )
+    best = chooseBetterAp2Candidate(
+      best,
+      ap2ReceiptFieldCandidate(
+        current,
+        AP2_CHECKOUT_RECEIPT_KEYS,
+        ap2CheckoutReceiptCandidate,
+        'checkout_receipt_jwt',
+      ),
+    )
 
     for (const nested of Object.values(current)) {
       if (isRecord(nested) || Array.isArray(nested)) queue.push(nested)
     }
   }
 
-  return false
+  return best?.contentId ?? null
+}
+
+function legacyAp2MandateContentId(value: unknown): string | null {
+  const mandateHash = ap2ObjectHash(value)
+  if (!mandateHash) return null
+  return ap2ContentId('legacy_payment_mandate', { mandate_hash: mandateHash })
+}
+
+function a2aX402ContentId(receipts: unknown): string | null {
+  if (!Array.isArray(receipts)) return null
+  for (const receipt of receipts) {
+    if (!isRecord(receipt) || receipt['success'] !== true) continue
+    const transaction = receipt['transaction']
+    if (!isNonEmptyString(transaction)) continue
+    const fields: Record<string, string> = { transaction }
+    if (isNonEmptyString(receipt['network'])) fields['network'] = receipt['network']
+    if (isNonEmptyString(receipt['payer'])) fields['payer'] = receipt['payer']
+    return ap2ContentId('a2a_x402_receipt', fields)
+  }
+  return null
 }
 
 /**
@@ -180,7 +307,7 @@ export function detectTransaction(
       const isUcp = !!ucpEnvelope && typeof ucpEnvelope['version'] === 'string'
       const checkoutUrl =
         typeof order['permalink_url'] === 'string' ? (order['permalink_url'] as string) : null
-      return { detected: true, protocol: isUcp ? 'UCP' : 'ACP', checkoutUrl }
+      return detection(isUcp ? 'UCP' : 'ACP', checkoutUrl)
     }
 
     // ACP webhook event shapes (server → merchant): order_create / order_update.
@@ -189,7 +316,7 @@ export function detectTransaction(
       const data = resp['data'] as Record<string, unknown> | undefined
       const checkoutUrl =
         typeof data?.['permalink_url'] === 'string' ? (data['permalink_url'] as string) : null
-      return { detected: true, protocol: 'ACP', checkoutUrl }
+      return detection('ACP', checkoutUrl)
     }
   }
 
@@ -208,11 +335,11 @@ export function detectTransaction(
     }
     // x402. accept v2 and v1 names
     if (lower['payment-response'] || lower['x-payment-response']) {
-      return { detected: true, protocol: 'x402', checkoutUrl: null }
+      return detection('x402')
     }
     // MPP. IETF draft Payment-Receipt header
     if (lower['payment-receipt']) {
-      return { detected: true, protocol: 'MPP', checkoutUrl: null }
+      return detection('MPP')
     }
   }
 
@@ -226,8 +353,11 @@ export function detectTransaction(
   // - { status: "success", payment_receipt: "<signed JWT>" }
   // - { status: "success", checkout_receipt: "<signed JWT>" }
   // - { parts: [{ kind: "data", data: { "ap2.PaymentReceipt": { status: "Success", ... } } }] }
-  if (resp && containsAp2V02Receipt(resp)) {
-    return { detected: true, protocol: 'AP2', checkoutUrl: null }
+  if (resp) {
+    const ap2Content = findAp2V02ReceiptContentId(resp)
+    if (ap2Content) {
+      return detection('AP2', null, ap2Content)
+    }
   }
 
   // AP2 v0.1 compatibility. PaymentMandate Message inside an A2A DataPart.
@@ -244,7 +374,8 @@ export function detectTransaction(
             typeof data === 'object' &&
             'ap2.mandates.PaymentMandate' in (data as Record<string, unknown>)
           ) {
-            return { detected: true, protocol: 'AP2', checkoutUrl: null }
+            const mandate = (data as Record<string, unknown>)['ap2.mandates.PaymentMandate']
+            return detection('AP2', null, legacyAp2MandateContentId(mandate))
           }
         }
       }
@@ -261,16 +392,13 @@ export function detectTransaction(
       const metadata = statusMessage?.['metadata'] as Record<string, unknown> | undefined
       if (metadata && metadata['x402.payment.status'] === 'payment-completed') {
         const receipts = metadata['x402.payment.receipts']
-        if (
-          Array.isArray(receipts) &&
-          receipts.some(
-            (r) =>
-              r !== null &&
-              typeof r === 'object' &&
-              (r as Record<string, unknown>)['success'] === true,
+        if (Array.isArray(receipts)) {
+          const accepted = receipts.some(
+            (r) => isRecord(r) && (r as Record<string, unknown>)['success'] === true,
           )
-        ) {
-          return { detected: true, protocol: 'AP2', checkoutUrl: null }
+          if (accepted) {
+            return detection('AP2', null, a2aX402ContentId(receipts))
+          }
         }
       }
     }
@@ -297,15 +425,15 @@ export function detectTransaction(
     // so no credentialSubject check needed. For v1 string form: type is just
     // "VerifiableCredential" so we need credentialSubject to confirm it's a PaymentMandate.
     if (isVcArray || (isVcStringLegacy && subjectIsPaymentMandate)) {
-      return { detected: true, protocol: 'AP2', checkoutUrl: null }
+      return detection('AP2', null, legacyAp2MandateContentId(resp))
     }
   }
 
   // Heuristic: tool name keywords (last resort)
   const lowerName = toolName.toLowerCase()
   if (HEURISTIC_KEYWORDS.some((k) => lowerName.includes(k))) {
-    return { detected: true, protocol: 'heuristic', checkoutUrl: null }
+    return detection('heuristic')
   }
 
-  return { detected: false, protocol: null, checkoutUrl: null }
+  return noDetection()
 }

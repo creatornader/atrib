@@ -159,6 +159,18 @@ describe('detectTransaction', () => {
       expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
     })
 
+    it('derives a stable AP2 content_id from decoded payment receipt identity', () => {
+      const direct = detectTransaction('payment_tool', ap2PaymentReceiptArtifactFixture)
+      const wrapped = detectTransaction('payment_tool', {
+        envelope: {
+          nested: ap2PaymentReceiptArtifactFixture,
+        },
+      })
+
+      expect(direct.contentId).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(wrapped.contentId).toBe(direct.contentId)
+    })
+
     it('detects an AP2 v0.2 payment receipt JWT result', () => {
       // Source: google-agentic-commerce/AP2 samples return { status, payment_receipt }.
       const result = detectTransaction('payment_tool', ap2PaymentReceiptResultFixture)
@@ -171,10 +183,20 @@ describe('detectTransaction', () => {
       expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
     })
 
+    it('derives AP2 content_id from compact receipt JWT hashes without decoding', () => {
+      const payment = detectTransaction('payment_tool', ap2PaymentReceiptResultFixture)
+      const checkout = detectTransaction('checkout_tool', ap2CheckoutReceiptResultFixture)
+
+      expect(payment.contentId).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(checkout.contentId).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(payment.contentId).not.toBe(checkout.contentId)
+    })
+
     it('detects a real AP2 PaymentMandate Message (A2A DataPart)', () => {
       // Source: github.com/google-agentic-commerce/ap2 docs/specification.md v0.1
       const result = detectTransaction('payment_tool', ap2PaymentMandateFixture)
       expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
+      expect(result.contentId).toMatch(/^sha256:[0-9a-f]{64}$/)
     })
 
     it('detects a real a2a-x402 payment-completed task message', () => {

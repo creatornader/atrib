@@ -103,6 +103,8 @@ Detected from successful AP2 receipts. Current AP2 uses Checkout and Payment Man
 
 Decoded receipt objects are detected when they carry `status: "Success"` and the required AP2 fields. Signed receipt JWTs are detected in AP2 sample result envelopes when the envelope has `status: "success"` plus `payment_receipt` or `checkout_receipt`.
 
+For Path 2 fallback transaction records, AP2 detection also returns a protocol-specific `contentId` when stable identity fields are visible. Decoded Payment Receipts take priority, then compact payment receipt JWT hashes, decoded Checkout Receipts, compact checkout receipt JWT hashes, legacy AP2 PaymentMandates, and a2a-x402 transaction receipts. If none are present, middleware falls back to the MCP server URL plus `"checkout"` like before.
+
 ```json
 {
   "status": "success",
@@ -139,7 +141,7 @@ The older AP2 v0.1 DataPart shape remains supported as a compatibility fallback:
 
 #### a2a-x402: Google AP2 crypto path
 
-Detected from an A2A `task` whose `status.message.metadata` contains `"x402.payment.status": "payment-completed"` **and** at least one entry in `"x402.payment.receipts"` with `success: true`. A `payment-completed` status with no successful receipt does NOT detect (a failed receipt is not a transaction). Reported as `protocol: 'AP2'` because a2a-x402 is the AP2 crypto path, not a separate protocol.
+Detected from an A2A `task` whose `status.message.metadata` contains `"x402.payment.status": "payment-completed"` **and** at least one entry in `"x402.payment.receipts"` with `success: true`. A `payment-completed` status with no successful receipt does NOT detect (a failed receipt is not a transaction). Reported as `protocol: 'AP2'` because a2a-x402 is the AP2 crypto path, not a separate protocol. When a successful receipt exposes a transaction id, Path 2 uses that receipt identity for the AP2 `contentId`; otherwise it uses the generic AP2 fallback.
 
 ```json
 {

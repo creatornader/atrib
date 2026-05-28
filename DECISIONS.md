@@ -191,7 +191,7 @@ All three layers are necessary. Layer 1 alone is necessary but not sufficient.
 - Decoding and validating the cart_mandate hash chain in the PaymentMandate (rejected; that's verification work belonging in `@atrib/verify`, not on the agent middleware critical path)
 - Removing the legacy W3C VC fallback entirely (rejected; costs nothing to keep, costs developer trust to silently break a research-fork integration)
 
-**Followup:** W3C Trace Context conformance and MCP SDK extension API verification next. The AP2 work was expected to touch `emitTransactionRecord` for AP2 content_id derivation; in the end no change was needed there because AP2 still uses the MCP server URL fallback (the PaymentMandate carries useful identifiers like `payment_request_id` but extracting them per-protocol is not required at this stage).
+**Followup update (2026-05-28):** [D095](#d095-ap2-path-2-content_id-uses-a-stable-receipt-identity-ladder) now extends this compatibility path. AP2 Path 2 uses stable receipt or mandate identity when present and falls back to the MCP server URL plus `"checkout"` only when no stable AP2 identity is visible.
 
 ## D018: W3C Trace Context and Baggage conformance: leftmost atrib, lenient parse, evict-from-end on overflow
 
@@ -4488,6 +4488,50 @@ The verifier never fetches AP2 / VI evidence implicitly. The caller supplies the
 
 ---
 
+## D095: AP2 Path 2 content_id uses a stable receipt identity ladder
+
+**Date:** 2026-05-28
+
+**Supersedes:** P033, removed from Pending decisions when this ADR codified the decision.
+
+**Context.** [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) made successful AP2 CheckoutReceipt and PaymentReceipt artifacts the v0.2 transaction signal. Path 2 agent-side transaction emission still derived `content_id` from the MCP server URL plus `"checkout"` for AP2. That fallback works, but it groups distinct AP2 payments served through the same tool endpoint under the same transaction identity.
+
+**Decision.** `@atrib/agent` now lets AP2 detection return a protocol-specific `contentId` when stable AP2 fields are present.
+
+The ladder is:
+
+1. Decoded PaymentReceipt: hash canonical `{ protocol: "AP2", version: 1, source: "payment_receipt", fields: { iss, reference, payment_id, psp_confirmation_id, network_confirmation_id } }`.
+2. Compact `payment_receipt` JWT: hash canonical `{ protocol: "AP2", version: 1, source: "payment_receipt_jwt", fields: { jwt_hash } }`, where `jwt_hash` is `sha256:` plus the SHA-256 of the compact JWT string.
+3. Decoded CheckoutReceipt: hash canonical `{ protocol: "AP2", version: 1, source: "checkout_receipt", fields: { iss, reference, order_id } }`.
+4. Compact `checkout_receipt` JWT: same JWT-hash pattern with `source: "checkout_receipt_jwt"`.
+5. Legacy AP2 v0.1 PaymentMandate and legacy VC PaymentMandate fallbacks: hash canonical `{ protocol: "AP2", version: 1, source: "legacy_payment_mandate", fields: { mandate_hash } }`, where `mandate_hash` is the SHA-256 of the canonical mandate object.
+6. a2a-x402 successful receipts, reported as AP2 by [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt), use `{ protocol: "AP2", version: 1, source: "a2a_x402_receipt", fields: { transaction, network?, payer? } }` when a transaction id is present.
+
+When none of those fields are present, Path 2 keeps the previous generic fallback: MCP server URL plus `"checkout"` for AP2. The detector still does not verify AP2 JWT signatures or decode compact JWTs. It only hashes the compact token string when that is the stable identifier available on the response.
+
+**Alternatives considered.**
+
+- *Always use the MCP server URL fallback.* Rejected. It collapses distinct AP2 payments through one endpoint.
+- *Decode compact receipt JWTs in `detectTransaction()`.* Rejected. [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) keeps decoding and signature checks in `@atrib/verify`, off the detector path.
+- *Use raw receipt fields directly in the signed record.* Rejected. The signed record needs only the `content_id` commitment. Full AP2 receipt bodies belong in caller-supplied verifier evidence per [D094](#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block).
+
+**Consequences.**
+
+- Two agents that observe the same decoded AP2 receipt derive the same Path 2 transaction `content_id` when the receipt exposes the same stable fields.
+- Distinct payment receipts no longer collapse to one AP2 `content_id` merely because they came from the same MCP server URL.
+- `TransactionDetection` now carries optional `contentId`. Existing generic fallback behavior remains unchanged for ACP, UCP, x402, MPP, heuristic detection, and AP2 responses without stable identity fields.
+- Tests cover decoded AP2 receipts, compact receipt JWTs, legacy PaymentMandate fallback, middleware Path 2 emission using the AP2-specific `contentId`, and the cross-package AP2 / VI e2e fixture path.
+
+**Cross-references.**
+
+- [§1.2.2](atrib-spec.md#122-content_id-derivation), base `content_id` derivation.
+- [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402), AP2 detection and identity ladder.
+- [§5.4.5](atrib-spec.md#545-transaction-detection), Path 2 transaction emission.
+- [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt), AP2 v0.2 receipt hook.
+- [D094](#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block), verifier-side evidence attachment.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -4924,24 +4968,6 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 - [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), verify promotion: when verify-mcp ships as primitive #7, Position 2 makes adding `atrib verify` a one-subcommand addition rather than a new helper + node_modules.
 - [P023](#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion), subscription surface; the always-on consumer pattern benefits from a stable CLI deployment for the same reasons.
 - [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type), parent-child env threading; benefits from PATH-resolved CLI per consequences above.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-
-## P033: AP2-specific transaction content_id derivation
-
-**Source:** AP2 / Verifiable Intent implementation gap audit after [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) landed. AP2 receipt detection can identify a successful transaction, but the current `content_id` derivation still follows the generic MCP server URL plus tool name path unless the producer supplies richer transaction identity.
-
-**The decision in question:** should `@atrib/agent` derive AP2 transaction `content_id` from stable AP2 fields such as checkout hash, payment transaction id, order id, receipt reference, merchant origin, or verifier identity when present?
-
-**Considerations.**
-
-- `content_id` must stay stable across equivalent observers. If two agents see the same AP2 payment, they should derive the same transaction identity where the evidence allows it.
-- The derivation needs a fallback ladder. Not every AP2 response exposes all fields.
-- The chosen fields must not leak more private data than the existing transaction metadata posture allows. Hashing canonical AP2 identity fields may be the right shape.
-- Conformance vectors should document the ladder so external producers can match it bit-for-bit.
-
-**Likely outcome (not committed):** accept with a conservative ladder. Use AP2 receipt / mandate identifiers when they are present and fall back to the existing generic content_id path otherwise.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 

@@ -260,12 +260,14 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
             publicKeyReady,
             () => publicKeyB64,
             queue,
-          ).catch((err) => {
-            console.warn('atrib: transaction emission failed', err)
-          }).finally(() => {
-            const idx = pendingEmissions.indexOf(emission)
-            if (idx !== -1) pendingEmissions.splice(idx, 1)
-          })
+          )
+            .catch((err) => {
+              console.warn('atrib: transaction emission failed', err)
+            })
+            .finally(() => {
+              const idx = pendingEmissions.indexOf(emission)
+              if (idx !== -1) pendingEmissions.splice(idx, 1)
+            })
           pendingEmissions.push(emission)
         }
       } catch (err) {
@@ -304,6 +306,7 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
  * Derives content_id per protocol:
  * - ACP/UCP: checkout URL from response, tool_name = "checkout"
  * - x402/MPP: HTTP endpoint URL, tool_name = "checkout"
+ * - AP2: protocol-specific receipt or mandate identity when present
  * - Heuristic: MCP server URL of tool, actual tool_name
  */
 async function emitTransactionRecord(
@@ -323,34 +326,36 @@ async function emitTransactionRecord(
   }
 
   // Derive content_id per protocol (§5.4.5)
-  let contentIdServerUrl: string
-  let contentIdToolName: string
+  let contentIdServerUrl = ''
+  let contentIdToolName = ''
 
-  switch (detection.protocol) {
-    case 'ACP':
-    case 'UCP':
-      contentIdServerUrl = detection.checkoutUrl ?? callServerUrl ?? ''
-      contentIdToolName = 'checkout'
-      break
-    case 'x402':
-    case 'MPP':
-      // Use the HTTP endpoint URL that returned Payment-Receipt
-      contentIdServerUrl = callServerUrl ?? ''
-      contentIdToolName = 'checkout'
-      break
-    case 'AP2':
-      contentIdServerUrl = callServerUrl ?? ''
-      contentIdToolName = 'checkout'
-      break
-    case 'heuristic':
-    default:
-      // Heuristic: weakest case, use the MCP server URL of the tool that was called
-      contentIdServerUrl = callServerUrl ?? ''
-      contentIdToolName = toolName
-      break
+  if (!detection.contentId) {
+    switch (detection.protocol) {
+      case 'ACP':
+      case 'UCP':
+        contentIdServerUrl = detection.checkoutUrl ?? callServerUrl ?? ''
+        contentIdToolName = 'checkout'
+        break
+      case 'x402':
+      case 'MPP':
+        // Use the HTTP endpoint URL that returned Payment-Receipt
+        contentIdServerUrl = callServerUrl ?? ''
+        contentIdToolName = 'checkout'
+        break
+      case 'AP2':
+        contentIdServerUrl = callServerUrl ?? ''
+        contentIdToolName = 'checkout'
+        break
+      case 'heuristic':
+      default:
+        // Heuristic: weakest case, use the MCP server URL of the tool that was called
+        contentIdServerUrl = callServerUrl ?? ''
+        contentIdToolName = toolName
+        break
+    }
   }
 
-  const contentId = computeContentId(contentIdServerUrl, contentIdToolName)
+  const contentId = detection.contentId ?? computeContentId(contentIdServerUrl, contentIdToolName)
 
   // §1.2.3: chain_root for genesis records
   const chainRoot = session.latestContext
