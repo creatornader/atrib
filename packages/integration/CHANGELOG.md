@@ -1,5 +1,24 @@
 # @atrib/integration
 
+## 0.0.18
+
+### Patch Changes
+
+- 9ae04bf: Add typed AP2 / Verifiable Intent mandate constraint evaluation to verifier evidence results.
+- ad3c179: Add async AP2 / Verifiable Intent SD-JWT conformance checks to `@atrib/verify`.
+
+  `verifyAp2ViEvidenceAsync()` now verifies VI credentials with OpenWallet `sd-jwt-js`, reports per-credential `sdJwtConformance`, and supports require, best-effort, and off policies. The AP2 integration test now exercises the async verifier path across package exports.
+
+- Updated dependencies [24c4331]
+- Updated dependencies [9ae04bf]
+- Updated dependencies [ad3c179]
+  - @atrib/mcp@0.13.0
+  - @atrib/agent@0.2.8
+  - @atrib/verify@0.4.0
+  - @atrib/log-dev@0.1.18
+  - @atrib/graph-node@0.1.18
+  - @atrib/log-node@0.1.18
+
 ## 0.0.17
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # @atrib/agent
 
+## 0.2.8
+
+### Patch Changes
+
+- 24c4331: Add `signTransactionRecord()` for [D052](../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) transaction cross-attestation bytes and use it for agent-side Path 2 transaction records.
+
+  Path 2 records now carry an agent `signers[]` entry over the atrib transaction record bytes. AP2 receipt JWT signatures remain verifier evidence and are not counted as transaction signers unless a counterparty signs the same atrib canonical bytes.
+
+- Updated dependencies [24c4331]
+- Updated dependencies [9ae04bf]
+- Updated dependencies [ad3c179]
+  - @atrib/mcp@0.13.0
+  - @atrib/verify@0.4.0
+
 ## 0.2.7
 
 ### Patch Changes

@@ -1283,9 +1283,11 @@ export class ApprovalActionMcp extends McpAgent<Env> {
       },
     )
 
+    const endpoint = logEndpoint(this.env)
     atrib(this.server, {
       creatorKey: this.env.ATRIB_ACTION_MCP_PRIVATE_KEY,
-      logEndpoint: logEndpoint(this.env),
+      logEndpoint: endpoint,
+      logSubmission: endpoint ? 'enabled' : 'disabled',
       serverUrl: serverUrl(this.env, 'action_mcp'),
       autoChain: true,
       disclosure: {

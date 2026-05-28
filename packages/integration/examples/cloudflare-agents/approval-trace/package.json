@@ -1,18 +1,18 @@
 {
   "name": "@atrib/cloudflare-approval-trace",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "type": "module",
   "description": "Interactive Cloudflare Agents example for atrib-signed human approval traces.",
   "scripts": {
-    "build": "pnpm --filter @atrib/mcp build && tsc --noEmit",
+    "build": "pnpm --filter @atrib/graph-node... build && tsc --noEmit",
     "dev": "pnpm --filter @atrib/mcp build && node scripts/write-dev-vars.mjs && wrangler dev --env-file .tmp/dev.vars",
     "deploy": "pnpm --filter @atrib/mcp build && wrangler deploy --secrets-file .tmp/secrets.json",
-    "proof:worker": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/graph-node build && tsx scripts/run-worker-proof.ts",
+    "proof:worker": "pnpm --filter @atrib/graph-node... build && tsx scripts/run-worker-proof.ts",
     "test": "pnpm --filter @atrib/mcp build && node scripts/run-vitest-clean.mjs",
     "test:browser": "pnpm --filter @atrib/mcp build && node scripts/run-playwright-clean.mjs",
     "test:e2e": "pnpm run test && pnpm run test:browser",
-    "typecheck": "pnpm --filter @atrib/mcp build && tsc --noEmit"
+    "typecheck": "pnpm --filter @atrib/graph-node... build && tsc --noEmit"
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",

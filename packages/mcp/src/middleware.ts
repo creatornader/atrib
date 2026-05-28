@@ -102,6 +102,12 @@ export interface AtribOptions {
   creatorKey?: string
   /** URL of the Merkle log submission endpoint. */
   logEndpoint?: string
+  /**
+   * Set to 'disabled' for offline tests and local-mirror-only hosts that
+   * should still sign records and run onRecord, but must not submit to a log.
+   * Defaults to 'enabled'.
+   */
+  logSubmission?: 'enabled' | 'disabled'
   /** Inline attribution policy document (§4.2). */
   policy?: Record<string, unknown>
   /** Canonical URL of this MCP server for content_id derivation. */
@@ -269,6 +275,16 @@ export interface AtribServer extends McpServer {
   destroy(): void
 }
 
+function createNoopSubmissionQueue(): SubmissionQueue {
+  return {
+    submit() {},
+    getProof() {
+      return undefined
+    },
+    async flush() {},
+  }
+}
+
 /**
  * Wrap an MCP server with atrib attribution middleware (§5.3).
  *
@@ -306,9 +322,12 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     )
   }
   const transactionTools = new Set(options.transactionTools ?? [])
-  const queue: SubmissionQueue = createSubmissionQueue(options.logEndpoint, {
-    ...(options.maxQueueDepth !== undefined ? { maxQueueDepth: options.maxQueueDepth } : {}),
-  })
+  const queue: SubmissionQueue =
+    options.logSubmission === 'disabled'
+      ? createNoopSubmissionQueue()
+      : createSubmissionQueue(options.logEndpoint, {
+          ...(options.maxQueueDepth !== undefined ? { maxQueueDepth: options.maxQueueDepth } : {}),
+        })
 
   // autoChain bookkeeping (process-lifetime, opt-in via options.autoChain).
   // Stable context_id for sessions where the caller never sets traceparent;

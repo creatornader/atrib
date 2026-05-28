@@ -4720,6 +4720,42 @@ Direct `atrib-emit-cli` also defaults its mirror path to `~/.atrib/records/atrib
 
 ---
 
+## D100: MCP middleware can sign without log submission
+
+**Date:** 2026-05-28
+
+**Status:** Accepted
+
+**Context.** `@atrib/mcp` used a missing `logEndpoint` to mean "use the public atrib log." That default is correct for normal middleware hosts, but it creates a bad test and local-mirror edge: a host may want records signed and persisted through `onRecord` while refusing outbound log writes. The Cloudflare approval-trace Worker test hit this edge. Its direct helper treated an empty `ATRIB_LOG_ENDPOINT` as no log, while the middleware converted the same absence into the production default. CI then depended on remote network timing while it was supposed to be an offline Worker proof.
+
+**Decision.** `@atrib/mcp` now accepts `logSubmission: 'disabled'`. In that mode, the middleware still signs successful tool calls, writes outbound atrib context, updates autoChain state, and invokes `onRecord`. It swaps the submission queue for a no-op queue: `submit()` does nothing, `flush()` resolves, and `getProof()` returns `undefined`.
+
+The default remains `logSubmission: 'enabled'`, and `logEndpoint` keeps its existing default of `https://log.atrib.dev/v1/entries` when submission is enabled.
+
+**Alternatives considered.**
+
+- *Treat an empty `logEndpoint` string as disabled.* Rejected. It overloads a malformed URL with a policy choice and makes configuration mistakes harder to see.
+- *Keep tests on the public log and only raise timeouts.* Rejected. Offline tests should not depend on public network writes. A timeout bump would hide the wrong dependency.
+- *Add a worker-local fake log endpoint for the Cloudflare test.* Rejected after verification. Durable Object outbound fetches to the test hostname did not route back through the Worker in Miniflare, so this still produced remote fetch failures.
+- *Disable attribution entirely in tests by omitting `creatorKey`.* Rejected. The test's point is to verify signatures, context, and local mirror records.
+
+**Consequences.**
+
+- Offline test suites can exercise signing and local mirror behavior without public-log traffic.
+- Local-mirror-only hosts have an explicit configuration for private or staged environments.
+- `getProof()` remains empty in no-log mode. Verifiers that need inclusion proofs must run with submission enabled or attach proof bundles from another log path.
+- Existing integrations are unchanged unless they opt into `logSubmission: 'disabled'`.
+
+**Cross-references.**
+
+- [§5.3.1](atrib-spec.md#531-server-side-middleware-for-mcp-servers), MCP middleware init options.
+- [§5.3.5](atrib-spec.md#535-log-submission), non-blocking log submission.
+- [§5.8](atrib-spec.md#58-degradation-contract), failures must not affect the primary tool path.
+- [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), local sidecar persistence.
+
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
