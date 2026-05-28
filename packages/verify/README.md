@@ -161,12 +161,17 @@ Checks performed when evidence is present:
 - AP2 PaymentReceipt / CheckoutReceipt success, required fields, and `reference` binding to a closed mandate serialization or explicit closed-mandate hash.
 - Compact AP2 receipt JWT verification with `jose`, using trusted local JWKS, `jwksUrl`, or verifier metadata containing inline `jwks` or `jwks_uri`.
 - VI SD-JWT parsing for L1, L2, L3 payment, and L3 checkout credentials.
+- Async VI SD-JWT / SD-JWT VC conformance with OpenWallet `@sd-jwt/core` and `@sd-jwt/sd-jwt-vc`.
 - ES256 signatures: L1 via trusted issuer keys, L2 via L1 `cnf.jwk`, L3 via the L2 delegated agent key.
 - `sd_hash` links, disclosure digest links, autonomous L2 `cnf.jwk` consistency, and final checkout/payment binding.
 
 The default signature policy is `require`. Missing keys or invalid signatures make `valid` false while still returning a structured result. Use `signaturePolicy: "best-effort"` for structural triage where issuer keys are not yet available.
 
 The default receipt JWT policy is also `require`. Invalid receipt JWTs make `valid` false. Use `receiptJwtPolicy: "best-effort"` when decoded receipt objects are already available and JWT verification is an advisory signal.
+
+The async verifier also defaults `sdJwtConformancePolicy` to `require` when VI credentials are present. Each credential result includes `sdJwtConformance.status`, `profile`, and an optional reason. Use `sdJwtConformancePolicy: "best-effort"` for advisory conformance checks, or `"off"` to keep the async result aligned with the decoded structural verifier. The default profile is `sd-jwt-vc`; callers may pass `sdJwtConformanceProfile: "sd-jwt"` for the core SD-JWT profile.
+
+VC type metadata and status-list fetches are explicit. If a caller enables `sdJwtVc.loadTypeMetadata` or submits credentials with VC status references, it should provide `sdJwtVc.vctFetcher` or `sdJwtVc.statusListFetcher`. The verifier does not perform hidden network fetches for those checks.
 
 ### `calculate(options): Promise<RecommendationDocument>`
 
@@ -182,7 +187,7 @@ For advanced use (custom calculators, alternative signing flows), the package al
 - `signRecommendation(unsigned, privateKey)`: JCS + Ed25519 signing
 - `verifyRecommendationSignature(doc, publicKey)`: signature verification
 - `verifyAp2ViEvidence(bundle, options?)`: decoded AP2 / VI receipt and mandate-chain evidence checking
-- `verifyAp2ViEvidenceAsync(bundle, options?)`: compact AP2 receipt JWT verification plus the decoded evidence checks
+- `verifyAp2ViEvidenceAsync(bundle, options?)`: compact AP2 receipt JWT verification, async VI SD-JWT / VC conformance, plus decoded evidence checks
 - `recommendationSigningInput(doc)`: the canonical bytes that get signed
 - `distributionsMatch(a, b)`: float-tolerant equality (within `1e-9` per recipient)
 - `fetchGraph(endpoint, contextId, treeSize?)`, `fetchSessionPolicyRecord`, `fetchPolicyDocument`
@@ -210,7 +215,7 @@ The merchant's payment pipeline never crashes because of an atrib problem. It ju
 
 ## Test coverage
 
-320 tests across 21 test files covering the [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm, graph endpoint client, JCS canonicalization, Ed25519 signing, settlement recommendations, policy templates, policy builder, calculation edge cases, property-based testing with fast-check, AP2 / VI evidence checking, and full `verify()` / `calculate()` paths including [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation.
+The test suite covers the [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm, graph endpoint client, JCS canonicalization, Ed25519 signing, settlement recommendations, policy templates, policy builder, calculation edge cases, property-based testing with fast-check, AP2 / VI evidence checking, and full `verify()` / `calculate()` paths including [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation.
 
 Run them with `pnpm --filter @atrib/verify test`.
 

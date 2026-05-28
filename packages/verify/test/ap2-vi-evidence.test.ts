@@ -46,6 +46,22 @@ function tamperJwtPayload(jwt: string, patch: Record<string, unknown>): string {
   return `${header}.${tampered}.${signature}`
 }
 
+function cloneEvidence<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+function tamperDisclosure(sdJwt: string, disclosureIndex: number, patch: Record<string, unknown>) {
+  const parts = sdJwt.split('~')
+  const disclosure = parts[disclosureIndex + 1]
+  if (!disclosure) throw new Error('missing disclosure')
+
+  const decoded = JSON.parse(textDecoder.decode(base64urlDecode(disclosure))) as unknown[]
+  const valueIndex = decoded.length === 2 ? 1 : 2
+  decoded[valueIndex] = { ...(decoded[valueIndex] as Record<string, unknown>), ...patch }
+  parts[disclosureIndex + 1] = base64urlEncode(textEncoder.encode(JSON.stringify(decoded)))
+  return parts.join('~')
+}
+
 describe('verifyAp2ViEvidence', () => {
   it('verifies signed VI immediate evidence with matching AP2 receipts', () => {
     const result = verifyAp2ViEvidence(immediateFixture)
@@ -60,6 +76,57 @@ describe('verifyAp2ViEvidence', () => {
       result.vi.credentials.every((credential) => credential.signature.status === 'verified'),
     ).toBe(true)
     expect(result.errors).toEqual([])
+  })
+
+  it('verifies VI SD-JWT VC conformance in the async verifier', async () => {
+    const result = await verifyAp2ViEvidenceAsync(immediateFixture, {
+      nowSeconds: 1_779_840_000,
+    })
+
+    expect(result.valid).toBe(true)
+    expect(result.vi.credentials).toHaveLength(2)
+    expect(
+      result.vi.credentials.every(
+        (credential) =>
+          credential.sdJwtConformance.status === 'verified' &&
+          credential.sdJwtConformance.profile === 'sd-jwt-vc',
+      ),
+    ).toBe(true)
+    expect(result.errors).toEqual([])
+  })
+
+  it('rejects VI disclosure tampering through SD-JWT conformance', async () => {
+    const tampered = cloneEvidence(immediateFixture)
+    tampered.vi.credentials[1]!.sdJwt = tamperDisclosure(tampered.vi.credentials[1]!.sdJwt, 0, {
+      checkout_hash: 'different_hash',
+    })
+
+    const result = await verifyAp2ViEvidenceAsync(tampered, {
+      nowSeconds: 1_779_840_000,
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.vi.credentials[1]!.sdJwtConformance.status).toBe('invalid')
+    expect(result.errors).toContain('vi_sd_jwt_conformance_invalid')
+  })
+
+  it('keeps SD-JWT VC metadata failures advisory in best-effort mode', async () => {
+    const result = await verifyAp2ViEvidenceAsync(immediateFixture, {
+      nowSeconds: 1_779_840_000,
+      sdJwtConformancePolicy: 'best-effort',
+      sdJwtVc: { loadTypeMetadata: true },
+    })
+
+    expect(result.valid).toBe(true)
+    expect(result.errors).not.toContain('vi_sd_jwt_conformance_invalid')
+    expect(
+      result.warnings.some((warning) => warning.startsWith('vi_sd_jwt_conformance_invalid:')),
+    ).toBe(true)
+    expect(
+      result.vi.credentials.some(
+        (credential) => credential.sdJwtConformance.reason === 'vct_fetcher',
+      ),
+    ).toBe(true)
   })
 
   it('rejects autonomous VI evidence when checkout and payment mandates bind different agent keys', () => {

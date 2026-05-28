@@ -3,6 +3,14 @@
 import canonicalize from 'canonicalize'
 import { createPublicKey, verify as verifyEcdsa } from 'node:crypto'
 import { base64urlDecode, base64urlEncode, sha256 } from '@atrib/mcp'
+import { SDJwtInstance } from '@sd-jwt/core'
+import { SDJwtVcInstance } from '@sd-jwt/sd-jwt-vc'
+import type {
+  SDJWTVCConfig,
+  StatusListFetcher,
+  StatusValidator,
+  VcTFetcher,
+} from '@sd-jwt/sd-jwt-vc'
 import {
   createLocalJWKSet,
   createRemoteJWKSet,
@@ -15,6 +23,8 @@ import type { JWK, JSONWebKeySet, JWTVerifyGetKey, JWTVerifyOptions } from 'jose
 
 export type ViCredentialLayer = 'L1' | 'L2' | 'L3_PAYMENT' | 'L3_CHECKOUT'
 export type ViMode = 'immediate' | 'autonomous' | 'unknown'
+export type SdJwtConformancePolicy = 'require' | 'best-effort' | 'off'
+export type SdJwtConformanceProfile = 'sd-jwt' | 'sd-jwt-vc'
 
 export interface ViCredentialInput {
   layer: ViCredentialLayer
@@ -41,6 +51,14 @@ export interface Ap2ReceiptJwtIssuer {
   metadataUrl?: string
 }
 
+export interface SdJwtVcConformanceOptions {
+  loadTypeMetadata?: boolean
+  vctFetcher?: VcTFetcher
+  statusListFetcher?: StatusListFetcher
+  statusValidator?: StatusValidator
+  maxVctExtendsDepth?: number
+}
+
 export interface Ap2ViEvidenceBundle {
   ap2?: Ap2EvidenceInput
   vi?: {
@@ -55,6 +73,9 @@ export interface VerifyAp2ViEvidenceOptions {
   receiptJwtIssuers?: Ap2ReceiptJwtIssuer[]
   receiptJwtPolicy?: 'require' | 'best-effort'
   signaturePolicy?: 'require' | 'best-effort'
+  sdJwtConformancePolicy?: SdJwtConformancePolicy
+  sdJwtConformanceProfile?: SdJwtConformanceProfile
+  sdJwtVc?: SdJwtVcConformanceOptions
   nowSeconds?: number
   clockSkewSeconds?: number
   fetch?: typeof fetch
@@ -65,12 +86,19 @@ export interface SignatureCheck {
   reason?: string
 }
 
+export interface SdJwtConformanceCheck {
+  status: 'verified' | 'invalid' | 'not_checked'
+  profile: SdJwtConformanceProfile | null
+  reason?: string
+}
+
 export interface ViCredentialCheck {
   layer: ViCredentialLayer
   alg: string | null
   typ: string | null
   kid: string | null
   signature: SignatureCheck
+  sdJwtConformance: SdJwtConformanceCheck
   sdHashOk: boolean | null
   disclosuresOk: boolean | null
   mandateVcts: string[]
@@ -180,6 +208,14 @@ function signatureCheck(status: SignatureCheck['status'], reason?: string): Sign
   return reason === undefined ? { status } : { status, reason }
 }
 
+function sdJwtConformanceCheck(
+  status: SdJwtConformanceCheck['status'],
+  profile: SdJwtConformanceProfile | null,
+  reason?: string,
+): SdJwtConformanceCheck {
+  return reason === undefined ? { status, profile } : { status, profile, reason }
+}
+
 function collectDelegatePayloadDigests(payload: JsonRecord): Set<string> {
   const digests = new Set<string>()
   const delegatePayload = payload['delegate_payload']
@@ -263,14 +299,18 @@ function normalizeJwks(value: JsonWebKey[] | { keys: JsonWebKey[] }): JSONWebKey
   return { keys: keys as JWK[] }
 }
 
-function verifyJwtSignature(parsed: ParsedCredential, publicJwk: JsonWebKey): boolean {
+function verifyEs256Signature(data: string, signature: Uint8Array, publicJwk: JsonWebKey): boolean {
   const key = createPublicKey({ key: publicJwk, format: 'jwk' })
   return verifyEcdsa(
     'sha256',
-    Buffer.from(parsed.signingInput, 'ascii'),
+    Buffer.from(data, 'ascii'),
     { key, dsaEncoding: 'ieee-p1363' },
-    Buffer.from(parsed.signature),
+    Buffer.from(signature),
   )
+}
+
+function verifyJwtSignature(parsed: ParsedCredential, publicJwk: JsonWebKey): boolean {
+  return verifyEs256Signature(parsed.signingInput, parsed.signature, publicJwk)
 }
 
 function findIssuerKey(kid: string | null, keys: JsonWebKey[]): JsonWebKey | undefined {
@@ -387,6 +427,7 @@ function initialCredentialCheck(parsed: ParsedCredential): ViCredentialCheck {
     typ,
     kid,
     signature: signatureCheck('not_checked'),
+    sdJwtConformance: sdJwtConformanceCheck('not_checked', null, 'async_required'),
     sdHashOk: null,
     disclosuresOk: disclosureDigestsOk(parsed),
     mandateVcts: parsed.mandateValues.map((mandate) => String(mandate['vct'])),
@@ -682,6 +723,193 @@ function checkTimeWindow(
   }
 }
 
+function sdJwtHasher(data: string | ArrayBuffer, alg: string): Uint8Array {
+  if (alg !== 'sha-256') throw new Error('hash_alg_unsupported')
+  const bytes = typeof data === 'string' ? textEncoder.encode(data) : new Uint8Array(data)
+  return sha256(bytes)
+}
+
+function sdJwtVerifier(publicJwk: JsonWebKey): (data: string, signature: string) => boolean {
+  return (data, signature) => verifyEs256Signature(data, base64urlDecode(signature), publicJwk)
+}
+
+function credentialVerificationKey(
+  parsed: ParsedCredential,
+  trustedIssuerKeys: JsonWebKey[],
+  byLayer: Map<ViCredentialLayer, ParsedCredential>,
+): JsonWebKey | undefined {
+  const kid = isString(parsed.header['kid']) ? parsed.header['kid'] : null
+  if (parsed.input.layer === 'L1') return findIssuerKey(kid, trustedIssuerKeys)
+
+  const l1UserKey = getCnfJwk(byLayer.get('L1')?.payload)
+  if (parsed.input.layer === 'L2') return l1UserKey
+
+  const l2AgentKeys =
+    byLayer
+      .get('L2')
+      ?.mandateValues.map(getCnfJwk)
+      .filter((jwk): jwk is JsonWebKey => jwk !== undefined) ?? []
+  return l2AgentKeys.find((candidate) => getKid(candidate) === kid)
+}
+
+function sdJwtErrorReason(error: unknown): string {
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+  if (message.includes('status_fetcher_unconfigured')) return 'status_fetcher'
+  if (message.includes('vct_fetcher_unconfigured')) return 'vct_fetcher'
+  if (message.includes('hash') || message.includes('digest')) return 'disclosure_digest'
+  if (message.includes('signature')) return 'signature'
+  if (message.includes('expired') || message.includes('exp')) return 'exp'
+  if (message.includes('nbf')) return 'nbf'
+  if (message.includes('iat')) return 'iat'
+  if (message.includes('key binding') || message.includes('kb')) return 'key_binding'
+  if (message.includes('vct')) return 'vct'
+  if (message.includes('status')) return 'status'
+  return 'invalid'
+}
+
+function addSdJwtConformanceFinding(
+  policy: Exclude<SdJwtConformancePolicy, 'off'>,
+  code: string,
+  layer: ViCredentialLayer,
+  errors: string[],
+  warnings: string[],
+): void {
+  if (policy === 'require') errors.push(code)
+  else warnings.push(`${code}:${layer}`)
+}
+
+async function verifyCredentialSdJwtConformance(
+  credentials: ViCredentialInput[],
+  trustedIssuerKeys: JsonWebKey[],
+  policy: Exclude<SdJwtConformancePolicy, 'off'>,
+  profile: SdJwtConformanceProfile,
+  options: VerifyAp2ViEvidenceOptions,
+  nowSeconds: number,
+  clockSkewSeconds: number,
+): Promise<{ checks: SdJwtConformanceCheck[]; errors: string[]; warnings: string[] }> {
+  const errors: string[] = []
+  const warnings: string[] = []
+  const parsedCredentials: Array<{ index: number; parsed: ParsedCredential }> = []
+  const checks = credentials.map(() => sdJwtConformanceCheck('not_checked', profile))
+
+  for (let index = 0; index < credentials.length; index += 1) {
+    const credential = credentials[index]!
+    try {
+      parsedCredentials.push({ index, parsed: parseCredential(credential) })
+    } catch {
+      checks[index] = sdJwtConformanceCheck('invalid', profile, 'parse')
+      addSdJwtConformanceFinding(
+        policy,
+        'vi_sd_jwt_conformance_invalid',
+        credential.layer,
+        errors,
+        warnings,
+      )
+    }
+  }
+
+  const byLayer = new Map<ViCredentialLayer, ParsedCredential>()
+  for (const { parsed } of parsedCredentials) byLayer.set(parsed.input.layer, parsed)
+
+  for (const { index: checkIndex, parsed } of parsedCredentials) {
+    const key = credentialVerificationKey(parsed, trustedIssuerKeys, byLayer)
+
+    if (parsed.header['alg'] !== 'ES256') {
+      checks[checkIndex] = sdJwtConformanceCheck('invalid', profile, 'alg')
+      addSdJwtConformanceFinding(
+        policy,
+        'vi_sd_jwt_conformance_invalid',
+        parsed.input.layer,
+        errors,
+        warnings,
+      )
+      continue
+    }
+
+    if (!key) {
+      checks[checkIndex] = sdJwtConformanceCheck('not_checked', profile, 'missing_key')
+      addSdJwtConformanceFinding(
+        policy,
+        'vi_sd_jwt_conformance_key_missing',
+        parsed.input.layer,
+        errors,
+        warnings,
+      )
+      continue
+    }
+
+    if (disclosureDigestsOk(parsed) === false) {
+      checks[checkIndex] = sdJwtConformanceCheck('invalid', profile, 'disclosure_digest')
+      addSdJwtConformanceFinding(
+        policy,
+        'vi_sd_jwt_conformance_invalid',
+        parsed.input.layer,
+        errors,
+        warnings,
+      )
+      continue
+    }
+
+    try {
+      const verifier = sdJwtVerifier(key)
+      const verifyOptions = { currentDate: nowSeconds, skewSeconds: clockSkewSeconds }
+
+      if (profile === 'sd-jwt-vc') {
+        const vcOptions = options.sdJwtVc ?? {}
+        const statusListFetcher =
+          vcOptions.statusListFetcher ??
+          (async () => {
+            throw new Error('status_fetcher_unconfigured')
+          })
+        const vctFetcher =
+          vcOptions.vctFetcher ??
+          (vcOptions.loadTypeMetadata
+            ? async () => {
+                throw new Error('vct_fetcher_unconfigured')
+              }
+            : undefined)
+        const vcConfig: SDJWTVCConfig = {
+          hasher: sdJwtHasher,
+          hashAlg: 'sha-256',
+          verifier,
+          loadTypeMetadataFormat: vcOptions.loadTypeMetadata === true,
+          statusListFetcher,
+        }
+        if (vcOptions.maxVctExtendsDepth !== undefined)
+          Object.assign(vcConfig, { maxVctExtendsDepth: vcOptions.maxVctExtendsDepth })
+        if (vcOptions.statusValidator !== undefined)
+          Object.assign(vcConfig, { statusValidator: vcOptions.statusValidator })
+        if (vctFetcher !== undefined) Object.assign(vcConfig, { vctFetcher })
+
+        const verifierInstance = new SDJwtVcInstance(vcConfig)
+        await verifierInstance.verify(parsed.input.sdJwt, verifyOptions)
+        await verifierInstance.getClaims(parsed.input.sdJwt)
+      } else {
+        const verifierInstance = new SDJwtInstance<Record<string, unknown>>({
+          hasher: sdJwtHasher,
+          hashAlg: 'sha-256',
+          verifier,
+        })
+        await verifierInstance.verify(parsed.input.sdJwt, verifyOptions)
+        await verifierInstance.getClaims(parsed.input.sdJwt)
+      }
+
+      checks[checkIndex] = sdJwtConformanceCheck('verified', profile)
+    } catch (error) {
+      checks[checkIndex] = sdJwtConformanceCheck('invalid', profile, sdJwtErrorReason(error))
+      addSdJwtConformanceFinding(
+        policy,
+        'vi_sd_jwt_conformance_invalid',
+        parsed.input.layer,
+        errors,
+        warnings,
+      )
+    }
+  }
+
+  return { checks, errors, warnings }
+}
+
 export function verifyAp2ViEvidence(
   bundle: Ap2ViEvidenceBundle,
   options: VerifyAp2ViEvidenceOptions = {},
@@ -713,6 +941,7 @@ export function verifyAp2ViEvidence(
         typ: null,
         kid: null,
         signature: signatureCheck('invalid', 'parse'),
+        sdJwtConformance: sdJwtConformanceCheck('invalid', null, 'parse'),
         sdHashOk: null,
         disclosuresOk: null,
         mandateVcts: [],
@@ -816,10 +1045,14 @@ export async function verifyAp2ViEvidenceAsync(
   const ap2: Ap2EvidenceInput = { ...bundle.ap2 }
   const receiptJwtIssuers = options.receiptJwtIssuers ?? bundle.receiptJwtIssuers ?? []
   const receiptJwtPolicy = options.receiptJwtPolicy ?? 'require'
+  const sdJwtConformancePolicy = options.sdJwtConformancePolicy ?? 'require'
+  const sdJwtConformanceProfile = options.sdJwtConformanceProfile ?? 'sd-jwt-vc'
   const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000)
   const clockSkewSeconds = options.clockSkewSeconds ?? 300
   const jwtErrors: string[] = []
   const jwtWarnings: string[] = []
+  const sdJwtErrors: string[] = []
+  const sdJwtWarnings: string[] = []
 
   const paymentJwt = ap2.paymentReceiptJwt
     ? await verifyReceiptJwt(
@@ -874,6 +1107,27 @@ export async function verifyAp2ViEvidenceAsync(
 
   const result = verifyAp2ViEvidence({ ...bundle, ap2 }, options)
 
+  if (sdJwtConformancePolicy !== 'off') {
+    const credentials = bundle.vi?.credentials ?? []
+    const trustedIssuerKeys = options.trustedIssuerKeys ?? bundle.trustedIssuerKeys ?? []
+    const sdJwt = await verifyCredentialSdJwtConformance(
+      credentials,
+      trustedIssuerKeys,
+      sdJwtConformancePolicy,
+      sdJwtConformanceProfile,
+      options,
+      nowSeconds,
+      clockSkewSeconds,
+    )
+
+    for (let index = 0; index < sdJwt.checks.length; index += 1) {
+      const check = result.vi.credentials[index]
+      if (check) check.sdJwtConformance = sdJwt.checks[index]!
+    }
+    sdJwtErrors.push(...sdJwt.errors)
+    sdJwtWarnings.push(...sdJwt.warnings)
+  }
+
   if (paymentJwt) {
     if (result.ap2.paymentReceipt) result.ap2.paymentReceipt.jwt = paymentJwt.check
     else result.ap2.paymentReceipt = emptyJwtReceiptCheck(paymentJwt.check)
@@ -883,8 +1137,8 @@ export async function verifyAp2ViEvidenceAsync(
     else result.ap2.checkoutReceipt = emptyJwtReceiptCheck(checkoutJwt.check)
   }
 
-  const errors = [...new Set([...result.errors, ...jwtErrors])]
-  const warnings = [...new Set([...result.warnings, ...jwtWarnings])]
+  const errors = [...new Set([...result.errors, ...jwtErrors, ...sdJwtErrors])]
+  const warnings = [...new Set([...result.warnings, ...jwtWarnings, ...sdJwtWarnings])]
   const hasAp2Receipt =
     result.ap2.paymentReceipt?.present === true || result.ap2.checkoutReceipt?.present === true
 

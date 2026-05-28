@@ -4302,6 +4302,55 @@ The verifier enforces ES256, issuer matching when `issuer` is configured, option
 
 ---
 
+## D091: AP2 / VI SD-JWT conformance uses OpenWallet sd-jwt-js
+
+**Date:** 2026-05-28
+
+**Supersedes:** P029, removed from Pending decisions when this ADR codified the decision.
+
+**Context.** [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) shipped a deliberately small Verifiable Intent parser inside `@atrib/verify`. It parsed compact SD-JWT strings, checked ES256 signatures, checked AP2 `sd_hash` and disclosure links, and validated the AP2 mandate chain. That was enough for local AP2 evidence checks, but it was not a credible long-term SD-JWT / SD-JWT VC conformance surface.
+
+The P029 audit called for a vetted SD-JWT implementation inside `@atrib/verify`, while preserving [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt)'s boundary: `@atrib/agent` detects AP2 receipts by shape, and verifier-side evidence checks stay off the middleware critical path.
+
+**Decision.** `@atrib/verify` now uses OpenWallet Foundation `sd-jwt-js` packages for async AP2 / Verifiable Intent credential conformance:
+
+1. `@sd-jwt/core` for issuer-signed SD-JWT verification.
+2. `@sd-jwt/sd-jwt-vc` for SD-JWT VC profile verification.
+
+The synchronous `verifyAp2ViEvidence()` path remains the decoded-object verifier from [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify). The async `verifyAp2ViEvidenceAsync()` path now performs AP2 receipt JWT verification from [D090](#d090-ap2-receipt-jwt-verification-uses-jose-in-atribverify), then verifies VI credentials with the SD-JWT library. Each VI credential result carries `sdJwtConformance: { status, profile, reason? }`.
+
+The default `sdJwtConformancePolicy` is `require`. Invalid SD-JWT / VC conformance makes the evidence result invalid. Callers can pass `sdJwtConformancePolicy: "best-effort"` to treat conformance failures as warnings, or `"off"` to skip the async conformance layer.
+
+The default conformance profile is `sd-jwt-vc`. Callers may pass `sdJwtConformanceProfile: "sd-jwt"` to run the core SD-JWT profile instead.
+
+`sdJwtVc.loadTypeMetadata` is opt-in. The verifier does not make implicit VCT metadata or status-list network calls. Callers that need VC type metadata or status checks must supply `sdJwtVc.vctFetcher` or `sdJwtVc.statusListFetcher`; otherwise those checks fail under `require` and warn under `best-effort`.
+
+**Important implementation boundary.** OpenWallet `sd-jwt-js` verifies signatures and registered time claims, and can unpack claims, but it does not fail merely because a presented disclosure is unmatched by the issuer payload. AP2 / VI verification treats that as invalid evidence. `@atrib/verify` therefore keeps the AP2-side disclosure digest reference guard (`_sd` or `delegate_payload`) as part of conformance instead of delegating the entire evidence decision to the library.
+
+**Alternatives considered.**
+
+- *Keep the local parser as the only conformance layer.* Rejected. Local parsing is useful for AP2-specific evidence extraction, but maintaining the whole SD-JWT / SD-JWT VC surface by hand would create protocol drift.
+- *Move SD-JWT verification into `detectTransaction()`.* Rejected. It would put issuer-key lookup, SD-JWT parsing, VC status checks, and failure reporting on the middleware path that [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) intentionally kept shape-only.
+- *Let the SD-JWT library make default network calls for VC status and VCT metadata.* Rejected. Verifier callers should supply trust roots and fetchers explicitly. Hidden network fetches would be surprising and harder to test.
+- *Replace AP2-specific digest and mandate checks with the library result.* Rejected. AP2 uses profile-specific fields such as `delegate_payload`, checkout/payment hash binding, and delegated `cnf.jwk` chains. Those checks remain atrib verifier responsibilities.
+
+**Consequences.**
+
+- `@atrib/verify` declares `@sd-jwt/core` and `@sd-jwt/sd-jwt-vc` as direct dependencies.
+- `verifyAp2ViEvidenceAsync()` now verifies VI SD-JWT / VC credentials by default when VI credentials are present.
+- `verifyAp2ViEvidence()` remains synchronous and marks `sdJwtConformance` as `not_checked` with reason `async_required`.
+- `@atrib/integration` runs AP2 receipt detection plus async AP2 / VI evidence verification across the package boundary.
+- P030 remains open for AP2 mandate constraint evaluation. [D091](#d091-ap2--vi-sd-jwt-conformance-uses-openwallet-sd-jwt-js) validates credential conformance and AP2 binding, not business-rule constraints like amount ceilings, merchant allowlists, or SKU limits.
+
+**Cross-references.**
+
+- [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt), AP2 receipt detection boundary.
+- [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), first AP2 / VI evidence checker.
+- [D090](#d090-ap2-receipt-jwt-verification-uses-jose-in-atribverify), AP2 receipt JWT verification.
+- [§5.5.4](atrib-spec.md#554-ap2--verifiable-intent-evidence-checks), updated AP2 / VI verifier surface.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -4738,24 +4787,6 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 - [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), verify promotion: when verify-mcp ships as primitive #7, Position 2 makes adding `atrib verify` a one-subcommand addition rather than a new helper + node_modules.
 - [P023](#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion), subscription surface; the always-on consumer pattern benefits from a stable CLI deployment for the same reasons.
 - [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type), parent-child env threading; benefits from PATH-resolved CLI per consequences above.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-
-## P029: Full SD-JWT / VC conformance for Verifiable Intent
-
-**Source:** AP2 / Verifiable Intent implementation gap audit after [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) landed. The first verifier implementation parses SD-JWT strings, checks disclosures, validates ES256 signatures, and verifies the AP2-specific mandate chain. It does not claim full SD-JWT VC conformance.
-
-**The decision in question:** should `@atrib/verify` adopt a dedicated SD-JWT / VC implementation for Verifiable Intent once the candidate dependency passes local fixtures and spec vectors?
-
-**Considerations.**
-
-- The current parser is intentionally small. It is good for local evidence checks and bad as a long-term SD-JWT conformance surface.
-- The dependency must support issuer-signed SD-JWT parsing, disclosure digest validation, holder binding or key binding where needed, and deterministic failure reporting.
-- The package boundary matters. The SD-JWT dependency should sit inside `@atrib/verify`; it should not leak into `@atrib/agent` or middleware.
-- Conformance tests should include IETF SD-JWT / SD-JWT VC vectors when available, plus AP2-specific VI chains from `packages/agent/test/fixtures/ap2/`.
-
-**Likely outcome (not committed):** accept after dependency selection. Replace or wrap the local parser with a vetted SD-JWT / VC library and keep the existing public result shape stable.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 
