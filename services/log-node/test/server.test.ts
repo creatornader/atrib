@@ -7,9 +7,12 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { request as httpRequest, type IncomingMessage } from 'node:http'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import * as ed from '@noble/ed25519'
 import { sha512, sha256 } from '@noble/hashes/sha2.js'
-import { signRecord, hexEncode } from '@atrib/mcp'
+import { canonicalRecord, signRecord, hexEncode } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import { startLogServer, type LogServer } from '../src/index.js'
 import { parseSignatureLine } from '../src/checkpoint.js'
@@ -128,7 +131,68 @@ describe('GET / (service-info index)', () => {
     expect(body.versions).toEqual(['v1'])
     expect(body.current_version).toBe('v1')
     expect(body.endpoints.submit).toBe('POST /v1/entries')
+    expect(body.endpoints.proof).toBe('GET /v1/proof/<record_hash_hex>')
     expect(body.explorer).toBe('https://explore.atrib.dev/')
+  })
+})
+
+describe('GET /v1/proof/:hash', () => {
+  it('returns the cached proof for a submitted record', async () => {
+    const record = await makeSignedRecord()
+    const { json: submitted } = await post(server.url, record)
+    const recordHashHex = hexEncode(sha256(canonicalRecord(record)))
+
+    const res = await fetch(`${server.url}/v1/proof/${recordHashHex}`)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual(submitted)
+  })
+
+  it('generates a fresh proof after restart from the persisted tree', async () => {
+    const privateKey = ed.utils.randomSecretKey()
+    const dir = await mkdtemp(join(tmpdir(), 'atrib-log-proof-'))
+    const persistencePath = join(dir, 'entries.bin')
+    const firstServer = await startLogServer({
+      port: 0,
+      logPrivateKey: privateKey,
+      persistencePath,
+    })
+
+    try {
+      const record = await makeSignedRecord()
+      const { json: submitted } = await post(firstServer.url, record)
+      const recordHashHex = hexEncode(sha256(canonicalRecord(record)))
+      await firstServer.close()
+
+      const secondServer = await startLogServer({
+        port: 0,
+        logPrivateKey: privateKey,
+        persistencePath,
+      })
+      try {
+        const res = await fetch(`${secondServer.url}/v1/proof/${recordHashHex}`)
+        expect(res.status).toBe(200)
+        const proof = (await res.json()) as Record<string, unknown>
+        expect(proof.log_index).toBe((submitted as Record<string, unknown>).log_index)
+        expect(typeof proof.checkpoint).toBe('string')
+        expect(Array.isArray(proof.inclusion_proof)).toBe(true)
+        expect(typeof proof.leaf_hash).toBe('string')
+      } finally {
+        await secondServer.close()
+      }
+    } finally {
+      try {
+        await firstServer.close()
+      } catch {
+        // The test closes firstServer before restart.
+      }
+    }
+  })
+
+  it('returns 404 for a missing hash', async () => {
+    const res = await fetch(`${server.url}/v1/proof/${'0'.repeat(64)}`)
+    expect(res.status).toBe(404)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(body.error).toBe('not found')
   })
 })
 

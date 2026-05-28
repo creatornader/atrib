@@ -1,0 +1,41 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "atrib-cloudflare-approval-trace",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ApprovalTraceAgent",
+        "class_name": "ApprovalTraceAgent",
+      },
+      {
+        "name": "ApprovalActionMcp",
+        "class_name": "ApprovalActionMcp",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ApprovalTraceAgent", "ApprovalActionMcp"],
+    },
+  ],
+  "vars": {
+    "ATRIB_LOG_ENDPOINT": "https://log.atrib.dev/v1/entries",
+    "ATRIB_AGENT_SERVER_URL": "mcp://atrib-cloudflare-approval-trace/agent",
+    "ATRIB_ACTION_MCP_SERVER_URL": "mcp://atrib-cloudflare-approval-trace/action",
+  },
+  "secrets": {
+    "required": [
+      "ATRIB_AGENT_PRIVATE_KEY",
+      "ATRIB_HUMAN_APPROVER_PRIVATE_KEY",
+      "ATRIB_ACTION_MCP_PRIVATE_KEY",
+    ],
+  },
+}

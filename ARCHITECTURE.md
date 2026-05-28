@@ -210,6 +210,12 @@ atrib categorizes runtime integration into six first-class patterns ([D069](DECI
 
 Patterns 1–3 ship reference implementations in atrib v1. Patterns 4–6 are documented with their conformance contract scope; reference implementations land per priority sequencing.
 
+### Cross-harness investigation continuity
+
+Runtime mounting is only half the problem. Real support and RCA work often crosses a support system, a log store, a hosted agent, a chat thread, and a local coding harness. The public Merkle log proves that each signed record existed, but it does not carry the private bodies and evidence a later harness needs to continue the task.
+
+The continuation shape is documented in spec [§7.8](atrib-spec.md#78-cross-harness-continuation-packets). A handoff that wants a local agent to resume without guessing needs record bodies or archive references, redacted ticket and log evidence, skill pack names and hashes, the latest chain tail, provenance anchors, and signed diagnostics for hosted-agent failures. This keeps atrib in the substrate role: Axiom-style wide logs keep tenant context and request/response evidence, support systems keep customer context and thread state, and atrib proves how the agent moved through both.
+
 ### Why each adapter is different
 
 Every MCP framework has a different integration surface. The Claude Agent SDK exposes an `McpServer` instance you can wrap directly. Cloudflare Agents has an `McpAgent` class with lifecycle hooks. Vercel AI SDK's `@ai-sdk/mcp` ships its own JSON-RPC implementation that is structurally incompatible with the standard `@modelcontextprotocol/sdk` Client. LangChain's `MultiServerMCPClient` wraps multiple connections and needs a different hook point.

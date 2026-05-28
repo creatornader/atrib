@@ -40,7 +40,8 @@ Contents
   - [I. Provable cognition (recall)](#i-provable-cognition-recall)
   - [II. Independent audit and compliance](#ii-independent-audit-and-compliance)
   - [III. Cross-agent provenance and handoffs](#iii-cross-agent-provenance-and-handoffs)
-  - [IV. Settlement, attribution, and the post-advertising web](#iv-settlement-attribution-and-the-post-advertising-web)
+  - [IV. Verifiable investigations and repair](#iv-verifiable-investigations-and-repair)
+  - [V. Settlement, attribution, and the post-advertising web](#v-settlement-attribution-and-the-post-advertising-web)
 
 _On the relationship between transparency, trust, and value in a world where agents act on our behalf._
 
@@ -116,7 +117,7 @@ The specification, the signing libraries, the calculation algorithm, and the log
 
 The five principles above describe a substrate. What the substrate enables is a set of distinct uses, each of which collapses without it. None of them is the central claim. atrib is not "for" any single one. The claim is that the substrate is a precondition for all of them, and that no other piece of infrastructure today provides it.
 
-The four uses below are ordered by how directly each relies on the substrate's load-bearing property: that an agent's actions are signed at the moment they happen and remain independently verifiable thereafter.
+The five uses below are ordered by how directly each relies on the substrate's load-bearing property: that an agent's actions are signed at the moment they happen and remain independently verifiable thereafter.
 
 ### I. Provable cognition (recall)
 
@@ -138,7 +139,15 @@ Agents that hand off work to other agents (a delegation flow, a multi-agent syst
 
 Without the substrate, multi-agent flows reduce to "trust whoever is closest to the platform." With it, the chain is the trust.
 
-### IV. Settlement, attribution, and the post-advertising web
+### IV. Verifiable investigations and repair
+
+Support, incident, billing, and RCA workflows expose another use of the same substrate. An investigation is not a single answer; it is a sequence of ticket reads, tenant-scoped log queries, code-path checks, hypotheses, diagnostics, revisions, and handoffs. Each step needs to be inspected later without pretending the public log can carry the private ticket or log body.
+
+atrib makes that trail verifiable without replacing observability systems. The log store keeps operational evidence. The support system keeps customer context. The local mirror or archive keeps record bodies under the chosen privacy posture. atrib proves how the agent moved through those systems, which prior evidence it claimed informed each step, and where the next harness should resume.
+
+This is the support/RCA form of repair: a future agent can trace a bad hypothesis, read the signed diagnostic that corrected it, and continue from the latest chain tail instead of replaying the whole investigation from memory or platform chat history.
+
+### V. Settlement, attribution, and the post-advertising web
 
 The substrate produces a useful side effect: when commerce closes a chain (an agent purchases something, a tool is invoked in service of a transaction), the same signed record set is what a settlement document is computed from. The [§4.6](#46-the-calculation-algorithm) algorithm runs deterministically over the graph and produces a value distribution any merchant or auditor can recompute. This is the attribution-economy use case, and it is genuinely real, but it is one consequence of the substrate, not the reason for it.
 
@@ -4591,7 +4600,32 @@ A diagnostic outcome is still an observed tool action for v1 purposes: an evalua
 
 This pattern does not prove the diagnostic is true unless the diagnostic tool or an external witness also attests the result per [§7.6](#76-outcome-verification-patterns). It proves the harness signed an outcome record and linked it to the evaluated action. Consumers decide how much to trust the evaluator.
 
-### 7.8 What the patterns DO NOT do
+### 7.8 Cross-harness continuation packets
+
+Long-running work often starts in one harness and continues in another. A support ticket may trigger a hosted agent, the hosted agent may post a result into a Slack thread, and an engineer may then continue the investigation in Claude Code or Codex. The public log proves that signed records exist, but it does not carry enough private context for the next harness to act. A continuation handoff therefore needs a packet outside the log.
+
+**The pattern.**
+
+A continuation packet carries the minimum material a receiving harness needs to resume a task without guessing:
+
+1. **Upstream anchors:** `context_id`, latest `record_hash`, latest chain tail, and any `provenance_token` the receiving session should use if it starts a fresh trace.
+2. **Body access:** local mirror bundle, archive references, or both for the record bodies the receiving agent may need. Tier 1 log commitments are not enough when the agent must inspect signed content.
+3. **Redacted evidence:** ticket, tenant context, request/response body, log-query, code-read, diagnostic, support-thread, and external-system references with hashes, scopes, and redaction policy. Operational evidence stays in the evidence systems; atrib proves how the agent used it.
+4. **Skill and domain context:** skill pack names, versions, hashes, and domain reference documents that shaped the investigation. If the hosted run used a billing-investigation skill but the local continuation does not load it, that is a real continuity break.
+5. **Runtime diagnostics:** tool availability, MCP auth status, skill-loading status, hosted memory and filesystem status, codebase checkout identity, and any failed hosted-agent capabilities. Diagnostic failures SHOULD be signed using the pattern in [§7.7](#77-signed-diagnostic-outcome--causal-trace-replay).
+6. **Privacy posture:** which bodies are public, archived, local-only, salted, redacted, or withheld. The packet MUST NOT weaken the per-record posture chosen under [§8](#8-privacy-postures).
+
+The packet MAY be carried privately by the support system, by a handoff message, or by a harness-specific extension record such as `https://example.com/v1/types/continuation_packet`. If it is emitted as a record, it participates in the normal chain and SHOULD use `informed_by` to point at the latest upstream record and any diagnostic records that shaped the handoff.
+
+**Why no new primitive.**
+
+Continuation is a packaging concern over existing primitives, not a new cognitive act. The receiving agent can use `atrib-recall` to read records, `atrib-trace` to walk the upstream chain, `atrib-summarize` to condense the context, and `atrib-emit` / `atrib-revise` / `atrib-annotate` to continue the work. A dedicated primitive would duplicate those verbs.
+
+**Trust boundary statement.**
+
+A continuation packet proves only what is signed and linked. It does not prove that a ticket, log result, or skill file is true unless those artifacts are independently attested per [§7.6](#76-outcome-verification-patterns). It also does not make private evidence public. The packet is a way to move verifiable context across harness boundaries while preserving the separation between the public log, producer-local mirrors, optional archives, and external evidence stores.
+
+### 7.9 What the patterns DO NOT do
 
 **They do not validate log inclusion.** Local signature verification proves "this record was signed by that creator_key." It does not prove "this record was committed to log.atrib.dev." A harness that needs the inclusion guarantee fetches an inclusion proof from the log per [§2](#2-merkle-log-protocol).
 

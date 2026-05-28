@@ -13,7 +13,7 @@
  *   - flags: --version / --help short-circuit before reading stdin
  */
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -187,6 +187,30 @@ describe('atrib-emit-cli wire contract', () => {
     expect(
       out.warnings.some((w) => w.startsWith('submission queued; proof not yet available')),
     ).toBe(false)
+  })
+
+  it('happy path: uses the per-agent mirror path when ATRIB_MIRROR_FILE is unset', async () => {
+    delete process.env['ATRIB_MIRROR_FILE']
+    const home = join(tmpDir, 'home')
+    await mkdir(home, { recursive: true })
+    const envelope = {
+      event_type: 'https://atrib.dev/v1/types/observation',
+      content: { what: 'cli-default-mirror-path', topics: ['cli-test'] },
+      context_id: 'aaaabbbbccccddddeeeeffff00001113',
+    }
+
+    const r = await runCli(['--log-endpoint', log.url], JSON.stringify(envelope), {
+      HOME: home,
+      ATRIB_PRIVATE_KEY: seedHex,
+      ATRIB_AGENT: 'cli-default-test',
+    })
+
+    expect(r.code).toBe(0)
+    const out = JSON.parse(r.stdout) as { record_hash: string }
+    expect(out.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    const defaultMirrorPath = join(home, '.atrib', 'records', 'atrib-emit-cli-default-test.jsonl')
+    const mirrorText = await readFile(defaultMirrorPath, 'utf8')
+    expect(mirrorText).toContain('cli-default-mirror-path')
   })
 
   it('unknown CLI flag: exits 0 with an invalid-arguments fallback', async () => {

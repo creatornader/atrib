@@ -19,8 +19,8 @@ mcp__atrib-emit__emit({
   event_type: string,           // URI per spec §1.2.4. Common normative values:
                                 // 'https://atrib.dev/v1/types/observation', '...annotation', '...revision'.
                                 // Extension URIs in any namespace are also valid.
-  content: Record<string, unknown>,  // Semantic content of the event. Stored in the local mirror,
-                                     // committed on-chain via content_id derived from event_type leaf.
+  content: Record<string, unknown>,  // Semantic content of the event. Stored in the local mirror.
+                                     // By default, args_hash commits to JCS(content).
 
   // Optional
   context_id?: string,          // 32-hex. STRONGLY RECOMMENDED. Producers (cron jobs, watchers,
@@ -84,7 +84,7 @@ If a 1Password item stores the seed with a `ATRIB_PRIVATE_KEY=<value>` label pre
 | `ATRIB_KEY_FILE` | three | path to a 0600 file containing the seed |
 | (Keychain) | | macOS only; falls back here last |
 | `ATRIB_LOG_ENDPOINT` | optional | log submission endpoint; defaults to `https://log.atrib.dev/v1/entries` |
-| `ATRIB_MIRROR_FILE` | optional | JSONL path emit WRITES its own envelope mirror to; if unset, mirroring is skipped |
+| `ATRIB_MIRROR_FILE` | optional | JSONL path emit WRITES its own envelope mirror to; defaults to `~/.atrib/records/atrib-emit-${ATRIB_AGENT:-claude-code}.jsonl` |
 | `ATRIB_AUTOCHAIN_SOURCE` | optional | JSONL path emit READS to inherit the wrapper's session context_id; defaults to the wrapper's local mirror under `~/.atrib/records/`. Splitting read/write paths lets emit write its own envelope mirror while still inheriting the wrapper's chain |
 | `ATRIB_AGENT` | optional | agent name for the agent-scoped Keychain service `atrib-creator-<agent>`; defaults to `claude-code` |
 | `ATRIB_KEYCHAIN_ACCOUNT` | optional | Keychain account; defaults to `userInfo().username` |
@@ -148,7 +148,7 @@ Five files do the work:
 - `src/index.ts`, McpServer registration + the `emitInProcess` library entrypoint ([D081](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d081-in-process-emit-for-hook-class-producers-emitinprocess)); the `emit` tool calls `handleEmit` which orchestrates sign + submit + mirror.
 - `src/main.ts`, MCP stdio binary entrypoint (`atrib-emit`); spins up the McpServer over stdio.
 - `src/cli.ts`, CLI binary entrypoint (`atrib-emit-cli`, [D082](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape)); reads a JSON envelope on stdin, calls `emitInProcess`, writes the result JSON to stdout. Exit code always 0 per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract).
-- `src/sign.ts`, Builds and signs the AtribRecord. Pure aside from the signing primitive itself; reuses `@atrib/mcp`'s `signRecord`, `computeContentId`, `getPublicKey`. Records produced by emit are byte-identical in canonical form to wrapper-signed records (verifier MUST NOT distinguish them).
+- `src/sign.ts`, Builds and signs the AtribRecord. Pure aside from the signing primitive itself; reuses `@atrib/mcp`'s `signRecord`, `computeContentId`, `getPublicKey`. Records produced by emit are byte-identical in canonical form to wrapper-signed records (verifier MUST NOT distinguish them). Explicit emit records default `args_hash` to `sha256(JCS(content))` unless the caller supplies an `argsHash`.
 - `src/keys.ts`, Bounded key resolution ([D081](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d081-in-process-emit-for-hook-class-producers-emitinprocess)). `ATRIB_PRIVATE_KEY` (base64url) → `ATRIB_KEY_FILE` → macOS Keychain (`ATRIB_KEYCHAIN_TIMEOUT_MS` default 3s) → 1Password CLI (`ATRIB_OP_TIMEOUT_MS` default 10s). Timeouts prevent unbounded hangs in headless contexts.
 - `src/storage.ts`, Best-effort JSONL mirror of full record + proof, for local recall.
 

@@ -156,6 +156,7 @@ describe('D081 byte-identicality: emitInProcess vs handleEmit', () => {
       'context_id',
       'chain_root',
       'content_id',
+      'args_hash',
     ]
     for (const f of fieldsThatMustMatch) {
       expect(recA[f], `field ${f}`).toEqual(recB[f])

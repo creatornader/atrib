@@ -1,0 +1,34 @@
+{
+  "name": "@atrib/cloudflare-approval-trace",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Interactive Cloudflare Agents example for atrib-signed human approval traces.",
+  "scripts": {
+    "build": "pnpm --filter @atrib/mcp build && tsc --noEmit",
+    "dev": "pnpm --filter @atrib/mcp build && node scripts/write-dev-vars.mjs && wrangler dev --env-file .tmp/dev.vars",
+    "deploy": "pnpm --filter @atrib/mcp build && wrangler deploy --secrets-file .tmp/secrets.json",
+    "proof:worker": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/graph-node build && tsx scripts/run-worker-proof.ts",
+    "test": "pnpm --filter @atrib/mcp build && node scripts/run-vitest-clean.mjs",
+    "test:browser": "pnpm --filter @atrib/mcp build && node scripts/run-playwright-clean.mjs",
+    "test:e2e": "pnpm run test && pnpm run test:browser",
+    "typecheck": "pnpm --filter @atrib/mcp build && tsc --noEmit"
+  },
+  "dependencies": {
+    "@atrib/mcp": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "agents": "^0.13.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@atrib/graph-node": "workspace:*",
+    "@cloudflare/vitest-pool-workers": "^0.16.10",
+    "@cloudflare/workers-types": "^4.20260527.1",
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^25.9.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7",
+    "wrangler": "^4.95.0"
+  }
+}
