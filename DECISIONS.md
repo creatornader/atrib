@@ -4678,6 +4678,48 @@ The helper signs the [D052](#d052-cross-attestation-requirement-for-transaction-
 
 ---
 
+## D099: Explicit emit records commit local content through default args_hash
+
+**Date:** 2026-05-28
+
+**Status:** Accepted
+
+**Context.** The P17 dogfood diagnostic run exposed a bad edge in explicit emits. Two different `atrib-emit-cli` diagnostics signed in the same millisecond with the same context and chain root could produce the same signed record because their semantic content lived only in the local `_local` sidecar. The public record committed to the event kind through `content_id`, but not to the local body. That meant a local mirror could contain two different bodies that pointed at the same `record_hash`. For diagnostic replay, that is not good enough: a downstream agent must be able to check that the body it is using matches the signed evidence.
+
+The same run also exposed a direct-CLI ergonomics gap: when `ATRIB_MIRROR_FILE` was unset, the CLI submitted records but skipped local mirroring. Those records were public-log evidence but not useful to recall, trace, or the P17 corpus builder.
+
+**Decision.** `@atrib/emit` now computes `args_hash = sha256(JCS(content))` when a caller omits `argsHash`. A caller-supplied `argsHash` still wins. Full content remains local in the mirror sidecar; the public record carries only the hash commitment. This keeps `content_id` as the kind identifier from [§1.2.2](atrib-spec.md#122-content_id), while using the existing [§8.3](atrib-spec.md#83-salted-commitment-posture) commitment field to bind the signed record to the local body.
+
+Direct `atrib-emit-cli` also defaults its mirror path to `~/.atrib/records/atrib-emit-${ATRIB_AGENT:-claude-code}.jsonl` when `ATRIB_MIRROR_FILE` is unset. Operators can still override the path explicitly.
+
+**Alternatives considered.**
+
+- *Change `content_id` to include the body.* Rejected. `content_id` identifies the action kind. Making it body-specific would break the existing grouping semantics for observations, annotations, revisions, and tool calls.
+- *Put `content` directly in the signed record.* Rejected. The public log is commitment-first. Many explicit emits carry private reasoning, file paths, or customer context that should stay in the local mirror or a future archive layer.
+- *Require every caller to pass `argsHash`.* Rejected. The CLI and MCP tool are used by agents and hooks. The safe default should be body commitment, with explicit override for callers that already have a salted or precomputed commitment.
+- *Rely on timestamp uniqueness.* Rejected. The observed failure happened precisely because two emits could share timestamp, context, event kind, and chain root.
+- *Only fix the mirror default.* Rejected. Mirroring preserves bodies, but it does not make those bodies replay-checkable against the signed record.
+
+**Consequences.**
+
+- Same-millisecond explicit emits with different local bodies no longer collapse to the same signed record.
+- P17 diagnostic rows can check local body replay by comparing `sha256(JCS(_local.content))` with `record.args_hash`.
+- Existing records without `args_hash` remain valid, but they are weaker diagnostic evidence because the local body is sidecar-only.
+- The byte-identical transport claim still holds: MCP-server and CLI emits with the same input produce the same canonical record fields.
+- Direct CLI use becomes useful to recall and trace by default because local mirroring no longer depends on an env var.
+
+**Cross-references.**
+
+- [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), local sidecar persistence.
+- [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), explicit cognitive primitives.
+- [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape), CLI distribution.
+- [D087](#d087-signed-diagnostic-outcome--causal-trace-replay), signed diagnostic outcome and replay.
+- [§1.2.2](atrib-spec.md#122-content_id), `content_id`.
+- [§8.3](atrib-spec.md#83-salted-commitment-posture), content commitments.
+
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

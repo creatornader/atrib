@@ -2,7 +2,7 @@
 // (createAtribEmitServer + the emit tool registration) without going over
 // stdio, by invoking the underlying handler directly.
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as ed from '@noble/ed25519'
 import { canonicalRecord, sha256, hexEncode, verifyRecord, type AtribRecord } from '@atrib/mcp'
 import { createAtribEmitServer, __test_only__ as __index_test_only__ } from '../src/index.js'
@@ -164,7 +164,7 @@ describe('buildAndSignEmitRecord', () => {
     expect(await verifyRecord(record)).toBe(true)
   })
 
-  it('omits tool_name, args_hash, and result_hash when not supplied (presence affects JCS)', async () => {
+  it('commits local content with args_hash when caller omits args_hash', async () => {
     const seed = await freshKey()
     const record = await buildAndSignEmitRecord({
       privateKey: seed,
@@ -175,8 +175,41 @@ describe('buildAndSignEmitRecord', () => {
     })
 
     expect(record).not.toHaveProperty('tool_name')
-    expect(record).not.toHaveProperty('args_hash')
+    expect((record as AtribRecord & { args_hash?: string }).args_hash).toMatch(
+      /^sha256:[0-9a-f]{64}$/,
+    )
     expect(record).not.toHaveProperty('result_hash')
+  })
+
+  it('different local content produces different records at the same timestamp', async () => {
+    const seed = await freshKey()
+    const timestamp = 1779972472173
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(timestamp)
+    try {
+      const common = {
+        privateKey: seed,
+        eventType: 'https://atrib.dev/v1/types/observation',
+        contextId: '5'.repeat(32),
+        chainRoot: 'sha256:' + '6'.repeat(64),
+      }
+      const first = await buildAndSignEmitRecord({
+        ...common,
+        content: { what: 'first diagnostic' },
+      })
+      const second = await buildAndSignEmitRecord({
+        ...common,
+        content: { what: 'second diagnostic' },
+      })
+
+      const firstHash = `sha256:${hexEncode(sha256(canonicalRecord(first)))}`
+      const secondHash = `sha256:${hexEncode(sha256(canonicalRecord(second)))}`
+      expect(firstHash).not.toBe(secondHash)
+      expect((first as AtribRecord & { args_hash?: string }).args_hash).not.toBe(
+        (second as AtribRecord & { args_hash?: string }).args_hash,
+      )
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('record_hash is stable for identical inputs at the same timestamp', async () => {
@@ -538,9 +571,8 @@ describe('producer sidecar routing (substrate-health by-producer aggregation)', 
     const bRecord = b.record as { record_hash?: string }
     // Both signed records share identical canonical-form bytes because
     // sidecar.producer is not part of canonicalSigningInput per spec §1.3.
-    // We assert via the same content_id (derived from canonical content
-    // hash) rather than record_hash, because record_hash incorporates the
-    // timestamp which differs by milliseconds between two calls.
+    // We assert via content_id rather than record_hash because record_hash
+    // incorporates timestamp. Producer stays sidecar-only.
     expect((aRecord as { content_id?: string }).content_id).toBe(
       (bRecord as { content_id?: string }).content_id,
     )

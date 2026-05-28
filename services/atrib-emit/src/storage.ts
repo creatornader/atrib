@@ -4,12 +4,12 @@
 // and an OPTIONAL `_local` sidecar carrying pre-sign payload content.
 //
 // The `_local` sidecar is the local-only complement to the public log.
-// Public log gets only the signed AtribRecord (with content_id as the
-// commitment to the original content). Local mirror additionally keeps
-// the pre-sign content so consumers (recall, trace, summarize) can
-// surface semantic context, `topics`, `what`, `why_noted`, alongside
-// the cryptographic evidence. Without the sidecar, mirror readers see
-// only event_type + hashes and must guess at semantics.
+// Public log gets only the signed AtribRecord. For explicit emits, args_hash
+// commits to the original content by default, while the local mirror keeps
+// the pre-sign content so consumers (recall, trace, summarize) can surface
+// semantic context, `topics`, `what`, `why_noted`, alongside the
+// cryptographic evidence. Without the sidecar, mirror readers see only
+// event_type + hashes and must guess at semantics.
 //
 // Sidecar shape rules:
 //   - Lives at the ENVELOPE level (not inside `record`). Never affects
@@ -24,11 +24,12 @@
 //     parse identically; readers must tolerate its absence.
 //
 // v1 keeps this minimal: append-only, no rotation, no compression. Path
-// defaults to ATRIB_MIRROR_FILE; if unset, mirroring is skipped (the
-// in-log record is still authoritative).
+// defaults to ATRIB_MIRROR_FILE, then to a per-agent file under
+// ~/.atrib/records.
 
 import { appendFile, mkdir } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import type { AtribRecord } from '@atrib/mcp'
 import type { ProofBundle } from '@atrib/mcp'
 
@@ -54,6 +55,13 @@ export interface MirrorLine {
 
 let ensuredDirs = new Set<string>()
 
+function mirrorPath(): string {
+  return (
+    process.env['ATRIB_MIRROR_FILE'] ??
+    join(homedir(), '.atrib', 'records', `atrib-emit-${process.env['ATRIB_AGENT'] ?? 'claude-code'}.jsonl`)
+  )
+}
+
 /**
  * Append one record + optional proof + optional local sidecar to the
  * mirror file. Failures log with the atrib-emit prefix and otherwise
@@ -65,8 +73,7 @@ export async function mirrorRecord(
   proof: ProofBundle | null,
   localSidecar?: LocalSidecar,
 ): Promise<void> {
-  const path = process.env['ATRIB_MIRROR_FILE']
-  if (!path) return
+  const path = mirrorPath()
   const line: MirrorLine = { record, proof, written_at: Date.now() }
   if (localSidecar) {
     line._local = localSidecar

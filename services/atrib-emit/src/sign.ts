@@ -7,8 +7,9 @@
 // action, not the specific invocation. The wrapper derives it from
 // server_url + tool_name; we use the synthetic pair (`mcp://atrib-emit` +
 // leaf of event_type URI), so all observations share content_id, all
-// annotations share content_id, etc. Per-emit distinctness comes from
-// (creator_key, context_id, timestamp), same as the wrapper.
+// annotations share content_id, etc. Explicit emit records also commit to
+// their local content through args_hash, so same-millisecond emits with
+// different sidecar bodies cannot collapse into the same signed record.
 //
 // The `content` argument never lands on-chain; the log stores commitments
 // only per spec §2.10. Full content lives in the local JSONL mirror for
@@ -19,17 +20,21 @@ import {
   getPublicKey,
   signRecord,
   base64urlEncode,
+  sha256,
+  hexEncode,
   type AtribRecord,
 } from '@atrib/mcp'
+import canonicalize from 'canonicalize'
 
 const SYNTHETIC_SERVER_URL = 'mcp://atrib-emit'
+const encoder = new TextEncoder()
 
 export interface BuildEmitRecordInput {
   privateKey: Uint8Array
   eventType: string
   contextId: string
   chainRoot: string
-  /** Cognitive content. Used only for content_id derivation context; full content lives in the mirror. */
+  /** Cognitive content. Committed through args_hash by default; full content lives in the mirror. */
   content: Record<string, unknown>
   informedBy?: string[] | undefined
   /**
@@ -66,11 +71,9 @@ export interface BuildEmitRecordInput {
    * Optional §8.3 args_hash commitment. Lets emit-signed records carry a
    * commitment to canonical args bytes for downstream consumers (e.g.
    * `recall_my_attribution_history` filtering by args_hash, or replay
-   * detection). Format: "sha256:" + 64 lowercase hex. Absence indicates
-   * the §8.1 default posture (no args commitment surfaced). Salted vs
-   * plain forms hash identically on the wire; the salt (when used) is
-   * carried in the separate args_salt field which this signer does not
-   * yet surface.
+   * detection). Format: "sha256:" + 64 lowercase hex. When omitted,
+   * explicit emit signs sha256(JCS(content)) so local bodies remain
+   * replay-checkable without exposing the body to the public log.
    */
   argsHash?: string | undefined
   /**
@@ -90,6 +93,7 @@ export async function buildAndSignEmitRecord(
   const publicKey = base64urlEncode(await getPublicKey(input.privateKey))
   const toolName = leafOfEventTypeUri(input.eventType)
   const contentId = computeContentId(SYNTHETIC_SERVER_URL, toolName)
+  const argsHash = input.argsHash ?? contentHash(input.content)
 
   // informed_by must be sorted lexicographically per §1.2.5 to keep the
   // canonical form stable across emitters. Omitted entirely (not null,
@@ -110,7 +114,7 @@ export async function buildAndSignEmitRecord(
     signature: '',
     ...(informedBySorted ? { informed_by: informedBySorted } : {}),
     ...(input.annotates ? { annotates: input.annotates } : {}),
-    ...(input.argsHash ? { args_hash: input.argsHash } : {}),
+    ...(argsHash ? { args_hash: argsHash } : {}),
     ...(input.provenanceToken ? { provenance_token: input.provenanceToken } : {}),
     ...(input.resultHash ? { result_hash: input.resultHash } : {}),
     ...(input.revises ? { revises: input.revises } : {}),
@@ -118,6 +122,14 @@ export async function buildAndSignEmitRecord(
   } as AtribRecord
 
   return signRecord(record, input.privateKey)
+}
+
+function contentHash(content: Record<string, unknown>): string {
+  const json = canonicalize(content)
+  if (typeof json !== 'string') {
+    throw new Error('content must be JCS-canonicalizable JSON')
+  }
+  return `sha256:${hexEncode(sha256(encoder.encode(json)))}`
 }
 
 /**

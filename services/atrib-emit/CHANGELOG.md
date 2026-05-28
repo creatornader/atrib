@@ -1,5 +1,13 @@
 # @atrib/emit
 
+## Unreleased
+
+### Patch Changes
+
+- Default direct `atrib-emit-cli` mirrors to `~/.atrib/records/atrib-emit-${ATRIB_AGENT:-claude-code}.jsonl` when `ATRIB_MIRROR_FILE` is unset.
+
+- Commit explicit emit content with `args_hash = sha256(JCS(content))` when callers omit `argsHash`. Caller-supplied `argsHash` still wins, and full content stays local in the mirror sidecar.
+
 ## 0.14.6
 
 ### Patch Changes
