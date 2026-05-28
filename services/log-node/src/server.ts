@@ -6,6 +6,7 @@
  * Endpoints:
  *   POST /v1/entries    . submit a signed attribution record
  *   GET  /v1/checkpoint . return the latest signed checkpoint as text/plain
+ *   GET  /v1/proof/:hex . return an inclusion proof for an included record
  *
  * Validation follows §2.6.1 Steps 1-6.
  *
@@ -207,6 +208,7 @@ async function handleRequest(
         stats: `GET /${v}/stats`,
         recent: `GET /${v}/recent`,
         lookup: `GET /${v}/lookup/<record_hash_hex>`,
+        proof: `GET /${v}/proof/<record_hash_hex>`,
         by_context: `GET /${v}/by-context/<context_id_hex>`,
         by_creator: `GET /${v}/by-creator/<creator_key_b64url>`,
         tile: `GET /${v}/tile/<level>/<index>`,
@@ -288,6 +290,14 @@ async function handleRequest(
   const lookupMatch = req.url?.match(/^\/v1\/lookup\/([0-9a-fA-F]{64})$/)
   if (req.method === 'GET' && lookupMatch) {
     return handleLookup(res, tree, lookupMatch[1]!.toLowerCase())
+  }
+
+  // GET /v1/proof/<hex>: return a fresh proof bundle for an already
+  // included entry. This lets proof-null mirrors recover evidence without
+  // re-submitting a record and risking a duplicate append.
+  const proofMatch = req.url?.match(/^\/v1\/proof\/([0-9a-fA-F]{64})$/)
+  if (req.method === 'GET' && proofMatch) {
+    return handleProofLookup(res, tree, signer, proofCache, proofMatch[1]!.toLowerCase())
   }
 
   // GET /v1/by-context/<hex>: list all entries for a context_id (16 bytes hex).
@@ -387,7 +397,7 @@ async function handleRequest(
 
   sendJson(res, 404, {
     error: 'not found',
-    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/recent, GET /v1/lookup/<hex>, GET /v1/by-context/<hex>, GET /v1/by-creator/<base64url>, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>, GET /dashboard, GET /<name>.mjs (dashboard sibling modules), GET /static/<name>, GET /favicon.ico',
+    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/recent, GET /v1/lookup/<hex>, GET /v1/proof/<hex>, GET /v1/by-context/<hex>, GET /v1/by-creator/<base64url>, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>, GET /dashboard, GET /<name>.mjs (dashboard sibling modules), GET /static/<name>, GET /favicon.ico',
   })
 }
 
@@ -680,6 +690,39 @@ function handleLookup(res: ServerResponse, tree: MerkleTree, hexHash: string): v
   sendJson(res, 404, { error: 'not found', record_hash: `sha256:${hexHash}` })
 }
 
+async function handleProofLookup(
+  res: ServerResponse,
+  tree: MerkleTree,
+  signer: CheckpointSigner,
+  proofCache: Map<string, ProofBundle>,
+  hexHash: string,
+): Promise<void> {
+  const cached = proofCache.get(hexHash)
+  if (cached !== undefined) {
+    res.setHeader('cache-control', 'public, max-age=60')
+    sendJson(res, 200, cached)
+    return
+  }
+
+  const size = tree.size
+  for (let i = 0; i < size; i++) {
+    const e = tree.entryBytes(i)
+    const recordHashHex = hexEncode(e.subarray(1, 33))
+    if (recordHashHex !== hexHash) continue
+
+    const proof = await makeProofBundle(tree, signer, i)
+    if (proofCache.size >= MAX_PROOF_CACHE) {
+      const oldest = proofCache.keys().next().value
+      if (oldest !== undefined) proofCache.delete(oldest)
+    }
+    proofCache.set(hexHash, proof)
+    res.setHeader('cache-control', 'public, max-age=60')
+    sendJson(res, 200, proof)
+    return
+  }
+  sendJson(res, 404, { error: 'not found', record_hash: `sha256:${hexHash}` })
+}
+
 function handleByContext(res: ServerResponse, tree: MerkleTree, contextHex: string): void {
   const size = tree.size
   const matches: ReturnType<typeof decodeEntry>[] = []
@@ -904,17 +947,7 @@ async function handleSubmit(
       return // finally block releases the lock
     }
     const logIndex = tree.append(entryBytes)
-    const inclusionProof = tree.inclusionProof(logIndex)
-    const leafHashBytes = tree.leafHash(logIndex)
-    const rootHash = tree.root()
-    const signedCheckpoint = await signer.sign(tree.size, rootHash)
-
-    proof = {
-      log_index: logIndex,
-      checkpoint: signedCheckpoint,
-      inclusion_proof: inclusionProof.map((h) => Buffer.from(h).toString('base64')),
-      leaf_hash: Buffer.from(leafHashBytes).toString('base64'),
-    }
+    proof = await makeProofBundle(tree, signer, logIndex)
 
     // Cache for idempotency. evict oldest entry if at capacity
     if (proofCache.size >= MAX_PROOF_CACHE) {
@@ -935,6 +968,25 @@ async function handleSubmit(
   // change the record_hash and be rejected by graph's verifyRecord step.
   if (graphFanoutEndpoint) {
     fanoutToGraph(graphFanoutEndpoint, fullRecord, recordHashHex, proof.log_index)
+  }
+}
+
+async function makeProofBundle(
+  tree: MerkleTree,
+  signer: CheckpointSigner,
+  logIndex: number,
+): Promise<ProofBundle> {
+  const treeSize = tree.size
+  const inclusionProof = tree.inclusionProof(logIndex)
+  const leafHashBytes = tree.leafHash(logIndex)
+  const rootHash = tree.root()
+  const signedCheckpoint = await signer.sign(treeSize, rootHash)
+
+  return {
+    log_index: logIndex,
+    checkpoint: signedCheckpoint,
+    inclusion_proof: inclusionProof.map((h) => Buffer.from(h).toString('base64')),
+    leaf_hash: Buffer.from(leafHashBytes).toString('base64'),
   }
 }
 

@@ -97,13 +97,19 @@ All hashes in the response are standard base64 (RFC 4648 §4, with padding), mat
 
 **Error responses** use RFC 9457 `application/problem+json`.
 
+### `GET /v1/proof/<record_hash_hex>`
+
+Returns a proof bundle for a record that is already included in the log. This is a read-only recovery endpoint: it does not append the record and it does not require the signed record body. It lets mirrors that currently hold `proof: null` recover inclusion evidence without duplicate submission.
+
+**Response `200 OK`** uses the same proof-bundle shape as `POST /v1/entries`. A missing record returns `404 Not Found`.
+
 ### `GET /v1/checkpoint`
 
 Returns the latest signed checkpoint as `text/plain` in C2SP signed-note format. Includes the current tree size and root hash signed by the log's Ed25519 key.
 
 ## Operator recovery
 
-Producer mirrors can contain entries shaped as `{ record, proof: null, _local }` when a record was signed and mirrored locally but log submission exceeded the producer flush deadline. Use the proof-null replay script to audit those records and append only the ones absent from the log.
+Producer mirrors can contain entries shaped as `{ record, proof: null, _local }` when a record was signed and mirrored locally but log submission exceeded the producer flush deadline. Use `GET /v1/proof/<record_hash_hex>` to recover evidence for records already in the log. Use the proof-null replay script to audit the remaining records and append only the ones absent from the log.
 
 The script is scan-only by default. Set `SUBMIT=1` to append missing records.
 
@@ -116,7 +122,7 @@ SUBMIT=1 RECORD_HASH=sha256:<64-hex> \
 
 ## Tests
 
-38 tests across 5 files covering entry serialization, Merkle tree correctness, checkpoint signing and parsing, HTTP server behavior, and end-to-end proof verification.
+The test suite covers entry serialization, Merkle tree correctness, checkpoint signing and parsing, HTTP server behavior, and proof verification.
 
 ```bash
 pnpm --filter @atrib/log-node test
