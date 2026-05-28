@@ -4474,7 +4474,7 @@ The verifier never fetches AP2 / VI evidence implicitly. The caller supplies the
 - `RecordVerificationResult` and settlement `VerificationResult` now have an optional `ap2_vi_evidence` block.
 - `valid`, `signatureOk`, `cross_attestation`, and `calcMatch` semantics remain unchanged.
 - `@atrib/verify` tests cover valid AP2 / VI evidence, invalid AP2 / VI evidence that stays tiered from record validity, and recommendation verification with attached AP2 / VI evidence.
-- [P035](#p035-cross-attestation-wiring-from-ap2-receipts-into-transaction-signers) remains open. AP2 receipt signatures are external evidence, not [D052](#d052-cross-attestation-requirement-for-transaction-records) `signers[]` until an AP2 participant signs the atrib record bytes.
+- [D098](#d098-ap2-receipts-stay-external-evidence-for-cross-attestation) later codifies that AP2 receipt signatures remain external evidence, not [D052](#d052-cross-attestation-requirement-for-transaction-records) `signers[]`, until an AP2 participant signs the atrib record bytes.
 
 **Cross-references.**
 
@@ -4568,7 +4568,7 @@ The verifier now treats the following as named evidence failures:
 - The default package test path now exercises AP2 / VI crypto edge behavior through the same verifier API callers use.
 - `verifyAp2ViEvidenceAsync()` reports stable, named failure codes for AP2 receipt JWT and VI SD-JWT edge cases instead of collapsing all local verifier-policy failures into a generic invalid result.
 - Network access is explicit in AP2 metadata tests and forbidden in static-JWKS cases.
-- [P034](#p034-live-ap2-interop-against-reference-implementation-or-sandbox) and [P035](#p035-cross-attestation-wiring-from-ap2-receipts-into-transaction-signers) remain open. This ADR is offline crypto conformance, not live AP2 interoperability or AP2-to-[D052](#d052-cross-attestation-requirement-for-transaction-records) cross-attestation.
+- [D097](#d097-ap2-live-interop-uses-an-opt-in-reference-artifact-harness) later codifies live AP2 artifact interop, and [D098](#d098-ap2-receipts-stay-external-evidence-for-cross-attestation) later codifies AP2-to-[D052](#d052-cross-attestation-requirement-for-transaction-records) cross-attestation boundaries. This ADR is offline crypto conformance, not live AP2 interoperability or AP2 cross-attestation.
 
 **Cross-references.**
 
@@ -4618,7 +4618,7 @@ The default path requires both transaction detection and AP2 / VI evidence verif
 - Default CI now tests the harness contract with fixture artifacts, but does not launch live AP2 services.
 - Operators can run `pnpm --filter @atrib/integration ap2-live-interop` after an AP2 sample emits artifacts, or can supply `ATRIB_AP2_INTEROP_COMMAND` to produce those artifacts first.
 - Live AP2 artifacts that drift from atrib's receipt detector or verifier boundary fail with named harness errors: `ap2_transaction_not_detected`, `ap2_vi_evidence_missing`, or `ap2_vi_evidence_invalid`.
-- [P035](#p035-cross-attestation-wiring-from-ap2-receipts-into-transaction-signers) remains open. This harness validates AP2 external evidence; it does not convert AP2 receipt signatures into [D052](#d052-cross-attestation-requirement-for-transaction-records) `signers[]`.
+- [D098](#d098-ap2-receipts-stay-external-evidence-for-cross-attestation) keeps AP2 receipt signatures as external evidence until an AP2 participant signs the atrib transaction record bytes.
 
 **Cross-references.**
 
@@ -4627,6 +4627,54 @@ The default path requires both transaction detection and AP2 / VI evidence verif
 - [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt), detector stays receipt-shaped and off crypto work.
 - [D094](#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block), verifier evidence stays tiered.
 - [D096](#d096-ap2--vi-crypto-conformance-uses-a-pinned-offline-corpus), offline crypto conformance.
+
+---
+
+## D098: AP2 receipts stay external evidence for cross-attestation
+
+**Date:** 2026-05-28
+
+**Status:** Accepted
+
+**Supersedes:** P035, removed from Pending decisions when this ADR codified the decision.
+
+**Context.** [D052](#d052-cross-attestation-requirement-for-transaction-records) requires transaction records to carry at least two verified `signers[]` entries. Each signer signs the same atrib transaction record bytes: the JCS form with `signers: []` and the top-level `signature` field omitted.
+
+AP2 receipt JWT signatures prove that an AP2 verifier, merchant, or payment party accepted a checkout or payment result under AP2's receipt format. They do not prove that party signed the atrib transaction record. Treating a receipt JWT as a [D052](#d052-cross-attestation-requirement-for-transaction-records) signer would conflate external transaction evidence with atrib co-signing.
+
+The producer-side gap was still real. `@atrib/agent` Path 2 transaction records used the legacy single-signer top-level `signature` field, so [D052](#d052-cross-attestation-requirement-for-transaction-records)-aware verifiers surfaced `signers_count: 0` even when the agent had enough key material to sign the cross-attestation bytes itself.
+
+**Decision.** `@atrib/mcp` now exports `signTransactionRecord(record, privateKey, counterpartySigners?)`.
+
+The helper signs the [D052](#d052-cross-attestation-requirement-for-transaction-records) canonical transaction bytes with the agent's Ed25519 key and returns a transaction-shaped record with:
+
+- `signature: ""`, because the top-level transaction signature is informational when `signers[]` is present;
+- `signers[0]` set to the agent's `{ creator_key, signature }`;
+- any caller-supplied `counterpartySigners` appended after the agent signer, assuming they already signed the same canonical bytes.
+
+`@atrib/agent` Path 2 transaction emission now uses `signTransactionRecord()` for every protocol, including AP2. For AP2, receipt JWTs and Verifiable Intent credentials remain `ap2_vi_evidence` verifier inputs. They are not converted into `signers[]`.
+
+**Alternatives considered.**
+
+- *Treat AP2 receipt JWT signatures as [D052](#d052-cross-attestation-requirement-for-transaction-records) signers.* Rejected. The signature algorithm, signing input, and semantic claim are different. This would create a false cross-attestation signal.
+- *Keep Path 2 on legacy top-level signatures until counterparty signing exists.* Rejected. The agent can already sign the [D052](#d052-cross-attestation-requirement-for-transaction-records) canonical bytes. Emitting a one-signer `signers[]` record is more honest and makes future counterparty merge code smaller.
+- *Require live AP2 co-signing now.* Rejected. Current public AP2 receipts do not define an atrib-record co-signing exchange. The first true counterparty signer needs AP2 participant support or a merchant adapter that signs the atrib canonical bytes.
+
+**Consequences.**
+
+- Path 2 transaction records now surface `cross_attestation.signers_count: 1`, `signers_valid: 1`, and `missing: true` until a counterparty signer is supplied.
+- Transaction records that use `signers[]` are only base-valid when a signer entry matching the top-level `creator_key` verifies over the [D052](#d052-cross-attestation-requirement-for-transaction-records) bytes. Unrelated valid signers do not validate the creator's record.
+- AP2 receipt evidence can make `ap2_vi_evidence.valid: true` while `cross_attestation.missing` remains true. Those are different trust layers.
+- Future AP2 or merchant adapters can request a counterparty signature over `canonicalCrossAttestationInput(record)` and pass it into `signTransactionRecord()` without changing verifier semantics.
+- [D052](#d052-cross-attestation-requirement-for-transaction-records) remains strict: the verifier does not count receipt JWTs toward the two-signer minimum.
+
+**Cross-references.**
+
+- [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records), transaction cross-attestation bytes and signer minimum.
+- [§5.4.5](atrib-spec.md#545-transaction-detection), Path 2 agent-side transaction emission.
+- [§5.5.4](atrib-spec.md#554-ap2--verifiable-intent-evidence-checks), AP2 / VI evidence stays verifier-side.
+- [D052](#d052-cross-attestation-requirement-for-transaction-records), transaction records require multiple signers.
+- [D094](#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block), AP2 / VI evidence does not alter base record validity.
 
 ---
 
@@ -5066,23 +5114,5 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 - [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), verify promotion: when verify-mcp ships as primitive #7, Position 2 makes adding `atrib verify` a one-subcommand addition rather than a new helper + node_modules.
 - [P023](#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion), subscription surface; the always-on consumer pattern benefits from a stable CLI deployment for the same reasons.
 - [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type), parent-child env threading; benefits from PATH-resolved CLI per consequences above.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-
-## P035: Cross-attestation wiring from AP2 receipts into transaction signers
-
-**Source:** AP2 / Verifiable Intent implementation gap audit after [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) and [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) landed. [D052](#d052-cross-attestation-requirement-for-transaction-records) requires transaction records to carry at least two signers, but current AP2 transaction emission still follows the normal single-producer signing path.
-
-**The decision in question:** should AP2 receipt evidence provide the counterparty attestation needed to populate transaction `signers[]`, and if so, how does `@atrib/agent` collect and merge the agent signature with verifier or merchant receipt signatures over the same canonical transaction record bytes?
-
-**Considerations.**
-
-- AP2 receipt signatures prove the AP2 verifier or merchant accepted the transaction. They are not automatically signatures over the atrib record. Mapping them into `signers[]` requires a clear canonicalization and counterparty-signature story.
-- One option is two-layer evidence: `signers[]` remains only signatures over the atrib record, while AP2 receipt signatures sit in the optional AP2 evidence block. This keeps [D052](#d052-cross-attestation-requirement-for-transaction-records) strict and avoids confusing receipt acceptance with atrib co-signing.
-- Another option is an adapter that asks the verifier or merchant to sign the atrib transaction record after receipt issuance. That gives true cross-attestation but needs protocol support outside atrib.
-- The verifier should keep flagging AP2 transaction records with `cross_attestation_missing: true` until true multi-signer transaction records exist.
-
-**Likely outcome (not committed):** defer true `signers[]` population until an AP2 participant can sign the atrib record bytes. In the meantime, expose AP2 receipt signatures as external evidence, not as [D052](#d052-cross-attestation-requirement-for-transaction-records) cross-attestation.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.

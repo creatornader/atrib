@@ -26,7 +26,7 @@ Two coverage surfaces define what you get:
 
 ## Coverage Matrix 2: Agent Payment Protocols
 
-`@atrib/agent` sits **above** every major agent payment protocol. It does not implement payments, move money, or enforce transactions; it detects transaction events in the response flow of whichever payment protocol your agent is using, and writes a signed fallback transaction record when no upstream atrib token already closed the chain. **You do not choose a payment protocol at install time**; the detection logic for all six (ACP, UCP, x402, MPP, AP2, a2a-x402) runs simultaneously and fires on whichever one your tool responses happen to carry. The fallback record is signed by the agent. Counterparty signatures and payment-receipt evidence are verifier inputs when the protocol supplies them; [D052](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)-aware verifiers still flag records that do not meet the required cross-attestation bar.
+`@atrib/agent` sits **above** every major agent payment protocol. It does not implement payments, move money, or enforce transactions; it detects transaction events in the response flow of whichever payment protocol your agent is using, and writes a fallback transaction record when no upstream atrib token already closed the chain. **You do not choose a payment protocol at install time**; the detection logic for all six (ACP, UCP, x402, MPP, AP2, a2a-x402) runs simultaneously and fires on whichever one your tool responses happen to carry. The fallback record carries an agent `signers[]` entry over the atrib transaction bytes. Counterparty signatures and payment-receipt evidence are verifier inputs when the protocol supplies them; [D052](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)-aware verifiers still flag records that do not meet the required cross-attestation bar.
 
 All detection logic lives in `packages/agent/src/transaction.ts` and runs against unit tests for each protocol's published spec.
 
@@ -100,6 +100,8 @@ Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIn0
 #### AP2: Google Agentic Payment Protocol (v0.2)
 
 Detected from successful AP2 receipts. Current AP2 uses Checkout and Payment Mandates for authorization, then returns signed Checkout Receipts and Payment Receipts when a verifier accepts or rejects the mandate. atrib treats the successful receipt as the transaction close signal.
+
+AP2 receipt JWT signatures remain verifier evidence. They are not counted as transaction `signers[]` unless an AP2 participant also signs the atrib transaction record bytes. See [D098](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation).
 
 Decoded receipt objects are detected when they carry `status: "Success"` and the required AP2 fields. Signed receipt JWTs are detected in AP2 sample result envelopes when the envelope has `status: "success"` plus `payment_receipt` or `checkout_receipt`.
 

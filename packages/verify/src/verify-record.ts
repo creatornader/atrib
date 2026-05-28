@@ -355,21 +355,22 @@ export async function verifyRecord(
   const warnings: string[] = []
 
   // §1.2.1 + §1.7.6: the top-level `signature` field is OPTIONAL on
-  // transaction records that carry the `signers[]` array. Skip the
-  // legacy single-sig check when (a) the record is a transaction AND
-  // (b) signers[] is present and non-empty. The cross_attestation
-  // annotation below covers signature verification per signer.
+  // transaction records that carry the `signers[]` array. For that shape,
+  // the creator's signer entry is the record's base signature path. Other
+  // signers stay cross-attestation evidence and do not make a record valid
+  // on behalf of the top-level creator.
   const isTransaction = record.event_type === 'https://atrib.dev/v1/types/transaction'
   const hasSignersArray = Array.isArray(record.signers) && record.signers.length > 0
-  const skipLegacySignatureCheck = isTransaction && hasSignersArray
+  const useCreatorSignerSignature = isTransaction && hasSignersArray
 
   let signatureOk = false
-  if (skipLegacySignatureCheck) {
-    // §1.7.6: signature validity for transaction records lives in
-    // cross_attestation, not signatureOk. We treat signatureOk as true
-    // here so consumers' valid-bit logic isn't broken; the actual
-    // multi-sig validity is exposed via cross_attestation.signers_valid.
-    signatureOk = true
+  if (useCreatorSignerSignature) {
+    try {
+      signatureOk = await verifyCreatorSignerSignature(record)
+      if (!signatureOk) warnings.push('creator signer verification failed')
+    } catch (err) {
+      warnings.push(`creator signer verification error: ${(err as Error).message}`)
+    }
   } else {
     try {
       signatureOk = await verifyRecordSignature(record)
@@ -643,6 +644,18 @@ async function resolveCrossAttestation(record: AtribRecord): Promise<CrossAttest
     signers_valid,
     missing: signers_valid < 2,
   }
+}
+
+async function verifyCreatorSignerSignature(record: AtribRecord): Promise<boolean> {
+  const signers = Array.isArray(record.signers) ? record.signers : []
+  const creatorSigner = signers.find((entry) => entry.creator_key === record.creator_key)
+  if (!creatorSigner) return false
+
+  const pubKey = base64urlDecode(creatorSigner.creator_key)
+  const sig = base64urlDecode(creatorSigner.signature)
+  if (pubKey.length !== 32 || sig.length !== 64) return false
+
+  return ed.verifyAsync(sig, canonicalCrossAttestationInput(record), pubKey)
 }
 
 function detectPosture(record: AtribRecord, warnings: string[]): PostureAnnotation {

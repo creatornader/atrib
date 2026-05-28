@@ -10,7 +10,7 @@
 import {
   base64urlDecode,
   base64urlEncode,
-  signRecord,
+  signTransactionRecord,
   getPublicKey,
   computeContentId,
   hexEncode,
@@ -374,7 +374,7 @@ async function emitTransactionRecord(
     session_token: session.sessionToken,
   } as AtribRecord
 
-  const signed = await signRecord(record, privateKey)
+  const signed = await signTransactionRecord(record, privateKey)
 
   // Submit immediately. transaction records are the closing anchor
   queue.submit(signed, 'high')

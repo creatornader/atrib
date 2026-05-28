@@ -507,6 +507,44 @@ describe('verifyRecord, cross_attestation (D052 / §1.7.6)', () => {
     expect(result.cross_attestation!.missing).toBe(true)
   })
 
+  it('rejects a transaction record when no valid signer matches creator_key', async () => {
+    const unrelatedCreator = base64urlEncode(await ed.getPublicKeyAsync(altSeed(0x40)))
+    const record = await buildTransaction([altSeed(0x10), altSeed(0x20)], {
+      creator_key: unrelatedCreator,
+    })
+
+    const result = await verifyRecord(record)
+
+    expect(result.signatureOk).toBe(false)
+    expect(result.valid).toBe(false)
+    expect(result.warnings).toContain('creator signer verification failed')
+    expect(result.cross_attestation).toEqual({
+      signers_count: 2,
+      signers_valid: 2,
+      missing: false,
+    })
+  })
+
+  it('rejects a transaction record when the creator signer is tampered', async () => {
+    const record = await buildTransaction([altSeed(0x10), altSeed(0x20)])
+    const tampered = {
+      ...record,
+      signers: [
+        { ...record.signers![0]!, signature: 'A' + record.signers![0]!.signature.slice(1) },
+        record.signers![1]!,
+      ],
+    } as AtribRecord
+
+    const result = await verifyRecord(tampered)
+
+    expect(result.signatureOk).toBe(false)
+    expect(result.valid).toBe(false)
+    expect(result.warnings).toContain('creator signer verification failed')
+    expect(result.cross_attestation!.signers_count).toBe(2)
+    expect(result.cross_attestation!.signers_valid).toBe(1)
+    expect(result.cross_attestation!.missing).toBe(true)
+  })
+
   it('signal-not-invalidation: missing cross_attestation does not flip valid', async () => {
     // Legacy single-signer transaction record. Verifier flags missing=true
     // but signature is structurally valid. Per §1.7.6 valid stays true.
