@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { getPublicKey, signRecord, verifyRecord } from '../src/signing.js'
-import { base64urlEncode } from '../src/base64url.js'
+import * as ed from '@noble/ed25519'
+import { getPublicKey, signRecord, signTransactionRecord, verifyRecord } from '../src/signing.js'
+import { base64urlDecode, base64urlEncode } from '../src/base64url.js'
+import { canonicalCrossAttestationInput } from '../src/canon.js'
 import type { AtribRecord } from '../src/types.js'
 
 async function makeSignedRecord(
@@ -121,9 +123,89 @@ describe('signRecord / verifyRecord', () => {
   })
 
   it('transaction event_type is valid', async () => {
-    const signed = await makeSignedRecord(privateKey, { event_type: 'https://atrib.dev/v1/types/transaction' })
+    const signed = await makeSignedRecord(privateKey, {
+      event_type: 'https://atrib.dev/v1/types/transaction',
+    })
     const valid = await verifyRecord(signed)
     expect(valid).toBe(true)
+  })
+
+  it('signTransactionRecord adds a signer over cross-attestation bytes', async () => {
+    const signed = await signTransactionRecord(
+      {
+        spec_version: 'atrib/1.0',
+        content_id: 'sha256:3f8a2b0000000000000000000000000000000000000000000000000000000000',
+        creator_key: '',
+        chain_root: 'sha256:7e1f4a0000000000000000000000000000000000000000000000000000000000',
+        event_type: 'https://atrib.dev/v1/types/transaction',
+        context_id: '4bf92f3577b34da6a3ce929d0e0e4736',
+        timestamp: 1743850000000,
+        signature: '',
+        signers: [],
+      } as AtribRecord,
+      privateKey,
+    )
+
+    expect(signed.signature).toBe('')
+    expect(signed.creator_key).toBe(base64urlEncode(await getPublicKey(privateKey)))
+    expect(signed.signers).toHaveLength(1)
+    expect(signed.signers![0]!.creator_key).toBe(signed.creator_key)
+    const ok = await ed.verifyAsync(
+      base64urlDecode(signed.signers![0]!.signature),
+      canonicalCrossAttestationInput(signed),
+      base64urlDecode(signed.signers![0]!.creator_key),
+    )
+    expect(ok).toBe(true)
+    await expect(verifyRecord(signed)).resolves.toBe(true)
+  })
+
+  it('rejects a transaction signer when the creator signer is tampered', async () => {
+    const signed = await signTransactionRecord(
+      {
+        spec_version: 'atrib/1.0',
+        content_id: 'sha256:3f8a2b0000000000000000000000000000000000000000000000000000000000',
+        creator_key: '',
+        chain_root: 'sha256:7e1f4a0000000000000000000000000000000000000000000000000000000000',
+        event_type: 'https://atrib.dev/v1/types/transaction',
+        context_id: '4bf92f3577b34da6a3ce929d0e0e4736',
+        timestamp: 1743850000000,
+        signature: '',
+        signers: [],
+      } as AtribRecord,
+      privateKey,
+    )
+    const tampered = {
+      ...signed,
+      signers: [
+        {
+          ...signed.signers![0]!,
+          signature: 'A' + signed.signers![0]!.signature.slice(1),
+        },
+      ],
+    } as AtribRecord
+
+    await expect(verifyRecord(tampered)).resolves.toBe(false)
+  })
+
+  it('rejects a transaction signer when no signer matches creator_key', async () => {
+    const signed = await signTransactionRecord(
+      {
+        spec_version: 'atrib/1.0',
+        content_id: 'sha256:3f8a2b0000000000000000000000000000000000000000000000000000000000',
+        creator_key: '',
+        chain_root: 'sha256:7e1f4a0000000000000000000000000000000000000000000000000000000000',
+        event_type: 'https://atrib.dev/v1/types/transaction',
+        context_id: '4bf92f3577b34da6a3ce929d0e0e4736',
+        timestamp: 1743850000000,
+        signature: '',
+        signers: [],
+      } as AtribRecord,
+      privateKey,
+    )
+    const otherKey = await getPublicKey(new Uint8Array(32).fill(2))
+    const tampered = { ...signed, creator_key: base64urlEncode(otherKey) } as AtribRecord
+
+    await expect(verifyRecord(tampered)).resolves.toBe(false)
   })
 
   it('accepts very old timestamps (no staleness check in v1)', async () => {

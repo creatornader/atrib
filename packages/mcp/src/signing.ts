@@ -8,9 +8,9 @@
 import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
 import { base64urlEncode, base64urlDecode } from './base64url.js'
-import { canonicalSigningInput } from './canon.js'
+import { canonicalCrossAttestationInput, canonicalSigningInput } from './canon.js'
 import { isValidEventTypeUri } from './types.js'
-import type { AtribRecord } from './types.js'
+import type { AtribRecord, SignerEntry } from './types.js'
 
 // @noble/ed25519 v3 needs sha512 wired via the hashes object
 ed.hashes.sha512 = sha512
@@ -46,6 +46,41 @@ export async function signRecord(
 }
 
 /**
+ * Sign a transaction record using the §1.7.6 cross-attestation bytes.
+ *
+ * The returned record carries `signers[]` with this creator's signer entry
+ * first, followed by any caller-supplied counterparty entries that already
+ * signed the same canonical bytes. AP2 receipt JWTs are not valid inputs here:
+ * they prove receipt acceptance, but they do not sign the atrib record bytes.
+ */
+export async function signTransactionRecord(
+  record: AtribRecord,
+  privateKey: Uint8Array,
+  counterpartySigners: SignerEntry[] = [],
+): Promise<AtribRecord> {
+  const publicKey = await getPublicKey(privateKey)
+  const creatorKey = base64urlEncode(publicKey)
+  const transactionRecord = {
+    ...record,
+    creator_key: creatorKey,
+    signature: '',
+    signers: [],
+  } as AtribRecord
+  const signingInput = canonicalCrossAttestationInput(transactionRecord)
+  const sigBytes = await ed.signAsync(signingInput, privateKey)
+  const signer: SignerEntry = {
+    creator_key: creatorKey,
+    signature: base64urlEncode(sigBytes),
+  }
+  const signed = { ...transactionRecord, signers: [signer, ...counterpartySigners] }
+  if ('session_token' in signed && signed.session_token !== undefined) {
+    return signed
+  }
+  const { session_token: _, ...rest } = signed as AtribRecord & { session_token?: never }
+  return rest as AtribRecord
+}
+
+/**
  * Verify an attribution record (§1.4.3). All 8 steps.
  * Returns true if and only if all steps pass.
  */
@@ -55,16 +90,31 @@ export async function verifyRecord(record: AtribRecord): Promise<boolean> {
     const pubKeyBytes = base64urlDecode(record.creator_key)
     if (pubKeyBytes.length !== 32) return false
 
-    // Step 2: Decode signature → 64-byte signature
-    const sigBytes = base64urlDecode(record.signature)
-    if (sigBytes.length !== 64) return false
+    const isTransaction = record.event_type === 'https://atrib.dev/v1/types/transaction'
+    const hasSignersArray = Array.isArray(record.signers) && record.signers.length > 0
 
-    // Step 3: Remove signature, apply JCS → verification input bytes
-    const verifyInput = canonicalSigningInput(record)
+    if (isTransaction && hasSignersArray) {
+      const creatorSigner = record.signers!.find(
+        (entry) => entry.creator_key === record.creator_key,
+      )
+      if (!creatorSigner) return false
+      const sigBytes = base64urlDecode(creatorSigner.signature)
+      if (sigBytes.length !== 64) return false
+      const verifyInput = canonicalCrossAttestationInput(record)
+      const valid = await ed.verifyAsync(sigBytes, verifyInput, pubKeyBytes)
+      if (!valid) return false
+    } else {
+      // Step 2: Decode signature → 64-byte signature
+      const sigBytes = base64urlDecode(record.signature)
+      if (sigBytes.length !== 64) return false
 
-    // Step 4: Verify Ed25519 signature (RFC 8032 §5.1.7)
-    const valid = await ed.verifyAsync(sigBytes, verifyInput, pubKeyBytes)
-    if (!valid) return false
+      // Step 3: Remove signature, apply JCS → verification input bytes
+      const verifyInput = canonicalSigningInput(record)
+
+      // Step 4: Verify Ed25519 signature (RFC 8032 §5.1.7)
+      const valid = await ed.verifyAsync(sigBytes, verifyInput, pubKeyBytes)
+      if (!valid) return false
+    }
 
     // Step 5: spec_version must be "atrib/1.0"
     if (record.spec_version !== 'atrib/1.0') return false

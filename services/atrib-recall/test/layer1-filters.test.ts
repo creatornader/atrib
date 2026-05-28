@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   signRecord,
+  signTransactionRecord,
   getPublicKey,
   base64urlEncode,
   genesisChainRoot,
@@ -71,10 +72,9 @@ describe('min_importance filter', () => {
     const anno = await makeSigned({ event_type: EVENT_TYPE_ANNOTATION_URI, timestamp: 2 })
     writeFileSync(
       file,
-      [
-        JSON.stringify(target),
-        envelope(anno, { annotates: targetHash, importance: 'high' }),
-      ].join('\n'),
+      [JSON.stringify(target), envelope(anno, { annotates: targetHash, importance: 'high' })].join(
+        '\n',
+      ),
     )
     const result = await recall({ min_importance: 'medium' }, file)
     expect(result.returned).toBe(1)
@@ -87,10 +87,9 @@ describe('min_importance filter', () => {
     const anno = await makeSigned({ event_type: EVENT_TYPE_ANNOTATION_URI, timestamp: 2 })
     writeFileSync(
       file,
-      [
-        JSON.stringify(target),
-        envelope(anno, { annotates: targetHash, importance: 'low' }),
-      ].join('\n'),
+      [JSON.stringify(target), envelope(anno, { annotates: targetHash, importance: 'low' })].join(
+        '\n',
+      ),
     )
     const result = await recall({ min_importance: 'high' }, file)
     expect(result.returned).toBe(0)
@@ -166,10 +165,7 @@ describe('include_revised filter', () => {
     const origHash = computeRecordHash(orig)
     const rev = await makeSigned({ event_type: EVENT_TYPE_REVISION_URI, timestamp: 2 })
     const revHash = computeRecordHash(rev)
-    writeFileSync(
-      file,
-      [JSON.stringify(orig), envelope(rev, { revises: origHash })].join('\n'),
-    )
+    writeFileSync(file, [JSON.stringify(orig), envelope(rev, { revises: origHash })].join('\n'))
     const result = await recall({}, file)
     expect(result.returned).toBe(2)
     const origRecord = result.records.find(
@@ -182,10 +178,7 @@ describe('include_revised filter', () => {
     const orig = await makeSigned({ timestamp: 1 })
     const origHash = computeRecordHash(orig)
     const rev = await makeSigned({ event_type: EVENT_TYPE_REVISION_URI, timestamp: 2 })
-    writeFileSync(
-      file,
-      [JSON.stringify(orig), envelope(rev, { revises: origHash })].join('\n'),
-    )
+    writeFileSync(file, [JSON.stringify(orig), envelope(rev, { revises: origHash })].join('\n'))
     const result = await recall({ include_revised: true, event_type: 'tool_call' }, file)
     expect(result.returned).toBe(0)
   })
@@ -200,16 +193,30 @@ describe('min_signers filter', () => {
   })
 
   it('counts signers[].length when present', async () => {
-    // For test purposes we construct a transaction record with a signers
-    // array. We don't validate cross-attestation signatures here - that's
-    // a separate concern - we just exercise the filter logic.
-    const txWith2 = await makeSigned({
+    const pub = await getPublicKey(KEY)
+    const base = {
+      spec_version: 'atrib/1.0',
       event_type: EVENT_TYPE_TRANSACTION_URI,
+      context_id: CTX,
+      creator_key: base64urlEncode(pub),
+      chain_root: genesisChainRoot(CTX),
+      content_id: `sha256:${'c'.repeat(64)}`,
+      timestamp: 1700000000000,
+      signature: '',
+      signers: [],
+    } as AtribRecord
+    const agentSigned = await signTransactionRecord(base, KEY)
+    const txWith2 = {
+      ...agentSigned,
       signers: [
-        { creator_key: 'k1', signature: 's1' },
-        { creator_key: 'k2', signature: 's2' },
+        ...agentSigned.signers!,
+        {
+          creator_key: 'E5j2LG0aRXxRumpLXz29L2n8qTIWIY3ImX5Ba9F9k8o',
+          signature:
+            'KtqgZe0aj6pEhUeGf67K7FxhaJ3fp7PFm8YKgZvbOH-VbACLs4UtdXcTi6zaBLdjuS8zboy7EIxAsiIa_y0-AA',
+        },
       ],
-    })
+    } as AtribRecord
     writeFileSync(file, JSON.stringify(txWith2))
     expect((await recall({ min_signers: 2 }, file)).returned).toBe(1)
     expect((await recall({ min_signers: 3 }, file)).returned).toBe(0)
@@ -266,7 +273,9 @@ describe('rank_by=relevance', () => {
       file,
     )
     expect(result.returned).toBe(2)
-    expect((result.records[0] as { content_id: string }).content_id).toBe(`sha256:${'1'.repeat(64)}`)
+    expect((result.records[0] as { content_id: string }).content_id).toBe(
+      `sha256:${'1'.repeat(64)}`,
+    )
   })
 
   it('boosts records matching the rank_anchor query', async () => {
@@ -320,8 +329,12 @@ describe('rank_by=relevance', () => {
       file,
     )
     expect(result.returned).toBe(2)
-    expect((result.records[0] as { content_id: string }).content_id).toBe(`sha256:${'1'.repeat(64)}`)
-    expect((result.records[1] as { content_id: string }).content_id).toBe(`sha256:${'2'.repeat(64)}`)
+    expect((result.records[0] as { content_id: string }).content_id).toBe(
+      `sha256:${'1'.repeat(64)}`,
+    )
+    expect((result.records[1] as { content_id: string }).content_id).toBe(
+      `sha256:${'2'.repeat(64)}`,
+    )
   })
 
   it('rank_by=causal_distance sorts by BFS distance from rank_anchor', async () => {
@@ -329,37 +342,39 @@ describe('rank_by=relevance', () => {
     // Walking from r1, expect r2 (distance 1) before r3 (distance 2).
     // Use a SEPARATE makeSigned helper to attach an explicit chain_root.
     const { canonicalRecord, sha256, hexEncode } = await import('@atrib/mcp')
-    const chainRootFor = (r: AtribRecord) =>
-      `sha256:${hexEncode(sha256(canonicalRecord(r)))}`
+    const chainRootFor = (r: AtribRecord) => `sha256:${hexEncode(sha256(canonicalRecord(r)))}`
     const r1 = await makeSigned({ timestamp: RECENT_TS, content_id: `sha256:${'1'.repeat(64)}` })
     const r1Hash = computeRecordHash(r1)
     const pub = await getPublicKey(KEY)
-    const r2 = await signRecord({
-      spec_version: 'atrib/1.0',
-      event_type: EVENT_TYPE_TOOL_CALL_URI,
-      context_id: CTX,
-      creator_key: base64urlEncode(pub),
-      chain_root: chainRootFor(r1),
-      content_id: `sha256:${'2'.repeat(64)}`,
-      timestamp: RECENT_TS + 1,
-      signature: '',
-    } as AtribRecord, KEY)
-    const r2Hash = computeRecordHash(r2)
-    const r3 = await signRecord({
-      spec_version: 'atrib/1.0',
-      event_type: EVENT_TYPE_TOOL_CALL_URI,
-      context_id: CTX,
-      creator_key: base64urlEncode(pub),
-      chain_root: chainRootFor(r2),
-      content_id: `sha256:${'3'.repeat(64)}`,
-      timestamp: RECENT_TS + 2,
-      signature: '',
-    } as AtribRecord, KEY)
-    const r3Hash = computeRecordHash(r3)
-    writeFileSync(
-      file,
-      [JSON.stringify(r1), JSON.stringify(r2), JSON.stringify(r3)].join('\n'),
+    const r2 = await signRecord(
+      {
+        spec_version: 'atrib/1.0',
+        event_type: EVENT_TYPE_TOOL_CALL_URI,
+        context_id: CTX,
+        creator_key: base64urlEncode(pub),
+        chain_root: chainRootFor(r1),
+        content_id: `sha256:${'2'.repeat(64)}`,
+        timestamp: RECENT_TS + 1,
+        signature: '',
+      } as AtribRecord,
+      KEY,
     )
+    const r2Hash = computeRecordHash(r2)
+    const r3 = await signRecord(
+      {
+        spec_version: 'atrib/1.0',
+        event_type: EVENT_TYPE_TOOL_CALL_URI,
+        context_id: CTX,
+        creator_key: base64urlEncode(pub),
+        chain_root: chainRootFor(r2),
+        content_id: `sha256:${'3'.repeat(64)}`,
+        timestamp: RECENT_TS + 2,
+        signature: '',
+      } as AtribRecord,
+      KEY,
+    )
+    const r3Hash = computeRecordHash(r3)
+    writeFileSync(file, [JSON.stringify(r1), JSON.stringify(r2), JSON.stringify(r3)].join('\n'))
     const result = await recall(
       { rank_by: 'causal_distance', rank_anchor: r1Hash, compact: false },
       file,
@@ -369,9 +384,7 @@ describe('rank_by=relevance', () => {
     // Assert via the distinct content_id values rather than re-hashing the
     // compact=false response, RecallRecordFull carries extra fields
     // (signature_verified, etc.) that change the canonical hash.
-    const contentIds = (result.records as Array<{ content_id: string }>).map(
-      (r) => r.content_id,
-    )
+    const contentIds = (result.records as Array<{ content_id: string }>).map((r) => r.content_id)
     expect(contentIds).toEqual([
       `sha256:${'1'.repeat(64)}`,
       `sha256:${'2'.repeat(64)}`,
@@ -383,7 +396,10 @@ describe('rank_by=relevance', () => {
 
   it('rank_by=causal_distance falls back to timestamp when rank_anchor is unusable', async () => {
     const r1 = await makeSigned({ timestamp: RECENT_TS })
-    const r2 = await makeSigned({ timestamp: RECENT_TS + 1, content_id: `sha256:${'2'.repeat(64)}` })
+    const r2 = await makeSigned({
+      timestamp: RECENT_TS + 1,
+      content_id: `sha256:${'2'.repeat(64)}`,
+    })
     writeFileSync(file, [JSON.stringify(r1), JSON.stringify(r2)].join('\n'))
     const result = await recall({ rank_by: 'causal_distance' }, file)
     expect(result.returned).toBe(2)
@@ -411,10 +427,9 @@ describe('rank_by=relevance', () => {
     })
     writeFileSync(
       file,
-      [
-        JSON.stringify(rec),
-        envelope(anno, { annotates: recHash, importance: 'critical' }),
-      ].join('\n'),
+      [JSON.stringify(rec), envelope(anno, { annotates: recHash, importance: 'critical' })].join(
+        '\n',
+      ),
     )
     const result = await recall(
       {
@@ -464,10 +479,7 @@ describe('rank_by=relevance', () => {
     })
     writeFileSync(
       file,
-      [
-        JSON.stringify(r),
-        envelope(anno, { annotates: rHash, importance: 'critical' }),
-      ].join('\n'),
+      [JSON.stringify(r), envelope(anno, { annotates: rHash, importance: 'critical' })].join('\n'),
     )
     const result = await recall(
       {

@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import * as ed from '@noble/ed25519'
 import { atrib } from '../src/middleware.js'
 import { detectTransaction } from '../src/transaction.js'
 import {
+  base64urlDecode,
   base64urlEncode,
+  canonicalCrossAttestationInput,
   encodeToken,
   signRecord,
   getPublicKey,
@@ -391,6 +394,39 @@ describe('atrib() agent middleware', () => {
       expect(txn).toBeDefined()
       expect(txn.content_id).toBe(expectedContentId)
       expect(txn.content_id).not.toBe(genericFallback)
+    })
+
+    it('Path 2 AP2 emits an agent signer but not a receipt-as-signer', async () => {
+      const submissions: AtribRecord[] = []
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+        const bodyText = typeof init?.body === 'string' ? init.body : '{}'
+        submissions.push(JSON.parse(bodyText) as AtribRecord)
+        return new Response(JSON.stringify({ logIndex: 1 }), { status: 200 })
+      })
+
+      const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
+      interceptor.onAfterToolResponse(
+        'payment_tool',
+        ap2PaymentReceiptArtifactFixture,
+        {},
+        { serverUrl: 'https://tools.example.com' },
+      )
+      await interceptor.flush()
+
+      const txn = submissions.find(
+        (s) => s?.event_type === 'https://atrib.dev/v1/types/transaction',
+      )
+      expect(txn).toBeDefined()
+      expect(txn!.signature).toBe('')
+      expect(txn!.signers).toHaveLength(1)
+      expect(txn!.signers![0]!.creator_key).toBe(txn!.creator_key)
+
+      const ok = await ed.verifyAsync(
+        base64urlDecode(txn!.signers![0]!.signature),
+        canonicalCrossAttestationInput(txn!),
+        base64urlDecode(txn!.signers![0]!.creator_key),
+      )
+      expect(ok).toBe(true)
     })
   })
 
