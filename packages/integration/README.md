@@ -43,12 +43,28 @@ Every signature, every chain hash, and every transaction event in that output is
 
 Every example has a `README.md` next to it explaining what's wired up and which lines a real customer would copy.
 
+## AP2 Live Interop
+
+`@atrib/integration` includes an opt-in AP2 reference artifact harness for runs produced by `google-agentic-commerce/AP2` samples or a compatible AP2 participant.
+
+The harness does not start AP2 services in default CI. Instead, it reads AP2 result and evidence artifacts, then runs the production atrib detector and verifier:
+
+```bash
+ATRIB_AP2_INTEROP_RESULT_JSON=/path/to/ap2-result.json \
+ATRIB_AP2_INTEROP_EVIDENCE_JSON=/path/to/ap2-vi-evidence.json \
+ATRIB_AP2_INTEROP_NOW_SECONDS=1779840000 \
+  pnpm --filter @atrib/integration ap2-live-interop
+```
+
+If a local command should create the artifacts first, pass it with `ATRIB_AP2_INTEROP_COMMAND`. Detection-only smoke checks may set `ATRIB_AP2_INTEROP_ALLOW_DETECTION_ONLY=1`, but full AP2 interop should include the evidence bundle so `verifyAp2ViEvidenceAsync()` runs off the detector path.
+
 ## Tests
 
-Run with `pnpm --filter @atrib/integration test`. 25 tests across 7 files:
+Run with `pnpm --filter @atrib/integration test`. 29 tests across 8 files:
 
 - **`test/end-to-end.test.ts`** (3 tests), full attribution chain across the public packages: agent calls a tool, server emits a signed record, the record's chain hash links to the previous step, the verifier re-runs the calculation against the resulting graph.
 - **`test/ap2-vi-e2e.test.ts`** (2 tests), AP2 v0.2 receipt detection plus async `@atrib/verify` AP2 / Verifiable Intent evidence checking for immediate and autonomous flows. This protects the detector/verifier boundary: successful receipts close the transaction, VI mandates remain verifier-side authorization evidence with SD-JWT / VC conformance and mandate constraints checked off the detector path, and AP2 Path 2 detection returns a receipt-derived `contentId` instead of the generic server URL fallback when stable receipt identity is present.
+- **`test/ap2-live-interop.test.ts`** (4 tests), opt-in AP2 reference artifact harness coverage. It proves AP2 reference-style result JSON plus AP2 / VI evidence JSON pass through `detectTransaction()` and `verifyAp2ViEvidenceAsync()`, mandates alone do not pass the transaction gate, and environment configuration fails early when malformed.
 - **`test/real-mcp-sdk.test.ts`** (2 tests), exercises both the wrapped MCP client and wrapped MCP server against a real `@modelcontextprotocol/sdk@1.29.0` transport, including the [§6](../../atrib-spec.md#6-key-directory) retroactive dispatcher wrap path and the `wrapMcpClient` adapter.
 - **`test/full-chain.test.ts`** (3 tests), the wrapper → mirror → log → verify path with a real signed record set.
 - **`test/resolve-identity-step7.test.ts`** (3 tests), real directory lookup plus verifier step 7 behavior around anchored identity evidence.

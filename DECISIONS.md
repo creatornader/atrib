@@ -4582,6 +4582,54 @@ The verifier now treats the following as named evidence failures:
 
 ---
 
+## D097: AP2 live interop uses an opt-in reference artifact harness
+
+**Date:** 2026-05-28
+
+**Status:** Accepted
+
+**Supersedes:** P034, removed from Pending decisions when this ADR codified the decision.
+
+**Context.** The public `google-agentic-commerce/AP2` repository now ships v0.2 schemas, a Python SDK, receipt wrapper code, and runnable sample scenarios. Those samples are the right source for live AP2 interoperability, but their full flows require external credentials, multiple local services, and in some cases a browser or trigger endpoint. Making that a default CI gate would make atrib's offline test path depend on Google API keys and local demo orchestration.
+
+P034 called for a live or containerized AP2 interop harness that runs an AP2 checkout / payment flow, captures receipts and VI credentials, emits an atrib transaction record, and verifies AP2 / VI evidence end to end. The local fixture corpus and [D096](#d096-ap2--vi-crypto-conformance-uses-a-pinned-offline-corpus) crypto corpus cover deterministic default CI; they do not prove compatibility with artifacts emitted by the AP2 reference samples.
+
+**Decision.** `@atrib/integration` now owns an opt-in AP2 reference artifact harness.
+
+The harness lives at `packages/integration/src/ap2-live-interop.ts` with a runnable script at `packages/integration/scripts/ap2-live-interop.ts`. It accepts:
+
+- an AP2 result artifact via `ATRIB_AP2_INTEROP_RESULT_JSON`;
+- an AP2 / VI evidence bundle via `ATRIB_AP2_INTEROP_EVIDENCE_JSON`;
+- optional `ATRIB_AP2_INTEROP_COMMAND`, run before the artifacts are read, so an operator can launch a reference scenario or capture step;
+- optional `ATRIB_AP2_INTEROP_NOW_SECONDS` for deterministic verifier clocking;
+- optional `ATRIB_AP2_INTEROP_ALLOW_DETECTION_ONLY=1` for smoke checks that intentionally omit VI evidence.
+
+The default path requires both transaction detection and AP2 / VI evidence verification to pass. Detection still uses `detectTransaction()` and stays shape-only. Evidence verification still uses `verifyAp2ViEvidenceAsync()` and stays off the middleware critical path.
+
+**Alternatives considered.**
+
+- *Run the AP2 sample stack in default CI.* Rejected. The Python sample flows require external credentials and long-running services. Default atrib CI must stay offline and deterministic.
+- *Add another synthetic fixture and call it interop.* Rejected. Synthetic fixtures are already covered by [D093](#d093-ap2--vi-fixtures-are-the-local-verifier-corpus) and [D096](#d096-ap2--vi-crypto-conformance-uses-a-pinned-offline-corpus). P034 is about accepting artifacts from a real AP2 participant or reference run.
+- *Hard-code one AP2 sample scenario path.* Rejected. The AP2 repo has card, x402, human-present, human-not-present, Python, Go, and Android samples. An artifact contract composes with all of them and is less fragile than one scenario-specific wrapper.
+- *Let the harness verify only detection.* Rejected as the default. Detection-only is allowed for smoke checks, but the P034 end-to-end claim requires AP2 / VI evidence when the full bundle is available.
+
+**Consequences.**
+
+- Default CI now tests the harness contract with fixture artifacts, but does not launch live AP2 services.
+- Operators can run `pnpm --filter @atrib/integration ap2-live-interop` after an AP2 sample emits artifacts, or can supply `ATRIB_AP2_INTEROP_COMMAND` to produce those artifacts first.
+- Live AP2 artifacts that drift from atrib's receipt detector or verifier boundary fail with named harness errors: `ap2_transaction_not_detected`, `ap2_vi_evidence_missing`, or `ap2_vi_evidence_invalid`.
+- [P035](#p035-cross-attestation-wiring-from-ap2-receipts-into-transaction-signers) remains open. This harness validates AP2 external evidence; it does not convert AP2 receipt signatures into [D052](#d052-cross-attestation-requirement-for-transaction-records) `signers[]`.
+
+**Cross-references.**
+
+- [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402), AP2 receipt detection boundary.
+- [§5.5.4](atrib-spec.md#554-ap2--verifiable-intent-evidence-checks), AP2 / VI evidence verification.
+- [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt), detector stays receipt-shaped and off crypto work.
+- [D094](#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block), verifier evidence stays tiered.
+- [D096](#d096-ap2--vi-crypto-conformance-uses-a-pinned-offline-corpus), offline crypto conformance.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -5018,24 +5066,6 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 - [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), verify promotion: when verify-mcp ships as primitive #7, Position 2 makes adding `atrib verify` a one-subcommand addition rather than a new helper + node_modules.
 - [P023](#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion), subscription surface; the always-on consumer pattern benefits from a stable CLI deployment for the same reasons.
 - [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type), parent-child env threading; benefits from PATH-resolved CLI per consequences above.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-
-## P034: Live AP2 interoperability harness
-
-**Source:** AP2 / Verifiable Intent implementation gap audit after [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) and [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) landed. Local fixtures prove the detector and verifier compose, but they do not prove atrib works against a real AP2 participant or reference implementation.
-
-**The decision in question:** should `@atrib/integration` add a live or containerized AP2 interop harness that runs an AP2 checkout / payment flow, captures the receipts and VI credentials, emits an atrib transaction record, and verifies the AP2 / VI evidence end to end?
-
-**Considerations.**
-
-- The default test suite must stay offline. Live interop should be opt-in, skipped unless explicit environment variables are present.
-- A containerized reference stack is preferred if the AP2 project ships one. It keeps CI deterministic and avoids depending on public services.
-- The harness should emit artifacts that can be promoted into local fixtures when AP2 changes shape.
-- This is the natural place to test remote JWKS, receipt JWT validation, and verifier metadata discovery from [D090](#d090-ap2-receipt-jwt-verification-uses-jose-in-atribverify).
-
-**Likely outcome (not committed):** accept once an AP2 reference implementation or stable sandbox is available. Keep it outside the default local test path.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 
