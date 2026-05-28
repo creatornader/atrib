@@ -1,0 +1,131 @@
+{
+  "description": "Synthetic decoded AP2 autonomous constraint case for @atrib/verify.",
+  "source": "AP2 v0.2 Checkout Mandate and Payment Mandate constraint documentation.",
+  "input": {
+    "openCheckoutMandates": [
+      {
+        "vct": "mandate.checkout.open.1",
+        "constraints": [
+          {
+            "type": "checkout.allowed_merchants",
+            "allowed": [{ "...": "merchant-digest" }]
+          },
+          {
+            "type": "checkout.line_items",
+            "items": [
+              {
+                "id": "req_1",
+                "acceptable_items": [{ "...": "item-digest" }],
+                "quantity": 1
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "openPaymentMandates": [
+      {
+        "vct": "mandate.payment.open.1",
+        "constraints": [
+          {
+            "type": "payment.amount_range",
+            "currency": "USD",
+            "min": 0,
+            "max": 20000
+          },
+          {
+            "type": "payment.allowed_payees",
+            "allowed": [{ "...": "merchant-digest" }]
+          },
+          {
+            "type": "payment.allowed_payment_instruments",
+            "allowed": [
+              {
+                "id": "card_4242",
+                "type": "card",
+                "description": "Card ending in 4242"
+              }
+            ]
+          },
+          {
+            "type": "payment.allowed_pisps",
+            "allowed": [
+              {
+                "legal_name": "Example PISP LLC",
+                "brand_name": "Example PISP",
+                "domain_name": "pisp.example"
+              }
+            ]
+          },
+          {
+            "type": "payment.execution_date",
+            "not_before": "2026-05-01T00:00:00Z",
+            "not_after": "2026-06-01T00:00:00Z"
+          }
+        ]
+      }
+    ],
+    "closedPaymentMandates": [
+      {
+        "vct": "mandate.payment.1",
+        "transaction_id": "checkout_hash",
+        "payee": {
+          "id": "merchant_1",
+          "name": "Demo Merchant",
+          "website": "https://demo-merchant.example"
+        },
+        "pisp": {
+          "legal_name": "Example PISP LLC",
+          "brand_name": "Example PISP",
+          "domain_name": "pisp.example"
+        },
+        "payment_amount": {
+          "amount": 19900,
+          "currency": "USD"
+        },
+        "payment_instrument": {
+          "id": "card_4242",
+          "type": "card",
+          "description": "Card ending in 4242"
+        },
+        "execution_date": "2026-05-28T12:00:00Z"
+      }
+    ],
+    "checkoutPayload": {
+      "order_id": "order_1",
+      "merchant": {
+        "id": "merchant_1",
+        "name": "Demo Merchant",
+        "website": "https://demo-merchant.example"
+      },
+      "line_items": [
+        {
+          "id": "line_1",
+          "product": {
+            "id": "sku_gold_shoe",
+            "title": "Gold Shoe"
+          },
+          "quantity": 1
+        }
+      ],
+      "total_price": 199.0,
+      "currency": "USD"
+    },
+    "nowSeconds": 1779840000
+  },
+  "disclosures": {
+    "merchant-digest": {
+      "id": "merchant_1",
+      "name": "Demo Merchant",
+      "website": "https://demo-merchant.example"
+    },
+    "item-digest": {
+      "id": "sku_gold_shoe",
+      "title": "Gold Shoe"
+    }
+  },
+  "expected": {
+    "status": "passed",
+    "checkCount": 7
+  }
+}

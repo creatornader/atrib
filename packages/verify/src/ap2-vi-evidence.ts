@@ -25,6 +25,15 @@ export type ViCredentialLayer = 'L1' | 'L2' | 'L3_PAYMENT' | 'L3_CHECKOUT'
 export type ViMode = 'immediate' | 'autonomous' | 'unknown'
 export type SdJwtConformancePolicy = 'require' | 'best-effort' | 'off'
 export type SdJwtConformanceProfile = 'sd-jwt' | 'sd-jwt-vc'
+export type Ap2ConstraintPolicy = 'require' | 'best-effort' | 'off'
+export type Ap2ConstraintDomain = 'checkout' | 'payment'
+export type Ap2ConstraintCheckStatus = 'passed' | 'failed' | 'unresolved' | 'unsupported'
+export type Ap2ConstraintEvaluationStatus =
+  | 'passed'
+  | 'failed'
+  | 'unresolved'
+  | 'not_applicable'
+  | 'not_checked'
 
 export interface ViCredentialInput {
   layer: ViCredentialLayer
@@ -37,6 +46,7 @@ export interface Ap2EvidenceInput {
   checkoutReceipt?: unknown
   paymentReceiptJwt?: string
   checkoutReceiptJwt?: string
+  checkoutPayload?: unknown
   closedPaymentMandate?: string
   closedCheckoutMandate?: string
   closedPaymentMandateHash?: string
@@ -75,6 +85,7 @@ export interface VerifyAp2ViEvidenceOptions {
   signaturePolicy?: 'require' | 'best-effort'
   sdJwtConformancePolicy?: SdJwtConformancePolicy
   sdJwtConformanceProfile?: SdJwtConformanceProfile
+  constraintPolicy?: Ap2ConstraintPolicy
   sdJwtVc?: SdJwtVcConformanceOptions
   nowSeconds?: number
   clockSkewSeconds?: number
@@ -124,6 +135,27 @@ export interface Ap2ReceiptJwtCheck {
   error?: string
 }
 
+export interface Ap2MandateConstraintCheck {
+  type: string
+  domain: Ap2ConstraintDomain
+  status: Ap2ConstraintCheckStatus
+  reason?: string
+}
+
+export interface Ap2MandateConstraintEvaluation {
+  status: Ap2ConstraintEvaluationStatus
+  checks: Ap2MandateConstraintCheck[]
+}
+
+export interface Ap2MandateConstraintInput {
+  openCheckoutMandates?: unknown[]
+  closedCheckoutMandates?: unknown[]
+  openPaymentMandates?: unknown[]
+  closedPaymentMandates?: unknown[]
+  checkoutPayload?: unknown
+  nowSeconds?: number
+}
+
 export interface Ap2EvidenceCheck {
   paymentReceipt?: Ap2ReceiptCheck
   checkoutReceipt?: Ap2ReceiptCheck
@@ -134,6 +166,7 @@ export interface ViEvidenceCheck {
   credentials: ViCredentialCheck[]
   delegationOk: boolean | null
   checkoutPaymentBindingOk: boolean | null
+  constraints: Ap2MandateConstraintEvaluation
 }
 
 export interface Ap2ViEvidenceVerification {
@@ -188,6 +221,10 @@ function isString(value: unknown): value is string {
 
 function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value)
 }
 
 function isJsonWebKeySet(value: unknown): value is { keys: JsonWebKey[] } {
@@ -292,6 +329,434 @@ function sameJson(left: unknown, right: unknown): boolean {
   const leftCanonical = canonicalJson(left)
   const rightCanonical = canonicalJson(right)
   return leftCanonical !== null && leftCanonical === rightCanonical
+}
+
+function getConstraintObjects(mandate: JsonRecord): JsonRecord[] {
+  const constraints = mandate['constraints']
+  if (!Array.isArray(constraints)) return []
+  return constraints.filter(isRecord)
+}
+
+function normalizeConstraintType(value: string): string {
+  return value.startsWith('mandate.') ? value.slice('mandate.'.length) : value
+}
+
+function makeConstraintCheck(
+  constraint: JsonRecord,
+  domain: Ap2ConstraintDomain,
+  status: Ap2ConstraintCheckStatus,
+  reason?: string,
+): Ap2MandateConstraintCheck {
+  const type = isString(constraint['type']) ? constraint['type'] : `${domain}.unknown`
+  return reason === undefined ? { type, domain, status } : { type, domain, status, reason }
+}
+
+function resolveDisclosureRefs(value: unknown, disclosures: Map<string, unknown>): unknown {
+  if (Array.isArray(value)) return value.map((item) => resolveDisclosureRefs(item, disclosures))
+  if (!isRecord(value)) return value
+
+  const digest = value['...']
+  if (isString(digest) && Object.keys(value).length === 1) {
+    return disclosures.has(digest)
+      ? resolveDisclosureRefs(disclosures.get(digest), disclosures)
+      : value
+  }
+
+  const resolved: JsonRecord = {}
+  for (const [key, nested] of Object.entries(value)) {
+    resolved[key] = resolveDisclosureRefs(nested, disclosures)
+  }
+  return resolved
+}
+
+function disclosureMap(parsedCredentials: ParsedCredential[]): Map<string, unknown> {
+  const disclosures = new Map<string, unknown>()
+  for (const parsed of parsedCredentials) {
+    for (const disclosure of parsed.disclosures) {
+      disclosures.set(disclosure.digest, disclosure.value)
+    }
+  }
+  return disclosures
+}
+
+function comparableFields(left: JsonRecord, right: JsonRecord, fields: string[]): string[] {
+  return fields.filter((field) => isString(left[field]) && isString(right[field]))
+}
+
+function entityMatches(left: unknown, right: unknown, fields: string[]): boolean {
+  if (!isRecord(left) || !isRecord(right)) return false
+  const fieldsToCompare = comparableFields(left, right, fields)
+  return (
+    fieldsToCompare.length > 0 && fieldsToCompare.every((field) => left[field] === right[field])
+  )
+}
+
+function anyEntityMatches(allowed: unknown, actual: unknown, fields: string[]): boolean | null {
+  if (!Array.isArray(allowed)) return null
+  if (!isRecord(actual)) return null
+  const allowedRecords = allowed.filter(isRecord)
+  if (allowedRecords.length === 0) return null
+  return allowedRecords.some((candidate) => entityMatches(candidate, actual, fields))
+}
+
+function paymentAmount(target: JsonRecord): { amount: number; currency: string } | null {
+  const amount = target['payment_amount']
+  if (!isRecord(amount) || !isSafeInteger(amount['amount']) || !isString(amount['currency'])) {
+    return null
+  }
+  return { amount: amount['amount'], currency: amount['currency'] }
+}
+
+function optionalIntegerBound(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  return isSafeInteger(value) ? value : null
+}
+
+function compareIsoDate(value: string, lower?: unknown, upper?: unknown): boolean | null {
+  const time = Date.parse(value)
+  if (!Number.isFinite(time)) return null
+
+  if (isString(lower)) {
+    const lowerTime = Date.parse(lower)
+    if (!Number.isFinite(lowerTime) || time < lowerTime) return false
+  }
+  if (isString(upper)) {
+    const upperTime = Date.parse(upper)
+    if (!Number.isFinite(upperTime) || time > upperTime) return false
+  }
+  return true
+}
+
+function decodeCompactJwtPayload(value: string): JsonRecord | undefined {
+  try {
+    const payload = decodeJwt(value)
+    return isRecord(payload) ? (payload as JsonRecord) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function resolveCheckoutPayload(
+  explicitPayload: unknown,
+  closedCheckoutMandates: JsonRecord[],
+): JsonRecord | undefined {
+  if (isRecord(explicitPayload)) return explicitPayload
+
+  for (const mandate of closedCheckoutMandates) {
+    const payload = mandate['checkout_payload']
+    if (isRecord(payload)) return payload
+
+    const checkoutJwt = mandate['checkout_jwt']
+    if (isString(checkoutJwt)) {
+      const decoded = decodeCompactJwtPayload(checkoutJwt)
+      if (decoded) return decoded
+    }
+  }
+
+  return undefined
+}
+
+function checkoutLineItemId(value: JsonRecord): string | null {
+  const product = value['product']
+  if (isRecord(product) && isString(product['id'])) return product['id']
+  return isString(value['id']) ? value['id'] : null
+}
+
+function checkoutLineItemQuantities(checkoutPayload: JsonRecord): Map<string, number> | null {
+  const items = checkoutPayload['line_items']
+  if (!Array.isArray(items)) return null
+
+  const quantities = new Map<string, number>()
+  for (const item of items) {
+    if (!isRecord(item)) return null
+    const id = checkoutLineItemId(item)
+    const quantity = item['quantity']
+    if (id === null || !isSafeInteger(quantity) || quantity < 0) return null
+    quantities.set(id, (quantities.get(id) ?? 0) + quantity)
+  }
+  return quantities
+}
+
+function maxLineItemFlow(
+  requirements: Array<{ quantity: number; acceptableIds: Set<string> }>,
+  checkoutQuantities: Map<string, number>,
+): number {
+  const source = 'source'
+  const sink = 'sink'
+  const graph = new Map<string, Map<string, number>>()
+
+  const addEdge = (from: string, to: string, capacity: number): void => {
+    if (!graph.has(from)) graph.set(from, new Map())
+    if (!graph.has(to)) graph.set(to, new Map())
+    graph.get(from)!.set(to, (graph.get(from)!.get(to) ?? 0) + capacity)
+    graph.get(to)!.set(from, graph.get(to)!.get(from) ?? 0)
+  }
+
+  requirements.forEach((requirement, index) => {
+    const reqNode = `req:${index}`
+    addEdge(source, reqNode, requirement.quantity)
+    for (const itemId of requirement.acceptableIds) {
+      if (checkoutQuantities.has(itemId))
+        addEdge(reqNode, `item:${itemId}`, Number.MAX_SAFE_INTEGER)
+    }
+  })
+  for (const [itemId, quantity] of checkoutQuantities) {
+    addEdge(`item:${itemId}`, sink, quantity)
+  }
+
+  let flow = 0
+  for (;;) {
+    const parent = new Map<string, string>()
+    const queue = [source]
+    parent.set(source, '')
+
+    for (let i = 0; i < queue.length && !parent.has(sink); i += 1) {
+      const node = queue[i]!
+      for (const [next, capacity] of graph.get(node) ?? []) {
+        if (capacity > 0 && !parent.has(next)) {
+          parent.set(next, node)
+          queue.push(next)
+        }
+      }
+    }
+
+    if (!parent.has(sink)) return flow
+
+    let increment = Number.MAX_SAFE_INTEGER
+    for (let node = sink; node !== source; node = parent.get(node)!) {
+      const prev = parent.get(node)!
+      increment = Math.min(increment, graph.get(prev)!.get(node)!)
+    }
+
+    for (let node = sink; node !== source; node = parent.get(node)!) {
+      const prev = parent.get(node)!
+      graph.get(prev)!.set(node, graph.get(prev)!.get(node)! - increment)
+      graph.get(node)!.set(prev, graph.get(node)!.get(prev)! + increment)
+    }
+    flow += increment
+  }
+}
+
+function evaluatePaymentConstraint(
+  constraint: JsonRecord,
+  closedPaymentMandates: JsonRecord[],
+  nowSeconds: number,
+): Ap2MandateConstraintCheck {
+  const type = isString(constraint['type']) ? normalizeConstraintType(constraint['type']) : ''
+  if (closedPaymentMandates.length === 0) {
+    return makeConstraintCheck(constraint, 'payment', 'unresolved', 'closed_payment_missing')
+  }
+
+  if (type === 'payment.amount_range') {
+    const min = optionalIntegerBound(constraint['min'])
+    const max = optionalIntegerBound(constraint['max'])
+    if (min === null || max === null) {
+      return makeConstraintCheck(constraint, 'payment', 'unresolved', 'amount_range')
+    }
+
+    for (const mandate of closedPaymentMandates) {
+      const amount = paymentAmount(mandate)
+      if (amount === null) {
+        return makeConstraintCheck(constraint, 'payment', 'unresolved', 'payment_amount')
+      }
+      if (isString(constraint['currency']) && constraint['currency'] !== amount.currency) {
+        return makeConstraintCheck(constraint, 'payment', 'failed', 'currency')
+      }
+      if (min !== undefined && amount.amount < min) {
+        return makeConstraintCheck(constraint, 'payment', 'failed', 'min')
+      }
+      if (max !== undefined && amount.amount > max) {
+        return makeConstraintCheck(constraint, 'payment', 'failed', 'max')
+      }
+    }
+    return makeConstraintCheck(constraint, 'payment', 'passed')
+  }
+
+  if (type === 'payment.allowed_payees') {
+    for (const mandate of closedPaymentMandates) {
+      const ok = anyEntityMatches(constraint['allowed'], mandate['payee'], [
+        'id',
+        'website',
+        'name',
+      ])
+      if (ok === null) return makeConstraintCheck(constraint, 'payment', 'unresolved', 'allowed')
+      if (!ok) return makeConstraintCheck(constraint, 'payment', 'failed', 'payee')
+    }
+    return makeConstraintCheck(constraint, 'payment', 'passed')
+  }
+
+  if (type === 'payment.allowed_payment_instruments') {
+    for (const mandate of closedPaymentMandates) {
+      const ok = anyEntityMatches(constraint['allowed'], mandate['payment_instrument'], [
+        'id',
+        'type',
+        'description',
+      ])
+      if (ok === null) return makeConstraintCheck(constraint, 'payment', 'unresolved', 'allowed')
+      if (!ok) return makeConstraintCheck(constraint, 'payment', 'failed', 'payment_instrument')
+    }
+    return makeConstraintCheck(constraint, 'payment', 'passed')
+  }
+
+  if (type === 'payment.allowed_pisps') {
+    for (const mandate of closedPaymentMandates) {
+      const ok = anyEntityMatches(constraint['allowed'], mandate['pisp'], [
+        'domain_name',
+        'brand_name',
+        'legal_name',
+      ])
+      if (ok === null) return makeConstraintCheck(constraint, 'payment', 'unresolved', 'allowed')
+      if (!ok) return makeConstraintCheck(constraint, 'payment', 'failed', 'pisp')
+    }
+    return makeConstraintCheck(constraint, 'payment', 'passed')
+  }
+
+  if (type === 'payment.execution_date') {
+    const immediateExecutionDate = new Date(nowSeconds * 1000).toISOString()
+    for (const mandate of closedPaymentMandates) {
+      const executionDate = isString(mandate['execution_date'])
+        ? mandate['execution_date']
+        : immediateExecutionDate
+      const ok = compareIsoDate(executionDate, constraint['not_before'], constraint['not_after'])
+      if (ok === null) return makeConstraintCheck(constraint, 'payment', 'unresolved', 'date')
+      if (!ok) return makeConstraintCheck(constraint, 'payment', 'failed', 'execution_date')
+    }
+    return makeConstraintCheck(constraint, 'payment', 'passed')
+  }
+
+  return makeConstraintCheck(constraint, 'payment', 'unsupported')
+}
+
+function evaluateCheckoutConstraint(
+  constraint: JsonRecord,
+  checkoutPayload: JsonRecord | undefined,
+  closedPaymentMandates: JsonRecord[],
+): Ap2MandateConstraintCheck {
+  const type = isString(constraint['type']) ? normalizeConstraintType(constraint['type']) : ''
+
+  if (type === 'checkout.allowed_merchants') {
+    const merchant =
+      checkoutPayload?.['merchant'] ??
+      closedPaymentMandates.find((mandate) => mandate['payee'] !== undefined)?.['payee']
+    const ok = anyEntityMatches(constraint['allowed'], merchant, ['id', 'website', 'name'])
+    if (ok === null) return makeConstraintCheck(constraint, 'checkout', 'unresolved', 'merchant')
+    if (!ok) return makeConstraintCheck(constraint, 'checkout', 'failed', 'merchant')
+    return makeConstraintCheck(constraint, 'checkout', 'passed')
+  }
+
+  if (type === 'checkout.line_items') {
+    if (!checkoutPayload) {
+      return makeConstraintCheck(constraint, 'checkout', 'unresolved', 'checkout_payload_missing')
+    }
+
+    const checkoutQuantities = checkoutLineItemQuantities(checkoutPayload)
+    const items = constraint['items']
+    if (checkoutQuantities === null || !Array.isArray(items)) {
+      return makeConstraintCheck(constraint, 'checkout', 'unresolved', 'line_items')
+    }
+
+    const requirements: Array<{ quantity: number; acceptableIds: Set<string> }> = []
+    for (const item of items) {
+      if (!isRecord(item)) {
+        return makeConstraintCheck(constraint, 'checkout', 'unresolved', 'requirement')
+      }
+      const quantity = item['quantity']
+      if (!isSafeInteger(quantity) || quantity < 0) {
+        return makeConstraintCheck(constraint, 'checkout', 'unresolved', 'requirement')
+      }
+      const acceptableItems = item['acceptable_items']
+      if (!Array.isArray(acceptableItems)) {
+        return makeConstraintCheck(constraint, 'checkout', 'unresolved', 'acceptable_items')
+      }
+      const acceptableIds = new Set<string>()
+      for (const acceptable of acceptableItems) {
+        if (isRecord(acceptable) && isString(acceptable['id'])) acceptableIds.add(acceptable['id'])
+      }
+      if (acceptableIds.size === 0) {
+        return makeConstraintCheck(constraint, 'checkout', 'unresolved', 'acceptable_items')
+      }
+      requirements.push({ quantity, acceptableIds })
+    }
+
+    const requiredQuantity = requirements.reduce((sum, item) => sum + item.quantity, 0)
+    const checkoutQuantity = [...checkoutQuantities.values()].reduce(
+      (sum, quantity) => sum + quantity,
+      0,
+    )
+    const maxFlow = maxLineItemFlow(requirements, checkoutQuantities)
+
+    if (maxFlow !== requiredQuantity || requiredQuantity !== checkoutQuantity) {
+      return makeConstraintCheck(constraint, 'checkout', 'failed', 'line_items')
+    }
+    return makeConstraintCheck(constraint, 'checkout', 'passed')
+  }
+
+  return makeConstraintCheck(constraint, 'checkout', 'unsupported')
+}
+
+function summarizeConstraintChecks(
+  checks: Ap2MandateConstraintCheck[],
+): Ap2ConstraintEvaluationStatus {
+  if (checks.length === 0) return 'not_applicable'
+  if (checks.some((check) => check.status === 'failed')) return 'failed'
+  if (checks.some((check) => check.status === 'unresolved' || check.status === 'unsupported')) {
+    return 'unresolved'
+  }
+  return 'passed'
+}
+
+export function evaluateAp2ViConstraints(
+  input: Ap2MandateConstraintInput,
+  disclosures: Map<string, unknown> = new Map(),
+): Ap2MandateConstraintEvaluation {
+  const openCheckoutMandates = (input.openCheckoutMandates ?? [])
+    .filter(isRecord)
+    .map((mandate) => resolveDisclosureRefs(mandate, disclosures))
+    .filter(isRecord)
+  const closedCheckoutMandates = (input.closedCheckoutMandates ?? [])
+    .filter(isRecord)
+    .map((mandate) => resolveDisclosureRefs(mandate, disclosures))
+    .filter(isRecord)
+  const openPaymentMandates = (input.openPaymentMandates ?? [])
+    .filter(isRecord)
+    .map((mandate) => resolveDisclosureRefs(mandate, disclosures))
+    .filter(isRecord)
+  const closedPaymentMandates = (input.closedPaymentMandates ?? [])
+    .filter(isRecord)
+    .map((mandate) => resolveDisclosureRefs(mandate, disclosures))
+    .filter(isRecord)
+  const resolvedCheckoutPayload = resolveDisclosureRefs(input.checkoutPayload, disclosures)
+  const checkoutPayload = resolveCheckoutPayload(resolvedCheckoutPayload, closedCheckoutMandates)
+  const nowSeconds = input.nowSeconds ?? Math.floor(Date.now() / 1000)
+  const checks: Ap2MandateConstraintCheck[] = []
+
+  for (const mandate of openCheckoutMandates) {
+    for (const constraint of getConstraintObjects(mandate)) {
+      const resolved = resolveDisclosureRefs(constraint, disclosures)
+      checks.push(
+        evaluateCheckoutConstraint(
+          isRecord(resolved) ? resolved : constraint,
+          checkoutPayload,
+          closedPaymentMandates,
+        ),
+      )
+    }
+  }
+
+  for (const mandate of openPaymentMandates) {
+    for (const constraint of getConstraintObjects(mandate)) {
+      const resolved = resolveDisclosureRefs(constraint, disclosures)
+      checks.push(
+        evaluatePaymentConstraint(
+          isRecord(resolved) ? resolved : constraint,
+          closedPaymentMandates,
+          nowSeconds,
+        ),
+      )
+    }
+  }
+
+  return { status: summarizeConstraintChecks(checks), checks }
 }
 
 function normalizeJwks(value: JsonWebKey[] | { keys: JsonWebKey[] }): JSONWebKeySet {
@@ -778,6 +1243,24 @@ function addSdJwtConformanceFinding(
   else warnings.push(`${code}:${layer}`)
 }
 
+function addConstraintFindings(
+  policy: Exclude<Ap2ConstraintPolicy, 'off'>,
+  constraints: Ap2MandateConstraintEvaluation,
+  errors: string[],
+  warnings: string[],
+): void {
+  for (const check of constraints.checks) {
+    let code: string | undefined
+    if (check.status === 'failed') code = `vi_constraint_failed:${check.type}`
+    if (check.status === 'unresolved') code = `vi_constraint_unresolved:${check.type}`
+    if (check.status === 'unsupported') code = `vi_constraint_unsupported:${check.type}`
+    if (code === undefined) continue
+
+    if (policy === 'require') errors.push(code)
+    else warnings.push(code)
+  }
+}
+
 async function verifyCredentialSdJwtConformance(
   credentials: ViCredentialInput[],
   trustedIssuerKeys: JsonWebKey[],
@@ -917,6 +1400,7 @@ export function verifyAp2ViEvidence(
   const errors: string[] = []
   const warnings: string[] = []
   const signaturePolicy = options.signaturePolicy ?? 'require'
+  const constraintPolicy = options.constraintPolicy ?? 'require'
   const trustedIssuerKeys = options.trustedIssuerKeys ?? bundle.trustedIssuerKeys ?? []
   const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000)
   const clockSkewSeconds = options.clockSkewSeconds ?? 300
@@ -978,6 +1462,23 @@ export function verifyAp2ViEvidence(
       : finalPaymentMandates.length > 0 || finalCheckoutMandates.length > 0
         ? 'immediate'
         : 'unknown'
+  const constraints =
+    constraintPolicy === 'off'
+      ? { status: 'not_checked' as const, checks: [] }
+      : evaluateAp2ViConstraints(
+          {
+            openCheckoutMandates,
+            closedCheckoutMandates: finalCheckoutMandates,
+            openPaymentMandates,
+            closedPaymentMandates: finalPaymentMandates,
+            checkoutPayload: bundle.ap2?.checkoutPayload,
+            nowSeconds,
+          },
+          disclosureMap(parsedCredentials),
+        )
+  if (constraintPolicy !== 'off') {
+    addConstraintFindings(constraintPolicy, constraints, errors, warnings)
+  }
 
   const ap2: Ap2EvidenceCheck = {}
   const expectedPaymentReference = expectedReceiptReference(
@@ -1032,6 +1533,7 @@ export function verifyAp2ViEvidence(
       credentials: credentialChecks,
       delegationOk,
       checkoutPaymentBindingOk,
+      constraints,
     },
     errors: [...new Set(errors)],
     warnings: [...new Set(warnings)],

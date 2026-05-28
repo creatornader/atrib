@@ -1077,7 +1077,7 @@ Verifier-side AP2 / Verifiable Intent evidence checks SHOULD run off the middlew
 5. autonomous-mode consistency: the open checkout and open payment mandates bind the same `cnf.jwk`;
 6. final checkout/payment binding: `checkout_hash` matches `checkout_jwt`, and PaymentMandate `transaction_id` matches the checkout hash.
 
-Failure in this evidence stage MUST NOT undo or block the transaction detector. It is a verifier signal for settlement, audit, and dispute workflows. The reference TypeScript surfaces are `@atrib/verify` `verifyAp2ViEvidence()` for decoded evidence and `verifyAp2ViEvidenceAsync()` for compact signed receipt JWTs plus async SD-JWT / VC conformance; see [§5.5.4](#554-ap2--verifiable-intent-evidence-checks), [D089](DECISIONS.md#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), [D090](DECISIONS.md#d090-ap2-receipt-jwt-verification-uses-jose-in-atribverify), and [D091](DECISIONS.md#d091-ap2--vi-sd-jwt-conformance-uses-openwallet-sd-jwt-js).
+Failure in this evidence stage MUST NOT undo or block the transaction detector. It is a verifier signal for settlement, audit, and dispute workflows. The reference TypeScript surfaces are `@atrib/verify` `verifyAp2ViEvidence()` for decoded evidence and `verifyAp2ViEvidenceAsync()` for compact signed receipt JWTs plus async SD-JWT / VC conformance; both include typed AP2 mandate constraint evaluation when open constraints are disclosed. See [§5.5.4](#554-ap2--verifiable-intent-evidence-checks), [D089](DECISIONS.md#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), [D090](DECISIONS.md#d090-ap2-receipt-jwt-verification-uses-jose-in-atribverify), [D091](DECISIONS.md#d091-ap2--vi-sd-jwt-conformance-uses-openwallet-sd-jwt-js), and [D092](DECISIONS.md#d092-ap2--vi-mandate-constraints-are-typed-verifier-evidence).
 
 Implementations SHOULD embed the `context_id` in the agent protocol envelope where the host supports metadata. Until AP2 standardizes an atrib-specific metadata field, the `context_id` MUST also travel via `params._meta.atrib` per [§1.5.2](#152-http-transport-tracestate), [§1.5.3](#153-http-fallback-x-atrib-chain), and [§1.5.3.1](#1531-context-id-header-x-atrib-context).
 
@@ -3909,6 +3909,12 @@ The result shape is:
     ],
     delegationOk: true,
     checkoutPaymentBindingOk: true,
+    constraints: {
+      status: 'passed' | 'failed' | 'unresolved' | 'not_applicable' | 'not_checked',
+      checks: [
+        { type: 'payment.amount_range', domain: 'payment', status: 'passed' },
+      ],
+    },
   },
   errors: [],
   warnings: [],
@@ -3922,6 +3928,10 @@ For compact AP2 receipt JWTs, callers MUST provide a trust root through `receipt
 The async verifier also runs SD-JWT / SD-JWT VC conformance for VI credentials when present. The default `sdJwtConformancePolicy` is `require`; `sdJwtConformancePolicy: "best-effort"` turns conformance failures into warnings, and `"off"` skips the async conformance layer. The default profile is `sd-jwt-vc`; callers MAY pass `sdJwtConformanceProfile: "sd-jwt"` for the core SD-JWT profile.
 
 VC type metadata and status-list checks are opt-in. Callers that set `sdJwtVc.loadTypeMetadata` or submit credentials with VC status references SHOULD provide `sdJwtVc.vctFetcher` and `sdJwtVc.statusListFetcher`. The verifier does not perform implicit network fetches for these checks.
+
+When open AP2 mandates disclose constraints, the verifier evaluates the typed subset codified in [D092](DECISIONS.md#d092-ap2--vi-mandate-constraints-are-typed-verifier-evidence): `checkout.allowed_merchants`, `checkout.line_items`, `payment.amount_range`, `payment.allowed_payees`, `payment.allowed_payment_instruments`, `payment.allowed_pisps`, and `payment.execution_date`. The default `constraintPolicy` is `require`; failed, unresolved, or unsupported disclosed constraints make `valid` false. `constraintPolicy: "best-effort"` turns those findings into warnings, and `"off"` returns `vi.constraints.status: "not_checked"`.
+
+Payment amount bounds are evaluated against AP2 integer minor-unit amounts. Checkout line items use deterministic max-flow matching so overlapping acceptable-item sets produce stable results. Missing checkout payloads, missing closed payment mandates, undisclosed allowed-list entries, and unsupported constraint types are explicit unresolved evidence, not silent passes.
 
 ---
 

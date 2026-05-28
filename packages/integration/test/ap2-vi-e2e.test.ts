@@ -20,6 +20,7 @@ describe('AP2 plus VI e2e', () => {
     expect(evidence.valid).toBe(true)
     expect(evidence.transactionAccepted).toBe(true)
     expect(evidence.vi.checkoutPaymentBindingOk).toBe(true)
+    expect(evidence.vi.constraints.status).toBe('not_applicable')
     expect(
       evidence.vi.credentials.every(
         (credential) => credential.sdJwtConformance.status === 'verified',

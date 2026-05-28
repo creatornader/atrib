@@ -40,10 +40,21 @@ export { buildRevocationRegistry, applyRevocation } from './revocations.js'
 export type { RevocationEntry, RevocationReason, MinimalRecord } from './revocations.js'
 
 // AP2 / Verifiable Intent evidence checks. Off the settlement critical path.
-export { verifyAp2ViEvidence, verifyAp2ViEvidenceAsync } from './ap2-vi-evidence.js'
+export {
+  evaluateAp2ViConstraints,
+  verifyAp2ViEvidence,
+  verifyAp2ViEvidenceAsync,
+} from './ap2-vi-evidence.js'
 export type {
+  Ap2ConstraintCheckStatus,
+  Ap2ConstraintDomain,
+  Ap2ConstraintEvaluationStatus,
+  Ap2ConstraintPolicy,
   Ap2EvidenceCheck,
   Ap2EvidenceInput,
+  Ap2MandateConstraintCheck,
+  Ap2MandateConstraintEvaluation,
+  Ap2MandateConstraintInput,
   Ap2ReceiptJwtCheck,
   Ap2ReceiptJwtIssuer,
   Ap2ReceiptCheck,

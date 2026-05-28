@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { exportJWK, generateKeyPair, SignJWT } from 'jose'
 import { base64urlDecode, base64urlEncode, sha256 } from '@atrib/mcp'
-import { verifyAp2ViEvidence, verifyAp2ViEvidenceAsync } from '../src/ap2-vi-evidence.js'
+import {
+  evaluateAp2ViConstraints,
+  verifyAp2ViEvidence,
+  verifyAp2ViEvidenceAsync,
+} from '../src/ap2-vi-evidence.js'
+import type { Ap2MandateConstraintInput } from '../src/ap2-vi-evidence.js'
 
 import immediateFixture from '../../agent/test/fixtures/ap2/vi_immediate_evidence.json'
 import splitAgentFixture from '../../agent/test/fixtures/ap2/vi_autonomous_split_agent_evidence.json'
+import constraintFixture from '../../agent/test/fixtures/ap2/vi_autonomous_constraints_decoded.json'
 
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
@@ -72,6 +78,7 @@ describe('verifyAp2ViEvidence', () => {
     expect(result.ap2.checkoutReceipt?.referenceOk).toBe(true)
     expect(result.vi.mode).toBe('immediate')
     expect(result.vi.checkoutPaymentBindingOk).toBe(true)
+    expect(result.vi.constraints.status).toBe('not_applicable')
     expect(
       result.vi.credentials.every((credential) => credential.signature.status === 'verified'),
     ).toBe(true)
@@ -130,12 +137,28 @@ describe('verifyAp2ViEvidence', () => {
   })
 
   it('rejects autonomous VI evidence when checkout and payment mandates bind different agent keys', () => {
-    const result = verifyAp2ViEvidence(splitAgentFixture)
+    const result = verifyAp2ViEvidence(splitAgentFixture, { constraintPolicy: 'best-effort' })
 
     expect(result.valid).toBe(false)
     expect(result.vi.mode).toBe('autonomous')
     expect(result.vi.delegationOk).toBe(false)
+    expect(result.vi.constraints.status).toBe('unresolved')
     expect(result.errors).toContain('vi_l2_cnf_mismatch')
+    expect(result.errors.some((error) => error.startsWith('vi_constraint_'))).toBe(false)
+    expect(result.warnings.some((warning) => warning.startsWith('vi_constraint_'))).toBe(true)
+  })
+
+  it('fails autonomous evidence when required constraints cannot be resolved', () => {
+    const result = verifyAp2ViEvidence(splitAgentFixture)
+
+    expect(result.valid).toBe(false)
+    expect(result.vi.constraints.status).toBe('unresolved')
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        'vi_constraint_unresolved:mandate.checkout.allowed_merchants',
+        'vi_constraint_unresolved:mandate.payment.amount_range',
+      ]),
+    )
   })
 
   it('returns a failed result instead of throwing on malformed evidence', () => {
@@ -449,5 +472,126 @@ describe('verifyAp2ViEvidence', () => {
     expect(result.ap2.paymentReceipt?.jwt?.verified).toBe(false)
     expect(result.warnings).toContain('ap2_payment_receipt_jwt_invalid')
     expect(result.errors).not.toContain('ap2_payment_receipt_jwt_invalid')
+  })
+})
+
+describe('evaluateAp2ViConstraints', () => {
+  const merchant = {
+    id: 'merchant_1',
+    name: 'Demo Merchant',
+    website: 'https://demo-merchant.example',
+  }
+  const pisp = {
+    legal_name: 'Example PISP LLC',
+    brand_name: 'Example PISP',
+    domain_name: 'pisp.example',
+  }
+  const paymentInstrument = {
+    id: 'card_4242',
+    type: 'card',
+    description: 'Card ending in 4242',
+  }
+  const checkoutPayload = {
+    order_id: 'order_1',
+    merchant,
+    line_items: [
+      {
+        id: 'line_1',
+        product: { id: 'sku_gold_shoe', title: 'Gold Shoe' },
+        quantity: 1,
+      },
+    ],
+    total_price: 199.0,
+    currency: 'USD',
+  }
+  const closedPaymentMandate = {
+    vct: 'mandate.payment.1',
+    transaction_id: 'checkout_hash',
+    payee: merchant,
+    pisp,
+    payment_amount: { amount: 19900, currency: 'USD' },
+    payment_instrument: paymentInstrument,
+    execution_date: '2026-05-28T12:00:00Z',
+  }
+
+  it('passes AP2 autonomous checkout and payment constraints with disclosed references', () => {
+    const result = evaluateAp2ViConstraints(
+      constraintFixture.input as Ap2MandateConstraintInput,
+      new Map(Object.entries(constraintFixture.disclosures)),
+    )
+
+    expect(result.status).toBe(constraintFixture.expected.status)
+    expect(result.checks).toHaveLength(constraintFixture.expected.checkCount)
+    expect(result.checks.every((check) => check.status === 'passed')).toBe(true)
+  })
+
+  it('treats non-integer AP2 payment amounts as unresolved evidence', () => {
+    const result = evaluateAp2ViConstraints({
+      openPaymentMandates: [
+        {
+          vct: 'mandate.payment.open.1',
+          constraints: [{ type: 'payment.amount_range', currency: 'USD', min: 0, max: 20000 }],
+        },
+      ],
+      closedPaymentMandates: [
+        { ...closedPaymentMandate, payment_amount: { amount: 199.5, currency: 'USD' } },
+      ],
+    })
+
+    expect(result.status).toBe('unresolved')
+    expect(result.checks).toContainEqual(
+      expect.objectContaining({
+        type: 'payment.amount_range',
+        status: 'unresolved',
+        reason: 'payment_amount',
+      }),
+    )
+  })
+
+  it('fails deterministic AP2 constraints when receipt evidence exceeds mandate bounds', () => {
+    const result = evaluateAp2ViConstraints({
+      openCheckoutMandates: [
+        {
+          vct: 'mandate.checkout.open.1',
+          constraints: [
+            {
+              type: 'checkout.allowed_merchants',
+              allowed: [{ id: 'merchant_other', name: 'Other Merchant' }],
+            },
+            {
+              type: 'checkout.line_items',
+              items: [
+                {
+                  id: 'req_1',
+                  acceptable_items: [{ id: 'sku_blue_shoe', title: 'Blue Shoe' }],
+                  quantity: 1,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      openPaymentMandates: [
+        {
+          vct: 'mandate.payment.open.1',
+          constraints: [
+            { type: 'payment.amount_range', currency: 'USD', min: 0, max: 10000 },
+            { type: 'payment.allowed_payees', allowed: [{ id: 'merchant_other' }] },
+          ],
+        },
+      ],
+      closedPaymentMandates: [closedPaymentMandate],
+      checkoutPayload,
+    })
+
+    expect(result.status).toBe('failed')
+    expect(result.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'checkout.allowed_merchants', status: 'failed' }),
+        expect.objectContaining({ type: 'checkout.line_items', status: 'failed' }),
+        expect.objectContaining({ type: 'payment.amount_range', status: 'failed' }),
+        expect.objectContaining({ type: 'payment.allowed_payees', status: 'failed' }),
+      ]),
+    )
   })
 })

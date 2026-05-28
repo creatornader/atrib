@@ -164,6 +164,7 @@ Checks performed when evidence is present:
 - Async VI SD-JWT / SD-JWT VC conformance with OpenWallet `@sd-jwt/core` and `@sd-jwt/sd-jwt-vc`.
 - ES256 signatures: L1 via trusted issuer keys, L2 via L1 `cnf.jwk`, L3 via the L2 delegated agent key.
 - `sd_hash` links, disclosure digest links, autonomous L2 `cnf.jwk` consistency, and final checkout/payment binding.
+- Typed AP2 mandate constraints: merchant allowlists, checkout line items, payment amount ranges, allowed payees, allowed payment instruments, allowed PISPs, and execution windows.
 
 The default signature policy is `require`. Missing keys or invalid signatures make `valid` false while still returning a structured result. Use `signaturePolicy: "best-effort"` for structural triage where issuer keys are not yet available.
 
@@ -172,6 +173,8 @@ The default receipt JWT policy is also `require`. Invalid receipt JWTs make `val
 The async verifier also defaults `sdJwtConformancePolicy` to `require` when VI credentials are present. Each credential result includes `sdJwtConformance.status`, `profile`, and an optional reason. Use `sdJwtConformancePolicy: "best-effort"` for advisory conformance checks, or `"off"` to keep the async result aligned with the decoded structural verifier. The default profile is `sd-jwt-vc`; callers may pass `sdJwtConformanceProfile: "sd-jwt"` for the core SD-JWT profile.
 
 VC type metadata and status-list fetches are explicit. If a caller enables `sdJwtVc.loadTypeMetadata` or submits credentials with VC status references, it should provide `sdJwtVc.vctFetcher` or `sdJwtVc.statusListFetcher`. The verifier does not perform hidden network fetches for those checks.
+
+The default constraint policy is `require`. Failed, unresolved, or unsupported disclosed AP2 constraints make `valid` false. Use `constraintPolicy: "best-effort"` to keep those findings advisory, or `"off"` to skip them. The lower-level `evaluateAp2ViConstraints(input, disclosures?)` helper is exported for decoded mandate material and fixture replay.
 
 ### `calculate(options): Promise<RecommendationDocument>`
 
@@ -186,6 +189,7 @@ For advanced use (custom calculators, alternative signing flows), the package al
 - `isValidPolicy(doc)`: schema check for `PolicyDocument`
 - `signRecommendation(unsigned, privateKey)`: JCS + Ed25519 signing
 - `verifyRecommendationSignature(doc, publicKey)`: signature verification
+- `evaluateAp2ViConstraints(input, disclosures?)`: decoded AP2 open-mandate constraint checking
 - `verifyAp2ViEvidence(bundle, options?)`: decoded AP2 / VI receipt and mandate-chain evidence checking
 - `verifyAp2ViEvidenceAsync(bundle, options?)`: compact AP2 receipt JWT verification, async VI SD-JWT / VC conformance, plus decoded evidence checks
 - `recommendationSigningInput(doc)`: the canonical bytes that get signed

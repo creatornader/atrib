@@ -48,7 +48,7 @@ Every example has a `README.md` next to it explaining what's wired up and which 
 Run with `pnpm --filter @atrib/integration test`. 23 tests across 6 files:
 
 - **`test/end-to-end.test.ts`** (3 tests), full attribution chain across the public packages: agent calls a tool, server emits a signed record, the record's chain hash links to the previous step, the verifier re-runs the calculation against the resulting graph.
-- **`test/ap2-vi-e2e.test.ts`** (1 test), AP2 v0.2 receipt detection plus async `@atrib/verify` AP2 / Verifiable Intent evidence checking. This protects the detector/verifier boundary: successful receipts close the transaction, while VI mandates remain verifier-side authorization evidence with SD-JWT / VC conformance checked off the detector path.
+- **`test/ap2-vi-e2e.test.ts`** (1 test), AP2 v0.2 receipt detection plus async `@atrib/verify` AP2 / Verifiable Intent evidence checking. This protects the detector/verifier boundary: successful receipts close the transaction, while VI mandates remain verifier-side authorization evidence with SD-JWT / VC conformance and mandate constraints checked off the detector path.
 - **`test/real-mcp-sdk.test.ts`** (2 tests), exercises both the wrapped MCP client and wrapped MCP server against a real `@modelcontextprotocol/sdk@1.29.0` transport, including the [§6](../../atrib-spec.md#6-key-directory) retroactive dispatcher wrap path and the `wrapMcpClient` adapter.
 - **`test/full-chain.test.ts`** (3 tests), the wrapper → mirror → log → verify path with a real signed record set.
 - **`test/resolve-identity-step7.test.ts`** (3 tests), real directory lookup plus verifier step 7 behavior around anchored identity evidence.
