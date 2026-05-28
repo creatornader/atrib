@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { atrib } from '../src/middleware.js'
+import { detectTransaction } from '../src/transaction.js'
 import {
   base64urlEncode,
   encodeToken,
@@ -8,6 +9,7 @@ import {
   genesisChainRoot,
   type AtribRecord,
 } from '@atrib/mcp'
+import ap2PaymentReceiptArtifactFixture from './fixtures/ap2/payment_receipt_artifact.json'
 
 const TEST_KEY = new Uint8Array(32).fill(42)
 const TEST_KEY_B64 = base64urlEncode(TEST_KEY)
@@ -159,7 +161,9 @@ describe('atrib() agent middleware', () => {
 
       // No transaction record should have been submitted (Path 2 suppressed).
       // Spec §2.6.1: each `submissions` entry IS the bare record.
-      const txnSubmissions = submissions.filter((s: any) => s?.event_type === 'https://atrib.dev/v1/types/transaction')
+      const txnSubmissions = submissions.filter(
+        (s: any) => s?.event_type === 'https://atrib.dev/v1/types/transaction',
+      )
       expect(txnSubmissions.length).toBe(0)
     })
 
@@ -189,7 +193,9 @@ describe('atrib() agent middleware', () => {
 
       await interceptor.flush()
 
-      const txnSubmissions = submissions.filter((s) => s?.event_type === 'https://atrib.dev/v1/types/transaction')
+      const txnSubmissions = submissions.filter(
+        (s) => s?.event_type === 'https://atrib.dev/v1/types/transaction',
+      )
       expect(txnSubmissions.length).toBeGreaterThanOrEqual(1)
       expect(txnSubmissions[0].event_type).toBe('https://atrib.dev/v1/types/transaction')
     })
@@ -222,7 +228,9 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find((s) => s?.event_type === 'https://atrib.dev/v1/types/transaction')
+      const txn = submissions.find(
+        (s) => s?.event_type === 'https://atrib.dev/v1/types/transaction',
+      )
       expect(txn).toBeDefined()
       expect(txn.session_token).toBe('my_session')
     })
@@ -253,7 +261,9 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find((s) => s?.event_type === 'https://atrib.dev/v1/types/transaction')
+      const txn = submissions.find(
+        (s) => s?.event_type === 'https://atrib.dev/v1/types/transaction',
+      )
       expect(txn).toBeDefined()
       // chain_root should match genesisChainRoot(context_id). sha256 prefix + 64 hex
       expect(txn.chain_root).toMatch(/^sha256:[0-9a-f]{64}$/)
@@ -300,7 +310,9 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find((s) => s?.event_type === 'https://atrib.dev/v1/types/transaction')
+      const txn = submissions.find(
+        (s) => s?.event_type === 'https://atrib.dev/v1/types/transaction',
+      )
       expect(txn.content_id).toBe(expectedContentId)
     })
 
@@ -333,9 +345,52 @@ describe('atrib() agent middleware', () => {
       )
       await interceptor.flush()
 
-      const txn = submissions.find((s) => s?.event_type === 'https://atrib.dev/v1/types/transaction')
+      const txn = submissions.find(
+        (s) => s?.event_type === 'https://atrib.dev/v1/types/transaction',
+      )
       expect(txn).toBeDefined()
       expect(txn.content_id).toBe(expectedContentId)
+    })
+
+    it('Path 2 AP2 uses protocol-specific receipt content_id when available', async () => {
+      const submissions: AtribRecord[] = []
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+        const bodyText = typeof init?.body === 'string' ? init.body : '{}'
+        const body = JSON.parse(bodyText) as AtribRecord
+        submissions.push(body)
+        return new Response(
+          JSON.stringify({
+            log_index: 1,
+            checkpoint: 'log.test/v1\n2\nrootHashBase64\n',
+            inclusion_proof: [],
+            leaf_hash: 'leafHashBase64',
+          }),
+          { status: 200 },
+        )
+      })
+
+      const { computeContentId } = await import('@atrib/mcp')
+      const expectedContentId = detectTransaction(
+        'payment_tool',
+        ap2PaymentReceiptArtifactFixture,
+      ).contentId
+      const genericFallback = computeContentId('https://tools.example.com', 'checkout')
+
+      const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
+      interceptor.onAfterToolResponse(
+        'payment_tool',
+        ap2PaymentReceiptArtifactFixture,
+        {},
+        { serverUrl: 'https://tools.example.com' },
+      )
+      await interceptor.flush()
+
+      const txn = submissions.find(
+        (s) => s?.event_type === 'https://atrib.dev/v1/types/transaction',
+      )
+      expect(txn).toBeDefined()
+      expect(txn.content_id).toBe(expectedContentId)
+      expect(txn.content_id).not.toBe(genericFallback)
     })
   })
 

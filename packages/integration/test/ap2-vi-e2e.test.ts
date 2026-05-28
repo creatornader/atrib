@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { detectTransaction } from '@atrib/agent'
+import { computeContentId } from '@atrib/mcp'
 import { verifyAp2ViEvidenceAsync } from '@atrib/verify'
 import type { Ap2ViEvidenceBundle } from '@atrib/verify'
 
@@ -19,6 +20,8 @@ describe('AP2 plus VI e2e', () => {
     })
 
     expect(detection).toMatchObject({ detected: true, protocol: 'AP2' })
+    expect(detection.contentId).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(detection.contentId).not.toBe(computeContentId('https://tools.example.com', 'checkout'))
     expect(evidence.valid).toBe(true)
     expect(evidence.transactionAccepted).toBe(true)
     expect(evidence.vi.checkoutPaymentBindingOk).toBe(true)
@@ -39,6 +42,8 @@ describe('AP2 plus VI e2e', () => {
     })
 
     expect(detection).toMatchObject({ detected: true, protocol: 'AP2' })
+    expect(detection.contentId).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(detection.contentId).not.toBe(computeContentId('https://tools.example.com', 'checkout'))
     expect(evidence.valid).toBe(true)
     expect(evidence.vi.mode).toBe('autonomous')
     expect(evidence.vi.delegationOk).toBe(true)
