@@ -158,6 +158,34 @@ describe('atrib() middleware', () => {
       expect(decoded!.creatorKey).toEqual(expectedPubKey)
     })
 
+    it('can disable log submission without disabling signing', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const resultObj = { content: [{ type: 'text', text: 'offline' }] }
+      const originalHandler = vi.fn().mockResolvedValue(resultObj)
+      const onRecord = vi.fn()
+      const fetchSpy = vi.spyOn(globalThis, 'fetch')
+
+      try {
+        const wrapped = atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://test.example.com',
+          logSubmission: 'disabled',
+          onRecord,
+        })
+        registerToolHandler(originalHandler)
+
+        const handler = getToolHandler()!
+        await handler(createToolCallRequest('offline_tool'), {})
+        await wrapped.flush()
+
+        expect((resultObj as any)._meta?.atrib).toBeDefined()
+        expect(onRecord).toHaveBeenCalledTimes(1)
+        expect(fetchSpy).not.toHaveBeenCalled()
+      } finally {
+        fetchSpy.mockRestore()
+      }
+    })
+
     it('does not emit record when isError is true', async () => {
       const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
       const errorResult = { isError: true, content: [{ type: 'text', text: 'error' }] }
