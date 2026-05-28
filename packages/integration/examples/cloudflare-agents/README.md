@@ -223,6 +223,27 @@ verified record:
   22871 sha256:a1a9d277f65b2c1195d5bec6395b60b242cac76cfe826fdbb334ae4f1bbd7f01 transaction
 ```
 
+### Interactive approval trace
+
+The runnable example at [`approval-trace/`](approval-trace/) turns the two
+Cloudflare surfaces into a human approval workflow:
+
+```text
+operator request -> agent proposal -> human approval -> MCP execution -> signed outcome -> audit trace
+```
+
+It is intentionally Cloudflare-shaped. The target system is a Durable Object
+SQLite table that models one DDoS ruleset row, the browser approval is the HITL
+gate, and the execution path uses an `McpAgent` action surface wrapped with
+`@atrib/mcp/worker`. The UI focuses on the parts a reviewer needs first:
+decision context, semantic causal chain, trustless audit, and signer separation.
+
+Run it with:
+
+```text
+pnpm --filter @atrib/cloudflare-approval-trace proof:worker
+```
+
 ### What if I need to support a stdio upstream from a Cloudflare Agent?
 
 You can't; Cloudflare Workers don't support child processes, so `StdioClientTransport` from the MCP SDK doesn't work in the Worker runtime. Your upstream MCP server must be HTTP-accessible (`streamable-http` or the deprecated `sse` transport).

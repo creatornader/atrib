@@ -2,6 +2,7 @@ packages:
   - 'packages/*'
   - 'packages/integration/examples/cloudflare-agents/live-worker-proof'
   - 'packages/integration/examples/cloudflare-agents/live-client-proof'
+  - 'packages/integration/examples/cloudflare-agents/approval-trace'
   - 'services/log-node'
   - 'services/graph-node'
   - 'services/directory-node'

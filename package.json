@@ -37,6 +37,7 @@
     "turbo": "^2.9.14",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.4",
+    "vite": "8.0.14",
     "vitest": "^4.1.7"
   },
   "pnpm": {
@@ -45,6 +46,8 @@
       "fast-uri@<3.1.2": "^3.1.2",
       "hono@<4.12.18": "^4.12.18",
       "qs@<6.15.2": "^6.15.2",
+      "@cloudflare/vitest-pool-workers>zod": "^3.25.76",
+      "vite": "8.0.14",
       "zod": "^4.4.3"
     }
   }

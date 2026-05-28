@@ -5116,3 +5116,163 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 - [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type), parent-child env threading; benefits from PATH-resolved CLI per consequences above.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P036: Cross-harness continuation packet for support/RCA investigations
+
+**Source:** John Yeo / Autumn support-investigation case study, May 2026 (`https://useautumn.com/blog/building-an-ai-agent-to-investigate-support-tickets`). The post describes a real workflow where structured request logs, Claude Code, Axiom MCP, and domain skills make local investigations effective, while a hosted Slack-facing agent loses quality when MCP auth, skill loading, and codebase context drift from the local harness. The key product implication for atrib: the public Merkle log proves commitments, but the local continuation agent needs record bodies, redacted evidence, skill versions, latest chain tail, and provenance anchors.
+
+**The decision in question:** should atrib standardize an informative cross-harness continuation packet pattern for workflows that begin in one harness and continue in another, especially support, incident, billing, and RCA investigations?
+
+The packet would carry:
+
+- Upstream anchors: `context_id`, latest `record_hash`, latest chain tail, and `provenance_token` guidance for a fresh receiving trace.
+- Body access: local mirror bundle, archive references, or both for the record bodies the receiver may need.
+- Redacted evidence: ticket ids, tenant context, request/response body references, tenant-scoped log-query references, code-read references, support-thread references, diagnostic outputs, and external-system references with hashes and scopes.
+- Skill and domain context: skill pack names, versions, hashes, and domain reference docs.
+- Runtime diagnostics: tool availability, MCP auth state, skill-loading state, hosted memory and filesystem status, codebase checkout identity, and hosted-agent capability failures.
+- Privacy posture: which bodies and evidence are public, archived, local-only, salted, redacted, or withheld.
+
+**Considerations.**
+
+- This is a harness-consumption pattern in [§7](atrib-spec.md#7-harness-integration-patterns), not a new [§9](atrib-spec.md#9-runtime-integration-patterns) runtime-mounting pattern.
+- Tier 1 public log proof is not enough for continuation. It proves a record existed, not what the receiving agent needs to inspect. Tier 2 body retrieval and Tier 3 signature replay remain necessary.
+- The packet should not collapse the Record Body Archive Layer into the log. [D070](#d070-record-body-archive-layer-placeholder-adr)'s separation remains load-bearing.
+- The packet can be private support-system metadata, a harness-specific extension record such as `https://example.com/v1/types/continuation_packet`, or both. A normative event_type is premature.
+- Existing cognitive primitives are sufficient. The receiving agent uses `recall`, `trace`, and `summarize` to read, then `emit`, `annotate`, and `revise` to continue.
+- Interaction channels are evidence, not the substrate. Plain-style webhooks, Slack threads, and local Claude Code or Codex sessions can carry the packet, but atrib should only prove the signed trail and anchors.
+
+**Likely outcome (not committed):** accept as an informative [§7](atrib-spec.md#7-harness-integration-patterns) pattern first. Build a support/RCA demo before deciding whether any fields deserve normative status or conformance vectors.
+
+**Cross-references.**
+
+- [§7.8](atrib-spec.md#78-cross-harness-continuation-packets), informative continuation-packet pattern.
+- [D070](#d070-record-body-archive-layer-placeholder-adr), Record Body Archive Layer.
+- [D087](#d087-signed-diagnostic-outcome--causal-trace-replay), signed diagnostic outcome pattern.
+- [P037](#p037-skill-and-domain-context-provenance-for-agent-investigations), skill/context provenance.
+- [P038](#p038-hosted-agent-diagnostic-records-for-mcp-auth-skill-loading-and-code-context-gaps), hosted-agent diagnostics.
+- [P039](#p039-support-and-rca-signed-investigation-demo), support/RCA demo.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P037: Skill and domain-context provenance for agent investigations
+
+**Source:** Same Autumn case study. The useful agent combined Claude Code, structured logs, and carefully iterated investigation skills that encoded billing, Stripe webhook, entitlement, and cache-domain knowledge. The hosted agent quality gap included skill-trigger failures.
+
+**The decision in question:** should atrib capture skill and domain-context provenance as first-class evidence in investigation traces and continuation packets?
+
+Candidate shape:
+
+- Skill pack name, version, source, and content hash.
+- Domain reference document ids and hashes.
+- Skill-loading status for the run.
+- Skill-trigger status when the harness exposes it.
+- A link from investigation hypotheses, diagnostics, and final summaries to the skill/context record hashes that informed them.
+
+**Considerations.**
+
+- This should not become a new cognitive primitive. It is either sidecar metadata, an extension record, or a field inside a continuation packet.
+- Skill files may contain private operational detail. Hashes and private archive references may be safer defaults than public bodies.
+- The immediate product value is explaining why a local harness outperformed a hosted harness: same model class, different skills and code context.
+- A receiving agent should be able to detect "the prior run used `billing-investigation@hash`, but I do not have it loaded."
+
+**Likely outcome (not committed):** accept for support/RCA flows as part of the continuation packet. Promote to a sharper schema only after a real demo proves which fields agents use.
+
+**Cross-references.**
+
+- [P036](#p036-cross-harness-continuation-packet-for-supportrca-investigations), continuation packet.
+- [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), local sidecar persistence.
+- [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), six-primitives boundary.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P038: Hosted-agent diagnostic records for MCP auth, skill loading, and code context gaps
+
+**Source:** Same Autumn case study. The hosted agent was useful for simple investigations but weaker for deeper iteration. The named failure classes were MCP auth flakiness, skills not triggering correctly, and worse codebase understanding compared with local Claude Code.
+
+**The decision in question:** should hosted-agent harnesses sign diagnostic records for capability gaps before or during investigation runs?
+
+Diagnostic classes to capture:
+
+- MCP connection and auth status per tool.
+- Skill discovery, load, and trigger status.
+- Codebase checkout identity, dirty state, and index freshness.
+- Hosted memory and filesystem availability.
+- Missing local-only tools or credentials.
+- Runtime transport limits, such as inability to spawn stdio MCP servers in Cloudflare Workers.
+
+**Considerations.**
+
+- [D087](#d087-signed-diagnostic-outcome--causal-trace-replay) already supplies the pattern. A diagnostic is a `tool_call` or extension record linked with `informed_by`, not a new event_type.
+- These diagnostics are especially useful when a hosted result is handed to a local harness. The receiver can see whether it should trust the prior result, redo part of the investigation, or continue from the signed evidence.
+- Some diagnostics can expose sensitive tool names or credential topology. Use privacy postures from [§8](atrib-spec.md#8-privacy-postures).
+
+**Likely outcome (not committed):** accept as a harness guidance pattern. Add it to any hosted-agent example that claims continuation quality, starting with the support/RCA demo.
+
+**Cross-references.**
+
+- [D087](#d087-signed-diagnostic-outcome--causal-trace-replay), diagnostic outcome pattern.
+- [P036](#p036-cross-harness-continuation-packet-for-supportrca-investigations), continuation packet.
+- [P039](#p039-support-and-rca-signed-investigation-demo), support/RCA demo.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P039: Support and RCA signed investigation demo
+
+**Source:** Same Autumn case study plus atrib's existing approval-trace work. The Cloudflare approval-trace example demonstrates signed proposal, approval, execution, outcome, and handoff. The next user-legible wedge is a signed investigation trace: support ticket, tenant-scoped logs, code-path reads, hypotheses, diagnostics, revisions, and handoff.
+
+**The decision in question:** should the next public demo be an Autumn-shaped support/RCA investigation trace instead of another commerce-first demo?
+
+Candidate demo:
+
+- Fake support ticket for a stateful billing issue.
+- Plain-style webhook trigger plus Slack-style thread handoff.
+- Fake Axiom-shaped wide logs with tenant context and request `extras`.
+- Agent queries logs, reads the code path, emits hypotheses, revises at least one wrong hypothesis, runs a diagnostic, and signs a final investigation summary.
+- Continuation packet lets a local Claude Code or Codex session continue from the hosted run.
+- Explorer view shows the signed causal chain without exposing private ticket or log bodies by default.
+
+**Considerations.**
+
+- This demo makes atrib useful even without a payment event. It shows provable investigation continuity, not settlement.
+- It complements Axiom-like observability rather than competing with it. The log store keeps operational evidence; atrib proves the investigation path.
+- It should reuse existing primitives and the new [§7.8](atrib-spec.md#78-cross-harness-continuation-packets) pattern. No new protocol feature should be invented just for the demo.
+- It gives Mastra adapter research a concrete test case without requiring the adapter to ship first.
+
+**Likely outcome (not committed):** accept. Build it after the approval-trace work lands cleanly, then use it to decide whether P036-P038 need implementation or only docs.
+
+**Cross-references.**
+
+- [P036](#p036-cross-harness-continuation-packet-for-supportrca-investigations), continuation packet.
+- [P037](#p037-skill-and-domain-context-provenance-for-agent-investigations), skill/context provenance.
+- [P038](#p038-hosted-agent-diagnostic-records-for-mcp-auth-skill-loading-and-code-context-gaps), hosted-agent diagnostics.
+- [D087](#d087-signed-diagnostic-outcome--causal-trace-replay), diagnostic outcome pattern.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P040: Mastra source verification after hosted support-agent evidence
+
+**Source:** Same Autumn case study. Autumn used Mastra to host an agent with access to codebase, MCPs, skills, memory, and file system support, but still observed a quality gap versus local Claude Code for deeper investigations. The README already lists Mastra as planned and source-verification-gated.
+
+**The decision in question:** should Mastra move up the adapter-priority queue because hosted support-agent workflows are becoming a concrete demand signal?
+
+**Considerations.**
+
+- Mastra is now attached to a real support-agent workflow rather than a framework popularity row.
+- The source-read-first rule still controls. No adapter should be designed from the blog post or package names alone.
+- A Mastra adapter may need to capture skill loading, memory state, file-system context, and MCP auth diagnostics in addition to tool calls.
+- If Mastra's hosted platform exposes post-hoc run events rather than in-process callbacks, the correct shape may be [§9.5](atrib-spec.md#95-pattern-post-hoc-api-import--consumer-re-sign), not a normal [§9.3](atrib-spec.md#93-pattern-callback--lifecycle-handlers-sdk-native-interception) adapter.
+
+**Likely outcome (not committed):** raise source verification priority. Do not commit to an adapter shape until Mastra source and hosted-runtime APIs are read.
+
+**Cross-references.**
+
+- [D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision), prior framework-adapter prioritization.
+- [D024](#d024-langchain-js-mcp-adapter-not-docs-only-multiservermcpclient-needs-a-proper-helper-because-its-internal-client-references-are-private), source-read-first precedent.
+- [P039](#p039-support-and-rca-signed-investigation-demo), support/RCA demo.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.

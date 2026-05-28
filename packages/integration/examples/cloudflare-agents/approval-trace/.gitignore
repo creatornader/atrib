@@ -1,0 +1,7 @@
+.tmp/
+runs/
+.wrangler/
+playwright-report/
+test-results/
+dist/
+node_modules/
