@@ -1,0 +1,105 @@
+{
+  "name": "dangling-claim-edges",
+  "spec_section": "3.2.4",
+  "description": "Producer-declared references that do not resolve inside the record set still produce dangling INFORMED_BY, PROVENANCE_OF, ANNOTATES, and REVISES edges so the signed claim stays visible.",
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:3000000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "33333333333333333333333333333333",
+        "timestamp": 1767225600000,
+        "signature": "IvVJ1s62O0LIdeM2V3rAyX6G-8t8RDLDnGdYrEVrBdgNAqw0mLtfABx9hx_lL8vUK_abomiGEysXXXt1nuxXCQ",
+        "informed_by": ["sha256:d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1"]
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "annotates": "sha256:d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2",
+        "content_id": "sha256:4000000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:ca02a7bbd898b4cdf99e60c923abcf116f3cc8224a790f395c36953f207cf09a",
+        "event_type": "https://atrib.dev/v1/types/annotation",
+        "context_id": "44444444444444444444444444444444",
+        "timestamp": 1767225600001,
+        "signature": "WJF7OEMc9ixxDPqbPHj-sheU7N8AKw814VQwqC1IbmSvQkxSrgc9Q-JJ7iel8sjd7F5Vi9IDS6Pt0g3kUmJ-Dw"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:5000000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:b235d9133396f6aa4f6e6a6d6c6cc16bb8cd806f484918177f1d8027afd44687",
+        "event_type": "https://atrib.dev/v1/types/revision",
+        "context_id": "55555555555555555555555555555555",
+        "timestamp": 1767225600002,
+        "signature": "wtzfbCRCWCeSEtP7JH9UxVuHrWr7zCyqyjJsCJt0wVZQMSrYI281chKTFKZdvtTiDQyA5qebz9kBPwBzf_yLAw",
+        "revises": "sha256:d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:6000000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:22af5eb7a99e9a167adafc9b1c22f688cb7d7f87cd31c10e00dda28bd0953cfc",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "66666666666666666666666666666666",
+        "timestamp": 1767225600003,
+        "signature": "kTcy9fiQH7-eIi79CNpFWSAM_HHsLezUAo_mnObZmesvG1QNgBzWl726tHn8GLjv017J0sSFSBZqIjN0WkFeBQ",
+        "provenance_token": "AAAAAAAAAAAAAAAAAAAAAA"
+      }
+    ]
+  },
+  "expected": {
+    "edges": [
+      {
+        "type": "INFORMED_BY",
+        "source_record_index": 0,
+        "target_node_id": "dangling:sha256:d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
+        "directed": true,
+        "dangling": true,
+        "reference_status": "unresolved",
+        "reference_hash": "sha256:d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1"
+      },
+      {
+        "type": "PROVENANCE_OF",
+        "source_record_index": 3,
+        "target_node_id": "dangling:provenance:AAAAAAAAAAAAAAAAAAAAAA",
+        "directed": true,
+        "dangling": true,
+        "reference_status": "unresolved",
+        "reference_token": "AAAAAAAAAAAAAAAAAAAAAA",
+        "reason": "no_token_source_in_record_set"
+      },
+      {
+        "type": "ANNOTATES",
+        "source_record_index": 1,
+        "target_node_id": "dangling:sha256:d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2",
+        "directed": true,
+        "dangling": true,
+        "reference_status": "unresolved",
+        "reference_hash": "sha256:d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2"
+      },
+      {
+        "type": "REVISES",
+        "source_record_index": 2,
+        "target_node_id": "dangling:sha256:d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3",
+        "directed": true,
+        "dangling": true,
+        "reference_status": "unresolved",
+        "reference_hash": "sha256:d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3"
+      }
+    ],
+    "edge_count_by_type": {
+      "CHAIN_PRECEDES": 0,
+      "SESSION_PRECEDES": 0,
+      "SESSION_PARALLEL": 0,
+      "CONVERGES_ON": 0,
+      "CROSS_SESSION": 0,
+      "INFORMED_BY": 1,
+      "PROVENANCE_OF": 1,
+      "ANNOTATES": 1,
+      "REVISES": 1
+    }
+  }
+}

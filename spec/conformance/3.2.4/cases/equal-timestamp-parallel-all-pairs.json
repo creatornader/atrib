@@ -1,0 +1,100 @@
+{
+  "name": "equal-timestamp-parallel-all-pairs",
+  "spec_section": "3.2.4",
+  "description": "Four isolated records in one context with equal timestamps. Full §3.2.4 derivation emits every pairwise SESSION_PARALLEL edge and no SESSION_PRECEDES edges.",
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:2000000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:0d6ba19b62531ccb0deb8804313eca283c69560f66f1b7b8a2c1592ae8c35c6b",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "22222222222222222222222222222222",
+        "timestamp": 1767225600000,
+        "signature": "XW1ErVyzl6sE545LQTP-SEedikdtWgca7YUTpeeRBBgVhoeNkm_1548TAfChU9ez1D6mZcCh26mgZ1xJvyOzBg"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:2100000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:0d6ba19b62531ccb0deb8804313eca283c69560f66f1b7b8a2c1592ae8c35c6b",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "22222222222222222222222222222222",
+        "timestamp": 1767225600000,
+        "signature": "AEZi7AkmrIaW1LS8ulPtCCY-t_hUg-Iak6NoSWTWK3nIi77V3WdlwleKU7jfK9TuwCCH7QlMZClKvTt-mPm1DQ"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:2200000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:0d6ba19b62531ccb0deb8804313eca283c69560f66f1b7b8a2c1592ae8c35c6b",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "22222222222222222222222222222222",
+        "timestamp": 1767225600000,
+        "signature": "dVesqOuYlPLAd8VXTbB0bisJhcf6mFVI8gtycAx28BIp9EsPUdgkOjo4La7wzZIHc26CSjFQds7tNxukZxJDBA"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:2300000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:0d6ba19b62531ccb0deb8804313eca283c69560f66f1b7b8a2c1592ae8c35c6b",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "22222222222222222222222222222222",
+        "timestamp": 1767225600000,
+        "signature": "QNL-Di0cnXFMwjjdqiCx62Pda2Ffa3SWZ1UruZkGIyNsAvkhQxIs0-KGSrHs9xylnHrJBOSL1EVzwdI9DD53Dw"
+      }
+    ]
+  },
+  "expected": {
+    "edges": [
+      {
+        "type": "SESSION_PARALLEL",
+        "source_record_index": 0,
+        "target_record_index": 1,
+        "directed": false
+      },
+      {
+        "type": "SESSION_PARALLEL",
+        "source_record_index": 0,
+        "target_record_index": 2,
+        "directed": false
+      },
+      {
+        "type": "SESSION_PARALLEL",
+        "source_record_index": 0,
+        "target_record_index": 3,
+        "directed": false
+      },
+      {
+        "type": "SESSION_PARALLEL",
+        "source_record_index": 1,
+        "target_record_index": 2,
+        "directed": false
+      },
+      {
+        "type": "SESSION_PARALLEL",
+        "source_record_index": 1,
+        "target_record_index": 3,
+        "directed": false
+      },
+      {
+        "type": "SESSION_PARALLEL",
+        "source_record_index": 2,
+        "target_record_index": 3,
+        "directed": false
+      }
+    ],
+    "edge_count_by_type": {
+      "CHAIN_PRECEDES": 0,
+      "SESSION_PRECEDES": 0,
+      "SESSION_PARALLEL": 6,
+      "CONVERGES_ON": 0,
+      "CROSS_SESSION": 0,
+      "INFORMED_BY": 0,
+      "PROVENANCE_OF": 0,
+      "ANNOTATES": 0,
+      "REVISES": 0
+    }
+  }
+}

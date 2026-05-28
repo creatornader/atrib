@@ -1,0 +1,29 @@
+{
+  "spec_section": "3.2.4",
+  "spec_title": "Full edge derivation rules",
+  "decision_link": "D101",
+  "generated_at": 1767225600000,
+  "generator": "packages/log-dev/scripts/generate-conformance-3.2.4.ts",
+  "cases": [
+    {
+      "file": "cases/all-nine-edge-types.json",
+      "name": "all-nine-edge-types"
+    },
+    {
+      "file": "cases/full-pairwise-session-precedes.json",
+      "name": "full-pairwise-session-precedes"
+    },
+    {
+      "file": "cases/equal-timestamp-parallel-all-pairs.json",
+      "name": "equal-timestamp-parallel-all-pairs"
+    },
+    {
+      "file": "cases/dangling-claim-edges.json",
+      "name": "dangling-claim-edges"
+    }
+  ],
+  "keys": {
+    "alice_pubkey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc"
+  },
+  "note": "Full §3.2.4 corpus covering all nine edge types, all-pairs SESSION_PRECEDES, all-pairs SESSION_PARALLEL, and dangling producer-declared references. The companion graph-node property tests exercise generated families of ordered, equal-timestamp, chained, compacted, and input-order-invariant record sets."
+}

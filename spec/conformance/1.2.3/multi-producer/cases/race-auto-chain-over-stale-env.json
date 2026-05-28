@@ -1,0 +1,18 @@
+{
+  "name": "race-auto-chain-over-stale-env",
+  "spec_section": "1.2.3",
+  "description": "Race vector: a producer's in-process autoChain tail and a parent-set env tail disagree. With no inbound handoff, the in-memory tail is fresher and MUST win over the stale env var.",
+  "input": {
+    "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inbound_record_hash_hex": null,
+    "auto_chain_tail_hex": "6666666666666666666666666666666666666666666666666666666666666666",
+    "env": {
+      "ATRIB_CHAIN_TAIL_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "mirror_tail_hex": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "expected": {
+    "chain_root": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+    "precedence_layer": "auto-chain"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "creator-signer-missing",
+  "spec_section": "1.7.6",
+  "description": "A transaction record whose signers[] contains two valid counterparty signatures but no signer entry for the top-level creator_key. Verifier MUST surface cross_attestation as satisfied (signers_valid: 2, missing: false) while rejecting the record's base signature path because unrelated signers do not validate the creator.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0606060606060606060606060606060606060606060606060606060606060606",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/transaction",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225606000,
+      "signature": "",
+      "signers": [
+        {
+          "creator_key": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA",
+          "signature": "-FzQWhrJrSVo-9kqfOxSnzRFHcNyjnoj9jLM964J-F3YqpkM3uByYUurGwra4ituoCLfXI7fU4oueM4tEEI9DQ"
+        },
+        {
+          "creator_key": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4",
+          "signature": "oF7f4lzOWn8CrEib6d17fnp65mpaq-jQnzK24JvJOYQqK6H1pDhTjVSHjxyFca_yQdbrATP4NqM7UpjLZdSiCg"
+        }
+      ]
+    },
+    "signer_seeds_hex": {
+      "counterparty": "2222222222222222222222222222222222222222222222222222222222222222",
+      "facilitator": "3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  },
+  "expected": {
+    "record_hash_hex": "1404e7b45166fd69e39c0961a710b0b104fd46ec6629bbb43d4734ee9c9147a7",
+    "cross_attestation": {
+      "signers_count": 2,
+      "signers_valid": 2,
+      "missing": false
+    },
+    "verifier_signature_ok": false,
+    "validator_should_accept": false
+  }
+}

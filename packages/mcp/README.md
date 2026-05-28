@@ -323,10 +323,11 @@ await log.close()
 
 ## Test coverage
 
-495 tests across 30 test files covering:
+The test suite covers:
 
 - Wire-format conformance to spec [§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry) + [§2.6.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#262-inclusion-proof-response)
 - Wycheproof Ed25519 test vectors (signing/verification)
+- Offline adversarial signing vectors for malformed records, bit-flipped signatures, truncated signatures, wrong creator keys, and JCS optional-field ordering
 - JCS canonicalization edge cases (RFC 8785)
 - Transaction cross-attestation signing and creator-signer verification via `signTransactionRecord()`
 - Token encoding/decoding round-trips

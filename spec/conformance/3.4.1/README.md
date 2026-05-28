@@ -4,14 +4,16 @@ Test fixtures for intra-session edge compaction per spec [§3.4.1.1](../../../at
 
 The corpus is the shared contract between every implementation that emits SESSION_PRECEDES / SESSION_PARALLEL edges from a graph endpoint. Compaction is information-preserving with respect to the partial order over the resolved record set: any "happens-before" relation derivable from the full pairwise edge set ([§3.2.4](../../../atrib-spec.md#324-edge-derivation-rules) steps 2–3) is still derivable from the compacted edge set plus CHAIN_PRECEDES transitivity. Both `?compact=true` (default) and `?compact=false` MUST be accepted by conformant `/v1/graph/<context_id>` implementations.
 
+Full, non-compacted edge derivation is covered by [`../3.2.4/`](../3.2.4/).
+
 ## Cases
 
-| File | Asserts |
-|---|---|
-| `cases/fully-chained-skip-redundant.json` | Chain-component skip. Five records forming a single CHAIN_PRECEDES connected component within one context_id. Compact derivation emits the four CHAIN_PRECEDES links and zero SESSION_PRECEDES / SESSION_PARALLEL edges (the chain already encodes temporal order; additional intra-component edges would carry no information). |
-| `cases/fully-unchained-adjacent-only.json` | Adjacent-only emission. Five isolated-genesis records sharing one context_id with no chain links. Compact derivation emits SESSION_PRECEDES only between consecutive-in-time pairs (4 edges), down from N*(N-1)/2 = 10 in the all-pairs derivation. |
-| `cases/mixed-chains-cross-component-only.json` | Cross-component bridge. Two parallel chains in one context_id. Compact derivation emits CHAIN_PRECEDES within each chain plus exactly one SESSION_PRECEDES at the cross-component boundary. |
-| `cases/equal-timestamp-parallel-cross-component.json` | Equal-timestamp SESSION_PARALLEL. Two unchained-genesis records sharing one context_id and one timestamp. Compact derivation emits one SESSION_PARALLEL edge (different chain components, equal timestamps). The shape is deterministic regardless of any hash-tiebreak order applied to the time-sort. |
+| File                                                  | Asserts                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cases/fully-chained-skip-redundant.json`             | Chain-component skip. Five records forming a single CHAIN_PRECEDES connected component within one context_id. Compact derivation emits the four CHAIN_PRECEDES links and zero SESSION_PRECEDES / SESSION_PARALLEL edges (the chain already encodes temporal order; additional intra-component edges would carry no information). |
+| `cases/fully-unchained-adjacent-only.json`            | Adjacent-only emission. Five isolated-genesis records sharing one context_id with no chain links. Compact derivation emits SESSION_PRECEDES only between consecutive-in-time pairs (4 edges), down from N\*(N-1)/2 = 10 in the all-pairs derivation.                                                                             |
+| `cases/mixed-chains-cross-component-only.json`        | Cross-component bridge. Two parallel chains in one context_id. Compact derivation emits CHAIN_PRECEDES within each chain plus exactly one SESSION_PRECEDES at the cross-component boundary.                                                                                                                                      |
+| `cases/equal-timestamp-parallel-cross-component.json` | Equal-timestamp SESSION_PARALLEL. Two unchained-genesis records sharing one context_id and one timestamp. Compact derivation emits one SESSION_PARALLEL edge (different chain components, equal timestamps). The shape is deterministic regardless of any hash-tiebreak order applied to the time-sort.                          |
 
 ## Tiebreak invariant
 

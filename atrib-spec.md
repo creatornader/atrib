@@ -739,6 +739,8 @@ A record passes verification if and only if all eight steps succeed. A partial v
 
 All implementations of Ed25519 signing and verification MUST be validated against the Wycheproof test vectors for EdDSA (github.com/C2SP/wycheproof, `testvectors_v1/eddsa_verify_test.json`) prior to production deployment. Any test vector marked `"result": "invalid"` that an implementation accepts is a security defect. Any test vector marked `"result": "valid"` that an implementation rejects is a compatibility defect.
 
+Implementations MUST also pass the offline adversarial signing corpus in [`spec/conformance/1.4/`](spec/conformance/1.4/) ([D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus)). The offline corpus is the default CI floor for malformed atrib record shapes, bit-flipped signatures, wrong creator keys, and JCS optional-field ordering. The live Wycheproof check remains the upstream compatibility check.
+
 **Note (Key Rotation):** Key rotation is normatively defined in [§1.9](#19-key-rotation-and-revocation) ([D033](DECISIONS.md#d033-key-rotation-and-revocation)).
 
 #### 1.4.5 event_type URI Validation
@@ -2320,6 +2322,8 @@ Nine edge types are defined. All are derived deterministically from observable r
 #### 3.2.4 Edge Derivation Rules
 
 These rules are normative. Implementations MUST apply them in the order given. Two implementations applying these rules to identical input records MUST produce identical edge sets.
+
+The full edge-derivation conformance corpus lives at [`spec/conformance/3.2.4/`](spec/conformance/3.2.4/) ([D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus)). It pins exact edge sets for all nine edge types, full pairwise SESSION_PRECEDES and SESSION_PARALLEL derivation, and dangling producer-declared references. The compact per-session graph corpus remains separate at [`spec/conformance/3.4.1/`](spec/conformance/3.4.1/).
 
 **Step 1:** CHAIN_PRECEDES edges**
 
@@ -4928,7 +4932,9 @@ Root of 2-entry tree: `SHA-256(0x01 || leaf_hash_0 || leaf_hash_1)`
 
 ### A.10 Vector Cases for Optional Fields and Postures
 
-The vectors in §A.1 through §A.9 cover the minimal record shape (default posture, no optional fields). The conformance corpus at [`spec/conformance/1.4/`](spec/conformance/1.4/) extends these with byte-level vectors covering each optional field and posture combination introduced in [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), [D045](DECISIONS.md#d045-privacy-postures-normative-spec-section), [D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense), and [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records). The dedicated [`spec/conformance/1.2.6/`](spec/conformance/1.2.6/) corpus provides the load-bearing four cases for the [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) `provenance_token` field (canonical-form invariance with the field present, upstream-derivation rule, genesis-only invariant rejection, absence-not-null contract). Implementations MUST produce outputs identical to the corpus vectors for the inputs the corpus specifies.
+The vectors in §A.1 through §A.9 cover the minimal record shape (default posture, no optional fields). The conformance corpus at [`spec/conformance/1.4/`](spec/conformance/1.4/) extends these with byte-level vectors covering each optional field and posture combination introduced in [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), [D045](DECISIONS.md#d045-privacy-postures-normative-spec-section), [D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense), and [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records). It also includes adversarial vectors from [D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus), covering malformed inputs, bad signatures, wrong creator keys, and JCS ordering edge cases. The dedicated [`spec/conformance/1.2.6/`](spec/conformance/1.2.6/) corpus provides the load-bearing four cases for the [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) `provenance_token` field (canonical-form invariance with the field present, upstream-derivation rule, genesis-only invariant rejection, absence-not-null contract). Implementations MUST produce outputs identical to the corpus vectors for the inputs the corpus specifies.
+
+The full graph edge-derivation corpus at [`spec/conformance/3.2.4/`](spec/conformance/3.2.4/) covers the normative [§3.2.4](#324-edge-derivation-rules) edge rules. The reduced response-shape corpus at [`spec/conformance/3.4.1/`](spec/conformance/3.4.1/) remains specific to `/v1/graph/{context_id}` compacting behavior.
 
 The corpus enumerates (each as a separate vector with full input → canonical bytes → record_hash → signature output):
 

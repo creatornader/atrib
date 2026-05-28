@@ -25,5 +25,5 @@
   "keys": {
     "alice_pubkey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc"
   },
-  "note": "Compaction is information-preserving with respect to the partial order over the resolved record set; ?compact=false MUST also accept the same input records and produce the full all-pairs derivation per §3.2.4 steps 2-3. The corpus only enumerates the compacted edge set; full-derivation conformance is covered by spec/conformance/3.2.4-style cross-implementation tests."
+  "note": "Compaction is information-preserving with respect to the partial order over the resolved record set; ?compact=false MUST also accept the same input records and produce the full all-pairs derivation per §3.2.4 steps 2-3. The corpus only enumerates the compacted edge set; full-derivation conformance is covered by spec/conformance/3.2.4/."
 }
