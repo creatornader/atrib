@@ -6,9 +6,11 @@ import {
   verifyAp2ViEvidence,
   verifyAp2ViEvidenceAsync,
 } from '../src/ap2-vi-evidence.js'
-import type { Ap2MandateConstraintInput } from '../src/ap2-vi-evidence.js'
+import type { Ap2MandateConstraintInput, Ap2ViEvidenceBundle } from '../src/ap2-vi-evidence.js'
 
 import immediateFixture from '../../agent/test/fixtures/ap2/vi_immediate_evidence.json'
+import autonomousFixture from '../../agent/test/fixtures/ap2/vi_autonomous_success_evidence.json'
+import autonomousNegativeMatrix from '../../agent/test/fixtures/ap2/vi_autonomous_negative_matrix.json'
 import splitAgentFixture from '../../agent/test/fixtures/ap2/vi_autonomous_split_agent_evidence.json'
 import constraintFixture from '../../agent/test/fixtures/ap2/vi_autonomous_constraints_decoded.json'
 
@@ -52,6 +54,24 @@ function tamperJwtPayload(jwt: string, patch: Record<string, unknown>): string {
   return `${header}.${tampered}.${signature}`
 }
 
+function tamperSdJwtPayload(sdJwt: string, patch: Record<string, unknown>): string {
+  const parts = sdJwt.split('~')
+  parts[0] = tamperJwtPayload(parts[0]!, patch)
+  return parts.join('~')
+}
+
+function tamperSdJwtHeader(sdJwt: string, patch: Record<string, unknown>): string {
+  const parts = sdJwt.split('~')
+  const [header, payload, signature] = parts[0]!.split('.')
+  const decoded = JSON.parse(textDecoder.decode(base64urlDecode(header!))) as Record<
+    string,
+    unknown
+  >
+  const tampered = base64urlEncode(textEncoder.encode(JSON.stringify({ ...decoded, ...patch })))
+  parts[0] = `${tampered}.${payload}.${signature}`
+  return parts.join('~')
+}
+
 function cloneEvidence<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
@@ -66,6 +86,64 @@ function tamperDisclosure(sdJwt: string, disclosureIndex: number, patch: Record<
   decoded[valueIndex] = { ...(decoded[valueIndex] as Record<string, unknown>), ...patch }
   parts[disclosureIndex + 1] = base64urlEncode(textEncoder.encode(JSON.stringify(decoded)))
   return parts.join('~')
+}
+
+type NegativeMutation =
+  | { type: 'tamper_payload'; layer: string; patch: Record<string, unknown> }
+  | { type: 'tamper_header'; layer: string; patch: Record<string, unknown> }
+  | {
+      type: 'tamper_disclosure'
+      layer: string
+      disclosureIndex: number
+      patch: Record<string, unknown>
+    }
+  | { type: 'patch_receipt_reference'; receipt: 'payment' | 'checkout'; reference: string }
+  | { type: 'remove_trusted_issuer_keys' }
+
+interface NegativeCase {
+  name: string
+  mutation: NegativeMutation
+  expectedErrors: string[]
+}
+
+function credentialByLayer(bundle: Ap2ViEvidenceBundle, layer: string) {
+  const credential = bundle.vi?.credentials?.find((candidate) => candidate.layer === layer)
+  if (!credential) throw new Error(`missing credential layer ${layer}`)
+  return credential
+}
+
+function applyNegativeMutation(bundle: Ap2ViEvidenceBundle, mutation: NegativeMutation): void {
+  if (mutation.type === 'tamper_payload') {
+    const credential = credentialByLayer(bundle, mutation.layer)
+    credential.sdJwt = tamperSdJwtPayload(credential.sdJwt, mutation.patch)
+    return
+  }
+
+  if (mutation.type === 'tamper_header') {
+    const credential = credentialByLayer(bundle, mutation.layer)
+    credential.sdJwt = tamperSdJwtHeader(credential.sdJwt, mutation.patch)
+    return
+  }
+
+  if (mutation.type === 'tamper_disclosure') {
+    const credential = credentialByLayer(bundle, mutation.layer)
+    credential.sdJwt = tamperDisclosure(credential.sdJwt, mutation.disclosureIndex, mutation.patch)
+    return
+  }
+
+  if (mutation.type === 'patch_receipt_reference') {
+    if (mutation.receipt === 'payment' && bundle.ap2?.paymentReceipt) {
+      ;(bundle.ap2.paymentReceipt as Record<string, unknown>).reference = mutation.reference
+      return
+    }
+    if (mutation.receipt === 'checkout' && bundle.ap2?.checkoutReceipt) {
+      ;(bundle.ap2.checkoutReceipt as Record<string, unknown>).reference = mutation.reference
+      return
+    }
+    throw new Error(`missing ${mutation.receipt} receipt`)
+  }
+
+  delete bundle.trustedIssuerKeys
 }
 
 describe('verifyAp2ViEvidence', () => {
@@ -84,6 +162,47 @@ describe('verifyAp2ViEvidence', () => {
     ).toBe(true)
     expect(result.errors).toEqual([])
   })
+
+  it('verifies signed autonomous VI evidence with AP2 receipts and constraints', async () => {
+    const result = await verifyAp2ViEvidenceAsync(autonomousFixture as Ap2ViEvidenceBundle, {
+      nowSeconds: 1_779_840_000,
+    })
+
+    expect(result.valid).toBe(true)
+    expect(result.transactionAccepted).toBe(true)
+    expect(result.ap2.paymentReceipt?.referenceOk).toBe(true)
+    expect(result.ap2.checkoutReceipt?.referenceOk).toBe(true)
+    expect(result.vi.mode).toBe('autonomous')
+    expect(result.vi.delegationOk).toBe(true)
+    expect(result.vi.checkoutPaymentBindingOk).toBe(true)
+    expect(result.vi.constraints.status).toBe('passed')
+    expect(result.vi.constraints.checks).toHaveLength(7)
+    expect(
+      result.vi.credentials.every(
+        (credential) =>
+          credential.signature.status === 'verified' &&
+          credential.sdJwtConformance.status === 'verified',
+      ),
+    ).toBe(true)
+    expect(result.errors).toEqual([])
+  })
+
+  for (const testCase of autonomousNegativeMatrix.cases as NegativeCase[]) {
+    it(`rejects autonomous VI fixture case: ${testCase.name}`, async () => {
+      const fixture = cloneEvidence(autonomousFixture) as Ap2ViEvidenceBundle
+      applyNegativeMutation(fixture, testCase.mutation)
+
+      const result = await verifyAp2ViEvidenceAsync(fixture, {
+        nowSeconds: autonomousNegativeMatrix.nowSeconds,
+        sdJwtConformancePolicy: 'best-effort',
+      })
+
+      expect(result.valid).toBe(false)
+      for (const expectedError of testCase.expectedErrors) {
+        expect(result.errors).toContain(expectedError)
+      }
+    })
+  }
 
   it('verifies VI SD-JWT VC conformance in the async verifier', async () => {
     const result = await verifyAp2ViEvidenceAsync(immediateFixture, {
