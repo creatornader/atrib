@@ -164,8 +164,10 @@ Checks performed when evidence is present:
 
 - AP2 PaymentReceipt / CheckoutReceipt success, required fields, and `reference` binding to a closed mandate serialization or explicit closed-mandate hash.
 - Compact AP2 receipt JWT verification with `jose`, using trusted local JWKS, `jwksUrl`, or verifier metadata containing inline `jwks` or `jwks_uri`.
+- Receipt JWT hardening for unsupported `alg`, `alg: "none"`, missing `kid`, unexpected `crit`, malformed compact JWTs, unsupported JWKS keys, duplicate `kid`, metadata precedence, issuer key isolation, and clock-edge behavior.
 - VI SD-JWT parsing for L1, L2, L3 payment, and L3 checkout credentials.
 - Async VI SD-JWT / SD-JWT VC conformance with OpenWallet `@sd-jwt/core` and `@sd-jwt/sd-jwt-vc`.
+- VI SD-JWT structural checks for duplicate disclosures, duplicate digest references, unused disclosures, unsupported `_sd_alg`, and future `nbf`.
 - ES256 signatures: L1 via trusted issuer keys, L2 via L1 `cnf.jwk`, L3 via the L2 delegated agent key.
 - `sd_hash` links, disclosure digest links, autonomous L2 `cnf.jwk` consistency, and final checkout/payment binding.
 - Typed AP2 mandate constraints: merchant allowlists, checkout line items, payment amount ranges, allowed payees, allowed payment instruments, allowed PISPs, and execution windows.
@@ -180,7 +182,7 @@ VC type metadata and status-list fetches are explicit. If a caller enables `sdJw
 
 The default constraint policy is `require`. Failed, unresolved, or unsupported disclosed AP2 constraints make `valid` false. Use `constraintPolicy: "best-effort"` to keep those findings advisory, or `"off"` to skip them. The lower-level `evaluateAp2ViConstraints(input, disclosures?)` helper is exported for decoded mandate material and fixture replay.
 
-The local AP2 / VI corpus lives under `packages/agent/test/fixtures/ap2/`. It includes signed immediate evidence, signed autonomous success evidence, a decoded constraint replay case, and a named autonomous negative matrix.
+The local AP2 / VI evidence corpus lives under `packages/agent/test/fixtures/ap2/`. It includes signed immediate evidence, signed autonomous success evidence, a decoded constraint replay case, and a named autonomous negative matrix. The crypto conformance corpus lives under `spec/conformance/ap2-vi-crypto/`. It pins offline JOSE, JWKS, metadata, SD-JWT, and clock-edge cases for the async verifier.
 
 The same evidence bundle can be passed to `verifyRecord(record, { ap2ViEvidence, ap2ViEvidenceOptions })` for transaction records or to `verifier.verify(doc, { ap2ViEvidence, ap2ViEvidenceOptions })` for settlement recommendation verification. Both APIs attach the result as `ap2_vi_evidence`; neither API fetches AP2 / VI material on its own.
 
@@ -227,7 +229,7 @@ The merchant's payment pipeline never crashes because of an atrib problem. It ju
 
 ## Test coverage
 
-The test suite covers the [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm, graph endpoint client, JCS canonicalization, Ed25519 signing, settlement recommendations, policy templates, policy builder, calculation edge cases, property-based testing with fast-check, AP2 / VI evidence checking, tiered AP2 / VI verifier attachment, and full `verify()` / `calculate()` paths including [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation.
+The test suite covers the [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm, graph endpoint client, JCS canonicalization, Ed25519 signing, settlement recommendations, policy templates, policy builder, calculation edge cases, property-based testing with fast-check, AP2 / VI evidence checking, AP2 / VI crypto conformance, tiered AP2 / VI verifier attachment, and full `verify()` / `calculate()` paths including [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation.
 
 Run them with `pnpm --filter @atrib/verify test`.
 

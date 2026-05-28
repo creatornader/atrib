@@ -1,0 +1,120 @@
+{
+  "spec_section": "5.5.4",
+  "spec_title": "AP2 / Verifiable Intent evidence checks",
+  "decision_link": "D096",
+  "generated_at": "2026-05-28",
+  "offline": true,
+  "generator": "packages/verify/test/ap2-vi-crypto-conformance.test.ts",
+  "receipt_jwt_cases": [
+    {
+      "name": "alg-none-is-rejected-before-key-resolution",
+      "mutation": { "type": "jwt_header_patch", "patch": { "alg": "none" } },
+      "expectedErrors": ["ap2_payment_receipt_jwt_alg_unsupported"]
+    },
+    {
+      "name": "alg-hs256-is-rejected-before-key-resolution",
+      "mutation": { "type": "jwt_header_patch", "patch": { "alg": "HS256" } },
+      "expectedErrors": ["ap2_payment_receipt_jwt_alg_unsupported"]
+    },
+    {
+      "name": "missing-kid-is-rejected-before-key-resolution",
+      "mutation": { "type": "jwt_header_remove", "field": "kid" },
+      "expectedErrors": ["ap2_payment_receipt_jwt_kid_missing"]
+    },
+    {
+      "name": "unexpected-crit-header-is-rejected",
+      "mutation": { "type": "jwt_header_patch", "patch": { "crit": ["exp"], "exp": true } },
+      "expectedErrors": ["ap2_payment_receipt_jwt_crit_unsupported"]
+    },
+    {
+      "name": "duplicate-kid-in-local-jwks-is-rejected",
+      "mutation": { "type": "duplicate_jwks_kid" },
+      "expectedErrors": ["ap2_payment_receipt_jwt_jwks_duplicate_kid"]
+    },
+    {
+      "name": "mismatched-jwk-alg-is-rejected",
+      "mutation": { "type": "jwk_patch", "patch": { "alg": "HS256" } },
+      "expectedErrors": ["ap2_payment_receipt_jwt_jwks_key_unsupported"]
+    },
+    {
+      "name": "wrong-curve-jwk-is-rejected",
+      "mutation": { "type": "jwk_patch", "patch": { "crv": "P-384" } },
+      "expectedErrors": ["ap2_payment_receipt_jwt_jwks_key_unsupported"]
+    },
+    {
+      "name": "encryption-use-jwk-is-rejected",
+      "mutation": { "type": "jwk_patch", "patch": { "use": "enc" } },
+      "expectedErrors": ["ap2_payment_receipt_jwt_jwks_key_unsupported"]
+    },
+    {
+      "name": "sign-only-key-ops-jwk-is-rejected",
+      "mutation": { "type": "jwk_patch", "patch": { "key_ops": ["sign"] } },
+      "expectedErrors": ["ap2_payment_receipt_jwt_jwks_key_unsupported"]
+    },
+    {
+      "name": "future-iat-outside-skew-is-rejected",
+      "mutation": { "type": "payload_patch", "patch": { "iat": 1779840601 } },
+      "expectedErrors": ["ap2_payment_receipt_jwt_iat_in_future"]
+    },
+    {
+      "name": "malformed-compact-jwt-is-rejected",
+      "mutation": { "type": "replace_jwt", "jwt": "not.a.valid.jwt" },
+      "expectedErrors": ["ap2_payment_receipt_jwt_invalid"]
+    }
+  ],
+  "receipt_jwt_boundary_cases": [
+    {
+      "name": "time-claims-inside-skew-boundary-pass",
+      "payloadPatch": { "iat": 1779840300, "nbf": 1779840300, "exp": 1779839701 },
+      "expectedValid": true
+    },
+    {
+      "name": "time-claims-one-second-outside-skew-fail",
+      "payloadPatch": { "iat": 1779840301 },
+      "expectedErrors": ["ap2_payment_receipt_jwt_iat_in_future"]
+    }
+  ],
+  "metadata_cases": [
+    {
+      "name": "inline-jwks-takes-precedence-over-jwks-uri",
+      "expectedFetches": ["https://issuer.example/.well-known/ap2"],
+      "expectedValid": true
+    },
+    {
+      "name": "issuer-key-cache-is-isolated-by-issuer",
+      "expectedValid": true
+    }
+  ],
+  "vi_sd_jwt_cases": [
+    {
+      "name": "duplicate-disclosure-is-rejected",
+      "mutation": { "type": "duplicate_disclosure", "layer": "L2", "disclosureIndex": 0 },
+      "expectedErrors": ["vi_disclosure_duplicate"]
+    },
+    {
+      "name": "duplicate-sd-digest-reference-is-rejected",
+      "mutation": { "type": "duplicate_sd_digest", "layer": "L2", "digestIndex": 0 },
+      "expectedErrors": ["vi_disclosure_digest_duplicate"]
+    },
+    {
+      "name": "unused-disclosure-is-rejected",
+      "mutation": { "type": "append_unused_disclosure", "layer": "L2" },
+      "expectedErrors": ["vi_disclosure_digest_mismatch"]
+    },
+    {
+      "name": "unsupported-sd-alg-is-rejected",
+      "mutation": {
+        "type": "payload_patch_resign",
+        "layer": "L2",
+        "patch": { "_sd_alg": "sha-512" }
+      },
+      "expectedErrors": ["vi_sd_alg_unsupported"]
+    },
+    {
+      "name": "future-nbf-outside-skew-is-rejected",
+      "mutation": { "type": "payload_patch_resign", "layer": "L2", "patch": { "nbf": 1779840601 } },
+      "expectedErrors": ["vi_credential_nbf_in_future"]
+    }
+  ],
+  "note": "All cases run against local fixture material. The reference test fails if a static-JWKS case attempts network access."
+}

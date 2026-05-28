@@ -57,6 +57,10 @@ replayable. The AP2 receipt `reference` values bind to the disclosed
 closed-mandate serializations by
 `base64url(sha256(ascii(serialized_mandate)))`.
 
+This directory is the AP2-shaped verifier evidence corpus. The crypto
+conformance corpus for JOSE, JWKS, SD-JWT, metadata, and clock-edge behavior
+lives at [`spec/conformance/ap2-vi-crypto/`](../../../../../spec/conformance/ap2-vi-crypto/).
+
 ## What a2a-x402 is
 
 a2a-x402 is the AP2 extension for crypto payments via x402. When the
