@@ -1,0 +1,97 @@
+{
+  "description": "Negative AP2 autonomous VI evidence cases applied to vi_autonomous_success_evidence.json.",
+  "source": "Synthetic AP2 v0.2 and Verifiable Intent verifier corpus.",
+  "base": "vi_autonomous_success_evidence.json",
+  "nowSeconds": 1779840000,
+  "cases": [
+    {
+      "name": "tampered_l2_signature",
+      "mutation": {
+        "type": "tamper_payload",
+        "layer": "L2",
+        "patch": { "nonce": "tampered" }
+      },
+      "expectedErrors": ["vi_signature_invalid"]
+    },
+    {
+      "name": "tampered_l3_signature",
+      "mutation": {
+        "type": "tamper_payload",
+        "layer": "L3_PAYMENT",
+        "patch": { "nonce": "tampered" }
+      },
+      "expectedErrors": ["vi_signature_invalid"]
+    },
+    {
+      "name": "disclosure_digest_mismatch",
+      "mutation": {
+        "type": "tamper_disclosure",
+        "layer": "L2",
+        "disclosureIndex": 0,
+        "patch": { "constraints": [] }
+      },
+      "expectedErrors": ["vi_disclosure_digest_mismatch"]
+    },
+    {
+      "name": "sd_hash_mismatch",
+      "mutation": {
+        "type": "tamper_payload",
+        "layer": "L3_CHECKOUT",
+        "patch": { "sd_hash": "bad_hash" }
+      },
+      "expectedErrors": ["vi_sd_hash_mismatch"]
+    },
+    {
+      "name": "wrong_l3_agent_key",
+      "mutation": {
+        "type": "tamper_header",
+        "layer": "L3_PAYMENT",
+        "patch": { "kid": "agt-fixture-2" }
+      },
+      "expectedErrors": ["vi_signature_key_missing"]
+    },
+    {
+      "name": "wrong_checkout_hash",
+      "mutation": {
+        "type": "tamper_disclosure",
+        "layer": "L3_CHECKOUT",
+        "disclosureIndex": 0,
+        "patch": { "checkout_hash": "wrong_checkout_hash" }
+      },
+      "expectedErrors": ["vi_checkout_hash_mismatch"]
+    },
+    {
+      "name": "wrong_transaction_id",
+      "mutation": {
+        "type": "tamper_disclosure",
+        "layer": "L3_PAYMENT",
+        "disclosureIndex": 0,
+        "patch": { "transaction_id": "wrong_transaction_id" }
+      },
+      "expectedErrors": ["vi_checkout_payment_binding_mismatch"]
+    },
+    {
+      "name": "wrong_receipt_reference",
+      "mutation": {
+        "type": "patch_receipt_reference",
+        "receipt": "payment",
+        "reference": "wrong_reference"
+      },
+      "expectedErrors": ["ap2_payment_receipt_reference_mismatch"]
+    },
+    {
+      "name": "expired_credential",
+      "mutation": {
+        "type": "tamper_payload",
+        "layer": "L2",
+        "patch": { "exp": 1 }
+      },
+      "expectedErrors": ["vi_credential_expired"]
+    },
+    {
+      "name": "missing_issuer_key",
+      "mutation": { "type": "remove_trusted_issuer_keys" },
+      "expectedErrors": ["vi_signature_key_missing"]
+    }
+  ]
+}
