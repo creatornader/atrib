@@ -188,6 +188,7 @@ Contents
   - [1.4.3 Verification procedure](#143-verification-procedure)
   - [1.4.4 Test vector validation](#144-test-vector-validation)
   - [1.4.5 event_type URI validation](#145-event_type-uri-validation)
+  - [1.4.6 Signing key isolation for sandboxed execution](#146-signing-key-isolation-for-sandboxed-execution)
 - [1.5 Context Propagation](#15-context-propagation)
   - [1.5.1 context_id: the session anchor](#151-context_id-the-session-anchor)
   - [1.5.2 HTTP transport: tracestate](#152-http-transport-tracestate)
@@ -780,6 +781,20 @@ In practice this means:
 A URI passing all six steps is syntactically valid for use as `event_type`. atrib normative URIs all pass these checks; conformance fixtures (§spec/conformance/1.4-extension/) include both passing and failing examples for verifier testing.
 
 **Recognition versus validation.** Validation per this section determines whether a record is structurally well-formed and signature-verifiable. Recognition (whether the URI is in atrib's normative set, in a known extension namespace, or completely unknown) is a separate concern handled at the application layer. Verifiers MAY surface recognition as informational metadata in their output (`event_type_recognized`, `event_type_namespace`, etc.) but MUST NOT use recognition to gate verification.
+
+#### 1.4.6 Signing Key Isolation for Sandboxed Execution
+
+When a producer signs records for an agent running inside a sandboxed execution environment, the Ed25519 private key MUST NOT be reachable from that sandbox. The producer MUST hold the key in a host signer process, host service, HSM, secure enclave, or equivalent boundary outside the sandbox, and expose only a request-signature interface to sandboxed code.
+
+The signer boundary MUST control `creator_key` and `signature` for standard records. For transaction records, it MUST control the local creator's `signers[]` entry per [§1.7.6](#176-cross-attestation-requirement-for-transaction-records). A signer MUST reject or overwrite any sandbox-supplied values for signer-controlled fields before canonicalization. Rejecting is RECOMMENDED because it makes boundary violations visible during testing and audit.
+
+The signer process MUST perform [§1.3](#13-canonical-serialization) canonicalization and [§1.4.2](#142-signing-procedure) signing itself. For transaction records, it MUST sign the [§1.7.6](#176-cross-attestation-requirement-for-transaction-records) cross-attestation bytes. The sandbox MAY propose unsigned record fields and sidecar context, but it MUST NOT produce the signature or directly access key bytes.
+
+The host signer SHOULD run host policy before signing. Policy can deny records based on tool name, sandbox identity, requested event type, capability envelope, operator approval state, or other host-local inputs. Policy denial is not an atrib verification failure; it means no atrib record was produced.
+
+The host signer MAY also submit the signed record to the log and return the resulting proof bundle. At minimum, it MUST return the signed record or `record_hash` to the sandbox so the sandbox can propagate context per [§1.5](#15-context-propagation).
+
+This requirement applies only when a producer composes atrib with sandboxed execution. Existing non-sandboxed producers MAY continue to hold the key in process, subject to their own host threat model. Key isolation does not certify that the sandboxed agent's request was truthful; it prevents sandbox code from directly minting records under the agent's key without crossing the host signer boundary.
 
 ---
 
@@ -4964,7 +4979,7 @@ _This section is informative._
 
 [§7](#7-harness-integration-patterns) covers how a harness consumes atrib once it is mounted: the agent-side surfacing, recall, and reasoning patterns. This section covers the orthogonal axis: how a runtime mounts atrib in the first place. The two are independent, a runtime picks one [§9](#9-runtime-integration-patterns) integration pattern (sometimes more than one) AND any subset of [§7](#7-harness-integration-patterns) consumption patterns.
 
-Six integration patterns cover every runtime category surveyed in atrib's harness field study (48 harnesses across IDE-integrated, multi-agent SDK, autonomous, browser-use, and managed-cloud categories). **None is canonical.** Each pattern is a candidate scope for the [D048](DECISIONS.md#d048-plug-and-play-enforcement-contract-for-adapters) conformance contract; in atrib v1 the contract specifies Pattern #3 in detail (callback / lifecycle handlers in `@atrib/agent`), and per-pattern conformance test surfaces will land alongside each pattern's reference implementation. A runtime builder picks the pattern its ergonomics support; multiple patterns can compose for one runtime when the runtime supports more than one.
+Seven integration patterns cover every runtime category surveyed in atrib's harness field study (48 harnesses across IDE-integrated, multi-agent SDK, autonomous, browser-use, sandboxed, and managed-cloud categories). **None is canonical.** Each pattern is a candidate scope for the [D048](DECISIONS.md#d048-plug-and-play-enforcement-contract-for-adapters) conformance contract; in atrib v1 the contract specifies Pattern #3 in detail (callback / lifecycle handlers in `@atrib/agent`), and per-pattern conformance test surfaces will land alongside each pattern's reference implementation. A runtime builder picks the pattern its ergonomics support; multiple patterns can compose for one runtime when the runtime supports more than one.
 
 ### 9.1 Pattern: Lifecycle hooks (stdin-JSON IPC)
 
@@ -5012,7 +5027,7 @@ Six integration patterns cover every runtime category surveyed in atrib's harnes
 
 **Causality formation.** OpenInference spans nest hierarchically (parent span = invoking agent, child span = tool call). atrib reads the span context to form `informed_by` edges. Cross-agent handoffs surface as `openinference.span.kind: "AGENT"` with linked spans; the adapter walks span links to construct the causal graph.
 
-**Reference implementation.** `@atrib/openinference` (planned). The package exports `createAtribSpanProcessor({ keyResolver, logEndpoint })` returning a standard OpenTelemetry SpanProcessor. Callers wire it into their existing OTel `TracerProvider`.
+**Reference implementation.** `@atrib/openinference`. The package exports a standard OpenTelemetry SpanProcessor that maps OpenInference spans into signed atrib records. Callers wire it into their existing OTel `TracerProvider`.
 
 **Trade-offs.** Highest reach per LOC across the multi-agent SDK landscape (one integration → 8+ frameworks). OpenInference span schema is stable for the common attributes but evolving for newer ones; the adapter codes against the stable subset and falls through cleanly when extended attributes appear. Requires the runtime to be OpenInference-instrumented; non-instrumented runtimes need a different pattern.
 
@@ -5044,21 +5059,35 @@ Six integration patterns cover every runtime category surveyed in atrib's harnes
 
 **Trade-offs.** Necessary for real-time bidirectional protocols. Latency budget is tight. Granularity choices are consumer-specific.
 
-### 9.7 Composing patterns
+### 9.7 Pattern: Sandboxed-execution signer proxy
+
+**Where it fits.** Runtimes that execute agent code inside a filesystem, network, process, container, or VM sandbox while a host process remains outside that sandbox. Surveyed examples include Claude Code sandboxing, hosted coding-agent sandboxes, local container sandboxes, and managed runtimes that expose a proxy boundary for credentials or network calls.
+
+**How atrib mounts.** Sandboxed code constructs an unsigned atrib record request and sends it to a host signer proxy. The host signer lives outside the sandbox, holds the Ed25519 key, runs host policy, controls `creator_key` and `signature` or the local `signers[]` entry, signs canonical bytes per [§1.4](#14-signing-and-verification), optionally submits the record to the log, and returns a `record_hash` or signed record to the sandbox. The sandbox never receives the private key.
+
+**Causality formation.** The sandbox passes `context_id`, `chain_root`, `informed_by`, and any sidecar context it knows to the host signer. The host signer applies the same chain-root precedence contract as other producers ([§1.2.3.1](#1231-multi-producer-chain-composition)) and returns the signed result so the sandbox can propagate [§1.5](#15-context-propagation) context to later calls.
+
+**Security boundary.** This pattern satisfies [§1.4.6](#146-signing-key-isolation-for-sandboxed-execution). It does not stop a prompt-injected sandboxed agent from asking the host to sign a bad request. It makes that request cross a host-owned policy and signing boundary, which lets the host deny the request, log the denial, require approval, or attach additional evidence before signing.
+
+**Reference implementation.** [`packages/integration/src/signer-proxy-example.ts`](packages/integration/src/signer-proxy-example.ts) plus [`packages/integration/examples/signer-proxy/`](packages/integration/examples/signer-proxy/). The test surface lives in [`packages/integration/test/signer-proxy.test.ts`](packages/integration/test/signer-proxy.test.ts).
+
+**Trade-offs.** Keeps key material outside the sandbox and composes cleanly with sandbox credential proxy designs. Adds a host signing hop and a policy surface. The host signer must be treated as part of the trusted producer boundary.
+
+### 9.8 Composing patterns
 
 A runtime may support multiple patterns concurrently. Claude Code supports Pattern #1 (lifecycle hooks for builtin tools) AND Pattern #2 (the wrapper for MCP-served tools) simultaneously. AutoGen supports Pattern #3 (InterventionHandler) AND Pattern #4 (native OpenInference). When patterns compose, the consumer MUST ensure they don't double-sign the same observation: each pattern's adapter signs its own boundary; the boundaries should not overlap.
 
 A canonical composition example: PostToolUse hooks fire on `mcp__.*` tools (Pattern #1 covers atrib-emit signing) AND on built-in tool names like `Bash|Edit|Write|Read|MultiEdit|WebFetch|WebSearch` (Pattern #1 again, with verb-based importance grading). Wrapper-fronted MCP tools (Pattern #2) sign at the protocol boundary. The hook skip-list excludes already-wrapped MCPs to avoid double-signing.
 
-### 9.8 Selecting a pattern
+### 9.9 Selecting a pattern
 
 A runtime builder picks based on:
 
-1. **What does the runtime expose?** Lifecycle hooks → Pattern #1. Native MCP → Pattern #2. SDK callbacks → Pattern #3. OpenInference instrumentation → Pattern #4. Closed-loop API only → Pattern #5 (or run-level attestation fallback when per-step shape is unavailable). Streaming bidirectional protocol → Pattern #6.
-2. **What does the runtime's threat model require?** Real-time signing for cross-attestation → Pattern #2 (only synchronous request-path access supports counterparty signature collection per [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)). Deferred-signature signing acceptable → any pattern.
-3. **What's the deployment shape?** Consumer-controlled execution loop → Patterns #1-4 + #6. Vendor-owned execution loop → Pattern #5 (or #5b).
+1. **What does the runtime expose?** Lifecycle hooks → Pattern #1. Native MCP → Pattern #2. SDK callbacks → Pattern #3. OpenInference instrumentation → Pattern #4. Closed-loop API only → Pattern #5 (or run-level attestation fallback when per-step shape is unavailable). Streaming bidirectional protocol → Pattern #6. Sandboxed execution with a host proxy boundary → Pattern #7.
+2. **What does the runtime's threat model require?** Real-time signing for cross-attestation → Pattern #2 (only synchronous request-path access supports counterparty signature collection per [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)). Key isolation from sandboxed code → Pattern #7. Deferred-signature signing acceptable → any pattern whose trust posture matches the runtime.
+3. **What's the deployment shape?** Consumer-controlled execution loop → Patterns #1-4, #6, and #7. Vendor-owned execution loop → Pattern #5 (or #5b).
 
-**Pattern coverage commitments.** atrib v1 ships reference implementations for Patterns #1, #2, #3 (multiple frameworks). Patterns #4, #5, and #6 are documented in this section with their conformance contract scope; reference implementations are planned for future development, prioritized by community demand and integration readiness. Third-party adapters in any pattern are encouraged; the [D048](DECISIONS.md#d048-plug-and-play-enforcement-contract-for-adapters) conformance contract scope extends to each pattern's reference test surface.
+**Pattern coverage commitments.** atrib v1 ships reference implementations for Patterns #1, #2, #3 (multiple frameworks), and #4. Pattern #7 ships a tested reference example for the key-isolation boundary, not a framework adapter. Patterns #5 and #6 are documented in this section with their conformance contract scope; reference implementations are planned for future development, prioritized by community demand and integration readiness. Third-party adapters in any pattern are encouraged; the [D048](DECISIONS.md#d048-plug-and-play-enforcement-contract-for-adapters) conformance contract scope extends to each pattern's reference test surface.
 
 ---
 

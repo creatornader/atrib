@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
     "demo": "tsx examples/end-to-end/demo.ts",
+    "signer-proxy-demo": "tsx examples/signer-proxy/demo.ts",
     "calc-demo": "tsx scripts/calc-demo.ts",
     "ap2-live-interop": "tsx scripts/ap2-live-interop.ts"
   },

@@ -4801,6 +4801,46 @@ Fourth, extend the [D052](#d052-cross-attestation-requirement-for-transaction-re
 
 ---
 
+## D102: Sandboxed signer proxy keeps keys outside sandbox
+
+**Date:** 2026-05-28
+
+**Status:** Accepted
+
+**Supersedes:** P014 and P015, removed from Pending decisions when this ADR codified the decision.
+
+**Context.** P014 and P015 captured the same security boundary from two angles. P015 was the normative rule: a producer signing records for sandboxed agent code must not place the Ed25519 private key inside that sandbox. P014 was the runtime pattern: sandboxed code asks a host signer proxy to sign, while the signer holds key material outside the sandbox. The Anthropic Claude Code sandboxing architecture uses the same credential separation shape for git credentials and signing keys. atrib needs that boundary because a record signed by a sandbox-held key still verifies even if prompt-injected code produced it.
+
+**Decision.** Add [§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution): when a producer signs records for an agent running inside a sandboxed execution environment, the private key MUST NOT be reachable from that sandbox. The producer MUST hold the key in a host signer process, host service, HSM, secure enclave, or equivalent boundary outside the sandbox. The sandbox may send unsigned record requests and sidecar context. The host signer controls `creator_key`, `signature`, and the local `signers[]` entry for transaction records; performs canonicalization and signing itself; runs host policy before signing; optionally submits to the log; and returns the signed record or `record_hash`.
+
+Add [§9.7](atrib-spec.md#97-pattern-sandboxed-execution-signer-proxy) as the informative runtime integration pattern for this rule. The pattern is now Pattern #7 because it is the next shipped documented pattern. P012 and P013 remain pending and will take later numbers when acted on.
+
+Ship a tested reference example in `@atrib/integration`: `packages/integration/src/signer-proxy-example.ts`, `packages/integration/examples/signer-proxy/`, and `packages/integration/test/signer-proxy.test.ts`. The test proves the sandbox client does not hold a private key, the host signer rejects sandbox-supplied signer-controlled fields, host policy runs before signing, and the resulting record verifies with normal `@atrib/mcp` verification.
+
+**Alternatives considered.**
+
+- *Keep keys inside the sandbox and rely on filesystem isolation.* Rejected. If the sandbox can read or call the key directly, prompt-injected code can mint records that verify under the agent key without crossing a host policy boundary.
+- *Let the sandbox canonicalize and send bytes to be signed.* Rejected for the reference pattern. The host signer must own canonicalization so the sandbox cannot smuggle a different record shape than the one the host reviewed.
+- *Make this only informative.* Rejected. The key-location rule is a producer-side security invariant for sandboxed execution, so [§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution) is normative.
+- *Require a specific proxy transport.* Rejected. Unix socket, stdio, loopback HTTP, HSM API, and enclave calls can all satisfy the same boundary if the sandbox cannot reach key material directly.
+
+**Consequences.**
+
+- Existing non-sandboxed producers are unchanged. They may continue to hold the key in process under their own host threat model.
+- Any future atrib producer that signs on behalf of sandboxed agent code must satisfy [§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution).
+- The signer proxy does not certify truth. It prevents direct key access and gives the host a policy gate before signing. Verifiers still assess signed records under the broader [§8.7](atrib-spec.md#87-adversarial-threat-model) stack.
+- P014 and P015 are retired from Pending decisions. Future sandbox work extends [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox) unless it changes the normative key-isolation rule.
+
+**Cross-references.**
+
+- [§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution), signing key isolation for sandboxed execution.
+- [§9.7](atrib-spec.md#97-pattern-sandboxed-execution-signer-proxy), sandboxed-execution signer proxy pattern.
+- [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records), transaction cross-attestation bytes.
+- [`packages/integration/examples/signer-proxy/`](packages/integration/examples/signer-proxy/), runnable signer-proxy example.
+- [`packages/integration/test/signer-proxy.test.ts`](packages/integration/test/signer-proxy.test.ts), reference test surface.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -4921,7 +4961,7 @@ The `extractor_classification` field is redundant for records where event_type i
 
 **Source:** external research analysis from May 2026 (publicly cited architecture patterns from Anthropic and EveryDev). Anthropic's "Multi-agent Research System" essay validates the orchestrator-worker shape (90.2% performance gain at 15x token cost). Their CitationAgent provides operator-trusted attribution for cross-agent reasoning. atrib has the substrate primitives ([D052](#d052-cross-attestation-requirement-for-transaction-records) cross-attestation, [D051](#d051-capability-scoped-records-via-directory-published-envelopes) capability envelopes, [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type) informed_by, [D067](#d067-multi-producer-chain-composition-precedence-contract) chain composition, production substrate with 8 distinct signers) but no normative pattern in [§9](atrib-spec.md#9-runtime-integration-patterns) documenting how an orchestrator should consume them at delegation time.
 
-**The decision in question:** add a new pattern to [§9](atrib-spec.md#9-runtime-integration-patterns) (Pattern #7) documenting the multi-agent orchestrator pattern: orchestrator queries the atrib log for worker capability declarations (per [§6.7](atrib-spec.md#67-capability-declarations)) + cross-attestation count (per [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)) + revocation status (per [§1.9](atrib-spec.md#19-key-rotation-and-revocation)) BEFORE delegating a task to that worker. The pattern is the cryptographic version of CitationAgent's attribution: workers' track records become independently auditable, not vendor-asserted.
+**The decision in question:** add a new pattern to [§9](atrib-spec.md#9-runtime-integration-patterns) documenting the multi-agent orchestrator pattern: orchestrator queries the atrib log for worker capability declarations (per [§6.7](atrib-spec.md#67-capability-declarations)) + cross-attestation count (per [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)) + revocation status (per [§1.9](atrib-spec.md#19-key-rotation-and-revocation)) BEFORE delegating a task to that worker. The pattern is the cryptographic version of CitationAgent's attribution: workers' track records become independently auditable, not vendor-asserted.
 
 **Considerations.**
 - The substrate primitives are all shipped; this is a pattern documentation + reference example, not a substrate change.
@@ -4930,7 +4970,7 @@ The `extractor_classification` field is redundant for records where event_type i
 - Composes with [D067](#d067-multi-producer-chain-composition-precedence-contract) chain composition (each worker produces records under its own creator_key; chain-root resolution lets the orchestrator trace cross-agent provenance).
 - Composes with [P013](#p013-new-runtime-integration-pattern---hosted-runtime-adapter-sign-events-stored-by-hosted-runtimes-like-anthropic-managed-agents) (a hosted-runtime adapter signing events under its agent's atrib key produces the substrate this pattern queries).
 
-**Likely outcome (not committed):** accept; ship the new [§9](atrib-spec.md#9-runtime-integration-patterns) pattern (Pattern #7) spec section paired with the reference orchestrator-gating demo. The substrate is structurally there; the gap is purely normative + tooling.
+**Likely outcome (not committed):** accept; ship a new [§9](atrib-spec.md#9-runtime-integration-patterns) pattern section paired with the reference orchestrator-gating demo. The substrate is structurally there; the gap is purely normative + tooling.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 
@@ -4938,49 +4978,16 @@ The `extractor_classification` field is redundant for records where event_type i
 
 **Source:** external research analysis from May 2026 (publicly cited architecture patterns from Anthropic and EveryDev). Anthropic's "Managed Agents" essay decomposes hosted long-horizon agent infrastructure into three explicit layers (harness + sandbox + session log) with the session log queryable via `getEvents()` positional slices. This is direct external validation of atrib's substrate-as-distinct-layer architecture, with one critical addition: Anthropic's session log is operator-trusted; atrib's would be operator-INDEPENDENT (signed by the agent's own key).
 
-**The decision in question:** add a new pattern to [§9](atrib-spec.md#9-runtime-integration-patterns) (Pattern #8) documenting the hosted-runtime adapter pattern: an adapter consumes the runtime's session-log API (Anthropic Managed Agents `getEvents()`, LangSmith Deployment threads, Mastra Platform Server, Inngest step replays) and signs each event under the agent's atrib key, producing a verifiable trajectory parallel to the operator-trusted log.
+**The decision in question:** add a new pattern to [§9](atrib-spec.md#9-runtime-integration-patterns) documenting the hosted-runtime adapter pattern: an adapter consumes the runtime's session-log API (Anthropic Managed Agents `getEvents()`, LangSmith Deployment threads, Mastra Platform Server, Inngest step replays) and signs each event under the agent's atrib key, producing a verifiable trajectory parallel to the operator-trusted log.
 
 **Considerations.**
-- This is a NEW integration pattern not covered by the existing 6 patterns in [§9](atrib-spec.md#9-runtime-integration-patterns) (Pattern #4 OpenInference is the closest, but operates on real-time spans not post-hoc API events).
+- This is a new integration pattern not covered by the shipped [§9](atrib-spec.md#9-runtime-integration-patterns) patterns. Pattern #4 OpenInference is the closest, but operates on real-time spans, not post-hoc API events.
 - A reference adapter for Anthropic Managed Agents is planned for public release; it demonstrates how hosted-runtime customers can adopt atrib with one npm install.
 - Pattern composes with [P012](#p012-new-runtime-integration-pattern---multi-agent-orchestrator-orchestrator-queries-atrib-for-worker-capability--cross-attestation-status-before-delegating) (a hosted-runtime adapter is a substrate producer; orchestrators built on top can query the substrate the adapter produces).
-- Composes with [P015](#p015-normative-must---signing-key-lives-outside-sandboxed-execution-environment-security) (the signing key for events extracted from a hosted runtime MUST live outside any sandbox the runtime spawns, per the same threat model).
+- Composes with [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox) when the hosted runtime extracts events from a sandboxed worker. The signing key must live outside the sandbox per [§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution).
 - Each runtime adapter is independent; ADR codifies the pattern, not any specific adapter.
 
 **Likely outcome (not committed):** accept when the first hosted-runtime adapter ships. Likely first: Anthropic Managed Agents (richest API surface, direct architectural alignment with atrib's three-layer model).
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-## P014: New runtime integration pattern - Sandboxed-execution composition (where the signing key lives when the agent runs in a sandbox)
-
-**Source:** external research analysis from May 2026 (publicly cited architecture patterns from Anthropic and EveryDev). Anthropic's "Claude Code Sandboxing" essay describes a two-boundary sandboxing model (filesystem isolation via bubblewrap/seatbelt + network isolation via proxy) and explicitly handles credentials by keeping them OUTSIDE the sandbox via proxy. The essay does NOT mention logging, trajectory recording, or session replayability - atrib fills that gap, but only if its signing key composition with sandboxes is correctly specified.
-
-**The decision in question:** add a new pattern to [§9](atrib-spec.md#9-runtime-integration-patterns) (Pattern #9) documenting how an agent running inside a sandbox composes with atrib: the signing key MUST live outside the sandboxed execution environment; the sandbox proxy receives signing requests from the sandboxed agent and forwards them to a signer process that holds the key in unsandboxed memory; the signer process performs the canonicalization + Ed25519 sign + record submission and returns the record_hash to the sandbox over the proxy. The trust model: a prompt-injected sandboxed agent can request a signature on adversarial content, but cannot directly produce signed records under the agent's key.
-
-**Considerations.**
-- This is the pattern-level companion to [P015](#p015-normative-must---signing-key-lives-outside-sandboxed-execution-environment-security) which is the spec-level normative MUST.
-- A reference example (atrib + Claude Code's open-source sandbox runtime, key isolated outside via proxy) is planned for public release. It demonstrates the cleanest "what atrib uniquely provides" framing acquired from external research.
-- Composes with [P012](#p012-new-runtime-integration-pattern---multi-agent-orchestrator-orchestrator-queries-atrib-for-worker-capability--cross-attestation-status-before-delegating) (orchestrators can require cross-attestation from sandboxed workers; the sandbox composition pattern documents how that cross-attestation is produced).
-- Should reference [§8.7](atrib-spec.md#87-adversarial-threat-model) Layer 11 (per [P017](#p017-environment-isolation-sandboxing-as-boundary-trust-complement-to-atribs-trajectory-trust)).
-
-**Likely outcome (not committed):** accept; ship spec section + reference example together. Sandboxing-composition recipe + example is the demonstrably-runnable artifact.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-## P015: Normative MUST - signing key lives outside sandboxed execution environment (SECURITY)
-
-**Source:** external research analysis from May 2026 (publicly cited architecture patterns from Anthropic and EveryDev). **Highest-priority architectural omission identified by external research.** Anthropic's "Claude Code Sandboxing" essay handles credentials by keeping them OUTSIDE the sandbox via proxy: *"sensitive credentials such as git credentials or signing keys are never inside the sandbox."* atrib's signing key has the same property and the same requirement, but the spec does not currently say so.
-
-**The decision in question:** add a normative MUST in [§1](atrib-spec.md#1-attribution-record-format) (or [§1.4](atrib-spec.md#14-signing) where the signing operation is normatively defined) that the signing key MUST NOT be reachable from any sandboxed execution environment the agent runs in. Producers wrapping sandboxed agents MUST hold the key in an unsandboxed signer process and expose only a request-signature interface to the sandbox.
-
-**Considerations.**
-- SECURITY CRITICAL. Without this normative guidance, prompt-injected sandboxed agents could produce signed records that verify but are adversarial - directly undermining atrib's verifiability claim.
-- The pattern parallels Anthropic's own credential separation design; consumers familiar with Claude Code sandboxing will recognize the shape immediately.
-- Spec change is small (a normative MUST + a brief rationale paragraph); the operational change for any producer running sandboxed agents is larger (must implement the proxy + signer-process split).
-- The sandboxed-execution composition pattern ([P014](#p014-new-runtime-integration-pattern---sandboxed-execution-composition-where-the-signing-key-lives-when-the-agent-runs-in-a-sandbox)) is the informative companion in [§9](atrib-spec.md#9-runtime-integration-patterns) documenting how to satisfy this MUST.
-- Becomes operational MUST when the first sandboxed-execution producer ships. Currently no atrib producer is itself running inside a sandbox; the gap is forward-looking but binding when it surfaces.
-
-**Likely outcome (not committed):** accept; ship the normative MUST in [§1.4](atrib-spec.md#14-signing) paired with [P014](#p014-new-runtime-integration-pattern---sandboxed-execution-composition-where-the-signing-key-lives-when-the-agent-runs-in-a-sandbox)'s informative pattern + the reference proxy example. Spec change is small; the constraint is structural.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 
@@ -5009,10 +5016,10 @@ The `extractor_classification` field is redundant for records where event_type i
 **Considerations.**
 - [§8.7](atrib-spec.md#87-adversarial-threat-model) currently does NOT have an environment-isolation layer; the trust stack reads as if atrib alone bears the entire verification burden, which is structurally incorrect.
 - The new layer is informative; it documents the complement, not a new internal mechanism.
-- Composes naturally with [P014](#p014-new-runtime-integration-pattern---sandboxed-execution-composition-where-the-signing-key-lives-when-the-agent-runs-in-a-sandbox) (sandboxed-execution composition) and [P015](#p015-normative-must---signing-key-lives-outside-sandboxed-execution-environment-security) (signing-key isolation MUST).
+- Composes naturally with [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox), which shipped sandboxed-execution signer proxy composition and the signing-key isolation MUST.
 - Should reference the Sandboxing essay's specific architectural primitives (bubblewrap, seatbelt, proxy) and atrib's role as the trajectory-trust complement.
 
-**Likely outcome (not committed):** accept; small informative spec addition. Pairs with [P014](#p014-new-runtime-integration-pattern---sandboxed-execution-composition-where-the-signing-key-lives-when-the-agent-runs-in-a-sandbox), [P015](#p015-normative-must---signing-key-lives-outside-sandboxed-execution-environment-security), [P016](#p016-foundations-positioning-extension---atribs-location-below-loop--runtime--sandbox-everydev-mapping). The sandboxing recipe and example reference artifact demonstrate the composition.
+**Likely outcome (not committed):** accept; small informative spec addition. Pairs with [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox) and [P016](#p016-foundations-positioning-extension---atribs-location-below-loop--runtime--sandbox-everydev-mapping). The signer-proxy example demonstrates the composition.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 

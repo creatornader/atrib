@@ -5,7 +5,7 @@
 This package exists for two purposes:
 
 1. **Cross-package integration tests** that exercise `@atrib/mcp` + `@atrib/agent` + `@atrib/verify` + `@atrib/log-dev` together against real `@modelcontextprotocol/sdk` clients and servers; the kind of test that doesn't belong in any single public package because it would create circular dependencies or pull in dev-only deps.
-2. **Runnable framework examples** showing how to wire atrib into every supported MCP host: Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS, plus the standalone end-to-end demo.
+2. **Runnable framework examples** showing how to wire atrib into every supported MCP host and runtime boundary: Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS, the signer-proxy sandbox pattern, plus the standalone end-to-end demo.
 
 If you're a customer trying to figure out how to plug atrib in, the examples here are the answer. If you're contributing to atrib, the tests here are how the cross-package contract is enforced.
 
@@ -40,6 +40,7 @@ Every signature, every chain hash, and every transaction event in that output is
 | **Cloudflare Agents**          | [`examples/cloudflare-agents/`](examples/cloudflare-agents/) | Both surfaces: server-side `McpAgent` (Surface 1) and client-side `Agent` calling upstream MCP servers (Surface 2), with live Worker proofs plus an interactive HITL approval-trace example. |
 | **Vercel AI SDK + AI Gateway** | [`examples/vercel-ai-sdk/`](examples/vercel-ai-sdk/)         | Vercel AI SDK with MCP tools, routed through the AI Gateway (recommended pattern for model fallback + observability).                                                                 |
 | **LangChain JS**               | [`examples/langchain-js/`](examples/langchain-js/)           | `MultiServerMCPClient` patched in-place by `attributeLangchainMcp` so every server it manages emits attributed records. including forked clients used for per-call header workflows. |
+| **Signer proxy**               | [`examples/signer-proxy/`](examples/signer-proxy/)           | Sandboxed-execution composition: sandbox code requests a signature, while the host signer keeps the Ed25519 key outside the sandbox and owns signer-controlled fields.                 |
 
 Every example has a `README.md` next to it explaining what's wired up and which lines a real customer would copy.
 
@@ -60,7 +61,7 @@ If a local command should create the artifacts first, pass it with `ATRIB_AP2_IN
 
 ## Tests
 
-Run with `pnpm --filter @atrib/integration test`. 29 tests across 8 files:
+Run with `pnpm --filter @atrib/integration test`. 33 tests across 9 files:
 
 - **`test/end-to-end.test.ts`** (3 tests), full attribution chain across the public packages: agent calls a tool, server emits a signed record, the record's chain hash links to the previous step, the verifier re-runs the calculation against the resulting graph.
 - **`test/ap2-vi-e2e.test.ts`** (2 tests), AP2 v0.2 receipt detection plus async `@atrib/verify` AP2 / Verifiable Intent evidence checking for immediate and autonomous flows. This protects the detector/verifier boundary: successful receipts close the transaction, VI mandates remain verifier-side authorization evidence with SD-JWT / VC conformance and mandate constraints checked off the detector path, and AP2 Path 2 detection returns a receipt-derived `contentId` instead of the generic server URL fallback when stable receipt identity is present.
@@ -69,6 +70,7 @@ Run with `pnpm --filter @atrib/integration test`. 29 tests across 8 files:
 - **`test/full-chain.test.ts`** (3 tests), the wrapper → mirror → log → verify path with a real signed record set.
 - **`test/resolve-identity-step7.test.ts`** (3 tests), real directory lookup plus verifier step 7 behavior around anchored identity evidence.
 - **`test/conformance-3.2.4.test.ts`** (11 tests), demo-vs-production drift guard. The integration package's `src/graph-builder.ts` is the in-process graph builder used by `pnpm demo`, the calc-demo script, and the in-process end-to-end test. If it silently drifts from `services/graph-node`'s production derivation, the demo's chain-hash output misrepresents what production atrib infrastructure actually emits. This test runs every record fixture through BOTH implementations and asserts normalized edge sets, node sets, and per-node `verification_state` values match exactly. The 9-edge regression case at the bottom of the file is the load-bearing assertion: if any of the four producer-claim edges (INFORMED_BY, PROVENANCE_OF, ANNOTATES, REVISES, [D041](../../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D044](../../DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), [D058](../../DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05), [D059](../../DECISIONS.md#d059-promote-revision-to-atrib-normative-event_type-byte-0x06)) silently drifts between the two implementations, the demo would start misrepresenting cognitive-primitive behavior, the surface customers care most about (atrib-emit, atrib-recall, atrib-trace, atrib-summarize).
+- **`test/signer-proxy.test.ts`** (4 tests), [D102](../../DECISIONS.md#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox) sandbox signer-proxy example coverage. It proves sandbox code can request a tool-call signature without holding a private key, host signer policy runs before signing, signer-controlled fields supplied by the sandbox are rejected, and optional submission failure stays off the signing path.
 
 **Honest framing on `conformance-3.2.4.test.ts`.** Both implementations are TypeScript, share `@atrib/mcp.canonicalRecord` for JCS, `@noble/hashes/sha2` for SHA-256, and `@atrib/mcp.verifyRecord` for Ed25519. Calling them "two independent implementations" in the spec's strongest sense would overstate the test's coverage; it catches algorithm-port errors and future drift between the two files, but it does not validate the spec against an independent reading of the prose or against an independent set of cryptographic primitives. Cross-language conformance against the `spec/conformance/3.4.1/` and `spec/conformance/3.4.5,6,7/` corpora is a separate later effort that lands when an external integrator writes a non-TS implementation and validates against the corpus without help from this codebase.
 
