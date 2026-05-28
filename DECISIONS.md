@@ -4340,13 +4340,68 @@ The default conformance profile is `sd-jwt-vc`. Callers may pass `sdJwtConforman
 - `verifyAp2ViEvidenceAsync()` now verifies VI SD-JWT / VC credentials by default when VI credentials are present.
 - `verifyAp2ViEvidence()` remains synchronous and marks `sdJwtConformance` as `not_checked` with reason `async_required`.
 - `@atrib/integration` runs AP2 receipt detection plus async AP2 / VI evidence verification across the package boundary.
-- P030 remains open for AP2 mandate constraint evaluation. [D091](#d091-ap2--vi-sd-jwt-conformance-uses-openwallet-sd-jwt-js) validates credential conformance and AP2 binding, not business-rule constraints like amount ceilings, merchant allowlists, or SKU limits.
+- [D092](#d092-ap2--vi-mandate-constraints-are-typed-verifier-evidence) adds the next verifier layer: typed AP2 mandate constraint evaluation.
 
 **Cross-references.**
 
 - [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt), AP2 receipt detection boundary.
 - [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), first AP2 / VI evidence checker.
 - [D090](#d090-ap2-receipt-jwt-verification-uses-jose-in-atribverify), AP2 receipt JWT verification.
+- [§5.5.4](atrib-spec.md#554-ap2--verifiable-intent-evidence-checks), updated AP2 / VI verifier surface.
+
+---
+
+## D092: AP2 / VI mandate constraints are typed verifier evidence
+
+**Date:** 2026-05-28
+
+**Supersedes:** P030, removed from Pending decisions when this ADR codified the decision.
+
+**Context.** [D091](#d091-ap2--vi-sd-jwt-conformance-uses-openwallet-sd-jwt-js) made AP2 / Verifiable Intent credential conformance credible, but it still did not answer whether an autonomous purchase stayed inside the user's disclosed mandate constraints.
+
+AP2 v0.2 defines typed constraints on open Checkout Mandates and Payment Mandates. Checkout constraints cover allowed merchants and line items. Payment constraints cover amount range, allowed payees, allowed payment instruments, allowed PISPs, recurrence, budget, reference, and execution date. These are verifier-side evidence checks. They do not change graph derivation or settlement calculation.
+
+**Decision.** `@atrib/verify` now includes typed AP2 / VI constraint evaluation.
+
+1. `evaluateAp2ViConstraints()` is exported for direct use with decoded mandate material.
+2. `verifyAp2ViEvidence()` runs the evaluator after parsing VI credentials and stores the result at `vi.constraints`.
+3. `constraintPolicy` defaults to `require`. Failed, unresolved, or unsupported disclosed constraints make the evidence result invalid. `constraintPolicy: "best-effort"` turns those findings into warnings. `constraintPolicy: "off"` skips constraint evaluation and returns `status: "not_checked"`.
+
+The first supported AP2 constraint set is deliberately typed:
+
+- `checkout.allowed_merchants`
+- `checkout.line_items`
+- `payment.amount_range`
+- `payment.allowed_payees`
+- `payment.allowed_payment_instruments`
+- `payment.allowed_pisps`
+- `payment.execution_date`
+
+For compatibility with the earlier synthetic fixture naming, the evaluator also accepts the same type names with a leading `mandate.` prefix.
+
+Payment amounts use AP2's integer minor-unit `payment_amount.amount` field. The evaluator does not use floating point totals for payment bounds. Checkout line item evaluation uses a deterministic max-flow check so overlapping acceptable-item sets do not depend on greedy ordering.
+
+The evaluator resolves selectively disclosed `{ "...": digest }` references when the referenced disclosure is present in the submitted VI presentation. Missing target data is reported as `unresolved`, not passed. Unknown constraint types are `unsupported`. Recurrence, budget, and payment reference constraints remain unsupported until the verifier has the needed history and open-checkout hash material.
+
+**Alternatives considered.**
+
+- *Keep constraints out of `@atrib/verify`.* Rejected. AP2's autonomous safety claim depends on deterministic constraint checks, and `@atrib/verify` already owns AP2 evidence evaluation.
+- *Introduce a generic policy language now.* Rejected. AP2 already defines typed fields with payment-specific semantics. A generic layer would add abstraction before the first concrete checks are stable.
+- *Treat missing constraint evidence as pass.* Rejected. If the verifier cannot see the final checkout, payment mandate, or disclosed allowed list, it cannot prove the purchase stayed inside the user's bounds.
+- *Evaluate all AP2 constraint types immediately.* Rejected. Recurrence and budget need presentation history. Payment reference needs a settled interpretation of the open-checkout mandate hash material. Reporting those cases as unsupported is more honest than guessing.
+
+**Consequences.**
+
+- AP2 autonomous evidence now has a distinct `vi.constraints` block with `status` and per-constraint checks.
+- `@atrib/verify` can reject amount, merchant, payee, instrument, PISP, execution-window, and line-item violations without adding AP2-specific graph edges.
+- `packages/agent/test/fixtures/ap2/vi_autonomous_constraints_decoded.json` records a deterministic decoded constraint case. P031 remains open for the broader signed autonomous fixture corpus and negative matrix.
+- `@atrib/integration` keeps the AP2 detector and verifier paths composed while confirming immediate-mode evidence has no open constraints to evaluate.
+
+**Cross-references.**
+
+- [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt), AP2 receipt detection boundary.
+- [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), first AP2 / VI evidence checker.
+- [D091](#d091-ap2--vi-sd-jwt-conformance-uses-openwallet-sd-jwt-js), SD-JWT / VC conformance layer.
 - [§5.5.4](atrib-spec.md#554-ap2--verifiable-intent-evidence-checks), updated AP2 / VI verifier surface.
 
 ---
@@ -4787,24 +4842,6 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 - [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), verify promotion: when verify-mcp ships as primitive #7, Position 2 makes adding `atrib verify` a one-subcommand addition rather than a new helper + node_modules.
 - [P023](#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion), subscription surface; the always-on consumer pattern benefits from a stable CLI deployment for the same reasons.
 - [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type), parent-child env threading; benefits from PATH-resolved CLI per consequences above.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-
-## P030: AP2 / VI mandate constraint evaluation
-
-**Source:** AP2 / Verifiable Intent implementation gap audit after [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) landed. The verifier now checks the cryptographic chain and final checkout / payment hash binding. It does not evaluate whether a purchase stays inside the user-declared mandate constraints.
-
-**The decision in question:** should `@atrib/verify` include an AP2 / VI constraint evaluator that checks merchant allowlists, payee binding, amount ceilings, currency, SKU or category limits, time windows, and agent delegation bounds against the final AP2 receipt and mandate payloads?
-
-**Considerations.**
-
-- Constraint checks are evidence checks, not graph derivation. They must not add AP2-specific graph edges.
-- The evaluator needs deterministic rules and clear failure messages. A generic policy language may be useful, but only if it preserves AP2's typed mandate fields.
-- Currency and amount checks need exact decimal handling. Floating point math is not acceptable for payment constraints.
-- The fixture matrix should cover in-bounds and out-of-bounds cases for immediate and autonomous flows.
-
-**Likely outcome (not committed):** accept in stages. Start with typed AP2 fields that are visible in current fixtures, then widen as AP2 reference examples expose more constraint shapes.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 

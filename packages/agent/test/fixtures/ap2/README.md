@@ -80,6 +80,11 @@ is the AP2 crypto payment path.
   evidence where open checkout and payment mandates delegate to different
   agent keys. Expected verifier outcome: invalid evidence with
   `vi_l2_cnf_mismatch`.
+- `vi_autonomous_constraints_decoded.json`: synthetic decoded open-mandate
+  constraint case for `@atrib/verify`'s typed constraint evaluator. It is
+  not a signed VI credential fixture. It covers merchant allowlists, checkout
+  line items, payment amount ranges, payees, payment instruments, PISPs, and
+  execution windows.
 - `payment_mandate_message.json`: Real example AP2 PaymentMandate Message
   from the v0.1 `docs/a2a-extension.md` compatibility path. Detection
   signal: `parts[].data["ap2.mandates.PaymentMandate"]` exists.
