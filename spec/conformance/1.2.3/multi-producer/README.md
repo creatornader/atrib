@@ -15,25 +15,28 @@ for the decision rationale and the alternative paths considered.
 
 ## Precedence (highest to lowest)
 
-| Layer | Source | When it fires |
-|---|---|---|
-| 1. inbound | `inboundRecordHashHex` (decoded from MCP `_meta.atrib`, W3C tracestate `atrib=...`, or `X-Atrib-Chain` header per [§1.5.2](../../../atrib-spec.md#152-http-transport-tracestate)) | The agent SDK threads the upstream record's hash explicitly into this call. The new record MUST chain to it. |
-| 2. auto-chain | `autoChainTailHex` (in-memory tail) | The producer signed a previous record under the same context in this process and remembers its hash. Within-process continuity. |
-| 3. env-tail | `ATRIB_CHAIN_TAIL_<context_id>` env var, value matching `^sha256:[0-9a-f]{64}$` | A parent process spawned this producer with the env var set. Cross-producer handoff. |
-| 4. mirror-tail | `mirrorTailHex` (caller pre-reads a mirror file filtered to this context_id) | A peer producer wrote to a shared on-disk mirror; we inherit its tail. File-as-IPC fallback. |
-| 5. genesis | `sha256:hex(SHA-256(UTF-8(context_id)))` per [§1.2.3](../../../atrib-spec.md#123-chain_root-for-genesis-records) | No upstream chain context exists. |
+| Layer          | Source                                                                                                                                                                            | When it fires                                                                                                                   |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1. inbound     | `inboundRecordHashHex` (decoded from MCP `_meta.atrib`, W3C tracestate `atrib=...`, or `X-Atrib-Chain` header per [§1.5.2](../../../atrib-spec.md#152-http-transport-tracestate)) | The agent SDK threads the upstream record's hash explicitly into this call. The new record MUST chain to it.                    |
+| 2. auto-chain  | `autoChainTailHex` (in-memory tail)                                                                                                                                               | The producer signed a previous record under the same context in this process and remembers its hash. Within-process continuity. |
+| 3. env-tail    | `ATRIB_CHAIN_TAIL_<context_id>` env var, value matching `^sha256:[0-9a-f]{64}$`                                                                                                   | A parent process spawned this producer with the env var set. Cross-producer handoff.                                            |
+| 4. mirror-tail | `mirrorTailHex` (caller pre-reads a mirror file filtered to this context_id)                                                                                                      | A peer producer wrote to a shared on-disk mirror; we inherit its tail. File-as-IPC fallback.                                    |
+| 5. genesis     | `sha256:hex(SHA-256(UTF-8(context_id)))` per [§1.2.3](../../../atrib-spec.md#123-chain_root-for-genesis-records)                                                                  | No upstream chain context exists.                                                                                               |
 
 ## Cases
 
-| File | Asserts |
-|---|---|
-| `cases/inbound-wins.json` | All four resolution sources present; inbound wins. |
-| `cases/auto-chain-wins.json` | No inbound; in-memory autoChain tail wins over env + mirror. |
-| `cases/env-tail-wins.json` | No inbound, no auto-chain; ATRIB_CHAIN_TAIL_<ctx> wins over mirror. |
-| `cases/mirror-tail-wins.json` | Only mirror tail present; producer chains to it. |
-| `cases/genesis-fallback.json` | No signals; synthetic genesis chain_root. |
-| `cases/env-tail-malformed-falls-through.json` | Env var set but malformed; resolver MUST fall through (does not treat the bad value as a chain anchor). |
-| `cases/env-tail-namespace-isolation.json` | Env var set for a DIFFERENT context_id; MUST NOT be consulted. |
+| File                                            | Asserts                                                                                                 |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `cases/inbound-wins.json`                       | All four resolution sources present; inbound wins.                                                      |
+| `cases/auto-chain-wins.json`                    | No inbound; in-memory autoChain tail wins over env + mirror.                                            |
+| `cases/env-tail-wins.json`                      | No inbound, no auto-chain; ATRIB*CHAIN_TAIL*<ctx> wins over mirror.                                     |
+| `cases/mirror-tail-wins.json`                   | Only mirror tail present; producer chains to it.                                                        |
+| `cases/genesis-fallback.json`                   | No signals; synthetic genesis chain_root.                                                               |
+| `cases/env-tail-malformed-falls-through.json`   | Env var set but malformed; resolver MUST fall through (does not treat the bad value as a chain anchor). |
+| `cases/env-tail-namespace-isolation.json`       | Env var set for a DIFFERENT context_id; MUST NOT be consulted.                                          |
+| `cases/race-inbound-over-stale-auto-chain.json` | Conflicting inbound and autoChain tails; inbound wins.                                                  |
+| `cases/race-auto-chain-over-stale-env.json`     | Conflicting autoChain and env tails; autoChain wins.                                                    |
+| `cases/race-env-over-stale-mirror.json`         | Conflicting env and mirror tails with no inbound or autoChain; env wins.                                |
 
 ## Reference implementation
 

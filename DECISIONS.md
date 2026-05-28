@@ -3523,9 +3523,9 @@ A run is **POSITIVE** if pass^k_delta ≥ 20 percentage points AND the secondary
 
 ### Cross-references
 
-- P019 (retired upon promotion to this ADR) - the Pending decision this ADR promotes from. The P019 entry was removed from the Pending decisions section per the existing promotion convention ([D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) retired P011 the same way). The live entries in the Pending section now skip P019; [P018](#p018-adopt-inspect-ai-as-the-track-b-harness-baseline), [P020](#p020-extend-the-substrate-correctness-conformance-corpus-to-wycheproof-equivalent-coverage), [P021](#p021-publish-a-behavior-impact-paired-benchmark-suite-as-an-atrib-artifact) remain in the eval framework subset.
+- P019 (retired upon promotion to this ADR) - the Pending decision this ADR promotes from. The P019 entry was removed from the Pending decisions section per the existing promotion convention ([D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) retired P011 the same way). The live entries in the Pending section now skip P019; [P018](#p018-adopt-inspect-ai-as-the-track-b-harness-baseline) and [P021](#p021-publish-a-behavior-impact-paired-benchmark-suite-as-an-atrib-artifact) remain in the eval framework subset, while [D101](#d101-substrate-wide-adversarial-conformance-corpus) owns the former P020 conformance-corpus workstream.
 - [P018](#p018-adopt-inspect-ai-as-the-track-b-harness-baseline) - Inspect AI harness adoption. The harness pilot may not be done at first-Track-B-run time; pass^k spec is independent of the harness choice. Either Inspect AI or the bespoke fallback computes pass^k identically.
-- [P020](#p020-extend-the-substrate-correctness-conformance-corpus-to-wycheproof-equivalent-coverage) - conformance corpus extension. Substrate-correctness eval; not affected by this metric change.
+- [D101](#d101-substrate-wide-adversarial-conformance-corpus) - conformance corpus extension. Substrate-correctness eval; not affected by this metric change.
 - [P021](#p021-publish-a-behavior-impact-paired-benchmark-suite-as-an-atrib-artifact) - Suite B publishable benchmark. Will use pass^k as primary metric per this ADR; quarterly snapshots report pass^k_delta per task class.
 
 ---
@@ -4561,7 +4561,7 @@ The verifier now treats the following as named evidence failures:
 - *Leave coverage inside the AP2 fixture directory.* Rejected. `packages/agent/test/fixtures/ap2/` remains the AP2-shaped evidence corpus. `spec/conformance/ap2-vi-crypto/` is the implementation-independent contract for verifier crypto edge behavior.
 - *Depend only on upstream library test suites.* Rejected. `jose` and OpenWallet should own their primitives, but atrib owns how AP2 / VI evidence is admitted, rejected, named, and kept off the detector path.
 - *Fetch adversarial vectors at test time.* Rejected. The default CI path must not silently skip if a network fetch fails. External corpus refreshes can be generator work; the committed corpus must run offline.
-- *Implement every Wycheproof-style ES256 edge now.* Rejected as too broad for this AP2 / VI increment. [D096](#d096-ap2--vi-crypto-conformance-uses-a-pinned-offline-corpus) locks atrib's AP2 verifier boundary; [P020](#p020-extend-the-substrate-correctness-conformance-corpus-to-wycheproof-equivalent-coverage) remains the broader cryptographic corpus workstream.
+- *Implement every Wycheproof-style ES256 edge now.* Rejected as too broad for this AP2 / VI increment. [D096](#d096-ap2--vi-crypto-conformance-uses-a-pinned-offline-corpus) locks atrib's AP2 verifier boundary; [D101](#d101-substrate-wide-adversarial-conformance-corpus) owns the broader adversarial conformance workstream.
 
 **Consequences.**
 
@@ -4753,6 +4753,51 @@ The default remains `logSubmission: 'enabled'`, and `logEndpoint` keeps its exis
 - [§5.8](atrib-spec.md#58-degradation-contract), failures must not affect the primary tool path.
 - [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), local sidecar persistence.
 
+
+---
+
+## D101: Substrate-wide adversarial conformance corpus
+
+**Date:** 2026-05-28
+
+**Status:** Accepted
+
+**Supersedes:** P020, removed from Pending decisions when this ADR codified the decision.
+
+**Context.** P020 captured a real gap in the substrate-correctness story. atrib had strong per-feature tests and several spec corpora, but the adversarial surface was split across local unit tests, a live Wycheproof fetch that skipped when the network was unavailable, and endpoint-specific graph fixtures. A third-party implementer could not replay one clear corpus that covered edge derivation, malformed signed inputs, multi-producer chain races, and cross-attestation boundary cases.
+
+**Decision.** Promote P020 into a substrate-wide conformance workstream with four shipped surfaces.
+
+First, add a full [§3.2.4](atrib-spec.md#324-edge-derivation-rules) graph corpus at `spec/conformance/3.2.4/`, generated by `packages/log-dev/scripts/generate-conformance-3.2.4.ts` and consumed by `services/graph-node/test/conformance-3.2.4.test.ts`. It pins exact edge sets for all nine edge types, full pairwise SESSION_PRECEDES, full pairwise SESSION_PARALLEL, and dangling producer-declared references. Add `services/graph-node/test/edge-derivation-properties.test.ts` for generated property checks over ordered records, equal timestamps, linear chains, compact mode, and input-order invariance.
+
+Second, add `spec/conformance/1.4/adversarial-vectors.json`, generated by `packages/log-dev/scripts/generate-conformance-1.4-adversarial.ts` and consumed by `packages/mcp/test/signing-adversarial-corpus.test.ts`. The vectors pin bit-flipped signatures, truncated signatures, wrong creator keys, malformed context IDs, invalid event_type URIs, and JCS optional-field ordering. The live Wycheproof Ed25519 fetch remains an upstream compatibility check, but this offline corpus is the CI floor.
+
+Third, extend the [D067](#d067-multi-producer-chain-composition-precedence-contract) corpus with explicit race vectors for conflicting inbound, autoChain, env, and mirror tails. The resolver contract remains unchanged. The new cases make stale-tail precedence replayable.
+
+Fourth, extend the [D052](#d052-cross-attestation-requirement-for-transaction-records) corpus with `creator-signer-missing`: two counterparty signatures verify over the cross-attestation bytes, but no signer entry matches the top-level `creator_key`. The verifier must report `cross_attestation.missing: false` while rejecting the record's base creator-signature path.
+
+**Alternatives considered.**
+
+- *Rely on unit tests.* Rejected. Unit tests catch local regressions, but they do not give external implementations a replayable spec artifact.
+- *Keep the live Wycheproof fetch as the only adversarial signing gate.* Rejected. It is useful, but it can skip under network failure and does not cover atrib record-shape adversaries.
+- *Hand-author the new JSON files.* Rejected. The corpus must be reproducible from fixed seeds and timestamps. Generators make drift obvious.
+- *Bundle the compact graph corpus into [§3.2.4](atrib-spec.md#324-edge-derivation-rules).* Rejected. Compact intra-session edges are a response optimization for [§3.4.1](atrib-spec.md#341-get-v1graphcontext_id); full [§3.2.4](atrib-spec.md#324-edge-derivation-rules) derivation needs its own corpus.
+
+**Consequences.**
+
+- A third-party verifier or graph service can replay the substrate corpus without depending on atrib's TypeScript tests.
+- P020 is retired from Pending decisions. Future corpus additions extend [D101](#d101-substrate-wide-adversarial-conformance-corpus) unless they change a normative rule enough to warrant their own ADR.
+- The corpus is adversarial, not exhaustive. New malformed-record, edge-derivation, or cross-attestation cases should be added when a bug or new rule exposes them.
+- `@atrib/graph-node` now declares `fast-check` as a dev dependency for property-based edge tests.
+
+**Cross-references.**
+
+- [§1.4](atrib-spec.md#14-signing-and-verification), signing and verification.
+- [§3.2.4](atrib-spec.md#324-edge-derivation-rules), graph edge derivation.
+- [§1.2.3.1](atrib-spec.md#1231-multi-producer-chain-composition), multi-producer chain-root precedence.
+- [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records), transaction cross-attestation.
+- [`spec/conformance/1.4/`](spec/conformance/1.4/), signing and adversarial vectors.
+- [`spec/conformance/3.2.4/`](spec/conformance/3.2.4/), full edge derivation corpus.
 
 ---
 
@@ -4985,23 +5030,6 @@ The `extractor_classification` field is redundant for records where event_type i
 - Risk: API rough edges; pilot one task (the lowest-effort Pattern 1 v2 sub-task) before committing the full experiment.
 
 **Likely outcome (not committed):** accept when E1 lands. The pilot validates the integration; full Pattern 1 v2 then runs on Inspect.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-## P020: Extend the substrate-correctness conformance corpus to Wycheproof-equivalent coverage
-
-**Source:** evals landscape research from May 2026 (publicly cited model from Google's `google/wycheproof` cryptography test suite, the canonical adversarial-input conformance corpus for cryptographic primitives). atrib's existing conformance corpus (at `spec/conformance/` for [§1.2.6](atrib-spec.md#126-provenance_token), [§1.4](atrib-spec.md#14-signing), [§1.9](atrib-spec.md#19-key-rotation-and-revocation), [§2.6.1](atrib-spec.md#261-submit-entry), [§3.4.7](atrib-spec.md#347-activity-map), [§4.6](atrib-spec.md#46-the-calculation-algorithm), [§6](atrib-spec.md#6-key-directory), [§6.3](atrib-spec.md#63-verifier-consultation)) is structurally analogous but does not yet cover the full adversarial-edge surface that a Wycheproof-equivalent corpus would.
-
-**The decision in question:** extend the conformance corpus to cover (a) property-based edge-derivation tests for [§3.2.4](atrib-spec.md#324-edge-derivation-rules), (b) adversarial-input vectors (malformed records, truncated bytes, bit-flipped signatures, JCS canonicalization edge cases), (c) [D067](#d067-multi-producer-chain-composition-precedence-contract) multi-producer race vectors (interleaved emissions, conflicting chain-tail claims, missing inbound tokens), (d) [D052](#d052-cross-attestation-requirement-for-transaction-records) cross-attestation positive/negative vectors (correct dual-signer bundles, single-signer transaction records that should flag, tampered counterparty signatures).
-
-**Considerations.**
-- Closes the gap between existing per-feature corpus coverage and the cryptography-conformance-grade corpus the verifiability claim requires.
-- Enables external verifier implementations (in any language) to validate atrib's substrate-correctness against an authoritative reference.
-- Independent of Track B Pattern 1 v2 work; can run in parallel.
-- Alternative rejected: rely on existing unit tests. They don't catch ordering correctness, they aren't legible as a published spec artifact, and they aren't replayable by a third-party verifier.
-- Pairs with the existing per-feature conformance corpora; this is corpus extension, not a new substrate.
-
-**Likely outcome (not committed):** accept when E2 lands. Approximately 3-5 days of focused corpus authoring.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 

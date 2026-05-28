@@ -1,0 +1,18 @@
+{
+  "name": "race-env-over-stale-mirror",
+  "spec_section": "1.2.3",
+  "description": "Race vector: no inbound handoff and no local autoChain tail are present, while env and mirror tails disagree. The parent-set env handoff MUST win over the mirror file because the mirror may lag pending writes.",
+  "input": {
+    "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inbound_record_hash_hex": null,
+    "auto_chain_tail_hex": null,
+    "env": {
+      "ATRIB_CHAIN_TAIL_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+    },
+    "mirror_tail_hex": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "expected": {
+    "chain_root": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+    "precedence_layer": "env-tail"
+  }
+}

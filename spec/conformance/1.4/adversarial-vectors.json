@@ -1,0 +1,177 @@
+{
+  "spec_section": "1.4",
+  "spec_title": "Signing and verification adversarial vectors",
+  "decision_link": "D101",
+  "generated_at": 1767225600000,
+  "generator": "packages/log-dev/scripts/generate-conformance-1.4-adversarial.ts",
+  "source_model": "Wycheproof-style adversarial corpus: malformed records, truncated bytes, bit-flipped signatures, wrong-key signatures, and JCS canonicalization edge cases.",
+  "keys": {
+    "creator_pubkey": "11l5O7wTooGagnx2rbb7qKSa7gB_SfLQmS2ZuCWtLEg",
+    "other_pubkey": "xoImN8fTEOxXYnvgC6JZ0lN0n0qvZERwz_vlOjX3MkI"
+  },
+  "vectors": [
+    {
+      "name": "valid-baseline",
+      "spec_section": "1.4",
+      "description": "A valid minimal tool_call record. Anchors the negative cases with the same key, timestamp, context_id, and content_id shape.",
+      "input": {
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:aa00000000000000000000000000000000000000000000000000000000000000",
+          "creator_key": "11l5O7wTooGagnx2rbb7qKSa7gB_SfLQmS2ZuCWtLEg",
+          "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+          "event_type": "https://atrib.dev/v1/types/tool_call",
+          "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "timestamp": 1767225600000,
+          "signature": "W4P8WSKJKBaENN8tZPioas0gW6T71dNtQgBuBkQMZWLt0tbMYSe2CuJhIf6e0SxFTXjt4FNBtMcG1ZnaJ_lpCg"
+        }
+      },
+      "expected": {
+        "verification_passes": true,
+        "submission_validation_passes": true,
+        "canonical_signing_input": "{\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:aa00000000000000000000000000000000000000000000000000000000000000\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"11l5O7wTooGagnx2rbb7qKSa7gB_SfLQmS2ZuCWtLEg\",\"event_type\":\"https://atrib.dev/v1/types/tool_call\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1767225600000}",
+        "signing_input_sha256_hex": "6df6a1307013634daa7b020dd43ebb7660022c70a34c9d31301a37c8257b3378"
+      }
+    },
+    {
+      "name": "bit-flipped-signature",
+      "spec_section": "1.4",
+      "description": "The first base64url character of a valid Ed25519 signature is changed. Structure remains acceptable, but signature verification MUST fail.",
+      "input": {
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:aa00000000000000000000000000000000000000000000000000000000000000",
+          "creator_key": "11l5O7wTooGagnx2rbb7qKSa7gB_SfLQmS2ZuCWtLEg",
+          "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+          "event_type": "https://atrib.dev/v1/types/tool_call",
+          "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "timestamp": 1767225600000,
+          "signature": "A4P8WSKJKBaENN8tZPioas0gW6T71dNtQgBuBkQMZWLt0tbMYSe2CuJhIf6e0SxFTXjt4FNBtMcG1ZnaJ_lpCg"
+        }
+      },
+      "expected": {
+        "verification_passes": false,
+        "submission_validation_passes": true
+      }
+    },
+    {
+      "name": "truncated-signature",
+      "spec_section": "1.4",
+      "description": "A valid signature with the final base64url character removed. The decoded signature is no longer 64 bytes and verification MUST fail.",
+      "input": {
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:aa00000000000000000000000000000000000000000000000000000000000000",
+          "creator_key": "11l5O7wTooGagnx2rbb7qKSa7gB_SfLQmS2ZuCWtLEg",
+          "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+          "event_type": "https://atrib.dev/v1/types/tool_call",
+          "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "timestamp": 1767225600000,
+          "signature": "W4P8WSKJKBaENN8tZPioas0gW6T71dNtQgBuBkQMZWLt0tbMYSe2CuJhIf6e0SxFTXjt4FNBtMcG1ZnaJ_lpC"
+        }
+      },
+      "expected": {
+        "verification_passes": false,
+        "submission_validation_passes": true
+      }
+    },
+    {
+      "name": "wrong-creator-key",
+      "spec_section": "1.4",
+      "description": "A valid signed record whose creator_key was replaced with another 32-byte Ed25519 public key. Verification MUST fail because the signature no longer matches the declared creator.",
+      "input": {
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:aa00000000000000000000000000000000000000000000000000000000000000",
+          "creator_key": "xoImN8fTEOxXYnvgC6JZ0lN0n0qvZERwz_vlOjX3MkI",
+          "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+          "event_type": "https://atrib.dev/v1/types/tool_call",
+          "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "timestamp": 1767225600000,
+          "signature": "W4P8WSKJKBaENN8tZPioas0gW6T71dNtQgBuBkQMZWLt0tbMYSe2CuJhIf6e0SxFTXjt4FNBtMcG1ZnaJ_lpCg"
+        }
+      },
+      "expected": {
+        "verification_passes": false,
+        "submission_validation_passes": true
+      }
+    },
+    {
+      "name": "malformed-context-id",
+      "spec_section": "1.4",
+      "description": "A record signed over an uppercase context_id. The signature matches those bytes, but §1.4.3 step 8 and §2.6.1 validation reject non-lowercase trace IDs.",
+      "input": {
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:ab00000000000000000000000000000000000000000000000000000000000000",
+          "creator_key": "11l5O7wTooGagnx2rbb7qKSa7gB_SfLQmS2ZuCWtLEg",
+          "chain_root": "sha256:22a48051594c1949deed7040850c1f0f8764537f5191be56732d16a54c1d8153",
+          "event_type": "https://atrib.dev/v1/types/tool_call",
+          "context_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "timestamp": 1767225600000,
+          "signature": "baqsFEh9fyP3K_4c6jUZCiW3kiXkZePdOd8vgEnGKMTkyfPr1jaQILKEN6CozdzXuf3Rera5H_NWQgCIi4ffCw"
+        }
+      },
+      "expected": {
+        "verification_passes": false,
+        "submission_validation_passes": false
+      }
+    },
+    {
+      "name": "invalid-event-type-uri",
+      "spec_section": "1.4",
+      "description": "A record signed over a bare event_type token rather than an absolute URI. Signature bytes match, but URI validation MUST reject it.",
+      "input": {
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:ac00000000000000000000000000000000000000000000000000000000000000",
+          "creator_key": "11l5O7wTooGagnx2rbb7qKSa7gB_SfLQmS2ZuCWtLEg",
+          "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+          "event_type": "tool_call",
+          "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "timestamp": 1767225600000,
+          "signature": "UFgHLNXtteTKC9uM7XVaJRNjc2hmSxWqvY9eXIK05I2_WWfvOrLIDTMwH8ZlLM8cEbDNejHNzyJbsxb4p924Bw"
+        }
+      },
+      "expected": {
+        "verification_passes": false,
+        "submission_validation_passes": false
+      }
+    },
+    {
+      "name": "jcs-optional-field-order",
+      "spec_section": "1.4",
+      "description": "A signed annotation record carrying optional fields whose names sort before, between, and after the base fields. The expected canonical string pins JCS lexicographic ordering.",
+      "input": {
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:ad00000000000000000000000000000000000000000000000000000000000000",
+          "creator_key": "11l5O7wTooGagnx2rbb7qKSa7gB_SfLQmS2ZuCWtLEg",
+          "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+          "event_type": "https://atrib.dev/v1/types/annotation",
+          "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "timestamp": 1767225600000,
+          "signature": "mxEwPXvKXsBJrWaktPIH_cO_6o73grq3YRmcIBvb9-gTz3-SMdDi3fge0reSCKpgu5Q85OKgxd9hH9CxWwIXAQ",
+          "annotates": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "args_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "args_salt": "AQIDBAUGBwgJCgsMDQ4PEA",
+          "informed_by": [
+            "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+          ],
+          "provenance_token": "AAAAAAAAAAAAAAAAAAAAAA",
+          "result_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "result_salt": "ERITFBUWFxgZGhscHR4fIA",
+          "session_token": "canonical-session-token",
+          "timestamp_granularity": "ms",
+          "tool_name": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+        }
+      },
+      "expected": {
+        "verification_passes": true,
+        "submission_validation_passes": true,
+        "canonical_signing_input": "{\"annotates\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"args_hash\":\"sha256:2222222222222222222222222222222222222222222222222222222222222222\",\"args_salt\":\"AQIDBAUGBwgJCgsMDQ4PEA\",\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:ad00000000000000000000000000000000000000000000000000000000000000\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"11l5O7wTooGagnx2rbb7qKSa7gB_SfLQmS2ZuCWtLEg\",\"event_type\":\"https://atrib.dev/v1/types/annotation\",\"informed_by\":[\"sha256:3333333333333333333333333333333333333333333333333333333333333333\"],\"provenance_token\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"result_hash\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"result_salt\":\"ERITFBUWFxgZGhscHR4fIA\",\"session_token\":\"canonical-session-token\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1767225600000,\"timestamp_granularity\":\"ms\",\"tool_name\":\"sha256:5555555555555555555555555555555555555555555555555555555555555555\"}",
+        "signing_input_sha256_hex": "509391581872431fa0d0d0b84fee989d9459eb48b372d3cb8fce8aa0bc4b4935"
+      }
+    }
+  ]
+}

@@ -77,12 +77,7 @@ function buildCase(opts: {
   autoChain?: string
   envTail?: string
   mirror?: string
-  expectedLayer:
-    | 'inbound'
-    | 'auto-chain'
-    | 'env-tail'
-    | 'mirror-tail'
-    | 'genesis'
+  expectedLayer: 'inbound' | 'auto-chain' | 'env-tail' | 'mirror-tail' | 'genesis'
 }): CaseBody {
   const env: Record<string, string> = opts.envTail
     ? { [ENV_VAR_NAME_FOR_A]: `sha256:${opts.envTail}` }
@@ -164,6 +159,33 @@ function main(): void {
         'The env var name is namespaced per context_id. ATRIB_CHAIN_TAIL_<other_context> set in the env MUST NOT be consulted when resolving for <this_context>. With no other signals, this falls through to genesis for the requested context.',
       expectedLayer: 'genesis',
     }),
+    buildCase({
+      name: 'race-inbound-over-stale-auto-chain',
+      description:
+        'Race vector: an inbound handoff and a local autoChain tail disagree after interleaved emissions. The inbound handoff is the explicit upstream call edge and MUST win over the stale local tail.',
+      inbound: '5'.repeat(64),
+      autoChain: TAIL_AUTOCHAIN,
+      envTail: TAIL_ENV,
+      mirror: TAIL_MIRROR,
+      expectedLayer: 'inbound',
+    }),
+    buildCase({
+      name: 'race-auto-chain-over-stale-env',
+      description:
+        "Race vector: a producer's in-process autoChain tail and a parent-set env tail disagree. With no inbound handoff, the in-memory tail is fresher and MUST win over the stale env var.",
+      autoChain: '6'.repeat(64),
+      envTail: TAIL_ENV,
+      mirror: TAIL_MIRROR,
+      expectedLayer: 'auto-chain',
+    }),
+    buildCase({
+      name: 'race-env-over-stale-mirror',
+      description:
+        'Race vector: no inbound handoff and no local autoChain tail are present, while env and mirror tails disagree. The parent-set env handoff MUST win over the mirror file because the mirror may lag pending writes.',
+      envTail: '7'.repeat(64),
+      mirror: TAIL_MIRROR,
+      expectedLayer: 'env-tail',
+    }),
   ]
   // Special-case: env-tail-malformed-falls-through needs a malformed env var
   // injected directly (buildCase only synthesizes valid sha256: prefixes).
@@ -189,8 +211,7 @@ function main(): void {
       tail_env: TAIL_ENV,
       tail_mirror: TAIL_MIRROR,
     },
-    note:
-      'Seven cases covering the precedence cascade (inbound > auto-chain > env-tail > mirror-tail > genesis), env-var malformation fall-through, and env-var namespace isolation. Producers in any language may consume this corpus by serializing their resolveChainRoot equivalent against each case input and asserting the chain_root output matches.',
+    note: 'Ten cases covering the precedence cascade (inbound > auto-chain > env-tail > mirror-tail > genesis), env-var malformation fall-through, env-var namespace isolation, and three multi-producer race vectors with conflicting tails. Producers in any language may consume this corpus by serializing their resolveChainRoot equivalent against each case input and asserting the chain_root output matches.',
   }
   writeFileSync(join(CORPUS_ROOT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
 

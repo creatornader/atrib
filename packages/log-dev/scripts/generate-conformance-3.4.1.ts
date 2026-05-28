@@ -137,12 +137,14 @@ async function buildLinearChain(n: number, startTs: number, label: string) {
 async function buildIsolatedGenesis(n: number, startTs: number, label: string) {
   const records: AtribRecord[] = []
   for (let i = 0; i < n; i++) {
-    records.push(await makeRecord({
-      contextId: CTX,
-      chainRoot: genesisChainRoot(CTX),
-      timestamp: startTs + i,
-      contentId: `sha256:${(label + i.toString().padStart(2, '0')).padEnd(64, '0')}`,
-    }))
+    records.push(
+      await makeRecord({
+        contextId: CTX,
+        chainRoot: genesisChainRoot(CTX),
+        timestamp: startTs + i,
+        contentId: `sha256:${(label + i.toString().padStart(2, '0')).padEnd(64, '0')}`,
+      }),
+    )
   }
   return records
 }
@@ -215,12 +217,37 @@ async function caseMixedChains(): Promise<Case> {
   const records = [...chainA, ...chainB]
   const edges: ExpectedEdge[] = []
   // CHAIN_PRECEDES: 2 per chain.
-  edges.push({ type: 'CHAIN_PRECEDES', source_record_index: 0, target_record_index: 1, directed: true })
-  edges.push({ type: 'CHAIN_PRECEDES', source_record_index: 1, target_record_index: 2, directed: true })
-  edges.push({ type: 'CHAIN_PRECEDES', source_record_index: 3, target_record_index: 4, directed: true })
-  edges.push({ type: 'CHAIN_PRECEDES', source_record_index: 4, target_record_index: 5, directed: true })
+  edges.push({
+    type: 'CHAIN_PRECEDES',
+    source_record_index: 0,
+    target_record_index: 1,
+    directed: true,
+  })
+  edges.push({
+    type: 'CHAIN_PRECEDES',
+    source_record_index: 1,
+    target_record_index: 2,
+    directed: true,
+  })
+  edges.push({
+    type: 'CHAIN_PRECEDES',
+    source_record_index: 3,
+    target_record_index: 4,
+    directed: true,
+  })
+  edges.push({
+    type: 'CHAIN_PRECEDES',
+    source_record_index: 4,
+    target_record_index: 5,
+    directed: true,
+  })
   // SESSION_PRECEDES: A's tail → B's head (cross-component adjacency in time).
-  edges.push({ type: 'SESSION_PRECEDES', source_record_index: 2, target_record_index: 3, directed: true })
+  edges.push({
+    type: 'SESSION_PRECEDES',
+    source_record_index: 2,
+    target_record_index: 3,
+    directed: true,
+  })
   return {
     name: 'mixed-chains-cross-component-only',
     description:
@@ -309,10 +336,13 @@ async function main() {
     keys: {
       alice_pubkey: base64urlEncode(await getPublicKey(ALICE_SEED)),
     },
-    note:
-      "Compaction is information-preserving with respect to the partial order over the resolved record set; ?compact=false MUST also accept the same input records and produce the full all-pairs derivation per §3.2.4 steps 2-3. The corpus only enumerates the compacted edge set; full-derivation conformance is covered by spec/conformance/3.2.4-style cross-implementation tests.",
+    note: 'Compaction is information-preserving with respect to the partial order over the resolved record set; ?compact=false MUST also accept the same input records and produce the full all-pairs derivation per §3.2.4 steps 2-3. The corpus only enumerates the compacted edge set; full-derivation conformance is covered by spec/conformance/3.2.4/.',
   }
-  writeFileSync(join(SPEC_ROOT, 'spec', 'conformance', '3.4.1', 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8')
+  writeFileSync(
+    join(SPEC_ROOT, 'spec', 'conformance', '3.4.1', 'manifest.json'),
+    JSON.stringify(manifest, null, 2) + '\n',
+    'utf8',
+  )
   console.log(`wrote manifest.json with ${cases.length} cases`)
 }
 

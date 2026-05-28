@@ -39,7 +39,8 @@ function buildGraph(
     const creatorIdx = i % creatorCount
     nodes.push({
       id: `sha256:tc_${i.toString().padStart(6, '0')}`,
-      event_type: 'tool_call', event_type_uri: 'https://atrib.dev/v1/types/tool_call',
+      event_type: 'tool_call',
+      event_type_uri: 'https://atrib.dev/v1/types/tool_call',
       content_id: `sha256:content_${i}`,
       creator_key: `creator_${creatorIdx.toString().padStart(3, '0')}`,
       chain_root: `sha256:chain_${i}`,
@@ -54,7 +55,8 @@ function buildGraph(
   for (let i = 0; i < gapNodes; i++) {
     nodes.push({
       id: `gap:${i}`,
-      event_type: 'gap_node', event_type_uri: null,
+      event_type: 'gap_node',
+      event_type_uri: null,
       content_id: null,
       creator_key: null,
       chain_root: null,
@@ -68,7 +70,8 @@ function buildGraph(
 
   const txNode: GraphNode = {
     id: 'sha256:tx_node',
-    event_type: 'transaction', event_type_uri: 'https://atrib.dev/v1/types/transaction',
+    event_type: 'transaction',
+    event_type_uri: 'https://atrib.dev/v1/types/transaction',
     content_id: 'sha256:tx_content',
     creator_key: 'creator_000',
     chain_root: 'sha256:tx_chain',
@@ -174,7 +177,11 @@ describe('applyMaximumCap edge cases', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('large graph performance', () => {
-  it('calculates distribution for 500 nodes within 2 seconds', () => {
+  // These are smoke budgets. Dedicated benchmarks own tighter timing checks.
+  const budget500NodeMs = 3000
+  const budget1000NodeMs = 8000
+
+  it('calculates distribution for 500 nodes within the smoke budget', () => {
     const graph = buildGraph(500, { creatorCount: 50 })
     const start = performance.now()
     const d = calculate(graph, DEFAULT_POLICY)
@@ -182,10 +189,10 @@ describe('large graph performance', () => {
 
     expect(Object.keys(d).length).toBeGreaterThan(0)
     expect(distributionSum(d)).toBeCloseTo(1.0, 8)
-    expect(elapsed).toBeLessThan(2000)
+    expect(elapsed).toBeLessThan(budget500NodeMs)
   })
 
-  it('calculates distribution for 1000 nodes within 5 seconds', () => {
+  it('calculates distribution for 1000 nodes within the smoke budget', () => {
     const graph = buildGraph(1000, { creatorCount: 100 })
     const start = performance.now()
     const d = calculate(graph, DEFAULT_POLICY)
@@ -193,8 +200,8 @@ describe('large graph performance', () => {
 
     expect(Object.keys(d).length).toBeGreaterThan(0)
     expect(distributionSum(d)).toBeCloseTo(1.0, 8)
-    expect(elapsed).toBeLessThan(5000)
-  })
+    expect(elapsed).toBeLessThan(budget1000NodeMs)
+  }, 10_000)
 
   it('maintains determinism on large graphs', () => {
     const graph = buildGraph(200, { creatorCount: 20 })

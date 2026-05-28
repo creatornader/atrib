@@ -1,0 +1,198 @@
+{
+  "name": "all-nine-edge-types",
+  "spec_section": "3.2.4",
+  "description": "A single fixture that exercises every normative §3.2.4 edge type in full derivation mode. This is the language-neutral smoke test for the complete graph substrate.",
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:0100000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+        "event_type": "https://atrib.dev/v1/types/transaction",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225601000,
+        "signature": "JGn8Neb1ppip1FHNXaMryOeI6Jcd1TR5eJ_6HstoEACZNMF2ssIcuP6AJjoEICmV1c9aSTTSE1NGa13Jr9btCQ",
+        "session_token": "edge-derivation-session-token"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:0200000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225601500,
+        "signature": "XtpCXNK0qZMtSI9kuMWA_WE4w0I1shifkHwRIgrn13k09bRgjAxkVrYVPeIBGyE-g9x7YVWVPRytt1gD4hVaDQ"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:0300000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:c6f96d81023dde392a7c85d7cc942befa228cb67d21e6d1c8993ae95f3a13d59",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1767225602000,
+        "signature": "U0XsxTLtnZ1LfKqM0uQothwPWl50BOFee5IzKp4-MTwtpGoVg4cDGAcPejye5raepMkqeoaEjgcgbEpg4v-0Aw"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:0400000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:bdb339768bc5e4fecbe55a442056919b2b325907d49bcbf3bf8de13781996a83",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "timestamp": 1767225603000,
+        "signature": "h_fDE_d9HO3dxt3WhKJdjSs22jV1l01JJFlDO_Ut1swP1VKdsUCwis4Qn56_5TgM_YmU3jYadmFXxtkGReCXBg",
+        "informed_by": ["sha256:c6f96d81023dde392a7c85d7cc942befa228cb67d21e6d1c8993ae95f3a13d59"],
+        "session_token": "edge-derivation-session-token"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:0500000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:fbbbb6de2aa74c3c9570d2d8db1de31eadb66113c96034a7adb21243754d7683",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "dddddddddddddddddddddddddddddddd",
+        "timestamp": 1767225604000,
+        "signature": "hqnK7COEUdNyOcjSbTUuJjH7ReQZKxDGe_DswHkHK-lR57xnAI0Vo2F_nRMcQy0vhh5y7WTHo79wvjsO1aInCA",
+        "provenance_token": "6ZXJCEeP56Pc0jqV00zK7w"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:0600000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:bdb339768bc5e4fecbe55a442056919b2b325907d49bcbf3bf8de13781996a83",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "timestamp": 1767225603500,
+        "signature": "XIrmUwBi1hLfh8T_f7-EcXgk3kAbjmh-a-XkuSHC0HoMCAzK58Hlov8XbZ4qyzrEUFy1G0F3-Juf6Z8o7WngDg"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:0700000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:bdb339768bc5e4fecbe55a442056919b2b325907d49bcbf3bf8de13781996a83",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "timestamp": 1767225603500,
+        "signature": "b2oDTTC0lO3zLlJjo1Om6eWwAa-zOS1K8l9z6f969Y4ehm2InWIyUntFwAVzeLEjzuISY5E_Ap-oy3FXqPHjAA"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "annotates": "sha256:e995c908478fe7a3dcd23a95d34ccaef71b2fe24d8f49d44931d499a37048520",
+        "content_id": "sha256:0800000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:dfb417454d7432715ecfaa33d89abdaba4457c3b2cbd85a4a20620d0cd806da6",
+        "event_type": "https://atrib.dev/v1/types/annotation",
+        "context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "timestamp": 1767225605000,
+        "signature": "9ZU0K__oyWgrT5yZ4bI4XIQr5xFSp1sWx1TnV3IQMAwTg46bSDvZEpbB4GYff9M3xsfPa3WsyRSu922Y_wuWCg"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:0900000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:352302489bc2fcf025cf00cda8308033f97ac87712ce90b4d7cd72c58e4c3af9",
+        "event_type": "https://atrib.dev/v1/types/revision",
+        "context_id": "ffffffffffffffffffffffffffffffff",
+        "timestamp": 1767225606000,
+        "signature": "v2wtp5gxXGkbJ-qQyCcqBJDvVcO6WBVDknIK-GBMo8VTGe6X5dOgdf4bMOgQ-gk8rWVo9ZmngIBfYeprcBmaCA",
+        "revises": "sha256:c6f96d81023dde392a7c85d7cc942befa228cb67d21e6d1c8993ae95f3a13d59"
+      }
+    ]
+  },
+  "expected": {
+    "edges": [
+      {
+        "type": "CHAIN_PRECEDES",
+        "source_record_index": 1,
+        "target_record_index": 2,
+        "directed": true
+      },
+      {
+        "type": "SESSION_PRECEDES",
+        "source_record_index": 0,
+        "target_record_index": 1,
+        "directed": true
+      },
+      {
+        "type": "SESSION_PRECEDES",
+        "source_record_index": 0,
+        "target_record_index": 2,
+        "directed": true
+      },
+      {
+        "type": "SESSION_PRECEDES",
+        "source_record_index": 3,
+        "target_record_index": 5,
+        "directed": true
+      },
+      {
+        "type": "SESSION_PRECEDES",
+        "source_record_index": 3,
+        "target_record_index": 6,
+        "directed": true
+      },
+      {
+        "type": "SESSION_PARALLEL",
+        "source_record_index": 5,
+        "target_record_index": 6,
+        "directed": false
+      },
+      {
+        "type": "CONVERGES_ON",
+        "source_record_index": 1,
+        "target_record_index": 0,
+        "directed": true
+      },
+      {
+        "type": "CONVERGES_ON",
+        "source_record_index": 2,
+        "target_record_index": 0,
+        "directed": true
+      },
+      {
+        "type": "CROSS_SESSION",
+        "source_record_index": 3,
+        "target_record_index": 0,
+        "directed": true
+      },
+      {
+        "type": "INFORMED_BY",
+        "source_record_index": 3,
+        "target_record_index": 1,
+        "directed": true
+      },
+      {
+        "type": "PROVENANCE_OF",
+        "source_record_index": 4,
+        "target_record_index": 0,
+        "directed": true
+      },
+      {
+        "type": "ANNOTATES",
+        "source_record_index": 7,
+        "target_record_index": 0,
+        "directed": true
+      },
+      {
+        "type": "REVISES",
+        "source_record_index": 8,
+        "target_record_index": 1,
+        "directed": true
+      }
+    ],
+    "edge_count_by_type": {
+      "CHAIN_PRECEDES": 1,
+      "SESSION_PRECEDES": 4,
+      "SESSION_PARALLEL": 1,
+      "CONVERGES_ON": 2,
+      "CROSS_SESSION": 1,
+      "INFORMED_BY": 1,
+      "PROVENANCE_OF": 1,
+      "ANNOTATES": 1,
+      "REVISES": 1
+    }
+  }
+}

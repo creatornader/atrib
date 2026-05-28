@@ -27,7 +27,11 @@ interface ConformanceCase {
   name: string
   spec_section: '1.7.6'
   description: string
-  input: { record: AtribRecord; signer_seed_hex?: string; signer_seeds_hex?: Record<string, string> }
+  input: {
+    record: AtribRecord
+    signer_seed_hex?: string
+    signer_seeds_hex?: Record<string, string>
+  }
   expected: {
     record_hash_hex: string
     cross_attestation: CrossAttestationAnnotation
@@ -76,5 +80,15 @@ describe('spec §1.7.6 conformance corpus', () => {
 
   it('tampered-second-signature: signers_count: 2, signers_valid: 1, missing: true', async () => {
     await runCase('tampered-second-signature')
+  })
+
+  it('creator-signer-missing: counterparty signatures do not validate the creator', async () => {
+    const fixture = loadCase('creator-signer-missing')
+    const result = await verifyRecord(fixture.input.record)
+
+    expect(result.signatureOk).toBe(false)
+    expect(result.valid).toBe(false)
+    expect(result.warnings).toEqual(['creator signer verification failed'])
+    expect(result.cross_attestation).toEqual(fixture.expected.cross_attestation)
   })
 })

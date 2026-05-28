@@ -413,7 +413,9 @@ Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hash
 ## Further reading
 
 - [atrib-spec.md](atrib-spec.md), the complete protocol specification ([§0](atrib-spec.md#0-foundations)-[§7](atrib-spec.md#7-harness-integration-patterns))
-- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D070](DECISIONS.md#d070-record-body-archive-layer-placeholder-adr); [D053](DECISIONS.md#d053-inclusion-proof-aggregation-flagged-for-follow-up) and [D070](DECISIONS.md#d070-record-body-archive-layer-placeholder-adr) are placeholder ADRs awaiting formal write-ups)
+- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus); [D053](DECISIONS.md#d053-inclusion-proof-aggregation-flagged-for-follow-up) and [D070](DECISIONS.md#d070-record-body-archive-layer-placeholder-adr) are placeholder ADRs awaiting formal write-ups)
 - [packages/agent/README.md](packages/agent/README.md) -- adapter table with quick-start snippets for every framework
+- [spec/conformance/1.4/](spec/conformance/1.4/) -- signing and adversarial record conformance corpus ([§1.4](atrib-spec.md#14-signing-and-verification) / [D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus))
 - [spec/conformance/1.2.6/](spec/conformance/1.2.6/) -- conformance corpus for the `provenance_token` field ([D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) / [§1.2.6](atrib-spec.md#126-provenance_token))
 - [spec/conformance/2.6.1/](spec/conformance/2.6.1/) -- shared conformance corpus for the submission API
+- [spec/conformance/3.2.4/](spec/conformance/3.2.4/) -- full graph edge derivation conformance corpus ([§3.2.4](atrib-spec.md#324-edge-derivation-rules) / [D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus))

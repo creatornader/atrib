@@ -1,0 +1,18 @@
+{
+  "name": "race-inbound-over-stale-auto-chain",
+  "spec_section": "1.2.3",
+  "description": "Race vector: an inbound handoff and a local autoChain tail disagree after interleaved emissions. The inbound handoff is the explicit upstream call edge and MUST win over the stale local tail.",
+  "input": {
+    "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inbound_record_hash_hex": "5555555555555555555555555555555555555555555555555555555555555555",
+    "auto_chain_tail_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+    "env": {
+      "ATRIB_CHAIN_TAIL_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "mirror_tail_hex": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "expected": {
+    "chain_root": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "precedence_layer": "inbound"
+  }
+}
