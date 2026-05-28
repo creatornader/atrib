@@ -4447,6 +4447,47 @@ The corpus now includes:
 
 ---
 
+## D094: AP2 / VI evidence attaches to verifier results as a tiered block
+
+**Date:** 2026-05-28
+
+**Supersedes:** P032, removed from Pending decisions when this ADR codified the decision.
+
+**Context.** [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), [D090](#d090-ap2-receipt-jwt-verification-uses-jose-in-atribverify), [D091](#d091-ap2--vi-sd-jwt-conformance-uses-openwallet-sd-jwt-js), [D092](#d092-ap2--vi-mandate-constraints-are-typed-verifier-evidence), and [D093](#d093-ap2--vi-fixtures-are-the-local-verifier-corpus) made AP2 / VI evidence verification credible as a standalone checker. The remaining integration gap was the standard verifier path: callers using `verifyRecord()` or `AtribVerifier.verify()` still had to call `verifyAp2ViEvidenceAsync()` separately and stitch the results together themselves.
+
+**Decision.** `@atrib/verify` accepts caller-supplied AP2 / Verifiable Intent evidence in the standard verification APIs and attaches the async evidence result as `ap2_vi_evidence`.
+
+1. `verifyRecord(record, { ap2ViEvidence, ap2ViEvidenceOptions })` runs AP2 / VI evidence verification only for transaction records and stores the result at `result.ap2_vi_evidence`.
+2. `AtribVerifier.verify(recommendation, { ap2ViEvidence, ap2ViEvidenceOptions })` runs the same evidence check for the recommendation's transaction and stores the result at `result.ap2_vi_evidence`.
+3. Evidence remains tiered. A record can have `valid: true` and `ap2_vi_evidence.valid: false`. The base `valid` bit continues to mean the atrib record or recommendation verified according to its existing signature and calculation rules. AP2 / VI evidence status lives in the evidence block.
+
+The verifier never fetches AP2 / VI evidence implicitly. The caller supplies the bundle because atrib records commit to transaction payload hashes, not full AP2 receipt bodies or VI credential presentations.
+
+**Alternatives considered.**
+
+- *Make AP2 / VI evidence failures flip `verifyRecord().valid`.* Rejected. That would blur record cryptographic validity with external authorization evidence. It would also make AP2 evidence mandatory for every transaction record, including non-AP2 protocols.
+- *Keep AP2 / VI evidence as a standalone helper only.* Rejected. The helper remains useful, but verifier callers need one result object that carries both the atrib verification state and the AP2 / VI evidence state.
+- *Auto-fetch evidence from receipts or hashes.* Rejected. There is no normative archive for full AP2 / VI evidence yet. Fetching would add network policy, privacy, and trust-root questions to a verifier surface that currently runs on caller-supplied material.
+
+**Consequences.**
+
+- `RecordVerificationResult` and settlement `VerificationResult` now have an optional `ap2_vi_evidence` block.
+- `valid`, `signatureOk`, `cross_attestation`, and `calcMatch` semantics remain unchanged.
+- `@atrib/verify` tests cover valid AP2 / VI evidence, invalid AP2 / VI evidence that stays tiered from record validity, and recommendation verification with attached AP2 / VI evidence.
+- [P035](#p035-cross-attestation-wiring-from-ap2-receipts-into-transaction-signers) remains open. AP2 receipt signatures are external evidence, not [D052](#d052-cross-attestation-requirement-for-transaction-records) `signers[]` until an AP2 participant signs the atrib record bytes.
+
+**Cross-references.**
+
+- [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt), AP2 receipt detector boundary.
+- [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), decoded AP2 / VI evidence checker.
+- [D090](#d090-ap2-receipt-jwt-verification-uses-jose-in-atribverify), AP2 receipt JWT verification.
+- [D091](#d091-ap2--vi-sd-jwt-conformance-uses-openwallet-sd-jwt-js), SD-JWT / VC conformance layer.
+- [D092](#d092-ap2--vi-mandate-constraints-are-typed-verifier-evidence), mandate constraint evaluation.
+- [D093](#d093-ap2--vi-fixtures-are-the-local-verifier-corpus), local AP2 / VI verifier corpus.
+- [§5.5.4](atrib-spec.md#554-ap2--verifiable-intent-evidence-checks), AP2 / VI evidence verifier surface.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -4887,24 +4928,6 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 
 
-## P032: AP2 / VI evidence integration with record verification flows
-
-**Source:** AP2 / Verifiable Intent implementation gap audit after [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify) landed. `verifyAp2ViEvidence()` is exported, but `verifyRecord()` and `AtribVerifier.verify()` do not yet attach AP2 / VI evidence annotations to transaction verification results.
-
-**The decision in question:** should `@atrib/verify` accept AP2 / VI evidence alongside a transaction record and merge the evidence result into the standard per-record verifier output?
-
-**Considerations.**
-
-- The evidence object should be caller-supplied. The signed atrib record currently commits to transaction payload hashes, not full AP2 / VI bodies.
-- Verification must remain tiered. A transaction record can have a valid atrib signature and still have AP2 evidence warnings or failures.
-- The result shape should expose AP2 / VI as an optional evidence block rather than changing `valid` semantics for all transactions.
-- This should pair with tests proving `verifyRecord()` still handles non-AP2 transaction records unchanged.
-
-**Likely outcome (not committed):** accept after the standalone evidence checker stabilizes. Add optional AP2 / VI evidence input to the verifier without making AP2 evidence mandatory for all transaction records.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-
 ## P033: AP2-specific transaction content_id derivation
 
 **Source:** AP2 / Verifiable Intent implementation gap audit after [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt) landed. AP2 receipt detection can identify a successful transaction, but the current `content_id` derivation still follows the generic MCP server URL plus tool name path unless the producer supplies richer transaction identity.
@@ -4977,6 +5000,6 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 - Cross-library differential checks are useful when practical: compare `jose` / WebCrypto / Node `crypto` outcomes for the same ES256 vectors and compare OpenWallet `sd-jwt-js` behavior against a second SD-JWT implementation when a maintained TypeScript-compatible candidate is available.
 - P034 remains the live interop workstream. P041 is the offline cryptographic conformance workstream.
 
-**Likely outcome (not committed):** accept after P032 or P033, before treating AP2 / VI verification as production-grade. Add a pinned corpus under `spec/conformance/ap2-vi-crypto/` or `packages/agent/test/fixtures/ap2/crypto/`, wire it into `pnpm -r test`, and make network fetches generator-only. The default CI path should fail if the corpus cannot be loaded.
+**Likely outcome (not committed):** accept after [D094](#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block) or P033, before treating AP2 / VI verification as production-grade. Add a pinned corpus under `spec/conformance/ap2-vi-crypto/` or `packages/agent/test/fixtures/ap2/crypto/`, wire it into `pnpm -r test`, and make network fetches generator-only. The default CI path should fail if the corpus cannot be loaded.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.

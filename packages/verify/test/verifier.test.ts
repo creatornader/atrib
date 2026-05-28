@@ -4,6 +4,8 @@ import { signRecommendation } from '../src/recommendation.js'
 import { calculate, DEFAULT_POLICY } from '../src/calculate.js'
 import { base64urlEncode, getPublicKey } from '@atrib/mcp'
 import type { GraphResponse, RecommendationDocument, SessionPolicyRecord } from '../src/types.js'
+import type { Ap2ViEvidenceBundle } from '../src/ap2-vi-evidence.js'
+import autonomousFixture from '../../agent/test/fixtures/ap2/vi_autonomous_success_evidence.json'
 
 const MERCHANT_KEY = new Uint8Array(32).fill(11)
 const MERCHANT_KEY_B64 = base64urlEncode(MERCHANT_KEY)
@@ -21,7 +23,8 @@ function makeGraph(): GraphResponse {
     nodes: [
       {
         id: 'a',
-        event_type: 'tool_call', event_type_uri: 'https://atrib.dev/v1/types/tool_call',
+        event_type: 'tool_call',
+        event_type_uri: 'https://atrib.dev/v1/types/tool_call',
         content_id: 'sha256:a',
         creator_key: 'KEY_A',
         chain_root: `sha256:${'0'.repeat(64)}`,
@@ -33,7 +36,8 @@ function makeGraph(): GraphResponse {
       },
       {
         id: 'b',
-        event_type: 'tool_call', event_type_uri: 'https://atrib.dev/v1/types/tool_call',
+        event_type: 'tool_call',
+        event_type_uri: 'https://atrib.dev/v1/types/tool_call',
         content_id: 'sha256:b',
         creator_key: 'KEY_B',
         chain_root: `sha256:${'0'.repeat(64)}`,
@@ -45,7 +49,8 @@ function makeGraph(): GraphResponse {
       },
       {
         id: 't',
-        event_type: 'transaction', event_type_uri: 'https://atrib.dev/v1/types/transaction',
+        event_type: 'transaction',
+        event_type_uri: 'https://atrib.dev/v1/types/transaction',
         content_id: 'sha256:t',
         creator_key: 'KEY_M',
         chain_root: `sha256:${'0'.repeat(64)}`,
@@ -144,6 +149,86 @@ describe('AtribVerifier.verify()', () => {
     expect(result.valid).toBe(true)
     expect(result.graph_node_count).toBe(3)
     expect(result.warnings).toEqual([])
+  })
+
+  it('attaches AP2 VI evidence to recommendation verification as a tiered result', async () => {
+    const graph = makeGraph()
+    const expectedDist = calculate(graph, DEFAULT_POLICY)
+    const unsigned = {
+      spec_version: 'atrib/1.0' as const,
+      document_type: 'settlement_recommendation' as const,
+      context_id: CTX,
+      transaction_id: 't',
+      policy_record_id: 'default',
+      graph_checkpoint: 'log.atrib.dev/v1',
+      graph_tree_size: 3,
+      calculated_at: 1743860000000,
+      calculated_by: 'https://resolve.atrib.dev/v1',
+      distribution: expectedDist,
+      maximum_total_share: null,
+      warnings: [],
+    }
+    const signed = await signRecommendation(unsigned, MERCHANT_KEY)
+    const merchantPub = base64urlEncode(await getPublicKey(MERCHANT_KEY))
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const u = String(url)
+      if (u.includes('/graph/')) return new Response(JSON.stringify(graph), { status: 200 })
+      if (u.endsWith('/pubkey')) return new Response(merchantPub, { status: 200 })
+      return new Response('', { status: 404 })
+    })
+
+    const verifier = new AtribVerifier()
+    const result = await verifier.verify(signed, {
+      ap2ViEvidence: autonomousFixture as Ap2ViEvidenceBundle,
+      ap2ViEvidenceOptions: { nowSeconds: 1_779_840_000 },
+    })
+
+    expect(result.valid).toBe(true)
+    expect(result.signatureOk).toBe(true)
+    expect(result.calcMatch).toBe(true)
+    expect(result.ap2_vi_evidence?.valid).toBe(true)
+    expect(result.ap2_vi_evidence?.vi.mode).toBe('autonomous')
+    expect(result.ap2_vi_evidence?.vi.constraints.status).toBe('passed')
+  })
+
+  it('keeps AP2 VI verifier errors tiered from recommendation validity', async () => {
+    const graph = makeGraph()
+    const expectedDist = calculate(graph, DEFAULT_POLICY)
+    const unsigned = {
+      spec_version: 'atrib/1.0' as const,
+      document_type: 'settlement_recommendation' as const,
+      context_id: CTX,
+      transaction_id: 't',
+      policy_record_id: 'default',
+      graph_checkpoint: 'log.atrib.dev/v1',
+      graph_tree_size: 3,
+      calculated_at: 1743860000000,
+      calculated_by: 'https://resolve.atrib.dev/v1',
+      distribution: expectedDist,
+      maximum_total_share: null,
+      warnings: [],
+    }
+    const signed = await signRecommendation(unsigned, MERCHANT_KEY)
+    const merchantPub = base64urlEncode(await getPublicKey(MERCHANT_KEY))
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const u = String(url)
+      if (u.includes('/graph/')) return new Response(JSON.stringify(graph), { status: 200 })
+      if (u.endsWith('/pubkey')) return new Response(merchantPub, { status: 200 })
+      return new Response('', { status: 404 })
+    })
+
+    const verifier = new AtribVerifier()
+    const result = await verifier.verify(signed, {
+      ap2ViEvidence: null as unknown as Ap2ViEvidenceBundle,
+    })
+
+    expect(result.valid).toBe(true)
+    expect(result.signatureOk).toBe(true)
+    expect(result.calcMatch).toBe(true)
+    expect(result.ap2_vi_evidence?.valid).toBe(false)
+    expect(result.ap2_vi_evidence?.errors[0]).toMatch(/^ap2_vi_evidence verification error:/)
   })
 
   it('returns calcMatch=false when distribution is wrong', async () => {

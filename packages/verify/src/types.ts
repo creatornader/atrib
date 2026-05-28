@@ -7,6 +7,8 @@
  * Mirrors §3.5 (graph response schema) and §4.7 (recommendation document).
  */
 
+import type { Ap2ViEvidenceVerification } from './ap2-vi-evidence.js'
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Graph types. §3.5
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,7 +26,16 @@
  * preserved verbatim on `GraphNode.event_type_uri` for graph clients that
  * want the original URI.
  */
-export type EventType = 'tool_call' | 'transaction' | 'observation' | 'directory_anchor' | 'annotation' | 'revision' | 'gap_node' | 'dangling_node' | 'extension'
+export type EventType =
+  | 'tool_call'
+  | 'transaction'
+  | 'observation'
+  | 'directory_anchor'
+  | 'annotation'
+  | 'revision'
+  | 'gap_node'
+  | 'dangling_node'
+  | 'extension'
 
 /**
  * Map an attribution record's event_type URI to a graph-layer short label.
@@ -299,4 +310,10 @@ export interface VerificationResult {
   distribution: Distribution
   warnings: string[]
   graph_node_count: number
+  /**
+   * Optional AP2 / Verifiable Intent evidence result supplied by the
+   * caller. This is tiered verifier evidence and does not alter the
+   * settlement recommendation signature or calculation checks.
+   */
+  ap2_vi_evidence?: Ap2ViEvidenceVerification
 }

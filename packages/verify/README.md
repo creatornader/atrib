@@ -65,11 +65,11 @@ Per the [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58
 | `resolveEndpoint` | `string` | `https://resolve.atrib.dev/v1` | Reserved for v2 remote calculation.                                     |
 | `merchantKey`     | `string` | unset                         | Base64url Ed25519 32-byte seed. Optional. `verify()` works without it. |
 
-### `verify(doc): Promise<VerificationResult>`
+### `verify(doc, options): Promise<VerificationResult>`
 
 Independently re-runs the [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation and verifies the document signature. Always returns a result object; never throws. Inspect `valid`, `signatureOk`, `calcMatch`, and `warnings` to understand the outcome.
 
-This method operates on `RecommendationDocument` shapes (settlement-recommendation flow per spec [§5.5.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#552-verify)). For verifying individual `AtribRecord`s, see `verifyRecord` below.
+This method operates on `RecommendationDocument` shapes (settlement-recommendation flow per spec [§5.5.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#552-verify)). When the caller supplies `ap2ViEvidence`, the verifier attaches the async AP2 / VI result as `ap2_vi_evidence`. That block is tiered and does not change the base recommendation signature or calculation checks. For verifying individual `AtribRecord`s, see `verifyRecord` below.
 
 ### `verifyRecord(record, options): Promise<RecordVerificationResult>`
 
@@ -82,6 +82,8 @@ const result = await verifyRecord(record, {
   upstreamCandidate,         // optional, for provenance_token resolution
   informedByCandidates: [],  // optional, for informed_by[] resolution
   identityClaim,             // optional, for capability_check (caller does directory lookup)
+  ap2ViEvidence,             // optional, transaction-only AP2 / VI evidence bundle
+  ap2ViEvidenceOptions,      // optional, passed to verifyAp2ViEvidenceAsync()
 })
 // result: {
 //   valid: boolean
@@ -90,6 +92,7 @@ const result = await verifyRecord(record, {
 //   provenance?:              { token, upstream_record_hash, upstream_resolved }
 //   informed_by_resolution?:  { resolved: string[], dangling: string[] }
 //   capability_check?:        { envelope, in_envelope, mismatches, unresolvable }
+//   ap2_vi_evidence?:         Ap2ViEvidenceVerification
 //   warnings: string[]
 // }
 ```
@@ -101,6 +104,7 @@ const result = await verifyRecord(record, {
 - `posture`: `{ timestamp_granularity, timestamp_consistent, timestamp_granularity_explicit, args_commitment_form, result_commitment_form, tool_name_form }` ([D045](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d045-privacy-postures-normative-spec-section) / [D061](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-§121) / [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture) / [§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture) / [§8.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#84-coarsened-timing-posture)). Always populated. Surfaces (a) the declared timing granularity, whether the timestamp value structurally matches the spec's trailing-zero invariant, and whether the field was explicitly set vs defaulted; (b) the structurally-detected `args_hash` / `result_hash` commitment scheme: `'salted-sha256'` when `args_salt` / `result_salt` is present, `'plain-sha256'` otherwise (the `'hmac-sha256'` variant from [§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture) is signaled out-of-band and is not structurally detectable); and (c) the [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture) `tool_name_form`: `'hashed'` when `tool_name` matches `^sha256:[0-9a-f]{64}$`, `'plain'` for any other present value, `null` when the field is absent. Per [D061](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-121) the [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture) verbatim-vs-opaque distinction is NOT structurally detectable, both surface as `'plain'`.
 - `capability_check`: `{ envelope, in_envelope, mismatches, unresolvable }` ([D051](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) / [§6.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#67-capability-declarations)). Populated only when the caller passes a resolved `identityClaim` in options. Checks the record's `event_type` against the envelope's `event_types` allowlist and the record's `timestamp` against `expires_at`. `tool_names` (against tool_call records), `max_amount`, and `counterparties` (against transaction records) flag `unresolvable: true` because the constraints depend on data not yet on the standard record shape (`tool_name`) or out-of-band protocol events (payment amount + counterparty). Per [§6.7.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#673-out-of-envelope-records) out-of-envelope is a signal, not invalidation: mismatches do not flip `valid` to false. The caller is responsible for fetching the active envelope at the record's timestamp via `@atrib/directory`'s `lookup()` (or a cached equivalent); `@atrib/verify` intentionally has no `@atrib/directory` dependency.
 - `cross_attestation`: `{ signers_count, signers_valid, missing }` ([D052](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) / [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)). Populated only on transaction records (`event_type = transaction`). Each entry in `signers[]` is verified against the cross-attestation canonical bytes (JCS form with `signers: []` and the top-level `signature` field omitted, per [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)). `missing: true` when fewer than 2 signers verify, atrib's normative minimum. Per [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) missing is a SIGNAL not invalidation: `valid` stays true if the underlying signature path holds. Legacy single-signer transaction records (no `signers[]` array, only top-level `signature`) surface as `signers_count: 0, missing: true` so consumers can flag them while accepting the cryptographic validity.
+- `ap2_vi_evidence`: the async AP2 / VI verifier result ([D094](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block) / [§5.5.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#554-ap2--verifiable-intent-evidence-checks)). Populated only when the caller passes `ap2ViEvidence` for a transaction record. It does not alter `valid`, `signatureOk`, or `cross_attestation`; consumers inspect `ap2_vi_evidence.valid` for AP2 authorization evidence.
 
 **Pending per-record annotations** (tracked as a Pending decision in [DECISIONS.md P005](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p005-reconcile-atribverify-readme-per-record-annotations-with-actual-code-surface)):
 
@@ -178,6 +182,8 @@ The default constraint policy is `require`. Failed, unresolved, or unsupported d
 
 The local AP2 / VI corpus lives under `packages/agent/test/fixtures/ap2/`. It includes signed immediate evidence, signed autonomous success evidence, a decoded constraint replay case, and a named autonomous negative matrix.
 
+The same evidence bundle can be passed to `verifyRecord(record, { ap2ViEvidence, ap2ViEvidenceOptions })` for transaction records or to `verifier.verify(doc, { ap2ViEvidence, ap2ViEvidenceOptions })` for settlement recommendation verification. Both APIs attach the result as `ap2_vi_evidence`; neither API fetches AP2 / VI material on its own.
+
 ### `calculate(options): Promise<RecommendationDocument>`
 
 Post-hoc calculation when no agent SDK was present. Always returns a fully-shaped document, unsigned with a warning if the merchant key is missing.
@@ -193,7 +199,7 @@ For advanced use (custom calculators, alternative signing flows), the package al
 - `verifyRecommendationSignature(doc, publicKey)`: signature verification
 - `evaluateAp2ViConstraints(input, disclosures?)`: decoded AP2 open-mandate constraint checking
 - `verifyAp2ViEvidence(bundle, options?)`: decoded AP2 / VI receipt and mandate-chain evidence checking
-- `verifyAp2ViEvidenceAsync(bundle, options?)`: compact AP2 receipt JWT verification, async VI SD-JWT / VC conformance, plus decoded evidence checks
+- `verifyAp2ViEvidenceAsync(bundle, options?)`: compact AP2 receipt JWT verification, async VI SD-JWT / VC conformance, plus decoded evidence checks. `verifyRecord()` and `AtribVerifier.verify()` call this when supplied with `ap2ViEvidence`
 - `recommendationSigningInput(doc)`: the canonical bytes that get signed
 - `distributionsMatch(a, b)`: float-tolerant equality (within `1e-9` per recipient)
 - `fetchGraph(endpoint, contextId, treeSize?)`, `fetchSessionPolicyRecord`, `fetchPolicyDocument`
@@ -221,7 +227,7 @@ The merchant's payment pipeline never crashes because of an atrib problem. It ju
 
 ## Test coverage
 
-The test suite covers the [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm, graph endpoint client, JCS canonicalization, Ed25519 signing, settlement recommendations, policy templates, policy builder, calculation edge cases, property-based testing with fast-check, AP2 / VI evidence checking, and full `verify()` / `calculate()` paths including [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation.
+The test suite covers the [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm, graph endpoint client, JCS canonicalization, Ed25519 signing, settlement recommendations, policy templates, policy builder, calculation edge cases, property-based testing with fast-check, AP2 / VI evidence checking, tiered AP2 / VI verifier attachment, and full `verify()` / `calculate()` paths including [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation.
 
 Run them with `pnpm --filter @atrib/verify test`.
 
