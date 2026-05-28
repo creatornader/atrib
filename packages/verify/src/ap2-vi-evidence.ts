@@ -253,17 +253,25 @@ function sdJwtConformanceCheck(
   return reason === undefined ? { status, profile } : { status, profile, reason }
 }
 
-function collectDelegatePayloadDigests(payload: JsonRecord): Set<string> {
-  const digests = new Set<string>()
+function collectDelegatePayloadDigestList(payload: JsonRecord): string[] {
+  const digests: string[] = []
   const delegatePayload = payload['delegate_payload']
   if (!Array.isArray(delegatePayload)) return digests
 
   for (const item of delegatePayload) {
     if (isRecord(item) && isString(item['...'])) {
-      digests.add(item['...'])
+      digests.push(item['...'])
     }
   }
   return digests
+}
+
+function collectDelegatePayloadDigests(payload: JsonRecord): Set<string> {
+  return new Set(collectDelegatePayloadDigestList(payload))
+}
+
+function hasDuplicateStrings(values: string[]): boolean {
+  return new Set(values).size !== values.length
 }
 
 function disclosureValue(decoded: unknown): unknown {
@@ -761,6 +769,9 @@ export function evaluateAp2ViConstraints(
 
 function normalizeJwks(value: JsonWebKey[] | { keys: JsonWebKey[] }): JSONWebKeySet {
   const keys = Array.isArray(value) ? value : value.keys
+  if (keys.length === 0) throw new Error('jwks_empty')
+  const seenKids = new Set<string>()
+  for (const key of keys) validateReceiptJwk(key, seenKids)
   return { keys: keys as JWK[] }
 }
 
@@ -783,8 +794,56 @@ function findIssuerKey(kid: string | null, keys: JsonWebKey[]): JsonWebKey | und
   return keys.find((key) => getKid(key) === kid)
 }
 
+function validateReceiptJwk(key: JsonWebKey, seenKids: Set<string>): void {
+  const record = key as JsonRecord
+  const kid = getKid(record)
+  if (kid !== null) {
+    if (seenKids.has(kid)) throw new Error('jwks_duplicate_kid')
+    seenKids.add(kid)
+  }
+
+  if (record['kty'] !== 'EC' || record['crv'] !== 'P-256') {
+    throw new Error('jwks_key_unsupported')
+  }
+
+  const alg = record['alg']
+  if (alg !== undefined && alg !== 'ES256') {
+    throw new Error('jwks_key_unsupported')
+  }
+
+  const use = record['use']
+  if (use !== undefined && use !== 'sig') {
+    throw new Error('jwks_key_unsupported')
+  }
+
+  const keyOps = record['key_ops']
+  if (
+    keyOps !== undefined &&
+    (!Array.isArray(keyOps) || !keyOps.every(isString) || !keyOps.includes('verify'))
+  ) {
+    throw new Error('jwks_key_unsupported')
+  }
+}
+
 function receiptJwtError(kind: ReceiptKind, code: string): string {
   return `ap2_${kind}_receipt_jwt_${code}`
+}
+
+function normalizeReceiptJwtErrorCode(code: string): string {
+  if (
+    code === 'fetch_unavailable' ||
+    code === 'metadata_fetch_failed' ||
+    code === 'metadata_invalid' ||
+    code === 'metadata_jwks_missing' ||
+    code === 'key_source_missing' ||
+    code === 'jwks_empty' ||
+    code === 'jwks_duplicate_kid' ||
+    code === 'jwks_key_unsupported' ||
+    code === 'iat_in_future'
+  ) {
+    return code === 'fetch_unavailable' ? 'metadata_fetch_unavailable' : code
+  }
+  return 'invalid'
 }
 
 function addReceiptJwtFailure(
@@ -880,6 +939,27 @@ function disclosureDigestsOk(parsed: ParsedCredential): boolean | null {
   return parsed.disclosures.every(
     (disclosure) => sdDigests.has(disclosure.digest) || delegateDigests.has(disclosure.digest),
   )
+}
+
+function credentialStructuralErrors(parsed: ParsedCredential): string[] {
+  const errors: string[] = []
+  if (hasDuplicateStrings(parsed.disclosures.map((disclosure) => disclosure.digest))) {
+    errors.push('vi_disclosure_duplicate')
+  }
+
+  const sdAlg = parsed.payload['_sd_alg']
+  if (sdAlg !== undefined && sdAlg !== 'sha-256') {
+    errors.push('vi_sd_alg_unsupported')
+  }
+
+  const sd = parsed.payload['_sd']
+  const sdDigests = Array.isArray(sd) ? sd.filter(isString) : []
+  const delegateDigests = collectDelegatePayloadDigestList(parsed.payload)
+  if (hasDuplicateStrings(sdDigests) || hasDuplicateStrings(delegateDigests)) {
+    errors.push('vi_disclosure_digest_duplicate')
+  }
+
+  return errors
 }
 
 function initialCredentialCheck(parsed: ParsedCredential): ViCredentialCheck {
@@ -981,6 +1061,16 @@ async function verifyReceiptJwt(
       return verification
     }
 
+    if (header.crit !== undefined) {
+      addReceiptJwtFailure(verification, kind, 'crit_unsupported', policy)
+      return verification
+    }
+
+    if (!isString(header.kid) || header.kid.length === 0) {
+      addReceiptJwtFailure(verification, kind, 'kid_missing', policy)
+      return verification
+    }
+
     const issuerConfig = findReceiptJwtIssuer(issuer, issuers)
     if (!issuerConfig) {
       addReceiptJwtFailure(verification, kind, 'issuer_untrusted', policy)
@@ -999,18 +1089,18 @@ async function verifyReceiptJwt(
     if (issuerConfig.issuer !== undefined) verifyOptions.issuer = issuerConfig.issuer
 
     const verified = await jwtVerify(receiptJwt, key.getKey, verifyOptions)
+    const iat = verified.payload.iat
+    if (isNumber(iat) && nowSeconds + clockSkewSeconds < iat) {
+      addReceiptJwtFailure(verification, kind, 'iat_in_future', policy)
+      return verification
+    }
 
     verification.check.verified = true
     verification.payload = verified.payload as JsonRecord
     return verification
   } catch (error) {
     const code = error instanceof Error && error.message ? error.message : 'invalid'
-    addReceiptJwtFailure(
-      verification,
-      kind,
-      code === 'fetch_unavailable' ? 'metadata_fetch_unavailable' : 'invalid',
-      policy,
-    )
+    addReceiptJwtFailure(verification, kind, normalizeReceiptJwtErrorCode(code), policy)
     if (code !== 'invalid' && code !== 'fetch_unavailable') {
       verification.warnings.push(`${receiptJwtError(kind, 'detail')}:${code}`)
     }
@@ -1185,6 +1275,9 @@ function checkTimeWindow(
     const iat = parsed.payload['iat']
     if (isNumber(iat) && nowSeconds + clockSkewSeconds < iat)
       errors.push('vi_credential_iat_in_future')
+    const nbf = parsed.payload['nbf']
+    if (isNumber(nbf) && nowSeconds + clockSkewSeconds < nbf)
+      errors.push('vi_credential_nbf_in_future')
   }
 }
 
@@ -1296,9 +1389,22 @@ async function verifyCredentialSdJwtConformance(
 
   for (const { index: checkIndex, parsed } of parsedCredentials) {
     const key = credentialVerificationKey(parsed, trustedIssuerKeys, byLayer)
+    const structuralErrors = credentialStructuralErrors(parsed)
 
     if (parsed.header['alg'] !== 'ES256') {
       checks[checkIndex] = sdJwtConformanceCheck('invalid', profile, 'alg')
+      addSdJwtConformanceFinding(
+        policy,
+        'vi_sd_jwt_conformance_invalid',
+        parsed.input.layer,
+        errors,
+        warnings,
+      )
+      continue
+    }
+
+    if (structuralErrors.length > 0) {
+      checks[checkIndex] = sdJwtConformanceCheck('invalid', profile, structuralErrors[0])
       addSdJwtConformanceFinding(
         policy,
         'vi_sd_jwt_conformance_invalid',
@@ -1416,6 +1522,7 @@ export function verifyAp2ViEvidence(
 
       if (!expectedTyp(credential.layer, check.typ)) errors.push('vi_typ_mismatch')
       if (check.disclosuresOk === false) errors.push('vi_disclosure_digest_mismatch')
+      errors.push(...credentialStructuralErrors(parsed))
     } catch (error) {
       const code = error instanceof Error && error.message ? error.message : 'vi_jwt_malformed'
       errors.push(code)

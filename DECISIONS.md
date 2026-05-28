@@ -4532,6 +4532,56 @@ When none of those fields are present, Path 2 keeps the previous generic fallbac
 
 ---
 
+## D096: AP2 / VI crypto conformance uses a pinned offline corpus
+
+**Date:** 2026-05-28
+
+**Status:** Accepted
+
+**Supersedes:** P041, removed from Pending decisions when this ADR codified the decision.
+
+**Context.** [D093](#d093-ap2--vi-fixtures-are-the-local-verifier-corpus) made `packages/agent/test/fixtures/ap2/` the local AP2 / Verifiable Intent evidence corpus. That corpus exercises real `jose`, OpenWallet `sd-jwt-js`, and Node ES256 verification paths through AP2-shaped evidence, but it is application-level regression coverage. It did not pin the adversarial crypto edge behavior a verifier boundary needs.
+
+The audit behind P041 called out specific gaps: JOSE `alg` confusion, missing or duplicate `kid`, unsupported JWK metadata, unexpected `crit`, malformed compact JWTs, receipt clock boundaries, metadata precedence, issuer-key cache isolation, duplicate SD-JWT disclosures, duplicate disclosure digest references, unused disclosures, unsupported `_sd_alg`, and VI credential clock boundaries.
+
+**Decision.** Add a pinned, offline AP2 / VI crypto conformance corpus under `spec/conformance/ap2-vi-crypto/` and a reference test at `packages/verify/test/ap2-vi-crypto-conformance.test.ts`.
+
+The corpus is a manifest of named cases. The reference test generates deterministic local P-256 fixture keys from fixed seeds, signs compact AP2 receipt JWTs and VI SD-JWT mutations locally, and fails static-JWKS cases if they attempt network access. Metadata cases may fetch only the URLs named by the case.
+
+The verifier now treats the following as named evidence failures:
+
+- Receipt JWT header failures: unsupported `alg`, unexpected `crit`, missing `kid`, malformed compact JWTs.
+- JWKS failures: empty key set, duplicate `kid`, wrong curve, unsupported `alg`, `use`, or `key_ops`.
+- Receipt clock failures: future `iat` outside configured skew, plus existing `nbf` / `exp` handling through `jose`.
+- Metadata behavior: inline `jwks` takes precedence over `jwks_uri`; issuer key selection is isolated by issuer even when `kid` values collide.
+- VI SD-JWT structure failures: duplicate disclosure digests, duplicate `_sd` / `delegate_payload` digest references, unsupported `_sd_alg`, unused disclosures, and future `nbf`.
+
+**Alternatives considered.**
+
+- *Leave coverage inside the AP2 fixture directory.* Rejected. `packages/agent/test/fixtures/ap2/` remains the AP2-shaped evidence corpus. `spec/conformance/ap2-vi-crypto/` is the implementation-independent contract for verifier crypto edge behavior.
+- *Depend only on upstream library test suites.* Rejected. `jose` and OpenWallet should own their primitives, but atrib owns how AP2 / VI evidence is admitted, rejected, named, and kept off the detector path.
+- *Fetch adversarial vectors at test time.* Rejected. The default CI path must not silently skip if a network fetch fails. External corpus refreshes can be generator work; the committed corpus must run offline.
+- *Implement every Wycheproof-style ES256 edge now.* Rejected as too broad for this AP2 / VI increment. [D096](#d096-ap2--vi-crypto-conformance-uses-a-pinned-offline-corpus) locks atrib's AP2 verifier boundary; [P020](#p020-extend-the-substrate-correctness-conformance-corpus-to-wycheproof-equivalent-coverage) remains the broader cryptographic corpus workstream.
+
+**Consequences.**
+
+- The default package test path now exercises AP2 / VI crypto edge behavior through the same verifier API callers use.
+- `verifyAp2ViEvidenceAsync()` reports stable, named failure codes for AP2 receipt JWT and VI SD-JWT edge cases instead of collapsing all local verifier-policy failures into a generic invalid result.
+- Network access is explicit in AP2 metadata tests and forbidden in static-JWKS cases.
+- [P034](#p034-live-ap2-interop-against-reference-implementation-or-sandbox) and [P035](#p035-cross-attestation-wiring-from-ap2-receipts-into-transaction-signers) remain open. This ADR is offline crypto conformance, not live AP2 interoperability or AP2-to-[D052](#d052-cross-attestation-requirement-for-transaction-records) cross-attestation.
+
+**Cross-references.**
+
+- [§5.5.4](atrib-spec.md#554-ap2--verifiable-intent-evidence-checks), verifier-side AP2 / VI evidence checks.
+- [`spec/conformance/ap2-vi-crypto/README.md`](spec/conformance/ap2-vi-crypto/README.md), corpus scope and reference test.
+- [`packages/verify/test/ap2-vi-crypto-conformance.test.ts`](packages/verify/test/ap2-vi-crypto-conformance.test.ts), reference implementation.
+- [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), decoded AP2 / VI evidence checks.
+- [D090](#d090-ap2-receipt-jwt-verification-uses-jose-in-atribverify), receipt JWT verification.
+- [D091](#d091-ap2--vi-sd-jwt-conformance-uses-openwallet-sd-jwt-js), SD-JWT / VC conformance.
+- [D093](#d093-ap2--vi-fixtures-are-the-local-verifier-corpus), AP2 / VI fixture corpus.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -5004,28 +5054,5 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 - The verifier should keep flagging AP2 transaction records with `cross_attestation_missing: true` until true multi-signer transaction records exist.
 
 **Likely outcome (not committed):** defer true `signers[]` population until an AP2 participant can sign the atrib record bytes. In the meantime, expose AP2 receipt signatures as external evidence, not as [D052](#d052-cross-attestation-requirement-for-transaction-records) cross-attestation.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-
-## P041: Harden AP2 / VI cryptographic conformance and CI fixtures
-
-**Source:** AP2 / Verifiable Intent implementation audit after [D093](#d093-ap2--vi-fixtures-are-the-local-verifier-corpus) landed. The linked corpus is deterministic and exercises real crypto libraries through AP2-shaped evidence, but it is still an application-level regression corpus. It does not yet qualify as hardened cryptographic conformance infrastructure.
-
-**The decision in question:** should atrib add a pinned AP2 / VI adversarial cryptography corpus and CI gate that runs without network access?
-
-**Considerations.**
-
-- Current coverage uses `jose`, OpenWallet `sd-jwt-js`, Node's ES256 verification, and generated signed fixtures. It catches the product failures we care about now: tampered L2 / L3 credentials, disclosure digest mismatch, `sd_hash` mismatch, wrong agent key, wrong checkout hash, wrong transaction id, wrong receipt reference, expired credential, missing issuer key, receipt JWT tampering, issuer mismatch, audience mismatch, and expiration.
-- This still leaves cryptographic edge behavior mostly delegated to dependencies. That is acceptable for a first verifier surface, but not enough for the long-term verifiability claim.
-- Existing Ed25519 coverage already includes a Wycheproof test, but that test fetches vectors at runtime and skips if the fetch fails. A hardened corpus should be pinned in-repo or fetched by a generator that records the upstream source SHA, then enforced in CI with no silent skip.
-- AP2 receipt JWT coverage should add adversarial JOSE vectors for unsupported `alg` values, `none` and HMAC confusion attempts, wrong curves, mismatched `kty` / `alg` / `use` / `key_ops`, malformed compact segments, unexpected `crit` headers, missing and duplicate `kid` cases, and ES256 signature edge cases.
-- VI SD-JWT coverage should add vectors for unsupported `_sd_alg`, duplicate disclosures, unused disclosures, repeated digest references, malformed nested disclosures, key-binding `aud` / `nonce` / `iat` / `exp` boundaries, and disclosure recursion or size limits.
-- JWKS and metadata coverage should add issuer and `kid` collision cases, stale-key and rotation cases, metadata `jwks` versus `jwks_uri` precedence, network failure behavior, timeout behavior, and cache isolation between issuers.
-- Clock coverage should use a table-driven boundary suite for `iat`, `nbf`, `exp`, and configured skew. One-second edges are where verifier bugs hide.
-- Cross-library differential checks are useful when practical: compare `jose` / WebCrypto / Node `crypto` outcomes for the same ES256 vectors and compare OpenWallet `sd-jwt-js` behavior against a second SD-JWT implementation when a maintained TypeScript-compatible candidate is available.
-- P034 remains the live interop workstream. P041 is the offline cryptographic conformance workstream.
-
-**Likely outcome (not committed):** accept after [D094](#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block) or P033, before treating AP2 / VI verification as production-grade. Add a pinned corpus under `spec/conformance/ap2-vi-crypto/` or `packages/agent/test/fixtures/ap2/crypto/`, wire it into `pnpm -r test`, and make network fetches generator-only. The default CI path should fail if the corpus cannot be loaded.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
