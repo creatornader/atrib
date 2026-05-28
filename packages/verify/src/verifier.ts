@@ -18,6 +18,12 @@ import {
   verifyRecommendationSignature,
   distributionsMatch,
 } from './recommendation.js'
+import { verifyAp2ViEvidenceAsync } from './ap2-vi-evidence.js'
+import type {
+  Ap2ViEvidenceBundle,
+  Ap2ViEvidenceVerification,
+  VerifyAp2ViEvidenceOptions,
+} from './ap2-vi-evidence.js'
 import type {
   PolicyDocument,
   RecommendationDocument,
@@ -47,6 +53,19 @@ export interface CalculateOptions {
   signWith?: 'merchant'
   /** Optional pin to a specific log tree size. */
   treeSize?: number
+}
+
+/** Options for settlement recommendation verification (§5.5.2). */
+export interface VerifyRecommendationOptions {
+  /**
+   * Caller-supplied AP2 / Verifiable Intent evidence for the transaction
+   * represented by the recommendation document. Evidence verification is
+   * tiered and attaches as `ap2_vi_evidence`; it does not change the base
+   * recommendation signature or calculation checks.
+   */
+  ap2ViEvidence?: Ap2ViEvidenceBundle
+  /** Options passed through to `verifyAp2ViEvidenceAsync()`. */
+  ap2ViEvidenceOptions?: VerifyAp2ViEvidenceOptions
 }
 
 export class AtribVerifier {
@@ -87,12 +106,16 @@ export class AtribVerifier {
    *   3. Fetch the session policy record (or use default if "default").
    *   4. Run calculate() locally and compare distributions within 1e-9.
    */
-  async verify(doc: RecommendationDocument): Promise<VerificationResult> {
+  async verify(
+    doc: RecommendationDocument,
+    options: VerifyRecommendationOptions = {},
+  ): Promise<VerificationResult> {
     const warnings: string[] = []
     let signatureOk = false
     let calcMatch = false
     let localDistribution = doc.distribution
     let nodeCount = 0
+    let ap2ViEvidence: Ap2ViEvidenceVerification | undefined
 
     // Step 1: signature
     try {
@@ -142,6 +165,17 @@ export class AtribVerifier {
       warnings.push(`graph fetch or calculation error: ${(err as Error).message}`)
     }
 
+    if (options.ap2ViEvidence !== undefined) {
+      try {
+        ap2ViEvidence = await verifyAp2ViEvidenceAsync(
+          options.ap2ViEvidence,
+          options.ap2ViEvidenceOptions,
+        )
+      } catch (err) {
+        ap2ViEvidence = ap2ViEvidenceErrorResult(err)
+      }
+    }
+
     return {
       valid: signatureOk && calcMatch,
       signatureOk,
@@ -149,6 +183,7 @@ export class AtribVerifier {
       distribution: localDistribution,
       warnings,
       graph_node_count: nodeCount,
+      ...(ap2ViEvidence ? { ap2_vi_evidence: ap2ViEvidence } : {}),
     }
   }
 
@@ -247,5 +282,23 @@ export class AtribVerifier {
     } catch {
       return null
     }
+  }
+}
+
+function ap2ViEvidenceErrorResult(err: unknown): Ap2ViEvidenceVerification {
+  const message = err instanceof Error ? err.message : String(err)
+  return {
+    valid: false,
+    transactionAccepted: false,
+    ap2: {},
+    vi: {
+      mode: 'unknown',
+      credentials: [],
+      delegationOk: null,
+      checkoutPaymentBindingOk: null,
+      constraints: { status: 'not_checked', checks: [] },
+    },
+    errors: [`ap2_vi_evidence verification error: ${message}`],
+    warnings: [],
   }
 }

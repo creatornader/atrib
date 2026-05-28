@@ -21,6 +21,9 @@ import {
   type AtribRecord,
 } from '@atrib/mcp'
 import { verifyRecord } from '../src/verify-record.js'
+import type { Ap2ViEvidenceBundle } from '../src/ap2-vi-evidence.js'
+import autonomousFixture from '../../agent/test/fixtures/ap2/vi_autonomous_success_evidence.json'
+import splitAgentFixture from '../../agent/test/fixtures/ap2/vi_autonomous_split_agent_evidence.json'
 
 async function freshKey() {
   const seed = new Uint8Array(32)
@@ -95,7 +98,9 @@ describe('verifyRecord', () => {
 
     const result = await verifyRecord(record)
 
-    expect(result.warnings.some((w) => w.includes('provenance_token has invalid format'))).toBe(true)
+    expect(result.warnings.some((w) => w.includes('provenance_token has invalid format'))).toBe(
+      true,
+    )
     expect(result.provenance).toBeUndefined()
     expect(result.valid).toBe(false)
   })
@@ -165,10 +170,7 @@ describe('verifyRecord, informed_by_resolution', () => {
 
   it('classifies all entries as dangling when no candidates supplied', async () => {
     const seed = await freshKey()
-    const refs = [
-      'sha256:' + 'd'.repeat(64),
-      'sha256:' + 'e'.repeat(64),
-    ]
+    const refs = ['sha256:' + 'd'.repeat(64), 'sha256:' + 'e'.repeat(64)]
     const record = await buildRecord(seed, { informed_by: refs.slice().sort() })
 
     const result = await verifyRecord(record)
@@ -518,6 +520,59 @@ describe('verifyRecord, cross_attestation (D052 / §1.7.6)', () => {
     expect(result.warnings).toEqual([])
     expect(result.valid).toBe(true)
   })
+
+  it('attaches AP2 VI evidence to transaction verification without changing base validity', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/transaction',
+    })
+
+    const result = await verifyRecord(record, {
+      ap2ViEvidence: autonomousFixture as Ap2ViEvidenceBundle,
+      ap2ViEvidenceOptions: { nowSeconds: 1_779_840_000 },
+    })
+
+    expect(result.signatureOk).toBe(true)
+    expect(result.cross_attestation!.missing).toBe(true)
+    expect(result.valid).toBe(true)
+    expect(result.ap2_vi_evidence?.valid).toBe(true)
+    expect(result.ap2_vi_evidence?.transactionAccepted).toBe(true)
+    expect(result.ap2_vi_evidence?.vi.mode).toBe('autonomous')
+    expect(result.ap2_vi_evidence?.vi.constraints.status).toBe('passed')
+  })
+
+  it('keeps AP2 VI evidence failures tiered from record signature validity', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/transaction',
+    })
+
+    const result = await verifyRecord(record, {
+      ap2ViEvidence: splitAgentFixture as Ap2ViEvidenceBundle,
+      ap2ViEvidenceOptions: { constraintPolicy: 'best-effort' },
+    })
+
+    expect(result.signatureOk).toBe(true)
+    expect(result.valid).toBe(true)
+    expect(result.ap2_vi_evidence?.valid).toBe(false)
+    expect(result.ap2_vi_evidence?.errors).toContain('vi_l2_cnf_mismatch')
+  })
+
+  it('keeps AP2 VI verifier errors tiered from record signature validity', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/transaction',
+    })
+
+    const result = await verifyRecord(record, {
+      ap2ViEvidence: null as unknown as Ap2ViEvidenceBundle,
+    })
+
+    expect(result.signatureOk).toBe(true)
+    expect(result.valid).toBe(true)
+    expect(result.ap2_vi_evidence?.valid).toBe(false)
+    expect(result.ap2_vi_evidence?.errors[0]).toMatch(/^ap2_vi_evidence verification error:/)
+  })
 })
 
 describe('verifyRecord, capability_check (D051 / §6.7)', () => {
@@ -534,7 +589,9 @@ describe('verifyRecord, capability_check (D051 / §6.7)', () => {
     const seed = await freshKey()
     const record = await buildRecord(seed)
 
-    const result = await verifyRecord(record, { identityClaim: { creator_key: record.creator_key } })
+    const result = await verifyRecord(record, {
+      identityClaim: { creator_key: record.creator_key },
+    })
 
     expect(result.capability_check).toBeDefined()
     expect(result.capability_check!.envelope).toBeNull()

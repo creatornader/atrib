@@ -13,9 +13,10 @@
  *   - informed_by_resolution: { resolved: string[], dangling: string[] }            (D041 / §1.2.5, §3.2.4)
  *   - posture:                { timestamp_granularity, timestamp_consistent, ...}   (D045 / §8.2 / §8.3 / §8.4)
  *   - capability_check:       { envelope, in_envelope, mismatches, unresolvable }   (D051 / §6.7)
+ *   - cross_attestation:      { signers_count, signers_valid, missing }             (D052 / §1.7.6)
+ *   - ap2_vi_evidence:        AP2 receipt + Verifiable Intent evidence result       (D094 / §5.5.4)
  *
  * Pending annotations (tracked in DECISIONS.md P005):
- *   - cross_attestation:      D052 / §1.7.6  (needs `signers[]` type addition + transaction-record signing variant in @atrib/mcp)
  *   - cross_log_*:            D050 / §2.11  (needs multi-log proof-bundle infrastructure)
  *
  * Design note on dependencies. The capability_check annotation does NOT
@@ -38,6 +39,12 @@ import {
   type SignerEntry,
 } from '@atrib/mcp'
 import * as ed from '@noble/ed25519'
+import { verifyAp2ViEvidenceAsync } from './ap2-vi-evidence.js'
+import type {
+  Ap2ViEvidenceBundle,
+  Ap2ViEvidenceVerification,
+  VerifyAp2ViEvidenceOptions,
+} from './ap2-vi-evidence.js'
 
 const PROVENANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/
 const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
@@ -267,6 +274,14 @@ export interface RecordVerificationResult {
    * cross-attestation; consumers decide policy.
    */
   cross_attestation?: CrossAttestationAnnotation
+  /**
+   * Optional AP2 / Verifiable Intent evidence annotation. Populated only
+   * when the caller passes `ap2ViEvidence` and the record is a transaction
+   * record. The evidence result is tiered: it does not alter `valid`,
+   * `signatureOk`, or `cross_attestation`. Consumers read
+   * `ap2_vi_evidence.valid` to decide AP2 / VI authorization posture.
+   */
+  ap2_vi_evidence?: Ap2ViEvidenceVerification
   warnings: string[]
 }
 
@@ -313,6 +328,16 @@ export interface VerifyRecordOptions {
    * NOT depend on @atrib/directory.
    */
   identityClaim?: ResolvedIdentityClaim
+  /**
+   * Caller-supplied AP2 / Verifiable Intent evidence for transaction
+   * records. The signed atrib record commits to transaction payload hashes,
+   * not full AP2 / VI bodies, so the verifier does not fetch or infer this
+   * object. When supplied for a transaction record, the async AP2 / VI
+   * checker runs and attaches its result as `ap2_vi_evidence`.
+   */
+  ap2ViEvidence?: Ap2ViEvidenceBundle
+  /** Options passed through to `verifyAp2ViEvidenceAsync()`. */
+  ap2ViEvidenceOptions?: VerifyAp2ViEvidenceOptions
 }
 
 /**
@@ -395,8 +420,41 @@ export async function verifyRecord(
     result.cross_attestation = await resolveCrossAttestation(record)
   }
 
+  if (options.ap2ViEvidence !== undefined) {
+    if (record.event_type === 'https://atrib.dev/v1/types/transaction') {
+      try {
+        result.ap2_vi_evidence = await verifyAp2ViEvidenceAsync(
+          options.ap2ViEvidence,
+          options.ap2ViEvidenceOptions,
+        )
+      } catch (err) {
+        result.ap2_vi_evidence = ap2ViEvidenceErrorResult(err)
+      }
+    } else {
+      warnings.push('ap2_vi_evidence supplied for non-transaction record')
+    }
+  }
+
   result.valid = signatureOk && warnings.length === 0
   return result
+}
+
+function ap2ViEvidenceErrorResult(err: unknown): Ap2ViEvidenceVerification {
+  const message = err instanceof Error ? err.message : String(err)
+  return {
+    valid: false,
+    transactionAccepted: false,
+    ap2: {},
+    vi: {
+      mode: 'unknown',
+      credentials: [],
+      delegationOk: null,
+      checkoutPaymentBindingOk: null,
+      constraints: { status: 'not_checked', checks: [] },
+    },
+    errors: [`ap2_vi_evidence verification error: ${message}`],
+    warnings: [],
+  }
 }
 
 function resolveProvenance(
@@ -487,7 +545,9 @@ function resolveCapabilityCheck(
   // separately", we add the mismatch but don't treat it as out-of-envelope on
   // its own; other sub-fields still apply if present.
   if (typeof envelope.expires_at === 'number' && record.timestamp > envelope.expires_at) {
-    mismatches.push(`envelope expired at ${envelope.expires_at}; record timestamp ${record.timestamp}`)
+    mismatches.push(
+      `envelope expired at ${envelope.expires_at}; record timestamp ${record.timestamp}`,
+    )
   }
 
   // event_types: the record's event_type URI must be in the allowlist.
@@ -515,7 +575,10 @@ function resolveCapabilityCheck(
   // Future API extension: accept resolved amount + counterparty as
   // VerifyRecordOptions inputs if a real consumer needs it.
   if (record.event_type === 'https://atrib.dev/v1/types/transaction') {
-    if (envelope.max_amount || (Array.isArray(envelope.counterparties) && envelope.counterparties.length > 0)) {
+    if (
+      envelope.max_amount ||
+      (Array.isArray(envelope.counterparties) && envelope.counterparties.length > 0)
+    ) {
       unresolvable = true
     }
   }
@@ -600,8 +663,10 @@ function detectPosture(record: AtribRecord, warnings: string[]): PostureAnnotati
   // result_salt indicates the salted-sha256 scheme; absence indicates the
   // default plain-sha256 scheme. The hmac-sha256 variant from §8.3 is
   // signaled out-of-band and is not structurally detectable.
-  const args_commitment_form = typeof record.args_salt === 'string' ? 'salted-sha256' : 'plain-sha256'
-  const result_commitment_form = typeof record.result_salt === 'string' ? 'salted-sha256' : 'plain-sha256'
+  const args_commitment_form =
+    typeof record.args_salt === 'string' ? 'salted-sha256' : 'plain-sha256'
+  const result_commitment_form =
+    typeof record.result_salt === 'string' ? 'salted-sha256' : 'plain-sha256'
 
   // Spec §8.2 / D061 tool_name_form: hashed when the value matches the
   // `sha256:<hex>` form (unambiguous), plain otherwise (verbatim vs opaque
