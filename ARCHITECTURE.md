@@ -197,7 +197,7 @@ There are two emission paths for transaction records (Section 5.4.5, [D011](DECI
 
 ## Runtime integration patterns
 
-atrib categorizes runtime integration into six first-class patterns ([D069](DECISIONS.md#d069-runtime-integration-patterns--first-class-peers-no-canonical-path), [§9](atrib-spec.md#9-runtime-integration-patterns)). None is canonical. A runtime builder picks the pattern its ergonomics support; multiple patterns can compose for one runtime.
+atrib categorizes runtime integration into seven peer patterns ([D069](DECISIONS.md#d069-runtime-integration-patterns--first-class-peers-no-canonical-path), [D102](DECISIONS.md#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox), [§9](atrib-spec.md#9-runtime-integration-patterns)). None is canonical. A runtime builder picks the pattern its ergonomics support; multiple patterns can compose for one runtime.
 
 | Pattern | Where it fits | Reference implementation |
 |---|---|---|
@@ -207,8 +207,9 @@ atrib categorizes runtime integration into six first-class patterns ([D069](DECI
 | 4. OpenInference SpanProcessor | OpenInference-instrumented runtimes (transitive coverage of 33 Python instrumentations + 9 JS packages) | [`@atrib/openinference`](packages/openinference/README.md) |
 | 5. Post-hoc API import + consumer re-sign | Closed-loop runtimes that own the trace (Cursor Cloud Agents recommended first reference; also Devin, Manus, Operator, Bolt/v0/Lovable) | per-runtime adapters (planned) |
 | 6. Streaming interceptor | Real-time bidirectional protocols (OpenAI Realtime API, voice/multimodal harnesses) | not yet built |
+| 7. Sandboxed-execution signer proxy | Runtimes that run agent code in a sandbox while a host signer process stays outside the sandbox | [`packages/integration/examples/signer-proxy/`](packages/integration/examples/signer-proxy/) |
 
-Patterns 1–3 ship reference implementations in atrib v1. Patterns 4–6 are documented with their conformance contract scope; reference implementations land per priority sequencing.
+Patterns 1–4 ship reference implementations in atrib v1. Pattern 7 ships a tested reference example for the key-isolation boundary. Patterns 5–6 are documented with their conformance contract scope; reference implementations land per priority sequencing.
 
 ### Cross-harness investigation continuity
 
@@ -413,8 +414,9 @@ Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hash
 ## Further reading
 
 - [atrib-spec.md](atrib-spec.md), the complete protocol specification ([§0](atrib-spec.md#0-foundations)-[§7](atrib-spec.md#7-harness-integration-patterns))
-- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus); [D053](DECISIONS.md#d053-inclusion-proof-aggregation-flagged-for-follow-up) and [D070](DECISIONS.md#d070-record-body-archive-layer-placeholder-adr) are placeholder ADRs awaiting formal write-ups)
+- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D102](DECISIONS.md#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox); [D053](DECISIONS.md#d053-inclusion-proof-aggregation-flagged-for-follow-up) and [D070](DECISIONS.md#d070-record-body-archive-layer-placeholder-adr) are placeholder ADRs awaiting formal write-ups)
 - [packages/agent/README.md](packages/agent/README.md) -- adapter table with quick-start snippets for every framework
+- [packages/integration/examples/signer-proxy/](packages/integration/examples/signer-proxy/) -- sandbox signer proxy example ([§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution) / [D102](DECISIONS.md#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox))
 - [spec/conformance/1.4/](spec/conformance/1.4/) -- signing and adversarial record conformance corpus ([§1.4](atrib-spec.md#14-signing-and-verification) / [D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus))
 - [spec/conformance/1.2.6/](spec/conformance/1.2.6/) -- conformance corpus for the `provenance_token` field ([D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) / [§1.2.6](atrib-spec.md#126-provenance_token))
 - [spec/conformance/2.6.1/](spec/conformance/2.6.1/) -- shared conformance corpus for the submission API
