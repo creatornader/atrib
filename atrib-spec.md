@@ -1077,7 +1077,7 @@ Verifier-side AP2 / Verifiable Intent evidence checks SHOULD run off the middlew
 5. autonomous-mode consistency: the open checkout and open payment mandates bind the same `cnf.jwk`;
 6. final checkout/payment binding: `checkout_hash` matches `checkout_jwt`, and PaymentMandate `transaction_id` matches the checkout hash.
 
-Failure in this evidence stage MUST NOT undo or block the transaction detector. It is a verifier signal for settlement, audit, and dispute workflows. The reference TypeScript surfaces are `@atrib/verify` `verifyAp2ViEvidence()` for decoded evidence and `verifyAp2ViEvidenceAsync()` for compact signed receipt JWTs; see [§5.5.4](#554-ap2--verifiable-intent-evidence-checks), [D089](DECISIONS.md#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), and [D090](DECISIONS.md#d090-ap2-receipt-jwt-verification-uses-jose-in-atribverify).
+Failure in this evidence stage MUST NOT undo or block the transaction detector. It is a verifier signal for settlement, audit, and dispute workflows. The reference TypeScript surfaces are `@atrib/verify` `verifyAp2ViEvidence()` for decoded evidence and `verifyAp2ViEvidenceAsync()` for compact signed receipt JWTs plus async SD-JWT / VC conformance; see [§5.5.4](#554-ap2--verifiable-intent-evidence-checks), [D089](DECISIONS.md#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), [D090](DECISIONS.md#d090-ap2-receipt-jwt-verification-uses-jose-in-atribverify), and [D091](DECISIONS.md#d091-ap2--vi-sd-jwt-conformance-uses-openwallet-sd-jwt-js).
 
 Implementations SHOULD embed the `context_id` in the agent protocol envelope where the host supports metadata. Until AP2 standardizes an atrib-specific metadata field, the `context_id` MUST also travel via `params._meta.atrib` per [§1.5.2](#152-http-transport-tracestate), [§1.5.3](#153-http-fallback-x-atrib-chain), and [§1.5.3.1](#1531-context-id-header-x-atrib-context).
 
@@ -3894,8 +3894,18 @@ The result shape is:
   vi: {
     mode: 'immediate' | 'autonomous' | 'unknown',
     credentials: [
-      { layer: 'L1', signature: { status: 'verified' }, sdHashOk: true },
-      { layer: 'L2', signature: { status: 'verified' }, disclosuresOk: true },
+      {
+        layer: 'L1',
+        signature: { status: 'verified' },
+        sdJwtConformance: { status: 'verified', profile: 'sd-jwt-vc' },
+        sdHashOk: true,
+      },
+      {
+        layer: 'L2',
+        signature: { status: 'verified' },
+        sdJwtConformance: { status: 'verified', profile: 'sd-jwt-vc' },
+        disclosuresOk: true,
+      },
     ],
     delegationOk: true,
     checkoutPaymentBindingOk: true,
@@ -3908,6 +3918,10 @@ The result shape is:
 The default signature policy is `require`: missing keys or invalid signatures make `valid` false while still returning a structured result. Callers that only need structural triage MAY pass `signaturePolicy: "best-effort"`, in which case missing-key checks become warnings.
 
 For compact AP2 receipt JWTs, callers MUST provide a trust root through `receiptJwtIssuers`. Each issuer entry MAY provide local `jwks`, a `jwksUrl`, or a `metadataUrl` whose JSON contains inline `jwks` or `jwks_uri`. The async verifier enforces ES256, configured issuer, optional audience, registered JWT expiry and not-before claims when present, AP2 receipt fields, and mandate `reference` binding. The default `receiptJwtPolicy` is `require`; `receiptJwtPolicy: "best-effort"` turns JWT verification failures into warnings when decoded receipt objects are already available.
+
+The async verifier also runs SD-JWT / SD-JWT VC conformance for VI credentials when present. The default `sdJwtConformancePolicy` is `require`; `sdJwtConformancePolicy: "best-effort"` turns conformance failures into warnings, and `"off"` skips the async conformance layer. The default profile is `sd-jwt-vc`; callers MAY pass `sdJwtConformanceProfile: "sd-jwt"` for the core SD-JWT profile.
+
+VC type metadata and status-list checks are opt-in. Callers that set `sdJwtVc.loadTypeMetadata` or submit credentials with VC status references SHOULD provide `sdJwtVc.vctFetcher` and `sdJwtVc.statusListFetcher`. The verifier does not perform implicit network fetches for these checks.
 
 ---
 
