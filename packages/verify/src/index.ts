@@ -21,6 +21,20 @@ export type {
   CrossAttestationAnnotation,
 } from './verify-record.js'
 
+// Cross-agent handoff claim verification. Used when one agent receives a
+// record_hash claim plus private body material from another agent and must
+// decide whether to link its next record through informed_by.
+export { verifyHandoffClaims } from './handoff.js'
+export type {
+  HandoffBodyVerification,
+  HandoffClaimInput,
+  HandoffClaimVerification,
+  HandoffProofVerification,
+  HandoffRejectionReason,
+  HandoffVerificationResult,
+  VerifyHandoffClaimsOptions,
+} from './handoff.js'
+
 // Calculation algorithm (§4.6). pure function, exported for direct use
 export { calculate, DEFAULT_POLICY, isValidPolicy } from './calculate.js'
 

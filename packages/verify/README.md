@@ -113,6 +113,51 @@ const result = await verifyRecord(record, {
 
 Each pending annotation is its own ADR scope when external consumers need it.
 
+### `verifyHandoffClaims(claims, options): Promise<HandoffVerificationResult>`
+
+Verifier-side Pattern 3 handoff acceptance. Use this when one agent receives another agent's `record_hash` claim and needs to verify the supplied record, private body material, and proof before signing its own `informed_by` follow-up.
+
+```typescript
+import { verifyHandoffClaims } from '@atrib/verify'
+
+const handoff = await verifyHandoffClaims(
+  [
+    {
+      record_hash,
+      record,
+      body,
+      proof,
+    },
+  ],
+  {
+    trusted_creator_keys: [agentAPublicKey],
+    require_body: true,
+    require_body_commitment: true,
+    require_log_inclusion: true,
+    log_public_key: logPublicKey,
+    max_age_ms: 60_000,
+  },
+)
+
+if (handoff.all_accepted) {
+  const informedBy = handoff.accepted_record_hashes
+  // Sign the receiving agent's next record with informed_by: informedBy.
+}
+```
+
+Checks performed:
+
+- Record hash binding: supplied record hash must equal the claimed `record_hash`.
+- Signature: `verifyRecord()` must accept the signed record.
+- Trust set: `creator_key` must be in `trusted_creator_keys` when supplied.
+- Freshness: record timestamp must be within `max_age_ms` when supplied.
+- Body commitments: supplied `body`, `args`, or `result` must match `args_hash` / `result_hash` when required.
+- Log proof: supplied proof must bind to the serialized log entry for that record, verify the inclusion path, and verify the C2SP checkpoint signature when `log_public_key` is supplied.
+
+The helper never fetches private material. Callers provide records, body material, and proof bundles from a local mirror, private handoff packet, Record Body Archive Layer, log lookup, or another channel. Rejected claims carry named reasons such as `wrong_signer`, `stale`, `body_hash_mismatch`, and `proof_invalid`.
+
+This is not a cognitive primitive. It is the [D105](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance) verifier extension that keeps [P022](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation) open until verify is routine agent-facing work.
+
 ### `verifyAp2ViEvidence(...)` and `verifyAp2ViEvidenceAsync(...)`
 
 AP2 / Verifiable Intent evidence checking for merchants and auditors. This runs outside the transaction detector path. It does not alter the graph, the settlement calculation, or record validity. It answers a narrower question: did the AP2 receipts and VI mandate chain form a coherent evidence bundle?
@@ -202,6 +247,7 @@ For advanced use (custom calculators, alternative signing flows), the package al
 - `evaluateAp2ViConstraints(input, disclosures?)`: decoded AP2 open-mandate constraint checking
 - `verifyAp2ViEvidence(bundle, options?)`: decoded AP2 / VI receipt and mandate-chain evidence checking
 - `verifyAp2ViEvidenceAsync(bundle, options?)`: compact AP2 receipt JWT verification, async VI SD-JWT / VC conformance, plus decoded evidence checks. `verifyRecord()` and `AtribVerifier.verify()` call this when supplied with `ap2ViEvidence`
+- `verifyHandoffClaims(claims, options?)`: Pattern 3 handoff claim acceptance before a receiving agent signs an `informed_by` follow-up
 - `recommendationSigningInput(doc)`: the canonical bytes that get signed
 - `distributionsMatch(a, b)`: float-tolerant equality (within `1e-9` per recipient)
 - `fetchGraph(endpoint, contextId, treeSize?)`, `fetchSessionPolicyRecord`, `fetchPolicyDocument`

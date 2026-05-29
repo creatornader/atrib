@@ -3457,6 +3457,7 @@ Contents
   - [5.5.2 Verifying a settlement recommendation](#552-verifying-a-settlement-recommendation)
   - [5.5.3 Post-hoc calculation (no agent SDK)](#553-post-hoc-calculation-no-agent-sdk)
   - [5.5.4 AP2 / Verifiable Intent evidence checks](#554-ap2--verifiable-intent-evidence-checks)
+  - [5.5.5 Handoff claim verification](#555-handoff-claim-verification)
 - [5.6 Key Management](#56-key-management)
   - [5.6.1 Key generation](#561-key-generation)
   - [5.6.2 Environment variable convention](#562-environment-variable-convention)
@@ -4061,6 +4062,53 @@ The AP2 / VI crypto conformance corpus lives at `spec/conformance/ap2-vi-crypto/
 The AP2 live interop harness lives in `@atrib/integration` and is opt-in. It accepts AP2 result artifacts plus AP2 / VI evidence JSON produced by a reference AP2 run, then requires `detectTransaction()` and `verifyAp2ViEvidenceAsync()` to agree. The default test suite exercises the artifact contract with local fixtures but does not start live AP2 services. See [D097](DECISIONS.md#d097-ap2-live-interop-uses-an-opt-in-reference-artifact-harness).
 
 Path 2 producers SHOULD use `signTransactionRecord()` from `@atrib/mcp` when emitting transaction records. The helper signs the [§1.7.6](#176-cross-attestation-requirement-for-transaction-records) canonical bytes with the producer key and preserves any caller-supplied counterparty signers that already signed the same bytes. See [D098](DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation).
+
+#### 5.5.5 Handoff Claim Verification
+
+`@atrib/verify` exposes `verifyHandoffClaims()` for Pattern 3 multi-agent receiving flows. A receiving agent uses it before linking its next action to another agent's claimed `record_hash`.
+
+```
+import { verifyHandoffClaims } from '@atrib/verify'
+
+const handoff = await verifyHandoffClaims(
+  [
+    {
+      record_hash: 'sha256:...',
+      record,
+      body: privateBodyMaterial,
+      proof,
+    },
+  ],
+  {
+    trusted_creator_keys: [agentAPublicKey],
+    require_body: true,
+    require_body_commitment: true,
+    require_log_inclusion: true,
+    log_public_key: logPublicKey,
+    max_age_ms: 60_000,
+  },
+)
+
+const nextRecord = await signRecord({
+  ...unsigned,
+  informed_by: handoff.accepted_record_hashes,
+}, privateKey)
+```
+
+The helper verifies each supplied claim independently:
+
+1. The supplied record's canonical hash equals the claimed `record_hash`.
+2. `verifyRecord()` accepts the record signature and canonical record shape.
+3. The record signer is in `trusted_creator_keys` when the caller supplies a trust set.
+4. The timestamp is within `max_age_ms` when the caller supplies a freshness bound.
+5. Supplied `body`, `args`, or `result` material matches `args_hash` / `result_hash` when body commitments are required.
+6. A supplied proof bundle verifies against the serialized log entry for that exact record. If `log_public_key` is present, the C2SP signed-note checkpoint signature is also verified.
+
+The result separates `accepted` and `rejected` claims and includes `accepted_record_hashes` for direct `informed_by` use. Rejected claims carry named reasons such as `record_missing`, `record_hash_mismatch`, `signature_invalid`, `wrong_signer`, `stale`, `body_hash_mismatch`, `proof_missing`, and `proof_invalid`.
+
+This helper does not fetch records, private bodies, archive material, or proofs on its own. The caller supplies those materials from a local mirror, Record Body Archive Layer, private continuation packet, log lookup, or another channel. The helper also does not add a graph edge type or event type. A successful follow-up still uses the existing [§1.2.5](#125-informed_by) field and the existing INFORMED_BY graph edge.
+
+This is an extension surface under [D080](DECISIONS.md#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion), not cognitive primitive #7. [P022](DECISIONS.md#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation) remains pending until handoff verification becomes routine agent-facing work. See [D105](DECISIONS.md#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance).
 
 ---
 
