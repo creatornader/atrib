@@ -1,5 +1,11 @@
 # @atrib/summarize
 
+## 0.4.7
+
+### Patch Changes
+
+- 92352be: Add explicit npm author, homepage, and keyword metadata to the cognitive MCP packages.
+
 ## 0.4.6
 
 ### Patch Changes
