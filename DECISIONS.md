@@ -727,7 +727,7 @@ A fork of an already-patched client: when the patched `fork()` is invoked, it ca
 
 **Discrepancy 1: Request body shape was wrong.** Spec [§2.6.1](atrib-spec.md#261-submit-entry) specifies the POST body as a bare attribution record. The existing `submitWithRetry` was wrapping it as `{record, priority}`. The wrapping pattern was even codified in `packages/mcp/test/submission.test.ts` ("sends record and priority in request body"), meaning the test was written against the buggy code rather than against the spec.
 
-**Discrepancy 2: Proof bundle field naming was wrong.** Spec [§2.6.2](atrib-spec.md#262-inclusion-proof-response) returns `{log_index, checkpoint, inclusion_proof, leaf_hash}` (snake_case). The existing `ProofBundle` interface used camelCase (`logIndex`, `inclusionProof`). This was less load-bearing because the cast to `ProofBundle` in the submission queue is opaque; nothing read the fields after caching, but `@atrib/verify`'s `GraphNode.log_index` already used snake_case correctly, so the two packages were inconsistent with each other and only one matched the spec.
+**Discrepancy 2: Proof bundle field naming was wrong.** Spec [§2.6.2](atrib-spec.md#262-inclusion-proof-response) returns `{log_index, checkpoint, inclusion_proof, leaf_hash}` (snake_case). The existing `ProofBundle` interface used camelCase (`logIndex`, `inclusionProof`). This was less decision-critical because the cast to `ProofBundle` in the submission queue is opaque; nothing read the fields after caching, but `@atrib/verify`'s `GraphNode.log_index` already used snake_case correctly, so the two packages were inconsistent with each other and only one matched the spec.
 
 **Decision:** Fix both discrepancies as part of this chunk and ship `@atrib/log-dev` as a faithful spec [§2.6](atrib-spec.md#26-submission-api-write-interface) reference implementation. Specifically:
 
@@ -891,7 +891,7 @@ GET /v1/pubkey
 
 The endpoint reads from the `CheckpointSigner` interface at runtime (no separate config); the seed never leaves the process. The `CheckpointSigner` interface gained an `origin` accessor so the handler doesn't need to import a constant from another file.
 
-A test verifies that the published `key_id` exactly matches the prefix in the live checkpoint signature line, AND that running `ed.verifyAsync(sig, body, public_key)` against the published pubkey succeeds, meaning the endpoint is real-cryptography-load-bearing and not just a status surface.
+A test verifies that the published `key_id` exactly matches the prefix in the live checkpoint signature line, AND that running `ed.verifyAsync(sig, body, public_key)` against the published pubkey succeeds, meaning the endpoint is cryptographically active and not just a status surface.
 
 **Alternatives considered.**
 
@@ -991,7 +991,7 @@ The spec was updated in [§2.4.2](atrib-spec.md#242-log-signing-key-and-key-id) 
 
 2. _Update [§2.4.2](atrib-spec.md#242-log-signing-key-and-key-id) to drop the C2SP vkey reference and document JSON-only at `/v1/pubkey` (spec follows impl)._ Rejected because dropping vkey breaks compatibility with existing C2SP-conformant tooling. Witness software, sumdb/note verifiers, and any future cosignature work expect to point at a URL and parse the response as a vkey string. JSON-only forces adapters everywhere.
 
-3. _Single hybrid endpoint at `/v1/pubkey` returning JSON that includes the vkey as a string field._ Rejected because tools like `note.NewVerifier` expect to fetch a vkey directly, not extract one from JSON. Even if such a tool's plumbing could be wrapped to do the extraction, the friction is exactly the kind of "everyone has to write a custom adapter" that C2SP was designed to avoid. The fact that two endpoints cost ~30 lines of code and are both load-bearing for their respective audiences makes the duplication cheap.
+3. _Single hybrid endpoint at `/v1/pubkey` returning JSON that includes the vkey as a string field._ Rejected because tools like `note.NewVerifier` expect to fetch a vkey directly, not extract one from JSON. Even if such a tool's plumbing could be wrapped to do the extraction, the friction is exactly the kind of "everyone has to write a custom adapter" that C2SP was designed to avoid. The fact that two endpoints cost ~30 lines of code and are both decision-critical for their respective audiences makes the duplication cheap.
 
 **Consequences.**
 
@@ -1261,7 +1261,7 @@ A decision was needed on three questions: (1) AKD vs roll-our-own simpler struct
 
 4. _Host the directory in the same Tessera log._ Rejected because directory entries form a different per-label append-only structure than tlog-tiles' entry-indexed structure. Conflating them would force one of them into the wrong abstraction. They share the witness pattern but not the data model.
 
-5. _Defer directory until V2._ Rejected because an audit pass identified it as load-bearing for the dogfood thesis. Without it, "agents reason from a past they can prove" is a cryptographic statement about bytes, not a semantic statement about identity.
+5. _Defer directory until V2._ Rejected because an audit pass identified it as decision-critical for the dogfood thesis. Without it, "agents reason from a past they can prove" is a cryptographic statement about bytes, not a semantic statement about identity.
 
 **Consequences.**
 
@@ -1375,7 +1375,7 @@ A type is eligible for promotion to atrib's normative URI namespace when the fol
 
 3. **Filterable benefit at the log-byte level.** Verifiers running real queries gain meaningfully more from byte-level filtering than from content fetch + parse. A primitive that's queried frequently across the consumer base (e.g., regulators querying for "transactions") clears this; a primitive of interest mainly to one consumer's tooling does not.
 
-4. **atrib protocol load-bearing OR observably canonical in extension form.** Either atrib's own [§3](atrib-spec.md#3-graph-query-interface) graph derivation or [§4](atrib-spec.md#4-attribution-policy-format) calculation depends on distinguishing this primitive (load-bearing), or the same extension URI has been independently adopted by multiple consumer categories with consistent semantics across them (observably canonical). The first is rare and decisive; the second is the more common path.
+4. **atrib protocol decision-critical OR observably canonical in extension form.** Either atrib's own [§3](atrib-spec.md#3-graph-query-interface) graph derivation or [§4](atrib-spec.md#4-attribution-policy-format) calculation depends on distinguishing this primitive (decision-critical), or the same extension URI has been independently adopted by multiple consumer categories with consistent semantics across them (observably canonical). The first is rare and decisive; the second is the more common path.
 
 5. **Promotion is non-disruptive.** The primitive's wire and graph behavior under its extension URI is consistent with what its normative URI would be. Consumers using the extension URI before promotion can swap to the normative URI without changing their semantics. If promotion would change behavior in a way existing extension users have to migrate around, the bar is not met (or the change is not a promotion, it is a redesign).
 
@@ -1482,7 +1482,7 @@ The `keystore: 'callback'` mode (designed and merged but not yet wired end-to-en
 **Consequences.**
 
 - _Spec._ New [§7.6](atrib-spec.md#76-hsm-operator-profile) subsection (informative profiles + normative callback contract).
-- _Wrapper._ `keystore: 'callback'` is the load-bearing change, already designed, validation against a mock HSM signer closes the implementation gap.
+- _Wrapper._ `keystore: 'callback'` is the decision-critical change, already designed, validation against a mock HSM signer closes the implementation gap.
 - _Documentation._ Each profile gets a 1-2 page operator runbook in `docs/operator/hsm-<profile>.md`; runbooks are drafted privately and promoted to public at first non-operator adoption.
 - _No breaking changes._ The `keystore: 'env' | 'file' | 'keychain'` modes remain available for solo operators / dev. Callback mode is additive.
 
@@ -1962,7 +1962,7 @@ The right layer for reasoning chains is the harness, not the protocol. Consumers
 
 1. **New [§7](atrib-spec.md#7-harness-integration-patterns) subsection titled "Harness-side reasoning chains."** Informative content showing how a harness mints an extension URI (e.g., `https://example.com/v1/types/reasoning_step`), emits records carrying the URI alongside `tool_call` records, links them via `informed_by`, and exposes them through recall-style consumer surfaces.
 
-2. **Trust boundary statement is mandatory.** The subsection states plainly: "reasoning records live outside atrib's normative trust boundary. They prove the harness emitted these bytes. They do NOT prove the LLM actually reasoned this way." This sentence is load-bearing and MUST NOT be removed in subsequent edits without a successor ADR.
+2. **Trust boundary statement is mandatory.** The subsection states plainly: "reasoning records live outside atrib's normative trust boundary. They prove the harness emitted these bytes. They do NOT prove the LLM actually reasoned this way." This sentence is decision-critical and MUST NOT be removed in subsequent edits without a successor ADR.
 
 3. **No normative claims.** The pattern is illustrative. atrib does not bless any specific reasoning predicate. Consumers may adopt the pattern, vary it, or replace it with their own.
 
@@ -2408,17 +2408,17 @@ This labeling artifact is symptomatic of a real spec gap: the URI is normatively
 
 **Evaluation against [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary).**
 
-1. **Architecture-agnostic in practice.** Does NOT clear under the cross-category-adoption reading. Today the only emitter is atrib's own reference directory. This is the indicator that's weakest, but the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) text on indicator 4 explicitly admits "atrib protocol load-bearing" as an alternative path, "rare and decisive." `directory_anchor` is the canonical example of that path.
+1. **Architecture-agnostic in practice.** Does NOT clear under the cross-category-adoption reading. Today the only emitter is atrib's own reference directory. This is the indicator that's weakest, but the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) text on indicator 4 explicitly admits "atrib protocol decision-critical" as an alternative path, "rare and decisive." `directory_anchor` is the canonical example of that path.
 
 2. **Structurally distinct from existing normative types.** Holds. `directory_anchor` is not a `tool_call` (no caller-supplied arguments, no MCP tool invocation). Not a `transaction` (no commerce protocol detection). Not an `observation` (the directory is not "perceiving its environment"; it is committing its own state). The closest neighbor is `observation`, but `observation` carries "the agent received this from outside"; `directory_anchor` carries "this service committed its internal state at this moment." Different semantic shape.
 
 3. **Filterable benefit at the log-byte level.** Holds. [§6.3](atrib-spec.md#63-verifier-consultation-algorithm) step 7 (AKD consistency check) is a real verifier query that needs all directory_anchor records for a given directory key. Without a byte slot, verifiers fetch the content of every `0xFF` entry from the directory's `creator_key` and parse the URI. With a byte slot, the same query is a byte filter on the binary entry.
 
-4. **atrib protocol load-bearing.** Holds, decisively. [§6.2.4](atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log) requires the emission. [§6.3](atrib-spec.md#63-verifier-consultation-algorithm) step 7 requires consumption. [§3.2.4](atrib-spec.md#324-edge-derivation-rules) graph derivation excludes `directory_anchor` from session edges (system commitments are not session participants). Three normative spec sections distinguish the type today.
+4. **atrib protocol decision-critical.** Holds, decisively. [§6.2.4](atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log) requires the emission. [§6.3](atrib-spec.md#63-verifier-consultation-algorithm) step 7 requires consumption. [§3.2.4](atrib-spec.md#324-edge-derivation-rules) graph derivation excludes `directory_anchor` from session edges (system commitments are not session participants). Three normative spec sections distinguish the type today.
 
 5. **Promotion is non-disruptive.** Holds. The URI does not change. Existing directory_anchor records (signed before the byte allocation, encoded as `0xFF`) remain valid: the URI in the record content is the authoritative type per [§2.3.1](atrib-spec.md#231-entry-serialization)'s "byte mapping is a fast-path filter; the authoritative type is the URI." New records get the new byte. Verifiers wanting complete directory_anchor queries during the transition window filter by URI (always works) rather than by byte (works only for post-promotion records). Once the pre-promotion records age out of operational interest, byte filtering suffices.
 
-Four of five indicators clear. Indicator 1 fails the literal cross-category reading but is moot because indicator 4's load-bearing branch holds, and [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) explicitly contemplates this case.
+Four of five indicators clear. Indicator 1 fails the literal cross-category reading but is moot because indicator 4's decision-critical branch holds, and [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) explicitly contemplates this case.
 
 **Alternatives considered.**
 
@@ -2426,7 +2426,7 @@ Four of five indicators clear. Indicator 1 fails the literal cross-category read
 
 2. _Fix the explorer label only, no spec change._ Rejected as the standalone fix. The explorer fix lands separately ([D054](#d054-unified-public-explorer-vs-per-service-admin-uis) update) and is correct on its own, but it papers over the underlying byte-encoding misclassification rather than fixing it. Both fixes ship together.
 
-3. _Promote in a batch with future system types (e.g., reserve `0x04`–`0x07` for "atrib system" types)._ Rejected. [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) explicitly rejects pre-allocation and tier systems. Each promotion gets its own ADR; the next system type that needs a byte gets the next byte (`0x05`) when its own load-bearing case clears.
+3. _Promote in a batch with future system types (e.g., reserve `0x04`–`0x07` for "atrib system" types)._ Rejected. [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) explicitly rejects pre-allocation and tier systems. Each promotion gets its own ADR; the next system type that needs a byte gets the next byte (`0x05`) when its own decision-critical case clears.
 
 4. _Re-encode pre-promotion records to update the byte from `0xFF` to `0x04`._ Rejected. The log is append-only; rewriting historical entries breaks immutability and inclusion proofs. The spec is explicit that the URI is the source of truth; transition-window mismatches are tolerable.
 
@@ -2634,7 +2634,7 @@ When P006 was filed, the repo had no CHANGELOG anywhere. By the time this decisi
 - `createGithubReleases: true` added to the release job's `changesets/action` config in `.github/workflows/release.yml`.
 - Future Version Packages PRs auto-create per-package GitHub Releases (e.g., `@atrib/mcp@0.1.3`) on merge, in addition to publishing to npm.
 - DECISIONS.md doubles as the authoritative log for non-package architectural decisions; per-package CHANGELOGs cover code/release-level changes.
-- If atrib-spec.md revision history becomes load-bearing (first external spec implementer raises it), open a follow-up ADR specifying the location and format.
+- If atrib-spec.md revision history becomes decision-critical (first external spec implementer raises it), open a follow-up ADR specifying the location and format.
 
 ## D061: Add tool_name, args_hash, result_hash fields to [§1.2.1](atrib-spec.md#121-field-definitions)
 
@@ -2768,7 +2768,7 @@ The implementation shipped 2026-05-04 (commit `e0699b5` for `@atrib/mcp` + `@atr
 
 2. **Extend the signed AtribRecord with the semantic content directly.** Rejected on first principles: the public log MUST stay lean per the spec's privacy postures ([§8](atrib-spec.md#8-privacy-postures)) and the operator-cost principle ([§2](atrib-spec.md#2-merkle-log-protocol)). Adding rich semantic content to signed records pushes against both.
 
-3. **A separate per-record JSON file alongside the JSONL mirror.** Considered briefly. Rejected because the JSONL append-only invariant is load-bearing for autoChain and crash-safety; introducing a second persistence surface creates synchronization risk.
+3. **A separate per-record JSON file alongside the JSONL mirror.** Considered briefly. Rejected because the JSONL append-only invariant is decision-critical for autoChain and crash-safety; introducing a second persistence surface creates synchronization risk.
 
 4. **A different field name (e.g. `meta`, `private`, `extra`).** Rejected because they're either too generic (`meta`, `extra`) or implied a security property the field doesn't actually provide (`private`, the field IS private to the host's filesystem, but that's a deployment property, not a cryptographic one). `_local` is honest: "this content lives on the local host only, by virtue of where it's written."
 
@@ -2820,7 +2820,7 @@ Also broaden the `observation` row in the [§1.2.4](atrib-spec.md#124-event_type
 **Alternatives considered:**
 
 - _Leave the spec as-is and rely on implementation memory + skill docs for the disambiguation._ Rejected because the drift is documented across multiple producer surfaces (lifecycle hooks, synthesize.py, agent self-emission gap), and the dogfood architecture has now been bitten by the same ambiguity twice. The spec is the right level for the fix; implementation-side guidance leaks operator-context detail and does not propagate to future implementers.
-- _Restrict observation to passive-watcher use only and expand annotation to absorb agent self-emitted notings._ Rejected because annotation REQUIRES `annotates` per [§1.2.7](atrib-spec.md#127-annotates) (validators MUST reject annotation without it) and the structural semantics are load-bearing for [§3.2.4](atrib-spec.md#324-edge-derivation-rules) ANNOTATES edge derivation. Removing the requirement would silently break graph derivation. The right move is clarifying that observation has two valid production shapes, not collapsing observation into annotation.
+- _Restrict observation to passive-watcher use only and expand annotation to absorb agent self-emitted notings._ Rejected because annotation REQUIRES `annotates` per [§1.2.7](atrib-spec.md#127-annotates) (validators MUST reject annotation without it) and the structural semantics are decision-critical for [§3.2.4](atrib-spec.md#324-edge-derivation-rules) ANNOTATES edge derivation. Removing the requirement would silently break graph derivation. The right move is clarifying that observation has two valid production shapes, not collapsing observation into annotation.
 - _Mint extension URIs for the agent self-emitted case (e.g. `https://atrib.dev/v1/types/discovery`)._ Rejected because the structural semantics already match the existing observation type (no required referent, first-class noting). Adding a new type would increase the vocabulary without resolving the drift; it would introduce a different ambiguity (discovery vs observation).
 - _Add canonical examples in a separate appendix or supplementary doc._ Rejected because consumers selecting an event_type are reading [§1.2.4](atrib-spec.md#124-event_type-values) first; a separate location would not be where the question gets asked.
 
@@ -2986,7 +2986,7 @@ Force-atlas2 would give nicer dense layouts than circular but is published as Co
 
 **Custom EdgeArrowProgram.** Sigma's stock arrow program scales the head proportionally to edge size, conflating "make arrow visible" with "make line thicker." The dashboard substitutes a custom arrow program via `Sigma.rendering.createEdgeArrowProgram({ lengthToThicknessRatio: 5, widenessToThicknessRatio: 6 })`, decoupling head prominence from line weight. Slim 2px lines, fat triangular heads.
 
-**Edge-color palette in two semantic tiers.** Tier 1 (vibrant, load-bearing): `--edge-ancestry` (orange `#fb923c`, dedicated, no node analogue) for `INFORMED_BY` + `PROVENANCE_OF`; intentional aliases `--edge-annotates` / `--edge-revises` / `--edge-converges` track their paired node colors. Tier 2 (muted greys, structural, graded by strength): `--edge-chain` = `--text-2` (most common edge in any session graph but least semantically dense), `--edge-session-precedes` = `--text-3`, `--edge-session-parallel` = `--text-4`, `--edge-cross-session` = `--muted`. The aliasing IS the design statement: where an edge color tracks a node color, the `var(--et-*)` reference in CSS records the intent.
+**Edge-color palette in two semantic tiers.** Tier 1 (vibrant, decision-critical): `--edge-ancestry` (orange `#fb923c`, dedicated, no node analogue) for `INFORMED_BY` + `PROVENANCE_OF`; intentional aliases `--edge-annotates` / `--edge-revises` / `--edge-converges` track their paired node colors. Tier 2 (muted greys, structural, graded by strength): `--edge-chain` = `--text-2` (most common edge in any session graph but least semantically dense), `--edge-session-precedes` = `--text-3`, `--edge-session-parallel` = `--text-4`, `--edge-cross-session` = `--muted`. The aliasing IS the design statement: where an edge color tracks a node color, the `var(--et-*)` reference in CSS records the intent.
 
 **Pair-aware legend.** Two-row grid; paired entries (annotation/ANNOTATES, revision/REVISES, transaction/CONVERGES_ON) stack in the same grid column on both rows; unpaired entries flow into a shared tail column that flexes independently per row, so neither row's tail inherits the other's content widths.
 
@@ -3045,7 +3045,7 @@ The structural problem was duplication of chain-resolution logic across producer
 **Consequences:**
 
 - Producers in `atrib-emit`, `mcp-wrap`, and future cognitive-primitive packages share one chain-resolution path, eliminating the drift class. A future producer joining the substrate writes one line of code (`await inheritChainContext({...})`) instead of reimplementing.
-- The `inheritedFrom` value that surfaces in `inheritChainContext` results gains two new variants: `'env-tail'` and `'mirror-tail'` (replacing the prior `'wrapper-mirror'`). Producers consuming the value (currently only `atrib-emit` for warnings) must handle the new variants. Backward compatibility was not preserved; the rename was load-bearing for clarity.
+- The `inheritedFrom` value that surfaces in `inheritChainContext` results gains two new variants: `'env-tail'` and `'mirror-tail'` (replacing the prior `'wrapper-mirror'`). Producers consuming the value (currently only `atrib-emit` for warnings) must handle the new variants. Backward compatibility was not preserved; the rename was decision-critical for clarity.
 - Live verification on a fresh emit post-fix: `chain_root != sha256(context_id)` for hook-spawned records sharing context with the wrapper. The rate of isolated-genesis records drops to zero for new emissions. Historical records signed before the fix remain immutable.
 - Conformance corpus enforces the precedence contract for any producer claiming `@atrib/mcp@0.5.x` compliance. Producers in non-Node languages can consume the JSON corpus directly; the corpus README documents the input/expected schema.
 - Spec [§1.2.3.1](atrib-spec.md#1231-multi-producer-chain-composition) is the new normative anchor. Future changes to the precedence ordering require regenerating the corpus, refreshing the reference implementation, and updating every producer's use site (tracked in CLAUDE.md sync-triggers).
@@ -3255,7 +3255,7 @@ The ten conventions:
 
 - _Keep the conventions informal._ Considered. The argument: drift has not yet been a documented problem, so codification is premature optimization. Rejected because the [§9](atrib-spec.md#9-runtime-integration-patterns) + [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) work was the first stretch of spec development where multiple convention dimensions interacted (status declaration + pattern subsection template + sync triggers + prose audit), and the conventions held only because they were applied consistently during that stretch. A future contributor with different defaults would silently drift, and the drift would be costly to repair after the fact.
 
-- _Adopt some conventions but not others._ Considered. Specifically, codify the load-bearing ones (RFC 2119, anchor links, prose audit, sync triggers) and leave the softer ones (pattern template, ADR template, status tags) informal. Rejected because partial codification creates ambiguity at the boundary: a reader cannot tell which conventions are binding without consulting both this ADR and an informal convention set elsewhere. Codifying all ten or none avoids the gray zone.
+- _Adopt some conventions but not others._ Considered. Specifically, codify the decision-critical ones (RFC 2119, anchor links, prose audit, sync triggers) and leave the softer ones (pattern template, ADR template, status tags) informal. Rejected because partial codification creates ambiguity at the boundary: a reader cannot tell which conventions are binding without consulting both this ADR and an informal convention set elsewhere. Codifying all ten or none avoids the gray zone.
 
 - _Codify in a separate `SPEC-STYLE.md` document instead of an ADR._ Considered. The argument: style guides typically live outside the decision log. Rejected because the conventions are decisions about how the spec is maintained, not just stylistic preferences. They belong in DECISIONS.md so that future ADRs can cite them and so that the sync-triggers contract applies to them like every other binding decision.
 
@@ -3302,7 +3302,7 @@ Recall, trace, and summarize MAY filter records produced under `inheritedFrom ==
 
 - _Per-process synthetic context_id (cluster all orphans from one process)._ Considered. This would make forensic clustering easier ("process X had N orphans during this period under context Y"). Rejected as the default because the per-call synthesis is simpler and has no process-state to manage; `mcp-wrap` and `atrib-emit` typically run as short-lived subprocesses where per-call and per-process degenerate to the same thing; producers that want clustering can cache a synthetic at their layer. Available as producer-side polish; not normative.
 
-- _Sidecar tag on orphan records (`_local.fallback: 'orphan'`)._ Considered as a complement, not an alternative. The producer-side mirror sidecar (per [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence)) MAY carry a `fallback` field marking the orphan provenance. This is non-normative producer convention; the load-bearing signal is `inheritedFrom`, which is in the producer's resolved context (not the signed record itself).
+- _Sidecar tag on orphan records (`_local.fallback: 'orphan'`)._ Considered as a complement, not an alternative. The producer-side mirror sidecar (per [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence)) MAY carry a `fallback` field marking the orphan provenance. This is non-normative producer convention; the decision-critical signal is `inheritedFrom`, which is in the producer's resolved context (not the signed record itself).
 
 **Consequences:**
 
@@ -3348,8 +3348,8 @@ Until that ADR lands, producers requiring handoff semantics SHOULD emit records 
 
 **Alternatives considered:**
 
-- _Promote `handoff` to byte 0x07 immediately, before any producer needs it._ Rejected per [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary): pre-emptive byte allocation accumulates normative debt for use cases that may never materialize. The `directory_anchor` promotion ([D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04)) cleared the bar by load-bearing branch, producers were already emitting it. handoff has not.
-- _Document the convention in [§7](atrib-spec.md#7-harness-integration-patterns) instead of reserving a byte._ Considered. Rejected because [§7](atrib-spec.md#7-harness-integration-patterns) covers consumer-side patterns, not the producer-side event_type vocabulary. Reserving the byte is the load-bearing commitment; the harness integration narrative (when written) can reference this ADR.
+- _Promote `handoff` to byte 0x07 immediately, before any producer needs it._ Rejected per [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary): pre-emptive byte allocation accumulates normative debt for use cases that may never materialize. The `directory_anchor` promotion ([D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04)) cleared the bar by decision-critical branch, producers were already emitting it. handoff has not.
+- _Document the convention in [§7](atrib-spec.md#7-harness-integration-patterns) instead of reserving a byte._ Considered. Rejected because [§7](atrib-spec.md#7-harness-integration-patterns) covers consumer-side patterns, not the producer-side event_type vocabulary. Reserving the byte is the decision-critical commitment; the harness integration narrative (when written) can reference this ADR.
 - _Use [§9](atrib-spec.md#9-runtime-integration-patterns) Pattern #3 (callback handlers) to capture handoffs as ordinary tool calls without a new byte._ Considered as a transition path, not a long-term answer. Multi-agent verifiers need the byte distinction to count handoffs without parsing `tool_name` strings; Pattern #3 instrumentation can produce the records but doesn't solve the verifier-side query problem.
 
 **Consequences:**
@@ -3515,7 +3515,7 @@ The primary headline reporting metric becomes:
 
 > **pass^k_delta = pass^k(treatment_arm) - pass^k(control_arm)**, in percentage points.
 
-A run is **POSITIVE** if pass^k_delta ≥ 20 percentage points AND the secondary signed-rank test on per-pair (treatment - control) deltas reaches p ≤ 0.10 on at least one of M1 (mistake_rate) or M3 (wall_clock_seconds). The 5 secondary metrics M1-M5 from the original design remain reported as supplementary signal but are no longer the load-bearing decision driver.
+A run is **POSITIVE** if pass^k_delta ≥ 20 percentage points AND the secondary signed-rank test on per-pair (treatment - control) deltas reaches p ≤ 0.10 on at least one of M1 (mistake_rate) or M3 (wall_clock_seconds). The 5 secondary metrics M1-M5 from the original design remain reported as supplementary signal but are no longer the decision-critical decision driver.
 
 ### Rationale
 
@@ -3642,7 +3642,7 @@ The decomposition test for whether two operations are the same primitive or diff
 
 **Decision.** The atrib agent-facing cognitive surface started as **exactly six primitives**. Each is a monomorphic MCP tool with one narrow purpose and one input schema. Each is a verb the agent reasons about as a discrete cognitive operation. The set is not extensible without a follow-on ADR.
 
-**2026-05-29 amendment:** [D106](#d106-verify-is-promoted-to-cognitive-primitive-7) promotes `atrib-verify` as primitive #7 after two independent Pattern 3 receiving flows made counterparty evidence verification load-bearing. The surface is now seven primitives: three writes and four reads.
+**2026-05-29 amendment:** [D106](#d106-verify-is-promoted-to-cognitive-primitive-7) promotes `atrib-verify` as primitive #7 after two independent Pattern 3 receiving flows made counterparty evidence verification decision-critical. The surface is now seven primitives: three writes and four reads.
 
 | #   | Primitive         | Spec event_type      | Read/write | Input shape                                                                                             | Graph effect                                                       | One-line purpose                                                                                                  |
 | --- | ----------------- | -------------------- | ---------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
@@ -3728,7 +3728,7 @@ The seven primitives correspond to MCP packages, but the packages are not flat-e
 - [D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05), annotation event_type promotion; underlies `atrib-annotate`.
 - [D059](#d059-promote-revision-to-atrib-normative-event_type-byte-0x06), revision event_type promotion; underlies `atrib-revise`.
 - [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default), env-honoring across MCP servers; the seven primitives inherit this contract.
-- [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion), primitive lifecycle (extension-first, promotion-via-gates); how the surface grows when load-bearing scope arrives.
+- [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion), primitive lifecycle (extension-first, promotion-via-gates); how the surface grows when decision-critical scope arrives.
 - [D106](#d106-verify-is-promoted-to-cognitive-primitive-7), follow-on amendment that promotes `atrib-verify`.
 
 ---
@@ -3737,7 +3737,7 @@ The seven primitives correspond to MCP packages, but the packages are not flat-e
 
 **Date:** 2026-05-13
 
-**Context.** [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) locked the atrib agent-facing surface at six primitives (`atrib-emit`, `atrib-annotate`, `atrib-revise`, `atrib-recall`, `atrib-trace`, `atrib-summarize`) and committed to "closed at six for v1". But the project will continue to discover operations that LOOK primitive-like at varying capability levels: some are full cognitive verbs that deserve their own tool; others are query-shape variants or strength settings on an existing primitive; some are theoretical until a load-bearing use case materializes. Without a stated lifecycle policy, every such operation triggers an ad-hoc "is this a new primitive?" debate, and the answer drifts session-to-session.
+**Context.** [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) locked the atrib agent-facing surface at six primitives (`atrib-emit`, `atrib-annotate`, `atrib-revise`, `atrib-recall`, `atrib-trace`, `atrib-summarize`) and committed to "closed at six for v1". But the project will continue to discover operations that LOOK primitive-like at varying capability levels: some are full cognitive verbs that deserve their own tool; others are query-shape variants or strength settings on an existing primitive; some are theoretical until a decision-critical use case materializes. Without a stated lifecycle policy, every such operation triggers an ad-hoc "is this a new primitive?" debate, and the answer drifts session-to-session.
 
 The worked-example tension that triggered this ADR was `verify`. `@atrib/verify` exists as a published package and provides signature + canonical-form + chain + log-inclusion verification. Should it be cognitive primitive #7? Three single-agent use cases stand out: (1) local-mirror gap fill, fetch a record_hash from log.atrib.dev when local mirror lacks it; (2) integrity audit, re-verify recent records against the public log's fresh root; (3) external record_hash relay, a user pastes a hash, agent should fetch + verify. Cases 1 and 2 are single-agent scope; case 3 trends multi-agent.
 
@@ -3747,13 +3747,13 @@ The boundary-drawing test in [D079](#d079-the-six-core-cognitive-primitives--atr
 
 1. **Extension**: added as an optional parameter or shape variant on the closest existing primitive. The agent's tool surface count does not grow. Examples: `recall.origin: 'local' | 'remote' | 'both'`, `recall.verify_strength: 'signature' | 'inclusion'`. The primitive's narrow purpose is preserved; the variant is a setting on the same verb.
 
-2. **Dedicated primitive (new MCP)**, added as a new MCP package and a new agent-facing tool, with [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) amended to list it. The surface grows by one. Reserved for operations that are load-bearing in production and that agents reach for as a discrete mental operation.
+2. **Dedicated primitive (new MCP)**, added as a new MCP package and a new agent-facing tool, with [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) amended to list it. The surface grows by one. Reserved for operations that are decision-critical in production and that agents reach for as a discrete mental operation.
 
 **The default posture is extension.** Promotion to dedicated primitive requires ALL of the following acceptance gates:
 
 | #   | Gate                                                                                                                                                                                                                                                                                                                  | Why it gates                                                                                                                                                                               |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | **Load-bearing use case in production.** Not theoretical. There is at least one shipped agent flow where this operation is called regularly and where its absence would degrade the agent's behavior.                                                                                                                 | Avoids surface bloat from speculative primitives. The boundary test alone admits too many candidates.                                                                                      |
+| 1   | **Decision-critical use case in production.** Not theoretical. There is at least one shipped agent flow where this operation is called regularly and where its absence would degrade the agent's behavior.                                                                                                                 | Avoids surface bloat from speculative primitives. The boundary test alone admits too many candidates.                                                                                      |
 | 2   | **Spec event_type either exists or is being promoted.** For write operations: the new primitive corresponds to a spec event_type. For read operations: the operation has a graph effect or read pattern documented in [§3](atrib-spec.md#3-graph-query-interface) that the existing read trio cannot express cleanly. | Anchors the agent-facing surface to atrib's normative protocol. Primitives without spec backing are app-layer features, not protocol-layer ones.                                           |
 | 3   | **Cognitive distinctness in agent reasoning.** When agents (or operators reading agent transcripts) describe what the agent did, the operation has its own name in natural language, not "a kind of recall" or "a flavor of emit".                                                                                    | The bash-standard test from [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Each primitive earns its name by being how the agent thinks about the operation. |
 | 4   | **[D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) amendment + new MCP package shipped together.** Promotion is not adopted piecemeal; the ADR text, the package source, and the changeset for the package version arrive in one commit.                                                  | Keeps the canonical-decision record and the implementation in lockstep. Without this, the surface is documented in one place and shipped in another.                                       |
@@ -3762,12 +3762,12 @@ When some gates are met but not all, the operation lives as an **extension** on 
 
 **Worked example: `verify`.**
 
-- Gate 1 (load-bearing use case): NOT MET in current single-agent scope. The three single-agent use cases (mirror gap, integrity audit, external relay) are real but rare; recall-with-`origin: 'remote'` covers them. They become load-bearing in Pattern 3 multi-agent scope, where agents routinely receive record_hashes from counterparties and must verify before acting.
+- Gate 1 (decision-critical use case): NOT MET in current single-agent scope. The three single-agent use cases (mirror gap, integrity audit, external relay) are real but rare; recall-with-`origin: 'remote'` covers them. They become decision-critical in Pattern 3 multi-agent scope, where agents routinely receive record_hashes from counterparties and must verify before acting.
 - Gate 2 (spec backing): PARTIAL. `@atrib/verify` package exists and the verification operation is normative ([§1.4](atrib-spec.md#14-signing-and-verification), [§2.6](atrib-spec.md)). But it produces no graph effect; it's a read-side property of records that recall already exercises internally.
 - Gate 3 (cognitive distinctness): WEAK in single-agent ("verify my own record" reads as a redundant recall); STRONG in multi-agent ("verify this claim from agent B" reads as a discrete cognitive operation distinct from looking up your own past).
 - Gate 4 (paired shipping): N/A, the extension is the current posture.
 
-**Current posture for `verify` after [D106](#d106-verify-is-promoted-to-cognitive-primitive-7):** dedicated primitive. Pattern 3 receiving flows made verification-before-linking load-bearing, so `@atrib/verify-mcp` now wraps the existing `@atrib/verify` package as `atrib-verify`.
+**Current posture for `verify` after [D106](#d106-verify-is-promoted-to-cognitive-primitive-7):** dedicated primitive. Pattern 3 receiving flows made verification-before-linking decision-critical, so `@atrib/verify-mcp` now wraps the existing `@atrib/verify` package as `atrib-verify`.
 
 **Promotion trigger for `verify`**: gates 1 and 3 strengthen to "MET" when Pattern 3 multi-agent flows ship and agents-receiving-counterparty-claims becomes a routine path. [D106](#d106-verify-is-promoted-to-cognitive-primitive-7) records that this trigger fired on 2026-05-29 through two independent flows: a private continuation packet and a Cloudflare Agent transaction packet.
 
@@ -3967,7 +3967,7 @@ Writer responsibility lives in the operator's hook layer, not in `@atrib/mcp`. T
 
 - _MCP protocol extension for per-call session context._ Rejected. Not under atrib's control; Anthropic-side change with indefinite timeline.
 - _Re-spawn MCP children per session._ Rejected. Architecturally violates MCP's "child = per-process" semantics; would force every MCP server to handle session lifecycle.
-- _Agent threads `context_id` on every MCP call._ Rejected. Defeats [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)'s no-config goal; load-bearing discipline that drifts over time. Workaround for now, not a structural fix.
+- _Agent threads `context_id` on every MCP call._ Rejected. Defeats [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)'s no-config goal; decision-critical discipline that drifts over time. Workaround for now, not a structural fix.
 - _Global state file (`~/.claude/state/active-session-id`) instead of per-PPID._ Rejected. Two concurrent Claude Code instances would overwrite each other's session ids; the second-most-recent reader would see the wrong session.
 - _State file content = pre-derived 32-hex._ Rejected. The `parse()` function strips dashes + lowercases anyway. Writing the raw UUID lets the file remain operator-readable as a UUID, easier to debug.
 
@@ -4065,7 +4065,7 @@ This ADR codifies the rationale for each calibration choice against a 2026-05-23
 
 **Alternatives considered.**
 
-- _Align all weights with CrewAI exactly (0.5 semantic, 0.3 recency, 0.2 importance)._ Rejected. atrib's relevance is BM25 (textual), not embedding similarity, so the signal strength differs from CrewAI's `semantic`. Importance in atrib is sparser than CrewAI's per-memory operator-assigned score, warranting a higher `BETA` to give annotated records meaningful lift. The shared `recency=0.3` is the load-bearing convergence; the rest of the split is atrib-specific by design.
+- _Align all weights with CrewAI exactly (0.5 semantic, 0.3 recency, 0.2 importance)._ Rejected. atrib's relevance is BM25 (textual), not embedding similarity, so the signal strength differs from CrewAI's `semantic`. Importance in atrib is sparser than CrewAI's per-memory operator-assigned score, warranting a higher `BETA` to give annotated records meaningful lift. The shared `recency=0.3` is the decision-critical convergence; the rest of the split is atrib-specific by design.
 - _Drop the noise floor and return top-K always (the field convention)._ Rejected. Trust-the-absence is a deliberate atrib product principle. Returning low-confidence top-K when the best candidate is recency-only noise creates hallucination risk in downstream agent reasoning. Keeping the empty-return path costs little and gives callers a structured signal they can act on.
 - _Bump `NOISE_FLOOR` to `alpha=0.3` so the threshold actually fires on active mirrors with constant fresh tool-call activity._ Deferred to the queued gold-standard sweep. The current `0.15` floor fires the stale-mirror empty case correctly per design comment; it does not fire the active-mirror nonsense-query case (best record's recency alone produces `alpha * 1.0 = 0.3`, above the 0.15 floor). Whether the threshold's intent should be widened to catch the second case is an empirical question the sweep should answer, not a feel-based bump.
 - _Keep `limit=25` default._ Rejected. Field convergence on 10 is consistent enough across Haystack, AutoGen, mem0, and Letta that the divergence is unjustified. Token cost in agent context windows scales with the limit; defaulting smaller is the safer choice when callers can always override.
@@ -4950,7 +4950,7 @@ The first implementation rejects `topic` and `importance` with `400 Bad Request`
 **Alternatives considered.**
 
 - _Do nothing until a dedicated handoff event exists._ Rejected. Same-key parent-child traces are disconnected today, and `informed_by` already represents the needed causality.
-- _Promote [D073](#d073-handoff-event_type-byte-placeholder-adr) immediately._ Rejected. The bar in [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) requires a load-bearing producer and conformance surface. Current evidence supports the cheaper convention, not a new normative event type.
+- _Promote [D073](#d073-handoff-event_type-byte-placeholder-adr) immediately._ Rejected. The bar in [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) requires a decision-critical producer and conformance surface. Current evidence supports the cheaper convention, not a new normative event type.
 - _Use `chain_root` for parent-child relationships._ Rejected. `chain_root` is the structural predecessor in a record chain. `informed_by` is the field for "this prior record informed this action."
 - _Make every child record cite the parent._ Rejected for middleware records. Citing the parent on the first successful child record is enough for trace traversal, and repeated citations add graph noise. `@atrib/emit` remains stateless because the CLI path signs one record per process.
 
@@ -4983,7 +4983,7 @@ The first implementation rejects `topic` and `importance` with `400 Bad Request`
 
 **Context.** [D104](#d104-parent-child-threading-uses-atrib_parent_record_hash) solved the producer-side parent-child case: when a parent has a prior record hash before a child signs, the child can cite that hash through `informed_by`. Pattern 3 multi-agent flows need the receiving side too. Agent B may receive a `record_hash` claim, a signed record, private body material, and an inclusion proof from Agent A. Before Agent B acts, it needs a small deterministic acceptance step: verify the evidence, reject bad claims, and only then use accepted hashes in its own `informed_by`.
 
-[D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion) says new primitives start as extensions until their load-bearing use case and cognitive distinctness are proven in routine work. [D105](#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance) first shipped as that extension. [D106](#d106-verify-is-promoted-to-cognitive-primitive-7) later promoted the operation after two independent receiving flows needed verification before linking.
+[D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion) says new primitives start as extensions until their decision-critical use case and cognitive distinctness are proven in routine work. [D105](#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance) first shipped as that extension. [D106](#d106-verify-is-promoted-to-cognitive-primitive-7) later promoted the operation after two independent receiving flows needed verification before linking.
 
 **Decision.** Ship `verifyHandoffClaims()` in `@atrib/verify` as the verifier-side Pattern 3 acceptance helper. A caller supplies one or more claims containing:
 
@@ -5046,7 +5046,7 @@ This is a verifier helper, not a new record type. It does not add graph edge typ
 
 **Codifies:** P022, the former pending decision for verify promotion.
 
-**Context.** [D105](#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance) added `verifyHandoffClaims()` as an extension-first helper. That was the right first move: one tested handoff path proved the shape, but not the cognitive primitive. The remaining gate was [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion)'s load-bearing routine-use bar.
+**Context.** [D105](#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance) added `verifyHandoffClaims()` as an extension-first helper. That was the right first move: one tested handoff path proved the shape, but not the cognitive primitive. The remaining gate was [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion)'s decision-critical routine-use bar.
 
 The follow-up work added two independent receiving-side flows:
 
@@ -5251,7 +5251,7 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 
 ## P010: sidecar `_local.fallback: 'orphan'` field per [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail)
 
-**Source:** [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) "Alternatives considered" notes that producers MAY add a sidecar `_local.fallback: 'orphan'` field to mark orphan provenance on the local-mirror side. The signed record carries no orphan signal; the producer's runtime context (`inheritedFrom`) is the load-bearing source of truth, but it lives in producer memory only.
+**Source:** [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) "Alternatives considered" notes that producers MAY add a sidecar `_local.fallback: 'orphan'` field to mark orphan provenance on the local-mirror side. The signed record carries no orphan signal; the producer's runtime context (`inheritedFrom`) is the decision-critical source of truth, but it lives in producer memory only.
 
 **The decision in question:** should the local-mirror sidecar shape (per [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) / [§5.9](atrib-spec.md#59-local-mirror-conventions)) gain a normative `fallback: 'orphan' | undefined` field so consumers reading the mirror (atrib-recall, atrib-trace, atrib-summarize) can filter orphans without needing access to the producer's runtime state?
 
@@ -5503,7 +5503,7 @@ The `extractor_classification` field is redundant for records where event_type i
 
 **Source:** Substrate-signing outage caused by a host-side hook helper losing access to its npm dependencies when the user-level symlink got redirected into a git worktree directory without a sibling `node_modules`. The outage was silent (the hook's stdout was 0; the detached helper crashed with `ERR_MODULE_NOT_FOUND` against `@modelcontextprotocol/sdk` and produced no records). The proximate fix was an installer guardrail refusing worktree paths; the underlying architecture coupling remains.
 
-The structural shape under Position 1: hook source files live in a deployment-side repo at `tools/claude-hooks/*.mjs`; the host points `~/.claude/scripts/<name>.mjs` symlinks at them; Node resolves their imports by walking up from each file's realpath looking for `node_modules`. Three implicit assumptions are co-load-bearing, (1) the realpath neighborhood carries the dependency install, (2) Node's CommonJS-style upward resolution remains stable, (3) symlinks never get redirected to a tree without the install. Any one breaking produces silent helper death because hooks fire detached and their failure modes are observable only in `~/.atrib/logs/mcp-signer.log` at boot-time substrate-health checks, not at fault time.
+The structural shape under Position 1: hook source files live in a deployment-side repo at `tools/claude-hooks/*.mjs`; the host points `~/.claude/scripts/<name>.mjs` symlinks at them; Node resolves their imports by walking up from each file's realpath looking for `node_modules`. Three implicit assumptions are co-dependent, (1) the realpath neighborhood carries the dependency install, (2) Node's CommonJS-style upward resolution remains stable, (3) symlinks never get redirected to a tree without the install. Any one breaking produces silent helper death because hooks fire detached and their failure modes are observable only in `~/.atrib/logs/mcp-signer.log` at boot-time substrate-health checks, not at fault time.
 
 The deeper conflation: the repo simultaneously holds the _source of truth for helper code_ (where developers edit + version-control) and the _runtime deployment_ (what hooks actually execute). Edit-in-place via symlinks is good for iteration; the same symlinks are the runtime's source of fragility.
 
@@ -5520,7 +5520,7 @@ The deeper conflation: the repo simultaneously holds the _source of truth for he
 - Position 2's resilience pattern is what every production-grade CLI tool converges on, published binary, stable PATH entry, integration shims are thin. Protocol-evolution risk (MCP spec changes, transport changes, signing-pipeline updates) absorbs into the CLI as one versioned surface instead of distributing across N helpers each carrying their own SDK pin.
 - Position 3 sounds like the diplomat's answer but doubles the surface area atrib has to keep working. Two installation paths means two failure modes and two sets of operator-facing docs. The maintenance tax is real.
 - Spec evolution (e.g., a future MCP transport change, or [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback)'s daemon mode landing) is easier to roll out across consumers when the consumers are versioned packages (Position 2) than when they're filesystem-anchored source files (Position 1).
-- The outage that prompted this ADR was silent for ~30 minutes; substrate-health visibility surfaces these gaps only at session boot. Failure handling matters more as atrib's substrate becomes load-bearing for verifiable-reasoning claims in real-world flows such as Pattern 3 multi-agent handoff verification.
+- The outage that prompted this ADR was silent for ~30 minutes; substrate-health visibility surfaces these gaps only at session boot. Failure handling matters more as atrib's substrate becomes decision-critical for verifiable-reasoning claims in real-world flows such as Pattern 3 multi-agent handoff verification.
 
 **Current posture:** Position 1 (status quo with installer guardrail). The substrate-signing-outage forensics produced exactly the kind of guardrail that closes the immediate failure mode (refuse-to-install-from-worktree). Position 1 is acceptable while atrib's substrate is in rapid iteration with a small developer surface.
 
@@ -5528,7 +5528,7 @@ The deeper conflation: the repo simultaneously holds the _source of truth for he
 
 1. **First external operator onboards** to atrib-as-substrate (not as repo), symlink-from-repo doesn't generalize across operator machines and becomes a friction point.
 2. **Helper count crosses ~10**, OR a new helper's dependency tree conflicts with an existing one. Per-helper dependency management becomes the dominant cost.
-3. **Protocol evolution churn**: MCP transport or signing-pipeline changes start producing version-coordination drift across helpers. Centralizing the protocol surface in one published CLI flips from "nice to have" to "load-bearing for substrate stability."
+3. **Protocol evolution churn**: MCP transport or signing-pipeline changes start producing version-coordination drift across helpers. Centralizing the protocol surface in one published CLI flips from "nice to have" to "decision-critical for substrate stability."
 4. **A second silent outage** of the same class (hook helpers die without surfacing the failure to running sessions). One occurrence is operationally tolerable with the guardrail; a second indicates the architecture itself is the problem.
 
 **When promotion happens.** Ship `@atrib/cli` covering all seven cognitive primitives as subcommands; replace `tools/claude-hooks/atrib-tool-emit-helper.mjs` and `atrib-tool-signer-hook.mjs` and the lifecycle helpers with thin shell scripts that exec the CLI; update the installer to drop the symlink-into-repo path entirely (in favor of `npm install -g @atrib/cli` as the single install step); deprecate the `tools/claude-hooks/node_modules/` sibling-install pattern. Keep `tools/claude-hooks/` as source for atrib-development.
@@ -5574,7 +5574,7 @@ The packet would carry:
 
 - This is a harness-consumption pattern in [§7](atrib-spec.md#7-harness-integration-patterns), not a new [§9](atrib-spec.md#9-runtime-integration-patterns) runtime-mounting pattern.
 - Tier 1 public log proof is not enough for continuation. It proves a record existed, not what the receiving agent needs to inspect. Tier 2 body retrieval and Tier 3 signature replay remain necessary.
-- The packet should not collapse the Record Body Archive Layer into the log. [D070](#d070-record-body-archive-layer-placeholder-adr)'s separation remains load-bearing.
+- The packet should not collapse the Record Body Archive Layer into the log. [D070](#d070-record-body-archive-layer-placeholder-adr)'s separation remains decision-critical.
 - The packet can be private support-system metadata, a harness-specific extension record such as `https://example.com/v1/types/continuation_packet`, or both. A normative event_type is premature.
 - Existing cognitive primitives are sufficient. The receiving agent uses `recall`, `trace`, and `summarize` to read, then `emit`, `annotate`, and `revise` to continue.
 - Interaction channels are evidence, not the substrate. Plain-style webhooks, Slack threads, and local Claude Code or Codex sessions can carry the packet, but atrib should only prove the signed trail and anchors.

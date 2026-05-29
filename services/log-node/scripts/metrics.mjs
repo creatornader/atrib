@@ -119,14 +119,14 @@ const METRICS = [
   {
     name: 'tree_size',
     tier: 1,
-    status: 'load-bearing',
+    status: 'decision-tied',
     decisionSupported: 'is the substrate in use at all',
     run: (ctx) => ctx.treeSize,
   },
   {
     name: 'distinct_creator_keys',
     tier: 1,
-    status: 'load-bearing',
+    status: 'decision-tied',
     decisionSupported: 'is more than one party signing records (multi-agent ecosystem)',
     run: (ctx) => new Set(ctx.entries.map((e) => toHex(e.creatorKey))).size,
   },
@@ -140,7 +140,7 @@ const METRICS = [
   {
     name: 'chain_depth',
     tier: 1,
-    status: 'load-bearing',
+    status: 'decision-tied',
     decisionSupported: 'do chains form (the thesis), or is each call standalone',
     run: (ctx) => {
       const byContext = new Map()
@@ -163,7 +163,7 @@ const METRICS = [
   {
     name: 'event_type_ratio',
     tier: 1,
-    status: 'load-bearing',
+    status: 'decision-tied',
     decisionSupported: 'are real economic events flowing, or is it all chatter',
     run: (ctx) => {
       const tc = ctx.entries.filter((e) => e.eventType === 0x01).length

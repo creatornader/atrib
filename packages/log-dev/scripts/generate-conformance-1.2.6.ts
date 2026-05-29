@@ -6,7 +6,7 @@
  * Output: spec/conformance/1.2.6/cases/*.json + manifest.json
  *
  * §1.2.6 introduces the provenance_token field for cross-session causal
- * anchoring. The corpus exercises four load-bearing properties:
+ * anchoring. The corpus exercises four decision-critical properties:
  *
  *   1. Canonical form with provenance_token (genesis record). Confirms the
  *      JCS field-order invariant, provenance_token sorts after informed_by

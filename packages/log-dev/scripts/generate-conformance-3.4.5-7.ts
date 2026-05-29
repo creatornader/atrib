@@ -501,7 +501,7 @@ async function main() {
     '3.4.5',
     'Provenance trace (producer-claim ancestry walk)',
     'D068 + §3.4.5',
-    'Provenance trace walks producer-claimed ancestry edges only (INFORMED_BY, ANNOTATES, REVISES). The structure-vs-claims invariant (§3.1) requires that CHAIN_PRECEDES NOT be walked. Cases enumerate the load-bearing properties: multi-hop walk, the structural-edge prohibition, and depth truncation.',
+    'Provenance trace walks producer-claimed ancestry edges only (INFORMED_BY, ANNOTATES, REVISES). The structure-vs-claims invariant (§3.1) requires that CHAIN_PRECEDES NOT be walked. Cases enumerate the decision-critical properties: multi-hop walk, the structural-edge prohibition, and depth truncation.',
     traceCases as unknown as CaseOutput<unknown, unknown>[],
   )
   traceManifest.keys.alice_pubkey = alicePub

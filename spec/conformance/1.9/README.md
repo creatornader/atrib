@@ -9,7 +9,7 @@ any third-party implementation that consumes atrib records.
 
 ## Status
 
-**Initial subset shipped.** The two load-bearing cases are committed:
+**Initial subset shipped.** The two decision-critical cases are committed:
 `pre-revocation-record.json` and `post-revocation-record.json`. They
 share an input sequence (4 entries: 2 pre-revocation, the revocation
 itself, 1 post-revocation) and assert the `verification_state` contract

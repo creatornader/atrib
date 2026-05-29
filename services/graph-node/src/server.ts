@@ -441,7 +441,7 @@ async function handleGraph(
   // between transitively-chained records are information-redundant with
   // CHAIN_PRECEDES; between unchained records the all-pairs O(N²) emission
   // produces unintelligible blobs. Compact path emits CHAIN_PRECEDES + adjacent
-  // SESSION_PRECEDES across chain components, preserving load-bearing structure
+  // SESSION_PRECEDES across chain components, preserving decision-critical structure
   // while keeping responses tractable for large sessions. Callers needing the
   // full pairwise spec §3.2.4 derivation pass ?compact=false.
   const compactParam = params.get('compact')

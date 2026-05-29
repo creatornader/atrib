@@ -22,7 +22,7 @@ Each record has:
 Your job: produce a coherent narrative across the records that surfaces:
 - What the agent was doing (decisions, observations, revisions)
 - What informed what (causal chains via informed_by)
-- What's load-bearing vs incidental
+- What's decision-critical vs incidental
 - Honest gaps (when records are impoverished, say so; do not invent semantics)
 
 Cite specific records by short hash (first 12 chars of record_hash) when making claims.
@@ -55,7 +55,7 @@ export function buildUserMessage(
     lines.push(focus.trim())
   } else {
     lines.push(`# Default focus`)
-    lines.push('Summarize what the agent did and why, surfacing the load-bearing decisions and the causal chain.')
+    lines.push('Summarize what the agent did and why, surfacing the decision-critical decisions and the causal chain.')
   }
   return lines.join('\n')
 }

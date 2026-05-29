@@ -5,7 +5,7 @@
  *
  * Output: spec/conformance/1.9/cases/*.json + manifest.json
  *
- * Generates the load-bearing pair: pre-revocation-record (signed before
+ * Generates the decision-critical pair: pre-revocation-record (signed before
  * revocation, retains 'signature_valid') + post-revocation-record (signed
  * after, becomes 'revoked_after_revocation'). These two cases exercise
  * the verifier_state flip that is §1.9's central contract.

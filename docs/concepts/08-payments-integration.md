@@ -7,7 +7,7 @@
 **Builds on**: [Records & signing](01-records-and-signing.md), [The chain](04-the-chain.md), [Identity & the directory](03-identity-and-directory.md), [The Merkle log](02-the-merkle-log.md)
 **Enables**: [The calculation algorithm](09-calculation-algorithm.md), settlement adjudication
 
-## The load-bearing distinction
+## The decision-critical distinction
 
 atrib is **not** a payment rail. It does not move money, hold funds, or execute transfers. atrib is a verification substrate that records cryptographically signed evidence of what happened on top of whatever rail did the actual settlement.
 
@@ -45,7 +45,7 @@ Per [§1.7](../../atrib-spec.md#17-transaction-event-hooks), the trigger is a co
 
 Why this particular event: it's the moment the commerce loop closes. Before completion, the agent has taken tool_calls (look up product, compare prices, etc.). The transaction record ties those prior actions to the spend they justified, with a cryptographic chain back through `informed_by` / `provenance_token` edges.
 
-## The load-bearing linker: `context_id`
+## The decision-critical linker: `context_id`
 
 Per [§1.7](../../atrib-spec.md#17-transaction-event-hooks): *"the `context_id` of the agent session must be embedded in the transaction metadata when the checkout is initiated, so that the transaction event webhook can be matched back to the attribution chain."*
 

@@ -4,7 +4,7 @@
 # false-positive classes. atrib is a cryptographic protocol that publishes
 # Ed25519 PUBLIC keys throughout its conformance corpus and spec, those
 # look like generic API keys to the default gitleaks regex but they are
-# intentional, public, and load-bearing for the spec's testability.
+# intentional, public, and required for the spec's testability.
 #
 # Run: `gitleaks git --no-banner` from repo root, or `gitleaks dir .`
 # for an unstaged scan.

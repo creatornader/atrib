@@ -90,7 +90,7 @@ export interface BuildGraphOptions {
    *
    * Tracked separately from §3.4.7's intra-session filter for the identity
    * view: that endpoint drops intra-session edges entirely; this option
-   * preserves the load-bearing temporal links across chain boundaries.
+   * preserves the decision-critical temporal links across chain boundaries.
    */
   compactIntraSessionEdges?: boolean
   /**
