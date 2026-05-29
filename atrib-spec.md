@@ -1396,6 +1396,7 @@ Contents
   - [2.5.3 Entry bundle endpoint](#253-entry-bundle-endpoint)
   - [2.5.4 Point-lookup endpoint (OPTIONAL)](#254-point-lookup-endpoint-optional)
   - [2.5.5 Recent-records endpoint (OPTIONAL)](#255-recent-records-endpoint-optional)
+  - [2.5.6 Log subscription surfaces (OPTIONAL)](#256-log-subscription-surfaces-optional)
 - [2.6 Submission API (Write Interface)](#26-submission-api-write-interface)
   - [2.6.1 Submit entry](#261-submit-entry)
   - [2.6.2 Inclusion proof response](#262-inclusion-proof-response)
@@ -1708,6 +1709,73 @@ Error responses:
 The response carries a compact per-entry shape (no full `record` object) so a feed of 20 entries stays small. Like [§2.5.4](#254-point-lookup-endpoint-optional), the body is NOT returned, the log only stores the 90-byte commitment. Consumers needing the full record body for any entry retrieve it via the producer-local mirror ([§5.9](#59-local-mirror-conventions)) or a Record Body Archive Layer ([§2.12](#212-record-body-archive-layer)).
 
 A log MAY decline to provide this endpoint and respond 404 to all `/v1/recent` requests. Consumers who require activity feeds against such logs MUST fall back to walking the entry-bundle endpoint and decoding entries client-side.
+
+#### 2.5.6 Log Subscription Surfaces (OPTIONAL)
+
+Log implementations MAY expose subscription surfaces for consumers that need live or periodically refreshed views of new log entries. These surfaces are OPTIONAL. Verification never depends on them; consumers can always fall back to the checkpoint, tile, entry-bundle, lookup, and recent-records endpoints.
+
+When provided, the subscription surfaces operate over the compact decoded log-entry shape from [§2.5.5](#255-recent-records-endpoint-optional). They MUST NOT imply that the log stores signed record bodies. Filters are limited to fields visible in the 90-byte log entry unless the implementation explicitly declares an archive or body-index dependency.
+
+The common filters are:
+
+- `creator_key=<base64url>`: exact Ed25519 public key match.
+- `context_id=<32-hex>`: exact session anchor match.
+- `event_type=<label-or-uri>`: decoded event-type label or atrib normative event_type URI.
+- `since=<timestamp>`: inclusive millisecond timestamp or ISO timestamp.
+
+Filters such as `topic` and `importance` require record-body or annotation-body indexing. A commitment-only log implementation SHOULD reject those filters with `400 Bad Request` rather than silently ignoring them.
+
+##### Server-Sent Events
+
+```
+GET https://log.atrib.dev/v1/stream?creator_key=<base64url>&event_type=annotation&since=1778112565186
+
+Response 200 OK:
+Content-Type: text/event-stream
+
+event: ready
+data: {"tree_size":1882,"filters":{"creator_key":"haoZK4...","event_type":"annotation","since":1778112565186}}
+
+id: 1883
+event: log_entry
+data: {"tree_size":1884,"entry":{"index":1883,"record_hash":"sha256:4797...","creator_key":"haoZK4...","context_id":"b5a2ebf81d43...","timestamp_ms":1778112567000,"event_type":"annotation","event_type_byte":5}}
+```
+
+`id` is the log index of the entry. A client MAY use it as its local checkpoint, but timestamp resume uses the `since` filter. Implementations MAY send comment heartbeats to keep intermediaries from closing idle connections.
+
+##### JSON Feed Companion
+
+```
+GET https://log.atrib.dev/v1/feed.json?event_type=transaction&limit=20
+
+Response 200 OK:
+Content-Type: application/feed+json
+
+{
+  "version": "https://jsonfeed.org/version/1.1",
+  "title": "atrib log entries",
+  "home_page_url": "https://log.atrib.dev/",
+  "feed_url": "https://log.atrib.dev/v1/feed.json?event_type=transaction&limit=20",
+  "items": [
+    {
+      "id": "sha256:4797...",
+      "url": "https://log.atrib.dev/v1/lookup/4797...",
+      "title": "transaction at log index 1883",
+      "content_text": "atrib transaction entry 1883 from haoZK4...",
+      "date_published": "2026-05-28T23:58:00.000Z",
+      "_atrib": { /* decoded log entry */ }
+    }
+  ],
+  "_atrib": {
+    "tree_size": 1884,
+    "limit": 20,
+    "offset": 0,
+    "filters": { "event_type": "transaction" }
+  }
+}
+```
+
+The JSON Feed companion is a pull surface for cron jobs, desktop readers, and hosted consumers that cannot hold a long-lived SSE connection. It follows the same filtering rules as `/v1/stream`.
 
 ---
 

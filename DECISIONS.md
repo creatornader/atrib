@@ -4841,6 +4841,57 @@ Ship a tested reference example in `@atrib/integration`: `packages/integration/s
 
 ---
 
+## D103: Log subscriptions use SSE plus JSON Feed over commitment-visible fields
+
+**Date:** 2026-05-28
+
+**Status:** Accepted
+
+**Supersedes:** P023, removed from Pending decisions when this ADR codified the decision.
+
+**Context.** Always-on consumers need a low-latency way to react to new public log entries. Polling `/v1/stats` and then walking tiles or `/v1/recent` is wasteful for notification routers, cross-agent subscribers, and cognitive runtimes that only care about a narrow creator, context, or event type. P023 proposed Server-Sent Events as the primary surface and JSON Feed as the pull companion.
+
+The log stores 90-byte commitment entries, not signed record bodies. That means log-node can filter by fields encoded in the entry: `creator_key`, `context_id`, `event_type`, `timestamp_ms`, and `log_index`. It cannot filter by annotation `topic` or `importance` without consulting record bodies, producer mirrors, or a Record Body Archive Layer.
+
+**Decision.** Add [§2.5.6](atrib-spec.md#256-log-subscription-surfaces-optional): log implementations MAY expose `/v1/stream` and `/v1/feed.json` as optional subscription surfaces over decoded log entries.
+
+`/v1/stream` is the primary push surface. It uses Server-Sent Events with `event: ready` followed by `event: log_entry` messages. Each `log_entry` event carries `{ tree_size, entry }`, where `entry` is the same compact decoded entry shape used by `/v1/recent`.
+
+`/v1/feed.json` is the pull companion. It returns JSON Feed 1.1 with one item per decoded log entry. Each item carries a stable `id` equal to the `record_hash`, a `/v1/lookup/<hash>` URL, a timestamp, a readable title, and an `_atrib` extension object containing the decoded entry.
+
+The first implementation supports these filters on both surfaces:
+
+- `creator_key`: exact base64url Ed25519 public key match.
+- `context_id`: exact 32-hex session anchor match.
+- `event_type`: decoded label (`tool_call`, `transaction`, `observation`, `directory_anchor`, `annotation`, `revision`, `extension`, `reserved`) or atrib normative event_type URI.
+- `since`: millisecond timestamp or ISO timestamp. Boundary is inclusive.
+
+The first implementation rejects `topic` and `importance` with `400 Bad Request` because those filters require record-body indexing. Rejecting is deliberate. Silent ignore would make downstream notification code believe server-side filtering happened when it did not.
+
+**Alternatives considered.**
+
+- *Polling only.* Rejected. It wastes client and server work for always-on consumers and adds avoidable latency.
+- *WebSocket primary.* Rejected. The log only needs one-way delivery. SSE is HTTP-native, proxy-friendly, and easier for scripts.
+- *Webhooks first.* Rejected. They require every consumer to host a public endpoint. They can come later for managed consumers.
+- *Accept `topic` and `importance` now by best-effort body fetch.* Rejected. The log is intentionally commitment-only. Body-aware filtering belongs in a separate index or archive-backed service.
+- *Make subscriptions normative.* Rejected for v1. Verification does not depend on push delivery. The surfaces are optional read conveniences.
+
+**Consequences.**
+
+- The public log can support live activity consumers without forcing them into polling loops.
+- Server-side filtering is honest about the commitment-only boundary.
+- JSON Feed gives cron and desktop consumers a simple fallback when they cannot hold a long-lived SSE connection.
+- Future body-aware subscription work should extend [D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields) only after a body index or Record Body Archive Layer exists.
+
+**Cross-references.**
+
+- [§2.5.6](atrib-spec.md#256-log-subscription-surfaces-optional), log subscription surfaces.
+- [`services/log-node/src/server.ts`](services/log-node/src/server.ts), reference implementation.
+- [`services/log-node/test/server.test.ts`](services/log-node/test/server.test.ts), SSE and JSON Feed tests.
+- [`services/log-node/README.md`](services/log-node/README.md), operator API documentation.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -5075,28 +5126,6 @@ The `extractor_classification` field is redundant for records where event_type i
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 
 
-## P023: Subscription surface for log.atrib.dev (SSE primary, JSON Feed companion)
-
-**Source:** Architectural gap surfaced 2026-05-13 in the always-on agent / importance-driven notification design conversation. Currently, consumers wanting to react to new atrib records in real-time must poll `/v1/stats` and fetch every record body, then filter locally. For an always-on consumer (e.g., an always-on cognitive runtime; future notification aggregators; cross-agent escalation receivers per [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion)'s Pattern 3 multi-agent scope), this is wasteful and high-latency. The substrate-driven-notification composition pattern (atrib provides signed importance, downstream consumer routes) depends on having a way to actually subscribe.
-
-**The decision in question:** add a subscription surface to `log.atrib.dev`. Server-Sent Events at `/v1/stream?<filters>` as the primary push mechanism (long-lived HTTP, low-latency, one-way, HTTP-native, every language has a client). Optional JSON Feed at `/v1/feed.json?<filters>` as the pull companion for consumers who can't hold long-lived connections (RSS-reader analog, cron-pollers, etc.).
-
-Filter parameters under consideration: `creator_key`, `context_id`, `event_type`, `topic`, `importance` (annotation records only), `since` (timestamp resume marker).
-
-**Considerations.**
-- Concrete use case: a downstream always-on cognitive runtime consumes annotation records with `importance ≥ high` and routes to operator-facing push. Without `/v1/stream`, the consumer polls `/v1/stats` and fetches everything new, filtering client-side. Inefficient and high-latency for sub-second response.
-- Implementation lands in the log-node service; record-stream filtering happens server-side from the tessera tile inventory.
-- Subscription surface is NOT a cognitive primitive per [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion). It's a service-layer feature of log.atrib.dev that downstream consumers (always-on runtimes, notification aggregators, cross-agent subscribers) consume. The agent itself does not reach for a "subscribe" tool; the harness or runtime does.
-- Backward-compatible: existing `/v1/stats` and `/v1/lookup/<hash>` endpoints unchanged. New endpoints additive.
-- Alternative rejected: pure RSS 2.0. XML-heavy, schema-rigid; doesn't fit atrib's record format cleanly. JSON Feed gets the universal-readability without the format pain.
-- Alternative rejected: WebSocket. Bidirectional channel atrib doesn't need; SSE is the right one-way push primitive.
-- Alternative rejected: webhooks-only. Requires every subscriber to host a public endpoint; high friction for individual operator integration. Webhooks could be added later as a third option.
-
-**Likely outcome (not committed):** accept when the first always-on consumer (a third-party cognitive runtime is the canonical trigger) starts blocking on log subscription. Implementation effort: SSE + filtering ~3-5 days of focused work in log-node; JSON Feed companion ~1 day on top. Integration testing with a real consumer doubles the timeline.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-
 ## P024: Embedded spec viewer at atrib.dev (auto-updated from spec source)
 
 **Source:** Reader-experience gap surfaced 2026-05-13 when README links pointing at `atrib-spec.md` rendered correctly on GitHub (relative path resolves to the same repo) but 404'd on npmjs.com (resolved to `npmjs.com/atrib-spec.md...`). The immediate fix landed as commit `03c70eb`: convert all relative spec / DECISIONS links to absolute GitHub URLs. This works but kicks readers out to GitHub by default. The spec deserves a permanent canonical URL that doesn't depend on GitHub being the host.
@@ -5156,11 +5185,11 @@ Filter parameters under consideration: `creator_key`, `context_id`, `event_type`
 **Considerations.**
 
 - Current practice during the single-agent phase is effectively single-signer ([D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)'s six primitives all fire under one creator_key). The substrate is multi-signer-capable, but routine work isn't yet multi-signer.
-- The hook reads from local mirror files. Multi-creator context would require either: (i) shipping the trusted-set's records to the local mirror via subscription, (ii) on-boot fetch from log.atrib.dev filtered by creator_key set + topics. Either path depends on [P023](#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion) (subscription surface) or a stable multi-key filter API.
+- The hook reads from local mirror files. Multi-creator context would require either: (i) shipping the trusted-set's records to the local mirror via subscription, (ii) on-boot fetch from log.atrib.dev filtered by creator_key set + topics. [D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields) supplies the single-key subscription surface, but trusted-set selection and topic-aware multi-key filtering remain open.
 - The "trusted set" is itself a design question: operator-curated allowlist? directory-anchored claims? Pattern-3 flow participants only? No standard answer until multi-agent flow shape stabilizes.
 - Topic-aware filtering (already shipped in Block 3b/3d) extends naturally to multi-creator records, same scoring function, just a wider record source.
 
-**Likely outcome (not committed):** ship this when at least one of the following is real: (i) Pattern 3 multi-agent flow active in production, (ii) [P023](#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion) subscription surface shipped, (iii) an agent regularly operates in contexts where another agent's signed history is relevant to boot-time state. Until then, the single-creator surface is canonical.
+**Likely outcome (not committed):** ship this when at least one of the following is real: (i) Pattern 3 multi-agent flow active in production, (ii) [D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields) grows trusted-set or multi-key filters, (iii) an agent regularly operates in contexts where another agent's signed history is relevant to boot-time state. Until then, the single-creator surface is canonical.
 
 **Cross-references.**
 
@@ -5168,7 +5197,7 @@ Filter parameters under consideration: `creator_key`, `context_id`, `event_type`
 - [D052](#d052-cross-attestation-requirement-for-transaction-records), cross-attestation records this would surface.
 - [D073](#d073-handoff-event_type-byte-placeholder-adr), handoff event_type placeholder; multi-creator session resume is the canonical handoff consumer case.
 - [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), verify-promotion; Pattern 3 triggers both this and that.
-- [P023](#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion), subscription surface; load-bearing dependency.
+- [D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields), subscription surface; shipped single-key dependency.
 - [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type), parent-child agent representation; multi-creator boot context is the read-side analogue.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
@@ -5225,7 +5254,7 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 - [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path), runtime integration patterns; Position 2's "hooks-call-CLI" pattern fits naturally as the canonical Pattern #2-equivalent (in-process MCP middleware) deployment shape.
 - [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback), long-lived emit daemon; the daemon's wire format is unchanged across Position 1 vs Position 2 (both invoke atrib-emit; only how the binary is located differs). Migration is independent.
 - [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), verify promotion: when verify-mcp ships as primitive #7, Position 2 makes adding `atrib verify` a one-subcommand addition rather than a new helper + node_modules.
-- [P023](#p023-subscription-surface-for-logatribdev-sse-primary-json-feed-companion), subscription surface; the always-on consumer pattern benefits from a stable CLI deployment for the same reasons.
+- [D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields), subscription surface; the always-on consumer pattern benefits from a stable CLI deployment for the same reasons.
 - [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type), parent-child env threading; benefits from PATH-resolved CLI per consequences above.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.

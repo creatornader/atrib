@@ -19,7 +19,7 @@ This package is `private: true` and is never published to npm. It is deployed as
 | **Persistence**         | In-process memory only                 | Persistent across restarts (if key is provided) |
 | **Checkpoint signing**  | Stub (no real signature)               | Real Ed25519 signatures                         |
 | **Conforms to spec [§2](../../atrib-spec.md#2-merkle-log-protocol)** | Wire format only                       | Full                                            |
-| **Inspection API**      | Yes (`entries`, `onSubmit`, etc.)      | No                                              |
+| **Inspection API**      | Yes (`entries`, `onSubmit`, etc.)      | HTTP read and subscription endpoints only       |
 | **npm published**       | No                                     | No (deployed as a service                      )|
 
 Both services speak the same `POST /v1/entries` wire format defined in spec [§2.6.1](../../atrib-spec.md#261-submit-entry), so client code is identical for both targets. Point `ATRIB_LOG_ENDPOINT` at either URL and the `@atrib/mcp` submission queue works unchanged.
@@ -106,6 +106,27 @@ Returns a proof bundle for a record that is already included in the log. This is
 ### `GET /v1/checkpoint`
 
 Returns the latest signed checkpoint as `text/plain` in C2SP signed-note format. Includes the current tree size and root hash signed by the log's Ed25519 key.
+
+### `GET /v1/stream`
+
+Server-Sent Events subscription surface for new decoded log entries. The stream emits a `ready` event followed by `log_entry` events:
+
+```text
+event: ready
+data: {"tree_size":42,"filters":{"event_type":"tool_call"}}
+
+id: 42
+event: log_entry
+data: {"tree_size":43,"entry":{"index":42,"record_hash":"sha256:..."}}
+```
+
+Supported filters: `creator_key`, `context_id`, `event_type`, and `since`. The log is commitment-only, so filters that require record bodies (`topic`, `importance`) return `400 Bad Request`.
+
+### `GET /v1/feed.json`
+
+JSON Feed 1.1 companion for consumers that cannot hold a long-lived SSE connection. Items are newest-first and carry the decoded log entry in `_atrib`.
+
+Supported filters match `/v1/stream`: `creator_key`, `context_id`, `event_type`, and `since`. `limit` and `offset` paginate the feed.
 
 ## Operator recovery
 

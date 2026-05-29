@@ -67,6 +67,7 @@ export async function bindServer(
   // this: §2.6.1 Step 6 says "return the existing inclusion proof" as a
   // SHOULD, not a MUST, for implementations with bounded caches.
   const proofCache = new Map<string, ProofBundle>()
+  const subscribers = new Set<LogStreamSubscriber>()
 
   // Acquire the submit lock: waits for previous submission to finish,
   // returns a release function. This serializes the append→proof→sign
@@ -91,17 +92,24 @@ export async function bindServer(
       res.end()
       return
     }
-    handleRequest(req, res, tree, signer, proofCache, acquireSubmitLock, graphFanoutEndpoint).catch(
-      (err) => {
-        // eslint-disable-next-line no-console
-        console.error('atrib-log-node: request handler crashed', err)
-        if (!res.headersSent) {
-          res.statusCode = 500
-          res.setHeader('content-type', 'application/json')
-          res.end(JSON.stringify({ error: 'internal error' }))
-        }
-      },
-    )
+    handleRequest(
+      req,
+      res,
+      tree,
+      signer,
+      proofCache,
+      acquireSubmitLock,
+      subscribers,
+      graphFanoutEndpoint,
+    ).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('atrib-log-node: request handler crashed', err)
+      if (!res.headersSent) {
+        res.statusCode = 500
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify({ error: 'internal error' }))
+      }
+    })
   })
 
   // Protect against Slowloris and slow-request DoS attacks
@@ -122,6 +130,7 @@ export async function bindServer(
   return {
     url,
     async close() {
+      for (const subscriber of subscribers) closeSubscriber(subscriber)
       await new Promise<void>((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()))
       })
@@ -130,6 +139,29 @@ export async function bindServer(
 }
 
 type AcquireLock = () => { wait: Promise<void>; release: () => void }
+
+interface DecodedEntry {
+  index: number
+  record_hash: string
+  creator_key: string
+  context_id: string
+  timestamp_ms: number
+  event_type: string
+  event_type_byte: number
+}
+
+interface LogEntryFilters {
+  creatorKey?: string
+  contextId?: string
+  eventType?: string
+  sinceMs?: number
+}
+
+interface LogStreamSubscriber {
+  filters: LogEntryFilters
+  heartbeat: ReturnType<typeof setInterval>
+  res: ServerResponse
+}
 
 function isGetOrHead(method: string | undefined): boolean {
   return method === 'GET' || method === 'HEAD'
@@ -154,6 +186,7 @@ async function handleRequest(
   signer: CheckpointSigner,
   proofCache: Map<string, ProofBundle>,
   acquireLock: AcquireLock,
+  subscribers: Set<LogStreamSubscriber>,
   graphFanoutEndpoint: string | undefined,
 ): Promise<void> {
   // D054: when accessed via the explore.atrib.dev hostname, serve the
@@ -211,6 +244,8 @@ async function handleRequest(
         proof: `GET /${v}/proof/<record_hash_hex>`,
         by_context: `GET /${v}/by-context/<context_id_hex>`,
         by_creator: `GET /${v}/by-creator/<creator_key_b64url>`,
+        stream: `GET /${v}/stream`,
+        json_feed: `GET /${v}/feed.json`,
         tile: `GET /${v}/tile/<level>/<index>`,
         entry_bundle: `GET /${v}/tile/entries/<index>`,
       },
@@ -220,7 +255,16 @@ async function handleRequest(
   }
 
   if (req.method === 'POST' && req.url === '/v1/entries') {
-    return handleSubmit(req, res, tree, signer, proofCache, acquireLock, graphFanoutEndpoint)
+    return handleSubmit(
+      req,
+      res,
+      tree,
+      signer,
+      proofCache,
+      acquireLock,
+      subscribers,
+      graphFanoutEndpoint,
+    )
   }
 
   // §1.8 / T8: the log is append-only by design. DELETE is rejected
@@ -270,6 +314,21 @@ async function handleRequest(
   // state in a single pass; not part of spec §2.5.
   if (req.method === 'GET' && req.url === '/v1/stats') {
     return handleStats(res, tree)
+  }
+
+  if (req.method === 'GET' && urlPath === '/v1/stream') {
+    const parsed = parseFilterParams(new URL(req.url ?? '', 'http://localhost').searchParams)
+    if (!parsed.ok) return reject(res, 400, parsed.error)
+    return handleStream(req, res, tree, parsed.filters, subscribers)
+  }
+
+  if (req.method === 'GET' && urlPath === '/v1/feed.json') {
+    const url = new URL(req.url ?? '', 'http://localhost')
+    const parsed = parseFilterParams(url.searchParams)
+    if (!parsed.ok) return reject(res, 400, parsed.error)
+    const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') ?? '20', 10) || 20, 1), 100)
+    const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0', 10) || 0, 0)
+    return handleJsonFeed(req, res, tree, parsed.filters, limit, offset)
   }
 
   // GET /v1/recent: newest N decoded entries (default 20, max 100). Powers
@@ -397,7 +456,7 @@ async function handleRequest(
 
   sendJson(res, 404, {
     error: 'not found',
-    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/recent, GET /v1/lookup/<hex>, GET /v1/proof/<hex>, GET /v1/by-context/<hex>, GET /v1/by-creator/<base64url>, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>, GET /dashboard, GET /<name>.mjs (dashboard sibling modules), GET /static/<name>, GET /favicon.ico',
+    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/recent, GET /v1/stream, GET /v1/feed.json, GET /v1/lookup/<hex>, GET /v1/proof/<hex>, GET /v1/by-context/<hex>, GET /v1/by-creator/<base64url>, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>, GET /dashboard, GET /<name>.mjs (dashboard sibling modules), GET /static/<name>, GET /favicon.ico',
   })
 }
 
@@ -638,15 +697,7 @@ async function handleStaticAsset(
 function decodeEntry(
   bytes: Uint8Array,
   index: number,
-): {
-  index: number
-  record_hash: string
-  creator_key: string
-  context_id: string
-  timestamp_ms: number
-  event_type: string
-  event_type_byte: number
-} {
+): DecodedEntry {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const eventByte = bytes[89]!
   const eventLabel =
@@ -815,6 +866,245 @@ function handleRecent(
   })
 }
 
+function handleStream(
+  req: IncomingMessage,
+  res: ServerResponse,
+  tree: MerkleTree,
+  filters: LogEntryFilters,
+  subscribers: Set<LogStreamSubscriber>,
+): void {
+  res.statusCode = 200
+  res.setHeader('content-type', 'text/event-stream; charset=utf-8')
+  res.setHeader('cache-control', 'no-cache, no-transform')
+  res.setHeader('connection', 'keep-alive')
+  res.flushHeaders()
+
+  const subscriber: LogStreamSubscriber = {
+    filters,
+    heartbeat: setInterval(() => {
+      if (!res.destroyed) res.write(': keep-alive\n\n')
+    }, 25_000),
+    res,
+  }
+  subscribers.add(subscriber)
+  req.on('close', () => {
+    subscribers.delete(subscriber)
+    clearInterval(subscriber.heartbeat)
+  })
+
+  res.write(
+    `event: ready\ndata: ${JSON.stringify({
+      tree_size: tree.size,
+      filters: publicFilterShape(filters),
+    })}\n\n`,
+  )
+
+  if (filters.sinceMs !== undefined) {
+    for (let i = 0; i < tree.size; i++) {
+      const entry = decodeEntry(tree.entryBytes(i), i)
+      if (matchesEntryFilters(entry, filters)) writeSseLogEntry(res, entry, tree.size)
+    }
+  }
+}
+
+function handleJsonFeed(
+  req: IncomingMessage,
+  res: ServerResponse,
+  tree: MerkleTree,
+  filters: LogEntryFilters,
+  limit: number,
+  offset: number,
+): void {
+  const entries = collectNewestEntries(tree, filters, limit, offset)
+  const baseUrl = requestBaseUrl(req)
+  const feedPath = req.url ?? '/v1/feed.json'
+  sendJsonWithContentType(
+    res,
+    200,
+    {
+      version: 'https://jsonfeed.org/version/1.1',
+      title: 'atrib log entries',
+      home_page_url: `${baseUrl}/`,
+      feed_url: `${baseUrl}${feedPath}`,
+      items: entries.map((entry) => jsonFeedItem(baseUrl, entry)),
+      _atrib: {
+        tree_size: tree.size,
+        limit,
+        offset,
+        filters: publicFilterShape(filters),
+      },
+    },
+    'application/feed+json; charset=utf-8',
+  )
+}
+
+function notifySubscribers(
+  subscribers: Set<LogStreamSubscriber>,
+  entry: DecodedEntry,
+  treeSize: number,
+): void {
+  for (const subscriber of subscribers) {
+    if (!matchesEntryFilters(entry, subscriber.filters)) continue
+    try {
+      writeSseLogEntry(subscriber.res, entry, treeSize)
+    } catch {
+      subscribers.delete(subscriber)
+      closeSubscriber(subscriber)
+    }
+  }
+}
+
+function closeSubscriber(subscriber: LogStreamSubscriber): void {
+  clearInterval(subscriber.heartbeat)
+  if (!subscriber.res.destroyed && !subscriber.res.writableEnded) subscriber.res.end()
+}
+
+function writeSseLogEntry(res: ServerResponse, entry: DecodedEntry, treeSize: number): void {
+  res.write(`id: ${entry.index}\n`)
+  res.write('event: log_entry\n')
+  res.write(`data: ${JSON.stringify({ tree_size: treeSize, entry })}\n\n`)
+}
+
+function collectNewestEntries(
+  tree: MerkleTree,
+  filters: LogEntryFilters,
+  limit: number,
+  offset: number,
+): DecodedEntry[] {
+  const entries: DecodedEntry[] = []
+  let skipped = 0
+  for (let i = tree.size - 1; i >= 0; i--) {
+    const entry = decodeEntry(tree.entryBytes(i), i)
+    if (!matchesEntryFilters(entry, filters)) continue
+    if (skipped < offset) {
+      skipped += 1
+      continue
+    }
+    entries.push(entry)
+    if (entries.length >= limit) break
+  }
+  return entries
+}
+
+function matchesEntryFilters(entry: DecodedEntry, filters: LogEntryFilters): boolean {
+  if (filters.creatorKey !== undefined && entry.creator_key !== filters.creatorKey) return false
+  if (filters.contextId !== undefined && entry.context_id !== filters.contextId) return false
+  if (filters.eventType !== undefined && entry.event_type !== filters.eventType) return false
+  if (filters.sinceMs !== undefined && entry.timestamp_ms < filters.sinceMs) return false
+  return true
+}
+
+function jsonFeedItem(baseUrl: string, entry: DecodedEntry): Record<string, unknown> {
+  const hashHex = entry.record_hash.slice('sha256:'.length)
+  return {
+    id: entry.record_hash,
+    url: `${baseUrl}/v1/lookup/${hashHex}`,
+    title: `${entry.event_type} at log index ${entry.index}`,
+    content_text: `atrib ${entry.event_type} entry ${entry.index} from ${entry.creator_key}`,
+    date_published: new Date(entry.timestamp_ms).toISOString(),
+    _atrib: entry,
+  }
+}
+
+function requestBaseUrl(req: IncomingMessage): string {
+  const proto = headerFirst(req.headers['x-forwarded-proto']) ?? 'http'
+  const host = headerFirst(req.headers.host) ?? 'log.atrib.dev'
+  return `${proto}://${host}`
+}
+
+function headerFirst(value: string | string[] | undefined): string | undefined {
+  const first = Array.isArray(value) ? value[0] : value
+  return first?.split(',')[0]?.trim()
+}
+
+function parseFilterParams(
+  params: URLSearchParams,
+): { ok: true; filters: LogEntryFilters } | { ok: false; error: string } {
+  for (const unsupported of ['topic', 'importance']) {
+    if (params.has(unsupported)) {
+      return {
+        ok: false,
+        error: `${unsupported} filter requires record-body indexing and is not supported by log-node subscriptions`,
+      }
+    }
+  }
+
+  const filters: LogEntryFilters = {}
+  const creatorKey = params.get('creator_key')
+  if (creatorKey !== null) {
+    if (!/^[A-Za-z0-9_-]{43}$/.test(creatorKey)) {
+      return { ok: false, error: 'creator_key must be a 43-character base64url Ed25519 public key' }
+    }
+    filters.creatorKey = creatorKey
+  }
+
+  const contextId = params.get('context_id')
+  if (contextId !== null) {
+    if (!/^[0-9a-f]{32}$/.test(contextId)) {
+      return { ok: false, error: 'context_id must be 32 lowercase hex characters' }
+    }
+    filters.contextId = contextId
+  }
+
+  const eventType = params.get('event_type')
+  if (eventType !== null) {
+    const normalized = normalizeEventTypeFilter(eventType)
+    if (normalized === undefined) {
+      return { ok: false, error: `unsupported event_type filter: ${eventType}` }
+    }
+    filters.eventType = normalized
+  }
+
+  const since = params.get('since')
+  if (since !== null) {
+    const parsed = parseSinceMs(since)
+    if (parsed === undefined) {
+      return { ok: false, error: 'since must be a non-negative millisecond timestamp or ISO timestamp' }
+    }
+    filters.sinceMs = parsed
+  }
+
+  return { ok: true, filters }
+}
+
+function normalizeEventTypeFilter(value: string): string | undefined {
+  const byValue: Record<string, string> = {
+    tool_call: 'tool_call',
+    transaction: 'transaction',
+    observation: 'observation',
+    directory_anchor: 'directory_anchor',
+    annotation: 'annotation',
+    revision: 'revision',
+    extension: 'extension',
+    reserved: 'reserved',
+    'https://atrib.dev/v1/types/tool_call': 'tool_call',
+    'https://atrib.dev/v1/types/transaction': 'transaction',
+    'https://atrib.dev/v1/types/observation': 'observation',
+    'https://atrib.dev/v1/types/directory_anchor': 'directory_anchor',
+    'https://atrib.dev/v1/types/annotation': 'annotation',
+    'https://atrib.dev/v1/types/revision': 'revision',
+  }
+  return byValue[value]
+}
+
+function parseSinceMs(value: string): number | undefined {
+  if (/^\d+$/.test(value)) {
+    const n = Number(value)
+    return Number.isSafeInteger(n) ? n : undefined
+  }
+  const t = Date.parse(value)
+  return Number.isFinite(t) && t >= 0 ? t : undefined
+}
+
+function publicFilterShape(filters: LogEntryFilters): Record<string, string | number> {
+  const out: Record<string, string | number> = {}
+  if (filters.creatorKey !== undefined) out.creator_key = filters.creatorKey
+  if (filters.contextId !== undefined) out.context_id = filters.contextId
+  if (filters.eventType !== undefined) out.event_type = filters.eventType
+  if (filters.sinceMs !== undefined) out.since = filters.sinceMs
+  return out
+}
+
 function handleStats(res: ServerResponse, tree: MerkleTree): void {
   const size = tree.size
   const signers = new Set<string>()
@@ -873,6 +1163,7 @@ async function handleSubmit(
   signer: CheckpointSigner,
   proofCache: Map<string, ProofBundle>,
   acquireLock: AcquireLock,
+  subscribers: Set<LogStreamSubscriber>,
   graphFanoutEndpoint: string | undefined,
 ): Promise<void> {
   let body: string
@@ -937,6 +1228,7 @@ async function handleSubmit(
   const lock = acquireLock()
   await lock.wait
   let proof: ProofBundle
+  let appendedEntry: DecodedEntry | null = null
   try {
     // Re-check cache inside the lock. two concurrent requests for the same
     // record can both miss the fast-path check above, but only the first
@@ -947,6 +1239,7 @@ async function handleSubmit(
       return // finally block releases the lock
     }
     const logIndex = tree.append(entryBytes)
+    appendedEntry = decodeEntry(entryBytes, logIndex)
     proof = await makeProofBundle(tree, signer, logIndex)
 
     // Cache for idempotency. evict oldest entry if at capacity
@@ -960,6 +1253,7 @@ async function handleSubmit(
   }
 
   sendJson(res, 200, proof)
+  if (appendedEntry) notifySubscribers(subscribers, appendedEntry, tree.size)
 
   // Fan out the full signed record to graph-node so the derived graph
   // stays in sync with the source-of-truth log. Fire-and-forget; failures
@@ -1181,9 +1475,18 @@ function sendBinary(res: ServerResponse, data: Uint8Array, isFull: boolean): voi
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
+  sendJsonWithContentType(res, status, body, 'application/json')
+}
+
+function sendJsonWithContentType(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  contentType: string,
+): void {
   const json = JSON.stringify(body)
   res.statusCode = status
-  res.setHeader('content-type', 'application/json')
+  res.setHeader('content-type', contentType)
   res.setHeader('content-length', Buffer.byteLength(json))
   res.end(json)
 }
