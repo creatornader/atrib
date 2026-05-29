@@ -96,6 +96,16 @@ export type {
   DirectoryAnchorContent,
 } from './content-shapes.js'
 
+// Local-mirror sidecar normalization for consumers that need recall-readable
+// content from legacy `_local.toolName` / `_local.args` / `_local.result`
+// fields or OpenInference callback sidecars that predate `_local.content`.
+export {
+  deriveLocalContentFromSidecar,
+  withDerivedLocalContent,
+  isLocalSidecarLike,
+} from './local-sidecar.js'
+export type { LocalSidecarLike } from './local-sidecar.js'
+
 // Context (for advanced usage)
 export {
   readInboundContext,

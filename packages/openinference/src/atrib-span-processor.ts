@@ -19,9 +19,8 @@
  *     `atrib:` prefix; the original span continues unaffected.
  *
  * This is a "simple" processor: it processes each span on `onEnd` without
- * batching. A future `AtribBatchSpanProcessor` would batch submissions to
- * the log to reduce per-record HTTP overhead, mirroring the Arize batch
- * variant's role.
+ * batching. Use `AtribBatchSpanProcessor` when a caller needs queueing and
+ * size-based or time-based batch submission.
  */
 
 import type {
@@ -39,38 +38,20 @@ import {
 } from '@atrib/mcp'
 import {
   spanToUnsignedRecord,
-  readIoValues,
-  readAgentName,
   readLlmOutputToolCallId,
   readToolCallId,
+  readIoValues,
 } from './span-to-record.js'
+import {
+  buildAtribSpanSidecar,
+  type AtribSpanSidecar,
+} from './sidecar.js'
 import { isOpenInferenceSpan } from './openinference-filter.js'
 import { InformedByTracker, type InformedByTrackerOptions } from './informed-by-tracker.js'
 import {
   deriveArgsResultHashFields,
   type ArgsResultHashPosture,
 } from './args-result-hash.js'
-
-export type AtribSpanSidecar = {
-  /**
-   * Span attributes the caller may want to capture in the local mirror
-   * but not in the public record. The atrib spec §1.2 record format does
-   * not carry args/result inline.
-   */
-  readonly input?: string
-  readonly output?: string
-  readonly agentName?: string
-  /**
-   * For LLM spans whose output is a tool call, the tool_call.id from
-   * `llm.output_messages.<i>.message.tool_calls.<j>.tool_call.id`.
-   * Matches the corresponding TOOL span's `tool_call.id` -- the
-   * empirical seed for future `informed_by` derivation between LLM and
-   * TOOL atrib records.
-   */
-  readonly llmOutputToolCallId?: string
-  readonly traceId: string
-  readonly spanId: string
-}
 
 export type AtribSubmission = (
   signed: AtribRecord,
@@ -268,16 +249,7 @@ export class AtribSpanProcessor implements SpanProcessor {
       this.tracker.recordLlmToolCallEmission(traceId, llmOutputToolCallId, recordHash)
     }
 
-    const io = readIoValues(span)
-    const agentName = readAgentName(span)
-    const sidecar: AtribSpanSidecar = {
-      ...(io.input !== undefined ? { input: io.input } : {}),
-      ...(io.output !== undefined ? { output: io.output } : {}),
-      ...(agentName !== undefined ? { agentName } : {}),
-      ...(llmOutputToolCallId !== undefined ? { llmOutputToolCallId } : {}),
-      traceId,
-      spanId: span.spanContext().spanId,
-    }
+    const sidecar = buildAtribSpanSidecar(span, result.kind)
 
     await this.opts.submit(signed, sidecar)
   }

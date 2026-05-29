@@ -7,8 +7,14 @@ export { AtribSpanProcessor } from './atrib-span-processor.js'
 export type {
   AtribSpanProcessorOptions,
   AtribSubmission,
-  AtribSpanSidecar,
 } from './atrib-span-processor.js'
+export {
+  buildAtribSpanSidecar,
+} from './sidecar.js'
+export type {
+  AtribSpanSidecar,
+  OpenInferenceSidecarContent,
+} from './sidecar.js'
 
 // Batch variant for production pipelines (mirrors OpenInferenceBatchSpanProcessor).
 export { AtribBatchSpanProcessor } from './atrib-batch-span-processor.js'

@@ -45,13 +45,15 @@ import {
 } from '@atrib/mcp'
 import {
   spanToUnsignedRecord,
-  readIoValues,
-  readAgentName,
   readLlmOutputToolCallId,
   readToolCallId,
+  readIoValues,
 } from './span-to-record.js'
 import { isOpenInferenceSpan } from './openinference-filter.js'
-import type { AtribSpanSidecar } from './atrib-span-processor.js'
+import {
+  buildAtribSpanSidecar,
+  type AtribSpanSidecar,
+} from './sidecar.js'
 import { InformedByTracker, type InformedByTrackerOptions } from './informed-by-tracker.js'
 import {
   deriveArgsResultHashFields,
@@ -287,16 +289,7 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
       this.tracker.recordLlmToolCallEmission(traceId, llmOutputToolCallId, recordHash)
     }
 
-    const io = readIoValues(span)
-    const agentName = readAgentName(span)
-    const sidecar: AtribSpanSidecar = {
-      ...(io.input !== undefined ? { input: io.input } : {}),
-      ...(io.output !== undefined ? { output: io.output } : {}),
-      ...(agentName !== undefined ? { agentName } : {}),
-      ...(llmOutputToolCallId !== undefined ? { llmOutputToolCallId } : {}),
-      traceId,
-      spanId: span.spanContext().spanId,
-    }
+    const sidecar = buildAtribSpanSidecar(span, result.kind)
 
     this.enqueue({ signed, sidecar })
   }

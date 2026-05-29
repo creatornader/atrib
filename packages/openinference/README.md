@@ -2,7 +2,7 @@
 
 OpenTelemetry SpanProcessor that consumes [OpenInference](https://github.com/Arize-ai/openinference)-shaped spans and emits signed atrib records.
 
-This is **Pattern #4** of atrib's six runtime integration patterns ([atrib-spec §9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#9-runtime-integration-patterns)). One adapter transitively reaches every framework with OpenInference instrumentation: OpenAI Agents SDK, Claude Agent SDK, LangChain (and LangGraph), Vercel AI, CrewAI, LlamaIndex, DSPy, MCP, Microsoft Agent Framework, Bedrock AgentCore, smolagents, Pydantic AI, Agno, and 20+ more.
+This is **Pattern #4** of atrib's seven runtime integration patterns ([atrib-spec §9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#9-runtime-integration-patterns)). One adapter transitively reaches every framework with OpenInference instrumentation: OpenAI Agents SDK, Claude Agent SDK, LangChain (and LangGraph), Vercel AI, CrewAI, LlamaIndex, DSPy, MCP, Microsoft Agent Framework, Bedrock AgentCore, smolagents, Pydantic AI, Agno, and 20+ more.
 
 ## Why this exists
 
@@ -25,24 +25,33 @@ pnpm add @opentelemetry/api @opentelemetry/sdk-trace-base
 ## Quick start
 
 ```ts
+import { appendFile, mkdir } from 'node:fs/promises'
 import { BasicTracerProvider } from '@opentelemetry/sdk-trace-base'
 import { AtribSpanProcessor } from '@atrib/openinference'
 import { base64urlEncode, getPublicKey } from '@atrib/mcp'
 
 const privateKey = /* your 32-byte Ed25519 seed */
 const creatorKey = base64urlEncode(await getPublicKey(privateKey))
+const mirrorDir = `${process.env.HOME}/.atrib/records`
+const mirrorPath = `${mirrorDir}/openinference.jsonl`
+await mkdir(mirrorDir, { recursive: true })
 
 const processor = new AtribSpanProcessor({
   privateKey,
   creatorKey,
   serverUrl: 'https://your-agent.example/atrib',
   submit: async (signed, sidecar) => {
-    // Forward to the atrib log via @atrib/mcp's createSubmissionQueue,
-    // a custom HTTP client, or any pipeline you control.
+    // Submit only the signed record to the public log. Persist the sidecar
+    // in your local mirror as `_local` if you want recall, trace, and
+    // summarize to read the span payload later.
     await fetch('https://log.atrib.dev/v1/submit', {
       method: 'POST',
-      body: JSON.stringify({ record: signed, sidecar }),
+      body: JSON.stringify(signed),
     })
+    await appendFile(
+      mirrorPath,
+      `${JSON.stringify({ record: signed, _local: sidecar, written_at: Date.now() })}\n`,
+    )
   },
 })
 
@@ -55,7 +64,7 @@ provider.addSpanProcessor(processor)
 
 ## What gets signed
 
-v0.0.1 maps all ten OpenInference span kinds:
+The current release maps all ten OpenInference span kinds:
 
 | Kind | atrib event_type | content_leaf |
 |---|---|---|
@@ -70,11 +79,23 @@ v0.0.1 maps all ten OpenInference span kinds:
 | `EVALUATOR` | `observation` | `evaluator:<span.name>` |
 | `PROMPT` | `observation` | `prompt:<span.name>` |
 
-All kinds derive `context_id` from `session.id` if present, else the OTel `trace_id`. Sidecar metadata captures `agent.name`, `input.value`, `output.value`, and -- for LLM spans whose output is a tool call -- `llm.output_messages.<i>.message.tool_calls.<j>.tool_call.id` (the empirical seed for LLM->TOOL `informed_by` derivation).
+All kinds derive `context_id` from `session.id` if present, else the OTel `trace_id`. The signed record stays canonical and lean. Sidecar metadata captures the recall-readable payload: span identity, `agent.name`, model name, input/output values, prompt metadata, usage, cost, score, metadata, and for LLM spans whose output is a tool call, `llm.output_messages.<i>.message.tool_calls.<j>.tool_call.id` (the empirical seed for LLM-to-TOOL `informed_by` derivation).
+
+## Sidecar-first observability metadata
+
+Langfuse, Phoenix, Datadog, and similar systems should remain the trace viewer, latency dashboard, cost dashboard, prompt-management surface, and eval surface. `@atrib/openinference` uses the same span tree as intake, then writes a different product shape:
+
+- public log: the signed `AtribRecord` and 90-byte commitment
+- local mirror: `{ record, _local: sidecar }`
+- cognitive consumers: recall, trace, and summarize read `_local.content`
+
+`sidecar.content` is intentionally local-only. It includes fields such as `source`, `span_kind`, `span_name`, `trace_id`, `span_id`, `what`, `topics`, `tool_name`, `args`, `result`, `input`, `output`, `agent_name`, `model_name`, prompt fields, `usage_details`, `cost_details`, `score_details`, and `metadata`. These fields are not signed record fields. If you need verifier-grade replay for input or output bytes, enable `argsResultHashPosture: 'plain'` or `'salted'` so the signed record carries `args_hash` and `result_hash`.
+
+This is the intended overlap with Langfuse: send the same spans to Langfuse for operations, and to atrib for signed evidence plus local cognitive recall.
 
 ## Simple vs batch
 
-Two SpanProcessor variants ship in v0.0.1:
+Two SpanProcessor variants ship:
 
 | Variant | When to use | Submit shape |
 |---|---|---|
@@ -150,13 +171,14 @@ Per the atrib spec [§5.8 degradation contract](https://github.com/creatornader/
 ## What this does NOT do
 
 - **No tool response capture.** Spans carry whatever the OpenInference instrumentation provided. atrib signs that span shape verbatim; it does not enrich tool outputs.
+- **No public prompt/output storage.** Prompts, outputs, usage, cost, scores, and metadata stay in the local sidecar unless the caller separately commits to them with `args_hash` / `result_hash` or publishes a body through another privacy posture.
 - **No log-inclusion verification.** Local signing produces a record; the configured `submit` callback is responsible for log commitment. Re-verification of log inclusion is the consumer's job ([§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry) inclusion proof flow).
 - **No re-instrumentation.** This package consumes OpenInference spans; it does not instrument frameworks. Use `@arizeai/openinference-*` instrumentations (or your framework's native OpenInference integration) to produce the spans.
 - **No graph derivation.** Emits flat records. The atrib log + graph-node service derive the [§3.2.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#324-edge-derivation-rules) graph from the record set.
 
 ## Status
 
-`v0.0.1` covers:
+Current coverage:
 
 - All 10 OpenInference span kinds mapped: `TOOL` -> `tool_call`; `LLM` / `AGENT` / `EMBEDDING` / `RETRIEVER` / `RERANKER` / `CHAIN` / `GUARDRAIL` / `EVALUATOR` / `PROMPT` -> `observation`.
 - Both Simple and Batch SpanProcessor variants.
@@ -164,6 +186,7 @@ Per the atrib spec [§5.8 degradation contract](https://github.com/creatornader/
 - Args/result hash extraction per spec [§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture) ([D045](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d045-privacy-postures-normative-spec-section) salted-commitment posture) with three modes: `none` / `plain` / `salted`.
 - Preflight verification helper that catches misconfigured context propagation at startup.
 - Attribute keys imported from `@arizeai/openinference-semantic-conventions` for canonical schema correctness.
+- Recall-readable local sidecar content for span identity, prompts, outputs, usage, cost, scores, metadata, and LLM-to-tool linkage.
 - 62 unit tests + composition pilot validated end-to-end against real Vercel AI SDK v6 + NVIDIA NIM-served Qwen 3.5 + `@arizeai/openinference-vercel`'s reference SpanProcessor on a shared TracerProvider.
 - Runnable integration example at `packages/integration/examples/openinference/` (offline by default; live model-driven path enabled via `ATRIB_OPENINFERENCE_RUN_LIVE=1` + `NVIDIA_API_KEY`).
 - Conformance fixtures in `test/fixtures/` capture four canonical span shapes (TOOL, two LLMs, AGENT) live-captured from a real run. The fixture-replay test catches upstream attribute-schema drift before it reaches consumers.

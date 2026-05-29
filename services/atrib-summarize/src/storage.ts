@@ -14,7 +14,14 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { canonicalRecord, hexEncode, sha256, type AtribRecord, type OnRecordSidecar } from '@atrib/mcp'
+import {
+  canonicalRecord,
+  hexEncode,
+  sha256,
+  withDerivedLocalContent,
+  type AtribRecord,
+  type OnRecordSidecar,
+} from '@atrib/mcp'
 
 export interface IndexedRecord {
   record: AtribRecord
@@ -37,7 +44,7 @@ export interface IndexedRecord {
  * (mcp-wrap writes toolName/args/result; atrib-emit writes content).
  */
 export interface SidecarPayload extends OnRecordSidecar {
-  content?: Record<string, unknown>
+  content?: unknown
   producer?: string
 }
 
@@ -99,7 +106,7 @@ export function loadAllRecords(dir: string = RECORDS_DIR): {
           // tolerate its absence.
           if (isEnvelope) {
             const sidecar = (parsed as { _local?: SidecarPayload })._local
-            if (sidecar) indexed.local = sidecar
+            if (sidecar) indexed.local = withDerivedLocalContent(rec.event_type, sidecar)
           }
           byHash.set(indexed.record_hash, indexed)
           all.push(indexed)

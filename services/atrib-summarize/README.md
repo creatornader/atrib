@@ -53,7 +53,9 @@ Without an API key, the tool returns a warnings-only response per the [§5.8](ht
 
 Same as `@atrib/trace`: every `*.jsonl` mirror under `~/.atrib/records/` (override via `ATRIB_RECORDS_DIR`). Tolerates both legacy bare-record and current envelope shapes.
 
-When a record lacks a `_local` sidecar (legacy entry), the prompt includes a marker telling the LLM the input is impoverished, only event_type + cryptographic metadata is available, so the synthesis can be honest about gaps. The output reports `records_with_sidecar` and `records_without_sidecar` counts so callers know how rich the input was.
+Summarize reads `_local.content` first, then derives the same content shape from legacy wrapper or OpenInference sidecar fields when needed. OpenInference content can add span kind/name, tool/agent/model, prompt identifiers and templates, input/output, usage, cost, score, metadata, and topics to the synthesis prompt. Those fields stay local sidecar payload per [D108](../../DECISIONS.md#d108-observability-span-trees-are-intake-local-sidecars-are-cognitive-payload); they are not promoted to signed protocol fields.
+
+When a record lacks usable local content (legacy entry), the prompt includes a marker telling the LLM the input is impoverished, only event_type + cryptographic metadata is available, so the synthesis can be honest about gaps. The output reports `records_with_sidecar` and `records_without_sidecar` counts so callers know how rich the input was.
 
 ## Behaviors
 

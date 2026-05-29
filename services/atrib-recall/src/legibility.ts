@@ -55,8 +55,10 @@ export function synthesizeDisplaySummary(
   }
 
   // 2. Per-event_type synthesis.
-  const tool_name = (record as AtribRecord & { tool_name?: string }).tool_name
   const c = isObject(content) ? content as Record<string, unknown> : {}
+  const recordToolName = (record as AtribRecord & { tool_name?: string }).tool_name
+  const sidecarToolName = stringFrom(c.tool_name ?? c.toolName)
+  const tool_name = recordToolName ?? sidecarToolName
 
   switch (record.event_type) {
     case `${ATRIB_EVENT_TYPE_PREFIX}tool_call`: {
@@ -194,6 +196,10 @@ export function formatAge(timestamp: number, now: number): string {
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v)
+}
+
+function stringFrom(v: unknown): string | undefined {
+  return typeof v === 'string' && v.length > 0 ? v : undefined
 }
 
 function truncate(s: string, maxLen: number): string {

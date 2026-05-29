@@ -56,6 +56,16 @@ describe('synthesizeDisplaySummary', () => {
     expect(result).toBe('tool call')
   })
 
+  it('tool_call synth reads tool_name from derived local content', () => {
+    const r = record(`${ATRIB}tool_call`)
+    const result = synthesizeDisplaySummary(
+      r,
+      { tool_name: 'search_web', args: { query: 'Langfuse overlap' } },
+      undefined,
+    )
+    expect(result).toMatch(/^call search_web\(.*query=.*\)$/)
+  })
+
   it('observation uses what field', () => {
     const r = record(`${ATRIB}observation`)
     const result = synthesizeDisplaySummary(

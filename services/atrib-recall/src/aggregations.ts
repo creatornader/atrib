@@ -29,6 +29,7 @@ import {
   hexEncode,
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_REVISION_URI,
+  deriveLocalContentFromSidecar,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
@@ -44,11 +45,12 @@ import { IMPORTANCE_NUMERIC } from './index.js'
  * `content.revises` reference.
  *
  * `content` is the deserialized `_local.content` from a D062 envelope mirror
- * line. Producers writing bare AtribRecord lines (legacy / non-envelope)
- * yield `content: undefined` here; annotation aggregation simply skips
- * those records (the §8.1 posture: no body disclosed). Code that wants to
- * read annotation importance / topics / summary MUST handle the undefined
- * case.
+ * line, or a derived equivalent from known legacy sidecar fields such as
+ * `_local.toolName`, `_local.args`, `_local.result`, `_local.input`, and
+ * `_local.output`. Producers writing bare AtribRecord lines yield
+ * `content: undefined` here; annotation aggregation simply skips those
+ * records (the §8.1 posture: no body disclosed). Code that wants to read
+ * annotation importance / topics / summary MUST handle the undefined case.
  */
 export type LoadedRecord = {
   record: AtribRecord
@@ -76,7 +78,7 @@ export function computeRecordHash(record: AtribRecord): string {
 }
 
 /**
- * Pull the inner AtribRecord and the D062 `_local.content` out of one
+ * Pull the inner AtribRecord and recall-readable local content out of one
  * parsed mirror line. Returns null when the line is neither shape or is
  * missing the required AtribRecord fields. The shape contract mirrors
  * `extractRecord` in `index.ts` exactly; the only addition is the optional
@@ -108,11 +110,11 @@ function extractLoaded(
     const local = (obj._local as Record<string, unknown> | undefined) ?? undefined
     if (local) {
       const producer = typeof local.producer === 'string' ? local.producer : undefined
-      const hasContent = 'content' in local
-      if (hasContent || producer !== undefined) {
+      const content = deriveLocalContentFromSidecar(record.event_type, local)
+      if (content !== undefined || producer !== undefined) {
         return {
           record,
-          ...(hasContent && { content: local.content }),
+          ...(content !== undefined && { content }),
           ...(producer !== undefined && { producer }),
         }
       }

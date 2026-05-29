@@ -70,6 +70,6 @@
     "context_id_source": "trace_id (no session.id)",
     "content_leaf_format": "llm:<llm.model_name>",
     "informed_by_seed_field": "llm.output_messages.0.message.tool_calls.0.tool_call.id",
-    "future_informed_by_target": "the TOOL record whose tool_call.id matches this seed"
+    "informed_by_target": "the TOOL record whose tool_call.id matches this seed"
   }
 }

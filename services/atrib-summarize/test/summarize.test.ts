@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import { __test_only__ } from '../src/index.js'
 import { callLlm, resolveLlmConfig } from '../src/llm.js'
+import { buildUserMessage } from '../src/prompt.js'
 import type { IndexedRecord } from '../src/storage.js'
 
 const { selectRecords, handleSummarize } = __test_only__
@@ -106,6 +107,35 @@ describe('selectRecords', () => {
       [r1],
     )
     expect(result).toHaveLength(1)
+  })
+})
+
+describe('buildUserMessage', () => {
+  it('renders OpenInference sidecar fields into the cognitive summary prompt', () => {
+    const r = fakeIndexed('44', 'a'.repeat(32), 3000)
+    r.local = {
+      content: {
+        source: 'openinference',
+        span_kind: 'LLM',
+        span_name: 'generate-text',
+        model_name: 'qwen3.5',
+        prompt_version: 'billing-v4',
+        prompt: 'compare Langfuse trace shape to atrib evidence shape',
+        output: 'keep observability data local and recall-readable',
+        usage_details: { input: 12, output: 34 },
+        metadata: { release: 'canary' },
+      },
+      producer: 'openinference',
+    }
+    const text = buildUserMessage([r], undefined)
+    expect(text).toContain('source: openinference')
+    expect(text).toContain('span_kind: LLM')
+    expect(text).toContain('model: qwen3.5')
+    expect(text).toContain('prompt_version: billing-v4')
+    expect(text).toContain('compare Langfuse trace shape')
+    expect(text).toContain('keep observability data local')
+    expect(text).toContain('usage_details')
+    expect(text).toContain('canary')
   })
 })
 
