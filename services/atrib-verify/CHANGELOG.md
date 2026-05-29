@@ -1,5 +1,11 @@
 # @atrib/verify-mcp
 
+## 0.2.2
+
+### Patch Changes
+
+- 77ea856: Add the package README status and license sections before the first Trusted Publisher-backed patch release.
+
 ## 0.2.1
 
 ### Patch Changes
