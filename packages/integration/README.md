@@ -33,14 +33,14 @@ Every signature, every chain hash, and every transaction event in that output is
 
 ## Examples
 
-| Example                        | Path                                                         | What it shows                                                                                                                                                                         |
-| ------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **End-to-end demo**            | [`examples/end-to-end/`](examples/end-to-end/)               | All moving parts in a single process: dev log + merchant + agent + payment + visualizer. Run with `pnpm demo`.                                                                        |
-| **Claude Agent SDK**           | [`examples/claude-agent-sdk/`](examples/claude-agent-sdk/)   | Both Case A (in-process tools. wrap the SDK's `McpServer` with `atrib()`) and Case B (third-party MCP servers; proxy via `createAtribProxy`).                                       |
+| Example                        | Path                                                         | What it shows                                                                                                                                                                                |
+| ------------------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **End-to-end demo**            | [`examples/end-to-end/`](examples/end-to-end/)               | All moving parts in a single process: dev log + merchant + agent + payment + visualizer. Run with `pnpm demo`.                                                                               |
+| **Claude Agent SDK**           | [`examples/claude-agent-sdk/`](examples/claude-agent-sdk/)   | Both Case A (in-process tools. wrap the SDK's `McpServer` with `atrib()`) and Case B (third-party MCP servers; proxy via `createAtribProxy`).                                                |
 | **Cloudflare Agents**          | [`examples/cloudflare-agents/`](examples/cloudflare-agents/) | Both surfaces: server-side `McpAgent` (Surface 1) and client-side `Agent` calling upstream MCP servers (Surface 2), with live Worker proofs plus an interactive HITL approval-trace example. |
-| **Vercel AI SDK + AI Gateway** | [`examples/vercel-ai-sdk/`](examples/vercel-ai-sdk/)         | Vercel AI SDK with MCP tools, routed through the AI Gateway (recommended pattern for model fallback + observability).                                                                 |
-| **LangChain JS**               | [`examples/langchain-js/`](examples/langchain-js/)           | `MultiServerMCPClient` patched in-place by `attributeLangchainMcp` so every server it manages emits attributed records. including forked clients used for per-call header workflows. |
-| **Signer proxy**               | [`examples/signer-proxy/`](examples/signer-proxy/)           | Sandboxed-execution composition: sandbox code requests a signature, while the host signer keeps the Ed25519 key outside the sandbox and owns signer-controlled fields.                 |
+| **Vercel AI SDK + AI Gateway** | [`examples/vercel-ai-sdk/`](examples/vercel-ai-sdk/)         | Vercel AI SDK with MCP tools, routed through the AI Gateway (recommended pattern for model fallback + observability).                                                                        |
+| **LangChain JS**               | [`examples/langchain-js/`](examples/langchain-js/)           | `MultiServerMCPClient` patched in-place by `attributeLangchainMcp` so every server it manages emits attributed records. including forked clients used for per-call header workflows.         |
+| **Signer proxy**               | [`examples/signer-proxy/`](examples/signer-proxy/)           | Sandboxed-execution composition: sandbox code requests a signature, while the host signer keeps the Ed25519 key outside the sandbox and owns signer-controlled fields.                       |
 
 Every example has a `README.md` next to it explaining what's wired up and which lines a real customer would copy.
 
@@ -63,13 +63,24 @@ If a local command should create the artifacts first, pass it with `ATRIB_AP2_IN
 
 The transaction-record artifact is optional unless `ATRIB_AP2_INTEROP_REQUIRE_COUNTERPARTY_ATTESTATION=1` is set. When present, the harness runs `verifyRecord()`, checks the record `content_id` against the detected AP2 receipt identity, and requires `cross_attestation.missing: false`.
 
+The fixture directory [`test/fixtures/ap2-reference/`](test/fixtures/ap2-reference/) contains compact AP2 receipt JWT artifacts generated from the official `google-agentic-commerce/AP2` Python SDK. Regenerate them from a local AP2 checkout with:
+
+```bash
+uv run --project /tmp/google-ap2-reference \
+  python packages/integration/scripts/generate-ap2-reference-receipts.py \
+  --ap2-repo /tmp/google-ap2-reference
+```
+
+Those fixtures exercise the AP2 SDK receipt-JWT path in default CI while keeping full AP2 scenario launches opt-in.
+
 ## Tests
 
-Run with `pnpm --filter @atrib/integration test`. 36 tests across 9 files:
+Run with `pnpm --filter @atrib/integration test`. 37 tests across 10 files:
 
 - **`test/end-to-end.test.ts`** (3 tests), full attribution chain across the public packages: agent calls a tool, server emits a signed record, the record's chain hash links to the previous step, the verifier re-runs the calculation against the resulting graph.
 - **`test/ap2-vi-e2e.test.ts`** (3 tests), AP2 v0.2 receipt detection plus async `@atrib/verify` AP2 / Verifiable Intent evidence checking for immediate and autonomous flows. This protects the detector/verifier boundary: successful receipts close the transaction, VI mandates remain verifier-side authorization evidence with SD-JWT / VC conformance and mandate constraints checked off the detector path, AP2 Path 2 detection returns a receipt-derived `contentId` instead of the generic server URL fallback when stable receipt identity is present, and a real counterparty signer over atrib transaction bytes satisfies cross-attestation without treating AP2 receipt JWTs as signers.
 - **`test/ap2-live-interop.test.ts`** (6 tests), opt-in AP2 reference artifact harness coverage. It proves AP2 reference-style result JSON plus AP2 / VI evidence JSON pass through `detectTransaction()` and `verifyAp2ViEvidenceAsync()`, transaction-record artifacts pass through `verifyRecord()` with counterparty attestation, mandates alone do not pass the transaction gate, and environment configuration fails early when malformed.
+- **`test/ap2-reference-artifacts.test.ts`** (1 test), official AP2 Python SDK receipt artifacts. It proves compact receipt JWTs generated by `ap2.sdk.receipt_wrapper.ReceiptClient` and `ap2.sdk.jwt_helper.create_jwt` pass through the live interop harness, verify against caller-supplied JWKS roots, and compose with a counterparty-signed atrib transaction record.
 - **`test/real-mcp-sdk.test.ts`** (2 tests), exercises both the wrapped MCP client and wrapped MCP server against a real `@modelcontextprotocol/sdk@1.29.0` transport, including the [§6](../../atrib-spec.md#6-key-directory) retroactive dispatcher wrap path and the `wrapMcpClient` adapter.
 - **`test/full-chain.test.ts`** (3 tests), the wrapper → mirror → log → verify path with a real signed record set.
 - **`test/resolve-identity-step7.test.ts`** (3 tests), real directory lookup plus verifier step 7 behavior around anchored identity evidence.
