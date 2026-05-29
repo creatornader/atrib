@@ -218,6 +218,44 @@ describe('AtribSpanProcessor end-to-end', () => {
     })
   })
 
+  it('resolves chain_root against session.id when present', async () => {
+    const submitted: AtribRecord[] = []
+    const resolverArgs: string[] = []
+    const chainRoot = `sha256:${'ab'.repeat(32)}`
+    const processor = new AtribSpanProcessor({
+      privateKey: TEST_KEY_BYTES,
+      creatorKey: base64urlEncode(await getPublicKey(TEST_KEY_BYTES)),
+      serverUrl: 'https://example.test/atrib',
+      submit: (signed) => {
+        submitted.push(signed)
+      },
+      resolveChainRoot: (contextId) => {
+        resolverArgs.push(contextId)
+        return chainRoot
+      },
+      debug: true,
+    })
+
+    const provider = new BasicTracerProvider({ spanProcessors: [processor] })
+    const tracer = provider.getTracer('test')
+    const sessionId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+
+    const span = tracer.startSpan('session-scoped-tool')
+    span.setAttribute('openinference.span.kind', 'TOOL')
+    span.setAttribute('tool.name', 'session_scoped_tool')
+    span.setAttribute('session.id', sessionId)
+    span.end()
+
+    await new Promise((resolve) => setImmediate(resolve))
+    await new Promise((resolve) => setImmediate(resolve))
+
+    expect(resolverArgs).toEqual([sessionId])
+    expect(submitted).toHaveLength(1)
+    expect(submitted[0]!.context_id).toBe(sessionId)
+    expect(submitted[0]!.chain_root).toBe(chainRoot)
+    expect(await verifyRecord(submitted[0]!)).toBe(true)
+  })
+
   it('skips spans missing required attributes for their kind without throwing', async () => {
     const submitted: AtribRecord[] = []
     const processor = await makeProcessor((signed) => {
@@ -317,6 +355,45 @@ describe('AtribSpanProcessor end-to-end', () => {
     await new Promise((resolve) => setImmediate(resolve))
     await new Promise((resolve) => setImmediate(resolve))
     expect(submitCalls).toBe(1)
+  })
+
+  it('shutdown waits for in-flight submit work', async () => {
+    const persisted: AtribRecord[] = []
+    let releaseSubmit: () => void = () => {}
+    let markSubmitStarted: () => void = () => {}
+    const submitStarted = new Promise<void>((resolve) => {
+      markSubmitStarted = resolve
+    })
+    const submitGate = new Promise<void>((resolve) => {
+      releaseSubmit = resolve
+    })
+    const processor = new AtribSpanProcessor({
+      privateKey: TEST_KEY_BYTES,
+      creatorKey: base64urlEncode(await getPublicKey(TEST_KEY_BYTES)),
+      serverUrl: 'https://example.test/atrib',
+      submit: async (signed) => {
+        markSubmitStarted()
+        await submitGate
+        persisted.push(signed)
+      },
+      debug: true,
+    })
+
+    const provider = new BasicTracerProvider({ spanProcessors: [processor] })
+    const tracer = provider.getTracer('test')
+
+    const span = tracer.startSpan('slow-submit')
+    span.setAttribute('openinference.span.kind', 'TOOL')
+    span.setAttribute('tool.name', 'slow_submit')
+    span.end()
+
+    await submitStarted
+    const shutdown = processor.shutdown()
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(persisted).toHaveLength(0)
+    releaseSubmit()
+    await shutdown
+    expect(persisted).toHaveLength(1)
   })
 
   it('honors a custom filter', async () => {

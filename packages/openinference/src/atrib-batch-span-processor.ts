@@ -239,9 +239,6 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
     const mappingCtx = {
       creatorKey: this.opts.creatorKey,
       serverUrl: this.opts.serverUrl,
-      ...(this.opts.resolveChainRoot
-        ? { chainRoot: await this.opts.resolveChainRoot(span.spanContext().traceId) }
-        : {}),
     }
     const result = spanToUnsignedRecord(span, mappingCtx)
     if (!result.ok) {
@@ -254,6 +251,13 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
     const llmOutputToolCallId = readLlmOutputToolCallId(span)
 
     let unsignedRecord = result.record
+    if (this.opts.resolveChainRoot !== undefined) {
+      unsignedRecord = {
+        ...unsignedRecord,
+        chain_root: await this.opts.resolveChainRoot(unsignedRecord.context_id),
+      }
+    }
+
     if (
       this.tracker !== null &&
       result.kind === 'TOOL' &&

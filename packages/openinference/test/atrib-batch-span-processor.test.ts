@@ -121,6 +121,46 @@ describe('AtribBatchSpanProcessor', () => {
     expect(total).toBe(2)
   })
 
+  it('resolves chain_root against session.id when present', async () => {
+    const calls: AtribBatchEntry[][] = []
+    const resolverArgs: string[] = []
+    const chainRoot = `sha256:${'cd'.repeat(32)}`
+    const pubKey = await getPublicKey(TEST_KEY_BYTES)
+    const processor = new AtribBatchSpanProcessor({
+      privateKey: TEST_KEY_BYTES,
+      creatorKey: base64urlEncode(pubKey),
+      serverUrl: 'https://test.example/atrib-batch',
+      submit: (batch) => {
+        calls.push([...batch])
+      },
+      resolveChainRoot: (contextId) => {
+        resolverArgs.push(contextId)
+        return chainRoot
+      },
+      config: { maxExportBatchSize: 100, scheduledDelayMillis: 60_000 },
+      debug: true,
+    })
+    const provider = new BasicTracerProvider({ spanProcessors: [processor] })
+    const tracer = provider.getTracer('batch-session-test')
+    const sessionId = 'cccccccccccccccccccccccccccccccc'
+
+    const span = tracer.startSpan('batch-session-scoped-tool')
+    span.setAttribute('openinference.span.kind', 'TOOL')
+    span.setAttribute('tool.name', 'batch_session_scoped_tool')
+    span.setAttribute('session.id', sessionId)
+    span.end()
+
+    await processor.forceFlush()
+
+    expect(resolverArgs).toEqual([sessionId])
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toHaveLength(1)
+    const signed = calls[0]![0]!.signed
+    expect(signed.context_id).toBe(sessionId)
+    expect(signed.chain_root).toBe(chainRoot)
+    expect(await verifyRecord(signed)).toBe(true)
+  })
+
   it('catches submit errors without affecting the OTel pipeline', async () => {
     let attempts = 0
     const processor = await makeBatchProcessor(

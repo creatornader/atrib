@@ -143,6 +143,7 @@ export type AtribSpanProcessorOptions = {
 export class AtribSpanProcessor implements SpanProcessor {
   private readonly opts: AtribSpanProcessorOptions
   private readonly tracker: InformedByTracker | null
+  private inflight: Set<Promise<void>> = new Set()
   private shutdownRequested = false
 
   constructor(opts: AtribSpanProcessorOptions) {
@@ -167,30 +168,31 @@ export class AtribSpanProcessor implements SpanProcessor {
     const filter = this.opts.filter ?? isOpenInferenceSpan
     if (!filter(span)) return
 
-    // Fire-and-forget: any failure is caught and logged. Per §5.8 atrib
-    // never affects the primary tool call. The OTel pipeline is the
-    // primary; atrib is an attached observer.
-    void this.process(span).catch((err) => this.logError('process', err))
+    // Fire-and-forget on the request path: any failure is caught and
+    // logged. Track the promise so forceFlush/shutdown can wait for local
+    // mirror writes that are still in flight.
+    const processing = this.process(span).catch((err) => this.logError('process', err))
+    this.inflight.add(processing)
+    void processing.finally(() => this.inflight.delete(processing))
   }
 
   shutdown(): Promise<void> {
     this.shutdownRequested = true
-    return Promise.resolve()
+    return this.forceFlush()
   }
 
-  forceFlush(): Promise<void> {
-    // Simple processor has no buffer to flush. Batch variant would drain
-    // pending submissions here.
-    return Promise.resolve()
+  async forceFlush(): Promise<void> {
+    // Simple processor has no buffer, but it may have async sign/submit
+    // work still running from onEnd.
+    while (this.inflight.size > 0) {
+      await Promise.allSettled([...this.inflight])
+    }
   }
 
   private async process(span: ReadableSpan): Promise<void> {
     const mappingCtx = {
       creatorKey: this.opts.creatorKey,
       serverUrl: this.opts.serverUrl,
-      ...(this.opts.resolveChainRoot
-        ? { chainRoot: await this.opts.resolveChainRoot(span.spanContext().traceId) }
-        : {}),
     }
 
     const result = spanToUnsignedRecord(span, mappingCtx)
@@ -207,6 +209,13 @@ export class AtribSpanProcessor implements SpanProcessor {
     // LLM emission, derive the informed_by edge BEFORE signing (the
     // signature covers informed_by per JCS canonical form).
     let unsignedRecord = result.record
+    if (this.opts.resolveChainRoot !== undefined) {
+      unsignedRecord = {
+        ...unsignedRecord,
+        chain_root: await this.opts.resolveChainRoot(unsignedRecord.context_id),
+      }
+    }
+
     if (
       this.tracker !== null &&
       result.kind === 'TOOL' &&

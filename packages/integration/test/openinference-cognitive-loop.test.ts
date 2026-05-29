@@ -9,6 +9,12 @@ const execFileAsync = promisify(execFile)
 
 describe('OpenInference cognitive loop example', () => {
   it('writes a local mirror and proves recall, trace, and summarize consumption', async () => {
+    await execFileAsync('pnpm', ['--filter', '@atrib/openinference', 'build'], {
+      cwd: process.cwd(),
+      timeout: 30000,
+      maxBuffer: 1024 * 1024,
+    })
+
     const { stdout } = await execFileAsync(
       join(process.cwd(), 'node_modules', '.bin', 'tsx'),
       ['examples/openinference/cognitive-loop.ts'],
