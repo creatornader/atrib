@@ -5118,6 +5118,8 @@ The verifier now counts `signers_valid` as distinct creator keys with at least o
 
 The AP2 live interop harness now accepts an optional `ATRIB_AP2_INTEROP_TRANSACTION_RECORD_JSON` artifact. When present, the harness runs `verifyRecord()` with the same AP2 / VI evidence bundle, checks that the record `content_id` matches the detected AP2 receipt identity, and fails if `cross_attestation.missing` is true. `ATRIB_AP2_INTEROP_REQUIRE_COUNTERPARTY_ATTESTATION=1` makes the transaction record artifact required.
 
+`@atrib/integration` also includes a local AP2 participant artifact generator. It accepts an AP2 result plus AP2 / VI evidence bundle, rehydrates split compact JWT and SD-JWT fixtures when needed, derives the transaction `content_id` through the production AP2 detector, signs the atrib transaction record as the agent, and appends a counterparty signer through `signTransactionAttestation()`. This is not a substitute for a real merchant or payment-party key. It is the local contract test for the bytes a real participant must sign.
+
 The [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) conformance corpus adds `duplicate-signer-key`, pinning the rule that two entries from one key count as one valid signer.
 
 **Alternatives considered.**
@@ -5133,6 +5135,7 @@ The [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-re
 - AP2 receipt JWT signatures still do not count toward `cross_attestation`. Only signatures over atrib's [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) canonical bytes count.
 - Duplicate signer entries can no longer satisfy the two-party minimum.
 - The live AP2 harness can act as a reference-artifact gate for merchant adapters that emit or receive an atrib transaction record.
+- The local participant generator gives AP2 implementers a concrete file-level contract before a live AP2 counterparty exposes an atrib signing endpoint.
 
 **Cross-references.**
 
@@ -5141,6 +5144,7 @@ The [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-re
 - [§5.5.4](atrib-spec.md#554-ap2--verifiable-intent-evidence-checks), AP2 / VI evidence and interop harness.
 - [`packages/integration/test/ap2-live-interop.test.ts`](packages/integration/test/ap2-live-interop.test.ts), artifact-harness coverage.
 - [`packages/integration/test/ap2-vi-e2e.test.ts`](packages/integration/test/ap2-vi-e2e.test.ts), AP2 Path 2 with counterparty signer.
+- [`packages/integration/test/ap2-local-participant.test.ts`](packages/integration/test/ap2-local-participant.test.ts), local participant artifact generation.
 - [`spec/conformance/1.7.6/cases/duplicate-signer-key.json`](spec/conformance/1.7.6/cases/duplicate-signer-key.json), duplicate-signer corpus case.
 
 ---
