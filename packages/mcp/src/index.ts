@@ -40,7 +40,13 @@ export {
 export { base64urlEncode, base64urlDecode } from './base64url.js'
 export { sha256, hexEncode, hexDecode } from './hash.js'
 export { canonicalSigningInput, canonicalRecord, canonicalCrossAttestationInput } from './canon.js'
-export { getPublicKey, signRecord, signTransactionRecord, verifyRecord } from './signing.js'
+export {
+  getPublicKey,
+  signRecord,
+  signTransactionAttestation,
+  signTransactionRecord,
+  verifyRecord,
+} from './signing.js'
 export { computeContentId, normalizeServerUrl } from './content-id.js'
 export {
   ATRIB_PARENT_RECORD_HASH_ENV,

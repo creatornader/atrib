@@ -149,9 +149,10 @@ export interface CrossAttestationAnnotation {
    */
   signers_count: number
   /**
-   * Number of signers whose Ed25519 signature successfully verifies
-   * against the cross-attestation canonical bytes (JCS form with
-   * `signers: []` and `signature` omitted, per §1.7.6).
+   * Number of distinct creator keys with at least one Ed25519 signature
+   * that successfully verifies against the cross-attestation canonical
+   * bytes (JCS form with `signers: []` and `signature` omitted, per
+   * §1.7.6). Duplicate entries from one key do not inflate this count.
    */
   signers_valid: number
   /**
@@ -270,8 +271,8 @@ export interface RecordVerificationResult {
    * Cross-attestation annotation per §1.7.6 (D052). Populated ONLY for
    * transaction records (`event_type = https://atrib.dev/v1/types/transaction`).
    * Surfaces signers_count, signers_valid, and missing (true when fewer
-   * than 2 signers verified). Per §1.7.6 verifiers MUST flag missing
-   * cross-attestation; consumers decide policy.
+   * than 2 distinct signer keys verify). Per §1.7.6 verifiers MUST flag
+   * missing cross-attestation; consumers decide policy.
    */
   cross_attestation?: CrossAttestationAnnotation
   /**
@@ -598,7 +599,8 @@ function resolveCapabilityCheck(
  * For each entry in `record.signers`, verify the Ed25519 signature
  * against the cross-attestation canonical bytes (JCS form with
  * `signers: []` and the top-level `signature` field omitted). Count
- * valid signatures; flag `missing: true` when fewer than 2 verify.
+ * distinct valid signer keys; flag `missing: true` when fewer than 2
+ * independent keys verify.
  *
  * Per §1.7.6 mismatches are SIGNALS, not invalidation: missing
  * cross-attestation does NOT push to `warnings[]` (which would flip
@@ -626,18 +628,19 @@ async function resolveCrossAttestation(record: AtribRecord): Promise<CrossAttest
     return { signers_count, signers_valid: 0, missing: true }
   }
 
-  let signers_valid = 0
+  const validSignerKeys = new Set<string>()
   for (const entry of signers as SignerEntry[]) {
     if (typeof entry?.creator_key !== 'string' || typeof entry?.signature !== 'string') continue
     try {
       const pubKey = base64urlDecode(entry.creator_key)
       const sig = base64urlDecode(entry.signature)
       const ok = await ed.verifyAsync(sig, canonicalBytes, pubKey)
-      if (ok) signers_valid++
+      if (ok) validSignerKeys.add(entry.creator_key)
     } catch {
       // Malformed key/sig bytes: skip without counting.
     }
   }
+  const signers_valid = validSignerKeys.size
 
   return {
     signers_count,
@@ -648,14 +651,21 @@ async function resolveCrossAttestation(record: AtribRecord): Promise<CrossAttest
 
 async function verifyCreatorSignerSignature(record: AtribRecord): Promise<boolean> {
   const signers = Array.isArray(record.signers) ? record.signers : []
-  const creatorSigner = signers.find((entry) => entry.creator_key === record.creator_key)
-  if (!creatorSigner) return false
+  const creatorSigners = signers.filter((entry) => entry.creator_key === record.creator_key)
+  if (creatorSigners.length === 0) return false
 
-  const pubKey = base64urlDecode(creatorSigner.creator_key)
-  const sig = base64urlDecode(creatorSigner.signature)
-  if (pubKey.length !== 32 || sig.length !== 64) return false
-
-  return ed.verifyAsync(sig, canonicalCrossAttestationInput(record), pubKey)
+  const verifyInput = canonicalCrossAttestationInput(record)
+  for (const creatorSigner of creatorSigners) {
+    try {
+      const pubKey = base64urlDecode(creatorSigner.creator_key)
+      const sig = base64urlDecode(creatorSigner.signature)
+      if (pubKey.length !== 32 || sig.length !== 64) continue
+      if (await ed.verifyAsync(sig, verifyInput, pubKey)) return true
+    } catch {
+      // Try the next matching signer entry.
+    }
+  }
+  return false
 }
 
 function detectPosture(record: AtribRecord, warnings: string[]): PostureAnnotation {

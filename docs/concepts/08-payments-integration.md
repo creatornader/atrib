@@ -2,7 +2,7 @@
 
 > atrib is not a payment rail. It is a verification substrate that records cryptographically signed evidence of payments on top of whatever rail (x402, ACP, UCP, AP2, MPP, a2a-x402) actually moved the money. The transaction record is the multi-party-signed receipt that any third party can verify.
 
-**Status**: DRAFT (v1, 2026-05-22 — produced in conversation; needs operator hand-review before promotion to REVIEW)
+**Status**: DRAFT (v1, 2026-05-22; produced in conversation, needs operator hand-review before promotion to REVIEW)
 **Spec anchors**: [§1.7 Transaction Event Hooks](../../atrib-spec.md#17-transaction-event-hooks) · [§1.7.6 Cross-attestation requirement](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) · [D052](../../DECISIONS.md)
 **Builds on**: [Records & signing](01-records-and-signing.md), [The chain](04-the-chain.md), [Identity & the directory](03-identity-and-directory.md), [The Merkle log](02-the-merkle-log.md)
 **Enables**: [The calculation algorithm](09-calculation-algorithm.md), settlement adjudication
@@ -58,7 +58,7 @@ The merchant's settlement webhook receives the completion event, reads `context_
 
 ## The governance: cross-attestation MUST ([§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records))
 
-Transaction records MUST carry signatures from at least two independent parties. The agent and the counterparty (typically the merchant) both sign over **identical canonical bytes** — the JCS serialization of the record with `signers: []` and top-level `signature` omitted. This is the only event_type in the spec that breaks from single-signer signing.
+Transaction records MUST carry signatures from at least two independent parties. The agent and the counterparty (typically the merchant) both sign over **identical canonical bytes**: the JCS serialization of the record with `signers: []` and top-level `signature` omitted. This is the only event_type in the spec that breaks from single-signer signing.
 
 ```jsonc
 "signers": [
@@ -69,9 +69,9 @@ Transaction records MUST carry signatures from at least two independent parties.
 
 A compromised single key cannot fabricate arbitrary transactions on someone else's behalf. The merchant cryptographically agreed to the same bytes the agent signed; the agent cryptographically agreed to the same bytes the merchant signed. Disputes resolve on signatures, not on operator-self-report.
 
-**Violations are flagged, not blocked.** Per [§5.8](../../atrib-spec.md#58-degradation-contract)'s degradation contract, atrib never breaks the underlying flow. Verifiers flag any transaction record with fewer than 2 verified signers as `cross_attestation_missing: true`. Strict settlement systems might refuse to act on flagged records; permissive ones might accept with a downgrade. The protocol provides the signal; policy decides the response.
+**Violations are flagged, not blocked.** Per [§5.8](../../atrib-spec.md#58-degradation-contract)'s degradation contract, atrib never breaks the underlying flow. Verifiers flag any transaction record with fewer than 2 distinct verified signer keys as `cross_attestation_missing: true`. Strict settlement systems might refuse to act on flagged records; permissive ones might accept with a downgrade. The protocol provides the signal; policy decides the response.
 
-**Counterparty key discovery**: out-of-band — either through the [§6 directory](../../atrib-spec.md#6-key-directory), through payment-protocol-specific channels (x402 facilitator metadata, ACP order envelope, AP2 PaymentMandate signer field), or via consumer-arranged key exchange. The spec deliberately doesn't pin a discovery mechanism.
+**Counterparty key discovery**: out-of-band. Either through the [§6 directory](../../atrib-spec.md#6-key-directory), through payment-protocol-specific channels (x402 facilitator metadata, ACP order envelope, AP2 receipt issuer or verifier key material), or via consumer-arranged key exchange. The spec deliberately doesn't pin a discovery mechanism.
 
 ## The full end-to-end flow
 
@@ -105,7 +105,7 @@ You can run #9 without #10 (just want to verify what happened). You can't run #1
 
 ## §4.6 gating
 
-[§4.6](../../atrib-spec.md#46-the-calculation-algorithm)'s calculation algorithm only runs when the graph contains a transaction node. And the transaction MUST carry ≥2 verified signatures — strict consumers MAY reject the calculation entirely when `cross_attestation_missing: true`. The default is to compute, return, and surface the flag.
+[§4.6](../../atrib-spec.md#46-the-calculation-algorithm)'s calculation algorithm only runs when the graph contains a transaction node. And the transaction MUST carry ≥2 distinct verified signer keys. Strict consumers MAY reject the calculation entirely when `cross_attestation_missing: true`. The default is to compute, return, and surface the flag.
 
 ## See also
 

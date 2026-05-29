@@ -1,5 +1,11 @@
 # @atrib/mcp
 
+## Unreleased
+
+### Minor Changes
+
+- Add `signTransactionAttestation()` for counterparty signer entries over transaction cross-attestation bytes. The root and Worker entrypoints both export it.
+
 ## 0.13.0
 
 ### Minor Changes

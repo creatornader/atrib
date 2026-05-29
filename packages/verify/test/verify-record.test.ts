@@ -491,6 +491,42 @@ describe('verifyRecord, cross_attestation (D052 / §1.7.6)', () => {
     expect(result.cross_attestation!.missing).toBe(false)
   })
 
+  it('does not count duplicate signer keys toward the minimum', async () => {
+    const record = await buildTransaction([altSeed(0x10)])
+    const duplicated = {
+      ...record,
+      signers: [record.signers![0]!, record.signers![0]!],
+    } as AtribRecord
+
+    const result = await verifyRecord(duplicated)
+
+    expect(result.cross_attestation!.signers_count).toBe(2)
+    expect(result.cross_attestation!.signers_valid).toBe(1)
+    expect(result.cross_attestation!.missing).toBe(true)
+  })
+
+  it('accepts a later valid creator signer when an earlier duplicate is tampered', async () => {
+    const record = await buildTransaction([altSeed(0x10), altSeed(0x20)])
+    const tamperedCreator = {
+      ...record.signers![0]!,
+      signature: 'A' + record.signers![0]!.signature.slice(1),
+    }
+    const duplicateCreator = record.signers![0]!
+    const counterparty = record.signers![1]!
+    const withDuplicateCreator = {
+      ...record,
+      signers: [tamperedCreator, duplicateCreator, counterparty],
+    } as AtribRecord
+
+    const result = await verifyRecord(withDuplicateCreator)
+
+    expect(result.signatureOk).toBe(true)
+    expect(result.valid).toBe(true)
+    expect(result.cross_attestation!.signers_count).toBe(3)
+    expect(result.cross_attestation!.signers_valid).toBe(2)
+    expect(result.cross_attestation!.missing).toBe(false)
+  })
+
   it('counts only valid signers when one signature is tampered', async () => {
     const record = await buildTransaction([altSeed(0x10), altSeed(0x20)])
     // Tamper the second signer's signature: flip a character.
