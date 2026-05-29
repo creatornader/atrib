@@ -2,7 +2,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { generateAp2LocalParticipantArtifacts } from '../src/ap2-local-participant.js'
+import {
+  generateAp2LocalParticipantArtifacts,
+  normalizeAp2ViEvidence,
+  normalizeClosedMandateReferenceMaterial,
+} from '../src/ap2-local-participant.js'
 import { runAp2LiveInteropFromEnv } from '../src/ap2-live-interop.js'
 
 import ap2ViReferenceEvidenceJson from './fixtures/ap2-vi-reference/ap2-vi-reference-evidence.json'
@@ -12,6 +16,41 @@ import ap2ViReferenceResultJson from './fixtures/ap2-vi-reference/ap2-vi-referen
 const metadata = ap2ViReferenceMetadataJson as { now_seconds: number }
 
 describe('AP2 local participant artifacts', () => {
+  it('extracts closed mandate JWT reference material from delegated AP2 chains', () => {
+    expect(
+      normalizeClosedMandateReferenceMaterial(
+        'open.header.signature~open-disclosure~~closed.header.signature~closed-disclosure~',
+      ),
+    ).toBe('closed.header.signature')
+
+    expect(
+      normalizeClosedMandateReferenceMaterial('closed.header.signature~closed-disclosure~'),
+    ).toBe('closed.header.signature')
+
+    expect(normalizeClosedMandateReferenceMaterial('opaque-closed-mandate')).toBe(
+      'opaque-closed-mandate',
+    )
+
+    expect(() =>
+      normalizeClosedMandateReferenceMaterial('open.header.signature~open-disclosure~~not-a-jwt~'),
+    ).toThrow('expected compact closed mandate JWT in AP2 mandate chain')
+  })
+
+  it('normalizes full AP2 mandate chains before writing verifier evidence', () => {
+    const evidence = normalizeAp2ViEvidence({
+      ap2: {
+        checkoutReceiptJwt: 'receipt.header.signature',
+        closedCheckoutMandate:
+          'open.header.signature~open-disclosure~~closed.checkout.signature~closed-disclosure~',
+        closedPaymentMandate:
+          'open.header.signature~open-disclosure~~closed.payment.signature~closed-disclosure~',
+      },
+    })
+
+    expect(evidence.ap2?.closedCheckoutMandate).toBe('closed.checkout.signature')
+    expect(evidence.ap2?.closedPaymentMandate).toBe('closed.payment.signature')
+  })
+
   it('emits a counterparty-signed atrib transaction record for AP2 / VI evidence', async () => {
     const outDir = await mkdtemp(join(tmpdir(), 'atrib-ap2-local-participant-'))
     try {

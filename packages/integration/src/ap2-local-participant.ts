@@ -33,6 +33,8 @@ interface SplitEvidenceFixture {
     checkoutReceipt?: unknown
     closedPaymentMandate?: string
     closedCheckoutMandate?: string
+    closedPaymentMandateHash?: string
+    closedCheckoutMandateHash?: string
   }
   vi?: { credentials?: SplitEvidenceCredential[] }
   trustedIssuerKeys?: JsonWebKey[]
@@ -87,6 +89,28 @@ export function joinSdJwt(parts: SplitSdJwt): string {
   return parts.trailingTilde === false ? body : `${body}~`
 }
 
+export function normalizeClosedMandateReferenceMaterial(serialized: string): string {
+  const trimmed = serialized.trim()
+  if (!trimmed) throw new Error('expected closed AP2 mandate')
+
+  const chainSegments = trimmed
+    .split('~~')
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+  if (chainSegments.length > 1) {
+    return extractCompactJwtFromSdJwt(
+      chainSegments[chainSegments.length - 1]!,
+      'expected compact closed mandate JWT in AP2 mandate chain',
+    )
+  }
+
+  if (trimmed.includes('~')) {
+    return extractCompactJwtFromSdJwt(trimmed, 'expected compact closed mandate JWT in AP2 SD-JWT')
+  }
+
+  return trimmed
+}
+
 export function normalizeAp2Result(input: unknown): unknown {
   if (!isRecord(input)) return input
   const fixture = input as SplitResultFixture
@@ -123,10 +147,24 @@ export function normalizeAp2ViEvidence(input: unknown): Ap2ViEvidenceBundle {
           ? { checkoutReceiptJwt: fixture.ap2.checkoutReceiptJwt }
           : {}),
       ...(fixture.ap2?.closedPaymentMandate
-        ? { closedPaymentMandate: fixture.ap2.closedPaymentMandate }
+        ? {
+            closedPaymentMandate: normalizeClosedMandateReferenceMaterial(
+              fixture.ap2.closedPaymentMandate,
+            ),
+          }
         : {}),
       ...(fixture.ap2?.closedCheckoutMandate
-        ? { closedCheckoutMandate: fixture.ap2.closedCheckoutMandate }
+        ? {
+            closedCheckoutMandate: normalizeClosedMandateReferenceMaterial(
+              fixture.ap2.closedCheckoutMandate,
+            ),
+          }
+        : {}),
+      ...(fixture.ap2?.closedPaymentMandateHash
+        ? { closedPaymentMandateHash: fixture.ap2.closedPaymentMandateHash }
+        : {}),
+      ...(fixture.ap2?.closedCheckoutMandateHash
+        ? { closedCheckoutMandateHash: fixture.ap2.closedCheckoutMandateHash }
         : {}),
     },
   }
@@ -216,6 +254,19 @@ function normalizeViCredential(credential: SplitEvidenceCredential): ViCredentia
     normalized.parentPresentation = credential.parentPresentation
   }
   return normalized
+}
+
+function extractCompactJwtFromSdJwt(serialized: string, errorMessage: string): string {
+  const compactJwt = serialized.split('~')[0]?.trim()
+  if (!compactJwt || !isCompactJwt(compactJwt)) {
+    throw new Error(errorMessage)
+  }
+  return compactJwt
+}
+
+function isCompactJwt(value: string): boolean {
+  const parts = value.split('.')
+  return parts.length === 3 && parts.every((part) => part.length > 0)
 }
 
 async function writeJson(path: string, value: unknown): Promise<void> {
