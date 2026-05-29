@@ -4631,6 +4631,10 @@ The harness lives at `packages/integration/src/ap2-live-interop.ts` with a runna
 
 The default path requires both transaction detection and AP2 / VI evidence verification to pass. Detection still uses `detectTransaction()` and stays shape-only. Evidence verification still uses `verifyAp2ViEvidenceAsync()` and stays off the middleware critical path.
 
+**Follow-up update (2026-05-29).** The integration package now includes an official AP2 SDK receipt-artifact path. `packages/integration/scripts/generate-ap2-reference-receipts.py` imports `ap2.sdk.receipt_wrapper.ReceiptClient` and `ap2.sdk.jwt_helper.create_jwt` from a local `google-agentic-commerce/AP2` checkout, mints compact payment and checkout receipt JWTs, verifies them with the AP2 SDK, and writes fixture artifacts under `packages/integration/test/fixtures/ap2-reference/`.
+
+Default CI still does not launch AP2 services or require Google credentials. The new fixture test feeds those AP2 SDK receipt JWTs through `detectTransaction()`, `verifyAp2ViEvidenceAsync()`, and a counterparty-signed atrib transaction record. This proves the artifact contract against the official receipt wrapper while keeping full scenario runs opt-in.
+
 **Alternatives considered.**
 
 - _Run the AP2 sample stack in default CI._ Rejected. The Python sample flows require external credentials and long-running services. Default atrib CI must stay offline and deterministic.

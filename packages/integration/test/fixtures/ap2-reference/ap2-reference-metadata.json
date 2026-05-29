@@ -1,0 +1,18 @@
+{
+  "base_evidence": "packages/agent/test/fixtures/ap2/vi_autonomous_success_evidence.json",
+  "issuer_kid": "official-ap2-reference-issuer",
+  "notes": [
+    "Receipt JWTs are generated and verified with the official AP2 Python SDK.",
+    "VI credentials come from atrib's deterministic AP2 / VI fixture corpus.",
+    "The full AP2 sample stack still remains opt-in because it needs external credentials."
+  ],
+  "receipt_iat": 1779840030,
+  "source_commit": "e1ea56db72a6385bce3e5c1112b3a56ce60acb43",
+  "source_paths": [
+    "code/sdk/python/ap2/sdk/receipt_wrapper.py",
+    "code/sdk/python/ap2/sdk/jwt_helper.py",
+    "code/sdk/python/ap2/sdk/generated/payment_receipt.py",
+    "code/sdk/python/ap2/sdk/generated/checkout_receipt.py"
+  ],
+  "source_repository": "https://github.com/google-agentic-commerce/AP2"
+}
