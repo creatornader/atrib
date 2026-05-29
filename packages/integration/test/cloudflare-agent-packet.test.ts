@@ -28,17 +28,24 @@ import {
   canonicalRecord,
   hexEncode,
   sha256,
+  signRecord,
   verifyInclusion,
   verifyRecord,
   type AtribRecord,
   type ProofBundle,
 } from '@atrib/mcp'
+import {
+  handoffClaimsFromEvidencePacket,
+  verifyHandoffClaims,
+  verifyRecord as verifyAtribRecord,
+} from '@atrib/verify'
 import { parseCheckpointBody, startLogServer, type LogServer } from '@atrib/log-node'
 
 ed.hashes.sha512 = sha512
 
 const AGENT_PRIVATE_KEY = new Uint8Array(32).fill(88)
 const AGENT_PRIVATE_KEY_B64 = base64urlEncode(AGENT_PRIVATE_KEY)
+const AUDIT_AGENT_PRIVATE_KEY = new Uint8Array(32).fill(89)
 const CHECKOUT_SERVER_URL = 'https://checkout.example.com'
 const LOG_PATH = '/v1/entries'
 
@@ -79,12 +86,36 @@ function headerValue(headers: HeadersInit | undefined, name: string): string | n
     const found = headers.find(([key]) => key.toLowerCase() === name.toLowerCase())
     return found?.[1] ?? null
   }
-  const key = Object.keys(headers).find((candidate) => candidate.toLowerCase() === name.toLowerCase())
+  const key = Object.keys(headers).find(
+    (candidate) => candidate.toLowerCase() === name.toLowerCase(),
+  )
   return key ? String((headers as Record<string, string>)[key]) : null
 }
 
 function recordHash(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
+}
+
+function hashText(value: string): string {
+  return `sha256:${hexEncode(sha256(new TextEncoder().encode(value)))}`
+}
+
+async function makeAuditFollowup(informedBy: string[]): Promise<AtribRecord> {
+  const creatorKey = base64urlEncode(await ed.getPublicKeyAsync(AUDIT_AGENT_PRIVATE_KEY))
+  return signRecord(
+    {
+      spec_version: 'atrib/1.0',
+      content_id: hashText(`cf-packet-audit:${informedBy.join(',')}`),
+      creator_key: creatorKey,
+      chain_root: 'sha256:' + '9'.repeat(64),
+      event_type: 'https://atrib.dev/v1/types/observation',
+      context_id: '8'.repeat(32),
+      timestamp: Date.now(),
+      informed_by: [...informedBy].sort(),
+      signature: '',
+    } as AtribRecord,
+    AUDIT_AGENT_PRIVATE_KEY,
+  )
 }
 
 describe('Cloudflare Agent packet proof', () => {
@@ -161,7 +192,7 @@ describe('Cloudflare Agent packet proof', () => {
     expect(result.status).toBe('completed')
     expect(upstreamCalls).toHaveLength(1)
     expect(
-      ((upstreamCalls[0] as { _meta?: Record<string, unknown> })._meta?.traceparent as string),
+      (upstreamCalls[0] as { _meta?: Record<string, unknown> })._meta?.traceparent as string,
     ).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/)
 
     await interceptor.flush()
@@ -210,5 +241,38 @@ describe('Cloudflare Agent packet proof', () => {
         rootHash,
       ),
     ).toBe(true)
+
+    const handoff = await verifyHandoffClaims(
+      handoffClaimsFromEvidencePacket({
+        kind: 'cloudflare_agent_packet',
+        required_record_hashes: [hash],
+        records: [
+          {
+            record_hash: hash,
+            record: submission.record,
+            proof: submission.proof,
+          },
+        ],
+      }),
+      {
+        trusted_creator_keys: [submission.record.creator_key],
+        allowed_context_ids: [submission.record.context_id],
+        require_log_inclusion: true,
+        log_public_key: logServer.logPublicKey,
+        now_ms: Date.now(),
+        max_age_ms: 60_000,
+      },
+    )
+
+    expect(handoff.accepted_record_hashes).toEqual([hash])
+    expect(handoff.rejected).toEqual([])
+
+    const auditRecord = await makeAuditFollowup(handoff.accepted_record_hashes)
+    const auditVerification = await verifyAtribRecord(auditRecord, {
+      informedByCandidates: [submission.record],
+    })
+
+    expect(auditVerification.signatureOk).toBe(true)
+    expect(auditVerification.informed_by_resolution?.resolved).toEqual([hash])
   })
 })

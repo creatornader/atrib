@@ -13,7 +13,11 @@ import {
   type ProofBundle,
 } from '@atrib/mcp'
 import { startLogServer, type LogServer } from '@atrib/log-node'
-import { verifyHandoffClaims, verifyRecord as verifyAtribRecord } from '@atrib/verify'
+import {
+  handoffClaimsFromEvidencePacket,
+  verifyHandoffClaims,
+  verifyRecord as verifyAtribRecord,
+} from '@atrib/verify'
 
 ed.hashes.sha512 = sha512
 
@@ -152,6 +156,152 @@ describe('Pattern 3 verified handoff', () => {
     expect(agentBVerification.signatureOk).toBe(true)
     expect(agentBVerification.informed_by_resolution?.resolved).toEqual([agentAHash])
     expect(agentBVerification.informed_by_resolution?.dangling).toEqual([])
+  })
+
+  it('verifies a continuation packet before Agent B signs an informed_by followup', async () => {
+    const claimBody = 'tenant=tenant_42 ticket=SUP-47 summary=continuation packet ready'
+    const agentARecord = await makeAgentAClaim(claimBody)
+    const agentAHash = recordHash(agentARecord)
+    const proof = await submitRecord(logServer.url, agentARecord)
+    const packet = {
+      kind: 'handoff_packet',
+      required_record_hashes: [agentAHash],
+      records: [
+        {
+          record_hash: agentAHash,
+          record: agentARecord,
+          proof,
+          _local: {
+            producer: 'agent-a',
+            content: claimBody,
+          },
+        },
+      ],
+      archive_refs: [
+        {
+          record_hash: agentAHash,
+          uri: `atrib-archive://tenant-42/${agentAHash}`,
+        },
+      ],
+    }
+
+    const handoff = await verifyHandoffClaims(handoffClaimsFromEvidencePacket(packet), {
+      trusted_creator_keys: [agentARecord.creator_key],
+      allowed_context_ids: [agentARecord.context_id],
+      require_body: true,
+      require_body_commitment: true,
+      require_log_inclusion: true,
+      log_public_key: logServer.logPublicKey,
+      now_ms: Date.now(),
+      max_age_ms: 60_000,
+    })
+
+    expect(handoff.accepted_record_hashes).toEqual([agentAHash])
+    expect(handoff.rejected).toEqual([])
+
+    const agentBRecord = await makeAgentBFollowup(handoff.accepted_record_hashes)
+    const agentBVerification = await verifyAtribRecord(agentBRecord, {
+      informedByCandidates: [agentARecord],
+    })
+
+    expect(agentBVerification.signatureOk).toBe(true)
+    expect(agentBVerification.informed_by_resolution?.resolved).toEqual([agentAHash])
+  })
+
+  it('rejects a continuation packet with no private body material', async () => {
+    const claimBody = 'ticket=SUP-48 summary=body omitted'
+    const agentARecord = await makeAgentAClaim(claimBody)
+    const agentAHash = recordHash(agentARecord)
+    const proof = await submitRecord(logServer.url, agentARecord)
+
+    const handoff = await verifyHandoffClaims(
+      handoffClaimsFromEvidencePacket({
+        kind: 'handoff_packet',
+        required_record_hashes: [agentAHash],
+        records: [{ record_hash: agentAHash, record: agentARecord, proof }],
+      }),
+      {
+        trusted_creator_keys: [agentARecord.creator_key],
+        allowed_context_ids: [agentARecord.context_id],
+        require_body: true,
+        require_body_commitment: true,
+        require_log_inclusion: true,
+        log_public_key: logServer.logPublicKey,
+        now_ms: Date.now(),
+        max_age_ms: 60_000,
+      },
+    )
+
+    expect(handoff.accepted_record_hashes).toEqual([])
+    expect(handoff.rejected[0]?.rejection_reasons).toContain('body_missing')
+  })
+
+  it('rejects a continuation packet with no inclusion proof', async () => {
+    const claimBody = 'ticket=SUP-49 summary=proof omitted'
+    const agentARecord = await makeAgentAClaim(claimBody)
+    const agentAHash = recordHash(agentARecord)
+
+    const handoff = await verifyHandoffClaims(
+      handoffClaimsFromEvidencePacket({
+        kind: 'handoff_packet',
+        required_record_hashes: [agentAHash],
+        records: [
+          {
+            record_hash: agentAHash,
+            record: agentARecord,
+            _local: { content: claimBody },
+          },
+        ],
+      }),
+      {
+        trusted_creator_keys: [agentARecord.creator_key],
+        allowed_context_ids: [agentARecord.context_id],
+        require_body: true,
+        require_body_commitment: true,
+        require_log_inclusion: true,
+        log_public_key: logServer.logPublicKey,
+        now_ms: Date.now(),
+        max_age_ms: 60_000,
+      },
+    )
+
+    expect(handoff.accepted_record_hashes).toEqual([])
+    expect(handoff.rejected[0]?.rejection_reasons).toContain('proof_missing')
+  })
+
+  it('rejects a continuation packet from a different context', async () => {
+    const claimBody = 'ticket=SUP-50 summary=wrong context'
+    const agentARecord = await makeAgentAClaim(claimBody)
+    const agentAHash = recordHash(agentARecord)
+    const proof = await submitRecord(logServer.url, agentARecord)
+
+    const handoff = await verifyHandoffClaims(
+      handoffClaimsFromEvidencePacket({
+        kind: 'handoff_packet',
+        required_record_hashes: [agentAHash],
+        records: [
+          {
+            record_hash: agentAHash,
+            record: agentARecord,
+            proof,
+            _local: { content: claimBody },
+          },
+        ],
+      }),
+      {
+        trusted_creator_keys: [agentARecord.creator_key],
+        allowed_context_ids: ['e'.repeat(32)],
+        require_body: true,
+        require_body_commitment: true,
+        require_log_inclusion: true,
+        log_public_key: logServer.logPublicKey,
+        now_ms: Date.now(),
+        max_age_ms: 60_000,
+      },
+    )
+
+    expect(handoff.accepted_record_hashes).toEqual([])
+    expect(handoff.rejected[0]?.rejection_reasons).toContain('wrong_context')
   })
 
   it('rejects wrong-signer evidence before Agent B links to it', async () => {

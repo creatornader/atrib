@@ -26,6 +26,7 @@ export type HandoffRejectionReason =
   | 'record_invalid'
   | 'signature_invalid'
   | 'wrong_signer'
+  | 'wrong_context'
   | 'stale'
   | 'body_missing'
   | 'body_commitment_missing'
@@ -41,11 +42,13 @@ export interface HandoffClaimInput {
   result?: unknown
   proof?: ProofBundle
   trusted_creator_keys?: string[]
+  allowed_context_ids?: string[]
   max_age_ms?: number
 }
 
 export interface VerifyHandoffClaimsOptions {
   trusted_creator_keys?: string[]
+  allowed_context_ids?: string[]
   require_body?: boolean
   require_body_commitment?: boolean
   require_log_inclusion?: boolean
@@ -78,6 +81,7 @@ export interface HandoffClaimVerification {
   signature_ok: boolean | null
   computed_record_hash: string | null
   signer_trusted: boolean | null
+  context_allowed: boolean | null
   body?: HandoffBodyVerification
   proof?: HandoffProofVerification
 }
@@ -87,6 +91,44 @@ export interface HandoffVerificationResult {
   rejected: HandoffClaimVerification[]
   accepted_record_hashes: string[]
   all_accepted: boolean
+}
+
+export interface HandoffEvidenceEntry {
+  record_hash?: string
+  record?: AtribRecord
+  body?: unknown
+  args?: unknown
+  result?: unknown
+  proof?: ProofBundle | null
+  _local?: {
+    content?: unknown
+    body?: unknown
+    args?: unknown
+    result?: unknown
+    producer?: string
+    [key: string]: unknown
+  } | null
+  [key: string]: unknown
+}
+
+export interface HandoffEvidencePacket {
+  kind?: string
+  records?: HandoffEvidenceEntry[]
+  claims?: HandoffEvidenceEntry[]
+  record_hashes?: string[]
+  required_record_hashes?: string[]
+  trusted_creator_keys?: string[]
+  allowed_context_ids?: string[]
+  max_age_ms?: number
+  archive_refs?: unknown[]
+  [key: string]: unknown
+}
+
+export interface HandoffClaimsFromEvidenceOptions {
+  required_record_hashes?: string[]
+  trusted_creator_keys?: string[]
+  allowed_context_ids?: string[]
+  max_age_ms?: number
 }
 
 function recordHash(record: AtribRecord): string {
@@ -124,6 +166,116 @@ function hashMaterial(value: unknown, salt?: string): string | null {
 
 function hasMaterial(value: unknown): boolean {
   return value !== undefined
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isAtribRecordLike(value: unknown): value is AtribRecord {
+  if (!isObject(value)) return false
+  return (
+    typeof value.spec_version === 'string' &&
+    typeof value.event_type === 'string' &&
+    typeof value.context_id === 'string' &&
+    typeof value.creator_key === 'string' &&
+    typeof value.chain_root === 'string' &&
+    typeof value.content_id === 'string' &&
+    typeof value.signature === 'string'
+  )
+}
+
+function proofOrUndefined(value: unknown): ProofBundle | undefined {
+  if (value === null || value === undefined) return undefined
+  return value as ProofBundle
+}
+
+function localSidecar(value: unknown): Record<string, unknown> | undefined {
+  return isObject(value) ? value : undefined
+}
+
+function evidenceEntries(
+  packet: HandoffEvidencePacket | HandoffEvidenceEntry[],
+): HandoffEvidenceEntry[] {
+  if (Array.isArray(packet)) return packet
+  const entries: HandoffEvidenceEntry[] = []
+  if (Array.isArray(packet.records)) entries.push(...packet.records)
+  if (Array.isArray(packet.claims)) entries.push(...packet.claims)
+  return entries
+}
+
+function requiredHashes(
+  packet: HandoffEvidencePacket | HandoffEvidenceEntry[],
+  options: HandoffClaimsFromEvidenceOptions,
+): string[] {
+  const values = new Set<string>()
+  if (!Array.isArray(packet)) {
+    for (const hash of packet.required_record_hashes ?? []) values.add(hash)
+    for (const hash of packet.record_hashes ?? []) values.add(hash)
+  }
+  for (const hash of options.required_record_hashes ?? []) values.add(hash)
+  return [...values]
+}
+
+function claimFromEvidenceEntry(
+  entry: HandoffEvidenceEntry,
+  packet: HandoffEvidencePacket | HandoffEvidenceEntry[],
+  options: HandoffClaimsFromEvidenceOptions,
+): HandoffClaimInput | null {
+  const envelope = isObject(entry) ? entry : {}
+  const record = isAtribRecordLike(envelope.record)
+    ? envelope.record
+    : isAtribRecordLike(entry)
+      ? entry
+      : undefined
+  const local = localSidecar(envelope._local)
+  const claimHash =
+    typeof envelope.record_hash === 'string'
+      ? envelope.record_hash
+      : record
+        ? recordHash(record)
+        : undefined
+  if (claimHash === undefined) return null
+
+  const trustedCreatorKeys =
+    options.trusted_creator_keys ??
+    (!Array.isArray(packet) ? packet.trusted_creator_keys : undefined)
+  const allowedContextIds =
+    options.allowed_context_ids ?? (!Array.isArray(packet) ? packet.allowed_context_ids : undefined)
+  const maxAgeMs = options.max_age_ms ?? (!Array.isArray(packet) ? packet.max_age_ms : undefined)
+
+  const claim: HandoffClaimInput = { record_hash: claimHash }
+  if (record) claim.record = record
+  const body = envelope.body ?? local?.body ?? local?.content
+  const args = envelope.args ?? local?.args
+  const result = envelope.result ?? local?.result
+  if (body !== undefined) claim.body = body
+  if (args !== undefined) claim.args = args
+  if (result !== undefined) claim.result = result
+  const proof = proofOrUndefined(envelope.proof)
+  if (proof !== undefined) claim.proof = proof
+  if (trustedCreatorKeys !== undefined) claim.trusted_creator_keys = trustedCreatorKeys
+  if (allowedContextIds !== undefined) claim.allowed_context_ids = allowedContextIds
+  if (maxAgeMs !== undefined) claim.max_age_ms = maxAgeMs
+  return claim
+}
+
+export function handoffClaimsFromEvidencePacket(
+  packet: HandoffEvidencePacket | HandoffEvidenceEntry[],
+  options: HandoffClaimsFromEvidenceOptions = {},
+): HandoffClaimInput[] {
+  const claims: HandoffClaimInput[] = []
+  const seen = new Set<string>()
+  for (const entry of evidenceEntries(packet)) {
+    const claim = claimFromEvidenceEntry(entry, packet, options)
+    if (!claim) continue
+    claims.push(claim)
+    seen.add(claim.record_hash)
+  }
+  for (const hash of requiredHashes(packet, options)) {
+    if (!seen.has(hash)) claims.push({ record_hash: hash })
+  }
+  return claims
 }
 
 function verifyBody(
@@ -322,6 +474,17 @@ function verifyTrustedSigner(
   return trusted
 }
 
+function verifyAllowedContext(
+  record: AtribRecord,
+  allowedContextIds: string[] | undefined,
+  reasons: HandoffRejectionReason[],
+): boolean | null {
+  if (allowedContextIds === undefined || allowedContextIds.length === 0) return null
+  const allowed = allowedContextIds.includes(record.context_id)
+  if (!allowed) reasons.push('wrong_context')
+  return allowed
+}
+
 async function verifyOneClaim(
   claim: HandoffClaimInput,
   options: VerifyHandoffClaimsOptions,
@@ -330,6 +493,7 @@ async function verifyOneClaim(
   const warnings: string[] = []
   const nowMs = options.now_ms ?? Date.now()
   const trustedCreatorKeys = claim.trusted_creator_keys ?? options.trusted_creator_keys
+  const allowedContextIds = claim.allowed_context_ids ?? options.allowed_context_ids
   const maxAgeMs = claim.max_age_ms ?? options.max_age_ms
 
   if (claim.record === undefined) {
@@ -342,6 +506,7 @@ async function verifyOneClaim(
       signature_ok: null,
       computed_record_hash: null,
       signer_trusted: null,
+      context_allowed: null,
     }
   }
 
@@ -356,6 +521,7 @@ async function verifyOneClaim(
   warnings.push(...verification.warnings)
 
   const signerTrusted = verifyTrustedSigner(claim.record, trustedCreatorKeys, reasons)
+  const contextAllowed = verifyAllowedContext(claim.record, allowedContextIds, reasons)
   verifyFreshness(claim.record, nowMs, maxAgeMs, reasons)
   const proof = await verifyProofPresence(
     claim,
@@ -385,6 +551,7 @@ async function verifyOneClaim(
     signature_ok: verification.signatureOk,
     computed_record_hash: computed,
     signer_trusted: signerTrusted,
+    context_allowed: contextAllowed,
     body,
   }
   if (proof !== undefined) result.proof = proof
