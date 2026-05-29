@@ -12,7 +12,7 @@ import {
   signRecord,
   type AtribRecord,
 } from '@atrib/mcp'
-import { verifyHandoffClaims } from '../src/index.js'
+import { handoffClaimsFromEvidencePacket, verifyHandoffClaims } from '../src/index.js'
 
 ed.hashes.sha512 = sha512
 
@@ -257,5 +257,71 @@ describe('verifyHandoffClaims', () => {
 
     expect(result.accepted_record_hashes).toEqual([])
     expect(result.rejected[0]?.rejection_reasons).toContain('stale')
+  })
+
+  it('rejects records outside the allowed context set', async () => {
+    const body = { summary: 'Agent A read the tenant logs', ticket: 'SUP-42' }
+    const record = await buildClaimRecord(11, body)
+    const hash = recordHash(record)
+
+    const result = await verifyHandoffClaims([{ record_hash: hash, record, body }], {
+      trusted_creator_keys: [record.creator_key],
+      allowed_context_ids: ['3'.repeat(32)],
+      require_body: true,
+      require_body_commitment: true,
+      now_ms: NOW_MS,
+      max_age_ms: 60_000,
+    })
+
+    expect(result.accepted_record_hashes).toEqual([])
+    expect(result.rejected[0]?.rejection_reasons).toContain('wrong_context')
+  })
+
+  it('builds claim inputs from D062 mirror envelopes', async () => {
+    const body = { summary: 'Agent A prepared a continuation packet', ticket: 'SUP-47' }
+    const record = await buildClaimRecord(11, body)
+    const hash = recordHash(record)
+
+    const claims = handoffClaimsFromEvidencePacket({
+      required_record_hashes: [hash],
+      records: [
+        {
+          record,
+          _local: {
+            producer: 'atrib-emit',
+            content: body,
+          },
+        },
+      ],
+    })
+
+    const result = await verifyHandoffClaims(claims, {
+      trusted_creator_keys: [record.creator_key],
+      allowed_context_ids: [record.context_id],
+      require_body: true,
+      require_body_commitment: true,
+      now_ms: NOW_MS,
+      max_age_ms: 60_000,
+    })
+
+    expect(claims[0]?.record_hash).toBe(hash)
+    expect(result.accepted_record_hashes).toEqual([hash])
+    expect(result.rejected).toEqual([])
+  })
+
+  it('preserves missing required packet records as verifier rejections', async () => {
+    const result = await verifyHandoffClaims(
+      handoffClaimsFromEvidencePacket({
+        required_record_hashes: ['sha256:' + 'b'.repeat(64)],
+        records: [],
+      }),
+      {
+        require_body: true,
+        require_log_inclusion: true,
+      },
+    )
+
+    expect(result.accepted_record_hashes).toEqual([])
+    expect(result.rejected[0]?.rejection_reasons).toContain('record_missing')
   })
 })

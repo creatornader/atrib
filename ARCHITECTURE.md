@@ -102,16 +102,16 @@ The reference implementation uses [Tessera](https://github.com/transparency-dev/
 
 The graph is a directed property multigraph with eight node types (`tool_call`, `transaction`, `observation`, `annotation`, `revision`, `directory_anchor`, `extension`, `gap_node`) and nine edge types, all derived deterministically from record structure:
 
-| Edge type          | Direction | Derivation                                                              |
-| ------------------ | --------- | ----------------------------------------------------------------------- |
-| `CHAIN_PRECEDES`   | A -> B    | B's `chain_root` = SHA-256(JCS(A)). Explicit hash chain link.           |
-| `SESSION_PRECEDES` | A -> B    | Same `context_id`, no chain link, A's timestamp < B's timestamp.        |
-| `SESSION_PARALLEL` | A <-> B   | Same `context_id`, no chain link, no temporal ordering.                 |
-| `CONVERGES_ON`     | N -> T    | N is a tool_call or gap_node, T is the transaction node, same session. observation and extension nodes do NOT participate ([D042](DECISIONS.md#d042-lift-observation-graph-participation-restriction), [D043](DECISIONS.md#d043-extension-uri-participation-in-graph-derivation)). |
-| `CROSS_SESSION`    | A -> T    | Different `context_id`, same explicit `session_token`. Same logical session across traces. Never inferred.  |
-| `INFORMED_BY`      | A -> B    | A's `informed_by` array contains the record_hash of B. Agent-declared reasoning context ([D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type)). Intra- or cross-session. Source/target may be any node type. |
-| `PROVENANCE_OF`    | D -> U    | D and U both carry the same `provenance_token` value, different `context_ids`, U is the token's source record. Cross-session causal anchoring ([D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring)). |
-| `ANNOTATES`        | A -> R    | A is an annotation record (event_type=annotation, byte 0x05) with `annotates: sha256:<R-hash>`. Forward-pointing commentary on a prior record ([D058](DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05)). |
+| Edge type          | Direction | Derivation                                                                                                                                                                                                                                                                                           |
+| ------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CHAIN_PRECEDES`   | A -> B    | B's `chain_root` = SHA-256(JCS(A)). Explicit hash chain link.                                                                                                                                                                                                                                        |
+| `SESSION_PRECEDES` | A -> B    | Same `context_id`, no chain link, A's timestamp < B's timestamp.                                                                                                                                                                                                                                     |
+| `SESSION_PARALLEL` | A <-> B   | Same `context_id`, no chain link, no temporal ordering.                                                                                                                                                                                                                                              |
+| `CONVERGES_ON`     | N -> T    | N is a tool_call or gap_node, T is the transaction node, same session. observation and extension nodes do NOT participate ([D042](DECISIONS.md#d042-lift-observation-graph-participation-restriction), [D043](DECISIONS.md#d043-extension-uri-participation-in-graph-derivation)).                   |
+| `CROSS_SESSION`    | A -> T    | Different `context_id`, same explicit `session_token`. Same logical session across traces. Never inferred.                                                                                                                                                                                           |
+| `INFORMED_BY`      | A -> B    | A's `informed_by` array contains the record_hash of B. Agent-declared reasoning context ([D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type)). Intra- or cross-session. Source/target may be any node type.                                                            |
+| `PROVENANCE_OF`    | D -> U    | D and U both carry the same `provenance_token` value, different `context_ids`, U is the token's source record. Cross-session causal anchoring ([D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring)).                                                                 |
+| `ANNOTATES`        | A -> R    | A is an annotation record (event_type=annotation, byte 0x05) with `annotates: sha256:<R-hash>`. Forward-pointing commentary on a prior record ([D058](DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05)).                                                                |
 | `REVISES`          | V -> P    | V is a revision record (event_type=revision, byte 0x06) with `revises: sha256:<P-hash>`. Supersedure of a prior stance, predecessor stays immutable on the log; consumers choose whether to honor the revision ([D059](DECISIONS.md#d059-promote-revision-to-atrib-normative-event_type-byte-0x06)). |
 
 The derivation rules are normative (Section 3.2.4). Two implementations processing identical records must produce identical edge sets. This is what makes independent verification possible: you do not need to trust the graph service, because you can rebuild the graph yourself and check.
@@ -216,15 +216,15 @@ There are two emission paths for transaction records (Section 5.4.5, [D011](DECI
 
 atrib categorizes runtime integration into seven peer patterns ([D069](DECISIONS.md#d069-runtime-integration-patterns--first-class-peers-no-canonical-path), [D102](DECISIONS.md#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox), [§9](atrib-spec.md#9-runtime-integration-patterns)). None is canonical. A runtime builder picks the pattern its ergonomics support; multiple patterns can compose for one runtime.
 
-| Pattern | Where it fits | Reference implementation |
-|---|---|---|
-| 1. Lifecycle hooks | Runtimes that expose typed hook events with stdin-JSON IPC (Claude Code, Cursor, Codex CLI, Browser-Use, Augment Code, Pi/Earendil) | hook helper spawning `atrib-emit-cli` ([D082](DECISIONS.md#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape)); the CLI calls `emitInProcess` ([D081](DECISIONS.md#d081-in-process-emit-for-hook-class-producers-emitinprocess)) over a stdin/stdout JSON contract |
-| 2. In-process MCP middleware | Runtimes that call tools through MCP servers (Goose, Continue, Cody, Claude Code MCP-served tools, opencode) | [`@atrib/mcp-wrap`](packages/mcp-wrap/), required for transaction records ([D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)) and `preCallTransform` ([D057](DECISIONS.md#d057-pre-call-signing-hook-precalltransform-for-cross-tool-causal-embedding)) |
-| 3. Callback / lifecycle handlers | Multi-agent SDKs with native callback APIs (LangGraph, CrewAI, AutoGen, Microsoft Agent Framework, Anthropic Agent SDK, smolagents, OpenAI Agents SDK, Vercel AI SDK, Flue, Google ADK) | [`@atrib/agent`](packages/agent/) framework adapters |
-| 4. OpenInference SpanProcessor | OpenInference-instrumented runtimes across Python, JavaScript, Java, and Go package surfaces | [`@atrib/openinference`](packages/openinference/README.md) |
-| 5. Post-hoc API import + consumer re-sign | Closed-loop runtimes that own the trace (Cursor Cloud Agents recommended first reference; also Devin, Manus, Operator, Bolt/v0/Lovable) | per-runtime adapters (planned) |
-| 6. Streaming interceptor | Real-time bidirectional protocols (OpenAI Realtime API, voice/multimodal harnesses) | not yet built |
-| 7. Sandboxed-execution signer proxy | Runtimes that run agent code in a sandbox while a host signer process stays outside the sandbox | [`packages/integration/examples/signer-proxy/`](packages/integration/examples/signer-proxy/) |
+| Pattern                                   | Where it fits                                                                                                                                                                           | Reference implementation                                                                                                                                                                                                                                                                          |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Lifecycle hooks                        | Runtimes that expose typed hook events with stdin-JSON IPC (Claude Code, Cursor, Codex CLI, Browser-Use, Augment Code, Pi/Earendil)                                                     | hook helper spawning `atrib-emit-cli` ([D082](DECISIONS.md#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape)); the CLI calls `emitInProcess` ([D081](DECISIONS.md#d081-in-process-emit-for-hook-class-producers-emitinprocess)) over a stdin/stdout JSON contract |
+| 2. In-process MCP middleware              | Runtimes that call tools through MCP servers (Goose, Continue, Cody, Claude Code MCP-served tools, opencode)                                                                            | [`@atrib/mcp-wrap`](packages/mcp-wrap/), required for transaction records ([D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)) and `preCallTransform` ([D057](DECISIONS.md#d057-pre-call-signing-hook-precalltransform-for-cross-tool-causal-embedding))             |
+| 3. Callback / lifecycle handlers          | Multi-agent SDKs with native callback APIs (LangGraph, CrewAI, AutoGen, Microsoft Agent Framework, Anthropic Agent SDK, smolagents, OpenAI Agents SDK, Vercel AI SDK, Flue, Google ADK) | [`@atrib/agent`](packages/agent/) framework adapters                                                                                                                                                                                                                                              |
+| 4. OpenInference SpanProcessor            | OpenInference-instrumented runtimes across Python, JavaScript, Java, and Go package surfaces                                                                                            | [`@atrib/openinference`](packages/openinference/README.md)                                                                                                                                                                                                                                        |
+| 5. Post-hoc API import + consumer re-sign | Closed-loop runtimes that own the trace (Cursor Cloud Agents recommended first reference; also Devin, Manus, Operator, Bolt/v0/Lovable)                                                 | per-runtime adapters (planned)                                                                                                                                                                                                                                                                    |
+| 6. Streaming interceptor                  | Real-time bidirectional protocols (OpenAI Realtime API, voice/multimodal harnesses)                                                                                                     | not yet built                                                                                                                                                                                                                                                                                     |
+| 7. Sandboxed-execution signer proxy       | Runtimes that run agent code in a sandbox while a host signer process stays outside the sandbox                                                                                         | [`packages/integration/examples/signer-proxy/`](packages/integration/examples/signer-proxy/)                                                                                                                                                                                                      |
 
 Patterns 1–4 ship reference implementations in atrib v1. Pattern 7 ships a tested reference example for the key-isolation boundary. Patterns 5–6 are documented with their conformance contract scope; reference implementations land per priority sequencing.
 
@@ -234,7 +234,7 @@ Runtime mounting is only half the problem. Real support and RCA work often cross
 
 The continuation shape is documented in spec [§7.8](atrib-spec.md#78-cross-harness-continuation-packets). A handoff that wants a local agent to resume without guessing needs record bodies or archive references, redacted ticket and log evidence, skill pack names and hashes, the latest chain tail, provenance anchors, and signed diagnostics for hosted-agent failures. This keeps atrib in the substrate role: Axiom-style wide logs keep tenant context and request/response evidence, support systems keep customer context and thread state, and atrib proves how the agent moved through both.
 
-The receiving side of a Pattern 3 handoff is now a verifier concern, not a graph concern. `@atrib/verify` exposes `verifyHandoffClaims()` so Agent B can accept or reject Agent A's `record_hash` claim before acting. It checks the supplied signed record, private body commitment, inclusion proof, checkpoint signature when the log key is known, trusted signer set, and freshness bound, then returns `accepted_record_hashes` for Agent B's `informed_by`. This is [D105](DECISIONS.md#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance)'s extension-first path; it does not promote a new event type or primitive.
+The receiving side of a Pattern 3 handoff is now a verifier concern, not a graph concern. `@atrib/verify` exposes `verifyHandoffClaims()` and `handoffClaimsFromEvidencePacket()` so Agent B can accept or reject Agent A's `record_hash` claim before acting. It checks the supplied signed record, private body commitment, inclusion proof, checkpoint signature when the log key is known, trusted signer set, allowed context set, and freshness bound, then returns `accepted_record_hashes` for Agent B's `informed_by`. [D105](DECISIONS.md#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance) added the extension-first verifier path. [D106](DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7) promotes the agent-facing wrapper as `@atrib/verify-mcp` after two independent receiving flows made verify-before-linking routine.
 
 ### Why each adapter is different
 
@@ -271,9 +271,9 @@ A protocol adapter has three canonical layers:
 
 Two observation surfaces exist per protocol and compose cleanly:
 
-| Surface | Where | What it observes |
-|---|---|---|
-| Runtime | `@atrib/agent` + framework adapter | Payment events during a single agent session |
+| Surface       | Where                                               | What it observes                                                              |
+| ------------- | --------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Runtime       | `@atrib/agent` + framework adapter                  | Payment events during a single agent session                                  |
 | Retrospective | Protocol adapter (scanner + registry + attribution) | All protocol activity across the ecosystem, independent of any single session |
 
 A complete per-protocol artifact demonstrates both paths: **Path A** (retrospective scanner + attribution, exercising [§3](atrib-spec.md#3-graph-query-interface) graph and [§4](atrib-spec.md#4-attribution-policy-format) calculation) plus **Path B** (a reference agent using `@atrib/agent` to make real payments, with signed receipts flowing into the log and merchant-side verification via `@atrib/verify`, exercising [§1](atrib-spec.md#1-attribution-record-format), [§2.6.1](atrib-spec.md#261-submit-entry), [§5](atrib-spec.md#5-sdk-specification)).
@@ -330,13 +330,13 @@ The load-bearing choices. Each is in [DECISIONS.md](DECISIONS.md) with full rati
 
 The atrib stack runs across two repositories with distinct deployment platforms. Each subdomain points its DNS at the appropriate origin; Cloudflare proxies all traffic for caching, DDoS protection, and TLS termination.
 
-| Subdomain | Source repo | Platform | Purpose |
-|---|---|---|---|
-| `atrib.dev` | [`atrib-web`](https://github.com/creatornader/atrib-web) | Vercel (Next.js) | Marketing landing page |
-| `explore.atrib.dev` | [`atrib`](https://github.com/creatornader/atrib) at `apps/dashboard/` | Fly.io (host-routed via log-node) | Public block explorer (seven views: overview, identity, session, action, demo, trace, anchoring) |
-| `log.atrib.dev` | [`atrib`](https://github.com/creatornader/atrib) at `services/log-node/` | Fly.io | Tessera-backed Merkle log API with optional SSE / JSON Feed subscriptions (spec [§2](atrib-spec.md#2-merkle-log-protocol)) |
-| `graph.atrib.dev` | [`atrib`](https://github.com/creatornader/atrib) at `services/graph-node/` | Fly.io | Graph query API (spec [§3](atrib-spec.md#3-graph-query-interface)) |
-| `directory.atrib.dev` | [`atrib`](https://github.com/creatornader/atrib) at `services/directory-node/` | Fly.io | AKD-backed identity-claim directory (spec [§6](atrib-spec.md#6-key-directory)) |
+| Subdomain             | Source repo                                                                    | Platform                          | Purpose                                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `atrib.dev`           | [`atrib-web`](https://github.com/creatornader/atrib-web)                       | Vercel (Next.js)                  | Marketing landing page                                                                                                     |
+| `explore.atrib.dev`   | [`atrib`](https://github.com/creatornader/atrib) at `apps/dashboard/`          | Fly.io (host-routed via log-node) | Public block explorer (seven views: overview, identity, session, action, demo, trace, anchoring)                           |
+| `log.atrib.dev`       | [`atrib`](https://github.com/creatornader/atrib) at `services/log-node/`       | Fly.io                            | Tessera-backed Merkle log API with optional SSE / JSON Feed subscriptions (spec [§2](atrib-spec.md#2-merkle-log-protocol)) |
+| `graph.atrib.dev`     | [`atrib`](https://github.com/creatornader/atrib) at `services/graph-node/`     | Fly.io                            | Graph query API (spec [§3](atrib-spec.md#3-graph-query-interface))                                                         |
+| `directory.atrib.dev` | [`atrib`](https://github.com/creatornader/atrib) at `services/directory-node/` | Fly.io                            | AKD-backed identity-claim directory (spec [§6](atrib-spec.md#6-key-directory))                                             |
 
 The bifurcation between `atrib-web` (landing page) and the `atrib` monorepo (protocol services + dashboard) is intentional. The landing page has different deployment cadence (Vercel preview-on-PR for marketing copy iteration) and a different audience (visitors learning about the protocol) than the API services (Fly + spec-locked). API services deploy through the `Deploy services` GitHub Actions workflow after `CI` succeeds on `main`; the manual fallback is `flyctl deploy -c services/<name>/fly.toml --remote-only`. Keeping them separate avoids coupling marketing iteration to the protocol release cycle.
 
@@ -411,6 +411,13 @@ services/atrib-summarize  MCP server for narrative synthesis across N records
       LLM (defaults to NIM qwen3.5-397b) to synthesize a narrative. Closes
       the consumer-side loop: agents read context, not raw records.
 
+services/atrib-verify  MCP server for counterparty handoff evidence checks
+  └── Consumer-side cognitive primitive, reads caller-supplied continuation
+      packets or mirror envelopes, verifies record signatures, body
+      commitments, inclusion proofs, trusted signers, context policy, and
+      freshness, then returns accepted hashes for `informed_by`. Read-only;
+      it does not fetch archives or sign records.
+
 (Future, not yet built, placeholder per D070)
 services/archive-node  Record Body Archive Layer (§2.12)
   └── Separate from log-node by design. Stores canonical record bodies
@@ -424,7 +431,7 @@ services/archive-node  Record Body Archive Layer (§2.12)
       §2.12 carries the current spec contract.
 ```
 
-The six designed-public packages (`mcp`, `agent`, `verify`, `cli`, `mcp-wrap`, `directory`) are published to npm via Trusted Publishing OIDC. The two private packages (`log-dev`, `integration`) are workspace fixtures. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The `atrib-trace` and `atrib-summarize` MCP services run in the agent's process alongside `atrib-emit` and read the local mirror, no separate deployment needed.
+The fourteen designed-public packages are published to npm via Trusted Publishing OIDC: seven core packages (`mcp`, `agent`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`) and seven cognitive-primitive MCP servers (`emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, `verify-mcp`). The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, and dashboard) are workspace fixtures, proof harnesses, deployed services, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence; no separate deployment is needed.
 
 Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hashes` for SHA-256, `canonicalize` for JCS. Framework dependencies are structural-typed, never hard-imported.
 
@@ -433,7 +440,7 @@ Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hash
 ## Further reading
 
 - [atrib-spec.md](atrib-spec.md), the complete protocol specification ([§0](atrib-spec.md#0-foundations)-[§7](atrib-spec.md#7-harness-integration-patterns))
-- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D105](DECISIONS.md#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance); [D053](DECISIONS.md#d053-inclusion-proof-aggregation-flagged-for-follow-up) and [D070](DECISIONS.md#d070-record-body-archive-layer-placeholder-adr) are placeholder ADRs awaiting formal write-ups)
+- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D106](DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7); [D053](DECISIONS.md#d053-inclusion-proof-aggregation-flagged-for-follow-up) and [D070](DECISIONS.md#d070-record-body-archive-layer-placeholder-adr) are placeholder ADRs awaiting formal write-ups)
 - [packages/agent/README.md](packages/agent/README.md) -- adapter table with quick-start snippets for every framework
 - [packages/integration/examples/signer-proxy/](packages/integration/examples/signer-proxy/) -- sandbox signer proxy example ([§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution) / [D102](DECISIONS.md#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox))
 - [spec/conformance/1.4/](spec/conformance/1.4/) -- signing and adversarial record conformance corpus ([§1.4](atrib-spec.md#14-signing-and-verification) / [D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus))

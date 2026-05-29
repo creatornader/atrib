@@ -12,4 +12,5 @@ packages:
   - 'services/atrib-recall'
   - 'services/atrib-trace'
   - 'services/atrib-summarize'
+  - 'services/atrib-verify'
   - 'apps/dashboard'

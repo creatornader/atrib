@@ -58,12 +58,12 @@ Per the [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58
 
 ### `new AtribVerifier(options)`
 
-| Field             | Type     | Default                       | Description                                                             |
-| ----------------- | -------- | ----------------------------- | ----------------------------------------------------------------------- |
-| `logEndpoint`     | `string` | `https://log.atrib.dev/v1`     | The Merkle log to fetch checkpoints and proofs from.                    |
-| `graphEndpoint`   | `string` | `https://graph.atrib.dev/v1`   | The graph query endpoint (spec [§3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#3-graph-query-interface)).                                     |
-| `resolveEndpoint` | `string` | `https://resolve.atrib.dev/v1` | Reserved for v2 remote calculation.                                     |
-| `merchantKey`     | `string` | unset                         | Base64url Ed25519 32-byte seed. Optional. `verify()` works without it. |
+| Field             | Type     | Default                        | Description                                                                                                                  |
+| ----------------- | -------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `logEndpoint`     | `string` | `https://log.atrib.dev/v1`     | The Merkle log to fetch checkpoints and proofs from.                                                                         |
+| `graphEndpoint`   | `string` | `https://graph.atrib.dev/v1`   | The graph query endpoint (spec [§3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#3-graph-query-interface)). |
+| `resolveEndpoint` | `string` | `https://resolve.atrib.dev/v1` | Reserved for v2 remote calculation.                                                                                          |
+| `merchantKey`     | `string` | unset                          | Base64url Ed25519 32-byte seed. Optional. `verify()` works without it.                                                       |
 
 ### `verify(doc, options): Promise<VerificationResult>`
 
@@ -79,11 +79,11 @@ Per-record verification. Verifies a single signed record's Ed25519 signature and
 import { verifyRecord } from '@atrib/verify'
 
 const result = await verifyRecord(record, {
-  upstreamCandidate,         // optional, for provenance_token resolution
-  informedByCandidates: [],  // optional, for informed_by[] resolution
-  identityClaim,             // optional, for capability_check (caller does directory lookup)
-  ap2ViEvidence,             // optional, transaction-only AP2 / VI evidence bundle
-  ap2ViEvidenceOptions,      // optional, passed to verifyAp2ViEvidenceAsync()
+  upstreamCandidate, // optional, for provenance_token resolution
+  informedByCandidates: [], // optional, for informed_by[] resolution
+  identityClaim, // optional, for capability_check (caller does directory lookup)
+  ap2ViEvidence, // optional, transaction-only AP2 / VI evidence bundle
+  ap2ViEvidenceOptions, // optional, passed to verifyAp2ViEvidenceAsync()
 })
 // result: {
 //   valid: boolean
@@ -109,7 +109,7 @@ const result = await verifyRecord(record, {
 **Pending per-record annotations** (tracked as a Pending decision in [DECISIONS.md P005](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p005-reconcile-atribverify-readme-per-record-annotations-with-actual-code-surface)):
 
 - `cross_log_proof_count` / `cross_log_threshold_met` / `cross_log_equivocation_detected` ([D050](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d050-cross-log-replication-for-equivocation-defense) / [§2.11](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#211-cross-log-replication)): requires multi-log proof-bundle parsing and trusted-log-set config.
-(Note: `tool_name_form`, `args_commitment_form`, and `result_commitment_form` per [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture)/[§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture) are all now implemented under `posture` above. [D061](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-121) added `tool_name`, `args_hash`, and `result_hash` to the [§1.2.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#121-field-definitions) canonical record schema, completing the structural inputs.)
+  (Note: `tool_name_form`, `args_commitment_form`, and `result_commitment_form` per [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture)/[§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture) are all now implemented under `posture` above. [D061](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-121) added `tool_name`, `args_hash`, and `result_hash` to the [§1.2.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#121-field-definitions) canonical record schema, completing the structural inputs.)
 
 Each pending annotation is its own ADR scope when external consumers need it.
 
@@ -118,26 +118,29 @@ Each pending annotation is its own ADR scope when external consumers need it.
 Verifier-side Pattern 3 handoff acceptance. Use this when one agent receives another agent's `record_hash` claim and needs to verify the supplied record, private body material, and proof before signing its own `informed_by` follow-up.
 
 ```typescript
-import { verifyHandoffClaims } from '@atrib/verify'
+import { handoffClaimsFromEvidencePacket, verifyHandoffClaims } from '@atrib/verify'
 
-const handoff = await verifyHandoffClaims(
-  [
+const claims = handoffClaimsFromEvidencePacket({
+  required_record_hashes: [record_hash],
+  records: [
     {
       record_hash,
       record,
-      body,
       proof,
+      _local: { content: body },
     },
   ],
-  {
-    trusted_creator_keys: [agentAPublicKey],
-    require_body: true,
-    require_body_commitment: true,
-    require_log_inclusion: true,
-    log_public_key: logPublicKey,
-    max_age_ms: 60_000,
-  },
-)
+})
+
+const handoff = await verifyHandoffClaims(claims, {
+  trusted_creator_keys: [agentAPublicKey],
+  allowed_context_ids: [expectedContextId],
+  require_body: true,
+  require_body_commitment: true,
+  require_log_inclusion: true,
+  log_public_key: logPublicKey,
+  max_age_ms: 60_000,
+})
 
 if (handoff.all_accepted) {
   const informedBy = handoff.accepted_record_hashes
@@ -150,13 +153,14 @@ Checks performed:
 - Record hash binding: supplied record hash must equal the claimed `record_hash`.
 - Signature: `verifyRecord()` must accept the signed record.
 - Trust set: `creator_key` must be in `trusted_creator_keys` when supplied.
+- Context policy: `context_id` must be in `allowed_context_ids` when supplied.
 - Freshness: record timestamp must be within `max_age_ms` when supplied.
 - Body commitments: supplied `body`, `args`, or `result` must match `args_hash` / `result_hash` when required.
 - Log proof: supplied proof must bind to the serialized log entry for that record, verify the inclusion path, and verify the C2SP checkpoint signature when `log_public_key` is supplied.
 
-The helper never fetches private material. Callers provide records, body material, and proof bundles from a local mirror, private handoff packet, Record Body Archive Layer, log lookup, or another channel. Rejected claims carry named reasons such as `wrong_signer`, `stale`, `body_hash_mismatch`, and `proof_invalid`.
+`handoffClaimsFromEvidencePacket()` accepts parsed [D062](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) local mirror envelopes, private continuation packets, or arrays of evidence entries. It preserves missing required hashes as verifier rejections. The helper never fetches private material. Callers provide records, body material, and proof bundles from a local mirror, private handoff packet, Record Body Archive Layer, log lookup, or another channel. Rejected claims carry named reasons such as `wrong_signer`, `wrong_context`, `stale`, `body_hash_mismatch`, and `proof_invalid`.
 
-This is not a cognitive primitive. It is the [D105](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance) verifier extension that keeps [P022](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation) open until verify is routine agent-facing work.
+The library helper backs the `@atrib/verify-mcp` `atrib-verify` primitive promoted by [D106](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7). The MCP wrapper handles agent-facing use; this package remains the verifier library.
 
 ### `verifyAp2ViEvidence(...)` and `verifyAp2ViEvidenceAsync(...)`
 
@@ -281,15 +285,15 @@ Run them with `pnpm --filter @atrib/verify test`.
 
 ## Spec references
 
-| Spec section | What this package implements                         |
-| ------------ | ---------------------------------------------------- |
-| [§3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#3-graph-query-interface)           | Graph query interface (client side)                  |
-| [§4.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#43-the-default-policy)         | Default policy document                              |
-| [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm)         | Pure calculation algorithm                           |
-| [§4.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#47-settlement-recommendation-document)         | Recommendation document signing/verification         |
-| [§5.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#55-atribverify-merchant-verification-library)         | `AtribVerifier` class. `verify()` and `calculate()` |
-| [§5.5.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#554-ap2--verifiable-intent-evidence-checks) | AP2 / VI evidence checks                             |
-| [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)         | Degradation contract; failures never break the host |
+| Spec section                                                                                                       | What this package implements                        |
+| ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| [§3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#3-graph-query-interface)                        | Graph query interface (client side)                 |
+| [§4.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#43-the-default-policy)                        | Default policy document                             |
+| [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm)                 | Pure calculation algorithm                          |
+| [§4.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#47-settlement-recommendation-document)        | Recommendation document signing/verification        |
+| [§5.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#55-atribverify-merchant-verification-library) | `AtribVerifier` class. `verify()` and `calculate()` |
+| [§5.5.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#554-ap2--verifiable-intent-evidence-checks) | AP2 / VI evidence checks                            |
+| [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)                      | Degradation contract; failures never break the host |
 
 The full protocol spec is at [`atrib-spec.md`](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).
 

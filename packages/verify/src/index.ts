@@ -24,11 +24,14 @@ export type {
 // Cross-agent handoff claim verification. Used when one agent receives a
 // record_hash claim plus private body material from another agent and must
 // decide whether to link its next record through informed_by.
-export { verifyHandoffClaims } from './handoff.js'
+export { handoffClaimsFromEvidencePacket, verifyHandoffClaims } from './handoff.js'
 export type {
   HandoffBodyVerification,
+  HandoffClaimsFromEvidenceOptions,
   HandoffClaimInput,
   HandoffClaimVerification,
+  HandoffEvidenceEntry,
+  HandoffEvidencePacket,
   HandoffProofVerification,
   HandoffRejectionReason,
   HandoffVerificationResult,
