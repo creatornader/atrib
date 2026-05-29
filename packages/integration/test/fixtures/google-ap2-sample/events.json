@@ -1,0 +1,81 @@
+{
+  "source": "google-agentic-commerce/AP2 samples/python/scenarios/a2a/human-not-present/cards",
+  "sessionId": "688cea4c",
+  "events": [
+    {
+      "result": {
+        "status": {
+          "message": {
+            "parts": [
+              {
+                "root": {
+                  "functionResponse": {
+                    "name": "create_payment_presentation",
+                    "response": {
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "{\"status\":\"success\",\"payment_mandate_chain_id\":\"pay_0365333ae6c249e0a96004c2e63d2a6e\",\"payment_nonce\":\"payment_nonce_12345\"}"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "result": {
+        "status": {
+          "message": {
+            "parts": [
+              {
+                "root": {
+                  "functionResponse": {
+                    "name": "create_checkout_presentation",
+                    "response": {
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "{\"status\":\"success\",\"checkout_mandate_chain_id\":\"chk_18fe8144648a450aae614f84ded90985\",\"checkout_nonce\":\"checkout_nonce_67890\"}"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "result": {
+        "status": {
+          "message": {
+            "parts": [
+              {
+                "root": {
+                  "functionResponse": {
+                    "name": "complete_checkout",
+                    "response": {
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "{\"status\":\"success\",\"order_id\":\"14c40322-1d60-4848-a6db-9cfed1eed487\",\"checkout_receipt_jwt_parts\":[\"eyJhbGciOiAiRVMyNTYiLCAidHlwIjogIkpXVCIsICJraWQiOiAibWVyY2hhbnQta2V5LTEifQ\",\"eyJzdGF0dXMiOiAiU3VjY2VzcyIsICJpc3MiOiAiaHR0cHM6Ly9kZW1vLW1lcmNoYW50LmV4YW1wbGUiLCAiaWF0IjogMTc4MDAzNDgwMywgInJlZmVyZW5jZSI6ICJQMW4zLU1vc0VHMVVicXBfLVZ1OUJ4amQwc1JDMjZvQVlyUVJ4VXk2eEdRIiwgImVycm9yIjogbnVsbCwgImVycm9yX2Rlc2NyaXB0aW9uIjogbnVsbCwgIm9yZGVyX2lkIjogIjE0YzQwMzIyLTFkNjAtNDg0OC1hNmRiLTljZmVkMWVlZDQ4NyJ9\",\"61AAGxeDAGxBSplgbYXsQ5_8jivOjuac2MsAGy1YqYAIsTIup9D7OmP934KoWEMHJQdVcUjPOiLCAgon05C1Gg\"]}"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
