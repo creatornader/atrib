@@ -18,7 +18,8 @@
     "signer-proxy-demo": "tsx examples/signer-proxy/demo.ts",
     "calc-demo": "tsx scripts/calc-demo.ts",
     "ap2-live-interop": "tsx scripts/ap2-live-interop.ts",
-    "ap2-local-participant": "tsx scripts/generate-ap2-local-participant-artifacts.ts"
+    "ap2-local-participant": "tsx scripts/generate-ap2-local-participant-artifacts.ts",
+    "ap2-google-sample-extract": "tsx scripts/extract-google-ap2-sample-artifacts.ts"
   },
   "dependencies": {
     "@atrib/agent": "workspace:*",
