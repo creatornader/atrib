@@ -9,6 +9,7 @@ coverage/
 .DS_Store
 .remember/
 .claude/
+supertool
 
 docs/superpowers/
 thoughts/
