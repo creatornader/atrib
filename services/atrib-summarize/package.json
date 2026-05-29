@@ -1,6 +1,6 @@
 {
   "name": "@atrib/summarize",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "MCP server for atrib. Synthesizes a narrative across N records via an OpenAI-compatible LLM so agents read context, not raw record bytes.",
   "license": "Apache-2.0",
   "type": "module",
