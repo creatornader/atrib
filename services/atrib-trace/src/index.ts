@@ -85,6 +85,10 @@ interface CompactVisited {
    */
   sidecar_summary?: {
     tool_name?: string
+    span_kind?: string
+    span_name?: string
+    model_name?: string
+    prompt_version?: string
     topics?: string[]
     /**
      * First 200 chars of the record's human-readable content, derived
@@ -119,6 +123,13 @@ export function summarizeSidecar(
   if (sc.toolName) out.tool_name = sc.toolName
   if (sc.producer) out.producer = sc.producer
   const c = sc.content as Record<string, unknown> | undefined
+  if (!out.tool_name && c && typeof c['tool_name'] === 'string') {
+    out.tool_name = c['tool_name']
+  }
+  if (c && typeof c['span_kind'] === 'string') out.span_kind = c['span_kind']
+  if (c && typeof c['span_name'] === 'string') out.span_name = c['span_name']
+  if (c && typeof c['model_name'] === 'string') out.model_name = c['model_name']
+  if (c && typeof c['prompt_version'] === 'string') out.prompt_version = c['prompt_version']
   if (c && Array.isArray(c['topics'])) {
     out.topics = (c['topics'] as unknown[]).filter((t): t is string => typeof t === 'string').slice(0, 6)
   }
@@ -128,7 +139,7 @@ export function summarizeSidecar(
   // an explicit final fallback to `summary` for legacy records.
   //   observation: content.what
   //   annotation:  content.summary
-  //   revision:    content.new_position (D086-normative) — surface this
+  //   revision:    content.new_position (D086-normative). Surface this
   //                so trace consumers can read the agent's stance shift
   //                without a separate recall call
   //   legacy:      content.summary (catches pre-D086 extractor records)
@@ -140,6 +151,10 @@ export function summarizeSidecar(
       primary = c['new_position']
     } else if (typeof c['summary'] === 'string') {
       primary = c['summary']
+    } else if (typeof c['prompt'] === 'string') {
+      primary = c['prompt']
+    } else if (typeof c['output'] === 'string') {
+      primary = c['output']
     }
     if (primary) {
       out.what = primary.length > 200 ? primary.slice(0, 197) + '…' : primary

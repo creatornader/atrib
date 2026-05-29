@@ -248,6 +248,23 @@ describe('summarizeSidecar — per-event_type content shape handling (D086)', ()
     expect(result?.what).toBe('primary-what')
   })
 
+  it('OpenInference: surfaces span identity and prompt version', () => {
+    const result = summarizeSidecar(mockLoaded({
+      source: 'openinference',
+      span_kind: 'LLM',
+      span_name: 'generate-text',
+      model_name: 'qwen3.5',
+      prompt_version: 'billing-v4',
+      prompt: 'compare Langfuse trace shape to atrib evidence shape',
+      topics: ['openinference', 'llm'],
+    }))
+    expect(result?.span_kind).toBe('LLM')
+    expect(result?.span_name).toBe('generate-text')
+    expect(result?.model_name).toBe('qwen3.5')
+    expect(result?.prompt_version).toBe('billing-v4')
+    expect(result?.what).toBe('compare Langfuse trace shape to atrib evidence shape')
+  })
+
   it('truncates the primary text at 200 chars with ellipsis', () => {
     const long = 'x'.repeat(500)
     const result = summarizeSidecar(mockLoaded({ what: long }))

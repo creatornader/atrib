@@ -100,10 +100,7 @@ describe('AtribSpanProcessor with autoInformedBy', () => {
       const llmSpan = tracer.startSpan('llm-step')
       llmSpan.setAttribute('openinference.span.kind', 'LLM')
       llmSpan.setAttribute('llm.model_name', 'qwen3.5')
-      llmSpan.setAttribute(
-        'llm.output_messages.0.message.tool_calls.0.tool_call.id',
-        'callA',
-      )
+      llmSpan.setAttribute('llm.output_messages.0.message.tool_calls.0.tool_call.id', 'callA')
       llmSpan.end()
 
       // Wait for LLM signing to complete + register in tracker
@@ -124,7 +121,10 @@ describe('AtribSpanProcessor with autoInformedBy', () => {
 
     // 3 records: LLM, TOOL, AGENT (root, even synthetic). Filter to
     // just the LLM and TOOL entries.
-    const llmRec = submitted.find((s) => s.record.event_type.endsWith('observation') && s.sidecar.llmOutputToolCallId === 'callA')!.record
+    const llmRec = submitted.find(
+      (s) =>
+        s.record.event_type.endsWith('observation') && s.sidecar.llmOutputToolCallId === 'callA',
+    )!.record
     const toolRec = submitted.find((s) => s.record.event_type.endsWith('tool_call'))!.record
     expect(llmRec).toBeDefined()
     expect(toolRec).toBeDefined()
@@ -159,6 +159,46 @@ describe('AtribSpanProcessor with autoInformedBy', () => {
     expect(submitted[0]!.informed_by).toBeUndefined()
   })
 
+  it('does not treat generic parent-child span nesting as informed_by', async () => {
+    const submitted: { record: AtribRecord; sidecar: AtribSpanSidecar }[] = []
+    const pubKey = await getPublicKey(TEST_KEY_BYTES)
+    const processor = new AtribSpanProcessor({
+      privateKey: TEST_KEY_BYTES,
+      creatorKey: base64urlEncode(pubKey),
+      serverUrl: 'https://test.example/atrib',
+      submit: (signed, sidecar) => {
+        submitted.push({ record: signed, sidecar })
+      },
+      autoInformedBy: true,
+    })
+    const provider = new BasicTracerProvider({ spanProcessors: [processor] })
+    const tracer = provider.getTracer('test')
+
+    const root = tracer.startSpan('agent-root')
+    await context.with(trace.setSpan(context.active(), root), async () => {
+      const llmSpan = tracer.startSpan('llm-child')
+      llmSpan.setAttribute('openinference.span.kind', 'LLM')
+      llmSpan.setAttribute('llm.model_name', 'qwen3.5')
+      llmSpan.end()
+
+      await new Promise((r) => setImmediate(r))
+      await new Promise((r) => setImmediate(r))
+
+      const toolSpan = tracer.startSpan('tool-child')
+      toolSpan.setAttribute('openinference.span.kind', 'TOOL')
+      toolSpan.setAttribute('tool.name', 'get_weather')
+      toolSpan.end()
+    })
+    root.end()
+
+    await new Promise((r) => setImmediate(r))
+    await new Promise((r) => setImmediate(r))
+
+    const toolRec = submitted.find((s) => s.sidecar.content.span_kind === 'TOOL')?.record
+    expect(toolRec).toBeDefined()
+    expect(toolRec?.informed_by).toBeUndefined()
+  })
+
   it('autoInformedBy=false (default) means no informed_by even when tool_call.id matches', async () => {
     const submitted: AtribRecord[] = []
     const pubKey = await getPublicKey(TEST_KEY_BYTES)
@@ -177,10 +217,7 @@ describe('AtribSpanProcessor with autoInformedBy', () => {
     const llmSpan = tracer.startSpan('llm')
     llmSpan.setAttribute('openinference.span.kind', 'LLM')
     llmSpan.setAttribute('llm.model_name', 'qwen3.5')
-    llmSpan.setAttribute(
-      'llm.output_messages.0.message.tool_calls.0.tool_call.id',
-      'callA',
-    )
+    llmSpan.setAttribute('llm.output_messages.0.message.tool_calls.0.tool_call.id', 'callA')
     llmSpan.end()
     await new Promise((r) => setImmediate(r))
     await new Promise((r) => setImmediate(r))

@@ -4278,11 +4278,24 @@ The following field names are normative when present (producers SHOULD use these
 | `toolName` | string | The MCP tool name as invoked. Populated by wrapper-side producers; absent for emit-side producers (which have no tool name to record).                                                                                                                 |
 | `args`     | object | The MCP tool call arguments as invoked. Populated by wrapper-side producers per the wrapped call.                                                                                                                                                      |
 | `result`   | object | The MCP tool's result object, captured BEFORE any host-side mutation (e.g. before atrib middleware writes its propagation token to `result._meta`). Populated by wrapper-side producers.                                                               |
-| `content`  | object | The pre-sign content payload as supplied to the producer. Populated by `atrib-emit`-style producers per the `content` argument the agent passed; typically carries `what`, `why_noted`, `topics`, `summary`, `importance` (depending on `event_type`). |
+| `content`  | object | The pre-sign content payload as supplied to the producer, or a normalized local content payload derived from the producer's runtime evidence. Populated by `atrib-emit`-style producers per the `content` argument the agent passed; typically carries `what`, `why_noted`, `topics`, `summary`, `importance` (depending on `event_type`). OpenInference producers SHOULD use this field for recall-readable span metadata rather than adding span metadata to the signed `record`. |
 
 Producers MAY add additional fields beyond this list. Consumers MUST tolerate unknown fields and SHOULD pass them through unchanged when re-emitting (e.g. when `atrib-trace` surfaces a sidecar summary for downstream tools).
 
 All sidecar fields are OPTIONAL. A sidecar containing only `{ "producer": "..." }` is well-formed; a missing sidecar is also well-formed.
+
+For OpenTelemetry / OpenInference producers, `_local.content` SHOULD use a stable local convention so cognitive primitives can read span-derived evidence without making observability fields part of `AtribRecord`. The recommended content fields are:
+
+| Field family | Fields | Purpose |
+| ------------ | ------ | ------- |
+| Span identity | `source`, `span_kind`, `span_name`, `trace_id`, `span_id` | Correlate a signed record with the runtime span tree and external observability systems. |
+| Legibility | `what`, `why_noted`, `topics` | Let recall, trace, and summarize display the span as human-readable context. |
+| Tool payload | `tool_name`, `args`, `result`, `input`, `output`, `input_mime_type`, `output_mime_type` | Preserve local payload context. `args_hash` and `result_hash` on the signed record remain the verifier-grade commitment path. |
+| Runtime metadata | `agent_name`, `model_name`, `tool_call_id`, `llm_output_tool_call_id` | Preserve framework and model identity plus the empirical LLM-to-tool linkage key. |
+| Prompt metadata | `invocation_parameters`, `prompt`, `prompt_messages`, `prompt_tools`, `prompt_tool_choice`, `prompt_template`, `prompt_template_variables`, `prompt_version`, `prompt_id`, `prompt_url` | Make prompt and prompt-version evidence findable by cognitive consumers while keeping it local by default. |
+| Operational metrics | `usage_details`, `cost_details`, `score_details`, `metadata` | Make token, cost, score, release, user, and other operational context available to local recall and summaries. |
+
+These fields are local-only. They MUST NOT be submitted to the public log as part of the standard submission path. If a later verifier, handoff, settlement, dispute, or recall consumer needs one of these fields to become protocol-visible, the field needs a separate ADR and either a signed-record commitment (`args_hash` / `result_hash` or a new field) or a promoted event type under [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary).
 
 #### 5.9.4 Submission-path invariant
 
@@ -4305,6 +4318,8 @@ function normalize(line):
 ```
 
 The exact field-presence checks are implementation-defined; the load-bearing AtribRecord fields per [§1.2.1](#121-field-definitions) are `spec_version`, `creator_key`, `chain_root`, `event_type`, `context_id`, `timestamp`, and `signature` (or `signers` for transaction records).
+
+Consumers that build cognitive surfaces SHOULD treat `_local.content` as the canonical recall-readable payload when it exists. For compatibility with older mirror lines, consumers MAY derive equivalent content from known sibling sidecar fields: `toolName`, `args`, and `result` for wrapper-produced tool calls; `input`, `output`, `agentName`, `llmOutputToolCallId`, `traceId`, `spanId`, `spanKind`, and `spanName` for early OpenInference callback sidecars. This derivation is read-time normalization only; it does not change signed record bytes.
 
 #### 5.9.6 Compatibility commitment
 
@@ -5168,11 +5183,13 @@ Seven integration patterns cover every runtime category surveyed in atrib's harn
 
 ### 9.4 Pattern: OpenInference SpanProcessor (telemetry-substrate hook)
 
-**Where it fits.** Runtimes instrumented with OpenInference (the OpenTelemetry conventions layer for LLM/agent frameworks maintained by Arize). atrib mounts as a custom SpanProcessor that reads OpenInference-shaped tool-call spans and constructs AtribRecords. Surveyed examples: Vercel AI (native), OpenAI Agents SDK (native), Claude Agent SDK (Python instrumentation), smolagents (via OpenInference instrumentation), CrewAI (optional), LangChain / LangGraph (via OpenInference + LangSmith bridge), LlamaIndex, DSPy, MCP itself (instrumented), Strands Agents (OTel-native), Bedrock AgentCore (planned LangFuse/Datadog/Dynatrace integrations route through OTel). OpenInference maintains a multi-language package set across Python, JavaScript, Java, and Go.
+**Where it fits.** Runtimes instrumented with OpenInference (the OpenTelemetry conventions layer for LLM/agent frameworks maintained by Arize). atrib mounts as a custom SpanProcessor that reads OpenInference-shaped spans and constructs AtribRecords. Surveyed examples: Vercel AI (native), OpenAI Agents SDK (native), Claude Agent SDK (Python instrumentation), smolagents (via OpenInference instrumentation), CrewAI (optional), LangChain / LangGraph (via OpenInference + LangSmith bridge), LlamaIndex, DSPy, MCP itself (instrumented), Strands Agents (OTel-native), Bedrock AgentCore (planned Langfuse / Datadog / Dynatrace integrations route through OTel). OpenInference maintains a multi-language package set across Python, JavaScript, Java, and Go.
 
-**How atrib mounts.** A custom SpanProcessor implementing OpenTelemetry's `onEnd(span)` interface filters for spans carrying OpenInference attributes (`openinference.tool.name`, `openinference.input.value`, `openinference.output.value`), maps each tool span to an AtribRecord, signs with the operator's key, and submits to the log. The runtime's existing OpenTelemetry tracer registration adds atrib's processor alongside existing exporters (Phoenix, Langfuse, etc.); atrib does not replace existing observability, it composes.
+**How atrib mounts.** A custom SpanProcessor implementing OpenTelemetry's `onEnd(span)` interface filters for spans carrying OpenInference attributes (`openinference.span.kind`, `tool.name`, `input.value`, `output.value`, `llm.*`, etc.), maps each span to an AtribRecord, signs with the operator's key, and passes the signed record plus local sidecar to the caller's submission callback. `TOOL` spans map to `tool_call`; `LLM`, `AGENT`, `EMBEDDING`, `RETRIEVER`, `RERANKER`, `CHAIN`, `GUARDRAIL`, `EVALUATOR`, and `PROMPT` map to `observation`. The runtime's existing OpenTelemetry tracer registration adds atrib's processor alongside existing exporters (Phoenix, Langfuse, Datadog, etc.); atrib does not replace existing observability, it composes.
 
-**Causality formation.** OpenInference spans nest hierarchically (parent span = invoking agent, child span = tool call). atrib reads the span context to form `informed_by` edges. Cross-agent handoffs surface as `openinference.span.kind: "AGENT"` with linked spans; the adapter walks span links to construct the causal graph.
+**Local sidecar formation.** The signed AtribRecord stays lean. Rich span data lives in the local mirror sidecar per [§5.9.3](#593-the-_local-sidecar-shape): span kind/name/id, input/output, model and agent names, prompt metadata, usage, cost, score, and generic metadata. The signed record MAY carry `args_hash` and `result_hash` when the caller wants replay-checkable commitments to sidecar bytes. OpenInference `input.value` and `output.value` strings that contain JSON SHOULD be parsed and JCS-canonicalized before hashing, so verifier-side body replay can use supplied JSON material rather than runtime-specific raw string bytes.
+
+**Causality formation.** OpenInference spans nest hierarchically, but the graph still records only signed structure and agent-declared references. Parent-child span nesting is a correlation fact about runtime execution, not a replayable claim that one signed action used another signed action as evidence. The reference implementation currently derives `informed_by` from the empirical LLM-to-TOOL tool-call id match: an LLM span that emits `llm.output_messages.<i>.message.tool_calls.<j>.tool_call.id` registers its signed record hash, and the matching TOOL span with `tool_call.id` cites it before signing. Future span-link or graph-node parent-id derivations must still materialize as explicit `informed_by` fields before signing; the graph service does not infer semantic causality from span nesting.
 
 **Reference implementation.** `@atrib/openinference`. The package exports a standard OpenTelemetry SpanProcessor that maps OpenInference spans into signed atrib records. Callers wire it into their existing OTel `TracerProvider`.
 

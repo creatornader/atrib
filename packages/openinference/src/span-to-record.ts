@@ -3,17 +3,13 @@
 /**
  * OpenInference span → atrib unsigned-record mapping.
  *
- * Maps three of the ten OpenInference span kinds to atrib records:
+ * Maps all ten OpenInference span kinds to atrib records:
  *
- *   - **TOOL**     -> `tool_call` event_type. Tool name drives content_id.
- *   - **LLM**      -> `observation` event_type. Model name drives content_id.
- *   - **AGENT**    -> `observation` event_type. Agent name (or root span name)
- *                     drives content_id.
- *
- * The other seven kinds (EMBEDDING, CHAIN, RETRIEVER, RERANKER, GUARDRAIL,
- * EVALUATOR, PROMPT) are recognized as OpenInference spans but skipped at
- * v0.0.1. Each can be added later as a separate event_type or routed to
- * `observation` with kind-specific content shapes.
+ *   - **TOOL** -> `tool_call` event_type. Tool name drives content_id.
+ *   - **LLM** / **AGENT** / **EMBEDDING** / **RETRIEVER** / **RERANKER** /
+ *     **CHAIN** / **GUARDRAIL** / **EVALUATOR** / **PROMPT** ->
+ *     `observation` event_type. Kind-specific model or span names drive
+ *     content_id.
  *
  * Canonical attribute keys imported from `@arizeai/openinference-semantic-
  * conventions` so schema upgrades in upstream package flow through
@@ -103,9 +99,8 @@ export type SpanMappingResult =
  * record. The caller is responsible for signing (via @atrib/mcp's
  * `signRecord`) and submission to the log.
  *
- * Returns `{ ok: false }` for non-OpenInference spans, kinds not yet
- * supported (EMBEDDING/CHAIN/RETRIEVER/RERANKER/GUARDRAIL/EVALUATOR/
- * PROMPT), and TOOL/LLM/AGENT spans missing the minimum attribute set.
+ * Returns `{ ok: false }` for non-OpenInference spans, unrecognized kinds,
+ * and recognized spans missing the minimum attribute set for their mapper.
  */
 export function spanToUnsignedRecord(
   span: ReadableSpan,

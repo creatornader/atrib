@@ -67,6 +67,30 @@ export interface ObservationContent {
   why_noted?: unknown
   topics?: unknown
   informed_by?: unknown
+  source?: unknown
+  span_kind?: unknown
+  span_name?: unknown
+  trace_id?: unknown
+  span_id?: unknown
+  tool_name?: unknown
+  input?: unknown
+  output?: unknown
+  agent_name?: unknown
+  model_name?: unknown
+  prompt?: unknown
+  prompt_messages?: unknown
+  prompt_tools?: unknown
+  prompt_tool_choice?: unknown
+  prompt_template?: unknown
+  prompt_template_variables?: unknown
+  prompt_version?: unknown
+  prompt_id?: unknown
+  prompt_url?: unknown
+  invocation_parameters?: unknown
+  usage_details?: unknown
+  cost_details?: unknown
+  score_details?: unknown
+  metadata?: unknown
 }
 
 /**
@@ -190,6 +214,28 @@ export function extractObservationText(c: ObservationContent, cap: number): stri
   pushString(parts, c.what, cap)
   pushString(parts, c.why_noted, cap)
   pushTopics(parts, c.topics)
+  pushString(parts, c.source, cap)
+  pushString(parts, c.span_kind, cap)
+  pushString(parts, c.span_name, cap)
+  pushString(parts, c.tool_name, cap)
+  pushString(parts, c.agent_name, cap)
+  pushString(parts, c.model_name, cap)
+  pushString(parts, c.prompt, cap)
+  pushString(parts, c.prompt_messages, cap)
+  pushString(parts, c.prompt_tools, cap)
+  pushString(parts, c.prompt_tool_choice, cap)
+  pushString(parts, c.prompt_template, cap)
+  pushString(parts, c.prompt_template_variables, cap)
+  pushString(parts, c.prompt_version, cap)
+  pushString(parts, c.prompt_id, cap)
+  pushString(parts, c.prompt_url, cap)
+  pushString(parts, c.input, cap)
+  pushString(parts, c.output, cap)
+  pushString(parts, jsonExcerpt(c.invocation_parameters, cap), cap)
+  pushString(parts, jsonExcerpt(c.usage_details, cap), cap)
+  pushString(parts, jsonExcerpt(c.cost_details, cap), cap)
+  pushString(parts, jsonExcerpt(c.score_details, cap), cap)
+  pushString(parts, jsonExcerpt(c.metadata, cap), cap)
   return parts.join(' ')
 }
 

@@ -5158,6 +5158,77 @@ The [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-re
 
 ---
 
+## D108: Observability span trees are intake, local sidecars are cognitive payload
+
+**Date:** 2026-05-29
+
+**Status:** Accepted
+
+**Extends:** [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path), [D086](#d086-bm25-indexes-record-content-from-d062-sidecars), and [D099](#d099-explicit-emit-records-commit-local-content-through-default-args_hash).
+
+**Context.** Langfuse and similar LLM observability systems make the runtime span tree the product center: trace, nested observations, sessions, inputs, outputs, model metadata, usage, cost, scores, prompt versions, tags, users, releases, and eval objects. Langfuse can ingest this through SDK wrappers, decorators, framework integrations, and OTLP. It maps OpenTelemetry spans into its trace and observation model, including generation, tool, retriever, agent, evaluator, embedding, and related observation types.
+
+That shape overlaps with atrib's capture surface. `@atrib/openinference` already consumes OpenInference-shaped OpenTelemetry spans, and most useful agent runs already produce a nested runtime trace before atrib signs anything. The product risk is muddying the boundary: if atrib copies the observability product model into the signed protocol, it becomes a worse Langfuse. If atrib ignores the span tree, it misses the cheapest and most widely deployed intake path for modern agent runtimes.
+
+The second risk is on the read side. Rich capture is only useful to atrib if future agents can recall it. Before this decision, recall, trace, and summarize privileged `_local.content`; wrapper-style sidecars such as `_local.toolName`, `_local.args`, and `_local.result` could be mirrored yet stay mostly invisible to content search and narrative synthesis. That made the capture shape and the consumption shape drift apart.
+
+**Decision.** Treat OpenTelemetry and OpenInference span trees as an intake and correlation layer, not as atrib's canonical evidence shape.
+
+The canonical evidence shape remains:
+
+1. The signed `AtribRecord`.
+2. The public Merkle-log commitment and inclusion proof.
+3. The deterministic graph derived from record structure.
+4. Optional local mirror or archive bodies needed for replay, handoff, settlement, dispute, or cognitive recall.
+
+Prompts, outputs, metadata, usage, cost, scores, prompt versions, trace ids, span ids, users, tags, and releases do not become first-class signed `AtribRecord` fields in v1. They live in local sidecar content unless a verifier, handoff, settlement, dispute, or recall consumer proves that one of those fields needs a protocol-level commitment or graph effect.
+
+`@atrib/openinference` now writes a recall-readable sidecar content payload under `_local.content` through its submission callback convention. The content shape is local-only and includes:
+
+- `source`, `span_kind`, `span_name`, `trace_id`, `span_id`.
+- `what`, `why_noted`, and `topics` so observation records are legible to recall.
+- `tool_name`, `args`, `result`, `input`, `output`, and MIME hints when present.
+- `agent_name`, `model_name`, `tool_call_id`, and `llm_output_tool_call_id`.
+- prompt fields such as prompt text, prompt messages, prompt tools, prompt template, prompt variables, prompt version, prompt id, and prompt URL when present.
+- usage, cost, score, and metadata maps when present.
+
+The signed record may still carry `args_hash` and `result_hash` per [§8.3](atrib-spec.md#83-salted-commitment-posture) when the caller wants replay-checkable commitments to the input or output bytes. That is the bridge from local observability payload to verifier-grade evidence. OpenInference strings that contain JSON are parsed and JCS-canonicalized before hashing so supplied body material can replay through `@atrib/verify`. The default remains sidecar-only.
+
+`@atrib/mcp` now exposes local-sidecar normalization helpers so read primitives share one rule: explicit `_local.content` wins; otherwise consumers derive recall-readable content from known local fields such as `toolName`, `args`, `result`, `input`, `output`, `traceId`, `spanId`, `spanKind`, and `spanName`. `@atrib/recall`, `@atrib/trace`, and `@atrib/summarize` consume the normalized content. BM25 search indexes OpenInference observation fields. Trace summaries surface span kind, span name, model name, and prompt version. Summaries include OpenInference prompt, output, usage, cost, score, and metadata snippets.
+
+`informed_by` is not copied from generic OTel parent-child nesting. Parent-child nesting proves correlation inside a trace, not dependency on a prior signed result. The shipped automatic derivation is intentionally narrower: LLM `tool_call.id` to matching TOOL `tool_call.id`, materialized before signing.
+
+**Alternatives considered.**
+
+- _Make Trace, Observation, and Session first-class atrib protocol objects._ Rejected. That would duplicate Langfuse and OpenTelemetry while weakening atrib's verifier boundary. `context_id` already gives correlation. `AtribRecord` already gives signed evidence.
+- _Add prompts, outputs, metadata, usage, cost, scores, and prompt versions as signed record fields._ Rejected for v1. These fields are high-cardinality, often private, and usually operational. They become verifier-relevant only when a consumer needs to replay or dispute a specific claim. `args_hash`, `result_hash`, local mirrors, and future archive bodies cover that bridge without expanding the core record.
+- _Ignore observability span trees and keep only wrapper/lifecycle capture._ Rejected. OpenTelemetry and OpenInference are the path of least resistance for many agent frameworks. Not consuming them would force atrib into custom adapters where a stable span stream already exists.
+- _Build a Langfuse-style trace viewer inside atrib._ Rejected. The useful product boundary is composition: send spans to Langfuse or Phoenix for debugging, send signed records to atrib for evidence, recall, handoff, and settlement.
+- _Let each cognitive primitive parse local sidecars independently._ Rejected. It recreates the drift this decision fixes. The normalizer belongs in `@atrib/mcp` because every read primitive already depends on it.
+
+**Consequences.**
+
+- atrib can sit beside Langfuse, Phoenix, Datadog, or any OTLP exporter on the same OpenTelemetry pipeline.
+- Langfuse remains the better place to inspect live traces, latency, cost dashboards, evals, and prompt-management workflows. atrib remains the place to prove which action was signed, chained, committed, and later used as context.
+- Some redundancy is intentional. `trace_id`, `span_id`, input/output snippets, model metadata, and prompt version may appear in both an observability backend and the local atrib mirror. The difference is consumption: Langfuse uses them for operations, atrib uses them as local cognitive payload and optional commitment material.
+- Read primitives get stronger. A future agent can search for a prompt version, model, usage anomaly, evaluator score, or OpenInference span name and then trace or summarize the signed records around it.
+- Causality remains replayable. Generic span nesting stays local sidecar context unless a future explicit derivation rule proves it should become signed `informed_by`.
+- The public log stays lean. None of the new observability fields reach the log unless the host separately submits a signed record or archive body under an explicit privacy posture.
+- Promotion remains conservative. A new signed field or event type still needs the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) bar: a distinct graph effect, verifier requirement, settlement requirement, or repeated consumer need.
+
+**Cross-references.**
+
+- [§5.9.3](atrib-spec.md#593-the-_local-sidecar-shape), local sidecar shape.
+- [§8.3](atrib-spec.md#83-salted-commitment-posture), args/result body commitments.
+- [§9.4](atrib-spec.md#94-pattern-openinference-spanprocessor-telemetry-substrate-hook), OpenInference SpanProcessor pattern.
+- [`packages/openinference/src/sidecar.ts`](packages/openinference/src/sidecar.ts), OpenInference sidecar normalization.
+- [`packages/mcp/src/local-sidecar.ts`](packages/mcp/src/local-sidecar.ts), shared local-sidecar normalizer.
+- [`services/atrib-recall/src/aggregations.ts`](services/atrib-recall/src/aggregations.ts), recall loader consumption.
+- [`services/atrib-trace/src/index.ts`](services/atrib-trace/src/index.ts), trace sidecar summaries.
+- [`services/atrib-summarize/src/prompt.ts`](services/atrib-summarize/src/prompt.ts), summary prompt consumption.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

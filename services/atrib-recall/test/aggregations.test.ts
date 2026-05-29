@@ -107,6 +107,53 @@ describe('loadLoaded', () => {
     expect(loaded[0]!.record_hash).toBe(computeRecordHash(r))
   })
 
+  it('derives content from wrapper sidecar fields when _local.content is absent', async () => {
+    const r = await makeSigned()
+    writeFileSync(file, JSON.stringify({
+      record: r,
+      _local: {
+        producer: 'mcp-wrap',
+        toolName: 'search_web',
+        args: { query: 'OpenInference sidecar recall' },
+        result: { hits: 2 },
+      },
+    }))
+    const loaded = loadLoaded(file)
+    expect(loaded).toHaveLength(1)
+    expect(loaded[0]!.content).toEqual({
+      tool_name: 'search_web',
+      args: { query: 'OpenInference sidecar recall' },
+      result: { hits: 2 },
+    })
+    expect(loaded[0]!.producer).toBe('mcp-wrap')
+  })
+
+  it('derives OpenInference observation content from legacy callback sidecars', async () => {
+    const r = await makeSigned({ event_type: 'https://atrib.dev/v1/types/observation' })
+    writeFileSync(file, JSON.stringify({
+      record: r,
+      _local: {
+        traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+        spanId: '00f067aa0ba902b7',
+        spanKind: 'LLM',
+        spanName: 'generate-text',
+        input: '{"prompt":"compare Langfuse"}',
+        output: '{"text":"sidecar content"}',
+      },
+    }))
+    const loaded = loadLoaded(file)
+    expect(loaded).toHaveLength(1)
+    expect(loaded[0]!.content).toMatchObject({
+      source: 'openinference',
+      span_kind: 'LLM',
+      span_name: 'generate-text',
+      trace_id: '4bf92f3577b34da6a3ce929d0e0e4736',
+      input: '{"prompt":"compare Langfuse"}',
+      output: '{"text":"sidecar content"}',
+      what: 'OpenInference llm span: generate-text',
+    })
+  })
+
   it('mixes bare + envelope lines in one file', async () => {
     const bare = await makeSigned({ timestamp: 1 })
     const wrapped = await makeSigned({ timestamp: 2 })

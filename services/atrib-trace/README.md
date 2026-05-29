@@ -30,7 +30,10 @@ mcp__atrib-trace__trace_forward({  // FORWARD — what was informed by this?
       event_type, context_id, creator_key, timestamp,
       next_informed_by, next_resolved, next_dangling,
       informed_by?, tool_name?, args_hash?, result_hash?,
-      sidecar_summary?: { tool_name?, topics?, what?, importance?, producer? },
+      sidecar_summary?: {
+        tool_name?, topics?, what?, importance?, producer?,
+        span_kind?, span_name?, model_name?, prompt_version?
+      },
       local_content?, local_producer? // only when include_content=true
     }
   ],
@@ -51,7 +54,7 @@ Every `*.jsonl` mirror under `~/.atrib/records/` (override via `ATRIB_RECORDS_DI
 - Bare `AtribRecord` per line (legacy / wrapper convention pre-sidecar)
 - `{ record, _local?, written_at }` envelope (current shape)
 
-When the envelope carries an optional `_local` sidecar (per the local-mirror sidecar pattern shipped in `@atrib/mcp` v0.2.x), trace surfaces a compact `sidecar_summary` per record: `tool_name`, `topics`, first ~200 chars of `what`/`summary`, and `importance` for annotations. When `include_content=true`, trace also returns the full [D062](../../DECISIONS.md#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) local mirror body as `local_content` plus `local_producer`; this is intended for harness-mediated causal replay where the agent needs rich expected/actual outcome context. Without the sidecar (legacy entries), the per-record output still includes the cryptographic evidence (event_type, hashes, creator_key, timestamp), just without semantic context.
+When the envelope carries an optional `_local` sidecar (per the local-mirror sidecar pattern shipped in `@atrib/mcp` v0.2.x), trace surfaces a compact `sidecar_summary` per record: `tool_name`, `topics`, first ~200 chars of `what`/`summary`, `importance` for annotations, and OpenInference fields such as `span_kind`, `span_name`, `model_name`, and `prompt_version` when present. Trace reads `_local.content` first, then derives the same content shape from legacy wrapper or OpenInference sidecar fields when needed. When `include_content=true`, trace also returns the full [D062](../../DECISIONS.md#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) local mirror body as `local_content` plus `local_producer`; this is intended for harness-mediated causal replay where the agent needs rich expected/actual outcome context. Without the sidecar (legacy entries), the per-record output still includes the cryptographic evidence (event_type, hashes, creator_key, timestamp), just without semantic context.
 
 ## Behaviors
 

@@ -41,6 +41,28 @@ describe('extractIndexableText: normative event types', () => {
     expect(text).not.toContain('sha256:')
   })
 
+  it('observation: indexes local OpenInference sidecar fields for recall', () => {
+    const text = extractIndexableText(EVENT_TYPE_OBSERVATION_URI, {
+      source: 'openinference',
+      span_kind: 'LLM',
+      span_name: 'generate-text',
+      model_name: 'qwen3.5',
+      prompt_version: 'pricing-v7',
+      prompt: 'compare Langfuse trace shape to atrib evidence shape',
+      output: 'sidecar first, record stays canonical',
+      usage_details: { input: 12, output: 34 },
+      metadata: { user_id: 'user-123', release: 'canary' },
+    })
+    expect(text).toContain('openinference')
+    expect(text).toContain('generate-text')
+    expect(text).toContain('qwen3.5')
+    expect(text).toContain('pricing-v7')
+    expect(text).toContain('Langfuse trace shape')
+    expect(text).toContain('sidecar first')
+    expect(text).toContain('user-123')
+    expect(text).toContain('canary')
+  })
+
   it('annotation: pulls summary + topics, omits annotates ref', () => {
     const text = extractIndexableText(EVENT_TYPE_ANNOTATION_URI, {
       annotates: 'sha256:' + 'b'.repeat(64),

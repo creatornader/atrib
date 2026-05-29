@@ -264,6 +264,27 @@ describe('indexableTokensForRecord (D086)', () => {
     expect(tokens).toContain('plan')
   })
 
+  it('extracts OpenInference observation sidecar fields for cognitive recall', () => {
+    const lr = makeLoaded(EVENT_TYPE_OBSERVATION_URI, {
+      source: 'openinference',
+      span_kind: 'LLM',
+      span_name: 'generate-text',
+      model_name: 'qwen3.5',
+      prompt_version: 'billing-v4',
+      prompt: 'compare Langfuse observations with atrib records',
+      output: 'use observability spans as local evidence',
+      metadata: { release: 'canary' },
+    })
+    const tokens = indexableTokensForRecord(lr, undefined)
+    expect(tokens).toContain('openinference')
+    expect(tokens).toContain('llm')
+    expect(tokens).toContain('qwen3')
+    expect(tokens).toContain('billing')
+    expect(tokens).toContain('langfuse')
+    expect(tokens).toContain('atrib')
+    expect(tokens).toContain('canary')
+  })
+
   it('BM25 search finds an observation by content without any annotation (the D086 win)', () => {
     // The pre-D086 corpus required an annotation to be searchable. Now a
     // bare emit with no annotation is findable by its `what` text.

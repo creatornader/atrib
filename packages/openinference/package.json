@@ -42,7 +42,8 @@
   "dependencies": {
     "@arizeai/openinference-semantic-conventions": "^2.4.0",
     "@atrib/mcp": "workspace:*",
-    "@noble/hashes": "^2.2.0"
+    "@noble/hashes": "^2.2.0",
+    "canonicalize": "^3.0.0"
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.9.0",

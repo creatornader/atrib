@@ -93,13 +93,12 @@ async function main() {
       submittedRecords.push(signed)
       console.log(
         `atrib: signed record ${signed.signature.slice(0, 16)}... ` +
-          `tool=${sidecar.agentName ?? '<unknown>'} ` +
+          `span=${sidecar.content.tool_name ?? sidecar.agentName ?? sidecar.spanName} ` +
           `traceId=${sidecar.traceId.slice(0, 8)}...`,
       )
       // In production:
-      //   await fetch(`${process.env.ATRIB_LOG_ENDPOINT}/entries`, {
-      //     method: 'POST', body: JSON.stringify({ record: signed, sidecar })
-      //   })
+      //   submit only `signed` to the public atrib log.
+      //   persist `{ record: signed, _local: sidecar }` to the local mirror.
     },
     debug: true,
   })

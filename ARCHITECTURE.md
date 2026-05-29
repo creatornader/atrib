@@ -228,6 +228,14 @@ atrib categorizes runtime integration into seven peer patterns ([D069](DECISIONS
 
 Patterns 1–4 ship reference implementations in atrib v1. Pattern 7 ships a tested reference example for the key-isolation boundary. Patterns 5–6 are documented with their conformance contract scope; reference implementations land per priority sequencing.
 
+### Observability Boundary
+
+OpenTelemetry and OpenInference span trees are intake and correlation surfaces. They are not the canonical evidence shape. `@atrib/openinference` consumes the same runtime spans that Langfuse or Phoenix can ingest, then emits signed `AtribRecord` bytes plus a local sidecar. The public log receives only the signed record commitment. The local mirror receives span payload fields such as trace id, span id, model name, prompt version, input/output snippets, usage, cost, score, and metadata.
+
+This keeps the product boundary clean. Langfuse-style systems remain the right place for trace inspection, latency, cost, prompt-management workflows, and eval dashboards. atrib uses the span tree to produce verifier-grade signed records and local cognitive payload. Recall, trace, and summarize read that payload from `_local.content`; verifier-grade replay uses `args_hash`, `result_hash`, local mirror bodies, or archive bodies when a consumer needs proof of specific bytes.
+
+`informed_by` is narrower than OTel parent-child nesting. Parent-child span structure says the runtime correlated two spans inside one trace. It does not prove that a later signed action depended on the earlier signed action's output. atrib only emits `informed_by` when an explicit rule can run before signing, such as the current LLM `tool_call.id` to matching TOOL `tool_call.id` rule.
+
 ### Cross-harness investigation continuity
 
 Runtime mounting is only half the problem. Real support and RCA work often crosses a support system, a log store, a hosted agent, a chat thread, and a local coding harness. The public Merkle log proves that each signed record existed, but it does not carry the private bodies and evidence a later harness needs to continue the task.
@@ -401,15 +409,18 @@ services/atrib-trace  MCP server for backward causal-chain walking
   └── Consumer-side cognitive primitive, reads the local mirror (per
       §5.9), follows `informed_by` edges backward from a starting record
       hash, surfaces sidecar_summary per visited record (tool name,
-      topics, intent). Read-only; does not sign. Lets an agent reconstruct
+      span kind/name, model, prompt version, topics, intent). Read-only;
+      does not sign. Lets an agent reconstruct
       "how did I arrive at this conclusion?" without round-tripping
       through the public log.
 
 services/atrib-summarize  MCP server for narrative synthesis across N records
   └── Consumer-side cognitive primitive, reads N records by context_id
       and/or record_hashes from the local mirror, calls an OpenAI-compatible
-      LLM (defaults to NIM qwen3.5-397b) to synthesize a narrative. Closes
-      the consumer-side loop: agents read context, not raw records.
+      LLM (defaults to NIM qwen3.5-397b) to synthesize a narrative. The
+      prompt includes normalized sidecar content, including OpenInference
+      prompt/output/usage/cost metadata when present. Closes the
+      consumer-side loop: agents read context, not raw records.
 
 services/atrib-verify  MCP server for counterparty handoff evidence checks
   └── Consumer-side cognitive primitive, reads caller-supplied continuation

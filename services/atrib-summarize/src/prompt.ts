@@ -85,7 +85,12 @@ function renderRecord(r: IndexedRecord): string {
     if (sc.toolName) out.push(`tool: ${sc.toolName}`)
     const c = sc.content as Record<string, unknown> | undefined
     if (c) {
+      if (typeof c['source'] === 'string') out.push(`source: ${c['source']}`)
+      if (typeof c['span_kind'] === 'string') out.push(`span_kind: ${c['span_kind']}`)
+      if (typeof c['span_name'] === 'string') out.push(`span_name: ${c['span_name']}`)
       if (typeof c['tool_name'] === 'string') out.push(`tool: ${c['tool_name']}`)
+      if (typeof c['agent_name'] === 'string') out.push(`agent: ${c['agent_name']}`)
+      if (typeof c['model_name'] === 'string') out.push(`model: ${c['model_name']}`)
       if (typeof c['what'] === 'string') out.push(`what: ${c['what']}`)
       if (typeof c['why_noted'] === 'string') out.push(`why_noted: ${c['why_noted']}`)
       if (typeof c['summary'] === 'string') out.push(`summary: ${c['summary']}`)
@@ -93,8 +98,18 @@ function renderRecord(r: IndexedRecord): string {
       if (typeof c['prior_position'] === 'string') out.push(`prior_position: ${c['prior_position']}`)
       if (typeof c['new_position'] === 'string') out.push(`new_position: ${c['new_position']}`)
       if (typeof c['reason'] === 'string') out.push(`reason: ${c['reason']}`)
+      if (typeof c['prompt'] === 'string') out.push(`prompt: ${c['prompt'].slice(0, 1200)}`)
+      if (typeof c['prompt_messages'] === 'string') out.push(`prompt_messages: ${c['prompt_messages'].slice(0, 1200)}`)
+      if (typeof c['prompt_template'] === 'string') out.push(`prompt_template: ${c['prompt_template'].slice(0, 1200)}`)
+      if (typeof c['prompt_version'] === 'string') out.push(`prompt_version: ${c['prompt_version']}`)
+      if (typeof c['input'] === 'string') out.push(`input (truncated): ${c['input'].slice(0, 1200)}`)
+      if (typeof c['output'] === 'string') out.push(`output (truncated): ${c['output'].slice(0, 1200)}`)
       if (c['args']) out.push(`args (truncated): ${JSON.stringify(c['args']).slice(0, 1200)}`)
       if (c['result']) out.push(`result (truncated): ${JSON.stringify(c['result']).slice(0, 1200)}`)
+      if (c['usage_details']) out.push(`usage_details: ${JSON.stringify(c['usage_details']).slice(0, 600)}`)
+      if (c['cost_details']) out.push(`cost_details: ${JSON.stringify(c['cost_details']).slice(0, 600)}`)
+      if (c['score_details']) out.push(`score_details: ${JSON.stringify(c['score_details']).slice(0, 600)}`)
+      if (c['metadata']) out.push(`metadata: ${JSON.stringify(c['metadata']).slice(0, 600)}`)
       if (Array.isArray(c['topics'])) {
         out.push(`topics: ${(c['topics'] as unknown[]).filter((x): x is string => typeof x === 'string').join(', ')}`)
       }

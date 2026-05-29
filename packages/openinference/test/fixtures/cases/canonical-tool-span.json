@@ -33,6 +33,6 @@
     "tool_name_field": "tool.name",
     "input_value_field": "input.value",
     "output_value_field": "output.value",
-    "tool_call_id_for_future_informed_by": "tool_call.id"
+    "tool_call_id_for_informed_by": "tool_call.id"
   }
 }

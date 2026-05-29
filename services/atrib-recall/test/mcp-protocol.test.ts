@@ -20,6 +20,7 @@ import {
   getPublicKey,
   base64urlEncode,
   genesisChainRoot,
+  EVENT_TYPE_OBSERVATION_URI,
   EVENT_TYPE_TOOL_CALL_URI,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
@@ -30,12 +31,19 @@ const CTX = 'a'.repeat(32)
 const BINARY = resolve(__dirname, '..', 'dist', 'index.js')
 
 async function makeSigned(timestamp = 1700000000000): Promise<AtribRecord> {
+  return makeSignedEvent(timestamp, EVENT_TYPE_TOOL_CALL_URI)
+}
+
+async function makeSignedEvent(
+  timestamp = 1700000000000,
+  eventType = EVENT_TYPE_TOOL_CALL_URI,
+): Promise<AtribRecord> {
   const pub = await getPublicKey(KEY)
   const record = {
     spec_version: 'atrib/1.0' as const,
     // URI form per spec §1.2.4 + §1.4.5; verifyRecord rejects the legacy
     // short form 'tool_call' that this fixture used pre-URI-migration.
-    event_type: EVENT_TYPE_TOOL_CALL_URI,
+    event_type: eventType,
     context_id: CTX,
     creator_key: base64urlEncode(pub),
     chain_root: genesisChainRoot(CTX),
@@ -223,16 +231,11 @@ describe('MCP protocol surface', () => {
     const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
     try {
       await client.initialize()
-      const res = await client.send(
-        'tools/call',
-        { name: 'nonexistent_tool', arguments: {} },
-        3,
-      )
+      const res = await client.send('tools/call', { name: 'nonexistent_tool', arguments: {} }, 3)
       // The MCP SDK surfaces unknown tools either as a JSON-RPC error or as
       // an error-bearing result (isError: true). Accept either shape.
       const errored =
-        res.error !== undefined ||
-        (res.result as { isError?: boolean })?.isError === true
+        res.error !== undefined || (res.result as { isError?: boolean })?.isError === true
       expect(errored).toBe(true)
     } finally {
       client.close()
@@ -346,16 +349,19 @@ describe('MCP protocol surface', () => {
     const target = await makeSigned(1700000000000)
     const targetHash = computeRecordHash(target)
     const pub = await getPublicKey(KEY)
-    const anno = await signRecord({
-      spec_version: 'atrib/1.0',
-      event_type: 'https://atrib.dev/v1/types/annotation',
-      context_id: CTX,
-      creator_key: base64urlEncode(pub),
-      chain_root: genesisChainRoot(CTX),
-      content_id: `sha256:${'a'.repeat(64)}`,
-      timestamp: 1700000001000,
-      signature: '',
-    } as AtribRecord, KEY)
+    const anno = await signRecord(
+      {
+        spec_version: 'atrib/1.0',
+        event_type: 'https://atrib.dev/v1/types/annotation',
+        context_id: CTX,
+        creator_key: base64urlEncode(pub),
+        chain_root: genesisChainRoot(CTX),
+        content_id: `sha256:${'a'.repeat(64)}`,
+        timestamp: 1700000001000,
+        signature: '',
+      } as AtribRecord,
+      KEY,
+    )
     writeFileSync(
       recordFile,
       [
@@ -423,29 +429,104 @@ describe('MCP protocol surface', () => {
     }
   })
 
+  it('recall_by_content retrieves OpenInference sidecar fields across prompt, model, usage, cost, score, and output', async () => {
+    const { computeRecordHash } = await import('../src/aggregations.js')
+    const target = await makeSignedEvent(1700000001000, EVENT_TYPE_OBSERVATION_URI)
+    const targetHash = computeRecordHash(target)
+    const distractor = await makeSignedEvent(1700000000000, EVENT_TYPE_OBSERVATION_URI)
+    writeFileSync(
+      recordFile,
+      [
+        JSON.stringify({
+          record: target,
+          _local: {
+            content: {
+              source: 'openinference',
+              span_kind: 'LLM',
+              span_name: 'generate-text',
+              model_name: 'qwen3.5-large',
+              prompt_version: 'refund-policy-v7',
+              prompt: 'Apply refund policy to late return',
+              output: 'Denied because the return window elapsed',
+              usage_details: { input_tokens: 111, output_tokens: 222 },
+              cost_details: { cost_bucket: 'micro-usd-42', currency: 'usd' },
+              score_details: { evaluator: 'faithfulness', verdict: 'pass' },
+              metadata: { release: 'canary-2026' },
+            },
+          },
+        }),
+        JSON.stringify({
+          record: distractor,
+          _local: {
+            content: {
+              source: 'openinference',
+              span_kind: 'EMBEDDING',
+              span_name: 'embed-docs',
+              model_name: 'text-embedding-3',
+              prompt_version: 'inventory-v1',
+              output: 'Indexed warehouse labels',
+              usage_details: { input_tokens: 9, output_tokens: 0 },
+              cost_details: { cost_bucket: 'micro-usd-1', currency: 'usd' },
+              score_details: { evaluator: 'coverage', verdict: 'ok' },
+            },
+          },
+        }),
+      ].join('\n'),
+    )
+    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await client.initialize()
+      for (const query of [
+        'refund policy v7',
+        'qwen3 large',
+        'input tokens 111 output tokens 222',
+        'micro usd 42 faithfulness pass',
+        'denied return window elapsed',
+        'generate text canary 2026',
+      ]) {
+        const res = await client.send(
+          'tools/call',
+          {
+            name: 'recall_by_content',
+            arguments: { query, k: 2 },
+          },
+          20 + query.length,
+        )
+        expect(res.error).toBeUndefined()
+        const result = res.result as { content: { type: string; text: string }[] }
+        const payload = JSON.parse(result.content[0]!.text) as {
+          results: Array<{ record_hash: string; components: { relevance: number } }>
+        }
+        expect(payload.results[0]?.record_hash).toBe(targetHash)
+        expect(payload.results[0]?.components.relevance).toBeGreaterThan(0)
+      }
+    } finally {
+      client.close()
+    }
+  })
+
   it('recall_walk walks chain-precedes edges from an anchor', async () => {
     const { canonicalRecord, sha256, hexEncode } = await import('@atrib/mcp')
-    const chainRootFor = (r: AtribRecord) =>
-      `sha256:${hexEncode(sha256(canonicalRecord(r)))}`
+    const chainRootFor = (r: AtribRecord) => `sha256:${hexEncode(sha256(canonicalRecord(r)))}`
     const { computeRecordHash } = await import('../src/aggregations.js')
     const r1 = await makeSigned(1700000000000)
     const r1Hash = computeRecordHash(r1)
     const pub = await getPublicKey(KEY)
-    const r2 = await signRecord({
-      spec_version: 'atrib/1.0',
-      event_type: EVENT_TYPE_TOOL_CALL_URI,
-      context_id: CTX,
-      creator_key: base64urlEncode(pub),
-      chain_root: chainRootFor(r1),
-      content_id: `sha256:${'2'.repeat(64)}`,
-      timestamp: 1700000001000,
-      signature: '',
-    } as AtribRecord, KEY)
-    const r2Hash = computeRecordHash(r2)
-    writeFileSync(
-      recordFile,
-      [JSON.stringify(r1), JSON.stringify(r2)].join('\n'),
+    const r2 = await signRecord(
+      {
+        spec_version: 'atrib/1.0',
+        event_type: EVENT_TYPE_TOOL_CALL_URI,
+        context_id: CTX,
+        creator_key: base64urlEncode(pub),
+        chain_root: chainRootFor(r1),
+        content_id: `sha256:${'2'.repeat(64)}`,
+        timestamp: 1700000001000,
+        signature: '',
+      } as AtribRecord,
+      KEY,
     )
+    const r2Hash = computeRecordHash(r2)
+    writeFileSync(recordFile, [JSON.stringify(r1), JSON.stringify(r2)].join('\n'))
     const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
     try {
       await client.initialize()
@@ -494,27 +575,33 @@ describe('MCP protocol surface', () => {
     const orig = await makeSigned(1700000000000)
     const { computeRecordHash } = await import('../src/aggregations.js')
     const origHash = computeRecordHash(orig)
-    const r1 = await signRecord({
-      spec_version: 'atrib/1.0',
-      event_type: 'https://atrib.dev/v1/types/revision',
-      context_id: CTX,
-      creator_key: base64urlEncode(await getPublicKey(KEY)),
-      chain_root: genesisChainRoot(CTX),
-      content_id: `sha256:${'b'.repeat(64)}`,
-      timestamp: 1700000001000,
-      signature: '',
-    } as AtribRecord, KEY)
+    const r1 = await signRecord(
+      {
+        spec_version: 'atrib/1.0',
+        event_type: 'https://atrib.dev/v1/types/revision',
+        context_id: CTX,
+        creator_key: base64urlEncode(await getPublicKey(KEY)),
+        chain_root: genesisChainRoot(CTX),
+        content_id: `sha256:${'b'.repeat(64)}`,
+        timestamp: 1700000001000,
+        signature: '',
+      } as AtribRecord,
+      KEY,
+    )
     const r1Hash = computeRecordHash(r1)
-    const r2 = await signRecord({
-      spec_version: 'atrib/1.0',
-      event_type: 'https://atrib.dev/v1/types/revision',
-      context_id: CTX,
-      creator_key: base64urlEncode(await getPublicKey(KEY)),
-      chain_root: genesisChainRoot(CTX),
-      content_id: `sha256:${'c'.repeat(64)}`,
-      timestamp: 1700000002000,
-      signature: '',
-    } as AtribRecord, KEY)
+    const r2 = await signRecord(
+      {
+        spec_version: 'atrib/1.0',
+        event_type: 'https://atrib.dev/v1/types/revision',
+        context_id: CTX,
+        creator_key: base64urlEncode(await getPublicKey(KEY)),
+        chain_root: genesisChainRoot(CTX),
+        content_id: `sha256:${'c'.repeat(64)}`,
+        timestamp: 1700000002000,
+        signature: '',
+      } as AtribRecord,
+      KEY,
+    )
     const r2Hash = computeRecordHash(r2)
     writeFileSync(
       recordFile,
@@ -562,27 +649,33 @@ describe('MCP protocol surface', () => {
     const orig = await makeSigned(1700000000000)
     const { computeRecordHash } = await import('../src/aggregations.js')
     const origHash = computeRecordHash(orig)
-    const r1 = await signRecord({
-      spec_version: 'atrib/1.0',
-      event_type: 'https://atrib.dev/v1/types/revision',
-      context_id: CTX,
-      creator_key: base64urlEncode(await getPublicKey(KEY)),
-      chain_root: genesisChainRoot(CTX),
-      content_id: `sha256:${'1'.repeat(64)}`,
-      timestamp: 1700000001000,
-      signature: '',
-    } as AtribRecord, KEY)
+    const r1 = await signRecord(
+      {
+        spec_version: 'atrib/1.0',
+        event_type: 'https://atrib.dev/v1/types/revision',
+        context_id: CTX,
+        creator_key: base64urlEncode(await getPublicKey(KEY)),
+        chain_root: genesisChainRoot(CTX),
+        content_id: `sha256:${'1'.repeat(64)}`,
+        timestamp: 1700000001000,
+        signature: '',
+      } as AtribRecord,
+      KEY,
+    )
     const r1Hash = computeRecordHash(r1)
-    const r2 = await signRecord({
-      spec_version: 'atrib/1.0',
-      event_type: 'https://atrib.dev/v1/types/revision',
-      context_id: CTX,
-      creator_key: base64urlEncode(await getPublicKey(KEY)),
-      chain_root: genesisChainRoot(CTX),
-      content_id: `sha256:${'2'.repeat(64)}`,
-      timestamp: 1700000002000,
-      signature: '',
-    } as AtribRecord, KEY)
+    const r2 = await signRecord(
+      {
+        spec_version: 'atrib/1.0',
+        event_type: 'https://atrib.dev/v1/types/revision',
+        context_id: CTX,
+        creator_key: base64urlEncode(await getPublicKey(KEY)),
+        chain_root: genesisChainRoot(CTX),
+        content_id: `sha256:${'2'.repeat(64)}`,
+        timestamp: 1700000002000,
+        signature: '',
+      } as AtribRecord,
+      KEY,
+    )
     const r2Hash = computeRecordHash(r2)
     writeFileSync(
       recordFile,
@@ -662,34 +755,46 @@ describe('MCP protocol surface', () => {
     const orig = await makeSigned(1700000000000)
     const { computeRecordHash } = await import('../src/aggregations.js')
     const origHash = computeRecordHash(orig)
-    const r1a = await signRecord({
-      spec_version: 'atrib/1.0',
-      event_type: 'https://atrib.dev/v1/types/revision',
-      context_id: CTX,
-      creator_key: base64urlEncode(await getPublicKey(KEY)),
-      chain_root: genesisChainRoot(CTX),
-      content_id: `sha256:${'a'.repeat(64)}`,
-      timestamp: 1700000001000,
-      signature: '',
-    } as AtribRecord, KEY)
+    const r1a = await signRecord(
+      {
+        spec_version: 'atrib/1.0',
+        event_type: 'https://atrib.dev/v1/types/revision',
+        context_id: CTX,
+        creator_key: base64urlEncode(await getPublicKey(KEY)),
+        chain_root: genesisChainRoot(CTX),
+        content_id: `sha256:${'a'.repeat(64)}`,
+        timestamp: 1700000001000,
+        signature: '',
+      } as AtribRecord,
+      KEY,
+    )
     const r1aHash = computeRecordHash(r1a)
-    const r1b = await signRecord({
-      spec_version: 'atrib/1.0',
-      event_type: 'https://atrib.dev/v1/types/revision',
-      context_id: CTX,
-      creator_key: base64urlEncode(await getPublicKey(KEY)),
-      chain_root: genesisChainRoot(CTX),
-      content_id: `sha256:${'b'.repeat(64)}`,
-      timestamp: 1700000002000,
-      signature: '',
-    } as AtribRecord, KEY)
+    const r1b = await signRecord(
+      {
+        spec_version: 'atrib/1.0',
+        event_type: 'https://atrib.dev/v1/types/revision',
+        context_id: CTX,
+        creator_key: base64urlEncode(await getPublicKey(KEY)),
+        chain_root: genesisChainRoot(CTX),
+        content_id: `sha256:${'b'.repeat(64)}`,
+        timestamp: 1700000002000,
+        signature: '',
+      } as AtribRecord,
+      KEY,
+    )
     const r1bHash = computeRecordHash(r1b)
     writeFileSync(
       recordFile,
       [
         JSON.stringify(orig),
-        JSON.stringify({ record: r1a, _local: { content: { revises: origHash, new_position: 'branch A' } } }),
-        JSON.stringify({ record: r1b, _local: { content: { revises: origHash, new_position: 'branch B' } } }),
+        JSON.stringify({
+          record: r1a,
+          _local: { content: { revises: origHash, new_position: 'branch A' } },
+        }),
+        JSON.stringify({
+          record: r1b,
+          _local: { content: { revises: origHash, new_position: 'branch B' } },
+        }),
       ].join('\n'),
     )
     const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
@@ -719,16 +824,19 @@ describe('MCP protocol surface', () => {
     const pub = await getPublicKey(KEY)
     const ck = base64urlEncode(pub)
     async function rec(ctx: string, ts: number, cid: string) {
-      return signRecord({
-        spec_version: 'atrib/1.0' as const,
-        event_type: EVENT_TYPE_TOOL_CALL_URI,
-        context_id: ctx,
-        creator_key: ck,
-        chain_root: genesisChainRoot(ctx),
-        content_id: cid,
-        timestamp: ts,
-        signature: '',
-      } as AtribRecord, KEY)
+      return signRecord(
+        {
+          spec_version: 'atrib/1.0' as const,
+          event_type: EVENT_TYPE_TOOL_CALL_URI,
+          context_id: ctx,
+          creator_key: ck,
+          chain_root: genesisChainRoot(ctx),
+          content_id: cid,
+          timestamp: ts,
+          signature: '',
+        } as AtribRecord,
+        KEY,
+      )
     }
     const records = [
       await rec(ctx1, 3000, `sha256:${'c'.repeat(64)}`),
@@ -763,20 +871,23 @@ describe('MCP protocol surface', () => {
   it('recall_session_chain can return D062 local content when requested', async () => {
     const ctx = 'c'.repeat(32)
     const pub = await getPublicKey(KEY)
-    const record = await signRecord({
-      spec_version: 'atrib/1.0' as const,
-      event_type: EVENT_TYPE_TOOL_CALL_URI,
-      context_id: ctx,
-      creator_key: base64urlEncode(pub),
-      chain_root: genesisChainRoot(ctx),
-      content_id: `sha256:${'e'.repeat(64)}`,
-      timestamp: 1700000000000,
-      signature: '',
-      tool_name: 'diagnostic_config_parser_probe',
-      args_hash: `sha256:${'1'.repeat(64)}`,
-      result_hash: `sha256:${'2'.repeat(64)}`,
-      informed_by: [`sha256:${'3'.repeat(64)}`],
-    } as AtribRecord, KEY)
+    const record = await signRecord(
+      {
+        spec_version: 'atrib/1.0' as const,
+        event_type: EVENT_TYPE_TOOL_CALL_URI,
+        context_id: ctx,
+        creator_key: base64urlEncode(pub),
+        chain_root: genesisChainRoot(ctx),
+        content_id: `sha256:${'e'.repeat(64)}`,
+        timestamp: 1700000000000,
+        signature: '',
+        tool_name: 'diagnostic_config_parser_probe',
+        args_hash: `sha256:${'1'.repeat(64)}`,
+        result_hash: `sha256:${'2'.repeat(64)}`,
+        informed_by: [`sha256:${'3'.repeat(64)}`],
+      } as AtribRecord,
+      KEY,
+    )
     writeFileSync(
       recordFile,
       JSON.stringify({
@@ -814,14 +925,10 @@ describe('MCP protocol surface', () => {
           local_producer?: string
         }>
       }
-      expect(payload.records[0]?.tool_name).toBe(
-        'diagnostic_config_parser_probe',
-      )
+      expect(payload.records[0]?.tool_name).toBe('diagnostic_config_parser_probe')
       expect(payload.records[0]?.args_hash).toBe(`sha256:${'1'.repeat(64)}`)
       expect(payload.records[0]?.result_hash).toBe(`sha256:${'2'.repeat(64)}`)
-      expect(payload.records[0]?.informed_by).toEqual([
-        `sha256:${'3'.repeat(64)}`,
-      ])
+      expect(payload.records[0]?.informed_by).toEqual([`sha256:${'3'.repeat(64)}`])
       expect(payload.records[0]?.local_content).toEqual({
         tool_name: 'python_atrib',
         result: 'edge decisions',
@@ -831,15 +938,9 @@ describe('MCP protocol surface', () => {
         .trim()
         .split('\n')
         .map((line) => JSON.parse(line) as { sample_result_hashes?: string[] })
-      expect(logRows.at(-1)?.sample_result_hashes).toEqual([
-        payload.records[0]?.record_hash,
-      ])
-      expect(logRows.at(-1)?.sample_result_hashes).not.toContain(
-        `sha256:${'1'.repeat(64)}`,
-      )
-      expect(logRows.at(-1)?.sample_result_hashes).not.toContain(
-        `sha256:${'2'.repeat(64)}`,
-      )
+      expect(logRows.at(-1)?.sample_result_hashes).toEqual([payload.records[0]?.record_hash])
+      expect(logRows.at(-1)?.sample_result_hashes).not.toContain(`sha256:${'1'.repeat(64)}`)
+      expect(logRows.at(-1)?.sample_result_hashes).not.toContain(`sha256:${'2'.repeat(64)}`)
     } finally {
       client.close()
     }
@@ -850,17 +951,20 @@ describe('MCP protocol surface', () => {
     const pub = await getPublicKey(KEY)
     const ck = base64urlEncode(pub)
     async function rec(cid: string, ts: number, informed_by?: string[]) {
-      return signRecord({
-        spec_version: 'atrib/1.0' as const,
-        event_type: EVENT_TYPE_TOOL_CALL_URI,
-        context_id: CTX,
-        creator_key: ck,
-        chain_root: genesisChainRoot(CTX),
-        content_id: cid,
-        timestamp: ts,
-        signature: '',
-        ...(informed_by && informed_by.length > 0 ? { informed_by } : {}),
-      } as AtribRecord, KEY)
+      return signRecord(
+        {
+          spec_version: 'atrib/1.0' as const,
+          event_type: EVENT_TYPE_TOOL_CALL_URI,
+          context_id: CTX,
+          creator_key: ck,
+          chain_root: genesisChainRoot(CTX),
+          content_id: cid,
+          timestamp: ts,
+          signature: '',
+          ...(informed_by && informed_by.length > 0 ? { informed_by } : {}),
+        } as AtribRecord,
+        KEY,
+      )
     }
     const r1 = await rec(`sha256:${'1'.repeat(64)}`, 100)
     const r1Hash = (await import('../src/aggregations.js')).computeRecordHash(r1)
@@ -876,11 +980,7 @@ describe('MCP protocol surface', () => {
     const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
     try {
       await client.initialize()
-      const res = await client.send(
-        'tools/call',
-        { name: 'recall_orphans', arguments: {} },
-        2,
-      )
+      const res = await client.send('tools/call', { name: 'recall_orphans', arguments: {} }, 2)
       const result = res.result as { content: { type: string; text: string }[] }
       const payload = JSON.parse(result.content[0]!.text) as {
         total: number
@@ -902,16 +1002,19 @@ describe('MCP protocol surface', () => {
     const pub1 = await getPublicKey(KEY)
     const key1 = base64urlEncode(pub1)
     async function rec1(cid: string, ts: number) {
-      return signRecord({
-        spec_version: 'atrib/1.0' as const,
-        event_type: EVENT_TYPE_TOOL_CALL_URI,
-        context_id: CTX,
-        creator_key: key1,
-        chain_root: genesisChainRoot(CTX),
-        content_id: cid,
-        timestamp: ts,
-        signature: '',
-      } as AtribRecord, KEY)
+      return signRecord(
+        {
+          spec_version: 'atrib/1.0' as const,
+          event_type: EVENT_TYPE_TOOL_CALL_URI,
+          context_id: CTX,
+          creator_key: key1,
+          chain_root: genesisChainRoot(CTX),
+          content_id: cid,
+          timestamp: ts,
+          signature: '',
+        } as AtribRecord,
+        KEY,
+      )
     }
     // Two records signed by KEY (different timestamps), one signed by KEY2.
     const r1 = await rec1(`sha256:${'a'.repeat(64)}`, 1000)
@@ -935,16 +1038,17 @@ describe('MCP protocol surface', () => {
     const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
     try {
       await client.initialize()
-      const res = await client.send(
-        'tools/call',
-        { name: 'recall_by_signer', arguments: {} },
-        2,
-      )
+      const res = await client.send('tools/call', { name: 'recall_by_signer', arguments: {} }, 2)
       const result = res.result as { content: { type: string; text: string }[] }
       const payload = JSON.parse(result.content[0]!.text) as {
         total_signers: number
         total_records: number
-        signers: { creator_key: string; count: number; latest_timestamp: number; earliest_timestamp: number }[]
+        signers: {
+          creator_key: string
+          count: number
+          latest_timestamp: number
+          earliest_timestamp: number
+        }[]
       }
       expect(payload.total_records).toBe(3)
       expect(payload.total_signers).toBe(2)

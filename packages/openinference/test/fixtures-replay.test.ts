@@ -30,12 +30,11 @@ type FixtureExpected = {
   tool_name_field?: string
   input_value_field?: string
   output_value_field?: string
-  tool_call_id_for_future_informed_by?: string
-  future_mapping_target?: string
+  tool_call_id_for_informed_by?: string
   informed_by_seed_field?: string
   context_id_source?: string
   content_leaf_format?: string
-  future_informed_by_target?: string
+  informed_by_target?: string
   fallback_note?: string
 }
 
@@ -164,9 +163,9 @@ describe('fixture replay: canonical Vercel AI SDK + OpenInference spans', () => 
     if (!result.ok) return
     expect(result.record.content_id).toMatch(/^sha256:[a-f0-9]{64}$/)
     expect(result.record.context_id).toBe('fffffffffffffffffffffffffffffffe')
-    // tool_call.id MUST be present on the captured TOOL span -- this is
-    // the empirical seed for future `informed_by` derivation between LLM
-    // and TOOL records.
+    // tool_call.id MUST be present on the captured TOOL span. This is the
+    // empirical seed for processor-level `informed_by` derivation between
+    // LLM and TOOL records.
     expect(tool.span.attributes['tool_call.id']).toBeDefined()
   })
 
@@ -234,8 +233,9 @@ describe('fixture replay: canonical Vercel AI SDK + OpenInference spans', () => 
     const llmSpan = materializeSpan(llmFixture.span)
     const seed = readLlmOutputToolCallId(llmSpan)
     expect(seed).toBeDefined()
-    // Empirical: the seed equals the immediately-following TOOL span's tool_call.id.
-    // This is the basis for future LLM->TOOL informed_by derivation.
+    // Empirical: the seed equals the immediately-following TOOL span's
+    // tool_call.id. This is the basis for processor-level LLM->TOOL
+    // informed_by derivation.
     expect(seed).toBe(toolFixture.span.attributes['tool_call.id'])
   })
 
