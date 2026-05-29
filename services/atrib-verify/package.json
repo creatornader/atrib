@@ -2,6 +2,7 @@
   "name": "@atrib/verify-mcp",
   "version": "0.2.3",
   "description": "MCP server for atrib. Verifies counterparty handoff evidence before an agent links follow-up work through informed_by.",
+  "author": "atrib <hello@atrib.dev>",
   "keywords": [
     "atrib",
     "mcp",
@@ -11,7 +12,8 @@
     "verifiable",
     "handoff",
     "agent",
-    "ed25519"
+    "ed25519",
+    "cognitive-primitive"
   ],
   "homepage": "https://atrib.dev",
   "license": "Apache-2.0",
