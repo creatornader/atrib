@@ -4936,6 +4936,67 @@ The first implementation rejects `topic` and `importance` with `400 Bad Request`
 
 ---
 
+## D105: Pattern 3 handoff claims use verifier-side claim acceptance
+
+**Date:** 2026-05-29
+
+**Status:** Accepted
+
+**Extends:** [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion), [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), and [D104](#d104-parent-child-threading-uses-atrib_parent_record_hash).
+
+**Context.** [D104](#d104-parent-child-threading-uses-atrib_parent_record_hash) solved the producer-side parent-child case: when a parent has a prior record hash before a child signs, the child can cite that hash through `informed_by`. Pattern 3 multi-agent flows need the receiving side too. Agent B may receive a `record_hash` claim, a signed record, private body material, and an inclusion proof from Agent A. Before Agent B acts, it needs a small deterministic acceptance step: verify the evidence, reject bad claims, and only then use accepted hashes in its own `informed_by`.
+
+[P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation) tracks whether this should become cognitive primitive #7. [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion) says new primitives start as extensions until their load-bearing use case and cognitive distinctness are proven in routine work. One tested Pattern 3 path is meaningful evidence, but not enough to amend [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)'s closed six-primitive surface.
+
+**Decision.** Ship `verifyHandoffClaims()` in `@atrib/verify` as the verifier-side Pattern 3 acceptance helper. A caller supplies one or more claims containing:
+
+- `record_hash`, the claimed `sha256:<64hex>` record hash.
+- `record`, the signed `AtribRecord` when available.
+- `body`, `args`, or `result` material when the receiving agent needs private evidence replay.
+- `proof`, a log proof bundle when available.
+- A trust set (`trusted_creator_keys`), freshness bounds, and an optional log public key.
+
+For each claim, the helper verifies:
+
+- The supplied record hashes to the claimed `record_hash`.
+- `verifyRecord()` accepts the record signature and canonical record shape.
+- The signer is in the supplied trust set when a trust set is provided.
+- The record timestamp is within the caller's freshness bound when one is provided.
+- Supplied body material matches the record's `args_hash` or `result_hash` commitment when required.
+- A supplied proof binds to the serialized log entry for that exact record, verifies its RFC 6962 inclusion path, and verifies the C2SP signed-note checkpoint signature when the caller supplies `log_public_key`.
+
+The result splits claims into `accepted` and `rejected` arrays and exposes `accepted_record_hashes` for the receiving agent to pass into its next signed record's `informed_by`. Rejection reasons are named (`record_missing`, `record_hash_mismatch`, `signature_invalid`, `wrong_signer`, `stale`, `body_hash_mismatch`, `proof_invalid`, etc.) so callers can explain why a handoff was refused.
+
+This is a verifier helper, not a new record type. It does not add graph edge types, does not promote [D073](#d073-handoff-event_type-byte-placeholder-adr), does not fetch private bodies on its own, and does not change settlement calculation. The caller remains responsible for obtaining records, private body material, and proof bundles from a local mirror, archive, private handoff packet, log lookup, or other trusted channel.
+
+**Current P022 posture.** P022 remains pending. [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion) gates 1 and 3 are closer but not yet met at the "routine cognitive primitive" bar. The repo now has one production API and a real-log e2e proving the Pattern 3 shape, including wrong-signer, stale, body-tamper, and proof-tamper rejection. Promotion to `@atrib/verify-mcp` should wait until at least two independent flows regularly need an agent-facing verify action before acting, or until a receiving agent cannot complete normal work without calling this helper interactively.
+
+**Alternatives considered.**
+
+- *Promote `@atrib/verify-mcp` immediately.* Rejected. This would skip [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion)'s extension-first rule. The API exists and is tested, but the agent-facing primitive has not yet proven routine use across independent flows.
+- *Fold handoff verification into `atrib-recall` now.* Rejected. Recall reads the local mirror. Pattern 3 acceptance may include private packet material, proof bundles, and trust-set policy that do not belong in recall's baseline read API.
+- *Accept `record_hash` references without body or proof checks.* Rejected. That would make `informed_by` easy to spoof with stale or unrelated records. The receiving agent needs an explicit acceptance step.
+- *Promote a dedicated `handoff` event_type.* Rejected. The graph relationship is already `INFORMED_BY`. [D073](#d073-handoff-event_type-byte-placeholder-adr) still lacks the producer and conformance evidence required by [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary).
+
+**Consequences.**
+
+- Pattern 3 now has a minimal tested receiving path: Agent A signs a claim, Agent B verifies supplied evidence, then Agent B signs a follow-up with `informed_by` pointing at the accepted claim.
+- `@atrib/verify` gains a new public API and a minor version changeset.
+- The first implementation is intentionally caller-supplied. Remote fetching, archive lookup, local-mirror lookup, and recall integration remain separate adapter work.
+- Since proof verification recomputes the expected log leaf from the record's serialized log entry, a valid proof for a different record cannot satisfy the handoff claim.
+- P022 stays findable as the promotion tracker instead of being silently absorbed into this helper.
+
+**Cross-references.**
+
+- [§5.5.5](atrib-spec.md#555-handoff-claim-verification), verifier-side handoff claim helper.
+- [`packages/verify/src/handoff.ts`](packages/verify/src/handoff.ts), reference implementation.
+- [`packages/verify/test/handoff.test.ts`](packages/verify/test/handoff.test.ts), local acceptance and rejection tests.
+- [`packages/integration/test/pattern3-handoff.test.ts`](packages/integration/test/pattern3-handoff.test.ts), real-log Pattern 3 e2e.
+- [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), future verify primitive promotion.
+- [D104](#d104-parent-child-threading-uses-atrib_parent_record_hash), producer-side parent-child threading.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -5162,10 +5223,11 @@ The `extractor_classification` field is redundant for records where event_type i
 **Considerations.**
 - The capability already exists in `@atrib/verify` package + `atrib verify` CLI; promotion is a matter of MCP-tool wrapping plus surface-documentation amendments, not new protocol work.
 - Multi-agent flows where agent B receives a record_hash from agent A through a structured protocol (A2A, MCP composition) are the canonical use case; verification before action is required for trust assessment.
+- [D105](#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance) ships the first verifier-side Pattern 3 acceptance helper and proves the shape with real-log e2e coverage. That strengthens the case, but does not yet prove routine agent-facing use.
 - Wraps the existing `@atrib/verify` package; no new spec event_type needed. Read-only operation, no graph effect distinct from recall's existing verification.
 - [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion)'s gate 4 requires the [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) amendment + new MCP package + changeset to ship together.
 
-**Likely outcome (not committed):** accept when Pattern 3 multi-agent thesis activation begins. Approximately 1-2 days of focused work (thin MCP wrapper + ADR amendment + scaffold updates).
+**Current posture:** still pending after [D105](#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance). Promote only when at least two independent Pattern 3 flows regularly require an agent-facing verify action, or when a receiving agent cannot complete normal work without invoking verification interactively. Approximate promotion cost remains 1-2 days of focused work (thin MCP wrapper + ADR amendment + scaffold updates).
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 
