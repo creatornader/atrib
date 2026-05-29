@@ -43,6 +43,7 @@ atrib/
       scripts/
         ap2-live-interop.ts    # Opt-in AP2 reference artifact harness. Reads AP2 result + AP2/VI evidence JSON, optionally verifies an atrib transaction-record artifact with counterparty attestation, and exits nonzero on drift.
         generate-ap2-reference-receipts.py # Opt-in generator that imports the official google-agentic-commerce/AP2 Python SDK from a local checkout and writes compact receipt-JWT fixtures for the AP2 interop harness.
+        generate-ap2-vi-reference-evidence.py # Opt-in generator that imports official AP2 SDK receipts plus the public agent-intent/verifiable-intent reference implementation and writes combined AP2 / VI fixture artifacts for the live interop harness.
       examples/
         end-to-end/            # Runnable demo for customer walkthroughs (`pnpm demo`)
         claude-agent-sdk/      # Case A + Case B examples

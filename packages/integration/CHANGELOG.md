@@ -4,6 +4,7 @@
 
 ### Patch Changes
 
+- Add AP2 plus Verifiable Intent reference artifacts generated from the official AP2 Python SDK and the public Verifiable Intent Python reference implementation, then test them through the live interop harness with counterparty transaction attestation.
 - Add AP2 reference receipt artifacts generated from the official AP2 Python SDK and test them through the live interop harness with counterparty transaction attestation.
 - Extend the AP2 live interop harness to verify optional atrib transaction-record artifacts, including AP2 receipt-derived `content_id` matching and counterparty cross-attestation.
 

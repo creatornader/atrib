@@ -667,6 +667,60 @@ describe('evaluateAp2ViConstraints', () => {
     )
   })
 
+  it('passes official VI reference constraints with cart item SKUs and payment reference', () => {
+    const result = evaluateAp2ViConstraints({
+      openCheckoutMandates: [
+        {
+          vct: 'mandate.checkout.open.1',
+          constraints: [
+            { type: 'mandate.checkout.allowed_merchants', allowed: [merchant] },
+            {
+              type: 'mandate.checkout.line_items',
+              items: [
+                {
+                  id: 'line-item-1',
+                  acceptable_items: [{ id: 'sku_gold_shoe', title: 'Gold Shoe' }],
+                  quantity: 1,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      openCheckoutMandateDigests: ['open_checkout_disclosure_hash'],
+      openPaymentMandates: [
+        {
+          vct: 'mandate.payment.open.1',
+          constraints: [
+            { type: 'mandate.payment.amount_range', currency: 'USD', min: 0, max: 20000 },
+            { type: 'mandate.payment.allowed_payees', allowed: [merchant] },
+            {
+              type: 'mandate.payment.reference',
+              conditional_transaction_id: 'open_checkout_disclosure_hash',
+            },
+          ],
+        },
+      ],
+      closedPaymentMandates: [closedPaymentMandate],
+      closedCheckoutMandates: [{ vct: 'mandate.checkout.1', checkout_hash: 'checkout_hash' }],
+      checkoutPaymentBindingOk: true,
+      checkoutPayload: {
+        iss: merchant.website,
+        cart: {
+          items: [{ sku: 'sku_gold_shoe', quantity: 1 }],
+        },
+      },
+    })
+
+    expect(result.status).toBe('passed')
+    expect(result.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'mandate.checkout.line_items', status: 'passed' }),
+        expect.objectContaining({ type: 'mandate.payment.reference', status: 'passed' }),
+      ]),
+    )
+  })
+
   it('fails deterministic AP2 constraints when receipt evidence exceeds mandate bounds', () => {
     const result = evaluateAp2ViConstraints({
       openCheckoutMandates: [

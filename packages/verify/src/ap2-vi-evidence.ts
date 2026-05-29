@@ -149,10 +149,12 @@ export interface Ap2MandateConstraintEvaluation {
 
 export interface Ap2MandateConstraintInput {
   openCheckoutMandates?: unknown[]
+  openCheckoutMandateDigests?: string[]
   closedCheckoutMandates?: unknown[]
   openPaymentMandates?: unknown[]
   closedPaymentMandates?: unknown[]
   checkoutPayload?: unknown
+  checkoutPaymentBindingOk?: boolean | null
   nowSeconds?: number
 }
 
@@ -188,6 +190,11 @@ interface Disclosure {
   value: unknown
 }
 
+interface MandateDisclosure {
+  digest: string
+  value: JsonRecord
+}
+
 interface ParsedCredential {
   input: ViCredentialInput
   jwt: string
@@ -196,6 +203,7 @@ interface ParsedCredential {
   signingInput: string
   signature: Uint8Array
   disclosures: Disclosure[]
+  mandateDisclosures: MandateDisclosure[]
   mandateValues: JsonRecord[]
 }
 
@@ -300,9 +308,12 @@ function parseCredential(input: ViCredentialInput): ParsedCredential {
       const value = disclosureValue(decodeBase64urlJson(encoded))
       return { encoded, digest: hashAscii(encoded), value }
     })
-  const mandateValues = disclosures.flatMap((disclosure) =>
-    isRecord(disclosure.value) && isString(disclosure.value['vct']) ? [disclosure.value] : [],
+  const mandateDisclosures = disclosures.flatMap((disclosure) =>
+    isRecord(disclosure.value) && isString(disclosure.value['vct'])
+      ? [{ digest: disclosure.digest, value: disclosure.value }]
+      : [],
   )
+  const mandateValues = mandateDisclosures.map((mandate) => mandate.value)
 
   return {
     input,
@@ -312,6 +323,7 @@ function parseCredential(input: ViCredentialInput): ParsedCredential {
     signingInput: `${parts[0]}.${parts[1]}`,
     signature: base64urlDecode(parts[2]),
     disclosures,
+    mandateDisclosures,
     mandateValues,
   }
 }
@@ -467,12 +479,24 @@ function resolveCheckoutPayload(
 function checkoutLineItemId(value: JsonRecord): string | null {
   const product = value['product']
   if (isRecord(product) && isString(product['id'])) return product['id']
+  if (isRecord(product) && isString(product['sku'])) return product['sku']
+  if (isString(value['sku'])) return value['sku']
   return isString(value['id']) ? value['id'] : null
 }
 
+function checkoutLineItems(checkoutPayload: JsonRecord): unknown[] | null {
+  const lineItems = checkoutPayload['line_items']
+  if (Array.isArray(lineItems)) return lineItems
+
+  const cart = checkoutPayload['cart']
+  if (isRecord(cart) && Array.isArray(cart['items'])) return cart['items']
+
+  return null
+}
+
 function checkoutLineItemQuantities(checkoutPayload: JsonRecord): Map<string, number> | null {
-  const items = checkoutPayload['line_items']
-  if (!Array.isArray(items)) return null
+  const items = checkoutLineItems(checkoutPayload)
+  if (items === null) return null
 
   const quantities = new Map<string, number>()
   for (const item of items) {
@@ -549,6 +573,8 @@ function evaluatePaymentConstraint(
   constraint: JsonRecord,
   closedPaymentMandates: JsonRecord[],
   nowSeconds: number,
+  checkoutPaymentBindingOk?: boolean | null,
+  openCheckoutMandateDigests: string[] = [],
 ): Ap2MandateConstraintCheck {
   const type = isString(constraint['type']) ? normalizeConstraintType(constraint['type']) : ''
   if (closedPaymentMandates.length === 0) {
@@ -615,6 +641,26 @@ function evaluatePaymentConstraint(
       ])
       if (ok === null) return makeConstraintCheck(constraint, 'payment', 'unresolved', 'allowed')
       if (!ok) return makeConstraintCheck(constraint, 'payment', 'failed', 'pisp')
+    }
+    return makeConstraintCheck(constraint, 'payment', 'passed')
+  }
+
+  if (type === 'payment.reference') {
+    const referencedCheckoutDigest = constraint['conditional_transaction_id']
+    if (!isString(referencedCheckoutDigest)) {
+      return makeConstraintCheck(constraint, 'payment', 'unresolved', 'conditional_transaction_id')
+    }
+    if (openCheckoutMandateDigests.length === 0) {
+      return makeConstraintCheck(constraint, 'payment', 'unresolved', 'open_checkout_digest')
+    }
+    if (!openCheckoutMandateDigests.includes(referencedCheckoutDigest)) {
+      return makeConstraintCheck(constraint, 'payment', 'failed', 'open_checkout_digest')
+    }
+    if (checkoutPaymentBindingOk === false) {
+      return makeConstraintCheck(constraint, 'payment', 'failed', 'checkout_payment_binding')
+    }
+    if (checkoutPaymentBindingOk === null || checkoutPaymentBindingOk === undefined) {
+      return makeConstraintCheck(constraint, 'payment', 'unresolved', 'checkout_payment_binding')
     }
     return makeConstraintCheck(constraint, 'payment', 'passed')
   }
@@ -736,6 +782,8 @@ export function evaluateAp2ViConstraints(
   const resolvedCheckoutPayload = resolveDisclosureRefs(input.checkoutPayload, disclosures)
   const checkoutPayload = resolveCheckoutPayload(resolvedCheckoutPayload, closedCheckoutMandates)
   const nowSeconds = input.nowSeconds ?? Math.floor(Date.now() / 1000)
+  const checkoutPaymentBindingOk = input.checkoutPaymentBindingOk
+  const openCheckoutMandateDigests = input.openCheckoutMandateDigests ?? []
   const checks: Ap2MandateConstraintCheck[] = []
 
   for (const mandate of openCheckoutMandates) {
@@ -759,6 +807,8 @@ export function evaluateAp2ViConstraints(
           isRecord(resolved) ? resolved : constraint,
           closedPaymentMandates,
           nowSeconds,
+          checkoutPaymentBindingOk,
+          openCheckoutMandateDigests,
         ),
       )
     }
@@ -1117,6 +1167,14 @@ function expectedReceiptReference(serialized?: string, explicitHash?: string): s
 function findMandates(parsedCredentials: ParsedCredential[], vct: string): JsonRecord[] {
   return parsedCredentials.flatMap((parsed) =>
     parsed.mandateValues.filter((mandate) => mandate['vct'] === vct),
+  )
+}
+
+function findMandateDigests(parsedCredentials: ParsedCredential[], vct: string): string[] {
+  return parsedCredentials.flatMap((parsed) =>
+    parsed.mandateDisclosures
+      .filter((mandate) => mandate.value['vct'] === vct)
+      .map((mandate) => mandate.digest),
   )
 }
 
@@ -1555,6 +1613,10 @@ export function verifyAp2ViEvidence(
   const finalCheckoutMandates = findMandates(parsedCredentials, 'mandate.checkout.1')
   const openPaymentMandates = findMandates(parsedCredentials, 'mandate.payment.open.1')
   const openCheckoutMandates = findMandates(parsedCredentials, 'mandate.checkout.open.1')
+  const openCheckoutMandateDigests = findMandateDigests(
+    parsedCredentials,
+    'mandate.checkout.open.1',
+  )
 
   checkCheckoutHash(finalCheckoutMandates, errors)
   const checkoutPaymentBindingOk = checkPaymentCheckoutBinding(
@@ -1575,10 +1637,12 @@ export function verifyAp2ViEvidence(
       : evaluateAp2ViConstraints(
           {
             openCheckoutMandates,
+            openCheckoutMandateDigests,
             closedCheckoutMandates: finalCheckoutMandates,
             openPaymentMandates,
             closedPaymentMandates: finalPaymentMandates,
             checkoutPayload: bundle.ap2?.checkoutPayload,
+            checkoutPaymentBindingOk,
             nowSeconds,
           },
           disclosureMap(parsedCredentials),
