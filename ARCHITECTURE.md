@@ -120,6 +120,23 @@ Gap nodes represent unsigned hops, tool calls evidenced by OTel spans but lackin
 
 `INFORMED_BY` and `PROVENANCE_OF` are agent-declared causal anchors (the agent's claim, structurally derived from declared fields). atrib certifies the claim was signed; it does not certify the truthfulness of the claim. This preserves the [§3.1](atrib-spec.md#31-design-principles-and-rationale) invariant (the graph records structure, not inferred causality) while letting consumers express the reasoning chains the brand promise of "verifiable agent actions in proper context" requires.
 
+### Derived evidence products
+
+Some useful agent experiences are built from the graph, but are not part of the
+graph itself. Examples include prior-work packets, root-cause suspect reports,
+macro-eval summaries, support/RCA continuation packets, and task-start evidence
+briefs.
+
+These products can rank records, reject stale or wrong-signer evidence, require
+body commitments, fetch inclusion proofs, and assign labels such as severity,
+owner candidate, or promotion decision. They should sign their conclusions when
+a future agent or auditor needs to replay the analysis. They should not add
+semantic edge types or weights to the base graph.
+
+The boundary is practical: record validity, deterministic edge derivation, and
+verifier behavior belong in the protocol. Task-specific usefulness belongs in an
+analyzer, harness, or product layer over signed records.
+
 ---
 
 ## Trust model

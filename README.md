@@ -22,6 +22,8 @@ Hard boundary: the public Merkle log proves a commitment, but it is not enough c
 
 One canonical harness pattern is signed diagnostic outcome + causal trace replay: sign the action, sign the diagnostic outcome that evaluates it with `informed_by` back to the action, then let the next repair step call `atrib-trace` from the diagnostic record. This keeps "what happened" and "what it supersedes" in one verifiable chain without requiring a whole-session transcript dump.
 
+Derived evidence products sit above the protocol. A harness can build a prior-work packet, suspect report, or eval summary from signed records, body commitments, verifier checks, and inclusion proofs. Those products can decide which records are useful for a task, which stale records to avoid, and which risks remain open. They do not change the record format, the graph derivation rules, or the six cognitive primitives.
+
 ## How it works
 
 - Each record is signed by the actor's Ed25519 key and JCS-canonicalized

@@ -39,6 +39,24 @@ Cadence: review every Sunday. Hand-collected for now (`pnpm verify-log` then loo
 
 A Tier 1 alarm is *"this is becoming a science project."* It's not paged, but it's the signal that the system is built but unused.
 
+## Tier 1b: dogfood behavior quality (weekly review)
+
+Does signed evidence change later agent behavior, or do we only have a busy log?
+
+| Metric | Source | Direction | What it tells us |
+|---|---|---|---|
+| Diagnostic traces with signed closure | local mirror plus `informed_by` walk | growing | Failures become replayable repair material |
+| Proof-backed diagnostic records | log proof lookup plus local mirror rows | growing | Live evidence has inclusion proof, not only local presence |
+| Body-commitment pass rate | `args_hash` / `result_hash` replay against local content | high | Future agents can check that the body they read matches the signed record |
+| Stale-evidence rejection cases | harness or dogfood packet reports | non-zero when stale evidence exists | The system avoids outdated prior work instead of amplifying it |
+| Replay gain | paired task or dogfood follow-up | positive | Prior signed evidence improves a future attempt |
+| Repeated-failure recurrence | dogfood macro-eval report | falling | The substrate helps stop the same mistake from recurring |
+
+Cadence: review with Tier 1. These metrics graduate a pattern from "signed
+activity" to "behavior impact." Keep them separate from the public graph and
+calculation layers. A prior-work packet, suspect report, or macro-eval label is
+derived evidence, not a new protocol edge.
+
 ## Tier 2: ecosystem signals (monthly review)
 
 Is anyone outside the operator interacting with atrib at all?
