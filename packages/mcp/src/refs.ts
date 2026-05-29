@@ -20,6 +20,25 @@ export const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
 /** Global (unanchored) regex used for scanning prose / nested values. */
 export const SHA256_REF_GLOBAL_PATTERN = /sha256:[0-9a-f]{64}/g
 
+/** Env var used by parent producers to thread a parent record into child records. */
+export const ATRIB_PARENT_RECORD_HASH_ENV = 'ATRIB_PARENT_RECORD_HASH'
+
+/**
+ * Return the parent record hash seed from an environment object.
+ *
+ * Invalid values are ignored so parent-child threading preserves the
+ * degradation contract: attribution metadata may drop, but the tool call
+ * must not fail.
+ */
+export function parentRecordHashFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  const value = env[ATRIB_PARENT_RECORD_HASH_ENV]
+  return typeof value === 'string' && SHA256_REF_PATTERN.test(value)
+    ? value
+    : undefined
+}
+
 /**
  * Walk a value (any shape) and extract all sha256:<64-hex> references.
  * Returns a Set of canonicalized matches.

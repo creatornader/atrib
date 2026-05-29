@@ -3345,7 +3345,7 @@ Until that ADR lands, producers requiring handoff semantics SHOULD emit records 
 - [§1.2.4](atrib-spec.md#124-event_type-values) (event_type URI table this ADR will eventually amend)
 - [§2.3.1](atrib-spec.md#231-entry-serialization) (byte mapping table this ADR will eventually amend)
 - [§9](atrib-spec.md#9-runtime-integration-patterns) (runtime integration patterns; multi-agent harnesses surface the handoff use case)
-- [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type), parent-child agent representation; layered design pairs the cheap producer-side `informed_by`-threading baseline with this ADR's eventual substantive promotion as option 2.
+- [D104](#d104-parent-child-threading-uses-atrib_parent_record_hash), parent-child agent representation; ships the producer-side `informed_by` baseline while keeping this ADR's substantive handoff promotion reserved for a future producer that needs it.
 
 ---
 
@@ -4892,6 +4892,50 @@ The first implementation rejects `topic` and `importance` with `400 Bad Request`
 
 ---
 
+## D104: Parent-child threading uses ATRIB_PARENT_RECORD_HASH
+
+**Date:** 2026-05-29
+
+**Status:** Accepted
+
+**Supersedes:** P025, removed from Pending decisions when this ADR codified the decision.
+
+**Context.** When a parent agent dispatches a child agent, the parent usually has a signed spawn record: a Task tool call, framework handoff, worker-node launch, or similar record. The child then signs its own records. Without an explicit link, parent and child records appear as flat peers, especially when both processes use the same `creator_key`. P025 tracked two options: a producer-side `informed_by` convention, or promotion of [D073](#d073-handoff-event_type-byte-placeholder-adr) into a dedicated `handoff` event_type with new graph rules.
+
+**Decision.** Ship the producer-side convention first. A parent producer that has the signed parent/spawn `record_hash` MAY set `ATRIB_PARENT_RECORD_HASH=<sha256:...>` in the child producer's environment before the child signs. Child producers that support the convention validate the env value as a canonical [§1.2.5](atrib-spec.md#125-informed_by) record hash and add it to `informed_by`.
+
+`@atrib/mcp` reads the env value at middleware initialization. If valid, it seeds the first successful wrapper-signed record's `informed_by`. Failed tool calls do not consume the seed. The middleware merges the seed with the `informedBy` callback and `autoDetectInformedByFromArgs`, dedupes, and signs the lexicographically sorted set.
+
+`@atrib/emit` uses the same helper and keeps its stateless per-emit behavior: when the env value is valid, each explicit emit call prepends it to caller-provided `informed_by` before signing. This matches short-lived `atrib-emit-cli` hook producers. Long-lived `atrib-emit` operators that need one-shot behavior should unset the env value after the first child record or rely on the wrapper-signed first record.
+
+[D073](#d073-handoff-event_type-byte-placeholder-adr) remains a placeholder. This ADR does not promote a new event_type byte, a new graph edge type, or new signed record fields. The graph edge is the existing INFORMED_BY edge.
+
+**Alternatives considered.**
+
+- *Do nothing until a dedicated handoff event exists.* Rejected. Same-key parent-child traces are disconnected today, and `informed_by` already represents the needed causality.
+- *Promote [D073](#d073-handoff-event_type-byte-placeholder-adr) immediately.* Rejected. The bar in [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) requires a load-bearing producer and conformance surface. Current evidence supports the cheaper convention, not a new normative event type.
+- *Use `chain_root` for parent-child relationships.* Rejected. `chain_root` is the structural predecessor in a record chain. `informed_by` is the field for "this prior record informed this action."
+- *Make every child record cite the parent.* Rejected for middleware records. Citing the parent on the first successful child record is enough for trace traversal, and repeated citations add graph noise. `@atrib/emit` remains stateless because the CLI path signs one record per process.
+
+**Consequences.**
+
+- Parent-child trace traversal works without changing the wire format. Walking backward from the first child record reaches the parent spawn record through INFORMED_BY, then continues through the parent's chain.
+- Same-identity parent and child processes still get a structural relationship even when `creator_key` cannot distinguish them.
+- This is a producer convention, not proof that a human-meaningful child agent existed. Verifiers should treat it as signed lineage metadata, subject to the broader [§8.7](atrib-spec.md#87-adversarial-threat-model) stack.
+- Runtimes where the parent record hash is not available before the child signs still need a later annotation, a framework-native `informed_by` point, or a future [D073](#d073-handoff-event_type-byte-placeholder-adr) promotion.
+- P025 is retired from Pending decisions. Future explicit handoff work should extend [D073](#d073-handoff-event_type-byte-placeholder-adr), not reopen the baseline parent-hash convention.
+
+**Cross-references.**
+
+- [§1.2.5](atrib-spec.md#125-informed_by), existing parent-child link field.
+- [§9.8](atrib-spec.md#98-composing-patterns), runtime composition notes for `ATRIB_PARENT_RECORD_HASH`.
+- [`packages/mcp/src/refs.ts`](packages/mcp/src/refs.ts), shared env validation helper.
+- [`packages/mcp/test/middleware.test.ts`](packages/mcp/test/middleware.test.ts), one-shot middleware seed coverage.
+- [`services/atrib-emit/test/emit.test.ts`](services/atrib-emit/test/emit.test.ts), explicit emit env coverage.
+- [D073](#d073-handoff-event_type-byte-placeholder-adr), future explicit handoff event placeholder.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -5146,36 +5190,6 @@ The `extractor_classification` field is redundant for records where event_type i
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 
 
-## P025: Parent-child agent representation, informed_by threading vs. dedicated handoff event_type
-
-**Source:** Architectural gap surfaced during multi-agent integration design. When a parent agent dispatches a subagent (e.g., a host-native Task tool, an A2A handoff, a LangGraph child node), an auto-signing wrapper produces a `tool_call` record on the parent side. But the subagent typically inherits the same signing key (so records sign under the SAME identity as the parent) and the same context_id (or a fresh-orphan one, depending on env passthrough), there is no graph edge linking subagent records to the parent's spawn-tool_call record. Parent and child records appear as flat peers in the substrate. A prior multi-agent framework survey identified the same gap: "cross-agent handoff state shape and where the informed_by edge naturally forms per framework" is the load-bearing research question. The placeholder [D073](#d073-handoff-event_type-byte-placeholder-adr) already reserves byte `0x07` for a future `handoff` event_type pending a load-bearing producer.
-
-**The decision in question:** which of two layered options resolves parent-child agent representation:
-
-1. **Producer-side informed_by threading (no spec change).** When a parent agent spawns a subagent, the spawn-time env passes `ATRIB_PARENT_RECORD_HASH=<parent's Task tool_call record_hash>`. The subagent's MCP wrapper (or first signed record) auto-seeds `informed_by: [$ATRIB_PARENT_RECORD_HASH]`. Causal lineage threads via the existing [§1.2.5](atrib-spec.md#125-informed_by) primitive. Walking `atrib-trace` from a subagent record backward surfaces the parent's Task tool_call, which in turn surfaces the parent's prior reasoning chain.
-2. **Promote [D073](#d073-handoff-event_type-byte-placeholder-adr) to a substantive handoff event_type (spec change).** Subagent spawn produces a dedicated `handoff` record (event_type `0x07`) distinct from the parent's `tool_call` record. The handoff record carries explicit `parent_creator_key`, `child_creator_key`, `spawn_args`, and graph-derivation rules emit a SPAWNS edge per a new [§3.2.4](atrib-spec.md#324-edge-derivation-rules) row. Subagent records optionally carry `inherits_from: <handoff_hash>` or thread via `informed_by` as in option 1.
-
-**Considerations.**
-
-- *Option 1 cost*: producer-side env convention. Each agent's wrapper or harness adapter needs to read the env and seed `informed_by` on first emit. Implementable in the @atrib/mcp-wrap layer with no spec change. Recall + trace work unchanged. Multi-process subagents (cross-machine) need the env to travel via whatever IPC the host uses.
-- *Option 2 cost*: spec promotion via [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)'s bar. Adds an event_type, edge derivation rule, conformance corpus row. Producers need to know which event_type to emit when (parent's Task tool_call vs. dedicated handoff). Higher cost; clearer graph semantics for multi-agent flows.
-- *Option 1 limits*: parent-child remains a producer convention, not a protocol commitment. Two producers that disagree on the env-name convention produce graph-disconnected lineage. Mitigable by documenting the convention in @atrib/mcp-wrap's README and the runtime-adapter spec ([D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path)).
-- *Option 2 limits*: requires a load-bearing multi-agent producer to justify the promotion bar. Current Task subagent surfaces in single-process hosts (same signing key for parent + child) don't yet stress the protocol. Pattern 3 multi-agent flows ([P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation) territory) likely do.
-- *Same-identity edge case*: when parent + child sign under the same `creator_key` (single-process hosts where both inherit the same signing key from the parent process), the substrate-level distinction "which agent emitted this" collapses to "same identity, different process." Option 1's `informed_by` thread captures the relationship without needing identity to differ. Option 2's `handoff` record explicitly distinguishes parent and child even when keys match (via field-level `parent_creator_key` / `child_creator_key`, both set to the same value where appropriate).
-- *Composition with cross-attestation*: if subagent and parent eventually sign under different keys (e.g., separate-key agents in Pattern 3 multi-agent flows), option 2's handoff record fits naturally with the [D052](#d052-cross-attestation-requirement-for-transaction-records) pattern; option 1 still works but requires the cross-attestation logic to live on the producer side.
-
-**Likely outcome (not committed):** ship option 1 first (cheap producer-side convention; closes the immediate single-process subagent gap), retain option 2 as a future spec promotion gated on the first multi-agent producer that needs explicit handoff semantics. Both compose: a future `handoff` record can carry `informed_by` populated by option 1's convention. A prior multi-agent framework survey across LangGraph, CrewAI, AutoGen, smol-agents, Anthropic Agent SDK, Vercel AI SDK, and OpenAI Agents SDK concluded that `informed_by` is the natural cross-agent causality primitive, supporting option 1 as the baseline.
-
-**Cross-references.**
-
-- [D073](#d073-handoff-event_type-byte-placeholder-adr), placeholder reserving event_type byte `0x07` for the future handoff promotion.
-- [§1.2.5](atrib-spec.md#125-informed_by), existing `informed_by` primitive used by option 1.
-- [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path), runtime-adapter spec; documents per-framework conventions like option 1.
-- [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), verify-promotion gated on Pattern 3 multi-agent activation; same forcing function for option 2.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-
 ## P026: Multi-creator awareness in SessionStart context surface
 
 **Source:** Fidelity audit of multi-creator context requirements in atrib's agent-facing surface, specifically the SessionStart boot-context block. The Layer 1 context surface presently shows records signed under a single creator_key. As atrib multi-agent flows ship (Pattern 3) and cross-agent verification becomes routine, SessionStart should also surface records from other creator_keys whose work is relevant to the boot-time work context, so the agent boots into a multi-signer view, not just its own past.
@@ -5198,7 +5212,7 @@ The `extractor_classification` field is redundant for records where event_type i
 - [D073](#d073-handoff-event_type-byte-placeholder-adr), handoff event_type placeholder; multi-creator session resume is the canonical handoff consumer case.
 - [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), verify-promotion; Pattern 3 triggers both this and that.
 - [D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields), subscription surface; shipped single-key dependency.
-- [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type), parent-child agent representation; multi-creator boot context is the read-side analogue.
+- [D104](#d104-parent-child-threading-uses-atrib_parent_record_hash), parent-child agent representation; multi-creator boot context is the read-side analogue.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 
@@ -5247,7 +5261,7 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 
 - Position 1 remains canonical until a promotion gate trips. The installer-guardrail closes the worst foot-gun; further fragility is documented but not chased.
 - When Position 2 ships, hooks become host-independent: the same `~/.claude/scripts/atrib-tool-signer-hook.sh` script works on Cursor's hook surface (if Cursor's hooks are stdio-compatible), Codex CLI's, Zed's ACP, because the integration is "exec a stable command on PATH" rather than "symlink a source file with sibling node_modules."
-- A successful migration also addresses [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type) option-1's deployment concern (env-driven `informed_by` threading needs the receiver MCP server reachable from any subprocess; a published CLI on PATH satisfies that uniformly).
+- A successful migration also addresses [D104](#d104-parent-child-threading-uses-atrib_parent_record_hash)'s deployment concern (env-driven `informed_by` threading needs the receiver MCP server reachable from any subprocess; a published CLI on PATH satisfies that uniformly).
 
 **Cross-references.**
 
@@ -5255,7 +5269,7 @@ The deeper conflation: the repo simultaneously holds the *source of truth for he
 - [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback), long-lived emit daemon; the daemon's wire format is unchanged across Position 1 vs Position 2 (both invoke atrib-emit; only how the binary is located differs). Migration is independent.
 - [P022](#p022-promote-verify-to-cognitive-primitive-7-on-pattern-3-multi-agent-activation), verify promotion: when verify-mcp ships as primitive #7, Position 2 makes adding `atrib verify` a one-subcommand addition rather than a new helper + node_modules.
 - [D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields), subscription surface; the always-on consumer pattern benefits from a stable CLI deployment for the same reasons.
-- [P025](#p025-parent-child-agent-representation--informed_by-threading-vs-dedicated-handoff-event_type), parent-child env threading; benefits from PATH-resolved CLI per consequences above.
+- [D104](#d104-parent-child-threading-uses-atrib_parent_record_hash), parent-child env threading; benefits from PATH-resolved CLI per consequences above.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 

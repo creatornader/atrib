@@ -71,6 +71,10 @@ and no env var, the wrapper reads `~/.atrib/wrap-config.json`.
 | `logFile`         | no       | `~/.atrib/logs/<name>-<agent>.log`        | Wrapper debug log (jsonl). Set to `""` to disable.                                                                                              |
 | `recordFile`      | no       | `~/.atrib/records/<name>-<agent>.jsonl`   | Signed-record mirror (jsonl). Set to `""` to disable.                                                                                           |
 
+## Parent-child threading
+
+If an upstream runtime spawns this wrapper as a child producer and already has the parent spawn record hash, set `ATRIB_PARENT_RECORD_HASH=<sha256:...>` in the wrapper process env. The underlying `@atrib/mcp` middleware reads it at startup and applies the valid hash to the first successful wrapper-signed record's `informed_by` field per [D104](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d104-parent-child-threading-uses-atrib_parent_record_hash). Invalid values are ignored. Failed tool calls do not consume the seed.
+
 ## Key resolution
 
 The wrapper picks the signing key in this order (first hit wins):
@@ -104,6 +108,8 @@ For each tool call through the wrapped MCP:
    verification path).
 6. Submits to the log endpoint via the priority queue.
 7. autoChain bookkeeping advances so the next call links to this one.
+
+When `ATRIB_PARENT_RECORD_HASH` is set, step 1 also adds that parent hash to the first successful record's `informed_by` set before signing.
 
 Records are byte-identical to those signed by `@atrib/agent` or any other
 caller of `@atrib/mcp` middleware. The wrapper is a transport, not a
