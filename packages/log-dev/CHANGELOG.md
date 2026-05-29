@@ -1,5 +1,13 @@
 # @atrib/log-dev
 
+## 0.1.19
+
+### Patch Changes
+
+- Updated dependencies [d19cb28]
+- Updated dependencies [cd149be]
+  - @atrib/mcp@0.14.0
+
 ## Unreleased
 
 ### Patch Changes
