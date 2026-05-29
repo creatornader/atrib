@@ -2,6 +2,18 @@
   "name": "@atrib/verify-mcp",
   "version": "0.2.2",
   "description": "MCP server for atrib. Verifies counterparty handoff evidence before an agent links follow-up work through informed_by.",
+  "keywords": [
+    "atrib",
+    "mcp",
+    "model-context-protocol",
+    "attribution",
+    "verification",
+    "verifiable",
+    "handoff",
+    "agent",
+    "ed25519"
+  ],
+  "homepage": "https://atrib.dev",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",

@@ -2,7 +2,7 @@
 
 MCP server exposing the `atrib-verify` cognitive primitive. It verifies counterparty handoff evidence before a receiving agent signs follow-up work that cites those records through `informed_by`.
 
-`atrib-verify` is read-only. It does not fetch from the public log, retrieve archive bodies, or sign a follow-up record. The receiving agent supplies the evidence packet, inspects the result, and then uses `atrib-emit` or normal wrapped tool calls to continue with `informed_by` set to the accepted hashes.
+The package is read-only. It accepts caller-supplied evidence, returns accepted and rejected hashes, and leaves the follow-up signing step to `atrib-emit` or normal wrapped tool calls.
 
 ## Install
 
@@ -10,27 +10,7 @@ MCP server exposing the `atrib-verify` cognitive primitive. It verifies counterp
 npm install @atrib/verify-mcp
 ```
 
-Or run it through `npx` from an MCP host:
-
-```json
-{
-  "mcpServers": {
-    "atrib-verify": {
-      "command": "npx",
-      "args": ["-y", "@atrib/verify-mcp"]
-    }
-  }
-}
-```
-
-If installed globally, the package exposes the `atrib-verify` binary:
-
-```bash
-npm install -g @atrib/verify-mcp
-atrib-verify
-```
-
-## Tool
+## Tool surface
 
 Host-specific tool names vary. The MCP tool itself is named `atrib-verify`:
 
@@ -50,6 +30,8 @@ mcp__atrib-verify__atrib-verify({
   now_ms?: number,
 })
 ```
+
+## Evidence
 
 `packet`, `records`, and `claims` accept the same evidence shapes as `@atrib/verify`:
 
@@ -83,6 +65,36 @@ The response returns accepted hashes plus compact per-claim evidence:
 }
 ```
 
+## Behaviors
+
+- **Read-only**: never signs records, submits to the log, or mutates the local mirror.
+- **Caller-supplied evidence**: does not fetch from the public log or retrieve archive bodies.
+- **Verifier-backed**: delegates signature, trust, body-commitment, inclusion, freshness, and context checks to `@atrib/verify`.
+- **Handoff-oriented**: accepted hashes are the values the receiving agent can cite through `informed_by` when it signs follow-up work.
+- **Explicit rejection**: failed claims stay visible in `rejected` instead of disappearing from the response.
+
+## Wire-up
+
+Run it through `npx` from an MCP host:
+
+```json
+{
+  "mcpServers": {
+    "atrib-verify": {
+      "command": "npx",
+      "args": ["-y", "@atrib/verify-mcp"]
+    }
+  }
+}
+```
+
+Or install it globally. The package exposes the `atrib-verify` binary:
+
+```bash
+npm install -g @atrib/verify-mcp
+atrib-verify
+```
+
 ## Local Development
 
 From a checkout of the atrib monorepo:
@@ -105,6 +117,10 @@ For local MCP host testing without npm:
   }
 }
 ```
+
+## Relationship to @atrib/verify
+
+`@atrib/verify-mcp` depends on `@atrib/verify` for verifier semantics. The MCP package owns the agent-facing schema, stdio transport, and compact response shape.
 
 ## Status
 
