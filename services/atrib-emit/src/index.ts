@@ -24,7 +24,9 @@ import {
   hexEncode,
   inheritChainContext,
   isValidEventTypeUri,
+  parentRecordHashFromEnv,
   resolveEnvContextId,
+  SHA256_REF_PATTERN,
   sha256,
   type AtribRecord,
   type ProofBundle,
@@ -48,7 +50,6 @@ function readMirrorPath(): string {
   )
 }
 
-const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
 const HEX_32_PATTERN = /^[0-9a-f]{32}$/
 // 16 bytes encoded as base64url with no padding = 22 chars per spec §1.2.6.
 const PROVENANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/
@@ -310,11 +311,11 @@ async function handleEmit({ input, key, queue, producer }: HandleEmitInput): Pro
     )
   }
 
-  // ATRIB_PARENT_RECORD_HASH env-var seeding (P025 option 1, producer-side
+  // ATRIB_PARENT_RECORD_HASH env-var seeding (D104, producer-side
   // parent-child causality threading). When a parent producer spawns a child
   // producer (multi-process subagent, cross-process delegate, framework worker
-  // node, etc.) and writes its parent's record_hash into this env, the child's
-  // first emit auto-prepends it to informed_by. Uses the existing §1.2.5
+  // node, etc.) and writes its parent's record_hash into this env, each emit
+  // call auto-prepends it to informed_by. Uses the existing §1.2.5
   // primitive, no spec change. Only valid sha256:<64-hex> values are honored;
   // anything else is silently ignored. Caller-passed informed_by entries take
   // precedence in ordering (env-seed prepends, dedupe preserves first occurrence);
@@ -323,13 +324,8 @@ async function handleEmit({ input, key, queue, producer }: HandleEmitInput): Pro
   // process hosts where parent and child share env (e.g., Claude Code's Task
   // tool) cannot use this convention naively because the parent's PostToolUse
   // signature fires after the child has already emitted; those cases need
-  // retroactive annotation or option-2 promotion. See atrib/DECISIONS.md#p025.
-  const PARENT_HASH_PATTERN = /^sha256:[0-9a-f]{64}$/
-  const envParentHash = process.env['ATRIB_PARENT_RECORD_HASH']
-  const validParentHash =
-    typeof envParentHash === 'string' && PARENT_HASH_PATTERN.test(envParentHash)
-      ? envParentHash
-      : undefined
+  // retroactive annotation or a future explicit handoff event. See D104.
+  const validParentHash = parentRecordHashFromEnv()
   const effectiveInformedBy = validParentHash
     ? Array.from(
         new Set([validParentHash, ...(input.informed_by ?? [])]),

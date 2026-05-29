@@ -11,7 +11,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { base64urlDecode, base64urlEncode } from './base64url.js'
 import { computeContentId } from './content-id.js'
-import { SHA256_REF_PATTERN, extractRecordHashes } from './refs.js'
+import {
+  SHA256_REF_PATTERN,
+  extractRecordHashes,
+  parentRecordHashFromEnv,
+} from './refs.js'
 import { resolveChainRoot } from './chain-root.js'
 import { readInboundContext, writeOutboundContext, parseBaggageAtribSession } from './context.js'
 import { signRecord, getPublicKey } from './signing.js'
@@ -335,6 +339,8 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   const autoChain = options.autoChain === true
   let stableContextId: string | undefined
   const lastRecordHashByContext = new Map<string, string>()
+  const parentRecordHashSeed = parentRecordHashFromEnv()
+  let parentRecordHashSeedConsumed = false
 
   // Seed lastRecordHashByContext from the caller-provided record set so
   // autoChain survives process restarts. For each context_id, find the
@@ -476,6 +482,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     sessionToken: string | undefined
     inboundTraceparent: unknown
     eventType: string
+    parentRecordHashSeeded: boolean
   }
 
   /**
@@ -562,6 +569,11 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     // (presence affects the JCS canonical form, so omission is normal).
     let informedByList: string[] | undefined
     const merged = new Set<string>()
+    let parentRecordHashSeeded = false
+    if (parentRecordHashSeed && !parentRecordHashSeedConsumed) {
+      merged.add(parentRecordHashSeed)
+      parentRecordHashSeeded = true
+    }
     if (options.informedBy) {
       try {
         const informed = options.informedBy(params)
@@ -679,7 +691,15 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     const signed = await signRecord(record, privateKey)
     const recordHashHex = hexEncode(sha256(canonicalRecord(signed)))
 
-    return { signed, recordHashHex, contextId, sessionToken, inboundTraceparent, eventType }
+    return {
+      signed,
+      recordHashHex,
+      contextId,
+      sessionToken,
+      inboundTraceparent,
+      eventType,
+      parentRecordHashSeeded,
+    }
   }
 
   /**
@@ -732,6 +752,9 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     const priority: 'high' | 'normal' =
       built.eventType === EVENT_TYPE_TRANSACTION_URI ? 'high' : 'normal'
     queue.submit(built.signed, priority)
+    if (built.parentRecordHashSeeded) {
+      parentRecordHashSeedConsumed = true
+    }
   }
 
   // The attribution wrapper. Extracted so we can apply it both to newly-

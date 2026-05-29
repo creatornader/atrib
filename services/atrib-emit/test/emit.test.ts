@@ -332,12 +332,9 @@ describe('handleEmit validation paths', () => {
   // pre-submission rejection paths, which never hit the queue.
 })
 
-describe('ATRIB_PARENT_RECORD_HASH env seeding (P025 option 1)', () => {
+describe('ATRIB_PARENT_RECORD_HASH env seeding (D104)', () => {
   // Asserts that when the producer's environment carries a valid parent record
-  // hash, handleEmit's signing path prepends it to informed_by. The test
-  // reaches into buildAndSignEmitRecord's captured args via a spy to inspect
-  // what handleEmit threaded through, since the signed record itself drops the
-  // canonical-sort step on informed_by.
+  // hash, handleEmit's signing path prepends it to informed_by.
   const { handleEmit } = __index_test_only__
   const VALID_PARENT = 'sha256:' + 'a'.repeat(64)
   const ANOTHER_VALID = 'sha256:' + 'b'.repeat(64)
@@ -359,8 +356,9 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (P025 option 1)', () => {
     // calls queue.submit() synchronously then returns; we don't need the
     // delivery roundtrip to test the env-seeding logic, the record_hash is
     // computed locally from the signed bytes before submission.
+    let submitted: AtribRecord | undefined
     const queue = {
-      submit: () => {},
+      submit: (record: AtribRecord) => { submitted = record },
       flush: async () => {},
       getProof: async () => null,
     } as unknown as ReturnType<typeof createSubmissionQueue>
@@ -374,13 +372,18 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (P025 option 1)', () => {
       key: { privateKey: seed, source: 'env' },
       queue,
     })
-    return result
+    return { result, submitted }
+  }
+
+  function submittedInformedBy(record: AtribRecord | undefined): string[] | undefined {
+    return (record as (AtribRecord & { informed_by?: string[] }) | undefined)?.informed_by
   }
 
   it('signs successfully when env carries a valid parent hash', async () => {
-    const result = await emitWithEnv(VALID_PARENT)
+    const { result, submitted } = await emitWithEnv(VALID_PARENT)
     expect(result.record_hash).not.toBe('sha256:unknown')
     expect(result.warnings.some((w) => w.toLowerCase().includes('error'))).toBe(false)
+    expect(submittedInformedBy(submitted)).toEqual([VALID_PARENT])
   })
 
   it('silently ignores invalid env values (uppercase / short / non-sha256)', async () => {
@@ -390,34 +393,30 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (P025 option 1)', () => {
       'not-a-hash',
       '',
     ]) {
-      const result = await emitWithEnv(bad)
+      const { result, submitted } = await emitWithEnv(bad)
       // Should still sign successfully, env is silently dropped, not raised
       // as an error.
       expect(result.record_hash).not.toBe('sha256:unknown')
+      expect(submittedInformedBy(submitted)).toBeUndefined()
     }
   })
 
   it('dedupes when caller informed_by already includes the parent hash', async () => {
-    // Both env and caller supply the same parent hash; the merged list should
-    // contain it exactly once. We assert via successful sign (no thrown
-    // duplicate-entry validator error) plus a follow-on call that confirms
-    // the merge precedes sign.ts's sort/canonical-bytes computation.
-    const result = await emitWithEnv(VALID_PARENT, [VALID_PARENT])
+    const { result, submitted } = await emitWithEnv(VALID_PARENT, [VALID_PARENT])
     expect(result.record_hash).not.toBe('sha256:unknown')
+    expect(submittedInformedBy(submitted)).toEqual([VALID_PARENT])
   })
 
   it('merges env-parent with caller-supplied informed_by', async () => {
-    // The merged list should include both. We can't read the merged array
-    // directly from the result, but we can assert the sign succeeds without
-    // emptyOutput warnings, the merge logic uses Set to dedupe and is the
-    // only way the env-seed integrates into informed_by.
-    const result = await emitWithEnv(VALID_PARENT, [ANOTHER_VALID])
+    const { result, submitted } = await emitWithEnv(VALID_PARENT, [ANOTHER_VALID])
     expect(result.record_hash).not.toBe('sha256:unknown')
+    expect(submittedInformedBy(submitted)).toEqual([VALID_PARENT, ANOTHER_VALID])
   })
 
   it('no-op when env is unset', async () => {
-    const result = await emitWithEnv(undefined, [ANOTHER_VALID])
+    const { result, submitted } = await emitWithEnv(undefined, [ANOTHER_VALID])
     expect(result.record_hash).not.toBe('sha256:unknown')
+    expect(submittedInformedBy(submitted)).toEqual([ANOTHER_VALID])
   })
 })
 

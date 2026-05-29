@@ -5147,6 +5147,8 @@ A runtime may support multiple patterns concurrently. Claude Code supports Patte
 
 A canonical composition example: PostToolUse hooks fire on `mcp__.*` tools (Pattern #1 covers atrib-emit signing) AND on built-in tool names like `Bash|Edit|Write|Read|MultiEdit|WebFetch|WebSearch` (Pattern #1 again, with verb-based importance grading). Wrapper-fronted MCP tools (Pattern #2) sign at the protocol boundary. The hook skip-list excludes already-wrapped MCPs to avoid double-signing.
 
+Parent-child producers use the [D104](DECISIONS.md#d104-parent-child-threading-uses-atrib_parent_record_hash) env convention when the parent record hash is known before the child signs. The parent sets `ATRIB_PARENT_RECORD_HASH=<sha256:...>` for the child process. Pattern #2 middleware applies that valid hash to the first successful child record's `informed_by` field; Pattern #1 hook producers and short-lived `atrib-emit-cli` calls may apply the same value to explicit emit records. Invalid values are ignored. This does not add a new edge type: graph derivation uses the existing INFORMED_BY edge.
+
 ### 9.9 Selecting a pattern
 
 A runtime builder picks based on:

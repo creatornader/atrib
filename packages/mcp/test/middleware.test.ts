@@ -11,6 +11,27 @@ import type { AtribRecord } from '../src/types.js'
 // Deterministic test key
 const TEST_PRIVATE_KEY = new Uint8Array(32).fill(42)
 const TEST_PRIVATE_KEY_B64 = base64urlEncode(TEST_PRIVATE_KEY)
+const VALID_PARENT_RECORD_HASH = 'sha256:' + 'a'.repeat(64)
+const OTHER_RECORD_HASH = 'sha256:' + 'b'.repeat(64)
+
+async function withParentRecordHash(
+  value: string | undefined,
+  fn: () => Promise<void>,
+) {
+  const prior = process.env['ATRIB_PARENT_RECORD_HASH']
+  if (value === undefined) delete process.env['ATRIB_PARENT_RECORD_HASH']
+  else process.env['ATRIB_PARENT_RECORD_HASH'] = value
+  try {
+    await fn()
+  } finally {
+    if (prior === undefined) delete process.env['ATRIB_PARENT_RECORD_HASH']
+    else process.env['ATRIB_PARENT_RECORD_HASH'] = prior
+  }
+}
+
+function informedByOf(record: AtribRecord): string[] | undefined {
+  return (record as AtribRecord & { informed_by?: string[] }).informed_by
+}
 
 /**
  * Create a minimal mock McpServer that captures the setRequestHandler calls.
@@ -204,6 +225,114 @@ describe('atrib() middleware', () => {
 
       // No _meta.atrib should be added
       expect((result as any)._meta?.atrib).toBeUndefined()
+    })
+
+    it('seeds the first committed tool_call from ATRIB_PARENT_RECORD_HASH', async () => {
+      await withParentRecordHash(VALID_PARENT_RECORD_HASH, async () => {
+        const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+        const originalHandler = vi.fn().mockImplementation(async () => ({
+          content: [{ type: 'text', text: 'ok' }],
+        }))
+        const observed: AtribRecord[] = []
+
+        atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://test.example.com',
+          autoChain: true,
+          logSubmission: 'disabled',
+          onRecord: (record) => { observed.push(record) },
+        })
+        registerToolHandler(originalHandler)
+
+        const handler = getToolHandler()!
+        await handler(createToolCallRequest('search_web'), {})
+        await handler(createToolCallRequest('search_web'), {})
+
+        expect(observed).toHaveLength(2)
+        expect(informedByOf(observed[0])).toEqual([VALID_PARENT_RECORD_HASH])
+        expect(informedByOf(observed[1])).toBeUndefined()
+      })
+    })
+
+    it('does not consume the parent seed when the tool call fails', async () => {
+      await withParentRecordHash(VALID_PARENT_RECORD_HASH, async () => {
+        const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+        const originalHandler = vi.fn()
+          .mockResolvedValueOnce({ isError: true, content: [{ type: 'text', text: 'error' }] })
+          .mockResolvedValueOnce({ content: [{ type: 'text', text: 'ok' }] })
+        const observed: AtribRecord[] = []
+
+        atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://test.example.com',
+          autoChain: true,
+          logSubmission: 'disabled',
+          onRecord: (record) => { observed.push(record) },
+        })
+        registerToolHandler(originalHandler)
+
+        const handler = getToolHandler()!
+        await handler(createToolCallRequest('search_web'), {})
+        await handler(createToolCallRequest('search_web'), {})
+
+        expect(observed).toHaveLength(1)
+        expect(informedByOf(observed[0])).toEqual([VALID_PARENT_RECORD_HASH])
+      })
+    })
+
+    it('dedupes the parent seed with callback and auto-detected references', async () => {
+      await withParentRecordHash(VALID_PARENT_RECORD_HASH, async () => {
+        const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+        const originalHandler = vi.fn().mockResolvedValue({
+          content: [{ type: 'text', text: 'ok' }],
+        })
+        const observed: AtribRecord[] = []
+
+        atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://test.example.com',
+          logSubmission: 'disabled',
+          autoDetectInformedByFromArgs: true,
+          informedBy: () => [OTHER_RECORD_HASH],
+          onRecord: (record) => { observed.push(record) },
+        })
+        registerToolHandler(originalHandler)
+
+        const handler = getToolHandler()!
+        const request = createToolCallRequest('search_web')
+        request.params.arguments = { query: `see ${OTHER_RECORD_HASH}` }
+        await handler(request, {})
+
+        expect(observed).toHaveLength(1)
+        expect(informedByOf(observed[0])).toEqual([
+          VALID_PARENT_RECORD_HASH,
+          OTHER_RECORD_HASH,
+        ])
+      })
+    })
+
+    it('ignores invalid parent hash env values', async () => {
+      await withParentRecordHash('sha256:' + 'A'.repeat(64), async () => {
+        const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+        const originalHandler = vi.fn().mockResolvedValue({
+          content: [{ type: 'text', text: 'ok' }],
+        })
+        const observed: AtribRecord[] = []
+
+        atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://test.example.com',
+          logSubmission: 'disabled',
+          onRecord: (record) => { observed.push(record) },
+        })
+        registerToolHandler(originalHandler)
+
+        const handler = getToolHandler()!
+        await handler(createToolCallRequest('search_web'), {})
+
+        expect(observed).toHaveLength(1)
+        expect(informedByOf(observed[0])).toBeUndefined()
+      })
     })
 
     it('invokes onRecord with the signed record after signing', async () => {

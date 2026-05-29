@@ -42,7 +42,13 @@ export { sha256, hexEncode, hexDecode } from './hash.js'
 export { canonicalSigningInput, canonicalRecord, canonicalCrossAttestationInput } from './canon.js'
 export { getPublicKey, signRecord, signTransactionRecord, verifyRecord } from './signing.js'
 export { computeContentId, normalizeServerUrl } from './content-id.js'
-export { SHA256_REF_PATTERN, SHA256_REF_GLOBAL_PATTERN, extractRecordHashes } from './refs.js'
+export {
+  ATRIB_PARENT_RECORD_HASH_ENV,
+  SHA256_REF_PATTERN,
+  SHA256_REF_GLOBAL_PATTERN,
+  extractRecordHashes,
+  parentRecordHashFromEnv,
+} from './refs.js'
 export { genesisChainRoot, chainRoot, resolveChainRoot } from './chain-root.js'
 export { readMirrorTail, inheritChainContext } from './mirror.js'
 export type { ChainContext } from './mirror.js'
