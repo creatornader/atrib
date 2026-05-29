@@ -1,5 +1,23 @@
 # @atrib/verify
 
+## 0.5.0
+
+### Minor Changes
+
+- 24e8160: Promote Pattern 3 handoff verification into the verifier library and agent-facing MCP primitive.
+
+  `@atrib/verify` now accepts packet-derived handoff claims, checks allowed contexts, and preserves missing required records as explicit rejections. `@atrib/verify-mcp` exposes the read-only `atrib-verify` primitive for receiving agents before they link follow-up work through `informed_by`.
+
+### Patch Changes
+
+- d19cb28: Add AP2 counterparty transaction attestation support.
+
+  `@atrib/mcp` now exposes `signTransactionAttestation()` so AP2 counterparties can sign the finalized atrib transaction bytes. `@atrib/verify` now counts distinct verified signer keys for transaction cross-attestation, so duplicate signer entries cannot satisfy the two-party requirement.
+
+- Updated dependencies [d19cb28]
+- Updated dependencies [cd149be]
+  - @atrib/mcp@0.14.0
+
 ## Unreleased
 
 ### Patch Changes

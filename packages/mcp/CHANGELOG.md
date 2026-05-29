@@ -1,5 +1,17 @@
 # @atrib/mcp
 
+## 0.14.0
+
+### Minor Changes
+
+- d19cb28: Add AP2 counterparty transaction attestation support.
+
+  `@atrib/mcp` now exposes `signTransactionAttestation()` so AP2 counterparties can sign the finalized atrib transaction bytes. `@atrib/verify` now counts distinct verified signer keys for transaction cross-attestation, so duplicate signer entries cannot satisfy the two-party requirement.
+
+- cd149be: Add [D104](../DECISIONS.md#d104-parent-child-threading-uses-atrib_parent_record_hash) parent-child `informed_by` threading through `ATRIB_PARENT_RECORD_HASH`.
+
+  `@atrib/mcp` now validates the env value with a shared record-hash helper and applies it to the first successful wrapper-signed child record. `@atrib/emit` uses the same helper for explicit emit records, and `@atrib/mcp-wrap` documents the inherited wrapper behavior.
+
 ## Unreleased
 
 ### Minor Changes
