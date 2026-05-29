@@ -1,5 +1,11 @@
 # @atrib/verify-mcp
 
+## 0.2.4
+
+### Patch Changes
+
+- 92352be: Add explicit npm author, homepage, and keyword metadata to the cognitive MCP packages.
+
 ## 0.2.3
 
 ### Patch Changes
