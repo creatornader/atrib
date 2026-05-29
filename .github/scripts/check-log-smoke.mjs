@@ -39,6 +39,16 @@ const endpoints = [
     },
   },
   {
+    name: 'feed',
+    url: 'https://log.atrib.dev/v1/feed.json?limit=5',
+    validate(body) {
+      const parsed = JSON.parse(body)
+      if (parsed.version !== 'https://jsonfeed.org/version/1.1' || !Array.isArray(parsed.items)) {
+        throw new Error('Unexpected /v1/feed.json response')
+      }
+    },
+  },
+  {
     name: 'explorer',
     url: 'https://explore.atrib.dev/',
     validate(body) {

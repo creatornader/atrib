@@ -61,6 +61,37 @@ async function post(url: string, body: unknown): Promise<{ status: number; json:
   return { status: res.status, json }
 }
 
+async function readSseEvent(res: Response, eventName: string): Promise<Record<string, unknown>> {
+  const reader = res.body?.getReader()
+  if (!reader) throw new Error('response has no body')
+  const decoder = new TextDecoder()
+  let text = ''
+  try {
+    while (true) {
+      const next = await Promise.race([
+        reader.read(),
+        new Promise<ReadableStreamReadResult<Uint8Array>>((_, reject) => {
+          setTimeout(() => reject(new Error(`timed out waiting for ${eventName}`)), 2000)
+        }),
+      ])
+      if (next.done) break
+      text += decoder.decode(next.value, { stream: true })
+      for (const chunk of text.split('\n\n')) {
+        if (!chunk.includes(`event: ${eventName}`)) continue
+        const data = chunk
+          .split('\n')
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice('data:'.length).trimStart())
+          .join('\n')
+        return JSON.parse(data) as Record<string, unknown>
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => {})
+  }
+  throw new Error(`stream ended before ${eventName}`)
+}
+
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
@@ -604,6 +635,81 @@ describe('GET /v1/recent', () => {
     expect(page2.entries.length).toBeGreaterThanOrEqual(1)
     // page2's newest index must be older than page1's oldest index
     expect(page2.entries[0]!.index).toBeLessThan(page1.entries.at(-1)!.index)
+  })
+})
+
+describe('GET /v1/feed.json', () => {
+  it('returns JSON Feed items filtered by commitment-visible entry fields', async () => {
+    const record = await makeSignedRecord()
+    await post(server.url, record)
+    await post(server.url, await makeSignedRecord())
+    const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
+    const eventType = encodeURIComponent('https://atrib.dev/v1/types/tool_call')
+
+    const res = await fetch(
+      `${server.url}/v1/feed.json?creator_key=${record.creator_key}&event_type=${eventType}&since=${record.timestamp - 1}`,
+    )
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('application/feed+json')
+    const body = (await res.json()) as {
+      version: string
+      items: Array<{ id: string; _atrib: { creator_key: string; record_hash: string } }>
+    }
+    expect(body.version).toBe('https://jsonfeed.org/version/1.1')
+    expect(body.items.map((item) => item.id)).toContain(recordHash)
+    expect(body.items.every((item) => item._atrib.creator_key === record.creator_key)).toBe(true)
+  })
+
+  it('rejects filters that require record bodies', async () => {
+    const res = await fetch(`${server.url}/v1/feed.json?importance=high`)
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as { error: string }
+    expect(body.error).toContain('importance')
+  })
+})
+
+describe('GET /v1/stream', () => {
+  it('replays matching historical entries when since is present', async () => {
+    const record = await makeSignedRecord()
+    await post(server.url, record)
+
+    const res = await fetch(
+      `${server.url}/v1/stream?creator_key=${record.creator_key}&since=${record.timestamp - 1}`,
+    )
+    expect(res.status).toBe(200)
+
+    const event = (await readSseEvent(res, 'log_entry')) as {
+      entry: { creator_key: string; record_hash: string }
+    }
+    expect(event.entry.creator_key).toBe(record.creator_key)
+    expect(event.entry.record_hash).toBe(`sha256:${hexEncode(sha256(canonicalRecord(record)))}`)
+  })
+
+  it('streams new matching entries as Server-Sent Events', async () => {
+    const record = await makeSignedRecord()
+    const res = await fetch(`${server.url}/v1/stream?creator_key=${record.creator_key}`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/event-stream')
+
+    const eventPromise = readSseEvent(res, 'log_entry')
+    await post(server.url, record)
+    const event = (await eventPromise) as {
+      tree_size: number
+      entry: { creator_key: string; record_hash: string; event_type: string }
+    }
+
+    expect(event.tree_size).toBeGreaterThan(0)
+    expect(event.entry.creator_key).toBe(record.creator_key)
+    expect(event.entry.record_hash).toBe(`sha256:${hexEncode(sha256(canonicalRecord(record)))}`)
+    expect(event.entry.event_type).toBe('tool_call')
+  })
+
+  it('rejects filters that require record bodies', async () => {
+    const res = await fetch(`${server.url}/v1/stream?topic=ap2`)
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as { error: string }
+    expect(body.error).toContain('topic')
   })
 })
 
