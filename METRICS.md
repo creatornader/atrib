@@ -131,7 +131,7 @@ A metric does not stay in the set forever. Each metric has a status that records
 |---|---|---|
 | `provisional` | Newly added; we suspect it might predict something useful, but we don't know yet. Tracked but not weighted in decisions. | After two quarterly reviews, promote to `tracked` if it has informed at least one decision; otherwise demote to `retired`. |
 | `tracked` | A metric we watch and use to color discussions, but no decision is mechanically tied to it. | Promote to `decision-tied` once it gets named in a Tier 4 trigger or a tier-review decision. Demote to `retired` if a quarterly review finds it never moved a discussion. |
-| `decision-tied` | A metric that decisions are explicitly pegged to. Changes here change behavior. | Demote to `tracked` (or directly to `retired`) only with a written explanation of why the metric is no longer decision-critical. |
+| `decision-tied` | A metric that decisions are explicitly pegged to. Changes here change behavior. | Demote to `tracked` (or directly to `retired`) only with a written explanation of why the metric no longer changes behavior. |
 | `retired` | No longer collected (or collected but ignored). The script may still emit it for historical compatibility; nothing depends on it. | One-way transition. |
 
 Each metric in this document and in the `METRICS` array of `services/log-node/scripts/metrics.mjs` carries a `status` field. Both must agree. When you change one, change the other in the same commit.

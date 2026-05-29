@@ -12,7 +12,7 @@
  * SESSION_PRECEDES (§3.2.4 step 2) and SESSION_PARALLEL (§3.2.4 step 3)
  * derivation that any /v1/graph/<context_id> implementation MAY apply
  * (and the reference implementation enables by default). The corpus
- * exercises the four decision-critical properties:
+ * exercises the four properties the corpus must preserve:
  *
  *   1. Chain-component skip (fully-chained). When N records form a
  *      single CHAIN_PRECEDES connected component, NO SESSION_PRECEDES

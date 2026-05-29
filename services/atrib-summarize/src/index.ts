@@ -41,7 +41,7 @@ const SummarizeInput = z.object({
   ),
   focus: z.string().min(1).max(2000).optional().describe(
     'Optional steering for the synthesis (e.g. "what decisions did I make", ' +
-    '"why did I revise X", "what are the decision-critical claims"). Defaults to a ' +
+    '"why did I revise X", "which claims shaped the outcome"). Defaults to a ' +
     'general "summarize what the agent did and why" focus.',
   ),
   max_records: z.number().int().min(1).max(200).optional().describe(

@@ -9,7 +9,7 @@
 
 ## What this teaches
 
-Why atrib's graph records *structure*, not *causality interpreted from content*, and why determinism in edge derivation is decision-critical for verifiability.
+Why atrib's graph records *structure*, not *causality interpreted from content*, and why verifiability requires deterministic edge derivation.
 
 ## What to cover when this gets written
 

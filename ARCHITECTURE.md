@@ -312,7 +312,7 @@ The consequence: adding `@atrib/mcp` or `@atrib/agent` to a production system ca
 
 ## Key design decisions
 
-The decision-critical choices. Each is in [DECISIONS.md](DECISIONS.md) with full rationale and rejected alternatives.
+The choices that define the protocol. Each is in [DECISIONS.md](DECISIONS.md) with full rationale and rejected alternatives.
 
 **Ed25519, 32-byte seed ([D003](DECISIONS.md#d003-ed25519-not-dids-or-pki)).** Not RSA, not ECDSA, not DIDs. Ed25519 is fast, has a small key size, deterministic signatures, and no PKI dependency. The 32-byte seed (not the 64-byte NaCl expanded format) keeps key management simple. Key rotation and revocation are normatively specified in [§1.9](atrib-spec.md#19-key-rotation-and-revocation) ([D033](DECISIONS.md#d033-key-rotation-and-revocation)); see also [§6](atrib-spec.md#6-key-directory) ([D034](DECISIONS.md#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers)) for the AKD-based public-key directory that resolves `creator_key → identity claim`.
 

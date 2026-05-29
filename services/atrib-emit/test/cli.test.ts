@@ -243,7 +243,7 @@ describe('atrib-emit-cli wire contract', () => {
     // Required envelope fields are listed
     expect(desc.envelope_schema.required['event_type']).toBeDefined()
     expect(desc.envelope_schema.required['content']).toBeDefined()
-    // Documented env vars include the decision-critical ones
+    // Documented env vars include the required ones
     const envNames = desc.env_vars.map((v) => v.name)
     expect(envNames).toContain('ATRIB_PRIVATE_KEY')
     expect(envNames).toContain('ATRIB_LOG_ENDPOINT')

@@ -5,7 +5,7 @@
  *
  * Wires the §3.2.4 derived-graph shape that the recall_walk handler and
  * the rank_by='causal_distance' path need, but scoped to the four
- * decision-critical edge types for "what records causally inform this one":
+ * edge types for "what records causally inform this one":
  *
  *   CHAIN_PRECEDES (weight 1): direct chain link.
  *     chain_root != genesisChainRoot(context_id) implies a prior record

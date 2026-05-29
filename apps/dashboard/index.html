@@ -153,7 +153,7 @@
     --et-revision-border: rgba(99, 102, 241, 0.3);
 
     /* Edge-type colors (graph viz), organized in two semantic tiers.
-       Tier 1 (vibrant): the decision-critical edges that carry meaning beyond
+       Tier 1 (vibrant): the edges that carry meaning beyond
        structure. Each either gets a dedicated color (informed_by) or
        intentionally aliases a node color (annotates → annotation node,
        revises → revision node, converges_on → transaction node) so the
@@ -163,7 +163,7 @@
        (every non-genesis record has one), the SESSION_* and CROSS_SESSION
        edges are weaker derivations. The grey gradient marks this hierarchy
        (text-2 > text-3 > text-4 > muted). */
-    /* Tier 1, decision-critical semantic */
+    /* Tier 1, semantic */
     --edge-ancestry:         #fb923c;                  /* informed_by + provenance_of (warm orange, no node analogue) */
     --edge-annotates:        var(--et-annotation);     /* tracks annotation node */
     --edge-revises:          var(--et-revision);       /* tracks revision node */
@@ -3645,7 +3645,7 @@ async function renderIdentity(creatorKey) {
     // already in the explainer paragraph above the controls; repeating
     // it on every render added noise. The 'fetched' latency line is
     // moved to a tooltip on the meta block, useful for investigation
-    // but not decision-critical in the visible meta.
+    // but not needed in the visible meta.
     const lines = [
       { label: 'window', value: windowLabel },
       {

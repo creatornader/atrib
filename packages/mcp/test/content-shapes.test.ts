@@ -67,10 +67,10 @@ describe('extractIndexableText: normative event types', () => {
     const text = extractIndexableText(EVENT_TYPE_ANNOTATION_URI, {
       annotates: 'sha256:' + 'b'.repeat(64),
       importance: 'high',
-      summary: 'this decision was decision-critical',
+      summary: 'this decision shaped the outcome',
       topics: ['design', 'rejected-alternatives'],
     })
-    expect(text).toContain('this decision was decision-critical')
+    expect(text).toContain('this decision shaped the outcome')
     expect(text).toContain('design')
     expect(text).toContain('rejected-alternatives')
     expect(text).not.toContain('sha256:')

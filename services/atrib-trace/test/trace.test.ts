@@ -204,11 +204,11 @@ describe('summarizeSidecar — per-event_type content shape handling (D086)', ()
 
   it('annotation: surfaces `summary` as the primary text', () => {
     const result = summarizeSidecar(mockLoaded({
-      summary: 'this decision was decision-critical for substrate hypothesis',
+      summary: 'this decision shaped the substrate hypothesis',
       importance: 'critical',
       topics: ['design'],
     }))
-    expect(result?.what).toBe('this decision was decision-critical for substrate hypothesis')
+    expect(result?.what).toBe('this decision shaped the substrate hypothesis')
     expect(result?.importance).toBe('critical')
     expect(result?.topics).toEqual(['design'])
   })

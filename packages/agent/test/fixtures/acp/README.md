@@ -18,4 +18,4 @@ None; these are example payloads from the public spec, not real customer data.
 
 ## Updating these fixtures
 
-If the upstream spec evolves, re-pull from the source URL above and update the affected fixture file. Add a comment in the JSON describing what changed and the new revision date. Do not remove fields silently; extra fields may be decision-critical for future detection logic.
+If the upstream spec evolves, re-pull from the source URL above and update the affected fixture file. Add a comment in the JSON describing what changed and the new revision date. Do not remove fields silently; extra fields may matter for future detection logic.

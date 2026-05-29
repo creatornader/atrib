@@ -291,7 +291,7 @@ async function handleEmit({ input, key, queue, producer }: HandleEmitInput): Pro
   // helper inherits BOTH context_id and chain_root from the mirror's most
   // recent record. The cognitive-extractor hook spawning atrib-emit with
   // ATRIB_CHAIN_TAIL_<context_id> + the agent's context_id is the primary
-  // decision-critical case; pre-fix this produced isolated genesis records
+  // case that needs preserving; pre-fix this produced isolated genesis records
   // because atrib-emit's local resolver short-circuited on caller context.
   const chain = await inheritChainContext({
     callerContextId,

@@ -21,5 +21,5 @@
   "keys": {
     "alice_pubkey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc"
   },
-  "note": "Provenance trace walks producer-claimed ancestry edges only (INFORMED_BY, ANNOTATES, REVISES). The structure-vs-claims invariant (§3.1) requires that CHAIN_PRECEDES NOT be walked. Cases enumerate the decision-critical properties: multi-hop walk, the structural-edge prohibition, and depth truncation."
+  "note": "Provenance trace walks producer-claimed ancestry edges only (INFORMED_BY, ANNOTATES, REVISES). The structure-vs-claims invariant (§3.1) requires that CHAIN_PRECEDES NOT be walked. Cases enumerate the properties the corpus must preserve: multi-hop walk, the structural-edge prohibition, and depth truncation."
 }

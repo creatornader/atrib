@@ -613,7 +613,7 @@ interface StepOneSuccess {
  * Stronger: re-canonicalize the body and verify the signature against
  * the operator's pubkey (deferred to a follow-on commit; the log's
  * inclusion proof already authenticates the hash, so the signature
- * re-verify is defense-in-depth, not decision-critical for step 1).
+ * re-verify is defense-in-depth, not required for step 1).
  */
 async function runStepOne(opts: StepOneInputs): Promise<StepOneSuccess | null> {
   const directoryOrigin = await fetchDirectoryOrigin(opts.directoryEndpoint, opts.fetchFn, opts.signal, opts.warnings)
