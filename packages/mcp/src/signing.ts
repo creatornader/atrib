@@ -81,6 +81,29 @@ export async function signTransactionRecord(
 }
 
 /**
+ * Create one signer entry over an existing transaction record's §1.7.6 bytes.
+ *
+ * AP2 merchants and settlement parties use this helper when they receive an
+ * atrib transaction record and need to countersign the same canonical bytes.
+ * The returned entry can be appended to `record.signers`; AP2 receipt JWTs
+ * still remain verifier evidence and must not be passed off as this signer.
+ */
+export async function signTransactionAttestation(
+  record: AtribRecord,
+  privateKey: Uint8Array,
+): Promise<SignerEntry> {
+  if (record.event_type !== 'https://atrib.dev/v1/types/transaction') {
+    throw new Error('atrib: transaction attestation requires a transaction record')
+  }
+  const publicKey = await getPublicKey(privateKey)
+  const sigBytes = await ed.signAsync(canonicalCrossAttestationInput(record), privateKey)
+  return {
+    creator_key: base64urlEncode(publicKey),
+    signature: base64urlEncode(sigBytes),
+  }
+}
+
+/**
  * Verify an attribution record (§1.4.3). All 8 steps.
  * Returns true if and only if all steps pass.
  */

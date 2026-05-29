@@ -9,17 +9,17 @@
 
 ## What this teaches
 
-The 10-layer trust stack — what each layer attests to, how it can fail, and what defense composes it with neighboring layers. This is the framework for answering "how much should I trust this signed record?"
+The 10-layer trust stack: what each layer attests to, how it can fail, and what defense composes it with neighboring layers. This is the framework for answering "how much should I trust this signed record?"
 
 ## What to cover when this gets written
 
 - The headline framing: atrib certifies signing, NOT truth
 - The 10 layers, each as a separate guarantee:
   1. Signature validity (the math)
-  2. Identity (does the key belong to the named entity? — leans on the directory)
+  2. Identity (does the key belong to the named entity? Leans on the directory)
   3. Capability (is this entity authorized for this kind of action?)
   4. Revocation (is the key still current?)
-  5. Cross-attestation (≥2 signers on transactions per [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records))
+  5. Cross-attestation (≥2 distinct verified signer keys on transactions per [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records))
   6. Tool-side attestation (did the tool also attest to what happened?)
   7. External evidence (does the world outside atrib corroborate?)
   8. Witnessing (independent cosigners on log checkpoints)
@@ -27,7 +27,7 @@ The 10-layer trust stack — what each layer attests to, how it can fail, and wh
   10. Structural anomaly detection (does the graph structure look suspicious?)
 - Why a layer stack and not a single number: each layer defends against different attacker classes
 - How verifiers compose layers: pick a subset, set thresholds, apply policy
-- Worked example: a single transaction record reasoned about layer-by-layer — what could fail at each, what compositions catch it
+- Worked example: a single transaction record reasoned about layer-by-layer, what could fail at each, what compositions catch it
 
 ## See also
 

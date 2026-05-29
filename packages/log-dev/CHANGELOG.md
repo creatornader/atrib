@@ -1,5 +1,11 @@
 # @atrib/log-dev
 
+## Unreleased
+
+### Patch Changes
+
+- Extend the [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) conformance corpus with `duplicate-signer-key` so duplicate signer entries count as one valid signer.
+
 ## 0.1.18
 
 ### Patch Changes

@@ -64,7 +64,13 @@ export {
 } from './merkle.js'
 export { formatProofBundle, parseProofBundle } from './proof-text.js'
 export { SHA256_REF_PATTERN, SHA256_REF_GLOBAL_PATTERN, extractRecordHashes } from './refs.js'
-export { getPublicKey, signRecord, verifyRecord } from './signing.js'
+export {
+  getPublicKey,
+  signRecord,
+  signTransactionAttestation,
+  signTransactionRecord,
+  verifyRecord,
+} from './signing.js'
 export { createSubmissionQueue } from './submission.js'
 export type { SubmissionQueue, ProofBundle } from './submission.js'
 export { encodeToken, decodeToken } from './token.js'

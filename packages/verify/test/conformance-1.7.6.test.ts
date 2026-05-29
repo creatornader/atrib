@@ -91,4 +91,8 @@ describe('spec §1.7.6 conformance corpus', () => {
     expect(result.warnings).toEqual(['creator signer verification failed'])
     expect(result.cross_attestation).toEqual(fixture.expected.cross_attestation)
   })
+
+  it('duplicate-signer-key: duplicate keys do not satisfy the minimum', async () => {
+    await runCase('duplicate-signer-key')
+  })
 })

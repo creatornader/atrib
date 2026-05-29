@@ -1,7 +1,7 @@
 {
   "name": "one-signer",
   "spec_section": "1.7.6",
-  "description": "A transaction record with one signer in signers[]. Below the §1.7.6 normative minimum of 2 signers. Verifier MUST surface signers_count: 1, signers_valid: 1, missing: true.",
+  "description": "A transaction record with one signer in signers[]. Below the §1.7.6 normative minimum of 2 distinct signer keys. Verifier MUST surface signers_count: 1, signers_valid: 1, missing: true.",
   "input": {
     "record": {
       "spec_version": "atrib/1.0",

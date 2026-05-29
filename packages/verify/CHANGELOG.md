@@ -1,5 +1,11 @@
 # @atrib/verify
 
+## Unreleased
+
+### Patch Changes
+
+- Count distinct valid signer keys for transaction `cross_attestation.signers_valid`. Duplicate signer entries no longer satisfy the two-party minimum.
+
 ## 0.4.0
 
 ### Minor Changes

@@ -1,0 +1,41 @@
+{
+  "name": "duplicate-signer-key",
+  "spec_section": "1.7.6",
+  "description": "A transaction record with two signers[] entries from the same creator key. Verifier MUST surface signers_count: 2, signers_valid: 1, missing: true because duplicate keys do not satisfy the independent counterparty requirement.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0707070707070707070707070707070707070707070707070707070707070707",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/transaction",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225607000,
+      "signature": "",
+      "signers": [
+        {
+          "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+          "signature": "GReMZsTSdPclhx7tVZoDmc7E9SezhIIhNZOHcKyX3tFL9uzv4EefBqf0LoWDYlVp3oo8rFrCdJyzsiN0wipqDg"
+        },
+        {
+          "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+          "signature": "GReMZsTSdPclhx7tVZoDmc7E9SezhIIhNZOHcKyX3tFL9uzv4EefBqf0LoWDYlVp3oo8rFrCdJyzsiN0wipqDg"
+        }
+      ]
+    },
+    "signer_seeds_hex": {
+      "agent": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  },
+  "expected": {
+    "record_hash_hex": "0cd402c561e6efe2b77a51ff4e12f09cc39b28095e98cca6b368adea947b408b",
+    "cross_attestation": {
+      "signers_count": 2,
+      "signers_valid": 1,
+      "missing": true
+    },
+    "verifier_signature_ok": true,
+    "validator_should_accept": true,
+    "valid_after_signal": true
+  }
+}

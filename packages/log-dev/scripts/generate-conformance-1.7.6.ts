@@ -1,25 +1,26 @@
 /**
  * Generate spec §1.7.6 conformance corpus fixtures (cross-attestation / D052).
  *
- * Run with: pnpm --filter @atrib/log-dev tsx scripts/generate-conformance-1.7.6.ts
+ * Run with: pnpm exec tsx packages/log-dev/scripts/generate-conformance-1.7.6.ts
  *
  * Output: spec/conformance/1.7.6/cases/*.json + manifest.json
  *
  * §1.7.6 mandates that transaction records carry a `signers` array with
- * at least 2 verified entries (typically agent + counterparty). Verifiers
+ * at least 2 distinct verified signer keys (typically agent + counterparty). Verifiers
  * surface a `cross_attestation` annotation: { signers_count, signers_valid,
  * missing }. Per §1.7.6 missing cross-attestation is a SIGNAL, not
  * invalidation: legacy single-signer transaction records remain
  * cryptographically valid via the top-level `signature`.
  *
- * The corpus exercises six cases:
+ * The corpus exercises seven cases:
  *
  *   1. legacy-single-signer      , transaction record without signers[]
- *   2. one-signer                , signers_count=1, missing=true
- *   3. two-signers-valid         , signers_count=2, missing=false (the canonical happy path)
- *   4. three-signers             , signers_count=3, missing=false
+ *   2. one-signer                , signers_count=1, signers_valid=1, missing=true
+ *   3. two-signers-valid         , signers_count=2, signers_valid=2, missing=false
+ *   4. three-signers             , signers_count=3, signers_valid=3, missing=false
  *   5. tampered-second-signature , one of two sigs is invalid → signers_valid=1, missing=true
  *   6. creator-signer-missing    , two valid counterparty sigs but no creator sig
+ *   7. duplicate-signer-key      , duplicate signer entries count once
  *
  * Each case fixes the cross-attestation canonical bytes plus the expected
  * `cross_attestation` annotation values. Conforming verifiers MUST produce
@@ -145,7 +146,7 @@ async function main(): Promise<void> {
     name: 'one-signer',
     spec_section: '1.7.6',
     description:
-      'A transaction record with one signer in signers[]. Below the §1.7.6 normative minimum of 2 signers. Verifier MUST surface signers_count: 1, signers_valid: 1, missing: true.',
+      'A transaction record with one signer in signers[]. Below the §1.7.6 normative minimum of 2 distinct signer keys. Verifier MUST surface signers_count: 1, signers_valid: 1, missing: true.',
     input: { record: r2, signer_seed_hex: hex(AGENT_SEED) },
     expected: {
       record_hash_hex: recordHashHex(r2),
@@ -283,6 +284,32 @@ async function main(): Promise<void> {
     },
   })
 
+  // ── Case 7: duplicate-signer-key ──────────────────────────────────
+  // Two entries are attached, but both are from the same key. The verifier
+  // counts distinct valid signer keys, so the minimum is not satisfied.
+  const r7Base = await buildSignedTransaction('07', 7000, [{ seed: AGENT_SEED, label: 'agent' }])
+  const r7 = {
+    ...r7Base,
+    signers: [r7Base.signers![0]!, r7Base.signers![0]!],
+  } as AtribRecord
+  writeCase('duplicate-signer-key', {
+    name: 'duplicate-signer-key',
+    spec_section: '1.7.6',
+    description:
+      'A transaction record with two signers[] entries from the same creator key. Verifier MUST surface signers_count: 2, signers_valid: 1, missing: true because duplicate keys do not satisfy the independent counterparty requirement.',
+    input: {
+      record: r7,
+      signer_seeds_hex: { agent: hex(AGENT_SEED) },
+    },
+    expected: {
+      record_hash_hex: recordHashHex(r7),
+      cross_attestation: { signers_count: 2, signers_valid: 1, missing: true },
+      verifier_signature_ok: true,
+      validator_should_accept: true,
+      valid_after_signal: true,
+    },
+  })
+
   // ── Manifest ───────────────────────────────────────────────────────
   const manifest = {
     spec_section: '1.7.6',
@@ -297,13 +324,14 @@ async function main(): Promise<void> {
       { file: 'cases/three-signers.json', name: 'three-signers' },
       { file: 'cases/tampered-second-signature.json', name: 'tampered-second-signature' },
       { file: 'cases/creator-signer-missing.json', name: 'creator-signer-missing' },
+      { file: 'cases/duplicate-signer-key.json', name: 'duplicate-signer-key' },
     ],
     keys: {
       agent_pubkey: base64urlEncode(await getPublicKey(AGENT_SEED)),
       counterparty_pubkey: base64urlEncode(await getPublicKey(COUNTERPARTY_SEED)),
       facilitator_pubkey: base64urlEncode(await getPublicKey(FACILITATOR_SEED)),
     },
-    note: 'The six cases collectively exercise the §1.7.6 cross_attestation algorithm: legacy single-sig (case 1), below-minimum signer counts (cases 1-2), the canonical happy path (case 3), above-minimum (case 4), tamper-detection (case 5), and creator-signer separation (case 6). Per §1.7.6 missing cross-attestation is a signal, not invalidation: legacy and tampered records remain cryptographically valid via the underlying signature, while a signers[] record with no creator signer is invalid even when two counterparty signatures verify.',
+    note: 'The seven cases collectively exercise the §1.7.6 cross_attestation algorithm: legacy single-sig (case 1), below-minimum signer counts (cases 1-2 and case 7), the canonical happy path (case 3), above-minimum (case 4), tamper-detection (case 5), creator-signer separation (case 6), and duplicate-signer rejection (case 7). Per §1.7.6 missing cross-attestation is a signal, not invalidation: legacy, tampered, and duplicate-signer records remain cryptographically valid via the underlying signature path when the creator signer verifies, while a signers[] record with no creator signer is invalid even when two counterparty signatures verify.',
   }
 
   writeFileSync(join(CORPUS_ROOT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')

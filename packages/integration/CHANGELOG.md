@@ -1,5 +1,11 @@
 # @atrib/integration
 
+## Unreleased
+
+### Patch Changes
+
+- Extend the AP2 live interop harness to verify optional atrib transaction-record artifacts, including AP2 receipt-derived `content_id` matching and counterparty cross-attestation.
+
 ## 0.0.18
 
 ### Patch Changes

@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import * as ed from '@noble/ed25519'
-import { getPublicKey, signRecord, signTransactionRecord, verifyRecord } from '../src/signing.js'
+import {
+  getPublicKey,
+  signRecord,
+  signTransactionAttestation,
+  signTransactionRecord,
+  verifyRecord,
+} from '../src/signing.js'
 import { base64urlDecode, base64urlEncode } from '../src/base64url.js'
 import { canonicalCrossAttestationInput } from '../src/canon.js'
 import type { AtribRecord } from '../src/types.js'
@@ -157,6 +163,46 @@ describe('signRecord / verifyRecord', () => {
     )
     expect(ok).toBe(true)
     await expect(verifyRecord(signed)).resolves.toBe(true)
+  })
+
+  it('signTransactionAttestation creates a standalone counterparty signer', async () => {
+    const counterpartyKey = new Uint8Array(32).fill(7)
+    const agentSigned = await signTransactionRecord(
+      {
+        spec_version: 'atrib/1.0',
+        content_id: 'sha256:3f8a2b0000000000000000000000000000000000000000000000000000000000',
+        creator_key: '',
+        chain_root: 'sha256:7e1f4a0000000000000000000000000000000000000000000000000000000000',
+        event_type: 'https://atrib.dev/v1/types/transaction',
+        context_id: '4bf92f3577b34da6a3ce929d0e0e4736',
+        timestamp: 1743850000000,
+        signature: '',
+        signers: [],
+      } as AtribRecord,
+      privateKey,
+    )
+
+    const counterparty = await signTransactionAttestation(agentSigned, counterpartyKey)
+    const twoPartyRecord = {
+      ...agentSigned,
+      signers: [...agentSigned.signers!, counterparty],
+    } as AtribRecord
+
+    expect(counterparty.creator_key).toBe(base64urlEncode(await getPublicKey(counterpartyKey)))
+    const ok = await ed.verifyAsync(
+      base64urlDecode(counterparty.signature),
+      canonicalCrossAttestationInput(twoPartyRecord),
+      base64urlDecode(counterparty.creator_key),
+    )
+    expect(ok).toBe(true)
+    await expect(verifyRecord(twoPartyRecord)).resolves.toBe(true)
+  })
+
+  it('rejects transaction attestations for non-transaction records', async () => {
+    const observation = await makeSignedRecord(privateKey)
+    await expect(signTransactionAttestation(observation, privateKey)).rejects.toThrow(
+      'transaction attestation requires a transaction record',
+    )
   })
 
   it('rejects a transaction signer when the creator signer is tampered', async () => {

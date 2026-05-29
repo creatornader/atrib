@@ -5090,6 +5090,53 @@ The output is compact and agent-facing: `accepted_record_hashes`, `accepted`, `r
 
 ---
 
+## D107: AP2 counterparty attestation signs atrib transaction bytes
+
+**Date:** 2026-05-29
+
+**Status:** Accepted
+
+**Extends:** [D052](#d052-cross-attestation-requirement-for-transaction-records), [D097](#d097-ap2-live-interop-uses-an-opt-in-reference-artifact-harness), and [D098](#d098-ap2-receipts-stay-external-evidence-for-cross-attestation).
+
+**Context.** [D098](#d098-ap2-receipts-stay-external-evidence-for-cross-attestation) drew the right boundary: AP2 receipt JWT signatures and VI SD-JWT credentials are external evidence, not `signers[]` entries. The remaining gap was the handoff point for a real AP2 merchant or settlement party that wants to countersign the atrib transaction record itself.
+
+`signTransactionRecord(record, privateKey, counterpartySigners?)` could already preserve supplied counterparty signers, but callers had to know how to produce those entries. The AP2 live interop harness also stopped at `detectTransaction()` plus `verifyAp2ViEvidenceAsync()`, so it could not test a reference artifact that included the actual atrib transaction record. One verifier edge also needed tightening: `signers_valid` counted valid entries, not distinct signer keys. A duplicate signer entry could inflate the count without adding an independent party.
+
+**Decision.** Add `signTransactionAttestation(record, privateKey)` to `@atrib/mcp` and `@atrib/mcp/worker`.
+
+The helper returns a single `{ creator_key, signature }` signer entry over `canonicalCrossAttestationInput(record)`. It requires `event_type = https://atrib.dev/v1/types/transaction`. AP2 participants use it only after the atrib transaction record fields are finalized, especially `creator_key`, `content_id`, `chain_root`, `context_id`, and `timestamp`.
+
+The verifier now counts `signers_valid` as distinct creator keys with at least one valid signature over the cross-attestation bytes. Duplicate entries from the same key do not satisfy the two-party minimum. The base creator-signature check now accepts any valid signer entry matching the top-level `creator_key`, so a tampered duplicate before a valid creator entry does not incorrectly reject the record.
+
+The AP2 live interop harness now accepts an optional `ATRIB_AP2_INTEROP_TRANSACTION_RECORD_JSON` artifact. When present, the harness runs `verifyRecord()` with the same AP2 / VI evidence bundle, checks that the record `content_id` matches the detected AP2 receipt identity, and fails if `cross_attestation.missing` is true. `ATRIB_AP2_INTEROP_REQUIRE_COUNTERPARTY_ATTESTATION=1` makes the transaction record artifact required.
+
+The [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) conformance corpus adds `duplicate-signer-key`, pinning the rule that two entries from one key count as one valid signer.
+
+**Alternatives considered.**
+
+- _Keep counterparty signing as manual use of `canonicalCrossAttestationInput()`._ Rejected. That is easy to misuse in AP2 adapters and makes merchant-side code copy low-level signing logic.
+- _Append counterparty signers inside `@atrib/verify`._ Rejected. Verification must stay read-only. Signing belongs in `@atrib/mcp`.
+- _Count valid signer entries instead of distinct keys._ Rejected. The security property is independent parties, not array length.
+- _Make transaction records mandatory for every AP2 interop run._ Rejected. Some reference runs only expose AP2 result and evidence artifacts. The harness keeps that path but lets stricter runs require the atrib record.
+
+**Consequences.**
+
+- AP2 Path 2 can now demonstrate the full boundary: successful AP2 receipt detection, valid AP2 / VI evidence, and a two-party atrib transaction record.
+- AP2 receipt JWT signatures still do not count toward `cross_attestation`. Only signatures over atrib's [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) canonical bytes count.
+- Duplicate signer entries can no longer satisfy the two-party minimum.
+- The live AP2 harness can act as a reference-artifact gate for merchant adapters that emit or receive an atrib transaction record.
+
+**Cross-references.**
+
+- [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402), AP2 receipt detection.
+- [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records), transaction cross-attestation.
+- [§5.5.4](atrib-spec.md#554-ap2--verifiable-intent-evidence-checks), AP2 / VI evidence and interop harness.
+- [`packages/integration/test/ap2-live-interop.test.ts`](packages/integration/test/ap2-live-interop.test.ts), artifact-harness coverage.
+- [`packages/integration/test/ap2-vi-e2e.test.ts`](packages/integration/test/ap2-vi-e2e.test.ts), AP2 Path 2 with counterparty signer.
+- [`spec/conformance/1.7.6/cases/duplicate-signer-key.json`](spec/conformance/1.7.6/cases/duplicate-signer-key.json), duplicate-signer corpus case.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
