@@ -1,0 +1,29 @@
+{
+  "ap2_source_commit": "e1ea56db72a6385bce3e5c1112b3a56ce60acb43",
+  "notes": [
+    "VI credentials are generated and verified with the official Verifiable Intent Python reference implementation.",
+    "AP2 compact receipt JWTs are generated and verified with the official AP2 Python SDK.",
+    "Committed fixtures store compact JWTs as segments to avoid false-positive secret scans; tests reassemble them before verifier use.",
+    "The full AP2 service scenario remains opt-in because it needs external credentials."
+  ],
+  "now_seconds": 1779840000,
+  "receipt_iat": 1779840030,
+  "source_paths": [
+    "AP2/code/sdk/python/ap2/sdk/receipt_wrapper.py",
+    "AP2/code/sdk/python/ap2/sdk/jwt_helper.py",
+    "AP2/code/sdk/python/ap2/sdk/generated/payment_receipt.py",
+    "AP2/code/sdk/python/ap2/sdk/generated/checkout_receipt.py",
+    "verifiable-intent/examples/autonomous_flow.py",
+    "verifiable-intent/examples/helpers.py",
+    "verifiable-intent/src/verifiable_intent/issuance/issuer.py",
+    "verifiable-intent/src/verifiable_intent/issuance/user.py",
+    "verifiable-intent/src/verifiable_intent/issuance/agent.py",
+    "verifiable-intent/src/verifiable_intent/verification/chain.py",
+    "verifiable-intent/src/verifiable_intent/verification/constraint_checker.py"
+  ],
+  "source_repositories": [
+    "https://github.com/google-agentic-commerce/AP2",
+    "https://github.com/agent-intent/verifiable-intent"
+  ],
+  "vi_source_commit": "356c29635f1c44df7de02edb58699ca9f29bece6"
+}

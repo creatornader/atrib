@@ -4,6 +4,7 @@
 
 ### Patch Changes
 
+- Accept official Verifiable Intent checkout payloads that carry purchased products under `cart.items[].sku`, and evaluate `mandate.payment.reference` against the existing checkout-payment binding check.
 - Count distinct valid signer keys for transaction `cross_attestation.signers_valid`. Duplicate signer entries no longer satisfy the two-party minimum.
 
 ## 0.4.0

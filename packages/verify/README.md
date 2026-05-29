@@ -219,7 +219,7 @@ Checks performed when evidence is present:
 - VI SD-JWT structural checks for duplicate disclosures, duplicate digest references, unused disclosures, unsupported `_sd_alg`, and future `nbf`.
 - ES256 signatures: L1 via trusted issuer keys, L2 via L1 `cnf.jwk`, L3 via the L2 delegated agent key.
 - `sd_hash` links, disclosure digest links, autonomous L2 `cnf.jwk` consistency, and final checkout/payment binding.
-- Typed AP2 mandate constraints: merchant allowlists, checkout line items, payment amount ranges, allowed payees, allowed payment instruments, allowed PISPs, and execution windows.
+- Typed AP2 mandate constraints: merchant allowlists, checkout line items, payment amount ranges, allowed payees, allowed payment instruments, allowed PISPs, execution windows, and `payment.reference`.
 
 The default signature policy is `require`. Missing keys or invalid signatures make `valid` false while still returning a structured result. Use `signaturePolicy: "best-effort"` for structural triage where issuer keys are not yet available.
 
@@ -231,7 +231,9 @@ VC type metadata and status-list fetches are explicit. If a caller enables `sdJw
 
 The default constraint policy is `require`. Failed, unresolved, or unsupported disclosed AP2 constraints make `valid` false. Use `constraintPolicy: "best-effort"` to keep those findings advisory, or `"off"` to skip them. The lower-level `evaluateAp2ViConstraints(input, disclosures?)` helper is exported for decoded mandate material and fixture replay.
 
-The local AP2 / VI evidence corpus lives under `packages/agent/test/fixtures/ap2/`. It includes signed immediate evidence, signed autonomous success evidence, a decoded constraint replay case, and a named autonomous negative matrix. The crypto conformance corpus lives under `spec/conformance/ap2-vi-crypto/`. It pins offline JOSE, JWKS, metadata, SD-JWT, and clock-edge cases for the async verifier.
+Checkout line-item checks accept both atrib's decoded `line_items[]` fixture shape and VI checkout JWT payloads that carry purchased products under `cart.items[].sku`. `payment.reference` is evaluated against the open checkout mandate disclosure digest and the same final checkout-payment binding surfaced as `checkoutPaymentBindingOk`.
+
+The local AP2 / VI evidence corpus lives under `packages/agent/test/fixtures/ap2/`. It includes signed immediate evidence, signed autonomous success evidence, a decoded constraint replay case, and a named autonomous negative matrix. The integration package also carries upstream-generated AP2 / VI artifacts under `packages/integration/test/fixtures/ap2-vi-reference/`. The crypto conformance corpus lives under `spec/conformance/ap2-vi-crypto/`. It pins offline JOSE, JWKS, metadata, SD-JWT, and clock-edge cases for the async verifier.
 
 The same evidence bundle can be passed to `verifyRecord(record, { ap2ViEvidence, ap2ViEvidenceOptions })` for transaction records or to `verifier.verify(doc, { ap2ViEvidence, ap2ViEvidenceOptions })` for settlement recommendation verification. Both APIs attach the result as `ap2_vi_evidence`; neither API fetches AP2 / VI material on its own.
 
