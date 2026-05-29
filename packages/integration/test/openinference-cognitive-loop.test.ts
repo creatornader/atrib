@@ -6,6 +6,13 @@ import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
 
 const execFileAsync = promisify(execFile)
+const workspaceRoot = join(process.cwd(), '..', '..')
+const tsxBin = join(
+  workspaceRoot,
+  'node_modules',
+  '.bin',
+  process.platform === 'win32' ? 'tsx.cmd' : 'tsx',
+)
 
 describe('OpenInference cognitive loop example', () => {
   it('writes a local mirror and proves recall, trace, and summarize consumption', async () => {
@@ -15,15 +22,11 @@ describe('OpenInference cognitive loop example', () => {
       maxBuffer: 1024 * 1024,
     })
 
-    const { stdout } = await execFileAsync(
-      join(process.cwd(), 'node_modules', '.bin', 'tsx'),
-      ['examples/openinference/cognitive-loop.ts'],
-      {
-        cwd: process.cwd(),
-        timeout: 30000,
-        maxBuffer: 1024 * 1024,
-      },
-    )
+    const { stdout } = await execFileAsync(tsxBin, ['examples/openinference/cognitive-loop.ts'], {
+      cwd: process.cwd(),
+      timeout: 30000,
+      maxBuffer: 1024 * 1024,
+    })
     const result = JSON.parse(stdout.trim()) as {
       status: string
       records: number

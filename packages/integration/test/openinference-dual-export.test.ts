@@ -6,6 +6,13 @@ import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
 
 const execFileAsync = promisify(execFile)
+const workspaceRoot = join(process.cwd(), '..', '..')
+const tsxBin = join(
+  workspaceRoot,
+  'node_modules',
+  '.bin',
+  process.platform === 'win32' ? 'tsx.cmd' : 'tsx',
+)
 
 describe('OpenInference dual-export smoke', () => {
   it('exports the same span stream to OTLP and atrib', async () => {
@@ -16,7 +23,7 @@ describe('OpenInference dual-export smoke', () => {
     })
 
     const { stdout } = await execFileAsync(
-      join(process.cwd(), 'node_modules', '.bin', 'tsx'),
+      tsxBin,
       ['examples/openinference/dual-export-smoke.ts'],
       {
         cwd: process.cwd(),
