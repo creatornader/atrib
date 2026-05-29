@@ -5192,9 +5192,11 @@ Prompts, outputs, metadata, usage, cost, scores, prompt versions, trace ids, spa
 - prompt fields such as prompt text, prompt messages, prompt tools, prompt template, prompt variables, prompt version, prompt id, and prompt URL when present.
 - usage, cost, score, and metadata maps when present.
 
-The signed record may still carry `args_hash` and `result_hash` per [§8.3](atrib-spec.md#83-salted-commitment-posture) when the caller wants replay-checkable commitments to the input or output bytes. That is the bridge from local observability payload to verifier-grade evidence. The default remains sidecar-only.
+The signed record may still carry `args_hash` and `result_hash` per [§8.3](atrib-spec.md#83-salted-commitment-posture) when the caller wants replay-checkable commitments to the input or output bytes. That is the bridge from local observability payload to verifier-grade evidence. OpenInference strings that contain JSON are parsed and JCS-canonicalized before hashing so supplied body material can replay through `@atrib/verify`. The default remains sidecar-only.
 
 `@atrib/mcp` now exposes local-sidecar normalization helpers so read primitives share one rule: explicit `_local.content` wins; otherwise consumers derive recall-readable content from known local fields such as `toolName`, `args`, `result`, `input`, `output`, `traceId`, `spanId`, `spanKind`, and `spanName`. `@atrib/recall`, `@atrib/trace`, and `@atrib/summarize` consume the normalized content. BM25 search indexes OpenInference observation fields. Trace summaries surface span kind, span name, model name, and prompt version. Summaries include OpenInference prompt, output, usage, cost, score, and metadata snippets.
+
+`informed_by` is not copied from generic OTel parent-child nesting. Parent-child nesting proves correlation inside a trace, not dependency on a prior signed result. The shipped automatic derivation is intentionally narrower: LLM `tool_call.id` to matching TOOL `tool_call.id`, materialized before signing.
 
 **Alternatives considered.**
 
@@ -5210,6 +5212,7 @@ The signed record may still carry `args_hash` and `result_hash` per [§8.3](atri
 - Langfuse remains the better place to inspect live traces, latency, cost dashboards, evals, and prompt-management workflows. atrib remains the place to prove which action was signed, chained, committed, and later used as context.
 - Some redundancy is intentional. `trace_id`, `span_id`, input/output snippets, model metadata, and prompt version may appear in both an observability backend and the local atrib mirror. The difference is consumption: Langfuse uses them for operations, atrib uses them as local cognitive payload and optional commitment material.
 - Read primitives get stronger. A future agent can search for a prompt version, model, usage anomaly, evaluator score, or OpenInference span name and then trace or summarize the signed records around it.
+- Causality remains replayable. Generic span nesting stays local sidecar context unless a future explicit derivation rule proves it should become signed `informed_by`.
 - The public log stays lean. None of the new observability fields reach the log unless the host separately submits a signed record or archive body under an explicit privacy posture.
 - Promotion remains conservative. A new signed field or event type still needs the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) bar: a distinct graph effect, verifier requirement, settlement requirement, or repeated consumer need.
 

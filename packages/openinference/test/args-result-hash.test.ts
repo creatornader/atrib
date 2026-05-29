@@ -10,10 +10,7 @@ import {
   hexEncode,
   type AtribRecord,
 } from '@atrib/mcp'
-import {
-  AtribSpanProcessor,
-  deriveArgsResultHashFields,
-} from '../src/index.js'
+import { AtribSpanProcessor, deriveArgsResultHashFields } from '../src/index.js'
 
 const TEST_KEY_BYTES = new Uint8Array(32).fill(7)
 
@@ -34,6 +31,14 @@ describe('deriveArgsResultHashFields', () => {
     // Verify deterministic
     const expected_args = `sha256:${hexEncode(sha256(new TextEncoder().encode('{"city":"Austin"}')))}`
     expect(fields.args_hash).toBe(expected_args)
+  })
+
+  it('posture plain hashes parsed JSON in canonical form', () => {
+    const fields = deriveArgsResultHashFields('plain', {
+      input: '{"b":2,"a":1}',
+    })
+    const expected = `sha256:${hexEncode(sha256(new TextEncoder().encode('{"a":1,"b":2}')))}`
+    expect(fields.args_hash).toBe(expected)
   })
 
   it('posture salted emits hash + 16-byte salt for each value', () => {
@@ -66,7 +71,7 @@ describe('deriveArgsResultHashFields', () => {
     const input = 'verifiable-input'
     const fields = deriveArgsResultHashFields('salted', { input })
     const salt = base64urlDecode(fields.args_salt!)
-    const inputBytes = new TextEncoder().encode(input)
+    const inputBytes = new TextEncoder().encode(JSON.stringify(input))
     const concat = new Uint8Array(salt.length + inputBytes.length)
     concat.set(salt, 0)
     concat.set(inputBytes, salt.length)

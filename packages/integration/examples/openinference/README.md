@@ -33,6 +33,24 @@ pnpm --filter @atrib/integration openinference-cognitive-loop
 
 That script emits synthetic OpenInference LLM and TOOL spans, signs them with `@atrib/openinference`, writes `{ record, _local }` envelopes to a temp local mirror, then checks that recall indexing sees prompt/model metadata, trace walks from TOOL back to LLM through `informed_by`, and summarize receives the normalized sidecar fields in its prompt input.
 
+To prove the export boundary, run the dual-export smoke:
+
+```bash
+pnpm --filter @atrib/integration openinference-dual-export-smoke
+```
+
+By default it starts a local OTLP HTTP receiver, sends the span stream through `OTLPTraceExporter`, and sends the same spans through `AtribSpanProcessor`. It also verifies record signatures, LLM-to-TOOL `informed_by`, and `args_hash` / `result_hash` presence.
+
+To run the same smoke against a local Phoenix collector:
+
+```bash
+docker run -p 6006:6006 -p 4317:4317 arizephoenix/phoenix:latest
+ATRIB_OPENINFERENCE_OTLP_ENDPOINT=http://localhost:6006/v1/traces \
+  pnpm --filter @atrib/integration openinference-dual-export-smoke
+```
+
+For Langfuse, set `ATRIB_OPENINFERENCE_OTLP_ENDPOINT` to the full OTLP trace endpoint and pass auth through `ATRIB_OPENINFERENCE_OTLP_HEADERS` or `OTEL_EXPORTER_OTLP_HEADERS`.
+
 ## Critical setup: the async-hooks context manager
 
 The example registers `AsyncHooksContextManager` BEFORE creating the TracerProvider. Without it, Vercel AI SDK's child spans (LLM/TOOL/LLM/AGENT of a single `generateText` call) lose parent-context across async boundaries and each becomes its own root span with a fresh trace_id. atrib's adapter then signs each as its own context_id, breaking session chain composition.
@@ -59,6 +77,8 @@ For every `streamText` / `generateText` invocation that flows through OpenInfere
 - `context_id`: from `session.id` if present, otherwise the OTel trace_id
 - `chain_root`: synthesized genesis (or supplied via `resolveChainRoot` for multi-record sessions)
 - Sidecar metadata: span kind/name/id, `tool_name`, `agent.name`, model name, prompt metadata, usage, cost, score, `input.value`, and `output.value`
+
+Parent-child span nesting remains correlation metadata. It does not create signed causal references by itself. The current automatic causal derivation is narrower: an LLM span that emits a `tool_call.id` can inform the matching TOOL span with the same id, and that `informed_by` edge is included before the TOOL record is signed.
 
 ## Reach
 

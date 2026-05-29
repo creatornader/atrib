@@ -234,6 +234,8 @@ OpenTelemetry and OpenInference span trees are intake and correlation surfaces. 
 
 This keeps the product boundary clean. Langfuse-style systems remain the right place for trace inspection, latency, cost, prompt-management workflows, and eval dashboards. atrib uses the span tree to produce verifier-grade signed records and local cognitive payload. Recall, trace, and summarize read that payload from `_local.content`; verifier-grade replay uses `args_hash`, `result_hash`, local mirror bodies, or archive bodies when a consumer needs proof of specific bytes.
 
+`informed_by` is narrower than OTel parent-child nesting. Parent-child span structure says the runtime correlated two spans inside one trace. It does not prove that a later signed action depended on the earlier signed action's output. atrib only emits `informed_by` when an explicit rule can run before signing, such as the current LLM `tool_call.id` to matching TOOL `tool_call.id` rule.
+
 ### Cross-harness investigation continuity
 
 Runtime mounting is only half the problem. Real support and RCA work often crosses a support system, a log store, a hosted agent, a chat thread, and a local coding harness. The public Merkle log proves that each signed record existed, but it does not carry the private bodies and evidence a later harness needs to continue the task.

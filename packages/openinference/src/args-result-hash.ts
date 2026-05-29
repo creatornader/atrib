@@ -5,6 +5,9 @@
  * posture). Reads `input.value` + `output.value` from an OpenInference
  * span and produces the optional `args_hash` / `args_salt` /
  * `result_hash` / `result_salt` fields atrib's record format defines.
+ * OpenInference stores those values as strings. When the string is valid
+ * JSON, hash the parsed JSON value in JCS form. Otherwise hash the string
+ * itself in JCS form. This matches verifier-side body replay.
  *
  * Three postures are supported (matching spec §8.3):
  *   - **'none'** (default) -- nothing emitted. Matches the §8.1 default
@@ -23,6 +26,7 @@
  * Default 'none' preserves §8.1 backwards-compatibility.
  */
 
+import canonicalize from 'canonicalize'
 import { sha256, hexEncode, base64urlEncode } from '@atrib/mcp'
 
 export type ArgsResultHashPosture = 'none' | 'plain' | 'salted'
@@ -57,28 +61,40 @@ export function deriveArgsResultHashFields(
   if (io.input !== undefined) {
     if (posture === 'salted') {
       const salt = randomSalt()
-      fields.args_hash = hashSalted(salt, utf8(io.input))
+      fields.args_hash = hashSalted(salt, canonicalMaterialBytes(io.input))
       fields.args_salt = base64urlEncode(salt)
     } else {
-      fields.args_hash = hashPlain(utf8(io.input))
+      fields.args_hash = hashPlain(canonicalMaterialBytes(io.input))
     }
   }
 
   if (io.output !== undefined) {
     if (posture === 'salted') {
       const salt = randomSalt()
-      fields.result_hash = hashSalted(salt, utf8(io.output))
+      fields.result_hash = hashSalted(salt, canonicalMaterialBytes(io.output))
       fields.result_salt = base64urlEncode(salt)
     } else {
-      fields.result_hash = hashPlain(utf8(io.output))
+      fields.result_hash = hashPlain(canonicalMaterialBytes(io.output))
     }
   }
 
   return fields
 }
 
-function utf8(s: string): Uint8Array {
-  return new TextEncoder().encode(s)
+function canonicalMaterialBytes(value: string): Uint8Array {
+  const canonical = canonicalize(parseJsonOrString(value))
+  if (canonical === undefined) {
+    throw new Error('OpenInference input/output material is not JCS-encodable')
+  }
+  return new TextEncoder().encode(canonical)
+}
+
+function parseJsonOrString(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown
+  } catch {
+    return value
+  }
 }
 
 function hashPlain(bytes: Uint8Array): string {
