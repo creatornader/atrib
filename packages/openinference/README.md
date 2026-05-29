@@ -149,6 +149,29 @@ ATRIB_OPENINFERENCE_OTLP_ENDPOINT=http://localhost:6006/v1/traces \
   pnpm --filter @atrib/integration openinference-dual-export-smoke
 ```
 
+For a backend-verified run, set `ATRIB_OPENINFERENCE_VERIFY_BACKEND=phoenix` or `langfuse`. The smoke then polls the backend read API after export and checks that the returned payload contains the same trace id, span ids, and span names that atrib signed into local sidecars. It also reports whether the backend exposes the run marker emitted as trace metadata.
+
+```bash
+ATRIB_OPENINFERENCE_OTLP_ENDPOINT=http://localhost:6006/v1/traces \
+ATRIB_OPENINFERENCE_VERIFY_BACKEND=phoenix \
+PHOENIX_BASE_URL=http://localhost:6006 \
+PHOENIX_PROJECT_NAME=default \
+  pnpm --filter @atrib/integration openinference-dual-export-smoke
+```
+
+For Langfuse, point the OTLP exporter at `/api/public/otel/v1/traces`, pass Basic auth on export, and provide the same credentials for the observations API:
+
+```bash
+AUTH_STRING=$(printf "pk-lf-...:sk-lf-..." | base64)
+
+ATRIB_OPENINFERENCE_OTLP_ENDPOINT=https://cloud.langfuse.com/api/public/otel/v1/traces \
+ATRIB_OPENINFERENCE_OTLP_HEADERS="Authorization=Basic ${AUTH_STRING},x-langfuse-ingestion-version=4" \
+ATRIB_OPENINFERENCE_VERIFY_BACKEND=langfuse \
+LANGFUSE_BASE_URL=https://cloud.langfuse.com \
+LANGFUSE_AUTH_STRING="${AUTH_STRING}" \
+  pnpm --filter @atrib/integration openinference-dual-export-smoke
+```
+
 ## Required: register an async context manager
 
 For Node.js consumers using the bare `BasicTracerProvider`: register `AsyncHooksContextManager` BEFORE the tracer provider, otherwise Vercel AI SDK (and similar instrumented frameworks) emit each async-boundary-crossing span as its own root with a fresh trace_id. atrib then signs each into its own context_id, breaking session chain composition.

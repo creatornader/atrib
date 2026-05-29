@@ -37,20 +37,30 @@ describe('OpenInference dual-export smoke', () => {
       collector_requests: number
       collector_bytes: number
       atrib_records: number
+      run_id: string
+      trace_ids: string[]
+      span_ids: string[]
+      span_names: string[]
       informed_by_edges: number
       tool_informed_by_llm: boolean
       args_hashes_present: boolean
       result_hashes_present: boolean
+      backend_verification: null
     }
 
     expect(result.status).toBe('ok')
+    expect(result.run_id).toMatch(/^atrib-dual-export-/)
     expect(result.collector_kind).toBe('local-otlp-http')
     expect(result.collector_requests).toBeGreaterThan(0)
     expect(result.collector_bytes).toBeGreaterThan(0)
     expect(result.atrib_records).toBeGreaterThanOrEqual(2)
+    expect(result.trace_ids).toHaveLength(1)
+    expect(result.span_ids).toHaveLength(2)
+    expect(result.span_names).toEqual(['generate-text', 'search_docs'])
     expect(result.informed_by_edges).toBe(1)
     expect(result.tool_informed_by_llm).toBe(true)
     expect(result.args_hashes_present).toBe(true)
     expect(result.result_hashes_present).toBe(true)
+    expect(result.backend_verification).toBeNull()
   }, 30000)
 })
