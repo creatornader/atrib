@@ -105,3 +105,11 @@ For local MCP host testing without npm:
   }
 }
 ```
+
+## Status
+
+Public package for cognitive primitive #7. It depends on `@atrib/verify` for verifier semantics and keeps the MCP surface read-only.
+
+## License
+
+Apache-2.0.
