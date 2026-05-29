@@ -1,5 +1,11 @@
 # @atrib/verify-mcp
 
+## 0.2.3
+
+### Patch Changes
+
+- ef495a6: Add npm keywords and align the package README with the cognitive-primitive MCP presentation pattern.
+
 ## 0.2.2
 
 ### Patch Changes
