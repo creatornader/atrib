@@ -5,7 +5,7 @@
  * server on a random port.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { request as httpRequest, type IncomingMessage } from 'node:http'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -532,6 +532,156 @@ describe('graph fanout', () => {
     const retried = JSON.parse(received[1]!.body) as { creator_key: string; signature: string }
     expect(retried.creator_key).toBe(record.creator_key)
     expect(retried.signature).toBe(record.signature)
+
+    await fanoutSrv.close()
+    await new Promise<void>((r) => mockServer.close(() => r()))
+  })
+
+  it('logs and stops graph fanout after max retry exhaustion', async () => {
+    const { createServer } = await import('node:http')
+    const received: { status: number; body: string }[] = []
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const mockServer = createServer((req, res) => {
+      let body = ''
+      req.on('data', (c: Buffer) => {
+        body += c.toString('utf-8')
+      })
+      req.on('end', () => {
+        received.push({ status: 503, body })
+        res.statusCode = 503
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify({ ok: false }))
+      })
+    })
+    await new Promise<void>((r) => mockServer.listen(0, '127.0.0.1', r))
+    const addr = mockServer.address()
+    if (!addr || typeof addr === 'string') throw new Error('mock addr')
+    const fanoutUrl = `http://127.0.0.1:${addr.port}/ingest`
+
+    const { startLogServer } = await import('../src/index.js')
+    const fanoutSrv = await startLogServer({
+      port: 0,
+      graphFanoutEndpoint: fanoutUrl,
+      graphFanoutRetryDelayMs: 5,
+    })
+
+    try {
+      const record = await makeSignedRecord()
+      const submitRes = await fetch(`${fanoutSrv.url}/v1/entries`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(record),
+      })
+      expect(submitRes.status).toBe(200)
+
+      const deadline = Date.now() + 1000
+      while (received.length < 3 && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 20))
+      }
+      expect(received).toHaveLength(3)
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('returned 503 after 3 attempts'))
+    } finally {
+      warnSpy.mockRestore()
+      await fanoutSrv.close()
+      await new Promise<void>((r) => mockServer.close(() => r()))
+    }
+  })
+
+  it('retries graph fanout on idempotent resubmission after prior fanout exhaustion', async () => {
+    const { createServer } = await import('node:http')
+    const statuses: number[] = [503, 503, 503, 200]
+    const received: { status: number; body: string }[] = []
+    const mockServer = createServer((req, res) => {
+      let body = ''
+      req.on('data', (c: Buffer) => {
+        body += c.toString('utf-8')
+      })
+      req.on('end', () => {
+        const status = statuses[received.length] ?? 200
+        received.push({ status, body })
+        res.statusCode = status
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify({ ok: status === 200 }))
+      })
+    })
+    await new Promise<void>((r) => mockServer.listen(0, '127.0.0.1', r))
+    const addr = mockServer.address()
+    if (!addr || typeof addr === 'string') throw new Error('mock addr')
+    const fanoutUrl = `http://127.0.0.1:${addr.port}/ingest`
+
+    const { startLogServer } = await import('../src/index.js')
+    const fanoutSrv = await startLogServer({ port: 0, graphFanoutEndpoint: fanoutUrl })
+
+    const record = await makeSignedRecord()
+    const body = JSON.stringify(record)
+    const submit = () =>
+      fetch(`${fanoutSrv.url}/v1/entries`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      })
+
+    const firstSubmit = await submit()
+    expect(firstSubmit.status).toBe(200)
+
+    const firstDeadline = Date.now() + 2000
+    while (received.length < 3 && Date.now() < firstDeadline) {
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    expect(received.map((r) => r.status)).toEqual([503, 503, 503])
+
+    const duplicateSubmit = await submit()
+    expect(duplicateSubmit.status).toBe(200)
+
+    const secondDeadline = Date.now() + 2000
+    while (received.length < 4 && Date.now() < secondDeadline) {
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    expect(received.map((r) => r.status)).toEqual([503, 503, 503, 200])
+
+    await fanoutSrv.close()
+    await new Promise<void>((r) => mockServer.close(() => r()))
+  })
+
+  it('aborts slow graph fanout attempts and retries them without blocking submit', async () => {
+    const { createServer } = await import('node:http')
+    const receivedAt: number[] = []
+    const mockServer = createServer((req, res) => {
+      req.resume()
+      receivedAt.push(Date.now())
+      setTimeout(() => {
+        if (res.destroyed) return
+        res.statusCode = 200
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify({ ok: true }))
+      }, 200)
+    })
+    await new Promise<void>((r) => mockServer.listen(0, '127.0.0.1', r))
+    const addr = mockServer.address()
+    if (!addr || typeof addr === 'string') throw new Error('mock addr')
+    const fanoutUrl = `http://127.0.0.1:${addr.port}/ingest`
+
+    const { startLogServer } = await import('../src/index.js')
+    const fanoutSrv = await startLogServer({
+      port: 0,
+      graphFanoutEndpoint: fanoutUrl,
+      graphFanoutTimeoutMs: 25,
+      graphFanoutRetryDelayMs: 5,
+    })
+
+    const record = await makeSignedRecord()
+    const submitRes = await fetch(`${fanoutSrv.url}/v1/entries`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(record),
+    })
+    expect(submitRes.status).toBe(200)
+
+    const deadline = Date.now() + 1000
+    while (receivedAt.length < 3 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 20))
+    }
+    expect(receivedAt).toHaveLength(3)
 
     await fanoutSrv.close()
     await new Promise<void>((r) => mockServer.close(() => r()))
