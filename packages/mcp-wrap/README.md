@@ -40,36 +40,45 @@ and no env var, the wrapper reads `~/.atrib/wrap-config.json`.
   "upstream": {
     "command": "agent-bridge",
     "args": [],
-    "env": { "AGENT_BRIDGE_URL": "...", "AGENT_BRIDGE_KEY": "..." }
+    "env": { "AGENT_BRIDGE_URL": "...", "AGENT_BRIDGE_KEY": "..." },
   },
   "serverUrl": "mcp://agent-bridge.local",
   "logEndpoint": "https://log.atrib.dev/v1/entries",
   "autoChain": true,
+  "contextIdSource": "harness",
+  "autoChainFallback": "fresh",
+  "autoDetectInformedByFromArgs": false,
   "disclosure": {
     "tool_name": "verbatim",
-    "args": "plain-sha256"
+    "args": "plain-sha256",
   },
   "tools": {
-    "post_context": { "injectReceiptId": true },
-    "checkout":     { "transactionTool": true }
-  }
+    "post_context": {
+      "injectReceiptId": true,
+      "informedByPaths": ["informed_by", "metadata.message_envelope.informed_by"],
+    },
+    "checkout": { "transactionTool": true },
+  },
 }
 ```
 
-| Field             | Required | Default                                   | Notes                                                                                                                                            |
-| ----------------- | -------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`            | yes      | (no default)                              | Logical wrapper name. Surfaced to host as McpServer name + used in default file paths.                                                          |
-| `agent`           | no       | `claude-code`                             | Identity hint. Picks the `atrib-creator-<agent>` Keychain service before falling back to `atrib-creator`.                                       |
-| `upstream.command`| yes      | (no default)                              | Binary to spawn for the upstream MCP server.                                                                                                     |
-| `upstream.args`   | no       | `[]`                                      | Args for the upstream binary.                                                                                                                    |
-| `upstream.env`    | no       | inherited                                 | Extra env merged with the parent process env (parent wins on conflicts).                                                                         |
-| `serverUrl`       | yes      | (no default)                              | Canonical URL for `content_id` derivation per spec [§1.2.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#122-content_id-derivation). Path segment for `agent` is appended automatically.                                 |
-| `logEndpoint`     | no       | `https://log.atrib.dev/v1/entries`        | Submission endpoint. Override for local development against `@atrib/log-dev` or a local log-node.                                                |
-| `autoChain`       | no       | `true`                                    | Chain successive tool calls within this wrapper's process lifetime. Required for CHAIN_PRECEDES edges from stdio hosts.                        |
-| `disclosure`      | no       | `{}`                                      | Optional [§8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#8-security-considerations-and-threat-model) disclosure dials passed to `@atrib/mcp`: `tool_name` (`omit`, `verbatim`, `hashed`), `args` (`omit`, `plain-sha256`, `salted-sha256`), and `result` (`omit`, `plain-sha256`, `salted-sha256`). |
-| `tools[<name>]`   | no       | (none)                                    | Per-tool overrides. `transactionTool: true` emits a `transaction` event_type record. `injectReceiptId: true` enables [D057](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d057-pre-call-signing-hook-precalltransform-for-cross-tool-causal-embedding) preCallTransform.    |
-| `logFile`         | no       | `~/.atrib/logs/<name>-<agent>.log`        | Wrapper debug log (jsonl). Set to `""` to disable.                                                                                              |
-| `recordFile`      | no       | `~/.atrib/records/<name>-<agent>.jsonl`   | Signed-record mirror (jsonl). Set to `""` to disable.                                                                                           |
+| Field                          | Required | Default                                 | Notes                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------ | -------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                         | yes      | (no default)                            | Logical wrapper name. Surfaced to host as McpServer name + used in default file paths.                                                                                                                                                                                                                                                                              |
+| `agent`                        | no       | `claude-code`                           | Identity hint. Picks the `atrib-creator-<agent>` Keychain service before falling back to `atrib-creator`.                                                                                                                                                                                                                                                           |
+| `upstream.command`             | yes      | (no default)                            | Binary to spawn for the upstream MCP server.                                                                                                                                                                                                                                                                                                                        |
+| `upstream.args`                | no       | `[]`                                    | Args for the upstream binary.                                                                                                                                                                                                                                                                                                                                       |
+| `upstream.env`                 | no       | inherited                               | Extra env merged with the parent process env (parent wins on conflicts).                                                                                                                                                                                                                                                                                            |
+| `serverUrl`                    | yes      | (no default)                            | Canonical URL for `content_id` derivation per spec [§1.2.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#122-content_id-derivation). Path segment for `agent` is appended automatically.                                                                                                                                                           |
+| `logEndpoint`                  | no       | `https://log.atrib.dev/v1/entries`      | Submission endpoint. Override for local development against `@atrib/log-dev` or a local log-node.                                                                                                                                                                                                                                                                   |
+| `autoChain`                    | no       | `true`                                  | Chain successive tool calls within this wrapper's process lifetime. Required for CHAIN_PRECEDES edges from stdio hosts.                                                                                                                                                                                                                                             |
+| `contextIdSource`              | no       | `none`                                  | Set to `harness` to read the active host session from `@atrib/mcp` harness discovery when inbound MCP metadata is absent.                                                                                                                                                                                                                                           |
+| `autoChainFallback`            | no       | `stable-process`                        | `stable-process` keeps the historical wrapper-wide context when no caller context exists. `fresh` gives no-context calls separate genesis contexts while still chaining calls that have a resolved context.                                                                                                                                                         |
+| `autoDetectInformedByFromArgs` | no       | `false`                                 | Broadly scans params for `sha256:<64hex>` references. Prefer `informedByPaths` for structured references; set this true only when free-text hash mentions should become provenance claims.                                                                                                                                                                          |
+| `disclosure`                   | no       | `{}`                                    | Optional [§8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#8-security-considerations-and-threat-model) disclosure dials passed to `@atrib/mcp`: `tool_name` (`omit`, `verbatim`, `hashed`), `args` (`omit`, `plain-sha256`, `salted-sha256`), and `result` (`omit`, `plain-sha256`, `salted-sha256`).                                              |
+| `tools[<name>]`                | no       | (none)                                  | Per-tool overrides. `transactionTool: true` emits a `transaction` event_type record. `injectReceiptId: true` enables [D057](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d057-pre-call-signing-hook-precalltransform-for-cross-tool-causal-embedding) preCallTransform. `informedByPaths` lists exact argument paths that contain record_hash refs. |
+| `logFile`                      | no       | `~/.atrib/logs/<name>-<agent>.log`      | Wrapper debug log (jsonl). Set to `""` to disable.                                                                                                                                                                                                                                                                                                                  |
+| `recordFile`                   | no       | `~/.atrib/records/<name>-<agent>.jsonl` | Signed-record mirror (jsonl). Set to `""` to disable.                                                                                                                                                                                                                                                                                                               |
 
 ## Parent-child threading
 

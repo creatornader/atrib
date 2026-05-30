@@ -6,7 +6,7 @@
 // integration.test.ts using an inMemory upstream.
 
 import { describe, it, expect } from 'vitest'
-import { buildPreCallTransform } from '../src/wrap.js'
+import { buildInformedBy, buildPreCallTransform } from '../src/wrap.js'
 import type { WrapConfig } from '../src/config.js'
 
 function makeConfig(tools?: WrapConfig['tools']): WrapConfig {
@@ -34,16 +34,12 @@ describe('buildPreCallTransform', () => {
   })
 
   it('returns a hook when at least one tool has injectReceiptId true', () => {
-    const hook = buildPreCallTransform(
-      makeConfig({ post_context: { injectReceiptId: true } }),
-    )
+    const hook = buildPreCallTransform(makeConfig({ post_context: { injectReceiptId: true } }))
     expect(typeof hook).toBe('function')
   })
 
   it('hook injects receipt into args for opted-in tools', () => {
-    const hook = buildPreCallTransform(
-      makeConfig({ post_context: { injectReceiptId: true } }),
-    )!
+    const hook = buildPreCallTransform(makeConfig({ post_context: { injectReceiptId: true } }))!
     const result = hook({
       toolName: 'post_context',
       args: { source: 'test', content: 'x' },
@@ -59,9 +55,7 @@ describe('buildPreCallTransform', () => {
   })
 
   it('hook returns undefined for tools NOT in the inject set (passthrough)', () => {
-    const hook = buildPreCallTransform(
-      makeConfig({ post_context: { injectReceiptId: true } }),
-    )!
+    const hook = buildPreCallTransform(makeConfig({ post_context: { injectReceiptId: true } }))!
     expect(
       hook({
         toolName: 'get_context',
@@ -108,9 +102,7 @@ describe('buildPreCallTransform', () => {
   })
 
   it('does not mutate the caller args object (returns a fresh object)', () => {
-    const hook = buildPreCallTransform(
-      makeConfig({ post_context: { injectReceiptId: true } }),
-    )!
+    const hook = buildPreCallTransform(makeConfig({ post_context: { injectReceiptId: true } }))!
     const args = { source: 'test', content: 'x' }
     const result = hook({
       toolName: 'post_context',
@@ -121,5 +113,70 @@ describe('buildPreCallTransform', () => {
     })
     expect(result).not.toBe(args)
     expect(args).toEqual({ source: 'test', content: 'x' })
+  })
+})
+
+describe('buildInformedBy', () => {
+  const RECORD_A = 'sha256:' + 'a'.repeat(64)
+  const RECORD_B = 'sha256:' + 'b'.repeat(64)
+  const CONTENT_HASH = 'sha256:' + 'c'.repeat(64)
+
+  it('returns undefined when no tools declare informedByPaths', () => {
+    expect(buildInformedBy(makeConfig())).toBeUndefined()
+    expect(buildInformedBy(makeConfig({ post_context: { injectReceiptId: true } }))).toBeUndefined()
+  })
+
+  it('extracts exact record refs from configured tool argument paths', () => {
+    const hook = buildInformedBy(
+      makeConfig({
+        post_context: {
+          injectReceiptId: true,
+          informedByPaths: ['informed_by', 'metadata.message_envelope.informed_by'],
+        },
+      }),
+    )!
+
+    const result = hook({
+      name: 'post_context',
+      arguments: {
+        informed_by: [RECORD_A],
+        content: `body hash ${CONTENT_HASH}`,
+        metadata: {
+          message_envelope: {
+            informed_by: RECORD_B,
+          },
+        },
+      },
+    })
+
+    expect(result).toEqual([RECORD_A, RECORD_B])
+  })
+
+  it('ignores prose hashes and non-configured tools', () => {
+    const hook = buildInformedBy(
+      makeConfig({
+        post_context: {
+          informedByPaths: ['informed_by'],
+        },
+      }),
+    )!
+
+    expect(
+      hook({
+        name: 'post_context',
+        arguments: {
+          content: `body hash ${CONTENT_HASH}`,
+        },
+      }),
+    ).toBeUndefined()
+
+    expect(
+      hook({
+        name: 'get_context',
+        arguments: {
+          informed_by: [RECORD_A],
+        },
+      }),
+    ).toBeUndefined()
   })
 })

@@ -11,11 +11,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { base64urlDecode, base64urlEncode } from './base64url.js'
 import { computeContentId } from './content-id.js'
-import {
-  SHA256_REF_PATTERN,
-  extractRecordHashes,
-  parentRecordHashFromEnv,
-} from './refs.js'
+import { SHA256_REF_PATTERN, extractRecordHashes, parentRecordHashFromEnv } from './refs.js'
 import { resolveChainRoot } from './chain-root.js'
 import { readInboundContext, writeOutboundContext, parseBaggageAtribSession } from './context.js'
 import { signRecord, getPublicKey } from './signing.js'
@@ -25,12 +21,11 @@ import canonicalize from 'canonicalize'
 import { encodeToken } from './token.js'
 import { createSubmissionQueue } from './submission.js'
 import { zeroize } from './zeroize.js'
-import {
-  EVENT_TYPE_TOOL_CALL_URI,
-  EVENT_TYPE_TRANSACTION_URI,
-} from './types.js'
+import { EVENT_TYPE_TOOL_CALL_URI, EVENT_TYPE_TRANSACTION_URI } from './types.js'
 import type { AtribRecord } from './types.js'
 import type { SubmissionQueue, ProofBundle } from './submission.js'
+
+const HEX_32 = /^[0-9a-f]{32}$/
 
 /** Context passed to a {@link PreCallTransform} callback. */
 export interface PreCallTransformContext {
@@ -76,9 +71,7 @@ export interface PreCallTransformContext {
  * into the row at insert time, letting downstream consumers anchor their own
  * `informed_by` references to the row's atrib record.
  */
-export type PreCallTransform = (
-  ctx: PreCallTransformContext,
-) => Record<string, unknown> | undefined
+export type PreCallTransform = (ctx: PreCallTransformContext) => Record<string, unknown> | undefined
 
 /**
  * Pre-sign payload context passed to `onRecord` alongside the signed
@@ -170,6 +163,27 @@ export interface AtribOptions {
    */
   autoChain?: boolean
   /**
+   * Optional per-call context resolver used when the caller did not provide
+   * `_meta.atrib` or a valid traceparent. This lets long-lived MCP children
+   * inherit the active host session from a harness state file instead of
+   * minting a wrapper-owned session.
+   *
+   * Returning undefined falls through to the normal autoChain fallback.
+   * Invalid values are ignored. Exceptions are caught so the tool call still
+   * succeeds when context discovery is stale or unavailable.
+   */
+  contextIdResolver?: () => string | undefined
+  /**
+   * Controls what `autoChain` does when no inbound or resolved context exists.
+   *
+   * `stable-process` preserves the historical wrapper behavior: a process-wide
+   * context_id is minted and reused so non-propagating hosts still get a chain.
+   *
+   * `fresh` keeps autoChain active for resolved contexts but refuses to create
+   * a wrapper-wide session. Each no-context call gets its own genesis context.
+   */
+  autoChainFallback?: 'stable-process' | 'fresh'
+  /**
    * Seed records used to populate the in-memory `lastRecordHashByContext`
    * map on startup. Without this, autoChain breaks across process restarts:
    * the first call after a wrapper restart becomes a fresh genesis even
@@ -208,9 +222,8 @@ export interface AtribOptions {
    * Use case: agent text frequently quotes record_hashes when reasoning back
    * about prior work. Without auto-detect, the agent has to ALSO declare them
    * via the `informedBy` callback. With auto-detect, hash references in args
-   * automatically form INFORMED_BY graph edges. mcp-wrap defaults this to
-   * `true` per the dogfood-plug-and-play-map "wrapper-side mechanical match"
-   * convention; raw `@atrib/mcp` consumers opt in explicitly.
+   * automatically form INFORMED_BY graph edges. Raw `@atrib/mcp` consumers
+   * and current `@atrib/mcp-wrap` consumers opt in explicitly.
    *
    * Per spec §1.2.5: informed_by is a provenance CLAIM, not a heuristic.
    * Auto-detected refs are still claims (the agent put the hash in args, so
@@ -337,6 +350,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   // Stable context_id for sessions where the caller never sets traceparent;
   // and per-context_id last-signed-record-hash for chain synthesis.
   const autoChain = options.autoChain === true
+  const autoChainFallback = options.autoChainFallback ?? 'stable-process'
   let stableContextId: string | undefined
   const lastRecordHashByContext = new Map<string, string>()
   const parentRecordHashSeed = parentRecordHashFromEnv()
@@ -366,7 +380,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     // If the seed records all share a single context_id and no traceparent
     // is set later, reuse that context_id rather than minting a new one.
     // Picks the context_id with the most-recent record.
-    if (newestByContext.size > 0) {
+    if (newestByContext.size > 0 && autoChainFallback === 'stable-process') {
       let bestCtx: string | undefined
       let bestTs = -Infinity
       for (const [ctx, r] of newestByContext) {
@@ -514,12 +528,22 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     if (!contextId && meta?.traceparent && typeof meta.traceparent === 'string') {
       const parts = meta.traceparent.split('-')
       const traceId = parts[1]
-      if (traceId && /^[0-9a-f]{32}$/.test(traceId)) {
+      if (traceId && HEX_32.test(traceId)) {
         contextId = traceId
       }
     }
+    if (!contextId && options.contextIdResolver) {
+      try {
+        const resolved = options.contextIdResolver()
+        if (typeof resolved === 'string' && HEX_32.test(resolved)) {
+          contextId = resolved
+        }
+      } catch (e) {
+        console.warn('atrib: contextIdResolver threw', e)
+      }
+    }
     if (!contextId) {
-      if (autoChain) {
+      if (autoChain && autoChainFallback === 'stable-process') {
         // Stable across the wrapper process's lifetime so successive
         // calls share a trace. Without this, autoChain has no effect
         // because every call would land in its own context_id bucket.
@@ -731,9 +755,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
       try {
         const r = options.onRecord(built.signed, sidecar)
         if (r && typeof (r as Promise<void>).then === 'function') {
-          ;(r as Promise<void>).catch((e) =>
-            console.warn('atrib: onRecord observer rejected', e),
-          )
+          ;(r as Promise<void>).catch((e) => console.warn('atrib: onRecord observer rejected', e))
         }
       } catch (e) {
         console.warn('atrib: onRecord observer threw', e)
@@ -783,8 +805,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
           await publicKeyReady
           const built = await buildSignedRecord(request)
           const params = request.params as Record<string, unknown>
-          const args =
-            (params.arguments as Record<string, unknown> | undefined) ?? {}
+          const args = (params.arguments as Record<string, unknown> | undefined) ?? {}
           const receiptId = encodeToken(built.signed)
           const transformed = options.preCallTransform({
             toolName: (params.name as string) ?? '',
@@ -829,10 +850,12 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
         // disclosure.result only fires on the post-call path: pre-call has
         // no result yet, so commitment-form synthesis would have nothing
         // to hash. The pre-call branch above silently skips it.
-        const built = preBuilt ?? (await (async () => {
-          await publicKeyReady
-          return buildSignedRecord(request, resultObj)
-        })())
+        const built =
+          preBuilt ??
+          (await (async () => {
+            await publicKeyReady
+            return buildSignedRecord(request, resultObj)
+          })())
 
         // Construct the pre-sign sidecar for onRecord observers. Captures
         // toolName + raw args + raw result so a richer local mirror can

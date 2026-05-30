@@ -9,12 +9,23 @@
 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { createAtribProxy, type AtribProxy, type PreCallTransform } from '@atrib/mcp'
+import {
+  createAtribProxy,
+  resolveEnvContextId,
+  SHA256_REF_PATTERN,
+  type AtribOptions,
+  type AtribProxy,
+  type PreCallTransform,
+} from '@atrib/mcp'
 import type { WrapConfig } from './config.js'
 import { resolveKey, type ResolvedKey } from './keys.js'
 import { loadAutoChainSeed, persistRecord } from './mirror.js'
 
-export type LogFn = (level: 'info' | 'warn' | 'error', msg: string, extra?: Record<string, unknown>) => void
+export type LogFn = (
+  level: 'info' | 'warn' | 'error',
+  msg: string,
+  extra?: Record<string, unknown>,
+) => void
 
 /** Inputs that callers (or tests) inject; defaults wire to disk + the real proxy. */
 export interface WrapDeps {
@@ -41,6 +52,70 @@ export function buildPreCallTransform(config: WrapConfig): PreCallTransform | un
   return (ctx) => {
     if (!injectTools.has(ctx.toolName)) return undefined
     return { ...ctx.args, atrib_receipt_id: ctx.receiptId }
+  }
+}
+
+type InformedByHook = NonNullable<AtribOptions['informedBy']>
+
+function valueAtPath(value: unknown, path: string): unknown {
+  let current = value
+  for (const part of path.split('.')) {
+    if (!part) return undefined
+    if (current === null || typeof current !== 'object' || Array.isArray(current)) {
+      return undefined
+    }
+    current = (current as Record<string, unknown>)[part]
+  }
+  return current
+}
+
+function collectExactRecordRefs(value: unknown, out: Set<string>): void {
+  if (value === null || value === undefined) return
+  if (typeof value === 'string') {
+    if (SHA256_REF_PATTERN.test(value)) out.add(value)
+    return
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectExactRecordRefs(item, out)
+    return
+  }
+  if (typeof value === 'object') {
+    for (const item of Object.values(value as Record<string, unknown>)) {
+      collectExactRecordRefs(item, out)
+    }
+  }
+}
+
+/**
+ * Build an informedBy hook from per-tool exact argument paths. The paths are
+ * relative to `params.arguments`, so `metadata.message_envelope.informed_by`
+ * reads `params.arguments.metadata.message_envelope.informed_by`.
+ */
+export function buildInformedBy(config: WrapConfig): InformedByHook | undefined {
+  const pathsByTool = new Map<string, string[]>()
+  for (const [toolName, override] of Object.entries(config.tools ?? {})) {
+    if (override.informedByPaths && override.informedByPaths.length > 0) {
+      pathsByTool.set(toolName, override.informedByPaths)
+    }
+  }
+  if (pathsByTool.size === 0) return undefined
+
+  return (params) => {
+    const toolName = typeof params.name === 'string' ? params.name : ''
+    const paths = pathsByTool.get(toolName)
+    if (!paths) return undefined
+    const args =
+      params.arguments !== null &&
+      typeof params.arguments === 'object' &&
+      !Array.isArray(params.arguments)
+        ? (params.arguments as Record<string, unknown>)
+        : {}
+
+    const refs = new Set<string>()
+    for (const path of paths) {
+      collectExactRecordRefs(valueAtPath(args, path), refs)
+    }
+    return refs.size > 0 ? [...refs].sort() : undefined
   }
 }
 
@@ -84,6 +159,7 @@ export async function wrap(
   }
 
   const preCallTransform = buildPreCallTransform(config)
+  const informedBy = buildInformedBy(config)
 
   const proxy = await createAtribProxy({
     name: `${config.name}-${config.agent}`,
@@ -99,14 +175,12 @@ export async function wrap(
       serverUrl: `${config.serverUrl}/${config.agent}`,
       logEndpoint: config.logEndpoint,
       autoChain: config.autoChain,
+      autoChainFallback: config.autoChainFallback,
+      ...(config.contextIdSource === 'harness' ? { contextIdResolver: resolveEnvContextId } : {}),
       ...(autoChainSeed.length > 0 ? { autoChainSeed } : {}),
       ...(transactionTools.length > 0 ? { transactionTools } : {}),
-      // mcp-wrap default: scan tool args for sha256:<hex> references and
-      // auto-populate informed_by per the dogfood-plug-and-play-map convention.
-      // See @atrib/mcp `AtribOptions.autoDetectInformedByFromArgs` for details.
-      // Wrapper users get the auto-detect "for free"; raw @atrib/mcp consumers
-      // (without mcp-wrap) opt in explicitly.
-      autoDetectInformedByFromArgs: true,
+      autoDetectInformedByFromArgs: config.autoDetectInformedByFromArgs,
+      ...(informedBy ? { informedBy } : {}),
       ...(config.disclosure ? { disclosure: config.disclosure } : {}),
       // Persists the signed record + optional pre-sign sidecar. The sidecar
       // carries the upstream tool name + raw args + raw result so consumers
