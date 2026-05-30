@@ -579,6 +579,10 @@ describe('graph fanout', () => {
         await new Promise((r) => setTimeout(r, 20))
       }
       expect(received).toHaveLength(3)
+      const warnDeadline = Date.now() + 1000
+      while (warnSpy.mock.calls.length === 0 && Date.now() < warnDeadline) {
+        await new Promise((r) => setTimeout(r, 20))
+      }
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('returned 503 after 3 attempts'))
     } finally {
       warnSpy.mockRestore()
