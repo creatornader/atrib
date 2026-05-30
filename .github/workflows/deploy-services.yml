@@ -131,9 +131,18 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
+      - uses: pnpm/action-setup@v6
+
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+          cache: pnpm
+
+      - name: Install canary dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build canary dependencies
+        run: pnpm --filter @atrib/mcp build
 
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
 
@@ -145,6 +154,9 @@ jobs:
       - name: Smoke test public log endpoints
         shell: bash
         run: node .github/scripts/check-log-smoke.mjs
+
+      - name: Smoke test log to graph indexing
+        run: pnpm --filter @atrib/log-node graph-canary
 
   deploy-graph-node:
     needs: changes

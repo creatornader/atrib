@@ -12,15 +12,15 @@ This package is `private: true` and is never published to npm. It is deployed as
 
 ## How it relates to `@atrib/log-dev`
 
-|                         | `@atrib/log-dev`                       | `@atrib/log-node`                               |
-| ----------------------- | -------------------------------------- | ----------------------------------------------- |
-| **Use case**            | Local dev, CI, end-to-end demos        | Production deployment                           |
-| **Inclusion proofs**    | Well-formed shapes, placeholder hashes | Real Merkle proofs                              |
-| **Persistence**         | In-process memory only                 | Persistent across restarts (if key is provided) |
-| **Checkpoint signing**  | Stub (no real signature)               | Real Ed25519 signatures                         |
+|                                                                      | `@atrib/log-dev`                       | `@atrib/log-node`                               |
+| -------------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------- |
+| **Use case**                                                         | Local dev, CI, end-to-end demos        | Production deployment                           |
+| **Inclusion proofs**                                                 | Well-formed shapes, placeholder hashes | Real Merkle proofs                              |
+| **Persistence**                                                      | In-process memory only                 | Persistent across restarts (if key is provided) |
+| **Checkpoint signing**                                               | Stub (no real signature)               | Real Ed25519 signatures                         |
 | **Conforms to spec [§2](../../atrib-spec.md#2-merkle-log-protocol)** | Wire format only                       | Full                                            |
-| **Inspection API**      | Yes (`entries`, `onSubmit`, etc.)      | HTTP read and subscription endpoints only       |
-| **npm published**       | No                                     | No (deployed as a service                      )|
+| **Inspection API**                                                   | Yes (`entries`, `onSubmit`, etc.)      | HTTP read and subscription endpoints only       |
+| **npm published**                                                    | No                                     | No (deployed as a service)                      |
 
 Both services speak the same `POST /v1/entries` wire format defined in spec [§2.6.1](../../atrib-spec.md#261-submit-entry), so client code is identical for both targets. Point `ATRIB_LOG_ENDPOINT` at either URL and the `@atrib/mcp` submission queue works unchanged.
 
@@ -140,6 +140,26 @@ pnpm --filter @atrib/log-node replay-proof-null
 SUBMIT=1 RECORD_HASH=sha256:<64-hex> \
   pnpm --filter @atrib/log-node replay-proof-null
 ```
+
+## Live graph canary
+
+`pnpm --filter @atrib/log-node graph-canary` signs a small canary record,
+submits it to the configured log endpoint, then polls the graph trace endpoint
+until the same `record_hash` appears at the returned `log_index`. It defaults
+to `https://log.atrib.dev/v1` and `https://graph.atrib.dev/v1`, so it writes
+an immutable public canary record when run without overrides.
+
+```bash
+pnpm --filter @atrib/log-node graph-canary
+
+LOG_ENDPOINT=http://127.0.0.1:3100/v1 \
+GRAPH_ENDPOINT=http://127.0.0.1:3200/v1 \
+  pnpm --filter @atrib/log-node graph-canary
+```
+
+The default signer is a public, non-authoritative canary key so repeated
+deploy checks use one stable creator. Set `ATRIB_GRAPH_CANARY_KEY` to a
+base64url-encoded 32-byte Ed25519 seed to use a private canary signer.
 
 ## Tests
 
