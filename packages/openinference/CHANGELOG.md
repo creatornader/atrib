@@ -1,5 +1,11 @@
 # @atrib/openinference
 
+## 0.3.2
+
+### Patch Changes
+
+- c2307da: Document backend-verified Phoenix and Langfuse dual-export smokes. The integration smoke can now poll the backend read API after export and compare returned trace and span identifiers against atrib sidecars.
+
 ## 0.3.1
 
 ### Patch Changes
