@@ -40,7 +40,36 @@ export interface ServerHandle {
   close(): Promise<void>
 }
 
+export interface GraphFanoutOptions {
+  timeoutMs?: number
+  maxAttempts?: number
+  retryDelayMs?: number
+}
+
+interface NormalizedGraphFanoutOptions {
+  timeoutMs: number
+  maxAttempts: number
+  retryDelayMs: number
+}
+
 const MAX_PROOF_CACHE = 100_000 // entries; ~30MB at ~300 bytes/entry
+const FANOUT_DEFAULT_TIMEOUT_MS = 5000
+const FANOUT_DEFAULT_MAX_ATTEMPTS = 3
+const FANOUT_DEFAULT_RETRY_DELAY_MS = 100
+
+function positiveIntOr(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback
+}
+
+function normalizeGraphFanoutOptions(
+  options: GraphFanoutOptions | undefined,
+): NormalizedGraphFanoutOptions {
+  return {
+    timeoutMs: positiveIntOr(options?.timeoutMs, FANOUT_DEFAULT_TIMEOUT_MS),
+    maxAttempts: positiveIntOr(options?.maxAttempts, FANOUT_DEFAULT_MAX_ATTEMPTS),
+    retryDelayMs: positiveIntOr(options?.retryDelayMs, FANOUT_DEFAULT_RETRY_DELAY_MS),
+  }
+}
 
 /**
  * Bind an HTTP server that handles POST /v1/entries and GET /v1/checkpoint.
@@ -51,6 +80,7 @@ export async function bindServer(
   port: number,
   host?: string,
   graphFanoutEndpoint?: string,
+  graphFanoutOptions?: GraphFanoutOptions,
 ): Promise<ServerHandle> {
   // Serialization lock: the append→proof→sign sequence must not be
   // interleaved by concurrent requests, because signer.sign is async
@@ -68,6 +98,7 @@ export async function bindServer(
   // SHOULD, not a MUST, for implementations with bounded caches.
   const proofCache = new Map<string, ProofBundle>()
   const subscribers = new Set<LogStreamSubscriber>()
+  const normalizedGraphFanoutOptions = normalizeGraphFanoutOptions(graphFanoutOptions)
 
   // Acquire the submit lock: waits for previous submission to finish,
   // returns a release function. This serializes the append→proof→sign
@@ -101,6 +132,7 @@ export async function bindServer(
       acquireSubmitLock,
       subscribers,
       graphFanoutEndpoint,
+      normalizedGraphFanoutOptions,
     ).catch((err) => {
       // eslint-disable-next-line no-console
       console.error('atrib-log-node: request handler crashed', err)
@@ -188,6 +220,7 @@ async function handleRequest(
   acquireLock: AcquireLock,
   subscribers: Set<LogStreamSubscriber>,
   graphFanoutEndpoint: string | undefined,
+  graphFanoutOptions: NormalizedGraphFanoutOptions,
 ): Promise<void> {
   // D054: when accessed via the explore.atrib.dev hostname, serve the
   // dashboard HTML at the root path. log.atrib.dev keeps API behavior at /;
@@ -264,6 +297,7 @@ async function handleRequest(
       acquireLock,
       subscribers,
       graphFanoutEndpoint,
+      graphFanoutOptions,
     )
   }
 
@@ -1168,6 +1202,7 @@ async function handleSubmit(
   acquireLock: AcquireLock,
   subscribers: Set<LogStreamSubscriber>,
   graphFanoutEndpoint: string | undefined,
+  graphFanoutOptions: NormalizedGraphFanoutOptions,
 ): Promise<void> {
   let body: string
   try {
@@ -1212,6 +1247,15 @@ async function handleSubmit(
   const cached = proofCache.get(recordHashHex)
   if (cached !== undefined) {
     sendJson(res, 200, cached)
+    if (graphFanoutEndpoint) {
+      fanoutToGraph(
+        graphFanoutEndpoint,
+        fullRecord,
+        recordHashHex,
+        cached.log_index,
+        graphFanoutOptions,
+      )
+    }
     return
   }
 
@@ -1239,6 +1283,15 @@ async function handleSubmit(
     const cachedInLock = proofCache.get(recordHashHex)
     if (cachedInLock !== undefined) {
       sendJson(res, 200, cachedInLock)
+      if (graphFanoutEndpoint) {
+        fanoutToGraph(
+          graphFanoutEndpoint,
+          fullRecord,
+          recordHashHex,
+          cachedInLock.log_index,
+          graphFanoutOptions,
+        )
+      }
       return // finally block releases the lock
     }
     const logIndex = tree.append(entryBytes)
@@ -1264,7 +1317,13 @@ async function handleSubmit(
   // post-commit record bytes so any tampering between log and graph would
   // change the record_hash and be rejected by graph's verifyRecord step.
   if (graphFanoutEndpoint) {
-    fanoutToGraph(graphFanoutEndpoint, fullRecord, recordHashHex, proof.log_index)
+    fanoutToGraph(
+      graphFanoutEndpoint,
+      fullRecord,
+      recordHashHex,
+      proof.log_index,
+      graphFanoutOptions,
+    )
   }
 }
 
@@ -1287,17 +1346,14 @@ async function makeProofBundle(
   }
 }
 
-const FANOUT_TIMEOUT_MS = 5000
-const FANOUT_MAX_ATTEMPTS = 3
-const FANOUT_RETRY_DELAY_MS = 100
-
 function fanoutToGraph(
   endpoint: string,
   record: AtribRecord,
   recordHashHex: string,
   logIndex: number,
+  options: NormalizedGraphFanoutOptions,
 ): void {
-  void fanoutToGraphAttempt(endpoint, record, recordHashHex, logIndex, 1)
+  void fanoutToGraphAttempt(endpoint, record, recordHashHex, logIndex, 1, options)
 }
 
 async function fanoutToGraphAttempt(
@@ -1306,9 +1362,10 @@ async function fanoutToGraphAttempt(
   recordHashHex: string,
   logIndex: number,
   attempt: number,
+  options: NormalizedGraphFanoutOptions,
 ): Promise<void> {
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), FANOUT_TIMEOUT_MS)
+  const timer = setTimeout(() => ctrl.abort(), options.timeoutMs)
   try {
     const r = await fetch(endpoint, {
       method: 'POST',
@@ -1323,9 +1380,9 @@ async function fanoutToGraphAttempt(
     })
     clearTimeout(timer)
     if (r.ok) return
-    if (attempt < FANOUT_MAX_ATTEMPTS) {
-      await delay(FANOUT_RETRY_DELAY_MS * attempt)
-      return fanoutToGraphAttempt(endpoint, record, recordHashHex, logIndex, attempt + 1)
+    if (attempt < options.maxAttempts) {
+      await delay(options.retryDelayMs * attempt)
+      return fanoutToGraphAttempt(endpoint, record, recordHashHex, logIndex, attempt + 1, options)
     }
     // eslint-disable-next-line no-console
     console.warn(
@@ -1333,9 +1390,9 @@ async function fanoutToGraphAttempt(
     )
   } catch (err: unknown) {
     clearTimeout(timer)
-    if (attempt < FANOUT_MAX_ATTEMPTS) {
-      await delay(FANOUT_RETRY_DELAY_MS * attempt)
-      return fanoutToGraphAttempt(endpoint, record, recordHashHex, logIndex, attempt + 1)
+    if (attempt < options.maxAttempts) {
+      await delay(options.retryDelayMs * attempt)
+      return fanoutToGraphAttempt(endpoint, record, recordHashHex, logIndex, attempt + 1, options)
     }
     const msg = err instanceof Error ? err.message : String(err)
     // eslint-disable-next-line no-console

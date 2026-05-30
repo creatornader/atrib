@@ -853,6 +853,43 @@ describe('atrib() middleware', () => {
       expect(captured[1]!.chain_root).toBe(`sha256:${hex(hash(canon(captured[0]!)))}`)
     })
 
+    it('autoChain fresh fallback isolates calls when the harness resolver fails', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: AtribRecord[] = []
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      try {
+        atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://test.example.com',
+          autoChain: true,
+          autoChainFallback: 'fresh',
+          contextIdResolver: () => {
+            throw new Error('resolver failed')
+          },
+          onRecord: (r) => {
+            captured.push(r)
+          },
+        })
+        registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
+
+        const handler = getToolHandler()!
+        await handler(bareToolCallRequest('a'), {})
+        await handler(bareToolCallRequest('b'), {})
+
+        expect(captured).toHaveLength(2)
+        expect(new Set(captured.map((r) => r.context_id)).size).toBe(2)
+
+        const { genesisChainRoot: genesis } = await import('../src/chain-root.js')
+        for (const record of captured) {
+          expect(record.chain_root).toBe(genesis(record.context_id))
+        }
+        expect(warnSpy).toHaveBeenCalledWith('atrib: contextIdResolver threw', expect.any(Error))
+      } finally {
+        warnSpy.mockRestore()
+      }
+    })
+
     it('autoChain fresh fallback keeps no-context calls out of one process-wide session', async () => {
       const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
       const captured: AtribRecord[] = []

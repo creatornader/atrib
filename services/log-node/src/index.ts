@@ -22,7 +22,7 @@ export {
 export type { CheckpointSigner, ParsedSignatureLine } from './checkpoint.js'
 
 export { bindServer } from './server.js'
-export type { ServerHandle } from './server.js'
+export type { GraphFanoutOptions, ServerHandle } from './server.js'
 export type { ProofBundle } from '@atrib/mcp'
 
 import * as ed from '@noble/ed25519'
@@ -56,6 +56,12 @@ export interface LogServerOptions {
    * Failures are logged with the `atrib-log: graph fanout` prefix.
    */
   graphFanoutEndpoint?: string
+  /** Internal test and canary knob. Defaults to 5000ms. */
+  graphFanoutTimeoutMs?: number
+  /** Internal test and canary knob. Defaults to 3 attempts. */
+  graphFanoutMaxAttempts?: number
+  /** Internal test and canary knob. Defaults to 100ms. */
+  graphFanoutRetryDelayMs?: number
 }
 
 export interface LogServer {
@@ -99,7 +105,25 @@ export async function startLogServer(options?: LogServerOptions): Promise<LogSer
   // the key must be available for the process lifetime. JavaScript does not
   // support reliable key zeroing (GC is non-deterministic). If memory-dump
   // resistance is ever required, consider a native HSM integration.
-  const handle = await bindServer(tree, signer, port, options?.host, options?.graphFanoutEndpoint)
+  const graphFanoutOptions = {
+    ...(options?.graphFanoutTimeoutMs !== undefined
+      ? { timeoutMs: options.graphFanoutTimeoutMs }
+      : {}),
+    ...(options?.graphFanoutMaxAttempts !== undefined
+      ? { maxAttempts: options.graphFanoutMaxAttempts }
+      : {}),
+    ...(options?.graphFanoutRetryDelayMs !== undefined
+      ? { retryDelayMs: options.graphFanoutRetryDelayMs }
+      : {}),
+  }
+  const handle = await bindServer(
+    tree,
+    signer,
+    port,
+    options?.host,
+    options?.graphFanoutEndpoint,
+    graphFanoutOptions,
+  )
 
   return {
     get url() {
