@@ -36,6 +36,36 @@ describe('parseConfig', () => {
     expect(config.autoChain).toBe(false)
   })
 
+  it('parses caller context and reference extraction controls', () => {
+    const config = parseConfig({
+      ...MINIMAL,
+      contextIdSource: 'harness',
+      autoChainFallback: 'fresh',
+      autoDetectInformedByFromArgs: false,
+      tools: {
+        post_context: {
+          injectReceiptId: true,
+          informedByPaths: ['informed_by', 'metadata.message_envelope.informed_by'],
+        },
+      },
+    })
+
+    expect(config.contextIdSource).toBe('harness')
+    expect(config.autoChainFallback).toBe('fresh')
+    expect(config.autoDetectInformedByFromArgs).toBe(false)
+    expect(config.tools?.['post_context']?.informedByPaths).toEqual([
+      'informed_by',
+      'metadata.message_envelope.informed_by',
+    ])
+  })
+
+  it('defaults to process fallback and wrapper hash auto-detection', () => {
+    const config = parseConfig(MINIMAL)
+    expect(config.contextIdSource).toBe('none')
+    expect(config.autoChainFallback).toBe('stable-process')
+    expect(config.autoDetectInformedByFromArgs).toBe(false)
+  })
+
   it('parses upstream with args + env', () => {
     const config = parseConfig({
       ...MINIMAL,

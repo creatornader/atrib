@@ -14,10 +14,7 @@ const TEST_PRIVATE_KEY_B64 = base64urlEncode(TEST_PRIVATE_KEY)
 const VALID_PARENT_RECORD_HASH = 'sha256:' + 'a'.repeat(64)
 const OTHER_RECORD_HASH = 'sha256:' + 'b'.repeat(64)
 
-async function withParentRecordHash(
-  value: string | undefined,
-  fn: () => Promise<void>,
-) {
+async function withParentRecordHash(value: string | undefined, fn: () => Promise<void>) {
   const prior = process.env['ATRIB_PARENT_RECORD_HASH']
   if (value === undefined) delete process.env['ATRIB_PARENT_RECORD_HASH']
   else process.env['ATRIB_PARENT_RECORD_HASH'] = value
@@ -240,7 +237,9 @@ describe('atrib() middleware', () => {
           serverUrl: 'https://test.example.com',
           autoChain: true,
           logSubmission: 'disabled',
-          onRecord: (record) => { observed.push(record) },
+          onRecord: (record) => {
+            observed.push(record)
+          },
         })
         registerToolHandler(originalHandler)
 
@@ -257,7 +256,8 @@ describe('atrib() middleware', () => {
     it('does not consume the parent seed when the tool call fails', async () => {
       await withParentRecordHash(VALID_PARENT_RECORD_HASH, async () => {
         const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
-        const originalHandler = vi.fn()
+        const originalHandler = vi
+          .fn()
           .mockResolvedValueOnce({ isError: true, content: [{ type: 'text', text: 'error' }] })
           .mockResolvedValueOnce({ content: [{ type: 'text', text: 'ok' }] })
         const observed: AtribRecord[] = []
@@ -267,7 +267,9 @@ describe('atrib() middleware', () => {
           serverUrl: 'https://test.example.com',
           autoChain: true,
           logSubmission: 'disabled',
-          onRecord: (record) => { observed.push(record) },
+          onRecord: (record) => {
+            observed.push(record)
+          },
         })
         registerToolHandler(originalHandler)
 
@@ -294,7 +296,9 @@ describe('atrib() middleware', () => {
           logSubmission: 'disabled',
           autoDetectInformedByFromArgs: true,
           informedBy: () => [OTHER_RECORD_HASH],
-          onRecord: (record) => { observed.push(record) },
+          onRecord: (record) => {
+            observed.push(record)
+          },
         })
         registerToolHandler(originalHandler)
 
@@ -304,10 +308,7 @@ describe('atrib() middleware', () => {
         await handler(request, {})
 
         expect(observed).toHaveLength(1)
-        expect(informedByOf(observed[0])).toEqual([
-          VALID_PARENT_RECORD_HASH,
-          OTHER_RECORD_HASH,
-        ])
+        expect(informedByOf(observed[0])).toEqual([VALID_PARENT_RECORD_HASH, OTHER_RECORD_HASH])
       })
     })
 
@@ -323,7 +324,9 @@ describe('atrib() middleware', () => {
           creatorKey: TEST_PRIVATE_KEY_B64,
           serverUrl: 'https://test.example.com',
           logSubmission: 'disabled',
-          onRecord: (record) => { observed.push(record) },
+          onRecord: (record) => {
+            observed.push(record)
+          },
         })
         registerToolHandler(originalHandler)
 
@@ -344,7 +347,9 @@ describe('atrib() middleware', () => {
       atrib(mockServer, {
         creatorKey: TEST_PRIVATE_KEY_B64,
         serverUrl: 'https://test.example.com',
-        onRecord: (rec) => { observed.push(rec) },
+        onRecord: (rec) => {
+          observed.push(rec)
+        },
       })
       registerToolHandler(originalHandler)
 
@@ -370,7 +375,9 @@ describe('atrib() middleware', () => {
       atrib(mockServer, {
         creatorKey: TEST_PRIVATE_KEY_B64,
         serverUrl: 'https://test.example.com',
-        onRecord: () => { throw new Error('disk full') },
+        onRecord: () => {
+          throw new Error('disk full')
+        },
       })
       registerToolHandler(originalHandler)
 
@@ -751,7 +758,9 @@ describe('atrib() middleware', () => {
       atrib(mockServer, {
         creatorKey: TEST_PRIVATE_KEY_B64,
         serverUrl: 'https://test.example.com',
-        onRecord: (r) => { captured.push(r) },
+        onRecord: (r) => {
+          captured.push(r)
+        },
       })
       registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
 
@@ -767,7 +776,9 @@ describe('atrib() middleware', () => {
       // Every chain_root must equal the genesis root for its own context_id.
       const { canonicalRecord: canon } = await import('../src/canon.js')
       const { sha256: hash, hexEncode: hex } = await import('../src/hash.js')
-      void canon; void hash; void hex
+      void canon
+      void hash
+      void hex
       const { genesisChainRoot: genesis } = await import('../src/chain-root.js')
       for (const r of captured) {
         expect(r.chain_root).toBe(genesis(r.context_id))
@@ -782,7 +793,9 @@ describe('atrib() middleware', () => {
         creatorKey: TEST_PRIVATE_KEY_B64,
         serverUrl: 'https://test.example.com',
         autoChain: true,
-        onRecord: (r) => { captured.push(r) },
+        onRecord: (r) => {
+          captured.push(r)
+        },
       })
       registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
 
@@ -811,6 +824,63 @@ describe('atrib() middleware', () => {
       }
     })
 
+    it('autoChain uses a resolved harness context before process fallback', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: AtribRecord[] = []
+      const resolvedContext = '1'.repeat(32)
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        autoChain: true,
+        contextIdResolver: () => resolvedContext,
+        onRecord: (r) => {
+          captured.push(r)
+        },
+      })
+      registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
+
+      const handler = getToolHandler()!
+      await handler(bareToolCallRequest('a'), {})
+      await handler(bareToolCallRequest('b'), {})
+
+      expect(captured).toHaveLength(2)
+      expect(captured[0]!.context_id).toBe(resolvedContext)
+      expect(captured[1]!.context_id).toBe(resolvedContext)
+
+      const { canonicalRecord: canon } = await import('../src/canon.js')
+      const { sha256: hash, hexEncode: hex } = await import('../src/hash.js')
+      expect(captured[1]!.chain_root).toBe(`sha256:${hex(hash(canon(captured[0]!)))}`)
+    })
+
+    it('autoChain fresh fallback keeps no-context calls out of one process-wide session', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: AtribRecord[] = []
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        autoChain: true,
+        autoChainFallback: 'fresh',
+        onRecord: (r) => {
+          captured.push(r)
+        },
+      })
+      registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
+
+      const handler = getToolHandler()!
+      await handler(bareToolCallRequest('a'), {})
+      await handler(bareToolCallRequest('b'), {})
+
+      expect(captured).toHaveLength(2)
+      expect(new Set(captured.map((r) => r.context_id)).size).toBe(2)
+
+      const { genesisChainRoot: genesis } = await import('../src/chain-root.js')
+      for (const record of captured) {
+        expect(record.chain_root).toBe(genesis(record.context_id))
+      }
+    })
+
     it('autoChainSeed restores chain across simulated wrapper restart', async () => {
       // First "wrapper instance", produce 2 records. autoChain on, no seed.
       const first: AtribRecord[] = []
@@ -820,7 +890,9 @@ describe('atrib() middleware', () => {
           creatorKey: TEST_PRIVATE_KEY_B64,
           serverUrl: 'https://test.example.com',
           autoChain: true,
-          onRecord: (r) => { first.push(r) },
+          onRecord: (r) => {
+            first.push(r)
+          },
         })
         registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
         const handler = getToolHandler()!
@@ -843,7 +915,9 @@ describe('atrib() middleware', () => {
         serverUrl: 'https://test.example.com',
         autoChain: true,
         autoChainSeed: first, // simulate reading the local jsonl mirror on boot
-        onRecord: (r) => { second.push(r) },
+        onRecord: (r) => {
+          second.push(r)
+        },
       })
       registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
       const handler = getToolHandler()!
@@ -868,7 +942,9 @@ describe('atrib() middleware', () => {
         creatorKey: TEST_PRIVATE_KEY_B64,
         serverUrl: 'https://test.example.com',
         autoChain: true,
-        onRecord: (r) => { captured.push(r) },
+        onRecord: (r) => {
+          captured.push(r)
+        },
       })
       registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
 
@@ -929,7 +1005,9 @@ describe('atrib() middleware', () => {
       atrib(mockServer, {
         creatorKey: TEST_PRIVATE_KEY_B64,
         serverUrl: 'https://test.example.com',
-        onRecord: (r) => { captured.push(r) },
+        onRecord: (r) => {
+          captured.push(r)
+        },
         preCallTransform: (ctx) => {
           preCallReceived = ctx
           return { ...ctx.args, atrib_receipt_id: ctx.receiptId }
@@ -979,7 +1057,9 @@ describe('atrib() middleware', () => {
       atrib(mockServer, {
         creatorKey: TEST_PRIVATE_KEY_B64,
         serverUrl: 'https://test.example.com',
-        onRecord: (r) => { captured.push(r) },
+        onRecord: (r) => {
+          captured.push(r)
+        },
         preCallTransform: () => {
           throw new Error('host blew up')
         },
@@ -1009,8 +1089,13 @@ describe('atrib() middleware', () => {
         creatorKey: TEST_PRIVATE_KEY_B64,
         serverUrl: 'https://test.example.com',
         autoChain: true,
-        onRecord: (r) => { captured.push(r) },
-        preCallTransform: (ctx) => { transforms.push(ctx); return undefined },
+        onRecord: (r) => {
+          captured.push(r)
+        },
+        preCallTransform: (ctx) => {
+          transforms.push(ctx)
+          return undefined
+        },
       })
 
       // First call: upstream errors. Pre-sign happened (preCallTransform ran),
@@ -1020,7 +1105,7 @@ describe('atrib() middleware', () => {
       registerToolHandler(vi.fn().mockResolvedValue(errorResult))
       await getToolHandler()!(createToolCallRequest('a'), {})
       expect(transforms).toHaveLength(1) // pre-sign DID run
-      expect(captured).toHaveLength(0)   // but no record committed
+      expect(captured).toHaveLength(0) // but no record committed
 
       // Second call: upstream succeeds. chain_root MUST be genesis (the failed
       // call's hash was discarded). If autoChain incorrectly remembered the
@@ -1040,10 +1125,15 @@ describe('atrib() middleware', () => {
       const resultObj = { content: [{ type: 'text', text: 'ok' }] }
 
       let upstreamArgs: Record<string, unknown> | undefined
-      registerToolHandler(vi.fn(async (req: Record<string, unknown>) => {
-        upstreamArgs = (req.params as Record<string, unknown>).arguments as Record<string, unknown>
-        return resultObj
-      }))
+      registerToolHandler(
+        vi.fn(async (req: Record<string, unknown>) => {
+          upstreamArgs = (req.params as Record<string, unknown>).arguments as Record<
+            string,
+            unknown
+          >
+          return resultObj
+        }),
+      )
 
       atrib(mockServer, {
         creatorKey: TEST_PRIVATE_KEY_B64,
@@ -1065,7 +1155,9 @@ describe('atrib() middleware', () => {
       atrib(mockServer, {
         creatorKey: TEST_PRIVATE_KEY_B64,
         serverUrl: 'https://test.example.com',
-        onRecord: (r) => { captured.push(r) },
+        onRecord: (r) => {
+          captured.push(r)
+        },
       })
       registerToolHandler(vi.fn().mockResolvedValue(resultObj))
 
@@ -1077,7 +1169,12 @@ describe('atrib() middleware', () => {
 
   describe('disclosure dials (D061 / §8.2 / §8.3)', () => {
     async function captureRecord(
-      disclosure: { tool_name?: 'omit' | 'verbatim' | 'hashed'; args?: 'omit' | 'plain-sha256' | 'salted-sha256' } | undefined,
+      disclosure:
+        | {
+            tool_name?: 'omit' | 'verbatim' | 'hashed'
+            args?: 'omit' | 'plain-sha256' | 'salted-sha256'
+          }
+        | undefined,
       toolName: string = 'search_web',
     ): Promise<AtribRecord> {
       const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
@@ -1086,7 +1183,9 @@ describe('atrib() middleware', () => {
       atrib(mockServer, {
         creatorKey: TEST_PRIVATE_KEY_B64,
         serverUrl: 'https://test.example.com',
-        onRecord: (r) => { captured.push(r) },
+        onRecord: (r) => {
+          captured.push(r)
+        },
         ...(disclosure ? { disclosure } : {}),
       })
       registerToolHandler(vi.fn().mockResolvedValue(resultObj))
@@ -1175,7 +1274,9 @@ describe('atrib() middleware', () => {
         atrib(mockServer, {
           creatorKey: TEST_PRIVATE_KEY_B64,
           serverUrl: 'https://test.example.com',
-          onRecord: (r) => { captured.push(r) },
+          onRecord: (r) => {
+            captured.push(r)
+          },
           disclosure: { result: 'plain-sha256' },
         })
         registerToolHandler(vi.fn().mockResolvedValue(resultObj))
@@ -1197,7 +1298,9 @@ describe('atrib() middleware', () => {
       atrib(mockServer, {
         creatorKey: TEST_PRIVATE_KEY_B64,
         serverUrl: 'https://test.example.com',
-        onRecord: (r) => { captured.push(r) },
+        onRecord: (r) => {
+          captured.push(r)
+        },
         disclosure: { result: 'salted-sha256' },
       })
       registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'r' }] }))
@@ -1220,7 +1323,9 @@ describe('atrib() middleware', () => {
       atrib(mockServer, {
         creatorKey: TEST_PRIVATE_KEY_B64,
         serverUrl: 'https://test.example.com',
-        onRecord: (r) => { captured.push(r) },
+        onRecord: (r) => {
+          captured.push(r)
+        },
         disclosure: {
           tool_name: 'verbatim',
           args: 'salted-sha256',
@@ -1248,7 +1353,9 @@ describe('atrib() middleware', () => {
         atrib(mockServer, {
           creatorKey: TEST_PRIVATE_KEY_B64,
           serverUrl: 'https://test.example.com',
-          onRecord: (r) => { captured.push(r) },
+          onRecord: (r) => {
+            captured.push(r)
+          },
           disclosure: { result: 'plain-sha256' },
           preCallTransform: () => undefined, // observe-only
         })
@@ -1259,7 +1366,11 @@ describe('atrib() middleware', () => {
         expect(captured[0]!.result_salt).toBeUndefined()
         // Init-time warning surfaces the misconfiguration to operators.
         const warnings = warnSpy.mock.calls.map((c) => String(c[0]))
-        expect(warnings.some((w) => w.includes('disclosure.result is incompatible with preCallTransform'))).toBe(true)
+        expect(
+          warnings.some((w) =>
+            w.includes('disclosure.result is incompatible with preCallTransform'),
+          ),
+        ).toBe(true)
       } finally {
         warnSpy.mockRestore()
       }

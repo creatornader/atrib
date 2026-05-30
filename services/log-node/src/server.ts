@@ -326,7 +326,10 @@ async function handleRequest(
     const url = new URL(req.url ?? '', 'http://localhost')
     const parsed = parseFilterParams(url.searchParams)
     if (!parsed.ok) return reject(res, 400, parsed.error)
-    const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') ?? '20', 10) || 20, 1), 100)
+    const limit = Math.min(
+      Math.max(parseInt(url.searchParams.get('limit') ?? '20', 10) || 20, 1),
+      100,
+    )
     const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0', 10) || 0, 0)
     return handleJsonFeed(req, res, tree, parsed.filters, limit, offset)
   }
@@ -694,10 +697,7 @@ async function handleStaticAsset(
 //   [65-80]  context_id (16 bytes)
 //   [81-88]  timestamp_ms (u64 big-endian)
 //   [89]     event_type byte
-function decodeEntry(
-  bytes: Uint8Array,
-  index: number,
-): DecodedEntry {
+function decodeEntry(bytes: Uint8Array, index: number): DecodedEntry {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const eventByte = bytes[89]!
   const eventLabel =
@@ -1059,7 +1059,10 @@ function parseFilterParams(
   if (since !== null) {
     const parsed = parseSinceMs(since)
     if (parsed === undefined) {
-      return { ok: false, error: 'since must be a non-negative millisecond timestamp or ISO timestamp' }
+      return {
+        ok: false,
+        error: 'since must be a non-negative millisecond timestamp or ISO timestamp',
+      }
     }
     filters.sinceMs = parsed
   }
@@ -1285,6 +1288,8 @@ async function makeProofBundle(
 }
 
 const FANOUT_TIMEOUT_MS = 5000
+const FANOUT_MAX_ATTEMPTS = 3
+const FANOUT_RETRY_DELAY_MS = 100
 
 function fanoutToGraph(
   endpoint: string,
@@ -1292,34 +1297,56 @@ function fanoutToGraph(
   recordHashHex: string,
   logIndex: number,
 ): void {
+  void fanoutToGraphAttempt(endpoint, record, recordHashHex, logIndex, 1)
+}
+
+async function fanoutToGraphAttempt(
+  endpoint: string,
+  record: AtribRecord,
+  recordHashHex: string,
+  logIndex: number,
+  attempt: number,
+): Promise<void> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), FANOUT_TIMEOUT_MS)
-  fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      // Carry the log_index so graph-node can apply revocation logic per §1.9.3.
-      // graph-node treats this header as advisory; missing = log_index null.
-      'x-atrib-log-index': String(logIndex),
-    },
-    body: JSON.stringify(record),
-    signal: ctrl.signal,
-  })
-    .then((r) => {
-      clearTimeout(timer)
-      if (!r.ok) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `atrib-log: graph fanout for ${recordHashHex.slice(0, 12)}… returned ${r.status}`,
-        )
-      }
+  try {
+    const r = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        // Carry the log_index so graph-node can apply revocation logic per §1.9.3.
+        // graph-node treats this header as advisory; missing = log_index null.
+        'x-atrib-log-index': String(logIndex),
+      },
+      body: JSON.stringify(record),
+      signal: ctrl.signal,
     })
-    .catch((err: unknown) => {
-      clearTimeout(timer)
-      const msg = err instanceof Error ? err.message : String(err)
-      // eslint-disable-next-line no-console
-      console.warn(`atrib-log: graph fanout for ${recordHashHex.slice(0, 12)}… failed: ${msg}`)
-    })
+    clearTimeout(timer)
+    if (r.ok) return
+    if (attempt < FANOUT_MAX_ATTEMPTS) {
+      await delay(FANOUT_RETRY_DELAY_MS * attempt)
+      return fanoutToGraphAttempt(endpoint, record, recordHashHex, logIndex, attempt + 1)
+    }
+    // eslint-disable-next-line no-console
+    console.warn(
+      `atrib-log: graph fanout for ${recordHashHex.slice(0, 12)}... returned ${r.status} after ${attempt} attempts`,
+    )
+  } catch (err: unknown) {
+    clearTimeout(timer)
+    if (attempt < FANOUT_MAX_ATTEMPTS) {
+      await delay(FANOUT_RETRY_DELAY_MS * attempt)
+      return fanoutToGraphAttempt(endpoint, record, recordHashHex, logIndex, attempt + 1)
+    }
+    const msg = err instanceof Error ? err.message : String(err)
+    // eslint-disable-next-line no-console
+    console.warn(
+      `atrib-log: graph fanout for ${recordHashHex.slice(0, 12)}... failed after ${attempt} attempts: ${msg}`,
+    )
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function handleCheckpoint(

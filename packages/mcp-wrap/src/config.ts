@@ -24,6 +24,7 @@ import { z } from 'zod'
 export const ToolOverrideSchema = z.object({
   transactionTool: z.boolean().optional(),
   injectReceiptId: z.boolean().optional(),
+  informedByPaths: z.array(z.string().min(1)).optional(),
 })
 
 export type ToolOverride = z.infer<typeof ToolOverrideSchema>
@@ -93,6 +94,24 @@ export const WrapConfigSchema = z.object({
    * _meta token. Set false to opt out per-wrapper.
    */
   autoChain: z.boolean().default(true),
+
+  /**
+   * Where to derive a caller context_id when the MCP host does not propagate
+   * `_meta.atrib` or traceparent.
+   */
+  contextIdSource: z.enum(['none', 'harness']).default('none'),
+
+  /**
+   * What autoChain should do when no caller context can be found.
+   */
+  autoChainFallback: z.enum(['stable-process', 'fresh']).default('stable-process'),
+
+  /**
+   * Broadly scan tool-call params for sha256 record refs. Defaults false so
+   * wrappers do not turn unrelated commitments into provenance claims. Prefer
+   * per-tool `informedByPaths` when a service has structured references.
+   */
+  autoDetectInformedByFromArgs: z.boolean().default(false),
 
   /**
    * Per-tool overrides keyed by tool name. Tools not listed get default

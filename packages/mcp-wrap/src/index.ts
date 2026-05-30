@@ -5,7 +5,7 @@
 
 export { parseConfig, WrapConfigSchema, ToolOverrideSchema, DisclosureSchema } from './config.js'
 export type { WrapConfig, ToolOverride, DisclosureConfig } from './config.js'
-export { wrap, buildPreCallTransform } from './wrap.js'
+export { wrap, buildPreCallTransform, buildInformedBy } from './wrap.js'
 export type { WrapDeps, LogFn } from './wrap.js'
 export { resolveKey } from './keys.js'
 export type { ResolvedKey } from './keys.js'

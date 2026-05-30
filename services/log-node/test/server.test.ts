@@ -491,6 +491,52 @@ describe('graph fanout', () => {
     await new Promise<void>((r) => mockServer.close(() => r()))
   })
 
+  it('retries graph fanout after a transient failure', async () => {
+    const { createServer } = await import('node:http')
+    const received: { status: number; body: string }[] = []
+    const mockServer = createServer((req, res) => {
+      let body = ''
+      req.on('data', (c: Buffer) => {
+        body += c.toString('utf-8')
+      })
+      req.on('end', () => {
+        const status = received.length === 0 ? 503 : 200
+        received.push({ status, body })
+        res.statusCode = status
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify({ ok: status === 200 }))
+      })
+    })
+    await new Promise<void>((r) => mockServer.listen(0, '127.0.0.1', r))
+    const addr = mockServer.address()
+    if (!addr || typeof addr === 'string') throw new Error('mock addr')
+    const fanoutUrl = `http://127.0.0.1:${addr.port}/ingest`
+
+    const { startLogServer } = await import('../src/index.js')
+    const fanoutSrv = await startLogServer({ port: 0, graphFanoutEndpoint: fanoutUrl })
+
+    const record = await makeSignedRecord()
+    const submitRes = await fetch(`${fanoutSrv.url}/v1/entries`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(record),
+    })
+    expect(submitRes.status).toBe(200)
+
+    const deadline = Date.now() + 2000
+    while (received.length < 2 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    expect(received.map((r) => r.status)).toEqual([503, 200])
+
+    const retried = JSON.parse(received[1]!.body) as { creator_key: string; signature: string }
+    expect(retried.creator_key).toBe(record.creator_key)
+    expect(retried.signature).toBe(record.signature)
+
+    await fanoutSrv.close()
+    await new Promise<void>((r) => mockServer.close(() => r()))
+  })
+
   it('still responds 200 to submit when fanout endpoint is unreachable', async () => {
     const { startLogServer } = await import('../src/index.js')
     const srv = await startLogServer({
