@@ -81,13 +81,13 @@ What still requires deliberate thought from you:
 1. Read the SessionStart hook output above (if present). The hook ran
    when this conversation started.
    • Active session chain? You're resuming mid-trace; continue it.
-   • High-importance records surfaced? Those are load-bearing context.
+   • High-importance records surfaced? Those can change your next step.
    • Starter recall hints? Run one if a consequential decision is imminent.
    • Substrate health warnings? Triage before substantive work.
 
 2. Mentally identify the conversation's likely write-primitive moments:
    • atrib-emit: which decisions will I make that future-me should find?
-   • atrib-annotate: which past records should I mark as load-bearing?
+   • atrib-annotate: which past records should I mark as high-priority?
    • atrib-revise: do I disagree with any prior position from the hook output?
 
 3. (Optional) curl -s https://log.atrib.dev/v1/stats
@@ -159,7 +159,7 @@ The decision tree at each moment of substantive work:
 
 **`atrib-annotate`** (MARK): you're looking at a past record and realizing it matters more than it looked at the time. Use it when:
 
-- A past observation is load-bearing for the session you're in. Annotate with `importance: high` or `critical` so recall surfaces it ahead of flat scans.
+- A past observation directly affects the session you're in. Annotate with `importance: high` or `critical` so recall surfaces it ahead of flat scans.
 - You want to tag a record with topics future-self will search by.
 - The original `summary` field on a record undersold what it means in retrospect.
 
@@ -213,13 +213,13 @@ Before calling any write primitive:
    - Marking a past record's importance / topics / summary → `atrib-annotate` (requires `annotates` + `importance` + `summary`)
    - Superseding a prior position with reason → `atrib-revise` (requires `revises` + `prior_position` + `new_position` + `reason`)
 3. **Did anything I already signed inform this?** Query `atrib-recall` if unsure. Identify the SUBSET of records that ACTUALLY shaped this; that's `informed_by`. Not "everything I happened to query."
-4. **What importance signal does future-me need?** If this is one of the load-bearing records of the session, follow the emit with an `atrib-annotate` referencing the new record's hash with `importance: high` or `critical`.
+4. **What importance signal does future-me need?** If future-me needs this record surfaced, follow the emit with an `atrib-annotate` referencing the new record's hash with `importance: high` or `critical`.
 
 If you can't answer #1 in one line, you don't need to sign yet.
 
 ## Code-shape examples
 
-### Pattern 1: load-bearing observation + annotation
+### Pattern 1: Observation + high-priority annotation
 
 ```typescript
 // Step 1: emit the observation describing what happened. Use atrib-emit for
@@ -457,7 +457,7 @@ When citing your own records to others, lead with cryptographic facts (verifiabl
 - "Checked recall: 25 records matched, 2 changed my approach (sha256:def…, sha256:ghi…). Proceeding with informed_by=[those two]."
 - "Notice: [observation]. Importance: high. Topics: [tags]. Signing now."
 - "Confidence: low on A, high on B. Future-self should weight B when reading this back."
-- "This decision is load-bearing. Signing observation + annotation so future-self finds it under [topic]."
+- "Future-self needs this decision. Signing observation + annotation so recall finds it under [topic]."
 
 These patterns make reasoning inspectable in real time and serve as discoverable hooks in commit messages and PR descriptions.
 
@@ -466,14 +466,14 @@ These patterns make reasoning inspectable in real time and serve as discoverable
 About to take an action? Ask:
 
 1. Will future-me, or another agent, want to find this with full context?
-   → Sign explicitly via emit. Add an annotation if it's load-bearing.
+   → Sign explicitly via emit. Add an annotation if it will matter later.
 2. Did anything in my past directly shape this action?
    → Set `informed_by` precisely (not exhaustively).
 3. Does this contradict a past claim of mine?
    → Sign a `revision`. Don't silently override.
 4. Is this trivial / mechanical / read-only?
    → Skip explicit signing.
-5. Am I about to make a load-bearing claim externally (commit, PR, briefing)?
+5. Am I about to make a claim externally that depends on prior signed context (commit, PR, briefing)?
    → Query recall first. Reference record_hashes. Declare confidence in prose.
 
 That's the loop. The graph of YOUR signed history is your working memory. Use it.

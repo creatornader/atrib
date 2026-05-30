@@ -37,12 +37,12 @@
   "metrics_meta": {
     "tree_size": {
       "tier": 1,
-      "status": "load-bearing",
+      "status": "decision-tied",
       "decision_supported": "is the substrate in use at all"
     },
     "distinct_creator_keys": {
       "tier": 1,
-      "status": "load-bearing",
+      "status": "decision-tied",
       "decision_supported": "is more than one party signing records (multi-agent ecosystem)"
     },
     "distinct_context_ids": {
@@ -52,12 +52,12 @@
     },
     "chain_depth": {
       "tier": 1,
-      "status": "load-bearing",
+      "status": "decision-tied",
       "decision_supported": "do chains form (the thesis), or is each call standalone"
     },
     "event_type_ratio": {
       "tier": 1,
-      "status": "load-bearing",
+      "status": "decision-tied",
       "decision_supported": "are real economic events flowing, or is it all chatter"
     },
     "log_age_days": {

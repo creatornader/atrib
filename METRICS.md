@@ -130,8 +130,8 @@ A metric does not stay in the set forever. Each metric has a status that records
 | Status | Meaning | Promotion / demotion criteria |
 |---|---|---|
 | `provisional` | Newly added; we suspect it might predict something useful, but we don't know yet. Tracked but not weighted in decisions. | After two quarterly reviews, promote to `tracked` if it has informed at least one decision; otherwise demote to `retired`. |
-| `tracked` | A metric we watch and use to color discussions, but no decision is mechanically tied to it. | Promote to `load-bearing` once it gets named in a Tier 4 trigger or a tier-review decision. Demote to `retired` if a quarterly review finds it never moved a discussion. |
-| `load-bearing` | A metric that decisions are explicitly pegged to. Changes here change behavior. | Demote to `tracked` (or directly to `retired`) only with a written explanation of why the metric is no longer load-bearing. |
+| `tracked` | A metric we watch and use to color discussions, but no decision is mechanically tied to it. | Promote to `decision-tied` once it gets named in a Tier 4 trigger or a tier-review decision. Demote to `retired` if a quarterly review finds it never moved a discussion. |
+| `decision-tied` | A metric that decisions are explicitly pegged to. Changes here change behavior. | Demote to `tracked` (or directly to `retired`) only with a written explanation of why the metric no longer changes behavior. |
 | `retired` | No longer collected (or collected but ignored). The script may still emit it for historical compatibility; nothing depends on it. | One-way transition. |
 
 Each metric in this document and in the `METRICS` array of `services/log-node/scripts/metrics.mjs` carries a `status` field. Both must agree. When you change one, change the other in the same commit.
@@ -161,7 +161,7 @@ For each metric, record the answer in `metrics/REVIEWS.md`. Then act:
 
 | Answer | Action |
 |---|---|
-| Yes, decision was tied to this number | Promote to `load-bearing` if not already. Document the decision. |
+| Yes, decision was tied to this number | Promote to `decision-tied` if not already. Document the decision. |
 | Yes, but only in the loose sense (it was on the dashboard) | Keep as `tracked`. |
 | No, but it might next quarter | Keep as `provisional` (or `tracked`); but only allow this answer twice in a row. |
 | No, and we can't articulate when it would | Demote one rung. After two consecutive No answers, `retired`. |

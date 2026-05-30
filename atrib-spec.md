@@ -89,7 +89,7 @@ atrib certifies five structural axes of agent activity: who acted (identity, via
 
 atrib does NOT certify that the agent's reasoning is truthful, that prior records actually influenced subsequent decisions, or that tool responses were real absent tool-side attestation. The substrate is content-preserving (commitments, not content) and disclosure-configurable (the privacy postures of [§8](#8-privacy-postures) let the harness pick how much each record reveals).
 
-This positioning is load-bearing. Brand promises that exceed what the substrate certifies create the same trust mismatch atrib was built to fix. [§3](#3-graph-query-interface) "What atrib chains, what it does not" gives the detailed structural-axis enumeration; [§7.6](#76-outcome-verification-patterns) documents the outcome-verification patterns that close the tool-response gap when consumers need it.
+This positioning keeps the claim honest. Brand promises that exceed what the substrate certifies create the same trust mismatch atrib was built to fix. [§3](#3-graph-query-interface) "What atrib chains, what it does not" gives the detailed structural-axis enumeration; [§7.6](#76-outcome-verification-patterns) documents the outcome-verification patterns that close the tool-response gap when consumers need it.
 
 ### Principle I: Provenance travels with the artifact
 
@@ -117,7 +117,7 @@ The specification, the signing libraries, the calculation algorithm, and the log
 
 The five principles above describe a substrate. What the substrate enables is a set of distinct uses, each of which collapses without it. None of them is the central claim. atrib is not "for" any single one. The claim is that the substrate is a precondition for all of them, and that no other piece of infrastructure today provides it.
 
-The five uses below are ordered by how directly each relies on the substrate's load-bearing property: that an agent's actions are signed at the moment they happen and remain independently verifiable thereafter.
+The five uses below are ordered by how directly each relies on the substrate's core property: an agent's actions are signed at the moment they happen and remain independently verifiable thereafter.
 
 ### I. Provable cognition (recall)
 
@@ -2275,7 +2275,7 @@ atrib does NOT certify:
 - That the agent's reasoning is truthful. A signed `informed_by` claim proves the agent committed to the claim; it does not prove the agent reasoned this way.
 - That a tool's response was real, absent tool-side attestation. `result_hash` is the agent's claim about what the tool returned; tool-side response signing closes this gap when needed ([§7.6](#76-outcome-verification-patterns)).
 
-These limits are load-bearing. The substrate's value comes from being honest about what it certifies and what it does not. Reasoning chains and outcome verification are layered on top using the existing primitives (extension URIs + `informed_by` per [D047](DECISIONS.md#d047-harness-side-reasoning-chains-as-informative-7-pattern), tool-side attestation + observation witnessing per [§7.6](#76-outcome-verification-patterns)).
+These limits define the substrate's value. atrib stays useful because it is honest about what it certifies and what it does not. Reasoning chains and outcome verification are layered on top using the existing primitives (extension URIs + `informed_by` per [D047](DECISIONS.md#d047-harness-side-reasoning-chains-as-informative-7-pattern), tool-side attestation + observation witnessing per [§7.6](#76-outcome-verification-patterns)).
 
 Contents
 
@@ -4264,7 +4264,7 @@ Each line of a local-mirror JSONL file is a JSON object of one of three shapes. 
 
 Producers SHOULD write Shape 1 or Shape 2 going forward. Producers SHOULD NOT write Shape 3 going forward, but consumers MUST read it for compatibility with mirrors that predate this section.
 
-**Field placement is load-bearing.** The `_local` sidecar MUST live at the envelope level (sibling to `record`), NEVER inside `record`. Placing sidecar content inside `record` would either change the JCS canonical form (breaking signature verification) or require producers to strip the sidecar before signing (introducing failure modes that the structural placement avoids).
+**Field placement affects signature validity.** The `_local` sidecar MUST live at the envelope level (sibling to `record`), NEVER inside `record`. Placing sidecar content inside `record` would either change the JCS canonical form (breaking signature verification) or require producers to strip the sidecar before signing (introducing failure modes that the structural placement avoids).
 
 #### 5.9.3 The `_local` sidecar shape
 
@@ -4317,7 +4317,7 @@ function normalize(line):
   return null  // skip, malformed or unknown shape
 ```
 
-The exact field-presence checks are implementation-defined; the load-bearing AtribRecord fields per [§1.2.1](#121-field-definitions) are `spec_version`, `creator_key`, `chain_root`, `event_type`, `context_id`, `timestamp`, and `signature` (or `signers` for transaction records).
+The exact field-presence checks are implementation-defined; the required AtribRecord fields per [§1.2.1](#121-field-definitions) are `spec_version`, `creator_key`, `chain_root`, `event_type`, `context_id`, `timestamp`, and `signature` (or `signers` for transaction records).
 
 Consumers that build cognitive surfaces SHOULD treat `_local.content` as the canonical recall-readable payload when it exists. For compatibility with older mirror lines, consumers MAY derive equivalent content from known sibling sidecar fields: `toolName`, `args`, and `result` for wrapper-produced tool calls; `input`, `output`, `agentName`, `llmOutputToolCallId`, `traceId`, `spanId`, `spanKind`, and `spanName` for early OpenInference callback sidecars. This derivation is read-time normalization only; it does not change signed record bytes.
 
@@ -4535,7 +4535,7 @@ If `K`'s claim carries `capabilities` per [§6.7](#67-capability-declarations), 
 
 The directory's checkpoints are witnessed using the same C2SP cosignature pattern from [§2.9](#29-witnessing-and-cosignatures). A directory operator publishes its checkpoints under origin `directory.<service>.<tld>/v6` (distinct from the Tessera log's origin). Witnesses cosign directory checkpoints exactly as they cosign log checkpoints. Verifiers configure trusted witness vkeys for the directory the same way they do for the log.
 
-The directory and the log SHOULD share witnesses where possible, since witness independence is the load-bearing security property. A witness witnessing both gives verifiers correlated evidence at lower cost.
+The directory and the log SHOULD share witnesses where possible, since witness independence is the security property verifiers rely on. A witness witnessing both gives verifiers correlated evidence at lower cost.
 
 Per [§6.2.4](#624-anchor-cross-reference-into-the-tessera-log) per-operation anchoring, every directory checkpoint produces a `directory_anchor` log entry; the witness coverage on each anchor's underlying log checkpoint applies transitively to the directory state at that version. Verifiers in [§6.3](#63-verifier-consultation-algorithm) step 3 use this transitively-applied witness coverage as the directory-side trust signal.
 
@@ -5108,7 +5108,7 @@ Root of 2-entry tree: `SHA-256(0x01 || leaf_hash_0 || leaf_hash_1)`
 
 ### A.10 Vector Cases for Optional Fields and Postures
 
-The vectors in §A.1 through §A.9 cover the minimal record shape (default posture, no optional fields). The conformance corpus at [`spec/conformance/1.4/`](spec/conformance/1.4/) extends these with byte-level vectors covering each optional field and posture combination introduced in [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), [D045](DECISIONS.md#d045-privacy-postures-normative-spec-section), [D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense), and [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records). It also includes adversarial vectors from [D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus), covering malformed inputs, bad signatures, wrong creator keys, and JCS ordering edge cases. The dedicated [`spec/conformance/1.2.6/`](spec/conformance/1.2.6/) corpus provides the load-bearing four cases for the [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) `provenance_token` field (canonical-form invariance with the field present, upstream-derivation rule, genesis-only invariant rejection, absence-not-null contract). Implementations MUST produce outputs identical to the corpus vectors for the inputs the corpus specifies.
+The vectors in §A.1 through §A.9 cover the minimal record shape (default posture, no optional fields). The conformance corpus at [`spec/conformance/1.4/`](spec/conformance/1.4/) extends these with byte-level vectors covering each optional field and posture combination introduced in [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), [D045](DECISIONS.md#d045-privacy-postures-normative-spec-section), [D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense), and [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records). It also includes adversarial vectors from [D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus), covering malformed inputs, bad signatures, wrong creator keys, and JCS ordering edge cases. The dedicated [`spec/conformance/1.2.6/`](spec/conformance/1.2.6/) corpus provides the four cases that define the [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) `provenance_token` field (canonical-form invariance with the field present, upstream-derivation rule, genesis-only invariant rejection, absence-not-null contract). Implementations MUST produce outputs identical to the corpus vectors for the inputs the corpus specifies.
 
 The full graph edge-derivation corpus at [`spec/conformance/3.2.4/`](spec/conformance/3.2.4/) covers the normative [§3.2.4](#324-edge-derivation-rules) edge rules. The reduced response-shape corpus at [`spec/conformance/3.4.1/`](spec/conformance/3.4.1/) remains specific to `/v1/graph/{context_id}` compacting behavior.
 

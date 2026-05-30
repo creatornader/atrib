@@ -22,7 +22,7 @@ import {
 interface MetricEntry {
   name: string
   tier: number
-  status: 'provisional' | 'tracked' | 'load-bearing' | 'retired'
+  status: 'provisional' | 'tracked' | 'decision-tied' | 'retired'
   decisionSupported: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   run: (ctx: any) => any
@@ -49,13 +49,13 @@ describe('metrics METRICS array shape', () => {
     for (const m of METRICS as MetricEntry[]) {
       expect(typeof m.name).toBe('string')
       expect(m.tier).toBeGreaterThanOrEqual(0)
-      expect(['provisional', 'tracked', 'load-bearing', 'retired']).toContain(m.status)
+      expect(['provisional', 'tracked', 'decision-tied', 'retired']).toContain(m.status)
       expect(typeof m.decisionSupported).toBe('string')
       expect(typeof m.run).toBe('function')
     }
   })
 
-  it('contains the named load-bearing metrics from METRICS.md', () => {
+  it('contains the named decision-tied metrics from METRICS.md', () => {
     const names = (METRICS as MetricEntry[]).map((m) => m.name)
     expect(names).toContain('tree_size')
     expect(names).toContain('distinct_creator_keys')

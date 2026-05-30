@@ -3,8 +3,8 @@
 /**
  * D081 invariant test: a record signed by emitInProcess is byte-identical
  * (same canonical bytes, same signature) to a record signed by the same
- * handleEmit path the MCP server uses. This is the load-bearing claim of
- * D081 — verifiers cannot distinguish records by transport, only by
+ * handleEmit path the MCP server uses. This is the claim D081 depends on:
+ * verifiers cannot distinguish records by transport, only by
  * creator_key and content.
  *
  * Implementation: spin up the same in-memory log stub the integration

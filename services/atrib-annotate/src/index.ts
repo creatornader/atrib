@@ -40,7 +40,7 @@ export const AnnotateInput = z.object({
   ),
   importance: Importance.describe(
     'Felt importance for future-self recall ranking. ' +
-      "'critical' (load-bearing decisions, identity claims), " +
+      "'critical' (decisions that shape future recall, identity claims), " +
       "'high' (worth surfacing in default recall), " +
       "'medium' (general signal), " +
       "'low' (background noting), " +

@@ -120,7 +120,7 @@ A subset of triggers is mechanically enforced by `scripts/check-doc-sync.mjs` (r
 
 ## Critical invariants (never violate)
 
-These are non-negotiable. They come from the founding conversation and are the load-bearing design decisions.
+These are non-negotiable. They come from the founding conversation and are the core design decisions.
 
 1. **atrib failures must never affect the primary tool call or agent response.** All exceptions caught. All network failures silent with retry. Pass-through mode if no key. This is [§5.8](atrib-spec.md#58-degradation-contract) of the spec. No exceptions.
 

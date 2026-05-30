@@ -32,7 +32,7 @@
  * without help from this codebase.
  *
  * The 9-edge regression case at the bottom of this file is the
- * load-bearing assertion: if any of the four producer-claim edges
+ * assertion that protects the four producer-claim edges: if any
  * (INFORMED_BY, PROVENANCE_OF, ANNOTATES, REVISES) silently drifts
  * between the two implementations, the demo will start lying to
  * customers about what production behavior looks like for cognitive

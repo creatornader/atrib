@@ -84,7 +84,7 @@ export function persistRecord(
  * Normalize a parsed mirror line to a bare AtribRecord. Tolerates both
  * legacy bare-record entries (legacy) and new envelope entries
  * ({record, _local?, written_at}). Returns null if neither shape parses
- * to a valid AtribRecord with the load-bearing fields.
+ * to a valid AtribRecord with the required fields.
  */
 function normalizeMirrorLine(parsed: unknown): AtribRecord | null {
   if (typeof parsed !== 'object' || parsed === null) return null

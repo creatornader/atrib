@@ -1,5 +1,5 @@
 // Tests the local-mirror jsonl loader + persister. The mirror is the
-// load-bearing piece for chain continuity across wrapper restarts.
+// reason chain continuity survives wrapper restarts.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
@@ -146,7 +146,7 @@ describe('loadAutoChainSeed', () => {
     expect(records).toHaveLength(2)
   })
 
-  it('skips records missing load-bearing fields', () => {
+  it('skips records missing required fields', () => {
     const file = join(tmpDir, 'records.jsonl')
     writeFileSync(
       file,
