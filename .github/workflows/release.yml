@@ -7,16 +7,9 @@ name: Release
 #      or publishes the bumped versions to npm if the release PR has been
 #      merged.
 #
-#   2. Snapshot release (workflow_dispatch mode=snapshot): publishes a one-off version under
+#   2. Snapshot release (workflow_dispatch): publishes a one-off version under
 #      the `snapshot` dist-tag, so changes can be previewed without entering
 #      changesets pre-release mode.
-#
-#   3. Initial package publish (workflow_dispatch mode=initial-package): creates
-#      a brand-new npm package once with NPM_TOKEN plus provenance. NPM_TOKEN
-#      must be a granular token with package write access and Bypass 2FA enabled.
-#      npm trusted publishing requires the package to already exist before its
-#      trust relationship can be configured, so this path is only for package
-#      birth.
 #
 # Both modes go through this single workflow file because npm Trusted
 # Publishers (OIDC) bind publish authorization to one specific workflow
@@ -53,23 +46,6 @@ on:
     branches:
       - main
   workflow_dispatch:
-    inputs:
-      mode:
-        description: 'Manual release mode'
-        required: true
-        type: choice
-        default: snapshot
-        options:
-          - snapshot
-          - initial-package
-      package_name:
-        description: 'Package name for initial-package mode, for example @atrib/memory-tool'
-        required: false
-        type: string
-      package_path:
-        description: 'Package path for initial-package mode, for example packages/memory-tool'
-        required: false
-        type: string
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -133,9 +109,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
-          cache: 'pnpm'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "24"
+          cache: "pnpm"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -152,11 +128,11 @@ jobs:
           # CHANGELOG.md entry by changesets/action.
           createGithubReleases: true
         env:
-          NPM_CONFIG_PROVENANCE: 'true'
+          NPM_CONFIG_PROVENANCE: "true"
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
   snapshot:
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'snapshot'
+    if: github.event_name == 'workflow_dispatch'
     name: Release snapshot
     runs-on: ubuntu-latest
     permissions:
@@ -174,9 +150,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
-          cache: 'pnpm'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "24"
+          cache: "pnpm"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -190,191 +166,4 @@ jobs:
       - name: Publish snapshot
         run: pnpm changeset publish --tag snapshot --no-git-tag
         env:
-          NPM_CONFIG_PROVENANCE: 'true'
-
-  initial-package:
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'initial-package'
-    name: Initial package publish
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          token: ${{ github.token }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: 'pnpm'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Validate package input
-        env:
-          PACKAGE_NAME: ${{ inputs.package_name }}
-          PACKAGE_PATH: ${{ inputs.package_path }}
-        run: |
-          node <<'NODE'
-          const fs = require('node:fs')
-          const path = require('node:path')
-
-          const packageName = process.env.PACKAGE_NAME
-          const packagePath = process.env.PACKAGE_PATH
-
-          if (!packageName || !packagePath) {
-            throw new Error('package_name and package_path are required for initial-package mode')
-          }
-          if (!packageName.startsWith('@atrib/')) {
-            throw new Error(`package_name must be under @atrib, got ${packageName}`)
-          }
-          if (path.isAbsolute(packagePath) || packagePath.includes('..')) {
-            throw new Error(`package_path must be a repo-relative package path, got ${packagePath}`)
-          }
-          if (!packagePath.startsWith('packages/') && !packagePath.startsWith('services/')) {
-            throw new Error(`package_path must start with packages/ or services/, got ${packagePath}`)
-          }
-
-          const packageJsonPath = path.join(packagePath, 'package.json')
-          const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
-          if (pkg.name !== packageName) {
-            throw new Error(`package name mismatch: input ${packageName}, package.json ${pkg.name}`)
-          }
-          if (pkg.private) {
-            throw new Error(`${packageName} is private and must not be published`)
-          }
-          if (pkg.publishConfig?.access !== 'public') {
-            throw new Error(`${packageName} must set publishConfig.access to public before first publish`)
-          }
-          if (pkg.repository?.url !== 'git+https://github.com/creatornader/atrib.git') {
-            throw new Error(`${packageName} must use the canonical repository URL`)
-          }
-          if (pkg.repository?.directory !== packagePath) {
-            throw new Error(`${packageName} repository.directory must equal ${packagePath}`)
-          }
-          if (!pkg.files?.includes('dist')) {
-            throw new Error(`${packageName} must publish dist through files[]`)
-          }
-          if (!pkg.scripts?.build) {
-            throw new Error(`${packageName} must expose a build script`)
-          }
-          NODE
-
-      - name: Confirm package is not already published
-        env:
-          PACKAGE_NAME: ${{ inputs.package_name }}
-        run: |
-          set +e
-          npm view "$PACKAGE_NAME" version --json >/tmp/npm-view.json 2>/tmp/npm-view.err
-          status=$?
-          set -e
-          if [ "$status" -eq 0 ]; then
-            echo "$PACKAGE_NAME already exists on npm:"
-            cat /tmp/npm-view.json
-            exit 1
-          fi
-          if ! grep -q "E404" /tmp/npm-view.err; then
-            cat /tmp/npm-view.err
-            exit "$status"
-          fi
-
-      - name: Build package
-        env:
-          PACKAGE_NAME: ${{ inputs.package_name }}
-        run: pnpm --filter "$PACKAGE_NAME..." build
-
-      - name: Test package if it has a test script
-        env:
-          PACKAGE_NAME: ${{ inputs.package_name }}
-          PACKAGE_PATH: ${{ inputs.package_path }}
-        run: |
-          if node -e "const p=require('./' + process.env.PACKAGE_PATH + '/package.json'); process.exit(p.scripts?.test ? 0 : 1)"; then
-            pnpm --filter "$PACKAGE_NAME" test
-          fi
-
-      - name: Run package smoke if it has a smoke script
-        env:
-          PACKAGE_NAME: ${{ inputs.package_name }}
-          PACKAGE_PATH: ${{ inputs.package_path }}
-        run: |
-          if node -e "const p=require('./' + process.env.PACKAGE_PATH + '/package.json'); process.exit(p.scripts?.smoke ? 0 : 1)"; then
-            pnpm --filter "$PACKAGE_NAME" smoke
-          fi
-
-      - name: Pack package
-        env:
-          PACKAGE_PATH: ${{ inputs.package_path }}
-        run: |
-          cd "$PACKAGE_PATH"
-          pnpm pack --pack-destination "$RUNNER_TEMP" --json | tee "$RUNNER_TEMP/pack.json"
-
-      - name: Publish initial package with provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: 'true'
-        run: |
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "NPM_TOKEN is required for initial-package mode"
-            exit 1
-          fi
-          tarball=$(node -e "const fs=require('node:fs'); const data=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/pack.json', 'utf8')); console.log(Array.isArray(data) ? data[0].filename : data.filename)")
-          publish_log="$RUNNER_TEMP/npm-publish.log"
-          set +e
-          npm publish "$tarball" --access public --provenance 2>&1 | tee "$publish_log"
-          publish_status=${PIPESTATUS[0]}
-          set -e
-          if [ "$publish_status" -ne 0 ]; then
-            if grep -Eq "EOTP|one-time password" "$publish_log"; then
-              echo "::error title=NPM_TOKEN requires publish-time 2FA::Initial package publish needs a granular npm token with package read-write access and Bypass 2FA enabled. Replace NPM_TOKEN and rerun this workflow_dispatch job."
-            elif grep -q "E404" "$publish_log"; then
-              echo "::error title=NPM_TOKEN cannot create this package::Initial package publish reached npm, but the token cannot create this scoped public package. Replace NPM_TOKEN with an npm owner token that can create packages under @atrib."
-            fi
-            exit "$publish_status"
-          fi
-
-      - name: Verify npm package metadata
-        env:
-          PACKAGE_NAME: ${{ inputs.package_name }}
-          PACKAGE_PATH: ${{ inputs.package_path }}
-        run: |
-          node <<'NODE'
-          const { execFileSync } = require('node:child_process')
-          const fs = require('node:fs')
-
-          const packageName = process.env.PACKAGE_NAME
-          const pkg = JSON.parse(fs.readFileSync(`${process.env.PACKAGE_PATH}/package.json`, 'utf8'))
-          const spec = `${packageName}@${pkg.version}`
-          const view = JSON.parse(execFileSync('npm', [
-            'view',
-            spec,
-            'name',
-            'version',
-            'description',
-            'repository',
-            'dist-tags.latest',
-            'dist.integrity',
-            'dist.attestations.provenance.predicateType',
-            'dist.signatures',
-            '--json',
-          ], { encoding: 'utf8' }))
-
-          if (view.name !== packageName) throw new Error(`published name mismatch for ${spec}`)
-          if (view.version !== pkg.version) throw new Error(`published version mismatch for ${spec}`)
-          if (view['dist-tags.latest'] !== pkg.version) throw new Error(`latest tag mismatch for ${spec}`)
-          if (view.repository?.directory !== process.env.PACKAGE_PATH) throw new Error(`repository.directory mismatch for ${spec}`)
-          if (!view['dist.integrity']) throw new Error(`missing dist.integrity for ${spec}`)
-          if (view['dist.attestations.provenance.predicateType'] !== 'https://slsa.dev/provenance/v1') {
-            throw new Error(`missing SLSA provenance attestation for ${spec}`)
-          }
-          if (!Array.isArray(view['dist.signatures']) || view['dist.signatures'].length === 0) {
-            throw new Error(`missing registry signature for ${spec}`)
-          }
-          NODE
+          NPM_CONFIG_PROVENANCE: "true"

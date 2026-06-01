@@ -106,95 +106,63 @@ publish and trusted-publisher setup are complete.
 
 ## First publish
 
-Preferred path: publish the first version from GitHub Actions with `NPM_TOKEN`
-and `npm publish --access public --provenance`. This creates the package while
-still attaching npm provenance from the public GitHub workflow. Use a one-time
-manual dispatch job for the named package. Do not route normal releases through
-`NPM_TOKEN`.
+First publish is manual. This matches the `@atrib/verify-mcp` rollout: the
+normal release workflow failed with npm `E404` for a package that did not exist,
+the first version was published locally by an npm owner, and the next
+changesets-managed version published from GitHub Actions after trusted publishing
+was configured.
 
-The `NPM_TOKEN` secret must be a granular npm token that can publish packages:
+npm documents this direct scoped-package path as `npm publish --access public`.
+The first manual version will not have GitHub Actions provenance. The next
+changesets-managed version should.
 
-- packages and scopes permission: read-write.
-- package selection: all packages, or a scope/package selection that allows new
-  packages under `@atrib`.
-- Bypass 2FA: enabled.
-
-Granting organization access to a granular token is not enough for package
-publishing. npm documents organization token access as settings/team access, not
-package publish access.
-
-Reference: npm documents provenance generation for GitHub Actions at
-<https://docs.npmjs.com/generating-provenance-statements>.
-
-If the workflow reaches `npm publish`, prints a Sigstore transparency-log URL,
-and then fails with npm `E404` on `PUT`, the token is present but cannot create
-the new scoped package. Replace the `NPM_TOKEN` secret with a token or owner path
-that can create public packages under `@atrib`, then rerun the same manual
-dispatch. Do not merge a follow-up release until that run succeeds.
-
-If the same workflow fails with npm `EOTP`, the token can reach package creation
-but does not bypass publish-time 2FA. Create a replacement token with Bypass 2FA
-enabled, update the GitHub secret, and rerun the same manual dispatch. npm
-expects `--expires` as a number of days, not a calendar date:
+For `@atrib/memory-tool`, run this in zsh from the repo root:
 
 ```bash
 npm config set auth-type legacy
 npm whoami || npm login --auth-type=legacy
 
-# Run this in an interactive terminal. npm prompts for the account password even
-# when `npm whoami` succeeds. Pass the OTP on the command so npm does not send
-# you through its browser auth URL.
-read -rp "npm otp: " NPM_OTP
-npm token create \
-  --name atrib-ci-initial-package-YYYY-MM-DD \
-  --token-description "Temporary atrib initial package publish token" \
-  --expires 2 \
-  --packages-all \
-  --packages-and-scopes-permission read-write \
-  --bypass-2fa \
-  --otp "$NPM_OTP"
+pnpm --filter @atrib/memory-tool... build
+pnpm --filter @atrib/memory-tool test
+pnpm --filter @atrib/memory-tool smoke
+
+cd packages/memory-tool
+read "NPM_OTP?npm otp: "
+npm publish --access public --otp "$NPM_OTP"
 unset NPM_OTP
-
-read -rsp "npm token: " NPM_TOKEN
-printf "\n"
-if [ -z "$NPM_TOKEN" ] || [ "${NPM_TOKEN#npm_}" = "$NPM_TOKEN" ]; then
-  echo "NPM token is empty or does not start with npm_; not updating GitHub secret"
-  unset NPM_TOKEN
-  exit 1
-fi
-printf "%s" "$NPM_TOKEN" | gh secret set NPM_TOKEN --repo creatornader/atrib
-unset NPM_TOKEN
-
-gh workflow run release.yml \
-  --repo creatornader/atrib \
-  --ref <branch> \
-  -f mode=initial-package \
-  -f package_name=<package-name> \
-  -f package_path=<package-path>
 ```
 
-If `npm token create` prints a browser auth URL, stop that attempt and rerun the
-command with a fresh `--otp` value. The browser URL can end on a 404 page after
-2FA and still leave the CLI without a token to print. Do not paste an empty value
-into `NPM_TOKEN`.
-
-If `npm token create` returns `E401`, the local npm session is stale or missing.
-Run `npm login --auth-type=legacy` again, complete the terminal username,
-password, and 2FA prompts, then rerun the token command.
-
-Revoke the temporary token after the package exists and trusted publishing is
-configured.
-
-Fallback path: publish locally with an authenticated npm owner:
+For a generic package:
 
 ```bash
+npm config set auth-type legacy
+npm whoami || npm login --auth-type=legacy
+pnpm --filter <package-name>... build
+pnpm --filter <package-name> test
+pnpm --filter <package-name> <smoke-script>
 cd <package-directory>
-npm publish --access public
+read "NPM_OTP?npm otp: "
+npm publish --access public --otp "$NPM_OTP"
+unset NPM_OTP
 ```
 
-Only use the fallback when you accept that the first version will not have the
-same GitHub Actions provenance as normal releases. Record that exception in the
-PR or tracker.
+If the package has no smoke script, skip that line. If the publish fails with
+`EOTP`, rerun the publish with a fresh OTP. If it fails with `E404`, confirm the
+npm account has write access under the `@atrib` scope and that the package uses
+`publishConfig.access = "public"`.
+
+Do not create or store an `NPM_TOKEN` secret for this step. The normal release
+workflow uses OIDC trusted publishing, not long-lived npm tokens.
+
+After publish, verify:
+
+```bash
+npm view <package-name>@<version> \
+  name version repository dist-tags dist.integrity dist.attestations dist.signatures --json
+```
+
+Expect `dist.integrity` and `dist.signatures[]`. Do not expect
+`dist.attestations` on the manual first version.
 
 ## Trusted publisher setup
 
@@ -204,13 +172,16 @@ After the package exists, configure npm trusted publishing for the package:
 npm trust github <package-name> \
   --repo creatornader/atrib \
   --file release.yml \
+  --allow-publish \
   -y
 ```
 
-This requires an authenticated npm owner account with 2FA. npm's own CLI docs
+This requires an authenticated npm owner account with 2FA. Current npm CLI docs
 state that `npm trust` requires the package to already exist and does not support
-granular access tokens with bypass 2FA for this configuration step:
-<https://docs.npmjs.com/cli/v11/commands/npm-trust/#prerequisites>.
+granular access tokens with bypass 2FA for this configuration step. As of npm
+11.12.1 on this machine, `npm trust github --help` rejects `--allow-publish`.
+If that still happens, omit `--allow-publish` and run the same command with
+`-y`.
 
 Verify the trust relationship:
 
