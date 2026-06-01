@@ -152,6 +152,11 @@ npm token create \
 
 read -rsp "npm token: " NPM_TOKEN
 printf "\n"
+if [ -z "$NPM_TOKEN" ] || [ "${NPM_TOKEN#npm_}" = "$NPM_TOKEN" ]; then
+  echo "NPM token is empty or does not start with npm_; not updating GitHub secret"
+  unset NPM_TOKEN
+  exit 1
+fi
 printf "%s" "$NPM_TOKEN" | gh secret set NPM_TOKEN --repo creatornader/atrib
 unset NPM_TOKEN
 
