@@ -88,6 +88,8 @@ const RECORD_FILE = process.env.RECORD_FILE ?? join(
   homedir(), '.atrib', 'records', 'records.jsonl',
 )
 const TILE_SIZE = 256
+const ENTRY_PRINT_LIMIT = parseNonNegativeInt(process.env.ATRIB_VERIFY_ENTRY_PRINT_LIMIT, 40)
+const PRINT_ALL_ENTRIES = process.env.ATRIB_VERIFY_PRINT_ALL_ENTRIES === '1'
 
 // ---------------------------------------------------------------------------
 // Pure helpers (no @atrib/mcp import, deliberately self-contained so this
@@ -132,11 +134,45 @@ function computeRoot(leaves) {
   return nodeHash(computeRoot(leaves.slice(0, k)), computeRoot(leaves.slice(k)))
 }
 
+function computeRootRange(leaves, start, end, cache) {
+  const size = end - start
+  if (size <= 0) throw new Error('empty subtree')
+  const key = `${start}:${end}`
+  const cached = cache.get(key)
+  if (cached) return cached
+
+  let root
+  if (size === 1) {
+    root = leaves[start]
+  } else {
+    const k = largestPowerOfTwoLessThan(size)
+    root = nodeHash(
+      computeRootRange(leaves, start, start + k, cache),
+      computeRootRange(leaves, start + k, end, cache),
+    )
+  }
+  cache.set(key, root)
+  return root
+}
+
+function computeRootCached(leaves) {
+  if (leaves.length === 0) {
+    return { root: sha256(new Uint8Array(0)), cache: new Map() }
+  }
+  const cache = new Map()
+  return { root: computeRootRange(leaves, 0, leaves.length, cache), cache }
+}
+
 // RFC 6962 §2.1.2: inclusion proof from leaf i to root over n leaves.
 function computeInclusionProof(index, leaves) {
   const n = leaves.length
   if (index < 0 || index >= n) throw new Error('index out of range')
   return _path(index, leaves)
+}
+
+function computeInclusionProofCached(index, leaves, cache) {
+  if (index < 0 || index >= leaves.length) throw new Error('index out of range')
+  return _pathCached(index, leaves, 0, leaves.length, cache)
 }
 
 function _path(index, leaves) {
@@ -148,6 +184,23 @@ function _path(index, leaves) {
   } else {
     return [..._path(index - k, leaves.slice(k)), computeRoot(leaves.slice(0, k))]
   }
+}
+
+function _pathCached(index, leaves, start, end, cache) {
+  const size = end - start
+  if (size <= 1) return []
+  const k = largestPowerOfTwoLessThan(size)
+  const split = start + k
+  if (index < split) {
+    return [
+      ..._pathCached(index, leaves, start, split, cache),
+      computeRootRange(leaves, split, end, cache),
+    ]
+  }
+  return [
+    ..._pathCached(index, leaves, split, end, cache),
+    computeRootRange(leaves, start, split, cache),
+  ]
 }
 
 function verifyInclusion(index, treeSize, leafHashValue, proof, expectedRoot) {
@@ -201,6 +254,42 @@ function b64urlDecode(s) {
 
 function b64urlEncode(bytes) {
   return Buffer.from(bytes).toString('base64url')
+}
+
+function parseNonNegativeInt(value, fallback) {
+  if (value == null || value === '') return fallback
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback
+}
+
+function formatDecodedEntryLine(index, entry) {
+  return (
+    `  [${index}] record_hash=${toHex(entry.recordHash).slice(0, 16)}...  ` +
+    `creator_key=${b64urlEncode(entry.creatorKey)}  ` +
+    `context_id=${toHex(entry.contextId)}  ` +
+    `ts=${new Date(entry.ts).toISOString()}  ` +
+    `event_type=0x${entry.eventType.toString(16).padStart(2, '0')}`
+  )
+}
+
+function selectEntrySamples(entries, limit) {
+  if (limit < 0) throw new Error('limit must be non-negative')
+  if (limit === 0) return entries.length === 0 ? [] : [{ kind: 'omitted', count: entries.length }]
+  if (entries.length <= limit) {
+    return entries.map((entry, index) => ({ kind: 'entry', index, entry }))
+  }
+
+  const headCount = Math.ceil(limit / 2)
+  const tailCount = Math.floor(limit / 2)
+  const out = []
+  for (let index = 0; index < headCount; index++) {
+    out.push({ kind: 'entry', index, entry: entries[index] })
+  }
+  out.push({ kind: 'omitted', count: entries.length - headCount - tailCount })
+  for (let index = entries.length - tailCount; index < entries.length; index++) {
+    out.push({ kind: 'entry', index, entry: entries[index] })
+  }
+  return out
 }
 
 // ---------------------------------------------------------------------------
@@ -480,16 +569,22 @@ async function main() {
 
   // Print decoded entries
   console.log()
-  console.log('ENTRIES (decoded):')
-  for (let i = 0; i < entries.length; i++) {
-    const e = entries[i]
-    console.log(
-      `  [${i}] record_hash=${toHex(e.recordHash).slice(0, 16)}…  ` +
-      `creator_key=${b64urlEncode(e.creatorKey)}  ` +
-      `context_id=${toHex(e.contextId)}  ` +
-      `ts=${new Date(e.ts).toISOString()}  ` +
-      `event_type=0x${e.eventType.toString(16).padStart(2, '0')}`,
-    )
+  console.log(`ENTRIES (decoded sample, ${entries.length} total):`)
+  const entryPrintLimit = PRINT_ALL_ENTRIES ? entries.length : ENTRY_PRINT_LIMIT
+  const samples = selectEntrySamples(entries, entryPrintLimit)
+  for (const sample of samples) {
+    if (sample.kind === 'entry') {
+      console.log(formatDecodedEntryLine(sample.index, sample.entry))
+    } else if (sample.count > 0) {
+      console.log(
+        `  ... ${sample.count} entr${sample.count === 1 ? 'y' : 'ies'} omitted. ` +
+        'Set ATRIB_VERIFY_PRINT_ALL_ENTRIES=1 to print every entry.',
+      )
+      r.note(
+        `${sample.count} decoded log entr${sample.count === 1 ? 'y' : 'ies'} omitted from stdout; ` +
+        'set ATRIB_VERIFY_ENTRY_PRINT_LIMIT or ATRIB_VERIFY_PRINT_ALL_ENTRIES=1 for a larger dump.',
+      )
+    }
   }
 
   // 3+4. GATEs B,C: signer scope. When RECORD_FILE is provided and parses,
@@ -568,7 +663,7 @@ async function main() {
 
   // 5. GATE A: tree integrity
   const leaves = entryBytes.map(b => leafHash(b))
-  const localRoot = computeRoot(leaves)
+  const { root: localRoot, cache: rootCache } = computeRootCached(leaves)
   if (bytesEqual(localRoot, cp.rootHash)) {
     r.pass('tree.root', `local root == checkpoint root (${toHex(localRoot).slice(0, 16)}…)`)
   } else {
@@ -578,7 +673,7 @@ async function main() {
   // 6. Per-leaf inclusion proofs
   let allInclusionsOk = true
   for (let i = 0; i < leaves.length; i++) {
-    const proof = computeInclusionProof(i, leaves)
+    const proof = computeInclusionProofCached(i, leaves, rootCache)
     const ok = verifyInclusion(i, leaves.length, leaves[i], proof, cp.rootHash)
     if (!ok) {
       allInclusionsOk = false
@@ -726,7 +821,9 @@ export {
   nodeHash,
   largestPowerOfTwoLessThan,
   computeRoot,
+  computeRootCached,
   computeInclusionProof,
+  computeInclusionProofCached,
   verifyInclusion,
   bytesEqual,
   parseCheckpoint,
@@ -734,4 +831,7 @@ export {
   parseEntry,
   b64urlDecode,
   b64urlEncode,
+  parseNonNegativeInt,
+  formatDecodedEntryLine,
+  selectEntrySamples,
 }
