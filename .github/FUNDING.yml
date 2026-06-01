@@ -1,12 +1,2 @@
-# Sponsorship + funding configuration. GitHub renders a "Sponsor"
-# button on the repo using the entries below.
-#
-# Add a github/patreon/tidelift/etc. entry here if/when atrib has a
-# funding channel; until then the file declares the file's intent
-# without exposing a funding handle that doesn't exist.
-
-# github: [creatornader]
-# patreon: <handle>
-# open_collective: <slug>
-# tidelift: npm/atrib
-# custom: ['https://atrib.dev/sponsor']
+# GitHub renders this as the repository Sponsor button.
+github: [creatornader]
