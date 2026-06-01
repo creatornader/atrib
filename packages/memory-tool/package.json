@@ -13,10 +13,13 @@
   "files": [
     "dist"
   ],
-  "description": "Verifiable backend wrapper for Anthropic's Memory Tool. Signs memory commands as atrib records while leaving storage under the host's control.",
+  "description": "Memory Tool wrapper for atrib. Signs Anthropic memory commands while leaving storage under the host's control.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "atrib",
     "anthropic",
