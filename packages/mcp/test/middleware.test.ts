@@ -7,6 +7,7 @@ import { decodeToken } from '../src/token.js'
 import { hexEncode } from '../src/hash.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AtribRecord } from '../src/types.js'
+import type { OnRecordSidecar } from '../src/middleware.js'
 
 // Deterministic test key
 const TEST_PRIVATE_KEY = new Uint8Array(32).fill(42)
@@ -409,6 +410,94 @@ describe('atrib() middleware', () => {
 
       // Token should be present (record was emitted)
       expect((resultObj as any)._meta?.atrib).toBeDefined()
+    })
+
+    it('captures MCP OAuth evidence from validated authInfo without storing the bearer token', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const originalHandler = vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] })
+      const sidecars: OnRecordSidecar[] = []
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://mcp.example.com/mcp',
+        logSubmission: 'disabled',
+        authorizationEvidence: {
+          requiredScopes: ['files:read'],
+          protectedResourceMetadata: {
+            resource: 'https://mcp.example.com/mcp',
+            authorization_servers: ['https://auth.example.com'],
+          },
+        },
+        onRecord: (_record, sidecar) => {
+          if (sidecar) sidecars.push(sidecar)
+        },
+      })
+      registerToolHandler(originalHandler)
+
+      const handler = getToolHandler()!
+      await handler(createToolCallRequest('read_file'), {
+        authInfo: {
+          token: 'secret-bearer-token',
+          clientId: 'client-123',
+          scopes: ['files:read', 'files:write'],
+          expiresAt: 1_800_000_000,
+          resource: new URL('https://mcp.example.com/mcp'),
+        },
+      })
+
+      expect(sidecars).toHaveLength(1)
+      expect(sidecars[0]!.resolvedFacts).toEqual({ tool_name: 'read_file' })
+      const evidence = sidecars[0]!.authorizationEvidence?.[0]
+      expect(evidence?.protocol).toBe('mcp_oauth')
+      expect(evidence?.claimsVerified).toBe(true)
+      expect(evidence?.claims.client_id).toBe('client-123')
+      expect(evidence?.claims.scope).toBe('files:read files:write')
+      expect(evidence?.claims.resource).toBe('https://mcp.example.com/mcp')
+      expect(evidence?.requiredScopes).toEqual(['files:read'])
+      expect(evidence?.expectedClientId).toBe('client-123')
+      expect(JSON.stringify(evidence)).not.toContain('secret-bearer-token')
+      expect(evidence?.token_hash).toMatch(/^sha256:[A-Za-z0-9_-]+$/)
+    })
+
+    it('captures DPoP proof material with a token hash instead of the bearer token', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const originalHandler = vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] })
+      const sidecars: OnRecordSidecar[] = []
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://mcp.example.com/mcp',
+        logSubmission: 'disabled',
+        authorizationEvidence: {
+          includeDpopProof: true,
+          requestMethod: 'POST',
+        },
+        onRecord: (_record, sidecar) => {
+          if (sidecar) sidecars.push(sidecar)
+        },
+      })
+      registerToolHandler(originalHandler)
+
+      const handler = getToolHandler()!
+      await handler(createToolCallRequest('read_file'), {
+        authInfo: {
+          token: 'secret-bearer-token',
+          clientId: 'client-123',
+          scopes: ['files:read'],
+          resource: new URL('https://mcp.example.com/mcp'),
+        },
+        requestInfo: {
+          headers: new Headers({ DPoP: 'header.payload.signature' }),
+          url: new URL('https://mcp.example.com/mcp'),
+        },
+      })
+
+      const dpop = sidecars[0]!.authorizationEvidence?.[0]?.dpopProof
+      expect(dpop?.proofJwt).toBe('header.payload.signature')
+      expect(dpop?.method).toBe('POST')
+      expect(dpop?.url).toBe('https://mcp.example.com/mcp')
+      expect(dpop?.expectedAth).toMatch(/^[A-Za-z0-9_-]+$/)
+      expect(JSON.stringify(dpop)).not.toContain('secret-bearer-token')
     })
   })
 

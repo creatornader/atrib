@@ -19,11 +19,17 @@ import {
   distributionsMatch,
 } from './recommendation.js'
 import { verifyAp2ViEvidenceAsync } from './ap2-vi-evidence.js'
+import { verifyAuthorizationEvidence } from './authorization-evidence.js'
 import type {
   Ap2ViEvidenceBundle,
   Ap2ViEvidenceVerification,
   VerifyAp2ViEvidenceOptions,
 } from './ap2-vi-evidence.js'
+import type {
+  AuthorizationEvidenceInput,
+  EvidenceCheckStatus,
+  EvidenceVerificationBlock,
+} from './authorization-evidence.js'
 import type {
   PolicyDocument,
   RecommendationDocument,
@@ -66,6 +72,11 @@ export interface VerifyRecommendationOptions {
   ap2ViEvidence?: Ap2ViEvidenceBundle
   /** Options passed through to `verifyAp2ViEvidenceAsync()`. */
   ap2ViEvidenceOptions?: VerifyAp2ViEvidenceOptions
+  /**
+   * Generic external authorization evidence. Each block is tiered and does
+   * not change recommendation validity.
+   */
+  authorizationEvidence?: AuthorizationEvidenceInput[]
 }
 
 export class AtribVerifier {
@@ -116,6 +127,7 @@ export class AtribVerifier {
     let localDistribution = doc.distribution
     let nodeCount = 0
     let ap2ViEvidence: Ap2ViEvidenceVerification | undefined
+    const evidence: EvidenceVerificationBlock[] = []
 
     // Step 1: signature
     try {
@@ -174,6 +186,17 @@ export class AtribVerifier {
       } catch (err) {
         ap2ViEvidence = ap2ViEvidenceErrorResult(err)
       }
+      evidence.push(ap2ViEvidenceToBlock(ap2ViEvidence))
+    }
+
+    if (options.authorizationEvidence) {
+      for (const item of options.authorizationEvidence) {
+        try {
+          evidence.push(await verifyAuthorizationEvidence(item))
+        } catch (err) {
+          evidence.push(authorizationEvidenceErrorResult(err))
+        }
+      }
     }
 
     return {
@@ -184,6 +207,7 @@ export class AtribVerifier {
       warnings,
       graph_node_count: nodeCount,
       ...(ap2ViEvidence ? { ap2_vi_evidence: ap2ViEvidence } : {}),
+      ...(evidence.length > 0 ? { evidence } : {}),
     }
   }
 
@@ -299,6 +323,50 @@ function ap2ViEvidenceErrorResult(err: unknown): Ap2ViEvidenceVerification {
       constraints: { status: 'not_checked', checks: [] },
     },
     errors: [`ap2_vi_evidence verification error: ${message}`],
+    warnings: [],
+  }
+}
+
+function ap2ViEvidenceToBlock(result: Ap2ViEvidenceVerification): EvidenceVerificationBlock {
+  return {
+    protocol: 'ap2_vi',
+    valid: result.valid,
+    issuer: null,
+    subject: null,
+    scope: [],
+    attenuation_ok: result.vi.constraints.status === 'passed' ? true : null,
+    delegation_ok: result.vi.delegationOk,
+    constraints: result.vi.constraints.checks.map((constraint) => {
+      const status: EvidenceCheckStatus =
+        constraint.status === 'passed'
+          ? 'passed'
+          : constraint.status === 'failed'
+            ? 'failed'
+            : constraint.status === 'unresolved'
+              ? 'unresolved'
+              : 'not_checked'
+      return constraint.reason
+        ? { type: constraint.type, status, reason: constraint.reason }
+        : { type: constraint.type, status }
+    }),
+    errors: result.errors,
+    warnings: result.warnings,
+    details: result,
+  }
+}
+
+function authorizationEvidenceErrorResult(err: unknown): EvidenceVerificationBlock {
+  const message = err instanceof Error ? err.message : String(err)
+  return {
+    protocol: 'authorization',
+    valid: false,
+    issuer: null,
+    subject: null,
+    scope: [],
+    attenuation_ok: null,
+    delegation_ok: null,
+    constraints: [],
+    errors: [`authorization_evidence verification error: ${message}`],
     warnings: [],
   }
 }

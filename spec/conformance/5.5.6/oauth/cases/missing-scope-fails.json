@@ -1,0 +1,24 @@
+{
+  "name": "verified claims fail missing required scope",
+  "kind": "claims",
+  "input": {
+    "protocol": "mcp_oauth",
+    "claimsVerified": true,
+    "claims": {
+      "iss": "https://auth.example.com",
+      "sub": "user-123",
+      "aud": "https://mcp.example.com/mcp",
+      "client_id": "client-123",
+      "scope": "files:read",
+      "resource": "https://mcp.example.com/mcp"
+    },
+    "issuer": "https://auth.example.com",
+    "audience": "https://mcp.example.com/mcp",
+    "requiredScopes": ["files:delete"]
+  },
+  "expected": {
+    "valid": false,
+    "constraints": [{ "type": "scope", "status": "failed" }],
+    "errors": ["oauth_evidence constraint failed: scope"]
+  }
+}

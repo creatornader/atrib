@@ -8,6 +8,7 @@
  */
 
 import type { Ap2ViEvidenceVerification } from './ap2-vi-evidence.js'
+import type { EvidenceVerificationBlock } from './authorization-evidence.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Graph types. §3.5
@@ -316,4 +317,9 @@ export interface VerificationResult {
    * settlement recommendation signature or calculation checks.
    */
   ap2_vi_evidence?: Ap2ViEvidenceVerification
+  /**
+   * Generic tiered external evidence blocks. These do not alter
+   * recommendation signature or calculation checks.
+   */
+  evidence?: EvidenceVerificationBlock[]
 }

@@ -12,6 +12,8 @@
 
 import { describe, it, expect } from 'vitest'
 import * as ed from '@noble/ed25519'
+import { exportJWK, generateKeyPair, SignJWT } from 'jose'
+import type { JWK } from 'jose'
 import {
   base64urlEncode,
   canonicalRecord,
@@ -24,6 +26,36 @@ import { verifyRecord } from '../src/verify-record.js'
 import type { Ap2ViEvidenceBundle } from '../src/ap2-vi-evidence.js'
 import autonomousFixture from '../../agent/test/fixtures/ap2/vi_autonomous_success_evidence.json'
 import splitAgentFixture from '../../agent/test/fixtures/ap2/vi_autonomous_split_agent_evidence.json'
+
+async function buildOAuthJwt(): Promise<{ token: string; jwk: JWK }> {
+  const { publicKey, privateKey } = await generateKeyPair('ES256')
+  const jwk = await exportJWK(publicKey)
+  jwk.kid = 'oauth-key-1'
+  jwk.alg = 'ES256'
+  jwk.use = 'sig'
+
+  const token = await new SignJWT({
+    client_id: 'https://client.example/client.json',
+    scope: 'files:read files:write',
+    resource: ['https://mcp.example.com/mcp'],
+    authorization_details: [
+      {
+        type: 'mcp_tool',
+        actions: ['call'],
+        locations: ['https://mcp.example.com/mcp'],
+      },
+    ],
+  })
+    .setProtectedHeader({ alg: 'ES256', kid: 'oauth-key-1' })
+    .setIssuer('https://auth.example.com')
+    .setSubject('user-123')
+    .setAudience('https://mcp.example.com/mcp')
+    .setIssuedAt(1_700_000_000)
+    .setExpirationTime(1_700_003_600)
+    .sign(privateKey)
+
+  return { token, jwk }
+}
 
 async function freshKey() {
   const seed = new Uint8Array(32)
@@ -610,6 +642,9 @@ describe('verifyRecord, cross_attestation (D052 / §1.7.6)', () => {
     expect(result.cross_attestation!.missing).toBe(true)
     expect(result.valid).toBe(true)
     expect(result.ap2_vi_evidence?.valid).toBe(true)
+    expect(result.evidence).toHaveLength(1)
+    expect(result.evidence![0]!.protocol).toBe('ap2_vi')
+    expect(result.evidence![0]!.valid).toBe(true)
     expect(result.ap2_vi_evidence?.transactionAccepted).toBe(true)
     expect(result.ap2_vi_evidence?.vi.mode).toBe('autonomous')
     expect(result.ap2_vi_evidence?.vi.constraints.status).toBe('passed')
@@ -629,6 +664,9 @@ describe('verifyRecord, cross_attestation (D052 / §1.7.6)', () => {
     expect(result.signatureOk).toBe(true)
     expect(result.valid).toBe(true)
     expect(result.ap2_vi_evidence?.valid).toBe(false)
+    expect(result.evidence).toHaveLength(1)
+    expect(result.evidence![0]!.protocol).toBe('ap2_vi')
+    expect(result.evidence![0]!.valid).toBe(false)
     expect(result.ap2_vi_evidence?.errors).toContain('vi_l2_cnf_mismatch')
   })
 
@@ -646,6 +684,115 @@ describe('verifyRecord, cross_attestation (D052 / §1.7.6)', () => {
     expect(result.valid).toBe(true)
     expect(result.ap2_vi_evidence?.valid).toBe(false)
     expect(result.ap2_vi_evidence?.errors[0]).toMatch(/^ap2_vi_evidence verification error:/)
+  })
+
+  it('attaches MCP OAuth evidence to tool-call verification without changing base validity', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/tool_call',
+    })
+    const { token, jwk } = await buildOAuthJwt()
+
+    const result = await verifyRecord(record, {
+      authorizationEvidence: [
+        {
+          protocol: 'mcp_oauth',
+          accessTokenJwt: token,
+          jwks: [jwk],
+          issuer: 'https://auth.example.com',
+          audience: 'https://mcp.example.com/mcp',
+          protectedResourceMetadata: {
+            resource: 'https://mcp.example.com/mcp',
+            authorization_servers: ['https://auth.example.com'],
+          },
+          requiredScopes: ['files:read'],
+          requiredAuthorizationDetails: [{ type: 'mcp_tool', actions: ['call'] }],
+          expectedClientId: 'https://client.example/client.json',
+          nowSeconds: 1_700_000_100,
+        },
+      ],
+    })
+
+    expect(result.signatureOk).toBe(true)
+    expect(result.valid).toBe(true)
+    expect(result.evidence).toHaveLength(1)
+    expect(result.evidence![0]!.protocol).toBe('mcp_oauth')
+    expect(result.evidence![0]!.valid).toBe(true)
+    expect(result.evidence![0]!.issuer).toBe('https://auth.example.com')
+    expect(result.evidence![0]!.subject).toBe('user-123')
+    expect(result.evidence![0]!.scope).toContain('files:read')
+    expect(result.evidence![0]!.attenuation_ok).toBe(true)
+  })
+
+  it('keeps MCP OAuth evidence failures tiered from record signature validity', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/tool_call',
+    })
+
+    const result = await verifyRecord(record, {
+      authorizationEvidence: [
+        {
+          protocol: 'mcp_oauth',
+          claimsVerified: true,
+          claims: {
+            iss: 'https://auth.example.com',
+            sub: 'user-123',
+            aud: 'https://mcp.example.com/mcp',
+            scope: 'files:read',
+            client_id: 'https://client.example/client.json',
+          },
+          issuer: 'https://auth.example.com',
+          audience: 'https://mcp.example.com/mcp',
+          requiredScopes: ['files:delete'],
+        },
+      ],
+    })
+
+    expect(result.signatureOk).toBe(true)
+    expect(result.valid).toBe(true)
+    expect(result.evidence![0]!.valid).toBe(false)
+    expect(result.evidence![0]!.errors).toContain('oauth_evidence constraint failed: scope')
+  })
+
+  it('attaches multiple OAuth evidence blocks without changing base validity', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/tool_call',
+    })
+    const { token, jwk } = await buildOAuthJwt()
+
+    const result = await verifyRecord(record, {
+      authorizationEvidence: [
+        {
+          protocol: 'mcp_oauth',
+          accessTokenJwt: token,
+          jwks: [jwk],
+          issuer: 'https://auth.example.com',
+          audience: 'https://mcp.example.com/mcp',
+          requiredScopes: ['files:read'],
+          nowSeconds: 1_700_000_100,
+        },
+        {
+          protocol: 'mcp_oauth',
+          claimsVerified: true,
+          claims: {
+            iss: 'https://auth.example.com',
+            sub: 'user-123',
+            aud: 'https://mcp.example.com/mcp',
+            scope: 'files:read',
+          },
+          issuer: 'https://auth.example.com',
+          audience: 'https://mcp.example.com/mcp',
+          requiredScopes: ['files:delete'],
+        },
+      ],
+    })
+
+    expect(result.signatureOk).toBe(true)
+    expect(result.valid).toBe(true)
+    expect(result.evidence).toHaveLength(2)
+    expect(result.evidence!.map((block) => block.valid)).toEqual([true, false])
   })
 })
 
@@ -784,6 +931,47 @@ describe('verifyRecord, capability_check (D051 / §6.7)', () => {
     expect(result.capability_check!.in_envelope).toBe(true) // mismatches empty
   })
 
+  it('resolves tool_names when caller supplies tool_call facts', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/tool_call',
+    })
+
+    const result = await verifyRecord(record, {
+      identityClaim: {
+        creator_key: record.creator_key,
+        capabilities: { tool_names: ['allowed_tool'] },
+      },
+      resolvedFacts: { tool_name: 'allowed_tool' },
+    })
+
+    expect(result.capability_check!.unresolvable).toBe(false)
+    expect(result.capability_check!.in_envelope).toBe(true)
+    expect(result.capability_check!.mismatches).toEqual([])
+  })
+
+  it('flags tool_names mismatch when caller supplies a disallowed tool fact', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/tool_call',
+    })
+
+    const result = await verifyRecord(record, {
+      identityClaim: {
+        creator_key: record.creator_key,
+        capabilities: { tool_names: ['allowed_tool'] },
+      },
+      resolvedFacts: { tool_name: 'dangerous_tool' },
+    })
+
+    expect(result.capability_check!.unresolvable).toBe(false)
+    expect(result.capability_check!.in_envelope).toBe(false)
+    expect(result.capability_check!.mismatches).toContain(
+      "tool_name 'dangerous_tool' not in allowlist",
+    )
+    expect(result.valid).toBe(true)
+  })
+
   it('does not flag tool_names unresolvable for non-tool_call records', async () => {
     // Per §6.7.2 step 2 the tool_names constraint applies only to tool_call.
     // For an observation record, the tool_names list is irrelevant.
@@ -831,6 +1019,62 @@ describe('verifyRecord, capability_check (D051 / §6.7)', () => {
     })
 
     expect(result.capability_check!.unresolvable).toBe(true)
+  })
+
+  it('resolves transaction max_amount and counterparty when caller supplies facts', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/transaction',
+    })
+
+    const result = await verifyRecord(record, {
+      identityClaim: {
+        creator_key: record.creator_key,
+        capabilities: {
+          max_amount: { currency: 'USD', value: 100 },
+          counterparties: ['vendor.example'],
+        },
+      },
+      resolvedFacts: {
+        transaction_amount: { currency: 'USD', value: 75 },
+        transaction_counterparty: 'vendor.example',
+      },
+    })
+
+    expect(result.capability_check!.unresolvable).toBe(false)
+    expect(result.capability_check!.in_envelope).toBe(true)
+    expect(result.capability_check!.mismatches).toEqual([])
+  })
+
+  it('flags transaction fact mismatches without invalidating the record', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed, {
+      event_type: 'https://atrib.dev/v1/types/transaction',
+    })
+
+    const result = await verifyRecord(record, {
+      identityClaim: {
+        creator_key: record.creator_key,
+        capabilities: {
+          max_amount: { currency: 'USD', value: 100 },
+          counterparties: ['vendor.example'],
+        },
+      },
+      resolvedFacts: {
+        transaction_amount: { currency: 'USD', value: 125 },
+        transaction_counterparty: 'other.example',
+      },
+    })
+
+    expect(result.capability_check!.unresolvable).toBe(false)
+    expect(result.capability_check!.in_envelope).toBe(false)
+    expect(result.capability_check!.mismatches).toContain(
+      'transaction amount 125 exceeds envelope max 100',
+    )
+    expect(result.capability_check!.mismatches).toContain(
+      "counterparty 'other.example' not in allowlist",
+    )
+    expect(result.valid).toBe(true)
   })
 
   it('combines event_types mismatch and expires_at mismatch into the same mismatches list', async () => {

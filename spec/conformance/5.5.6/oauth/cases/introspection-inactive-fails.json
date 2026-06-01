@@ -1,0 +1,25 @@
+{
+  "name": "inactive introspection response fails",
+  "kind": "introspection",
+  "input": {
+    "protocol": "mcp_oauth",
+    "introspectionVerified": true,
+    "introspection": {
+      "active": false,
+      "iss": "https://auth.example.com",
+      "sub": "user-123",
+      "aud": "https://mcp.example.com/mcp",
+      "client_id": "client-123",
+      "scope": "files:read",
+      "resource": "https://mcp.example.com/mcp"
+    },
+    "issuer": "https://auth.example.com",
+    "audience": "https://mcp.example.com/mcp",
+    "requiredScopes": ["files:read"]
+  },
+  "expected": {
+    "valid": false,
+    "constraints": [{ "type": "scope", "status": "passed" }],
+    "errors": ["oauth_evidence introspection inactive"]
+  }
+}

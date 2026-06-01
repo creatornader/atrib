@@ -25,4 +25,11 @@ describe('overview copy', () => {
     expect(html).toContain('sha256:… record hash')
     expect(html).not.toContain('Search by creator_key, context_id, or record_hash')
   })
+
+  it('can render verifier evidence blocks on action receipts when returned', () => {
+    expect(html).toContain('function renderEvidencePanel(blocks)')
+    expect(html).toContain("label: 'evidence'")
+    expect(html).toContain('external evidence')
+    expect(html).toContain('External evidence blocks passed verifier checks.')
+  })
 })

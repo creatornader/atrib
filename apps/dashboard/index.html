@@ -2431,6 +2431,74 @@ function renderRawJsonPanel(title, meta, payload, options = {}) {
   )
 }
 
+function evidenceBlocks(value) {
+  const evidence = value && Array.isArray(value.evidence) ? value.evidence : []
+  return evidence.filter((block) => block && typeof block === 'object')
+}
+
+function evidenceStatus(blocks) {
+  if (blocks.length === 0) {
+    return {
+      label: 'evidence',
+      value: 'not attached',
+      note: 'No verifier evidence blocks were returned with this action.',
+      tone: 'info',
+    }
+  }
+  const valid = blocks.filter((block) => block.valid === true).length
+  const invalid = blocks.length - valid
+  return {
+    label: 'evidence',
+    value: `${valid}/${blocks.length} valid`,
+    note: invalid === 0
+      ? 'External evidence blocks passed verifier checks.'
+      : 'One or more external evidence blocks need verifier review.',
+    tone: invalid === 0 ? 'ok' : 'warn',
+  }
+}
+
+function renderEvidencePanel(blocks) {
+  if (!blocks.length) return null
+  return el('section', { class: 'panel flush', 'aria-label': 'External evidence' },
+    el('div', { class: 'panel-head' },
+      el('h2', {}, 'external evidence'),
+      el('span', { class: 'meta' }, `${blocks.length} block${blocks.length === 1 ? '' : 's'}`),
+    ),
+    el('div', { class: 'panel-body' },
+      el('table', { class: 'feed' },
+        el('thead', {}, el('tr', {},
+          el('th', {}, 'protocol'),
+          el('th', {}, 'status'),
+          el('th', {}, 'issuer'),
+          el('th', {}, 'subject'),
+          el('th', {}, 'scope'),
+          el('th', {}, 'constraints'),
+        )),
+        el('tbody', {},
+          ...blocks.map((block) => {
+            const constraints = Array.isArray(block.constraints) ? block.constraints : []
+            const failed = constraints.filter((constraint) => constraint?.status === 'failed').length
+            const unresolved = constraints.filter((constraint) => constraint?.status === 'unresolved').length
+            const scope = Array.isArray(block.scope) ? block.scope.join(' ') : ''
+            return el('tr', {},
+              el('td', {}, el('span', { class: 'mono' }, block.protocol || 'unknown')),
+              el('td', {}, el('span', { class: `badge ${block.valid ? 'ok' : 'warn'}` }, block.valid ? 'valid' : 'review')),
+              el('td', {}, block.issuer || '—'),
+              el('td', {}, block.subject || '—'),
+              el('td', {}, scope ? el('span', { class: 'mono' }, scope) : '—'),
+              el('td', {},
+                `${constraints.length} total`,
+                failed ? ` · ${failed} failed` : '',
+                unresolved ? ` · ${unresolved} unresolved` : '',
+              ),
+            )
+          }),
+        ),
+      ),
+    ),
+  )
+}
+
 function pulseStat(label, value, sub = null, options = {}) {
   const opts = typeof options === 'boolean' ? { wide: options } : options
   const attrs = {
@@ -4271,6 +4339,7 @@ async function renderAction(recordHash) {
 
   const identityOk = entry.creator_key && identityCache.get(entry.creator_key)?.found === true
   const eventInfo = eventTypeInfo(entry.event_type, entry.creator_key, entry.event_type_uri)
+  const evidence = evidenceBlocks(entry)
   root.append(renderDetailStatus([
     {
       label: 'signature',
@@ -4296,6 +4365,7 @@ async function renderAction(recordHash) {
       note: entry.context_id ? 'Open the session or ancestry view for context.' : 'No context id was returned for this lookup.',
       tone: entry.context_id ? 'ok' : 'warn',
     },
+    evidenceStatus(evidence),
   ]))
 
   root.append(el('section', { class: 'receipt', 'aria-label': 'Verification receipt' },
@@ -4356,6 +4426,9 @@ async function renderAction(recordHash) {
       ),
     ),
   ))
+
+  const evidencePanel = renderEvidencePanel(evidence)
+  if (evidencePanel) root.append(evidencePanel)
 
   root.append(renderRawJsonPanel('raw record', 'as returned by /v1/lookup', entry))
 

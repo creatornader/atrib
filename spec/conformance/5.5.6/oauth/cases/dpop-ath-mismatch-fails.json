@@ -1,0 +1,33 @@
+{
+  "name": "DPoP proof fails access-token hash binding",
+  "kind": "dpop",
+  "accessToken": "fixture-access-token",
+  "dpop": {
+    "method": "POST",
+    "url": "https://mcp.example.com/mcp",
+    "ath": "mismatch",
+    "iat": 1800000000,
+    "jti": "dpop-ath-mismatch-1",
+    "bindCnfJkt": true
+  },
+  "input": {
+    "protocol": "mcp_oauth",
+    "claimsVerified": true,
+    "claims": {
+      "iss": "https://auth.example.com",
+      "sub": "user-123",
+      "aud": "https://mcp.example.com/mcp",
+      "scope": "files:read",
+      "resource": "https://mcp.example.com/mcp"
+    },
+    "issuer": "https://auth.example.com",
+    "audience": "https://mcp.example.com/mcp",
+    "requiredScopes": ["files:read"],
+    "nowSeconds": 1800000000
+  },
+  "expected": {
+    "valid": false,
+    "constraints": [{ "type": "dpop.ath", "status": "failed" }],
+    "errors": ["oauth_evidence constraint failed: dpop.ath"]
+  }
+}

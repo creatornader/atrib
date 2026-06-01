@@ -1,0 +1,32 @@
+{
+  "spec_version": "atrib/1.0",
+  "section": "5.5.6",
+  "suite": "oauth-mcp-authorization-evidence",
+  "description": "Offline verifier cases for generic OAuth and MCP authorization evidence blocks.",
+  "cases": [
+    {
+      "name": "verified claims satisfy required scope",
+      "file": "cases/verified-claims-scope-pass.json"
+    },
+    {
+      "name": "verified claims fail missing required scope",
+      "file": "cases/missing-scope-fails.json"
+    },
+    {
+      "name": "JWT access token satisfies resource binding",
+      "file": "cases/jwt-resource-binding-pass.json"
+    },
+    {
+      "name": "DPoP proof satisfies htm, htu, ath, jti, iat, and cnf.jkt",
+      "file": "cases/dpop-proof-pass.json"
+    },
+    {
+      "name": "DPoP proof fails access-token hash binding",
+      "file": "cases/dpop-ath-mismatch-fails.json"
+    },
+    {
+      "name": "inactive introspection response fails",
+      "file": "cases/introspection-inactive-fails.json"
+    }
+  ]
+}

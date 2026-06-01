@@ -1,0 +1,36 @@
+{
+  "name": "JWT access token satisfies resource binding",
+  "kind": "jwt",
+  "jwtClaims": {
+    "iss": "https://auth.example.com",
+    "sub": "user-123",
+    "aud": "https://mcp.example.com/mcp",
+    "client_id": "client-123",
+    "scope": "files:read",
+    "resource": "https://mcp.example.com/mcp",
+    "iat": 1700000000,
+    "exp": 1700003600
+  },
+  "input": {
+    "protocol": "mcp_oauth",
+    "issuer": "https://auth.example.com",
+    "audience": "https://mcp.example.com/mcp",
+    "resource": "https://mcp.example.com/mcp",
+    "protectedResourceMetadata": {
+      "resource": "https://mcp.example.com/mcp",
+      "authorization_servers": ["https://auth.example.com"]
+    },
+    "requiredScopes": ["files:read"],
+    "expectedClientId": "client-123",
+    "nowSeconds": 1700000100
+  },
+  "expected": {
+    "valid": true,
+    "constraints": [
+      { "type": "scope", "status": "passed" },
+      { "type": "resource", "status": "passed" },
+      { "type": "protected_resource.authorization_servers", "status": "passed" }
+    ],
+    "errors": []
+  }
+}

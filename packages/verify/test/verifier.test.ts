@@ -190,6 +190,67 @@ describe('AtribVerifier.verify()', () => {
     expect(result.ap2_vi_evidence?.valid).toBe(true)
     expect(result.ap2_vi_evidence?.vi.mode).toBe('autonomous')
     expect(result.ap2_vi_evidence?.vi.constraints.status).toBe('passed')
+    expect(result.evidence).toHaveLength(1)
+    expect(result.evidence?.[0]?.protocol).toBe('ap2_vi')
+    expect(result.evidence?.[0]?.valid).toBe(true)
+  })
+
+  it('attaches OAuth evidence to recommendation verification without changing validity', async () => {
+    const graph = makeGraph()
+    const expectedDist = calculate(graph, DEFAULT_POLICY)
+    const unsigned = {
+      spec_version: 'atrib/1.0' as const,
+      document_type: 'settlement_recommendation' as const,
+      context_id: CTX,
+      transaction_id: 't',
+      policy_record_id: 'default',
+      graph_checkpoint: 'log.atrib.dev/v1',
+      graph_tree_size: 3,
+      calculated_at: 1743860000000,
+      calculated_by: 'https://resolve.atrib.dev/v1',
+      distribution: expectedDist,
+      maximum_total_share: null,
+      warnings: [],
+    }
+    const signed = await signRecommendation(unsigned, MERCHANT_KEY)
+    const merchantPub = base64urlEncode(await getPublicKey(MERCHANT_KEY))
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const u = String(url)
+      if (u.includes('/graph/')) return new Response(JSON.stringify(graph), { status: 200 })
+      if (u.endsWith('/pubkey')) return new Response(merchantPub, { status: 200 })
+      return new Response('', { status: 404 })
+    })
+
+    const verifier = new AtribVerifier()
+    const result = await verifier.verify(signed, {
+      authorizationEvidence: [
+        {
+          protocol: 'mcp_oauth',
+          claimsVerified: true,
+          claims: {
+            iss: 'https://auth.example.com',
+            sub: 'user-123',
+            aud: 'https://mcp.example.com/mcp',
+            client_id: 'client-123',
+            scope: 'files:read files:write',
+            resource: 'https://mcp.example.com/mcp',
+          },
+          issuer: 'https://auth.example.com',
+          audience: 'https://mcp.example.com/mcp',
+          requiredScopes: ['files:read'],
+          expectedClientId: 'client-123',
+        },
+      ],
+    })
+
+    expect(result.valid).toBe(true)
+    expect(result.signatureOk).toBe(true)
+    expect(result.calcMatch).toBe(true)
+    expect(result.evidence).toHaveLength(1)
+    expect(result.evidence?.[0]?.protocol).toBe('mcp_oauth')
+    expect(result.evidence?.[0]?.valid).toBe(true)
+    expect(result.evidence?.[0]?.attenuation_ok).toBe(true)
   })
 
   it('keeps AP2 VI verifier errors tiered from recommendation validity', async () => {

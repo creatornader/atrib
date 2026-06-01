@@ -3460,6 +3460,7 @@ Contents
   - [5.5.3 Post-hoc calculation (no agent SDK)](#553-post-hoc-calculation-no-agent-sdk)
   - [5.5.4 AP2 / Verifiable Intent evidence checks](#554-ap2--verifiable-intent-evidence-checks)
   - [5.5.5 Handoff claim verification](#555-handoff-claim-verification)
+  - [5.5.6 Generic authorization evidence blocks](#556-generic-authorization-evidence-blocks)
 - [5.6 Key Management](#56-key-management)
   - [5.6.1 Key generation](#561-key-generation)
   - [5.6.2 Environment variable convention](#562-environment-variable-convention)
@@ -4122,6 +4123,55 @@ The result separates `accepted` and `rejected` claims and includes `accepted_rec
 
 The helper and primitive do not add a graph edge type or event type. A successful follow-up still uses the existing [§1.2.5](#125-informed_by) field and the existing INFORMED_BY graph edge. See [D105](DECISIONS.md#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance) and [D106](DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7).
 
+#### 5.5.6 Generic Authorization Evidence Blocks
+
+`@atrib/verify` exposes a generic tiered evidence block shape for external authorization and delegation systems. These blocks are verifier-side signals. They do not alter record signature verification, graph derivation, settlement calculation, or `verifyRecord().valid`.
+
+The generic result shape is:
+
+```
+{
+  protocol: 'oauth2' | 'mcp_oauth' | 'ap2_vi' | string,
+  valid: boolean,
+  issuer: string | null,
+  subject: string | null,
+  scope: string[],
+  attenuation_ok: boolean | null,
+  delegation_ok: boolean | null,
+  constraints: [
+    {
+      type: string,
+      status: 'passed' | 'failed' | 'unresolved' | 'not_checked',
+      expected?: unknown,
+      actual?: unknown,
+      reason?: string,
+    },
+  ],
+  errors: string[],
+  warnings: string[],
+  details?: unknown,
+}
+```
+
+`verifyRecord(record, { authorizationEvidence })` attaches an `evidence[]` array. Each evidence item is evaluated independently. A record can have `valid: true` while one or more `evidence[]` entries have `valid: false`; consumers apply policy based on their own trust posture. `ap2ViEvidence` remains available as the legacy AP2 / VI field and is also mirrored into `evidence[]` as `protocol: "ap2_vi"`.
+
+The initial generic adapter is OAuth / MCP authorization evidence. It accepts a compact access-token JWT with caller-supplied trusted JWKS, caller-verified claims, or a caller-supplied OAuth token-introspection response. The verifier does not call an introspection endpoint; the caller owns that network and trust policy. The verifier checks:
+
+1. JWT signature, `iss`, `aud`, `exp`, `nbf`, and clock skew when a JWT and JWKS are supplied.
+2. MCP protected-resource binding through token `aud`, token `resource`, and OAuth Protected Resource Metadata.
+3. Required scopes from `scope` or `scp`.
+4. Optional RFC 9396 `authorization_details` constraints by `type`, `actions`, and `locations`.
+5. Optional `client_id`, subject, actor subject, and `cnf.jkt` checks.
+6. Optional RFC 9449 DPoP proof evidence: `typ`, public JWK thumbprint, `htm`, `htu`, `ath`, `jti`, `iat`, nonce when supplied, and `cnf.jkt` binding when the access-token claims expose it.
+
+The OAuth / MCP adapter does not mint tokens, run OAuth redirects, call token-introspection endpoints, fetch authorization-server metadata, or maintain a global DPoP replay cache. Callers supply tokens, claims, trust roots, protected-resource metadata, seen DPoP `jti` values when they enforce replay policy, and required constraints. Missing trusted keys or unverified decoded claims make the evidence block invalid by default; callers MAY choose a best-effort signature policy for advisory triage.
+
+`@atrib/mcp` MAY capture MCP/OAuth evidence from an MCP HTTP transport's already-validated `authInfo` and request metadata into the local mirror sidecar. Producer-side capture MUST NOT persist the raw bearer token by default. The reference implementation stores verified claims, a one-way token hash when configured, optional DPoP proof material, and verifier constraints. It also records resolved local facts such as `tool_name` so `verifyRecord()` can evaluate capability envelopes without changing the signed record bytes.
+
+The offline conformance corpus for this adapter lives at `spec/conformance/5.5.6/oauth/`. It covers verified claims, JWT access tokens, MCP resource binding, scope attenuation failures, caller-supplied introspection responses, and DPoP proof checks.
+
+This section is intentionally at the verifier layer. Authorization systems decide what an agent is allowed to do. atrib records what the agent did, who signed the record, how it links to prior work, and which external evidence a verifier accepted. See [D109](DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks).
+
 ---
 
 ### 5.6 Key Management
@@ -4272,13 +4322,15 @@ The sidecar is a free-form JSON object carrying pre-sign payload context that th
 
 The following field names are normative when present (producers SHOULD use these names; consumers SHOULD recognize them):
 
-| Field      | Type   | Purpose                                                                                                                                                                                                                                                |
-| ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `producer` | string | Identifies the producer that wrote this entry, for cross-source disambiguation when multiple producers write to the same mirror directory. Values are producer-specific (e.g. `"atrib-emit"`, or any other wrapper / emitter package name).            |
-| `toolName` | string | The MCP tool name as invoked. Populated by wrapper-side producers; absent for emit-side producers (which have no tool name to record).                                                                                                                 |
-| `args`     | object | The MCP tool call arguments as invoked. Populated by wrapper-side producers per the wrapped call.                                                                                                                                                      |
-| `result`   | object | The MCP tool's result object, captured BEFORE any host-side mutation (e.g. before atrib middleware writes its propagation token to `result._meta`). Populated by wrapper-side producers.                                                               |
-| `content`  | object | The pre-sign content payload as supplied to the producer, or a normalized local content payload derived from the producer's runtime evidence. Populated by `atrib-emit`-style producers per the `content` argument the agent passed; typically carries `what`, `why_noted`, `topics`, `summary`, `importance` (depending on `event_type`). OpenInference producers SHOULD use this field for recall-readable span metadata rather than adding span metadata to the signed `record`. |
+| Field                   | Type   | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `producer`              | string | Identifies the producer that wrote this entry, for cross-source disambiguation when multiple producers write to the same mirror directory. Values are producer-specific (e.g. `"atrib-emit"`, or any other wrapper / emitter package name).                                                                                                                                                                                                                                         |
+| `toolName`              | string | The MCP tool name as invoked. Populated by wrapper-side producers; absent for emit-side producers (which have no tool name to record).                                                                                                                                                                                                                                                                                                                                              |
+| `args`                  | object | The MCP tool call arguments as invoked. Populated by wrapper-side producers per the wrapped call.                                                                                                                                                                                                                                                                                                                                                                                   |
+| `result`                | object | The MCP tool's result object, captured BEFORE any host-side mutation (e.g. before atrib middleware writes its propagation token to `result._meta`). Populated by wrapper-side producers.                                                                                                                                                                                                                                                                                            |
+| `content`               | object | The pre-sign content payload as supplied to the producer, or a normalized local content payload derived from the producer's runtime evidence. Populated by `atrib-emit`-style producers per the `content` argument the agent passed; typically carries `what`, `why_noted`, `topics`, `summary`, `importance` (depending on `event_type`). OpenInference producers SHOULD use this field for recall-readable span metadata rather than adding span metadata to the signed `record`. |
+| `authorizationEvidence` | array  | Optional verifier-ready external authorization evidence captured from the host runtime, such as MCP/OAuth evidence from already-validated `authInfo`. This field is local-only and MUST NOT include raw bearer tokens by default. Consumers can pass it to `verifyRecord(record, { authorizationEvidence })` to populate `evidence[]`.                                                                                                                                              |
+| `resolvedFacts`         | object | Optional local facts resolved from the payload or runtime event, such as `{ "tool_name": "read_file" }`. Consumers can pass it to `verifyRecord(record, { resolvedFacts })` so capability-envelope checks can use facts that are not in the compact signed record.                                                                                                                                                                                                                  |
 
 Producers MAY add additional fields beyond this list. Consumers MUST tolerate unknown fields and SHOULD pass them through unchanged when re-emitting (e.g. when `atrib-trace` surfaces a sidecar summary for downstream tools).
 
@@ -4286,14 +4338,14 @@ All sidecar fields are OPTIONAL. A sidecar containing only `{ "producer": "..." 
 
 For OpenTelemetry / OpenInference producers, `_local.content` SHOULD use a stable local convention so cognitive primitives can read span-derived evidence without making observability fields part of `AtribRecord`. The recommended content fields are:
 
-| Field family | Fields | Purpose |
-| ------------ | ------ | ------- |
-| Span identity | `source`, `span_kind`, `span_name`, `trace_id`, `span_id` | Correlate a signed record with the runtime span tree and external observability systems. |
-| Legibility | `what`, `why_noted`, `topics` | Let recall, trace, and summarize display the span as human-readable context. |
-| Tool payload | `tool_name`, `args`, `result`, `input`, `output`, `input_mime_type`, `output_mime_type` | Preserve local payload context. `args_hash` and `result_hash` on the signed record remain the verifier-grade commitment path. |
-| Runtime metadata | `agent_name`, `model_name`, `tool_call_id`, `llm_output_tool_call_id` | Preserve framework and model identity plus the empirical LLM-to-tool linkage key. |
-| Prompt metadata | `invocation_parameters`, `prompt`, `prompt_messages`, `prompt_tools`, `prompt_tool_choice`, `prompt_template`, `prompt_template_variables`, `prompt_version`, `prompt_id`, `prompt_url` | Make prompt and prompt-version evidence findable by cognitive consumers while keeping it local by default. |
-| Operational metrics | `usage_details`, `cost_details`, `score_details`, `metadata` | Make token, cost, score, release, user, and other operational context available to local recall and summaries. |
+| Field family        | Fields                                                                                                                                                                                  | Purpose                                                                                                                       |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Span identity       | `source`, `span_kind`, `span_name`, `trace_id`, `span_id`                                                                                                                               | Correlate a signed record with the runtime span tree and external observability systems.                                      |
+| Legibility          | `what`, `why_noted`, `topics`                                                                                                                                                           | Let recall, trace, and summarize display the span as human-readable context.                                                  |
+| Tool payload        | `tool_name`, `args`, `result`, `input`, `output`, `input_mime_type`, `output_mime_type`                                                                                                 | Preserve local payload context. `args_hash` and `result_hash` on the signed record remain the verifier-grade commitment path. |
+| Runtime metadata    | `agent_name`, `model_name`, `tool_call_id`, `llm_output_tool_call_id`                                                                                                                   | Preserve framework and model identity plus the empirical LLM-to-tool linkage key.                                             |
+| Prompt metadata     | `invocation_parameters`, `prompt`, `prompt_messages`, `prompt_tools`, `prompt_tool_choice`, `prompt_template`, `prompt_template_variables`, `prompt_version`, `prompt_id`, `prompt_url` | Make prompt and prompt-version evidence findable by cognitive consumers while keeping it local by default.                    |
+| Operational metrics | `usage_details`, `cost_details`, `score_details`, `metadata`                                                                                                                            | Make token, cost, score, release, user, and other operational context available to local recall and summaries.                |
 
 These fields are local-only. They MUST NOT be submitted to the public log as part of the standard submission path. If a later verifier, handoff, settlement, dispute, or recall consumer needs one of these fields to become protocol-visible, the field needs a separate ADR and either a signed-record commitment (`args_hash` / `result_hash` or a new field) or a promoted event type under [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary).
 
@@ -4622,9 +4674,9 @@ A verifier that has resolved a record's `creator_key` to an identity claim with 
 
 1. Determine the active envelope at the record's `timestamp`. The active envelope is the most recent identity claim published in [§6.2](#62-directory-operations) history at or before the record's timestamp. If no envelope was active at that time, the record is treated as having no envelope constraint.
 2. Check the record's content against the envelope:
-   - If `tool_names` is present, the record's `tool_name` MUST be in the list (for tool_call records).
+   - If `tool_names` is present, the record's `tool_name` MUST be in the list (for tool_call records). The verifier MAY use a `tool_name` field disclosed on the record or caller-supplied facts resolved from the local record body or upstream protocol event. If no tool name is available, the verifier MUST flag the check as `unresolvable: true`.
    - If `event_types` is present, the record's `event_type` URI MUST be in the list.
-   - For transaction records, if `max_amount` and/or `counterparties` are present, the verifier MUST resolve the transaction amount and counterparty from the protocol-specific transaction event the record commits to (per [§1.7](#17-transaction-event-hooks)'s payment-protocol definitions: ACP order envelope, UCP envelope, x402 PAYMENT-RESPONSE header, MPP Payment-Receipt, AP2 CheckoutReceipt or PaymentReceipt, a2a-x402 receipts). The resolved amount MUST NOT exceed `max_amount`; the resolved counterparty MUST be in the `counterparties` allowlist. When the protocol-specific event is not available out-of-band, the verifier MUST flag the check as `unresolvable: true` rather than passing or failing silently.
+   - For transaction records, if `max_amount` and/or `counterparties` are present, the verifier MUST resolve the transaction amount and counterparty from the protocol-specific transaction event the record commits to (per [§1.7](#17-transaction-event-hooks)'s payment-protocol definitions: ACP order envelope, UCP envelope, x402 PAYMENT-RESPONSE header, MPP Payment-Receipt, AP2 CheckoutReceipt or PaymentReceipt, a2a-x402 receipts). The resolved amount MUST NOT exceed `max_amount`; the resolved counterparty MUST be in the `counterparties` allowlist. When the protocol-specific event is not available out-of-band or through caller-supplied resolved facts, the verifier MUST flag the check as `unresolvable: true` rather than passing or failing silently.
    - If `expires_at` is present and the record's timestamp is after it, the envelope is expired (treated as having no constraint and flagged separately).
 3. Surface the result as `capability_check: { envelope: CapabilityEnvelope | null, in_envelope: bool, mismatches: string[], unresolvable: bool }` on the verification output.
 
