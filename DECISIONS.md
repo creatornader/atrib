@@ -5356,7 +5356,7 @@ The missing piece is producer-side capture from already-validated MCP HTTP autho
 
 **Extends:** [D070](#d070-record-body-archive-layer), [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks), and [D110](#d110-mcpoauth-evidence-capture-closes-the-producer-to-verifier-loop).
 
-**Context.** [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks) and [D110](#d110-mcpoauth-evidence-capture-closes-the-producer-to-verifier-loop) made MCP/OAuth evidence possible, but left three production seams for hosts to solve alone:
+**Context.** [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks) and [D110](#d110-mcpoauth-evidence-capture-closes-the-producer-to-verifier-loop) made MCP/OAuth evidence possible, but left three production edges for hosts to solve alone:
 
 1. Explorer evidence needed a body/evidence API because `log-node` cannot return sidecar evidence.
 2. DPoP replay protection needed state shared across verifier instances.
@@ -5379,6 +5379,7 @@ The missing piece is producer-side capture from already-validated MCP HTTP autho
 - atrib has a concrete second evidence adapter path with production retrieval and verifier plumbing, not just fixture code.
 - Hosts still own OAuth secrets, live introspection policy, replay-cache deployment, and archive opt-in policy.
 - The archive layer gives public inspection a way to show evidence without changing log entries or graph derivation.
+- A hosted Cloudflare Worker / Durable Object reference for replay-cache and introspection endpoints remains a useful follow-up example, not a missing protocol requirement.
 
 **Cross-references.**
 
@@ -5388,6 +5389,7 @@ The missing piece is producer-side capture from already-validated MCP HTTP autho
 - [`packages/verify/src/dpop-replay-cache.ts`](packages/verify/src/dpop-replay-cache.ts), replay-cache contract.
 - [`packages/verify/src/oauth-introspection.ts`](packages/verify/src/oauth-introspection.ts), host-owned introspection helper.
 - [`services/archive-node/`](services/archive-node/), production archive reference service.
+- [`docs/concepts/12-delegation-and-capabilities.md`](docs/concepts/12-delegation-and-capabilities.md), capability and delegation boundary note.
 
 ---
 

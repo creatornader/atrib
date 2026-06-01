@@ -28,6 +28,7 @@ The logical layering — foundations first, then structure, then guarantees, the
 | 9 | [The calculation algorithm](09-calculation-algorithm.md) | [§4.6](../../atrib-spec.md#46-the-calculation-algorithm) | DRAFT |
 | 10 | [Integration patterns (runtime adapters)](10-integration-patterns.md) | [§9](../../atrib-spec.md#9-runtime-integration-patterns), [D069](../../DECISIONS.md#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) | STUB |
 | 11 | [The six cognitive primitives](11-cognitive-primitives.md) | [D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) | STUB |
+| 12 | [Delegation and capabilities](12-delegation-and-capabilities.md) | [§5.5.6](../../atrib-spec.md#556-generic-authorization-evidence-blocks), [§6.7](../../atrib-spec.md#67-capability-declarations) | DRAFT |
 
 ## Discovery order (how atrib was actually built)
 
@@ -51,6 +52,6 @@ The order above is *learning-friendly*. The order below is *historically accurat
 
 ## Status of this directory
 
-Living draft as of 2026-05-22. The two `DRAFT` entries (payments + calculation) were produced in conversation and dropped in as v1 starting points. The rest are stubs awaiting deep-dive treatment.
+Living draft as of 2026-06-01. The `DRAFT` entries were produced in conversation and dropped in as v1 starting points. The rest are stubs awaiting deep-dive treatment.
 
 Once a doc reaches `PUBLISHED`, it becomes source material for the eventual atrib developer docs site.
