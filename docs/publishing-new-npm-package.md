@@ -138,17 +138,22 @@ enabled, update the GitHub secret, and rerun the same manual dispatch. npm
 expects `--expires` as a number of days, not a calendar date:
 
 ```bash
+npm config set auth-type legacy
 npm whoami || npm login --auth-type=legacy
 
-# Run this in an interactive terminal. npm prompts for the account password and
-# OTP even when `npm whoami` succeeds.
+# Run this in an interactive terminal. npm prompts for the account password even
+# when `npm whoami` succeeds. Pass the OTP on the command so npm does not send
+# you through its browser auth URL.
+read -rp "npm otp: " NPM_OTP
 npm token create \
   --name atrib-ci-initial-package-YYYY-MM-DD \
   --token-description "Temporary atrib initial package publish token" \
   --expires 2 \
   --packages-all \
   --packages-and-scopes-permission read-write \
-  --bypass-2fa
+  --bypass-2fa \
+  --otp "$NPM_OTP"
+unset NPM_OTP
 
 read -rsp "npm token: " NPM_TOKEN
 printf "\n"
@@ -168,12 +173,14 @@ gh workflow run release.yml \
   -f package_path=<package-path>
 ```
 
+If `npm token create` prints a browser auth URL, stop that attempt and rerun the
+command with a fresh `--otp` value. The browser URL can end on a 404 page after
+2FA and still leave the CLI without a token to print. Do not paste an empty value
+into `NPM_TOKEN`.
+
 If `npm token create` returns `E401`, the local npm session is stale or missing.
 Run `npm login --auth-type=legacy` again, complete the terminal username,
-password, and 2FA prompts, then rerun the token command. Do not use npm's web
-login flow for this step; local npm configs with `auth-type = "web"` can send
-the operator through a browser auth URL that does not complete the CLI token
-creation path.
+password, and 2FA prompts, then rerun the token command.
 
 Revoke the temporary token after the package exists and trusted publishing is
 configured.
@@ -197,7 +204,7 @@ After the package exists, configure npm trusted publishing for the package:
 npm trust github <package-name> \
   --repo creatornader/atrib \
   --file release.yml \
-  --allow-publish
+  -y
 ```
 
 This requires an authenticated npm owner account with 2FA. npm's own CLI docs
@@ -216,7 +223,6 @@ The expected relationship is:
 - provider: GitHub Actions.
 - repository: `creatornader/atrib`.
 - workflow filename: `release.yml`.
-- allowed action: `npm publish`.
 
 ## Post-publish verification
 
