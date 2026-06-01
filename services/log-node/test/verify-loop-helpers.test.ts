@@ -21,7 +21,9 @@ import {
   nodeHash,
   largestPowerOfTwoLessThan,
   computeRoot,
+  computeRootCached,
   computeInclusionProof,
+  computeInclusionProofCached,
   verifyInclusion,
   bytesEqual,
   parseCheckpoint,
@@ -29,6 +31,9 @@ import {
   parseEntry,
   b64urlDecode,
   b64urlEncode,
+  parseNonNegativeInt,
+  formatDecodedEntryLine,
+  selectEntrySamples,
 } from '../scripts/verify-loop.mjs'
 
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -133,6 +138,35 @@ describe('verify-loop helpers: inclusion proofs', () => {
         expect(ok, `inclusion(${i}/${n}) failed`).toBe(true)
       }
     }
+  })
+
+  it('cached roots match the reference recursive root for trees of size 1..16', () => {
+    for (let n = 1; n <= 16; n++) {
+      const ls = leaves(n)
+      const { root, cache } = computeRootCached(ls)
+      expect(hex(root), `root(${n})`).toBe(hex(computeRoot(ls)))
+      expect(cache.size, `cache(${n})`).toBeGreaterThan(0)
+    }
+  })
+
+  it('cached inclusion proofs match reference proofs and verify for every leaf', () => {
+    for (let n = 1; n <= 16; n++) {
+      const ls = leaves(n)
+      const { root, cache } = computeRootCached(ls)
+      for (let i = 0; i < n; i++) {
+        const proof = computeInclusionProofCached(i, ls, cache)
+        const referenceProof = computeInclusionProof(i, ls)
+        expect(proof.map(hex), `proof(${i}/${n})`).toEqual(referenceProof.map(hex))
+        expect(verifyInclusion(i, n, ls[i]!, proof, root), `cached inclusion(${i}/${n})`).toBe(true)
+      }
+    }
+  })
+
+  it('cached inclusion proofs reject out-of-range indexes', () => {
+    const ls = leaves(4)
+    const { cache } = computeRootCached(ls)
+    expect(() => computeInclusionProofCached(-1, ls, cache)).toThrow(/out of range/)
+    expect(() => computeInclusionProofCached(4, ls, cache)).toThrow(/out of range/)
   })
 
   it('rejects a proof that targets the wrong leaf', () => {
@@ -328,5 +362,50 @@ describe('verify-loop helpers: parseEntry', () => {
     expect(Array.from(e.recordHash)).toEqual(Array.from(recordHash))
     expect(Array.from(e.creatorKey)).toEqual(Array.from(creatorKey))
     expect(Array.from(e.contextId)).toEqual(Array.from(contextId))
+  })
+})
+
+describe('verify-loop helpers: decoded entry output', () => {
+  it('parses non-negative integer env values with fallback', () => {
+    expect(parseNonNegativeInt('0', 40)).toBe(0)
+    expect(parseNonNegativeInt('12', 40)).toBe(12)
+    expect(parseNonNegativeInt('', 40)).toBe(40)
+    expect(parseNonNegativeInt(undefined, 40)).toBe(40)
+    expect(parseNonNegativeInt('-1', 40)).toBe(40)
+    expect(parseNonNegativeInt('1.5', 40)).toBe(40)
+    expect(parseNonNegativeInt('nope', 40)).toBe(40)
+  })
+
+  it('samples head and tail entries with one omission marker', () => {
+    const entries = Array.from({ length: 10 }, (_, i) => ({ id: i }))
+    expect(selectEntrySamples(entries, 4)).toEqual([
+      { kind: 'entry', index: 0, entry: entries[0] },
+      { kind: 'entry', index: 1, entry: entries[1] },
+      { kind: 'omitted', count: 6 },
+      { kind: 'entry', index: 8, entry: entries[8] },
+      { kind: 'entry', index: 9, entry: entries[9] },
+    ])
+  })
+
+  it('can suppress entry lines entirely while reporting the omitted count', () => {
+    expect(selectEntrySamples([1, 2, 3], 0)).toEqual([{ kind: 'omitted', count: 3 }])
+    expect(selectEntrySamples([], 0)).toEqual([])
+  })
+
+  it('formats one decoded entry line without dumping the full record body', () => {
+    const entry = {
+      recordHash: new Uint8Array(32).fill(1),
+      creatorKey: new Uint8Array(32).fill(2),
+      contextId: new Uint8Array(16).fill(3),
+      ts: 1735689600000,
+      eventType: 0x01,
+    }
+    expect(formatDecodedEntryLine(7, entry)).toBe(
+      '  [7] record_hash=0101010101010101...  ' +
+      'creator_key=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI  ' +
+      'context_id=03030303030303030303030303030303  ' +
+      'ts=2025-01-01T00:00:00.000Z  ' +
+      'event_type=0x01',
+    )
   })
 })
