@@ -398,6 +398,7 @@
   @media (max-width: 720px) {
     .panel.flush { overflow-x: auto; overflow-y: hidden; }
     .panel.flush table { min-width: 540px; }
+    .panel.flush table.evidence-feed { min-width: 0; }
     .panel.flush .trace-graph { min-width: 540px; }
   }
 
@@ -854,6 +855,49 @@
   table.feed tbody tr.new,
   table.feed tbody tr.new td {
     animation: rowEnter 6500ms ease-out;
+  }
+  .evidence-authority {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    color: var(--text-2);
+  }
+  @media (max-width: 720px) {
+    table.evidence-feed {
+      min-width: 0;
+    }
+    table.evidence-feed thead {
+      display: none;
+    }
+    table.evidence-feed tbody tr {
+      display: grid;
+      gap: 0;
+      padding: 10px 0;
+    }
+    table.evidence-feed tbody tr:hover {
+      background: transparent;
+    }
+    table.evidence-feed tbody td {
+      display: grid;
+      grid-template-columns: 104px minmax(0, 1fr);
+      gap: 12px;
+      padding: 8px 20px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    table.evidence-feed tbody td .badge,
+    table.evidence-feed tbody td .mono,
+    table.evidence-feed tbody td .evidence-authority {
+      justify-self: start;
+    }
+    table.evidence-feed tbody td::before {
+      content: attr(data-label);
+      color: var(--text-3);
+      font: 600 10.5px/1.3 var(--font-sans);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      white-space: nowrap;
+    }
   }
   @keyframes rowEnter {
     0%   { background-color: rgba(252, 211, 77, 0.18); }
@@ -2494,6 +2538,19 @@ function evidenceStatus(blocks) {
   }
 }
 
+function evidenceFlagLabel(value) {
+  if (value === true) return 'ok'
+  if (value === false) return 'review'
+  return 'n/a'
+}
+
+function evidenceAuthorityLabel(block) {
+  const parts = []
+  if ('attenuation_ok' in block) parts.push(`attenuation ${evidenceFlagLabel(block.attenuation_ok)}`)
+  if ('delegation_ok' in block) parts.push(`delegation ${evidenceFlagLabel(block.delegation_ok)}`)
+  return parts.length ? parts.join(', ') : 'n/a'
+}
+
 function renderEvidencePanel(blocks) {
   if (!blocks.length) return null
   return el('section', { class: 'panel flush', 'aria-label': 'External evidence' },
@@ -2502,13 +2559,14 @@ function renderEvidencePanel(blocks) {
       el('span', { class: 'meta' }, `${blocks.length} block${blocks.length === 1 ? '' : 's'}`),
     ),
     el('div', { class: 'panel-body' },
-      el('table', { class: 'feed' },
+      el('table', { class: 'feed evidence-feed' },
         el('thead', {}, el('tr', {},
           el('th', {}, 'protocol'),
           el('th', {}, 'status'),
           el('th', {}, 'issuer'),
           el('th', {}, 'subject'),
           el('th', {}, 'scope'),
+          el('th', {}, 'authority'),
           el('th', {}, 'constraints'),
         )),
         el('tbody', {},
@@ -2518,12 +2576,15 @@ function renderEvidencePanel(blocks) {
             const unresolved = constraints.filter((constraint) => constraint?.status === 'unresolved').length
             const scope = Array.isArray(block.scope) ? block.scope.join(' ') : ''
             return el('tr', {},
-              el('td', {}, el('span', { class: 'mono' }, block.protocol || 'unknown')),
-              el('td', {}, el('span', { class: `badge ${block.valid ? 'ok' : 'warn'}` }, block.valid ? 'valid' : 'review')),
-              el('td', {}, block.issuer || '—'),
-              el('td', {}, block.subject || '—'),
-              el('td', {}, scope ? el('span', { class: 'mono' }, scope) : '—'),
-              el('td', {},
+              el('td', { 'data-label': 'protocol' }, el('span', { class: 'mono' }, block.protocol || 'unknown')),
+              el('td', { 'data-label': 'status' }, el('span', { class: `badge ${block.valid ? 'ok' : 'warn'}` }, block.valid ? 'valid' : 'review')),
+              el('td', { 'data-label': 'issuer' }, block.issuer || 'n/a'),
+              el('td', { 'data-label': 'subject' }, block.subject || 'n/a'),
+              el('td', { 'data-label': 'scope' }, scope ? el('span', { class: 'mono' }, scope) : 'n/a'),
+              el('td', { 'data-label': 'authority' },
+                el('span', { class: 'evidence-authority' }, evidenceAuthorityLabel(block)),
+              ),
+              el('td', { 'data-label': 'constraints' },
                 `${constraints.length} total`,
                 failed ? ` · ${failed} failed` : '',
                 unresolved ? ` · ${unresolved} unresolved` : '',
