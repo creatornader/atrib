@@ -28,6 +28,7 @@ atrib/
   ARCHITECTURE.md              # Technical architecture overview: trust model, protocol layers, design decisions
   PRIOR-ART.md                 # Prior art & standards map: every spec/protocol atrib builds on, organized by layer
   METRICS.md                   # Tiered metrics framework + lifecycle states + quarterly evolution review for the dogfood experiment
+  docs/publishing-new-npm-package.md # Runsheet for creating and publishing a new public npm package.
   metrics/                     # Dated JSON snapshots from `pnpm --filter @atrib/log-node metrics`
   packages/
     mcp/                       # @atrib/mcp: MCP server middleware (public)
@@ -98,15 +99,16 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 
 ## Authoritative docs
 
-| Doc               | Responsible for                                                                                                                      |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `atrib-spec.md`   | Complete protocol specification: record format, Merkle log, graph model, policy format, SDK contract                                 |
-| `CLAUDE.md`       | Project conventions, invariants, implementation guidance                                                                             |
-| `ARCHITECTURE.md` | Technical architecture overview: trust model, protocol layers, payment integration, design decisions                                 |
-| `DESIGN.md`       | Product design system: current surface inventory, north-star direction, tokens, components, UI writing rules, design backlog         |
-| `DECISIONS.md`    | Architectural decision log: what was decided, why, what alternatives were considered                                                 |
-| `PRIOR-ART.md`    | Every standard and protocol atrib builds on, extends, or hooks into, organized by layer                                              |
-| `METRICS.md`      | Tiered metrics framework, metric lifecycle states, quarterly evolution review process, annual meta-review for the dogfood experiment |
+| Doc                                  | Responsible for                                                                                                                      |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `atrib-spec.md`                      | Complete protocol specification: record format, Merkle log, graph model, policy format, SDK contract                                 |
+| `CLAUDE.md`                          | Project conventions, invariants, implementation guidance                                                                             |
+| `ARCHITECTURE.md`                    | Technical architecture overview: trust model, protocol layers, payment integration, design decisions                                 |
+| `DESIGN.md`                          | Product design system: current surface inventory, north-star direction, tokens, components, UI writing rules, design backlog         |
+| `DECISIONS.md`                       | Architectural decision log: what was decided, why, what alternatives were considered                                                 |
+| `PRIOR-ART.md`                       | Every standard and protocol atrib builds on, extends, or hooks into, organized by layer                                              |
+| `METRICS.md`                         | Tiered metrics framework, metric lifecycle states, quarterly evolution review process, annual meta-review for the dogfood experiment |
+| `docs/publishing-new-npm-package.md` | Runsheet for creating and publishing a new public npm package                                                                        |
 
 ## Sync triggers
 
@@ -119,7 +121,7 @@ A subset of triggers is mechanically enforced by `scripts/check-doc-sync.mjs` (r
 | Event                          | Update                                                                                                                                                                                                           |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Architectural decision made    | `DECISIONS.md`: new entry with date, context, decision, alternatives                                                                                                                                             |
-| New package created            | This file (repository structure) AND `README.md` (packages table)                                                                                                                                                |
+| New package created            | This file (repository structure) AND `README.md` (packages table); public npm packages also follow `docs/publishing-new-npm-package.md`                                                                          |
 | Product design surface changed | `DESIGN.md` first, then the surface README if a view/component contract changed                                                                                                                                  |
 | New framework adapter shipped  | `packages/agent/README.md` (adapter table + side-by-side quick-starts) AND `README.md` (top-level adapter table) AND `DECISIONS.md` (a Dxxx entry with the integration shape decision and rejected alternatives) |
 
