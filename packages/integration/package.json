@@ -23,6 +23,7 @@
     "ap2-local-participant": "tsx scripts/generate-ap2-local-participant-artifacts.ts",
     "ap2-google-sample-extract": "tsx scripts/extract-google-ap2-sample-artifacts.ts",
     "mem0-wrapper-demo": "tsx examples/mem0/mem0-wrapper-demo.ts",
+    "mem0-oss-compat-smoke": "tsx examples/mem0/mem0-oss-compat-smoke.ts",
     "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts",
     "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts"
   },
@@ -53,6 +54,8 @@
     "@types/node": "^25.9.1",
     "ai": "^6.0.193",
     "jose": "6.2.3",
+    "mem0ai": "3.0.6",
+    "tslib": "^2.8.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8",
     "zod": "^4.4.3"
