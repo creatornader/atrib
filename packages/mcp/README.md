@@ -111,6 +111,30 @@ Wraps an `McpServer` instance in place. The wrapper is idempotent and can be cal
 | `preCallTransform`  | `PreCallTransform`                                                                                                                               | optional                | Pre-call hook for cross-tool causal embedding. When set, the middleware signs the record BEFORE forwarding to the upstream handler and invokes the callback with `{ toolName, args, receiptId, recordHash, contextId }`. The host returns mutated args to inject the receipt_id (or record_hash) into the upstream call. Use case: a wrapper around a database-writing tool that wants the tool to record its own atrib receipt at insert time, letting downstream consumers anchor `informed_by` references to the row. Errors thrown from the callback degrade silently to the standard post-call signing path ([§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)). Tools without `preCallTransform` set retain the default post-call signing semantics.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `disclosure`        | `{ tool_name?: 'omit'\|'verbatim'\|'hashed'; args?: 'omit'\|'plain-sha256'\|'salted-sha256'; result?: 'omit'\|'plain-sha256'\|'salted-sha256' }` | optional                | Opt-in disclosure dials per [§8 / D061](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-§121). All three default to `'omit'`, preserving the [§8.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#81-default-posture) default posture (existing behavior; record bytes unchanged for callers that don't opt in). `tool_name: 'verbatim'` writes the raw tool name; `'hashed'` writes `sha256:<hex>` of it. `args` and `result` use the same scheme: `'plain-sha256'` writes `<field>_hash = sha256(JCS(payload))`; `'salted-sha256'` generates a 16-byte random salt per record and writes both the salt field and `<field>_hash = sha256(salt ‖ JCS(payload))`. The result is hashed BEFORE atrib mutates `result._meta` with its own propagation token, so the commitment covers exactly what the upstream handler returned. **Compatibility**: `disclosure.result` requires the post-call signing path and is INCOMPATIBLE with `preCallTransform` (which signs pre-call when no result is available); when both are set, `result` disclosure is silently inactive on the pre-call path and an init-time warning fires so the conflict is visible at config time. |
 
+### Producer-side MCP/OAuth evidence capture
+
+Set `authorizationEvidence` when an MCP HTTP transport has already validated `extra.authInfo` and you want the local mirror to preserve verifier-ready evidence for later `@atrib/verify` checks:
+
+```typescript
+atrib(server, {
+  creatorKey: '<base64url-encoded-32-byte-seed>',
+  serverUrl: 'https://mcp.example.com/mcp',
+  authorizationEvidence: {
+    claimSource: 'extraClaims',
+    requiredScopes: ['files:read'],
+    protectedResourceMetadata: {
+      resource: 'https://mcp.example.com/mcp',
+      authorization_servers: ['https://auth.example.com'],
+    },
+    includeDpopProof: true,
+  },
+})
+```
+
+The middleware stores this evidence only in the local sidecar passed to `onRecord` or mirror writers. It does not add OAuth claims to the signed `AtribRecord`, and it does not submit them to the public log. The sidecar contains verified claims from `authInfo`, a one-way `token_hash` when a bearer token is present, optional DPoP proof material, and configured constraints. It does not store the raw bearer token by default.
+
+The same sidecar also includes `resolvedFacts: { tool_name }` for tool calls. Verifiers can pass those facts to `verifyRecord(record, { resolvedFacts })` so capability envelopes that constrain `tool_names` can be evaluated from local body material instead of surfacing as unresolved.
+
 ### Parent-child threading
 
 Per [D104](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d104-parent-child-threading-uses-atrib_parent_record_hash), a parent producer that has already signed the spawn record for a child can set `ATRIB_PARENT_RECORD_HASH=<sha256:...>` in the child process env. `atrib()` reads the value at middleware initialization. If the value is valid, the first successful wrapper-signed record adds it to `informed_by`. Failed tool calls do not consume the seed. The seed merges with `informedBy` and `autoDetectInformedByFromArgs`, dedupes, and signs in lexicographic order. Invalid env values are ignored.

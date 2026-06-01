@@ -33,6 +33,32 @@ describe('local sidecar normalization', () => {
     })
   })
 
+  it('derives tool_call authorization evidence and resolved facts from the sidecar', () => {
+    expect(
+      deriveLocalContentFromSidecar(EVENT_TYPE_TOOL_CALL_URI, {
+        toolName: 'read_file',
+        authorizationEvidence: [
+          {
+            protocol: 'mcp_oauth',
+            claimsVerified: true,
+            claims: { scope: 'files:read' },
+          },
+        ],
+        resolvedFacts: { tool_name: 'read_file' },
+      }),
+    ).toEqual({
+      tool_name: 'read_file',
+      authorization_evidence: [
+        {
+          protocol: 'mcp_oauth',
+          claimsVerified: true,
+          claims: { scope: 'files:read' },
+        },
+      ],
+      resolved_facts: { tool_name: 'read_file' },
+    })
+  })
+
   it('derives OpenInference observation content from legacy callback fields', () => {
     expect(
       deriveLocalContentFromSidecar(EVENT_TYPE_OBSERVATION_URI, {

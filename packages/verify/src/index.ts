@@ -18,8 +18,32 @@ export type {
   RecordVerificationResult,
   ProvenanceAnnotation,
   VerifyRecordOptions,
+  ResolvedCapabilityFacts,
   CrossAttestationAnnotation,
 } from './verify-record.js'
+
+// Generic external authorization evidence checks. Off the atrib record-validity path.
+export {
+  verifyAuthorizationEvidence,
+  verifyOAuthAuthorizationEvidence,
+} from './authorization-evidence.js'
+export type {
+  AuthorizationEvidenceInput,
+  EvidenceCheckStatus,
+  EvidenceConstraintCheck,
+  EvidenceVerificationBlock,
+  OAuthAccessTokenClaims,
+  OAuthAuthorizationDetailConstraint,
+  OAuthAuthorizationEvidenceInput,
+  OAuthAuthorizationEvidenceVerification,
+  OAuthDpopCheck,
+  OAuthDpopProofInput,
+  OAuthEvidenceProtocol,
+  OAuthProtectedResourceMetadata,
+  OAuthSignaturePolicy,
+  OAuthTokenIntrospectionResponse,
+  OAuthTokenCheck,
+} from './authorization-evidence.js'
 
 // Cross-agent handoff claim verification. Used when one agent receives a
 // record_hash claim plus private body material from another agent and must

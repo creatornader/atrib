@@ -3753,7 +3753,7 @@ The boundary-drawing test in [D079](#d079-the-six-core-cognitive-primitives--atr
 
 | #   | Gate                                                                                                                                                                                                                                                                                                                  | Why it gates                                                                                                                                                                               |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | **Production use case that changes behavior.** Not theoretical. There is at least one shipped agent flow where this operation is called regularly and where its absence would degrade the agent's behavior.                                                                                                             | Avoids surface bloat from speculative primitives. The boundary test alone admits too many candidates.                                                                                      |
+| 1   | **Production use case that changes behavior.** Not theoretical. There is at least one shipped agent flow where this operation is called regularly and where its absence would degrade the agent's behavior.                                                                                                           | Avoids surface bloat from speculative primitives. The boundary test alone admits too many candidates.                                                                                      |
 | 2   | **Spec event_type either exists or is being promoted.** For write operations: the new primitive corresponds to a spec event_type. For read operations: the operation has a graph effect or read pattern documented in [§3](atrib-spec.md#3-graph-query-interface) that the existing read trio cannot express cleanly. | Anchors the agent-facing surface to atrib's normative protocol. Primitives without spec backing are app-layer features, not protocol-layer ones.                                           |
 | 3   | **Cognitive distinctness in agent reasoning.** When agents (or operators reading agent transcripts) describe what the agent did, the operation has its own name in natural language, not "a kind of recall" or "a flavor of emit".                                                                                    | The bash-standard test from [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Each primitive earns its name by being how the agent thinks about the operation. |
 | 4   | **[D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) amendment + new MCP package shipped together.** Promotion is not adopted piecemeal; the ADR text, the package source, and the changeset for the package version arrive in one commit.                                                  | Keeps the canonical-decision record and the implementation in lockstep. Without this, the surface is documented in one place and shipped in another.                                       |
@@ -5226,6 +5226,112 @@ The signed record may still carry `args_hash` and `result_hash` per [§8.3](atri
 - [`services/atrib-recall/src/aggregations.ts`](services/atrib-recall/src/aggregations.ts), recall loader consumption.
 - [`services/atrib-trace/src/index.ts`](services/atrib-trace/src/index.ts), trace sidecar summaries.
 - [`services/atrib-summarize/src/prompt.ts`](services/atrib-summarize/src/prompt.ts), summary prompt consumption.
+
+---
+
+## D109: MCP/OAuth authorization evidence uses generic tiered evidence blocks
+
+**Date:** 2026-06-01
+
+**Status:** Accepted
+
+**Extends:** [D051](#d051-capability-scoped-records-via-directory-published-envelopes), [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), [D094](#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block), and [D105](#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance).
+
+**Context.** External review of Vouch, ZCAP-LD, OAuth/GNAP, A2A, MCP authorization, AP2, and Verifiable Intent clarified a layer boundary. atrib already proves signed action history, graph structure, handoff evidence, identity claims, capability envelopes, and AP2 / VI transaction evidence. It does not issue authorization credentials or decide which agent is allowed to act. That boundary is correct.
+
+The gap was verifier ergonomics. AP2 / VI evidence had a strong tiered result under `ap2_vi_evidence`, but the shape was protocol-specific and transaction-only. Tool-call authorization evidence from MCP's OAuth profile had nowhere to attach. Capability checks also had avoidable `unresolvable` outcomes because callers could not supply the facts they had already resolved from a local body or protocol event.
+
+MCP authorization makes this worth implementing now. HTTP MCP servers use OAuth-style resource-server semantics, protected-resource metadata, authorization-server discovery, scopes, and resource binding. atrib is already MCP-native. A verifier that sees a signed MCP `tool_call` record should be able to attach the OAuth evidence for that call without changing the record validity bit.
+
+**Decision.** `@atrib/verify` now exposes a generic tiered `evidence[]` block shape and an OAuth / MCP authorization evidence verifier.
+
+1. `verifyRecord()` accepts `authorizationEvidence[]` and attaches results to `result.evidence`.
+2. Each evidence block has `{ valid, protocol, issuer, subject, scope, attenuation_ok, delegation_ok, constraints, errors, warnings }`.
+3. AP2 / VI evidence remains available at `ap2_vi_evidence` for backward compatibility and is also mirrored into `evidence[]` as `protocol: "ap2_vi"`.
+4. OAuth / MCP evidence verifies caller-supplied access-token JWTs against caller-supplied JWKS, checks issuer, audience, resource binding, required scopes, optional RFC 9396-style `authorization_details`, optional `client_id`, subject, actor subject, `cnf.jkt`, caller-supplied introspection responses, and optional DPoP proof material.
+5. The OAuth / MCP verifier does not mint tokens, run OAuth redirects, call introspection endpoints, or fetch metadata. Callers supply tokens, claims, introspection responses, protected-resource metadata, constraints, and trust roots.
+6. `verifyRecord()` accepts `resolvedFacts` so capability checks can evaluate `tool_names`, `max_amount`, and `counterparties` when the caller has local body material or protocol-event facts.
+7. Evidence validity is tiered. A record can have `valid: true` while an evidence block has `valid: false`.
+
+**Alternatives considered.**
+
+- _Build a Vouch adapter first._ Rejected. Vouch has strategic overlap, but current traction is thin and its fixed delegation-depth posture is not a pattern atrib should copy.
+- _Make OAuth evidence failures flip `verifyRecord().valid`._ Rejected. That would blur record authenticity with external authorization posture. A signed action can be real even when the token evidence is missing, expired, over-scoped, or invalid.
+- _Keep AP2 / VI as the only evidence block._ Rejected. MCP tool calls are atrib's broadest capture surface. Authorization evidence needs to attach before transactions, not only after commerce closes.
+- _Fetch OAuth metadata or call token-introspection endpoints inside `@atrib/verify`._ Rejected. Hidden network fetches would add privacy, caching, trust-root, and SSRF policy to a verifier path that currently runs on caller-supplied material.
+- _Put OAuth scopes into the signed atrib record._ Rejected. Scope strings and token claims are external authorization evidence. They are not part of the canonical action record unless a producer deliberately commits local body material through `args_hash` or `result_hash`.
+
+**Consequences.**
+
+- atrib gains a second concrete authorization-evidence adapter without becoming an authorization server.
+- MCP/OAuth strengthens the tool-call side of atrib in the same way AP2/VI strengthened the transaction side.
+- Consumers can render and policy-check one `evidence[]` list across AP2 / VI, MCP/OAuth, and future ZCAP-LD, Biscuit, macaroon, GNAP, or Vouch adapters.
+- Capability checks are less often stuck at `unresolvable` when callers have already resolved tool names, amounts, or counterparties.
+- Opaque-token support is caller-supplied evidence. A caller can pass a verified introspection response from a path it controls, but `@atrib/verify` does not call the introspection endpoint itself.
+- Delegation-depth limits stay out of core validity. Any future capability-chain adapter must bound verifier work without treating arbitrary hop count as a semantic validity rule.
+
+**Cross-references.**
+
+- [§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks), generic authorization evidence blocks.
+- [§6.7.2](atrib-spec.md#672-verifier-semantics), resolved capability facts.
+- [`packages/verify/src/authorization-evidence.ts`](packages/verify/src/authorization-evidence.ts), OAuth / MCP authorization evidence verifier.
+- [`packages/verify/src/verify-record.ts`](packages/verify/src/verify-record.ts), `authorizationEvidence[]`, `evidence[]`, and `resolvedFacts`.
+- [MCP authorization](https://modelcontextprotocol.io/specification/draft/basic/authorization), OAuth-based HTTP transport authorization.
+- [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728), OAuth Protected Resource Metadata.
+- [RFC 9396](https://www.rfc-editor.org/rfc/rfc9396), OAuth Rich Authorization Requests.
+- [RFC 9449](https://www.rfc-editor.org/rfc/rfc9449), OAuth DPoP.
+- [RFC 7662](https://www.rfc-editor.org/rfc/rfc7662), OAuth Token Introspection.
+
+---
+
+## D110: MCP/OAuth evidence capture closes the producer-to-verifier loop
+
+**Date:** 2026-06-01
+
+**Status:** Accepted
+
+**Extends:** [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), [D100](#d100-mcp-middleware-can-sign-and-observe-records-with-log-submission-disabled), and [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks).
+
+**Context.** [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks) gave verifiers a generic `evidence[]` shape and an MCP/OAuth evidence checker. That was necessary, but incomplete. A verifier-only adapter still required every host to hand-build evidence blocks from MCP transport state. That left too much of the useful path outside atrib's own reference implementation.
+
+The missing piece is producer-side capture from already-validated MCP HTTP authorization state. MCP transports can expose `extra.authInfo` and request metadata after the server or framework has accepted the OAuth token. atrib should preserve that authorization context in the local mirror sidecar so later verifiers can attach it to the signed record.
+
+**Decision.** `@atrib/mcp` now has opt-in producer-side MCP/OAuth evidence capture through `AtribOptions.authorizationEvidence`.
+
+1. The producer reads validated `extra.authInfo` and request metadata after the tool handler succeeds.
+2. The producer writes verifier-ready `authorizationEvidence` only to the local sidecar passed to `onRecord` or mirror writers.
+3. The producer does not put OAuth claims, scopes, or proof material into the signed `AtribRecord`.
+4. The producer does not store raw bearer tokens by default. It stores verified claims, optional one-way token hash, configured constraints, and optional DPoP proof material.
+5. The producer writes `resolvedFacts: { tool_name }` for tool calls so capability-envelope checks can use local body facts.
+6. `@atrib/verify` accepts caller-supplied OAuth token-introspection responses, verifies optional DPoP proofs, and keeps replay-cache state caller-owned through `seenJtis`.
+7. `AtribVerifier.verify()` mirrors AP2 / VI into generic `evidence[]` and accepts generic authorization evidence for settlement-level checks.
+8. `spec/conformance/5.5.6/oauth/` pins offline JWT, verified-claims, introspection, scope, resource-binding, and DPoP cases.
+9. `@atrib/integration` exposes `pnpm --filter @atrib/integration mcp-oauth-evidence` to prove the producer-to-verifier path locally.
+10. The explorer action view can render `entry.evidence[]` when a lookup or body surface supplies verifier evidence, but the public log remains commitment-only.
+
+**Alternatives considered.**
+
+- _Store OAuth evidence in the public log entry._ Rejected. The log commits to record hashes and fixed entry bytes. OAuth scopes and proofs are external authorization evidence and often sensitive.
+- _Store raw bearer tokens so auditors can replay every check._ Rejected. A bearer token is a credential. The sidecar may store a hash and verified claims, but raw token retention must be an explicit host policy outside the default path.
+- _Perform live introspection inside `@atrib/verify`._ Rejected for the same reason as [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks): hidden network calls add privacy, caching, SSRF, and trust-root policy to a verifier path that should run on supplied evidence.
+- _Make DPoP replay prevention global inside the library._ Rejected. Replay detection needs shared state across requests and verifier instances. The library verifies `jti`, `iat`, `ath`, `htm`, `htu`, and `cnf.jkt`; callers pass `seenJtis` when they enforce replay policy.
+
+**Consequences.**
+
+- MCP/OAuth is now a real second adapter path, not just a result schema.
+- The reference path proves an authorized MCP tool call can produce a signed atrib record, local authorization sidecar evidence, and a verifier `evidence[]` result without changing base record validity.
+- Capability support improves at the same time because producers now provide resolved tool-name facts in the sidecar.
+- The public log posture stays unchanged. Authorization material remains local, archived, or verifier-supplied evidence.
+- Explorer support is conditional. It renders evidence only when an API or body surface includes it; it does not imply the commitment-only log stores evidence blocks.
+
+**Cross-references.**
+
+- [§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks), generic authorization evidence blocks.
+- [§5.9.3](atrib-spec.md#593-the-_local-sidecar-shape), local sidecar fields.
+- [`packages/mcp/src/oauth-evidence.ts`](packages/mcp/src/oauth-evidence.ts), producer-side MCP/OAuth sidecar evidence capture.
+- [`packages/verify/src/authorization-evidence.ts`](packages/verify/src/authorization-evidence.ts), OAuth / MCP authorization evidence verifier.
+- [`packages/integration/src/mcp-oauth-evidence-harness.ts`](packages/integration/src/mcp-oauth-evidence-harness.ts), local producer-to-verifier harness.
+- [`spec/conformance/5.5.6/oauth/`](spec/conformance/5.5.6/oauth/), offline OAuth / MCP evidence corpus.
 
 ---
 

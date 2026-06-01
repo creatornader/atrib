@@ -14,6 +14,7 @@
  *   - posture:                { timestamp_granularity, timestamp_consistent, ...}   (D045 / §8.2 / §8.3 / §8.4)
  *   - capability_check:       { envelope, in_envelope, mismatches, unresolvable }   (D051 / §6.7)
  *   - cross_attestation:      { signers_count, signers_valid, missing }             (D052 / §1.7.6)
+ *   - evidence:               Generic tiered external authorization evidence blocks (D109 / §5.5.6)
  *   - ap2_vi_evidence:        AP2 receipt + Verifiable Intent evidence result       (D094 / §5.5.4)
  *
  * Pending annotations (tracked in DECISIONS.md P005):
@@ -40,11 +41,16 @@ import {
 } from '@atrib/mcp'
 import * as ed from '@noble/ed25519'
 import { verifyAp2ViEvidenceAsync } from './ap2-vi-evidence.js'
+import { verifyAuthorizationEvidence } from './authorization-evidence.js'
 import type {
   Ap2ViEvidenceBundle,
   Ap2ViEvidenceVerification,
   VerifyAp2ViEvidenceOptions,
 } from './ap2-vi-evidence.js'
+import type {
+  AuthorizationEvidenceInput,
+  EvidenceVerificationBlock,
+} from './authorization-evidence.js'
 
 const PROVENANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/
 const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
@@ -128,6 +134,19 @@ export interface CapabilityCheckAnnotation {
    * the verifier MUST flag this rather than passing or failing silently.
    */
   unresolvable: boolean
+}
+
+export interface ResolvedCapabilityFacts {
+  /**
+   * Resolved tool name for a tool_call record. This may come from an
+   * attributed record's optional §8.2 `tool_name` field, a caller's local
+   * mirror body, or an upstream protocol event that the record commits to.
+   */
+  tool_name?: string
+  /** Resolved transaction amount from the committed payment-protocol event. */
+  transaction_amount?: { currency: string; value: number }
+  /** Resolved transaction counterparty from the committed payment-protocol event. */
+  transaction_counterparty?: string
 }
 
 /**
@@ -283,6 +302,11 @@ export interface RecordVerificationResult {
    * `ap2_vi_evidence.valid` to decide AP2 / VI authorization posture.
    */
   ap2_vi_evidence?: Ap2ViEvidenceVerification
+  /**
+   * Generic tiered external evidence blocks. These do not alter `valid` or
+   * `signatureOk`; each block carries its own `valid` bit and findings.
+   */
+  evidence?: EvidenceVerificationBlock[]
   warnings: string[]
 }
 
@@ -329,6 +353,18 @@ export interface VerifyRecordOptions {
    * NOT depend on @atrib/directory.
    */
   identityClaim?: ResolvedIdentityClaim
+  /**
+   * Caller-supplied facts resolved from the record body or the external
+   * protocol event the record commits to. These let capability_check evaluate
+   * constraints that are intentionally not present in the compact signed
+   * record body, instead of marking them unresolvable.
+   */
+  resolvedFacts?: ResolvedCapabilityFacts
+  /**
+   * Caller-supplied external authorization evidence. Each block is verified
+   * off the atrib record-validity path and attaches to `result.evidence`.
+   */
+  authorizationEvidence?: AuthorizationEvidenceInput[]
   /**
    * Caller-supplied AP2 / Verifiable Intent evidence for transaction
    * records. The signed atrib record commits to transaction payload hashes,
@@ -413,7 +449,12 @@ export async function verifyRecord(
   // resolved identity claim. We do not look up the claim ourselves to
   // avoid coupling @atrib/verify to @atrib/directory's WASM bridge.
   if (options.identityClaim) {
-    result.capability_check = resolveCapabilityCheck(record, options.identityClaim, warnings)
+    result.capability_check = resolveCapabilityCheck(
+      record,
+      options.identityClaim,
+      options.resolvedFacts,
+      warnings,
+    )
   }
 
   // cross_attestation (D052 / §1.7.6), surface only on transaction records.
@@ -429,11 +470,23 @@ export async function verifyRecord(
           options.ap2ViEvidence,
           options.ap2ViEvidenceOptions,
         )
+        pushEvidence(result, ap2ViEvidenceToBlock(result.ap2_vi_evidence))
       } catch (err) {
         result.ap2_vi_evidence = ap2ViEvidenceErrorResult(err)
+        pushEvidence(result, ap2ViEvidenceToBlock(result.ap2_vi_evidence))
       }
     } else {
       warnings.push('ap2_vi_evidence supplied for non-transaction record')
+    }
+  }
+
+  if (options.authorizationEvidence) {
+    for (const evidence of options.authorizationEvidence) {
+      try {
+        pushEvidence(result, await verifyAuthorizationEvidence(evidence))
+      } catch (err) {
+        pushEvidence(result, authorizationEvidenceErrorResult(err))
+      }
     }
   }
 
@@ -455,6 +508,55 @@ function ap2ViEvidenceErrorResult(err: unknown): Ap2ViEvidenceVerification {
       constraints: { status: 'not_checked', checks: [] },
     },
     errors: [`ap2_vi_evidence verification error: ${message}`],
+    warnings: [],
+  }
+}
+
+function pushEvidence(result: RecordVerificationResult, block: EvidenceVerificationBlock): void {
+  if (!result.evidence) result.evidence = []
+  result.evidence.push(block)
+}
+
+function ap2ViEvidenceToBlock(result: Ap2ViEvidenceVerification): EvidenceVerificationBlock {
+  return {
+    protocol: 'ap2_vi',
+    valid: result.valid,
+    issuer: null,
+    subject: null,
+    scope: [],
+    attenuation_ok: result.vi.constraints.status === 'passed' ? true : null,
+    delegation_ok: result.vi.delegationOk,
+    constraints: result.vi.constraints.checks.map((constraint) => {
+      const status =
+        constraint.status === 'passed'
+          ? 'passed'
+          : constraint.status === 'failed'
+            ? 'failed'
+            : constraint.status === 'unresolved'
+              ? 'unresolved'
+              : 'not_checked'
+      return constraint.reason
+        ? { type: constraint.type, status, reason: constraint.reason }
+        : { type: constraint.type, status }
+    }),
+    errors: result.errors,
+    warnings: result.warnings,
+    details: result,
+  }
+}
+
+function authorizationEvidenceErrorResult(err: unknown): EvidenceVerificationBlock {
+  const message = err instanceof Error ? err.message : String(err)
+  return {
+    protocol: 'authorization',
+    valid: false,
+    issuer: null,
+    subject: null,
+    scope: [],
+    attenuation_ok: null,
+    delegation_ok: null,
+    constraints: [],
+    errors: [`authorization_evidence verification error: ${message}`],
     warnings: [],
   }
 }
@@ -521,15 +623,14 @@ function resolveInformedBy(
  * mismatches into `warnings` (which would set `valid: false`); they go
  * into the structured `mismatches[]` field for consumer policy to weigh.
  *
- * For transaction records with `max_amount` or `counterparties`
- * constraints, we set `unresolvable: true`. The protocol-specific
- * transaction event isn't accessible to @atrib/verify; the caller would
- * need to provide the resolved amount + counterparty out-of-band, which
- * is a future-API extension if a real consumer needs it.
+ * For constraints whose underlying facts are not present in the compact
+ * signed record, callers can pass `resolvedFacts`. Missing facts are
+ * flagged as `unresolvable` rather than silently passed.
  */
 function resolveCapabilityCheck(
   record: AtribRecord,
   claim: ResolvedIdentityClaim,
+  facts: ResolvedCapabilityFacts | undefined,
   _warnings: string[],
 ): CapabilityCheckAnnotation {
   const envelope = claim.capabilities ?? null
@@ -560,28 +661,47 @@ function resolveCapabilityCheck(
   }
 
   // tool_names: per §6.7.2 step 2, only applies to tool_call records and
-  // requires the record's tool_name. The current AtribRecord shape does
-  // not expose tool_name (per §8.2 default posture: only content_id is
-  // present, which is a hash of serverUrl + toolName). Without tool_name
-  // we can't check this constraint. Mark unresolvable.
+  // requires a resolved tool_name. The field may be present on the record
+  // under §8.2 or supplied by the caller from local body material.
   if (Array.isArray(envelope.tool_names) && envelope.tool_names.length > 0) {
     if (record.event_type === 'https://atrib.dev/v1/types/tool_call') {
-      unresolvable = true
+      const toolName = facts?.tool_name ?? record.tool_name
+      if (typeof toolName === 'string' && toolName.length > 0) {
+        if (!envelope.tool_names.includes(toolName)) {
+          mismatches.push(`tool_name '${toolName}' not in allowlist`)
+        }
+      } else {
+        unresolvable = true
+      }
     }
   }
 
-  // max_amount + counterparties: per §6.7.2 the verifier "MUST resolve
-  // the transaction amount and counterparty from the protocol-specific
-  // transaction event the record commits to". @atrib/verify doesn't
-  // have access to the payment-protocol event; flag as unresolvable.
-  // Future API extension: accept resolved amount + counterparty as
-  // VerifyRecordOptions inputs if a real consumer needs it.
+  // max_amount + counterparties: per §6.7.2 the verifier uses the
+  // protocol-specific transaction event the record commits to. The caller
+  // supplies those resolved facts when available.
   if (record.event_type === 'https://atrib.dev/v1/types/transaction') {
-    if (
-      envelope.max_amount ||
-      (Array.isArray(envelope.counterparties) && envelope.counterparties.length > 0)
-    ) {
-      unresolvable = true
+    if (envelope.max_amount) {
+      const amount = facts?.transaction_amount
+      if (!amount) {
+        unresolvable = true
+      } else if (amount.currency !== envelope.max_amount.currency) {
+        mismatches.push(
+          `transaction currency '${amount.currency}' does not match envelope currency '${envelope.max_amount.currency}'`,
+        )
+      } else if (amount.value > envelope.max_amount.value) {
+        mismatches.push(
+          `transaction amount ${amount.value} exceeds envelope max ${envelope.max_amount.value}`,
+        )
+      }
+    }
+
+    if (Array.isArray(envelope.counterparties) && envelope.counterparties.length > 0) {
+      const counterparty = facts?.transaction_counterparty
+      if (!counterparty) {
+        unresolvable = true
+      } else if (!envelope.counterparties.includes(counterparty)) {
+        mismatches.push(`counterparty '${counterparty}' not in allowlist`)
+      }
     }
   }
 

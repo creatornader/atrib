@@ -82,6 +82,8 @@ const result = await verifyRecord(record, {
   upstreamCandidate, // optional, for provenance_token resolution
   informedByCandidates: [], // optional, for informed_by[] resolution
   identityClaim, // optional, for capability_check (caller does directory lookup)
+  resolvedFacts, // optional, caller-resolved facts for capability_check
+  authorizationEvidence, // optional, OAuth/MCP auth evidence blocks
   ap2ViEvidence, // optional, transaction-only AP2 / VI evidence bundle
   ap2ViEvidenceOptions, // optional, passed to verifyAp2ViEvidenceAsync()
 })
@@ -92,6 +94,7 @@ const result = await verifyRecord(record, {
 //   provenance?:              { token, upstream_record_hash, upstream_resolved }
 //   informed_by_resolution?:  { resolved: string[], dangling: string[] }
 //   capability_check?:        { envelope, in_envelope, mismatches, unresolvable }
+//   evidence?:                EvidenceVerificationBlock[]
 //   ap2_vi_evidence?:         Ap2ViEvidenceVerification
 //   warnings: string[]
 // }
@@ -102,8 +105,9 @@ const result = await verifyRecord(record, {
 - `provenance`: `{ token, upstream_record_hash, upstream_resolved }` per session-genesis record carrying `provenance_token` ([D044](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) / [§1.2.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#126-provenance_token)). The 16-byte token truncation is irreversible: `upstream_record_hash` populates only when the caller supplies a candidate whose canonical-form SHA-256[:16] matches the token.
 - `informed_by_resolution`: `{ resolved: string[], dangling: string[] }` per record carrying `informed_by` ([D041](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type) / [§1.2.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#125-informed_by)). Dangling references are flagged but do not fail verification: they signal "the verifier has not seen upstream context," not "the record is invalid."
 - `posture`: `{ timestamp_granularity, timestamp_consistent, timestamp_granularity_explicit, args_commitment_form, result_commitment_form, tool_name_form }` ([D045](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d045-privacy-postures-normative-spec-section) / [D061](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-§121) / [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture) / [§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture) / [§8.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#84-coarsened-timing-posture)). Always populated. Surfaces (a) the declared timing granularity, whether the timestamp value structurally matches the spec's trailing-zero invariant, and whether the field was explicitly set vs defaulted; (b) the structurally-detected `args_hash` / `result_hash` commitment scheme: `'salted-sha256'` when `args_salt` / `result_salt` is present, `'plain-sha256'` otherwise (the `'hmac-sha256'` variant from [§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture) is signaled out-of-band and is not structurally detectable); and (c) the [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture) `tool_name_form`: `'hashed'` when `tool_name` matches `^sha256:[0-9a-f]{64}$`, `'plain'` for any other present value, `null` when the field is absent. Per [D061](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-121) the [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture) verbatim-vs-opaque distinction is NOT structurally detectable, both surface as `'plain'`.
-- `capability_check`: `{ envelope, in_envelope, mismatches, unresolvable }` ([D051](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) / [§6.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#67-capability-declarations)). Populated only when the caller passes a resolved `identityClaim` in options. Checks the record's `event_type` against the envelope's `event_types` allowlist and the record's `timestamp` against `expires_at`. `tool_names` (against tool_call records), `max_amount`, and `counterparties` (against transaction records) flag `unresolvable: true` because the constraints depend on data not yet on the standard record shape (`tool_name`) or out-of-band protocol events (payment amount + counterparty). Per [§6.7.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#673-out-of-envelope-records) out-of-envelope is a signal, not invalidation: mismatches do not flip `valid` to false. The caller is responsible for fetching the active envelope at the record's timestamp via `@atrib/directory`'s `lookup()` (or a cached equivalent); `@atrib/verify` intentionally has no `@atrib/directory` dependency.
+- `capability_check`: `{ envelope, in_envelope, mismatches, unresolvable }` ([D051](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) / [§6.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#67-capability-declarations)). Populated only when the caller passes a resolved `identityClaim` in options. Checks the record's `event_type` against the envelope's `event_types` allowlist and the record's `timestamp` against `expires_at`. `tool_names`, `max_amount`, and `counterparties` are checked when the caller supplies `resolvedFacts` from the local body or protocol event. Missing facts flag `unresolvable: true` rather than passing silently. Per [§6.7.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#673-out-of-envelope-records) out-of-envelope is a signal, not invalidation: mismatches do not flip `valid` to false. The caller is responsible for fetching the active envelope at the record's timestamp via `@atrib/directory`'s `lookup()` (or a cached equivalent); `@atrib/verify` intentionally has no `@atrib/directory` dependency.
 - `cross_attestation`: `{ signers_count, signers_valid, missing }` ([D052](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) / [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)). Populated only on transaction records (`event_type = transaction`). Each entry in `signers[]` is verified against the cross-attestation canonical bytes (JCS form with `signers: []` and the top-level `signature` field omitted, per [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)). `signatureOk` requires a valid signer entry whose `creator_key` matches the record's top-level `creator_key`; unrelated counterparty signers do not validate the record on behalf of its creator. `missing: true` when fewer than 2 distinct signer keys verify, atrib's normative minimum. Duplicate entries from one key do not inflate `signers_valid`. Per [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) missing is a signal, not invalidation: `valid` stays true if the underlying signature path holds. Agent-side Path 2 fallback records usually surface as `signers_count: 1, missing: true` until a counterparty signs the same bytes. Legacy single-signer transaction records (no `signers[]` array, only top-level `signature`) surface as `signers_count: 0, missing: true` so consumers can flag them while accepting the cryptographic validity.
+- `evidence`: generic tiered external authorization evidence blocks ([D109](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks) / [§5.5.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#556-generic-authorization-evidence-blocks)). Populated when the caller passes `authorizationEvidence` or when AP2 / VI evidence is mirrored into the generic shape. Each block has `{ valid, protocol, issuer, subject, scope, attenuation_ok, delegation_ok, constraints, errors, warnings }`. These blocks do not alter `valid`, `signatureOk`, or `capability_check`.
 - `ap2_vi_evidence`: the async AP2 / VI verifier result ([D094](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block) / [§5.5.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#554-ap2--verifiable-intent-evidence-checks)). Populated only when the caller passes `ap2ViEvidence` for a transaction record. It does not alter `valid`, `signatureOk`, or `cross_attestation`; consumers inspect `ap2_vi_evidence.valid` for AP2 authorization evidence.
 
 **Pending per-record annotations** (tracked as a Pending decision in [DECISIONS.md P005](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p005-reconcile-atribverify-readme-per-record-annotations-with-actual-code-surface)):
@@ -161,6 +165,45 @@ Checks performed:
 `handoffClaimsFromEvidencePacket()` accepts parsed [D062](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) local mirror envelopes, private continuation packets, or arrays of evidence entries. It preserves missing required hashes as verifier rejections. The helper never fetches private material. Callers provide records, body material, and proof bundles from a local mirror, private handoff packet, Record Body Archive Layer, log lookup, or another channel. Rejected claims carry named reasons such as `wrong_signer`, `wrong_context`, `stale`, `body_hash_mismatch`, and `proof_invalid`.
 
 The library helper backs the `@atrib/verify-mcp` `atrib-verify` primitive promoted by [D106](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7). The MCP wrapper handles agent-facing use; this package remains the verifier library.
+
+### `verifyOAuthAuthorizationEvidence(evidence): Promise<OAuthAuthorizationEvidenceVerification>`
+
+Verifier-side OAuth / MCP authorization evidence checking. This runs outside the record signature path and does not fetch tokens, mint credentials, call token-introspection endpoints, or contact authorization servers. Callers supply a compact access-token JWT plus trusted JWKS, caller-verified claims, or a caller-supplied OAuth token-introspection response from a path they control.
+
+```typescript
+import { verifyRecord } from '@atrib/verify'
+
+const result = await verifyRecord(record, {
+  authorizationEvidence: [
+    {
+      protocol: 'mcp_oauth',
+      accessTokenJwt,
+      jwks: [issuerJwk],
+      issuer: 'https://auth.example',
+      audience: 'https://mcp.example/mcp',
+      protectedResourceMetadata: {
+        resource: 'https://mcp.example/mcp',
+        authorization_servers: ['https://auth.example'],
+      },
+      requiredScopes: ['files:read'],
+      expectedClientId: 'https://client.example/client.json',
+    },
+  ],
+})
+```
+
+Checks performed when evidence is present:
+
+- JWT signature, `iss`, `aud`, `exp`, `nbf`, and clock-skew checks when `accessTokenJwt` and `jwks` are supplied.
+- MCP protected-resource binding through `aud`, token `resource`, and protected-resource metadata.
+- Required OAuth scopes from `scope` or `scp`.
+- Optional RFC 9396-style `authorization_details` constraints by `type`, `actions`, and `locations`.
+- Optional `client_id`, subject, actor subject, and `cnf.jkt` checks.
+- Optional DPoP proof checks for `htm`, `htu`, `ath`, `jti`, `iat`, nonce when supplied, and `cnf.jkt` binding.
+
+The default signature policy is `require`. Missing trusted keys or unverified decoded claims make the evidence block invalid. Use `signaturePolicy: "best-effort"` only for advisory triage. DPoP replay state stays caller-owned: pass `seenJtis` to fail proofs whose `jti` has already been used.
+
+Producer-side MCP capture lives in `@atrib/mcp` behind the opt-in `authorizationEvidence` option. The producer writes evidence into the local-only sidecar without storing raw bearer tokens by default. Verifiers can pass that sidecar's `authorizationEvidence` and `resolvedFacts` to `verifyRecord()`.
 
 ### `verifyAp2ViEvidence(...)` and `verifyAp2ViEvidenceAsync(...)`
 
@@ -253,6 +296,8 @@ For advanced use (custom calculators, alternative signing flows), the package al
 - `evaluateAp2ViConstraints(input, disclosures?)`: decoded AP2 open-mandate constraint checking
 - `verifyAp2ViEvidence(bundle, options?)`: decoded AP2 / VI receipt and mandate-chain evidence checking
 - `verifyAp2ViEvidenceAsync(bundle, options?)`: compact AP2 receipt JWT verification, async VI SD-JWT / VC conformance, plus decoded evidence checks. `verifyRecord()` and `AtribVerifier.verify()` call this when supplied with `ap2ViEvidence`
+- `verifyAuthorizationEvidence(evidence)`: generic external authorization evidence dispatch for `verifyRecord()` evidence blocks
+- `verifyOAuthAuthorizationEvidence(evidence)`: OAuth / MCP authorization evidence checks for access-token JWTs or caller-verified claims
 - `verifyHandoffClaims(claims, options?)`: Pattern 3 handoff claim acceptance before a receiving agent signs an `informed_by` follow-up
 - `recommendationSigningInput(doc)`: the canonical bytes that get signed
 - `distributionsMatch(a, b)`: float-tolerant equality (within `1e-9` per recipient)

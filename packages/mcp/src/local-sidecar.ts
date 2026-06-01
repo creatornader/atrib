@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-  EVENT_TYPE_TOOL_CALL_URI,
-  EVENT_TYPE_OBSERVATION_URI,
-} from './types.js'
+import { EVENT_TYPE_TOOL_CALL_URI, EVENT_TYPE_OBSERVATION_URI } from './types.js'
 
 /**
  * Local mirror sidecar helpers.
@@ -63,12 +60,16 @@ export function withDerivedLocalContent<T extends object>(
   return { ...local, content }
 }
 
-function deriveToolCallContent(local: Record<string, unknown>): Record<string, unknown> | undefined {
+function deriveToolCallContent(
+  local: Record<string, unknown>,
+): Record<string, unknown> | undefined {
   const out: Record<string, unknown> = {}
   const toolName = firstString(local.tool_name, local.toolName)
   if (toolName !== undefined) out.tool_name = toolName
   copyIfPresent(out, 'args', local.args ?? local.input ?? local.arguments)
   copyIfPresent(out, 'result', local.result ?? local.output ?? local.response)
+  copyIfPresent(out, 'authorization_evidence', local.authorizationEvidence)
+  copyIfPresent(out, 'resolved_facts', local.resolvedFacts)
   copyOpenInferenceIdentity(out, local)
   return Object.keys(out).length > 0 ? out : undefined
 }
@@ -113,7 +114,10 @@ function deriveOpenInferenceContent(
     firstString(local.llm_output_tool_call_id, local.llmOutputToolCallId),
   )
   if (eventTypeUri === EVENT_TYPE_OBSERVATION_URI && spanKind !== undefined) {
-    const label = spanName !== undefined ? `${spanKind.toLowerCase()} span: ${spanName}` : `${spanKind.toLowerCase()} span`
+    const label =
+      spanName !== undefined
+        ? `${spanKind.toLowerCase()} span: ${spanName}`
+        : `${spanKind.toLowerCase()} span`
     out.what = `OpenInference ${label}`
   }
   return Object.keys(out).length > 1 ? out : undefined
@@ -130,19 +134,11 @@ function copyOpenInferenceIdentity(
   setString(out, 'span_id', firstString(local.span_id, local.spanId))
 }
 
-function copyIfPresent(
-  out: Record<string, unknown>,
-  key: string,
-  value: unknown,
-): void {
+function copyIfPresent(out: Record<string, unknown>, key: string, value: unknown): void {
   if (value !== undefined) out[key] = value
 }
 
-function setString(
-  out: Record<string, unknown>,
-  key: string,
-  value: string | undefined,
-): void {
+function setString(out: Record<string, unknown>, key: string, value: string | undefined): void {
   if (value !== undefined) out[key] = value
 }
 

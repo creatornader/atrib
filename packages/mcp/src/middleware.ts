@@ -22,8 +22,10 @@ import { encodeToken } from './token.js'
 import { createSubmissionQueue } from './submission.js'
 import { zeroize } from './zeroize.js'
 import { EVENT_TYPE_TOOL_CALL_URI, EVENT_TYPE_TRANSACTION_URI } from './types.js'
+import { buildMcpOAuthEvidenceFromExtra } from './oauth-evidence.js'
 import type { AtribRecord } from './types.js'
 import type { SubmissionQueue, ProofBundle } from './submission.js'
+import type { CapturedMcpOAuthEvidence, McpOAuthEvidenceCaptureOptions } from './oauth-evidence.js'
 
 const HEX_32 = /^[0-9a-f]{32}$/
 
@@ -91,6 +93,12 @@ export interface OnRecordSidecar {
   args?: Record<string, unknown>
   /** Upstream tool's result object, BEFORE atrib mutated _meta with its token. */
   result?: Record<string, unknown>
+  /** Verifier-ready authorization evidence captured from MCP request metadata. */
+  authorizationEvidence?: CapturedMcpOAuthEvidence[]
+  /** Local facts callers can feed into @atrib/verify capability_check. */
+  resolvedFacts?: {
+    tool_name?: string
+  }
 }
 
 /** Options for the atrib() middleware (§5.3.1). */
@@ -131,6 +139,15 @@ export interface AtribOptions {
    * surfaces (atrib-trace, atrib-summarize) that need semantic context.
    */
   onRecord?: (record: AtribRecord, sidecar?: OnRecordSidecar) => void | Promise<void>
+  /**
+   * Opt-in producer-side MCP/OAuth evidence capture. When enabled and the
+   * MCP transport provides `extra.authInfo`, atrib writes verifier-ready
+   * authorization evidence into the local-only sidecar. The bearer token is
+   * not stored; the sidecar contains verified claims, optional token hash,
+   * optional DPoP proof material, and configured constraints for later
+   * `@atrib/verify` checks.
+   */
+  authorizationEvidence?: boolean | McpOAuthEvidenceCaptureOptions
   /**
    * Maximum number of records held in the in-memory submission queue while
    * the log is unreachable. When this cap is hit, the queue evicts the
@@ -863,9 +880,18 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
         // submission below is unchanged, it only sees `built.signed`.
         const params = request.params as Record<string, unknown>
         const sidecar: OnRecordSidecar = { result: resultObj }
-        if (typeof params.name === 'string') sidecar.toolName = params.name
+        if (typeof params.name === 'string') {
+          sidecar.toolName = params.name
+          sidecar.resolvedFacts = { tool_name: params.name }
+        }
         const sideArgs = params.arguments as Record<string, unknown> | undefined
         if (sideArgs) sidecar.args = sideArgs
+        const authorizationEvidence = buildMcpOAuthEvidenceFromExtra(
+          extra,
+          options.authorizationEvidence,
+          { serverUrl },
+        )
+        if (authorizationEvidence) sidecar.authorizationEvidence = [authorizationEvidence]
         commitRecord(built, resultObj, sidecar)
 
         return result

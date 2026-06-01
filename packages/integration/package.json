@@ -21,7 +21,8 @@
     "calc-demo": "tsx scripts/calc-demo.ts",
     "ap2-live-interop": "tsx scripts/ap2-live-interop.ts",
     "ap2-local-participant": "tsx scripts/generate-ap2-local-participant-artifacts.ts",
-    "ap2-google-sample-extract": "tsx scripts/extract-google-ap2-sample-artifacts.ts"
+    "ap2-google-sample-extract": "tsx scripts/extract-google-ap2-sample-artifacts.ts",
+    "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts"
   },
   "dependencies": {
     "@atrib/agent": "workspace:*",
@@ -47,6 +48,7 @@
     "@opentelemetry/semantic-conventions": "^1.41.1",
     "@types/node": "^25.9.1",
     "ai": "^6.0.191",
+    "jose": "6.2.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7",
     "zod": "^4.4.3"

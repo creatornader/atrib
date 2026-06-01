@@ -1,0 +1,35 @@
+{
+  "name": "verified claims satisfy required scope",
+  "kind": "claims",
+  "input": {
+    "protocol": "mcp_oauth",
+    "claimsVerified": true,
+    "claims": {
+      "iss": "https://auth.example.com",
+      "sub": "user-123",
+      "aud": "https://mcp.example.com/mcp",
+      "client_id": "client-123",
+      "scope": "files:read files:write",
+      "resource": "https://mcp.example.com/mcp"
+    },
+    "issuer": "https://auth.example.com",
+    "audience": "https://mcp.example.com/mcp",
+    "resource": "https://mcp.example.com/mcp",
+    "protectedResourceMetadata": {
+      "resource": "https://mcp.example.com/mcp",
+      "authorization_servers": ["https://auth.example.com"]
+    },
+    "requiredScopes": ["files:read"],
+    "expectedClientId": "client-123"
+  },
+  "expected": {
+    "valid": true,
+    "constraints": [
+      { "type": "scope", "status": "passed" },
+      { "type": "resource", "status": "passed" },
+      { "type": "protected_resource.authorization_servers", "status": "passed" },
+      { "type": "client_id", "status": "passed" }
+    ],
+    "errors": []
+  }
+}

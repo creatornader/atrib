@@ -106,6 +106,19 @@ export {
 } from './local-sidecar.js'
 export type { LocalSidecarLike } from './local-sidecar.js'
 
+// MCP/OAuth sidecar evidence capture. Producer-side helper for local mirrors.
+export { buildMcpOAuthEvidenceFromExtra } from './oauth-evidence.js'
+export type {
+  CapturedDpopProofEvidence,
+  CapturedMcpOAuthEvidence,
+  CapturedOAuthAccessTokenClaims,
+  CapturedOAuthAuthorizationDetailConstraint,
+  CapturedOAuthProtectedResourceMetadata,
+  McpOAuthEvidenceCaptureOptions,
+  McpOAuthEvidenceCaptureContext,
+  McpRequestExtraLike,
+} from './oauth-evidence.js'
+
 // Context (for advanced usage)
 export {
   readInboundContext,
