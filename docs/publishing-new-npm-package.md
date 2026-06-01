@@ -138,8 +138,10 @@ enabled, update the GitHub secret, and rerun the same manual dispatch. npm
 expects `--expires` as a number of days, not a calendar date:
 
 ```bash
-npm login --auth-type=legacy
+npm whoami || npm login --auth-type=legacy
 
+# Run this in an interactive terminal. npm prompts for the account password and
+# OTP even when `npm whoami` succeeds.
 npm token create \
   --name atrib-ci-initial-package-YYYY-MM-DD \
   --token-description "Temporary atrib initial package publish token" \
