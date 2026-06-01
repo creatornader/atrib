@@ -1,5 +1,13 @@
 # @atrib/verify-mcp
 
+## 0.2.7
+
+### Patch Changes
+
+- Updated dependencies [114248a]
+  - @atrib/mcp@0.16.0
+  - @atrib/verify@0.7.0
+
 ## 0.2.6
 
 ### Patch Changes
