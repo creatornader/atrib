@@ -138,7 +138,7 @@ enabled, update the GitHub secret, and rerun the same manual dispatch. npm
 expects `--expires` as a number of days, not a calendar date:
 
 ```bash
-npm login
+npm login --auth-type=legacy
 
 npm token create \
   --name atrib-ci-initial-package-YYYY-MM-DD \
@@ -162,8 +162,11 @@ gh workflow run release.yml \
 ```
 
 If `npm token create` returns `E401`, the local npm session is stale or missing.
-Run `npm login` again, complete the browser and 2FA prompt, then rerun the token
-command.
+Run `npm login --auth-type=legacy` again, complete the terminal username,
+password, and 2FA prompts, then rerun the token command. Do not use npm's web
+login flow for this step; local npm configs with `auth-type = "web"` can send
+the operator through a browser auth URL that does not complete the CLI token
+creation path.
 
 Revoke the temporary token after the package exists and trusted publishing is
 configured.
