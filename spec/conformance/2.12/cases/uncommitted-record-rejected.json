@@ -1,0 +1,20 @@
+{
+  "id": "uncommitted-record-rejected",
+  "spec_section": "2.12.2",
+  "description": "Production archive submission rejects a record body whose hash is not committed in any trusted log.",
+  "request": {
+    "method": "POST",
+    "path": "/v1/records",
+    "body": {
+      "record": {
+        "spec_version": "atrib/1.0"
+      }
+    }
+  },
+  "expected": {
+    "status": 409,
+    "body": {
+      "error": "record hash not committed in trusted logs"
+    }
+  }
+}

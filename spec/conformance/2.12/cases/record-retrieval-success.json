@@ -1,0 +1,23 @@
+{
+  "id": "record-retrieval-success",
+  "spec_section": "2.12.3",
+  "description": "An archived committed record is returned with body, proofs, evidence, resolved facts, and retention metadata.",
+  "request": {
+    "method": "GET",
+    "path": "/v1/record/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "expected": {
+    "status": 200,
+    "body": {
+      "record_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "record": {
+        "spec_version": "atrib/1.0"
+      },
+      "log_proofs": [],
+      "evidence": [],
+      "resolved_facts": {},
+      "archived_at_ms": 1700000000000,
+      "retention_window_ms": 31536000000
+    }
+  }
+}

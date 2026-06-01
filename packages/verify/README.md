@@ -168,7 +168,7 @@ The library helper backs the `@atrib/verify-mcp` `atrib-verify` primitive promot
 
 ### `verifyOAuthAuthorizationEvidence(evidence): Promise<OAuthAuthorizationEvidenceVerification>`
 
-Verifier-side OAuth / MCP authorization evidence checking. This runs outside the record signature path and does not fetch tokens, mint credentials, call token-introspection endpoints, or contact authorization servers. Callers supply a compact access-token JWT plus trusted JWKS, caller-verified claims, or a caller-supplied OAuth token-introspection response from a path they control.
+Verifier-side OAuth / MCP authorization evidence checking. This runs outside the record signature path and does not fetch tokens, mint credentials, call token-introspection endpoints, or contact authorization servers. Callers supply a compact access-token JWT plus trusted JWKS, caller-verified claims, or a caller-supplied OAuth token-introspection response from a path they control. Hosts that want a library helper for the live step can call `introspectOAuthToken()` first, then pass its result into `verifyRecord()`.
 
 ```typescript
 import { verifyRecord } from '@atrib/verify'
@@ -192,6 +192,37 @@ const result = await verifyRecord(record, {
 })
 ```
 
+For opaque access tokens, keep live network policy at the host boundary:
+
+```typescript
+import {
+  introspectOAuthToken,
+  oauthEvidenceFromIntrospectionResult,
+  verifyRecord,
+} from '@atrib/verify'
+
+const introspection = await introspectOAuthToken({
+  endpoint: 'https://auth.example/oauth/introspect',
+  token: opaqueAccessToken,
+  clientAuthentication: {
+    method: 'basic',
+    clientId: process.env.OAUTH_CLIENT_ID ?? '',
+    clientSecret: process.env.OAUTH_CLIENT_SECRET ?? '',
+  },
+  expectedIssuer: 'https://auth.example',
+  expectedAudience: 'https://mcp.example/mcp',
+})
+
+const result = await verifyRecord(record, {
+  authorizationEvidence: [
+    oauthEvidenceFromIntrospectionResult(introspection, {
+      protocol: 'mcp_oauth',
+      requiredScopes: ['files:read'],
+    }),
+  ],
+})
+```
+
 Checks performed when evidence is present:
 
 - JWT signature, `iss`, `aud`, `exp`, `nbf`, and clock-skew checks when `accessTokenJwt` and `jwks` are supplied.
@@ -201,7 +232,7 @@ Checks performed when evidence is present:
 - Optional `client_id`, subject, actor subject, and `cnf.jkt` checks.
 - Optional DPoP proof checks for `htm`, `htu`, `ath`, `jti`, `iat`, nonce when supplied, and `cnf.jkt` binding.
 
-The default signature policy is `require`. Missing trusted keys or unverified decoded claims make the evidence block invalid. Use `signaturePolicy: "best-effort"` only for advisory triage. DPoP replay state stays caller-owned: pass `seenJtis` to fail proofs whose `jti` has already been used.
+The default signature policy is `require`. Missing trusted keys or unverified decoded claims make the evidence block invalid. Use `signaturePolicy: "best-effort"` only for advisory triage. DPoP replay state stays caller-owned: pass `seenJtis` for one-process checks or a shared `dpopReplayCache` for deployments that need atomic replay defense across workers.
 
 Producer-side MCP capture lives in `@atrib/mcp` behind the opt-in `authorizationEvidence` option. The producer writes evidence into the local-only sidecar without storing raw bearer tokens by default. Verifiers can pass that sidecar's `authorizationEvidence` and `resolvedFacts` to `verifyRecord()`.
 
@@ -298,6 +329,9 @@ For advanced use (custom calculators, alternative signing flows), the package al
 - `verifyAp2ViEvidenceAsync(bundle, options?)`: compact AP2 receipt JWT verification, async VI SD-JWT / VC conformance, plus decoded evidence checks. `verifyRecord()` and `AtribVerifier.verify()` call this when supplied with `ap2ViEvidence`
 - `verifyAuthorizationEvidence(evidence)`: generic external authorization evidence dispatch for `verifyRecord()` evidence blocks
 - `verifyOAuthAuthorizationEvidence(evidence)`: OAuth / MCP authorization evidence checks for access-token JWTs or caller-verified claims
+- `introspectOAuthToken(options)`: host-owned OAuth token introspection helper for opaque-token evidence
+- `oauthEvidenceFromIntrospectionResult(result, base?)`: adapter from host-owned introspection result to OAuth evidence input
+- `MemoryDpopReplayCache`: in-process implementation of the `DpopReplayCache` contract for tests and single-worker deployments
 - `verifyHandoffClaims(claims, options?)`: Pattern 3 handoff claim acceptance before a receiving agent signs an `informed_by` follow-up
 - `recommendationSigningInput(doc)`: the canonical bytes that get signed
 - `distributionsMatch(a, b)`: float-tolerant equality (within `1e-9` per recipient)

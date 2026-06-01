@@ -10,6 +10,7 @@ import {
   jwtVerify,
 } from 'jose'
 import type { JWK, JSONWebKeySet, JWTPayload, JWTVerifyOptions } from 'jose'
+import type { DpopReplayCache, DpopReplayCacheKey } from './dpop-replay-cache.js'
 
 export type EvidenceCheckStatus = 'passed' | 'failed' | 'unresolved' | 'not_checked'
 export type OAuthSignaturePolicy = 'require' | 'best-effort' | 'off'
@@ -123,6 +124,7 @@ export interface OAuthAuthorizationEvidenceInput {
   requiredCnfJkt?: string
   requireCnf?: boolean
   signaturePolicy?: OAuthSignaturePolicy
+  dpopReplayCache?: DpopReplayCache
   nowSeconds?: number
   clockSkewSeconds?: number
 }
@@ -506,6 +508,7 @@ async function verifyDpopProof(
   input: OAuthDpopProofInput,
   claims: OAuthAccessTokenClaims | null,
   requiredCnfJkt: string | undefined,
+  replayCache: DpopReplayCache | undefined,
 ): Promise<DpopVerificationResult> {
   const constraints: EvidenceConstraintCheck[] = []
   const errors: string[] = []
@@ -571,7 +574,15 @@ async function verifyDpopProof(
       check('dpop.htu', dpop.htu === input.url ? 'passed' : 'failed', input.url, dpop.htu),
     )
 
-    const jtiSeen = dpop.jti !== null && input.seenJtis?.includes(dpop.jti) === true
+    const jtiSeen =
+      dpop.jti !== null && input.seenJtis?.includes(dpop.jti) === true
+        ? true
+        : dpop.jti !== null && replayCache !== undefined
+          ? !(await replayCache.checkAndRemember(
+              replayKey(dpop.jti, dpop, claims),
+              dpopReplayExpiresAtSeconds(payload, input),
+            ))
+          : false
     constraints.push(
       check(
         'dpop.jti',
@@ -642,6 +653,32 @@ async function verifyDpopProof(
   return { dpop, constraints, errors }
 }
 
+function replayKey(
+  jti: string,
+  dpop: OAuthDpopCheck,
+  claims: OAuthAccessTokenClaims | null,
+): DpopReplayCacheKey {
+  return {
+    jti,
+    ...(dpop.jkt !== null ? { jkt: dpop.jkt } : {}),
+    ...(dpop.htm !== null ? { htm: dpop.htm } : {}),
+    ...(dpop.htu !== null ? { htu: dpop.htu } : {}),
+    ...(typeof claims?.iss === 'string' ? { issuer: claims.iss } : {}),
+    ...(typeof claims?.client_id === 'string' ? { client_id: claims.client_id } : {}),
+  }
+}
+
+function dpopReplayExpiresAtSeconds(
+  payload: JWTPayload & { iat?: unknown },
+  input: OAuthDpopProofInput,
+): number {
+  const now = input.nowSeconds ?? Math.floor(Date.now() / 1000)
+  const skew = input.clockSkewSeconds ?? 0
+  const maxAge = input.maxAgeSeconds ?? 300
+  const iat = typeof payload.iat === 'number' ? payload.iat : now
+  return iat + maxAge + skew
+}
+
 export async function verifyOAuthAuthorizationEvidence(
   input: OAuthAuthorizationEvidenceInput,
 ): Promise<OAuthAuthorizationEvidenceVerification> {
@@ -697,7 +734,12 @@ export async function verifyOAuthAuthorizationEvidence(
         ? { clockSkewSeconds: input.clockSkewSeconds }
         : {}),
     }
-    const dpopResult = await verifyDpopProof(dpopProofInput, claims, input.requiredCnfJkt)
+    const dpopResult = await verifyDpopProof(
+      dpopProofInput,
+      claims,
+      input.requiredCnfJkt,
+      input.dpopReplayCache,
+    )
     dpop = dpopResult.dpop
     constraints.push(...dpopResult.constraints)
     errors.push(...dpopResult.errors)

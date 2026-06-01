@@ -131,6 +131,9 @@ importers:
       '@atrib/agent':
         specifier: workspace:*
         version: link:../agent
+      '@atrib/archive-node':
+        specifier: workspace:*
+        version: link:../../services/archive-node
       '@atrib/directory':
         specifier: workspace:*
         version: link:../directory
@@ -461,6 +464,37 @@ importers:
       fast-check:
         specifier: ^4.8.0
         version: 4.8.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(vite@8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(tsx@4.22.3))
+
+  services/archive-node:
+    dependencies:
+      '@atrib/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
+      '@atrib/verify':
+        specifier: workspace:*
+        version: link:../../packages/verify
+    devDependencies:
+      '@atrib/log-node':
+        specifier: workspace:*
+        version: link:../log-node
+      '@noble/ed25519':
+        specifier: ^3.1.0
+        version: 3.1.0
+      '@noble/hashes':
+        specifier: ^2.2.0
+        version: 2.2.0
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

@@ -1760,6 +1760,7 @@ const DEFAULTS = {
   log:       'https://log.atrib.dev/v1',
   graph:     'https://graph.atrib.dev/v1',
   directory: 'https://directory.atrib.dev/v6',
+  archive:   'https://archive.atrib.dev/v1',
 }
 
 const POLL_INTERVAL_MS = 5000
@@ -1805,6 +1806,7 @@ function endpoints() {
     log:       q.get('log')       || DEFAULTS.log,
     graph:     q.get('graph')     || DEFAULTS.graph,
     directory: q.get('directory') || DEFAULTS.directory,
+    archive:   q.get('archive')   || DEFAULTS.archive,
   }
 }
 
@@ -1868,9 +1870,20 @@ function isoTime(ms) {
 // ─── Network helpers ─────────────────────────────────────────────────────
 
 async function fetchJson(url, opts = {}) {
-  const r = await fetch(url, { headers: { accept: 'application/json' }, ...opts })
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
-  return r.json()
+  const { timeoutMs, ...fetchOpts } = opts
+  const ctrl = timeoutMs ? new AbortController() : null
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null
+  try {
+    const r = await fetch(url, {
+      headers: { accept: 'application/json' },
+      ...fetchOpts,
+      ...(ctrl ? { signal: ctrl.signal } : {}),
+    })
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
+    return r.json()
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 async function fetchMaybe(url, opts = {}) {
@@ -2434,6 +2447,30 @@ function renderRawJsonPanel(title, meta, payload, options = {}) {
 function evidenceBlocks(value) {
   const evidence = value && Array.isArray(value.evidence) ? value.evidence : []
   return evidence.filter((block) => block && typeof block === 'object')
+}
+
+function mergeArchiveEvidence(entry, archiveResponse) {
+  if (!archiveResponse || archiveResponse._error) return entry
+  const blocks = [...evidenceBlocks(entry), ...evidenceBlocks(archiveResponse)]
+  if (blocks.length === 0) return entry
+  const seen = new Set()
+  const evidence = []
+  for (const block of blocks) {
+    const key = JSON.stringify(block)
+    if (seen.has(key)) continue
+    seen.add(key)
+    evidence.push(block)
+  }
+  return {
+    ...entry,
+    evidence,
+    archive: {
+      record_hash: archiveResponse.record_hash,
+      archived_at_ms: archiveResponse.archived_at_ms,
+      retention_window_ms: archiveResponse.retention_window_ms,
+      resolved_facts: archiveResponse.resolved_facts,
+    },
+  }
 }
 
 function evidenceStatus(blocks) {
@@ -4320,7 +4357,7 @@ async function renderAction(recordHash) {
     ],
   }))
 
-  const entry = await fetchMaybe(`${ep.log}/lookup/${hashHex}`)
+  let entry = await fetchMaybe(`${ep.log}/lookup/${hashHex}`)
   if (!routeGenerationStillCurrent(myGen)) return
   if (entry._error) {
     root.append(el('section', { class: 'panel' },
@@ -4334,6 +4371,12 @@ async function renderAction(recordHash) {
     clearAndRender(root)
     return
   }
+
+  const archiveEvidence = ep.archive
+    ? await fetchMaybe(`${ep.archive}/evidence/${hashHex}`, { timeoutMs: 1200 })
+    : null
+  if (!routeGenerationStillCurrent(myGen)) return
+  entry = mergeArchiveEvidence(entry, archiveEvidence)
 
   if (entry.creator_key) await resolveIdentity(entry.creator_key)
 
@@ -6224,11 +6267,12 @@ function renderAbout() {
       el('h2', {}, 'Override endpoints (for local dev)'),
       el('p', {},
         'Append URL params: ',
-        el('code', {}, '?log=http://localhost:3100/v1&graph=...&directory=...'),
-        '. The defaults point at the production deployments (',
+        el('code', {}, '?log=http://localhost:3100/v1&graph=...&directory=...&archive=...'),
+        '. The defaults point at the public endpoint names (',
         el('code', {}, 'log.atrib.dev'), ', ',
         el('code', {}, 'graph.atrib.dev'), ', ',
-        el('code', {}, 'directory.atrib.dev'), ').',
+        el('code', {}, 'directory.atrib.dev'), ', ',
+        el('code', {}, 'archive.atrib.dev'), ').',
       ),
     ),
   ))

@@ -1,0 +1,47 @@
+{
+  "id": "evidence-projection-success",
+  "spec_section": "2.12.3",
+  "description": "The evidence projection returns only record summary fields, verifier evidence, resolved facts, and archive metadata.",
+  "request": {
+    "method": "GET",
+    "path": "/v1/evidence/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "expected": {
+    "status": 200,
+    "body": {
+      "record_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "record_summary": {
+        "creator_key": "creator",
+        "context_id": "00000000000000000000000000000000",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "timestamp": 1700000000000,
+        "content_id": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "evidence": [
+        {
+          "valid": true,
+          "protocol": "mcp_oauth",
+          "issuer": "https://auth.example",
+          "subject": "agent-a",
+          "scope": [
+            "tools:read"
+          ],
+          "attenuation_ok": true,
+          "delegation_ok": null,
+          "constraints": {
+            "required_scopes": [
+              "tools:read"
+            ]
+          },
+          "errors": [],
+          "warnings": []
+        }
+      ],
+      "resolved_facts": {
+        "tool_name": "search"
+      },
+      "archived_at_ms": 1700000000000,
+      "retention_window_ms": 31536000000
+    }
+  }
+}

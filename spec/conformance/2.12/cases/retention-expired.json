@@ -1,0 +1,19 @@
+{
+  "id": "retention-expired",
+  "spec_section": "2.12.3",
+  "description": "An expired archived record returns 410 Gone, distinct from an unarchived 404.",
+  "request": {
+    "method": "GET",
+    "path": "/v1/record/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "expected": {
+    "status": 410,
+    "body": {
+      "error": "retention expired",
+      "record_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "retention_window_ms": 31536000000,
+      "archived_at_ms": 1700000000000,
+      "expired_at_ms": 1731536000000
+    }
+  }
+}

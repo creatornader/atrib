@@ -2140,7 +2140,7 @@ The atrib log commits to a record's hash. The signed canonical record body lives
 
 This section specifies the OPTIONAL **Record Body Archive Layer**: a content-addressed durability layer for canonical record bodies, separate from the log. The archive is what closes the verifiability loop for records whose privacy posture admits public-body retrieval. Records using the salted-commitment posture ([§8.3](#83-salted-commitment-posture)) deliberately do NOT submit bodies to any archive; their verifiability story is producer-local.
 
-The full archive ADR is tracked separately as [D070](DECISIONS.md#d070-record-body-archive-layer-design); this section establishes the spec-level surface and contract.
+The archive ADR is [D070](DECISIONS.md#d070-record-body-archive-layer); this section establishes the spec-level surface and contract.
 
 #### 2.12.1 Architectural position
 
@@ -2154,6 +2154,36 @@ Producers MAY submit a record body to one or more archives at the same time as c
 
 Submission is content-addressed and idempotent: re-submitting an already-archived body MUST be a 200 success, not a 4xx duplicate. The archive validates submissions by canonicalizing the body, computing its `record_hash`, and confirming the same hash is present in at least one log the archive trusts (preventing archives from being used as garbage stores for bodies whose hashes have never been committed anywhere).
 
+The V1 submission API is:
+
+```
+POST https://archive.atrib.dev/v1/records
+Content-Type: application/json
+
+{
+  "record_hash": "sha256:...",              // optional, checked if present
+  "record": { /* full AtribRecord per §1.2, including signature */ },
+  "proof": { /* optional §2.8 proof bundle from a trusted log */ },
+  "log_proofs": [ /* optional §2.8 proof bundles */ ],
+  "authorizationEvidence": [ /* optional §5.5.6 verifier inputs */ ],
+  "evidence": [ /* optional precomputed §5.5.6 result blocks */ ],
+  "resolvedFacts": { /* optional §6.7 local facts */ }
+}
+
+Response 201 Created:
+{
+  "record_hash": "sha256:...",
+  "record": { /* full AtribRecord */ },
+  "log_proofs": [],
+  "evidence": [],
+  "resolved_facts": {},
+  "archived_at_ms": 1700000000000,
+  "retention_window_ms": 31536000000
+}
+```
+
+`authorizationEvidence` is a submission-time convenience for producers that already have local sidecar evidence. The archive MAY verify it into public `evidence[]` result blocks on retrieval. Raw bearer tokens MUST NOT be required for this path and SHOULD NOT be submitted.
+
 #### 2.12.3 Retrieval API
 
 ```
@@ -2166,7 +2196,11 @@ Content-Type: application/json
 
 {
   "record": { /* full AtribRecord per §1.2, including signature */ },
-  "log_proofs": [ /* optional: §2.8 proof bundle entries from logs the archive trusts */ ]
+  "log_proofs": [ /* optional: §2.8 proof bundle entries from logs the archive trusts */ ],
+  "evidence": [ /* optional §5.5.6 result blocks */ ],
+  "resolved_facts": { /* optional §6.7 local facts */ },
+  "archived_at_ms": 1700000000000,
+  "retention_window_ms": 31536000000
 }
 
 Response 404 Not Found:
@@ -2185,6 +2219,30 @@ Response 410 Gone:
 `410 Gone` is distinct from `404 Not Found`: `410` means "the body was archived and has been deleted per retention policy"; `404` means "this body was never archived here." Verifiers that see `410` from one archive MAY query other archives; verifiers that see `404` across all known archives know the body is producer-local-only.
 
 The returned `record` is verified the same way regardless of source: re-canonicalize via [§1.3](#13-canonical-serialization), re-hash, compare against the log commitment, then re-verify the signature per [§1.4](#14-signing-and-verification). The archive cannot fabricate bodies; it can only suppress them.
+
+Explorers and lightweight clients that only need verifier evidence MAY call:
+
+```
+GET https://archive.atrib.dev/v1/evidence/<record_hash_hex>
+
+Response 200 OK:
+{
+  "record_hash": "sha256:...",
+  "record_summary": {
+    "creator_key": "...",
+    "context_id": "...",
+    "event_type": "...",
+    "timestamp": 1700000000000,
+    "content_id": "sha256:..."
+  },
+  "evidence": [ /* §5.5.6 result blocks */ ],
+  "resolved_facts": {},
+  "archived_at_ms": 1700000000000,
+  "retention_window_ms": 31536000000
+}
+```
+
+This endpoint is a projection of the archived body and sidecar evidence. It does not change the public log lookup contract.
 
 #### 2.12.4 Retention manifest
 
@@ -2244,12 +2302,14 @@ A verifier presented with only Tier 1 can prove "a record existed"; Tiers 2 + 3 
 Archive operators implementing this section:
 
 - MUST expose `/v1/record/<record_hash_hex>` with the response shape in [§2.12.3](#2123-retrieval-api).
+- MUST expose `/v1/evidence/<record_hash_hex>` with the projection shape in [§2.12.3](#2123-retrieval-api).
 - MUST expose `/v1/retention` with the manifest shape in [§2.12.4](#2124-retention-manifest).
+- MUST expose `POST /v1/records` with the submission shape in [§2.12.2](#2122-submission-model).
 - MUST validate submitted bodies against at least one log's commitment before accepting.
 - MUST honor the `minimum_window_ms` retention they publish.
-- MAY decline to archive any specific submission (returning a documented submission API error not yet specified here, the submission API surface is a [D070](DECISIONS.md#d070-record-body-archive-layer-design) follow-up).
+- MAY decline to archive any specific submission with a documented error response.
 
-Conformance corpora for the retrieval API and the retention manifest land alongside [D070](DECISIONS.md#d070-record-body-archive-layer-design); this section establishes the contract those corpora target.
+The retrieval, evidence-projection, retention, and uncommitted-record cases are covered by `spec/conformance/2.12/`.
 
 ---
 
@@ -4164,7 +4224,11 @@ The initial generic adapter is OAuth / MCP authorization evidence. It accepts a 
 5. Optional `client_id`, subject, actor subject, and `cnf.jkt` checks.
 6. Optional RFC 9449 DPoP proof evidence: `typ`, public JWK thumbprint, `htm`, `htu`, `ath`, `jti`, `iat`, nonce when supplied, and `cnf.jkt` binding when the access-token claims expose it.
 
-The OAuth / MCP adapter does not mint tokens, run OAuth redirects, call token-introspection endpoints, fetch authorization-server metadata, or maintain a global DPoP replay cache. Callers supply tokens, claims, trust roots, protected-resource metadata, seen DPoP `jti` values when they enforce replay policy, and required constraints. Missing trusted keys or unverified decoded claims make the evidence block invalid by default; callers MAY choose a best-effort signature policy for advisory triage.
+The OAuth / MCP adapter does not mint tokens, run OAuth redirects, call token-introspection endpoints, fetch authorization-server metadata, or maintain a global DPoP replay cache. Callers supply tokens, claims, trust roots, protected-resource metadata, seen DPoP `jti` values or a shared replay cache when they enforce replay policy, and required constraints. Missing trusted keys or unverified decoded claims make the evidence block invalid by default; callers MAY choose a best-effort signature policy for advisory triage.
+
+`@atrib/verify` also exposes a host-owned token-introspection helper. The helper posts to the caller's configured introspection endpoint, applies caller-supplied client authentication and expectation checks, and returns a caller-supplied introspection response for the evidence verifier. `verifyRecord()` and `verifyOAuthAuthorizationEvidence()` still do not perform hidden network calls.
+
+Deployments that require process-shared or fleet-shared DPoP replay protection pass a `dpopReplayCache` implementation into the evidence verifier. The cache contract is atomic `checkAndRemember(key, expiresAtSeconds)`, so hosts can back it with Redis, Durable Objects, Postgres, or another shared store. The bundled memory cache is for one-process deployments and tests.
 
 `@atrib/mcp` MAY capture MCP/OAuth evidence from an MCP HTTP transport's already-validated `authInfo` and request metadata into the local mirror sidecar. Producer-side capture MUST NOT persist the raw bearer token by default. The reference implementation stores verified claims, a one-way token hash when configured, optional DPoP proof material, and verifier constraints. It also records resolved local facts such as `tool_name` so `verifyRecord()` can evaluate capability envelopes without changing the signed record bytes.
 

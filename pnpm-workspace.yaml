@@ -6,6 +6,7 @@ packages:
   - 'services/log-node'
   - 'services/graph-node'
   - 'services/directory-node'
+  - 'services/archive-node'
   - 'services/atrib-emit'
   - 'services/atrib-annotate'
   - 'services/atrib-revise'

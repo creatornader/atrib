@@ -348,7 +348,7 @@ The atrib stack runs across two repositories with distinct deployment platforms.
 
 The bifurcation between `atrib-web` (landing page) and the `atrib` monorepo (protocol services + dashboard) is intentional. The landing page has different deployment cadence (Vercel preview-on-PR for marketing copy iteration) and a different audience (visitors learning about the protocol) than the API services (Fly + spec-locked). API services deploy through the `Deploy services` GitHub Actions workflow after `CI` succeeds on `main`; the manual fallback is `flyctl deploy -c services/<name>/fly.toml --remote-only`. Keeping them separate avoids coupling marketing iteration to the protocol release cycle.
 
-`explore.atrib.dev` is a special case: it shares the `atrib` repo with the API services and ships baked into the log-node Docker image. The log-node server applies host-based routing, when `Host=explore.atrib.dev` the request handler returns the dashboard HTML at `/`; otherwise it returns the API service-info index. This avoids a separate deployment surface for what is structurally one set of static assets composed against the three service APIs.
+`explore.atrib.dev` is a special case: it shares the `atrib` repo with the API services and ships baked into the log-node Docker image. The log-node server applies host-based routing, when `Host=explore.atrib.dev` the request handler returns the dashboard HTML at `/`; otherwise it returns the API service-info index. This avoids a separate deployment surface for what is structurally one set of static assets composed against the log, graph, directory, and archive evidence APIs.
 
 ### How Cloudflare serves multiple origins
 
@@ -429,17 +429,14 @@ services/atrib-verify  MCP server for counterparty handoff evidence checks
       freshness, then returns accepted hashes for `informed_by`. Read-only;
       it does not fetch archives or sign records.
 
-(Future, not yet built, placeholder per D070)
 services/archive-node  Record Body Archive Layer (§2.12)
   └── Separate from log-node by design. Stores canonical record bodies
-      content-addressed by record_hash. Submission OPTIONAL at the
-      protocol level, producers using the salted-commitment privacy
-      posture (§8.3) keep bodies producer-local instead. Multi-archive
-      federation supported via content-addressing; multiple archives
-      MAY mirror the same body set. Closes the verifiability loop for
-      records whose privacy posture admits public-body retrieval. The
-      formal ADR + reference implementation are tracked under D070;
-      §2.12 carries the current spec contract.
+      content-addressed by record_hash, confirms each accepted body is
+      committed in a trusted log, and serves explorer evidence projections.
+      Submission remains OPTIONAL at the protocol level. Producers using
+      the salted-commitment privacy posture (§8.3) keep bodies producer-local
+      instead. Multi-archive federation is additive through the same hash
+      contract.
 ```
 
 The fourteen designed-public packages are published to npm via Trusted Publishing OIDC: seven core packages (`mcp`, `agent`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`) and seven cognitive-primitive MCP servers (`emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, `verify-mcp`). The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, and dashboard) are workspace fixtures, proof harnesses, deployed services, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence; no separate deployment is needed.
@@ -451,7 +448,7 @@ Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hash
 ## Further reading
 
 - [atrib-spec.md](atrib-spec.md), the complete protocol specification ([§0](atrib-spec.md#0-foundations)-[§7](atrib-spec.md#7-harness-integration-patterns))
-- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D106](DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7); [D053](DECISIONS.md#d053-inclusion-proof-aggregation-flagged-for-follow-up) and [D070](DECISIONS.md#d070-record-body-archive-layer-placeholder-adr) are placeholder ADRs awaiting formal write-ups)
+- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D111](DECISIONS.md#d111-host-owned-oauth-evidence-infrastructure); [D053](DECISIONS.md#d053-inclusion-proof-aggregation-flagged-for-follow-up) remains a placeholder ADR awaiting a formal write-up)
 - [packages/agent/README.md](packages/agent/README.md) -- adapter table with quick-start snippets for every framework
 - [packages/integration/examples/signer-proxy/](packages/integration/examples/signer-proxy/) -- sandbox signer proxy example ([§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution) / [D102](DECISIONS.md#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox))
 - [spec/conformance/1.4/](spec/conformance/1.4/) -- signing and adversarial record conformance corpus ([§1.4](atrib-spec.md#14-signing-and-verification) / [D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus))

@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { calculateJwkThumbprint, exportJWK, importJWK, SignJWT } from 'jose'
 import { base64urlEncode, sha256 } from '@atrib/mcp'
 import { verifyOAuthAuthorizationEvidence } from '../src/authorization-evidence.js'
+import { MemoryDpopReplayCache } from '../src/dpop-replay-cache.js'
 import manifest from '../../../spec/conformance/5.5.6/oauth/manifest.json'
 import type {
   OAuthAuthorizationEvidenceInput,
@@ -158,4 +159,52 @@ describe('OAuth / MCP authorization evidence conformance corpus', () => {
       if (fixture.expected.errors.length === 0) expect(result.errors).toEqual([])
     })
   }
+
+  it('rejects repeated DPoP jtis through a shared replay cache', async () => {
+    const fixture: OAuthEvidenceCase = {
+      name: 'shared-dpop-replay-cache',
+      kind: 'dpop',
+      accessToken: 'opaque-access-token',
+      input: {
+        protocol: 'mcp_oauth',
+        claimsVerified: true,
+        claims: {
+          iss: 'https://issuer.example',
+          sub: 'agent-a',
+          client_id: 'client-1',
+          scope: 'tools:read',
+          resource: 'https://mcp.example',
+        },
+        issuer: 'https://issuer.example',
+        resource: 'https://mcp.example',
+        requiredScopes: ['tools:read'],
+        expectedClientId: 'client-1',
+        nowSeconds: 1_700_000_200,
+      },
+      dpop: {
+        method: 'POST',
+        url: 'https://mcp.example/tools/search',
+        ath: 'token',
+        iat: 1_700_000_100,
+        jti: 'shared-jti-1',
+        bindCnfJkt: true,
+      },
+      expected: { valid: true, constraints: [], errors: [] },
+    }
+    const cache = new MemoryDpopReplayCache({ nowSeconds: () => 1_700_000_200 })
+    const input = await buildDpopInput(fixture)
+
+    const first = await verifyOAuthAuthorizationEvidence({ ...input, dpopReplayCache: cache })
+    expect(first.valid).toBe(true)
+
+    const second = await verifyOAuthAuthorizationEvidence({ ...input, dpopReplayCache: cache })
+    expect(second.valid).toBe(false)
+    expect(second.constraints).toContainEqual(
+      expect.objectContaining({
+        type: 'dpop.jti',
+        status: 'failed',
+        reason: 'jti already seen',
+      }),
+    )
+  })
 })
