@@ -131,6 +131,9 @@ importers:
       '@atrib/agent':
         specifier: workspace:*
         version: link:../agent
+      '@atrib/archive-node':
+        specifier: workspace:*
+        version: link:../../services/archive-node
       '@atrib/directory':
         specifier: workspace:*
         version: link:../directory
