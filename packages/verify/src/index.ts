@@ -46,12 +46,15 @@ export type {
 } from './authorization-evidence.js'
 
 export {
+  FetchDpopReplayCache,
   MemoryDpopReplayCache,
+  createFetchDpopReplayCache,
   dpopReplayCacheKeyId,
 } from './dpop-replay-cache.js'
 export type {
   DpopReplayCache,
   DpopReplayCacheKey,
+  FetchDpopReplayCacheOptions,
   MemoryDpopReplayCacheOptions,
 } from './dpop-replay-cache.js'
 

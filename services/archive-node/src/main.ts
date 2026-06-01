@@ -12,7 +12,7 @@ const retentionWindowMs = parseOptionalInt(process.env.ATRIB_ARCHIVE_RETENTION_W
 const archivedAfterMs = parseOptionalInt(process.env.ATRIB_ARCHIVE_ARCHIVED_AFTER_MS)
 
 const server = await bindArchiveServer(port, host, {
-  origin: process.env.ATRIB_ARCHIVE_ORIGIN ?? 'archive.atrib.dev/v1',
+  origin: process.env.ATRIB_ARCHIVE_ORIGIN ?? 'archive.atrib.dev',
   trustedLogEndpoints,
   ...(process.env.ATRIB_ARCHIVE_PERSIST
     ? { persistencePath: process.env.ATRIB_ARCHIVE_PERSIST }
@@ -22,9 +22,7 @@ const server = await bindArchiveServer(port, host, {
   ...(process.env.ATRIB_ARCHIVE_POLICY_URL
     ? { policyUrl: process.env.ATRIB_ARCHIVE_POLICY_URL }
     : {}),
-  ...(process.env.ATRIB_ARCHIVE_ALLOW_UNCOMMITTED === '1'
-    ? { allowUncommittedRecords: true }
-    : {}),
+  ...(process.env.ATRIB_ARCHIVE_ALLOW_UNCOMMITTED === '1' ? { allowUncommittedRecords: true } : {}),
 })
 
 // eslint-disable-next-line no-console

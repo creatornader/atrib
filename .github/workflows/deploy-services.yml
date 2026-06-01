@@ -17,6 +17,7 @@ on:
           - log-node
           - graph-node
           - directory-node
+          - archive-node
           - all
 
 concurrency: deploy-services-${{ github.event.workflow_run.head_sha || github.sha }}
@@ -35,6 +36,7 @@ jobs:
       log_node: ${{ steps.changed.outputs.log_node }}
       graph_node: ${{ steps.changed.outputs.graph_node }}
       directory_node: ${{ steps.changed.outputs.directory_node }}
+      archive_node: ${{ steps.changed.outputs.archive_node }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -52,12 +54,14 @@ jobs:
           log_node=false
           graph_node=false
           directory_node=false
+          archive_node=false
 
           case "$SERVICE" in
             all)
               log_node=true
               graph_node=true
               directory_node=true
+              archive_node=true
               ;;
             log-node)
               log_node=true
@@ -67,6 +71,9 @@ jobs:
               ;;
             directory-node)
               directory_node=true
+              ;;
+            archive-node)
+              archive_node=true
               ;;
             changed)
               if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
@@ -81,6 +88,7 @@ jobs:
                     log_node=true
                     graph_node=true
                     directory_node=true
+                    archive_node=true
                     ;;
                   services/log-node/*|apps/dashboard/*)
                     log_node=true
@@ -91,10 +99,14 @@ jobs:
                   services/directory-node/*)
                     directory_node=true
                     ;;
+                  services/archive-node/*|spec/conformance/2.12/*)
+                    archive_node=true
+                    ;;
                   packages/mcp/*|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json)
                     log_node=true
                     graph_node=true
                     directory_node=true
+                    archive_node=true
                     ;;
                   packages/directory/*)
                     log_node=true
@@ -102,6 +114,7 @@ jobs:
                     ;;
                   packages/verify/*)
                     graph_node=true
+                    archive_node=true
                     ;;
                 esac
               done <<< "$changed_files"
@@ -116,11 +129,13 @@ jobs:
             echo "log_node=$log_node"
             echo "graph_node=$graph_node"
             echo "directory_node=$directory_node"
+            echo "archive_node=$archive_node"
           } >> "$GITHUB_OUTPUT"
 
           echo "log-node=$log_node"
           echo "graph-node=$graph_node"
           echo "directory-node=$directory_node"
+          echo "archive-node=$archive_node"
 
   deploy-log-node:
     needs: changes
@@ -189,3 +204,43 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: flyctl deploy -c services/directory-node/fly.toml --remote-only
+
+  deploy-archive-node:
+    needs: changes
+    if: needs.changes.outputs.archive_node == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install archive dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build archive dependencies
+        run: |
+          pnpm --filter @atrib/mcp build
+          pnpm --filter @atrib/verify build
+          pnpm --filter @atrib/archive-node build
+
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+
+      - name: Deploy archive-node
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy -c services/archive-node/fly.toml --remote-only
+
+      - name: Smoke test archive retention manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive_smoke_url="${ATRIB_ARCHIVE_SMOKE_URL:-https://atrib-archive.fly.dev/v1/retention}"
+          curl -fsS "$archive_smoke_url" > /tmp/archive-retention.json
+          node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync('/tmp/archive-retention.json','utf8')); if (body.operator !== 'archive.atrib.dev') throw new Error('unexpected archive operator'); if (typeof body.minimum_window_ms !== 'number') throw new Error('missing minimum_window_ms');"

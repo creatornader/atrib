@@ -174,6 +174,7 @@ export async function wrap(
       creatorKey: key.seedB64url,
       serverUrl: `${config.serverUrl}/${config.agent}`,
       logEndpoint: config.logEndpoint,
+      ...(config.archiveSubmission ? { archiveSubmission: config.archiveSubmission } : {}),
       autoChain: config.autoChain,
       autoChainFallback: config.autoChainFallback,
       ...(config.contextIdSource === 'harness' ? { contextIdResolver: resolveEnvContextId } : {}),

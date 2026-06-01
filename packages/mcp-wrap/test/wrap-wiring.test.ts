@@ -108,4 +108,35 @@ describe('wrap wiring', () => {
       }),
     ).toEqual([RECORD_A])
   })
+
+  it('passes archive submission config to @atrib/mcp', async () => {
+    const { wrap } = await import('../src/wrap.js')
+    const { createAtribProxy } = await import('@atrib/mcp')
+    const createAtribProxyMock = vi.mocked(createAtribProxy)
+    createAtribProxyMock.mockClear()
+
+    const dir = mkdtempSync(join(tmpdir(), 'atrib-wrap-archive-'))
+    const recordFile = join(dir, 'records.jsonl')
+
+    try {
+      await wrap(
+        {
+          ...makeConfig(recordFile),
+          archiveSubmission: { endpoint: 'https://archive.test/v1' },
+        } as unknown as WrapConfig,
+        {
+          resolveKey: async () => ({
+            seedB64url: 'seed',
+            source: 'env',
+            publicKeyB64url: 'pub',
+          }),
+        },
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+
+    const options = createAtribProxyMock.mock.calls[0]?.[0]
+    expect(options?.atrib.archiveSubmission).toEqual({ endpoint: 'https://archive.test/v1' })
+  })
 })

@@ -232,7 +232,30 @@ Checks performed when evidence is present:
 - Optional `client_id`, subject, actor subject, and `cnf.jkt` checks.
 - Optional DPoP proof checks for `htm`, `htu`, `ath`, `jti`, `iat`, nonce when supplied, and `cnf.jkt` binding.
 
-The default signature policy is `require`. Missing trusted keys or unverified decoded claims make the evidence block invalid. Use `signaturePolicy: "best-effort"` only for advisory triage. DPoP replay state stays caller-owned: pass `seenJtis` for one-process checks or a shared `dpopReplayCache` for deployments that need atomic replay defense across workers.
+The default signature policy is `require`. Missing trusted keys or unverified decoded claims make the evidence block invalid. Use `signaturePolicy: "best-effort"` only for advisory triage. DPoP replay state stays caller-owned: pass `seenJtis` for one-process checks, `MemoryDpopReplayCache` for one-process services, or `createFetchDpopReplayCache()` when a deployment exposes a shared atomic replay-cache endpoint.
+
+```typescript
+import { createFetchDpopReplayCache, verifyRecord } from '@atrib/verify'
+
+const dpopReplayCache = createFetchDpopReplayCache({
+  endpoint: 'https://replay-cache.example.com/v1/dpop/check',
+  headers: { Authorization: `Bearer ${process.env.REPLAY_CACHE_TOKEN}` },
+})
+
+const result = await verifyRecord(record, {
+  authorizationEvidence: [
+    {
+      protocol: 'mcp_oauth',
+      claims,
+      claimsVerified: true,
+      dpopProof,
+      dpopReplayCache,
+    },
+  ],
+})
+```
+
+The shared endpoint must atomically remember the posted key until `expires_at_seconds` and return `{ "accepted": true }` for a new proof or `{ "accepted": false }` for replay. The storage backend can be Redis, Durable Objects, Postgres, or another compare-and-set primitive owned by the host.
 
 Producer-side MCP capture lives in `@atrib/mcp` behind the opt-in `authorizationEvidence` option. The producer writes evidence into the local-only sidecar without storing raw bearer tokens by default. Verifiers can pass that sidecar's `authorizationEvidence` and `resolvedFacts` to `verifyRecord()`.
 
@@ -331,6 +354,7 @@ For advanced use (custom calculators, alternative signing flows), the package al
 - `verifyOAuthAuthorizationEvidence(evidence)`: OAuth / MCP authorization evidence checks for access-token JWTs or caller-verified claims
 - `introspectOAuthToken(options)`: host-owned OAuth token introspection helper for opaque-token evidence
 - `oauthEvidenceFromIntrospectionResult(result, base?)`: adapter from host-owned introspection result to OAuth evidence input
+- `createFetchDpopReplayCache(options)`: HTTP-backed DPoP replay-cache adapter for fleet-shared replay checks
 - `MemoryDpopReplayCache`: in-process implementation of the `DpopReplayCache` contract for tests and single-worker deployments
 - `verifyHandoffClaims(claims, options?)`: Pattern 3 handoff claim acceptance before a receiving agent signs an `informed_by` follow-up
 - `recommendationSigningInput(doc)`: the canonical bytes that get signed

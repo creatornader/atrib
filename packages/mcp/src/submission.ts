@@ -53,9 +53,11 @@ import type { AtribRecord } from './types.js'
 
 const DEFAULT_LOG_ENDPOINT = 'https://log.atrib.dev/v1/entries'
 const SUBMISSION_PATH = '/v1/entries'
+const ARCHIVE_RECORDS_PATH = '/v1/records'
 const MAX_RETRIES = 3
 const INITIAL_BACKOFF_MS = 1000
 const MAX_WINDOW_MS = 30_000
+const DEFAULT_ARCHIVE_TIMEOUT_MS = 5000
 /**
  * Default cap on the number of unsubmitted records held in memory while the
  * log is unreachable. Without this cap, a multi-hour log outage in a hot
@@ -104,6 +106,31 @@ function normalizeLogEndpoint(raw: string): string {
   return raw
 }
 
+function normalizeArchiveEndpoint(raw: string): string {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    throw new Error(
+      `atrib: archive endpoint '${raw}' is not a valid URL. Expected something like 'https://archive.example.com/v1/records'.`,
+    )
+  }
+  const path = url.pathname.endsWith('/') ? url.pathname.slice(0, -1) : url.pathname
+  if (path === '' || path === '/') {
+    url.pathname = ARCHIVE_RECORDS_PATH
+    return url.toString()
+  }
+  if (path === '/v1') {
+    url.pathname = ARCHIVE_RECORDS_PATH
+    return url.toString()
+  }
+  if (path.endsWith(ARCHIVE_RECORDS_PATH)) {
+    url.pathname = ARCHIVE_RECORDS_PATH
+    return url.toString()
+  }
+  return raw
+}
+
 /**
  * Inclusion proof bundle returned by the log's submission API per spec §2.6.2.
  *
@@ -127,7 +154,7 @@ export interface ProofBundle {
 
 export interface SubmissionQueue {
   /** Submit a signed record to the log (non-blocking). */
-  submit(record: AtribRecord, priority: 'high' | 'normal'): void
+  submit(record: AtribRecord, priority: 'high' | 'normal', sidecar?: SubmissionSidecar): void
   /** Get a cached proof bundle by record_hash. */
   getProof(recordHash: string): ProofBundle | undefined
   /** Flush all pending submissions (for testing/shutdown). */
@@ -139,6 +166,21 @@ type Priority = 'high' | 'normal'
 interface PendingEntry {
   record: AtribRecord
   priority: Priority
+  sidecar?: SubmissionSidecar
+}
+
+export interface SubmissionSidecar {
+  authorizationEvidence?: unknown[]
+  resolvedFacts?: Record<string, unknown>
+  args?: Record<string, unknown>
+  result?: Record<string, unknown>
+}
+
+export interface ArchiveSubmissionOptions {
+  /** Archive record-submission endpoint. Accepts either /v1 or /v1/records. */
+  endpoint: string
+  /** Per-request timeout for best-effort archive submission. Defaults to 5000. */
+  timeoutMs?: number
 }
 
 export interface SubmissionQueueOptions {
@@ -154,6 +196,13 @@ export interface SubmissionQueueOptions {
    * disable (only safe for tests and short-lived processes).
    */
   maxQueueDepth?: number
+  /**
+   * Optional record body archive submission. Disabled by default because it
+   * sends the signed record body and selected verifier evidence outside the
+   * producer's local mirror. When enabled, archive submission happens only
+   * after the log accepts the record and returns an inclusion proof.
+   */
+  archiveSubmission?: ArchiveSubmissionOptions
 }
 
 export function createSubmissionQueue(
@@ -162,6 +211,14 @@ export function createSubmissionQueue(
 ): SubmissionQueue {
   const endpoint = normalizeLogEndpoint(logEndpoint ?? DEFAULT_LOG_ENDPOINT)
   const maxQueueDepth = options.maxQueueDepth ?? DEFAULT_MAX_QUEUE_DEPTH
+  const archiveSubmission =
+    options.archiveSubmission !== undefined
+      ? {
+          ...options.archiveSubmission,
+          endpoint: normalizeArchiveEndpoint(options.archiveSubmission.endpoint),
+          timeoutMs: options.archiveSubmission.timeoutMs ?? DEFAULT_ARCHIVE_TIMEOUT_MS,
+        }
+      : undefined
   const proofCache = new Map<string, ProofBundle>()
   // Tracks records whose initial submission failed but may succeed on a
   // later flush() retry. Each entry carries its priority so flush() can
@@ -209,7 +266,48 @@ export function createSubmissionQueue(
     return hexEncode(sha256(canonical))
   }
 
-  async function submitWithRetry(record: AtribRecord, priority: Priority): Promise<void> {
+  async function submitToArchive(
+    record: AtribRecord,
+    proof: ProofBundle,
+    sidecar: SubmissionSidecar | undefined,
+    hash: string,
+  ): Promise<void> {
+    if (!archiveSubmission) return
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), archiveSubmission.timeoutMs)
+    const payload: Record<string, unknown> = { record, proof }
+    if (sidecar?.authorizationEvidence && sidecar.authorizationEvidence.length > 0) {
+      payload.authorizationEvidence = sidecar.authorizationEvidence
+    }
+    if (sidecar?.resolvedFacts && Object.keys(sidecar.resolvedFacts).length > 0) {
+      payload.resolvedFacts = sidecar.resolvedFacts
+    }
+
+    try {
+      const response = await fetch(archiveSubmission.endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        console.warn(`atrib: archive submission rejected (${response.status})`, {
+          record_hash: hash,
+        })
+      }
+    } catch (err) {
+      console.warn('atrib: archive submission failed', { record_hash: hash, error: err })
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  async function submitWithRetry(
+    record: AtribRecord,
+    priority: Priority,
+    sidecar?: SubmissionSidecar,
+  ): Promise<void> {
     const hash = recordHash(record)
     const startTime = Date.now()
     let backoff = INITIAL_BACKOFF_MS
@@ -245,7 +343,9 @@ export function createSubmissionQueue(
             (raw.inclusion_proof as unknown[]).every((e) => typeof e === 'string') &&
             typeof raw.leaf_hash === 'string'
           ) {
-            proofCache.set(hash, raw as unknown as ProofBundle)
+            const proof = raw as unknown as ProofBundle
+            proofCache.set(hash, proof)
+            await submitToArchive(record, proof, sidecar, hash)
           }
           pendingRecords.delete(hash)
           return
@@ -277,19 +377,21 @@ export function createSubmissionQueue(
     while (pendingRecords.size >= maxQueueDepth) {
       evictOneOldest()
     }
-    pendingRecords.set(hash, { record, priority })
+    pendingRecords.set(hash, { record, priority, ...(sidecar ? { sidecar } : {}) })
   }
 
   return {
-    submit(record: AtribRecord, priority: Priority): void {
-      const promise = submitWithRetry(record, priority).catch((err) => {
-        console.warn('atrib: unexpected submission error', err)
-      }).finally(() => {
-        // Prune resolved promise to prevent unbounded growth in long-running
-        // processes that never call flush().
-        const idx = pendingPromises.indexOf(promise)
-        if (idx !== -1) pendingPromises.splice(idx, 1)
-      })
+    submit(record: AtribRecord, priority: Priority, sidecar?: SubmissionSidecar): void {
+      const promise = submitWithRetry(record, priority, sidecar)
+        .catch((err) => {
+          console.warn('atrib: unexpected submission error', err)
+        })
+        .finally(() => {
+          // Prune resolved promise to prevent unbounded growth in long-running
+          // processes that never call flush().
+          const idx = pendingPromises.indexOf(promise)
+          if (idx !== -1) pendingPromises.splice(idx, 1)
+        })
       pendingPromises.push(promise)
     },
 
@@ -315,7 +417,9 @@ export function createSubmissionQueue(
         ]
         const retryPromises: Promise<void>[] = []
         for (const entry of highFirst) {
-          retryPromises.push(submitWithRetry(entry.record, entry.priority).catch(() => {}))
+          retryPromises.push(
+            submitWithRetry(entry.record, entry.priority, entry.sidecar).catch(() => {}),
+          )
         }
         await Promise.allSettled(retryPromises)
       }

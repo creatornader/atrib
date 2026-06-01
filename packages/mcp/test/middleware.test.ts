@@ -499,6 +499,74 @@ describe('atrib() middleware', () => {
       expect(dpop?.expectedAth).toMatch(/^[A-Za-z0-9_-]+$/)
       expect(JSON.stringify(dpop)).not.toContain('secret-bearer-token')
     })
+
+    it('submits sanitized OAuth evidence to the archive when enabled', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const originalHandler = vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] })
+      const proof = {
+        log_index: 42,
+        checkpoint: 'log.test/v1\n43\nrootHashBase64\n',
+        inclusion_proof: [],
+        leaf_hash: 'leafHashBase64',
+      }
+      const archivePayloads: unknown[] = []
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+        const href = String(url)
+        if (href === 'https://log.test/v1/entries') {
+          return new Response(JSON.stringify(proof), { status: 200 })
+        }
+        if (href === 'https://archive.test/v1/records') {
+          archivePayloads.push(JSON.parse(init?.body as string))
+          return new Response(JSON.stringify({ stored: true }), { status: 201 })
+        }
+        throw new Error(`unexpected fetch ${href}`)
+      })
+
+      try {
+        const wrapped = atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://mcp.example.com/mcp',
+          logEndpoint: 'https://log.test/v1/entries',
+          archiveSubmission: { endpoint: 'https://archive.test/v1' },
+          authorizationEvidence: {
+            requiredScopes: ['files:read'],
+            protectedResourceMetadata: {
+              resource: 'https://mcp.example.com/mcp',
+              authorization_servers: ['https://auth.example.com'],
+            },
+          },
+        })
+        registerToolHandler(originalHandler)
+
+        const handler = getToolHandler()!
+        await handler(createToolCallRequest('read_file'), {
+          authInfo: {
+            token: 'secret-bearer-token',
+            clientId: 'client-123',
+            scopes: ['files:read'],
+            resource: new URL('https://mcp.example.com/mcp'),
+          },
+        })
+        await wrapped.flush()
+
+        expect(archivePayloads).toHaveLength(1)
+        expect(JSON.stringify(archivePayloads[0])).not.toContain('secret-bearer-token')
+        expect(archivePayloads[0]).toMatchObject({
+          proof,
+          authorizationEvidence: [
+            {
+              protocol: 'mcp_oauth',
+              claims: { client_id: 'client-123' },
+              claimsVerified: true,
+              requiredScopes: ['files:read'],
+            },
+          ],
+          resolvedFacts: { tool_name: 'read_file' },
+        })
+      } finally {
+        fetchSpy.mockRestore()
+      }
+    })
   })
 
   describe('context propagation', () => {

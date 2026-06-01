@@ -31,6 +31,14 @@ describe('parseConfig', () => {
     expect(config.logEndpoint).toBe('http://localhost:3100/v1/entries')
   })
 
+  it('parses opt-in archive submission config', () => {
+    const config = parseConfig({
+      ...MINIMAL,
+      archiveSubmission: { endpoint: 'https://archive.test/v1' },
+    })
+    expect(config.archiveSubmission).toEqual({ endpoint: 'https://archive.test/v1' })
+  })
+
   it('honors autoChain false', () => {
     const config = parseConfig({ ...MINIMAL, autoChain: false })
     expect(config.autoChain).toBe(false)
