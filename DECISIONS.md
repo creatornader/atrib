@@ -2296,7 +2296,7 @@ A new optional field `inclusion_proof_refs: [{ log_id, record_hash, checkpoint_r
 4. Storage and verification cost trade-offs at high record volumes.
 5. Failure modes: how does a verifier surface "cited proof exists but doesn't verify against current checkpoint state"?
 
-**Implementation sequencing.** None for now. When formally written: spec subsection (the original [§2.12](atrib-spec.md#212-record-body-archive-layer) placeholder slot is taken by [D070](#d070-record-body-archive-layer-placeholder-adr) Record Body Archive Layer; aggregation lands in §2.13 or as a [§2.11](atrib-spec.md#211-cross-log-replication) extension) → record format extension → verifier-side cross-checking → conformance corpus → operator guidance.
+**Implementation sequencing.** None for now. When formally written: spec subsection (the original [§2.12](atrib-spec.md#212-record-body-archive-layer) slot is taken by [D070](#d070-record-body-archive-layer) Record Body Archive Layer; aggregation lands in §2.13 or as a [§2.11](atrib-spec.md#211-cross-log-replication) extension) → record format extension → verifier-side cross-checking → conformance corpus → operator guidance.
 
 **Caveat on this entry.** Because this ADR is a placeholder, anything described above is a sketch, not a commitment. The formal ADR (when authored) will follow the standard format and may diverge from this placeholder in any technical detail. Cross-references to [D053](#d053-inclusion-proof-aggregation-flagged-for-follow-up) from other ADRs or the spec MUST treat the substance as forward-looking, not normative.
 
@@ -2305,19 +2305,19 @@ A new optional field `inclusion_proof_refs: [{ log_id, record_hash, checkpoint_r
 **Date:** 2026-04-29
 **Status:** Accepted
 
-**Context.** atrib's read-side data lives across three deployed services: log-node (entries + checkpoints + inclusion proofs), graph-node (graph queries derived from log entries), directory-node (identity claims + AKD proofs). All three serve public data per spec [§0](atrib-spec.md#0-foundations) ("anyone can verify"). None of them ships a human-readable inspection UI; the only interaction surface is JSON-over-HTTP designed for machine consumers (verifiers, agents, libraries).
+**Context.** At the time of this decision, atrib's read-side data lived across three deployed services: log-node (entries + checkpoints + inclusion proofs), graph-node (graph queries derived from log entries), directory-node (identity claims + AKD proofs). All three serve public data per spec [§0](atrib-spec.md#0-foundations) ("anyone can verify"). None of them ships a human-readable inspection UI; the only interaction surface is JSON-over-HTTP designed for machine consumers (verifiers, agents, libraries). [D070](#d070-record-body-archive-layer) later added optional archive evidence as another read API for the same explorer surface.
 
 The natural impulse is to add an admin/inspection UI to each service: a small HTML page on log-node, another on graph-node, another on directory-node. Each would let a human paste a record_hash / context_id / creator_key and see what the service knows about it.
 
 This is the wrong shape. It produces three disconnected admin pages instead of solving the underlying "where do I look to see what's happening" problem. Humans understanding atrib activity care about the JOIN across the three services: "this record_hash was signed by THIS identity (directory) at THIS chain position (log) producing THESE graph edges (graph)." Three separate UIs force humans to do that join manually.
 
-The right shape is a unified explorer that composes from the three services. This is the same pattern Certificate Transparency (crt.sh), Sigstore (rekor.sigstore.dev), and Ethereum (Etherscan) use: individual logs/services don't ship UIs; one explorer composes from all of them.
+The right shape is a unified explorer that composes from the public read APIs. This is the same pattern Certificate Transparency (crt.sh), Sigstore (rekor.sigstore.dev), and Ethereum (Etherscan) use: individual logs/services don't ship UIs; one explorer composes from all of them.
 
 **Decision.**
 
 1. **No per-service inspection UIs.** log-node, graph-node, and directory-node MUST NOT ship inline admin/dashboard HTML. Their interfaces stay JSON-over-HTTP for machine consumers.
 
-2. **A unified explorer ships separately.** A standalone surface composes from all three services' read APIs and presents the joined views humans actually want. The five primary views: identity (anchored on `creator_key`), session (anchored on `context_id`), action (anchored on `record_hash`), anchoring (recent log checkpoints + directory anchors), and search (free-text resolving to identity / context / record).
+2. **A unified explorer ships separately.** A standalone surface composes from the public read APIs and presents the joined views humans actually want. The first five primary views were identity (anchored on `creator_key`), session (anchored on `context_id`), action (anchored on `record_hash`), anchoring (recent log checkpoints + directory anchors), and search (free-text resolving to identity / context / record). Later explorer iterations added demo and trace views, and [D070](#d070-record-body-archive-layer) added archive evidence to action receipts.
 
 3. **Read-only and unauthenticated.** The explorer reads only public data. Adding an auth wall would (a) break the spec [§0](atrib-spec.md#0-foundations) "verifiable by anyone" promise, (b) be security theater (the underlying APIs are public anyway), and (c) create false-restriction perception. Read views stay open forever.
 
@@ -2325,7 +2325,7 @@ The right shape is a unified explorer that composes from the three services. Thi
 
 5. **Three-stage build sequence.** The deployment strategy proceeds in three stages. First: a minimal single-page HTML (no build step, no framework) **served inline by log-node at `https://explore.atrib.dev/`** so the first stage doesn't introduce a second hosting platform. Second: a Vite/Next.js SPA with proper routing + components, deployed to its own hosting (likely Cloudflare Pages at `dashboard.atrib.dev` or `atrib.dev/dashboard`); at that point the inline log-node route either redirects to the SPA or stays as a backup. Third: a full block-explorer-grade surface with search indexing, real-time updates, embedded chain visualizations. The first stage ships immediately; the second follows when dogfood metrics produce useful results to display; the third follows the broader implementation work.
 
-6. **CORS allowed on all three services' read endpoints.** `Access-Control-Allow-Origin: *` is set on log-node, graph-node, directory-node so a browser-based explorer hosted from any origin can read the public APIs. The data is already public; CORS just makes browser-based composition possible.
+6. **CORS allowed on composed read endpoints.** `Access-Control-Allow-Origin: *` is set on log-node, graph-node, directory-node, and archive-node read endpoints so a browser-based explorer hosted from any origin can read the public APIs. The data is already public; CORS just makes browser-based composition possible.
 
 7. **Future write actions require per-action auth.** If the explorer ever gains write actions (e.g., "publish an identity claim from the UI" instead of CLI), THOSE specific actions get authenticated per action, the read views stay open. This boundary is preserved through future iterations.
 
@@ -2342,7 +2342,7 @@ The right shape is a unified explorer that composes from the three services. Thi
 **Consequences.**
 
 - _Spec._ No spec changes for [D054](#d054-unified-public-explorer-vs-per-service-admin-uis) itself; the explorer reads from the existing [§2.5](atrib-spec.md#25-tile-api-read-interface) / [§3.4](atrib-spec.md#34-query-api) / [§6.2](atrib-spec.md#62-directory-operations) read APIs. CORS clarification can land in those sections as a normative note (`Access-Control-Allow-Origin: *` is the canonical setting for the read endpoints).
-- _log-node, graph-node, directory-node._ All three gain `Access-Control-Allow-Origin: *` headers on read endpoints (and OPTIONS preflight handling). Tests confirm headers present.
+- _log-node, graph-node, directory-node, archive-node._ Composed read services set `Access-Control-Allow-Origin: *` headers on read endpoints (and OPTIONS preflight handling where needed). Tests confirm headers present.
 - _Repo._ New `apps/dashboard/` directory ships the explorer source. Option 1 is a single HTML file with embedded CSS + vanilla JS (no build step). Options 2 and 3 will introduce a framework + build step when they're built.
 - _Hosting._ Option 1 is served inline by log-node at `https://explore.atrib.dev/` (also at `https://log.atrib.dev/dashboard` for legacy direct access). The Dockerfile copies `apps/dashboard/index.html` into the image; the server reads it once at startup, caches in memory, and returns with `Cache-Control: public, max-age=60`. The "no per-service inspection UIs" rule (point 1 above) bans per-service ADMIN HTML, page-shaped, service-private surfaces. Serving the unified explorer from a service is materially different: log-node is acting as a static-file host for the cross-service surface, not exposing a service-specific admin. The host-based routing is explicit: when the request `Host` header is `explore.atrib.dev` the dashboard is returned at `/`; otherwise log-node returns API responses at `/v1/*` and a 404 hint at `/`. When option 2 (SPA) ships it will get its own hosting (likely Cloudflare Pages); the inline route stays as a fallback. **Naming rationale:** `explore` was chosen over `dashboard` so that `dashboard.atrib.dev` is reserved for the actual auth-gated personal dashboard product (separate memory entry); `explore` reads as block-explorer and avoids the "dashboard implies my-account" connotation.
 - _CLAUDE.md._ New sync trigger: "Explorer view changes" → update apps/dashboard/ + verify CORS unchanged on the underlying services.
@@ -2357,7 +2357,7 @@ The right shape is a unified explorer that composes from the three services. Thi
 
 **Implementation sequencing.**
 
-Option 1 (now): single HTML file at `apps/dashboard/index.html`; CORS added to all three services; log-node serves the HTML at `/dashboard`; Dockerfile bundles the file; deployed to https://explore.atrib.dev/. The explorer loads against production (`log.atrib.dev`, `graph.atrib.dev`, `directory.atrib.dev`) by default with URL-param overrides for local services. Option 2 (when dogfood metrics are producing measurable signal): Vite/Next.js refactor of option 1's view components into a proper SPA; deploys to its own hosting (likely Cloudflare Pages). Option 3 (after the broader implementation work completes): full block-explorer-grade surface; search indexing, real-time updates, visualization. Personal dashboard tracks separately.
+Option 1 (now): single HTML file at `apps/dashboard/index.html`; CORS added to the composed read services; log-node serves the HTML at `/dashboard`; Dockerfile bundles the file; deployed to https://explore.atrib.dev/. The explorer loads against production (`log.atrib.dev`, `graph.atrib.dev`, `directory.atrib.dev`, and optional `archive.atrib.dev`) by default with URL-param overrides for local services. Option 2 (when dogfood metrics are producing measurable signal): Vite/Next.js refactor of option 1's view components into a proper SPA; deploys to its own hosting (likely Cloudflare Pages). Option 3 (after the broader implementation work completes): full block-explorer-grade surface; search indexing, real-time updates, visualization. Personal dashboard tracks separately.
 
 ## D055: annotation / proposal / apply types stay as extension URIs (not promoted to atrib-normative)
 
@@ -3179,34 +3179,45 @@ The original "wrap every MCP at zero per-server cost" framing positioned `@atrib
 
 ---
 
-## D070: Record Body Archive Layer (placeholder ADR)
+## D070: Record Body Archive Layer
 
-**Date:** 2026-05-07.
+**Date:** 2026-05-07. Updated 2026-06-01.
 
-**Status:** Placeholder. The [§2.12](atrib-spec.md#212-record-body-archive-layer) Record Body Archive Layer surface exists in the spec; the formal ADR codifying API contract details, retention manifest format, federation rules, signed retention checkpoints, and reference implementation lives behind this placeholder until that work lands. Cross-references from the spec or other ADRs to [D070](#d070-record-body-archive-layer-placeholder-adr) MUST treat the substance below as forward-looking, not normative.
+**Status:** Accepted.
 
-This ADR is a placeholder. It records that the record body archive layer has been carved out of the spec and queued for full design work, without committing to specific implementation details. When this ADR is formally written and the mechanism is implemented, the details below MAY change in any way; this entry documents the intent and the known design questions, not the final design.
+**Extends:** [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), [D094](#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block), and [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks).
 
-**Context:**
+**Context.**
 
 The atrib log commits to a record's hash, not its body ([§2.3](atrib-spec.md#23-log-entry-format), [§2.10](atrib-spec.md#210-what-the-log-stores-and-what-it-does-not)). This separation preserves the salted-commitment privacy posture ([§8.3](atrib-spec.md#83-salted-commitment-posture)) and bounds log storage cost. It also creates a verifiability gap: a verifier with only the public commitment cannot re-canonicalize the record and re-check its signature without obtaining the body from somewhere.
 
 [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) addresses the producer side, the producer-local mirror always carries the canonical body. But producer-local-only durability is brittle: if the producer's mirror is wiped, the body is unrecoverable forever. [§2.12](atrib-spec.md#212-record-body-archive-layer) introduces a separate Record Body Archive Layer to close this gap for records whose privacy posture admits public-body retrieval.
 
-**Why deferred:**
+MCP/OAuth evidence made the product need concrete. The explorer can render `evidence[]`, but the public log lookup cannot return bodies or sidecar material without violating the commitment-only log boundary. A separate archive can serve bodies and verifier evidence for records whose producer deliberately opts in.
 
-The skeleton ([§2.12](atrib-spec.md#212-record-body-archive-layer)) defines the protocol-level contract, content-addressed retrieval, retention manifest, federation, trust model, tiered verifiability, but the implementation work (a new `services/archive-node/` service with submission API, retention checkpoints, multi-archive federation rules, conformance corpora) is multi-hour design work that warrants its own ADR with explicit privacy-posture analysis. Shipping the spec skeleton first lets verifiers and producers code against the contract while the implementation is sequenced.
+**Decision.** The Record Body Archive Layer is implemented as `services/archive-node`, a private deployable service separate from `log-node`.
 
-**Known design questions** (for the formal ADR to resolve):
+1. The archive exposes `POST /v1/records`, `GET /v1/record/<record_hash_hex>`, `GET /v1/evidence/<record_hash_hex>`, and `GET /v1/retention`.
+2. Submission is content-addressed and idempotent. The archive canonicalizes the supplied `record`, computes `record_hash`, verifies the record signature, and confirms the hash is committed in at least one trusted log before accepting.
+3. The archive stores full signed record bodies, optional log proofs, optional `authorizationEvidence` verifier inputs, optional precomputed `evidence[]` result blocks, and optional `resolvedFacts`.
+4. Retrieval returns the full record body plus log proofs, retention metadata, resolved facts, and verifier evidence result blocks.
+5. The evidence projection endpoint returns only the record summary, resolved facts, and `evidence[]` blocks needed by the explorer action view.
+6. Retention is explicit through `/v1/retention`; expired records return `410 Gone`, distinct from `404 Not Found`.
+7. The public explorer queries `archive.atrib.dev/v1/evidence/<hash>` opportunistically and merges any returned `evidence[]` blocks into the action receipt. A missing archive body does not affect the log lookup view.
 
-1. **Submission API shape.** [§2.12.2](atrib-spec.md#2122-submission-model) establishes that submission is at-sign and idempotent. The actual write API (endpoint, body shape, error responses, retry semantics, rate-limiting) is unspecified.
-2. **Retention checkpoints.** [§2.12.6](atrib-spec.md#2126-trust-model) mentions signed retention checkpoints (mirroring [§2.4](atrib-spec.md#24-checkpoint-format) log checkpoints) as a future mitigation against archives lying about retention. The checkpoint format, signing key model, and cosignature surface are not yet specified.
-3. **Federation rules.** [§2.12.5](atrib-spec.md#2125-federation) states multi-archive federation MAY happen and is content-addressed. The protocol contract for multi-archive verifier policy (M-of-N, archive trust set, propagation latency tolerances) is not yet specified.
-4. **Conformance corpora.** [§2.12.8](atrib-spec.md#2128-conformance) references conformance corpora that ship alongside [D070](#d070-record-body-archive-layer-placeholder-adr) work; the corpus shape (input bodies + retrieval expectations + retention-window cases) is not yet designed.
-5. **Reference implementation deployment.** A V1 archive (`archive.atrib.dev`) needs the same Fly-style deployment shape as log/graph/directory; storage backend (volume vs object storage) not yet decided.
-6. **Producer policy expression.** Producers MAY submit some records' bodies and not others ([§2.12.2](atrib-spec.md#2122-submission-model)). Whether this policy is expressed as a per-record annotation, a producer-wide configuration, or both is not yet specified.
+**Alternatives considered.**
 
-**Caveat on this entry.** Because this ADR is a placeholder, anything described above is a sketch, not a commitment. The formal ADR (when authored) will follow the standard format and may diverge from this placeholder in any technical detail. Cross-references to [D070](#d070-record-body-archive-layer-placeholder-adr) from other ADRs or the spec MUST treat the substance as forward-looking, not normative.
+- _Return bodies from `log-node`._ Rejected. That collapses the commitment log and body archive into one trust surface and weakens the privacy posture that motivated fixed log entries.
+- _Make archive submission mandatory._ Rejected. Records using salted commitments or producer-local-only evidence must remain valid. Archive availability is a retrieval tier, not a record-validity rule.
+- _Only store full bodies, not evidence projections._ Rejected. Explorer and lightweight verifier clients need a small evidence surface without fetching full bodies by default.
+- _Accept any submitted body without log confirmation._ Rejected for production. That would let the archive become a store for uncommitted material. The reference service has an explicit dev-only bypass for isolated tests.
+
+**Consequences.**
+
+- atrib now has a production body/evidence API while keeping the public log commitment-only.
+- Explorer action receipts can show MCP/OAuth or other verifier evidence when an archive body exists.
+- The archive operator can suppress or expire bodies, but cannot fabricate them because every returned body must hash to a public log commitment.
+- Full federation policy and signed retention checkpoints remain future hardening. The V1 service's content-addressing and retention manifest leave those additions compatible.
 
 **Cross-references:**
 
@@ -3216,6 +3227,8 @@ The skeleton ([§2.12](atrib-spec.md#212-record-body-archive-layer)) defines the
 - [§5.9](atrib-spec.md#59-local-mirror-conventions) (producer-local mirror; the other body-availability path)
 - [§8.3](atrib-spec.md#83-salted-commitment-posture) (privacy posture that opts out of archive submission)
 - [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) (two-tier private-local + public-canonical persistence on the producer side)
+- [`services/archive-node/`](services/archive-node/), reference archive implementation.
+- [`spec/conformance/2.12/`](spec/conformance/2.12/), archive API conformance corpus.
 
 ---
 
@@ -3223,7 +3236,7 @@ The skeleton ([§2.12](atrib-spec.md#212-record-body-archive-layer)) defines the
 
 **Date:** 2026-05-09
 
-**Context:** The atrib specification grew from [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type) through [D070](#d070-record-body-archive-layer-placeholder-adr) over six weeks of intensive spec work. Sections written across that stretch varied in their treatment of normative vs informative status, cross-reference style, conformance-corpus binding, and pattern-subsection layout. Drift across these dimensions creates two costs. First, readers integrating against the spec face inconsistent claims: a `MUST` in one section means "verifier rejects on violation," in another section it means "implementations should agree but no test vector enforces." Second, the spec maintenance contract erodes: if [§3](atrib-spec.md#3-graph-query-interface) patterns follow one template and [§9](atrib-spec.md#9-runtime-integration-patterns) patterns follow another, future sections have no clear template to copy.
+**Context:** The atrib specification grew from [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type) through [D070](#d070-record-body-archive-layer) over six weeks of intensive spec work. Sections written across that stretch varied in their treatment of normative vs informative status, cross-reference style, conformance-corpus binding, and pattern-subsection layout. Drift across these dimensions creates two costs. First, readers integrating against the spec face inconsistent claims: a `MUST` in one section means "verifier rejects on violation," in another section it means "implementations should agree but no test vector enforces." Second, the spec maintenance contract erodes: if [§3](atrib-spec.md#3-graph-query-interface) patterns follow one template and [§9](atrib-spec.md#9-runtime-integration-patterns) patterns follow another, future sections have no clear template to copy.
 
 The [§9](atrib-spec.md#9-runtime-integration-patterns) + [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) work applied a consistent set of conventions across new spec material. Those conventions, applied informally, are the de facto standard. Without codification, future sections may drift away from them as new contributors adopt different defaults.
 
@@ -3265,7 +3278,7 @@ The ten conventions:
 
 - Existing spec sections predating this ADR are grandfathered. Substantive edits to those sections (more than a typo or small clarification) bring the section in scope; the editor migrates the section to convention compliance as part of the edit.
 
-- Future ADRs follow convention 9 (template) and convention 10 (architectural framing). The convention-9 template matches the structure [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) and [D070](#d070-record-body-archive-layer-placeholder-adr) use; no new structure is required.
+- Future ADRs follow convention 9 (template) and convention 10 (architectural framing). The convention-9 template matches the structure [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) and [D070](#d070-record-body-archive-layer) use; no new structure is required.
 
 - A new `CLAUDE.md` sync-triggers row is added for [D071](#d071-spec-writing-conventions) itself: when conventions are revised, this ADR is the canonical source; downstream surfaces include `scripts/check-doc-sync.mjs` (if mechanical enforcement extends), the spec sections currently following the conventions, and any documentation that referenced the prior informal status.
 
@@ -5335,6 +5348,48 @@ The missing piece is producer-side capture from already-validated MCP HTTP autho
 
 ---
 
+## D111: Host-owned OAuth evidence infrastructure
+
+**Date:** 2026-06-01
+
+**Status:** Accepted
+
+**Extends:** [D070](#d070-record-body-archive-layer), [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks), and [D110](#d110-mcpoauth-evidence-capture-closes-the-producer-to-verifier-loop).
+
+**Context.** [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks) and [D110](#d110-mcpoauth-evidence-capture-closes-the-producer-to-verifier-loop) made MCP/OAuth evidence possible, but left three production seams for hosts to solve alone:
+
+1. Explorer evidence needed a body/evidence API because `log-node` cannot return sidecar evidence.
+2. DPoP replay protection needed state shared across verifier instances.
+3. Opaque-token introspection needed live network plumbing, but hidden verifier fetches would violate the caller-owned trust boundary.
+
+**Decision.** atrib now ships host-owned infrastructure for those three edges without moving authorization policy into core record validity.
+
+1. `services/archive-node` serves body and evidence retrieval for archived records. The explorer reads its evidence projection opportunistically.
+2. `@atrib/verify` exposes `DpopReplayCache` and `MemoryDpopReplayCache`. Deployments that need replay defense pass a shared cache into OAuth evidence verification.
+3. `@atrib/verify` exposes `introspectOAuthToken()` and `oauthEvidenceFromIntrospectionResult()`. The host chooses the endpoint, client authentication, timeout, and expected issuer, audience, or resource. The helper returns caller-supplied evidence; `verifyRecord()` still performs no hidden network calls.
+
+**Alternatives considered.**
+
+- _Let `verifyRecord()` call introspection endpoints._ Rejected. It would hide network behavior, SSRF policy, token handling, and authorization-server trust roots inside a function that should verify supplied material.
+- _Keep DPoP replay state as `seenJtis[]` only._ Rejected. It works for tests and one process, but production HTTP deployments need an atomic shared check-and-remember contract.
+- _Make archive evidence mandatory for explorer action views._ Rejected. Most records remain verifiable at Tier 1 from the log alone. Missing body evidence is a state to show, not an error.
+
+**Consequences.**
+
+- atrib has a concrete second evidence adapter path with production retrieval and verifier plumbing, not just fixture code.
+- Hosts still own OAuth secrets, live introspection policy, and replay-cache deployment.
+- The archive layer gives public inspection a way to show evidence without changing log entries or graph derivation.
+
+**Cross-references.**
+
+- [§2.12](atrib-spec.md#212-record-body-archive-layer), archive body and evidence API.
+- [§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks), OAuth / MCP evidence and DPoP replay-cache semantics.
+- [`packages/verify/src/dpop-replay-cache.ts`](packages/verify/src/dpop-replay-cache.ts), replay-cache contract.
+- [`packages/verify/src/oauth-introspection.ts`](packages/verify/src/oauth-introspection.ts), host-owned introspection helper.
+- [`services/archive-node/`](services/archive-node/), production archive reference service.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -5680,7 +5735,7 @@ The packet would carry:
 
 - This is a harness-consumption pattern in [§7](atrib-spec.md#7-harness-integration-patterns), not a new [§9](atrib-spec.md#9-runtime-integration-patterns) runtime-mounting pattern.
 - Tier 1 public log proof is not enough for continuation. It proves a record existed, not what the receiving agent needs to inspect. Tier 2 body retrieval and Tier 3 signature replay remain necessary.
-- The packet should not collapse the Record Body Archive Layer into the log. [D070](#d070-record-body-archive-layer-placeholder-adr)'s separation remains the rule that preserves the privacy posture.
+- The packet should not collapse the Record Body Archive Layer into the log. [D070](#d070-record-body-archive-layer)'s separation remains the rule that preserves the privacy posture.
 - The packet can be private support-system metadata, a harness-specific extension record such as `https://example.com/v1/types/continuation_packet`, or both. A normative event_type is premature.
 - Existing cognitive primitives are sufficient. The receiving agent uses `recall`, `trace`, and `summarize` to read, then `emit`, `annotate`, and `revise` to continue.
 - Interaction channels are evidence, not the substrate. Plain-style webhooks, Slack threads, and local Claude Code or Codex sessions can carry the packet, but atrib should only prove the signed trail and anchors.
@@ -5690,7 +5745,7 @@ The packet would carry:
 **Cross-references.**
 
 - [§7.8](atrib-spec.md#78-cross-harness-continuation-packets), informative continuation-packet pattern.
-- [D070](#d070-record-body-archive-layer-placeholder-adr), Record Body Archive Layer.
+- [D070](#d070-record-body-archive-layer), Record Body Archive Layer.
 - [D087](#d087-signed-diagnostic-outcome--causal-trace-replay), signed diagnostic outcome pattern.
 - [P037](#p037-skill-and-domain-context-provenance-for-agent-investigations), skill/context provenance.
 - [P038](#p038-hosted-agent-diagnostic-records-for-mcp-auth-skill-loading-and-code-context-gaps), hosted-agent diagnostics.

@@ -28,6 +28,10 @@ describe('overview copy', () => {
 
   it('can render verifier evidence blocks on action receipts when returned', () => {
     expect(html).toContain('function renderEvidencePanel(blocks)')
+    expect(html).toContain("archive:   'https://archive.atrib.dev/v1'")
+    expect(html).toContain('function mergeArchiveEvidence(entry, archiveResponse)')
+    expect(html).toContain('/evidence/${hashHex}`')
+    expect(html).toContain('timeoutMs: 1200')
     expect(html).toContain("label: 'evidence'")
     expect(html).toContain('external evidence')
     expect(html).toContain('External evidence blocks passed verifier checks.')

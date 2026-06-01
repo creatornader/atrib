@@ -1,0 +1,22 @@
+{
+  "spec_section": "2.12",
+  "description": "Record Body Archive Layer V1 API conformance cases",
+  "cases": [
+    {
+      "id": "record-retrieval-success",
+      "file": "cases/record-retrieval-success.json"
+    },
+    {
+      "id": "evidence-projection-success",
+      "file": "cases/evidence-projection-success.json"
+    },
+    {
+      "id": "retention-expired",
+      "file": "cases/retention-expired.json"
+    },
+    {
+      "id": "uncommitted-record-rejected",
+      "file": "cases/uncommitted-record-rejected.json"
+    }
+  ]
+}

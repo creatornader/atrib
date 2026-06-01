@@ -1,0 +1,32 @@
+{
+  "name": "@atrib/archive-node",
+  "version": "0.1.21",
+  "description": "atrib spec §2.12 record body archive HTTP service",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "atrib-archive-node": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "start": "node dist/main.js",
+    "dev": "tsx src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@atrib/mcp": "workspace:*",
+    "@atrib/verify": "workspace:*"
+  },
+  "devDependencies": {
+    "@atrib/log-node": "workspace:*",
+    "@noble/ed25519": "^3.1.0",
+    "@noble/hashes": "^2.2.0",
+    "@types/node": "^25.9.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  }
+}

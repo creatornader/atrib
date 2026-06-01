@@ -1,0 +1,37 @@
+app = 'atrib-archive'
+primary_region = 'iad'
+
+[build]
+  dockerfile = '../../services/archive-node/Dockerfile'
+
+[env]
+  PORT = '3300'
+  HOST = '0.0.0.0'
+  ATRIB_ARCHIVE_ORIGIN = 'archive.atrib.dev/v1'
+  ATRIB_ARCHIVE_PERSIST = '/data/archive.jsonl'
+  ATRIB_ARCHIVE_LOG_ENDPOINTS = 'https://log.atrib.dev/v1'
+
+[[mounts]]
+  source = 'atrib_archive_data'
+  destination = '/data'
+
+[http_service]
+  internal_port = 3300
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+
+[checks]
+  [checks.health]
+    port = 3300
+    type = 'http'
+    interval = '15s'
+    timeout = '2s'
+    grace_period = '5s'
+    method = 'GET'
+    path = '/v1/retention'

@@ -45,6 +45,26 @@ export type {
   OAuthTokenCheck,
 } from './authorization-evidence.js'
 
+export {
+  MemoryDpopReplayCache,
+  dpopReplayCacheKeyId,
+} from './dpop-replay-cache.js'
+export type {
+  DpopReplayCache,
+  DpopReplayCacheKey,
+  MemoryDpopReplayCacheOptions,
+} from './dpop-replay-cache.js'
+
+export {
+  introspectOAuthToken,
+  oauthEvidenceFromIntrospectionResult,
+} from './oauth-introspection.js'
+export type {
+  OAuthIntrospectionClientAuthentication,
+  OAuthIntrospectionOptions,
+  OAuthIntrospectionResult,
+} from './oauth-introspection.js'
+
 // Cross-agent handoff claim verification. Used when one agent receives a
 // record_hash claim plus private body material from another agent and must
 // decide whether to link its next record through informed_by.
