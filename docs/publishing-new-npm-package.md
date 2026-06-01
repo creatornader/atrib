@@ -134,13 +134,14 @@ dispatch. Do not merge a follow-up release until that run succeeds.
 
 If the same workflow fails with npm `EOTP`, the token can reach package creation
 but does not bypass publish-time 2FA. Create a replacement token with Bypass 2FA
-enabled, update the GitHub secret, and rerun the same manual dispatch:
+enabled, update the GitHub secret, and rerun the same manual dispatch. npm
+expects `--expires` as a number of days, not a calendar date:
 
 ```bash
 npm token create \
   --name atrib-ci-initial-package-YYYY-MM-DD \
   --token-description "Temporary atrib initial package publish token" \
-  --expires YYYY-MM-DD \
+  --expires 2 \
   --packages-all \
   --packages-and-scopes-permission read-write \
   --bypass-2fa
