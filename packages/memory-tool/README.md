@@ -10,15 +10,9 @@ backend alone.
 
 ## Install
 
-After npm publication:
-
 ```bash
-pnpm add @atrib/memory-tool @atrib/mcp @anthropic-ai/sdk
+pnpm add @atrib/memory-tool @anthropic-ai/sdk
 ```
-
-Until then, `@atrib/memory-tool` is a publish-target package. Run it from this
-workspace or install the packed tarball produced by `pnpm pack` in
-`packages/memory-tool/`.
 
 ## Quick start
 
