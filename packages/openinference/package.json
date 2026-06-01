@@ -40,7 +40,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@arizeai/openinference-semantic-conventions": "^2.4.0",
+    "@arizeai/openinference-semantic-conventions": "^2.5.0",
     "@atrib/mcp": "workspace:*",
     "@noble/hashes": "^2.2.0",
     "canonicalize": "^3.0.0"
@@ -55,6 +55,6 @@
     "@opentelemetry/sdk-trace-base": "^2.7.1",
     "@types/node": "^25.9.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.8"
   }
 }
