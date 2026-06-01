@@ -1,5 +1,11 @@
 # @atrib/verify
 
+## 0.6.0
+
+### Minor Changes
+
+- 4bec234: Add host-owned OAuth introspection helpers and shared DPoP replay-cache support for MCP/OAuth evidence verification.
+
 ## 0.5.2
 
 ### Patch Changes
