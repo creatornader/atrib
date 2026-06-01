@@ -40,7 +40,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@arizeai/openinference-semantic-conventions": "^2.4.0",
+    "@arizeai/openinference-semantic-conventions": "^2.5.0",
     "@atrib/mcp": "workspace:*",
     "@noble/hashes": "^2.2.0",
     "canonicalize": "^3.0.0"
