@@ -143,7 +143,17 @@ The `@atrib/memory-tool` first publish proved why raw `npm publish` is forbidden
 version `0.2.0` reached npm with `@atrib/mcp: "workspace:*"` in the registry
 manifest, so fresh consumer installs failed with `EUNSUPPORTEDPROTOCOL`.
 Version `0.2.1` repaired the package through the normal trusted-publishing
-release path.
+release path, and version `0.2.0` was deprecated with a registry warning that
+points consumers to `0.2.1` or later.
+
+If a broken first version reaches npm, publish the fixed version, then deprecate
+the broken version once an npm owner has a fresh OTP:
+
+```bash
+npm deprecate <package-name>@<bad-version> \
+  "Broken initial publish. Use <package-name>@<fixed-version> or later." \
+  --otp "$NPM_OTP"
+```
 
 Do not create or store an `NPM_TOKEN` secret for this step. The normal release
 workflow uses OIDC trusted publishing, not long-lived npm tokens.
@@ -237,6 +247,8 @@ After npm and GitHub agree:
 
 - Change README wording from "publish-target" to "published" and update the
   package count.
+- If any broken first-publish version reached npm, confirm it is deprecated or
+  record the npm-owner OTP gate before claiming the rollout is closed.
 - Search for stale prior-count wording and update every hit:
 
   ```bash
