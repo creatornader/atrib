@@ -42,6 +42,7 @@ import {
 import * as ed from '@noble/ed25519'
 import { verifyAp2ViEvidenceAsync } from './ap2-vi-evidence.js'
 import { verifyAuthorizationEvidence } from './authorization-evidence.js'
+import { verifyVouchAuthorizationEvidence } from './vouch-evidence.js'
 import type {
   Ap2ViEvidenceBundle,
   Ap2ViEvidenceVerification,
@@ -51,6 +52,7 @@ import type {
   AuthorizationEvidenceInput,
   EvidenceVerificationBlock,
 } from './authorization-evidence.js'
+import type { VouchAuthorizationEvidenceInput } from './vouch-evidence.js'
 
 const PROVENANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/
 const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
@@ -366,6 +368,13 @@ export interface VerifyRecordOptions {
    */
   authorizationEvidence?: AuthorizationEvidenceInput[]
   /**
+   * Caller-supplied Vouch credentials for external authorization evidence.
+   * The verifier checks the Data Integrity proof and declared intent locally
+   * using caller-supplied trusted keys. It does not resolve DIDs or fetch
+   * Vouch material.
+   */
+  vouchEvidence?: VouchAuthorizationEvidenceInput[]
+  /**
    * Caller-supplied AP2 / Verifiable Intent evidence for transaction
    * records. The signed atrib record commits to transaction payload hashes,
    * not full AP2 / VI bodies, so the verifier does not fetch or infer this
@@ -490,6 +499,16 @@ export async function verifyRecord(
     }
   }
 
+  if (options.vouchEvidence) {
+    for (const evidence of options.vouchEvidence) {
+      try {
+        pushEvidence(result, await verifyVouchAuthorizationEvidence(evidence))
+      } catch (err) {
+        pushEvidence(result, vouchEvidenceErrorResult(err))
+      }
+    }
+  }
+
   result.valid = signatureOk && warnings.length === 0
   return result
 }
@@ -557,6 +576,22 @@ function authorizationEvidenceErrorResult(err: unknown): EvidenceVerificationBlo
     delegation_ok: null,
     constraints: [],
     errors: [`authorization_evidence verification error: ${message}`],
+    warnings: [],
+  }
+}
+
+function vouchEvidenceErrorResult(err: unknown): EvidenceVerificationBlock {
+  const message = err instanceof Error ? err.message : String(err)
+  return {
+    protocol: 'vouch',
+    valid: false,
+    issuer: null,
+    subject: null,
+    scope: [],
+    attenuation_ok: null,
+    delegation_ok: null,
+    constraints: [],
+    errors: [`vouch_evidence verification error: ${message}`],
     warnings: [],
   }
 }

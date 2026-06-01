@@ -20,6 +20,7 @@ import {
 } from './recommendation.js'
 import { verifyAp2ViEvidenceAsync } from './ap2-vi-evidence.js'
 import { verifyAuthorizationEvidence } from './authorization-evidence.js'
+import { verifyVouchAuthorizationEvidence } from './vouch-evidence.js'
 import type {
   Ap2ViEvidenceBundle,
   Ap2ViEvidenceVerification,
@@ -30,6 +31,7 @@ import type {
   EvidenceCheckStatus,
   EvidenceVerificationBlock,
 } from './authorization-evidence.js'
+import type { VouchAuthorizationEvidenceInput } from './vouch-evidence.js'
 import type {
   PolicyDocument,
   RecommendationDocument,
@@ -77,6 +79,11 @@ export interface VerifyRecommendationOptions {
    * not change recommendation validity.
    */
   authorizationEvidence?: AuthorizationEvidenceInput[]
+  /**
+   * Caller-supplied Vouch credentials for external authorization evidence.
+   * Verifier checks are tiered and do not change recommendation validity.
+   */
+  vouchEvidence?: VouchAuthorizationEvidenceInput[]
 }
 
 export class AtribVerifier {
@@ -195,6 +202,16 @@ export class AtribVerifier {
           evidence.push(await verifyAuthorizationEvidence(item))
         } catch (err) {
           evidence.push(authorizationEvidenceErrorResult(err))
+        }
+      }
+    }
+
+    if (options.vouchEvidence) {
+      for (const item of options.vouchEvidence) {
+        try {
+          evidence.push(await verifyVouchAuthorizationEvidence(item))
+        } catch (err) {
+          evidence.push(vouchEvidenceErrorResult(err))
         }
       }
     }
@@ -367,6 +384,22 @@ function authorizationEvidenceErrorResult(err: unknown): EvidenceVerificationBlo
     delegation_ok: null,
     constraints: [],
     errors: [`authorization_evidence verification error: ${message}`],
+    warnings: [],
+  }
+}
+
+function vouchEvidenceErrorResult(err: unknown): EvidenceVerificationBlock {
+  const message = err instanceof Error ? err.message : String(err)
+  return {
+    protocol: 'vouch',
+    valid: false,
+    issuer: null,
+    subject: null,
+    scope: [],
+    attenuation_ok: null,
+    delegation_ok: null,
+    constraints: [],
+    errors: [`vouch_evidence verification error: ${message}`],
     warnings: [],
   }
 }

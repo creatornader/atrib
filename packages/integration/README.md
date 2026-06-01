@@ -131,6 +131,23 @@ pnpm --filter @atrib/integration mcp-oauth-live-archive
 
 The live archive script uses the same fixture MCP authorization environment, submits the signed record to `log.atrib.dev`, archives the record body and selected evidence at `archive.atrib.dev`, fetches the evidence projection, checks that the raw bearer token did not publish, and prints the public explorer action URL. Override endpoints with `ATRIB_LIVE_OAUTH_LOG_ENDPOINT`, `ATRIB_LIVE_OAUTH_ARCHIVE_ENDPOINT`, and `ATRIB_LIVE_OAUTH_EXPLORER_ORIGIN` when testing against local or staging services.
 
+## Vouch Evidence Harness
+
+`@atrib/integration` includes a local Vouch evidence harness that exercises the
+verifier-side credential path without resolving DIDs or contacting Vouch
+services:
+
+```bash
+pnpm --filter @atrib/integration vouch-evidence
+```
+
+The harness signs an atrib `tool_call` record, generates a Vouch-style
+credential with a Data Integrity proof using `cryptosuite: "eddsa-jcs-2022"`,
+then verifies the credential as a `protocol: "vouch"` evidence block on the
+signed record. It proves the Vouch credential is external authorization
+evidence: the atrib record stays valid on its own, while the Vouch block carries
+its own `valid`, issuer, subject, resource, temporal, and signature findings.
+
 ## Tests
 
 Run with `pnpm --filter @atrib/integration test`. Focused cross-package tests include:
@@ -155,7 +172,7 @@ Run with `pnpm --filter @atrib/integration test`. Focused cross-package tests in
 
 **Honest framing on `conformance-3.2.4.test.ts`.** Both implementations are TypeScript, share `@atrib/mcp.canonicalRecord` for JCS, `@noble/hashes/sha2` for SHA-256, and `@atrib/mcp.verifyRecord` for Ed25519. Calling them "two independent implementations" in the spec's strongest sense would overstate the test's coverage; it catches algorithm-port errors and future drift between the two files, but it does not validate the spec against an independent reading of the prose or against an independent set of cryptographic primitives. Cross-language conformance against the `spec/conformance/3.4.1/` and `spec/conformance/3.4.5,6,7/` corpora is a separate later effort that lands when an external integrator writes a non-TS implementation and validates against the corpus without help from this codebase.
 
-These tests are deliberately small in number; most behavior is covered by the per-package unit tests (391 total across the workspace). The integration tests are the **cross-package contract** layer: they catch the kind of bug that happens when one package's wire format quietly drifts from another's expectations.
+These tests are deliberately small in number; most behavior is covered by the per-package unit tests. The integration tests are the **cross-package contract** layer: they catch the kind of bug that happens when one package's wire format quietly drifts from another's expectations.
 
 ## Why this package is private
 

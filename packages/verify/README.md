@@ -107,7 +107,7 @@ const result = await verifyRecord(record, {
 - `posture`: `{ timestamp_granularity, timestamp_consistent, timestamp_granularity_explicit, args_commitment_form, result_commitment_form, tool_name_form }` ([D045](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d045-privacy-postures-normative-spec-section) / [D061](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-§121) / [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture) / [§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture) / [§8.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#84-coarsened-timing-posture)). Always populated. Surfaces (a) the declared timing granularity, whether the timestamp value structurally matches the spec's trailing-zero invariant, and whether the field was explicitly set vs defaulted; (b) the structurally-detected `args_hash` / `result_hash` commitment scheme: `'salted-sha256'` when `args_salt` / `result_salt` is present, `'plain-sha256'` otherwise (the `'hmac-sha256'` variant from [§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture) is signaled out-of-band and is not structurally detectable); and (c) the [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture) `tool_name_form`: `'hashed'` when `tool_name` matches `^sha256:[0-9a-f]{64}$`, `'plain'` for any other present value, `null` when the field is absent. Per [D061](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d061-add-tool_name-args_hash-result_hash-fields-to-121) the [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture) verbatim-vs-opaque distinction is NOT structurally detectable, both surface as `'plain'`.
 - `capability_check`: `{ envelope, in_envelope, mismatches, unresolvable }` ([D051](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) / [§6.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#67-capability-declarations)). Populated only when the caller passes a resolved `identityClaim` in options. Checks the record's `event_type` against the envelope's `event_types` allowlist and the record's `timestamp` against `expires_at`. `tool_names`, `max_amount`, and `counterparties` are checked when the caller supplies `resolvedFacts` from the local body or protocol event. Missing facts flag `unresolvable: true` rather than passing silently. Per [§6.7.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#673-out-of-envelope-records) out-of-envelope is a signal, not invalidation: mismatches do not flip `valid` to false. The caller is responsible for fetching the active envelope at the record's timestamp via `@atrib/directory`'s `lookup()` (or a cached equivalent); `@atrib/verify` intentionally has no `@atrib/directory` dependency.
 - `cross_attestation`: `{ signers_count, signers_valid, missing }` ([D052](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) / [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)). Populated only on transaction records (`event_type = transaction`). Each entry in `signers[]` is verified against the cross-attestation canonical bytes (JCS form with `signers: []` and the top-level `signature` field omitted, per [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)). `signatureOk` requires a valid signer entry whose `creator_key` matches the record's top-level `creator_key`; unrelated counterparty signers do not validate the record on behalf of its creator. `missing: true` when fewer than 2 distinct signer keys verify, atrib's normative minimum. Duplicate entries from one key do not inflate `signers_valid`. Per [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) missing is a signal, not invalidation: `valid` stays true if the underlying signature path holds. Agent-side Path 2 fallback records usually surface as `signers_count: 1, missing: true` until a counterparty signs the same bytes. Legacy single-signer transaction records (no `signers[]` array, only top-level `signature`) surface as `signers_count: 0, missing: true` so consumers can flag them while accepting the cryptographic validity.
-- `evidence`: generic tiered external authorization evidence blocks ([D109](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks) / [§5.5.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#556-generic-authorization-evidence-blocks)). Populated when the caller passes `authorizationEvidence` or when AP2 / VI evidence is mirrored into the generic shape. Each block has `{ valid, protocol, issuer, subject, scope, attenuation_ok, delegation_ok, constraints, errors, warnings }`. These blocks do not alter `valid`, `signatureOk`, or `capability_check`.
+- `evidence`: generic tiered external authorization evidence blocks ([D109](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks) / [§5.5.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#556-generic-authorization-evidence-blocks)). Populated when the caller passes `authorizationEvidence`, `vouchEvidence`, or when AP2 / VI evidence is mirrored into the generic shape. Each block has `{ valid, protocol, issuer, subject, scope, attenuation_ok, delegation_ok, constraints, errors, warnings }`. These blocks do not alter `valid`, `signatureOk`, or `capability_check`.
 - `ap2_vi_evidence`: the async AP2 / VI verifier result ([D094](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block) / [§5.5.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#554-ap2--verifiable-intent-evidence-checks)). Populated only when the caller passes `ap2ViEvidence` for a transaction record. It does not alter `valid`, `signatureOk`, or `cross_attestation`; consumers inspect `ap2_vi_evidence.valid` for AP2 authorization evidence.
 
 **Pending per-record annotations** (tracked as a Pending decision in [DECISIONS.md P005](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p005-reconcile-atribverify-readme-per-record-annotations-with-actual-code-surface)):
@@ -259,6 +259,55 @@ The shared endpoint must atomically remember the posted key until `expires_at_se
 
 Producer-side MCP capture lives in `@atrib/mcp` behind the opt-in `authorizationEvidence` option. The producer writes evidence into the local-only sidecar without storing raw bearer tokens by default. Verifiers can pass that sidecar's `authorizationEvidence` and `resolvedFacts` to `verifyRecord()`.
 
+### `verifyVouchAuthorizationEvidence(evidence): Promise<VouchAuthorizationEvidenceVerification>`
+
+Verifier-side Vouch credential evidence checking. This runs outside the record
+signature path and does not resolve DIDs, fetch credential status, or choose
+trust roots. Callers supply the Vouch credential plus the trusted Ed25519 key
+as raw bytes, base64url, Multikey, JWK, or a `verificationMethods` map keyed by
+`proof.verificationMethod`.
+
+```typescript
+import { verifyRecord } from '@atrib/verify'
+
+const result = await verifyRecord(record, {
+  vouchEvidence: [
+    {
+      credential,
+      publicKeyMultibase,
+      expectedIssuer: 'did:web:vouch.example',
+      expectedSubject: 'did:web:agent.example',
+      expectedIntent: {
+        action: 'call_tool',
+        target: 'mcp://files.example',
+        resource: 'mcp://files.example/report.md',
+      },
+      nowSeconds: Math.floor(Date.now() / 1000),
+    },
+  ],
+})
+```
+
+Checks performed when evidence is present:
+
+- `proof.type = "DataIntegrityProof"` and `proof.cryptosuite =
+"eddsa-jcs-2022"`.
+- Vouch Data Integrity signature verification by removing `proofValue`,
+  JCS-canonicalizing the credential with the unsigned proof present, hashing
+  with SHA-256, and verifying the Ed25519 signature.
+- Required `issuer`, `credentialSubject.id`, and
+  `credentialSubject.intent.{action,target,resource}` fields.
+- Optional expected issuer, subject, action, target, and resource binding.
+- `validFrom` and `validUntil` checks against caller-supplied `nowSeconds` and
+  optional clock skew.
+
+The result attaches as `protocol: "vouch"` in `evidence[]`. A failed Vouch
+credential makes that evidence block invalid, but it does not change the signed
+record's `valid` or `signatureOk` fields. Run
+`pnpm --filter @atrib/integration vouch-evidence` for a local fixture that signs
+an atrib `tool_call` record, generates a Vouch-style credential, and verifies
+the Vouch evidence block against the record.
+
 ### `verifyAp2ViEvidence(...)` and `verifyAp2ViEvidenceAsync(...)`
 
 AP2 / Verifiable Intent evidence checking for merchants and auditors. This runs outside the transaction detector path. It does not alter the graph, the settlement calculation, or record validity. It answers a narrower question: did the AP2 receipts and VI mandate chain form a coherent evidence bundle?
@@ -352,6 +401,7 @@ For advanced use (custom calculators, alternative signing flows), the package al
 - `verifyAp2ViEvidenceAsync(bundle, options?)`: compact AP2 receipt JWT verification, async VI SD-JWT / VC conformance, plus decoded evidence checks. `verifyRecord()` and `AtribVerifier.verify()` call this when supplied with `ap2ViEvidence`
 - `verifyAuthorizationEvidence(evidence)`: generic external authorization evidence dispatch for `verifyRecord()` evidence blocks
 - `verifyOAuthAuthorizationEvidence(evidence)`: OAuth / MCP authorization evidence checks for access-token JWTs or caller-verified claims
+- `verifyVouchAuthorizationEvidence(evidence)`: Vouch credential evidence checks for caller-supplied `eddsa-jcs-2022` credentials and trusted keys
 - `introspectOAuthToken(options)`: host-owned OAuth token introspection helper for opaque-token evidence
 - `oauthEvidenceFromIntrospectionResult(result, base?)`: adapter from host-owned introspection result to OAuth evidence input
 - `createFetchDpopReplayCache(options)`: HTTP-backed DPoP replay-cache adapter for fleet-shared replay checks

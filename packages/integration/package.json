@@ -23,7 +23,8 @@
     "ap2-local-participant": "tsx scripts/generate-ap2-local-participant-artifacts.ts",
     "ap2-google-sample-extract": "tsx scripts/extract-google-ap2-sample-artifacts.ts",
     "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts",
-    "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts"
+    "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts",
+    "vouch-evidence": "tsx scripts/vouch-evidence.ts"
   },
   "dependencies": {
     "@atrib/agent": "workspace:*",
@@ -33,7 +34,8 @@
     "@atrib/log-dev": "workspace:*",
     "@atrib/log-node": "workspace:*",
     "@atrib/mcp": "workspace:*",
-    "@atrib/verify": "workspace:*"
+    "@atrib/verify": "workspace:*",
+    "canonicalize": "^3.0.0"
   },
   "devDependencies": {
     "@ai-sdk/openai-compatible": "^2.0.48",

@@ -5482,6 +5482,92 @@ still succeeds or fails according to the host's handler.
 - [D100](#d100-log-submission-can-be-disabled-while-still-signing-and-running-onrecord),
   offline signing and `onRecord` behavior.
 
+## D113: Vouch credentials attach as caller-supplied authorization evidence
+
+**Date:** 2026-06-01
+
+**Status:** Accepted
+
+**Context.** Vouch's CCG report draft defines an autonomous-agent credential
+profile using W3C Verifiable Credentials secured with Data Integrity proofs,
+`cryptosuite: "eddsa-jcs-2022"`, DIDs, Multikey, and intent fields. The
+outreach program needed a concrete Vouch artifact before commenting in W3C CCG
+or Vouch channels. Sending only the existing OAuth / MCP evidence harness would
+make the route too abstract.
+
+The layer boundary still matters. Vouch credentials can say who authorized an
+agent, what intent they vouched for, and which resource the intent covers.
+atrib records what the agent actually did, who signed the action record, how it
+links to prior work, and which verifier evidence was accepted. Vouch evidence
+should attach to signed action records, not replace them.
+
+**Decision.** `@atrib/verify` now accepts caller-supplied Vouch credentials as
+generic `evidence[]` blocks with `protocol: "vouch"`.
+
+The verifier checks:
+
+1. `proof.type = "DataIntegrityProof"` and
+   `proof.cryptosuite = "eddsa-jcs-2022"`.
+2. Vouch Data Integrity verification by removing `proofValue`,
+   JCS-canonicalizing the credential with the unsigned proof present, hashing
+   with SHA-256, and verifying the Ed25519 signature.
+3. Required `issuer`, `credentialSubject.id`, and
+   `credentialSubject.intent.{action,target,resource}` fields.
+4. Optional caller expectations for issuer, subject, action, target, and
+   resource.
+5. `validFrom` and `validUntil` against caller-supplied `nowSeconds` and clock
+   skew.
+
+The verifier accepts trusted Ed25519 key material from the caller as raw bytes,
+base64url, Multikey, JWK, or a `verificationMethods` map keyed by
+`proof.verificationMethod`. It does not resolve DIDs, fetch credential status,
+choose trust roots, mint credentials, or enforce Vouch issuance policy.
+
+`verifyRecord()` and `AtribVerifier.verify()` attach the Vouch result to
+`evidence[]`. A failed Vouch credential makes that evidence block invalid, but
+does not change the signed atrib record's `valid` or `signatureOk` fields.
+
+**Alternatives rejected.**
+
+- _Resolve DIDs inside `@atrib/verify`._ Rejected. DID resolution brings network
+  policy, cache policy, trust-root choice, status-list policy, and SSRF risk.
+  Callers own that boundary.
+- _Treat Vouch credentials as atrib identity claims._ Rejected. Vouch credentials
+  are external authorization evidence. atrib creator keys and directory claims
+  remain the record-signer identity path.
+- _Make failed Vouch evidence invalidate the record._ Rejected. A signed action
+  can be authentic even when an attached authorization credential is missing,
+  expired, over-scoped, or invalid.
+- _Store Vouch credential bodies in the public log._ Rejected. The log commits
+  to record hashes and fixed entry bytes. Credential bodies and verifier
+  evidence belong in caller storage, local mirrors, or the archive service when
+  producers opt in.
+
+**Consequences.**
+
+- The Vouch / KYA-OS outreach lane now has a runnable artifact:
+  `pnpm --filter @atrib/integration vouch-evidence`.
+- `@atrib/verify` has a second generic authorization adapter after OAuth / MCP,
+  using the same tiered `evidence[]` result shape.
+- Hosts can combine Vouch evidence with signed action records without making
+  atrib an authorization issuer or DID resolver.
+- Future ZCAP-LD, KYA-OS detached-proof, Biscuit, macaroon, or GNAP adapters
+  should follow the same caller-supplied evidence boundary unless a later ADR
+  narrows it.
+
+**Cross-references.**
+
+- [§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks), generic
+  authorization evidence blocks.
+- [`packages/verify/src/vouch-evidence.ts`](packages/verify/src/vouch-evidence.ts),
+  Vouch evidence verifier.
+- [`packages/integration/src/vouch-evidence-harness.ts`](packages/integration/src/vouch-evidence-harness.ts),
+  local Vouch evidence harness.
+- [Vouch Protocol](https://github.com/vouch-protocol/vouch), CCG report draft
+  and reference implementation.
+- [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks),
+  generic evidence block shape.
+
 ---
 
 # Pending decisions

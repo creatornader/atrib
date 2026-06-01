@@ -45,6 +45,15 @@ export type {
   OAuthTokenCheck,
 } from './authorization-evidence.js'
 
+export { verifyVouchAuthorizationEvidence } from './vouch-evidence.js'
+export type {
+  VouchAuthorizationEvidenceInput,
+  VouchAuthorizationEvidenceVerification,
+  VouchEvidenceDetails,
+  VouchIntentConstraints,
+  VouchTrustedKeyInput,
+} from './vouch-evidence.js'
+
 export {
   FetchDpopReplayCache,
   MemoryDpopReplayCache,

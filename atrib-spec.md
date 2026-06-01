@@ -4219,7 +4219,9 @@ The generic result shape is:
 
 `verifyRecord(record, { authorizationEvidence })` attaches an `evidence[]` array. Each evidence item is evaluated independently. A record can have `valid: true` while one or more `evidence[]` entries have `valid: false`; consumers apply policy based on their own trust posture. `ap2ViEvidence` remains available as the legacy AP2 / VI field and is also mirrored into `evidence[]` as `protocol: "ap2_vi"`.
 
-The initial generic adapter is OAuth / MCP authorization evidence. It accepts a compact access-token JWT with caller-supplied trusted JWKS, caller-verified claims, or a caller-supplied OAuth token-introspection response. The verifier does not call an introspection endpoint; the caller owns that network and trust policy. The verifier checks:
+Current generic adapters are OAuth / MCP authorization evidence and Vouch credential evidence.
+
+The OAuth / MCP adapter accepts a compact access-token JWT with caller-supplied trusted JWKS, caller-verified claims, or a caller-supplied OAuth token-introspection response. The verifier does not call an introspection endpoint; the caller owns that network and trust policy. The verifier checks:
 
 1. JWT signature, `iss`, `aud`, `exp`, `nbf`, and clock skew when a JWT and JWKS are supplied.
 2. MCP protected-resource binding through token `aud`, token `resource`, and OAuth Protected Resource Metadata.
@@ -4229,6 +4231,8 @@ The initial generic adapter is OAuth / MCP authorization evidence. It accepts a 
 6. Optional RFC 9449 DPoP proof evidence: `typ`, public JWK thumbprint, `htm`, `htu`, `ath`, `jti`, `iat`, nonce when supplied, and `cnf.jkt` binding when the access-token claims expose it.
 
 The OAuth / MCP adapter does not mint tokens, run OAuth redirects, call token-introspection endpoints, fetch authorization-server metadata, or maintain a global DPoP replay cache. Callers supply tokens, claims, trust roots, protected-resource metadata, seen DPoP `jti` values or a shared replay cache when they enforce replay policy, and required constraints. Missing trusted keys or unverified decoded claims make the evidence block invalid by default; callers MAY choose a best-effort signature policy for advisory triage.
+
+The Vouch adapter accepts caller-supplied Vouch credentials secured with a Data Integrity proof using `cryptosuite: "eddsa-jcs-2022"` plus caller-supplied trusted Ed25519 key material. The verifier does not resolve DIDs, fetch credential status, or choose trust roots. It removes `proofValue`, JCS-canonicalizes the credential with the unsigned proof present, hashes the canonical bytes with SHA-256, verifies the Ed25519 proof, and checks issuer, subject, intent action, intent target, intent resource, `validFrom`, and `validUntil` against caller-supplied expectations.
 
 `@atrib/verify` also exposes a host-owned token-introspection helper. The helper posts to the caller's configured introspection endpoint, applies caller-supplied client authentication and expectation checks, and returns a caller-supplied introspection response for the evidence verifier. `verifyRecord()` and `verifyOAuthAuthorizationEvidence()` still do not perform hidden network calls.
 
