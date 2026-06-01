@@ -152,6 +152,9 @@ importers:
       '@atrib/verify':
         specifier: workspace:*
         version: link:../verify
+      canonicalize:
+        specifier: ^3.0.0
+        version: 3.0.0
     devDependencies:
       '@ai-sdk/openai-compatible':
         specifier: ^2.0.48
