@@ -76,6 +76,8 @@ Update these in the same PR:
 
 - `README.md`: package table and published-package count. Use "publish-target"
   wording until npm confirms the package exists.
+- `ARCHITECTURE.md`: published-package count and package-family summary if the
+  new package changes the public package surface.
 - Package README: if it includes an npm install command, label it as the
   post-publication command until first publish completes. Include a workspace or
   packed-tarball path for pre-publication testing.
@@ -96,7 +98,8 @@ Review it like any other PR:
 
 ```bash
 gh pr checks <release-pr-number>
-gh pr diff <release-pr-number> --stat
+gh pr diff <release-pr-number> --name-only
+gh pr diff <release-pr-number> --patch
 ```
 
 Merge only after checks pass and the first-publish plan is ready. If the release
@@ -117,23 +120,7 @@ In this pnpm workspace, use `pnpm publish`, not raw `npm publish`. `pnpm publish
 rewrites `workspace:*` dependencies in the packed manifest; raw `npm publish`
 does not, and can upload an install-broken tarball.
 
-For `@atrib/memory-tool`, run this in zsh from the repo root:
-
-```bash
-npm config set auth-type legacy
-npm whoami || npm login --auth-type=legacy
-
-pnpm --filter @atrib/memory-tool... build
-pnpm --filter @atrib/memory-tool test
-pnpm --filter @atrib/memory-tool smoke
-
-cd packages/memory-tool
-read "NPM_OTP?npm otp: "
-pnpm publish --access public --otp "$NPM_OTP"
-unset NPM_OTP
-```
-
-For a generic package:
+Run this in zsh from the repo root:
 
 ```bash
 npm config set auth-type legacy
@@ -151,6 +138,12 @@ If the package has no smoke script, skip that line. If the publish fails with
 `EOTP`, rerun the publish with a fresh OTP. If it fails with `E404`, confirm the
 npm account has write access under the `@atrib` scope and that the package uses
 `publishConfig.access = "public"`.
+
+The `@atrib/memory-tool` first publish proved why raw `npm publish` is forbidden:
+version `0.2.0` reached npm with `@atrib/mcp: "workspace:*"` in the registry
+manifest, so fresh consumer installs failed with `EUNSUPPORTEDPROTOCOL`.
+Version `0.2.1` repaired the package through the normal trusted-publishing
+release path.
 
 Do not create or store an `NPM_TOKEN` secret for this step. The normal release
 workflow uses OIDC trusted publishing, not long-lived npm tokens.
@@ -244,6 +237,13 @@ After npm and GitHub agree:
 
 - Change README wording from "publish-target" to "published" and update the
   package count.
+- Search for stale prior-count wording and update every hit:
+
+  ```bash
+  rg -n -i "\b(<old-count>|<old-count-word>)\b.{0,80}(packages|npm|public|published)|(packages|npm|public|published).{0,80}\b(<old-count>|<old-count-word>)\b" \
+    README.md ARCHITECTURE.md CLAUDE.md DOC-SYNC-TRIGGERS.md docs packages services
+  ```
+
 - Update private outreach trackers from local-artifact status to published npm
   artifact status.
 - Rerun the local preflight checks.
