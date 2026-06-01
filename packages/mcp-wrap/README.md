@@ -25,11 +25,27 @@ binary:
 
 ```bash
 pnpm --filter @atrib/mcp-wrap build
-node ~/repos/atrib/services/mcp-wrap/dist/main.js path/to/wrap-config.json
+node ~/repos/atrib/packages/mcp-wrap/dist/main.js path/to/wrap-config.json
 ```
 
 Or set `ATRIB_WRAP_CONFIG` in the host's MCP server entry. With no argument
 and no env var, the wrapper reads `~/.atrib/wrap-config.json`.
+
+## Filesystem smoke
+
+Run this when a maintainer wants to see the wrapper against a real upstream MCP
+server before reading the internals:
+
+```bash
+pnpm --filter @atrib/mcp-wrap smoke:filesystem
+```
+
+The smoke script creates a temp fixture file, starts a local log receiver,
+wraps `@modelcontextprotocol/server-filesystem` through `atrib-wrap`, calls
+`read_file` through a normal MCP client, and checks that a signed mirror record
+plus a local log submission were produced. It needs network access the first
+time `npx` fetches the upstream filesystem server, but it does not need an LLM
+API key or the production atrib log.
 
 ## Config shape
 

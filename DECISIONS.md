@@ -5391,6 +5391,97 @@ The missing piece is producer-side capture from already-validated MCP HTTP autho
 - [`services/archive-node/`](services/archive-node/), production archive reference service.
 - [`docs/concepts/12-delegation-and-capabilities.md`](docs/concepts/12-delegation-and-capabilities.md), capability and delegation boundary note.
 
+## D112: Anthropic Memory Tool wrapper signs memory commands without owning storage
+
+**Date:** 2026-06-01
+
+**Status:** Accepted
+
+**Context.** Anthropic's Memory Tool is a client-side tool: the application
+handles file operations and controls storage. The current TypeScript SDK exposes
+`betaMemoryTool(handlers)`, where the host implements handlers for `view`,
+`create`, `str_replace`, `insert`, `delete`, and `rename`. Anthropic's public
+docs describe this as a backend-swappable surface and tell implementers to
+restrict operations to `/memories`.
+
+The outreach program needed a finished artifact for the Anthropic Memory Tool
+lane, not only a strategy note. The previous plan said `@atrib/memory-tool`
+would implement a storage backend itself. Source-reading the SDK showed a
+cleaner shape for TypeScript: wrap any existing `MemoryToolHandlers` object and
+sign the commands around it.
+
+**Decision.** Add `@atrib/memory-tool` as a public package that exports
+`createAtribMemoryTool()` and `attributeMemoryTool()`. The package wraps
+Anthropic Memory Tool handlers, signs mutating commands as atrib `tool_call`
+records, and leaves storage under the host's control.
+
+Default signed commands:
+
+- `create`
+- `str_replace`
+- `insert`
+- `delete`
+- `rename`
+
+`view` remains unsigned by default because it is read-only and can reveal memory
+contents through result hashes if the host chooses a weak privacy posture.
+Callers can opt in with `signReads: true`.
+
+Each record uses:
+
+- `tool_name = anthropic.memory.<command>`
+- `args_hash = sha256(JCS(command))`
+- `result_hash = sha256(JCS({ status, result }))` or
+  `sha256(JCS({ status, error }))`
+- `event_type = tool_call`
+- `context_id` from the caller or a fresh process-local id
+- `chain_root` from `@atrib/mcp` `resolveChainRoot()`
+
+The signed record does not store memory file bodies. The host can keep bodies in
+its own filesystem, database, cloud store, local mirror, or archive policy.
+If no atrib signing key is configured, or the configured key cannot be decoded,
+the wrapper passes commands through without signing. The Memory Tool operation
+still succeeds or fails according to the host's handler.
+
+**Alternatives rejected.**
+
+- _Implement a new filesystem backend._ Rejected for v0. Anthropic already
+  ships a local filesystem handler. Wrapping handlers proves the verifiability
+  layer without copying storage logic or drifting from the SDK's own example.
+- _Depend on Anthropic SDK at runtime._ Rejected. The package imports SDK types
+  only. Users already pass the wrapped handlers to `betaMemoryTool()`.
+- _Sign only successful mutations._ Rejected. Failed writes are useful evidence
+  in memory-integrity investigations, so the wrapper signs error outcomes while
+  preserving the original thrown error.
+- _Sign reads by default._ Rejected. Reads are useful for audit trails in some
+  deployments, but they create more privacy surface. Opt-in is the better
+  default.
+
+**Consequences.**
+
+- The Anthropic Memory Tool outreach lane now has a runnable package artifact.
+- The integration composes with `BetaLocalFilesystemMemoryTool` and any custom
+  handler object.
+- The package depends on the public `@atrib/mcp` signing, hashing, submission,
+  and chain-root helpers instead of reimplementing protocol logic.
+- Missing or invalid signing configuration degrades to unsigned pass-through,
+  matching [§5.8](atrib-spec.md#58-degradation-contract).
+- The package pins its peer expectation to `@anthropic-ai/sdk >=0.100.1`. The
+  Memory Tool is still beta, so callers should pin the SDK version they test.
+
+**Cross-references.**
+
+- [`packages/memory-tool/README.md`](packages/memory-tool/README.md), package
+  guide and quick start.
+- [§1.2](atrib-spec.md#12-record-format), record fields.
+- [§5.8](atrib-spec.md#58-degradation-contract), degradation contract.
+- [§8.3](atrib-spec.md#83-salted-commitment-posture), content commitment
+  posture.
+- [D067](#d067-multi-producer-chain-composition-precedence-contract), shared
+  chain-root resolution.
+- [D100](#d100-log-submission-can-be-disabled-while-still-signing-and-running-onrecord),
+  offline signing and `onRecord` behavior.
+
 ---
 
 # Pending decisions

@@ -36,6 +36,7 @@
     "build": "rm -rf dist && tsc",
     "start": "node dist/main.js",
     "dev": "tsx src/main.ts",
+    "smoke:filesystem": "pnpm build && tsx examples/filesystem-smoke.ts",
     "test": "vitest run"
   },
   "dependencies": {
