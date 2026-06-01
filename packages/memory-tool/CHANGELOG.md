@@ -1,5 +1,11 @@
 # @atrib/memory-tool
 
+## 0.2.1
+
+### Patch Changes
+
+- 722ee51: Publish a corrected memory-tool manifest with the resolved `@atrib/mcp` dependency.
+
 ## 0.2.0
 
 ### Minor Changes
