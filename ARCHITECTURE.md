@@ -429,7 +429,7 @@ services/atrib-verify  MCP server for counterparty handoff evidence checks
       freshness, then returns accepted hashes for `informed_by`. Read-only;
       it does not fetch archives or sign records.
 
-services/archive-node  Record Body Archive Layer (§2.12)
+services/archive-node  Record Body Archive Layer (§2.12), deployed at https://archive.atrib.dev/v1
   └── Separate from log-node by design. Stores canonical record bodies
       content-addressed by record_hash, confirms each accepted body is
       committed in a trusted log, and serves explorer evidence projections.
