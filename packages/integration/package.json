@@ -22,7 +22,8 @@
     "ap2-live-interop": "tsx scripts/ap2-live-interop.ts",
     "ap2-local-participant": "tsx scripts/generate-ap2-local-participant-artifacts.ts",
     "ap2-google-sample-extract": "tsx scripts/extract-google-ap2-sample-artifacts.ts",
-    "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts"
+    "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts",
+    "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts"
   },
   "dependencies": {
     "@atrib/agent": "workspace:*",
