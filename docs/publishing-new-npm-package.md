@@ -106,11 +106,22 @@ publish and trusted-publisher setup are complete.
 
 ## First publish
 
-Preferred path: publish the first version from GitHub Actions with the existing
-`NPM_TOKEN` secret and `npm publish --access public --provenance`. This creates
-the package while still attaching npm provenance from the public GitHub workflow.
-Use a one-time manual dispatch job for the named package. Do not route normal
-releases through `NPM_TOKEN`.
+Preferred path: publish the first version from GitHub Actions with `NPM_TOKEN`
+and `npm publish --access public --provenance`. This creates the package while
+still attaching npm provenance from the public GitHub workflow. Use a one-time
+manual dispatch job for the named package. Do not route normal releases through
+`NPM_TOKEN`.
+
+The `NPM_TOKEN` secret must be a granular npm token that can publish packages:
+
+- packages and scopes permission: read-write.
+- package selection: all packages, or a scope/package selection that allows new
+  packages under `@atrib`.
+- Bypass 2FA: enabled.
+
+Granting organization access to a granular token is not enough for package
+publishing. npm documents organization token access as settings/team access, not
+package publish access.
 
 Reference: npm documents provenance generation for GitHub Actions at
 <https://docs.npmjs.com/generating-provenance-statements>.
@@ -120,6 +131,35 @@ and then fails with npm `E404` on `PUT`, the token is present but cannot create
 the new scoped package. Replace the `NPM_TOKEN` secret with a token or owner path
 that can create public packages under `@atrib`, then rerun the same manual
 dispatch. Do not merge a follow-up release until that run succeeds.
+
+If the same workflow fails with npm `EOTP`, the token can reach package creation
+but does not bypass publish-time 2FA. Create a replacement token with Bypass 2FA
+enabled, update the GitHub secret, and rerun the same manual dispatch:
+
+```bash
+npm token create \
+  --name atrib-ci-initial-package-YYYY-MM-DD \
+  --token-description "Temporary atrib initial package publish token" \
+  --expires YYYY-MM-DD \
+  --packages-all \
+  --packages-and-scopes-permission read-write \
+  --bypass-2fa
+
+read -rsp "npm token: " NPM_TOKEN
+printf "\n"
+printf "%s" "$NPM_TOKEN" | gh secret set NPM_TOKEN --repo creatornader/atrib
+unset NPM_TOKEN
+
+gh workflow run release.yml \
+  --repo creatornader/atrib \
+  --ref <branch> \
+  -f mode=initial-package \
+  -f package_name=<package-name> \
+  -f package_path=<package-path>
+```
+
+Revoke the temporary token after the package exists and trusted publishing is
+configured.
 
 Fallback path: publish locally with an authenticated npm owner:
 

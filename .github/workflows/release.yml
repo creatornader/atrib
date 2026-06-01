@@ -12,9 +12,11 @@ name: Release
 #      changesets pre-release mode.
 #
 #   3. Initial package publish (workflow_dispatch mode=initial-package): creates
-#      a brand-new npm package once with NPM_TOKEN plus provenance. npm trusted
-#      publishing requires the package to already exist before its trust
-#      relationship can be configured, so this path is only for package birth.
+#      a brand-new npm package once with NPM_TOKEN plus provenance. NPM_TOKEN
+#      must be a granular token with package write access and Bypass 2FA enabled.
+#      npm trusted publishing requires the package to already exist before its
+#      trust relationship can be configured, so this path is only for package
+#      birth.
 #
 # Both modes go through this single workflow file because npm Trusted
 # Publishers (OIDC) bind publish authorization to one specific workflow
@@ -324,7 +326,19 @@ jobs:
             exit 1
           fi
           tarball=$(node -e "const fs=require('node:fs'); const data=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/pack.json', 'utf8')); console.log(Array.isArray(data) ? data[0].filename : data.filename)")
-          npm publish "$tarball" --access public --provenance
+          publish_log="$RUNNER_TEMP/npm-publish.log"
+          set +e
+          npm publish "$tarball" --access public --provenance 2>&1 | tee "$publish_log"
+          publish_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$publish_status" -ne 0 ]; then
+            if grep -Eq "EOTP|one-time password" "$publish_log"; then
+              echo "::error title=NPM_TOKEN requires publish-time 2FA::Initial package publish needs a granular npm token with package read-write access and Bypass 2FA enabled. Replace NPM_TOKEN and rerun this workflow_dispatch job."
+            elif grep -q "E404" "$publish_log"; then
+              echo "::error title=NPM_TOKEN cannot create this package::Initial package publish reached npm, but the token cannot create this scoped public package. Replace NPM_TOKEN with an npm owner token that can create packages under @atrib."
+            fi
+            exit "$publish_status"
+          fi
 
       - name: Verify npm package metadata
         env:
