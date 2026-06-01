@@ -4,14 +4,16 @@ Reference Record Body Archive Layer for atrib [§2.12](../../atrib-spec.md#212-r
 
 The archive is separate from `log-node`. The log stores fixed commitment entries. The archive stores full signed record bodies and optional verifier evidence for producers that opt into public body retrieval.
 
+Production deploy target: `https://archive.atrib.dev/v1`, backed by the Fly app `atrib-archive`.
+
 ## API
 
-| Endpoint | Purpose |
-| --- | --- |
-| `POST /v1/records` | Archive a full signed `AtribRecord` body after confirming its hash is already committed in a trusted log. |
-| `GET /v1/record/<record_hash_hex>` | Retrieve the full body, log proofs, resolved facts, and verifier evidence results. |
-| `GET /v1/evidence/<record_hash_hex>` | Retrieve only the evidence projection used by explorer action views. |
-| `GET /v1/retention` | Publish the archive retention manifest. |
+| Endpoint                             | Purpose                                                                                                   |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `POST /v1/records`                   | Archive a full signed `AtribRecord` body after confirming its hash is already committed in a trusted log. |
+| `GET /v1/record/<record_hash_hex>`   | Retrieve the full body, log proofs, resolved facts, and verifier evidence results.                        |
+| `GET /v1/evidence/<record_hash_hex>` | Retrieve only the evidence projection used by explorer action views.                                      |
+| `GET /v1/retention`                  | Publish the archive retention manifest.                                                                   |
 
 `POST /v1/records` accepts:
 
@@ -26,6 +28,8 @@ The archive is separate from `log-node`. The log stores fixed commitment entries
 
 `authorizationEvidence` uses the `@atrib/verify` OAuth / MCP evidence input shape. The archive verifies those inputs on retrieval and returns generic `evidence[]` blocks. It does not return raw bearer tokens. Producers should not submit records whose privacy posture requires producer-local-only bodies.
 
+`@atrib/mcp` and `@atrib/mcp-wrap` can submit to this API through the opt-in `archiveSubmission` config. The producer path sends the signed record body, the log proof returned by `POST /v1/entries`, optional `authorizationEvidence`, and optional `resolvedFacts`. It does not send local-only sidecar `args` or `result` fields.
+
 ## Local Run
 
 ```bash
@@ -36,3 +40,21 @@ pnpm --filter @atrib/archive-node dev
 ```
 
 For isolated tests only, set `ATRIB_ARCHIVE_ALLOW_UNCOMMITTED=1` to skip trusted-log confirmation.
+
+## Fly Deployment
+
+The service deploys from `services/archive-node/fly.toml`. The deploy workflow includes an `archive-node` dispatch option and redeploys the archive when `services/archive-node/`, `spec/conformance/2.12/`, `packages/mcp/`, or `packages/verify/` changes.
+
+One-time infrastructure setup:
+
+```bash
+flyctl apps create atrib-archive --org personal
+flyctl volumes create atrib_archive_data --region iad --size 1 --yes -a atrib-archive
+flyctl certs create archive.atrib.dev -a atrib-archive
+```
+
+After DNS points `archive.atrib.dev` at the Fly app, verify:
+
+```bash
+curl -fsS https://archive.atrib.dev/v1/retention
+```

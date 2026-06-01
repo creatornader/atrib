@@ -18,15 +18,24 @@ export interface DpopReplayCache {
    * Redis, Durable Objects, Postgres, or any other shared compare-and-set
    * primitive. The in-memory implementation below is process-local only.
    */
-  checkAndRemember(
-    key: DpopReplayCacheKey,
-    expiresAtSeconds: number,
-  ): boolean | Promise<boolean>
+  checkAndRemember(key: DpopReplayCacheKey, expiresAtSeconds: number): boolean | Promise<boolean>
 }
 
 export interface MemoryDpopReplayCacheOptions {
   maxEntries?: number
   nowSeconds?: () => number
+}
+
+export interface FetchDpopReplayCacheOptions {
+  /**
+   * Host-owned shared replay-cache endpoint. It must atomically remember the
+   * supplied key until `expires_at_seconds` and reply with `{ "accepted": true }`
+   * for a new key or `{ "accepted": false }` for a replay.
+   */
+  endpoint: string
+  fetchImpl?: typeof fetch
+  headers?: Record<string, string>
+  timeoutMs?: number
 }
 
 export class MemoryDpopReplayCache implements DpopReplayCache {
@@ -68,6 +77,56 @@ export class MemoryDpopReplayCache implements DpopReplayCache {
       this.entries.delete(oldest)
     }
   }
+}
+
+export class FetchDpopReplayCache implements DpopReplayCache {
+  private readonly endpoint: string
+  private readonly fetchImpl: typeof fetch
+  private readonly headers: Record<string, string>
+  private readonly timeoutMs: number
+
+  constructor(options: FetchDpopReplayCacheOptions) {
+    this.endpoint = new URL(options.endpoint).toString()
+    this.fetchImpl = options.fetchImpl ?? fetch
+    this.headers = options.headers ?? {}
+    this.timeoutMs = options.timeoutMs ?? 5000
+  }
+
+  async checkAndRemember(key: DpopReplayCacheKey, expiresAtSeconds: number): Promise<boolean> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
+    try {
+      const response = await this.fetchImpl(this.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.headers,
+        },
+        body: JSON.stringify({
+          key,
+          key_id: dpopReplayCacheKeyId(key),
+          expires_at_seconds: expiresAtSeconds,
+        }),
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        throw new Error(`DPoP replay cache rejected request with HTTP ${response.status}`)
+      }
+      const raw = (await response.json()) as { accepted?: unknown }
+      if (typeof raw.accepted !== 'boolean') {
+        throw new Error('DPoP replay cache response must include boolean accepted')
+      }
+      return raw.accepted
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+}
+
+export function createFetchDpopReplayCache(
+  options: FetchDpopReplayCacheOptions,
+): FetchDpopReplayCache {
+  return new FetchDpopReplayCache(options)
 }
 
 export function dpopReplayCacheKeyId(key: DpopReplayCacheKey): string {

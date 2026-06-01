@@ -37,6 +37,13 @@ export const DisclosureSchema = z.object({
 
 export type DisclosureConfig = z.infer<typeof DisclosureSchema>
 
+export const ArchiveSubmissionSchema = z.object({
+  endpoint: z.string().url(),
+  timeoutMs: z.number().int().positive().optional(),
+})
+
+export type ArchiveSubmissionConfig = z.infer<typeof ArchiveSubmissionSchema>
+
 export const WrapConfigSchema = z.object({
   /**
    * Logical name for THIS wrapped server. Used in:
@@ -85,6 +92,13 @@ export const WrapConfigSchema = z.object({
 
   /** Log submission endpoint. Defaults to atrib production log. */
   logEndpoint: z.string().url().default('https://log.atrib.dev/v1/entries'),
+
+  /**
+   * Optional record body archive submission. Disabled unless explicitly set,
+   * because archive submission sends signed record bodies and selected
+   * verifier evidence outside the producer's local mirror.
+   */
+  archiveSubmission: ArchiveSubmissionSchema.optional(),
 
   /**
    * Whether to chain successive tool calls within this wrapper's process

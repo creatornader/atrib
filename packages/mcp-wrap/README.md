@@ -44,6 +44,7 @@ and no env var, the wrapper reads `~/.atrib/wrap-config.json`.
   },
   "serverUrl": "mcp://agent-bridge.local",
   "logEndpoint": "https://log.atrib.dev/v1/entries",
+  "archiveSubmission": { "endpoint": "https://archive.atrib.dev/v1" },
   "autoChain": true,
   "contextIdSource": "harness",
   "autoChainFallback": "fresh",
@@ -71,6 +72,7 @@ and no env var, the wrapper reads `~/.atrib/wrap-config.json`.
 | `upstream.env`                 | no       | inherited                               | Extra env merged with the parent process env (parent wins on conflicts).                                                                                                                                                                                                                                                                                            |
 | `serverUrl`                    | yes      | (no default)                            | Canonical URL for `content_id` derivation per spec [§1.2.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#122-content_id-derivation). Path segment for `agent` is appended automatically.                                                                                                                                                           |
 | `logEndpoint`                  | no       | `https://log.atrib.dev/v1/entries`      | Submission endpoint. Override for local development against `@atrib/log-dev` or a local log-node.                                                                                                                                                                                                                                                                   |
+| `archiveSubmission`            | no       | unset                                   | Optional Record Body Archive submission config. Set `{ "endpoint": "https://archive.atrib.dev/v1" }` only for records whose bodies and selected verifier evidence may be public. The wrapper passes it through to `@atrib/mcp`; archive submission happens after log proof and does not send local sidecar args or results.                                         |
 | `autoChain`                    | no       | `true`                                  | Chain successive tool calls within this wrapper's process lifetime. Required for CHAIN_PRECEDES edges from stdio hosts.                                                                                                                                                                                                                                             |
 | `contextIdSource`              | no       | `none`                                  | Set to `harness` to read the active host session from `@atrib/mcp` harness discovery when inbound MCP metadata is absent.                                                                                                                                                                                                                                           |
 | `autoChainFallback`            | no       | `stable-process`                        | `stable-process` keeps the historical wrapper-wide context when no caller context exists. `fresh` gives no-context calls separate genesis contexts while still chaining calls that have a resolved context.                                                                                                                                                         |
@@ -116,7 +118,9 @@ For each tool call through the wrapped MCP:
    (closes the chain seed → pubkey → record signature → log inclusion
    verification path).
 6. Submits to the log endpoint via the priority queue.
-7. autoChain bookkeeping advances so the next call links to this one.
+7. If `archiveSubmission` is set, submits the signed record body, log proof,
+   and selected verifier evidence to the archive.
+8. autoChain bookkeeping advances so the next call links to this one.
 
 When `ATRIB_PARENT_RECORD_HASH` is set, step 1 also adds that parent hash to the first successful record's `informed_by` set before signing.
 

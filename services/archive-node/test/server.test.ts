@@ -135,13 +135,15 @@ describe('archive-node HTTP', () => {
 
   it('sets CORS headers on read endpoints', async () => {
     const archive = await bindArchiveServer(0, '127.0.0.1', {
-      origin: 'archive.test/v1',
+      origin: 'archive.test',
       allowUncommittedRecords: true,
     })
     try {
       const res = await fetch(`${archive.url}/v1/retention`)
       expect(res.status).toBe(200)
       expect(res.headers.get('access-control-allow-origin')).toBe('*')
+      const body = (await res.json()) as { operator: string }
+      expect(body.operator).toBe('archive.test')
     } finally {
       await archive.close()
     }

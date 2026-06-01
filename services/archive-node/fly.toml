@@ -7,7 +7,7 @@ primary_region = 'iad'
 [env]
   PORT = '3300'
   HOST = '0.0.0.0'
-  ATRIB_ARCHIVE_ORIGIN = 'archive.atrib.dev/v1'
+  ATRIB_ARCHIVE_ORIGIN = 'archive.atrib.dev'
   ATRIB_ARCHIVE_PERSIST = '/data/archive.jsonl'
   ATRIB_ARCHIVE_LOG_ENDPOINTS = 'https://log.atrib.dev/v1'
 

@@ -2154,6 +2154,8 @@ Producers MAY submit a record body to one or more archives at the same time as c
 
 Submission is content-addressed and idempotent: re-submitting an already-archived body MUST be a 200 success, not a 4xx duplicate. The archive validates submissions by canonicalizing the body, computing its `record_hash`, and confirming the same hash is present in at least one log the archive trusts (preventing archives from being used as garbage stores for bodies whose hashes have never been committed anywhere).
 
+Reference producers SHOULD submit to archives after the log accepts the record and returns an inclusion proof when that proof is available. This keeps archive submission optional and best-effort while letting the archive validate the submitted body against a committed log entry immediately. Producers that stage archive submission before proof availability MUST still tolerate archive rejection and retry later with proof or other trusted log evidence.
+
 The V1 submission API is:
 
 ```
@@ -2183,6 +2185,8 @@ Response 201 Created:
 ```
 
 `authorizationEvidence` is a submission-time convenience for producers that already have local sidecar evidence. The archive MAY verify it into public `evidence[]` result blocks on retrieval. Raw bearer tokens MUST NOT be required for this path and SHOULD NOT be submitted.
+
+When the evidence source is a producer-local sidecar ([§5.9.3](#593-the-_local-sidecar-shape)), producers SHOULD project only verifier evidence and resolved facts into archive submissions. Local-only raw `args`, `result`, or private reasoning payloads SHOULD remain in the producer mirror unless the record's privacy posture explicitly permits public body disclosure.
 
 #### 2.12.3 Retrieval API
 
@@ -4228,9 +4232,11 @@ The OAuth / MCP adapter does not mint tokens, run OAuth redirects, call token-in
 
 `@atrib/verify` also exposes a host-owned token-introspection helper. The helper posts to the caller's configured introspection endpoint, applies caller-supplied client authentication and expectation checks, and returns a caller-supplied introspection response for the evidence verifier. `verifyRecord()` and `verifyOAuthAuthorizationEvidence()` still do not perform hidden network calls.
 
-Deployments that require process-shared or fleet-shared DPoP replay protection pass a `dpopReplayCache` implementation into the evidence verifier. The cache contract is atomic `checkAndRemember(key, expiresAtSeconds)`, so hosts can back it with Redis, Durable Objects, Postgres, or another shared store. The bundled memory cache is for one-process deployments and tests.
+Deployments that require process-shared or fleet-shared DPoP replay protection pass a `dpopReplayCache` implementation into the evidence verifier. The cache contract is atomic `checkAndRemember(key, expiresAtSeconds)`, so hosts can back it with Redis, Durable Objects, Postgres, or another shared store. The bundled memory cache is for one-process deployments and tests. The bundled HTTP-backed adapter posts `{ key, key_id, expires_at_seconds }` to a host-owned endpoint and expects `{ "accepted": true }` for a new proof or `{ "accepted": false }` for replay.
 
 `@atrib/mcp` MAY capture MCP/OAuth evidence from an MCP HTTP transport's already-validated `authInfo` and request metadata into the local mirror sidecar. Producer-side capture MUST NOT persist the raw bearer token by default. The reference implementation stores verified claims, a one-way token hash when configured, optional DPoP proof material, and verifier constraints. It also records resolved local facts such as `tool_name` so `verifyRecord()` can evaluate capability envelopes without changing the signed record bytes.
+
+`@atrib/mcp` MAY submit archived record bodies and selected sidecar evidence through [§2.12](#212-record-body-archive-layer) when a producer explicitly configures an archive endpoint. This producer path runs after log acceptance, submits the returned proof bundle with the signed record body, and excludes raw local sidecar `args` and `result` fields by default.
 
 The offline conformance corpus for this adapter lives at `spec/conformance/5.5.6/oauth/`. It covers verified claims, JWT access tokens, MCP resource binding, scope attenuation failures, caller-supplied introspection responses, and DPoP proof checks.
 

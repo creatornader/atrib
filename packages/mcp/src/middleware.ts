@@ -24,7 +24,7 @@ import { zeroize } from './zeroize.js'
 import { EVENT_TYPE_TOOL_CALL_URI, EVENT_TYPE_TRANSACTION_URI } from './types.js'
 import { buildMcpOAuthEvidenceFromExtra } from './oauth-evidence.js'
 import type { AtribRecord } from './types.js'
-import type { SubmissionQueue, ProofBundle } from './submission.js'
+import type { ArchiveSubmissionOptions, SubmissionQueue, ProofBundle } from './submission.js'
 import type { CapturedMcpOAuthEvidence, McpOAuthEvidenceCaptureOptions } from './oauth-evidence.js'
 
 const HEX_32 = /^[0-9a-f]{32}$/
@@ -113,6 +113,13 @@ export interface AtribOptions {
    * Defaults to 'enabled'.
    */
   logSubmission?: 'enabled' | 'disabled'
+  /**
+   * Opt-in record body archive submission. When set, the middleware submits
+   * the signed record body plus selected verifier evidence to the archive
+   * only after the log returns an inclusion proof. Raw sidecar args/results
+   * stay local-only.
+   */
+  archiveSubmission?: ArchiveSubmissionOptions
   /** Inline attribution policy document (§4.2). */
   policy?: Record<string, unknown>
   /** Canonical URL of this MCP server for content_id derivation. */
@@ -361,6 +368,9 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
       ? createNoopSubmissionQueue()
       : createSubmissionQueue(options.logEndpoint, {
           ...(options.maxQueueDepth !== undefined ? { maxQueueDepth: options.maxQueueDepth } : {}),
+          ...(options.archiveSubmission !== undefined
+            ? { archiveSubmission: options.archiveSubmission }
+            : {}),
         })
 
   // autoChain bookkeeping (process-lifetime, opt-in via options.autoChain).
@@ -790,7 +800,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     // are admitted at high priority so they are not delayed behind tool_call backlog.
     const priority: 'high' | 'normal' =
       built.eventType === EVENT_TYPE_TRANSACTION_URI ? 'high' : 'normal'
-    queue.submit(built.signed, priority)
+    queue.submit(built.signed, priority, sidecar)
     if (built.parentRecordHashSeeded) {
       parentRecordHashSeedConsumed = true
     }

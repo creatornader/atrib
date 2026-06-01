@@ -5364,8 +5364,8 @@ The missing piece is producer-side capture from already-validated MCP HTTP autho
 
 **Decision.** atrib now ships host-owned infrastructure for those three edges without moving authorization policy into core record validity.
 
-1. `services/archive-node` serves body and evidence retrieval for archived records. The explorer reads its evidence projection opportunistically.
-2. `@atrib/verify` exposes `DpopReplayCache` and `MemoryDpopReplayCache`. Deployments that need replay defense pass a shared cache into OAuth evidence verification.
+1. `services/archive-node` serves body and evidence retrieval for archived records. The explorer reads its evidence projection opportunistically. Producers can opt into archive submission through `@atrib/mcp` or `@atrib/mcp-wrap`; the producer submits the signed body only after log acceptance and sends selected verifier evidence, not raw local sidecar args or results.
+2. `@atrib/verify` exposes `DpopReplayCache`, `MemoryDpopReplayCache`, and `createFetchDpopReplayCache()`. Deployments that need replay defense pass a shared cache into OAuth evidence verification; the HTTP adapter lets hosts wire Redis, Durable Objects, Postgres, or another atomic store behind a small endpoint.
 3. `@atrib/verify` exposes `introspectOAuthToken()` and `oauthEvidenceFromIntrospectionResult()`. The host chooses the endpoint, client authentication, timeout, and expected issuer, audience, or resource. The helper returns caller-supplied evidence; `verifyRecord()` still performs no hidden network calls.
 
 **Alternatives considered.**
@@ -5377,13 +5377,14 @@ The missing piece is producer-side capture from already-validated MCP HTTP autho
 **Consequences.**
 
 - atrib has a concrete second evidence adapter path with production retrieval and verifier plumbing, not just fixture code.
-- Hosts still own OAuth secrets, live introspection policy, and replay-cache deployment.
+- Hosts still own OAuth secrets, live introspection policy, replay-cache deployment, and archive opt-in policy.
 - The archive layer gives public inspection a way to show evidence without changing log entries or graph derivation.
 
 **Cross-references.**
 
 - [§2.12](atrib-spec.md#212-record-body-archive-layer), archive body and evidence API.
 - [§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks), OAuth / MCP evidence and DPoP replay-cache semantics.
+- [`packages/mcp/src/submission.ts`](packages/mcp/src/submission.ts), producer-side archive submission after log proof.
 - [`packages/verify/src/dpop-replay-cache.ts`](packages/verify/src/dpop-replay-cache.ts), replay-cache contract.
 - [`packages/verify/src/oauth-introspection.ts`](packages/verify/src/oauth-introspection.ts), host-owned introspection helper.
 - [`services/archive-node/`](services/archive-node/), production archive reference service.

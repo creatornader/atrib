@@ -84,6 +84,104 @@ describe('createSubmissionQueue', () => {
     expect(cached).toEqual(proof)
   })
 
+  it('submits archive body and evidence after log acceptance', async () => {
+    const proof = {
+      log_index: 42,
+      checkpoint: 'log.test/v1\n43\nrootHashBase64\n',
+      inclusion_proof: ['siblingHashBase64'],
+      leaf_hash: 'leafHashBase64',
+    }
+    const archivePayloads: unknown[] = []
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      if (url === 'https://log.test/v1/entries') {
+        return new Response(JSON.stringify(proof), { status: 200 })
+      }
+      if (url === 'https://archive.test/v1/records') {
+        archivePayloads.push(JSON.parse(init.body as string))
+        return new Response(JSON.stringify({ stored: true }), { status: 201 })
+      }
+      throw new Error(`unexpected fetch ${url}`)
+    })
+
+    const queue = createSubmissionQueue('https://log.test/v1/entries', {
+      archiveSubmission: { endpoint: 'https://archive.test/v1/records/' },
+    })
+    const record = await makeSignedRecord()
+
+    queue.submit(record, 'normal', {
+      args: { token: 'local-only-token' },
+      result: { secret: 'local-only-result' },
+      authorizationEvidence: [
+        {
+          protocol: 'mcp_oauth',
+          issuer: 'https://auth.example.com',
+          subject: 'client-123',
+          scope: ['files:read'],
+          claimsVerified: true,
+          token_hash: 'sha256:test',
+        },
+      ],
+      resolvedFacts: { tool_name: 'read_file' },
+    })
+    await advanceUntilSettled()
+    await queue.flush()
+
+    expect(archivePayloads).toHaveLength(1)
+    expect(archivePayloads[0]).toEqual({
+      record,
+      proof,
+      authorizationEvidence: [
+        {
+          protocol: 'mcp_oauth',
+          issuer: 'https://auth.example.com',
+          subject: 'client-123',
+          scope: ['files:read'],
+          claimsVerified: true,
+          token_hash: 'sha256:test',
+        },
+      ],
+      resolvedFacts: { tool_name: 'read_file' },
+    })
+    expect(JSON.stringify(archivePayloads[0])).not.toContain('local-only-token')
+    expect(JSON.stringify(archivePayloads[0])).not.toContain('local-only-result')
+  })
+
+  it('does not let archive submission failure invalidate log submission', async () => {
+    const proof = {
+      log_index: 42,
+      checkpoint: 'log.test/v1\n43\nrootHashBase64\n',
+      inclusion_proof: ['siblingHashBase64'],
+      leaf_hash: 'leafHashBase64',
+    }
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === 'https://log.test/v1/entries') {
+        return new Response(JSON.stringify(proof), { status: 200 })
+      }
+      if (url === 'https://archive.test/v1/records') {
+        return new Response('archive unavailable', { status: 503 })
+      }
+      throw new Error(`unexpected fetch ${url}`)
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const queue = createSubmissionQueue('https://log.test/v1/entries', {
+      archiveSubmission: { endpoint: 'https://archive.test/v1' },
+    })
+    const record = await makeSignedRecord()
+    const hash = recordHashHex(record)
+
+    queue.submit(record, 'normal')
+    await advanceUntilSettled()
+    await queue.flush()
+
+    expect(queue.getProof(hash)).toEqual(proof)
+    expect(warnSpy).toHaveBeenCalledWith(
+      'atrib: archive submission rejected (503)',
+      expect.objectContaining({ record_hash: hash }),
+    )
+    warnSpy.mockRestore()
+  })
+
   it('getProof returns undefined before submission', () => {
     const queue = createSubmissionQueue('https://log.test/v1/entries')
     expect(queue.getProof('nonexistent')).toBeUndefined()
@@ -392,8 +490,8 @@ describe('createSubmissionQueue', () => {
       for (const r of records) queue.submit(r, 'normal')
       await queue.flush()
 
-      const evictionWarnings = warnSpy.mock.calls.filter((c) =>
-        typeof c[0] === 'string' && c[0].includes('queue at cap'),
+      const evictionWarnings = warnSpy.mock.calls.filter(
+        (c) => typeof c[0] === 'string' && c[0].includes('queue at cap'),
       )
       expect(evictionWarnings.length).toBeGreaterThan(0)
       warnSpy.mockRestore()
@@ -414,8 +512,8 @@ describe('createSubmissionQueue', () => {
 
       await queue.flush()
 
-      const evictionWarnings = warnSpy.mock.calls.filter((c) =>
-        typeof c[0] === 'string' && c[0].includes('queue at cap'),
+      const evictionWarnings = warnSpy.mock.calls.filter(
+        (c) => typeof c[0] === 'string' && c[0].includes('queue at cap'),
       )
       expect(evictionWarnings.length).toBeGreaterThan(0)
       warnSpy.mockRestore()
@@ -433,8 +531,8 @@ describe('createSubmissionQueue', () => {
       for (const r of records) queue.submit(r, 'normal')
       await queue.flush()
 
-      const evictionWarnings = warnSpy.mock.calls.filter((c) =>
-        typeof c[0] === 'string' && c[0].includes('queue at cap'),
+      const evictionWarnings = warnSpy.mock.calls.filter(
+        (c) => typeof c[0] === 'string' && c[0].includes('queue at cap'),
       )
       expect(evictionWarnings).toHaveLength(0)
       warnSpy.mockRestore()
