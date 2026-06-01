@@ -112,9 +112,10 @@ the first version was published locally by an npm owner, and the next
 changesets-managed version published from GitHub Actions after trusted publishing
 was configured.
 
-npm documents this direct scoped-package path as `npm publish --access public`.
-The first manual version will not have GitHub Actions provenance. The next
-changesets-managed version should.
+npm documents the direct scoped-package path as publish with `--access public`.
+In this pnpm workspace, use `pnpm publish`, not raw `npm publish`. `pnpm publish`
+rewrites `workspace:*` dependencies in the packed manifest; raw `npm publish`
+does not, and can upload an install-broken tarball.
 
 For `@atrib/memory-tool`, run this in zsh from the repo root:
 
@@ -128,7 +129,7 @@ pnpm --filter @atrib/memory-tool smoke
 
 cd packages/memory-tool
 read "NPM_OTP?npm otp: "
-npm publish --access public --otp "$NPM_OTP"
+pnpm publish --access public --otp "$NPM_OTP"
 unset NPM_OTP
 ```
 
@@ -142,7 +143,7 @@ pnpm --filter <package-name> test
 pnpm --filter <package-name> <smoke-script>
 cd <package-directory>
 read "NPM_OTP?npm otp: "
-npm publish --access public --otp "$NPM_OTP"
+pnpm publish --access public --otp "$NPM_OTP"
 unset NPM_OTP
 ```
 
@@ -157,11 +158,14 @@ workflow uses OIDC trusted publishing, not long-lived npm tokens.
 After publish, verify:
 
 ```bash
+pnpm pack --pack-destination /tmp --json
+tar -xOf /tmp/<tarball-name>.tgz package/package.json | grep -qv 'workspace:'
 npm view <package-name>@<version> \
   name version repository dist-tags dist.integrity dist.attestations dist.signatures --json
 ```
 
-Expect `dist.integrity` and `dist.signatures[]`. Do not expect
+Expect no `workspace:` dependency in the packed manifest. Expect
+`dist.integrity` and `dist.signatures[]` from npm. Do not expect
 `dist.attestations` on the manual first version.
 
 ## Trusted publisher setup
