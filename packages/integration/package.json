@@ -29,12 +29,14 @@
     "langgraph-store-smoke": "tsx examples/langgraph-store/langgraph-store-smoke.ts",
     "llamaindex-memory-smoke": "tsx examples/llamaindex-memory/llamaindex-memory-smoke.ts",
     "evidence-packet-eval": "tsx examples/evidence-packet-eval/evidence-packet-eval.ts",
+    "a2a-handoff-proof": "tsx examples/a2a-handoff/a2a-handoff-proof.ts",
     "graphiti-mcp-smoke": "pnpm --filter @atrib/mcp-wrap build && tsx examples/graphiti/graphiti-mcp-smoke.ts",
     "graphiti-core-ollama-smoke": "tsx examples/graphiti/graphiti-core-ollama-smoke.ts",
     "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts",
     "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts"
   },
   "dependencies": {
+    "@a2a-js/sdk": "0.3.13",
     "@atrib/agent": "workspace:*",
     "@atrib/archive-node": "workspace:*",
     "@atrib/directory": "workspace:*",

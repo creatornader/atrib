@@ -65,6 +65,7 @@
 
 ### Patch Changes
 
+- Add an official A2A SDK JSON-RPC handoff proof that carries an atrib evidence packet in an A2A `DataPart`, verifies it, and signs a receiving-agent follow-up with `informed_by`.
 - Add a Google AP2 sample extractor that converts captured A2A events plus the sample `.temp-db` mandate chains into live interop artifacts.
 - Normalize AP2 delegated mandate chains in the local participant artifact generator so upstream sample outputs can use full `open~~closed` SD-JWT chains without manual closed-JWT extraction.
 - Add a local AP2 participant artifact generator that writes AP2 result evidence, AP2 / VI verifier evidence, and a two-party atrib transaction record over the production AP2 receipt identity.
