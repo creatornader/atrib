@@ -2,6 +2,7 @@
 
 import { randomBytes } from 'node:crypto'
 import canonicalize from 'canonicalize'
+import { BrowserSession } from 'browser-use/browser'
 import {
   base64urlDecode,
   base64urlEncode,
@@ -18,6 +19,7 @@ import {
   verifyRecord,
 } from '@atrib/mcp'
 import type { AtribRecord, ProofBundle, SubmissionQueue } from '@atrib/mcp'
+import type { Page } from 'browser-use/browser'
 
 type MaybePromise<T> = T | Promise<T>
 
@@ -238,6 +240,17 @@ export interface BrowserWorkflowSmokeResult {
   caveats: string[]
 }
 
+export interface BrowserUseWorkflowSmokeResult extends BrowserWorkflowSmokeResult {
+  host: {
+    framework: 'browser-use'
+    package_version: string
+    browser_session_id: string
+    browser_tabs: number
+    page_title: string
+    page_url: string
+  }
+}
+
 export async function runBrowserWorkflowReceiptSmoke(): Promise<BrowserWorkflowSmokeResult> {
   const privateKey = new Uint8Array(32).fill(23)
   const contextId = '62726f777365722d776f726b666c6f77'
@@ -328,6 +341,180 @@ export async function runBrowserWorkflowReceiptSmoke(): Promise<BrowserWorkflowS
   }
 }
 
+export async function runBrowserUseWorkflowReceiptSmoke(): Promise<BrowserUseWorkflowSmokeResult> {
+  const privateKey = new Uint8Array(32).fill(25)
+  const contextId = '62726f777365722d7573652d70726f6f'
+  const privatePhrase = 'private browser-use note: vendor risk reviewed'
+  const browserUsePackageVersion = '0.7.1'
+  const session = new BrowserSession({
+    profile: {
+      headless: true,
+      enable_default_extensions: false,
+      allowed_domains: ['about:blank'],
+    },
+  })
+  const recorder = new BrowserWorkflowReceiptRecorder({
+    privateKey,
+    contextId,
+    serverUrl: 'browser-use://session',
+    logSubmission: 'disabled',
+    now: timestampClock(1_779_840_100_000),
+  })
+
+  try {
+    await session.start()
+    const page = await session.get_current_page()
+    if (!page) throw new Error('browser-use session did not expose a current page')
+    await page.setContent(browserUseVendorApprovalHtml())
+
+    const pageUrl = page.url()
+    const observed = await recorder.action({
+      operation: 'observe',
+      pageUrl,
+      args: {
+        framework: 'browser-use',
+        browser_session_id: session.id,
+        include_screenshot: false,
+      },
+      run: async () => {
+        const state = await session.get_browser_state_with_recovery({
+          include_screenshot: false,
+          include_recent_events: true,
+        })
+        return {
+          title: state.title,
+          url: state.url,
+          tabs: state.tabs.length,
+          selector_count: Object.keys(state.selector_map ?? {}).length,
+          page_info: state.page_info,
+          has_screenshot: Boolean(state.screenshot),
+        }
+      },
+    })
+
+    const approveCenter = await elementCenter(page, '#approve-vendor')
+    await recorder.action({
+      operation: 'click',
+      pageUrl,
+      args: {
+        framework: 'browser-use',
+        browser_session_id: session.id,
+        selector: '#approve-vendor',
+        visible_label: 'Approve vendor',
+      },
+      run: async () => {
+        await session.click_coordinates(approveCenter.x, approveCenter.y)
+        return page.evaluate(() => ({
+          approved: document.body.dataset.approved === 'true',
+          active_panel: document.body.dataset.activePanel ?? null,
+        }))
+      },
+    })
+
+    const noteCenter = await elementCenter(page, '#approval-note')
+    await recorder.action({
+      operation: 'fill',
+      pageUrl,
+      args: {
+        framework: 'browser-use',
+        browser_session_id: session.id,
+        selector: '#approval-note',
+        value: privatePhrase,
+      },
+      run: async () => {
+        await session.click_coordinates(noteCenter.x, noteCenter.y)
+        await session.send_keys(privatePhrase)
+        return page.evaluate(() => {
+          const field = document.querySelector<HTMLTextAreaElement>('#approval-note')
+          return {
+            field: 'approval-note',
+            value_length: field?.value.length ?? 0,
+          }
+        })
+      },
+    })
+
+    const submitCenter = await elementCenter(page, '#submit-approval')
+    const finalReceipt = await recorder.action({
+      operation: 'submit',
+      pageUrl,
+      args: {
+        framework: 'browser-use',
+        browser_session_id: session.id,
+        selector: '#submit-approval',
+        form_value: privatePhrase,
+      },
+      run: async () => {
+        await session.click_coordinates(submitCenter.x, submitCenter.y)
+        return page.evaluate(() => ({
+          status: document.body.dataset.submitted === 'true' ? 'submitted' : 'not-submitted',
+          confirmation_id:
+            document
+              .querySelector('[data-confirmation-id]')
+              ?.getAttribute('data-confirmation-id') ?? 'missing',
+          page_url: window.location.href,
+        }))
+      },
+    })
+
+    await recorder.flushAtrib()
+    const records = recorder.getSignedRecords()
+    const sidecars = recorder.getSidecars()
+    const invalid = []
+    for (const record of records) {
+      if (!(await verifyRecord(record))) invalid.push(record.tool_name)
+    }
+    if (invalid.length > 0) {
+      throw new Error(`invalid signed record(s): ${invalid.join(', ')}`)
+    }
+    const publicRecordJson = JSON.stringify(records)
+    if (publicRecordJson.includes(privatePhrase)) {
+      throw new Error('public records leaked browser-use form data')
+    }
+    if (!JSON.stringify(sidecars).includes(privatePhrase)) {
+      throw new Error('local sidecars should keep inspectable browser-use action material')
+    }
+    if (finalReceipt.status !== 'submitted') {
+      throw new Error('browser-use workflow did not submit the approval form')
+    }
+
+    return {
+      ok: true,
+      note: 'Signs a real browser-use BrowserSession workflow as hash-only atrib records while local sidecars keep page and form material.',
+      context_id: contextId,
+      signed_records: records.length,
+      operations: records.map((record) => record.tool_name as BrowserWorkflowToolName),
+      record_hashes: records.map(
+        (record) => `sha256:${hexEncode(sha256(canonicalRecord(record)))}`,
+      ),
+      final_receipt: {
+        status: 'submitted',
+        confirmation_id: finalReceipt.confirmation_id,
+        page_url: finalReceipt.page_url,
+      },
+      privacy: {
+        public_records_hash_only: true,
+        local_sidecars_keep_payloads: true,
+      },
+      caveats: [
+        'This proof runs browser-use BrowserSession directly, not a live Browser Use cloud task.',
+        'This proof does not run an autonomous LLM-driven Agent loop.',
+        'This proof does not use Browserbase, Stagehand, OpenHands, OpenAI Computer Use, or Anthropic computer use.',
+      ],
+      host: {
+        framework: 'browser-use',
+        package_version: browserUsePackageVersion,
+        browser_session_id: session.id,
+        browser_tabs: observed.tabs,
+        page_title: observed.title,
+        page_url: observed.url,
+      },
+    }
+  } finally {
+    await session.close()
+  }
+}
+
 export function resolveBrowserWorkflowPrivateKey(value?: Uint8Array | string): Uint8Array {
   const raw = value ?? (typeof process !== 'undefined' ? process.env.ATRIB_PRIVATE_KEY : undefined)
   if (raw instanceof Uint8Array) {
@@ -399,6 +586,64 @@ class FixtureApprovalPage {
       confirmation_id: 'browser-workflow-receipt-001',
       page_url: this.pageUrl,
     }
+  }
+}
+
+function browserUseVendorApprovalHtml(): string {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Browser Use vendor approval</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 32px; }
+      main { max-width: 560px; }
+      label, textarea, button { display: block; margin-top: 12px; }
+      textarea { width: 360px; height: 96px; }
+    </style>
+  </head>
+  <body data-approved="false" data-submitted="false">
+    <main data-route="browser-use-vendor-approval">
+      <h1>Approve vendor invoice</h1>
+      <button id="approve-vendor">Approve vendor</button>
+      <label for="approval-note">Approval note</label>
+      <textarea id="approval-note" disabled></textarea>
+      <button id="submit-approval" disabled>Submit approval</button>
+      <output id="result"></output>
+    </main>
+    <script>
+      const approve = document.querySelector('#approve-vendor');
+      const note = document.querySelector('#approval-note');
+      const submit = document.querySelector('#submit-approval');
+      const result = document.querySelector('#result');
+      approve.addEventListener('click', () => {
+        document.body.dataset.approved = 'true';
+        document.body.dataset.activePanel = 'approval-form';
+        note.disabled = false;
+        submit.disabled = false;
+        note.focus();
+      });
+      submit.addEventListener('click', () => {
+        if (note.value.length === 0) return;
+        document.body.dataset.submitted = 'true';
+        result.dataset.confirmationId = 'browser-use-workflow-receipt-001';
+        result.textContent = 'Approval submitted';
+      });
+    </script>
+  </body>
+</html>`
+}
+
+async function elementCenter(page: Page, selector: string): Promise<{ x: number; y: number }> {
+  const locator = page.locator(selector)
+  await locator.waitFor({ state: 'visible', timeout: 5000 })
+  const box = await locator.boundingBox()
+  if (!box) {
+    throw new Error(`browser-use element is not visible: ${selector}`)
+  }
+  return {
+    x: Math.round(box.x + box.width / 2),
+    y: Math.round(box.y + box.height / 2),
   }
 }
 
