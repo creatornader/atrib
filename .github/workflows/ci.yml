@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [main]
 
-
 # Default to read-only GITHUB_TOKEN; jobs that need more (release.yml does)
 # specify their own permissions block. Closes CodeQL alert
 # actions/missing-workflow-permissions.
@@ -41,6 +40,8 @@ jobs:
           cache: 'pnpm'
 
       - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @atrib/integration exec playwright install --with-deps chromium
 
       - run: pnpm -r build
 

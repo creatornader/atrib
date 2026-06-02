@@ -76,6 +76,7 @@
     "jose": "6.2.3",
     "llamaindex": "0.12.1",
     "mem0ai": "3.0.6",
+    "playwright": "1.60.0",
     "tslib": "^2.8.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8",
