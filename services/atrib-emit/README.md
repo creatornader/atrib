@@ -100,21 +100,21 @@ If a 1Password item stores the seed with a `ATRIB_PRIVATE_KEY=<value>` label pre
 
 `atrib-emit` validates `informed_by` refs before signing. A ref is kept when it
 appears in a local mirror under `~/.atrib/records` or resolves through the
-configured log's `/lookup/{record_hash}` endpoint. If lookup fails
-operationally, the ref is kept with a warning per
-[§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract).
-If local mirrors and log lookup both report absence, the ref is dropped and
-the warning names the short hash. Set `allow_unresolved_informed_by: true`
-only for deliberate dangling claims, such as conformance fixtures.
+configured log's `/lookup/{record_hash}` endpoint. If validation is unavailable
+or local mirrors and log lookup both report absence, the ref is dropped and the
+warning names the short hash. This keeps [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)
+intact by signing the event without an unverifiable structure claim. Set
+`allow_unresolved_informed_by: true` only for deliberate dangling claims, such
+as conformance fixtures.
 
 ## Two binaries
 
 The package ships two binaries from the same `src/index.ts` signing path:
 
-- **`atrib-emit`** — the MCP server. Long-lived in an agent's MCP host (Claude Code, Claude Desktop). Surfaces the six [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) cognitive primitives to the agent at tool-discovery time. Use this for interactive in-session signing.
-- **`atrib-emit-cli`** — a thin command-line wrapper around `emitInProcess` per [D082](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape). Reads one JSON envelope on stdin, signs the record in-process, writes the `EmitOutput` JSON to stdout. Use this for hook-class producers (Claude Code PostToolUse + lifecycle hooks, watchers, batch jobs) that spawn a short-lived signer rather than holding an MCP server warm.
+- **`atrib-emit`**: the MCP server. Long-lived in an agent's MCP host (Claude Code, Claude Desktop). Surfaces the six [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) cognitive primitives to the agent at tool-discovery time. Use this for interactive in-session signing.
+- **`atrib-emit-cli`**: a thin command-line wrapper around `emitInProcess` per [D082](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape). Reads one JSON envelope on stdin, signs the record in-process, writes the `EmitOutput` JSON to stdout. Use this for hook-class producers (Claude Code PostToolUse + lifecycle hooks, watchers, batch jobs) that spawn a short-lived signer rather than holding an MCP server warm.
 
-Records signed by either binary are byte-identical at the canonical-form level — [§1.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#13-canonical-serialization) does not surface the transport.
+Records signed by either binary are byte-identical at the canonical-form level. [§1.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#13-canonical-serialization) does not surface the transport.
 
 ### atrib-emit-cli quick reference
 
@@ -132,7 +132,7 @@ atrib-emit-cli doctor                  # exits 0 if key + log + mirror all ok, n
 atrib-emit-cli --describe              # stable JSON description for agent / tooling discovery
 ```
 
-Exit code on `emit` is always 0 per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract); failures surface as warnings inside the result JSON or as a stderr diagnostic line. `doctor` exits non-zero on failure — operator-facing diagnostic, not hook-safe.
+Exit code on `emit` is always 0 per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract); failures surface as warnings inside the result JSON or as a stderr diagnostic line. `doctor` exits non-zero on failure because it is an operator-facing diagnostic, not a hook-safe command.
 
 ## Installation in an MCP host
 

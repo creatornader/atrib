@@ -456,14 +456,46 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (D104)', () => {
     ).toBe(true)
     expect(submittedInformedBy(submitted)).toEqual([known])
   })
+
+  it('drops unvalidated informed_by refs when lookup availability is unknown', async () => {
+    delete process.env['ATRIB_PARENT_RECORD_HASH']
+    const seed = await freshKey()
+    const unvalidated = 'sha256:' + 'e'.repeat(64)
+    let submitted: AtribRecord | undefined
+    const queue = {
+      submit: (record: AtribRecord) => {
+        submitted = record
+      },
+      flush: async () => {},
+      getProof: async () => null,
+    } as unknown as ReturnType<typeof createSubmissionQueue>
+
+    const result = await handleEmit({
+      input: {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'unvalidated informed_by test' },
+        context_id: 'e'.repeat(32),
+        informed_by: [unvalidated],
+      },
+      key: { privateKey: seed, source: 'env' },
+      queue,
+      recordReferenceResolver: async () => 'unknown',
+    })
+
+    expect(result.record_hash).not.toBe('sha256:unknown')
+    expect(
+      result.warnings.some((w) => w.includes('dropped unvalidated informed_by reference')),
+    ).toBe(true)
+    expect(submittedInformedBy(submitted)).toBeUndefined()
+  })
 })
 
 describe('D083 harness session-id discovery (consumer integration)', () => {
   // Asserts the cross-cutting integration: when handleEmit runs in a process
   // that has no caller-supplied context_id and no ATRIB_CONTEXT_ID env, but
   // does have a documented harness env var (CLAUDE_CODE_SESSION_ID), the
-  // signed record carries the derived 32-hex context_id. Covers the load-
-  // bearing path the substrate-health analysis surfaced 2026-05-22.
+  // signed record carries the derived 32-hex context_id. Covers the path the
+  // substrate-health analysis surfaced 2026-05-22.
   const { handleEmit } = __index_test_only__
 
   let priorCtx: string | undefined

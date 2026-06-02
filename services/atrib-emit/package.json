@@ -24,7 +24,7 @@
     "atrib-emit-cli": "./dist/cli.js"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc",
+    "build": "rm -rf dist && tsc && chmod +x dist/main.js dist/cli.js",
     "start": "node dist/main.js",
     "dev": "tsx src/main.ts",
     "test": "vitest run"

@@ -5483,6 +5483,75 @@ still succeeds or fails according to the host's handler.
 - [D100](#d100-log-submission-can-be-disabled-while-still-signing-and-running-onrecord),
   offline signing and `onRecord` behavior.
 
+## D113: Unvalidated informed_by refs are omitted by default
+
+**Date:** 2026-06-02
+
+**Status:** Accepted
+
+**Extends:** [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape), and [D104](#d104-parent-child-threading-uses-atrib_parent_record_hash).
+
+**Context.** A live session graph still showed missing `INFORMED_BY` refs after
+the producer-side structured-ref fix had landed. The immediate cause was
+runtime skew: the repository carried the fixed `@atrib/emit`, while the
+operator machine still had an older global `@atrib/emit` binary on the hook
+path. A follow-up smoke found a second structural gap in the fixed path:
+`@atrib/emit` kept caller-supplied `informed_by` refs when validation was
+`unknown` because local mirrors or log lookup were unavailable.
+
+That default preserved the wrong thing. The [§5.8](atrib-spec.md#58-degradation-contract)
+degradation contract says atrib failures must not affect the primary tool call
+or agent response. It does not require producers to preserve an unverifiable
+graph claim. If the producer cannot prove a referenced record exists in local
+mirror state or the configured log lookup, signing the event without that ref
+is the safer degradation.
+
+**Decision.** Producers that validate `informed_by` refs keep only refs that are
+found locally or through log lookup. Missing refs and unvalidated refs are
+omitted before signing by default. The producer emits a warning that names the
+short hash and still signs the event without the omitted ref. Deliberate
+dangling claims remain possible only through an explicit escape hatch:
+`allow_unresolved_informed_by: true`.
+
+For `@atrib/emit`, this rule applies to both the long-lived MCP server and the
+`atrib-emit-cli` hook binary because both route through `handleEmit`. The build
+script also restores executable bits on `dist/main.js` and `dist/cli.js` after
+`tsc`, so local global installs keep the hook-spawned binaries runnable.
+
+**Alternatives rejected.**
+
+- _Keep unvalidated refs with a warning._ Rejected. It keeps signed structure
+  that the producer failed to validate. That creates avoidable dangling edges.
+- _Refuse to sign when a ref cannot be validated._ Rejected. That violates the
+  degradation contract. The primary event can still be signed without the
+  unverifiable edge.
+- _Treat validation failure as an external ref._ Rejected. External refs are
+  references to records outside the resolved graph set. A lookup failure says
+  nothing about scope.
+
+**Consequences.**
+
+- Default producer behavior favors fewer graph claims over unverifiable graph
+  claims.
+- Existing signed records are immutable. Historical missing-ref edges remain
+  visible until the referenced records are replayed or the session is viewed
+  with repair annotations.
+- Operators must update or restart long-lived producer processes after package
+  updates. Source changes and global installs do not rewrite already-loaded MCP
+  server code.
+- Conformance fixtures and deliberate dangling-node tests must set
+  `allow_unresolved_informed_by: true`.
+
+**Cross-references.**
+
+- [§1.2.5](atrib-spec.md#125-informed_by), `informed_by`.
+- [§3.2.4](atrib-spec.md#324-edge-derivation-rules), graph edge derivation.
+- [§5.8](atrib-spec.md#58-degradation-contract), degradation contract.
+- [`services/atrib-emit/src/reference-resolution.ts`](services/atrib-emit/src/reference-resolution.ts),
+  reference validation.
+- [`services/atrib-emit/test/emit.test.ts`](services/atrib-emit/test/emit.test.ts),
+  default drop coverage.
+
 ---
 
 # Pending decisions
