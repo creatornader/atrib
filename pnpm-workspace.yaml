@@ -3,6 +3,7 @@ packages:
   - 'packages/integration/examples/cloudflare-agents/live-worker-proof'
   - 'packages/integration/examples/cloudflare-agents/live-client-proof'
   - 'packages/integration/examples/cloudflare-agents/approval-trace'
+  - 'packages/integration/examples/cloudflare-agents/oauth-evidence-infra'
   - 'services/log-node'
   - 'services/graph-node'
   - 'services/directory-node'

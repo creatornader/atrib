@@ -56,6 +56,7 @@ atrib/
           live-worker-proof/   # Real Cloudflare Worker + Durable Object proof for server-side MCP signing and prior-action recall.
           live-client-proof/   # Real Cloudflare Agent.addMcpServer proof for client-side wrapping and fallback transaction signing.
           approval-trace/      # Interactive Cloudflare Agents HITL example: proposal -> human approval -> MCP execution -> signed audit trace.
+          oauth-evidence-infra/ # Cloudflare Worker + Durable Object reference for DPoP replay cache and OAuth introspection evidence.
         vercel-ai-sdk/         # createMCPClient + AI Gateway example
         langchain-js/          # MultiServerMCPClient + loadMcpTools example
         signer-proxy/          # D102 sandboxed-execution signer proxy example. Sandbox requests signatures, host signer keeps the key outside the sandbox.
@@ -91,7 +92,7 @@ atrib/
       6/                       # Public-key directory conformance corpus (test vectors for §6, D034). Skeleton; fixtures land alongside the directory implementation.
 ```
 
-Public packages are intended for npm publication. Private workspace packages and services (`log-dev`, `integration`, `cloudflare-live-proof`, `cloudflare-live-client-proof`, `cloudflare-approval-trace`, `log-node`, `graph-node`, `directory-node`, `archive-node`, `dashboard`) are fixtures, proof harnesses, deployed services, or product surfaces with `private: true` in their `package.json` so they cannot be accidentally published. The `directory-bridge` Rust crate is source-only, its WASM build artifacts ship inside `@atrib/directory` (see [`packages/directory-bridge/README.md`](packages/directory-bridge/README.md) for the build procedure).
+Public packages are intended for npm publication. Private workspace packages and services (`log-dev`, `integration`, `cloudflare-live-proof`, `cloudflare-live-client-proof`, `cloudflare-approval-trace`, `cloudflare-oauth-evidence-infra`, `log-node`, `graph-node`, `directory-node`, `archive-node`, `dashboard`) are fixtures, proof harnesses, deployed services, examples, or product surfaces with `private: true` in their `package.json` so they cannot be accidentally published. The `directory-bridge` Rust crate is source-only, its WASM build artifacts ship inside `@atrib/directory` (see [`packages/directory-bridge/README.md`](packages/directory-bridge/README.md) for the build procedure).
 
 ## Hub doc
 
@@ -187,14 +188,14 @@ Read `DESIGN.md` before making visual, UI writing, explorer, website, share-imag
 
 ### Monorepo
 
-This is a TypeScript monorepo with **twenty-five workspace packages**:
+This is a TypeScript monorepo with **twenty-six workspace packages**:
 
 - **Eight public SDK and integration packages** (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`, `@atrib/cli`, `@atrib/mcp-wrap`, `@atrib/directory`, `@atrib/openinference`, `@atrib/memory-tool`)
 - **Seven cognitive-primitive MCP servers** (`@atrib/emit`, `@atrib/annotate`, `@atrib/revise`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`, `@atrib/verify-mcp`) - published to npm with binaries
 - **Two private test/example packages** (`@atrib/log-dev`, `@atrib/integration`)
 - **Four private deployable-service packages** (`@atrib/log-node`, `@atrib/graph-node`, `@atrib/directory-node`, `@atrib/archive-node`)
 - **One private product-surface package** (`@atrib/dashboard`)
-- **Three private Cloudflare example packages** (`@atrib/cloudflare-live-proof`, `@atrib/cloudflare-live-client-proof`, `@atrib/cloudflare-approval-trace`)
+- **Four private Cloudflare example packages** (`@atrib/cloudflare-live-proof`, `@atrib/cloudflare-live-client-proof`, `@atrib/cloudflare-approval-trace`, `@atrib/cloudflare-oauth-evidence-infra`)
 
 Plus a Rust crate (`atrib-directory-bridge`, source-only; built artifacts ship inside `@atrib/directory`). Uses pnpm workspaces and turborepo for the TypeScript builds; the Rust bridge is built once via `wasm-pack` and the resulting WASM artifacts are checked into `packages/directory/wasm/`. Four deployable services not on npm: `services/log-node`, `services/graph-node`, `services/directory-node`, `services/archive-node`.
 

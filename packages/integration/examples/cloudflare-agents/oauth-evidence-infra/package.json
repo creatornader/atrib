@@ -1,0 +1,23 @@
+{
+  "name": "@atrib/cloudflare-oauth-evidence-infra",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker and Durable Object reference for atrib OAuth evidence infrastructure.",
+  "scripts": {
+    "build": "pnpm --filter @atrib/verify... build && tsc --noEmit",
+    "dev": "wrangler dev --config wrangler.jsonc",
+    "deploy": "wrangler deploy --config wrangler.jsonc",
+    "test": "pnpm --filter @atrib/verify... build && vitest run",
+    "typecheck": "pnpm --filter @atrib/verify... build && tsc --noEmit"
+  },
+  "devDependencies": {
+    "@atrib/verify": "workspace:*",
+    "@cloudflare/vitest-pool-workers": "^0.16.10",
+    "@cloudflare/workers-types": "^4.20260601.1",
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8",
+    "wrangler": "^4.95.0"
+  }
+}

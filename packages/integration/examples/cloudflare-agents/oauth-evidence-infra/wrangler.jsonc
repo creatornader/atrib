@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "atrib-cloudflare-oauth-evidence-infra",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DPOP_REPLAY_CACHE",
+        "class_name": "DpopReplayCacheDurableObject",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DpopReplayCacheDurableObject"],
+    },
+  ],
+  "vars": {
+    "OAUTH_INTROSPECTION_AUTH_MODE": "basic",
+  },
+  "secrets": {
+    "required": [
+      "DPOP_REPLAY_CACHE_BEARER_TOKEN",
+      "INTROSPECTION_PROXY_BEARER_TOKEN",
+      "OAUTH_INTROSPECTION_ENDPOINT",
+      "OAUTH_INTROSPECTION_CLIENT_ID",
+      "OAUTH_INTROSPECTION_CLIENT_SECRET",
+    ],
+  },
+}

@@ -232,7 +232,7 @@ Checks performed when evidence is present:
 - Optional `client_id`, subject, actor subject, and `cnf.jkt` checks.
 - Optional DPoP proof checks for `htm`, `htu`, `ath`, `jti`, `iat`, nonce when supplied, and `cnf.jkt` binding.
 
-The default signature policy is `require`. Missing trusted keys or unverified decoded claims make the evidence block invalid. Use `signaturePolicy: "best-effort"` only for advisory triage. DPoP replay state stays caller-owned: pass `seenJtis` for one-process checks, `MemoryDpopReplayCache` for one-process services, or `createFetchDpopReplayCache()` when a deployment exposes a shared atomic replay-cache endpoint.
+The default signature policy is `require`. Missing trusted keys or unverified decoded claims make the evidence block invalid. Use `signaturePolicy: "best-effort"` only for advisory triage. DPoP replay state stays caller-owned: pass `seenJtis` for one-process checks, `MemoryDpopReplayCache` for one-process services, or `createFetchDpopReplayCache()` when a deployment exposes a shared atomic replay-cache endpoint. A Cloudflare Worker and Durable Object reference for the HTTP replay-cache endpoint and host-owned introspection proxy lives at [`packages/integration/examples/cloudflare-agents/oauth-evidence-infra/`](https://github.com/creatornader/atrib/blob/main/packages/integration/examples/cloudflare-agents/oauth-evidence-infra/).
 
 ```typescript
 import { createFetchDpopReplayCache, verifyRecord } from '@atrib/verify'
