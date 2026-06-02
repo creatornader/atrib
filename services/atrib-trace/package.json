@@ -1,6 +1,6 @@
 {
   "name": "@atrib/trace",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "description": "MCP server for atrib. Walks informed_by chains backward from a record_hash to surface the reasoning chain that produced it.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
