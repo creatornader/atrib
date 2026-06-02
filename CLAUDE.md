@@ -60,6 +60,7 @@ atrib/
         vercel-ai-sdk/         # createMCPClient + AI Gateway example
         langchain-js/          # MultiServerMCPClient + loadMcpTools example
         langgraph-store/       # LangGraph JS BaseStore memory proof with hash-only atrib records.
+        llamaindex-memory/     # LlamaIndex.TS Memory proof with hash-only atrib records.
         graphiti/              # Graphiti MCP-shaped add/search/get episodes boundary proof through @atrib/mcp-wrap.
         signer-proxy/          # D102 sandboxed-execution signer proxy example. Sandbox requests signatures, host signer keeps the key outside the sandbox.
   policies/                     # Attribution policy templates and guide (6 templates + README)

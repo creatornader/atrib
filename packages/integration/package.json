@@ -27,6 +27,7 @@
     "mem0-oss-full-cycle-smoke": "tsx examples/mem0/mem0-oss-full-cycle-smoke.ts",
     "mem0-client-smoke": "tsx examples/mem0/mem0-client-smoke.ts",
     "langgraph-store-smoke": "tsx examples/langgraph-store/langgraph-store-smoke.ts",
+    "llamaindex-memory-smoke": "tsx examples/llamaindex-memory/llamaindex-memory-smoke.ts",
     "graphiti-mcp-smoke": "pnpm --filter @atrib/mcp-wrap build && tsx examples/graphiti/graphiti-mcp-smoke.ts",
     "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts",
     "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts"
@@ -61,6 +62,7 @@
     "@types/node": "^25.9.1",
     "ai": "^6.0.194",
     "jose": "6.2.3",
+    "llamaindex": "0.12.1",
     "mem0ai": "3.0.6",
     "tslib": "^2.8.1",
     "typescript": "^6.0.3",
