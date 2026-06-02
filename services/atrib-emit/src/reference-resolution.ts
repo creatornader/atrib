@@ -45,9 +45,8 @@ export async function filterResolvableInformedBy(
       continue
     }
     if (resolution === 'unknown') {
-      kept.push(ref)
       options.warnings.push(
-        `could not validate informed_by reference ${shortHash(ref)}; kept it to preserve degradation contract`,
+        `dropped unvalidated informed_by reference ${shortHash(ref)}; validation unavailable`,
       )
       continue
     }
