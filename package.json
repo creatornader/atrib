@@ -46,9 +46,30 @@
       "fast-uri@<3.1.2": "^3.1.2",
       "hono@<4.12.18": "^4.12.18",
       "qs@<6.15.2": "^6.15.2",
+      "uuid@<11.1.1": "11.1.1",
       "@cloudflare/vitest-pool-workers>zod": "^3.25.76",
       "vite": "8.0.15",
       "zod": "^4.4.3"
+    },
+    "packageExtensions": {
+      "mem0ai@3.0.6": {
+        "peerDependenciesMeta": {
+          "@anthropic-ai/sdk": {
+            "optional": true
+          },
+          "pg": {
+            "optional": true
+          },
+          "redis": {
+            "optional": true
+          }
+        }
+      }
+    },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "pg": ">=8.11.3 <9"
+      }
     }
   }
 }
