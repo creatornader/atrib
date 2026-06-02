@@ -22,13 +22,13 @@
   },
   "devDependencies": {
     "@atrib/graph-node": "workspace:*",
-    "@cloudflare/vitest-pool-workers": "^0.16.10",
+    "@cloudflare/vitest-pool-workers": "^0.16.11",
     "@cloudflare/workers-types": "^4.20260601.1",
     "@playwright/test": "^1.60.0",
     "@types/node": "^25.9.1",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8",
-    "wrangler": "^4.95.0"
+    "wrangler": "^4.96.0"
   }
 }

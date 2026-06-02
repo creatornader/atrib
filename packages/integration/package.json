@@ -52,7 +52,7 @@
     "@opentelemetry/sdk-trace-base": "^2.7.1",
     "@opentelemetry/semantic-conventions": "^1.41.1",
     "@types/node": "^25.9.1",
-    "ai": "^6.0.193",
+    "ai": "^6.0.194",
     "jose": "6.2.3",
     "mem0ai": "3.0.6",
     "tslib": "^2.8.1",
