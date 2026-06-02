@@ -61,6 +61,7 @@ atrib/
         langchain-js/          # MultiServerMCPClient + loadMcpTools example
         langgraph-store/       # LangGraph JS BaseStore memory proof with hash-only atrib records.
         llamaindex-memory/     # LlamaIndex.TS Memory proof with hash-only atrib records.
+        a2a-handoff/           # Official A2A SDK JSON-RPC handoff proof with verifier-gated informed_by follow-up.
         graphiti/              # Graphiti MCP-shaped add/search/get episodes boundary proof through @atrib/mcp-wrap, plus optional real Graphiti core + Ollama proof.
         signer-proxy/          # D102 sandboxed-execution signer proxy example. Sandbox requests signatures, host signer keeps the key outside the sandbox.
   policies/                     # Attribution policy templates and guide (6 templates + README)
