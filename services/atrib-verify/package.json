@@ -1,6 +1,6 @@
 {
   "name": "@atrib/verify-mcp",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "MCP server for atrib. Verifies counterparty handoff evidence before an agent links follow-up work through informed_by.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
