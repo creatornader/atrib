@@ -60,6 +60,20 @@ platform-client `MemoryClient.add()` and `MemoryClient.search()` boundaries,
 while preserving the client return values. It does not need a Mem0 API key and
 does not call the hosted Mem0 service.
 
+To smoke the Python OSS `Memory` shape without an external model provider, run:
+
+```bash
+pnpm --filter @atrib/integration mem0-python-oss-smoke
+```
+
+That smoke runs Python `mem0ai==2.0.4` through `uv`, starts a local
+OpenAI-compatible provider, calls the real Python `Memory.add()` and
+`Memory.search()` paths against a local Qdrant store, then signs host-side
+atrib records for `mem0.python.memory.add` and `mem0.python.memory.search`.
+It proves the Python OSS boundary can be recorded as hash-only atrib history
+while the raw memory payload stays in local sidecars. It does not need an
+OpenAI key, Mem0 API key, vector database server, or hosted service.
+
 ## Use it with mem0
 
 The same wrapper targets the public `add` and `search` shape:
@@ -93,6 +107,8 @@ const results = await memory.search('What do you know about me?', {
   records.
 - The real `mem0ai` platform client can call a Mem0-shaped add/search API while
   atrib signs the same hash-only boundary and preserves return values.
+- The real Python `mem0ai` OSS `Memory` class can complete add/search through a
+  local provider while host-side atrib signing records hash-only operations.
 - Signing errors never break the underlying memory call.
 - Public signed records disclose `mem0.memory.add` / `mem0.memory.search`,
   `args_hash`, and `result_hash`, not private memory bodies.
@@ -104,8 +120,10 @@ const results = await memory.search('What do you know about me?', {
 This is a TypeScript proof, not a Python SDK release and not a production hosted
 Mem0 integration. The compatibility smoke reaches the real `mem0ai/oss` add
 path, the full-cycle smoke proves a successful local-provider add/search path,
-and the client smoke reaches the real `MemoryClient` request shape against a
-local Mem0-shaped API. The proof still does not cover mem0's Python package, a
-real hosted Mem0 account, or a real model provider. A Python `atrib-py` slice,
-real hosted-account proof, or explicit approval for TypeScript-first framing
-should come before asking mem0 maintainers to review it as an official recipe.
+the client smoke reaches the real `MemoryClient` request shape against a local
+Mem0-shaped API, and the Python smoke reaches Python `mem0.Memory.add()` /
+`mem0.Memory.search()` with host-side signing. The proof still does not cover a
+Python atrib package release, a real hosted Mem0 account, or a real model
+provider. A Python SDK slice, real hosted-account proof, or explicit approval
+for TypeScript-plus-Python-OSS framing should come before asking mem0
+maintainers to review it as an official recipe.
