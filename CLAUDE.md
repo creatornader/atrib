@@ -59,6 +59,7 @@ atrib/
           oauth-evidence-infra/ # Cloudflare Worker + Durable Object reference for DPoP replay cache and OAuth introspection evidence.
         vercel-ai-sdk/         # createMCPClient + AI Gateway example
         langchain-js/          # MultiServerMCPClient + loadMcpTools example
+        graphiti/              # Graphiti MCP-shaped add/search/get episodes boundary proof through @atrib/mcp-wrap.
         signer-proxy/          # D102 sandboxed-execution signer proxy example. Sandbox requests signatures, host signer keeps the key outside the sandbox.
   policies/                     # Attribution policy templates and guide (6 templates + README)
   skills/

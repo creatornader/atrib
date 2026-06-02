@@ -26,6 +26,7 @@
     "mem0-oss-compat-smoke": "tsx examples/mem0/mem0-oss-compat-smoke.ts",
     "mem0-oss-full-cycle-smoke": "tsx examples/mem0/mem0-oss-full-cycle-smoke.ts",
     "mem0-client-smoke": "tsx examples/mem0/mem0-client-smoke.ts",
+    "graphiti-mcp-smoke": "pnpm --filter @atrib/mcp-wrap build && tsx examples/graphiti/graphiti-mcp-smoke.ts",
     "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts",
     "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts"
   },
@@ -37,6 +38,7 @@
     "@atrib/log-dev": "workspace:*",
     "@atrib/log-node": "workspace:*",
     "@atrib/mcp": "workspace:*",
+    "@atrib/mcp-wrap": "workspace:*",
     "@atrib/verify": "workspace:*",
     "canonicalize": "^3.0.0"
   },
