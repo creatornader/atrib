@@ -152,6 +152,9 @@ importers:
       '@atrib/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@atrib/mcp-wrap':
+        specifier: workspace:*
+        version: link:../mcp-wrap
       '@atrib/verify':
         specifier: workspace:*
         version: link:../verify
