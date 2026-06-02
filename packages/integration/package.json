@@ -25,6 +25,7 @@
     "mem0-wrapper-demo": "tsx examples/mem0/mem0-wrapper-demo.ts",
     "mem0-oss-compat-smoke": "tsx examples/mem0/mem0-oss-compat-smoke.ts",
     "mem0-oss-full-cycle-smoke": "tsx examples/mem0/mem0-oss-full-cycle-smoke.ts",
+    "mem0-client-smoke": "tsx examples/mem0/mem0-client-smoke.ts",
     "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts",
     "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts"
   },

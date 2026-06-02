@@ -47,6 +47,19 @@ records, verifies those records, preserves mem0's normal result values, and
 keeps private message text out of public records. It does not need an OpenAI
 key, Mem0 API key, vector database, or hosted service.
 
+To smoke the hosted-client shape without hitting Mem0 production, run:
+
+```bash
+pnpm --filter @atrib/integration mem0-client-smoke
+```
+
+That smoke imports the real `MemoryClient` from `mem0ai`, starts a local
+Mem0-shaped API for `ping`, `add`, and `search`, then calls the client through
+`attributeMem0Memory()`. It proves the same hash-only signing posture works for
+platform-client `MemoryClient.add()` and `MemoryClient.search()` boundaries,
+while preserving the client return values. It does not need a Mem0 API key and
+does not call the hosted Mem0 service.
+
 ## Use it with mem0
 
 The same wrapper targets the public `add` and `search` shape:
@@ -78,6 +91,8 @@ const results = await memory.search('What do you know about me?', {
 - The real `mem0ai/oss` package can complete an add/search cycle through a
   local OpenAI-compatible provider while atrib signs the public hash-only
   records.
+- The real `mem0ai` platform client can call a Mem0-shaped add/search API while
+  atrib signs the same hash-only boundary and preserves return values.
 - Signing errors never break the underlying memory call.
 - Public signed records disclose `mem0.memory.add` / `mem0.memory.search`,
   `args_hash`, and `result_hash`, not private memory bodies.
@@ -86,10 +101,11 @@ const results = await memory.search('What do you know about me?', {
 
 ## What it does not prove yet
 
-This is a Node boundary proof, not a Python SDK release and not a mem0-hosted
-integration. The compatibility smoke reaches the real `mem0ai/oss` add path,
-and the full-cycle smoke proves a successful local-provider add/search path.
-The proof still does not cover mem0's Python package, the hosted Mem0 API, or a
-real model provider. A Python `atrib-py` slice or explicit approval for
-Node-first framing should come before asking mem0 maintainers to review it as an
-official recipe.
+This is a TypeScript proof, not a Python SDK release and not a production hosted
+Mem0 integration. The compatibility smoke reaches the real `mem0ai/oss` add
+path, the full-cycle smoke proves a successful local-provider add/search path,
+and the client smoke reaches the real `MemoryClient` request shape against a
+local Mem0-shaped API. The proof still does not cover mem0's Python package, a
+real hosted Mem0 account, or a real model provider. A Python `atrib-py` slice,
+real hosted-account proof, or explicit approval for TypeScript-first framing
+should come before asking mem0 maintainers to review it as an official recipe.
