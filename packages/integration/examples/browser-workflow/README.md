@@ -15,6 +15,7 @@ the page snapshot, selector, form value, and result material.
 
 ```bash
 pnpm --filter @atrib/integration browser-workflow-receipt-smoke
+pnpm --filter @atrib/integration browser-use-workflow-receipt-smoke
 ```
 
 ## What It Proves
@@ -27,11 +28,18 @@ pnpm --filter @atrib/integration browser-workflow-receipt-smoke
 - Local sidecars keep the inspectable action details needed for debugging,
   review, and replay.
 - The primary action path still returns the normal workflow result.
+- The `browser-use-workflow-receipt-smoke` command runs the same receipt shape
+  through a real `browser-use` `BrowserSession`, using browser-use navigation,
+  state capture, coordinate clicks, and keyboard input on a local page.
 
 ## What It Does Not Prove Yet
 
-This is a browser-shaped local receipt harness, not live Playwright,
-Browserbase, Browser Use, Computer Use, OpenHands, or Operator automation. The
-next proof should run the same receipt shape against a real browser automation
-host and pair the record hashes with screenshots, DOM excerpts, or action
-replay artifacts.
+The deterministic smoke is still a browser-shaped local receipt harness, not
+live Playwright, Browserbase, Browser Use, Computer Use, OpenHands, or Operator
+automation.
+
+The browser-use smoke closes the real browser-use host gap for a direct
+`BrowserSession`, but it is not an autonomous LLM-driven `Agent` run, a Browser
+Use cloud task, Browserbase, Stagehand, OpenHands, OpenAI Computer Use,
+Anthropic computer use, or Operator automation. A later proof can pair the same
+record hashes with screenshots, DOM excerpts, or action replay artifacts.

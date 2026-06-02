@@ -7,6 +7,7 @@ import { canonicalRecord, genesisChainRoot, hexEncode, sha256, verifyRecord } fr
 import { describe, expect, it } from 'vitest'
 import {
   BrowserWorkflowReceiptRecorder,
+  runBrowserUseWorkflowReceiptSmoke,
   runBrowserWorkflowReceiptSmoke,
 } from '../src/browser-workflow-receipt.js'
 
@@ -53,6 +54,47 @@ describe('browser workflow receipt example', () => {
     })
     expect(result.caveats.join(' ')).toContain('not Playwright')
   })
+
+  it('signs a real browser-use BrowserSession workflow through the runnable smoke', async () => {
+    const { stdout } = await execFileAsync(
+      tsxBin,
+      ['examples/browser-workflow/browser-use-workflow-receipt-smoke.ts'],
+      {
+        cwd: process.cwd(),
+        timeout: 30000,
+        maxBuffer: 1024 * 1024,
+      },
+    )
+    const result = JSON.parse(stdout.trim()) as Awaited<
+      ReturnType<typeof runBrowserUseWorkflowReceiptSmoke>
+    >
+
+    expect(result.ok).toBe(true)
+    expect(result.host).toMatchObject({
+      framework: 'browser-use',
+      package_version: '0.7.1',
+      page_title: 'Browser Use vendor approval',
+      page_url: 'about:blank',
+    })
+    expect(result.signed_records).toBe(4)
+    expect(result.operations).toEqual([
+      'browser.action.observe',
+      'browser.action.click',
+      'browser.action.fill',
+      'browser.action.submit',
+    ])
+    expect(result.record_hashes).toHaveLength(4)
+    expect(result.final_receipt).toMatchObject({
+      status: 'submitted',
+      confirmation_id: 'browser-use-workflow-receipt-001',
+    })
+    expect(result.privacy).toEqual({
+      public_records_hash_only: true,
+      local_sidecars_keep_payloads: true,
+    })
+    expect(result.caveats.join(' ')).toContain('not a live Browser Use cloud task')
+    expect(stdout).not.toContain('private browser-use note')
+  }, 30000)
 
   it('chains records and keeps form content out of public records', async () => {
     const secret = 'private browser note'
