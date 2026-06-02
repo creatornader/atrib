@@ -28,6 +28,7 @@
     "mem0-client-smoke": "tsx examples/mem0/mem0-client-smoke.ts",
     "langgraph-store-smoke": "tsx examples/langgraph-store/langgraph-store-smoke.ts",
     "llamaindex-memory-smoke": "tsx examples/llamaindex-memory/llamaindex-memory-smoke.ts",
+    "evidence-packet-eval": "tsx examples/evidence-packet-eval/evidence-packet-eval.ts",
     "graphiti-mcp-smoke": "pnpm --filter @atrib/mcp-wrap build && tsx examples/graphiti/graphiti-mcp-smoke.ts",
     "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts",
     "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts"
