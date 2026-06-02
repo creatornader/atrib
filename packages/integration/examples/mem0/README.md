@@ -33,6 +33,20 @@ error, keeps private message text out of the public record, and stores the raw
 request shape only in the local sidecar. It does not need an OpenAI key, Mem0
 API key, vector database, or hosted service.
 
+To smoke a successful real-package add/search cycle, run:
+
+```bash
+pnpm --filter @atrib/integration mem0-oss-full-cycle-smoke
+```
+
+That smoke imports `Memory` from `mem0ai/oss`, starts a local
+OpenAI-compatible provider, lets mem0's extraction branch write to the in-memory
+vector store, then searches the stored memory through `attributeMem0Memory()`.
+It proves the wrapper signs both `mem0.memory.add` and `mem0.memory.search`
+records, verifies those records, preserves mem0's normal result values, and
+keeps private message text out of public records. It does not need an OpenAI
+key, Mem0 API key, vector database, or hosted service.
+
 ## Use it with mem0
 
 The same wrapper targets the public `add` and `search` shape:
@@ -61,6 +75,9 @@ const results = await memory.search('What do you know about me?', {
 - `add()` and `search()` return the same values as the wrapped memory object.
 - The real `mem0ai/oss` package can run through the signed `add()` boundary
   without changing mem0's thrown error.
+- The real `mem0ai/oss` package can complete an add/search cycle through a
+  local OpenAI-compatible provider while atrib signs the public hash-only
+  records.
 - Signing errors never break the underlying memory call.
 - Public signed records disclose `mem0.memory.add` / `mem0.memory.search`,
   `args_hash`, and `result_hash`, not private memory bodies.
@@ -71,6 +88,8 @@ const results = await memory.search('What do you know about me?', {
 
 This is a Node boundary proof, not a Python SDK release and not a mem0-hosted
 integration. The compatibility smoke reaches the real `mem0ai/oss` add path,
-but it stops at the local provider denial. A successful extraction and search
-cycle, a Python `atrib-py` slice, or both should come before asking mem0
-maintainers to review it as an official recipe.
+and the full-cycle smoke proves a successful local-provider add/search path.
+The proof still does not cover mem0's Python package, the hosted Mem0 API, or a
+real model provider. A Python `atrib-py` slice or explicit approval for
+Node-first framing should come before asking mem0 maintainers to review it as an
+official recipe.
