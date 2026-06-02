@@ -29,6 +29,7 @@
     "langgraph-store-smoke": "tsx examples/langgraph-store/langgraph-store-smoke.ts",
     "llamaindex-memory-smoke": "tsx examples/llamaindex-memory/llamaindex-memory-smoke.ts",
     "evidence-packet-eval": "tsx examples/evidence-packet-eval/evidence-packet-eval.ts",
+    "evidence-packet-inspect": "uv run --quiet --with inspect-ai python examples/evidence-packet-eval/inspect_native_task.py",
     "a2a-handoff-proof": "tsx examples/a2a-handoff/a2a-handoff-proof.ts",
     "google-adk-plugin-smoke": "tsx examples/google-adk/google-adk-plugin-smoke.ts",
     "graphiti-mcp-smoke": "pnpm --filter @atrib/mcp-wrap build && tsx examples/graphiti/graphiti-mcp-smoke.ts",
