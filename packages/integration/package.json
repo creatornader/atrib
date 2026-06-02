@@ -33,6 +33,7 @@
     "evidence-packet-inspect": "uv run --quiet --with inspect-ai python examples/evidence-packet-eval/inspect_native_task.py",
     "a2a-handoff-proof": "tsx examples/a2a-handoff/a2a-handoff-proof.ts",
     "google-adk-plugin-smoke": "tsx examples/google-adk/google-adk-plugin-smoke.ts",
+    "browser-workflow-receipt-smoke": "tsx examples/browser-workflow/browser-workflow-receipt-smoke.ts",
     "graphiti-mcp-smoke": "pnpm --filter @atrib/mcp-wrap build && tsx examples/graphiti/graphiti-mcp-smoke.ts",
     "graphiti-core-ollama-smoke": "tsx examples/graphiti/graphiti-core-ollama-smoke.ts",
     "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts",
