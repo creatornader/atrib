@@ -322,7 +322,9 @@ describe('handleEmit validation paths', () => {
     })
 
     expect(result.record_hash).toBe('sha256:unknown')
-    expect(result.warnings.some((w) => w.includes('provenance_token is genesis-record-only'))).toBe(true)
+    expect(result.warnings.some((w) => w.includes('provenance_token is genesis-record-only'))).toBe(
+      true,
+    )
     await queue.flush()
   })
 
@@ -358,7 +360,9 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (D104)', () => {
     // computed locally from the signed bytes before submission.
     let submitted: AtribRecord | undefined
     const queue = {
-      submit: (record: AtribRecord) => { submitted = record },
+      submit: (record: AtribRecord) => {
+        submitted = record
+      },
       flush: async () => {},
       getProof: async () => null,
     } as unknown as ReturnType<typeof createSubmissionQueue>
@@ -367,6 +371,7 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (D104)', () => {
         event_type: 'https://atrib.dev/v1/types/observation',
         content: { what: 'env-seeded test' },
         context_id: 'c'.repeat(32),
+        allow_unresolved_informed_by: true,
         ...(callerInformedBy ? { informed_by: callerInformedBy } : {}),
       },
       key: { privateKey: seed, source: 'env' },
@@ -417,6 +422,39 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (D104)', () => {
     const { result, submitted } = await emitWithEnv(undefined, [ANOTHER_VALID])
     expect(result.record_hash).not.toBe('sha256:unknown')
     expect(submittedInformedBy(submitted)).toEqual([ANOTHER_VALID])
+  })
+
+  it('drops unresolved informed_by refs before signing by default', async () => {
+    delete process.env['ATRIB_PARENT_RECORD_HASH']
+    const seed = await freshKey()
+    const known = 'sha256:' + 'c'.repeat(64)
+    const missing = 'sha256:' + 'd'.repeat(64)
+    let submitted: AtribRecord | undefined
+    const queue = {
+      submit: (record: AtribRecord) => {
+        submitted = record
+      },
+      flush: async () => {},
+      getProof: async () => null,
+    } as unknown as ReturnType<typeof createSubmissionQueue>
+
+    const result = await handleEmit({
+      input: {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'filtered informed_by test' },
+        context_id: 'c'.repeat(32),
+        informed_by: [known, missing],
+      },
+      key: { privateKey: seed, source: 'env' },
+      queue,
+      recordReferenceResolver: async (ref) => (ref === known ? 'found' : 'not-found'),
+    })
+
+    expect(result.record_hash).not.toBe('sha256:unknown')
+    expect(
+      result.warnings.some((w) => w.includes('dropped unresolved informed_by reference')),
+    ).toBe(true)
+    expect(submittedInformedBy(submitted)).toEqual([known])
   })
 })
 
@@ -532,7 +570,9 @@ describe('producer sidecar routing (substrate-health by-producer aggregation)', 
     const { readFileSync } = await import('node:fs')
     // Read the LAST JSONL line (each emit appends; tests that emit twice
     // care about the most recent record only).
-    const lines = readFileSync(mirrorFile, 'utf8').split('\n').filter((l) => l.length > 0)
+    const lines = readFileSync(mirrorFile, 'utf8')
+      .split('\n')
+      .filter((l) => l.length > 0)
     return JSON.parse(lines[lines.length - 1] as string) as Record<string, unknown>
   }
 

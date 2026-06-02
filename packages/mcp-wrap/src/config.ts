@@ -121,9 +121,9 @@ export const WrapConfigSchema = z.object({
   autoChainFallback: z.enum(['stable-process', 'fresh']).default('stable-process'),
 
   /**
-   * Broadly scan tool-call params for sha256 record refs. Defaults false so
-   * wrappers do not turn unrelated commitments into provenance claims. Prefer
-   * per-tool `informedByPaths` when a service has structured references.
+   * Extract sha256 record refs from structured reference fields. Defaults
+   * false so wrappers do not turn unrelated hashes into provenance claims.
+   * Prefer per-tool `informedByPaths` when a service has exact paths.
    */
   autoDetectInformedByFromArgs: z.boolean().default(false),
 

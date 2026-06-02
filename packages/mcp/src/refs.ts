@@ -20,6 +20,32 @@ export const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
 /** Global (unanchored) regex used for scanning prose / nested values. */
 export const SHA256_REF_GLOBAL_PATTERN = /sha256:[0-9a-f]{64}/g
 
+/**
+ * Field names that may carry record references for the middleware's
+ * auto-detect path.
+ *
+ * `informed_by` is intentionally not included. For wrapped tools, that field
+ * usually belongs to the upstream tool's own envelope. Treating it as the
+ * wrapper record's claim double-counts edges and can promote unresolved refs
+ * before the upstream tool has validated them. Wrappers that want that field
+ * to become an edge should use an explicit informedBy callback or
+ * @atrib/mcp-wrap informedByPaths.
+ */
+const AUTO_DETECT_RECORD_REF_KEYS = new Set([
+  'record_hash',
+  'record_hashes',
+  'accepted_record_hashes',
+  'required_record_hashes',
+  'source_record_hash',
+  'target_record_hash',
+  'from_record_hash',
+  'to_record_hash',
+  'start_record_hash',
+  'parent_record_hash',
+  'annotates',
+  'revises',
+])
+
 /** Env var used by parent producers to thread a parent record into child records. */
 export const ATRIB_PARENT_RECORD_HASH_ENV = 'ATRIB_PARENT_RECORD_HASH'
 
@@ -34,9 +60,7 @@ export function parentRecordHashFromEnv(
   env: Record<string, string | undefined> = process.env,
 ): string | undefined {
   const value = env[ATRIB_PARENT_RECORD_HASH_ENV]
-  return typeof value === 'string' && SHA256_REF_PATTERN.test(value)
-    ? value
-    : undefined
+  return typeof value === 'string' && SHA256_REF_PATTERN.test(value) ? value : undefined
 }
 
 /**
@@ -74,5 +98,50 @@ export function extractRecordHashes(value: unknown): Set<string> {
     }
   }
   walk(value, true)
+  return found
+}
+
+/**
+ * Extract record-reference candidates from structured reference fields only.
+ *
+ * This is the safe input for autoDetectInformedByFromArgs. It does not scan
+ * arbitrary prose, content payloads, args_hash/result_hash/content_id
+ * commitments, or nested informed_by envelopes. Those values may be
+ * meaningful evidence, but they are not automatically graph edges.
+ */
+export function extractRecordReferenceCandidates(value: unknown): Set<string> {
+  const found = new Set<string>()
+
+  function collect(v: unknown) {
+    if (v === null || v === undefined) return
+    if (typeof v === 'string') {
+      const matches = v.match(SHA256_REF_GLOBAL_PATTERN)
+      if (matches) for (const m of matches) found.add(m)
+      return
+    }
+    if (Array.isArray(v)) {
+      for (const item of v) collect(item)
+      return
+    }
+    if (typeof v === 'object') {
+      for (const item of Object.values(v as Record<string, unknown>)) collect(item)
+    }
+  }
+
+  function walk(v: unknown) {
+    if (v === null || v === undefined) return
+    if (Array.isArray(v)) {
+      for (const item of v) walk(item)
+      return
+    }
+    if (typeof v !== 'object') return
+
+    for (const [key, child] of Object.entries(v as Record<string, unknown>)) {
+      if (AUTO_DETECT_RECORD_REF_KEYS.has(key)) collect(child)
+      else walk(child)
+    }
+  }
+
+  walk(value)
   return found
 }
