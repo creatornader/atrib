@@ -26,6 +26,7 @@
     "mem0-oss-compat-smoke": "tsx examples/mem0/mem0-oss-compat-smoke.ts",
     "mem0-oss-full-cycle-smoke": "tsx examples/mem0/mem0-oss-full-cycle-smoke.ts",
     "mem0-client-smoke": "tsx examples/mem0/mem0-client-smoke.ts",
+    "langgraph-store-smoke": "tsx examples/langgraph-store/langgraph-store-smoke.ts",
     "graphiti-mcp-smoke": "pnpm --filter @atrib/mcp-wrap build && tsx examples/graphiti/graphiti-mcp-smoke.ts",
     "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts",
     "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts"
@@ -47,6 +48,8 @@
     "@arizeai/openinference-semantic-conventions": "^2.5.0",
     "@arizeai/openinference-vercel": "^2.7.7",
     "@atrib/openinference": "workspace:^",
+    "@langchain/core": "1.1.48",
+    "@langchain/langgraph": "1.3.3",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
