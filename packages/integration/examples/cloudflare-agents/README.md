@@ -2,9 +2,9 @@
 
 This example shows how to add atrib attribution to a Cloudflare-deployed application using the [`agents`](https://www.npmjs.com/package/agents) package. Cloudflare exposes two distinct MCP integration surfaces, and atrib has a different (one-line) integration story for each.
 
-| Surface                                | What it does                                                                                         | atrib integration                                                                                                                                                                     |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`McpAgent`** (server-side)           | Builds an MCP server that runs as a Durable Object on Cloudflare. You define tools on `this.server`. | One-line `atrib(this.server, options)` from `@atrib/mcp/worker` in Workers. Same primitive as `@atrib/mcp` in Node-like hosts.                                                        |
+| Surface                                | What it does                                                                                         | atrib integration                                                                                                                                                                                                                                                       |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`McpAgent`** (server-side)           | Builds an MCP server that runs as a Durable Object on Cloudflare. You define tools on `this.server`. | One-line `atrib(this.server, options)` from `@atrib/mcp/worker` in Workers. Same primitive as `@atrib/mcp` in Node-like hosts.                                                                                                                                          |
 | **`Agent.addMcpServer`** (client-side) | Your Agent connects out to one or more upstream MCP servers via HTTP.                                | One-line `attributeCloudflareAgentMcp(this, { interceptor })` from `@atrib/agent`. Wraps each connection's underlying `Client` so calls carry atrib/W3C context, consume upstream tokens, record gap nodes, and emit fallback transaction records when commerce closes. |
 
 Both integrations are zero-deploy: no extra Worker, no proxy hop, no architectural change to your app.
@@ -242,6 +242,30 @@ Run it with:
 
 ```text
 pnpm --filter @atrib/cloudflare-approval-trace proof:worker
+```
+
+### OAuth evidence infrastructure reference
+
+The reference at [`oauth-evidence-infra/`](oauth-evidence-infra/) is a Cloudflare
+Worker plus Durable Object for the host-owned OAuth evidence surfaces from
+[D111](../../../../DECISIONS.md#d111-host-owned-oauth-evidence-infrastructure):
+
+- `POST /v1/dpop/check` backs `createFetchDpopReplayCache()` with atomic shared
+  replay state.
+- `POST /v1/oauth/introspect` backs `introspectOAuthToken()` with a proxy that
+  keeps upstream OAuth secrets at the host boundary and strips token-shaped
+  fields before returning evidence.
+
+This is not a third Cloudflare Agent adapter. It is support infrastructure that
+Cloudflare-hosted MCP/OAuth deployments can run next to either surface when they
+need fleet-shared DPoP replay checks or controlled opaque-token introspection.
+It strengthens the Cloudflare authorization-evidence story without replacing
+the approval-trace demo.
+
+Run it with:
+
+```text
+pnpm --filter @atrib/cloudflare-oauth-evidence-infra test
 ```
 
 ### What if I need to support a stdio upstream from a Cloudflare Agent?

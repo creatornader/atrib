@@ -5379,7 +5379,7 @@ The missing piece is producer-side capture from already-validated MCP HTTP autho
 - atrib has a concrete second evidence adapter path with production retrieval and verifier plumbing, not just fixture code.
 - Hosts still own OAuth secrets, live introspection policy, replay-cache deployment, and archive opt-in policy.
 - The archive layer gives public inspection a way to show evidence without changing log entries or graph derivation.
-- A hosted Cloudflare Worker / Durable Object reference for replay-cache and introspection endpoints remains a useful follow-up example, not a missing protocol requirement.
+- A hosted Cloudflare Worker / Durable Object reference for replay-cache and introspection endpoints now lives at [`packages/integration/examples/cloudflare-agents/oauth-evidence-infra/`](packages/integration/examples/cloudflare-agents/oauth-evidence-infra/). It is an implementation example, not a protocol requirement.
 
 **Cross-references.**
 
@@ -5389,6 +5389,7 @@ The missing piece is producer-side capture from already-validated MCP HTTP autho
 - [`packages/verify/src/dpop-replay-cache.ts`](packages/verify/src/dpop-replay-cache.ts), replay-cache contract.
 - [`packages/verify/src/oauth-introspection.ts`](packages/verify/src/oauth-introspection.ts), host-owned introspection helper.
 - [`services/archive-node/`](services/archive-node/), production archive reference service.
+- [`packages/integration/examples/cloudflare-agents/oauth-evidence-infra/`](packages/integration/examples/cloudflare-agents/oauth-evidence-infra/), Cloudflare Worker and Durable Object reference for replay cache and introspection endpoints.
 - [`docs/concepts/12-delegation-and-capabilities.md`](docs/concepts/12-delegation-and-capabilities.md), capability and delegation boundary note.
 
 ## D112: Anthropic Memory Tool wrapper signs memory commands without owning storage

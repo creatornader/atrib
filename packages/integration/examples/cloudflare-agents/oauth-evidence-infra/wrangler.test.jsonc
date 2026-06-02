@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "atrib-cloudflare-oauth-evidence-infra-test",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DPOP_REPLAY_CACHE",
+        "class_name": "DpopReplayCacheDurableObject",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DpopReplayCacheDurableObject"],
+    },
+  ],
+  "vars": {
+    "DPOP_REPLAY_CACHE_BEARER_TOKEN": "replay-test-secret",
+    "INTROSPECTION_PROXY_BEARER_TOKEN": "introspection-proxy-test-secret",
+    "OAUTH_INTROSPECTION_ENDPOINT": "test-fixture",
+    "OAUTH_INTROSPECTION_AUTH_MODE": "basic",
+    "OAUTH_INTROSPECTION_CLIENT_ID": "introspection-client",
+    "OAUTH_INTROSPECTION_CLIENT_SECRET": "introspection-secret",
+    "EXPECTED_ISSUER": "https://issuer.example",
+    "EXPECTED_AUDIENCE": "mcp-client",
+    "EXPECTED_RESOURCE": "mcp://files.example",
+    "ENABLE_TEST_UPSTREAM": "1",
+  },
+}
