@@ -53,6 +53,7 @@ export {
   SHA256_REF_PATTERN,
   SHA256_REF_GLOBAL_PATTERN,
   extractRecordHashes,
+  extractRecordReferenceCandidates,
   parentRecordHashFromEnv,
 } from './refs.js'
 export { genesisChainRoot, chainRoot, resolveChainRoot } from './chain-root.js'

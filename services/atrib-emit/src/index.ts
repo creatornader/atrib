@@ -33,6 +33,7 @@ import {
   type SubmissionQueue,
 } from '@atrib/mcp'
 import { resolveKey, type ResolvedKey } from './keys.js'
+import { filterResolvableInformedBy, type RecordReferenceResolver } from './reference-resolution.js'
 import { buildAndSignEmitRecord } from './sign.js'
 import { mirrorRecord } from './storage.js'
 
@@ -55,72 +56,123 @@ const HEX_32_PATTERN = /^[0-9a-f]{32}$/
 const PROVENANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/
 
 const EmitInput = z.object({
-  event_type: z.string().min(1).max(256).describe(
-    "Event type URI per spec §1.2.4. Common normative values: " +
-    "'https://atrib.dev/v1/types/observation', '...annotation', '...revision'. " +
-    'Extension URIs in any namespace OK.',
-  ),
-  content: z.record(z.string(), z.unknown()).describe(
-    'Semantic content of the cognitive event. Shape varies per event_type. ' +
-    "For observation: { what: string, why_noted?: string, topics?: string[] }. " +
-    "For annotation: { annotates: 'sha256:...', importance: 'critical'|'high'|'medium'|'low'|'noise', summary: string, topics?: string[] }. " +
-    "For revision: { revises: 'sha256:...', prior_position: string, new_position: string, reason: string }.",
-  ),
-  context_id: z.string().regex(HEX_32_PATTERN).optional().describe(
-    '32-hex context_id. If omitted, a fresh genesis context_id is generated and the record is treated as a new chain.',
-  ),
-  informed_by: z.array(z.string().regex(SHA256_REF_PATTERN)).optional().describe(
-    "Array of 'sha256:<64-hex>' record_hashes that informed this event. " +
-    'Sorted lexicographically before signing per §1.2.5.',
-  ),
-  chain_root: z.string().regex(SHA256_REF_PATTERN).optional().describe(
-    "Caller-managed chain_root, the 'sha256:<64-hex>' hash of the immediately " +
-    'preceding record in this context_id. When supplied alongside context_id, ' +
-    'atrib-emit uses both verbatim instead of treating context_id as a fresh ' +
-    'genesis. Required when caller manages chain state across multiple emits ' +
-    "under one context_id (e.g. multi-record watcher pipelines). When omitted " +
-    'with context_id present, atrib-emit synthesizes the genesis chain_root ' +
-    'per spec §1.2.3. Without context_id, this field is meaningless and ' +
-    'returns a warnings-only response.',
-  ),
-  provenance_token: z.string().regex(PROVENANCE_TOKEN_PATTERN).optional().describe(
-    '22-char base64url cross-session causal anchor per spec §1.2.6 / D044. ' +
-    'Genesis-record-only: atrib-emit refuses to sign a record that carries ' +
-    'this field if its chain_root is not the genesis chain_root for the ' +
-    'context_id (per §5.8 graceful-degradation, this returns a warnings-only ' +
-    'response rather than a malformed record).',
-  ),
-  annotates: z.string().regex(SHA256_REF_PATTERN).optional().describe(
-    "'sha256:<64-hex>' record_hash this annotation describes per spec §1.2.7 / D058. " +
-    'REQUIRED when event_type is the annotation URI; FORBIDDEN on any other event_type. ' +
-    'atrib-emit enforces the require/forbid invariant per §1.2.7 (validators MUST reject ' +
-    'violations) and returns a warnings-only response rather than signing a malformed record.',
-  ),
-  revises: z.string().regex(SHA256_REF_PATTERN).optional().describe(
-    "'sha256:<64-hex>' record_hash this revision supersedes per spec §1.2.9 / D059. " +
-    'REQUIRED when event_type is the revision URI; FORBIDDEN on any other event_type. ' +
-    'atrib-emit enforces the require/forbid invariant per §1.2.9 (validators MUST reject ' +
-    'violations) and returns a warnings-only response rather than signing a malformed record.',
-  ),
-  tool_name: z.string().min(1).max(64).optional().describe(
-    'Optional §8.2 tool_name disclosure. Verbatim or transformed name (verbatim, opaque, ' +
-    'or hashed per §8.2). Lets emit-signed records carry the tool name for downstream ' +
-    'consumers (e.g. recall_my_attribution_history filtering by tool_name). Absence ' +
-    'indicates the §8.1 default posture (no disclosure).',
-  ),
-  args_hash: z.string().regex(SHA256_REF_PATTERN).optional().describe(
-    'Optional §8.3 args_hash commitment. Format: "sha256:" + 64 lowercase hex. Lets ' +
-    'emit-signed records carry a commitment to canonical args bytes for downstream ' +
-    'consumers (e.g. recall filtering by args_hash, or replay detection). Salted vs ' +
-    'plain forms hash identically on the wire; the salt (when used) is carried in the ' +
-    'separate args_salt field, which this surface does not yet expose.',
-  ),
-  result_hash: z.string().regex(SHA256_REF_PATTERN).optional().describe(
-    'Optional §8.3 result_hash commitment. Format: "sha256:" + 64 lowercase hex. Lets ' +
-    'emit-signed records carry a commitment to canonical result bytes for downstream ' +
-    'consumers. Salted vs plain forms hash identically on the wire; the salt (when used) ' +
-    'is carried in the separate result_salt field, which this surface does not yet expose.',
-  ),
+  event_type: z
+    .string()
+    .min(1)
+    .max(256)
+    .describe(
+      'Event type URI per spec §1.2.4. Common normative values: ' +
+        "'https://atrib.dev/v1/types/observation', '...annotation', '...revision'. " +
+        'Extension URIs in any namespace OK.',
+    ),
+  content: z
+    .record(z.string(), z.unknown())
+    .describe(
+      'Semantic content of the cognitive event. Shape varies per event_type. ' +
+        'For observation: { what: string, why_noted?: string, topics?: string[] }. ' +
+        "For annotation: { annotates: 'sha256:...', importance: 'critical'|'high'|'medium'|'low'|'noise', summary: string, topics?: string[] }. " +
+        "For revision: { revises: 'sha256:...', prior_position: string, new_position: string, reason: string }.",
+    ),
+  context_id: z
+    .string()
+    .regex(HEX_32_PATTERN)
+    .optional()
+    .describe(
+      '32-hex context_id. If omitted, a fresh genesis context_id is generated and the record is treated as a new chain.',
+    ),
+  informed_by: z
+    .array(z.string().regex(SHA256_REF_PATTERN))
+    .optional()
+    .describe(
+      "Array of 'sha256:<64-hex>' record_hashes that informed this event. " +
+        'By default, atrib-emit keeps only refs it can find in local mirrors or ' +
+        'the configured log lookup. Sorted lexicographically before signing per §1.2.5.',
+    ),
+  allow_unresolved_informed_by: z
+    .boolean()
+    .optional()
+    .describe(
+      'Set true only when the caller deliberately wants to sign dangling ' +
+        'informed_by refs. Defaults false so temp fixture hashes and evidence ' +
+        'commitments do not become graph edges by accident.',
+    ),
+  chain_root: z
+    .string()
+    .regex(SHA256_REF_PATTERN)
+    .optional()
+    .describe(
+      "Caller-managed chain_root, the 'sha256:<64-hex>' hash of the immediately " +
+        'preceding record in this context_id. When supplied alongside context_id, ' +
+        'atrib-emit uses both verbatim instead of treating context_id as a fresh ' +
+        'genesis. Required when caller manages chain state across multiple emits ' +
+        'under one context_id (e.g. multi-record watcher pipelines). When omitted ' +
+        'with context_id present, atrib-emit synthesizes the genesis chain_root ' +
+        'per spec §1.2.3. Without context_id, this field is meaningless and ' +
+        'returns a warnings-only response.',
+    ),
+  provenance_token: z
+    .string()
+    .regex(PROVENANCE_TOKEN_PATTERN)
+    .optional()
+    .describe(
+      '22-char base64url cross-session causal anchor per spec §1.2.6 / D044. ' +
+        'Genesis-record-only: atrib-emit refuses to sign a record that carries ' +
+        'this field if its chain_root is not the genesis chain_root for the ' +
+        'context_id (per §5.8 graceful-degradation, this returns a warnings-only ' +
+        'response rather than a malformed record).',
+    ),
+  annotates: z
+    .string()
+    .regex(SHA256_REF_PATTERN)
+    .optional()
+    .describe(
+      "'sha256:<64-hex>' record_hash this annotation describes per spec §1.2.7 / D058. " +
+        'REQUIRED when event_type is the annotation URI; FORBIDDEN on any other event_type. ' +
+        'atrib-emit enforces the require/forbid invariant per §1.2.7 (validators MUST reject ' +
+        'violations) and returns a warnings-only response rather than signing a malformed record.',
+    ),
+  revises: z
+    .string()
+    .regex(SHA256_REF_PATTERN)
+    .optional()
+    .describe(
+      "'sha256:<64-hex>' record_hash this revision supersedes per spec §1.2.9 / D059. " +
+        'REQUIRED when event_type is the revision URI; FORBIDDEN on any other event_type. ' +
+        'atrib-emit enforces the require/forbid invariant per §1.2.9 (validators MUST reject ' +
+        'violations) and returns a warnings-only response rather than signing a malformed record.',
+    ),
+  tool_name: z
+    .string()
+    .min(1)
+    .max(64)
+    .optional()
+    .describe(
+      'Optional §8.2 tool_name disclosure. Verbatim or transformed name (verbatim, opaque, ' +
+        'or hashed per §8.2). Lets emit-signed records carry the tool name for downstream ' +
+        'consumers (e.g. recall_my_attribution_history filtering by tool_name). Absence ' +
+        'indicates the §8.1 default posture (no disclosure).',
+    ),
+  args_hash: z
+    .string()
+    .regex(SHA256_REF_PATTERN)
+    .optional()
+    .describe(
+      'Optional §8.3 args_hash commitment. Format: "sha256:" + 64 lowercase hex. Lets ' +
+        'emit-signed records carry a commitment to canonical args bytes for downstream ' +
+        'consumers (e.g. recall filtering by args_hash, or replay detection). Salted vs ' +
+        'plain forms hash identically on the wire; the salt (when used) is carried in the ' +
+        'separate args_salt field, which this surface does not yet expose.',
+    ),
+  result_hash: z
+    .string()
+    .regex(SHA256_REF_PATTERN)
+    .optional()
+    .describe(
+      'Optional §8.3 result_hash commitment. Format: "sha256:" + 64 lowercase hex. Lets ' +
+        'emit-signed records carry a commitment to canonical result bytes for downstream ' +
+        'consumers. Salted vs plain forms hash identically on the wire; the salt (when used) ' +
+        'is carried in the separate result_salt field, which this surface does not yet expose.',
+    ),
 })
 
 type EmitOutput = {
@@ -143,6 +195,8 @@ export interface CreateAtribEmitServerOptions {
   key?: ResolvedKey
   /** Override the log endpoint (defaults to env or @atrib/mcp default). */
   logEndpoint?: string | undefined
+  /** Override informed_by record lookup, primarily for tests and embedded hosts. */
+  recordReferenceResolver?: RecordReferenceResolver | undefined
 }
 
 /**
@@ -169,7 +223,13 @@ export async function createAtribEmitServer(
     },
     async (rawInput) => {
       const input = EmitInput.parse(rawInput)
-      const result = await handleEmit({ input, key, queue })
+      const result = await handleEmit({
+        input,
+        key,
+        queue,
+        logEndpoint,
+        recordReferenceResolver: options.recordReferenceResolver,
+      })
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       }
@@ -194,6 +254,8 @@ interface HandleEmitInput {
    * downstream consumers can tell which surface signed each record.
    */
   producer?: string
+  logEndpoint?: string | undefined
+  recordReferenceResolver?: RecordReferenceResolver | undefined
 }
 
 /**
@@ -201,7 +263,14 @@ interface HandleEmitInput {
  * scope doc. Per §5.8 degradation: never throws to the agent; surfaces all
  * partial-failure conditions in `warnings`.
  */
-async function handleEmit({ input, key, queue, producer }: HandleEmitInput): Promise<EmitOutput> {
+async function handleEmit({
+  input,
+  key,
+  queue,
+  producer,
+  logEndpoint,
+  recordReferenceResolver,
+}: HandleEmitInput): Promise<EmitOutput> {
   const warnings: string[] = []
 
   if (!isValidEventTypeUri(input.event_type)) {
@@ -326,11 +395,15 @@ async function handleEmit({ input, key, queue, producer }: HandleEmitInput): Pro
   // signature fires after the child has already emitted; those cases need
   // retroactive annotation or a future explicit handoff event. See D104.
   const validParentHash = parentRecordHashFromEnv()
-  const effectiveInformedBy = validParentHash
-    ? Array.from(
-        new Set([validParentHash, ...(input.informed_by ?? [])]),
-      )
+  const candidateInformedBy = validParentHash
+    ? Array.from(new Set([validParentHash, ...(input.informed_by ?? [])]))
     : input.informed_by
+  const effectiveInformedBy = await filterResolvableInformedBy(candidateInformedBy, {
+    allowUnresolved: input.allow_unresolved_informed_by,
+    resolver: recordReferenceResolver,
+    logEndpoint,
+    warnings,
+  })
 
   let record
   try {
@@ -349,9 +422,7 @@ async function handleEmit({ input, key, queue, producer }: HandleEmitInput): Pro
       resultHash: input.result_hash,
     })
   } catch (e) {
-    return emptyOutput(contextId, [
-      `signing failed: ${e instanceof Error ? e.message : String(e)}`,
-    ])
+    return emptyOutput(contextId, [`signing failed: ${e instanceof Error ? e.message : String(e)}`])
   }
 
   const recordHash = record.signature ? hashRecord(record) : null
@@ -366,7 +437,7 @@ async function handleEmit({ input, key, queue, producer }: HandleEmitInput): Pro
   // consumers (recall, trace, summarize) can surface semantic context
   // alongside the cryptographic evidence. The sidecar lives at the
   // envelope level, the signed record bytes are unchanged.
-  await mirrorRecord(record, recordHash ? getProofFor(queue, recordHash) ?? null : null, {
+  await mirrorRecord(record, recordHash ? (getProofFor(queue, recordHash) ?? null) : null, {
     content: input.content,
     producer: producer ?? 'atrib-emit',
   })
@@ -374,7 +445,7 @@ async function handleEmit({ input, key, queue, producer }: HandleEmitInput): Pro
   // Try to read a proof if the queue submitted synchronously and the log
   // returned one within the same tick. Most submissions return null here
   // and the proof shows up on a later poll via getProof.
-  const proof = recordHash ? getProofFor(queue, recordHash) ?? null : null
+  const proof = recordHash ? (getProofFor(queue, recordHash) ?? null) : null
 
   if (!proof) {
     warnings.push('submission queued; proof not yet available (poll the log later if needed)')
@@ -450,6 +521,8 @@ export interface EmitInProcessOptions {
    * interactive CLI, a service with its own backpressure).
    */
   flushDeadlineMs?: number
+  /** Override informed_by record lookup, primarily for tests and embedded hosts. */
+  recordReferenceResolver?: RecordReferenceResolver | undefined
 }
 
 const DEFAULT_FLUSH_DEADLINE_MS = 5000
@@ -489,7 +562,14 @@ export async function emitInProcess(
   const logEndpoint = options.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT']
   const flushDeadlineMs = options.flushDeadlineMs ?? DEFAULT_FLUSH_DEADLINE_MS
   const queue: SubmissionQueue = createSubmissionQueue(logEndpoint)
-  const result = await handleEmit({ input, key, queue, producer: options.producer })
+  const result = await handleEmit({
+    input,
+    key,
+    queue,
+    producer: options.producer,
+    logEndpoint,
+    recordReferenceResolver: options.recordReferenceResolver,
+  })
   // Drain before returning, bounded by flushDeadlineMs. The typical caller
   // is a detached hook process that exits right after this resolves; we
   // don't want the queue's 30s retry budget on an unreachable log to

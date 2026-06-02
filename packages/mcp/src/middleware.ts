@@ -11,7 +11,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { base64urlDecode, base64urlEncode } from './base64url.js'
 import { computeContentId } from './content-id.js'
-import { SHA256_REF_PATTERN, extractRecordHashes, parentRecordHashFromEnv } from './refs.js'
+import {
+  SHA256_REF_PATTERN,
+  extractRecordReferenceCandidates,
+  parentRecordHashFromEnv,
+} from './refs.js'
 import { resolveChainRoot } from './chain-root.js'
 import { readInboundContext, writeOutboundContext, parseBaggageAtribSession } from './context.js'
 import { signRecord, getPublicKey } from './signing.js'
@@ -236,24 +240,16 @@ export interface AtribOptions {
   /**
    * Mechanical auto-detection of `informed_by` references from tool args.
    *
-   * When `true`, the middleware scans the tool-call params for `sha256:<64hex>`
-   * substrings (skipping the `chain_root` field which carries the chain
-   * primitive, not a reference). Detected references are merged with the
-   * explicit `informedBy` callback result (if any), de-duped, and lex-sorted
-   * per §1.2.5. Default `false` preserves backward compat, existing wrappers
-   * see no behavioral change unless they opt in.
+   * When `true`, the middleware extracts refs only from structured
+   * record-reference fields such as `record_hash`, `record_hashes`,
+   * `accepted_record_hashes`, `annotates`, and `revises`. It does not scan
+   * arbitrary prose or commitment fields. Detected references are merged with
+   * the explicit `informedBy` callback result, de-duped, and lex-sorted per
+   * §1.2.5. Default `false` preserves backward compat.
    *
-   * Use case: agent text frequently quotes record_hashes when reasoning back
-   * about prior work. Without auto-detect, the agent has to ALSO declare them
-   * via the `informedBy` callback. With auto-detect, hash references in args
-   * automatically form INFORMED_BY graph edges. Raw `@atrib/mcp` consumers
-   * and current `@atrib/mcp-wrap` consumers opt in explicitly.
-   *
-   * Per spec §1.2.5: informed_by is a provenance CLAIM, not a heuristic.
-   * Auto-detected refs are still claims (the agent put the hash in args, so
-   * the agent is asserting awareness). The substrate doesn't certify they
-   * actually informed the action, graph layer surfaces dangling refs per
-   * §3.2.4 step 6.
+   * Per spec §1.2.5: informed_by is a provenance claim. Auto-detect is only a
+   * convenience for structured record refs; hosts that know a tool-specific
+   * path should prefer the explicit `informedBy` callback.
    */
   autoDetectInformedByFromArgs?: boolean
   /**
@@ -640,7 +636,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     // Mechanical auto-detect from args, opt-in via autoDetectInformedByFromArgs.
     // See AtribOptions.autoDetectInformedByFromArgs for the rationale.
     if (options.autoDetectInformedByFromArgs) {
-      for (const h of extractRecordHashes(params)) merged.add(h)
+      for (const h of extractRecordReferenceCandidates(params)) merged.add(h)
     }
     if (merged.size > 0) {
       // Lex-sort per §1.2.5 to keep canonical form stable across emitters.

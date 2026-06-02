@@ -181,9 +181,9 @@ GLOBAL OPTIONS
   --help                    Print this help.
 
 ENVELOPE FIELDS (emit, read from stdin as one JSON object)
-  event_type, content (required); context_id, informed_by, annotates,
-  revises, session_token, provenance_token, tool_name, args_hash,
-  result_hash (optional).
+  event_type, content (required); context_id, informed_by,
+  allow_unresolved_informed_by, annotates, revises, session_token,
+  provenance_token, tool_name, args_hash, result_hash (optional).
 
 OUTPUT
   emit: EmitOutput JSON on stdout, always exit 0.
@@ -246,44 +246,105 @@ function buildDescription(): CliDescription {
         content: 'Object of any shape. Becomes the signed semantic payload.',
       },
       optional: {
-        context_id: '32-hex trace identifier; threads records into a coherent session chain (D072, D078).',
-        informed_by: 'Array of sha256:<64-hex> record_hashes; ANNOTATES edge per §3.2.4.',
-        annotates: 'sha256:<64-hex> record_hash; required when event_type is the annotation URI per D058 / §1.2.7.',
-        revises: 'sha256:<64-hex> record_hash; required when event_type is the revision URI per D059 / §1.2.9.',
+        context_id:
+          '32-hex trace identifier; threads records into a coherent session chain (D072, D078).',
+        informed_by:
+          'Array of sha256:<64-hex> record_hashes; INFORMED_BY edge per §3.2.4 when resolvable.',
+        allow_unresolved_informed_by:
+          'Boolean escape hatch. Set true only for deliberate dangling informed_by claims.',
+        annotates:
+          'sha256:<64-hex> record_hash; required when event_type is the annotation URI per D058 / §1.2.7.',
+        revises:
+          'sha256:<64-hex> record_hash; required when event_type is the revision URI per D059 / §1.2.9.',
         session_token: 'Cross-session causal anchor per W3C Trace Context tracestate.',
         provenance_token:
           'Genesis-record-only 22-char base64url cross-session anchor per spec §1.2.6 / D044.',
         tool_name: 'Disclosed tool name per §8.2 (optional disclosure posture).',
-        args_hash: 'sha256:<64-hex> commitment to canonical args per §8.3 salted-commitment posture.',
+        args_hash:
+          'sha256:<64-hex> commitment to canonical args per §8.3 salted-commitment posture.',
         result_hash:
           'sha256:<64-hex> commitment to canonical result bytes per §8.3 salted-commitment posture.',
-        producer: 'Producer label routed to mirror sidecar `_local.producer`. Defaults to "atrib-emit-cli"; hook helpers override with finer attribution (e.g. "claude-hooks-builtin-2b").',
+        producer:
+          'Producer label routed to mirror sidecar `_local.producer`. Defaults to "atrib-emit-cli"; hook helpers override with finer attribution (e.g. "claude-hooks-builtin-2b").',
       },
     },
     output_schema: {
-      record_hash: '"sha256:<64-hex>" of the signed canonical form, or "sha256:unknown" on degraded fallback.',
-      log_index: 'integer position in the log if submission confirmed within flush deadline, else null.',
+      record_hash:
+        '"sha256:<64-hex>" of the signed canonical form, or "sha256:unknown" on degraded fallback.',
+      log_index:
+        'integer position in the log if submission confirmed within flush deadline, else null.',
       checkpoint: 'C2SP signed note string if confirmed, else null.',
-      inclusion_proof: 'array of base64 SHA-256 hashes (proof bundle) if confirmed, else null or omitted.',
+      inclusion_proof:
+        'array of base64 SHA-256 hashes (proof bundle) if confirmed, else null or omitted.',
       context_id: '32-hex trace id the record was signed under.',
       warnings: 'array of strings: degraded paths (queued / flush-deadline / missing-key / etc).',
     },
     env_vars: [
-      { name: 'ATRIB_PRIVATE_KEY', description: 'base64url Ed25519 32-byte seed. First key source tried.', required: false },
-      { name: 'ATRIB_KEY_FILE', description: 'Path to a file containing the seed. Second source.', required: false },
-      { name: 'ATRIB_KEYCHAIN_TIMEOUT_MS', description: 'Keychain spawn timeout in ms (default 3000).', required: false },
-      { name: 'ATRIB_OP_TIMEOUT_MS', description: '1Password CLI spawn timeout in ms (default 10000).', required: false },
-      { name: 'ATRIB_LOG_ENDPOINT', description: 'Override the log submission URL.', required: false },
-      { name: 'ATRIB_MIRROR_FILE', description: 'JSONL file path the signing path appends to.', required: false },
-      { name: 'ATRIB_AUTOCHAIN_SOURCE', description: 'JSONL file path the inheritance reads from (chain composition).', required: false },
-      { name: 'ATRIB_AGENT', description: 'Agent label used in the default mirror filename.', required: false },
-      { name: 'ATRIB_CONTEXT_ID', description: 'Default 32-hex context_id when envelope omits one (D078).', required: false },
-      { name: 'CLAUDE_CODE_SESSION_ID', description: 'Harness-injected fallback (D083): UUID stripped + lowercased to a 32-hex context_id when ATRIB_CONTEXT_ID is unset. One entry in @atrib/mcp KNOWN_HARNESS_DISCOVERIES.', required: false },
+      {
+        name: 'ATRIB_PRIVATE_KEY',
+        description: 'base64url Ed25519 32-byte seed. First key source tried.',
+        required: false,
+      },
+      {
+        name: 'ATRIB_KEY_FILE',
+        description: 'Path to a file containing the seed. Second source.',
+        required: false,
+      },
+      {
+        name: 'ATRIB_KEYCHAIN_TIMEOUT_MS',
+        description: 'Keychain spawn timeout in ms (default 3000).',
+        required: false,
+      },
+      {
+        name: 'ATRIB_OP_TIMEOUT_MS',
+        description: '1Password CLI spawn timeout in ms (default 10000).',
+        required: false,
+      },
+      {
+        name: 'ATRIB_LOG_ENDPOINT',
+        description: 'Override the log submission URL.',
+        required: false,
+      },
+      {
+        name: 'ATRIB_MIRROR_FILE',
+        description: 'JSONL file path the signing path appends to.',
+        required: false,
+      },
+      {
+        name: 'ATRIB_AUTOCHAIN_SOURCE',
+        description: 'JSONL file path the inheritance reads from (chain composition).',
+        required: false,
+      },
+      {
+        name: 'ATRIB_AGENT',
+        description: 'Agent label used in the default mirror filename.',
+        required: false,
+      },
+      {
+        name: 'ATRIB_CONTEXT_ID',
+        description: 'Default 32-hex context_id when envelope omits one (D078).',
+        required: false,
+      },
+      {
+        name: 'CLAUDE_CODE_SESSION_ID',
+        description:
+          'Harness-injected fallback (D083): UUID stripped + lowercased to a 32-hex context_id when ATRIB_CONTEXT_ID is unset. One entry in @atrib/mcp KNOWN_HARNESS_DISCOVERIES.',
+        required: false,
+      },
     ],
     spec_references: [
-      { section: '§1.3', url: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#13-canonical-serialization' },
-      { section: '§1.4.2', url: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#142-record-hash' },
-      { section: '§5.8', url: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract' },
+      {
+        section: '§1.3',
+        url: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#13-canonical-serialization',
+      },
+      {
+        section: '§1.4.2',
+        url: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#142-record-hash',
+      },
+      {
+        section: '§5.8',
+        url: 'https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract',
+      },
     ],
     decision_references: [
       {
@@ -387,7 +448,12 @@ function checkMirrorWritable(): CheckResult {
   const t0 = Date.now()
   const path =
     process.env['ATRIB_MIRROR_FILE'] ??
-    join(homedir(), '.atrib', 'records', `atrib-emit-${process.env['ATRIB_AGENT'] ?? 'claude-code'}.jsonl`)
+    join(
+      homedir(),
+      '.atrib',
+      'records',
+      `atrib-emit-${process.env['ATRIB_AGENT'] ?? 'claude-code'}.jsonl`,
+    )
   const parent = dirname(path)
   try {
     // The mirror file itself may or may not exist; we care about the parent
@@ -421,7 +487,8 @@ interface DoctorReport {
 }
 
 async function runDoctor(opts: { logEndpoint?: string }): Promise<DoctorReport> {
-  const endpoint = opts.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT'] ?? 'https://log.atrib.dev/v1/entries'
+  const endpoint =
+    opts.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT'] ?? 'https://log.atrib.dev/v1/entries'
   const [key, logEndpoint, mirror] = await Promise.all([
     checkKey(),
     checkLogEndpoint(endpoint),
@@ -454,6 +521,7 @@ interface RawEnvelope {
   content?: unknown
   context_id?: unknown
   informed_by?: unknown
+  allow_unresolved_informed_by?: unknown
   annotates?: unknown
   revises?: unknown
   session_token?: unknown
@@ -479,6 +547,9 @@ function buildEmitInput(envelope: RawEnvelope): Record<string, unknown> {
   if (envelope.content !== undefined) out['content'] = envelope.content
   if (envelope.context_id !== undefined) out['context_id'] = envelope.context_id
   if (envelope.informed_by !== undefined) out['informed_by'] = envelope.informed_by
+  if (envelope.allow_unresolved_informed_by !== undefined) {
+    out['allow_unresolved_informed_by'] = envelope.allow_unresolved_informed_by
+  }
   if (envelope.annotates !== undefined) out['annotates'] = envelope.annotates
   if (envelope.revises !== undefined) out['revises'] = envelope.revises
   if (envelope.session_token !== undefined) out['session_token'] = envelope.session_token
@@ -555,7 +626,9 @@ export async function main(argv: readonly string[]): Promise<number> {
   try {
     raw = await readStdin()
   } catch (e) {
-    writeStderrLine(`atrib-emit-cli: stdin read error: ${e instanceof Error ? e.message : String(e)}`)
+    writeStderrLine(
+      `atrib-emit-cli: stdin read error: ${e instanceof Error ? e.message : String(e)}`,
+    )
     writeStdoutJson(fallbackResult('stdin read error'))
     return 0
   }
@@ -570,7 +643,9 @@ export async function main(argv: readonly string[]): Promise<number> {
   try {
     envelope = JSON.parse(raw) as RawEnvelope
   } catch (e) {
-    writeStderrLine(`atrib-emit-cli: stdin parse error: ${e instanceof Error ? e.message : String(e)}`)
+    writeStderrLine(
+      `atrib-emit-cli: stdin parse error: ${e instanceof Error ? e.message : String(e)}`,
+    )
     writeStdoutJson(fallbackResult('stdin parse error'))
     return 0
   }

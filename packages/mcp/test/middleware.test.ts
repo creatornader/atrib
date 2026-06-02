@@ -283,7 +283,7 @@ describe('atrib() middleware', () => {
       })
     })
 
-    it('dedupes the parent seed with callback and auto-detected references', async () => {
+    it('dedupes the parent seed with callback and auto-detected structured references', async () => {
       await withParentRecordHash(VALID_PARENT_RECORD_HASH, async () => {
         const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
         const originalHandler = vi.fn().mockResolvedValue({
@@ -305,12 +305,43 @@ describe('atrib() middleware', () => {
 
         const handler = getToolHandler()!
         const request = createToolCallRequest('search_web')
-        request.params.arguments = { query: `see ${OTHER_RECORD_HASH}` }
+        request.params.arguments = { record_hash: OTHER_RECORD_HASH }
         await handler(request, {})
 
         expect(observed).toHaveLength(1)
         expect(informedByOf(observed[0])).toEqual([VALID_PARENT_RECORD_HASH, OTHER_RECORD_HASH])
       })
+    })
+
+    it('does not auto-detect prose hashes as informed_by claims', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const originalHandler = vi.fn().mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+      })
+      const observed: AtribRecord[] = []
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        logSubmission: 'disabled',
+        autoDetectInformedByFromArgs: true,
+        onRecord: (record) => {
+          observed.push(record)
+        },
+      })
+      registerToolHandler(originalHandler)
+
+      const handler = getToolHandler()!
+      const request = createToolCallRequest('search_web')
+      request.params.arguments = {
+        content: `mentioned ${OTHER_RECORD_HASH}`,
+        args_hash: OTHER_RECORD_HASH,
+        informed_by: [OTHER_RECORD_HASH],
+      }
+      await handler(request, {})
+
+      expect(observed).toHaveLength(1)
+      expect(informedByOf(observed[0])).toBeUndefined()
     })
 
     it('ignores invalid parent hash env values', async () => {

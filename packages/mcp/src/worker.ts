@@ -63,7 +63,12 @@ export {
   verifyInclusion,
 } from './merkle.js'
 export { formatProofBundle, parseProofBundle } from './proof-text.js'
-export { SHA256_REF_PATTERN, SHA256_REF_GLOBAL_PATTERN, extractRecordHashes } from './refs.js'
+export {
+  SHA256_REF_PATTERN,
+  SHA256_REF_GLOBAL_PATTERN,
+  extractRecordHashes,
+  extractRecordReferenceCandidates,
+} from './refs.js'
 export {
   getPublicKey,
   signRecord,
