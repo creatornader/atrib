@@ -65,6 +65,7 @@ atrib/
         google-adk/            # Google ADK InMemoryRunner + BasePlugin + FunctionTool proof for hash-only atrib signing at the ADK tool callback boundary.
         letta-memory/          # Letta core and archival memory proof through real Letta executor dispatch, with fake managers and hash-only host signing.
         mastra-runtime/        # Mastra MCPClient/MCPServer stdio proof plus workflow suspend/resume receipt proof.
+        microsoft-agent-framework/ # Microsoft Agent Framework Python WorkflowBuilder proof with hash-only workflow event receipts.
         browser-workflow/      # Browser-shaped plus browser-use-hosted observe/click/fill/submit receipt proofs with hash-only atrib records and local sidecars.
         brief-dcbench/         # Brief dcbench-shaped decision-compliance evidence proof linking context lookup, agent action, and score through informed_by.
         proof-log-receipt/     # Single-hash receipt proof for checkpoint signature, inclusion proof, archive body/evidence retrieval, and verifier output.
