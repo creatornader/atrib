@@ -9,6 +9,7 @@ import {
   BrowserWorkflowReceiptRecorder,
   runBrowserUseWorkflowReceiptSmoke,
   runBrowserWorkflowReceiptSmoke,
+  runStagehandWorkflowReceiptSmoke,
 } from '../src/browser-workflow-receipt.js'
 
 const execFileAsync = promisify(execFile)
@@ -94,6 +95,48 @@ describe('browser workflow receipt example', () => {
     })
     expect(result.caveats.join(' ')).toContain('not a live Browser Use cloud task')
     expect(stdout).not.toContain('private browser-use note')
+  }, 30000)
+
+  it('signs a local Stagehand workflow through the runnable smoke', async () => {
+    const { stdout } = await execFileAsync(
+      tsxBin,
+      ['examples/browser-workflow/stagehand-workflow-receipt-smoke.ts'],
+      {
+        cwd: process.cwd(),
+        timeout: 30000,
+        maxBuffer: 1024 * 1024,
+      },
+    )
+    const result = JSON.parse(stdout.trim()) as Awaited<
+      ReturnType<typeof runStagehandWorkflowReceiptSmoke>
+    >
+
+    expect(result.ok).toBe(true)
+    expect(result.host).toMatchObject({
+      framework: 'stagehand',
+      package_version: '3.4.0',
+      environment: 'LOCAL',
+      action_mode: 'pre-resolved-stagehand-act',
+      extracted_confirmation_seen: true,
+    })
+    expect(result.signed_records).toBe(4)
+    expect(result.operations).toEqual([
+      'browser.action.observe',
+      'browser.action.click',
+      'browser.action.fill',
+      'browser.action.submit',
+    ])
+    expect(result.record_hashes).toHaveLength(4)
+    expect(result.final_receipt).toMatchObject({
+      status: 'submitted',
+      confirmation_id: 'stagehand-workflow-receipt-001',
+    })
+    expect(result.privacy).toEqual({
+      public_records_hash_only: true,
+      local_sidecars_keep_payloads: true,
+    })
+    expect(result.caveats.join(' ')).toContain('not a Browserbase cloud session')
+    expect(stdout).not.toContain('private stagehand note')
   }, 30000)
 
   it('chains records and keeps form content out of public records', async () => {

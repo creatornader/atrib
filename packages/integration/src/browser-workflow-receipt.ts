@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { randomBytes } from 'node:crypto'
+import { Stagehand } from '@browserbasehq/stagehand'
 import canonicalize from 'canonicalize'
 import { BrowserSession } from 'browser-use/browser'
 import {
@@ -249,6 +250,51 @@ export interface BrowserUseWorkflowSmokeResult extends BrowserWorkflowSmokeResul
     page_title: string
     page_url: string
   }
+}
+
+export interface StagehandWorkflowSmokeResult extends BrowserWorkflowSmokeResult {
+  host: {
+    framework: 'stagehand'
+    package_version: string
+    environment: 'LOCAL'
+    session_id: string
+    action_mode: 'pre-resolved-stagehand-act'
+    extracted_page_text_chars: number
+    extracted_confirmation_seen: boolean
+  }
+}
+
+type StagehandAction = {
+  selector: string
+  description: string
+  method: 'click' | 'fill'
+  arguments: string[]
+}
+
+type StagehandActResult = {
+  success: boolean
+  message?: string
+  actionDescription?: string
+  actions?: StagehandAction[]
+}
+
+type StagehandLocalPage = {
+  goto(url: string): Promise<unknown>
+  waitForSelector(selector: string, options?: { timeout?: number }): Promise<unknown>
+  snapshot(): Promise<{ formattedTree?: string; xpathMap?: unknown; urlMap?: unknown }>
+  evaluate<TResult>(fn: () => TResult | Promise<TResult>): Promise<TResult>
+  url(): Promise<string>
+}
+
+type StagehandLocalRuntime = {
+  init(): Promise<void>
+  close(): Promise<void>
+  sessionId?: string
+  context: {
+    pages(): StagehandLocalPage[]
+  }
+  act(action: StagehandAction): Promise<StagehandActResult>
+  extract(options: { page: StagehandLocalPage }): Promise<{ pageText?: string }>
 }
 
 export async function runBrowserWorkflowReceiptSmoke(): Promise<BrowserWorkflowSmokeResult> {
@@ -515,6 +561,212 @@ export async function runBrowserUseWorkflowReceiptSmoke(): Promise<BrowserUseWor
   }
 }
 
+export async function runStagehandWorkflowReceiptSmoke(): Promise<StagehandWorkflowSmokeResult> {
+  const privateKey = new Uint8Array(32).fill(26)
+  const contextId = '737461676568616e642d70726f6f6630'
+  const privatePhrase = 'private stagehand note: vendor risk reviewed'
+  const stagehandPackageVersion = '3.4.0'
+  const stagehand = new Stagehand({
+    env: 'LOCAL',
+    verbose: 0,
+    localBrowserLaunchOptions: {
+      headless: true,
+    },
+  }) as unknown as StagehandLocalRuntime
+  const recorder = new BrowserWorkflowReceiptRecorder({
+    privateKey,
+    contextId,
+    serverUrl: 'stagehand://local-session',
+    logSubmission: 'disabled',
+    now: timestampClock(1_779_840_200_000),
+  })
+
+  try {
+    await stagehand.init()
+    const page = stagehand.context.pages()[0]
+    if (!page) throw new Error('Stagehand local session did not expose a page')
+    await page.goto(`data:text/html,${encodeURIComponent(stagehandVendorApprovalHtml())}`)
+    await page.waitForSelector('#approve-vendor', { timeout: 5000 })
+    const stagehandPageUrl = await page.url()
+    const pageUrl = 'stagehand://local/vendor-approval'
+
+    const observed = await recorder.action({
+      operation: 'observe',
+      pageUrl,
+      args: {
+        framework: 'stagehand',
+        environment: 'LOCAL',
+        stagehand_session_id: stagehand.sessionId ?? null,
+        stagehand_page_url_hash: hashCanonical(stagehandPageUrl),
+        include_screenshot: false,
+      },
+      run: async () => {
+        const [snapshot, extraction] = await Promise.all([
+          page.snapshot(),
+          stagehand.extract({ page }),
+        ])
+        return {
+          framework: 'stagehand',
+          snapshot_node_count: countSnapshotLines(snapshot.formattedTree),
+          page_text_chars: extraction.pageText?.length ?? 0,
+          page_text_has_approval_form:
+            extraction.pageText?.includes('Approve vendor invoice') ?? false,
+          page_text_has_private_note: extraction.pageText?.includes(privatePhrase) ?? false,
+        }
+      },
+    })
+
+    await recorder.action({
+      operation: 'click',
+      pageUrl,
+      args: {
+        framework: 'stagehand',
+        action_mode: 'pre-resolved-stagehand-act',
+        action: {
+          selector: '#approve-vendor',
+          method: 'click',
+          description: 'click approve vendor button',
+        },
+      },
+      run: async () => {
+        const action = stagehandAction('#approve-vendor', 'click', 'click approve vendor button')
+        const result = await stagehand.act(action)
+        const pageState = await page.evaluate(() => ({
+          approved: document.body.dataset.approved === 'true',
+          active_panel: document.body.dataset.activePanel ?? null,
+        }))
+        return {
+          stagehand_result: result,
+          page_state: pageState,
+        }
+      },
+    })
+
+    await recorder.action({
+      operation: 'fill',
+      pageUrl,
+      args: {
+        framework: 'stagehand',
+        action_mode: 'pre-resolved-stagehand-act',
+        action: {
+          selector: '#approval-note',
+          method: 'fill',
+          description: 'fill approval note',
+          value: privatePhrase,
+        },
+      },
+      run: async () => {
+        const action = stagehandAction(
+          '#approval-note',
+          'fill',
+          'fill approval note',
+          privatePhrase,
+        )
+        const result = await stagehand.act(action)
+        const pageState = await page.evaluate(() => {
+          const field = document.querySelector<HTMLTextAreaElement>('#approval-note')
+          return {
+            field: 'approval-note',
+            value_length: field?.value.length ?? 0,
+          }
+        })
+        return {
+          stagehand_result: result,
+          page_state: pageState,
+        }
+      },
+    })
+
+    const finalReceipt = await recorder.action({
+      operation: 'submit',
+      pageUrl,
+      args: {
+        framework: 'stagehand',
+        action_mode: 'pre-resolved-stagehand-act',
+        action: {
+          selector: '#submit-approval',
+          method: 'click',
+          description: 'submit approval form',
+        },
+      },
+      run: async () => {
+        const action = stagehandAction('#submit-approval', 'click', 'submit approval form')
+        const result = await stagehand.act(action)
+        const pageState = await page.evaluate(() => ({
+          status: document.body.dataset.submitted === 'true' ? 'submitted' : 'not-submitted',
+          confirmation_id:
+            document
+              .querySelector('[data-confirmation-id]')
+              ?.getAttribute('data-confirmation-id') ?? 'missing',
+          page_url: 'stagehand://local/vendor-approval',
+        }))
+        return {
+          stagehand_result: result,
+          ...pageState,
+        }
+      },
+    })
+
+    await recorder.flushAtrib()
+    const records = recorder.getSignedRecords()
+    const sidecars = recorder.getSidecars()
+    const invalid = []
+    for (const record of records) {
+      if (!(await verifyRecord(record))) invalid.push(record.tool_name)
+    }
+    if (invalid.length > 0) {
+      throw new Error(`invalid signed record(s): ${invalid.join(', ')}`)
+    }
+    const publicRecordJson = JSON.stringify(records)
+    if (publicRecordJson.includes(privatePhrase)) {
+      throw new Error('public records leaked Stagehand form data')
+    }
+    if (!JSON.stringify(sidecars).includes(privatePhrase)) {
+      throw new Error('local sidecars should keep inspectable Stagehand action material')
+    }
+    if (finalReceipt.status !== 'submitted') {
+      throw new Error('Stagehand workflow did not submit the approval form')
+    }
+
+    return {
+      ok: true,
+      note: 'Signs a local Stagehand workflow as hash-only atrib records while local sidecars keep page and form material.',
+      context_id: contextId,
+      signed_records: records.length,
+      operations: records.map((record) => record.tool_name as BrowserWorkflowToolName),
+      record_hashes: records.map(
+        (record) => `sha256:${hexEncode(sha256(canonicalRecord(record)))}`,
+      ),
+      final_receipt: {
+        status: 'submitted',
+        confirmation_id: finalReceipt.confirmation_id,
+        page_url: finalReceipt.page_url,
+      },
+      privacy: {
+        public_records_hash_only: true,
+        local_sidecars_keep_payloads: true,
+      },
+      caveats: [
+        'This proof runs Stagehand env LOCAL, not a Browserbase cloud session.',
+        'This proof uses pre-resolved Stagehand act actions, not LLM-planned observe or act calls.',
+        'This proof does not use Browserbase session replay, autonomous Stagehand agents, OpenHands, OpenAI Computer Use, or Anthropic computer use.',
+      ],
+      host: {
+        framework: 'stagehand',
+        package_version: stagehandPackageVersion,
+        environment: 'LOCAL',
+        session_id: stagehand.sessionId ?? 'missing',
+        action_mode: 'pre-resolved-stagehand-act',
+        extracted_page_text_chars: observed.page_text_chars,
+        extracted_confirmation_seen:
+          finalReceipt.confirmation_id === 'stagehand-workflow-receipt-001',
+      },
+    }
+  } finally {
+    await stagehand.close()
+  }
+}
+
 export function resolveBrowserWorkflowPrivateKey(value?: Uint8Array | string): Uint8Array {
   const raw = value ?? (typeof process !== 'undefined' ? process.env.ATRIB_PRIVATE_KEY : undefined)
   if (raw instanceof Uint8Array) {
@@ -632,6 +884,69 @@ function browserUseVendorApprovalHtml(): string {
     </script>
   </body>
 </html>`
+}
+
+function stagehandVendorApprovalHtml(): string {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Stagehand vendor approval</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 32px; }
+      main { max-width: 560px; }
+      label, textarea, button { display: block; margin-top: 12px; }
+      textarea { width: 360px; height: 96px; }
+    </style>
+  </head>
+  <body data-approved="false" data-submitted="false">
+    <main data-route="stagehand-vendor-approval">
+      <h1>Approve vendor invoice</h1>
+      <button id="approve-vendor">Approve vendor</button>
+      <label for="approval-note">Approval note</label>
+      <textarea id="approval-note" disabled></textarea>
+      <button id="submit-approval" disabled>Submit approval</button>
+      <output id="result"></output>
+    </main>
+    <script>
+      const approve = document.querySelector('#approve-vendor');
+      const note = document.querySelector('#approval-note');
+      const submit = document.querySelector('#submit-approval');
+      const result = document.querySelector('#result');
+      approve.addEventListener('click', () => {
+        document.body.dataset.approved = 'true';
+        document.body.dataset.activePanel = 'approval-form';
+        note.disabled = false;
+        submit.disabled = false;
+        note.focus();
+      });
+      submit.addEventListener('click', () => {
+        if (note.value.length === 0) return;
+        document.body.dataset.submitted = 'true';
+        result.dataset.confirmationId = 'stagehand-workflow-receipt-001';
+        result.textContent = 'Approval submitted';
+      });
+    </script>
+  </body>
+</html>`
+}
+
+function stagehandAction(
+  selector: string,
+  method: 'click' | 'fill',
+  description: string,
+  value?: string,
+): StagehandAction {
+  return {
+    selector,
+    description,
+    method,
+    arguments: value === undefined ? [] : [value],
+  }
+}
+
+function countSnapshotLines(formattedTree: string | undefined): number {
+  return formattedTree?.split('\n').filter((line) => line.trim().length > 0).length ?? 0
 }
 
 async function elementCenter(page: Page, selector: string): Promise<{ x: number; y: number }> {
