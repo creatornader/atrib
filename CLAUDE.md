@@ -60,6 +60,7 @@ atrib/
         vercel-ai-sdk/         # createMCPClient + AI Gateway example
         langchain-js/          # MultiServerMCPClient + loadMcpTools example
         langgraph-store/       # LangGraph JS BaseStore memory proof with hash-only atrib records.
+        langgraph-python-checkpointer/ # LangGraph Python StateGraph + InMemorySaver checkpoint proof with hash-only atrib records.
         llamaindex-memory/     # LlamaIndex.TS Memory proof with hash-only atrib records.
         a2a-handoff/           # Official A2A SDK JSON-RPC handoff proof with verifier-gated informed_by follow-up.
         google-adk/            # Google ADK InMemoryRunner + BasePlugin + FunctionTool proof for hash-only atrib signing at the ADK tool callback boundary.
