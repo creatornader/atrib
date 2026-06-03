@@ -18,7 +18,7 @@ What the smoke proves:
 
 What it does not prove yet:
 
-- Python LlamaIndex `llama_index.core.memory.Memory` parity.
+- The Python package path. Use [`../llamaindex-python-memory/`](../llamaindex-python-memory/) for `llama_index.core.memory.Memory`.
 - Vector-store memory blocks with an external database.
 - Outreach approval to post in LlamaIndex channels.
 
