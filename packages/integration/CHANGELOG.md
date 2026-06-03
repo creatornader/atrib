@@ -79,6 +79,7 @@
 
 ### Patch Changes
 
+- Extend the official A2A SDK proof to sign and verify an A2A `AgentCard` before the verifier-gated handoff follow-up.
 - Add an official A2A SDK JSON-RPC handoff proof that carries an atrib evidence packet in an A2A `DataPart`, verifies it, and signs a receiving-agent follow-up with `informed_by`.
 - Add a Google AP2 sample extractor that converts captured A2A events plus the sample `.temp-db` mandate chains into live interop artifacts.
 - Normalize AP2 delegated mandate chains in the local participant artifact generator so upstream sample outputs can use full `open~~closed` SD-JWT chains without manual closed-JWT extraction.
