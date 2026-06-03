@@ -12,6 +12,11 @@ describe('A2A handoff proof', () => {
       protocol_version: '0.3.0',
       transport: 'JSONRPC',
     })
+    expect(result.agent_card.signatures_count).toBe(1)
+    expect(result.agent_card.signature_alg).toBe('EdDSA')
+    expect(result.agent_card.signature_kid).toBe('atrib-a2a-evidence-agent-ed25519')
+    expect(result.agent_card.signature_valid).toBe(true)
+    expect(result.agent_card.signed_payload_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
     expect(result.a2a.response_kind).toBe('message')
     expect(result.a2a.response_part_kinds).toEqual(['text', 'data'])
     expect(result.evidence.accepted_record_hashes).toEqual([result.evidence.remote_record_hash])

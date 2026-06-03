@@ -4,7 +4,13 @@ import { randomUUID } from 'node:crypto'
 import canonicalize from 'canonicalize'
 import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
-import { type AgentCard, type DataPart, type Message, type MessageSendParams } from '@a2a-js/sdk'
+import {
+  type AgentCard,
+  type AgentCardSignature,
+  type DataPart,
+  type Message,
+  type MessageSendParams,
+} from '@a2a-js/sdk'
 import { ClientFactory, JsonRpcTransportFactory } from '@a2a-js/sdk/client'
 import {
   DefaultRequestHandler,
@@ -40,6 +46,7 @@ const A2A_AGENT_URL = 'https://a2a.example.test/atrib-handoff/jsonrpc'
 const A2A_AGENT_CARD_URL = 'https://a2a.example.test/.well-known/agent-card.json'
 const A2A_REMOTE_AGENT_SEED = new Uint8Array(32).fill(181)
 const RECEIVING_AGENT_SEED = new Uint8Array(32).fill(182)
+const A2A_AGENT_CARD_KEY_ID = 'atrib-a2a-evidence-agent-ed25519'
 const REMOTE_ATRIB_CONTEXT_ID = '12'.repeat(16)
 const RECEIVER_ATRIB_CONTEXT_ID = '34'.repeat(16)
 const MAX_AGE_MS = 60_000
@@ -56,6 +63,11 @@ export interface A2aHandoffProofResult {
     name: string
     url: string
     preferred_transport: string
+    signatures_count: number
+    signature_alg: 'EdDSA'
+    signature_kid: string
+    signature_valid: boolean
+    signed_payload_hash: string
   }
   a2a: {
     request_context_id: string
@@ -162,7 +174,8 @@ export async function runA2aHandoffProof(nowMs = Date.now()): Promise<A2aHandoff
       port: 0,
       logPrivateKey: ed.utils.randomSecretKey(),
     })
-    const agentCard = makeAgentCard()
+    const agentCard = await makeSignedAgentCard()
+    const agentCardSignature = await verifyAgentCardSignature(agentCard)
     const requestHandler = new DefaultRequestHandler(
       agentCard,
       new InMemoryTaskStore(),
@@ -221,6 +234,11 @@ export async function runA2aHandoffProof(nowMs = Date.now()): Promise<A2aHandoff
         name: agentCard.name,
         url: agentCard.url,
         preferred_transport: agentCard.preferredTransport ?? 'JSONRPC',
+        signatures_count: agentCard.signatures?.length ?? 0,
+        signature_alg: agentCardSignature.alg,
+        signature_kid: agentCardSignature.kid,
+        signature_valid: agentCardSignature.valid,
+        signed_payload_hash: agentCardSignature.payloadHash,
       },
       a2a: {
         request_context_id: response.contextId ?? A2A_CONTEXT_ID,
@@ -253,7 +271,15 @@ export async function runA2aHandoffProof(nowMs = Date.now()): Promise<A2aHandoff
   }
 }
 
-function makeAgentCard(): AgentCard {
+async function makeSignedAgentCard(): Promise<AgentCard> {
+  const unsignedCard = makeUnsignedAgentCard()
+  return {
+    ...unsignedCard,
+    signatures: [await signAgentCard(unsignedCard)],
+  }
+}
+
+function makeUnsignedAgentCard(): AgentCard {
   return {
     name: 'atrib A2A Evidence Agent',
     description: 'Returns a signed atrib evidence packet for a delegated A2A task.',
@@ -277,6 +303,67 @@ function makeAgentCard(): AgentCard {
     defaultOutputModes: ['text/plain', 'application/json'],
     additionalInterfaces: [{ url: A2A_AGENT_URL, transport: 'JSONRPC' }],
   }
+}
+
+async function signAgentCard(card: AgentCard): Promise<AgentCardSignature> {
+  const protectedHeader = {
+    alg: 'EdDSA',
+    typ: 'JOSE',
+    kid: A2A_AGENT_CARD_KEY_ID,
+  }
+  const protectedValue = base64urlEncode(utf8(JSON.stringify(protectedHeader)))
+  const payloadValue = base64urlEncode(utf8(canonicalAgentCardPayload(card)))
+  const signingInput = utf8(`${protectedValue}.${payloadValue}`)
+  const signature = await ed.signAsync(signingInput, A2A_REMOTE_AGENT_SEED)
+  return {
+    protected: protectedValue,
+    signature: base64urlEncode(signature),
+  }
+}
+
+async function verifyAgentCardSignature(card: AgentCard): Promise<{
+  alg: 'EdDSA'
+  kid: string
+  valid: boolean
+  payloadHash: string
+}> {
+  const signature = card.signatures?.[0]
+  if (!signature) {
+    return {
+      alg: 'EdDSA',
+      kid: '',
+      valid: false,
+      payloadHash: hashText(canonicalAgentCardPayload(card)),
+    }
+  }
+  const protectedHeader = JSON.parse(text(base64urlDecode(signature.protected))) as {
+    alg?: unknown
+    kid?: unknown
+  }
+  const payload = canonicalAgentCardPayload(card)
+  const signingInput = utf8(`${signature.protected}.${base64urlEncode(utf8(payload))}`)
+  const valid =
+    protectedHeader.alg === 'EdDSA' &&
+    typeof protectedHeader.kid === 'string' &&
+    (await ed.verifyAsync(
+      base64urlDecode(signature.signature),
+      signingInput,
+      await ed.getPublicKeyAsync(A2A_REMOTE_AGENT_SEED),
+    ))
+
+  return {
+    alg: 'EdDSA',
+    kid: typeof protectedHeader.kid === 'string' ? protectedHeader.kid : '',
+    valid,
+    payloadHash: hashText(payload),
+  }
+}
+
+function canonicalAgentCardPayload(card: AgentCard): string {
+  const { signatures: _signatures, ...unsignedCard } = card
+  const encoded = canonicalize(unsignedCard)
+  if (encoded === undefined) throw new Error('agent card is not JSON-canonicalizable')
+  return encoded
 }
 
 function makeSendParams(): MessageSendParams {
@@ -486,4 +573,16 @@ function hashText(value: string): string {
 
 function recordHash(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
+}
+
+function utf8(value: string): Uint8Array {
+  return new TextEncoder().encode(value)
+}
+
+function text(value: Uint8Array): string {
+  return new TextDecoder().decode(value)
+}
+
+function base64urlDecode(value: string): Uint8Array {
+  return new Uint8Array(Buffer.from(value, 'base64url'))
 }
