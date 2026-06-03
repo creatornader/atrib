@@ -36,7 +36,12 @@ describe('OpenAI Agents runtime receipt example', () => {
         agent: string
         model: string
         tool: string
-        lifecycle: string
+        handoff: string
+        lifecycle: {
+          function_tool: string
+          handoff: string
+        }
+        handoff_event_type: string
       }
       signed_records: number
       operations: string[]
@@ -49,10 +54,18 @@ describe('OpenAI Agents runtime receipt example', () => {
         quantity: number
         total_usd: number
       }
+      handoff_receipt: {
+        from_agent_name: string
+        to_agent_name: string
+        event_type: string
+        record_hash: string
+      }
       event_counts: {
         model_calls: number
-        tool_call_items: number
-        tool_call_output_items: number
+        raw_function_call_items: number
+        raw_function_call_output_items: number
+        signed_function_tool_lifecycle_events: number
+        signed_handoff_lifecycle_events: number
       }
       privacy: {
         public_records_hash_only: boolean
@@ -69,13 +82,19 @@ describe('OpenAI Agents runtime receipt example', () => {
       agent: 'Agent',
       model: 'scripted',
       tool: 'tool',
-      lifecycle: 'agent_tool_end',
+      handoff: 'handoff',
+      lifecycle: {
+        function_tool: 'agent_tool_end',
+        handoff: 'agent_handoff',
+      },
+      handoff_event_type: 'https://atrib.dev/v1/types/handoff',
     })
-    expect(result.signed_records).toBe(1)
+    expect(result.signed_records).toBe(2)
     expect(result.operations).toEqual([
       'openai.agents.function-tool.procurement_reviewer.quote_price',
+      'openai.agents.handoff.procurement_reviewer.fulfillment_specialist',
     ])
-    expect(result.record_hashes).toHaveLength(1)
+    expect(result.record_hashes).toHaveLength(2)
     expect(result.final_output).toContain('openai-agents-atlas-kit-2')
     expect(result.final_receipt).toEqual({
       status: 'quoted',
@@ -84,10 +103,18 @@ describe('OpenAI Agents runtime receipt example', () => {
       quantity: 2,
       total_usd: 84,
     })
+    expect(result.handoff_receipt).toEqual({
+      from_agent_name: 'Procurement Reviewer',
+      to_agent_name: 'Fulfillment Specialist',
+      event_type: 'https://atrib.dev/v1/types/handoff',
+      record_hash: result.record_hashes[1],
+    })
     expect(result.event_counts).toEqual({
-      model_calls: 2,
-      tool_call_items: 1,
-      tool_call_output_items: 1,
+      model_calls: 3,
+      raw_function_call_items: 2,
+      raw_function_call_output_items: 2,
+      signed_function_tool_lifecycle_events: 1,
+      signed_handoff_lifecycle_events: 1,
     })
     expect(result.privacy).toEqual({
       public_records_hash_only: true,
@@ -123,17 +150,32 @@ describe('OpenAI Agents runtime receipt example', () => {
       args: { receipt_id: 'receipt-1', internal_note: secret },
       result: { status: 'published', internal_note: secret },
     })
+    await recorder.recordHandoff({
+      surface: 'handoff',
+      fromAgentName: 'Procurement Reviewer',
+      toAgentName: 'Fulfillment Specialist',
+    })
 
     const records = recorder.getSignedRecords()
     const sidecars = recorder.getSidecars()
     const firstHash = `sha256:${hexEncode(sha256(canonicalRecord(records[0]!)))}`
+    const secondHash = `sha256:${hexEncode(sha256(canonicalRecord(records[1]!)))}`
 
-    expect(records).toHaveLength(2)
+    expect(records).toHaveLength(3)
     expect(records[0]!.chain_root).toBe(genesisChainRoot(contextId))
     expect(records[1]!.chain_root).toBe(firstHash)
+    expect(records[2]!.chain_root).toBe(secondHash)
+    expect(records[2]!.event_type).toBe('https://atrib.dev/v1/types/handoff')
     expect(JSON.stringify(records)).not.toContain(secret)
     expect(JSON.stringify(sidecars)).toContain(secret)
+    expect(sidecars[2]).toMatchObject({
+      surface: 'handoff',
+      lifecycle: 'agent_handoff',
+      from_agent_name: 'Procurement Reviewer',
+      to_agent_name: 'Fulfillment Specialist',
+    })
     expect(await verifyRecord(records[0]!)).toBe(true)
     expect(await verifyRecord(records[1]!)).toBe(true)
+    expect(await verifyRecord(records[2]!)).toBe(true)
   })
 })
