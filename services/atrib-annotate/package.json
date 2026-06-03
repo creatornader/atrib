@@ -1,6 +1,6 @@
 {
   "name": "@atrib/annotate",
-  "version": "0.2.22",
+  "version": "0.2.23",
   "description": "MCP server for atrib. Lets agents mark a past record's importance and meaning. Adds an ANNOTATES graph edge so recall surfaces weighted annotations ahead of flat scans.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
