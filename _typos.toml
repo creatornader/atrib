@@ -20,6 +20,10 @@ extend-ignore-re = [
     # in test prose. The 8-char minimum is wide enough to skip natural
     # English words.
     "\\b[0-9a-f]{8,}\\b",
+    # Changesets changelogs include 7-char git hashes in dependency
+    # references (`[64490ba]`) and patch headings (`64490ba:`).
+    "\\[[0-9a-f]{7}\\]",
+    "\\b[0-9a-f]{7}:",
     # markdown anchor links (#some-heading-slug), typos flags slug
     # fragments stripped of apostrophes (e.g. "atribs-normative-..."
     # is the slug for "atrib's normative ...")
