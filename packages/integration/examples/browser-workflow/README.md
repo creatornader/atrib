@@ -16,6 +16,7 @@ the page snapshot, selector, form value, and result material.
 ```bash
 pnpm --filter @atrib/integration browser-workflow-receipt-smoke
 pnpm --filter @atrib/integration browser-use-workflow-receipt-smoke
+pnpm --filter @atrib/integration stagehand-workflow-receipt-smoke
 ```
 
 ## What It Proves
@@ -31,15 +32,24 @@ pnpm --filter @atrib/integration browser-use-workflow-receipt-smoke
 - The `browser-use-workflow-receipt-smoke` command runs the same receipt shape
   through a real `browser-use` `BrowserSession`, using browser-use navigation,
   state capture, coordinate clicks, and keyboard input on a local page.
+- The `stagehand-workflow-receipt-smoke` command runs the same receipt shape
+  through a real `@browserbasehq/stagehand` local session. It uses Stagehand's
+  page snapshot and extraction surface, then executes pre-resolved Stagehand
+  `act` actions for click, fill, and submit.
 
 ## What It Does Not Prove Yet
 
 The deterministic smoke is still a browser-shaped local receipt harness, not
-live Playwright, Browserbase, Browser Use, Computer Use, OpenHands, or Operator
-automation.
+live Playwright, Browserbase, Browser Use, Stagehand, Computer Use, OpenHands,
+or Operator automation.
 
 The browser-use smoke closes the real browser-use host gap for a direct
 `BrowserSession`, but it is not an autonomous LLM-driven `Agent` run, a Browser
 Use cloud task, Browserbase, Stagehand, OpenHands, OpenAI Computer Use,
-Anthropic computer use, or Operator automation. A later proof can pair the same
-record hashes with screenshots, DOM excerpts, or action replay artifacts.
+Anthropic computer use, or Operator automation.
+
+The Stagehand smoke closes the local Stagehand session gap for pre-resolved
+`act` actions. It is not a Browserbase cloud session, Browserbase session
+replay, autonomous Stagehand agent, or LLM-planned Stagehand `observe` / `act`
+run. A later proof can pair the same record hashes with screenshots, DOM
+excerpts, action replay artifacts, or Browserbase session metadata.
