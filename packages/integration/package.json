@@ -31,6 +31,7 @@
     "langgraph-store-smoke": "tsx examples/langgraph-store/langgraph-store-smoke.ts",
     "langgraph-python-checkpointer-smoke": "tsx examples/langgraph-python-checkpointer/langgraph-python-checkpointer-smoke.ts",
     "llamaindex-memory-smoke": "tsx examples/llamaindex-memory/llamaindex-memory-smoke.ts",
+    "llamaindex-python-memory-smoke": "tsx examples/llamaindex-python-memory/llamaindex-python-memory-smoke.ts",
     "evidence-packet-eval": "tsx examples/evidence-packet-eval/evidence-packet-eval.ts",
     "evidence-packet-inspect": "uv run --quiet --with inspect-ai python examples/evidence-packet-eval/inspect_native_task.py",
     "trace-repair-suspect": "tsx examples/trace-repair-suspect/trace-repair-suspect-smoke.ts",
