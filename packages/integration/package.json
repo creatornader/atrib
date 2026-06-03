@@ -27,6 +27,7 @@
     "mem0-oss-full-cycle-smoke": "tsx examples/mem0/mem0-oss-full-cycle-smoke.ts",
     "mem0-client-smoke": "tsx examples/mem0/mem0-client-smoke.ts",
     "mem0-python-oss-smoke": "tsx examples/mem0/mem0-python-oss-smoke.ts",
+    "letta-memory-smoke": "tsx examples/letta-memory/letta-memory-smoke.ts",
     "langgraph-store-smoke": "tsx examples/langgraph-store/langgraph-store-smoke.ts",
     "llamaindex-memory-smoke": "tsx examples/llamaindex-memory/llamaindex-memory-smoke.ts",
     "evidence-packet-eval": "tsx examples/evidence-packet-eval/evidence-packet-eval.ts",
