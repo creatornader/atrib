@@ -85,6 +85,93 @@ describe('Mastra runtime receipt example', () => {
     expect(stdout).not.toContain('orchid Mastra procurement note')
   })
 
+  it('signs a Mastra workflow suspend and resume through the runnable smoke', async () => {
+    const { stdout } = await execFileAsync(
+      tsxBin,
+      ['examples/mastra-runtime/mastra-workflow-suspend-resume-smoke.ts'],
+      {
+        cwd: process.cwd(),
+        timeout: 30000,
+        maxBuffer: 1024 * 1024,
+      },
+    )
+    const result = JSON.parse(stdout.trim()) as {
+      ok: boolean
+      mastra: {
+        core: string
+        storage: string
+        workflow: string
+        run: string
+      }
+      workflow: {
+        name: string
+        run_id: string
+        suspended_status: string
+        final_status: string
+        resume_labels: string[]
+      }
+      signed_records: number
+      operations: string[]
+      record_hashes: string[]
+      causal_links: {
+        suspend_informed_by_start: boolean
+        resume_informed_by_suspend: boolean
+        result_informed_by_resume: boolean
+      }
+      final_receipt: {
+        status: string
+        sku: string
+        quantity: number
+        approved_by: string
+      }
+      privacy: {
+        public_records_hash_only: boolean
+        local_sidecars_keep_payloads: boolean
+      }
+      caveats: string[]
+    }
+
+    expect(result.ok).toBe(true)
+    expect(result.mastra).toEqual({
+      core: '1.38.0',
+      storage: 'InMemoryStore',
+      workflow: 'createWorkflow/createStep',
+      run: 'Run.start/Run.resume',
+    })
+    expect(result.workflow).toEqual({
+      name: 'vendorApprovalWorkflow',
+      run_id: 'mastra-workflow-run-1',
+      suspended_status: 'suspended',
+      final_status: 'success',
+      resume_labels: ['human-approval'],
+    })
+    expect(result.signed_records).toBe(4)
+    expect(result.operations).toEqual([
+      'mastra.workflow.vendorApprovalWorkflow.workflow-start',
+      'mastra.workflow.vendorApprovalWorkflow.step-suspended',
+      'mastra.workflow.vendorApprovalWorkflow.workflow-resume',
+      'mastra.workflow.vendorApprovalWorkflow.workflow-result',
+    ])
+    expect(result.record_hashes).toHaveLength(4)
+    expect(result.causal_links).toEqual({
+      suspend_informed_by_start: true,
+      resume_informed_by_suspend: true,
+      result_informed_by_resume: true,
+    })
+    expect(result.final_receipt).toEqual({
+      status: 'approved',
+      sku: 'atlas-kit',
+      quantity: 2,
+      approved_by: 'nora',
+    })
+    expect(result.privacy).toEqual({
+      public_records_hash_only: true,
+      local_sidecars_keep_payloads: true,
+    })
+    expect(result.caveats.join(' ')).toContain('not hosted Mastra Platform')
+    expect(stdout).not.toContain('violet Mastra workflow note')
+  })
+
   it('chains records and keeps Mastra tool content out of public records', async () => {
     const secret = 'private Mastra note'
     const contextId = '33333333333333333333333333333333'
