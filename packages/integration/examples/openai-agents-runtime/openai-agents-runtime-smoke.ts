@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import { Agent, setTracingDisabled, tool, Usage } from '@openai/agents'
+import { Agent, handoff, setTracingDisabled, tool, Usage } from '@openai/agents'
 import type {
   AgentOutputItem,
   Model,
@@ -34,7 +34,12 @@ type SmokeResult = {
     agent: 'Agent'
     model: 'scripted'
     tool: 'tool'
-    lifecycle: 'agent_tool_end'
+    handoff: 'handoff'
+    lifecycle: {
+      function_tool: 'agent_tool_end'
+      handoff: 'agent_handoff'
+    }
+    handoff_event_type: 'https://atrib.dev/v1/types/handoff'
   }
   context_id: string
   signed_records: number
@@ -48,10 +53,18 @@ type SmokeResult = {
     quantity: number
     total_usd: number
   }
+  handoff_receipt: {
+    from_agent_name: string
+    to_agent_name: string
+    event_type: 'https://atrib.dev/v1/types/handoff'
+    record_hash: string
+  }
   event_counts: {
     model_calls: number
-    tool_call_items: number
-    tool_call_output_items: number
+    raw_function_call_items: number
+    raw_function_call_output_items: number
+    signed_function_tool_lifecycle_events: number
+    signed_handoff_lifecycle_events: number
   }
   privacy: {
     public_records_hash_only: true
@@ -88,18 +101,30 @@ export async function runOpenAIAgentsRuntimeReceiptSmoke(): Promise<SmokeResult>
       internal_note: input.internal_note,
     }),
   })
+  const fulfillmentAgent = recorder.attachAgent(
+    new Agent({
+      name: 'Fulfillment Specialist',
+      instructions: 'Confirm fulfillment after the procurement reviewer transfers the quoted work.',
+      model,
+    }),
+  )
+  const fulfillmentHandoff = handoff(fulfillmentAgent, {
+    toolNameOverride: 'transfer_to_fulfillment_specialist',
+    toolDescriptionOverride: 'Transfer a quoted procurement request to fulfillment.',
+  })
   const agent = recorder.attachAgent(
     new Agent({
       name: 'Procurement Reviewer',
-      instructions: 'Use quote_price for procurement quote requests.',
+      instructions: 'Use quote_price, then transfer quoted procurement work to fulfillment.',
       model,
       tools: [quoteTool],
+      handoffs: [fulfillmentHandoff],
     }),
   )
 
   const result = await import('@openai/agents').then(({ run }) =>
     run(agent, 'Quote 2 atlas-kit units with the private procurement note.', {
-      maxTurns: 3,
+      maxTurns: 5,
     }),
   )
 
@@ -123,6 +148,15 @@ export async function runOpenAIAgentsRuntimeReceiptSmoke(): Promise<SmokeResult>
   }
 
   const receipt = unwrapReceipt(sidecars[0]?.result)
+  const handoffReceipt = sidecars.find((entry) => entry.surface === 'handoff')
+  if (
+    !handoffReceipt ||
+    handoffReceipt.event_type !== 'https://atrib.dev/v1/types/handoff' ||
+    typeof handoffReceipt.from_agent_name !== 'string' ||
+    typeof handoffReceipt.to_agent_name !== 'string'
+  ) {
+    throw new Error(`missing OpenAI Agents handoff sidecar: ${JSON.stringify(handoffReceipt)}`)
+  }
   const recordHashes = records.map(
     (record) => `sha256:${hexEncode(sha256(canonicalRecord(record)))}`,
   )
@@ -130,7 +164,7 @@ export async function runOpenAIAgentsRuntimeReceiptSmoke(): Promise<SmokeResult>
 
   return {
     ok: true,
-    note: 'Runs a real @openai/agents Agent with a scripted local Model, executes a real function tool through run(), then signs one hash-only atrib record from the SDK lifecycle event.',
+    note: 'Runs real @openai/agents Agents with a scripted local Model, executes a real function tool, invokes a real handoff, then signs hash-only atrib records from SDK lifecycle events.',
     openai_agents: {
       package: '@openai/agents',
       version: packageVersion('@openai/agents'),
@@ -138,7 +172,12 @@ export async function runOpenAIAgentsRuntimeReceiptSmoke(): Promise<SmokeResult>
       agent: 'Agent',
       model: 'scripted',
       tool: 'tool',
-      lifecycle: 'agent_tool_end',
+      handoff: 'handoff',
+      lifecycle: {
+        function_tool: 'agent_tool_end',
+        handoff: 'agent_handoff',
+      },
+      handoff_event_type: 'https://atrib.dev/v1/types/handoff',
     },
     context_id: contextId,
     signed_records: records.length,
@@ -146,18 +185,31 @@ export async function runOpenAIAgentsRuntimeReceiptSmoke(): Promise<SmokeResult>
     record_hashes: recordHashes,
     final_output: String(result.finalOutput),
     final_receipt: receipt,
+    handoff_receipt: {
+      from_agent_name: handoffReceipt.from_agent_name,
+      to_agent_name: handoffReceipt.to_agent_name,
+      event_type: 'https://atrib.dev/v1/types/handoff',
+      record_hash: handoffReceipt.record_hash,
+    },
     event_counts: {
       model_calls: model.calls,
-      tool_call_items: output.filter((item) => item.type === 'function_call').length,
-      tool_call_output_items: output.filter((item) => item.type === 'function_call_result').length,
+      raw_function_call_items: output.filter((item) => item.type === 'function_call').length,
+      raw_function_call_output_items: output.filter((item) => item.type === 'function_call_result')
+        .length,
+      signed_function_tool_lifecycle_events: sidecars.filter(
+        (entry) => entry.surface === 'function-tool',
+      ).length,
+      signed_handoff_lifecycle_events: sidecars.filter((entry) => entry.surface === 'handoff')
+        .length,
     },
     privacy: {
       public_records_hash_only: true,
       local_sidecars_keep_payloads: true,
     },
     caveats: [
-      'This proves the @openai/agents JavaScript local function-tool boundary, not the Python Agents SDK.',
-      'It does not call a hosted OpenAI model, the Responses API, computer-use tools, MCP transports, sessions, handoffs, or OpenAI tracing export.',
+      'This proves the @openai/agents JavaScript local function-tool and handoff lifecycle boundaries, not the Python Agents SDK.',
+      'The handoff receipt uses the D073 extension URI, not a promoted handoff event byte or a Pattern 3 verifier packet.',
+      'It does not call a hosted OpenAI model, the Responses API, computer-use tools, MCP transports, sessions, or OpenAI tracing export.',
       'The scripted model is deliberate so the proof is deterministic and does not require OPENAI_API_KEY.',
     ],
   }
@@ -165,14 +217,20 @@ export async function runOpenAIAgentsRuntimeReceiptSmoke(): Promise<SmokeResult>
 
 class ScriptedToolModel implements Model {
   calls = 0
+  private issuedQuote = false
+  private issuedHandoff = false
 
   async getResponse(request: ModelRequest): Promise<ModelResponse> {
     this.calls += 1
-    if (this.calls === 1) {
-      const toolName = request.tools.find((entry) => entry.type === 'function')?.name
-      if (toolName !== 'quote_price') {
-        throw new Error(`expected quote_price tool, saw ${toolName ?? 'none'}`)
+    const toolNames = request.tools
+      .filter((entry) => entry.type === 'function')
+      .map((entry) => entry.name)
+    const handoffNames = request.handoffs.map((entry) => entry.toolName)
+    if (!this.issuedQuote) {
+      if (!toolNames.includes('quote_price')) {
+        throw new Error(`expected quote_price tool, saw ${toolNames.join(', ') || 'none'}`)
       }
+      this.issuedQuote = true
       return {
         usage: new Usage({ requests: 1 }),
         responseId: 'openai-agents-scripted-1',
@@ -192,6 +250,24 @@ class ScriptedToolModel implements Model {
       }
     }
 
+    if (!this.issuedHandoff && handoffNames.includes('transfer_to_fulfillment_specialist')) {
+      findToolReceipt(request.input)
+      this.issuedHandoff = true
+      return {
+        usage: new Usage({ requests: 1 }),
+        responseId: 'openai-agents-scripted-2',
+        output: [
+          {
+            type: 'function_call',
+            callId: 'openai-agents-handoff-call-1',
+            name: 'transfer_to_fulfillment_specialist',
+            status: 'completed',
+            arguments: '{}',
+          },
+        ],
+      }
+    }
+
     const receipt = findToolReceipt(request.input)
     return {
       usage: new Usage({ requests: 1 }),
@@ -204,7 +280,7 @@ class ScriptedToolModel implements Model {
           content: [
             {
               type: 'output_text',
-              text: `Quote ${receipt.quote_id} totals $${receipt.total_usd}.`,
+              text: `Fulfillment accepted ${receipt.quote_id} at $${receipt.total_usd}.`,
             },
           ],
         },

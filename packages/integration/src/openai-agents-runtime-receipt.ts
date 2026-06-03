@@ -22,26 +22,36 @@ import type { AtribRecord, ProofBundle, SubmissionQueue } from '@atrib/mcp'
 type MaybePromise<T> = T | Promise<T>
 
 const DEFAULT_SERVER_URL = 'openai-agents://runtime'
+const EVENT_TYPE_HANDOFF_URI = 'https://atrib.dev/v1/types/handoff'
 const encoder = new TextEncoder()
 
-export type OpenAIAgentsRuntimeSurface = 'function-tool'
+export type OpenAIAgentsRuntimeSurface = 'function-tool' | 'handoff'
 
-export type OpenAIAgentsRuntimeOutcome = {
-  status: 'ok'
-  result: unknown
-}
+export type OpenAIAgentsRuntimeOutcome =
+  | {
+      status: 'ok'
+      result: unknown
+    }
+  | {
+      status: 'transferred'
+      to_agent_name: string
+    }
 
 export interface OpenAIAgentsRuntimeSidecar {
   framework: 'openai-agents-js'
   surface: OpenAIAgentsRuntimeSurface
   agent_name: string
-  tool_name: string
   operation: string
-  tool_call_id: string
+  lifecycle: 'agent_tool_end' | 'agent_handoff'
+  event_type: string
   args: unknown
   record_hash: string
-  status: 'ok'
+  status: OpenAIAgentsRuntimeOutcome['status']
   result: unknown
+  tool_name?: string
+  tool_call_id?: string
+  from_agent_name?: string
+  to_agent_name?: string
 }
 
 export interface OpenAIAgentsRuntimeReceiptOptions {
@@ -77,12 +87,18 @@ export interface OpenAIAgentsRuntimeReceiptState {
 }
 
 export interface OpenAIAgentsRuntimeToolEnd {
-  surface: OpenAIAgentsRuntimeSurface
+  surface: 'function-tool'
   agentName: string
   toolName: string
   toolCallId: string
   args: unknown
   result: unknown
+}
+
+export interface OpenAIAgentsRuntimeHandoff {
+  surface: 'handoff'
+  fromAgentName: string
+  toAgentName: string
 }
 
 export class OpenAIAgentsRuntimeReceiptRecorder implements OpenAIAgentsRuntimeReceiptState {
@@ -125,11 +141,26 @@ export class OpenAIAgentsRuntimeReceiptRecorder implements OpenAIAgentsRuntimeRe
         this.pending.delete(pending)
       })
     })
+    agent.on('agent_handoff', (_context, nextAgent) => {
+      const pending = this.signHandoff({
+        surface: 'handoff',
+        fromAgentName: agent.name,
+        toAgentName: nextAgent.name,
+      })
+      this.pending.add(pending)
+      pending.finally(() => {
+        this.pending.delete(pending)
+      })
+    })
     return agent
   }
 
   async recordToolEnd(call: OpenAIAgentsRuntimeToolEnd): Promise<void> {
     await this.signToolEnd(call)
+  }
+
+  async recordHandoff(call: OpenAIAgentsRuntimeHandoff): Promise<void> {
+    await this.signHandoff(call)
   }
 
   getSignedRecords(): AtribRecord[] {
@@ -172,9 +203,6 @@ export class OpenAIAgentsRuntimeReceiptRecorder implements OpenAIAgentsRuntimeRe
   }
 
   private async signToolEnd(call: OpenAIAgentsRuntimeToolEnd): Promise<void> {
-    const privateKey = this.privateKey
-    if (!privateKey) return
-
     const argsSnapshot = snapshotCanonical(call.args)
     const outcomeSnapshot = snapshotCanonical({
       status: 'ok',
@@ -182,15 +210,68 @@ export class OpenAIAgentsRuntimeReceiptRecorder implements OpenAIAgentsRuntimeRe
     }) as OpenAIAgentsRuntimeOutcome | undefined
     if (argsSnapshot === undefined || outcomeSnapshot === undefined) return
 
+    const operation = [
+      'openai',
+      'agents',
+      call.surface,
+      normalizeSegment(call.agentName),
+      call.toolName,
+    ].join('.')
+    await this.signOperation({
+      call,
+      eventType: EVENT_TYPE_TOOL_CALL_URI,
+      operation,
+      argsSnapshot,
+      outcomeSnapshot,
+    })
+  }
+
+  private async signHandoff(call: OpenAIAgentsRuntimeHandoff): Promise<void> {
+    const argsSnapshot = snapshotCanonical({
+      lifecycle: 'agent_handoff',
+      from_agent_name: call.fromAgentName,
+      to_agent_name: call.toAgentName,
+    })
+    const outcomeSnapshot = snapshotCanonical({
+      status: 'transferred',
+      to_agent_name: call.toAgentName,
+    }) as OpenAIAgentsRuntimeOutcome | undefined
+    if (argsSnapshot === undefined || outcomeSnapshot === undefined) return
+
+    const operation = [
+      'openai',
+      'agents',
+      call.surface,
+      normalizeSegment(call.fromAgentName),
+      normalizeSegment(call.toAgentName),
+    ].join('.')
+    await this.signOperation({
+      call,
+      eventType: EVENT_TYPE_HANDOFF_URI,
+      operation,
+      argsSnapshot,
+      outcomeSnapshot,
+    })
+  }
+
+  private async signOperation({
+    call,
+    eventType,
+    operation,
+    argsSnapshot,
+    outcomeSnapshot,
+  }: {
+    call: OpenAIAgentsRuntimeToolEnd | OpenAIAgentsRuntimeHandoff
+    eventType: string
+    operation: string
+    argsSnapshot: unknown
+    outcomeSnapshot: OpenAIAgentsRuntimeOutcome
+  }): Promise<void> {
+    const privateKey = this.privateKey
+    if (!privateKey) return
+
     try {
       await this.init()
-      const operation = [
-        'openai',
-        'agents',
-        call.surface,
-        normalizeSegment(call.agentName),
-        call.toolName,
-      ].join('.')
       const record: AtribRecord = {
         spec_version: 'atrib/1.0',
         content_id: computeContentId(this.serverUrl, operation),
@@ -199,7 +280,7 @@ export class OpenAIAgentsRuntimeReceiptRecorder implements OpenAIAgentsRuntimeRe
           contextId: this.contextId,
           autoChainTailHex: this.lastRecordHashHex,
         }),
-        event_type: EVENT_TYPE_TOOL_CALL_URI,
+        event_type: eventType,
         context_id: this.contextId,
         timestamp: this.now(),
         signature: '',
@@ -215,6 +296,7 @@ export class OpenAIAgentsRuntimeReceiptRecorder implements OpenAIAgentsRuntimeRe
         args: argsSnapshot,
         outcome: outcomeSnapshot,
         recordHash: `sha256:${recordHashHex}`,
+        eventType,
       })
       this.lastRecordHashHex = recordHashHex
       this.records.push(signed)
@@ -258,24 +340,45 @@ function buildSidecar({
   args,
   outcome,
   recordHash,
+  eventType,
 }: {
-  call: OpenAIAgentsRuntimeToolEnd
+  call: OpenAIAgentsRuntimeToolEnd | OpenAIAgentsRuntimeHandoff
   operation: string
   args: unknown
   outcome: OpenAIAgentsRuntimeOutcome
   recordHash: string
+  eventType: string
 }): OpenAIAgentsRuntimeSidecar {
-  return {
+  const base = {
     framework: 'openai-agents-js',
     surface: call.surface,
-    agent_name: call.agentName,
-    tool_name: call.toolName,
     operation,
-    tool_call_id: call.toolCallId,
+    event_type: eventType,
     args,
     record_hash: recordHash,
-    status: 'ok',
-    result: outcome.result,
+    status: outcome.status,
+    result: outcome.status === 'ok' ? outcome.result : { to_agent_name: outcome.to_agent_name },
+  } satisfies Omit<
+    OpenAIAgentsRuntimeSidecar,
+    'agent_name' | 'lifecycle' | 'tool_name' | 'tool_call_id' | 'from_agent_name' | 'to_agent_name'
+  >
+
+  if (call.surface === 'function-tool') {
+    return {
+      ...base,
+      agent_name: call.agentName,
+      lifecycle: 'agent_tool_end',
+      tool_name: call.toolName,
+      tool_call_id: call.toolCallId,
+    }
+  }
+
+  return {
+    ...base,
+    agent_name: call.fromAgentName,
+    lifecycle: 'agent_handoff',
+    from_agent_name: call.fromAgentName,
+    to_agent_name: call.toAgentName,
   }
 }
 
