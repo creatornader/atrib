@@ -36,6 +36,7 @@
     "browser-workflow-receipt-smoke": "tsx examples/browser-workflow/browser-workflow-receipt-smoke.ts",
     "browser-use-workflow-receipt-smoke": "tsx examples/browser-workflow/browser-use-workflow-receipt-smoke.ts",
     "brief-dcbench-evidence-smoke": "tsx examples/brief-dcbench/brief-dcbench-evidence-smoke.ts",
+    "proof-log-receipt": "tsx examples/proof-log-receipt/proof-log-receipt-smoke.ts",
     "graphiti-mcp-smoke": "pnpm --filter @atrib/mcp-wrap build && tsx examples/graphiti/graphiti-mcp-smoke.ts",
     "graphiti-core-ollama-smoke": "tsx examples/graphiti/graphiti-core-ollama-smoke.ts",
     "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts",
