@@ -29,6 +29,7 @@
     "mem0-python-oss-smoke": "tsx examples/mem0/mem0-python-oss-smoke.ts",
     "letta-memory-smoke": "tsx examples/letta-memory/letta-memory-smoke.ts",
     "langgraph-store-smoke": "tsx examples/langgraph-store/langgraph-store-smoke.ts",
+    "langgraph-python-checkpointer-smoke": "tsx examples/langgraph-python-checkpointer/langgraph-python-checkpointer-smoke.ts",
     "llamaindex-memory-smoke": "tsx examples/llamaindex-memory/llamaindex-memory-smoke.ts",
     "evidence-packet-eval": "tsx examples/evidence-packet-eval/evidence-packet-eval.ts",
     "evidence-packet-inspect": "uv run --quiet --with inspect-ai python examples/evidence-packet-eval/inspect_native_task.py",
