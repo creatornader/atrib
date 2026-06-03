@@ -23,7 +23,13 @@ type MaybePromise<T> = T | Promise<T>
 const DEFAULT_SERVER_URL = 'mastra://runtime'
 const encoder = new TextEncoder()
 
-export type MastraRuntimeSurface = 'mcp-client-tool'
+export type MastraRuntimeSurface = 'mcp-client-tool' | 'workflow-suspend-resume'
+
+export type MastraRuntimeWorkflowEventName =
+  | 'workflow-start'
+  | 'step-suspended'
+  | 'workflow-resume'
+  | 'workflow-result'
 
 export type MastraRuntimeOutcome =
   | {
@@ -35,9 +41,11 @@ export type MastraRuntimeOutcome =
       error: { name: string; message: string }
     }
 
-export interface MastraRuntimeSidecar {
+export type MastraRuntimeSidecar = MastraRuntimeToolCallSidecar | MastraRuntimeWorkflowSidecar
+
+export interface MastraRuntimeToolCallSidecar {
   framework: 'mastra-runtime'
-  surface: MastraRuntimeSurface
+  surface: 'mcp-client-tool'
   server_name: string
   tool_name: string
   namespaced_tool_name: string
@@ -48,6 +56,22 @@ export interface MastraRuntimeSidecar {
   status: 'ok' | 'error'
   result?: unknown
   error?: { name: string; message: string }
+}
+
+export interface MastraRuntimeWorkflowSidecar {
+  framework: 'mastra-runtime'
+  surface: 'workflow-suspend-resume'
+  workflow_name: string
+  run_id: string
+  step_name?: string
+  event_name: MastraRuntimeWorkflowEventName
+  operation: string
+  payload: unknown
+  record_hash: string
+  status: 'ok' | 'error'
+  result?: unknown
+  error?: { name: string; message: string }
+  informed_by?: string[]
 }
 
 export interface MastraRuntimeReceiptOptions {
@@ -83,13 +107,24 @@ export interface MastraRuntimeReceiptState {
 }
 
 export interface MastraRuntimeToolCall<TResult> {
-  surface: MastraRuntimeSurface
+  surface: 'mcp-client-tool'
   serverName: string
   toolName: string
   namespacedToolName: string
   toolCallId: string
   args: unknown
   run: () => MaybePromise<TResult>
+}
+
+export interface MastraRuntimeWorkflowEvent {
+  surface: 'workflow-suspend-resume'
+  workflowName: string
+  runId: string
+  stepName?: string
+  eventName: MastraRuntimeWorkflowEventName
+  payload: unknown
+  result?: unknown
+  informedBy?: string[]
 }
 
 export class MastraRuntimeReceiptRecorder implements MastraRuntimeReceiptState {
@@ -133,6 +168,13 @@ export class MastraRuntimeReceiptRecorder implements MastraRuntimeReceiptState {
       })
       throw error
     }
+  }
+
+  async workflowEvent(event: MastraRuntimeWorkflowEvent): Promise<string | undefined> {
+    const payloadSnapshot = snapshotCanonical(event.payload)
+    const resultSnapshot = snapshotCanonical(event.result ?? { status: event.eventName })
+    if (payloadSnapshot === undefined || resultSnapshot === undefined) return undefined
+    return this.signWorkflowEvent(event, payloadSnapshot, resultSnapshot)
   }
 
   getSignedRecords(): AtribRecord[] {
@@ -187,7 +229,7 @@ export class MastraRuntimeReceiptRecorder implements MastraRuntimeReceiptState {
       }
       const signed = await signRecord(record, privateKey)
       const recordHashHex = hexEncode(sha256(canonicalRecord(signed)))
-      const sidecar = buildSidecar({
+      const sidecar = buildToolCallSidecar({
         call,
         operation,
         args: argsSnapshot,
@@ -201,6 +243,64 @@ export class MastraRuntimeReceiptRecorder implements MastraRuntimeReceiptState {
       await this.onRecord?.(signed, sidecar)
     } catch {
       // §5.8: Mastra tool execution must not fail because atrib could not sign.
+    }
+  }
+
+  private async signWorkflowEvent(
+    event: MastraRuntimeWorkflowEvent,
+    payloadSnapshot: unknown,
+    resultSnapshot: unknown,
+  ): Promise<string | undefined> {
+    const privateKey = this.privateKey
+    if (!privateKey) return undefined
+
+    try {
+      await this.init()
+      const operation = `mastra.workflow.${event.workflowName}.${event.eventName}`
+      const record: AtribRecord = {
+        spec_version: 'atrib/1.0',
+        content_id: computeContentId(this.serverUrl, operation),
+        creator_key: this.creatorKey,
+        chain_root: resolveChainRoot({
+          contextId: this.contextId,
+          autoChainTailHex: this.lastRecordHashHex,
+        }),
+        event_type: EVENT_TYPE_TOOL_CALL_URI,
+        context_id: this.contextId,
+        timestamp: this.now(),
+        signature: '',
+        args_hash: hashCanonical({
+          workflow_name: event.workflowName,
+          run_id: event.runId,
+          step_name: event.stepName,
+          event_name: event.eventName,
+          payload: payloadSnapshot,
+        }),
+        result_hash: hashCanonical(resultSnapshot),
+        tool_name: operation,
+        ...(event.informedBy && event.informedBy.length > 0
+          ? { informed_by: [...event.informedBy] }
+          : {}),
+      }
+      const signed = await signRecord(record, privateKey)
+      const recordHashHex = hexEncode(sha256(canonicalRecord(signed)))
+      const recordHash = `sha256:${recordHashHex}`
+      const sidecar = buildWorkflowSidecar({
+        event,
+        operation,
+        payload: payloadSnapshot,
+        result: resultSnapshot,
+        recordHash,
+      })
+      this.lastRecordHashHex = recordHashHex
+      this.records.push(signed)
+      this.sidecars.push(sidecar)
+      this.queue?.submit(signed, 'normal')
+      await this.onRecord?.(signed, sidecar)
+      return recordHash
+    } catch {
+      // §5.8: Mastra workflow execution must not fail because atrib could not sign.
+      return undefined
     }
   }
 
@@ -229,7 +329,7 @@ export function resolveMastraRuntimePrivateKey(value?: Uint8Array | string): Uin
   return decoded
 }
 
-function buildSidecar({
+function buildToolCallSidecar({
   call,
   operation,
   args,
@@ -241,7 +341,7 @@ function buildSidecar({
   args: unknown
   outcome: MastraRuntimeOutcome
   recordHash: string
-}): MastraRuntimeSidecar {
+}): MastraRuntimeToolCallSidecar {
   const base = {
     framework: 'mastra-runtime' as const,
     surface: call.surface,
@@ -256,6 +356,34 @@ function buildSidecar({
   return outcome.status === 'ok'
     ? { ...base, status: 'ok', result: outcome.result }
     : { ...base, status: 'error', error: outcome.error }
+}
+
+function buildWorkflowSidecar({
+  event,
+  operation,
+  payload,
+  result,
+  recordHash,
+}: {
+  event: MastraRuntimeWorkflowEvent
+  operation: string
+  payload: unknown
+  result: unknown
+  recordHash: string
+}): MastraRuntimeWorkflowSidecar {
+  const base: Omit<MastraRuntimeWorkflowSidecar, 'status' | 'result' | 'error'> = {
+    framework: 'mastra-runtime' as const,
+    surface: event.surface,
+    workflow_name: event.workflowName,
+    run_id: event.runId,
+    event_name: event.eventName,
+    operation,
+    payload,
+    record_hash: recordHash,
+  }
+  if (event.stepName) base.step_name = event.stepName
+  if (event.informedBy && event.informedBy.length > 0) base.informed_by = [...event.informedBy]
+  return { ...base, status: 'ok', result }
 }
 
 function tryResolvePrivateKey(value?: Uint8Array | string): Uint8Array | undefined {

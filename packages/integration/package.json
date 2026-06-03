@@ -37,6 +37,7 @@
     "openai-agents-runtime-smoke": "tsx examples/openai-agents-runtime/openai-agents-runtime-smoke.ts",
     "openai-responses-tool-call-smoke": "tsx examples/openai-responses/openai-responses-tool-call-smoke.ts",
     "mastra-runtime-smoke": "tsx examples/mastra-runtime/mastra-runtime-smoke.ts",
+    "mastra-workflow-suspend-resume-smoke": "tsx examples/mastra-runtime/mastra-workflow-suspend-resume-smoke.ts",
     "browser-workflow-receipt-smoke": "tsx examples/browser-workflow/browser-workflow-receipt-smoke.ts",
     "browser-use-workflow-receipt-smoke": "tsx examples/browser-workflow/browser-use-workflow-receipt-smoke.ts",
     "stagehand-workflow-receipt-smoke": "tsx examples/browser-workflow/stagehand-workflow-receipt-smoke.ts",
