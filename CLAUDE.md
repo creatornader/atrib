@@ -63,6 +63,7 @@ atrib/
         llamaindex-memory/     # LlamaIndex.TS Memory proof with hash-only atrib records.
         a2a-handoff/           # Official A2A SDK JSON-RPC handoff proof with verifier-gated informed_by follow-up.
         google-adk/            # Google ADK InMemoryRunner + BasePlugin + FunctionTool proof for hash-only atrib signing at the ADK tool callback boundary.
+        mastra-runtime/        # Mastra MCPClient + MCPServer stdio proof for hash-only atrib signing at the runtime tool boundary.
         browser-workflow/      # Browser-shaped plus browser-use-hosted observe/click/fill/submit receipt proofs with hash-only atrib records and local sidecars.
         brief-dcbench/         # Brief dcbench-shaped decision-compliance evidence proof linking context lookup, agent action, and score through informed_by.
         proof-log-receipt/     # Single-hash receipt proof for checkpoint signature, inclusion proof, archive body/evidence retrieval, and verifier output.

@@ -6025,6 +6025,8 @@ Candidate demo:
 - A Mastra adapter may need to capture skill loading, memory state, file-system context, and MCP auth diagnostics in addition to tool calls.
 - If Mastra's hosted platform exposes post-hoc run events rather than in-process callbacks, the correct shape may be [§9.5](atrib-spec.md#95-pattern-post-hoc-api-import--consumer-re-sign), not a normal [§9.3](atrib-spec.md#93-pattern-callback--lifecycle-handlers-sdk-native-interception) adapter.
 
+**Follow-up, 2026-06-03:** [`packages/integration/examples/mastra-runtime/`](packages/integration/examples/mastra-runtime/) now proves the local `@mastra/mcp` path: `MCPClient` connects to `MCPServer` over stdio, executes a Mastra `createTool()` tool, signs a hash-only atrib record, and keeps raw payloads in local sidecars. That removes the local MCP source-verification gap. Hosted Mastra Platform run imports, post-hoc event APIs, skill loading, memory state, file-system context, and MCP auth diagnostics remain unread.
+
 **Likely outcome (not committed):** raise source verification priority. Do not commit to an adapter shape until Mastra source and hosted-runtime APIs are read.
 
 **Cross-references.**

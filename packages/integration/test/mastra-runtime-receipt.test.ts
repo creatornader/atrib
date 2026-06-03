@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { execFile } from 'node:child_process'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
+import { canonicalRecord, genesisChainRoot, hexEncode, sha256, verifyRecord } from '@atrib/mcp'
+import { describe, expect, it } from 'vitest'
+import { MastraRuntimeReceiptRecorder } from '../src/mastra-runtime-receipt.js'
+
+const execFileAsync = promisify(execFile)
+const workspaceRoot = join(process.cwd(), '..', '..')
+const tsxBin = join(
+  workspaceRoot,
+  'node_modules',
+  '.bin',
+  process.platform === 'win32' ? 'tsx.cmd' : 'tsx',
+)
+
+describe('Mastra runtime receipt example', () => {
+  it('signs a Mastra MCP client tool call through the runnable smoke', async () => {
+    const { stdout } = await execFileAsync(
+      tsxBin,
+      ['examples/mastra-runtime/mastra-runtime-smoke.ts'],
+      {
+        cwd: process.cwd(),
+        timeout: 30000,
+        maxBuffer: 1024 * 1024,
+      },
+    )
+    const result = JSON.parse(stdout.trim()) as {
+      ok: boolean
+      mastra: {
+        core: string
+        mcp: string
+        server: string
+        client: string
+        transport: string
+      }
+      signed_records: number
+      operations: string[]
+      record_hashes: string[]
+      final_receipt: {
+        status: string
+        approval_id: string
+        sku: string
+        quantity: number
+      }
+      event_counts: {
+        listed_tools: number
+        executed_tools: number
+      }
+      privacy: {
+        public_records_hash_only: boolean
+        local_sidecars_keep_payloads: boolean
+      }
+      caveats: string[]
+    }
+
+    expect(result.ok).toBe(true)
+    expect(result.mastra).toMatchObject({
+      core: '1.38.0',
+      mcp: '1.9.0',
+      server: 'MCPServer',
+      client: 'MCPClient',
+      transport: 'stdio',
+    })
+    expect(result.signed_records).toBe(1)
+    expect(result.operations).toEqual(['mastra.mcp-client-tool.procurement.approve_order'])
+    expect(result.record_hashes).toHaveLength(1)
+    expect(result.final_receipt).toEqual({
+      status: 'approved',
+      approval_id: 'mastra-atlas-kit-2',
+      sku: 'atlas-kit',
+      quantity: 2,
+    })
+    expect(result.event_counts).toEqual({
+      listed_tools: 1,
+      executed_tools: 1,
+    })
+    expect(result.privacy).toEqual({
+      public_records_hash_only: true,
+      local_sidecars_keep_payloads: true,
+    })
+    expect(result.caveats.join(' ')).toContain('not a full @atrib/agent Mastra adapter')
+    expect(stdout).not.toContain('orchid Mastra procurement note')
+  })
+
+  it('chains records and keeps Mastra tool content out of public records', async () => {
+    const secret = 'private Mastra note'
+    const contextId = '33333333333333333333333333333333'
+    const recorder = new MastraRuntimeReceiptRecorder({
+      privateKey: new Uint8Array(32).fill(25),
+      contextId,
+      logSubmission: 'disabled',
+      now: () => 1_779_840_100_000,
+    })
+
+    await recorder.toolCall({
+      surface: 'mcp-client-tool',
+      serverName: 'procurement',
+      toolName: 'approve_order',
+      namespacedToolName: 'procurement_approve_order',
+      toolCallId: 'call-1',
+      args: { sku: 'atlas-kit', internal_note: secret },
+      run: () => ({ status: 'approved', internal_note: secret }),
+    })
+    await recorder.toolCall({
+      surface: 'mcp-client-tool',
+      serverName: 'procurement',
+      toolName: 'publish_receipt',
+      namespacedToolName: 'procurement_publish_receipt',
+      toolCallId: 'call-2',
+      args: { receipt_id: 'receipt-1', internal_note: secret },
+      run: () => ({ status: 'published', internal_note: secret }),
+    })
+
+    const records = recorder.getSignedRecords()
+    const sidecars = recorder.getSidecars()
+    const firstHash = `sha256:${hexEncode(sha256(canonicalRecord(records[0]!)))}`
+
+    expect(records).toHaveLength(2)
+    expect(records[0]!.chain_root).toBe(genesisChainRoot(contextId))
+    expect(records[1]!.chain_root).toBe(firstHash)
+    expect(JSON.stringify(records)).not.toContain(secret)
+    expect(JSON.stringify(sidecars)).toContain(secret)
+    expect(await verifyRecord(records[0]!)).toBe(true)
+    expect(await verifyRecord(records[1]!)).toBe(true)
+  })
+})
