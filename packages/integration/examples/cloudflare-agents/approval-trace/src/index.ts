@@ -490,6 +490,7 @@ function tracePacket(
   }))
   const get = (label: string) => parsed.find((entry) => entry.label === label)
   const trigger = get('trigger')
+  const triage = get('triage')
   const decision = get('approval') ?? get('rejection')
   const execution = get('execution')
   const outcome = get('outcome')
@@ -528,7 +529,9 @@ function tracePacket(
         name: 'Autonomous trigger context',
         evidence:
           'The trace starts with the issue or schedule trigger that caused the agent to work before human review.',
-        evidence_labels: trigger ? ['trigger'] : [],
+        evidence_labels: [trigger ? 'trigger' : null, triage ? 'triage' : null].filter(
+          Boolean,
+        ) as string[],
       },
       {
         name: 'Decision context',
@@ -682,6 +685,53 @@ export class ApprovalTraceAgent extends Agent<Env> {
       body: triggerBody,
       proof: await submitRecord(this.env, triggerRecord),
     })
+    const triageBody = {
+      kind: 'autonomous_triage',
+      trigger_record_hash: triggerHash,
+      repository: 'cloudflare/agents-demo',
+      issue_id: 'workers-issue-4821',
+      route: '/v1/report',
+      intent: 'add rate limiting',
+      policy_result: 'human_review_required',
+      gathered_context: [
+        'GitHub issue webhook payload',
+        'Cloudflare Workers route target',
+        'repository write policy',
+      ],
+    }
+    this.saveNativeEvent(
+      runId,
+      emitNativeEvent({
+        channel: 'agents:workflow',
+        type: 'workflow:triage_completed',
+        agent: 'ApprovalTraceAgent',
+        name: runId,
+        payload: {
+          route: triageBody.route,
+          intent: triageBody.intent,
+          policyResult: triageBody.policy_result,
+        },
+      }),
+    )
+    const triageRecord = await signObservation({
+      env: this.env,
+      role: 'agent',
+      key: privateKey(this.env.ATRIB_AGENT_PRIVATE_KEY),
+      contextId,
+      chainRoot: triggerHash,
+      toolName: 'autonomous_triage',
+      body: triageBody,
+      informedBy: [triggerHash],
+    })
+    const triageHash = recordHash(triageRecord)
+    await this.saveTraceRecord({
+      runId,
+      label: 'triage',
+      signer: 'agent',
+      record: triageRecord,
+      body: triageBody,
+      proof: await submitRecord(this.env, triageRecord),
+    })
     const plan = await planAction(this.env, input.prompt)
     const payloadHash = hashUnknown(plan.payload)
     const body = {
@@ -713,10 +763,10 @@ export class ApprovalTraceAgent extends Agent<Env> {
       role: 'agent',
       key: privateKey(this.env.ATRIB_AGENT_PRIVATE_KEY),
       contextId,
-      chainRoot: triggerHash,
+      chainRoot: triageHash,
       toolName: 'proposal',
       body,
-      informedBy: [triggerHash],
+      informedBy: [triageHash],
     })
     const proposalHash = recordHash(record)
     await this.saveTraceRecord({
@@ -1079,13 +1129,14 @@ export class ApprovalTraceAgent extends Agent<Env> {
       ORDER BY
         CASE label
           WHEN 'trigger' THEN 1
-          WHEN 'proposal' THEN 2
-          WHEN 'approval' THEN 3
-          WHEN 'rejection' THEN 3
-          WHEN 'preview' THEN 4
-          WHEN 'execution' THEN 5
-          WHEN 'outcome' THEN 6
-          WHEN 'handoff' THEN 7
+          WHEN 'triage' THEN 2
+          WHEN 'proposal' THEN 3
+          WHEN 'approval' THEN 4
+          WHEN 'rejection' THEN 4
+          WHEN 'preview' THEN 5
+          WHEN 'execution' THEN 6
+          WHEN 'outcome' THEN 7
+          WHEN 'handoff' THEN 8
           ELSE 99
         END ASC,
         created_at ASC

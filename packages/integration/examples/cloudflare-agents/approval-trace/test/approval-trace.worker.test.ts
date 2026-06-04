@@ -214,11 +214,12 @@ describe('Cloudflare approval trace Worker', () => {
     const pending = await createRun(runId)
 
     expect(pending.status).toBe('pending_approval')
-    expect(labels(pending)).toEqual(['trigger', 'proposal'])
+    expect(labels(pending)).toEqual(['trigger', 'triage', 'proposal'])
 
     const trace = await approveRun(runId)
     const records = byLabel(trace)
     const trigger = records.get('trigger')!
+    const triage = records.get('triage')!
     const proposal = records.get('proposal')!
     const approval = records.get('approval')!
     const preview = records.get('preview')!
@@ -229,6 +230,7 @@ describe('Cloudflare approval trace Worker', () => {
     expect(trace.status).toBe('succeeded')
     expect(labels(trace)).toEqual([
       'trigger',
+      'triage',
       'proposal',
       'approval',
       'preview',
@@ -239,7 +241,8 @@ describe('Cloudflare approval trace Worker', () => {
     await expectSignedTrace(trace)
     expectTracePacketBasics(trace)
 
-    expect(sorted(proposal.record.informed_by)).toEqual([trigger.record_hash])
+    expect(sorted(triage.record.informed_by)).toEqual([trigger.record_hash])
+    expect(sorted(proposal.record.informed_by)).toEqual([triage.record_hash])
     expect(sorted(approval.record.informed_by)).toEqual([proposal.record_hash])
     expect(sorted(preview.record.informed_by)).toEqual([approval.record_hash])
     expect(sorted(execution.record.informed_by)).toEqual([approval.record_hash])
@@ -297,13 +300,15 @@ describe('Cloudflare approval trace Worker', () => {
     const trace = await rejectRun(runId)
     const records = byLabel(trace)
     const trigger = records.get('trigger')!
+    const triage = records.get('triage')!
     const proposal = records.get('proposal')!
     const rejection = records.get('rejection')!
 
     expect(trace.status).toBe('rejected')
-    expect(labels(trace)).toEqual(['trigger', 'proposal', 'rejection'])
+    expect(labels(trace)).toEqual(['trigger', 'triage', 'proposal', 'rejection'])
     await expectSignedTrace(trace)
-    expect(sorted(proposal.record.informed_by)).toEqual([trigger.record_hash])
+    expect(sorted(triage.record.informed_by)).toEqual([trigger.record_hash])
+    expect(sorted(proposal.record.informed_by)).toEqual([triage.record_hash])
     expect(sorted(rejection.record.informed_by)).toEqual([proposal.record_hash])
     expect(trace.records.some((record) => record.signer === 'action_mcp')).toBe(false)
     expect(trace.trace_packet.answer).toMatchObject({
@@ -326,6 +331,7 @@ describe('Cloudflare approval trace Worker', () => {
     expect(trace.status).toBe('failed')
     expect(labels(trace)).toEqual([
       'trigger',
+      'triage',
       'proposal',
       'approval',
       'preview',
