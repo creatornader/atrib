@@ -21,6 +21,8 @@ describe('MCP OAuth live archive helper', () => {
 
       expect(receipt.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
       expect(receipt.context_id).toBe('1234567890abcdef1234567890abcdef')
+      expect(receipt.args_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(receipt.result_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
       expect(receipt.log_index).toBe(0)
       expect(receipt.explorer_action_url).toBe(`https://explore.test/action/${receipt.record_hash}`)
       expect(receipt.raw_bearer_token_published).toBe(false)

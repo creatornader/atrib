@@ -7,6 +7,8 @@ describe('MCP OAuth evidence harness', () => {
     const result = await runMcpOAuthEvidenceHarness()
 
     expect(result.record.context_id).toBe('1234567890abcdef1234567890abcdef')
+    expect(result.record.args_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(result.record.result_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
     expect(result.sidecar.resolvedFacts).toEqual({ tool_name: 'read_file' })
     expect(result.sidecar.authorizationEvidence).toHaveLength(1)
     expect(JSON.stringify(result.sidecar.authorizationEvidence)).not.toContain(

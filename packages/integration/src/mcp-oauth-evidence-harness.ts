@@ -48,7 +48,7 @@ export async function runMcpOAuthEvidenceHarness(): Promise<McpOAuthEvidenceHarn
     creatorKey: base64urlEncode(TEST_PRIVATE_KEY),
     serverUrl: RESOURCE,
     logSubmission: 'disabled',
-    disclosure: { tool_name: 'verbatim' },
+    disclosure: { tool_name: 'verbatim', args: 'plain-sha256', result: 'plain-sha256' },
     authorizationEvidence: {
       claimSource: 'extraClaims',
       includeDpopProof: true,

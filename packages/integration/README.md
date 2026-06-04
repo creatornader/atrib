@@ -148,7 +148,7 @@ To create a public archived OAuth evidence fixture for explorer QA, run:
 pnpm --filter @atrib/integration mcp-oauth-live-archive
 ```
 
-The live archive script uses the same fixture MCP authorization environment, submits the signed record to `log.atrib.dev`, archives the record body and selected evidence at `archive.atrib.dev`, fetches the evidence projection, checks that the raw bearer token did not publish, and prints the public explorer action URL. Override endpoints with `ATRIB_LIVE_OAUTH_LOG_ENDPOINT`, `ATRIB_LIVE_OAUTH_ARCHIVE_ENDPOINT`, and `ATRIB_LIVE_OAUTH_EXPLORER_ORIGIN` when testing against local or staging services.
+The live archive script uses the same fixture MCP authorization environment, signs request and result commitments, submits the record to `log.atrib.dev`, archives the record body and selected evidence at `archive.atrib.dev`, fetches the evidence projection, checks that the raw bearer token did not publish, and prints the public explorer action URL. Override endpoints with `ATRIB_LIVE_OAUTH_LOG_ENDPOINT`, `ATRIB_LIVE_OAUTH_ARCHIVE_ENDPOINT`, and `ATRIB_LIVE_OAUTH_EXPLORER_ORIGIN` when testing against local or staging services.
 
 For deployments that need shared DPoP replay state or controlled opaque-token introspection, [`examples/cloudflare-agents/oauth-evidence-infra/`](examples/cloudflare-agents/oauth-evidence-infra/) provides a Cloudflare Worker and Durable Object reference for the `@atrib/verify` HTTP replay-cache and introspection helpers.
 
