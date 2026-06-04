@@ -16,6 +16,9 @@ export type {
   OnRecordSidecar,
   PreCallTransform,
   PreCallTransformContext,
+  RecordReferenceCandidate,
+  RecordReferenceResolver,
+  RecordReferenceSource,
 } from './middleware.js'
 
 export type { AtribRecord, UnsignedAtribRecord, DecodedToken, SignerEntry } from './types.js'
@@ -68,7 +71,11 @@ export {
   SHA256_REF_GLOBAL_PATTERN,
   extractRecordHashes,
   extractRecordReferenceCandidates,
+  ATRIB_PARENT_RECORD_HASH_ENV,
+  parentRecordHashFromEnv,
 } from './refs.js'
+export { ATRIB_CONTEXT_ID_ENV, buildSubagentProducerEnv, chainTailEnvName } from './subagent.js'
+export type { BuildSubagentProducerEnvOptions } from './subagent.js'
 export {
   getPublicKey,
   signRecord,

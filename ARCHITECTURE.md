@@ -242,6 +242,10 @@ Runtime mounting is only half the problem. Real support and RCA work often cross
 
 The continuation shape is documented in spec [§7.8](atrib-spec.md#78-cross-harness-continuation-packets). A handoff that wants a local agent to resume without guessing needs record bodies or archive references, redacted ticket and log evidence, skill pack names and hashes, the latest chain tail, provenance anchors, and signed diagnostics for hosted-agent failures. This keeps atrib in the substrate role: Axiom-style wide logs keep tenant context and request/response evidence, support systems keep customer context and thread state, and atrib proves how the agent moved through both.
 
+Same-session agent-to-subagent handoff uses a narrower producer bundle. When the parent dispatch hash exists before the child signs, adapters pass `ATRIB_CONTEXT_ID`, `ATRIB_CHAIN_TAIL_<context_id>`, and `ATRIB_PARENT_RECORD_HASH` together, preferably via `@atrib/mcp` `buildSubagentProducerEnv()`. This preserves session scope, chain continuity, and the explicit parent edge without adding a handoff event type.
+
+Producer-side `informed_by` validation is source-aware. Parent env seeds stay on the producer-owned path, while callback and auto-detected refs can be resolver-accepted through local mirrors plus log lookup before signing. `@atrib/mcp-wrap` uses that guard for configured `informedByPaths`, so temp proof hashes stay evidence instead of becoming graph edges.
+
 The receiving side of a Pattern 3 handoff is now a verifier concern, not a graph concern. `@atrib/verify` exposes `verifyHandoffClaims()` and `handoffClaimsFromEvidencePacket()` so Agent B can accept or reject Agent A's `record_hash` claim before acting. It checks the supplied signed record, private body commitment, inclusion proof, checkpoint signature when the log key is known, trusted signer set, allowed context set, and freshness bound, then returns `accepted_record_hashes` for Agent B's `informed_by`. [D105](DECISIONS.md#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance) added the extension-first verifier path. [D106](DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7) promotes the agent-facing wrapper as `@atrib/verify-mcp` after two independent receiving flows made verify-before-linking routine.
 
 ### Why each adapter is different
@@ -450,7 +454,7 @@ Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hash
 ## Further reading
 
 - [atrib-spec.md](atrib-spec.md), the complete protocol specification ([§0](atrib-spec.md#0-foundations)-[§7](atrib-spec.md#7-harness-integration-patterns))
-- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D113](DECISIONS.md#d113-unvalidated-informed_by-refs-are-omitted-by-default); [D053](DECISIONS.md#d053-inclusion-proof-aggregation-flagged-for-follow-up) remains a placeholder ADR awaiting a formal write-up)
+- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D116](DECISIONS.md#d116-producer-side-informed_by-validation-is-source-aware); [D053](DECISIONS.md#d053-inclusion-proof-aggregation-flagged-for-follow-up) remains a placeholder ADR awaiting a formal write-up)
 - [packages/agent/README.md](packages/agent/README.md) -- adapter table with quick-start snippets for every framework
 - [packages/integration/examples/signer-proxy/](packages/integration/examples/signer-proxy/) -- sandbox signer proxy example ([§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution) / [D102](DECISIONS.md#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox))
 - [spec/conformance/1.4/](spec/conformance/1.4/) -- signing and adversarial record conformance corpus ([§1.4](atrib-spec.md#14-signing-and-verification) / [D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus))

@@ -14,6 +14,7 @@ const TEST_PRIVATE_KEY = new Uint8Array(32).fill(42)
 const TEST_PRIVATE_KEY_B64 = base64urlEncode(TEST_PRIVATE_KEY)
 const VALID_PARENT_RECORD_HASH = 'sha256:' + 'a'.repeat(64)
 const OTHER_RECORD_HASH = 'sha256:' + 'b'.repeat(64)
+const THIRD_RECORD_HASH = 'sha256:' + 'c'.repeat(64)
 
 async function withParentRecordHash(value: string | undefined, fn: () => Promise<void>) {
   const prior = process.env['ATRIB_PARENT_RECORD_HASH']
@@ -311,6 +312,124 @@ describe('atrib() middleware', () => {
         expect(observed).toHaveLength(1)
         expect(informedByOf(observed[0])).toEqual([VALID_PARENT_RECORD_HASH, OTHER_RECORD_HASH])
       })
+    })
+
+    it('filters callback and auto-detected refs through recordReferenceResolver', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const originalHandler = vi.fn().mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+      })
+      const observed: AtribRecord[] = []
+      const resolver = vi.fn(async ({ recordHash }) => recordHash === OTHER_RECORD_HASH)
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        logSubmission: 'disabled',
+        autoDetectInformedByFromArgs: true,
+        informedBy: () => [OTHER_RECORD_HASH, THIRD_RECORD_HASH],
+        recordReferenceResolver: resolver,
+        onRecord: (record) => {
+          observed.push(record)
+        },
+      })
+      registerToolHandler(originalHandler)
+
+      const handler = getToolHandler()!
+      const request = createToolCallRequest('search_web')
+      request.params.arguments = { record_hash: THIRD_RECORD_HASH }
+      await handler(request, {})
+
+      expect(observed).toHaveLength(1)
+      expect(informedByOf(observed[0])).toEqual([OTHER_RECORD_HASH])
+      expect(resolver).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recordHash: OTHER_RECORD_HASH,
+          source: 'informedBy-callback',
+          toolName: 'search_web',
+        }),
+      )
+      expect(resolver).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recordHash: THIRD_RECORD_HASH,
+          source: 'auto-detect',
+          toolName: 'search_web',
+        }),
+      )
+    })
+
+    it('preserves parent env seed even when resolver rejects other refs', async () => {
+      await withParentRecordHash(VALID_PARENT_RECORD_HASH, async () => {
+        const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+        const originalHandler = vi.fn().mockResolvedValue({
+          content: [{ type: 'text', text: 'ok' }],
+        })
+        const observed: AtribRecord[] = []
+        const resolver = vi.fn(async () => false)
+
+        atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://test.example.com',
+          logSubmission: 'disabled',
+          informedBy: () => [OTHER_RECORD_HASH],
+          recordReferenceResolver: resolver,
+          onRecord: (record) => {
+            observed.push(record)
+          },
+        })
+        registerToolHandler(originalHandler)
+
+        const handler = getToolHandler()!
+        await handler(createToolCallRequest('search_web'), {})
+
+        expect(observed).toHaveLength(1)
+        expect(informedByOf(observed[0])).toEqual([VALID_PARENT_RECORD_HASH])
+        expect(resolver).toHaveBeenCalledTimes(1)
+        expect(resolver).toHaveBeenCalledWith(
+          expect.objectContaining({
+            recordHash: OTHER_RECORD_HASH,
+            source: 'informedBy-callback',
+          }),
+        )
+      })
+    })
+
+    it('drops refs when recordReferenceResolver throws without failing the tool call', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const resultObj = { content: [{ type: 'text', text: 'ok' }] }
+      const originalHandler = vi.fn().mockResolvedValue(resultObj)
+      const observed: AtribRecord[] = []
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      try {
+        atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://test.example.com',
+          logSubmission: 'disabled',
+          informedBy: () => [OTHER_RECORD_HASH],
+          recordReferenceResolver: async () => {
+            throw new Error('resolver down')
+          },
+          onRecord: (record) => {
+            observed.push(record)
+          },
+        })
+        registerToolHandler(originalHandler)
+
+        const handler = getToolHandler()!
+        const result = await handler(createToolCallRequest('search_web'), {})
+
+        expect(result).toBe(resultObj)
+        expect((resultObj as any)._meta?.atrib).toBeDefined()
+        expect(observed).toHaveLength(1)
+        expect(informedByOf(observed[0])).toBeUndefined()
+        expect(warnSpy).toHaveBeenCalledWith(
+          'atrib: recordReferenceResolver threw',
+          expect.any(Error),
+        )
+      } finally {
+        warnSpy.mockRestore()
+      }
     })
 
     it('does not auto-detect prose hashes as informed_by claims', async () => {

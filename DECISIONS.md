@@ -5623,6 +5623,197 @@ The signed record uses:
 - [`packages/integration/test/google-adk-python-attribution.test.ts`](packages/integration/test/google-adk-python-attribution.test.ts),
   opt-in Python smoke coverage.
 
+## D115: Agent-to-subagent handoff uses a three-signal producer bundle
+
+**Date:** 2026-06-04
+
+**Status:** Accepted
+
+**Extends:** [D065](#d065-atrib_chain_tail_context_id-env-var-for-cross-producer-chain-tail-handoff),
+[D104](#d104-parent-child-threading-uses-atrib_parent_record_hash),
+[D105](#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance),
+and [D113](#d113-unvalidated-informed_by-refs-are-omitted-by-default).
+
+**Context.** Agent-to-subagent workflows are now a routine agent runtime shape:
+coding agents spawn workers, orchestrators dispatch specialists, hosted agents
+hand work to local agents, and framework runtimes expose handoff or delegation
+callbacks. atrib already had the pieces, but they were documented separately:
+`ATRIB_CONTEXT_ID` for session scope, `ATRIB_CHAIN_TAIL_<context_id>` for chain
+continuity, `ATRIB_PARENT_RECORD_HASH` for a parent dispatch edge, and Pattern 3
+verification for received handoff claims.
+
+That separation made the common path too easy to implement partially. A child
+could inherit the context but start a split chain, chain to the parent but lack
+an explicit parent edge, or cite a temp smoke/hash artifact as `informed_by`
+without proving the target record exists. The live outreach-master session
+showed this failure class: the session itself was valid, but some downstream
+records preserved unresolved `INFORMED_BY` claims from local proof outputs.
+
+**Decision.** Same-session subagent spawns use a single producer handoff bundle.
+When the parent has signed the dispatch record before the child signs, the
+parent or adapter MUST pass these signals together:
+
+- `ATRIB_CONTEXT_ID=<parent-context-id>`
+- `ATRIB_CHAIN_TAIL_<parent-context-id>=<latest-tail-record-hash>`
+- `ATRIB_PARENT_RECORD_HASH=<parent-dispatch-record-hash>`
+
+`@atrib/mcp` exposes `buildSubagentProducerEnv()` so adapters can build this
+bundle without hand-copying env-var rules. When the dispatch record is also the
+latest chain tail, the helper uses the parent dispatch hash for both
+`ATRIB_CHAIN_TAIL_<context_id>` and `ATRIB_PARENT_RECORD_HASH`. When a runtime
+has a fresher tail, it can pass a distinct `chainTailRecordHash`.
+
+If the parent dispatch record hash is not available before the child signs,
+the adapter MUST NOT preserve a guessed or unresolved parent edge. It should use
+one of three shapes instead:
+
+- pre-call signing for the spawn/handoff action, then pass the resulting parent
+  hash to the child bundle;
+- Pattern 3 evidence, where the receiving agent calls `atrib-verify` and uses
+  only `accepted_record_hashes` in its follow-up `informed_by`; or
+- a later annotation or revision record that explains the relationship after
+  both sides are signed.
+
+Temp smoke hashes, output commitment hashes, transcript snippets, and private
+proof labels are evidence metadata. They are not `informed_by` targets unless
+they are also durable atrib record hashes that resolve locally or through a
+trusted packet. `allow_unresolved_informed_by: true` remains reserved for
+deliberate dangling fixtures and diagnostics.
+
+**Alternatives rejected.**
+
+- _Promote a dedicated `handoff` event_type now._ Rejected. The producer bundle
+  fixes the common same-session case with existing `chain_root` and
+  `informed_by` semantics. [D073](#d073-handoff-event_type-byte-placeholder-adr)
+  remains the reserved decision point for runtimes that need handoff-specific
+  graph behavior.
+- _Only document `ATRIB_PARENT_RECORD_HASH`._ Rejected. It links the parent edge
+  but does not preserve session scope or chain continuity by itself.
+- _Let child producers keep unresolved parent refs and repair later._ Rejected.
+  Repair records can explain history, but new producers should not create
+  avoidable missing links.
+
+**Consequences.**
+
+- Adapter authors have one helper for same-session child env construction
+  instead of three handwritten conventions.
+- The parent-to-child direction stays producer-side. The child-to-parent return
+  direction remains verifier-side when the parent is asked to build on a child
+  packet.
+- Existing signed records are immutable. This decision prevents the next class
+  of broken links; it does not erase historical dangling nodes.
+- SessionStart and multi-creator awareness remain a separate read-side problem
+  under [P026](#p026-multi-creator-awareness-in-sessionstart-context-surface).
+- This does not make parent env seeds depend on child-visible mirror or public
+  log lookup. [D116](#d116-producer-side-informed_by-validation-is-source-aware)
+  adds resolver-backed validation for callback and auto-detected refs while
+  keeping parent dispatch hashes on the producer-owned path.
+
+**Cross-references.**
+
+- [`packages/mcp/src/subagent.ts`](packages/mcp/src/subagent.ts),
+  `buildSubagentProducerEnv()` helper.
+- [`packages/mcp/test/subagent.test.ts`](packages/mcp/test/subagent.test.ts),
+  helper coverage.
+- [§9.8](atrib-spec.md#98-composing-patterns), runtime composition guidance.
+- [§7.8](atrib-spec.md#78-cross-harness-continuation-packets),
+  cross-harness packet shape.
+
+## D116: Producer-side informed_by validation is source-aware
+
+**Date:** 2026-06-04
+
+**Status:** Accepted
+
+**Extends:** [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type),
+[D104](#d104-parent-child-threading-uses-atrib_parent_record_hash),
+[D113](#d113-unvalidated-informed_by-refs-are-omitted-by-default),
+and [D115](#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle).
+
+**Context.** [D115](#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle)
+fixed the same-session agent-to-subagent spawn shape, but the remaining
+missing-link class was broader than parent-child threading. `@atrib/mcp`
+accepted any shape-valid `sha256:<64-hex>` returned by an `informedBy` callback or
+structured auto-detect path. That preserved backwards compatibility, but it let
+wrapper configs promote temp smoke hashes, output commitments, or private proof
+labels into signed `informed_by` claims when those hashes were not durable atrib
+records.
+
+At the same time, a naive "resolve every ref before signing" rule would break the
+subagent path [D115](#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle)
+is trying to preserve. A parent process can sign a dispatch record and pass that
+hash to a child before the child's mirror or the public log can see it. That hash
+is producer-owned structure, not an external evidence claim.
+
+**Decision.** `@atrib/mcp` now treats `informed_by` candidates by source:
+
+- `parent-env`: `ATRIB_PARENT_RECORD_HASH` seeds are shape-validated and kept as
+  producer-owned spawn anchors. They are not looked up through the child's mirror
+  or the public log.
+- `informedBy-callback`: explicit host callback refs are shape-validated, then
+  resolver-accepted when a `recordReferenceResolver` is configured.
+- `auto-detect`: structured auto-detected refs follow the same resolver path as
+  callback refs.
+
+`@atrib/mcp` exposes `recordReferenceResolver` on `AtribOptions`, plus
+`RecordReferenceCandidate` metadata (`recordHash`, `source`, `toolName`,
+`contextId`, `params`) so hosts can make source-aware decisions. Resolver errors
+are caught, the candidate is dropped, and the wrapped tool call still succeeds
+per [§5.8](atrib-spec.md#58-degradation-contract).
+
+`@atrib/mcp` also exposes a shared `defaultRecordReferenceResolver()` for Node
+hosts. It checks local mirrors under `ATRIB_AUTOCHAIN_SOURCE`, `ATRIB_MIRROR_FILE`,
+and `ATRIB_RECORDS_DIR` / `~/.atrib/records`, then falls back to public log lookup.
+It returns `found`, `not-found`, or `unknown`; hosts that require validated refs
+drop both `not-found` and `unknown`.
+
+`@atrib/mcp-wrap` now wires this resolver for configured `informedByPaths`. It
+checks the configured wrapper mirror first, then uses the shared resolver. This
+keeps valid cross-producer local links, such as refs to `atrib-emit` observations,
+while dropping temp proof hashes that have no durable record. `@atrib/emit` now
+uses the same shared resolver implementation for explicit emit refs, preserving
+its existing [D113](#d113-unvalidated-informed_by-refs-are-omitted-by-default)
+behavior without duplicating mirror and log lookup code.
+
+**Alternatives rejected.**
+
+- _Make every `informed_by` candidate perform mandatory lookup._ Rejected. It
+  would drop valid parent dispatch hashes during the spawn race between parent
+  signing and child-visible durability.
+- _Keep resolver logic only in `@atrib/emit`._ Rejected. The latest missing-link
+  incident flowed through wrapper-signed tool calls, so the guard must sit at the
+  shared middleware boundary too.
+- _Validate only against the wrapper's own mirror._ Rejected. Valid refs often
+  point to records signed by a sibling producer, especially `atrib-emit`.
+- _Treat unknown lookup status as acceptable._ Rejected for wrapper-configured
+  refs. If validation is unavailable, the safer graph behavior is to omit the
+  edge and leave the evidence in local sidecar or prose.
+
+**Consequences.**
+
+- The common `mcp-wrap informedByPaths` path no longer signs unresolved refs when
+  the target is absent from local mirrors and the log lookup.
+- Parent-to-child subagent anchors still work before log inclusion or child
+  mirror visibility.
+- Raw `@atrib/mcp` consumers keep shape-only behavior unless they configure a
+  resolver. This preserves API compatibility, but production wrappers should pass
+  a resolver when they promote argument fields into `informed_by`.
+- `@atrib/emit` and `@atrib/mcp-wrap` now share resolver behavior, reducing drift
+  between explicit cognitive records and wrapper-signed tool records.
+
+**Cross-references.**
+
+- [`packages/mcp/src/middleware.ts`](packages/mcp/src/middleware.ts),
+  source-aware candidate handling.
+- [`packages/mcp/src/record-reference.ts`](packages/mcp/src/record-reference.ts),
+  shared local mirror plus log resolver.
+- [`packages/mcp/src/mirror.ts`](packages/mcp/src/mirror.ts),
+  explicit mirror hash lookup.
+- [`packages/mcp-wrap/src/wrap.ts`](packages/mcp-wrap/src/wrap.ts),
+  wrapper resolver wiring.
+- [`services/atrib-emit/src/reference-resolution.ts`](services/atrib-emit/src/reference-resolution.ts),
+  shared resolver reuse.
+
 ---
 
 # Pending decisions
