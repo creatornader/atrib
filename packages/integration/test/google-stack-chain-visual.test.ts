@@ -3,6 +3,8 @@
 import { createServer, type Server } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { runInNewContext } from 'node:vm'
 import { chromium, type Browser } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -71,9 +73,30 @@ describe('Google stack chain visual workbench', () => {
     await page.close()
   })
 
+  it('renders from file URL through the embedded snapshot fallback', async () => {
+    const page = await browser.newPage({ viewport: { width: 1000, height: 720 } })
+    const consoleErrors: string[] = []
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text())
+    })
+    page.on('pageerror', (error) => consoleErrors.push(error.message))
+
+    await page.goto(pathToFileURL(join(root, 'index.html')).href)
+    await expect.poll(() => page.locator('#proofStatus').textContent()).toBe('local proof ready')
+    await expect.poll(() => page.locator('.node').count()).toBe(4)
+    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(4)
+    expect(consoleErrors).toEqual([])
+    await page.close()
+  })
+
   it('pins the static visual fixture to the current proof snapshot', async () => {
     const fixture = JSON.parse(await readFile(join(root, 'proof-snapshot.json'), 'utf8'))
+    const snapshotScript = await readFile(join(root, 'proof-snapshot.js'), 'utf8')
+    const context = { window: {} as { GOOGLE_STACK_PROOF_SNAPSHOT?: unknown } }
+    runInNewContext(snapshotScript, context)
+    const scriptFixture = context.window.GOOGLE_STACK_PROOF_SNAPSHOT
 
+    expect(scriptFixture).toEqual(fixture)
     expect(fixture.nodes.map((node: { record_hash: string }) => node.record_hash)).toEqual([
       'sha256:e5f103d959cbb1e316e6d658b35fabc547b6b9b3bd530d0165cfbe48155cc6db',
       'sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9',

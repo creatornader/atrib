@@ -552,6 +552,7 @@ th {
   font-weight: 780;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 tbody tr {
@@ -578,7 +579,7 @@ td:nth-child(3) {
 
 th:nth-child(1),
 td:nth-child(1) {
-  width: 78px;
+  width: 92px;
 }
 
 th:nth-child(2),

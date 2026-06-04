@@ -19,10 +19,15 @@ Open the visual workbench:
 pnpm --filter @atrib/integration google-stack-chain-visual
 ```
 
-Vite prints the local URL. The workbench is a static UI over the current snapshot:
-it shows the four proof stages, lets the operator select each record, highlights
-the matching BigQuery Agent Analytics-shaped fixture row, and keeps the same
-claim limits visible on screen.
+Vite prints the local URL, usually `http://127.0.0.1:5173/`. The workbench also
+supports direct file opening through
+[`visual/index.html`](visual/index.html); the served path is better for normal
+review, while the file path is useful for quick local inspection.
+
+The workbench is a static UI over the current snapshot: it shows the four proof
+stages, lets the operator select each record, highlights the matching BigQuery
+Agent Analytics-shaped fixture row, and keeps the same claim limits visible on
+screen.
 
 The script prints a JSON summary with the AP2 transaction record hash, A2A
 remote and receiver follow-up hashes, and ADK Python tool-callback record hash.
@@ -56,9 +61,17 @@ atrib-specific columns for record hash, parent record hashes, and protocol. This
 is a local fixture for review, not a BigQuery Storage Write API export.
 
 The visual snapshot lives at [`visual/proof-snapshot.json`](visual/proof-snapshot.json).
-When the proof script's pinned hashes change, update that file and rerun
-`pnpm --filter @atrib/integration test -- google-stack-chain-visual` before
-using the workbench in an outreach packet.
+[`visual/proof-snapshot.js`](visual/proof-snapshot.js) is generated from the JSON
+so the workbench can also run from `file://`. When the proof script's pinned
+hashes change, update both files and rerun
+`pnpm --filter @atrib/integration test -- google-stack-chain-visual` before using
+the workbench in an outreach packet.
+
+For a hosted preview, this should deploy as a static site. Vercel or Cloudflare
+Pages is enough; the Cloudflare approval-trace example needs a Worker because it
+has live workflow state, but this Google stack workbench only serves static
+HTML, CSS, JavaScript, and fixture data. Keep the hosted URL private or
+operator-approved until the outreach route is chosen.
 
 ## What it proves
 

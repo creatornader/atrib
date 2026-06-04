@@ -28,14 +28,26 @@ const nodes = {
 }
 
 async function init() {
-  const response = await fetch('./proof-snapshot.json')
-  if (!response.ok) {
-    throw new Error(`Unable to load visual snapshot: ${response.status}`)
-  }
-  state.data = await response.json()
+  state.data = await loadSnapshot()
   state.selectedId = state.data.nodes[0].id
   renderStatic()
   selectNode(state.selectedId)
+}
+
+async function loadSnapshot() {
+  if (window.location.protocol === 'file:' && window.GOOGLE_STACK_PROOF_SNAPSHOT) {
+    return window.GOOGLE_STACK_PROOF_SNAPSHOT
+  }
+  try {
+    const response = await fetch('./proof-snapshot.json')
+    if (!response.ok) {
+      throw new Error(`Unable to load visual snapshot: ${response.status}`)
+    }
+    return await response.json()
+  } catch (error) {
+    if (window.GOOGLE_STACK_PROOF_SNAPSHOT) return window.GOOGLE_STACK_PROOF_SNAPSHOT
+    throw error
+  }
 }
 
 function renderStatic() {
