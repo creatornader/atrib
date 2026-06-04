@@ -51,6 +51,7 @@ extend-exclude = [
     "node_modules/",
     ".turbo/",
     ".remember/",
+    "patches/",
     "pnpm-lock.yaml",
     "metrics/",
 ]

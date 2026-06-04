@@ -565,7 +565,7 @@ export async function runStagehandWorkflowReceiptSmoke(): Promise<StagehandWorkf
   const privateKey = new Uint8Array(32).fill(26)
   const contextId = '737461676568616e642d70726f6f6630'
   const privatePhrase = 'private stagehand note: vendor risk reviewed'
-  const stagehandPackageVersion = '3.4.0'
+  const stagehandPackageVersion = '3.5.0'
   const stagehand = new Stagehand({
     env: 'LOCAL',
     verbose: 0,

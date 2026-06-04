@@ -114,7 +114,7 @@ describe('browser workflow receipt example', () => {
     expect(result.ok).toBe(true)
     expect(result.host).toMatchObject({
       framework: 'stagehand',
-      package_version: '3.4.0',
+      package_version: '3.5.0',
       environment: 'LOCAL',
       action_mode: 'pre-resolved-stagehand-act',
       extracted_confirmation_seen: true,
