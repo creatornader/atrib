@@ -88,17 +88,17 @@ function renderStatic() {
   document.querySelectorAll('.segment').forEach((button) => {
     button.addEventListener('click', () => {
       document.querySelectorAll('.segment').forEach((item) => item.classList.remove('active'))
+      document
+        .querySelectorAll('.segment')
+        .forEach((item) => item.setAttribute('aria-pressed', 'false'))
       button.classList.add('active')
+      button.setAttribute('aria-pressed', 'true')
       const view = button.dataset.view
       if (view === 'analytics') {
-        document
-          .querySelector('#analyticsBand')
-          .scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        scrollToSection(document.querySelector('#analyticsBand'))
       }
       if (view === 'limits') {
-        document
-          .querySelector('.muted-panel')
-          .scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        scrollToSection(document.querySelector('.muted-panel'))
       }
     })
   })
@@ -110,6 +110,7 @@ function renderChainNode(item, index) {
   button.type = 'button'
   button.dataset.nodeId = item.id
   button.setAttribute('aria-label', `Inspect ${item.label}`)
+  button.setAttribute('aria-pressed', 'false')
   button.innerHTML = `
     <span class="node-index">${index + 1}</span>
     <div>
@@ -133,6 +134,7 @@ function renderMobileTab(item) {
   button.type = 'button'
   button.dataset.nodeId = item.id
   button.textContent = item.protocol
+  button.setAttribute('aria-pressed', 'false')
   button.addEventListener('click', () => selectNode(item.id))
   return button
 }
@@ -140,6 +142,9 @@ function renderMobileTab(item) {
 function renderAnalyticsRow(row) {
   const tr = document.createElement('tr')
   tr.dataset.nodeId = row.node_id
+  tr.tabIndex = 0
+  tr.setAttribute('role', 'button')
+  tr.setAttribute('aria-label', `Inspect ${row.protocol} analytics row`)
   tr.innerHTML = `
     <td data-label="Protocol">${escapeHtml(row.protocol)}</td>
     <td data-label="Event" title="${escapeHtml(row.event_type)}">${escapeHtml(formatEvent(row.event_type))}</td>
@@ -148,6 +153,11 @@ function renderAnalyticsRow(row) {
     <td data-label="Record"><code>${shortHash(row.atrib_record_hash)}</code></td>
   `
   tr.addEventListener('click', () => selectNode(row.node_id))
+  tr.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    selectNode(row.node_id)
+  })
   return tr
 }
 
@@ -181,11 +191,18 @@ function selectNode(id) {
   )
 
   document.querySelectorAll('[data-node-id]').forEach((item) => {
-    item.classList.toggle('active', item.dataset.nodeId === id)
+    const active = item.dataset.nodeId === id
+    item.classList.toggle('active', active)
+    if (item.matches('button')) item.setAttribute('aria-pressed', String(active))
   })
   document.querySelectorAll('#analyticsRows tr').forEach((item) => {
     item.classList.toggle('selected', item.dataset.nodeId === id)
   })
+}
+
+function scrollToSection(element) {
+  const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+  element.scrollIntoView({ behavior, block: 'nearest' })
 }
 
 function getSelectedNode() {
@@ -209,13 +226,13 @@ function showToast(message) {
 
 function shortHash(value) {
   if (!value.startsWith('sha256:')) return value
-  return `${value.slice(0, 18)}...${value.slice(-12)}`
+  return `${value.slice(0, 18)}\u2026${value.slice(-12)}`
 }
 
 function shortTrace(value) {
   if (!value) return 'local-only'
   if (value.length <= 18) return value
-  return `${value.slice(0, 12)}...${value.slice(-6)}`
+  return `${value.slice(0, 12)}\u2026${value.slice(-6)}`
 }
 
 function formatEvent(value) {

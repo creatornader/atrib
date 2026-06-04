@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="shell" data-testid="google-stack-visual">
+    <a class="skip-link" href="#main-content">Skip to workbench</a>
+    <main class="shell" id="main-content" data-testid="google-stack-visual">
       <header class="topbar">
         <div class="title-block">
           <p class="eyebrow">AP2 / A2A / ADK proof workbench</p>
@@ -21,8 +22,8 @@
         <div class="run-strip" aria-label="proof status">
           <span class="status-dot" aria-hidden="true"></span>
           <div>
-            <strong id="proofStatus">Loading</strong>
-            <span id="snapshotLabel">Reading local snapshot.</span>
+            <strong id="proofStatus">Loading&hellip;</strong>
+            <span id="snapshotLabel">Reading local snapshot&hellip;</span>
           </div>
         </div>
       </header>
@@ -33,7 +34,7 @@
             <div class="panel-head">
               <h2>Run artifact</h2>
             </div>
-            <button class="command" id="copyCommand" type="button">
+            <button class="command" id="copyCommand" type="button" aria-label="Copy proof command">
               <span>Copy command</span>
               <code id="commandText">pnpm --filter @atrib/integration google-stack-chain-proof</code>
             </button>
@@ -77,10 +78,16 @@
                 row.
               </p>
             </div>
-            <div class="segmented" role="tablist" aria-label="view mode">
-              <button class="segment active" type="button" data-view="proof">Proof</button>
-              <button class="segment" type="button" data-view="analytics">Analytics</button>
-              <button class="segment" type="button" data-view="limits">Limits</button>
+            <div class="segmented" aria-label="view mode">
+              <button class="segment active" type="button" data-view="proof" aria-pressed="true">
+                Proof
+              </button>
+              <button class="segment" type="button" data-view="analytics" aria-pressed="false">
+                Analytics
+              </button>
+              <button class="segment" type="button" data-view="limits" aria-pressed="false">
+                Limits
+              </button>
             </div>
           </div>
 
@@ -122,7 +129,7 @@
             </div>
             <div>
               <p class="field-label">Record hash</p>
-              <button class="hash-box" id="copyHash" type="button">
+              <button class="hash-box" id="copyHash" type="button" aria-label="Copy selected record hash">
                 <code id="selectedHash"></code>
               </button>
             </div>
