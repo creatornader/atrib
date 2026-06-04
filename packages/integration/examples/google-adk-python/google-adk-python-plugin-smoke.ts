@@ -73,9 +73,9 @@ type SmokeResult = {
   record_hashes: string[]
   event_counts: GoogleAdkPythonProof['summary']
   chain: {
-    first_record_is_genesis: true
-    subsequent_records_chain: true
-    subsequent_records_inform_by_previous: true
+    first_record_is_genesis: boolean
+    subsequent_records_chain: boolean
+    subsequent_records_inform_by_previous: boolean
   }
   final_text: string
   privacy: {
