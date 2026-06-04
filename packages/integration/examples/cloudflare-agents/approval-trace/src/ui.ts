@@ -4,23 +4,27 @@ export function renderApp(): string {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cloudflare approval trace</title>
+    <title>Cloudflare Agent Trace</title>
     <style>
       :root {
         color-scheme: light;
-        --bg: #f5f7fb;
+        --bg: #eef2f7;
         --panel: #ffffff;
-        --line: #d9e1ec;
-        --text: #111318;
-        --muted: #596579;
-        --blue: #1f5fd8;
-        --green: #147a54;
-        --amber: #b36200;
+        --panel-strong: #101827;
+        --line: #d3dce8;
+        --line-strong: #aebccc;
+        --text: #10141f;
+        --muted: #526178;
+        --blue: #245dd8;
+        --green: #12704f;
+        --amber: #b75b00;
         --orange: #f38020;
-        --red: #b4232e;
-        --ink: #1f2937;
-        --soft: #eef3f8;
-        --shadow: 0 18px 48px rgba(18, 28, 45, 0.08);
+        --red: #b91c35;
+        --ink: #202939;
+        --soft: #f3f6fa;
+        --soft-blue: #edf4ff;
+        --shadow: 0 18px 50px rgba(25, 34, 51, 0.1);
+        --shadow-tight: 0 10px 26px rgba(25, 34, 51, 0.08);
       }
 
       * {
@@ -29,7 +33,9 @@ export function renderApp(): string {
 
       body {
         margin: 0;
-        background: var(--bg);
+        background:
+          linear-gradient(180deg, #f8fafc 0, #eef2f7 320px, #e8edf4 100%),
+          var(--bg);
         color: var(--text);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
@@ -55,63 +61,84 @@ export function renderApp(): string {
       .shell {
         margin: 0 auto;
         max-width: 1460px;
-        padding: 24px;
+        min-height: 100vh;
+        padding: 22px 24px 32px;
       }
 
       .hero {
-        align-items: end;
+        align-items: center;
+        background:
+          linear-gradient(135deg, #101827 0%, #172136 58%, #24314b 100%),
+          var(--panel-strong);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
         display: grid;
         gap: 18px;
         grid-template-columns: minmax(0, 1fr) auto;
-        margin-bottom: 18px;
+        margin-bottom: 14px;
+        overflow: hidden;
+        padding: 22px 24px;
+        position: relative;
+      }
+
+      .hero::after {
+        background: #f38020;
+        bottom: 0;
+        content: "";
+        height: 4px;
+        left: 0;
+        position: absolute;
+        width: 100%;
       }
 
       h1 {
-        font-size: 26px;
+        color: #fff;
+        font-size: 30px;
         letter-spacing: 0;
         line-height: 1.15;
-        margin: 0 0 6px;
+        margin: 0 0 8px;
       }
 
       .sub {
-        color: var(--muted);
+        color: #cbd5e1;
         font-size: 14px;
         line-height: 1.5;
         margin: 0;
-        max-width: 760px;
+        max-width: 820px;
       }
 
       .workflow-rail {
         align-items: center;
-        background: var(--panel);
+        background: rgba(255, 255, 255, 0.94);
         border: 1px solid var(--line);
         border-radius: 8px;
-        box-shadow: var(--shadow);
+        box-shadow: var(--shadow-tight);
         display: flex;
         gap: 18px;
         justify-content: space-between;
-        margin-bottom: 16px;
+        margin-bottom: 14px;
         min-height: 74px;
         padding: 14px 16px;
       }
 
       .status-chip {
         align-items: center;
-        background: #fff7ed;
-        border: 1px solid #fed7aa;
+        background: rgba(255, 247, 237, 0.12);
+        border: 1px solid rgba(251, 146, 60, 0.48);
         border-radius: 999px;
-        color: #9a3412;
+        color: #fed7aa;
         display: inline-flex;
         font-size: 12px;
         font-weight: 800;
         min-height: 28px;
-        padding: 6px 10px;
+        padding: 7px 11px;
       }
 
       .rail-main {
         align-items: center;
         display: flex;
-        gap: 11px;
+        gap: 13px;
         min-width: 0;
       }
 
@@ -148,7 +175,7 @@ export function renderApp(): string {
       }
 
       .step.active {
-        background: #e8efff;
+        background: var(--soft-blue);
         border-color: #b8c8f6;
         color: var(--blue);
       }
@@ -174,8 +201,8 @@ export function renderApp(): string {
       .dot {
         border-radius: 999px;
         display: inline-block;
-        height: 9px;
-        width: 9px;
+        height: 10px;
+        width: 10px;
       }
 
       .dot.pending {
@@ -192,23 +219,36 @@ export function renderApp(): string {
 
       .grid {
         display: grid;
-        gap: 16px;
-        grid-template-columns: minmax(320px, 0.92fr) minmax(390px, 1.12fr) minmax(360px, 1fr);
+        gap: 14px;
+        grid-template-columns: minmax(330px, 0.9fr) minmax(420px, 1.18fr) minmax(360px, 1fr);
       }
 
       .panel {
-        background: var(--panel);
+        background: rgba(255, 255, 255, 0.96);
         border: 1px solid var(--line);
         border-radius: 8px;
-        box-shadow: var(--shadow);
+        box-shadow: var(--shadow-tight);
         min-width: 0;
         padding: 16px;
+        position: relative;
+      }
+
+      .panel::before {
+        background: var(--orange);
+        border-radius: 8px 8px 0 0;
+        content: "";
+        height: 3px;
+        left: -1px;
+        position: absolute;
+        right: -1px;
+        top: -1px;
       }
 
       .panel h2 {
-        font-size: 14px;
-        letter-spacing: 0.04em;
-        margin: 0 0 12px;
+        color: #121826;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        margin: 1px 0 14px;
         text-transform: uppercase;
       }
 
@@ -218,7 +258,7 @@ export function renderApp(): string {
       }
 
       textarea {
-        background: #fff;
+        background: #fbfdff;
         border: 1px solid var(--line);
         border-radius: 8px;
         color: var(--text);
@@ -233,7 +273,7 @@ export function renderApp(): string {
       .danger {
         align-items: center;
         border: 1px solid transparent;
-        border-radius: 8px;
+        border-radius: 7px;
         display: inline-flex;
         font-weight: 750;
         justify-content: center;
@@ -242,17 +282,20 @@ export function renderApp(): string {
       }
 
       .primary {
-        background: var(--blue);
+        background: #245dd8;
+        box-shadow: 0 10px 22px rgba(36, 93, 216, 0.22);
         color: #fff;
       }
 
       .secondary {
-        background: var(--soft);
+        background: #eef3f8;
+        border-color: var(--line);
         color: var(--ink);
       }
 
       .danger {
         background: #fff1f2;
+        border-color: #fecdd3;
         color: var(--red);
       }
 
@@ -293,11 +336,12 @@ export function renderApp(): string {
 
       .progress-list {
         display: grid;
-        gap: 8px;
+        gap: 9px;
       }
 
       .progress-item {
         align-items: start;
+        background: #fbfdff;
         border: 1px solid var(--line);
         border-radius: 8px;
         display: grid;
@@ -356,7 +400,7 @@ export function renderApp(): string {
       }
 
       .metric {
-        background: var(--soft);
+        background: #f8fafc;
         border: 1px solid var(--line);
         border-radius: 8px;
         display: grid;
@@ -386,7 +430,7 @@ export function renderApp(): string {
 
       .diff pre,
       .json pre {
-        background: #111827;
+        background: #0f172a;
         border-radius: 8px;
         color: #f9fafb;
         font-size: 12px;
@@ -405,6 +449,7 @@ export function renderApp(): string {
       }
 
       .prop {
+        background: #fbfdff;
         border: 1px solid var(--line);
         border-radius: 8px;
         display: grid;
@@ -428,7 +473,7 @@ export function renderApp(): string {
       }
 
       .event {
-        background: #fff;
+        background: #fbfdff;
         border: 1px solid var(--line);
         border-radius: 8px;
         color: inherit;
@@ -454,7 +499,7 @@ export function renderApp(): string {
       }
 
       .pill {
-        background: var(--soft);
+        background: #eef3f8;
         border: 1px solid var(--line);
         border-radius: 999px;
         color: var(--ink);
@@ -502,19 +547,337 @@ export function renderApp(): string {
         text-decoration: none;
       }
 
+      .hero {
+        background: rgba(255, 255, 255, 0.97);
+        border-color: var(--line);
+        box-shadow: var(--shadow-tight);
+        padding: 12px 16px;
+      }
+
+      .hero::after {
+        content: none;
+      }
+
+      .brand-row,
+      .header-meta {
+        align-items: center;
+        display: flex;
+        gap: 14px;
+        min-width: 0;
+      }
+
+      .cloud-mark {
+        color: var(--orange);
+        flex: 0 0 auto;
+        height: 32px;
+        width: 38px;
+      }
+
+      .hero h1 {
+        color: var(--text);
+        font-size: 20px;
+        margin: 0;
+      }
+
+      .hero .sub {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 2px;
+      }
+
+      .header-meta {
+        flex-wrap: wrap;
+        font-size: 13px;
+        justify-content: end;
+      }
+
+      .meta-pill {
+        align-items: center;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        display: inline-flex;
+        gap: 8px;
+        min-height: 32px;
+        padding: 7px 10px;
+      }
+
+      .meta-code {
+        background: #f4f7fb;
+        border: 1px solid #dce5f0;
+        border-radius: 6px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        padding: 4px 7px;
+      }
+
+      .workflow-rail {
+        display: grid;
+        grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.45fr);
+        min-height: 92px;
+        padding: 14px 18px;
+      }
+
+      .rail-stepper {
+        flex-wrap: nowrap;
+        gap: 8px;
+      }
+
+      .step {
+        border-radius: 8px;
+        min-height: 52px;
+        min-width: 0;
+        padding: 8px;
+        width: 100%;
+      }
+
+      .step-index {
+        align-items: center;
+        border: 2px solid #9aa8bb;
+        border-radius: 999px;
+        display: inline-flex;
+        height: 30px;
+        justify-content: center;
+        margin-right: 7px;
+        vertical-align: middle;
+        width: 30px;
+      }
+
+      .step-copy {
+        display: inline-block;
+        line-height: 1.2;
+        vertical-align: middle;
+      }
+
+      .step-copy strong,
+      .step-copy span {
+        display: block;
+      }
+
+      .step-copy span {
+        color: inherit;
+        font-size: 11px;
+        font-weight: 500;
+        margin-top: 2px;
+      }
+
+      .step.done .step-index {
+        background: var(--green);
+        border-color: var(--green);
+        color: #fff;
+      }
+
+      .step.active .step-index {
+        border-color: var(--blue);
+        color: var(--blue);
+      }
+
+      .step.halted .step-index {
+        background: var(--orange);
+        border-color: var(--orange);
+        color: #fff;
+      }
+
+      .grid {
+        grid-template-columns: minmax(320px, 0.95fr) minmax(430px, 1.35fr) minmax(360px, 1fr);
+      }
+
+      .trigger-card {
+        border-bottom: 1px solid var(--line);
+        display: grid;
+        gap: 8px;
+        margin: -4px -16px 14px;
+        padding: 4px 16px 14px;
+      }
+
+      .trigger-source {
+        align-items: center;
+        display: flex;
+        gap: 10px;
+        font-weight: 800;
+      }
+
+      .trigger-details {
+        display: grid;
+        gap: 7px;
+      }
+
+      .detail-row {
+        display: grid;
+        font-size: 13px;
+        gap: 8px;
+        grid-template-columns: 92px minmax(0, 1fr);
+      }
+
+      .detail-row span:first-child {
+        color: var(--muted);
+      }
+
+      .progress-list {
+        position: relative;
+      }
+
+      .progress-item,
+      .event {
+        animation: itemIn 360ms ease both;
+      }
+
+      .progress-item {
+        grid-template-columns: 18px minmax(0, 1fr) auto;
+      }
+
+      .progress-time {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 2px;
+      }
+
+      .diff {
+        grid-template-columns: 1fr;
+      }
+
+      .diff pre {
+        background: #fbfdff;
+        border: 1px solid var(--line);
+        color: #102033;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        max-height: 310px;
+      }
+
+      .receipt-panel {
+        grid-column: 1 / -1;
+        padding: 0;
+      }
+
+      .receipt-toolbar {
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+        padding: 10px 14px;
+      }
+
+      .receipt-shell {
+        display: grid;
+        grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr) minmax(320px, 0.9fr);
+      }
+
+      .receipt-section {
+        min-width: 0;
+        padding: 14px;
+      }
+
+      .receipt-section + .receipt-section {
+        border-left: 1px solid var(--line);
+      }
+
+      .signer-list,
+      .verify-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .signer-row,
+      .verify-row {
+        align-items: center;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: grid;
+        gap: 8px;
+        grid-template-columns: 28px minmax(0, 1fr) auto;
+        padding: 9px;
+      }
+
+      @keyframes itemIn {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 1ms !important;
+          scroll-behavior: auto !important;
+          transition-duration: 1ms !important;
+        }
+      }
+
       @media (max-width: 1100px) {
         .hero,
-        .grid {
+        .grid,
+        .receipt-shell {
           grid-template-columns: 1fr;
         }
 
         .workflow-rail {
           align-items: stretch;
           display: grid;
+          grid-template-columns: 1fr;
         }
 
         .rail-stepper {
+          flex-wrap: wrap;
           justify-content: start;
+        }
+
+        .step {
+          width: auto;
+        }
+
+        .receipt-section + .receipt-section {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+        }
+      }
+
+      @media (max-width: 720px) {
+        .shell {
+          padding: 14px;
+        }
+
+        .hero {
+          grid-template-columns: 1fr;
+          padding: 18px;
+        }
+
+        .brand-row {
+          align-items: flex-start;
+        }
+
+        .header-meta {
+          display: grid;
+          font-size: 12px;
+          gap: 10px;
+          grid-template-columns: auto minmax(0, 1fr);
+          justify-content: start;
+        }
+
+        .header-meta > span {
+          min-width: 0;
+        }
+
+        .header-meta .meta-code {
+          display: inline-block;
+          max-width: 150px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          vertical-align: bottom;
+          white-space: nowrap;
+        }
+
+        h1 {
+          font-size: 24px;
+        }
+
+        .diff {
+          grid-template-columns: 1fr;
         }
       }
     </style>
@@ -522,41 +885,69 @@ export function renderApp(): string {
   <body>
     <main class="shell" data-testid="approval-trace-app">
       <section class="hero">
-        <div>
-          <h1>Cloudflare Agent Trace</h1>
-          <p class="sub">Watch an agent wake from a prior trigger, work autonomously, halt for human approval, resume through MCP execution, then leave a signed audit trail.</p>
+        <div class="brand-row">
+          <svg class="cloud-mark" viewBox="0 0 48 32" aria-hidden="true">
+            <path fill="currentColor" d="M15.4 25.5h27.8c2.4 0 4.3-1.8 4.3-4.1 0-2.2-1.8-4.1-4-4.1-.5 0-1 .1-1.5.3C40.5 10.5 34.1 5 26.5 5c-7.2 0-13.3 5-14.9 11.7-.6-.2-1.3-.3-2-.3A7.4 7.4 0 0 0 2.3 24c0 .5.4.9.9.9h8.2c.7-3.9 4.1-6.9 8.2-6.9h3.8c.7 0 1.2.5 1.2 1.2s-.5 1.2-1.2 1.2h-3.8a5.9 5.9 0 0 0-5.8 5.1Z"/>
+          </svg>
+          <div>
+            <h1>Cloudflare Agent Trace</h1>
+            <p class="sub">Incoming alert to autonomous triage to human review to signed MCP execution.</p>
+          </div>
         </div>
-        <span class="status-chip">Local proof surface</span>
+        <div class="header-meta">
+          <span class="meta-pill"><span class="dot ok"></span>Live run</span>
+          <span>Run ID <span class="meta-code" id="runIdLabel">pending</span></span>
+          <span>Region <span class="meta-code">IAD</span></span>
+          <span>Started <span id="startedLabel">waiting</span></span>
+        </div>
       </section>
 
       <section class="workflow-rail" id="workflowRail" aria-live="polite">
         <div class="rail-main">
           <span class="dot pending" id="statusDot"></span>
           <div>
-            <strong id="statusTitle">Ready</strong>
-            <p id="statusDetail">Run the prior trigger to start autonomous triage before the human review gate.</p>
+            <strong id="statusTitle">Loading triggered workflow</strong>
+            <p id="statusDetail">The demo starts at the incoming alert and shows the autonomous work before the human review gate.</p>
           </div>
         </div>
         <div class="rail-stepper" id="workflowSteps">
-          <span class="step active" data-step="trigger">Trigger</span>
-          <span class="step" data-step="autonomous">Autonomous triage</span>
-          <span class="step" data-step="halt">HITL halt</span>
-          <span class="step" data-step="resume">Resume</span>
-          <span class="step" data-step="audit">Audit</span>
+          <span class="step active" data-step="trigger"><span class="step-index">1</span><span class="step-copy"><strong>Trigger</strong><span>Incoming alert</span></span></span>
+          <span class="step" data-step="autonomous"><span class="step-index">2</span><span class="step-copy"><strong>Autonomous triage</strong><span>Context and policy</span></span></span>
+          <span class="step" data-step="halt"><span class="step-index">3</span><span class="step-copy"><strong>Human review halted</strong><span>Awaiting review</span></span></span>
+          <span class="step" data-step="resume"><span class="step-index">4</span><span class="step-copy"><strong>MCP execution resumed</strong><span>Pending approval</span></span></span>
+          <span class="step" data-step="audit"><span class="step-index">5</span><span class="step-copy"><strong>Audit ready</strong><span>Pending</span></span></span>
         </div>
       </section>
 
       <section class="grid">
         <div class="panel">
-          <h2>Prior trigger</h2>
+          <h2>Trigger and progress</h2>
+          <div class="trigger-card">
+            <div class="trigger-source">
+              <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#111827" d="M12 .5A12 12 0 0 0 8.2 21.9c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.4-4-1.4-.6-1.4-1.4-1.8-1.4-1.8-1.1-.8.1-.8.1-.8 1.2.1 1.9 1.3 1.9 1.3 1.1 1.9 2.9 1.3 3.6 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.3-3.3-.1-.3-.6-1.6.1-3.3 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6.2 0C17.6 2 18.6 2.3 18.6 2.3c.7 1.7.2 3 .1 3.3.8.9 1.3 2 1.3 3.3 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5Z"/>
+              </svg>
+              <span>GitHub issue webhook</span>
+              <span class="pill">Verified</span>
+            </div>
+            <div class="trigger-details">
+              <div class="detail-row"><span>Repository</span><strong>cloudflare/agents-demo</strong></div>
+              <div class="detail-row"><span>Issue</span><strong>#482 Add rate limit to /v1/report</strong></div>
+              <div class="detail-row"><span>Event</span><strong>issues.opened</strong></div>
+              <div class="detail-row"><span>Received</span><strong id="receivedLabel">waiting</strong></div>
+            </div>
+          </div>
+          <div id="answer" class="metric-row">
+            <p class="empty">Waiting for the incoming alert.</p>
+          </div>
           <div class="prompt">
-            <textarea id="prompt">A scheduled agent follow-up found a bug-labeled Workers issue with enough evidence to publish a triage reply.</textarea>
+            <textarea id="prompt">A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.</textarea>
             <label class="toggle">
               <input id="simulateError" type="checkbox" />
-              Simulate issue thread change after approval
+              Simulate repository file change after approval
             </label>
             <div class="actions">
-              <button class="primary" id="create">Run prior trigger</button>
+              <button class="primary" id="create">Replay prior trigger</button>
               <button class="secondary" id="reset">Reset</button>
             </div>
           </div>
@@ -571,14 +962,14 @@ export function renderApp(): string {
         <div class="panel">
           <h2>Human review gate</h2>
           <div id="proposal" class="proposal">
-            <p class="empty">Run the trigger to see the agent's proposal, exact payload, diff, risk, and approval controls.</p>
+            <p class="empty">The workflow has not reached human review yet.</p>
           </div>
         </div>
 
         <div class="panel">
-          <h2>Live agent progress</h2>
-          <div id="answer" class="metric-row">
-            <p class="empty">No run yet.</p>
+          <h2>Signed trace</h2>
+          <div id="timeline" class="timeline">
+            <p class="empty">Signed records will appear here as the workflow runs.</p>
           </div>
         </div>
       </section>
@@ -601,16 +992,25 @@ export function renderApp(): string {
             </div>
           </div>
         </div>
-        <div class="panel">
-          <h2>Signed timeline</h2>
-          <div id="timeline" class="timeline">
-            <p class="empty">Signed records will appear here as the workflow runs.</p>
+        <div class="panel receipt-panel">
+          <div class="receipt-toolbar">
+            <h2 style="margin: 0;">Receipt inspector</h2>
+            <span class="pill">JSON pretty</span>
           </div>
-        </div>
-        <div class="panel">
-          <h2>Receipts and proofs</h2>
-          <div id="receipts" class="json">
-            <p class="empty">Open a receipt to inspect the record and Merkle proof.</p>
+          <div class="receipt-shell">
+            <div class="receipt-section json" id="receipts">
+              <p class="empty">Open a receipt to inspect the record and Merkle proof.</p>
+            </div>
+            <div class="receipt-section" id="receiptSummary">
+              <p class="empty">Summary appears after a signed record is selected.</p>
+            </div>
+            <div class="receipt-section" id="verification">
+              <div class="verify-list">
+                <div class="verify-row"><span class="pill">LOG</span><div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><span class="event-action">Pending</span></div>
+                <div class="verify-row"><span class="pill">SIG</span><div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><span class="event-action">Pending</span></div>
+                <div class="verify-row"><span class="pill">GET</span><div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><span class="event-action">Pending</span></div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -620,6 +1020,7 @@ export function renderApp(): string {
       let currentRun = null;
       let busy = false;
       let currentStep = 'trigger';
+      let autoStarted = false;
 
       const statusDot = document.querySelector('#statusDot');
       const statusTitle = document.querySelector('#statusTitle');
@@ -633,6 +1034,44 @@ export function renderApp(): string {
       const resetButton = document.querySelector('#reset');
       const promptInput = document.querySelector('#prompt');
       const simulateErrorInput = document.querySelector('#simulateError');
+      const runIdLabel = document.querySelector('#runIdLabel');
+      const startedLabel = document.querySelector('#startedLabel');
+      const receivedLabel = document.querySelector('#receivedLabel');
+      const receiptSummaryEl = document.querySelector('#receiptSummary');
+      const verificationEl = document.querySelector('#verification');
+
+      const bootStages = [
+        {
+          key: 'trigger',
+          title: 'Trigger received',
+          detail: 'GitHub issue webhook opened the run and supplied the initial Workers route alert.',
+          step: 'trigger',
+        },
+        {
+          key: 'context',
+          title: 'Context gathered',
+          detail: 'The agent loaded repository, issue, and route context before planning a change.',
+          step: 'autonomous',
+        },
+        {
+          key: 'policy',
+          title: 'Policy and intent analysis',
+          detail: 'The agent classified the request as a repository write that must stop for review.',
+          step: 'autonomous',
+        },
+        {
+          key: 'proposal',
+          title: 'Proposed action generated',
+          detail: 'The agent prepared a write_file payload, diff, risk note, and payload hash.',
+          step: 'autonomous',
+        },
+        {
+          key: 'halt',
+          title: 'Human review halted',
+          detail: 'The workflow stopped before MCP execution and is waiting for a signed decision.',
+          step: 'halt',
+        },
+      ];
 
       function renderSteps(step, kind = 'pending') {
         currentStep = step;
@@ -655,12 +1094,65 @@ export function renderApp(): string {
         renderSteps(step, kind);
       }
 
+      function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;');
+      }
+
+      function nowTime(offsetMs = 0) {
+        return new Date(Date.now() + offsetMs).toISOString().slice(11, 19) + ' UTC';
+      }
+
+      function renderBootProgress(activeIndex) {
+        const rows = bootStages.map((stage, index) => {
+          const done = index < activeIndex;
+          const active = index === activeIndex;
+          const halted = stage.key === 'halt' && active;
+          return \`
+            <div class="progress-item \${halted ? 'halted' : ''}">
+              <span class="dot \${done ? 'ok' : active ? 'pending' : 'pending'}"></span>
+              <div>
+                <strong>\${stage.title}</strong>
+                <span>\${stage.detail}</span>
+              </div>
+              <span class="progress-time">\${done || active ? nowTime(index * 900) : '-'}</span>
+            </div>
+          \`;
+        }).join('');
+        answerEl.innerHTML = '<div class="progress-list">' + rows + '</div>';
+        const activeStage = bootStages[activeIndex] ?? bootStages[bootStages.length - 1];
+        setStatus(activeStage.title, activeStage.key === 'halt' ? 'pending' : 'ok', activeStage.detail, activeStage.step);
+        if (activeStage.key !== 'halt') {
+          proposalEl.innerHTML = \`
+            <div class="run-state">
+              <strong>\${activeStage.title}</strong>
+              <span>The agent has not reached the human review gate yet.</span>
+            </div>
+          \`;
+        }
+        timelineEl.innerHTML = \`
+          <button class="event selected" type="button">
+            <span class="event-head"><strong>\${activeStage.key === 'trigger' ? 'trigger.received' : 'agent.' + activeStage.key}</strong><span class="pill">agent</span></span>
+            <span class="hash">record pending</span>
+            <span class="value">\${activeStage.detail}</span>
+          </button>
+        \`;
+      }
+
       function updateControls(activeLabel = '') {
         const hasRun = currentRun !== null;
         const hasPendingApproval = currentRun?.status === 'pending_approval';
         const canSetFailureMode = !hasRun || hasPendingApproval;
         createButton.disabled = busy || hasRun;
-        createButton.textContent = busy && activeLabel === 'create' ? 'Running trigger...' : 'Run prior trigger';
+        createButton.textContent = busy && activeLabel === 'create' ? 'Running trigger...' : 'Replay prior trigger';
         resetButton.disabled = busy || !hasRun;
         promptInput.disabled = busy || hasRun;
         simulateErrorInput.disabled = busy || !canSetFailureMode;
@@ -717,7 +1209,7 @@ export function renderApp(): string {
           case 'failed':
             return {
               title: 'Execution resumed and failed',
-              detail: 'The signed diagnostic record explains the changed issue thread.',
+              detail: 'The signed diagnostic record explains the changed repository file.',
             };
           case 'rejected':
             return {
@@ -758,6 +1250,7 @@ export function renderApp(): string {
         const payload = body.proposed_payload ?? {};
         const before = payload.before ?? {};
         const after = payload.after ?? {};
+        const diff = payload.diff ?? pretty({ before, after });
         const disabled = run.status !== 'pending_approval';
         const state = runStateCopy(run);
         proposalEl.innerHTML = \`
@@ -766,8 +1259,12 @@ export function renderApp(): string {
             <span>\${state.detail}</span>
           </div>
           <div class="metric">
-            <span class="label">Agent proposal</span>
-            <span class="value">\${body.action ?? 'No action'}</span>
+            <span class="label">Proposed action</span>
+            <span class="value"><span class="pill">\${payload.operation ?? 'write_file'}</span> \${body.action ?? 'No action'}</span>
+          </div>
+          <div class="metric">
+            <span class="label">Target</span>
+            <span class="value"><span class="meta-code">\${payload.target_file ?? 'missing'}</span></span>
           </div>
           <div class="metric">
             <span class="label">Risk</span>
@@ -775,12 +1272,8 @@ export function renderApp(): string {
           </div>
           <div class="diff">
             <div>
-              <span class="label">Before</span>
-              <pre>\${pretty(before)}</pre>
-            </div>
-            <div>
-              <span class="label">After</span>
-              <pre>\${pretty(after)}</pre>
+              <span class="label">Diff (unified)</span>
+              <pre>\${escapeHtml(diff)}</pre>
             </div>
           </div>
           <div class="metric">
@@ -790,16 +1283,17 @@ export function renderApp(): string {
           <div class="actions">
             <button class="primary" id="approve" \${disabled ? 'disabled' : ''}>Approve and resume</button>
             <button class="danger" id="reject" \${disabled ? 'disabled' : ''}>Reject</button>
+            <button class="secondary" id="requestChanges" \${disabled ? 'disabled' : ''}>Request changes</button>
           </div>
         \`;
         document.querySelector('#approve')?.addEventListener('click', async () => {
           await transition({
             title: 'Agent resumed',
-            detail: 'The human approval is signed. The action MCP is publishing the approved issue reply.',
+            detail: 'The human approval is signed. The action MCP is applying the approved file update.',
             step: 'resume',
             activeLabel: 'approve',
             fn: async () => post('/api/runs/' + run.run_id + '/approve', {
-              reason: 'Payload matches the issue scope and expected Cloudflare support target.',
+              reason: 'Payload matches the issue scope and expected Cloudflare repository target.',
               simulate_error: simulateErrorInput.checked,
             }),
           });
@@ -808,10 +1302,21 @@ export function renderApp(): string {
           await transition({
             title: 'Signing rejection',
             detail: 'The human decision is being signed. No execution will run.',
-            step: 'review',
+            step: 'halt',
             activeLabel: 'reject',
             fn: async () => post('/api/runs/' + run.run_id + '/reject', {
-              reason: 'This issue reply should not be published.',
+              reason: 'This repository file update should not be applied.',
+            }),
+          });
+        });
+        document.querySelector('#requestChanges')?.addEventListener('click', async () => {
+          await transition({
+            title: 'Requesting changes',
+            detail: 'The human decision is being signed as a no-execute review outcome.',
+            step: 'halt',
+            activeLabel: 'reject',
+            fn: async () => post('/api/runs/' + run.run_id + '/reject', {
+              reason: 'The reviewer requested a smaller repository file update.',
             }),
           });
         });
@@ -825,17 +1330,27 @@ export function renderApp(): string {
         const labels = new Set(run.records.map((record) => record.label));
         const stageRows = [
           {
-            title: 'Prior trigger received',
+            title: 'Trigger received',
             detail: labels.has('trigger') ? 'GitHub issue webhook or scheduled follow-up woke the agent.' : 'Waiting for trigger.',
             done: labels.has('trigger'),
           },
           {
-            title: 'Autonomous triage complete',
-            detail: labels.has('proposal') ? 'Agent classified the issue and prepared a publishable action candidate.' : 'Agent has not planned yet.',
+            title: 'Context gathered',
+            detail: labels.has('proposal') ? 'Repository, issue, and Workers route context loaded.' : 'Waiting for context.',
             done: labels.has('proposal'),
           },
           {
-            title: run.status === 'pending_approval' ? 'Halted at HITL gate' : 'Human review recorded',
+            title: 'Policy and intent analysis',
+            detail: labels.has('proposal') ? 'Repository writes require human review before MCP execution.' : 'Waiting for policy analysis.',
+            done: labels.has('proposal'),
+          },
+          {
+            title: 'Proposed action generated',
+            detail: labels.has('proposal') ? 'Agent prepared a write_file payload, diff, risk note, and payload hash.' : 'Agent has not planned yet.',
+            done: labels.has('proposal'),
+          },
+          {
+            title: run.status === 'pending_approval' ? 'Human review halted' : 'Human review recorded',
             detail: answer.decision ? 'Decision: ' + answer.decision : 'Execution is stopped until a human signs approval or rejection.',
             done: Boolean(answer.decision),
             halted: run.status === 'pending_approval',
@@ -872,6 +1387,7 @@ export function renderApp(): string {
                   <strong>\${row.title}</strong>
                   <span>\${row.detail}</span>
                 </div>
+                <span class="progress-time">\${row.done || row.halted ? nowTime(0) : '-'}</span>
               </div>
             \`).join('')}
           </div>
@@ -884,6 +1400,11 @@ export function renderApp(): string {
       }
 
       function renderTimeline(run) {
+        const signers = [
+          { name: 'Agent', detail: 'agents/triage@1.4.2', status: run.records.some((record) => record.signer === 'agent') ? 'Signed' : 'Pending' },
+          { name: 'Human', detail: 'reviewer@example.com', status: run.records.some((record) => record.signer === 'human') ? 'Signed' : 'Pending' },
+          { name: 'Action MCP', detail: 'github.write@2.3.1', status: run.records.some((record) => record.signer === 'action_mcp') ? 'Signed' : 'Pending' },
+        ];
         timelineEl.innerHTML = run.trace_packet.timeline.length
           ? run.trace_packet.timeline.map((entry) => \`
               <button class="event" data-hash="\${entry.record_hash}">
@@ -895,7 +1416,17 @@ export function renderApp(): string {
             <span class="value">informed by: \${entry.informed_by.length ? entry.informed_by.map(shortHash).join(', ') : 'genesis'}</span>
             <span class="event-action">View signed record and proof</span>
           </button>
-        \`).join('')
+        \`).join('') + \`
+          <div class="signer-list">
+            \${signers.map((signer) => \`
+              <div class="signer-row">
+                <span class="pill">\${signer.name.slice(0, 1)}</span>
+                <div><strong>\${signer.name}</strong><span class="empty">\${signer.detail}</span></div>
+                <span class="pill">\${signer.status}</span>
+              </div>
+            \`).join('')}
+          </div>
+        \`
           : '<p class="empty">No signed records yet.</p>';
         timelineEl.querySelectorAll('.event').forEach((button) => {
           button.addEventListener('click', () => {
@@ -903,12 +1434,29 @@ export function renderApp(): string {
             timelineEl.querySelectorAll('.event').forEach((item) => item.classList.remove('selected'));
             button.classList.add('selected');
             receiptsEl.innerHTML = '<pre>' + pretty(record) + '</pre>';
+            receiptSummaryEl.innerHTML = \`
+              <div class="metric-row">
+                <div class="metric"><span class="label">Selected record</span><span class="value">\${record?.label ?? 'missing'}</span></div>
+                <div class="metric"><span class="label">Signer</span><span class="value">\${record?.signer ?? 'missing'}</span></div>
+                <div class="metric"><span class="label">Record hash</span><span class="hash">\${record?.record_hash ?? 'missing'}</span></div>
+                <div class="metric"><span class="label">Proof status</span><span class="value">\${record?.proof ? 'public proof included' : 'local proof disabled or pending'}</span></div>
+              </div>
+            \`;
+            verificationEl.querySelectorAll('.event-action').forEach((item) => {
+              item.textContent = record?.proof ? 'Ready' : 'Local';
+            });
           });
         });
       }
 
       function render(run) {
         currentRun = run;
+        runIdLabel.textContent = run.run_id;
+        const started = run.records[0]?.record?.timestamp
+          ? new Date(run.records[0].record.timestamp).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+          : 'pending';
+        startedLabel.textContent = started;
+        receivedLabel.textContent = started;
         renderProposal(run);
         renderAnswer(run);
         renderTimeline(run);
@@ -932,29 +1480,64 @@ export function renderApp(): string {
       }
 
       createButton.addEventListener('click', async () => {
-        await transition({
-          title: 'Autonomous triage running',
-          detail: 'The prior trigger is signed. The agent is classifying the issue and preparing a proposal.',
-          step: 'autonomous',
-          activeLabel: 'create',
-          fn: () => post('/api/runs', {
-            prompt: promptInput.value,
-          }),
-        });
+        await startTriggeredRun();
       });
+
+      async function startTriggeredRun() {
+        if (busy) return;
+        try {
+          setBusy(true, 'create');
+          currentRun = null;
+          runIdLabel.textContent = 'pending';
+          startedLabel.textContent = nowTime(0);
+          receivedLabel.textContent = nowTime(0);
+          receiptsEl.innerHTML = '<p class="empty">Open a receipt to inspect the record and Merkle proof.</p>';
+          receiptSummaryEl.innerHTML = '<p class="empty">Summary appears after a signed record is selected.</p>';
+          verificationEl.querySelectorAll('.event-action').forEach((item) => {
+            item.textContent = 'Pending';
+          });
+          const runPromise = post('/api/runs', {
+            prompt: promptInput.value,
+          });
+          for (let index = 0; index < bootStages.length; index += 1) {
+            renderBootProgress(index);
+            await sleep(index === bootStages.length - 1 ? 260 : 520);
+          }
+          const run = await runPromise;
+          render(run);
+        } catch (error) {
+          setStatus('Workflow error', 'error', 'The request failed before the trace could complete.', currentStep);
+          receiptsEl.innerHTML = '<pre>' + escapeHtml(String(error?.message ?? error)) + '</pre>';
+        } finally {
+          setBusy(false);
+        }
+      }
 
       resetButton.addEventListener('click', () => {
         if (busy) return;
         currentRun = null;
+        runIdLabel.textContent = 'pending';
+        startedLabel.textContent = 'waiting';
+        receivedLabel.textContent = 'waiting';
         proposalEl.innerHTML = '<p class="empty">Run the trigger to see the agent\\'s proposal, exact payload, diff, risk, and approval controls.</p>';
-        answerEl.innerHTML = '<p class="empty">No run yet.</p>';
+        answerEl.innerHTML = '<p class="empty">No active run.</p>';
         timelineEl.innerHTML = '<p class="empty">Signed records will appear here as the workflow runs.</p>';
         receiptsEl.innerHTML = '<p class="empty">Open a receipt to inspect the record and Merkle proof.</p>';
-        setStatus('Ready', 'pending', 'Run the prior trigger to start autonomous triage before the human review gate.', 'trigger');
+        receiptSummaryEl.innerHTML = '<p class="empty">Summary appears after a signed record is selected.</p>';
+        verificationEl.querySelectorAll('.event-action').forEach((item) => {
+          item.textContent = 'Pending';
+        });
+        setStatus('Ready for incoming alert', 'pending', 'Run the prior trigger to start autonomous triage before the human review gate.', 'trigger');
         updateControls();
       });
 
       updateControls();
+      if (!autoStarted) {
+        autoStarted = true;
+        requestAnimationFrame(() => {
+          startTriggeredRun();
+        });
+      }
     </script>
   </body>
 </html>`

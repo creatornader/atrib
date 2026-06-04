@@ -184,10 +184,10 @@ async function runApproved(workerUrl: string, simulateError: boolean): Promise<T
   await postJson<TraceResponse>(`${workerUrl}/api/runs`, {
     run_id: runId,
     prompt:
-      'A scheduled agent follow-up found a bug-labeled Workers issue with enough evidence to publish a triage reply.',
+      'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.',
   })
   return postJson<TraceResponse>(`${workerUrl}/api/runs/${runId}/approve`, {
-    reason: 'Payload matches the issue scope and expected Cloudflare support target.',
+    reason: 'Payload matches the issue scope and expected Cloudflare repository target.',
     simulate_error: simulateError,
   })
 }
@@ -197,10 +197,10 @@ async function runRejected(workerUrl: string): Promise<TraceResponse> {
   await postJson<TraceResponse>(`${workerUrl}/api/runs`, {
     run_id: runId,
     prompt:
-      'A scheduled agent follow-up found a bug-labeled Workers issue with enough evidence to publish a triage reply.',
+      'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.',
   })
   return postJson<TraceResponse>(`${workerUrl}/api/runs/${runId}/reject`, {
-    reason: 'The reviewer decided this issue reply should not be published.',
+    reason: 'The reviewer decided this repository file update should not be applied.',
   })
 }
 
@@ -397,8 +397,9 @@ async function main() {
       ok:
         page.includes('data-testid="approval-trace-app"') &&
         page.includes('Cloudflare Agent Trace') &&
-        page.includes('HITL halt') &&
-        page.includes('Live agent progress') &&
+        page.includes('Human review halted') &&
+        page.includes('Trigger and progress') &&
+        page.includes('write_file') &&
         page.includes('Signed records will appear here as the workflow runs.') &&
         page.includes('Approve and resume'),
     },

@@ -82,7 +82,7 @@ interface ActionTargetReader {
 const worker = (workerExports as unknown as { default: FetchHandler }).default
 const testEnv = env as unknown as TestEnv
 const defaultPrompt =
-  'A scheduled agent follow-up found a bug-labeled Workers issue with enough evidence to publish a triage reply.'
+  'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.'
 
 afterEach(async () => {
   await reset()
@@ -154,7 +154,7 @@ async function createRun(runId: string): Promise<TraceResponse> {
 
 async function approveRun(runId: string, simulateError = false): Promise<TraceResponse> {
   return postJson<TraceResponse>(`/api/runs/${runId}/approve`, {
-    reason: 'Payload matches the issue scope and expected Cloudflare support target.',
+    reason: 'Payload matches the issue scope and expected Cloudflare repository target.',
     simulate_error: simulateError,
   })
 }
@@ -254,7 +254,7 @@ describe('Cloudflare approval trace Worker', () => {
       decision: 'approved',
       executed: true,
       outcome: 'success',
-      changed: ['issue_threads.workers-issue-4821'],
+      changed: ['repo_files.server/middleware/rate_limit.ts'],
     })
 
     const eventTypes = trace.native_observability.map((event) => event.type)
@@ -271,11 +271,15 @@ describe('Cloudflare approval trace Worker', () => {
       ]),
     )
 
-    const targetRows = await getTargetRows(runId, 'workers-issue-4821')
+    const targetRows = await getTargetRows(runId, 'server/middleware/rate_limit.ts')
     expect(targetRows).toEqual([
       expect.objectContaining({
-        status: 'triaged',
-        follow_up_scheduled: true,
+        file: 'server/middleware/rate_limit.ts',
+        handler: 'reportHandler',
+        rate_limit: expect.objectContaining({
+          max: 100,
+          standard_headers: true,
+        }),
       }),
     ])
 
@@ -308,7 +312,7 @@ describe('Cloudflare approval trace Worker', () => {
       outcome: 'not_run',
       changed: [],
     })
-    expect(await getTargetRows(runId, 'workers-issue-4821')).toEqual([])
+    expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([])
   })
 
   it('records a diagnostic outcome when the approved action fails', async () => {
@@ -333,7 +337,7 @@ describe('Cloudflare approval trace Worker', () => {
     expect(sorted(outcome.record.informed_by)).toEqual([execution.record_hash])
     expect(outcome.body).toMatchObject({
       status: 'error',
-      error: 'issue_thread_version_conflict',
+      error: 'repository_file_version_conflict',
       changed_rows: [],
     })
     expect(trace.trace_packet.answer).toMatchObject({
@@ -341,10 +345,10 @@ describe('Cloudflare approval trace Worker', () => {
       executed: true,
       outcome: 'error',
       changed: [],
-      diagnostic: 'The demo issue thread changed after approval.',
+      diagnostic: 'The repository file changed after approval.',
     })
     expect(trace.native_observability.map((event) => event.type)).toContain('workflow:terminated')
-    expect(await getTargetRows(runId, 'workers-issue-4821')).toEqual([])
+    expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([])
   })
 
   it('rejects stale approval attempts after the run leaves pending review', async () => {

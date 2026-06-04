@@ -56,13 +56,15 @@ interface PlannedAction {
   summary: string
   risk: string
   payload: {
-    operation: 'publish_issue_triage_reply'
+    operation: 'write_file'
     issue_id: string
     repository: string
     labels: string[]
+    target_file: string
     version: number
     before: Record<string, unknown>
     after: Record<string, unknown>
+    diff: string
   }
 }
 
@@ -168,8 +170,10 @@ interface ListedActionRecord {
 }
 
 const TEXT_ENCODER = new TextEncoder()
-const STABLE_CONNECTOR_ID = 'cloudflare-demo-issue-triage-mcp'
+const STABLE_CONNECTOR_ID = 'cloudflare-demo-repository-write-mcp'
 const LOG_BASE_URL = 'https://log.atrib.dev/v1'
+const DEFAULT_TRIGGER_PROMPT =
+  'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.'
 
 type BaseAgentNamespace = DurableObjectNamespace<Agent<Env, unknown, Record<string, unknown>>>
 
@@ -183,6 +187,7 @@ async function getTraceAgent(env: Env, name: string): Promise<ApprovalTraceAgent
 function json(value: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers)
   headers.set('Content-Type', 'application/json')
+  headers.set('Cache-Control', 'no-store')
   return new Response(`${JSON.stringify(value, null, 2)}\n`, { ...init, headers })
 }
 
@@ -198,7 +203,10 @@ function errorJson(error: unknown): Response {
 
 function html(value: string): Response {
   return new Response(value, {
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
   })
 }
 
@@ -328,33 +336,60 @@ function emitNativeEvent(input: {
 }
 
 function fixturePlan(prompt: string): PlannedAction {
+  const diff = `@@ -1,6 +1,16 @@
+ import { NextFunction, Request, Response } from 'express';
+ import { getConfig } from '../config';
+
++import rateLimit from 'express-rate-limit';
++
++const limiter = rateLimit({
++  windowMs: 60 * 1000,
++  max: 100,
++  standardHeaders: true,
++  legacyHeaders: false,
++});
+
+ const config = getConfig();
+
+-export function reportHandler(req: Request, res: Response, next: NextFunction) {
++export const reportHandler = [limiter, (req: Request, res: Response, next: NextFunction) => {
+   // existing logic
+   next();
+-}
++}];`
   return {
     planner: 'fixture',
-    action: 'Publish a triage reply for the demo Workers issue',
+    action: 'Update rate-limit middleware for the /v1/report route',
     summary:
-      'Respond to a bug-labeled Workers issue after the autonomous agent classifies the incident and prepares a safe next step.',
-    risk: 'requires_human_approval: publishes a customer-visible issue reply and schedules follow-up',
+      'Respond to a GitHub issue webhook by preparing a small repository file update that adds request limiting to the reported route.',
+    risk: 'requires_human_approval: writes repository code that changes production request handling',
     payload: {
-      operation: 'publish_issue_triage_reply',
+      operation: 'write_file',
       issue_id: 'workers-issue-4821',
-      repository: 'demo/workers-support',
+      repository: 'cloudflare/agents-demo',
       labels: ['bug', 'workers', 'help'],
+      target_file: 'server/middleware/rate_limit.ts',
       version: 4,
       before: {
-        status: 'opened',
-        last_agent_action: 'classified_issue',
-        public_reply: null,
-        follow_up_scheduled: false,
-        note: prompt.slice(0, 120),
+        file: 'server/middleware/rate_limit.ts',
+        imports: ['NextFunction', 'Request', 'Response', 'getConfig'],
+        handler: 'reportHandler',
+        rate_limit: null,
+        issue: prompt.slice(0, 120),
       },
       after: {
-        status: 'triaged',
-        public_reply:
-          'Thanks for the report. The agent found a likely Worker binding mismatch and queued a follow-up check against the failing route.',
-        follow_up_scheduled: true,
-        follow_up_after: '24h',
-        note: 'Approved for this demo issue thread only.',
+        file: 'server/middleware/rate_limit.ts',
+        imports: ['NextFunction', 'Request', 'Response', 'getConfig', 'rateLimit'],
+        handler: 'reportHandler',
+        rate_limit: {
+          window_ms: 60_000,
+          max: 100,
+          standard_headers: true,
+          legacy_headers: false,
+        },
+        note: 'Approved for this demo repository file only.',
       },
+      diff,
     },
   }
 }
@@ -376,7 +411,7 @@ async function planAction(env: Env, prompt: string): Promise<PlannedAction> {
           {
             role: 'system',
             content:
-              'Return compact JSON for a safe Cloudflare Workers issue-triage approval proposal. Do not include markdown.',
+              'Return compact JSON for a safe Cloudflare Workers repository file-change approval proposal. Do not include markdown.',
           },
           {
             role: 'user',
@@ -603,17 +638,17 @@ export class ApprovalTraceAgent extends Agent<Env> {
       source: 'github_issue_webhook',
       scheduled_task: 'agent.follow_up_after_triage',
       event: {
-        repository: 'demo/workers-support',
+        repository: 'cloudflare/agents-demo',
         issue_id: 'workers-issue-4821',
         labels: ['bug', 'workers', 'help'],
         title: input.prompt,
       },
       autonomous_phase: [
         'classified issue intent',
-        'checked cached Workers route signal',
-        'prepared customer-visible reply candidate',
+        'checked the affected Workers route',
+        'prepared a repository file update',
       ],
-      halt_condition: 'publishing a public issue reply requires human approval',
+      halt_condition: 'writing repository code requires human approval',
     }
     this.saveNativeEvent(
       runId,
@@ -661,7 +696,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       proposed_payload_hash: payloadHash,
       proposed_payload: plan.payload,
       approval_question:
-        'Should the agent publish this triage reply and schedule the follow-up task?',
+        'Should the agent write this repository file update and resume MCP execution?',
     }
     this.saveNativeEvent(
       runId,
@@ -1118,7 +1153,7 @@ interface AtribRecordRow {
 
 export class ApprovalActionMcp extends McpAgent<Env> {
   server = new McpServer({
-    name: 'cloudflare-demo-issue-triage-action',
+    name: 'cloudflare-demo-repository-action',
     version: '1.0.0',
   })
 
@@ -1145,9 +1180,9 @@ export class ApprovalActionMcp extends McpAgent<Env> {
     )
 
     this.server.registerTool(
-      'preview_issue_triage',
+      'preview_file_update',
       {
-        description: 'Preview the approved Cloudflare issue-triage action before mutation.',
+        description: 'Preview the approved Cloudflare repository file update before mutation.',
         inputSchema: {
           approval_record_hash: z.string(),
           stable_connector_id: z.string(),
@@ -1195,11 +1230,12 @@ export class ApprovalActionMcp extends McpAgent<Env> {
               type: 'text',
               text: jsonText({
                 status: 'ready',
-                diagnostic: 'Preview confirms one demo issue row would change.',
+                diagnostic: 'Preview confirms one repository file would change.',
                 approval_record_hash,
-                changed_rows: [`issue_threads.${p.issue_id}`],
+                changed_rows: [`repo_files.${p.target_file}`],
                 before: p.before,
                 after: p.after,
+                diff: p.diff,
               }),
             },
           ],
@@ -1208,9 +1244,9 @@ export class ApprovalActionMcp extends McpAgent<Env> {
     )
 
     this.server.registerTool(
-      'publish_issue_triage_reply',
+      'write_file',
       {
-        description: 'Apply the approved Cloudflare issue-triage action to Durable Object SQLite.',
+        description: 'Apply the approved Cloudflare repository file update to Durable Object SQLite.',
         inputSchema: {
           approval_record_hash: z.string(),
           stable_connector_id: z.string(),
@@ -1266,8 +1302,8 @@ export class ApprovalActionMcp extends McpAgent<Env> {
                 type: 'text',
                 text: jsonText({
                   status: 'error',
-                  error: 'issue_thread_version_conflict',
-                  diagnostic: 'The demo issue thread changed after approval.',
+                  error: 'repository_file_version_conflict',
+                  diagnostic: 'The repository file changed after approval.',
                   changed_rows: [],
                   approval_record_hash,
                 }),
@@ -1276,10 +1312,10 @@ export class ApprovalActionMcp extends McpAgent<Env> {
           }
         }
         this.sql`
-          INSERT OR REPLACE INTO issue_threads
-            (issue_id, repository, operation, state_json, updated_at)
+          INSERT OR REPLACE INTO repo_files
+            (file_path, repository, operation, state_json, updated_at)
           VALUES
-            (${p.issue_id}, ${p.repository}, ${p.operation}, ${JSON.stringify(p.after)}, ${Date.now()})
+            (${p.target_file}, ${p.repository}, ${p.operation}, ${JSON.stringify(p.after)}, ${Date.now()})
         `
         return {
           content: [
@@ -1287,8 +1323,8 @@ export class ApprovalActionMcp extends McpAgent<Env> {
               type: 'text',
               text: jsonText({
                 status: 'success',
-                diagnostic: 'Durable Object SQLite demo issue row updated.',
-                changed_rows: [`issue_threads.${p.issue_id}`],
+                diagnostic: 'Durable Object SQLite demo repository file row updated.',
+                changed_rows: [`repo_files.${p.target_file}`],
                 approval_record_hash,
                 after: p.after,
               }),
@@ -1376,8 +1412,8 @@ export class ApprovalActionMcp extends McpAgent<Env> {
     const rows = [
       ...this.sql<{ state_json: string }>`
         SELECT state_json
-        FROM issue_threads
-        WHERE issue_id = ${ruleId}
+        FROM repo_files
+        WHERE file_path = ${ruleId}
       `,
     ]
     return rows.map((row) => JSON.parse(row.state_json) as Record<string, unknown>)
@@ -1385,8 +1421,8 @@ export class ApprovalActionMcp extends McpAgent<Env> {
 
   private ensureSchema(): void {
     this.sql`
-      CREATE TABLE IF NOT EXISTS issue_threads (
-        issue_id TEXT PRIMARY KEY,
+      CREATE TABLE IF NOT EXISTS repo_files (
+        file_path TEXT PRIMARY KEY,
         repository TEXT NOT NULL,
         operation TEXT NOT NULL,
         state_json TEXT NOT NULL,
@@ -1409,11 +1445,11 @@ export class ApprovalActionMcp extends McpAgent<Env> {
   private persistActionRecord(record: AtribRecord, sidecar?: OnRecordSidecar): void {
     const hash = recordHash(record)
     const label =
-      sidecar?.toolName === 'publish_issue_triage_reply'
+      sidecar?.toolName === 'write_file'
         ? 'execution'
         : (sidecar?.toolName ?? 'tool_call')
     this.storeRecord(hash, record, sidecar ?? {}, label, 'action_mcp')
-    if (sidecar?.toolName === 'publish_issue_triage_reply') {
+    if (sidecar?.toolName === 'write_file') {
       void this.signAndStoreOutcome(record, sidecar).catch((error) => {
         console.warn('outcome signing failed', error)
       })
@@ -1501,7 +1537,7 @@ async function executeThroughActionMcp(input: {
     const context = JSON.parse(getTextResult(contextResult)) as ExecutionContext
     const payloadDigest = context.payload_hash.replace(/^sha256:/u, '')
     const preview = await client.callTool({
-      name: 'preview_issue_triage',
+      name: 'preview_file_update',
       _meta: meta,
       arguments: {
         approval_record_hash: context.approval_record_hash,
@@ -1515,7 +1551,7 @@ async function executeThroughActionMcp(input: {
       throw new Error(`preview failed: ${JSON.stringify(previewBody)}`)
     }
     const execution = await client.callTool({
-      name: 'publish_issue_triage_reply',
+      name: 'write_file',
       _meta: meta,
       arguments: {
         approval_record_hash: context.approval_record_hash,
@@ -1532,7 +1568,7 @@ async function executeThroughActionMcp(input: {
       failed: executionBody.status === 'error',
       records: await Promise.all(
         records.map(async (item) => ({
-          label: item.label === 'preview_issue_triage' ? 'preview' : item.label,
+          label: item.label === 'preview_file_update' ? 'preview' : item.label,
           signer: item.signer,
           record_hash: item.record_hash,
           record: item.record,
@@ -1557,12 +1593,12 @@ async function waitForActionRecords(
     const body = JSON.parse(getTextResult(result)) as { records?: ListedActionRecord[] }
     const records = (body.records ?? []).filter((record) => record.record.context_id === contextId)
     if (
-      records.some((record) => record.label === 'preview_issue_triage') &&
+      records.some((record) => record.label === 'preview_file_update') &&
       records.some((record) => record.label === 'execution') &&
       records.some((record) => record.label === 'outcome')
     ) {
       return records.filter((record) =>
-        ['preview_issue_triage', 'execution', 'outcome'].includes(record.label),
+        ['preview_file_update', 'execution', 'outcome'].includes(record.label),
       )
     }
     await new Promise((resolve) => setTimeout(resolve, 100))
@@ -1588,9 +1624,7 @@ export default {
         return json(
           await agent.createProposal({
             runId,
-            prompt:
-              body.prompt ??
-              'A scheduled agent follow-up found a bug-labeled Workers issue with enough evidence to publish a triage reply.',
+            prompt: body.prompt ?? DEFAULT_TRIGGER_PROMPT,
           }),
         )
       }
