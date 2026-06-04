@@ -8,11 +8,11 @@ export function renderApp(): string {
     <style>
       :root {
         color-scheme: light;
-        --bg: #eef2f7;
+        --bg: #f5f7fb;
         --panel: #ffffff;
         --panel-strong: #101827;
-        --line: #d3dce8;
-        --line-strong: #aebccc;
+        --line: #d8dee8;
+        --line-strong: #aeb8c7;
         --text: #10141f;
         --muted: #526178;
         --blue: #245dd8;
@@ -364,6 +364,10 @@ export function renderApp(): string {
         display: block;
         font-size: 12px;
         line-height: 1.35;
+      }
+
+      .progress-item > div > span {
+        display: none;
       }
 
       .progress-item.halted {
@@ -880,6 +884,1295 @@ export function renderApp(): string {
           grid-template-columns: 1fr;
         }
       }
+
+      /* Reference-driven polish pass: compact Cloudflare-style operations UI. */
+      :root {
+        --bg: #f6f8fb;
+        --panel: #ffffff;
+        --line: #d8e0eb;
+        --line-strong: #b8c4d3;
+        --text: #101623;
+        --muted: #5d687a;
+        --blue: #0969da;
+        --green: #078861;
+        --amber: #c76a00;
+        --orange: #f38020;
+        --red: #c52233;
+        --ink: #1d2737;
+        --soft: #f4f7fb;
+        --soft-blue: #edf5ff;
+        --shadow: 0 14px 34px rgba(18, 27, 42, 0.08);
+        --shadow-tight: 0 8px 18px rgba(18, 27, 42, 0.045);
+      }
+
+      body {
+        background: #fff;
+        font-size: 14px;
+      }
+
+      .shell {
+        max-width: 1536px;
+        padding: 0 0 0;
+      }
+
+      .hero {
+        background: #fff;
+        border-color: var(--line);
+        border-radius: 8px;
+        margin-bottom: 8px;
+        min-height: 62px;
+        padding: 10px 28px;
+      }
+
+      .hero::after {
+        content: none;
+      }
+
+      .cloud-mark {
+        height: 32px;
+        width: 54px;
+      }
+
+      .brand-row {
+        gap: 16px;
+      }
+
+      .hero h1 {
+        color: var(--text);
+        font-size: 21px;
+        font-weight: 780;
+        margin: 0;
+      }
+
+      .hero .sub {
+        display: none;
+      }
+
+      .header-meta {
+        gap: 12px;
+      }
+
+      .header-meta > span {
+        white-space: nowrap;
+      }
+
+      .header-meta .meta-code {
+        display: inline-block;
+        max-width: 268px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: middle;
+        white-space: nowrap;
+      }
+
+      .meta-pill {
+        gap: 8px;
+      }
+
+      .meta-pill,
+      .meta-code {
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+      }
+
+      .workflow-rail {
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        gap: 16px;
+        grid-template-columns: 1fr;
+        margin-bottom: 6px;
+        min-height: 64px;
+        padding: 0 30px 0;
+      }
+
+      .rail-main {
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+        height: 1px;
+        overflow: hidden;
+        position: absolute;
+        white-space: nowrap;
+        width: 1px;
+      }
+
+      .rail-main .dot {
+        height: 10px;
+        margin-top: 3px;
+        width: 10px;
+      }
+
+      .rail-main strong {
+        font-size: 15px;
+      }
+
+      .rail-main p {
+        font-size: 13px;
+      }
+
+      .rail-stepper {
+        align-items: center;
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        position: relative;
+        width: 100%;
+      }
+
+      .step {
+        align-items: center;
+        background: transparent;
+        border: 1px solid transparent;
+        color: var(--ink);
+        display: flex;
+        min-height: 52px;
+        padding: 6px 9px;
+        position: relative;
+      }
+
+      .step:not(:last-child)::after {
+        border-top: 2px solid #c5cfdb;
+        content: "";
+        left: 168px;
+        position: absolute;
+        top: 26px;
+        width: calc(100% - 178px);
+        z-index: 0;
+      }
+
+      .step.done:not(:last-child)::after {
+        border-color: var(--green);
+      }
+
+      .step.active,
+      .step.halted,
+      .step.error {
+        background: #fff;
+        border-color: #ccd7e5;
+        box-shadow: var(--shadow-tight);
+      }
+
+      .step.halted {
+        background: #fff8ed;
+        border-color: #f3a64e;
+        justify-self: center;
+        width: 332px;
+      }
+
+      .step.halted:not(:last-child)::after {
+        border-color: #c5cfdb;
+        border-top-style: dashed;
+        left: calc(100% + 8px);
+        width: 78px;
+      }
+
+      .step.done {
+        background: transparent;
+        border-color: transparent;
+        color: var(--green);
+      }
+
+      .step.done .step-copy {
+        color: var(--ink);
+      }
+
+      .step-index {
+        background: #fff;
+        flex: 0 0 auto;
+        font-size: 14px;
+        font-weight: 800;
+        height: 34px;
+        width: 34px;
+        z-index: 1;
+      }
+
+      .step.done .step-index {
+        font-size: 0;
+        position: relative;
+      }
+
+      .step.done .step-index::after {
+        content: "";
+        border-bottom: 3px solid #fff;
+        border-right: 3px solid #fff;
+        height: 14px;
+        left: 13px;
+        position: absolute;
+        top: 8px;
+        transform: rotate(45deg);
+        width: 7px;
+      }
+
+      .step.halted .step-index {
+        font-size: 0;
+        position: relative;
+      }
+
+      .step.halted .step-index::before,
+      .step.halted .step-index::after {
+        background: #fff;
+        border-radius: 2px;
+        content: "";
+        height: 15px;
+        position: absolute;
+        top: 9px;
+        width: 4px;
+      }
+
+      .step.halted .step-index::before {
+        left: 12px;
+      }
+
+      .step.halted .step-index::after {
+        right: 12px;
+      }
+
+      .step-copy strong {
+        font-size: 14px;
+        line-height: 1.15;
+        white-space: nowrap;
+      }
+
+      .step-copy span {
+        font-size: 12px;
+        line-height: 1.25;
+      }
+
+      .step-badge {
+        background: #fff0dc;
+        border: 1px solid #ffd09a;
+        border-radius: 999px;
+        color: #a44900;
+        display: inline-flex;
+        font-size: 10px;
+        font-weight: 850;
+        line-height: 1;
+        margin-left: 7px;
+        padding: 3px 6px;
+        vertical-align: 1px;
+      }
+
+      .grid {
+        gap: 10px;
+        align-items: start;
+        grid-template-columns: 363px minmax(0, 1fr) 524px;
+        margin: 0 10px;
+      }
+
+      .grid > .panel {
+        height: 618px;
+        overflow: hidden;
+      }
+
+      .panel {
+        border-color: var(--line);
+        border-radius: 8px;
+        box-shadow: 0 6px 16px rgba(18, 27, 42, 0.035);
+        padding: 0;
+      }
+
+      .panel::before {
+        content: none;
+      }
+
+      .panel h2 {
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        color: var(--ink);
+        display: flex;
+        font-size: 12px;
+        font-weight: 850;
+        justify-content: space-between;
+        letter-spacing: 0.05em;
+        margin: 0;
+        min-height: 38px;
+        padding: 0 14px;
+      }
+
+      .grid > .panel:first-child > h2 {
+        display: flex;
+      }
+
+      .heading-pill {
+        background: #fff0dc;
+        border: 1px solid #ffd09a;
+        border-radius: 999px;
+        color: #a44900;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0;
+        padding: 3px 7px;
+        text-transform: none;
+      }
+
+      .heading-pill.green {
+        background: #e8f7ef;
+        border-color: #b9e5cb;
+        color: var(--green);
+      }
+
+      .trigger-card {
+        margin: 0;
+        padding: 14px 16px 15px;
+      }
+
+      .trigger-card .section-label {
+        font-size: 14px;
+        letter-spacing: 0;
+        margin-bottom: 0;
+        text-transform: none;
+      }
+
+      .trigger-source {
+        font-size: 15px;
+      }
+
+      .trigger-details {
+        gap: 8px;
+        margin-top: 2px;
+      }
+
+      .detail-row {
+        grid-template-columns: 88px minmax(0, 1fr);
+      }
+
+      #answer,
+      .prompt,
+      .proposal,
+      .timeline,
+      .value-props {
+        padding: 14px 16px;
+      }
+
+      .proposal {
+        display: grid;
+        gap: 10px;
+      }
+
+      .prompt {
+        border-top: 1px solid var(--line);
+      }
+
+      .prompt.compact {
+        display: none;
+      }
+
+      .panel > .links {
+        display: none;
+      }
+
+      .visually-hidden {
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+        height: 1px;
+        overflow: hidden;
+        position: absolute;
+        white-space: nowrap;
+        width: 1px;
+      }
+
+      .control-strip {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: space-between;
+      }
+
+      .section-label {
+        color: var(--ink);
+        display: block;
+        font-size: 12px;
+        font-weight: 850;
+        letter-spacing: 0.04em;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+      }
+
+      textarea {
+        min-height: 86px;
+      }
+
+      .metric-row {
+        gap: 8px;
+      }
+
+      .metric {
+        background: #f8fafc;
+        border-color: #dce4ee;
+        gap: 5px;
+        padding: 8px 10px;
+      }
+
+      .proposal .metric {
+        align-items: center;
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        column-gap: 10px;
+        grid-template-columns: 120px minmax(0, 1fr);
+        padding: 0;
+      }
+
+      .proposal .metric .label {
+        color: var(--ink);
+        font-size: 13px;
+        letter-spacing: 0;
+        text-transform: none;
+        white-space: nowrap;
+      }
+
+      .proposal .metric .value {
+        align-items: center;
+        display: flex;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .label {
+        letter-spacing: 0.04em;
+      }
+
+      .progress-list {
+        gap: 0;
+        padding-left: 0;
+      }
+
+      .progress-list::before {
+        background: linear-gradient(180deg, #078861 0 68%, #cfd8e5 68% 100%);
+        bottom: 18px;
+        content: "";
+        left: 9px;
+        position: absolute;
+        top: 18px;
+        width: 2px;
+      }
+
+      .progress-item {
+        animation-duration: 180ms;
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        column-gap: 9px;
+        grid-template-columns: 20px minmax(0, 1fr) auto;
+        padding: 9px 0;
+        position: relative;
+      }
+
+      .progress-item .dot {
+        border: 2px solid #fff;
+        box-shadow: 0 0 0 1px #c7d2df;
+        height: 14px;
+        margin-left: 2px;
+        position: relative;
+        width: 14px;
+        z-index: 1;
+      }
+
+      .dot.future {
+        background: #fff;
+      }
+
+      .progress-item.halted {
+        background: transparent;
+      }
+
+      .progress-item.halted strong {
+        color: #9a4a00;
+      }
+
+      .progress-item.proposal .dot.ok {
+        background: var(--blue);
+        box-shadow: 0 0 0 1px #b8c8f6;
+      }
+
+      .progress-item:not(.proposal) .dot.ok {
+        background: var(--green);
+        font-size: 0;
+      }
+
+      .progress-item:not(.proposal) .dot.ok::after {
+        border-bottom: 2px solid #fff;
+        border-right: 2px solid #fff;
+        content: "";
+        height: 6px;
+        left: 4px;
+        position: absolute;
+        top: 2px;
+        transform: rotate(45deg);
+        width: 3px;
+      }
+
+      .progress-item.halted .dot.pending {
+        font-size: 0;
+      }
+
+      .progress-item.halted .dot.pending::before,
+      .progress-item.halted .dot.pending::after {
+        background: #fff;
+        border-radius: 1px;
+        content: "";
+        height: 7px;
+        position: absolute;
+        top: 2px;
+        width: 2px;
+      }
+
+      .progress-item.halted .dot.pending::before {
+        left: 4px;
+      }
+
+      .progress-item.halted .dot.pending::after {
+        right: 4px;
+      }
+
+      .run-state {
+        background: #f8fafc;
+        border-color: #dce4ee;
+      }
+
+      .proposal > .run-state.proposal-state {
+        display: none;
+      }
+
+      .run-state.halt {
+        background: #fff8ed;
+        border-color: #f3a64e;
+        box-shadow: inset 3px 0 0 var(--orange);
+      }
+
+      .diff-head {
+        align-items: center;
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+        margin-bottom: 6px;
+      }
+
+      .diff-tools {
+        color: var(--muted);
+        display: flex;
+        font-size: 12px;
+        gap: 10px;
+      }
+
+      .diff pre {
+        font-size: 12px;
+        line-height: 1.55;
+        max-height: 300px;
+      }
+
+      .diff-code {
+        background: #fbfdff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        color: #102033;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.55;
+        max-height: 302px;
+        overflow: auto;
+        padding: 8px 0;
+      }
+
+      .diff-line {
+        display: block;
+        min-height: 18px;
+        padding: 0 12px;
+        white-space: pre-wrap;
+      }
+
+      .diff-line.add {
+        background: #e9f8ef;
+        color: #0b5138;
+      }
+
+      .diff-line.remove {
+        background: #fff1f2;
+        color: #8f1d2d;
+      }
+
+      .diff-line.meta {
+        color: #667085;
+      }
+
+      .risk-bar {
+        align-items: center;
+        background: #fff8ed;
+        border: 1px solid #ffd09a;
+        border-radius: 8px;
+        display: grid;
+        gap: 8px;
+        grid-template-columns: auto auto minmax(0, 1fr) auto;
+        padding: 8px 10px;
+      }
+
+      .risk-icon {
+        color: var(--orange);
+        display: inline-flex;
+        height: 16px;
+        width: 16px;
+      }
+
+      .risk-icon svg {
+        height: 16px;
+        width: 16px;
+      }
+
+      .risk-level {
+        background: #fff0dc;
+        border: 1px solid #ffd09a;
+        border-radius: 999px;
+        color: #a44900;
+        font-size: 12px;
+        font-weight: 800;
+        padding: 2px 7px;
+      }
+
+      .primary,
+      .secondary,
+      .danger {
+        align-items: center;
+        display: grid;
+        gap: 8px;
+        grid-template-columns: 20px minmax(0, 1fr);
+        justify-content: stretch;
+        min-height: 58px;
+        padding: 9px 10px;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: minmax(190px, 1fr) minmax(176px, 0.9fr) minmax(176px, 0.9fr);
+        gap: 22px;
+        margin-top: 4px;
+      }
+
+      .action-copy {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+        text-align: left;
+      }
+
+      .action-copy small {
+        color: inherit;
+        font-size: 9.5px;
+        font-weight: 650;
+        line-height: 1.12;
+        opacity: 0.78;
+        overflow-wrap: normal;
+        text-wrap: normal;
+      }
+
+      .button-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 850;
+        line-height: 1.12;
+        white-space: nowrap;
+      }
+
+      .primary .button-label {
+        font-size: 13px;
+      }
+
+      .primary .action-copy small {
+        font-size: 9px;
+        white-space: nowrap;
+      }
+
+      .primary {
+        background: #078861;
+        box-shadow: 0 10px 22px rgba(7, 136, 97, 0.18);
+      }
+
+      .secondary {
+        background: #fff;
+      }
+
+      .danger {
+        background: #fff;
+      }
+
+      .button-icon {
+        align-items: center;
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        display: inline-flex;
+        height: 18px;
+        justify-content: center;
+        justify-self: start;
+        line-height: 0;
+        margin-left: 0;
+        width: 18px;
+      }
+
+      .button-icon svg {
+        display: block;
+        height: 11px;
+        width: 11px;
+      }
+
+      .primary .button-icon {
+        border-color: rgba(255, 255, 255, 0.78);
+      }
+
+      .danger .button-icon,
+      .secondary .button-icon {
+        margin-top: -1px;
+      }
+
+      .primary .action-copy,
+      .danger .action-copy,
+      .secondary .action-copy {
+        align-self: center;
+      }
+
+      .record-timeline {
+        display: grid;
+        gap: 0;
+        position: relative;
+      }
+
+      .record-timeline::before {
+        background: #cfd8e5;
+        bottom: 26px;
+        content: "";
+        left: 74px;
+        position: absolute;
+        top: 24px;
+        width: 2px;
+      }
+
+      .event,
+      .event-future {
+        animation-duration: 180ms;
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        display: grid;
+        gap: 7px;
+        grid-template-columns: 58px 20px minmax(0, 1fr) 132px;
+        padding: 5px 0;
+      }
+
+      .event:hover,
+      .event:focus-visible,
+      .event.selected {
+        background: #fff7ec;
+        border-color: transparent;
+        box-shadow: none;
+        outline: 0;
+      }
+
+      .event-future.selected {
+        background: #fff7ec;
+      }
+
+      .event-time {
+        color: var(--muted);
+        font-size: 12px;
+        padding-top: 4px;
+      }
+
+      .event-marker {
+        align-items: center;
+        background: var(--green);
+        border: 2px solid #fff;
+        border-radius: 999px;
+        box-shadow: 0 0 0 1px #b7d7c8;
+        color: #fff;
+        display: inline-flex;
+        font-size: 10px;
+        height: 17px;
+        justify-content: center;
+        margin-top: 3px;
+        position: relative;
+        width: 17px;
+        z-index: 1;
+      }
+
+      .event-marker.done::after {
+        border-bottom: 2px solid #fff;
+        border-right: 2px solid #fff;
+        content: "";
+        height: 7px;
+        margin-top: -2px;
+        transform: rotate(45deg);
+        width: 4px;
+      }
+
+      .event-marker.pending {
+        background: var(--orange);
+        box-shadow: 0 0 0 1px #ffd09a;
+        font-size: 0;
+      }
+
+      .event-marker.pending::before,
+      .event-marker.pending::after {
+        background: #fff;
+        border-radius: 1px;
+        content: "";
+        height: 8px;
+        position: absolute;
+        top: 3px;
+        width: 2px;
+      }
+
+      .event-marker.pending::before {
+        left: 5px;
+      }
+
+      .event-marker.pending::after {
+        right: 5px;
+      }
+
+      .event-marker.future {
+        background: #fff;
+        box-shadow: 0 0 0 1px #a8b4c3;
+        border-color: #fff;
+      }
+
+      .event-copy {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .event-copy strong {
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .event-copy .value {
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.35;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .event-future strong,
+      .event-future .value,
+      .event-future .event-time {
+        color: #7a8497;
+      }
+
+      .event-hash {
+        align-self: center;
+        color: #44536a;
+        font-size: 11px;
+        max-width: 132px;
+        overflow: hidden;
+        overflow-wrap: normal;
+        text-align: right;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        word-break: normal;
+      }
+
+      .trace-section-label {
+        color: var(--ink);
+        display: block;
+        font-size: 13px;
+        font-weight: 800;
+        margin: 0 0 8px;
+      }
+
+      .trace-header-meta {
+        align-items: center;
+        display: flex;
+        gap: 7px;
+        margin-left: auto;
+        min-width: 0;
+        font-size: 11px;
+        letter-spacing: 0;
+        text-transform: none;
+        white-space: nowrap;
+      }
+
+      .trace-id {
+        display: inline-block;
+        max-width: 116px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: middle;
+        white-space: nowrap;
+      }
+
+      .signer-list,
+      .trace-integrity {
+        border-top: 1px solid var(--line);
+        margin-top: 20px;
+        padding-top: 10px;
+      }
+
+      .signer-list {
+        gap: 0;
+        margin-top: 14px;
+      }
+
+      .signer-list .trace-section-label {
+        margin-bottom: 8px;
+      }
+
+      .signer-row {
+        background: #fff;
+        border-radius: 0;
+        gap: 8px;
+        grid-template-columns: 24px 78px minmax(0, 1fr) 58px 84px 14px;
+        min-height: 34px;
+        padding: 5px 8px;
+        box-shadow: none;
+      }
+
+      .signer-row + .signer-row {
+        border-top: 0;
+      }
+
+      .signer-list .signer-row:first-of-type {
+        border-radius: 7px 7px 0 0;
+      }
+
+      .signer-list .signer-row:last-child {
+        border-radius: 0 0 7px 7px;
+      }
+
+      .signer-row > * {
+        min-width: 0;
+      }
+
+      .signer-row strong,
+      .signer-row .empty {
+        align-self: center;
+      }
+
+      .signer-row strong {
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .signer-row .empty {
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .signer-row .empty,
+      .verify-row .empty {
+        display: block;
+      }
+
+      .signer-icon {
+        align-items: center;
+        border-radius: 7px;
+        display: inline-flex;
+        height: 22px;
+        justify-content: center;
+        width: 22px;
+      }
+
+      .signer-icon svg {
+        height: 15px;
+        width: 15px;
+      }
+
+      .signer-icon.agent {
+        background: #e8f2ff;
+        color: #0969da;
+      }
+
+      .signer-icon.human {
+        background: #fff3df;
+        color: #c76a00;
+      }
+
+      .signer-icon.mcp {
+        background: #e9f7ef;
+        color: #078861;
+      }
+
+      .signer-status {
+        border-color: #c7d6e8;
+        font-size: 11px;
+        min-height: 20px;
+        padding: 2px 6px;
+        justify-self: end;
+      }
+
+      .signer-status.signed {
+        background: #edf5ff;
+        color: #0969da;
+      }
+
+      .signer-status.pending {
+        background: #fff0dc;
+        border-color: #ffd09a;
+        color: #a44900;
+      }
+
+      .signer-status.pending.mcp {
+        background: #e9f8ef;
+        border-color: #b9e5cb;
+        color: #078861;
+      }
+
+      .signature-slot {
+        align-self: center;
+        color: var(--muted);
+        font-size: 11px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .signature-slot .hash {
+        font-size: 10px;
+      }
+
+      .copy-icon {
+        align-self: center;
+        color: var(--muted);
+        display: inline-flex;
+        height: 14px;
+        justify-self: end;
+        width: 14px;
+      }
+
+      .copy-icon svg {
+        height: 14px;
+        width: 14px;
+      }
+
+      .integrity-list {
+        display: grid;
+        gap: 7px;
+      }
+
+      .integrity-row {
+        display: grid;
+        font-size: 12px;
+        gap: 8px;
+        grid-template-columns: 94px minmax(0, 1fr) auto;
+      }
+
+      .integrity-row strong {
+        color: var(--ink);
+        font-weight: 700;
+      }
+
+      .integrity-row .hash {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .verify-row {
+        background: #fff;
+      }
+
+      .verify-row .pill {
+        justify-content: center;
+        min-width: 36px;
+      }
+
+      .verify-row:nth-child(1) .pill {
+        background: #edf5ff;
+        border-color: #c7d6e8;
+        color: #0969da;
+      }
+
+      .verify-row:nth-child(2) .pill {
+        background: #fff0dc;
+        border-color: #ffd09a;
+        color: #a44900;
+      }
+
+      .verify-row:nth-child(3) .pill {
+        background: #e9f8ef;
+        border-color: #b9e5cb;
+        color: #078861;
+      }
+
+      .receipt-grid {
+        display: block;
+        margin-top: 10px;
+        padding: 0 10px;
+      }
+
+      .receipt-panel {
+        grid-column: auto;
+        scroll-margin-top: 12px;
+      }
+
+      .receipt-toolbar {
+        align-items: center;
+        display: flex;
+        gap: 12px;
+        justify-content: flex-start;
+        min-height: 38px;
+        padding: 0 14px;
+      }
+
+      .receipt-toolbar h2 {
+        border-bottom: 0;
+        min-height: auto;
+        padding: 0;
+      }
+
+      .receipt-controls {
+        align-items: center;
+        display: flex;
+        gap: 8px;
+      }
+
+      .receipt-controls .label {
+        color: var(--ink);
+        font-size: 12px;
+        letter-spacing: 0;
+        text-transform: none;
+      }
+
+      .icon-button {
+        align-items: center;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--ink);
+        display: inline-flex;
+        font-size: 12px;
+        font-weight: 700;
+        gap: 7px;
+        height: 26px;
+        justify-content: center;
+        padding: 0 9px;
+      }
+
+      .icon-button.square {
+        width: 28px;
+        padding: 0;
+      }
+
+      .icon-button svg {
+        height: 14px;
+        width: 14px;
+      }
+
+      .receipt-shell {
+        grid-template-columns: minmax(420px, 1.05fr) minmax(360px, 0.9fr) minmax(420px, 1fr);
+      }
+
+      .receipt-section {
+        padding: 12px 14px;
+      }
+
+      .json pre {
+        background: #fff;
+        border: 1px solid var(--line);
+        color: #102033;
+        font-size: 12px;
+        line-height: 1.5;
+        max-height: 210px;
+        padding: 10px 12px 10px 36px;
+        position: relative;
+      }
+
+      .receipt-tabs {
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        gap: 34px;
+        margin: -12px -14px 10px;
+        padding: 0 26px;
+      }
+
+      .receipt-tab {
+        background: transparent;
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 700;
+        min-height: 34px;
+        padding: 0;
+        position: relative;
+      }
+
+      .receipt-tab.active::after {
+        background: var(--orange);
+        bottom: -1px;
+        content: "";
+        height: 2px;
+        left: 0;
+        position: absolute;
+        right: 0;
+      }
+
+      .receipt-summary-grid,
+      .verification-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .summary-row {
+        display: grid;
+        font-size: 12px;
+        gap: 8px;
+        grid-template-columns: 130px minmax(0, 1fr) auto;
+      }
+
+      .summary-row .hash,
+      .summary-row a {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .verify-row {
+        border-radius: 7px;
+        grid-template-columns: 34px minmax(0, 1fr) auto;
+        min-height: 44px;
+        padding: 7px 9px;
+      }
+
+      .verify-row .event-action {
+        color: var(--blue);
+        font-size: 12px;
+        font-weight: 750;
+      }
+
+      @media (max-width: 1100px) {
+        .workflow-rail,
+        .rail-stepper,
+        .grid,
+        .receipt-shell {
+          grid-template-columns: 1fr;
+        }
+
+        .step:not(:last-child)::after {
+          content: none;
+        }
+
+        .rail-stepper {
+          gap: 8px;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .header-meta {
+          grid-template-columns: 1fr;
+        }
+
+        .event {
+          grid-template-columns: 48px 20px minmax(0, 1fr);
+        }
+
+        .event-hash {
+          grid-column: 3;
+          justify-self: start;
+        }
+      }
     </style>
   </head>
   <body>
@@ -911,18 +2204,19 @@ export function renderApp(): string {
           </div>
         </div>
         <div class="rail-stepper" id="workflowSteps">
-          <span class="step active" data-step="trigger"><span class="step-index">1</span><span class="step-copy"><strong>Trigger</strong><span>Incoming alert</span></span></span>
-          <span class="step" data-step="autonomous"><span class="step-index">2</span><span class="step-copy"><strong>Autonomous triage</strong><span>Context and policy</span></span></span>
-          <span class="step" data-step="halt"><span class="step-index">3</span><span class="step-copy"><strong>Human review halted</strong><span>Awaiting review</span></span></span>
-          <span class="step" data-step="resume"><span class="step-index">4</span><span class="step-copy"><strong>MCP execution resumed</strong><span>Pending approval</span></span></span>
-          <span class="step" data-step="audit"><span class="step-index">5</span><span class="step-copy"><strong>Audit ready</strong><span>Pending</span></span></span>
+          <span class="step active" data-step="trigger"><span class="step-index">1</span><span class="step-copy"><strong>Trigger</strong><span data-step-time="trigger">Pending</span></span></span>
+          <span class="step" data-step="autonomous"><span class="step-index">2</span><span class="step-copy"><strong>Autonomous triage</strong><span data-step-time="autonomous">Pending</span></span></span>
+          <span class="step" data-step="halt"><span class="step-index">3</span><span class="step-copy"><strong>Human review halted <span class="step-badge">Awaiting review</span></strong><span data-step-time="halt">Pending</span></span></span>
+          <span class="step" data-step="resume"><span class="step-index">4</span><span class="step-copy"><strong>MCP execution resumed</strong><span data-step-time="resume">Pending</span></span></span>
+          <span class="step" data-step="audit"><span class="step-index">5</span><span class="step-copy"><strong>Audit ready</strong><span data-step-time="audit">Pending</span></span></span>
         </div>
       </section>
 
       <section class="grid">
         <div class="panel">
-          <h2>Trigger and progress</h2>
+          <h2>Trigger &amp; progress</h2>
           <div class="trigger-card">
+            <span class="section-label">Prior trigger</span>
             <div class="trigger-source">
               <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="#111827" d="M12 .5A12 12 0 0 0 8.2 21.9c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.4-4-1.4-.6-1.4-1.4-1.8-1.4-1.8-1.1-.8.1-.8.1-.8 1.2.1 1.9 1.3 1.9 1.3 1.1 1.9 2.9 1.3 3.6 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.3-3.3-.1-.3-.6-1.6.1-3.3 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6.2 0C17.6 2 18.6 2.3 18.6 2.3c.7 1.7.2 3 .1 3.3.8.9 1.3 2 1.3 3.3 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5Z"/>
@@ -937,16 +2231,16 @@ export function renderApp(): string {
               <div class="detail-row"><span>Received</span><strong id="receivedLabel">waiting</strong></div>
             </div>
           </div>
-          <div id="answer" class="metric-row">
+          <div id="answer">
             <p class="empty">Waiting for the incoming alert.</p>
           </div>
-          <div class="prompt">
-            <textarea id="prompt">A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.</textarea>
-            <label class="toggle">
-              <input id="simulateError" type="checkbox" />
-              Simulate repository file change after approval
-            </label>
-            <div class="actions">
+          <div class="prompt compact">
+            <textarea class="visually-hidden" id="prompt">A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.</textarea>
+            <div class="control-strip">
+              <label class="toggle">
+                <input id="simulateError" type="checkbox" />
+                Simulate repository file change after approval
+              </label>
               <button class="primary" id="create">Replay prior trigger</button>
               <button class="secondary" id="reset">Reset</button>
             </div>
@@ -960,55 +2254,48 @@ export function renderApp(): string {
         </div>
 
         <div class="panel">
-          <h2>Human review gate</h2>
+          <h2>Human review (required) <span class="heading-pill" id="reviewStatePill">Waiting</span></h2>
           <div id="proposal" class="proposal">
             <p class="empty">The workflow has not reached human review yet.</p>
           </div>
         </div>
 
         <div class="panel">
-          <h2>Signed trace</h2>
+          <h2>Signed trace <span class="heading-pill green">Verifiable</span><span class="trace-header-meta">Trace ID <span class="meta-code trace-id" id="traceIdLabel">pending</span><span class="copy-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></span></span></h2>
           <div id="timeline" class="timeline">
             <p class="empty">Signed records will appear here as the workflow runs.</p>
           </div>
         </div>
       </section>
 
-      <section class="grid" style="margin-top: 16px;">
-        <div class="panel">
-          <h2>Atrib value layer</h2>
-          <div class="value-props">
-            <div class="prop">
-              <strong>Autonomous trigger context</strong>
-              <span>The audit starts before the proposal, at the webhook or scheduled follow-up that woke the agent.</span>
-            </div>
-            <div class="prop">
-              <strong>Decision context</strong>
-              <span>The reviewer sees the exact payload and risk before the agent resumes.</span>
-            </div>
-            <div class="prop">
-              <strong>Signer separation</strong>
-              <span>Agent trigger/proposal, human decision, and action MCP execution carry distinct keys.</span>
-            </div>
-          </div>
-        </div>
+      <section class="receipt-grid">
         <div class="panel receipt-panel">
           <div class="receipt-toolbar">
-            <h2 style="margin: 0;">Receipt inspector</h2>
-            <span class="pill">JSON pretty</span>
+            <h2>Receipt inspector</h2>
+            <div class="receipt-controls">
+              <span class="label">Format</span>
+              <span class="meta-code">JSON (pretty)</span>
+              <button class="icon-button square" type="button" aria-label="Copy receipt">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg>
+              </button>
+              <button class="icon-button" type="button" aria-label="Download receipt">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v7m0 0 3-3m-3 3L5 6M3 12.5h10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"/></svg>
+                Download receipt
+              </button>
+            </div>
           </div>
           <div class="receipt-shell">
             <div class="receipt-section json" id="receipts">
-              <p class="empty">Open a receipt to inspect the record and Merkle proof.</p>
+              <p class="empty">View signed record and proof after the first trace record is selected.</p>
             </div>
             <div class="receipt-section" id="receiptSummary">
               <p class="empty">Summary appears after a signed record is selected.</p>
             </div>
             <div class="receipt-section" id="verification">
               <div class="verify-list">
-                <div class="verify-row"><span class="pill">LOG</span><div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><span class="event-action">Pending</span></div>
-                <div class="verify-row"><span class="pill">SIG</span><div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><span class="event-action">Pending</span></div>
-                <div class="verify-row"><span class="pill">GET</span><div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><span class="event-action">Pending</span></div>
+                <div class="verify-row"><span class="pill">LOG</span><div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><span class="event-action" data-ready-label="View proof">Pending</span></div>
+                <div class="verify-row"><span class="pill">SIG</span><div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><span class="event-action" data-ready-label="Verify">Pending</span></div>
+                <div class="verify-row"><span class="pill">GET</span><div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><span class="event-action" data-ready-label="Download">Pending</span></div>
               </div>
             </div>
           </div>
@@ -1021,6 +2308,8 @@ export function renderApp(): string {
       let busy = false;
       let currentStep = 'trigger';
       let autoStarted = false;
+      let autoFollow = true;
+      let stageDisplayTimes = {};
 
       const statusDot = document.querySelector('#statusDot');
       const statusTitle = document.querySelector('#statusTitle');
@@ -1039,6 +2328,8 @@ export function renderApp(): string {
       const receivedLabel = document.querySelector('#receivedLabel');
       const receiptSummaryEl = document.querySelector('#receiptSummary');
       const verificationEl = document.querySelector('#verification');
+      const reviewStatePill = document.querySelector('#reviewStatePill');
+      const traceIdLabel = document.querySelector('#traceIdLabel');
 
       const bootStages = [
         {
@@ -1085,6 +2376,27 @@ export function renderApp(): string {
             item.classList.add(step === 'halt' ? 'halted' : kind === 'error' ? 'error' : 'active');
           }
         });
+        updateStepTimes();
+      }
+
+      function updateStepTimes(run = currentRun) {
+        const triggerTime = stageDisplayTimes.trigger ?? (run ? formatRecordTime(run.records.find((record) => record.label === 'trigger')) + ' UTC' : 'Pending');
+        const triageTime = stageDisplayTimes.context ?? (run ? formatRecordTime(run.records.find((record) => record.label === 'triage')) + ' UTC' : 'Pending');
+        const proposalTime = stageDisplayTimes.proposal ?? (run ? formatRecordTime(run.records.find((record) => record.label === 'proposal')) + ' UTC' : 'Pending');
+        const haltTime = stageDisplayTimes.halt ?? proposalTime;
+        const execution = run?.records.find((record) => record.label === 'execution');
+        const handoff = run?.records.find((record) => record.label === 'handoff');
+        const stepTimes = {
+          trigger: triggerTime,
+          autonomous: triageTime,
+          halt: haltTime,
+          resume: execution ? formatRecordTime(execution) + ' UTC' : 'Pending',
+          audit: handoff ? formatRecordTime(handoff) + ' UTC' : 'Pending',
+        };
+        Object.entries(stepTimes).forEach(([key, value]) => {
+          const target = workflowSteps.querySelector('[data-step-time="' + key + '"]');
+          if (target) target.textContent = value;
+        });
       }
 
       function setStatus(title, kind = 'pending', detail = '', step = currentStep) {
@@ -1092,10 +2404,27 @@ export function renderApp(): string {
         statusTitle.textContent = title;
         statusDetail.textContent = detail || 'The workflow is waiting for the next action.';
         renderSteps(step, kind);
+        if (reviewStatePill) {
+          reviewStatePill.textContent = step === 'halt' ? 'Paused' : step === 'resume' ? 'Running' : step === 'audit' && kind === 'error' ? 'Needs review' : step === 'audit' ? 'Ready' : 'Waiting';
+          reviewStatePill.textContent = reviewStatePill.textContent.toUpperCase();
+          reviewStatePill.classList.toggle('green', step === 'audit' && kind === 'ok');
+        }
       }
 
       function sleep(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      function followElement(target, block = 'nearest') {
+        if (!target || !autoFollow) return;
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        requestAnimationFrame(() => {
+          target.scrollIntoView({
+            behavior: reduceMotion ? 'auto' : 'smooth',
+            block,
+            inline: 'nearest',
+          });
+        });
       }
 
       function escapeHtml(value) {
@@ -1111,23 +2440,48 @@ export function renderApp(): string {
         return new Date(Date.now() + offsetMs).toISOString().slice(11, 19) + ' UTC';
       }
 
+      function progressKeyForTitle(title) {
+        if (title === 'Trigger received') return 'trigger';
+        if (title === 'Context gathered') return 'context';
+        if (title === 'Policy and intent analysis') return 'policy';
+        if (title === 'Proposed action generated') return 'proposal';
+        if (title === 'Human review halted' || title === 'Human review recorded') return 'halt';
+        if (title === 'Agent resumed through MCP') return 'resume';
+        if (title === 'Audit ready') return 'audit';
+        return '';
+      }
+
+      function progressDisplayTime(run, title, active) {
+        const key = progressKeyForTitle(title);
+        if (key && stageDisplayTimes[key]) return stageDisplayTimes[key];
+        if (!active) return '-';
+        return formatRecordTime(progressRecordFor(run, title)) + ' UTC';
+      }
+
+      function formatRecordTime(record, offsetMs = 0) {
+        const timestamp = record?.record?.timestamp;
+        if (timestamp) return new Date(new Date(timestamp).getTime() + offsetMs).toISOString().slice(11, 19);
+        return new Date(Date.now() + offsetMs).toISOString().slice(11, 19);
+      }
+
       function renderBootProgress(activeIndex) {
         const rows = bootStages.map((stage, index) => {
           const done = index < activeIndex;
           const active = index === activeIndex;
           const halted = stage.key === 'halt' && active;
+          if ((done || active) && !stageDisplayTimes[stage.key]) stageDisplayTimes[stage.key] = nowTime(0);
           return \`
-            <div class="progress-item \${halted ? 'halted' : ''}">
-              <span class="dot \${done ? 'ok' : active ? 'pending' : 'pending'}"></span>
+            <div class="progress-item \${halted ? 'halted' : ''} \${stage.key === 'proposal' ? 'proposal' : ''}">
+              <span class="dot \${done ? 'ok' : active ? 'pending' : 'future'}"></span>
               <div>
                 <strong>\${stage.title}</strong>
                 <span>\${stage.detail}</span>
               </div>
-              <span class="progress-time">\${done || active ? nowTime(index * 900) : '-'}</span>
+              <span class="progress-time">\${done || active ? stageDisplayTimes[stage.key] : '-'}</span>
             </div>
           \`;
         }).join('');
-        answerEl.innerHTML = '<div class="progress-list">' + rows + '</div>';
+        answerEl.innerHTML = '<span class="section-label">Agent progress</span><div class="progress-list">' + rows + '</div>';
         const activeStage = bootStages[activeIndex] ?? bootStages[bootStages.length - 1];
         setStatus(activeStage.title, activeStage.key === 'halt' ? 'pending' : 'ok', activeStage.detail, activeStage.step);
         if (activeStage.key !== 'halt') {
@@ -1139,12 +2493,21 @@ export function renderApp(): string {
           \`;
         }
         timelineEl.innerHTML = \`
-          <button class="event selected" type="button">
-            <span class="event-head"><strong>\${activeStage.key === 'trigger' ? 'trigger.received' : 'agent.' + activeStage.key}</strong><span class="pill">agent</span></span>
-            <span class="hash">record pending</span>
-            <span class="value">\${activeStage.detail}</span>
-          </button>
+          <span class="trace-section-label">Record timeline</span>
+          <div class="record-timeline">
+            <button class="event selected" type="button">
+              <span class="event-time">\${nowTime(activeIndex * 1800).slice(0, 8)}</span>
+              <span class="event-marker \${activeStage.key === 'halt' ? 'pending' : ''}"></span>
+              <span class="event-copy">
+                <strong>\${activeStage.key === 'trigger' ? 'trigger.received' : 'agent.' + activeStage.key}</strong>
+                <span class="value">\${activeStage.detail}</span>
+              </span>
+              <span class="event-hash hash">pending</span>
+            </button>
+          </div>
         \`;
+        followElement(answerEl.querySelectorAll('.progress-item')[activeIndex], 'nearest');
+        if (activeStage.key === 'halt') followElement(proposalEl, 'nearest');
       }
 
       function updateControls(activeLabel = '') {
@@ -1160,11 +2523,13 @@ export function renderApp(): string {
         const reject = document.querySelector('#reject');
         if (approve) {
           approve.disabled = busy || !hasPendingApproval;
-          approve.textContent = busy && activeLabel === 'approve' ? 'Resuming agent...' : 'Approve and resume';
+          const label = approve.querySelector('.button-label');
+          if (label) label.textContent = busy && activeLabel === 'approve' ? 'Resuming agent...' : 'Approve and resume';
         }
         if (reject) {
           reject.disabled = busy || !hasPendingApproval;
-          reject.textContent = busy && activeLabel === 'reject' ? 'Rejecting...' : 'Reject';
+          const label = reject.querySelector('.button-label');
+          if (label) label.textContent = busy && activeLabel === 'reject' ? 'Rejecting...' : 'Reject';
         }
       }
 
@@ -1188,6 +2553,122 @@ export function renderApp(): string {
       function shortHash(hash) {
         if (!hash) return 'missing';
         return hash.slice(0, 18) + '...' + hash.slice(-8);
+      }
+
+      function recordDisplayId(hash) {
+        if (!hash) return '-';
+        return 'rec_' + hash.replace('sha256:', '').slice(0, 12).toUpperCase() + '...';
+      }
+
+      function timelineDetail(entry, run) {
+        if (entry.label === 'trigger') return 'GitHub issue webhook';
+        if (entry.label === 'triage') return 'Intent: add rate limiting';
+        if (entry.label === 'proposal') return 'write_file proposal';
+        if (entry.label === 'approval') return 'Human approved payload';
+        if (entry.label === 'rejection') return 'Human rejected payload';
+        if (entry.label === 'preview') return 'MCP preview completed';
+        if (entry.label === 'execution') return run.status === 'failed' ? 'MCP execution attempted' : 'MCP execution resumed';
+        if (entry.label === 'outcome') return run.status === 'failed' ? 'Diagnostic outcome signed' : 'Repository update signed';
+        if (entry.label === 'handoff') return 'Audit handoff ready';
+        return entry.informed_by.length ? 'Linked to prior signed record' : 'Genesis record';
+      }
+
+      function timelineLabel(entry, run) {
+        if (entry.label === 'trigger') return 'trigger.received';
+        if (entry.label === 'triage') return 'triage.completed';
+        if (entry.label === 'proposal') return 'proposal.generated';
+        if (entry.label === 'approval') return 'human.approval.signed';
+        if (entry.label === 'rejection') return 'human.rejection.signed';
+        if (entry.label === 'preview') return 'mcp.preview.completed';
+        if (entry.label === 'execution') return 'mcp.execution.resumed';
+        if (entry.label === 'outcome') return run.status === 'failed' ? 'diagnostic.signed' : 'repository.update.signed';
+        if (entry.label === 'handoff') return 'audit.ready';
+        return entry.label;
+      }
+
+      function futureTraceRows(run) {
+        const labels = new Set(run.trace_packet.timeline.map((entry) => entry.label));
+        const rows = [];
+        if (!labels.has('approval') && !labels.has('rejection')) {
+          rows.push({ name: 'human.review.halted', detail: 'Awaiting human decision', marker: 'pending' });
+        }
+        if (!labels.has('execution')) {
+          rows.push({ name: 'mcp.execution.resumed', detail: 'Pending approval', marker: 'future' });
+        }
+        if (!labels.has('handoff')) {
+          rows.push({ name: 'audit.ready', detail: 'Pending', marker: 'future' });
+        }
+        return rows;
+      }
+
+      function signerIcon(kind) {
+        if (kind === 'human') {
+          return '<span class="signer-icon human"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0" fill="currentColor"/></svg></span>';
+        }
+        if (kind === 'mcp') {
+          return '<span class="signer-icon mcp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v4h4v6h-4v4H9v-4H5V7h4V3Z" fill="currentColor"/></svg></span>';
+        }
+        return '<span class="signer-icon agent"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v3h3v9a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V7h3V4Zm2 0v3h4V4h-4Zm-1 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm6 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm-5 3h4v-2h-4v2Z" fill="currentColor"/></svg></span>';
+      }
+
+      function signerSignature(run, signer) {
+        const record = run.records.find((item) => item.signer === signer);
+        if (!record) return '-';
+        const hash = record.record_hash.replace('sha256:', '');
+        return hash.slice(0, 10) + '...' + hash.slice(-4);
+      }
+
+      function signerStatusClass(signer) {
+        const status = signer.status.toLowerCase();
+        return status + (signer.kind === 'mcp' ? ' mcp' : '');
+      }
+
+      function traceIdForRun(run) {
+        return run.trace_packet.trace_id ?? 'trc_' + run.run_id.replaceAll('-', '').toUpperCase().slice(0, 18);
+      }
+
+      function copyIcon() {
+        return '<span class="copy-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></span>';
+      }
+
+      function renderDiff(diff) {
+        return String(diff).split('\\n').map((line) => {
+          const kind = line.startsWith('+') && !line.startsWith('+++')
+            ? 'add'
+            : line.startsWith('-') && !line.startsWith('---')
+              ? 'remove'
+              : line.startsWith('@@')
+                ? 'meta'
+                : '';
+          return '<span class="diff-line ' + kind + '">' + escapeHtml(line) + '</span>';
+        }).join('');
+      }
+
+      function progressRecordFor(run, rowTitle) {
+        if (rowTitle === 'Trigger received') return run.records.find((record) => record.label === 'trigger');
+        if (rowTitle === 'Context gathered' || rowTitle === 'Policy and intent analysis') {
+          return run.records.find((record) => record.label === 'triage');
+        }
+        if (rowTitle === 'Proposed action generated') return run.records.find((record) => record.label === 'proposal');
+        if (rowTitle === 'Human review halted' || rowTitle === 'Human review recorded') {
+          return run.records.find((record) => record.label === 'approval' || record.label === 'rejection')
+            ?? run.records.find((record) => record.label === 'proposal');
+        }
+        if (rowTitle === 'Agent resumed through MCP') return run.records.find((record) => record.label === 'execution');
+        if (rowTitle === 'Audit ready') {
+          return run.records.find((record) => record.label === 'handoff')
+            ?? run.records.find((record) => record.label === 'outcome')
+            ?? run.records.find((record) => record.label === 'rejection');
+        }
+        return run.records.find((record) => record.label === 'proposal');
+      }
+
+      function progressRowClass(row) {
+        const key = progressKeyForTitle(row.title);
+        return [
+          row.halted ? 'halted' : '',
+          key === 'proposal' ? 'proposal' : '',
+        ].filter(Boolean).join(' ');
       }
 
       function pretty(value) {
@@ -1254,7 +2735,7 @@ export function renderApp(): string {
         const disabled = run.status !== 'pending_approval';
         const state = runStateCopy(run);
         proposalEl.innerHTML = \`
-          <div class="run-state \${run.status === 'pending_approval' ? 'halt' : run.status === 'succeeded' ? 'ok' : ''}">
+          <div class="run-state proposal-state \${run.status === 'pending_approval' ? 'halt' : run.status === 'succeeded' ? 'ok' : ''}">
             <strong>\${state.title}</strong>
             <span>\${state.detail}</span>
           </div>
@@ -1266,24 +2747,25 @@ export function renderApp(): string {
             <span class="label">Target</span>
             <span class="value"><span class="meta-code">\${payload.target_file ?? 'missing'}</span></span>
           </div>
-          <div class="metric">
-            <span class="label">Risk</span>
-            <span class="value">\${body.risk ?? 'requires_human_approval'}</span>
-          </div>
           <div class="diff">
             <div>
-              <span class="label">Diff (unified)</span>
-              <pre>\${escapeHtml(diff)}</pre>
+              <div class="diff-head">
+                <span class="label">Diff (unified)</span>
+                <span class="diff-tools"><span>Context</span><span>3 lines</span><span>Wrap</span></span>
+              </div>
+              <div class="diff-code">\${renderDiff(diff)}</div>
             </div>
           </div>
-          <div class="metric">
-            <span class="label">Payload hash</span>
-            <span class="hash">\${body.proposed_payload_hash ?? 'missing'}</span>
+          <div class="risk-bar">
+            <span class="risk-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 15 14H1L8 1.5Zm0 4v4m0 2.5h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg></span>
+            <span class="risk-level">Medium</span>
+            <span class="value">\${body.risk ?? 'requires_human_approval'}</span>
+            <span class="diff-tools">Details</span>
           </div>
           <div class="actions">
-            <button class="primary" id="approve" \${disabled ? 'disabled' : ''}>Approve and resume</button>
-            <button class="danger" id="reject" \${disabled ? 'disabled' : ''}>Reject</button>
-            <button class="secondary" id="requestChanges" \${disabled ? 'disabled' : ''}>Request changes</button>
+            <button class="primary" id="approve" aria-label="Approve and resume" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span><span class="action-copy"><span class="button-label">Approve and resume</span><small>Allow MCP execution to continue</small></span></button>
+            <button class="danger" id="reject" aria-label="Reject" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 4.5 7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span><span class="action-copy"><span class="button-label">Reject</span><small>Cancel this proposed action</small></span></button>
+            <button class="secondary" id="requestChanges" aria-label="Request changes" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v6H7l-3 3V4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="action-copy"><span class="button-label">Request changes</span><small>Send feedback to agent</small></span></button>
           </div>
         \`;
         document.querySelector('#approve')?.addEventListener('click', async () => {
@@ -1336,13 +2818,13 @@ export function renderApp(): string {
           },
           {
             title: 'Context gathered',
-            detail: labels.has('proposal') ? 'Repository, issue, and Workers route context loaded.' : 'Waiting for context.',
-            done: labels.has('proposal'),
+            detail: labels.has('triage') ? 'Repository, issue, and Workers route context loaded.' : 'Waiting for context.',
+            done: labels.has('triage'),
           },
           {
             title: 'Policy and intent analysis',
-            detail: labels.has('proposal') ? 'Repository writes require human review before MCP execution.' : 'Waiting for policy analysis.',
-            done: labels.has('proposal'),
+            detail: labels.has('triage') ? 'Repository writes require human review before MCP execution.' : 'Waiting for policy analysis.',
+            done: labels.has('triage'),
           },
           {
             title: 'Proposed action generated',
@@ -1369,89 +2851,137 @@ export function renderApp(): string {
           },
         ];
         answerEl.innerHTML = \`
-          <div class="metric-row">
-            <div class="metric">
-              <span class="label">Current state</span>
-              <span class="value">\${run.status}</span>
-            </div>
-            <div class="metric">
-              <span class="label">Execution result</span>
-              <span class="value">\${answer.executed ? answer.outcome : 'not run'}</span>
-            </div>
-          </div>
+          <span class="section-label">Agent progress</span>
           <div class="progress-list">
             \${stageRows.map((row) => \`
-              <div class="progress-item \${row.halted ? 'halted' : ''}">
-                <span class="dot \${row.done ? 'ok' : row.halted ? 'pending' : 'pending'}"></span>
+              <div class="progress-item \${progressRowClass(row)}">
+                <span class="dot \${row.done ? 'ok' : row.halted ? 'pending' : 'future'}"></span>
                 <div>
-                  <strong>\${row.title}</strong>
+                  <strong>\${row.title === 'Resume not started' ? 'MCP execution (pending)' : row.title === 'Audit assembling' ? 'Audit ready (pending)' : row.title}</strong>
                   <span>\${row.detail}</span>
                 </div>
-                <span class="progress-time">\${row.done || row.halted ? nowTime(0) : '-'}</span>
+                <span class="progress-time">\${progressDisplayTime(run, row.title, row.done || row.halted)}</span>
               </div>
             \`).join('')}
           </div>
-          <div class="metric">
-            <span class="label">Changed rows</span>
-            <span class="value">\${answer.changed.length ? answer.changed.join(', ') : 'none'}</span>
-          </div>
+          \${auditReady ? \`
+            <div class="metric-row">
+              <div class="metric">
+                <span class="label">Execution result</span>
+                <span class="value">\${answer.executed ? answer.outcome : 'not run'}</span>
+              </div>
+              <div class="metric">
+                <span class="label">Changed rows</span>
+                <span class="value">\${answer.changed.length ? answer.changed.join(', ') : 'none'}</span>
+              </div>
+            </div>
+          \` : ''}
           \${auditReady && publicUrl ? '<div class="links"><a href="' + publicUrl + '">Public log context</a><a href="/api/runs/' + run.run_id + '">Trace JSON</a></div>' : ''}
         \`;
       }
 
       function renderTimeline(run) {
         const signers = [
-          { name: 'Agent', detail: 'agents/triage@1.4.2', status: run.records.some((record) => record.signer === 'agent') ? 'Signed' : 'Pending' },
-          { name: 'Human', detail: 'reviewer@example.com', status: run.records.some((record) => record.signer === 'human') ? 'Signed' : 'Pending' },
-          { name: 'Action MCP', detail: 'github.write@2.3.1', status: run.records.some((record) => record.signer === 'action_mcp') ? 'Signed' : 'Pending' },
+          { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', signer: 'agent', status: run.records.some((record) => record.signer === 'agent') ? 'Signed' : 'Pending' },
+          { kind: 'human', name: 'Human', detail: 'alice@example.com', signer: 'human', status: run.records.some((record) => record.signer === 'human') ? 'Signed' : 'Pending' },
+          { kind: 'mcp', name: 'Action MCP', detail: 'github.write@2.3.1', signer: 'action_mcp', status: run.records.some((record) => record.signer === 'action_mcp') ? 'Signed' : 'Pending' },
         ];
         timelineEl.innerHTML = run.trace_packet.timeline.length
-          ? run.trace_packet.timeline.map((entry) => \`
-              <button class="event" data-hash="\${entry.record_hash}">
-            <span class="event-head">
-              <strong>\${entry.label}</strong>
-              <span class="pill">\${entry.signer}</span>
-            </span>
-            <span class="hash">\${shortHash(entry.record_hash)}</span>
-            <span class="value">informed by: \${entry.informed_by.length ? entry.informed_by.map(shortHash).join(', ') : 'genesis'}</span>
-            <span class="event-action">View signed record and proof</span>
-          </button>
-        \`).join('') + \`
-          <div class="signer-list">
-            \${signers.map((signer) => \`
-              <div class="signer-row">
-                <span class="pill">\${signer.name.slice(0, 1)}</span>
-                <div><strong>\${signer.name}</strong><span class="empty">\${signer.detail}</span></div>
-                <span class="pill">\${signer.status}</span>
+          ? \`
+          <div class="record-timeline">
+            \${run.trace_packet.timeline.map((entry, index) => {
+              const record = run.records.find((item) => item.record_hash === entry.record_hash);
+              const isPendingHuman = false;
+              return \`
+                <button class="event" data-hash="\${entry.record_hash}" data-label="\${entry.label}">
+                  <span class="event-time">\${formatRecordTime(record, index * 1000)}</span>
+                  <span class="event-marker \${isPendingHuman ? 'pending' : 'done'}"></span>
+                  <span class="event-copy">
+                    <strong>\${timelineLabel(entry, run)}</strong>
+                    <span class="value">\${timelineDetail(entry, run)}</span>
+                  </span>
+                  <span class="event-hash hash">\${recordDisplayId(entry.record_hash)}</span>
+                </button>
+              \`;
+            }).join('')}
+            \${futureTraceRows(run).map((row) => \`
+              <div class="event-future \${row.marker === 'pending' ? 'selected' : ''}">
+                <span class="event-time">-</span>
+                <span class="event-marker \${row.marker}"></span>
+                <span class="event-copy">
+                  <strong>\${row.name}</strong>
+                  <span class="value">\${row.detail}</span>
+                </span>
+                <span class="event-hash hash">-</span>
               </div>
             \`).join('')}
           </div>
+          <div class="signer-list">
+            <span class="trace-section-label">Signers</span>
+            \${signers.map((signer) => \`
+              <div class="signer-row">
+                \${signerIcon(signer.kind)}
+                <strong>\${signer.name}</strong>
+                <span class="empty">\${signer.detail}</span>
+                <span class="pill signer-status \${signerStatusClass(signer)}">\${signer.status}</span>
+                <span class="signature-slot">Sig: <span class="hash">\${signerSignature(run, signer.signer)}</span></span>\${copyIcon()}
+              </div>
+            \`).join('')}
+          </div>
+          <div class="trace-integrity">
+            <span class="trace-section-label">Trace integrity</span>
+            <div class="integrity-list">
+              <div class="integrity-row"><strong>Merkle root</strong><span class="hash">\${run.records[0]?.record_hash ?? 'pending'}</span>\${copyIcon()}</div>
+              <div class="integrity-row"><strong>Log hash</strong><span class="hash">\${run.records[1]?.record_hash ?? 'pending'}</span>\${copyIcon()}</div>
+              <div class="integrity-row"><strong>Proof status</strong><span class="value">Included in Cloudflare Integrity Log</span><a href="\${run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id}">View proof</a></div>
+            </div>
+          </div>
         \`
           : '<p class="empty">No signed records yet.</p>';
+        const renderReceiptSummary = (record) => {
+          const signedRecords = signers.filter((signer) => signer.status === 'Signed').length;
+          const pendingSignatures = signers.filter((signer) => signer.status === 'Pending').length;
+          const logEntry = run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id;
+          receiptSummaryEl.innerHTML = \`
+            <div class="receipt-tabs">
+              <button class="receipt-tab active" type="button">Summary</button>
+              <button class="receipt-tab" type="button">Record details</button>
+            </div>
+            <div class="receipt-summary-grid">
+              <div class="summary-row"><span>Total records</span><strong>\${run.records.length}</strong><span></span></div>
+              <div class="summary-row"><span>Signed records</span><strong>\${signedRecords}</strong><span></span></div>
+              <div class="summary-row"><span>Pending signatures</span><strong>\${pendingSignatures}</strong><span></span></div>
+              <div class="summary-row"><span>Merkle root</span><span class="hash">\${shortHash(run.records[0]?.record_hash)}</span>\${copyIcon()}</div>
+              <div class="summary-row"><span>Log entry</span><a href="\${logEntry}">cl_\${traceIdForRun(run).slice(4, 20)}</a><span></span></div>
+              <div class="summary-row"><span>Log timestamp</span><strong>\${formatRecordTime(record) + ' UTC'}</strong><span></span></div>
+              <div class="summary-row"><span>Retention</span><strong>30 days (default)</strong><span></span></div>
+            </div>
+          \`;
+        };
+        const selectRecord = (record) => {
+          receiptsEl.innerHTML = '<pre>' + pretty(record) + '</pre>';
+          renderReceiptSummary(record);
+          verificationEl.querySelectorAll('.event-action').forEach((item) => {
+            item.textContent = item.dataset.readyLabel ?? (record?.proof ? 'Ready' : 'Local');
+          });
+        };
         timelineEl.querySelectorAll('.event').forEach((button) => {
           button.addEventListener('click', () => {
             const record = run.records.find((item) => item.record_hash === button.dataset.hash);
             timelineEl.querySelectorAll('.event').forEach((item) => item.classList.remove('selected'));
             button.classList.add('selected');
-            receiptsEl.innerHTML = '<pre>' + pretty(record) + '</pre>';
-            receiptSummaryEl.innerHTML = \`
-              <div class="metric-row">
-                <div class="metric"><span class="label">Selected record</span><span class="value">\${record?.label ?? 'missing'}</span></div>
-                <div class="metric"><span class="label">Signer</span><span class="value">\${record?.signer ?? 'missing'}</span></div>
-                <div class="metric"><span class="label">Record hash</span><span class="hash">\${record?.record_hash ?? 'missing'}</span></div>
-                <div class="metric"><span class="label">Proof status</span><span class="value">\${record?.proof ? 'public proof included' : 'local proof disabled or pending'}</span></div>
-              </div>
-            \`;
-            verificationEl.querySelectorAll('.event-action').forEach((item) => {
-              item.textContent = record?.proof ? 'Ready' : 'Local';
-            });
+            selectRecord(record);
           });
         });
+        const preferredLabel = run.status === 'pending_approval' ? 'proposal' : run.status === 'rejected' ? 'rejection' : run.status === 'failed' ? 'outcome' : 'handoff';
+        const preferredButton = timelineEl.querySelector(\`.event[data-label="\${preferredLabel}"]\`) ?? timelineEl.querySelector('.event');
+        preferredButton?.click();
       }
 
       function render(run) {
         currentRun = run;
         runIdLabel.textContent = run.run_id;
+        traceIdLabel.textContent = traceIdForRun(run);
         const started = run.records[0]?.record?.timestamp
           ? new Date(run.records[0].record.timestamp).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
           : 'pending';
@@ -1461,7 +2991,13 @@ export function renderApp(): string {
         renderAnswer(run);
         renderTimeline(run);
         setStatusForRun(run);
+        updateStepTimes(run);
         updateControls();
+        if (run.status === 'pending_approval') {
+          followElement(document.querySelector('#approve'), 'nearest');
+        } else if (['succeeded', 'failed', 'rejected'].includes(run.status)) {
+          followElement(document.querySelector('.receipt-panel'), 'start');
+        }
       }
 
       async function transition({ title, detail, step, activeLabel = '', fn }) {
@@ -1488,10 +3024,12 @@ export function renderApp(): string {
         try {
           setBusy(true, 'create');
           currentRun = null;
+          stageDisplayTimes = {};
           runIdLabel.textContent = 'pending';
+          traceIdLabel.textContent = 'pending';
           startedLabel.textContent = nowTime(0);
           receivedLabel.textContent = nowTime(0);
-          receiptsEl.innerHTML = '<p class="empty">Open a receipt to inspect the record and Merkle proof.</p>';
+          receiptsEl.innerHTML = '<p class="empty">View signed record and proof after the first trace record is selected.</p>';
           receiptSummaryEl.innerHTML = '<p class="empty">Summary appears after a signed record is selected.</p>';
           verificationEl.querySelectorAll('.event-action').forEach((item) => {
             item.textContent = 'Pending';
@@ -1501,7 +3039,7 @@ export function renderApp(): string {
           });
           for (let index = 0; index < bootStages.length; index += 1) {
             renderBootProgress(index);
-            await sleep(index === bootStages.length - 1 ? 260 : 520);
+            await sleep(index === bootStages.length - 1 ? 1200 : 1700);
           }
           const run = await runPromise;
           render(run);
@@ -1516,13 +3054,15 @@ export function renderApp(): string {
       resetButton.addEventListener('click', () => {
         if (busy) return;
         currentRun = null;
+        stageDisplayTimes = {};
         runIdLabel.textContent = 'pending';
+        traceIdLabel.textContent = 'pending';
         startedLabel.textContent = 'waiting';
         receivedLabel.textContent = 'waiting';
         proposalEl.innerHTML = '<p class="empty">Run the trigger to see the agent\\'s proposal, exact payload, diff, risk, and approval controls.</p>';
         answerEl.innerHTML = '<p class="empty">No active run.</p>';
         timelineEl.innerHTML = '<p class="empty">Signed records will appear here as the workflow runs.</p>';
-        receiptsEl.innerHTML = '<p class="empty">Open a receipt to inspect the record and Merkle proof.</p>';
+        receiptsEl.innerHTML = '<p class="empty">View signed record and proof after the first trace record is selected.</p>';
         receiptSummaryEl.innerHTML = '<p class="empty">Summary appears after a signed record is selected.</p>';
         verificationEl.querySelectorAll('.event-action').forEach((item) => {
           item.textContent = 'Pending';
@@ -1534,6 +3074,7 @@ export function renderApp(): string {
       updateControls();
       if (!autoStarted) {
         autoStarted = true;
+        simulateErrorInput.checked = new URLSearchParams(window.location.search).get('simulate_error') === '1';
         requestAnimationFrame(() => {
           startTriggeredRun();
         });
