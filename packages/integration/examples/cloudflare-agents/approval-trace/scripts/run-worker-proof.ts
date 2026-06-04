@@ -399,7 +399,7 @@ async function main() {
         page.includes('Cloudflare Agent Trace') &&
         page.includes('HITL halt') &&
         page.includes('Live agent progress') &&
-        page.includes('Signed trace timeline') &&
+        page.includes('Signed records will appear here as the workflow runs.') &&
         page.includes('Approve and resume'),
     },
   ]
