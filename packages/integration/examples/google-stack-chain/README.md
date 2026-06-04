@@ -74,7 +74,7 @@ HTML, CSS, JavaScript, and fixture data. Keep the hosted URL private or
 operator-approved until the outreach route is chosen.
 
 Current hosted preview:
-[`https://atrib-google-stack-proof-visual.vercel.app`](https://atrib-google-stack-proof-visual.vercel.app).
+[`https://atrib-google.vercel.app`](https://atrib-google.vercel.app).
 It was deployed from the static `visual/` files with `vercel.json` disabling
 install and build steps.
 
