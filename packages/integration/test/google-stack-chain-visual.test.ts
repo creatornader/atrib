@@ -89,6 +89,46 @@ describe('Google stack chain visual workbench', () => {
     await page.close()
   })
 
+  it('keeps mobile controls touch-safe and readable', async () => {
+    const page = await browser.newPage({
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 2,
+      isMobile: true,
+    })
+
+    await page.goto(baseUrl)
+    const audit = await page.evaluate(() => {
+      const controls = [...document.querySelectorAll('button,[role="button"]')].map((element) => {
+        const rect = element.getBoundingClientRect()
+        return {
+          height: rect.height,
+          text: (element.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 80),
+          width: rect.width,
+        }
+      })
+      const visibleText = [
+        ...document.querySelectorAll('p,li,td,th,button,h1,h2,h3,strong,span,dt,dd'),
+      ]
+        .filter((element) => {
+          const rect = element.getBoundingClientRect()
+          return rect.width > 0 && rect.height > 0 && (element.textContent ?? '').trim()
+        })
+        .map((element) => Number(window.getComputedStyle(element).fontSize.replace('px', '')))
+
+      return {
+        clientWidth: document.documentElement.clientWidth,
+        minVisibleFont: Math.min(...visibleText),
+        smallControls: controls.filter((control) => control.width < 44 || control.height < 44),
+        scrollWidth: document.documentElement.scrollWidth,
+      }
+    })
+
+    expect(audit.smallControls).toEqual([])
+    expect(audit.minVisibleFont).toBeGreaterThanOrEqual(12)
+    expect(audit.scrollWidth).toBe(audit.clientWidth)
+    await page.close()
+  })
+
   it('pins the static visual fixture to the current proof snapshot', async () => {
     const fixture = JSON.parse(await readFile(join(root, 'proof-snapshot.json'), 'utf8'))
     const snapshotScript = await readFile(join(root, 'proof-snapshot.js'), 'utf8')

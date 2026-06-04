@@ -239,10 +239,10 @@ h1 {
   border: 0;
   border-radius: 6px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 740;
-  min-height: 30px;
-  padding: 6px 10px;
+  min-height: 44px;
+  padding: 10px 14px;
 }
 
 .segment.active {
@@ -277,7 +277,7 @@ tbody tr:focus-visible {
 
 .command span {
   color: #b9c2d2;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 760;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -307,7 +307,7 @@ tbody tr:focus-visible {
 .facts dt,
 .field-label {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 780;
   letter-spacing: 0.05em;
   line-height: 1.25;
@@ -481,7 +481,7 @@ tbody tr:focus-visible {
 .node-hash {
   color: #334155;
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.42;
   overflow-wrap: anywhere;
 }
@@ -499,10 +499,10 @@ tbody tr:focus-visible {
   align-items: center;
   border-radius: 999px;
   display: inline-flex;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 780;
-  min-height: 23px;
-  padding: 4px 8px;
+  min-height: 26px;
+  padding: 5px 9px;
 }
 
 .badge,
@@ -594,7 +594,7 @@ td {
 
 th {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 780;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -616,7 +616,7 @@ tbody tr.selected {
 
 td code {
   color: #334155;
-  font-size: 11px;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
@@ -846,10 +846,10 @@ td:nth-child(5) {
     border-radius: 999px;
     color: var(--muted);
     flex: 0 0 auto;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 740;
-    min-height: 31px;
-    padding: 6px 10px;
+    min-height: 44px;
+    padding: 10px 14px;
   }
 
   .mobile-tab.active {
@@ -919,7 +919,7 @@ td:nth-child(5) {
   td::before {
     color: var(--muted);
     content: attr(data-label);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 780;
     letter-spacing: 0.04em;
     text-transform: uppercase;
