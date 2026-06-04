@@ -33,6 +33,15 @@ required. Compliance-coded products, such as audit trails, SOC 2 evidence, and
 AI governance tooling, approximate this without the substrate. atrib makes it
 native to the action record.
 
+### Verifiable evals
+
+Agent evals can score the signed trajectory behind a run, instead of stopping at
+the final answer or a runtime log. A harness can link task setup, tool calls,
+verifier checks, diagnostic outcomes, and scorer output through `informed_by`,
+then publish the result as evidence another team can replay. This turns
+benchmarks into inspectable claims: what was tested, what the agent did, what
+the evaluator saw, and which records support the score.
+
 ### Cross-agent provenance
 
 Tool calls chain forward through W3C trace context. Agents that hand off work to
