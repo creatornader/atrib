@@ -77,6 +77,8 @@ export interface A2aHandoffProofResult {
   }
   evidence: {
     remote_record_hash: string
+    remote_informed_by_resolved: string[]
+    remote_informed_by_dangling: string[]
     accepted_record_hashes: string[]
     rejected_count: number
     proof_log_index: number
@@ -92,6 +94,23 @@ export interface A2aHandoffProofResult {
     public_record_contains_private_phrase: boolean
   }
   log_url: string
+  records?: {
+    remote: AtribRecord
+    followup: AtribRecord
+  }
+}
+
+export interface A2aHandoffProofOptions {
+  nowMs?: number
+  remoteInformedBy?: string[]
+  remoteInformedByCandidates?: AtribRecord[]
+  includeSignedRecords?: boolean
+  ids?: {
+    requestMessageId?: string
+    responseMessageId?: string
+    taskId?: string
+    contextId?: string
+  }
 }
 
 interface RemoteA2aEvidenceBody {
@@ -132,10 +151,17 @@ class EvidencePacketAgent implements AgentExecutor {
   constructor(
     private readonly logUrl: string,
     private readonly nowMs: number,
+    private readonly options: A2aHandoffProofOptions,
   ) {}
 
   async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
-    const evidence = await makeRemoteEvidence(this.logUrl, requestContext, this.nowMs)
+    const evidence = await makeRemoteEvidence(
+      this.logUrl,
+      requestContext,
+      this.nowMs,
+      this.options.remoteInformedBy ?? [],
+      this.options.ids,
+    )
     const packetPart: DataPart = {
       kind: 'data',
       data: {
@@ -148,7 +174,7 @@ class EvidencePacketAgent implements AgentExecutor {
     }
     const response: Message = {
       kind: 'message',
-      messageId: randomUUID(),
+      messageId: this.options.ids?.responseMessageId ?? randomUUID(),
       role: 'agent',
       taskId: requestContext.taskId,
       contextId: requestContext.contextId,
@@ -167,7 +193,11 @@ class EvidencePacketAgent implements AgentExecutor {
   cancelTask = async (): Promise<void> => {}
 }
 
-export async function runA2aHandoffProof(nowMs = Date.now()): Promise<A2aHandoffProofResult> {
+export async function runA2aHandoffProof(
+  input: number | A2aHandoffProofOptions = Date.now(),
+): Promise<A2aHandoffProofResult> {
+  const options = typeof input === 'number' ? { nowMs: input } : input
+  const nowMs = options.nowMs ?? Date.now()
   let logServer: LogServer | undefined
   try {
     logServer = await startLogServer({
@@ -179,7 +209,7 @@ export async function runA2aHandoffProof(nowMs = Date.now()): Promise<A2aHandoff
     const requestHandler = new DefaultRequestHandler(
       agentCard,
       new InMemoryTaskStore(),
-      new EvidencePacketAgent(logServer.url, nowMs),
+      new EvidencePacketAgent(logServer.url, nowMs, options),
     )
     const transportHandler = new JsonRpcTransportHandler(requestHandler)
     const clientFactory = new ClientFactory({
@@ -191,7 +221,7 @@ export async function runA2aHandoffProof(nowMs = Date.now()): Promise<A2aHandoff
       preferredTransports: ['JSONRPC'],
     })
     const client = await clientFactory.createFromAgentCard(agentCard)
-    const response = await client.sendMessage(makeSendParams())
+    const response = await client.sendMessage(makeSendParams(options.ids))
     if (!isMessage(response)) {
       throw new Error(`expected A2A message response, got ${response.kind}`)
     }
@@ -215,6 +245,9 @@ export async function runA2aHandoffProof(nowMs = Date.now()): Promise<A2aHandoff
       (entry) => entry.record_hash === handoff.accepted_record_hashes[0],
     )
     if (!remoteEntry?.record) throw new Error('accepted A2A record missing from packet')
+    const remoteVerification = await verifyAtribRecord(remoteEntry.record, {
+      informedByCandidates: options.remoteInformedByCandidates ?? [],
+    })
     const followupRecord = await makeReceivingAgentFollowup(
       handoff.accepted_record_hashes,
       response.contextId ?? A2A_CONTEXT_ID,
@@ -223,7 +256,7 @@ export async function runA2aHandoffProof(nowMs = Date.now()): Promise<A2aHandoff
     const followupVerification = await verifyAtribRecord(followupRecord, {
       informedByCandidates: [remoteEntry.record],
     })
-    return {
+    const result: A2aHandoffProofResult = {
       strategy: 'atrib-a2a-handoff-proof-v1',
       sdk: {
         package: '@a2a-js/sdk',
@@ -248,6 +281,8 @@ export async function runA2aHandoffProof(nowMs = Date.now()): Promise<A2aHandoff
       },
       evidence: {
         remote_record_hash: handoff.accepted_record_hashes[0]!,
+        remote_informed_by_resolved: remoteVerification.informed_by_resolution?.resolved ?? [],
+        remote_informed_by_dangling: remoteVerification.informed_by_resolution?.dangling ?? [],
         accepted_record_hashes: handoff.accepted_record_hashes,
         rejected_count: handoff.rejected.length,
         proof_log_index: remoteEntry.proof?.log_index ?? -1,
@@ -266,6 +301,13 @@ export async function runA2aHandoffProof(nowMs = Date.now()): Promise<A2aHandoff
       },
       log_url: logServer.url,
     }
+    if (options.includeSignedRecords) {
+      result.records = {
+        remote: remoteEntry.record,
+        followup: followupRecord,
+      }
+    }
+    return result
   } finally {
     await logServer?.close()
   }
@@ -366,24 +408,25 @@ function canonicalAgentCardPayload(card: AgentCard): string {
   return encoded
 }
 
-function makeSendParams(): MessageSendParams {
+function makeSendParams(ids: A2aHandoffProofOptions['ids'] = {}): MessageSendParams {
+  const message: Message = {
+    kind: 'message',
+    messageId: ids.requestMessageId ?? randomUUID(),
+    role: 'user',
+    contextId: ids.contextId ?? A2A_CONTEXT_ID,
+    parts: [
+      {
+        kind: 'text',
+        text: `Investigate support handoff ${PRIVATE_TASK_PHRASE} and return evidence.`,
+      },
+    ],
+  }
   return {
     configuration: {
       blocking: true,
       acceptedOutputModes: ['text/plain', 'application/json'],
     },
-    message: {
-      kind: 'message',
-      messageId: randomUUID(),
-      role: 'user',
-      contextId: A2A_CONTEXT_ID,
-      parts: [
-        {
-          kind: 'text',
-          text: `Investigate support handoff ${PRIVATE_TASK_PHRASE} and return evidence.`,
-        },
-      ],
-    },
+    message,
     metadata: {
       'atrib.dev/requested-evidence': 'handoff_packet',
     },
@@ -428,6 +471,8 @@ async function makeRemoteEvidence(
   logUrl: string,
   requestContext: RequestContext,
   nowMs: number,
+  informedBy: string[],
+  ids: A2aHandoffProofOptions['ids'] = {},
 ): Promise<RemoteEvidence> {
   const requestText = requestTextFromMessage(requestContext.userMessage)
   const body: RemoteA2aEvidenceBody = {
@@ -435,7 +480,7 @@ async function makeRemoteEvidence(
     protocol_version: A2A_PROTOCOL_VERSION,
     transport: 'JSONRPC',
     agent_card_url: A2A_AGENT_CARD_URL,
-    task_id: requestContext.taskId,
+    task_id: ids.taskId ?? requestContext.taskId,
     context_id: requestContext.contextId,
     request_message_id: requestContext.userMessage.messageId,
     delegated_request: {
@@ -447,7 +492,7 @@ async function makeRemoteEvidence(
       summary: 'delegated A2A agent completed evidence capture',
     },
   }
-  const record = await makeRemoteClaimRecord(body, nowMs)
+  const record = await makeRemoteClaimRecord(body, nowMs, informedBy)
   const recordHashValue = recordHash(record)
   const proof = await submitRecord(logUrl, record)
   const packet: HandoffEvidencePacket = {
@@ -471,6 +516,7 @@ async function makeRemoteEvidence(
 async function makeRemoteClaimRecord(
   body: RemoteA2aEvidenceBody,
   timestamp: number,
+  informedBy: string[],
 ): Promise<AtribRecord> {
   const creatorKey = await publicKey(A2A_REMOTE_AGENT_SEED)
   return signRecord(
@@ -482,6 +528,7 @@ async function makeRemoteClaimRecord(
       event_type: 'https://atrib.dev/v1/types/observation',
       context_id: REMOTE_ATRIB_CONTEXT_ID,
       timestamp,
+      ...(informedBy.length > 0 ? { informed_by: [...informedBy].sort() } : {}),
       args_hash: hashMaterial(body),
       signature: '',
     } as AtribRecord,
