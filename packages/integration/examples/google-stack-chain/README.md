@@ -73,6 +73,11 @@ has live workflow state, but this Google stack workbench only serves static
 HTML, CSS, JavaScript, and fixture data. Keep the hosted URL private or
 operator-approved until the outreach route is chosen.
 
+Current hosted preview:
+[`https://atrib-google-stack-proof-visual.vercel.app`](https://atrib-google-stack-proof-visual.vercel.app).
+It was deployed from the static `visual/` files with `vercel.json` disabling
+install and build steps.
+
 ## What it proves
 
 - AP2 authorization and receipt evidence can produce a signed atrib transaction
