@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "atrib-cloudflare-approval-trace",
+  "name": "atrib-cloudflare",
   "main": "src/index.ts",
   "compatibility_date": "2026-05-27",
   "compatibility_flags": ["nodejs_compat"],
@@ -28,8 +28,8 @@
   ],
   "vars": {
     "ATRIB_LOG_ENDPOINT": "https://log.atrib.dev/v1/entries",
-    "ATRIB_AGENT_SERVER_URL": "mcp://atrib-cloudflare-approval-trace/agent",
-    "ATRIB_ACTION_MCP_SERVER_URL": "mcp://atrib-cloudflare-approval-trace/action",
+    "ATRIB_AGENT_SERVER_URL": "mcp://atrib-cloudflare/agent",
+    "ATRIB_ACTION_MCP_SERVER_URL": "mcp://atrib-cloudflare/action",
   },
   "secrets": {
     "required": [

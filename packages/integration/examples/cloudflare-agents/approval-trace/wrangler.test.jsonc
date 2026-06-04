@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "atrib-cloudflare-approval-trace-test",
+  "name": "atrib-cloudflare-test",
   "main": "src/index.ts",
   "compatibility_date": "2026-05-27",
   "compatibility_flags": ["nodejs_compat"],
@@ -27,8 +27,8 @@
   ],
   "vars": {
     "ATRIB_LOG_ENDPOINT": "",
-    "ATRIB_AGENT_SERVER_URL": "mcp://atrib-cloudflare-approval-trace-test/agent",
-    "ATRIB_ACTION_MCP_SERVER_URL": "mcp://atrib-cloudflare-approval-trace-test/action",
+    "ATRIB_AGENT_SERVER_URL": "mcp://atrib-cloudflare-test/agent",
+    "ATRIB_ACTION_MCP_SERVER_URL": "mcp://atrib-cloudflare-test/action",
     "ATRIB_AGENT_PRIVATE_KEY": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE",
     "ATRIB_HUMAN_APPROVER_PRIVATE_KEY": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAI",
     "ATRIB_ACTION_MCP_PRIVATE_KEY": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM",

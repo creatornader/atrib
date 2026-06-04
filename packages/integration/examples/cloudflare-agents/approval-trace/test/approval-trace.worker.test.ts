@@ -82,7 +82,7 @@ interface ActionTargetReader {
 const worker = (workerExports as unknown as { default: FetchHandler }).default
 const testEnv = env as unknown as TestEnv
 const defaultPrompt =
-  'Protect this demo origin from L7 DDoS traffic and preserve the current managed challenge action.'
+  'A scheduled agent follow-up found a bug-labeled Workers issue with enough evidence to publish a triage reply.'
 
 afterEach(async () => {
   await reset()
@@ -154,14 +154,14 @@ async function createRun(runId: string): Promise<TraceResponse> {
 
 async function approveRun(runId: string, simulateError = false): Promise<TraceResponse> {
   return postJson<TraceResponse>(`/api/runs/${runId}/approve`, {
-    reason: 'Payload matches the scoped incident and expected Cloudflare ruleset target.',
+    reason: 'Payload matches the issue scope and expected Cloudflare support target.',
     simulate_error: simulateError,
   })
 }
 
 async function rejectRun(runId: string): Promise<TraceResponse> {
   return postJson<TraceResponse>(`/api/runs/${runId}/reject`, {
-    reason: 'The reviewer decided this incident should not mutate the demo rule.',
+    reason: 'The reviewer decided this issue reply should not be published.',
   })
 }
 
@@ -186,6 +186,7 @@ function expectTracePacketBasics(trace: TraceResponse): void {
     `https://log.atrib.dev/v1/by-context/${trace.context_id}`,
   )
   expect(trace.trace_packet.differentiators.map((item) => item.name)).toEqual([
+    'Autonomous trigger context',
     'Decision context',
     'Semantic causal chain',
     'Trustless audit',
@@ -213,10 +214,11 @@ describe('Cloudflare approval trace Worker', () => {
     const pending = await createRun(runId)
 
     expect(pending.status).toBe('pending_approval')
-    expect(labels(pending)).toEqual(['proposal'])
+    expect(labels(pending)).toEqual(['trigger', 'proposal'])
 
     const trace = await approveRun(runId)
     const records = byLabel(trace)
+    const trigger = records.get('trigger')!
     const proposal = records.get('proposal')!
     const approval = records.get('approval')!
     const preview = records.get('preview')!
@@ -226,6 +228,7 @@ describe('Cloudflare approval trace Worker', () => {
 
     expect(trace.status).toBe('succeeded')
     expect(labels(trace)).toEqual([
+      'trigger',
       'proposal',
       'approval',
       'preview',
@@ -236,6 +239,7 @@ describe('Cloudflare approval trace Worker', () => {
     await expectSignedTrace(trace)
     expectTracePacketBasics(trace)
 
+    expect(sorted(proposal.record.informed_by)).toEqual([trigger.record_hash])
     expect(sorted(approval.record.informed_by)).toEqual([proposal.record_hash])
     expect(sorted(preview.record.informed_by)).toEqual([approval.record_hash])
     expect(sorted(execution.record.informed_by)).toEqual([approval.record_hash])
@@ -250,12 +254,13 @@ describe('Cloudflare approval trace Worker', () => {
       decision: 'approved',
       executed: true,
       outcome: 'success',
-      changed: ['zone_rulesets.rule_demo_ddos_l7_sensitivity'],
+      changed: ['issue_threads.workers-issue-4821'],
     })
 
     const eventTypes = trace.native_observability.map((event) => event.type)
     expect(eventTypes).toEqual(
       expect.arrayContaining([
+        'workflow:triggered',
         'message:request',
         'submission:create',
         'tool:approval',
@@ -266,11 +271,11 @@ describe('Cloudflare approval trace Worker', () => {
       ]),
     )
 
-    const targetRows = await getTargetRows(runId, 'rule_demo_ddos_l7_sensitivity')
+    const targetRows = await getTargetRows(runId, 'workers-issue-4821')
     expect(targetRows).toEqual([
       expect.objectContaining({
-        action: 'managed_challenge',
-        sensitivity: 'high',
+        status: 'triaged',
+        follow_up_scheduled: true,
       }),
     ])
 
@@ -287,12 +292,14 @@ describe('Cloudflare approval trace Worker', () => {
     await createRun(runId)
     const trace = await rejectRun(runId)
     const records = byLabel(trace)
+    const trigger = records.get('trigger')!
     const proposal = records.get('proposal')!
     const rejection = records.get('rejection')!
 
     expect(trace.status).toBe('rejected')
-    expect(labels(trace)).toEqual(['proposal', 'rejection'])
+    expect(labels(trace)).toEqual(['trigger', 'proposal', 'rejection'])
     await expectSignedTrace(trace)
+    expect(sorted(proposal.record.informed_by)).toEqual([trigger.record_hash])
     expect(sorted(rejection.record.informed_by)).toEqual([proposal.record_hash])
     expect(trace.records.some((record) => record.signer === 'action_mcp')).toBe(false)
     expect(trace.trace_packet.answer).toMatchObject({
@@ -301,7 +308,7 @@ describe('Cloudflare approval trace Worker', () => {
       outcome: 'not_run',
       changed: [],
     })
-    expect(await getTargetRows(runId, 'rule_demo_ddos_l7_sensitivity')).toEqual([])
+    expect(await getTargetRows(runId, 'workers-issue-4821')).toEqual([])
   })
 
   it('records a diagnostic outcome when the approved action fails', async () => {
@@ -314,6 +321,7 @@ describe('Cloudflare approval trace Worker', () => {
 
     expect(trace.status).toBe('failed')
     expect(labels(trace)).toEqual([
+      'trigger',
       'proposal',
       'approval',
       'preview',
@@ -325,7 +333,7 @@ describe('Cloudflare approval trace Worker', () => {
     expect(sorted(outcome.record.informed_by)).toEqual([execution.record_hash])
     expect(outcome.body).toMatchObject({
       status: 'error',
-      error: 'ruleset_version_conflict',
+      error: 'issue_thread_version_conflict',
       changed_rows: [],
     })
     expect(trace.trace_packet.answer).toMatchObject({
@@ -333,10 +341,10 @@ describe('Cloudflare approval trace Worker', () => {
       executed: true,
       outcome: 'error',
       changed: [],
-      diagnostic: 'The demo ruleset version changed after approval.',
+      diagnostic: 'The demo issue thread changed after approval.',
     })
     expect(trace.native_observability.map((event) => event.type)).toContain('workflow:terminated')
-    expect(await getTargetRows(runId, 'rule_demo_ddos_l7_sensitivity')).toEqual([])
+    expect(await getTargetRows(runId, 'workers-issue-4821')).toEqual([])
   })
 
   it('rejects stale approval attempts after the run leaves pending review', async () => {

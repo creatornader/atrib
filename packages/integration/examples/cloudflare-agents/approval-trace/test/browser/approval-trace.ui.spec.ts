@@ -17,13 +17,14 @@ async function createProposal(page: Page): Promise<void> {
   await expect(page).toHaveTitle('Cloudflare approval trace')
   await expect(page.getByTestId('approval-trace-app')).toBeVisible()
   await expect(page.locator('#statusTitle')).toHaveText('Ready')
-  await page.getByRole('button', { name: 'Ask agent for proposal' }).click()
-  await expect(page.locator('#statusTitle')).toHaveText('Awaiting human decision')
-  await expect(page.getByRole('button', { name: 'Ask agent for proposal' })).toBeDisabled()
-  await expect(page.getByRole('button', { name: 'Approve and run' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Run prior trigger' }).click()
+  await expect(page.locator('#statusTitle')).toHaveText('Halted for human review')
+  await expect(page.getByRole('button', { name: 'Run prior trigger' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Approve and resume' })).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Reject' })).toBeEnabled()
-  await expect(page.locator('#timeline .event')).toHaveCount(1)
-  await expect(page.locator('#answer')).toContainText('pending_approval')
+  await expect(page.locator('#timeline .event')).toHaveCount(2)
+  await expect(page.locator('#answer')).toContainText('Halted at HITL gate')
+  await expect(page.locator('#answer')).toContainText('Execution is stopped')
 }
 
 async function openTimelineRecord(page: Page, label: string): Promise<void> {
@@ -37,22 +38,20 @@ test.describe('Cloudflare approval trace browser UI', () => {
   test('clicks through approved execution and opens the signed receipt', async ({ page }) => {
     await expectCleanConsole(page, async () => {
       await createProposal(page)
-      await page.getByRole('button', { name: 'Approve and run' }).click()
+      await page.getByRole('button', { name: 'Approve and resume' }).click()
 
       await expect(page.locator('#statusTitle')).toHaveText('Trace complete', { timeout: 30_000 })
-      await expect(page.locator('#answer')).toContainText('succeeded')
-      await expect(page.locator('#answer')).toContainText('success')
-      await expect(page.locator('#answer')).toContainText(
-        'zone_rulesets.rule_demo_ddos_l7_sensitivity',
-      )
-      await expect(page.locator('#timeline .event')).toHaveCount(6)
-      await expect(page.getByRole('button', { name: 'Approve and run' })).toBeDisabled()
+      await expect(page.locator('#answer')).toContainText('Agent resumed through MCP')
+      await expect(page.locator('#answer')).toContainText('Audit ready')
+      await expect(page.locator('#answer')).toContainText('issue_threads.workers-issue-4821')
+      await expect(page.locator('#timeline .event')).toHaveCount(7)
+      await expect(page.getByRole('button', { name: 'Approve and resume' })).toBeDisabled()
       await expect(page.getByRole('button', { name: 'Reject' })).toBeDisabled()
 
       await openTimelineRecord(page, 'execution')
       await expect(page.locator('#receipts pre')).toContainText('"signer": "action_mcp"')
       await expect(page.locator('#receipts pre')).toContainText(
-        '"tool_name": "apply_ruleset_change"',
+        '"tool_name": "publish_issue_triage_reply"',
       )
       await expect(page.locator('#receipts pre')).toContainText('"proof": null')
     })
@@ -64,9 +63,8 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.getByRole('button', { name: 'Reject' }).click()
 
       await expect(page.locator('#statusTitle')).toHaveText('Rejected')
-      await expect(page.locator('#answer')).toContainText('rejected')
       await expect(page.locator('#answer')).toContainText('not run')
-      await expect(page.locator('#timeline .event')).toHaveCount(2)
+      await expect(page.locator('#timeline .event')).toHaveCount(3)
       await expect(page.locator('#timeline')).not.toContainText('action_mcp')
 
       await openTimelineRecord(page, 'rejection')
@@ -78,24 +76,23 @@ test.describe('Cloudflare approval trace browser UI', () => {
   test('clicks through diagnostic error and opens the outcome receipt', async ({ page }) => {
     await expectCleanConsole(page, async () => {
       await createProposal(page)
-      await page.getByLabel('Simulate stale ruleset version after approval').check()
-      await page.getByRole('button', { name: 'Approve and run' }).click()
+      await page.getByLabel('Simulate issue thread change after approval').check()
+      await page.getByRole('button', { name: 'Approve and resume' }).click()
 
       await expect(page.locator('#statusTitle')).toHaveText('Diagnostic trace complete', {
         timeout: 30_000,
       })
-      await expect(page.locator('#answer')).toContainText('failed')
       await expect(page.locator('#answer')).toContainText('error')
       await expect(page.locator('#answer')).toContainText('none')
-      await expect(page.locator('#timeline .event')).toHaveCount(6)
+      await expect(page.locator('#timeline .event')).toHaveCount(7)
 
       await openTimelineRecord(page, 'outcome')
       await expect(page.locator('#receipts pre')).toContainText('"signer": "action_mcp"')
       await expect(page.locator('#receipts pre')).toContainText(
-        '"error": "ruleset_version_conflict"',
+        '"error": "issue_thread_version_conflict"',
       )
       await expect(page.locator('#receipts pre')).toContainText(
-        '"diagnostic": "The demo ruleset version changed after approval."',
+        '"diagnostic": "The demo issue thread changed after approval."',
       )
     })
   })

@@ -5,15 +5,17 @@ Interactive Cloudflare Agents example for atrib-signed human approval traces.
 The app is a safe Cloudflare-shaped workflow:
 
 ```text
-operator request -> agent proposal -> human approval -> MCP execution -> signed outcome -> audit trace
+prior trigger -> autonomous triage -> human approval halt -> MCP execution resumes -> signed outcome -> audit trace
 ```
 
 The simulated target is a Durable Object SQLite table that looks like a
-Cloudflare DDoS ruleset. No real Cloudflare account state is mutated.
+Cloudflare Workers issue-triage queue. No real Cloudflare account state is
+mutated.
 
 ## What this shows
 
-- A real browser approval or rejection drives the workflow.
+- A prior trigger starts the agent before the browser approval gate appears.
+- A real browser approval or rejection halts or resumes the workflow.
 - Agent, human reviewer, and action MCP records use distinct signing keys.
 - The action MCP record has an explicit `informed_by` edge to the human
   approval record.
@@ -23,8 +25,10 @@ Cloudflare DDoS ruleset. No real Cloudflare account state is mutated.
 
 The important atrib differentiators are:
 
+- **Autonomous trigger context:** the audit starts at the webhook or scheduled
+  follow-up that woke the agent.
 - **Decision context:** the reviewer sees exactly what the agent is asking to
-  change before approving.
+  publish before approving.
 - **Semantic causal chain:** proposal, approval, execution, outcome, and handoff
   link to each other as signed records.
 - **Trustless audit:** a later reviewer can verify the trace outside the Worker,
@@ -86,4 +90,4 @@ wrangler secret put OPENAI_API_KEY
 ```
 
 The model must return JSON. If it fails, the app falls back to the deterministic
-Cloudflare DDoS ruleset plan and records `planner: fixture`.
+Cloudflare issue-triage plan and records `planner: fixture`.
