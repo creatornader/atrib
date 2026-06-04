@@ -4,6 +4,7 @@ RUN corepack enable
 WORKDIR /app
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
+COPY patches/ patches/
 
 # archive-node validates record bodies with @atrib/verify and computes hashes
 # through @atrib/mcp. It is a separate body service from log-node.
