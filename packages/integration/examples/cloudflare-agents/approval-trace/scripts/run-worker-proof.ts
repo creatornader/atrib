@@ -184,10 +184,10 @@ async function runApproved(workerUrl: string, simulateError: boolean): Promise<T
   await postJson<TraceResponse>(`${workerUrl}/api/runs`, {
     run_id: runId,
     prompt:
-      'Protect this demo origin from L7 DDoS traffic and preserve the current managed challenge action.',
+      'A scheduled agent follow-up found a bug-labeled Workers issue with enough evidence to publish a triage reply.',
   })
   return postJson<TraceResponse>(`${workerUrl}/api/runs/${runId}/approve`, {
-    reason: 'Payload matches the scoped incident and expected Cloudflare ruleset target.',
+    reason: 'Payload matches the issue scope and expected Cloudflare support target.',
     simulate_error: simulateError,
   })
 }
@@ -197,10 +197,10 @@ async function runRejected(workerUrl: string): Promise<TraceResponse> {
   await postJson<TraceResponse>(`${workerUrl}/api/runs`, {
     run_id: runId,
     prompt:
-      'Protect this demo origin from L7 DDoS traffic and preserve the current managed challenge action.',
+      'A scheduled agent follow-up found a bug-labeled Workers issue with enough evidence to publish a triage reply.',
   })
   return postJson<TraceResponse>(`${workerUrl}/api/runs/${runId}/reject`, {
-    reason: 'The reviewer decided this incident should not mutate the demo rule.',
+    reason: 'The reviewer decided this issue reply should not be published.',
   })
 }
 
@@ -227,6 +227,7 @@ async function verifyTrace(
   const checks: Array<{ name: string; ok: boolean; detail?: string }> = []
   const push = (name: string, ok: boolean, detail?: string) => checks.push({ name, ok, detail })
   const byLabel = new Map(trace.records.map((record) => [record.label, record]))
+  const trigger = byLabel.get('trigger')
   const proposal = byLabel.get('proposal')
   const approval = byLabel.get('approval') ?? byLabel.get('rejection')
   const execution = byLabel.get('execution')
@@ -247,6 +248,7 @@ async function verifyTrace(
     if (item.proof) push(`${trace.run_id}:${item.label}: inclusion`, verifyProof(item.proof))
   }
 
+  push(`${trace.run_id}: trigger exists`, Boolean(trigger))
   push(`${trace.run_id}: proposal exists`, Boolean(proposal))
   push(`${trace.run_id}: decision exists`, Boolean(approval))
   push(
@@ -258,6 +260,18 @@ async function verifyTrace(
     graph.nodes
       .filter((node) => graphNodeIds.has(node.id))
       .every((node) => node.verification_state === 'signature_valid'),
+  )
+  push(
+    `${trace.run_id}: proposal points at trigger`,
+    Boolean(trigger && proposal && refsEqual(proposal.record.informed_by, [trigger.record_hash])),
+  )
+  push(
+    `${trace.run_id}: graph trigger edge`,
+    Boolean(
+      trigger &&
+      proposal &&
+      hasGraphEdge(graph, 'INFORMED_BY', proposal.record_hash, trigger.record_hash),
+    ),
   )
   push(
     `${trace.run_id}: decision points at proposal`,
@@ -273,9 +287,13 @@ async function verifyTrace(
   )
   push(
     `${trace.run_id}: differentiators present`,
-    ['Decision context', 'Semantic causal chain', 'Trustless audit', 'Signer separation'].every(
-      (name) => trace.trace_packet.differentiators.some((item) => item.name === name),
-    ),
+    [
+      'Autonomous trigger context',
+      'Decision context',
+      'Semantic causal chain',
+      'Trustless audit',
+      'Signer separation',
+    ].every((name) => trace.trace_packet.differentiators.some((item) => item.name === name)),
   )
 
   const agentKey = proposal?.record.creator_key
@@ -378,6 +396,7 @@ async function main() {
       name: 'interactive UI renders',
       ok:
         page.includes('data-testid="approval-trace-app"') &&
+        page.includes('Autonomous trigger') &&
         page.includes('Decision context') &&
         page.includes('Semantic causal chain') &&
         page.includes('Trustless audit') &&

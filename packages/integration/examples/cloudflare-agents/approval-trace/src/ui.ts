@@ -8,18 +8,19 @@ export function renderApp(): string {
     <style>
       :root {
         color-scheme: light;
-        --bg: #f7f8fb;
+        --bg: #f5f7fb;
         --panel: #ffffff;
-        --line: #d7dfeb;
-        --text: #111827;
-        --muted: #5b667a;
-        --blue: #235bd8;
+        --line: #d9e1ec;
+        --text: #111318;
+        --muted: #596579;
+        --blue: #1f5fd8;
         --green: #147a54;
-        --amber: #9a6200;
+        --amber: #b36200;
+        --orange: #f38020;
         --red: #b4232e;
         --ink: #1f2937;
-        --soft: #eef3f9;
-        --shadow: 0 18px 48px rgba(17, 24, 39, 0.08);
+        --soft: #eef3f8;
+        --shadow: 0 18px 48px rgba(18, 28, 45, 0.08);
       }
 
       * {
@@ -94,6 +95,19 @@ export function renderApp(): string {
         padding: 14px 16px;
       }
 
+      .status-chip {
+        align-items: center;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        border-radius: 999px;
+        color: #9a3412;
+        display: inline-flex;
+        font-size: 12px;
+        font-weight: 800;
+        min-height: 28px;
+        padding: 6px 10px;
+      }
+
       .rail-main {
         align-items: center;
         display: flex;
@@ -139,6 +153,12 @@ export function renderApp(): string {
         color: var(--blue);
       }
 
+      .step.halted {
+        background: #fff7ed;
+        border-color: #fdba74;
+        color: #9a3412;
+      }
+
       .step.done {
         background: #e8f6ef;
         border-color: #b8dfca;
@@ -173,7 +193,7 @@ export function renderApp(): string {
       .grid {
         display: grid;
         gap: 16px;
-        grid-template-columns: minmax(310px, 0.9fr) minmax(360px, 1.05fr) minmax(360px, 1.15fr);
+        grid-template-columns: minmax(320px, 0.92fr) minmax(390px, 1.12fr) minmax(360px, 1fr);
       }
 
       .panel {
@@ -259,6 +279,52 @@ export function renderApp(): string {
         display: grid;
         gap: 4px;
         padding: 10px;
+      }
+
+      .run-state.halt {
+        background: #fff7ed;
+        border-color: #fdba74;
+      }
+
+      .run-state.ok {
+        background: #ecfdf5;
+        border-color: #a7f3d0;
+      }
+
+      .progress-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .progress-item {
+        align-items: start;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: grid;
+        gap: 4px;
+        grid-template-columns: 12px minmax(0, 1fr);
+        padding: 10px;
+      }
+
+      .progress-item .dot {
+        margin-top: 4px;
+      }
+
+      .progress-item strong {
+        display: block;
+        font-size: 13px;
+      }
+
+      .progress-item span {
+        color: var(--muted);
+        display: block;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .progress-item.halted {
+        background: #fff7ed;
+        border-color: #fdba74;
       }
 
       .run-state strong {
@@ -457,9 +523,10 @@ export function renderApp(): string {
     <main class="shell" data-testid="approval-trace-app">
       <section class="hero">
         <div>
-          <h1>Signed approval trace for Cloudflare Agents</h1>
-          <p class="sub">Run a Cloudflare-shaped DDoS ruleset workflow, approve or reject the agent's proposal, then inspect the signed causal trace that explains what happened.</p>
+          <h1>Cloudflare Agent Trace</h1>
+          <p class="sub">Watch an agent wake from a prior trigger, work autonomously, halt for human approval, resume through MCP execution, then leave a signed audit trail.</p>
         </div>
+        <span class="status-chip">Local proof surface</span>
       </section>
 
       <section class="workflow-rail" id="workflowRail" aria-live="polite">
@@ -467,28 +534,29 @@ export function renderApp(): string {
           <span class="dot pending" id="statusDot"></span>
           <div>
             <strong id="statusTitle">Ready</strong>
-            <p id="statusDetail">Ask the agent for a proposal, then approve or reject the signed payload.</p>
+            <p id="statusDetail">Run the prior trigger to start autonomous triage before the human review gate.</p>
           </div>
         </div>
         <div class="rail-stepper" id="workflowSteps">
-          <span class="step active" data-step="request">Request</span>
-          <span class="step" data-step="review">Review</span>
-          <span class="step" data-step="execute">Execute</span>
+          <span class="step active" data-step="trigger">Trigger</span>
+          <span class="step" data-step="autonomous">Autonomous triage</span>
+          <span class="step" data-step="halt">HITL halt</span>
+          <span class="step" data-step="resume">Resume</span>
           <span class="step" data-step="audit">Audit</span>
         </div>
       </section>
 
       <section class="grid">
         <div class="panel">
-          <h2>Workflow</h2>
+          <h2>Prior trigger</h2>
           <div class="prompt">
-            <textarea id="prompt">Protect this origin from a spike of L7 DDoS traffic. Tighten only the demo managed challenge rule and preserve the current action.</textarea>
+            <textarea id="prompt">A scheduled agent follow-up found a bug-labeled Workers issue with enough evidence to publish a triage reply.</textarea>
             <label class="toggle">
               <input id="simulateError" type="checkbox" />
-              Simulate stale ruleset version after approval
+              Simulate issue thread change after approval
             </label>
             <div class="actions">
-              <button class="primary" id="create">Ask agent for proposal</button>
+              <button class="primary" id="create">Run prior trigger</button>
               <button class="secondary" id="reset">Reset</button>
             </div>
           </div>
@@ -501,40 +569,36 @@ export function renderApp(): string {
         </div>
 
         <div class="panel">
-          <h2>Review</h2>
+          <h2>Human review gate</h2>
           <div id="proposal" class="proposal">
-            <p class="empty">Create a proposal to see the action payload, diff, risk, and approval controls.</p>
+            <p class="empty">Run the trigger to see the agent's proposal, exact payload, diff, risk, and approval controls.</p>
           </div>
         </div>
 
         <div class="panel">
-          <h2>Atrib value layer</h2>
-          <div class="value-props">
-            <div class="prop">
-              <strong>Decision context</strong>
-              <span>The reviewer sees the exact payload and risk before the agent resumes.</span>
-            </div>
-            <div class="prop">
-              <strong>Semantic causal chain</strong>
-              <span>Proposal, approval, execution, outcome, and handoff are linked as signed records.</span>
-            </div>
-            <div class="prop">
-              <strong>Trustless audit</strong>
-              <span>The trace can be checked outside the Worker, database, or chat transcript.</span>
-            </div>
-            <div class="prop">
-              <strong>Signer separation</strong>
-              <span>Agent proposal, human decision, and action MCP execution carry distinct keys.</span>
-            </div>
+          <h2>Live agent progress</h2>
+          <div id="answer" class="metric-row">
+            <p class="empty">No run yet.</p>
           </div>
         </div>
       </section>
 
       <section class="grid" style="margin-top: 16px;">
         <div class="panel">
-          <h2>Trace answer</h2>
-          <div id="answer" class="metric-row">
-            <p class="empty">No run yet.</p>
+          <h2>Atrib value layer</h2>
+          <div class="value-props">
+            <div class="prop">
+              <strong>Autonomous trigger context</strong>
+              <span>The audit starts before the proposal, at the webhook or scheduled follow-up that woke the agent.</span>
+            </div>
+            <div class="prop">
+              <strong>Decision context</strong>
+              <span>The reviewer sees the exact payload and risk before the agent resumes.</span>
+            </div>
+            <div class="prop">
+              <strong>Signer separation</strong>
+              <span>Agent trigger/proposal, human decision, and action MCP execution carry distinct keys.</span>
+            </div>
           </div>
         </div>
         <div class="panel">
@@ -555,7 +619,7 @@ export function renderApp(): string {
     <script type="module">
       let currentRun = null;
       let busy = false;
-      let currentStep = 'request';
+      let currentStep = 'trigger';
 
       const statusDot = document.querySelector('#statusDot');
       const statusTitle = document.querySelector('#statusTitle');
@@ -572,13 +636,15 @@ export function renderApp(): string {
 
       function renderSteps(step, kind = 'pending') {
         currentStep = step;
-        const order = ['request', 'review', 'execute', 'audit'];
+        const order = ['trigger', 'autonomous', 'halt', 'resume', 'audit'];
         const activeIndex = order.indexOf(step);
         workflowSteps.querySelectorAll('.step').forEach((item) => {
           const itemIndex = order.indexOf(item.dataset.step);
           item.className = 'step';
           if (itemIndex < activeIndex) item.classList.add('done');
-          if (item.dataset.step === step) item.classList.add(kind === 'error' ? 'error' : 'active');
+          if (item.dataset.step === step) {
+            item.classList.add(step === 'halt' ? 'halted' : kind === 'error' ? 'error' : 'active');
+          }
         });
       }
 
@@ -594,7 +660,7 @@ export function renderApp(): string {
         const hasPendingApproval = currentRun?.status === 'pending_approval';
         const canSetFailureMode = !hasRun || hasPendingApproval;
         createButton.disabled = busy || hasRun;
-        createButton.textContent = busy && activeLabel === 'create' ? 'Planning proposal...' : 'Ask agent for proposal';
+        createButton.textContent = busy && activeLabel === 'create' ? 'Running trigger...' : 'Run prior trigger';
         resetButton.disabled = busy || !hasRun;
         promptInput.disabled = busy || hasRun;
         simulateErrorInput.disabled = busy || !canSetFailureMode;
@@ -602,7 +668,7 @@ export function renderApp(): string {
         const reject = document.querySelector('#reject');
         if (approve) {
           approve.disabled = busy || !hasPendingApproval;
-          approve.textContent = busy && activeLabel === 'approve' ? 'Running approved action...' : 'Approve and run';
+          approve.textContent = busy && activeLabel === 'approve' ? 'Resuming agent...' : 'Approve and resume';
         }
         if (reject) {
           reject.disabled = busy || !hasPendingApproval;
@@ -640,18 +706,18 @@ export function renderApp(): string {
         switch (run.status) {
           case 'pending_approval':
             return {
-              title: 'Waiting for human decision',
-              detail: 'Approval resumes the agent and runs the MCP action. Rejection signs the decision and stops execution.',
+              title: 'Halted for human review',
+              detail: 'The agent has stopped before publishing. Approval resumes execution through the action MCP.',
             };
           case 'succeeded':
             return {
-              title: 'Approved action ran',
-              detail: 'The proposal, human approval, execution, outcome, and handoff are all signed below.',
+              title: 'Execution resumed and completed',
+              detail: 'The trigger, proposal, approval, execution, outcome, and handoff are all signed below.',
             };
           case 'failed':
             return {
-              title: 'Approved action failed',
-              detail: 'The signed diagnostic record explains the stale Cloudflare ruleset version.',
+              title: 'Execution resumed and failed',
+              detail: 'The signed diagnostic record explains the changed issue thread.',
             };
           case 'rejected':
             return {
@@ -668,7 +734,7 @@ export function renderApp(): string {
 
       function setStatusForRun(run) {
         if (run.status === 'pending_approval') {
-          setStatus('Awaiting human decision', 'pending', 'Review the exact payload, risk, and diff before allowing the agent to resume.', 'review');
+          setStatus('Halted for human review', 'pending', 'Autonomous triage is complete. Review the payload before the agent can resume.', 'halt');
           return;
         }
         if (run.status === 'succeeded') {
@@ -683,7 +749,7 @@ export function renderApp(): string {
           setStatus('Rejected', 'error', 'The human decision is signed. No execution ran.', 'audit');
           return;
         }
-        setStatus(run.status.replaceAll('_', ' '), 'pending', 'The workflow is still running.', 'execute');
+        setStatus(run.status.replaceAll('_', ' '), 'pending', 'The workflow is still running.', 'resume');
       }
 
       function renderProposal(run) {
@@ -695,7 +761,7 @@ export function renderApp(): string {
         const disabled = run.status !== 'pending_approval';
         const state = runStateCopy(run);
         proposalEl.innerHTML = \`
-          <div class="run-state">
+          <div class="run-state \${run.status === 'pending_approval' ? 'halt' : run.status === 'succeeded' ? 'ok' : ''}">
             <strong>\${state.title}</strong>
             <span>\${state.detail}</span>
           </div>
@@ -722,18 +788,18 @@ export function renderApp(): string {
             <span class="hash">\${body.proposed_payload_hash ?? 'missing'}</span>
           </div>
           <div class="actions">
-            <button class="primary" id="approve" \${disabled ? 'disabled' : ''}>Approve and run</button>
+            <button class="primary" id="approve" \${disabled ? 'disabled' : ''}>Approve and resume</button>
             <button class="danger" id="reject" \${disabled ? 'disabled' : ''}>Reject</button>
           </div>
         \`;
         document.querySelector('#approve')?.addEventListener('click', async () => {
           await transition({
-            title: 'Executing approved action',
-            detail: 'The human approval is signed. The MCP action is running and the audit trace is being assembled.',
-            step: 'execute',
+            title: 'Agent resumed',
+            detail: 'The human approval is signed. The action MCP is publishing the approved issue reply.',
+            step: 'resume',
             activeLabel: 'approve',
             fn: async () => post('/api/runs/' + run.run_id + '/approve', {
-              reason: 'Payload matches the incident scope and uses the expected Cloudflare ruleset target.',
+              reason: 'Payload matches the issue scope and expected Cloudflare support target.',
               simulate_error: simulateErrorInput.checked,
             }),
           });
@@ -745,7 +811,7 @@ export function renderApp(): string {
             step: 'review',
             activeLabel: 'reject',
             fn: async () => post('/api/runs/' + run.run_id + '/reject', {
-              reason: 'Payload should not run for this incident.',
+              reason: 'This issue reply should not be published.',
             }),
           });
         });
@@ -755,24 +821,65 @@ export function renderApp(): string {
       function renderAnswer(run) {
         const answer = run.trace_packet.answer;
         const publicUrl = run.trace_packet.handoff?.public_context_url;
+        const auditReady = ['succeeded', 'failed', 'rejected'].includes(run.status);
+        const labels = new Set(run.records.map((record) => record.label));
+        const stageRows = [
+          {
+            title: 'Prior trigger received',
+            detail: labels.has('trigger') ? 'GitHub issue webhook or scheduled follow-up woke the agent.' : 'Waiting for trigger.',
+            done: labels.has('trigger'),
+          },
+          {
+            title: 'Autonomous triage complete',
+            detail: labels.has('proposal') ? 'Agent classified the issue and prepared a publishable action candidate.' : 'Agent has not planned yet.',
+            done: labels.has('proposal'),
+          },
+          {
+            title: run.status === 'pending_approval' ? 'Halted at HITL gate' : 'Human review recorded',
+            detail: answer.decision ? 'Decision: ' + answer.decision : 'Execution is stopped until a human signs approval or rejection.',
+            done: Boolean(answer.decision),
+            halted: run.status === 'pending_approval',
+          },
+          {
+            title: answer.executed ? 'Agent resumed through MCP' : 'Resume not started',
+            detail: answer.executed ? 'The action MCP ran only after approval.' : 'Rejected or waiting for approval.',
+            done: answer.executed,
+          },
+          {
+            title: auditReady ? 'Audit ready' : 'Audit assembling',
+            detail: auditReady
+              ? 'Public log context and trace JSON are ready.'
+              : 'Receipts appear as the run progresses; terminal audit waits for a decision.',
+            done: auditReady,
+          },
+        ];
         answerEl.innerHTML = \`
-          <div class="metric">
-            <span class="label">Current state</span>
-            <span class="value">\${run.status}</span>
+          <div class="metric-row">
+            <div class="metric">
+              <span class="label">Current state</span>
+              <span class="value">\${run.status}</span>
+            </div>
+            <div class="metric">
+              <span class="label">Execution result</span>
+              <span class="value">\${answer.executed ? answer.outcome : 'not run'}</span>
+            </div>
           </div>
-          <div class="metric">
-            <span class="label">Decision</span>
-            <span class="value">\${answer.decision ?? 'pending'}</span>
-          </div>
-          <div class="metric">
-            <span class="label">Execution</span>
-            <span class="value">\${answer.executed ? answer.outcome : 'not run'}</span>
+          <div class="progress-list">
+            \${stageRows.map((row) => \`
+              <div class="progress-item \${row.halted ? 'halted' : ''}">
+                <span class="dot \${row.done ? 'ok' : row.halted ? 'pending' : 'pending'}"></span>
+                <div>
+                  <strong>\${row.title}</strong>
+                  <span>\${row.detail}</span>
+                </div>
+              </div>
+            \`).join('')}
           </div>
           <div class="metric">
             <span class="label">Changed rows</span>
             <span class="value">\${answer.changed.length ? answer.changed.join(', ') : 'none'}</span>
           </div>
-          \${publicUrl ? '<div class="links"><a href="' + publicUrl + '">Public log context</a><a href="/api/runs/' + run.run_id + '">Trace JSON</a></div>' : ''}
+          \${auditReady && publicUrl ? '<div class="links"><a href="' + publicUrl + '">Public log context</a><a href="/api/runs/' + run.run_id + '">Trace JSON</a></div>' : ''}
         \`;
       }
 
@@ -826,9 +933,9 @@ export function renderApp(): string {
 
       createButton.addEventListener('click', async () => {
         await transition({
-          title: 'Planning proposal',
-          detail: 'The agent is preparing a signed Cloudflare-shaped change request.',
-          step: 'request',
+          title: 'Autonomous triage running',
+          detail: 'The prior trigger is signed. The agent is classifying the issue and preparing a proposal.',
+          step: 'autonomous',
           activeLabel: 'create',
           fn: () => post('/api/runs', {
             prompt: promptInput.value,
@@ -839,11 +946,11 @@ export function renderApp(): string {
       resetButton.addEventListener('click', () => {
         if (busy) return;
         currentRun = null;
-        proposalEl.innerHTML = '<p class="empty">Create a proposal to see the action payload, diff, risk, and approval controls.</p>';
+        proposalEl.innerHTML = '<p class="empty">Run the trigger to see the agent\\'s proposal, exact payload, diff, risk, and approval controls.</p>';
         answerEl.innerHTML = '<p class="empty">No run yet.</p>';
         timelineEl.innerHTML = '<p class="empty">Signed records will appear here as the workflow runs.</p>';
         receiptsEl.innerHTML = '<p class="empty">Open a receipt to inspect the record and Merkle proof.</p>';
-        setStatus('Ready', 'pending', 'Ask the agent for a proposal, then approve or reject the signed payload.', 'request');
+        setStatus('Ready', 'pending', 'Run the prior trigger to start autonomous triage before the human review gate.', 'trigger');
         updateControls();
       });
 

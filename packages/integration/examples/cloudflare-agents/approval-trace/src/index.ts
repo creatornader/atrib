@@ -56,10 +56,10 @@ interface PlannedAction {
   summary: string
   risk: string
   payload: {
-    operation: 'update_zone_ruleset'
-    zone_id: string
-    phase: string
-    rule_id: string
+    operation: 'publish_issue_triage_reply'
+    issue_id: string
+    repository: string
+    labels: string[]
     version: number
     before: Record<string, unknown>
     after: Record<string, unknown>
@@ -168,7 +168,7 @@ interface ListedActionRecord {
 }
 
 const TEXT_ENCODER = new TextEncoder()
-const STABLE_CONNECTOR_ID = 'cloudflare-demo-ruleset-mcp'
+const STABLE_CONNECTOR_ID = 'cloudflare-demo-issue-triage-mcp'
 const LOG_BASE_URL = 'https://log.atrib.dev/v1'
 
 type BaseAgentNamespace = DurableObjectNamespace<Agent<Env, unknown, Record<string, unknown>>>
@@ -242,9 +242,9 @@ function randomParentId(): string {
 
 function serverUrl(env: Env, role: SignerRole): string {
   if (role === 'action_mcp') {
-    return env.ATRIB_ACTION_MCP_SERVER_URL ?? 'mcp://atrib-cloudflare-approval-trace/action'
+    return env.ATRIB_ACTION_MCP_SERVER_URL ?? 'mcp://atrib-cloudflare/action'
   }
-  return env.ATRIB_AGENT_SERVER_URL ?? 'mcp://atrib-cloudflare-approval-trace/agent'
+  return env.ATRIB_AGENT_SERVER_URL ?? 'mcp://atrib-cloudflare/agent'
 }
 
 function logEndpoint(env: Env): string | undefined {
@@ -330,25 +330,30 @@ function emitNativeEvent(input: {
 function fixturePlan(prompt: string): PlannedAction {
   return {
     planner: 'fixture',
-    action: 'Raise the demo L7 DDoS managed challenge sensitivity',
+    action: 'Publish a triage reply for the demo Workers issue',
     summary:
-      'Tighten only the demo Cloudflare ruleset row for the active incident. Preserve the current challenge action.',
-    risk: 'requires_human_approval: changes traffic-handling behavior for one ruleset row',
+      'Respond to a bug-labeled Workers issue after the autonomous agent classifies the incident and prepares a safe next step.',
+    risk: 'requires_human_approval: publishes a customer-visible issue reply and schedules follow-up',
     payload: {
-      operation: 'update_zone_ruleset',
-      zone_id: 'zone_demo',
-      phase: 'ddos_l7',
-      rule_id: 'rule_demo_ddos_l7_sensitivity',
-      version: 12,
+      operation: 'publish_issue_triage_reply',
+      issue_id: 'workers-issue-4821',
+      repository: 'demo/workers-support',
+      labels: ['bug', 'workers', 'help'],
+      version: 4,
       before: {
-        sensitivity: 'medium',
-        action: 'managed_challenge',
+        status: 'opened',
+        last_agent_action: 'classified_issue',
+        public_reply: null,
+        follow_up_scheduled: false,
         note: prompt.slice(0, 120),
       },
       after: {
-        sensitivity: 'high',
-        action: 'managed_challenge',
-        note: 'Approved for the active L7 DDoS incident only.',
+        status: 'triaged',
+        public_reply:
+          'Thanks for the report. The agent found a likely Worker binding mismatch and queued a follow-up check against the failing route.',
+        follow_up_scheduled: true,
+        follow_up_after: '24h',
+        note: 'Approved for this demo issue thread only.',
       },
     },
   }
@@ -371,7 +376,7 @@ async function planAction(env: Env, prompt: string): Promise<PlannedAction> {
           {
             role: 'system',
             content:
-              'Return compact JSON for a safe Cloudflare DDoS ruleset approval proposal. Do not include markdown.',
+              'Return compact JSON for a safe Cloudflare Workers issue-triage approval proposal. Do not include markdown.',
           },
           {
             role: 'user',
@@ -449,6 +454,7 @@ function tracePacket(
     created_at: row.created_at,
   }))
   const get = (label: string) => parsed.find((entry) => entry.label === label)
+  const trigger = get('trigger')
   const decision = get('approval') ?? get('rejection')
   const execution = get('execution')
   const outcome = get('outcome')
@@ -484,6 +490,12 @@ function tracePacket(
     },
     differentiators: [
       {
+        name: 'Autonomous trigger context',
+        evidence:
+          'The trace starts with the issue or schedule trigger that caused the agent to work before human review.',
+        evidence_labels: trigger ? ['trigger'] : [],
+      },
+      {
         name: 'Decision context',
         evidence:
           'The proposal signs the exact Cloudflare-shaped payload before the reviewer approves.',
@@ -516,6 +528,7 @@ function tracePacket(
     observability: {
       native_events: nativeEvents,
       coverage: [
+        'prior workflow trigger',
         'message lifecycle',
         'human approval gate',
         'MCP tool execution',
@@ -585,11 +598,61 @@ export class ApprovalTraceAgent extends Agent<Env> {
     this.ensureSchema()
     const runId = input.runId ?? crypto.randomUUID()
     const contextId = randomContextId()
+    const triggerBody = {
+      kind: 'workflow_trigger',
+      source: 'github_issue_webhook',
+      scheduled_task: 'agent.follow_up_after_triage',
+      event: {
+        repository: 'demo/workers-support',
+        issue_id: 'workers-issue-4821',
+        labels: ['bug', 'workers', 'help'],
+        title: input.prompt,
+      },
+      autonomous_phase: [
+        'classified issue intent',
+        'checked cached Workers route signal',
+        'prepared customer-visible reply candidate',
+      ],
+      halt_condition: 'publishing a public issue reply requires human approval',
+    }
+    this.saveNativeEvent(
+      runId,
+      emitNativeEvent({
+        channel: 'agents:workflow',
+        type: 'workflow:triggered',
+        agent: 'ApprovalTraceAgent',
+        name: runId,
+        payload: {
+          source: triggerBody.source,
+          issueId: triggerBody.event.issue_id,
+          haltCondition: triggerBody.halt_condition,
+        },
+      }),
+    )
+    const triggerRecord = await signObservation({
+      env: this.env,
+      role: 'agent',
+      key: privateKey(this.env.ATRIB_AGENT_PRIVATE_KEY),
+      contextId,
+      chainRoot: genesisChainRoot(contextId),
+      toolName: 'workflow_trigger',
+      body: triggerBody,
+    })
+    const triggerHash = recordHash(triggerRecord)
+    await this.saveTraceRecord({
+      runId,
+      label: 'trigger',
+      signer: 'agent',
+      record: triggerRecord,
+      body: triggerBody,
+      proof: await submitRecord(this.env, triggerRecord),
+    })
     const plan = await planAction(this.env, input.prompt)
     const payloadHash = hashUnknown(plan.payload)
     const body = {
       kind: 'agent_proposal',
       prompt: input.prompt,
+      trigger_record_hash: triggerHash,
       planner: plan.planner,
       action: plan.action,
       summary: plan.summary,
@@ -598,7 +661,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       proposed_payload_hash: payloadHash,
       proposed_payload: plan.payload,
       approval_question:
-        'Should the agent apply this Cloudflare-shaped ruleset change for the active incident?',
+        'Should the agent publish this triage reply and schedule the follow-up task?',
     }
     this.saveNativeEvent(
       runId,
@@ -615,9 +678,10 @@ export class ApprovalTraceAgent extends Agent<Env> {
       role: 'agent',
       key: privateKey(this.env.ATRIB_AGENT_PRIVATE_KEY),
       contextId,
-      chainRoot: genesisChainRoot(contextId),
+      chainRoot: triggerHash,
       toolName: 'proposal',
       body,
+      informedBy: [triggerHash],
     })
     const proposalHash = recordHash(record)
     await this.saveTraceRecord({
@@ -862,8 +926,8 @@ export class ApprovalTraceAgent extends Agent<Env> {
     const body = {
       kind: 'handoff_packet',
       summary: input.failed
-        ? 'The approved Cloudflare-shaped action failed with signed diagnostic evidence.'
-        : 'The approved Cloudflare-shaped action completed and produced a signed outcome.',
+        ? 'The approved Cloudflare-shaped issue action failed with signed diagnostic evidence.'
+        : 'The approved Cloudflare-shaped issue action completed and produced a signed outcome.',
       approval_record_hash: approval.record_hash,
       outcome_record_hash: outcome.record_hash,
       public_context_url: `${LOG_BASE_URL}/by-context/${workflow.context_id}`,
@@ -979,13 +1043,14 @@ export class ApprovalTraceAgent extends Agent<Env> {
       WHERE run_id = ${runId}
       ORDER BY
         CASE label
-          WHEN 'proposal' THEN 1
-          WHEN 'approval' THEN 2
-          WHEN 'rejection' THEN 2
-          WHEN 'preview' THEN 3
-          WHEN 'execution' THEN 4
-          WHEN 'outcome' THEN 5
-          WHEN 'handoff' THEN 6
+          WHEN 'trigger' THEN 1
+          WHEN 'proposal' THEN 2
+          WHEN 'approval' THEN 3
+          WHEN 'rejection' THEN 3
+          WHEN 'preview' THEN 4
+          WHEN 'execution' THEN 5
+          WHEN 'outcome' THEN 6
+          WHEN 'handoff' THEN 7
           ELSE 99
         END ASC,
         created_at ASC
@@ -1053,7 +1118,7 @@ interface AtribRecordRow {
 
 export class ApprovalActionMcp extends McpAgent<Env> {
   server = new McpServer({
-    name: 'cloudflare-demo-ruleset-action',
+    name: 'cloudflare-demo-issue-triage-action',
     version: '1.0.0',
   })
 
@@ -1080,9 +1145,9 @@ export class ApprovalActionMcp extends McpAgent<Env> {
     )
 
     this.server.registerTool(
-      'preview_ruleset_change',
+      'preview_issue_triage',
       {
-        description: 'Preview the approved Cloudflare DDoS ruleset change before mutation.',
+        description: 'Preview the approved Cloudflare issue-triage action before mutation.',
         inputSchema: {
           approval_record_hash: z.string(),
           stable_connector_id: z.string(),
@@ -1130,9 +1195,9 @@ export class ApprovalActionMcp extends McpAgent<Env> {
               type: 'text',
               text: jsonText({
                 status: 'ready',
-                diagnostic: 'Preview confirms one demo ruleset row would change.',
+                diagnostic: 'Preview confirms one demo issue row would change.',
                 approval_record_hash,
-                changed_rows: [`zone_rulesets.${p.rule_id}`],
+                changed_rows: [`issue_threads.${p.issue_id}`],
                 before: p.before,
                 after: p.after,
               }),
@@ -1143,9 +1208,9 @@ export class ApprovalActionMcp extends McpAgent<Env> {
     )
 
     this.server.registerTool(
-      'apply_ruleset_change',
+      'publish_issue_triage_reply',
       {
-        description: 'Apply the approved Cloudflare DDoS ruleset change to Durable Object SQLite.',
+        description: 'Apply the approved Cloudflare issue-triage action to Durable Object SQLite.',
         inputSchema: {
           approval_record_hash: z.string(),
           stable_connector_id: z.string(),
@@ -1201,8 +1266,8 @@ export class ApprovalActionMcp extends McpAgent<Env> {
                 type: 'text',
                 text: jsonText({
                   status: 'error',
-                  error: 'ruleset_version_conflict',
-                  diagnostic: 'The demo ruleset version changed after approval.',
+                  error: 'issue_thread_version_conflict',
+                  diagnostic: 'The demo issue thread changed after approval.',
                   changed_rows: [],
                   approval_record_hash,
                 }),
@@ -1211,10 +1276,10 @@ export class ApprovalActionMcp extends McpAgent<Env> {
           }
         }
         this.sql`
-          INSERT OR REPLACE INTO zone_rulesets
-            (rule_id, zone_id, phase, state_json, updated_at)
+          INSERT OR REPLACE INTO issue_threads
+            (issue_id, repository, operation, state_json, updated_at)
           VALUES
-            (${p.rule_id}, ${p.zone_id}, ${p.phase}, ${JSON.stringify(p.after)}, ${Date.now()})
+            (${p.issue_id}, ${p.repository}, ${p.operation}, ${JSON.stringify(p.after)}, ${Date.now()})
         `
         return {
           content: [
@@ -1222,8 +1287,8 @@ export class ApprovalActionMcp extends McpAgent<Env> {
               type: 'text',
               text: jsonText({
                 status: 'success',
-                diagnostic: 'Durable Object SQLite demo ruleset row updated.',
-                changed_rows: [`zone_rulesets.${p.rule_id}`],
+                diagnostic: 'Durable Object SQLite demo issue row updated.',
+                changed_rows: [`issue_threads.${p.issue_id}`],
                 approval_record_hash,
                 after: p.after,
               }),
@@ -1311,8 +1376,8 @@ export class ApprovalActionMcp extends McpAgent<Env> {
     const rows = [
       ...this.sql<{ state_json: string }>`
         SELECT state_json
-        FROM zone_rulesets
-        WHERE rule_id = ${ruleId}
+        FROM issue_threads
+        WHERE issue_id = ${ruleId}
       `,
     ]
     return rows.map((row) => JSON.parse(row.state_json) as Record<string, unknown>)
@@ -1320,10 +1385,10 @@ export class ApprovalActionMcp extends McpAgent<Env> {
 
   private ensureSchema(): void {
     this.sql`
-      CREATE TABLE IF NOT EXISTS zone_rulesets (
-        rule_id TEXT PRIMARY KEY,
-        zone_id TEXT NOT NULL,
-        phase TEXT NOT NULL,
+      CREATE TABLE IF NOT EXISTS issue_threads (
+        issue_id TEXT PRIMARY KEY,
+        repository TEXT NOT NULL,
+        operation TEXT NOT NULL,
         state_json TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       )
@@ -1344,11 +1409,11 @@ export class ApprovalActionMcp extends McpAgent<Env> {
   private persistActionRecord(record: AtribRecord, sidecar?: OnRecordSidecar): void {
     const hash = recordHash(record)
     const label =
-      sidecar?.toolName === 'apply_ruleset_change'
+      sidecar?.toolName === 'publish_issue_triage_reply'
         ? 'execution'
         : (sidecar?.toolName ?? 'tool_call')
     this.storeRecord(hash, record, sidecar ?? {}, label, 'action_mcp')
-    if (sidecar?.toolName === 'apply_ruleset_change') {
+    if (sidecar?.toolName === 'publish_issue_triage_reply') {
       void this.signAndStoreOutcome(record, sidecar).catch((error) => {
         console.warn('outcome signing failed', error)
       })
@@ -1436,7 +1501,7 @@ async function executeThroughActionMcp(input: {
     const context = JSON.parse(getTextResult(contextResult)) as ExecutionContext
     const payloadDigest = context.payload_hash.replace(/^sha256:/u, '')
     const preview = await client.callTool({
-      name: 'preview_ruleset_change',
+      name: 'preview_issue_triage',
       _meta: meta,
       arguments: {
         approval_record_hash: context.approval_record_hash,
@@ -1450,7 +1515,7 @@ async function executeThroughActionMcp(input: {
       throw new Error(`preview failed: ${JSON.stringify(previewBody)}`)
     }
     const execution = await client.callTool({
-      name: 'apply_ruleset_change',
+      name: 'publish_issue_triage_reply',
       _meta: meta,
       arguments: {
         approval_record_hash: context.approval_record_hash,
@@ -1467,7 +1532,7 @@ async function executeThroughActionMcp(input: {
       failed: executionBody.status === 'error',
       records: await Promise.all(
         records.map(async (item) => ({
-          label: item.label === 'preview_ruleset_change' ? 'preview' : item.label,
+          label: item.label === 'preview_issue_triage' ? 'preview' : item.label,
           signer: item.signer,
           record_hash: item.record_hash,
           record: item.record,
@@ -1492,12 +1557,12 @@ async function waitForActionRecords(
     const body = JSON.parse(getTextResult(result)) as { records?: ListedActionRecord[] }
     const records = (body.records ?? []).filter((record) => record.record.context_id === contextId)
     if (
-      records.some((record) => record.label === 'preview_ruleset_change') &&
+      records.some((record) => record.label === 'preview_issue_triage') &&
       records.some((record) => record.label === 'execution') &&
       records.some((record) => record.label === 'outcome')
     ) {
       return records.filter((record) =>
-        ['preview_ruleset_change', 'execution', 'outcome'].includes(record.label),
+        ['preview_issue_triage', 'execution', 'outcome'].includes(record.label),
       )
     }
     await new Promise((resolve) => setTimeout(resolve, 100))
@@ -1525,7 +1590,7 @@ export default {
             runId,
             prompt:
               body.prompt ??
-              'Protect this origin from L7 DDoS traffic by tightening the demo managed challenge rule.',
+              'A scheduled agent follow-up found a bug-labeled Workers issue with enough evidence to publish a triage reply.',
           }),
         )
       }
