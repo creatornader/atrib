@@ -66,7 +66,7 @@ atrib/
         a2a-handoff/           # Official A2A SDK JSON-RPC proof with signed AgentCard, verifier-gated handoff packet, and informed_by follow-up.
         google-adk/            # Google ADK InMemoryRunner + BasePlugin + FunctionTool proof for hash-only atrib signing at the ADK tool callback boundary.
         google-adk-python/     # Google ADK Python InMemoryRunner + BasePlugin + FunctionTool proof for hash-only atrib signing at the Python tool callback boundary.
-        google-stack-chain/     # Local proof ladder composing AP2 / VI live interop, A2A handoff evidence, and Google ADK Python signing.
+        google-stack-chain/     # Local proof chain linking AP2 / VI live interop, A2A handoff evidence, and Google ADK Python signing through informed_by.
         letta-memory/          # Letta core and archival memory proof through real Letta executor dispatch, with fake managers and hash-only host signing.
         mastra-runtime/        # Mastra MCPClient/MCPServer stdio proof plus workflow suspend/resume receipt proof.
         microsoft-agent-framework/ # Microsoft Agent Framework Python WorkflowBuilder proof with hash-only workflow event receipts.

@@ -14,9 +14,10 @@ import {
   resolveChainRoot,
   sha256,
   signRecord,
-  verifyRecord,
+  verifyRecord as verifyMcpRecord,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
+import { verifyRecord as verifyAtribRecord } from '@atrib/verify'
 
 type GoogleAdkPythonEvent = {
   index: number
@@ -28,6 +29,17 @@ type GoogleAdkPythonEvent = {
   user_id?: string | null
   args: unknown
   result: unknown
+}
+
+type GoogleOperationalIds = {
+  trace_id: string
+  span_id: string
+  adk_invocation_id: string | null
+  adk_session_id: string
+  adk_function_call_id: string | null
+  adk_agent_name: string | null
+  source: 'local-adk-sidecar'
+  trace_projection: 'deterministic-local'
 }
 
 type GoogleAdkPythonProof = {
@@ -71,11 +83,15 @@ type SmokeResult = {
   signed_records: number
   operations: string[]
   record_hashes: string[]
+  google_operational_ids: GoogleOperationalIds[]
   event_counts: GoogleAdkPythonProof['summary']
   chain: {
     first_record_is_genesis: boolean
     subsequent_records_chain: boolean
     subsequent_records_inform_by_previous: boolean
+    parent_informed_by: string | null
+    parent_informed_by_resolved: string[]
+    parent_informed_by_dangling: string[]
   }
   final_text: string
   privacy: {
@@ -83,6 +99,11 @@ type SmokeResult = {
     local_sidecars_keep_payloads: true
   }
   caveats: string[]
+}
+
+export interface GoogleAdkPythonPluginSmokeOptions {
+  parentRecordHash?: string
+  parentRecord?: AtribRecord
 }
 
 const privateKey = Buffer.from(
@@ -94,7 +115,9 @@ const serverUrl = 'google-adk-python://runner-plugin'
 const privatePhrase = 'quiet ADK Python tool note'
 const baseTimestamp = 1_779_842_000_000
 
-export async function runGoogleAdkPythonPluginSmoke(): Promise<SmokeResult> {
+export async function runGoogleAdkPythonPluginSmoke(
+  options: GoogleAdkPythonPluginSmokeOptions = {},
+): Promise<SmokeResult> {
   const proof = runPythonProof()
   const creatorKey = base64urlEncode(await getPublicKey(privateKey))
   const records: AtribRecord[] = []
@@ -104,6 +127,7 @@ export async function runGoogleAdkPythonPluginSmoke(): Promise<SmokeResult> {
     session: GoogleAdkPythonProof['session']
     event: GoogleAdkPythonEvent
     operation: string
+    google_operational_ids: GoogleOperationalIds
     record_hash: string
   }> = []
   let lastRecordHashHex: string | undefined
@@ -111,6 +135,7 @@ export async function runGoogleAdkPythonPluginSmoke(): Promise<SmokeResult> {
 
   for (const event of proof.events) {
     const operation = `google.adk.python.tool.${event.tool_name}`
+    const googleOperationalIds = makeGoogleOperationalIds(proof.session, event, operation)
     const record: AtribRecord = {
       spec_version: 'atrib/1.0',
       content_id: computeContentId(serverUrl, operation),
@@ -139,7 +164,11 @@ export async function runGoogleAdkPythonPluginSmoke(): Promise<SmokeResult> {
         result: event.result,
       }),
       tool_name: operation,
-      ...(lastRecordHash ? { informed_by: [lastRecordHash] } : {}),
+      ...(lastRecordHash
+        ? { informed_by: [lastRecordHash] }
+        : options.parentRecordHash
+          ? { informed_by: [options.parentRecordHash] }
+          : {}),
     }
     const signed = await signRecord(record, privateKey)
     const recordHashHex = hexEncode(sha256(canonicalRecord(signed)))
@@ -153,13 +182,14 @@ export async function runGoogleAdkPythonPluginSmoke(): Promise<SmokeResult> {
       session: proof.session,
       event,
       operation,
+      google_operational_ids: googleOperationalIds,
       record_hash: recordHash,
     })
   }
 
   const invalid = []
   for (const record of records) {
-    if (!(await verifyRecord(record))) invalid.push(record.tool_name)
+    if (!(await verifyMcpRecord(record))) invalid.push(record.tool_name)
   }
   if (invalid.length > 0) {
     throw new Error(`invalid signed record(s): ${invalid.join(', ')}`)
@@ -183,6 +213,10 @@ export async function runGoogleAdkPythonPluginSmoke(): Promise<SmokeResult> {
     (record) => `sha256:${hexEncode(sha256(canonicalRecord(record)))}`,
   )
   const subsequentRecords = records.slice(1)
+  const parentVerification =
+    options.parentRecord && records[0]
+      ? await verifyAtribRecord(records[0], { informedByCandidates: [options.parentRecord] })
+      : undefined
 
   return {
     ok: true,
@@ -200,6 +234,7 @@ export async function runGoogleAdkPythonPluginSmoke(): Promise<SmokeResult> {
     signed_records: records.length,
     operations: records.map((record) => record.tool_name ?? ''),
     record_hashes: recordHashes,
+    google_operational_ids: sidecars.map((sidecar) => sidecar.google_operational_ids),
     event_counts: proof.summary,
     chain: {
       first_record_is_genesis: records[0]?.chain_root === resolveChainRoot({ contextId }),
@@ -209,6 +244,9 @@ export async function runGoogleAdkPythonPluginSmoke(): Promise<SmokeResult> {
       subsequent_records_inform_by_previous: subsequentRecords.every(
         (record, index) => record.informed_by?.[0] === recordHashes[index],
       ),
+      parent_informed_by: options.parentRecordHash ?? null,
+      parent_informed_by_resolved: parentVerification?.informed_by_resolution?.resolved ?? [],
+      parent_informed_by_dangling: parentVerification?.informed_by_resolution?.dangling ?? [],
     },
     final_text: proof.summary.final_text,
     privacy: {
@@ -267,6 +305,27 @@ function hashCanonical(value: unknown): string {
   const encoded = canonicalize(value)
   if (!encoded) throw new Error('failed to canonicalize Google ADK Python material')
   return `sha256:${hexEncode(sha256(new TextEncoder().encode(encoded)))}`
+}
+
+function makeGoogleOperationalIds(
+  session: GoogleAdkPythonProof['session'],
+  event: GoogleAdkPythonEvent,
+  operation: string,
+): GoogleOperationalIds {
+  return {
+    trace_id: digestHex(`${session.session_id}:${operation}:trace`, 32),
+    span_id: digestHex(`${session.session_id}:${operation}:${event.index}:span`, 16),
+    adk_invocation_id: event.invocation_id ?? null,
+    adk_session_id: session.session_id,
+    adk_function_call_id: event.function_call_id ?? null,
+    adk_agent_name: event.agent_name ?? null,
+    source: 'local-adk-sidecar',
+    trace_projection: 'deterministic-local',
+  }
+}
+
+function digestHex(value: string, length: number): string {
+  return hexEncode(sha256(new TextEncoder().encode(value))).slice(0, length)
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
