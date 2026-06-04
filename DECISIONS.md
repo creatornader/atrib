@@ -5552,6 +5552,77 @@ script also restores executable bits on `dist/main.js` and `dist/cli.js` after
 - [`services/atrib-emit/test/emit.test.ts`](services/atrib-emit/test/emit.test.ts),
   default drop coverage.
 
+## D114: Google ADK Python proof uses the plugin callback boundary
+
+**Date:** 2026-06-04
+
+**Status:** Accepted
+
+**Extends:** [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path)
+and [D100](#d100-log-submission-can-be-disabled-while-still-signing-and-running-onrecord).
+
+**Context.** The existing Google ADK example proved the TypeScript package:
+`@google/adk` `InMemoryRunner`, `BasePlugin`, and `FunctionTool` can emit a
+hash-only atrib record at the tool callback boundary. Route research for the
+Google ADK outreach lane showed the stronger public channel is currently
+`google/adk-python`, whose `Ideas` and `Show and tell` discussions already
+cover provenance exporters, Ed25519 receipts, compliance plugins, memory, and
+authority receipts. The TypeScript proof was useful, but the route and artifact
+did not match.
+
+**Decision.** Add a sibling Python ADK proof at
+[`packages/integration/examples/google-adk-python/`](packages/integration/examples/google-adk-python/).
+The proof runs a real `google-adk==2.1.0` `InMemoryRunner`, registers a Python
+`BasePlugin`, uses a scripted `BaseLlm`, calls a real `FunctionTool`, and captures
+the `after_tool_callback` event. The TypeScript smoke then signs one hash-only
+atrib `tool_call` record for that captured Python tool outcome, following the
+same host-signing pattern used by the LangGraph Python, LlamaIndex Python,
+Letta, and Microsoft Agent Framework examples.
+
+The signed record uses:
+
+- `tool_name = google.adk.python.tool.<tool_name>`
+- `args_hash = sha256(JCS(package, package_version, runtime, session, tool_name, agent_name, user_id, args))`
+- `result_hash = sha256(JCS(operation, tool, result))`
+- `event_type = tool_call`
+- `context_id` supplied by the smoke
+- local sidecars for raw ADK app, session, user, invocation, function-call id,
+  arguments, and result material
+
+**Alternatives rejected.**
+
+- _Post the TypeScript proof into `google/adk-python`._ Rejected. The channel
+  mismatch would make the artifact harder for Python maintainers to judge.
+- _Open a Python proof that bypasses ADK and calls the tool function directly._
+  Rejected. It would not prove the ADK plugin lifecycle.
+- _Sign inside the Python script._ Rejected for this example. The existing
+  Python examples keep Python runtime capture separate from atrib signing in the
+  TypeScript smoke, so protocol signing still uses the shared `@atrib/mcp`
+  helpers.
+- _Lead with BigQuery Agent Analytics or Agent Platform Runtime._ Rejected for
+  this proof. Those are stronger later routes, but they require managed Google
+  identifiers that this local `InMemoryRunner` proof does not produce.
+
+**Consequences.**
+
+- The ADK outreach lane now has a Python artifact that matches the higher-signal
+  ADK Python route.
+- The proof stays local and credential-free. It does not claim Agent Platform
+  Runtime, Gemini Enterprise, BigQuery Agent Analytics, Memory Bank, trajectory
+  evaluation, hosted model calls, upstream acceptance, or maintainer interest.
+- A later managed Google proof can pair the same callback boundary with ADK
+  telemetry, BigQuery Agent Analytics event ids, Cloud Trace ids, Memory Bank
+  events, or Agent Platform Runtime deployment ids.
+
+**Cross-references.**
+
+- [`packages/integration/examples/google-adk/`](packages/integration/examples/google-adk/),
+  TypeScript ADK plugin proof.
+- [`packages/integration/examples/google-adk-python/`](packages/integration/examples/google-adk-python/),
+  Python ADK plugin proof.
+- [`packages/integration/test/google-adk-python-attribution.test.ts`](packages/integration/test/google-adk-python-attribution.test.ts),
+  opt-in Python smoke coverage.
+
 ---
 
 # Pending decisions
