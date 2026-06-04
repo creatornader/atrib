@@ -37,6 +37,7 @@
     "trace-repair-suspect": "tsx examples/trace-repair-suspect/trace-repair-suspect-smoke.ts",
     "a2a-handoff-proof": "tsx examples/a2a-handoff/a2a-handoff-proof.ts",
     "google-adk-plugin-smoke": "tsx examples/google-adk/google-adk-plugin-smoke.ts",
+    "google-adk-python-plugin-smoke": "tsx examples/google-adk-python/google-adk-python-plugin-smoke.ts",
     "openai-agents-runtime-smoke": "tsx examples/openai-agents-runtime/openai-agents-runtime-smoke.ts",
     "openai-responses-tool-call-smoke": "tsx examples/openai-responses/openai-responses-tool-call-smoke.ts",
     "mastra-runtime-smoke": "tsx examples/mastra-runtime/mastra-runtime-smoke.ts",
