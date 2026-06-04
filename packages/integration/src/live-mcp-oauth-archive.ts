@@ -46,6 +46,8 @@ export interface LiveMcpOAuthArchiveEvidenceSummary {
 export interface LiveMcpOAuthArchiveReceipt {
   record_hash: string
   context_id: string
+  args_hash: string
+  result_hash: string
   log_index: number | null
   log_lookup_url: string
   archive_record_url: string
@@ -155,6 +157,12 @@ export async function createLiveMcpOAuthArchiveReceipt(
   const archiveEndpoint = options.archiveEndpoint ?? DEFAULT_ARCHIVE_ENDPOINT
   const explorerOrigin = options.explorerOrigin ?? DEFAULT_EXPLORER_ORIGIN
   const harness = await (options.runHarness ?? runMcpOAuthEvidenceHarness)()
+  if (!harness.record.args_hash) {
+    throw new Error('MCP/OAuth archive receipt requires args_hash disclosure')
+  }
+  if (!harness.record.result_hash) {
+    throw new Error('MCP/OAuth archive receipt requires result_hash disclosure')
+  }
   const hash = recordHash(harness.record)
   const hex = hashHex(hash)
   const proof = await submitRecord(fetchImpl, logEndpoint, harness.record)
@@ -179,6 +187,8 @@ export async function createLiveMcpOAuthArchiveReceipt(
   return {
     record_hash: hash,
     context_id: harness.record.context_id,
+    args_hash: harness.record.args_hash,
+    result_hash: harness.record.result_hash,
     log_index: logIndex,
     log_lookup_url: endpoint(logEndpoint, 'lookup', hex),
     archive_record_url: archiveRecordUrl,
