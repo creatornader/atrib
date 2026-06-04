@@ -10,6 +10,9 @@ export type {
   OnRecordSidecar,
   PreCallTransform,
   PreCallTransformContext,
+  RecordReferenceCandidate,
+  RecordReferenceResolver,
+  RecordReferenceSource,
 } from './middleware.js'
 
 // Proxy: in-process McpServer that forwards to an upstream MCP server with
@@ -56,9 +59,16 @@ export {
   extractRecordReferenceCandidates,
   parentRecordHashFromEnv,
 } from './refs.js'
+export { ATRIB_CONTEXT_ID_ENV, buildSubagentProducerEnv, chainTailEnvName } from './subagent.js'
+export type { BuildSubagentProducerEnvOptions } from './subagent.js'
 export { genesisChainRoot, chainRoot, resolveChainRoot } from './chain-root.js'
-export { readMirrorTail, inheritChainContext } from './mirror.js'
+export { readMirrorTail, inheritChainContext, recordHashExistsInMirror } from './mirror.js'
 export type { ChainContext } from './mirror.js'
+export {
+  clearRecordReferenceResolverCacheForTests,
+  defaultRecordReferenceResolver,
+} from './record-reference.js'
+export type { LocalRecordReferenceResolver, RecordReferenceResolution } from './record-reference.js'
 export { encodeToken, decodeToken } from './token.js'
 
 // Harness session-id discovery (D083)

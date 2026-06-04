@@ -380,7 +380,7 @@ async function handleEmit({
     )
   }
 
-  // ATRIB_PARENT_RECORD_HASH env-var seeding (D104, producer-side
+  // ATRIB_PARENT_RECORD_HASH env-var seeding (D104/D115/D116, producer-side
   // parent-child causality threading). When a parent producer spawns a child
   // producer (multi-process subagent, cross-process delegate, framework worker
   // node, etc.) and writes its parent's record_hash into this env, each emit
@@ -395,15 +395,15 @@ async function handleEmit({
   // signature fires after the child has already emitted; those cases need
   // retroactive annotation or a future explicit handoff event. See D104.
   const validParentHash = parentRecordHashFromEnv()
-  const candidateInformedBy = validParentHash
-    ? Array.from(new Set([validParentHash, ...(input.informed_by ?? [])]))
-    : input.informed_by
-  const effectiveInformedBy = await filterResolvableInformedBy(candidateInformedBy, {
+  const resolvedInputInformedBy = await filterResolvableInformedBy(input.informed_by, {
     allowUnresolved: input.allow_unresolved_informed_by,
     resolver: recordReferenceResolver,
     logEndpoint,
     warnings,
   })
+  const effectiveInformedBy = validParentHash
+    ? Array.from(new Set([validParentHash, ...(resolvedInputInformedBy ?? [])]))
+    : resolvedInputInformedBy
 
   let record
   try {

@@ -32,6 +32,7 @@ import * as readline from 'node:readline'
 import { canonicalRecord } from './canon.js'
 import { resolveChainRoot, genesisChainRoot } from './chain-root.js'
 import { sha256, hexEncode } from './hash.js'
+import { SHA256_REF_PATTERN } from './refs.js'
 import type { AtribRecord } from './types.js'
 
 /**
@@ -78,15 +79,53 @@ export async function readMirrorTail(opts: {
   return mostRecent
 }
 
+/**
+ * Return true when a signed-record mirror contains the requested record_hash.
+ *
+ * This is a producer-side validation helper for Node hosts. It accepts both
+ * bare-record and envelope mirror lines, skips malformed lines, and never
+ * throws to the caller. The public log may lag local signing, so callers
+ * should use this for mirror-backed refs, not for parent-env spawn anchors
+ * that were just signed in the parent process.
+ */
+export async function recordHashExistsInMirror(opts: {
+  path: string
+  recordHash: string
+  contextId?: string | undefined
+}): Promise<boolean> {
+  if (!SHA256_REF_PATTERN.test(opts.recordHash)) return false
+  let exists = true
+  try {
+    const stats = await stat(opts.path)
+    if (stats.size === 0) return false
+  } catch {
+    exists = false
+  }
+  if (!exists) return false
+
+  try {
+    const stream = createReadStream(opts.path, { encoding: 'utf-8' })
+    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity })
+    for await (const line of rl) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      const record = parseMirrorLine(trimmed)
+      if (!record) continue
+      if (opts.contextId && record.context_id !== opts.contextId) continue
+      const hash = `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
+      if (hash === opts.recordHash) return true
+    }
+  } catch {
+    return false
+  }
+  return false
+}
+
 function parseMirrorLine(line: string): AtribRecord | null {
   try {
-    const parsed = JSON.parse(line) as
-      | Partial<AtribRecord>
-      | { record?: Partial<AtribRecord> }
+    const parsed = JSON.parse(line) as Partial<AtribRecord> | { record?: Partial<AtribRecord> }
     const candidate =
-      'record' in parsed && parsed.record
-        ? parsed.record
-        : (parsed as Partial<AtribRecord>)
+      'record' in parsed && parsed.record ? parsed.record : (parsed as Partial<AtribRecord>)
     if (
       typeof candidate.context_id !== 'string' ||
       typeof candidate.creator_key !== 'string' ||
@@ -104,12 +143,7 @@ function parseMirrorLine(line: string): AtribRecord | null {
 export interface ChainContext {
   contextId: string
   chainRoot: string
-  inheritedFrom:
-    | 'caller-supplied'
-    | 'fresh-orphan'
-    | 'env-tail'
-    | 'mirror-tail'
-    | 'fresh'
+  inheritedFrom: 'caller-supplied' | 'fresh-orphan' | 'env-tail' | 'mirror-tail' | 'fresh'
 }
 
 /**

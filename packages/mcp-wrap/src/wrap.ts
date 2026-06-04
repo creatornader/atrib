@@ -11,6 +11,8 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   createAtribProxy,
+  defaultRecordReferenceResolver,
+  recordHashExistsInMirror,
   resolveEnvContextId,
   SHA256_REF_PATTERN,
   type AtribOptions,
@@ -119,6 +121,35 @@ export function buildInformedBy(config: WrapConfig): InformedByHook | undefined 
   }
 }
 
+export function buildRecordReferenceResolver(
+  config: WrapConfig,
+  recordFile: string,
+  log: LogFn = () => {},
+): AtribOptions['recordReferenceResolver'] {
+  return async (candidate) => {
+    if (
+      recordFile &&
+      (await recordHashExistsInMirror({ path: recordFile, recordHash: candidate.recordHash }))
+    ) {
+      return true
+    }
+
+    const resolution = await defaultRecordReferenceResolver(
+      candidate.recordHash,
+      config.logEndpoint,
+    )
+    if (resolution === 'found') return true
+
+    log('warn', 'dropped unresolved informed_by candidate', {
+      record_hash: candidate.recordHash,
+      source: candidate.source,
+      tool_name: candidate.toolName,
+      resolution,
+    })
+    return false
+  }
+}
+
 /** Default file paths under ~/.atrib for a given name + agent. */
 function defaultPaths(config: WrapConfig): { logFile: string; recordFile: string } {
   const suffix = config.name === config.agent ? config.name : `${config.name}-${config.agent}`
@@ -160,6 +191,7 @@ export async function wrap(
 
   const preCallTransform = buildPreCallTransform(config)
   const informedBy = buildInformedBy(config)
+  const recordReferenceResolver = buildRecordReferenceResolver(config, recordFile, log)
 
   const proxy = await createAtribProxy({
     name: `${config.name}-${config.agent}`,
@@ -182,6 +214,7 @@ export async function wrap(
       ...(transactionTools.length > 0 ? { transactionTools } : {}),
       autoDetectInformedByFromArgs: config.autoDetectInformedByFromArgs,
       ...(informedBy ? { informedBy } : {}),
+      recordReferenceResolver,
       ...(config.disclosure ? { disclosure: config.disclosure } : {}),
       // Persists the signed record + optional pre-sign sidecar. The sidecar
       // carries the upstream tool name + raw args + raw result so consumers

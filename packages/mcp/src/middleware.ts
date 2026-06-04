@@ -79,6 +79,25 @@ export interface PreCallTransformContext {
  */
 export type PreCallTransform = (ctx: PreCallTransformContext) => Record<string, unknown> | undefined
 
+export type RecordReferenceSource = 'parent-env' | 'informedBy-callback' | 'auto-detect'
+
+export interface RecordReferenceCandidate {
+  /** Candidate record_hash, `sha256:<64-hex>`. */
+  recordHash: string
+  /** How the candidate entered the producer. */
+  source: RecordReferenceSource
+  /** MCP tool name (params.name), e.g. "post_context". */
+  toolName: string
+  /** Per-call context_id that the record being signed will use. */
+  contextId: string
+  /** Full MCP tool-call params object. */
+  params: Record<string, unknown>
+}
+
+export type RecordReferenceResolver = (
+  candidate: RecordReferenceCandidate,
+) => boolean | Promise<boolean>
+
 /**
  * Pre-sign payload context passed to `onRecord` alongside the signed
  * AtribRecord. The signed record commits to this content (via content_id /
@@ -237,6 +256,19 @@ export interface AtribOptions {
    * provenance claim, not a heuristic.
    */
   informedBy?: (params: Record<string, unknown>) => string[] | undefined
+  /**
+   * Optional source-aware validator for `informed_by` candidates.
+   *
+   * When supplied, refs from `informedBy` callbacks and
+   * `autoDetectInformedByFromArgs` are kept only if the resolver returns
+   * true. `ATRIB_PARENT_RECORD_HASH` env seeds are producer-owned spawn
+   * anchors and bypass this lookup because the parent may have just signed
+   * the dispatch record before mirror or public-log visibility catches up.
+   *
+   * Resolver errors are caught; the candidate is dropped and the wrapped tool
+   * call still succeeds per §5.8.
+   */
+  recordReferenceResolver?: RecordReferenceResolver
   /**
    * Mechanical auto-detection of `informed_by` references from tool args.
    *
@@ -616,6 +648,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     // (presence affects the JCS canonical form, so omission is normal).
     let informedByList: string[] | undefined
     const merged = new Set<string>()
+    const candidates: RecordReferenceCandidate[] = []
     let parentRecordHashSeeded = false
     if (parentRecordHashSeed && !parentRecordHashSeedConsumed) {
       merged.add(parentRecordHashSeed)
@@ -626,7 +659,15 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
         const informed = options.informedBy(params)
         if (Array.isArray(informed)) {
           for (const h of informed) {
-            if (typeof h === 'string' && SHA256_REF_PATTERN.test(h)) merged.add(h)
+            if (typeof h === 'string' && SHA256_REF_PATTERN.test(h)) {
+              candidates.push({
+                recordHash: h,
+                source: 'informedBy-callback',
+                toolName,
+                contextId,
+                params,
+              })
+            }
           }
         }
       } catch (e) {
@@ -636,7 +677,30 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     // Mechanical auto-detect from args, opt-in via autoDetectInformedByFromArgs.
     // See AtribOptions.autoDetectInformedByFromArgs for the rationale.
     if (options.autoDetectInformedByFromArgs) {
-      for (const h of extractRecordReferenceCandidates(params)) merged.add(h)
+      for (const h of extractRecordReferenceCandidates(params)) {
+        candidates.push({
+          recordHash: h,
+          source: 'auto-detect',
+          toolName,
+          contextId,
+          params,
+        })
+      }
+    }
+    if (candidates.length > 0) {
+      for (const candidate of candidates) {
+        if (!options.recordReferenceResolver) {
+          merged.add(candidate.recordHash)
+          continue
+        }
+        try {
+          if (await options.recordReferenceResolver(candidate)) {
+            merged.add(candidate.recordHash)
+          }
+        } catch (e) {
+          console.warn('atrib: recordReferenceResolver threw', e)
+        }
+      }
     }
     if (merged.size > 0) {
       // Lex-sort per §1.2.5 to keep canonical form stable across emitters.
