@@ -5,6 +5,7 @@ WORKDIR /app
 
 # Copy workspace root files
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
+COPY patches/ patches/
 
 # Copy packages the graph service depends on (mcp + verify + graph-node)
 COPY packages/mcp/ packages/mcp/

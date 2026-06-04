@@ -5,6 +5,7 @@ WORKDIR /app
 
 # Copy workspace root files
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
+COPY patches/ patches/
 
 # Copy packages the directory service depends on
 # (mcp + directory + directory-node). The @atrib/directory package

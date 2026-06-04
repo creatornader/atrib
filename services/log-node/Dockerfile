@@ -5,6 +5,7 @@ WORKDIR /app
 
 # Copy workspace root files
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
+COPY patches/ patches/
 
 # Copy only the packages we need (mcp + directory + log-node).
 # @atrib/directory is needed at runtime for the self-claim publish on boot
