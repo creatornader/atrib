@@ -1,5 +1,23 @@
 # @atrib/emit
 
+## 0.14.15
+
+### Patch Changes
+
+- 80310e7: Add `buildSubagentProducerEnv()` for same-session agent-to-subagent handoff.
+
+  The helper builds the canonical child producer env bundle with `ATRIB_CONTEXT_ID`,
+  `ATRIB_CHAIN_TAIL_<context_id>`, and `ATRIB_PARENT_RECORD_HASH` so adapters do
+  not hand-copy the parent-child threading rules.
+
+  Add source-aware `informed_by` validation hooks and shared record-reference
+  resolution through local mirrors plus log lookup. `@atrib/mcp-wrap` now uses the
+  resolver for configured `informedByPaths`, and `@atrib/emit` reuses the shared
+  resolver implementation.
+
+- Updated dependencies [80310e7]
+  - @atrib/mcp@0.17.0
+
 ## 0.14.14
 
 ### Patch Changes
