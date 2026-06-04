@@ -13,6 +13,17 @@ Run:
 pnpm --filter @atrib/integration google-stack-chain-proof
 ```
 
+Open the visual workbench:
+
+```bash
+pnpm --filter @atrib/integration google-stack-chain-visual
+```
+
+Vite prints the local URL. The workbench is a static UI over the current snapshot:
+it shows the four proof stages, lets the operator select each record, highlights
+the matching BigQuery Agent Analytics-shaped fixture row, and keeps the same
+claim limits visible on screen.
+
 The script prints a JSON summary with the AP2 transaction record hash, A2A
 remote and receiver follow-up hashes, and ADK Python tool-callback record hash.
 It also prints a deterministic `snapshot` block. The snapshot excludes the
@@ -43,6 +54,11 @@ ADK BigQuery Agent Analytics columns (`timestamp`, `event_type`, `agent`,
 `parent_span_id`, `status`, `error_message`, `is_truncated`). It adds
 atrib-specific columns for record hash, parent record hashes, and protocol. This
 is a local fixture for review, not a BigQuery Storage Write API export.
+
+The visual snapshot lives at [`visual/proof-snapshot.json`](visual/proof-snapshot.json).
+When the proof script's pinned hashes change, update that file and rerun
+`pnpm --filter @atrib/integration test -- google-stack-chain-visual` before
+using the workbench in an outreach packet.
 
 ## What it proves
 

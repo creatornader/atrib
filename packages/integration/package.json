@@ -39,6 +39,7 @@
     "google-adk-plugin-smoke": "tsx examples/google-adk/google-adk-plugin-smoke.ts",
     "google-adk-python-plugin-smoke": "tsx examples/google-adk-python/google-adk-python-plugin-smoke.ts",
     "google-stack-chain-proof": "tsx examples/google-stack-chain/google-stack-chain-proof.ts",
+    "google-stack-chain-visual": "vite --host 127.0.0.1 examples/google-stack-chain/visual",
     "openai-agents-runtime-smoke": "tsx examples/openai-agents-runtime/openai-agents-runtime-smoke.ts",
     "openai-responses-tool-call-smoke": "tsx examples/openai-responses/openai-responses-tool-call-smoke.ts",
     "mastra-runtime-smoke": "tsx examples/mastra-runtime/mastra-runtime-smoke.ts",

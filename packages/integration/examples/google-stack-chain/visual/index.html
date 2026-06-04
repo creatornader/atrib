@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Google stack proof chain</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell" data-testid="google-stack-visual">
+      <header class="topbar">
+        <div class="title-block">
+          <p class="eyebrow">AP2 / A2A / ADK proof workbench</p>
+          <h1>Google stack proof chain</h1>
+          <p class="subline">
+            Inspect the local proof chain that links AP2 authorization evidence, A2A
+            handoff evidence, and a Google ADK Python callback through verified
+            <code>informed_by</code> records.
+          </p>
+        </div>
+        <div class="run-strip" aria-label="proof status">
+          <span class="status-dot" aria-hidden="true"></span>
+          <div>
+            <strong id="proofStatus">Loading</strong>
+            <span id="snapshotLabel">Reading local snapshot.</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="layout">
+        <aside class="artifact-rail" aria-label="artifact summary">
+          <section class="panel compact">
+            <div class="panel-head">
+              <h2>Run artifact</h2>
+            </div>
+            <button class="command" id="copyCommand" type="button">
+              <span>Copy command</span>
+              <code id="commandText">pnpm --filter @atrib/integration google-stack-chain-proof</code>
+            </button>
+            <dl class="facts">
+              <div>
+                <dt>Strategy</dt>
+                <dd id="strategyText">atrib-google-stack-chain-proof-v2</dd>
+              </div>
+              <div>
+                <dt>Snapshot</dt>
+                <dd id="snapshotSchema">atrib-google-stack-chain.snapshot.v1</dd>
+              </div>
+              <div>
+                <dt>Bridge</dt>
+                <dd>explicit informed_by</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="panel compact">
+            <div class="panel-head">
+              <h2>What it gives Google</h2>
+            </div>
+            <ul class="value-list" id="valueList"></ul>
+          </section>
+
+          <section class="panel compact muted-panel">
+            <div class="panel-head">
+              <h2>Claim limits</h2>
+            </div>
+            <ul class="caveat-list" id="caveatList"></ul>
+          </section>
+        </aside>
+
+        <section class="proof-stage panel">
+          <div class="stage-head">
+            <div>
+              <h2>Verifier-resolved chain</h2>
+              <p>
+                Select a stage to inspect its parent records, checks, and analytics
+                row.
+              </p>
+            </div>
+            <div class="segmented" role="tablist" aria-label="view mode">
+              <button class="segment active" type="button" data-view="proof">Proof</button>
+              <button class="segment" type="button" data-view="analytics">Analytics</button>
+              <button class="segment" type="button" data-view="limits">Limits</button>
+            </div>
+          </div>
+
+          <div class="chain" id="chain" aria-label="proof chain"></div>
+
+          <div class="mobile-tabs" aria-label="mobile stage picker" id="mobileTabs"></div>
+
+          <div class="analytics-band" id="analyticsBand">
+            <div class="band-title">
+              <h3>BigQuery Agent Analytics-shaped fixture</h3>
+              <p id="analyticsCaveat"></p>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Protocol</th>
+                    <th>Event</th>
+                    <th>Agent</th>
+                    <th>Trace</th>
+                    <th>Record</th>
+                  </tr>
+                </thead>
+                <tbody id="analyticsRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <aside class="inspector panel" aria-label="record inspector">
+          <div class="panel-head">
+            <h2>Record inspector</h2>
+            <span class="badge" id="protocolBadge">AP2</span>
+          </div>
+          <div class="inspector-body">
+            <div>
+              <p class="field-label">Selected record</p>
+              <h3 id="selectedTitle">AP2 transaction</h3>
+            </div>
+            <div>
+              <p class="field-label">Record hash</p>
+              <button class="hash-box" id="copyHash" type="button">
+                <code id="selectedHash"></code>
+              </button>
+            </div>
+            <div>
+              <p class="field-label">Parents</p>
+              <div class="parent-list" id="parentList"></div>
+            </div>
+            <div>
+              <p class="field-label">Verifier checks</p>
+              <ul class="check-list" id="checkList"></ul>
+            </div>
+            <div>
+              <p class="field-label">Evidence read</p>
+              <p id="evidenceText" class="body-copy"></p>
+            </div>
+            <div>
+              <p class="field-label">Value add</p>
+              <p id="valueText" class="body-copy"></p>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </main>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
