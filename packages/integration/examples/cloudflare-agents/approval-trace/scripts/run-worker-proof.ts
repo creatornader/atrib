@@ -157,9 +157,14 @@ async function runWranglerDeploy(): Promise<string> {
   return workerUrl.replace(/\/$/u, '')
 }
 
-async function postJson<T>(url: string, body: unknown): Promise<T> {
+async function postJson<T>(
+  url: string,
+  body: unknown,
+  options: { retryServerErrors?: boolean } = {},
+): Promise<T> {
   let lastError = ''
-  for (let attempt = 0; attempt < 6; attempt += 1) {
+  const maxAttempts = options.retryServerErrors === false ? 1 : 6
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -189,7 +194,7 @@ async function runApproved(workerUrl: string, simulateError: boolean): Promise<T
   return postJson<TraceResponse>(`${workerUrl}/api/runs/${runId}/approve`, {
     reason: 'Payload matches the issue scope and expected Cloudflare repository target.',
     simulate_error: simulateError,
-  })
+  }, { retryServerErrors: false })
 }
 
 async function runRejected(workerUrl: string): Promise<TraceResponse> {
@@ -201,7 +206,7 @@ async function runRejected(workerUrl: string): Promise<TraceResponse> {
   })
   return postJson<TraceResponse>(`${workerUrl}/api/runs/${runId}/reject`, {
     reason: 'The reviewer decided this repository file update should not be applied.',
-  })
+  }, { retryServerErrors: false })
 }
 
 function refsEqual(actual: string[] | undefined, expected: string[]): boolean {

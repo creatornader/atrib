@@ -961,8 +961,8 @@ export class ApprovalTraceAgent extends Agent<Env> {
     const body = {
       kind: 'handoff_packet',
       summary: input.failed
-        ? 'The approved Cloudflare-shaped issue action failed with signed diagnostic evidence.'
-        : 'The approved Cloudflare-shaped issue action completed and produced a signed outcome.',
+        ? 'The approved Cloudflare-shaped file action failed with signed diagnostic evidence.'
+        : 'The approved Cloudflare-shaped file action completed and produced a signed outcome.',
       approval_record_hash: approval.record_hash,
       outcome_record_hash: outcome.record_hash,
       public_context_url: `${LOG_BASE_URL}/by-context/${workflow.context_id}`,
