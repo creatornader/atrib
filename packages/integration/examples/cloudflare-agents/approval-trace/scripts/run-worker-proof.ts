@@ -396,11 +396,11 @@ async function main() {
       name: 'interactive UI renders',
       ok:
         page.includes('data-testid="approval-trace-app"') &&
-        page.includes('Autonomous trigger') &&
-        page.includes('Decision context') &&
-        page.includes('Semantic causal chain') &&
-        page.includes('Trustless audit') &&
-        page.includes('Signer separation'),
+        page.includes('Cloudflare Agent Trace') &&
+        page.includes('HITL halt') &&
+        page.includes('Live agent progress') &&
+        page.includes('Signed trace timeline') &&
+        page.includes('Approve and resume'),
     },
   ]
 
