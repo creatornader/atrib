@@ -133,6 +133,45 @@ describe('archive-node HTTP', () => {
     }
   })
 
+  it('returns a generic problem for invalid JSON bodies', async () => {
+    const archive = await bindArchiveServer(0, '127.0.0.1', {
+      origin: 'archive.test/v1',
+      allowUncommittedRecords: true,
+    })
+    try {
+      const res = await fetch(`${archive.url}/v1/records`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{',
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as { detail: string }
+      expect(body.detail).toBe('invalid JSON body')
+    } finally {
+      await archive.close()
+    }
+  })
+
+  it('does not expose archive validation exception text', async () => {
+    const archive = await bindArchiveServer(0, '127.0.0.1', {
+      origin: 'archive.test/v1',
+      allowUncommittedRecords: true,
+    })
+    try {
+      const res = await fetch(`${archive.url}/v1/records`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ record: { bad: true } }),
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as { detail: string }
+      expect(body.detail).toBe('archive submission failed validation')
+      expect(body.detail).not.toContain('Error')
+    } finally {
+      await archive.close()
+    }
+  })
+
   it('sets CORS headers on read endpoints', async () => {
     const archive = await bindArchiveServer(0, '127.0.0.1', {
       origin: 'archive.test',

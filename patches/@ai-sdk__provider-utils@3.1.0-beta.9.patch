@@ -1,0 +1,867 @@
+diff --git a/dist/index.d.mts b/dist/index.d.mts
+index 0375bdc4b03e8328528536d8a4e9a4d4f998e054..78bc381bede05568e29c7848f51a3bd6f2759146 100644
+--- a/dist/index.d.mts
++++ b/dist/index.d.mts
+@@ -27,6 +27,18 @@ declare function convertAsyncIteratorToReadableStream<T>(iterator: AsyncIterator
+ declare function delay(delayInMs?: number | null, options?: {
+     abortSignal?: AbortSignal;
+ }): Promise<void>;
++declare class DelayedPromise<T> {
++    private status;
++    private _promise;
++    private _resolve;
++    private _reject;
++    get promise(): Promise<T>;
++    resolve(value: T): void;
++    reject(error: unknown): void;
++    isResolved(): boolean;
++    isRejected(): boolean;
++    isPending(): boolean;
++}
+ 
+ /**
+ Extracts the headers from a response object and returns them as a key-value object.
+@@ -114,7 +126,9 @@ type Validator<OBJECT = unknown> = {
+  */
+ declare function validator<OBJECT>(validate?: undefined | ((value: unknown) => ValidationResult<OBJECT> | PromiseLike<ValidationResult<OBJECT>>)): Validator<OBJECT>;
+ declare function isValidator(value: unknown): value is Validator;
+-declare function asValidator<OBJECT>(value: Validator<OBJECT> | StandardSchemaV1<unknown, OBJECT>): Validator<OBJECT>;
++declare function lazyValidator<OBJECT>(createValidator: () => Validator<OBJECT>): LazyValidator<OBJECT>;
++type LazyValidator<OBJECT> = () => Validator<OBJECT>;
++declare function asValidator<OBJECT>(value: Validator<OBJECT> | LazyValidator<OBJECT> | StandardSchemaV1<unknown, OBJECT>): Validator<OBJECT>;
+ declare function standardSchemaValidator<OBJECT>(standardSchema: StandardSchemaV1<unknown, OBJECT>): Validator<OBJECT>;
+ 
+ /**
+@@ -352,8 +366,10 @@ type Schema<OBJECT = unknown> = Validator<OBJECT> & {
+      */
+     readonly jsonSchema: JSONSchema7;
+ };
+-type FlexibleSchema<T> = z4.core.$ZodType<T, any> | z3.Schema<T, z3.ZodTypeDef, any> | Schema<T>;
+-type InferSchema<SCHEMA> = SCHEMA extends z3.Schema ? z3.infer<SCHEMA> : SCHEMA extends z4.core.$ZodType ? z4.infer<SCHEMA> : SCHEMA extends Schema<infer T> ? T : never;
++declare function lazySchema<SCHEMA>(createSchema: () => Schema<SCHEMA>): LazySchema<SCHEMA>;
++type LazySchema<SCHEMA> = () => Schema<SCHEMA>;
++type FlexibleSchema<T> = z4.core.$ZodType<T, any> | z3.Schema<T, z3.ZodTypeDef, any> | Schema<T> | LazySchema<T>;
++type InferSchema<SCHEMA> = SCHEMA extends z3.Schema ? z3.infer<SCHEMA> : SCHEMA extends z4.core.$ZodType ? z4.infer<SCHEMA> : SCHEMA extends LazySchema<infer T> ? T : SCHEMA extends Schema<infer T> ? T : never;
+ /**
+  * Create a schema using a JSON Schema.
+  *
+@@ -363,7 +379,7 @@ type InferSchema<SCHEMA> = SCHEMA extends z3.Schema ? z3.infer<SCHEMA> : SCHEMA
+ declare function jsonSchema<OBJECT = unknown>(jsonSchema: JSONSchema7, { validate, }?: {
+     validate?: (value: unknown) => ValidationResult<OBJECT> | PromiseLike<ValidationResult<OBJECT>>;
+ }): Schema<OBJECT>;
+-declare function asSchema<OBJECT>(schema: z4.core.$ZodType<OBJECT, any> | z3.Schema<OBJECT, z3.ZodTypeDef, any> | Schema<OBJECT> | undefined): Schema<OBJECT>;
++declare function asSchema<OBJECT>(schema: z4.core.$ZodType<OBJECT, any> | z3.Schema<OBJECT, z3.ZodTypeDef, any> | Schema<OBJECT> | LazySchema<OBJECT> | undefined): Schema<OBJECT>;
+ 
+ /**
+ Additional provider-specific options.
+@@ -832,6 +848,7 @@ declare function createProviderDefinedToolFactoryWithOutputSchema<INPUT, OUTPUT,
+  * @returns A new object containing only entries with non-null and non-undefined values.
+  */
+ declare function removeUndefinedEntries<T>(record: Record<string, T | undefined>): Record<string, T>;
++declare function normalizeHeaders(headers: HeadersInit | Record<string, string | undefined> | Array<[string, string | undefined]> | undefined): Record<string, string>;
+ 
+ type Resolvable<T> = T | Promise<T> | (() => T) | (() => Promise<T>);
+ /**
+@@ -963,5 +980,13 @@ interface ToolResult<NAME extends string, INPUT, OUTPUT> {
+ }
+ 
+ declare const VERSION: string;
++declare const DEFAULT_MAX_DOWNLOAD_SIZE: number;
++declare function readResponseWithSizeLimit({ response, url, maxBytes, }: {
++    response: Response;
++    url: string;
++    maxBytes?: number;
++}): Promise<Uint8Array>;
++
++declare function validateDownloadUrl(url: string): void;
+ 
+-export { type AssistantContent, type AssistantModelMessage, type DataContent, type FetchFunction, type FilePart, type FlexibleSchema, type IdGenerator, type ImagePart, type InferSchema, type InferToolInput, type InferToolOutput, type ModelMessage, type ParseResult, type ProviderDefinedToolFactory, type ProviderDefinedToolFactoryWithOutputSchema, type ProviderOptions, type ReasoningPart, type Resolvable, type ResponseHandler, type Schema, type SystemModelMessage, type TextPart, type Tool, type ToolApprovalRequest, type ToolApprovalResponse, type ToolCall, type ToolCallOptions, type ToolCallPart, type ToolContent, type ToolExecuteFunction, type ToolModelMessage, type ToolResult, type ToolResultPart, type UserContent, type UserModelMessage, VERSION, type ValidationResult, type Validator, asSchema, asValidator, combineHeaders, convertAsyncIteratorToReadableStream, convertBase64ToUint8Array, convertToBase64, convertUint8ArrayToBase64, createBinaryResponseHandler, createEventSourceResponseHandler, createIdGenerator, createJsonErrorResponseHandler, createJsonResponseHandler, createJsonStreamResponseHandler, createProviderDefinedToolFactory, createProviderDefinedToolFactoryWithOutputSchema, createStatusCodeErrorResponseHandler, delay, dynamicTool, executeTool, extractResponseHeaders, generateId, getErrorMessage, getFromApi, getRuntimeEnvironmentUserAgent, injectJsonInstructionIntoMessages, isAbortError, isParsableJson, isUrlSupported, isValidator, jsonSchema, loadApiKey, loadOptionalSetting, loadSetting, mediaTypeToExtension, parseJSON, parseJsonEventStream, parseProviderOptions, postFormDataToApi, postJsonToApi, postToApi, removeUndefinedEntries, resolve, safeParseJSON, safeValidateTypes, standardSchemaValidator, tool, validateTypes, validator, validatorSymbol, withUserAgentSuffix, withoutTrailingSlash, zodSchema };
++export { type AssistantContent, type AssistantModelMessage, DEFAULT_MAX_DOWNLOAD_SIZE, DelayedPromise, type DataContent, type FetchFunction, type FilePart, type FlexibleSchema, type IdGenerator, type ImagePart, type InferSchema, type InferToolInput, type InferToolOutput, type LazySchema, type LazyValidator, type ModelMessage, type ParseResult, type ProviderDefinedToolFactory, type ProviderDefinedToolFactoryWithOutputSchema, type ProviderOptions, type ReasoningPart, type Resolvable, type ResponseHandler, type Schema, type SystemModelMessage, type TextPart, type Tool, type ToolApprovalRequest, type ToolApprovalResponse, type ToolCall, type ToolCallOptions, type ToolCallPart, type ToolContent, type ToolExecuteFunction, type ToolModelMessage, type ToolResult, type ToolResultPart, type UserContent, type UserModelMessage, VERSION, type ValidationResult, type Validator, asSchema, asValidator, combineHeaders, convertAsyncIteratorToReadableStream, convertBase64ToUint8Array, convertToBase64, convertUint8ArrayToBase64, createBinaryResponseHandler, createEventSourceResponseHandler, createIdGenerator, createJsonErrorResponseHandler, createJsonResponseHandler, createJsonStreamResponseHandler, createProviderDefinedToolFactory, createProviderDefinedToolFactoryWithOutputSchema, createStatusCodeErrorResponseHandler, delay, dynamicTool, executeTool, extractResponseHeaders, generateId, getErrorMessage, getFromApi, getRuntimeEnvironmentUserAgent, injectJsonInstructionIntoMessages, isAbortError, isParsableJson, isUrlSupported, isValidator, jsonSchema, lazySchema, lazyValidator, loadApiKey, loadOptionalSetting, loadSetting, mediaTypeToExtension, normalizeHeaders, parseJSON, parseJsonEventStream, parseProviderOptions, postFormDataToApi, postJsonToApi, postToApi, readResponseWithSizeLimit, removeUndefinedEntries, resolve, safeParseJSON, safeValidateTypes, standardSchemaValidator, tool, validateDownloadUrl, validateTypes, validator, validatorSymbol, withUserAgentSuffix, withoutTrailingSlash, zodSchema };
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 0375bdc4b03e8328528536d8a4e9a4d4f998e054..78bc381bede05568e29c7848f51a3bd6f2759146 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -27,6 +27,18 @@ declare function convertAsyncIteratorToReadableStream<T>(iterator: AsyncIterator
+ declare function delay(delayInMs?: number | null, options?: {
+     abortSignal?: AbortSignal;
+ }): Promise<void>;
++declare class DelayedPromise<T> {
++    private status;
++    private _promise;
++    private _resolve;
++    private _reject;
++    get promise(): Promise<T>;
++    resolve(value: T): void;
++    reject(error: unknown): void;
++    isResolved(): boolean;
++    isRejected(): boolean;
++    isPending(): boolean;
++}
+ 
+ /**
+ Extracts the headers from a response object and returns them as a key-value object.
+@@ -114,7 +126,9 @@ type Validator<OBJECT = unknown> = {
+  */
+ declare function validator<OBJECT>(validate?: undefined | ((value: unknown) => ValidationResult<OBJECT> | PromiseLike<ValidationResult<OBJECT>>)): Validator<OBJECT>;
+ declare function isValidator(value: unknown): value is Validator;
+-declare function asValidator<OBJECT>(value: Validator<OBJECT> | StandardSchemaV1<unknown, OBJECT>): Validator<OBJECT>;
++declare function lazyValidator<OBJECT>(createValidator: () => Validator<OBJECT>): LazyValidator<OBJECT>;
++type LazyValidator<OBJECT> = () => Validator<OBJECT>;
++declare function asValidator<OBJECT>(value: Validator<OBJECT> | LazyValidator<OBJECT> | StandardSchemaV1<unknown, OBJECT>): Validator<OBJECT>;
+ declare function standardSchemaValidator<OBJECT>(standardSchema: StandardSchemaV1<unknown, OBJECT>): Validator<OBJECT>;
+ 
+ /**
+@@ -352,8 +366,10 @@ type Schema<OBJECT = unknown> = Validator<OBJECT> & {
+      */
+     readonly jsonSchema: JSONSchema7;
+ };
+-type FlexibleSchema<T> = z4.core.$ZodType<T, any> | z3.Schema<T, z3.ZodTypeDef, any> | Schema<T>;
+-type InferSchema<SCHEMA> = SCHEMA extends z3.Schema ? z3.infer<SCHEMA> : SCHEMA extends z4.core.$ZodType ? z4.infer<SCHEMA> : SCHEMA extends Schema<infer T> ? T : never;
++declare function lazySchema<SCHEMA>(createSchema: () => Schema<SCHEMA>): LazySchema<SCHEMA>;
++type LazySchema<SCHEMA> = () => Schema<SCHEMA>;
++type FlexibleSchema<T> = z4.core.$ZodType<T, any> | z3.Schema<T, z3.ZodTypeDef, any> | Schema<T> | LazySchema<T>;
++type InferSchema<SCHEMA> = SCHEMA extends z3.Schema ? z3.infer<SCHEMA> : SCHEMA extends z4.core.$ZodType ? z4.infer<SCHEMA> : SCHEMA extends LazySchema<infer T> ? T : SCHEMA extends Schema<infer T> ? T : never;
+ /**
+  * Create a schema using a JSON Schema.
+  *
+@@ -363,7 +379,7 @@ type InferSchema<SCHEMA> = SCHEMA extends z3.Schema ? z3.infer<SCHEMA> : SCHEMA
+ declare function jsonSchema<OBJECT = unknown>(jsonSchema: JSONSchema7, { validate, }?: {
+     validate?: (value: unknown) => ValidationResult<OBJECT> | PromiseLike<ValidationResult<OBJECT>>;
+ }): Schema<OBJECT>;
+-declare function asSchema<OBJECT>(schema: z4.core.$ZodType<OBJECT, any> | z3.Schema<OBJECT, z3.ZodTypeDef, any> | Schema<OBJECT> | undefined): Schema<OBJECT>;
++declare function asSchema<OBJECT>(schema: z4.core.$ZodType<OBJECT, any> | z3.Schema<OBJECT, z3.ZodTypeDef, any> | Schema<OBJECT> | LazySchema<OBJECT> | undefined): Schema<OBJECT>;
+ 
+ /**
+ Additional provider-specific options.
+@@ -832,6 +848,7 @@ declare function createProviderDefinedToolFactoryWithOutputSchema<INPUT, OUTPUT,
+  * @returns A new object containing only entries with non-null and non-undefined values.
+  */
+ declare function removeUndefinedEntries<T>(record: Record<string, T | undefined>): Record<string, T>;
++declare function normalizeHeaders(headers: HeadersInit | Record<string, string | undefined> | Array<[string, string | undefined]> | undefined): Record<string, string>;
+ 
+ type Resolvable<T> = T | Promise<T> | (() => T) | (() => Promise<T>);
+ /**
+@@ -963,5 +980,13 @@ interface ToolResult<NAME extends string, INPUT, OUTPUT> {
+ }
+ 
+ declare const VERSION: string;
++declare const DEFAULT_MAX_DOWNLOAD_SIZE: number;
++declare function readResponseWithSizeLimit({ response, url, maxBytes, }: {
++    response: Response;
++    url: string;
++    maxBytes?: number;
++}): Promise<Uint8Array>;
++
++declare function validateDownloadUrl(url: string): void;
+ 
+-export { type AssistantContent, type AssistantModelMessage, type DataContent, type FetchFunction, type FilePart, type FlexibleSchema, type IdGenerator, type ImagePart, type InferSchema, type InferToolInput, type InferToolOutput, type ModelMessage, type ParseResult, type ProviderDefinedToolFactory, type ProviderDefinedToolFactoryWithOutputSchema, type ProviderOptions, type ReasoningPart, type Resolvable, type ResponseHandler, type Schema, type SystemModelMessage, type TextPart, type Tool, type ToolApprovalRequest, type ToolApprovalResponse, type ToolCall, type ToolCallOptions, type ToolCallPart, type ToolContent, type ToolExecuteFunction, type ToolModelMessage, type ToolResult, type ToolResultPart, type UserContent, type UserModelMessage, VERSION, type ValidationResult, type Validator, asSchema, asValidator, combineHeaders, convertAsyncIteratorToReadableStream, convertBase64ToUint8Array, convertToBase64, convertUint8ArrayToBase64, createBinaryResponseHandler, createEventSourceResponseHandler, createIdGenerator, createJsonErrorResponseHandler, createJsonResponseHandler, createJsonStreamResponseHandler, createProviderDefinedToolFactory, createProviderDefinedToolFactoryWithOutputSchema, createStatusCodeErrorResponseHandler, delay, dynamicTool, executeTool, extractResponseHeaders, generateId, getErrorMessage, getFromApi, getRuntimeEnvironmentUserAgent, injectJsonInstructionIntoMessages, isAbortError, isParsableJson, isUrlSupported, isValidator, jsonSchema, loadApiKey, loadOptionalSetting, loadSetting, mediaTypeToExtension, parseJSON, parseJsonEventStream, parseProviderOptions, postFormDataToApi, postJsonToApi, postToApi, removeUndefinedEntries, resolve, safeParseJSON, safeValidateTypes, standardSchemaValidator, tool, validateTypes, validator, validatorSymbol, withUserAgentSuffix, withoutTrailingSlash, zodSchema };
++export { type AssistantContent, type AssistantModelMessage, DEFAULT_MAX_DOWNLOAD_SIZE, DelayedPromise, type DataContent, type FetchFunction, type FilePart, type FlexibleSchema, type IdGenerator, type ImagePart, type InferSchema, type InferToolInput, type InferToolOutput, type LazySchema, type LazyValidator, type ModelMessage, type ParseResult, type ProviderDefinedToolFactory, type ProviderDefinedToolFactoryWithOutputSchema, type ProviderOptions, type ReasoningPart, type Resolvable, type ResponseHandler, type Schema, type SystemModelMessage, type TextPart, type Tool, type ToolApprovalRequest, type ToolApprovalResponse, type ToolCall, type ToolCallOptions, type ToolCallPart, type ToolContent, type ToolExecuteFunction, type ToolModelMessage, type ToolResult, type ToolResultPart, type UserContent, type UserModelMessage, VERSION, type ValidationResult, type Validator, asSchema, asValidator, combineHeaders, convertAsyncIteratorToReadableStream, convertBase64ToUint8Array, convertToBase64, convertUint8ArrayToBase64, createBinaryResponseHandler, createEventSourceResponseHandler, createIdGenerator, createJsonErrorResponseHandler, createJsonResponseHandler, createJsonStreamResponseHandler, createProviderDefinedToolFactory, createProviderDefinedToolFactoryWithOutputSchema, createStatusCodeErrorResponseHandler, delay, dynamicTool, executeTool, extractResponseHeaders, generateId, getErrorMessage, getFromApi, getRuntimeEnvironmentUserAgent, injectJsonInstructionIntoMessages, isAbortError, isParsableJson, isUrlSupported, isValidator, jsonSchema, lazySchema, lazyValidator, loadApiKey, loadOptionalSetting, loadSetting, mediaTypeToExtension, normalizeHeaders, parseJSON, parseJsonEventStream, parseProviderOptions, postFormDataToApi, postJsonToApi, postToApi, readResponseWithSizeLimit, removeUndefinedEntries, resolve, safeParseJSON, safeValidateTypes, standardSchemaValidator, tool, validateDownloadUrl, validateTypes, validator, validatorSymbol, withUserAgentSuffix, withoutTrailingSlash, zodSchema };
+diff --git a/dist/index.js b/dist/index.js
+index 7a363a2a4f99e98232903ecb1394082e41ba21e9..b129bcbfeeb4a3a59e8509e0a4f5a56946a26722 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -31,6 +31,8 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
+ // src/index.ts
+ var src_exports = {};
+ __export(src_exports, {
++  DEFAULT_MAX_DOWNLOAD_SIZE: () => DEFAULT_MAX_DOWNLOAD_SIZE,
++  DelayedPromise: () => DelayedPromise,
+   EventSourceParserStream: () => import_stream2.EventSourceParserStream,
+   VERSION: () => VERSION,
+   asSchema: () => asSchema,
+@@ -63,10 +65,13 @@ __export(src_exports, {
+   isUrlSupported: () => isUrlSupported,
+   isValidator: () => isValidator,
+   jsonSchema: () => jsonSchema,
++  lazySchema: () => lazySchema,
++  lazyValidator: () => lazyValidator,
+   loadApiKey: () => loadApiKey,
+   loadOptionalSetting: () => loadOptionalSetting,
+   loadSetting: () => loadSetting,
+   mediaTypeToExtension: () => mediaTypeToExtension,
++  normalizeHeaders: () => normalizeHeaders,
+   parseJSON: () => parseJSON,
+   parseJsonEventStream: () => parseJsonEventStream,
+   parseProviderOptions: () => parseProviderOptions,
+@@ -74,11 +79,13 @@ __export(src_exports, {
+   postJsonToApi: () => postJsonToApi,
+   postToApi: () => postToApi,
+   removeUndefinedEntries: () => removeUndefinedEntries,
++  readResponseWithSizeLimit: () => readResponseWithSizeLimit,
+   resolve: () => resolve,
+   safeParseJSON: () => safeParseJSON,
+   safeValidateTypes: () => safeValidateTypes,
+   standardSchemaValidator: () => standardSchemaValidator,
+   tool: () => tool,
++  validateDownloadUrl: () => validateDownloadUrl,
+   validateTypes: () => validateTypes,
+   validator: () => validator,
+   validatorSymbol: () => validatorSymbol,
+@@ -157,6 +164,51 @@ async function delay(delayInMs, options) {
+ function createAbortError() {
+   return new DOMException("Delay was aborted", "AbortError");
+ }
++var DelayedPromise = class {
++  constructor() {
++    this.status = { type: "pending" };
++    this._resolve = void 0;
++    this._reject = void 0;
++  }
++  get promise() {
++    if (this._promise) {
++      return this._promise;
++    }
++    this._promise = new Promise((resolve2, reject) => {
++      if (this.status.type === "resolved") {
++        resolve2(this.status.value);
++      } else if (this.status.type === "rejected") {
++        reject(this.status.error);
++      }
++      this._resolve = resolve2;
++      this._reject = reject;
++    });
++    return this._promise;
++  }
++  resolve(value) {
++    var _a2;
++    this.status = { type: "resolved", value };
++    if (this._promise) {
++      (_a2 = this._resolve) == null ? void 0 : _a2.call(this, value);
++    }
++  }
++  reject(error) {
++    var _a2;
++    this.status = { type: "rejected", error };
++    if (this._promise) {
++      (_a2 = this._reject) == null ? void 0 : _a2.call(this, error);
++    }
++  }
++  isResolved() {
++    return this.status.type === "resolved";
++  }
++  isRejected() {
++    return this.status.type === "rejected";
++  }
++  isPending() {
++    return this.status.type === "pending";
++  }
++};
+ 
+ // src/extract-response-headers.ts
+ function extractResponseHeaders(response) {
+@@ -187,6 +239,27 @@ function removeUndefinedEntries(record) {
+     Object.entries(record).filter(([_key, value]) => value != null)
+   );
+ }
++function normalizeHeaders(headers) {
++  if (headers == null) {
++    return {};
++  }
++  const normalized = {};
++  if (headers instanceof Headers) {
++    headers.forEach((value, key) => {
++      normalized[key.toLowerCase()] = value;
++    });
++  } else {
++    if (!Array.isArray(headers)) {
++      headers = Object.entries(headers);
++    }
++    for (const [key, value] of headers) {
++      if (value != null) {
++        normalized[key.toLowerCase()] = value;
++      }
++    }
++  }
++  return normalized;
++}
+ 
+ // src/with-user-agent-suffix.ts
+ function withUserAgentSuffix(headers, ...userAgentSuffixParts) {
+@@ -285,6 +358,80 @@ function handleFetchError({
+ 
+ // src/version.ts
+ var VERSION = true ? "3.1.0-beta.9" : "0.0.0-test";
++var DEFAULT_MAX_DOWNLOAD_SIZE = 2 * 1024 * 1024 * 1024;
++var downloadErrorName = "AI_DownloadError";
++var downloadErrorMarker = `vercel.ai.error.${downloadErrorName}`;
++var downloadErrorSymbol = Symbol.for(downloadErrorMarker);
++var DownloadError = class extends import_provider.AISDKError {
++  constructor({
++    url,
++    statusCode,
++    statusText,
++    cause,
++    message = cause == null ? `Failed to download ${url}: ${statusCode} ${statusText}` : `Failed to download ${url}: ${cause}`
++  }) {
++    super({ name: downloadErrorName, message, cause });
++    this[downloadErrorSymbol] = true;
++    this.url = url;
++    this.statusCode = statusCode;
++    this.statusText = statusText;
++  }
++  static isInstance(error) {
++    return import_provider.AISDKError.hasMarker(error, downloadErrorMarker);
++  }
++};
++async function readResponseWithSizeLimit({
++  response,
++  url,
++  maxBytes = DEFAULT_MAX_DOWNLOAD_SIZE
++}) {
++  const contentLength = response.headers.get("content-length");
++  if (contentLength != null) {
++    const length = parseInt(contentLength, 10);
++    if (!isNaN(length) && length > maxBytes) {
++      throw new DownloadError({
++        url,
++        message: `Download of ${url} exceeded maximum size of ${maxBytes} bytes (Content-Length: ${length}).`
++      });
++    }
++  }
++  const body = response.body;
++  if (body == null) {
++    return new Uint8Array(0);
++  }
++  const reader = body.getReader();
++  const chunks = [];
++  let totalBytes = 0;
++  try {
++    while (true) {
++      const { done, value } = await reader.read();
++      if (done) {
++        break;
++      }
++      totalBytes += value.length;
++      if (totalBytes > maxBytes) {
++        throw new DownloadError({
++          url,
++          message: `Download of ${url} exceeded maximum size of ${maxBytes} bytes.`
++        });
++      }
++      chunks.push(value);
++    }
++  } finally {
++    try {
++      await reader.cancel();
++    } finally {
++      reader.releaseLock();
++    }
++  }
++  const result = new Uint8Array(totalBytes);
++  let offset = 0;
++  for (const chunk of chunks) {
++    result.set(chunk, offset);
++    offset += chunk.length;
++  }
++  return result;
++}
+ 
+ // src/get-from-api.ts
+ var getOriginalFetch = () => globalThis.fetch;
+@@ -570,8 +717,17 @@ function validator(validate) {
+ function isValidator(value) {
+   return typeof value === "object" && value !== null && validatorSymbol in value && value[validatorSymbol] === true && "validate" in value;
+ }
++function lazyValidator(createValidator) {
++  let validator2;
++  return () => {
++    if (validator2 == null) {
++      validator2 = createValidator();
++    }
++    return validator2;
++  };
++}
+ function asValidator(value) {
+-  return isValidator(value) ? value : standardSchemaValidator(value);
++  return isValidator(value) ? value : typeof value === "function" ? value() : standardSchemaValidator(value);
+ }
+ function standardSchemaValidator(standardSchema) {
+   return validator(async (value) => {
+@@ -2297,6 +2453,15 @@ function zodSchema(zodSchema2, options) {
+ 
+ // src/schema.ts
+ var schemaSymbol = Symbol.for("vercel.ai.schema");
++function lazySchema(createSchema) {
++  let schema;
++  return () => {
++    if (schema == null) {
++      schema = createSchema();
++    }
++    return schema;
++  };
++}
+ function jsonSchema(jsonSchema2, {
+   validate
+ } = {}) {
+@@ -2316,7 +2481,7 @@ function asSchema(schema) {
+   return schema == null ? jsonSchema({
+     properties: {},
+     additionalProperties: false
+-  }) : isSchema(schema) ? schema : zodSchema(schema);
++  }) : isSchema(schema) ? schema : typeof schema === "function" ? schema() : zodSchema(schema);
+ }
+ 
+ // src/uint8-utils.ts
+@@ -2336,6 +2501,103 @@ function convertUint8ArrayToBase64(array) {
+ function convertToBase64(value) {
+   return value instanceof Uint8Array ? convertUint8ArrayToBase64(value) : value;
+ }
++function validateDownloadUrl(url) {
++  let parsed;
++  try {
++    parsed = new URL(url);
++  } catch (e) {
++    throw new DownloadError({
++      url,
++      message: `Invalid URL: ${url}`
++    });
++  }
++  if (parsed.protocol === "data:") {
++    return;
++  }
++  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
++    throw new DownloadError({
++      url,
++      message: `URL scheme must be http, https, or data, got ${parsed.protocol}`
++    });
++  }
++  const hostname = parsed.hostname;
++  if (!hostname) {
++    throw new DownloadError({
++      url,
++      message: `URL must have a hostname`
++    });
++  }
++  if (hostname === "localhost" || hostname.endsWith(".local") || hostname.endsWith(".localhost")) {
++    throw new DownloadError({
++      url,
++      message: `URL with hostname ${hostname} is not allowed`
++    });
++  }
++  if (hostname.startsWith("[") && hostname.endsWith("]")) {
++    const ipv6 = hostname.slice(1, -1);
++    if (isPrivateIPv6(ipv6)) {
++      throw new DownloadError({
++        url,
++        message: `URL with IPv6 address ${hostname} is not allowed`
++      });
++    }
++    return;
++  }
++  if (isIPv4(hostname)) {
++    if (isPrivateIPv4(hostname)) {
++      throw new DownloadError({
++        url,
++        message: `URL with IP address ${hostname} is not allowed`
++      });
++    }
++    return;
++  }
++}
++function isIPv4(hostname) {
++  const parts = hostname.split(".");
++  if (parts.length !== 4) return false;
++  return parts.every((part) => {
++    const num = Number(part);
++    return Number.isInteger(num) && num >= 0 && num <= 255 && String(num) === part;
++  });
++}
++function isPrivateIPv4(ip) {
++  const parts = ip.split(".").map(Number);
++  const [a, b] = parts;
++  if (a === 0) return true;
++  if (a === 10) return true;
++  if (a === 127) return true;
++  if (a === 169 && b === 254) return true;
++  if (a === 172 && b >= 16 && b <= 31) return true;
++  if (a === 192 && b === 168) return true;
++  return false;
++}
++function isPrivateIPv6(ip) {
++  const normalized = ip.toLowerCase();
++  if (normalized === "::1") return true;
++  if (normalized === "::") return true;
++  if (normalized.startsWith("::ffff:")) {
++    const mappedPart = normalized.slice(7);
++    if (isIPv4(mappedPart)) {
++      return isPrivateIPv4(mappedPart);
++    }
++    const hexParts = mappedPart.split(":");
++    if (hexParts.length === 2) {
++      const high = parseInt(hexParts[0], 16);
++      const low = parseInt(hexParts[1], 16);
++      if (!isNaN(high) && !isNaN(low)) {
++        const a = high >> 8 & 255;
++        const b = high & 255;
++        const c = low >> 8 & 255;
++        const d = low & 255;
++        return isPrivateIPv4(`${a}.${b}.${c}.${d}`);
++      }
++    }
++  }
++  if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true;
++  if (normalized.startsWith("fe80")) return true;
++  return false;
++}
+ 
+ // src/without-trailing-slash.ts
+ function withoutTrailingSlash(url) {
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 351fc81923cfe7c91bb0d6ddb35263564f2535c2..0f0bbd2a5da484592321ea04fe8590b496d55206 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -67,6 +67,51 @@ async function delay(delayInMs, options) {
+ function createAbortError() {
+   return new DOMException("Delay was aborted", "AbortError");
+ }
++var DelayedPromise = class {
++  constructor() {
++    this.status = { type: "pending" };
++    this._resolve = void 0;
++    this._reject = void 0;
++  }
++  get promise() {
++    if (this._promise) {
++      return this._promise;
++    }
++    this._promise = new Promise((resolve2, reject) => {
++      if (this.status.type === "resolved") {
++        resolve2(this.status.value);
++      } else if (this.status.type === "rejected") {
++        reject(this.status.error);
++      }
++      this._resolve = resolve2;
++      this._reject = reject;
++    });
++    return this._promise;
++  }
++  resolve(value) {
++    var _a2;
++    this.status = { type: "resolved", value };
++    if (this._promise) {
++      (_a2 = this._resolve) == null ? void 0 : _a2.call(this, value);
++    }
++  }
++  reject(error) {
++    var _a2;
++    this.status = { type: "rejected", error };
++    if (this._promise) {
++      (_a2 = this._reject) == null ? void 0 : _a2.call(this, error);
++    }
++  }
++  isResolved() {
++    return this.status.type === "resolved";
++  }
++  isRejected() {
++    return this.status.type === "rejected";
++  }
++  isPending() {
++    return this.status.type === "pending";
++  }
++};
+ 
+ // src/extract-response-headers.ts
+ function extractResponseHeaders(response) {
+@@ -97,6 +142,27 @@ function removeUndefinedEntries(record) {
+     Object.entries(record).filter(([_key, value]) => value != null)
+   );
+ }
++function normalizeHeaders(headers) {
++  if (headers == null) {
++    return {};
++  }
++  const normalized = {};
++  if (headers instanceof Headers) {
++    headers.forEach((value, key) => {
++      normalized[key.toLowerCase()] = value;
++    });
++  } else {
++    if (!Array.isArray(headers)) {
++      headers = Object.entries(headers);
++    }
++    for (const [key, value] of headers) {
++      if (value != null) {
++        normalized[key.toLowerCase()] = value;
++      }
++    }
++  }
++  return normalized;
++}
+ 
+ // src/with-user-agent-suffix.ts
+ function withUserAgentSuffix(headers, ...userAgentSuffixParts) {
+@@ -113,7 +179,7 @@ function withUserAgentSuffix(headers, ...userAgentSuffixParts) {
+ }
+ 
+ // src/generate-id.ts
+-import { InvalidArgumentError } from "@ai-sdk/provider";
++import { AISDKError, InvalidArgumentError } from "@ai-sdk/provider";
+ var createIdGenerator = ({
+   prefix,
+   size = 16,
+@@ -195,6 +261,80 @@ function handleFetchError({
+ 
+ // src/version.ts
+ var VERSION = true ? "3.1.0-beta.9" : "0.0.0-test";
++var DEFAULT_MAX_DOWNLOAD_SIZE = 2 * 1024 * 1024 * 1024;
++var downloadErrorName = "AI_DownloadError";
++var downloadErrorMarker = `vercel.ai.error.${downloadErrorName}`;
++var downloadErrorSymbol = Symbol.for(downloadErrorMarker);
++var DownloadError = class extends AISDKError {
++  constructor({
++    url,
++    statusCode,
++    statusText,
++    cause,
++    message = cause == null ? `Failed to download ${url}: ${statusCode} ${statusText}` : `Failed to download ${url}: ${cause}`
++  }) {
++    super({ name: downloadErrorName, message, cause });
++    this[downloadErrorSymbol] = true;
++    this.url = url;
++    this.statusCode = statusCode;
++    this.statusText = statusText;
++  }
++  static isInstance(error) {
++    return AISDKError.hasMarker(error, downloadErrorMarker);
++  }
++};
++async function readResponseWithSizeLimit({
++  response,
++  url,
++  maxBytes = DEFAULT_MAX_DOWNLOAD_SIZE
++}) {
++  const contentLength = response.headers.get("content-length");
++  if (contentLength != null) {
++    const length = parseInt(contentLength, 10);
++    if (!isNaN(length) && length > maxBytes) {
++      throw new DownloadError({
++        url,
++        message: `Download of ${url} exceeded maximum size of ${maxBytes} bytes (Content-Length: ${length}).`
++      });
++    }
++  }
++  const body = response.body;
++  if (body == null) {
++    return new Uint8Array(0);
++  }
++  const reader = body.getReader();
++  const chunks = [];
++  let totalBytes = 0;
++  try {
++    while (true) {
++      const { done, value } = await reader.read();
++      if (done) {
++        break;
++      }
++      totalBytes += value.length;
++      if (totalBytes > maxBytes) {
++        throw new DownloadError({
++          url,
++          message: `Download of ${url} exceeded maximum size of ${maxBytes} bytes.`
++        });
++      }
++      chunks.push(value);
++    }
++  } finally {
++    try {
++      await reader.cancel();
++    } finally {
++      reader.releaseLock();
++    }
++  }
++  const result = new Uint8Array(totalBytes);
++  let offset = 0;
++  for (const chunk of chunks) {
++    result.set(chunk, offset);
++    offset += chunk.length;
++  }
++  return result;
++}
+ 
+ // src/get-from-api.ts
+ var getOriginalFetch = () => globalThis.fetch;
+@@ -483,8 +623,17 @@ function validator(validate) {
+ function isValidator(value) {
+   return typeof value === "object" && value !== null && validatorSymbol in value && value[validatorSymbol] === true && "validate" in value;
+ }
++function lazyValidator(createValidator) {
++  let validator2;
++  return () => {
++    if (validator2 == null) {
++      validator2 = createValidator();
++    }
++    return validator2;
++  };
++}
+ function asValidator(value) {
+-  return isValidator(value) ? value : standardSchemaValidator(value);
++  return isValidator(value) ? value : typeof value === "function" ? value() : standardSchemaValidator(value);
+ }
+ function standardSchemaValidator(standardSchema) {
+   return validator(async (value) => {
+@@ -2214,6 +2363,15 @@ function zodSchema(zodSchema2, options) {
+ 
+ // src/schema.ts
+ var schemaSymbol = Symbol.for("vercel.ai.schema");
++function lazySchema(createSchema) {
++  let schema;
++  return () => {
++    if (schema == null) {
++      schema = createSchema();
++    }
++    return schema;
++  };
++}
+ function jsonSchema(jsonSchema2, {
+   validate
+ } = {}) {
+@@ -2233,7 +2391,7 @@ function asSchema(schema) {
+   return schema == null ? jsonSchema({
+     properties: {},
+     additionalProperties: false
+-  }) : isSchema(schema) ? schema : zodSchema(schema);
++  }) : isSchema(schema) ? schema : typeof schema === "function" ? schema() : zodSchema(schema);
+ }
+ 
+ // src/uint8-utils.ts
+@@ -2253,6 +2411,103 @@ function convertUint8ArrayToBase64(array) {
+ function convertToBase64(value) {
+   return value instanceof Uint8Array ? convertUint8ArrayToBase64(value) : value;
+ }
++function validateDownloadUrl(url) {
++  let parsed;
++  try {
++    parsed = new URL(url);
++  } catch (e) {
++    throw new DownloadError({
++      url,
++      message: `Invalid URL: ${url}`
++    });
++  }
++  if (parsed.protocol === "data:") {
++    return;
++  }
++  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
++    throw new DownloadError({
++      url,
++      message: `URL scheme must be http, https, or data, got ${parsed.protocol}`
++    });
++  }
++  const hostname = parsed.hostname;
++  if (!hostname) {
++    throw new DownloadError({
++      url,
++      message: `URL must have a hostname`
++    });
++  }
++  if (hostname === "localhost" || hostname.endsWith(".local") || hostname.endsWith(".localhost")) {
++    throw new DownloadError({
++      url,
++      message: `URL with hostname ${hostname} is not allowed`
++    });
++  }
++  if (hostname.startsWith("[") && hostname.endsWith("]")) {
++    const ipv6 = hostname.slice(1, -1);
++    if (isPrivateIPv6(ipv6)) {
++      throw new DownloadError({
++        url,
++        message: `URL with IPv6 address ${hostname} is not allowed`
++      });
++    }
++    return;
++  }
++  if (isIPv4(hostname)) {
++    if (isPrivateIPv4(hostname)) {
++      throw new DownloadError({
++        url,
++        message: `URL with IP address ${hostname} is not allowed`
++      });
++    }
++    return;
++  }
++}
++function isIPv4(hostname) {
++  const parts = hostname.split(".");
++  if (parts.length !== 4) return false;
++  return parts.every((part) => {
++    const num = Number(part);
++    return Number.isInteger(num) && num >= 0 && num <= 255 && String(num) === part;
++  });
++}
++function isPrivateIPv4(ip) {
++  const parts = ip.split(".").map(Number);
++  const [a, b] = parts;
++  if (a === 0) return true;
++  if (a === 10) return true;
++  if (a === 127) return true;
++  if (a === 169 && b === 254) return true;
++  if (a === 172 && b >= 16 && b <= 31) return true;
++  if (a === 192 && b === 168) return true;
++  return false;
++}
++function isPrivateIPv6(ip) {
++  const normalized = ip.toLowerCase();
++  if (normalized === "::1") return true;
++  if (normalized === "::") return true;
++  if (normalized.startsWith("::ffff:")) {
++    const mappedPart = normalized.slice(7);
++    if (isIPv4(mappedPart)) {
++      return isPrivateIPv4(mappedPart);
++    }
++    const hexParts = mappedPart.split(":");
++    if (hexParts.length === 2) {
++      const high = parseInt(hexParts[0], 16);
++      const low = parseInt(hexParts[1], 16);
++      if (!isNaN(high) && !isNaN(low)) {
++        const a = high >> 8 & 255;
++        const b = high & 255;
++        const c = low >> 8 & 255;
++        const d = low & 255;
++        return isPrivateIPv4(`${a}.${b}.${c}.${d}`);
++      }
++    }
++  }
++  if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true;
++  if (normalized.startsWith("fe80")) return true;
++  return false;
++}
+ 
+ // src/without-trailing-slash.ts
+ function withoutTrailingSlash(url) {
+@@ -2289,6 +2544,8 @@ import {
+   EventSourceParserStream as EventSourceParserStream2
+ } from "eventsource-parser/stream";
+ export {
++  DEFAULT_MAX_DOWNLOAD_SIZE,
++  DelayedPromise,
+   EventSourceParserStream2 as EventSourceParserStream,
+   VERSION,
+   asSchema,
+@@ -2321,10 +2578,13 @@ export {
+   isUrlSupported,
+   isValidator,
+   jsonSchema,
++  lazySchema,
++  lazyValidator,
+   loadApiKey,
+   loadOptionalSetting,
+   loadSetting,
+   mediaTypeToExtension,
++  normalizeHeaders,
+   parseJSON,
+   parseJsonEventStream,
+   parseProviderOptions,
+@@ -2332,11 +2592,13 @@ export {
+   postJsonToApi,
+   postToApi,
+   removeUndefinedEntries,
++  readResponseWithSizeLimit,
+   resolve,
+   safeParseJSON,
+   safeValidateTypes,
+   standardSchemaValidator,
+   tool,
++  validateDownloadUrl,
+   validateTypes,
+   validator,
+   validatorSymbol,

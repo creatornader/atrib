@@ -130,15 +130,24 @@ async function handleSubmit(
   try {
     parsed = JSON.parse(await readBody(req))
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'invalid JSON body'
-    return problem(res, message.includes('too large') ? 413 : 400, 'bad-request', 'Bad Request', message)
+    const bodyTooLarge = err instanceof Error && err.message.includes('too large')
+    const detail = bodyTooLarge ? 'request body too large' : 'invalid JSON body'
+    return problem(res, bodyTooLarge ? 413 : 400, 'bad-request', 'Bad Request', detail)
   }
 
   let submission: ReturnType<typeof normalizeArchiveSubmission>
   try {
     submission = normalizeArchiveSubmission(parsed)
   } catch (err) {
-    return problem(res, 400, 'bad-archive-submission', 'Bad Request', String(err))
+    // eslint-disable-next-line no-console
+    console.warn('archive-node rejected archive submission', err)
+    return problem(
+      res,
+      400,
+      'bad-archive-submission',
+      'Bad Request',
+      'archive submission failed validation',
+    )
   }
 
   const verification = await verifyAtribRecord(submission.record)
@@ -162,7 +171,15 @@ async function handleSubmit(
   try {
     stored = await store.put(submission)
   } catch (err) {
-    return problem(res, 400, 'bad-archive-submission', 'Bad Request', String(err))
+    // eslint-disable-next-line no-console
+    console.warn('archive-node rejected archive storage', err)
+    return problem(
+      res,
+      400,
+      'bad-archive-submission',
+      'Bad Request',
+      'archive submission failed validation',
+    )
   }
 
   const body = await publicRecordResponse(stored.entry)
