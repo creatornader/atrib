@@ -6,13 +6,53 @@ atrib is the substrate behind agents that reason from a past they can prove. Eve
 
 ## What this enables
 
-Everything below depends on the same substrate property: an action is signed when it happens and remains verifiable afterward.
+Everything below depends on the same substrate property: an action is signed
+when it happens and remains verifiable afterward.
 
-- **Provable cognition.** An agent reads its own prior records and reasons from them. Each record is a signed claim that re-verifies locally; the agent's continuity of self survives platform changes, model changes, and harness changes because the cryptography is independent of all of them. This is the dogfood thesis: agents that reason from a past they can prove.
-- **Independent audit.** Any third party can verify what an agent did, in what order, with what causal structure. No trust in the agent operator, the platform, or any intermediary required. Compliance-coded products (audit trail, SOC 2, AI governance tooling) approximate this without the substrate; the substrate does it correctly.
-- **Cross-agent provenance.** Tool calls chain forward through W3C trace context. Agents that hand off work to subagents carry session scope, chain tail, and parent dispatch refs together. The chain is the trust.
-- **Verifiable investigations.** Support, incident, billing, and RCA agents can sign the investigation trail: ticket intake, tenant-scoped log queries, code-path reads, hypotheses, diagnostics, revisions, and human handoffs. Observability tools keep the operational evidence; atrib proves how the agent used that evidence.
-- **Settlement when commerce closes a chain.** A side effect of the substrate: the same signed record set is what a settlement document is computed from. The [§4.6](atrib-spec.md#46-the-calculation-algorithm) algorithm runs deterministically; any merchant or auditor can recompute and verify. This is real attribution-economy infrastructure, and it follows from the substrate rather than being its purpose.
+### Provable cognition
+
+An agent reads its own prior records and reasons from them. Each record is a
+signed claim that re-verifies locally. The agent's continuity of self survives
+platform changes, model changes, and harness changes because the cryptography is
+independent of all of them. This is the dogfood thesis: agents that reason from
+a past they can prove.
+
+### Privacy-preserving evidence
+
+The public log stores commitments, not private work product. A verifier can
+check signatures, hashes, inclusion proofs, and selected evidence without
+forcing tool arguments, tool results, memory text, authorization material, or
+workflow context into a public payload dump. Harnesses choose what stays in
+local mirrors, sidecars, or opt-in archive evidence.
+
+### Independent audit
+
+Any third party can verify what an agent did, in what order, with what causal
+structure. No trust in the agent operator, the platform, or any intermediary is
+required. Compliance-coded products, such as audit trails, SOC 2 evidence, and
+AI governance tooling, approximate this without the substrate. atrib makes it
+native to the action record.
+
+### Cross-agent provenance
+
+Tool calls chain forward through W3C trace context. Agents that hand off work to
+subagents carry session scope, chain tail, and parent dispatch refs together.
+The chain is the trust.
+
+### Verifiable investigations
+
+Support, incident, billing, and RCA agents can sign the investigation trail:
+ticket intake, tenant-scoped log queries, code-path reads, hypotheses,
+diagnostics, revisions, and human handoffs. Observability tools keep the
+operational evidence; atrib proves how the agent used that evidence.
+
+### Settlement when commerce closes a chain
+
+A side effect of the substrate: the same signed record set is what a settlement
+document is computed from. The [§4.6](atrib-spec.md#46-the-calculation-algorithm)
+algorithm runs deterministically; any merchant or auditor can recompute and
+verify. This is real attribution-economy infrastructure, and it follows from the
+substrate rather than being its purpose.
 
 ## Substrate vs harness
 
