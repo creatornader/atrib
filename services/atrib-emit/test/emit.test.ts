@@ -418,6 +418,37 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (D104)', () => {
     expect(submittedInformedBy(submitted)).toEqual([VALID_PARENT, ANOTHER_VALID])
   })
 
+  it('keeps env-parent by default while filtering unresolved caller refs', async () => {
+    process.env['ATRIB_PARENT_RECORD_HASH'] = VALID_PARENT
+    const seed = await freshKey()
+    let submitted: AtribRecord | undefined
+    const queue = {
+      submit: (record: AtribRecord) => {
+        submitted = record
+      },
+      flush: async () => {},
+      getProof: async () => null,
+    } as unknown as ReturnType<typeof createSubmissionQueue>
+
+    const result = await handleEmit({
+      input: {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'parent seed default test' },
+        context_id: 'c'.repeat(32),
+        informed_by: [ANOTHER_VALID],
+      },
+      key: { privateKey: seed, source: 'env' },
+      queue,
+      recordReferenceResolver: async () => 'not-found',
+    })
+
+    expect(result.record_hash).not.toBe('sha256:unknown')
+    expect(result.warnings).toContain(
+      'dropped unresolved informed_by reference sha256:bbbbbbbbbbbb...bbbbbbbb; not found in local mirrors or log lookup',
+    )
+    expect(submittedInformedBy(submitted)).toEqual([VALID_PARENT])
+  })
+
   it('no-op when env is unset', async () => {
     const { result, submitted } = await emitWithEnv(undefined, [ANOTHER_VALID])
     expect(result.record_hash).not.toBe('sha256:unknown')

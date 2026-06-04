@@ -86,6 +86,7 @@ describe('wrap wiring', () => {
     expect(typeof options?.atrib.contextIdResolver).toBe('function')
     expect(typeof options?.atrib.preCallTransform).toBe('function')
     expect(typeof options?.atrib.informedBy).toBe('function')
+    expect(typeof options?.atrib.recordReferenceResolver).toBe('function')
     expect(options?.atrib.disclosure).toEqual({
       post_context: {
         tool_name: true,

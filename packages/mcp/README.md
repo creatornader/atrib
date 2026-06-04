@@ -153,7 +153,27 @@ The archive path is best-effort and non-blocking. It runs after log submission s
 
 ### Parent-child threading
 
-Per [D104](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d104-parent-child-threading-uses-atrib_parent_record_hash), a parent producer that has already signed the spawn record for a child can set `ATRIB_PARENT_RECORD_HASH=<sha256:...>` in the child process env. `atrib()` reads the value at middleware initialization. If the value is valid, the first successful wrapper-signed record adds it to `informed_by`. Failed tool calls do not consume the seed. The seed merges with `informedBy` and `autoDetectInformedByFromArgs`, dedupes, and signs in lexicographic order. Invalid env values are ignored.
+Per [D115](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle), a parent producer that has already signed the spawn record for a child should pass the same-session subagent env bundle:
+
+```typescript
+import { buildSubagentProducerEnv } from '@atrib/mcp'
+
+const childEnv = buildSubagentProducerEnv({
+  contextId: parentContextId,
+  parentRecordHash: parentDispatchRecordHash,
+  baseEnv: process.env,
+})
+```
+
+The helper sets `ATRIB_CONTEXT_ID=<parent-context-id>`, `ATRIB_CHAIN_TAIL_<parent-context-id>=<latest-tail-record-hash>`, and `ATRIB_PARENT_RECORD_HASH=<parent-dispatch-record-hash>` when the inputs are canonical. Pass `chainTailRecordHash` when the latest tail differs from the parent dispatch hash. Shape validation is not existence lookup: pass a parent hash the caller just signed or verified, not a temp proof label or output commitment. `atrib()` reads `ATRIB_PARENT_RECORD_HASH` at middleware initialization. If the value is valid, the first successful wrapper-signed record adds it to `informed_by`. Failed tool calls do not consume the seed. The seed merges with `informedBy` and `autoDetectInformedByFromArgs`, dedupes, and signs in lexicographic order. Invalid values are ignored.
+
+### Source-aware `informed_by` validation
+
+Per [D116](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d116-producer-side-informed_by-validation-is-source-aware), `recordReferenceResolver` can validate refs before they enter a signed record. The resolver sees `recordHash`, `source`, `toolName`, `contextId`, and raw `params`. Refs from `informedBy` callbacks and structured auto-detect are kept only when the resolver returns true. Resolver errors drop the candidate and do not block the tool call.
+
+`ATRIB_PARENT_RECORD_HASH` seeds are different: they are producer-owned spawn anchors and bypass resolver lookup because the parent can sign a dispatch record before the child-visible mirror or public log sees it.
+
+Node hosts can use `defaultRecordReferenceResolver()` to check local mirrors under `ATRIB_AUTOCHAIN_SOURCE`, `ATRIB_MIRROR_FILE`, and `ATRIB_RECORDS_DIR` / `~/.atrib/records`, then fall back to log lookup. `recordHashExistsInMirror()` checks an explicit mirror file, useful when the host configured a custom `recordFile`.
 
 Returns a `SubmissionQueue`-aware wrapper exposing:
 
@@ -166,7 +186,7 @@ In-process surrogate `McpServer` that forwards every tool call to an upstream MC
 
 ### Lower-level primitives
 
-For advanced use cases (custom transports, manual signing, recommendation calculation), the package also exports the cryptographic and serialization primitives directly: `signRecord`, `signTransactionRecord`, `signTransactionAttestation`, `verifyRecord`, `canonicalRecord`, `canonicalCrossAttestationInput`, `computeContentId`, `genesisChainRoot`, `chainRoot`, `encodeToken`, `decodeToken`, `base64urlEncode`, `base64urlDecode`, `sha256`, `hexEncode`, `hexDecode`, plus the W3C trace-context helpers (`readInboundContext`, `writeOutboundContext`, `parseTracestateAtrib`, `parseBaggageAtribSession`, `extractTraceId`, `mergeTracestate`, `mergeBaggageAtribSession`), the record-reference helpers (`SHA256_REF_PATTERN`, `extractRecordHashes`, `extractRecordReferenceCandidates`, `ATRIB_PARENT_RECORD_HASH_ENV`, `parentRecordHashFromEnv`), the harness session-id discovery helpers per [D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) (`resolveEnvContextId`, `KNOWN_HARNESS_DISCOVERIES`), the read-primitive instrumentation helpers per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) (`logReadPrimitiveCall`, `extractRecordHashesFromMcpResult`), the normative content-shape extractors per [D086](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content) (`extractIndexableText`, per-event_type extractors and type defs, see the dedicated section below), and the submission queue itself (`createSubmissionQueue`).
+For advanced use cases (custom transports, manual signing, recommendation calculation), the package also exports the cryptographic and serialization primitives directly: `signRecord`, `signTransactionRecord`, `signTransactionAttestation`, `verifyRecord`, `canonicalRecord`, `canonicalCrossAttestationInput`, `computeContentId`, `genesisChainRoot`, `chainRoot`, `encodeToken`, `decodeToken`, `base64urlEncode`, `base64urlDecode`, `sha256`, `hexEncode`, `hexDecode`, plus the W3C trace-context helpers (`readInboundContext`, `writeOutboundContext`, `parseTracestateAtrib`, `parseBaggageAtribSession`, `extractTraceId`, `mergeTracestate`, `mergeBaggageAtribSession`), the record-reference helpers (`SHA256_REF_PATTERN`, `extractRecordHashes`, `extractRecordReferenceCandidates`, `ATRIB_PARENT_RECORD_HASH_ENV`, `parentRecordHashFromEnv`, `defaultRecordReferenceResolver`, `recordHashExistsInMirror`), the subagent env helpers (`ATRIB_CONTEXT_ID_ENV`, `chainTailEnvName`, `buildSubagentProducerEnv`), the harness session-id discovery helpers per [D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) (`resolveEnvContextId`, `KNOWN_HARNESS_DISCOVERIES`), the read-primitive instrumentation helpers per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) (`logReadPrimitiveCall`, `extractRecordHashesFromMcpResult`), the normative content-shape extractors per [D086](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content) (`extractIndexableText`, per-event_type extractors and type defs, see the dedicated section below), and the submission queue itself (`createSubmissionQueue`).
 
 ### Read-primitive instrumentation ([D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) Surface 6)
 

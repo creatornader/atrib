@@ -5,8 +5,16 @@
 // which the test guard blocks anyway. Integration tests live in
 // integration.test.ts using an inMemory upstream.
 
-import { describe, it, expect } from 'vitest'
-import { buildInformedBy, buildPreCallTransform } from '../src/wrap.js'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, it, expect, vi } from 'vitest'
+import { canonicalRecord, hexEncode, sha256, type AtribRecord } from '@atrib/mcp'
+import {
+  buildInformedBy,
+  buildPreCallTransform,
+  buildRecordReferenceResolver,
+} from '../src/wrap.js'
 import type { WrapConfig } from '../src/config.js'
 
 function makeConfig(tools?: WrapConfig['tools']): WrapConfig {
@@ -23,6 +31,17 @@ function makeConfig(tools?: WrapConfig['tools']): WrapConfig {
 
 const SAMPLE_RECEIPT =
   'OL9GMj6QjKD55xWpOB6AvYIf-2--Ivh3Al6XuorYh3k.haoZK4D1AXmy_r05GJP4CZGOv0zh0iK1l7ls1FA8oZI'
+
+const VALID_RECORD: AtribRecord = {
+  spec_version: 'atrib/1.0',
+  content_id: `sha256:${'d'.repeat(64)}`,
+  creator_key: 'haoZK4D1AXmy_r05GJP4CZGOv0zh0iK1l7ls1FA8oZI',
+  chain_root: `sha256:${'0'.repeat(64)}`,
+  event_type: 'https://atrib.dev/v1/types/tool_call',
+  context_id: 'a'.repeat(32),
+  timestamp: 1000,
+  signature: 'A'.repeat(86),
+}
 
 describe('buildPreCallTransform', () => {
   it('returns undefined when no tools have injectReceiptId set', () => {
@@ -178,5 +197,61 @@ describe('buildInformedBy', () => {
         },
       }),
     ).toBeUndefined()
+  })
+})
+
+describe('buildRecordReferenceResolver', () => {
+  it('accepts refs present in the configured wrapper mirror', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'atrib-wrap-ref-'))
+    const recordFile = join(dir, 'records.jsonl')
+    const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(VALID_RECORD)))}`
+    writeFileSync(recordFile, `${JSON.stringify({ record: VALID_RECORD })}\n`)
+
+    try {
+      const resolver = buildRecordReferenceResolver(makeConfig(), recordFile)
+      await expect(
+        resolver({
+          recordHash,
+          source: 'informedBy-callback',
+          toolName: 'post_context',
+          contextId: VALID_RECORD.context_id,
+          params: { name: 'post_context' },
+        }),
+      ).resolves.toBe(true)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects refs missing from mirror and log lookup', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'atrib-wrap-ref-miss-'))
+    const recordFile = join(dir, 'records.jsonl')
+    const log = vi.fn()
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 404 } as Response)
+
+    try {
+      const resolver = buildRecordReferenceResolver(makeConfig(), recordFile, log)
+      await expect(
+        resolver({
+          recordHash: `sha256:${'f'.repeat(64)}`,
+          source: 'informedBy-callback',
+          toolName: 'post_context',
+          contextId: VALID_RECORD.context_id,
+          params: { name: 'post_context' },
+        }),
+      ).resolves.toBe(false)
+      expect(log).toHaveBeenCalledWith(
+        'warn',
+        'dropped unresolved informed_by candidate',
+        expect.objectContaining({
+          source: 'informedBy-callback',
+          tool_name: 'post_context',
+          resolution: 'not-found',
+        }),
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+      vi.restoreAllMocks()
+    }
   })
 })

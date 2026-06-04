@@ -12,6 +12,7 @@ import {
   hexEncode,
   inheritChainContext,
   readMirrorTail,
+  recordHashExistsInMirror,
   sha256,
   signRecord,
 } from '../src/index.js'
@@ -117,10 +118,7 @@ describe('readMirrorTail', () => {
       context_id: CTX_B,
       content_id: `sha256:${'3'.repeat(64)}`,
     })
-    await writeFile(
-      mirrorPath,
-      [a1, b1, a2, b2].map((r) => JSON.stringify(r)).join('\n') + '\n',
-    )
+    await writeFile(mirrorPath, [a1, b1, a2, b2].map((r) => JSON.stringify(r)).join('\n') + '\n')
 
     const onA = await readMirrorTail({ path: mirrorPath, contextId: CTX_A })
     expect(onA?.content_id).toBe(a2.content_id)
@@ -135,6 +133,41 @@ describe('readMirrorTail', () => {
 
     const result = await readMirrorTail({ path: mirrorPath, contextId: CTX_B })
     expect(result).toBeNull()
+  })
+})
+
+describe('recordHashExistsInMirror', () => {
+  it('finds bare and envelope mirror records by canonical record_hash', async () => {
+    const r1 = await makeRecord({ timestamp: 1, content_id: `sha256:${'1'.repeat(64)}` })
+    const r2 = await makeRecord({ timestamp: 2, content_id: `sha256:${'2'.repeat(64)}` })
+    const h1 = `sha256:${hexEncode(sha256(canonicalRecord(r1)))}`
+    const h2 = `sha256:${hexEncode(sha256(canonicalRecord(r2)))}`
+    await writeFile(mirrorPath, `${JSON.stringify(r1)}\n${JSON.stringify({ record: r2 })}\n`)
+
+    expect(await recordHashExistsInMirror({ path: mirrorPath, recordHash: h1 })).toBe(true)
+    expect(await recordHashExistsInMirror({ path: mirrorPath, recordHash: h2 })).toBe(true)
+  })
+
+  it('returns false for missing, malformed, and wrong-context refs', async () => {
+    const r1 = await makeRecord({ context_id: CTX_A })
+    const h1 = `sha256:${hexEncode(sha256(canonicalRecord(r1)))}`
+    await writeFile(mirrorPath, `not-json\n${JSON.stringify({ record: r1 })}\n`)
+
+    expect(await recordHashExistsInMirror({ path: mirrorPath, recordHash: h1 })).toBe(true)
+    expect(
+      await recordHashExistsInMirror({
+        path: mirrorPath,
+        recordHash: h1,
+        contextId: CTX_B,
+      }),
+    ).toBe(false)
+    expect(
+      await recordHashExistsInMirror({
+        path: mirrorPath,
+        recordHash: `sha256:${'f'.repeat(64)}`,
+      }),
+    ).toBe(false)
+    expect(await recordHashExistsInMirror({ path: mirrorPath, recordHash: 'bad' })).toBe(false)
   })
 })
 
