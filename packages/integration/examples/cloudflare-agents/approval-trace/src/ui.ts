@@ -733,10 +733,10 @@ export function renderApp(): string {
       }
 
       .github-mark {
+        color: #111827;
         display: block;
         flex: 0 0 auto;
         height: 24px;
-        overflow: visible;
         width: 24px;
       }
 
@@ -907,6 +907,10 @@ export function renderApp(): string {
           min-width: 0;
         }
 
+        .header-meta > span:nth-child(3) {
+          margin-left: 0;
+        }
+
         .header-meta .meta-code {
           display: inline-block;
           max-width: 150px;
@@ -959,6 +963,9 @@ export function renderApp(): string {
         background: #fff;
         border-color: var(--line);
         border-radius: 8px;
+        display: flex;
+        gap: 22px;
+        justify-content: flex-start;
         margin-bottom: 8px;
         min-height: 62px;
         padding: 10px 28px;
@@ -989,7 +996,13 @@ export function renderApp(): string {
       }
 
       .header-meta {
+        flex: 1 1 auto;
         gap: 12px;
+        justify-content: flex-start;
+      }
+
+      .header-meta > span:nth-child(3) {
+        margin-left: auto;
       }
 
       .header-meta > span {
@@ -1608,11 +1621,14 @@ export function renderApp(): string {
       }
 
       .risk-details-toggle {
+        align-items: center;
         background: transparent;
         border: 0;
         color: var(--muted);
         cursor: pointer;
+        display: inline-flex;
         font-size: 12px;
+        gap: 4px;
         padding: 0;
         white-space: nowrap;
       }
@@ -2113,29 +2129,6 @@ export function renderApp(): string {
         background: #fff;
       }
 
-      .verify-row .pill {
-        justify-content: center;
-        min-width: 36px;
-      }
-
-      .verify-row:nth-child(1) .pill {
-        background: #edf5ff;
-        border-color: #c7d6e8;
-        color: #0969da;
-      }
-
-      .verify-row:nth-child(2) .pill {
-        background: #fff0dc;
-        border-color: #ffd09a;
-        color: #a44900;
-      }
-
-      .verify-row:nth-child(3) .pill {
-        background: #e9f8ef;
-        border-color: #b9e5cb;
-        color: #078861;
-      }
-
       .receipt-grid {
         display: block;
         margin-top: 10px;
@@ -2308,15 +2301,192 @@ export function renderApp(): string {
 
       .verify-row {
         border-radius: 7px;
-        grid-template-columns: 34px minmax(0, 1fr) auto;
+        grid-template-columns: 34px minmax(0, 1fr) minmax(72px, auto);
         min-height: 44px;
         padding: 7px 9px;
       }
 
+      .verify-row > div {
+        min-width: 0;
+      }
+
+      .verify-icon {
+        align-items: center;
+        border: 1px solid;
+        border-radius: 7px;
+        display: inline-flex;
+        height: 28px;
+        justify-content: center;
+        width: 28px;
+      }
+
+      .verify-icon svg {
+        height: 15px;
+        width: 15px;
+      }
+
+      .verify-icon.log {
+        background: #f3f8ff;
+        border-color: #d4e5fb;
+        color: #0969da;
+      }
+
+      .verify-icon.sig {
+        background: #fff7ed;
+        border-color: #fed7aa;
+        color: #b35a00;
+      }
+
+      .verify-icon.get {
+        background: #eefbf4;
+        border-color: #c7efd6;
+        color: #078861;
+      }
+
       .verify-row .event-action {
+        align-items: center;
+        background: transparent;
+        border: 0;
         color: var(--blue);
+        display: inline-flex;
         font-size: 12px;
         font-weight: 750;
+        gap: 5px;
+        justify-content: flex-end;
+        min-width: 0;
+        padding: 0;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .verify-row .event-action:disabled {
+        color: var(--muted);
+        cursor: not-allowed;
+      }
+
+      .verify-row .event-action svg {
+        height: 13px;
+        width: 13px;
+      }
+
+      .verify-row .event-action.verified {
+        color: var(--green);
+      }
+
+      .verify-row .event-action.failed {
+        color: var(--red);
+      }
+
+      .verification-result {
+        background: #fbfdff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: grid;
+        gap: 7px;
+        margin-top: 10px;
+        padding: 9px 10px;
+      }
+
+      .verification-result.checking {
+        background: #f7fbff;
+        border-color: #cfe0f8;
+      }
+
+      .verification-result.failed {
+        background: #fff7f7;
+        border-color: #ffc9c9;
+      }
+
+      .verification-step {
+        align-items: center;
+        display: grid;
+        font-size: 12px;
+        gap: 7px;
+        grid-template-columns: 16px minmax(0, 1fr);
+      }
+
+      .verification-step strong {
+        font-size: 12px;
+      }
+
+      .verification-step span:last-child {
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .verification-dot {
+        align-items: center;
+        border: 1px solid #c9d5e5;
+        border-radius: 999px;
+        display: inline-flex;
+        height: 14px;
+        justify-content: center;
+        width: 14px;
+      }
+
+      .verification-dot.checking {
+        animation: verifyPulse 900ms ease-in-out infinite;
+        background: var(--blue);
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.12);
+      }
+
+      .verification-dot.ok {
+        background: var(--green);
+        border-color: var(--green);
+        color: #fff;
+      }
+
+      .verification-dot.ok::after {
+        content: "";
+        border: solid currentColor;
+        border-width: 0 1.5px 1.5px 0;
+        height: 6px;
+        transform: rotate(45deg) translate(-1px, -1px);
+        width: 3px;
+      }
+
+      .verification-dot.fail {
+        background: var(--red);
+        border-color: var(--red);
+        color: #fff;
+      }
+
+      .verification-dot.fail::before {
+        content: "";
+        background: currentColor;
+        height: 8px;
+        transform: rotate(45deg);
+        width: 1.5px;
+      }
+
+      .risk-heading {
+        align-items: center;
+        color: var(--ink);
+        display: flex;
+        font-size: 12px;
+        font-weight: 750;
+        justify-content: space-between;
+        margin: 2px 0 -4px;
+      }
+
+      .risk-details-toggle svg {
+        height: 12px;
+        width: 12px;
+      }
+
+      @keyframes verifyPulse {
+        0%,
+        100% {
+          opacity: 0.65;
+          transform: scale(0.86);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1);
+        }
       }
 
       @media (max-width: 1450px) and (min-width: 1101px) {
@@ -2387,8 +2557,19 @@ export function renderApp(): string {
       }
 
       @media (max-width: 720px) {
+        .hero {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 12px;
+        }
+
         .header-meta {
           grid-template-columns: 1fr;
+          width: 100%;
+        }
+
+        .header-meta > span:nth-child(3) {
+          margin-left: 0;
         }
 
         .event {
@@ -2445,8 +2626,8 @@ export function renderApp(): string {
           <div class="trigger-card">
             <span class="section-label">Prior trigger</span>
             <div class="trigger-source">
-              <svg class="github-mark" viewBox="-1 -1 26 26" aria-hidden="true">
-                <path fill="#111827" d="M12 .5A12 12 0 0 0 8.2 21.9c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.4-4-1.4-.6-1.4-1.4-1.8-1.4-1.8-1.1-.8.1-.8.1-.8 1.2.1 1.9 1.3 1.9 1.3 1.1 1.9 2.9 1.3 3.6 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.3-3.3-.1-.3-.6-1.6.1-3.3 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6.2 0C17.6 2 18.6 2.3 18.6 2.3c.7 1.7.2 3 .1 3.3.8.9 1.3 2 1.3 3.3 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5Z"/>
+              <svg class="github-mark" viewBox="0 0 16 16" aria-hidden="true">
+                <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1 8 3.87c.68 0 1.36.09 2 .26 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
               </svg>
               <span>GitHub issue webhook</span>
               <span class="pill">Verified</span>
@@ -2520,9 +2701,9 @@ export function renderApp(): string {
             </div>
             <div class="receipt-section" id="verification">
               <div class="verify-list">
-                <div class="verify-row"><span class="pill">LOG</span><div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><button class="event-action" type="button" disabled>Pending</button></div>
-                <div class="verify-row"><span class="pill">SIG</span><div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" disabled>Pending</button></div>
-                <div class="verify-row"><span class="pill">GET</span><div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><button class="event-action" type="button" disabled>Pending</button></div>
+                <div class="verify-row"><span class="verify-icon log" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5.2 7V5.2a2.8 2.8 0 1 1 5.6 0V7M4 7h8v6.5H4V7Zm4 3v1.4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span><div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><button class="event-action" type="button" disabled>Pending</button></div>
+                <div class="verify-row"><span class="verify-icon sig" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5 8.5 7 10l4-4.5M3.5 2.5h9v11h-9v-11Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span><div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" disabled>Pending</button></div>
+                <div class="verify-row"><span class="verify-icon get" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M8 2.5v6m0 0 2.5-2.5M8 8.5 5.5 6M3 12.5h10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span><div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><button class="event-action" type="button" disabled>Pending</button></div>
               </div>
             </div>
           </div>
@@ -2963,7 +3144,15 @@ export function renderApp(): string {
         const labels = new Set(run.trace_packet.timeline.map((entry) => entry.label));
         const rows = [];
         if (!labels.has('approval') && !labels.has('rejection')) {
-          rows.push({ name: 'human.review.halted', detail: 'Awaiting human decision', marker: 'pending' });
+          const proposal = run.records.find((record) => record.label === 'proposal');
+          rows.push({
+            name: 'human.review.halted',
+            detail: 'Awaiting human decision',
+            marker: 'pending',
+            record: proposal,
+            displayLabel: 'approval',
+            hash: proposal?.record_hash,
+          });
         }
         if (!labels.has('execution')) {
           rows.push({ name: 'mcp.execution.resumed', detail: 'Pending approval', marker: 'future' });
@@ -3114,6 +3303,56 @@ export function renderApp(): string {
         return run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id;
       }
 
+      function verifyIcon(kind) {
+        const icons = {
+          log: '<svg viewBox="0 0 16 16"><path d="M5.2 7V5.2a2.8 2.8 0 1 1 5.6 0V7M4 7h8v6.5H4V7Zm4 3v1.4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg>',
+          sig: '<svg viewBox="0 0 16 16"><path d="M5 8.5 7 10l4-4.5M3.5 2.5h9v11h-9v-11Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg>',
+          get: '<svg viewBox="0 0 16 16"><path d="M8 2.5v6m0 0 2.5-2.5M8 8.5 5.5 6M3 12.5h10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg>',
+        };
+        return '<span class="verify-icon ' + kind + '" aria-hidden="true">' + (icons[kind] ?? icons.log) + '</span>';
+      }
+
+      function actionGlyph(kind = 'external') {
+        if (kind === 'download') return '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v6m0 0 2.5-2.5M8 8.5 5.5 6M3 12.5h10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"/></svg>';
+        if (kind === 'check') return '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"/></svg>';
+        return '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 3.5h6v6M12.5 3.5 6 10M4 5v8h8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg>';
+      }
+
+      function verificationRowsMarkup(run = currentRun, record = selectedReceiptRecord) {
+        if (!run || !record) {
+          return '<div class="verify-list">'
+            + '<div class="verify-row">' + verifyIcon('log') + '<div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><button class="event-action" type="button" disabled>Pending</button></div>'
+            + '<div class="verify-row">' + verifyIcon('sig') + '<div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" disabled>Pending</button></div>'
+            + '<div class="verify-row">' + verifyIcon('get') + '<div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><button class="event-action" type="button" disabled>Pending</button></div>'
+            + '</div>';
+        }
+        const proofUrl = proofTargetForRun(run);
+        return '<div class="verify-list">'
+          + '<div class="verify-row">' + verifyIcon('log') + '<div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><a class="event-action" href="' + escapeHtml(proofUrl) + '" target="_blank" rel="noreferrer">View proof ' + actionGlyph('external') + '</a></div>'
+          + '<div class="verify-row">' + verifyIcon('sig') + '<div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" data-verify-receipt>Verify ' + actionGlyph('external') + '</button></div>'
+          + '<div class="verify-row">' + verifyIcon('get') + '<div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><button class="event-action" type="button" data-download-receipt>Download ' + actionGlyph('download') + '</button></div>'
+          + '</div>';
+      }
+
+      function verificationCheckingMarkup(record = selectedReceiptRecord) {
+        return '<div class="verification-result checking" id="verificationResult" role="status">'
+          + '<div class="verification-step"><span class="verification-dot checking"></span><div><strong>Verifying receipt</strong><span>Checking ' + escapeHtml(shortHash(record?.record_hash)) + '</span></div></div>'
+          + '<div class="verification-step"><span class="verification-dot"></span><div><strong>Record hash</strong><span>Waiting for Worker verifier</span></div></div>'
+          + '<div class="verification-step"><span class="verification-dot"></span><div><strong>Signature</strong><span>Waiting for Ed25519 check</span></div></div>'
+          + '</div>';
+      }
+
+      function verificationResultMarkup(result, record = selectedReceiptRecord) {
+        const ok = Boolean(result?.ok);
+        const hashOk = Boolean(result?.hash_ok);
+        const signatureOk = Boolean(result?.signature_ok);
+        return '<div class="verification-result ' + (ok ? '' : 'failed') + '" id="verificationResult" role="status">'
+          + '<div class="verification-step"><span class="verification-dot ' + (hashOk ? 'ok' : 'fail') + '"></span><div><strong>Record hash ' + (hashOk ? 'matches' : 'mismatch') + '</strong><span>' + escapeHtml(shortHash(result?.record_hash ?? record?.record_hash)) + '</span></div></div>'
+          + '<div class="verification-step"><span class="verification-dot ' + (signatureOk ? 'ok' : 'fail') + '"></span><div><strong>Signature ' + (signatureOk ? 'valid' : 'failed') + '</strong><span>Creator key ' + escapeHtml(shortHash(result?.creator_key ?? record?.record?.creator_key)) + '</span></div></div>'
+          + '<div class="verification-step"><span class="verification-dot ' + (ok ? 'ok' : 'fail') + '"></span><div><strong>' + (ok ? 'Receipt verified' : 'Verification failed') + '</strong><span>Checked by the Cloudflare Worker verifier just now</span></div></div>'
+          + '</div>';
+      }
+
       function updateTraceHeaderCopy() {
         const button = document.querySelector('[data-copy-source="#traceIdLabel"]');
         if (!button) return;
@@ -3121,24 +3360,47 @@ export function renderApp(): string {
       }
 
       function renderVerificationActions(run = currentRun, record = selectedReceiptRecord) {
-        if (!run || !record) {
-          verificationEl.innerHTML = \`
-            <div class="verify-list">
-              <div class="verify-row"><span class="pill">LOG</span><div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><button class="event-action" type="button" disabled>Pending</button></div>
-              <div class="verify-row"><span class="pill">SIG</span><div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" disabled>Pending</button></div>
-              <div class="verify-row"><span class="pill">GET</span><div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><button class="event-action" type="button" disabled>Pending</button></div>
-            </div>
-          \`;
-          return;
+        verificationEl.innerHTML = verificationRowsMarkup(run, record);
+      }
+
+      async function verifySelectedReceipt(button) {
+        const record = selectedReceiptRecord;
+        if (!record) return;
+        button.disabled = true;
+        button.innerHTML = 'Verifying...';
+        button.classList.remove('verified', 'failed');
+        const existingResult = verificationEl.querySelector('#verificationResult');
+        if (existingResult) existingResult.remove();
+        verificationEl.insertAdjacentHTML('beforeend', verificationCheckingMarkup(record));
+        try {
+          await sleep(250);
+          const result = await post('/api/verify-record', {
+            record: record.record,
+            expected_hash: record.record_hash,
+          });
+          const ok = Boolean(result?.ok);
+          const resultEl = verificationEl.querySelector('#verificationResult');
+          if (resultEl) resultEl.outerHTML = verificationResultMarkup(result, record);
+          button.innerHTML = (ok ? 'Verified ' : 'Check failed ') + actionGlyph(ok ? 'check' : 'external');
+          button.classList.toggle('verified', ok);
+          button.classList.toggle('failed', !ok);
+        } catch (error) {
+          const resultEl = verificationEl.querySelector('#verificationResult');
+          const failed = {
+            ok: false,
+            hash_ok: false,
+            signature_ok: false,
+            record_hash: record.record_hash,
+            creator_key: record.record?.creator_key,
+          };
+          if (resultEl) resultEl.outerHTML = verificationResultMarkup(failed, record);
+          const failedText = escapeHtml(String(error?.message ?? error));
+          verificationEl.insertAdjacentHTML('beforeend', '<p class="empty">' + failedText + '</p>');
+          button.innerHTML = 'Check failed ' + actionGlyph('external');
+          button.classList.add('failed');
+        } finally {
+          button.disabled = false;
         }
-        const proofUrl = proofTargetForRun(run);
-        verificationEl.innerHTML = \`
-          <div class="verify-list">
-            <div class="verify-row"><span class="pill">LOG</span><div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><a class="event-action" href="\${proofUrl}" target="_blank" rel="noreferrer">View proof</a></div>
-            <div class="verify-row"><span class="pill">SIG</span><div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" data-verify-receipt>Verify</button></div>
-            <div class="verify-row"><span class="pill">GET</span><div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><button class="event-action" type="button" data-download-receipt>Download</button></div>
-          </div>
-        \`;
       }
 
       function updateReceiptControls(record = selectedReceiptRecord) {
@@ -3236,11 +3498,12 @@ export function renderApp(): string {
               <div class="diff-code">\${renderDiff(diff)}</div>
             </div>
           </div>
+          <div class="risk-heading">Risk assessment</div>
           <div class="risk-bar">
             <span class="risk-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 15 14H1L8 1.5Zm0 4v4m0 2.5h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg></span>
             <span class="risk-level">Medium</span>
             <span class="value">\${body.risk ?? 'requires_human_approval'}</span>
-            <button class="risk-details-toggle" id="riskDetailsToggle" type="button" aria-expanded="false" aria-controls="riskDetails">Details</button>
+            <button class="risk-details-toggle" id="riskDetailsToggle" type="button" aria-expanded="false" aria-controls="riskDetails">Details <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg></button>
           </div>
           <div class="risk-details" id="riskDetails" hidden>
             <strong>Human review gate</strong>
@@ -3399,13 +3662,13 @@ export function renderApp(): string {
             }).join('')}
             \${futureTraceRows(run).map((row) => \`
               <div class="event-future \${row.marker === 'pending' ? 'selected' : ''}">
-                <span class="event-time">-</span>
+                <span class="event-time">\${row.record ? displayRecordTime(row.record, row.displayLabel) : '-'}</span>
                 <span class="event-marker \${row.marker}"></span>
                 <span class="event-copy">
                   <strong>\${row.name}</strong>
                   <span class="value">\${row.detail}</span>
                 </span>
-                <span class="event-hash hash">-</span>
+                <span class="event-hash hash">\${row.hash ? recordDisplayId(row.hash) : '-'}</span>
               </div>
             \`).join('')}
           </div>
@@ -3553,11 +3816,7 @@ export function renderApp(): string {
 
         const verifyButton = target.closest?.('[data-verify-receipt]');
         if (verifyButton && !verifyButton.disabled && selectedReceiptRecord) {
-          const isVerifiable = selectedReceiptRecord.record_hash?.startsWith('sha256:')
-            && selectedReceiptRecord.record?.signature
-            && selectedReceiptRecord.record?.creator_key;
-          verifyButton.textContent = isVerifiable ? 'Verified' : 'Check failed';
-          verifyButton.classList.toggle('verified', Boolean(isVerifiable));
+          await verifySelectedReceipt(verifyButton);
           return;
         }
 

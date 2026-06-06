@@ -87,6 +87,9 @@ test.describe('Cloudflare approval trace browser UI', () => {
         /log\.atrib\.dev|\/api\/runs\//,
       )
       await page.locator('#verification').getByRole('button', { name: 'Verify' }).click()
+      await expect(page.locator('#verificationResult')).toContainText('Record hash matches')
+      await expect(page.locator('#verificationResult')).toContainText('Signature valid')
+      await expect(page.locator('#verificationResult')).toContainText('Receipt verified')
       await expect(page.locator('#verification').getByRole('button', { name: 'Verified' })).toBeVisible()
       const pendingDownload = page.waitForEvent('download')
       await page.getByRole('button', { name: 'Download receipt' }).click()
