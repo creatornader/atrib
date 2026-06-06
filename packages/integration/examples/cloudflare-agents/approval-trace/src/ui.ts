@@ -529,6 +529,36 @@ export function renderApp(): string {
         font-weight: 750;
       }
 
+      button.event-action,
+      a.event-action {
+        align-items: center;
+        background: transparent;
+        border: 0;
+        color: var(--blue);
+        display: inline-flex;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 750;
+        justify-content: flex-end;
+        padding: 0;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      button.event-action:not(:disabled),
+      a.event-action {
+        cursor: pointer;
+      }
+
+      button.event-action:disabled {
+        color: var(--muted);
+        cursor: not-allowed;
+      }
+
+      .event-action.verified {
+        color: var(--green);
+      }
+
       .empty {
         color: var(--muted);
         font-size: 14px;
@@ -700,6 +730,14 @@ export function renderApp(): string {
         display: flex;
         gap: 10px;
         font-weight: 800;
+      }
+
+      .github-mark {
+        display: block;
+        flex: 0 0 auto;
+        height: 24px;
+        overflow: visible;
+        width: 24px;
       }
 
       .trigger-details {
@@ -1163,6 +1201,22 @@ export function renderApp(): string {
         vertical-align: 1px;
       }
 
+      .step-copy strong [data-step-title] {
+        display: inline;
+      }
+
+      .step-badge.approved {
+        background: #e9f8ef;
+        border-color: #b9e5cb;
+        color: #047857;
+      }
+
+      .step-badge.rejected {
+        background: #fff1f2;
+        border-color: #fecdd3;
+        color: #be123c;
+      }
+
       .grid {
         gap: 10px;
         align-items: start;
@@ -1553,6 +1607,40 @@ export function renderApp(): string {
         white-space: nowrap;
       }
 
+      .risk-details-toggle {
+        background: transparent;
+        border: 0;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 12px;
+        padding: 0;
+        white-space: nowrap;
+      }
+
+      .risk-details-toggle:hover,
+      .risk-details-toggle:focus-visible {
+        color: var(--blue);
+        outline: 0;
+        text-decoration: underline;
+      }
+
+      .risk-details {
+        background: #fffaf3;
+        border: 1px solid #ffd09a;
+        border-radius: 8px;
+        color: var(--ink);
+        display: grid;
+        font-size: 12px;
+        gap: 5px;
+        line-height: 1.35;
+        margin-top: -2px;
+        padding: 8px 10px;
+      }
+
+      .risk-details[hidden] {
+        display: none;
+      }
+
       .primary,
       .secondary,
       .danger {
@@ -1594,21 +1682,21 @@ export function renderApp(): string {
 
       .button-label {
         display: block;
-        font-size: 13px;
+        font-size: 12.5px;
         font-weight: 850;
         line-height: 1.12;
         white-space: nowrap;
       }
 
       .primary .button-label {
-        font-size: 13px;
+        font-size: 12.5px;
       }
 
       .primary .action-copy small {
         font-size: 8px;
         letter-spacing: 0;
-        overflow: visible;
-        text-overflow: clip;
+        overflow: hidden;
+        text-overflow: ellipsis;
         white-space: nowrap;
       }
 
@@ -1970,11 +2058,27 @@ export function renderApp(): string {
 
       .copy-icon {
         align-self: center;
+        background: transparent;
+        border: 0;
         color: var(--muted);
         display: inline-flex;
         height: 14px;
         justify-self: end;
+        padding: 0;
         width: 14px;
+      }
+
+      button.copy-icon {
+        cursor: pointer;
+      }
+
+      button.copy-icon:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+
+      .copy-icon[data-copy-state="copied"] {
+        color: var(--green);
       }
 
       .copy-icon svg {
@@ -2086,6 +2190,28 @@ export function renderApp(): string {
         padding: 0 9px;
       }
 
+      .icon-button:disabled {
+        color: var(--muted);
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+
+      .icon-button:not(:disabled) {
+        cursor: pointer;
+      }
+
+      .icon-button:not(:disabled):hover,
+      .icon-button:not(:disabled):focus-visible {
+        border-color: #b9c6d6;
+        box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.08);
+        outline: 0;
+      }
+
+      .icon-button[data-copy-state="copied"] {
+        border-color: #b9e5cb;
+        color: var(--green);
+      }
+
       .icon-button.square {
         width: 28px;
         padding: 0;
@@ -2125,7 +2251,9 @@ export function renderApp(): string {
 
       .receipt-tab {
         background: transparent;
+        border: 0;
         color: var(--ink);
+        cursor: pointer;
         font-size: 12px;
         font-weight: 700;
         min-height: 34px;
@@ -2141,6 +2269,21 @@ export function renderApp(): string {
         left: 0;
         position: absolute;
         right: 0;
+      }
+
+      .record-details-grid {
+        display: grid;
+        gap: 8px;
+      }
+
+      .record-details-grid .summary-row {
+        grid-template-columns: 118px minmax(0, 1fr) auto;
+      }
+
+      .record-details-grid .summary-row .value {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .receipt-summary-grid,
@@ -2290,7 +2433,7 @@ export function renderApp(): string {
         <div class="rail-stepper" id="workflowSteps">
           <span class="step active" data-step="trigger"><span class="step-index">1</span><span class="step-copy"><strong>Trigger</strong><span data-step-time="trigger">Pending</span></span></span>
           <span class="step" data-step="autonomous"><span class="step-index">2</span><span class="step-copy"><strong>Autonomous triage</strong><span data-step-time="autonomous">Pending</span></span></span>
-          <span class="step" data-step="halt"><span class="step-index">3</span><span class="step-copy"><strong>Human review halted <span class="step-badge">Awaiting review</span></strong><span data-step-time="halt">Pending</span></span></span>
+          <span class="step" data-step="halt"><span class="step-index">3</span><span class="step-copy"><strong><span data-step-title="halt">Human review halted</span> <span class="step-badge" data-step-badge="halt">Awaiting review</span></strong><span data-step-time="halt">Pending</span></span></span>
           <span class="step" data-step="resume"><span class="step-index">4</span><span class="step-copy"><strong>MCP execution resumed</strong><span data-step-time="resume">Pending</span></span></span>
           <span class="step" data-step="audit"><span class="step-index">5</span><span class="step-copy"><strong>Audit ready</strong><span data-step-time="audit">Pending</span></span></span>
         </div>
@@ -2302,7 +2445,7 @@ export function renderApp(): string {
           <div class="trigger-card">
             <span class="section-label">Prior trigger</span>
             <div class="trigger-source">
-              <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+              <svg class="github-mark" viewBox="-1 -1 26 26" aria-hidden="true">
                 <path fill="#111827" d="M12 .5A12 12 0 0 0 8.2 21.9c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.4-4-1.4-.6-1.4-1.4-1.8-1.4-1.8-1.1-.8.1-.8.1-.8 1.2.1 1.9 1.3 1.9 1.3 1.1 1.9 2.9 1.3 3.6 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.3-3.3-.1-.3-.6-1.6.1-3.3 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6.2 0C17.6 2 18.6 2.3 18.6 2.3c.7 1.7.2 3 .1 3.3.8.9 1.3 2 1.3 3.3 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5Z"/>
               </svg>
               <span>GitHub issue webhook</span>
@@ -2345,7 +2488,7 @@ export function renderApp(): string {
         </div>
 
         <div class="panel">
-          <h2>Signed trace <span class="heading-pill green">Verifiable</span><span class="trace-header-meta">Trace ID <span class="meta-code trace-id" id="traceIdLabel">pending</span><span class="copy-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></span></span></h2>
+          <h2>Signed trace <span class="heading-pill green">Verifiable</span><span class="trace-header-meta">Trace ID <span class="meta-code trace-id" id="traceIdLabel">pending</span><button class="copy-icon" type="button" aria-label="Copy trace ID" data-copy-source="#traceIdLabel" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></button></span></h2>
           <div id="timeline" class="timeline">
             <p class="empty">Signed records will appear here as the workflow runs.</p>
           </div>
@@ -2359,10 +2502,10 @@ export function renderApp(): string {
             <div class="receipt-controls">
               <span class="label">Format</span>
               <span class="meta-code">JSON (pretty)</span>
-              <button class="icon-button square" type="button" aria-label="Copy receipt">
+              <button class="icon-button square" id="copyReceipt" type="button" aria-label="Copy receipt" disabled>
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg>
               </button>
-              <button class="icon-button" type="button" aria-label="Download receipt">
+              <button class="icon-button" id="downloadReceipt" type="button" aria-label="Download receipt" disabled>
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v7m0 0 3-3m-3 3L5 6M3 12.5h10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"/></svg>
                 Download receipt
               </button>
@@ -2377,9 +2520,9 @@ export function renderApp(): string {
             </div>
             <div class="receipt-section" id="verification">
               <div class="verify-list">
-                <div class="verify-row"><span class="pill">LOG</span><div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><span class="event-action" data-ready-label="View proof">Pending</span></div>
-                <div class="verify-row"><span class="pill">SIG</span><div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><span class="event-action" data-ready-label="Verify">Pending</span></div>
-                <div class="verify-row"><span class="pill">GET</span><div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><span class="event-action" data-ready-label="Download">Pending</span></div>
+                <div class="verify-row"><span class="pill">LOG</span><div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><button class="event-action" type="button" disabled>Pending</button></div>
+                <div class="verify-row"><span class="pill">SIG</span><div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" disabled>Pending</button></div>
+                <div class="verify-row"><span class="pill">GET</span><div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><button class="event-action" type="button" disabled>Pending</button></div>
               </div>
             </div>
           </div>
@@ -2394,6 +2537,7 @@ export function renderApp(): string {
       let autoStarted = false;
       let autoFollow = true;
       let stageDisplayTimes = {};
+      let selectedReceiptRecord = null;
 
       const statusDot = document.querySelector('#statusDot');
       const statusTitle = document.querySelector('#statusTitle');
@@ -2414,6 +2558,8 @@ export function renderApp(): string {
       const verificationEl = document.querySelector('#verification');
       const reviewStatePill = document.querySelector('#reviewStatePill');
       const traceIdLabel = document.querySelector('#traceIdLabel');
+      const copyReceiptButton = document.querySelector('#copyReceipt');
+      const downloadReceiptButton = document.querySelector('#downloadReceipt');
 
       const bootStages = [
         {
@@ -2448,6 +2594,26 @@ export function renderApp(): string {
         },
       ];
 
+      const bootDisplayOffsets = {
+        trigger: 0,
+        context: 1200,
+        policy: 2600,
+        proposal: 4800,
+        halt: 6200,
+      };
+
+      const recordDisplayOffsets = {
+        trigger: 0,
+        triage: 1200,
+        proposal: 4800,
+        approval: 6200,
+        rejection: 6200,
+        preview: 7400,
+        execution: 8600,
+        outcome: 9800,
+        handoff: 11200,
+      };
+
       function renderSteps(step, kind = 'pending') {
         currentStep = step;
         const order = ['trigger', 'autonomous', 'halt', 'resume', 'audit'];
@@ -2460,27 +2626,61 @@ export function renderApp(): string {
             item.classList.add(step === 'halt' ? 'halted' : kind === 'error' ? 'error' : 'active');
           }
         });
+        updateHaltStepState();
         updateStepTimes();
       }
 
       function updateStepTimes(run = currentRun) {
-        const triggerTime = stageDisplayTimes.trigger ?? (run ? formatRecordTime(run.records.find((record) => record.label === 'trigger')) + ' UTC' : 'Pending');
-        const triageTime = stageDisplayTimes.context ?? (run ? formatRecordTime(run.records.find((record) => record.label === 'triage')) + ' UTC' : 'Pending');
-        const proposalTime = stageDisplayTimes.proposal ?? (run ? formatRecordTime(run.records.find((record) => record.label === 'proposal')) + ' UTC' : 'Pending');
-        const haltTime = stageDisplayTimes.halt ?? proposalTime;
+        const trigger = run?.records.find((record) => record.label === 'trigger');
+        const triage = run?.records.find((record) => record.label === 'triage');
+        const proposal = run?.records.find((record) => record.label === 'proposal');
+        const decision = run?.records.find((record) => record.label === 'approval' || record.label === 'rejection');
+        const triggerTime = stageDisplayTimes.trigger ?? (trigger ? displayRecordTime(trigger, 'trigger') + ' UTC' : 'Pending');
+        const triageTime = stageDisplayTimes.context ?? (triage ? displayRecordTime(triage, 'triage') + ' UTC' : 'Pending');
+        const proposalTime = stageDisplayTimes.proposal ?? (proposal ? displayRecordTime(proposal, 'proposal') + ' UTC' : 'Pending');
+        const haltRecord = decision ?? proposal;
+        const haltLabel = decision?.label ?? 'approval';
+        const haltTime = stageDisplayTimes.halt ?? (haltRecord ? displayRecordTime(haltRecord, haltLabel) + ' UTC' : proposalTime);
         const execution = run?.records.find((record) => record.label === 'execution');
         const handoff = run?.records.find((record) => record.label === 'handoff');
         const stepTimes = {
           trigger: triggerTime,
           autonomous: triageTime,
           halt: haltTime,
-          resume: execution ? formatRecordTime(execution) + ' UTC' : 'Pending',
-          audit: handoff ? formatRecordTime(handoff) + ' UTC' : 'Pending',
+          resume: execution ? displayRecordTime(execution, 'execution') + ' UTC' : 'Pending',
+          audit: handoff ? displayRecordTime(handoff, 'handoff') + ' UTC' : 'Pending',
         };
         Object.entries(stepTimes).forEach(([key, value]) => {
           const target = workflowSteps.querySelector('[data-step-time="' + key + '"]');
           if (target) target.textContent = value;
         });
+      }
+
+      function updateHaltStepState(run = currentRun) {
+        const title = workflowSteps.querySelector('[data-step-title="halt"]');
+        const badge = workflowSteps.querySelector('[data-step-badge="halt"]');
+        if (!title || !badge) return;
+        badge.classList.remove('approved', 'rejected');
+        if (!run || run.status === 'pending_approval') {
+          title.textContent = 'Human review halted';
+          badge.textContent = 'Awaiting review';
+          return;
+        }
+        if (run.status === 'rejected') {
+          title.textContent = 'Human review rejected';
+          badge.textContent = 'Rejected';
+          badge.classList.add('rejected');
+          return;
+        }
+        if (run.status === 'approved' || run.status === 'executing') {
+          title.textContent = 'Human review approved';
+          badge.textContent = 'Resuming';
+          badge.classList.add('approved');
+          return;
+        }
+        title.textContent = 'Human review approved';
+        badge.textContent = 'Approved';
+        badge.classList.add('approved');
       }
 
       function setStatus(title, kind = 'pending', detail = '', step = currentStep) {
@@ -2524,6 +2724,11 @@ export function renderApp(): string {
         return new Date(Date.now() + offsetMs).toISOString().slice(11, 19) + ' UTC';
       }
 
+      function displayRecordTime(record, label = record?.label, fallbackIndex = 0) {
+        const offset = recordDisplayOffsets[label] ?? fallbackIndex * 1000;
+        return formatRecordTime(record, offset);
+      }
+
       function progressKeyForTitle(title) {
         if (title === 'Trigger received') return 'trigger';
         if (title === 'Context gathered') return 'context';
@@ -2539,7 +2744,8 @@ export function renderApp(): string {
         const key = progressKeyForTitle(title);
         if (key && stageDisplayTimes[key]) return stageDisplayTimes[key];
         if (!active) return '-';
-        return formatRecordTime(progressRecordFor(run, title)) + ' UTC';
+        const record = progressRecordFor(run, title);
+        return displayRecordTime(record, record?.label ?? key) + ' UTC';
       }
 
       function formatRecordTime(record, offsetMs = 0) {
@@ -2629,15 +2835,15 @@ export function renderApp(): string {
                 <strong>\${signer.name}</strong>
                 <span class="empty">\${signer.detail}</span>
                 <span class="pill signer-status \${signer.className}">\${signer.status}</span>
-                <span class="signature-slot">Sig: <span class="hash">\${signer.sig}</span></span>\${copyIcon()}
+                <span class="signature-slot">Sig: <span class="hash">\${signer.sig}</span></span>\${copyIcon('', signer.name + ' signature')}
               </div>
             \`).join('')}
           </div>
           <div class="trace-integrity">
             <span class="trace-section-label">Trace integrity</span>
             <div class="integrity-list">
-              <div class="integrity-row"><strong>Merkle root</strong><span class="hash">pending</span>\${copyIcon()}</div>
-              <div class="integrity-row"><strong>Log hash</strong><span class="hash">pending</span>\${copyIcon()}</div>
+              <div class="integrity-row"><strong>Merkle root</strong><span class="hash">pending</span>\${copyIcon('', 'Merkle root')}</div>
+              <div class="integrity-row"><strong>Log hash</strong><span class="hash">pending</span>\${copyIcon('', 'log hash')}</div>
               <div class="integrity-row"><strong>Proof status</strong><span class="value">Waiting for first signed record</span><span></span></div>
             </div>
           </div>
@@ -2649,7 +2855,7 @@ export function renderApp(): string {
           const done = index < activeIndex;
           const active = index === activeIndex;
           const halted = stage.key === 'halt' && active;
-          if ((done || active) && !stageDisplayTimes[stage.key]) stageDisplayTimes[stage.key] = nowTime(0);
+          if ((done || active) && !stageDisplayTimes[stage.key]) stageDisplayTimes[stage.key] = nowTime(bootDisplayOffsets[stage.key] ?? index * 1000);
           return \`
             <div class="progress-item \${halted ? 'halted' : ''} \${stage.key === 'proposal' ? 'proposal' : ''}">
               <span class="dot \${done ? 'ok' : active ? 'pending' : 'future'}"></span>
@@ -2785,6 +2991,10 @@ export function renderApp(): string {
         return hash.slice(0, 10) + '...' + hash.slice(-4);
       }
 
+      function signerRecordHash(run, signer) {
+        return run.records.find((item) => item.signer === signer)?.record_hash ?? '';
+      }
+
       function signerStatusClass(signer) {
         const status = signer.status.toLowerCase();
         return status + (signer.kind === 'mcp' ? ' mcp' : '');
@@ -2794,8 +3004,10 @@ export function renderApp(): string {
         return run.trace_packet.trace_id ?? 'trc_' + run.run_id.replaceAll('-', '').toUpperCase().slice(0, 18);
       }
 
-      function copyIcon() {
-        return '<span class="copy-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></span>';
+      function copyIcon(value = '', label = 'value') {
+        const normalized = String(value ?? '');
+        const disabled = !normalized || normalized === '-' || normalized === 'pending';
+        return '<button class="copy-icon" type="button" aria-label="Copy ' + escapeHtml(label) + '" data-copy-value="' + escapeHtml(normalized) + '" ' + (disabled ? 'disabled' : '') + '><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></button>';
       }
 
       function renderDiff(diff) {
@@ -2840,6 +3052,107 @@ export function renderApp(): string {
 
       function pretty(value) {
         return JSON.stringify(value, null, 2);
+      }
+
+      async function writeClipboard(text) {
+        const value = String(text ?? '');
+        if (!value) return false;
+        try {
+          await navigator.clipboard.writeText(value);
+          return true;
+        } catch {
+          const textarea = document.createElement('textarea');
+          textarea.value = value;
+          textarea.setAttribute('readonly', '');
+          textarea.style.position = 'fixed';
+          textarea.style.left = '-9999px';
+          document.body.appendChild(textarea);
+          textarea.select();
+          const copied = document.execCommand('copy');
+          textarea.remove();
+          return copied;
+        }
+      }
+
+      function markCopied(button) {
+        button.dataset.copyState = 'copied';
+        window.setTimeout(() => {
+          delete button.dataset.copyState;
+        }, 1200);
+      }
+
+      function downloadJson(filename, value) {
+        const blob = new Blob([pretty(value)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function receiptFileName(record = selectedReceiptRecord) {
+        const label = record?.label ?? 'record';
+        const hash = String(record?.record_hash ?? 'pending').replace('sha256:', '').slice(0, 12);
+        return 'cloudflare-trace-' + label + '-' + hash + '.json';
+      }
+
+      function selectedReceiptPayload(record = selectedReceiptRecord) {
+        if (!record || !currentRun) return null;
+        return {
+          trace_id: traceIdForRun(currentRun),
+          run_id: currentRun.run_id,
+          status: currentRun.status,
+          selected_record: record,
+        };
+      }
+
+      function proofTargetForRun(run = currentRun) {
+        if (!run) return '';
+        return run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id;
+      }
+
+      function updateTraceHeaderCopy() {
+        const button = document.querySelector('[data-copy-source="#traceIdLabel"]');
+        if (!button) return;
+        button.disabled = !traceIdLabel.textContent || traceIdLabel.textContent === 'pending';
+      }
+
+      function renderVerificationActions(run = currentRun, record = selectedReceiptRecord) {
+        if (!run || !record) {
+          verificationEl.innerHTML = \`
+            <div class="verify-list">
+              <div class="verify-row"><span class="pill">LOG</span><div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><button class="event-action" type="button" disabled>Pending</button></div>
+              <div class="verify-row"><span class="pill">SIG</span><div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" disabled>Pending</button></div>
+              <div class="verify-row"><span class="pill">GET</span><div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><button class="event-action" type="button" disabled>Pending</button></div>
+            </div>
+          \`;
+          return;
+        }
+        const proofUrl = proofTargetForRun(run);
+        verificationEl.innerHTML = \`
+          <div class="verify-list">
+            <div class="verify-row"><span class="pill">LOG</span><div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><a class="event-action" href="\${proofUrl}" target="_blank" rel="noreferrer">View proof</a></div>
+            <div class="verify-row"><span class="pill">SIG</span><div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" data-verify-receipt>Verify</button></div>
+            <div class="verify-row"><span class="pill">GET</span><div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><button class="event-action" type="button" data-download-receipt>Download</button></div>
+          </div>
+        \`;
+      }
+
+      function updateReceiptControls(record = selectedReceiptRecord) {
+        const hasRecord = Boolean(record);
+        if (copyReceiptButton) copyReceiptButton.disabled = !hasRecord;
+        if (downloadReceiptButton) downloadReceiptButton.disabled = !hasRecord;
+      }
+
+      function clearReceiptInspector() {
+        selectedReceiptRecord = null;
+        receiptsEl.innerHTML = '<p class="empty">View signed record and proof after the first trace record is selected.</p>';
+        receiptSummaryEl.innerHTML = '<p class="empty">Summary appears after a signed record is selected.</p>';
+        renderVerificationActions(null, null);
+        updateReceiptControls(null);
       }
 
       function runStateCopy(run) {
@@ -2927,7 +3240,12 @@ export function renderApp(): string {
             <span class="risk-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 15 14H1L8 1.5Zm0 4v4m0 2.5h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg></span>
             <span class="risk-level">Medium</span>
             <span class="value">\${body.risk ?? 'requires_human_approval'}</span>
-            <span class="diff-tools">Details</span>
+            <button class="risk-details-toggle" id="riskDetailsToggle" type="button" aria-expanded="false" aria-controls="riskDetails">Details</button>
+          </div>
+          <div class="risk-details" id="riskDetails" hidden>
+            <strong>Human review gate</strong>
+            <span>This proposal changes repository code for a production Workers route. The agent must halt before the action MCP writes the file.</span>
+            <span>Approval signs the exact payload hash, connector id, and target file before execution resumes.</span>
           </div>
           <div class="actions">
             <button class="primary" id="approve" aria-label="Approve and resume" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span><span class="action-copy"><span class="button-label">Approve and resume</span><small>Allow MCP execution to continue</small></span></button>
@@ -2935,6 +3253,14 @@ export function renderApp(): string {
             <button class="secondary" id="requestChanges" aria-label="Request changes" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v6H7l-3 3V4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="action-copy"><span class="button-label">Request changes</span><small>Send feedback to agent</small></span></button>
           </div>
         \`;
+        document.querySelector('#riskDetailsToggle')?.addEventListener('click', (event) => {
+          const button = event.currentTarget;
+          const details = document.querySelector('#riskDetails');
+          if (!details) return;
+          const expanded = button.getAttribute('aria-expanded') === 'true';
+          button.setAttribute('aria-expanded', String(!expanded));
+          details.hidden = expanded;
+        });
         document.querySelector('#approve')?.addEventListener('click', async () => {
           await transition({
             title: 'Agent resumed',
@@ -3061,7 +3387,7 @@ export function renderApp(): string {
               const isPendingHuman = false;
               return \`
                 <button class="event" data-hash="\${entry.record_hash}" data-label="\${entry.label}">
-                  <span class="event-time">\${formatRecordTime(record, index * 1000)}</span>
+                  <span class="event-time">\${displayRecordTime(record, entry.label, index)}</span>
                   <span class="event-marker \${isPendingHuman ? 'pending' : 'done'}"></span>
                   <span class="event-copy">
                     <strong>\${timelineLabel(entry, run)}</strong>
@@ -3091,46 +3417,73 @@ export function renderApp(): string {
                 <strong>\${signer.name}</strong>
                 <span class="empty">\${signer.detail}</span>
                 <span class="pill signer-status \${signerStatusClass(signer)}">\${signer.status}</span>
-                <span class="signature-slot">Sig: <span class="hash">\${signerSignature(run, signer.signer)}</span></span>\${copyIcon()}
+                <span class="signature-slot">Sig: <span class="hash">\${signerSignature(run, signer.signer)}</span></span>\${copyIcon(signerRecordHash(run, signer.signer), signer.name + ' signature')}
               </div>
             \`).join('')}
           </div>
           <div class="trace-integrity">
             <span class="trace-section-label">Trace integrity</span>
             <div class="integrity-list">
-              <div class="integrity-row"><strong>Merkle root</strong><span class="hash">\${run.records[0]?.record_hash ?? 'pending'}</span>\${copyIcon()}</div>
-              <div class="integrity-row"><strong>Log hash</strong><span class="hash">\${run.records[1]?.record_hash ?? 'pending'}</span>\${copyIcon()}</div>
-              <div class="integrity-row"><strong>Proof status</strong><span class="value">Included in Cloudflare Integrity Log</span><a href="\${run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id}">View proof</a></div>
+              <div class="integrity-row"><strong>Merkle root</strong><span class="hash">\${run.records[0]?.record_hash ?? 'pending'}</span>\${copyIcon(run.records[0]?.record_hash ?? '', 'Merkle root')}</div>
+              <div class="integrity-row"><strong>Log hash</strong><span class="hash">\${run.records[1]?.record_hash ?? 'pending'}</span>\${copyIcon(run.records[1]?.record_hash ?? '', 'log hash')}</div>
+              <div class="integrity-row"><strong>Proof status</strong><span class="value">Included in Cloudflare Integrity Log</span><a class="event-action" href="\${run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id}" target="_blank" rel="noreferrer">View proof</a></div>
             </div>
           </div>
         \`
           : '<p class="empty">No signed records yet.</p>';
-        const renderReceiptSummary = (record) => {
+        const bindReceiptTabs = (record) => {
+          receiptSummaryEl.querySelectorAll('[data-receipt-tab]').forEach((button) => {
+            button.addEventListener('click', () => {
+              renderReceiptSummary(record, button.dataset.receiptTab);
+            });
+          });
+        };
+        const renderReceiptSummary = (record, activeTab = 'summary') => {
           const signedRecords = signers.filter((signer) => signer.status === 'Signed').length;
           const pendingSignatures = signers.filter((signer) => signer.status === 'Pending').length;
           const logEntry = run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id;
-          receiptSummaryEl.innerHTML = \`
+          const tabMarkup = \`
             <div class="receipt-tabs">
-              <button class="receipt-tab active" type="button">Summary</button>
-              <button class="receipt-tab" type="button">Record details</button>
+              <button class="receipt-tab \${activeTab === 'summary' ? 'active' : ''}" type="button" data-receipt-tab="summary">Summary</button>
+              <button class="receipt-tab \${activeTab === 'details' ? 'active' : ''}" type="button" data-receipt-tab="details">Record details</button>
             </div>
+          \`;
+          if (activeTab === 'details') {
+            receiptSummaryEl.innerHTML = tabMarkup + \`
+              <div class="record-details-grid">
+                <div class="summary-row"><span>Record label</span><strong>\${record.label}</strong><span></span></div>
+                <div class="summary-row"><span>Signer</span><strong>\${record.signer}</strong><span></span></div>
+                <div class="summary-row"><span>Tool</span><span class="value">\${record.record.tool_name ?? 'observation'}</span><span></span></div>
+                <div class="summary-row"><span>Timestamp</span><span class="value">\${displayRecordTime(record, record.label) + ' UTC'} / \${record.record.timestamp} ms</span><span></span></div>
+                <div class="summary-row"><span>Record hash</span><span class="hash">\${shortHash(record.record_hash)}</span>\${copyIcon(record.record_hash, 'record hash')}</div>
+                <div class="summary-row"><span>Chain root</span><span class="hash">\${shortHash(record.record.chain_root)}</span>\${copyIcon(record.record.chain_root, 'chain root')}</div>
+                <div class="summary-row"><span>Context ID</span><span class="hash">\${record.record.context_id}</span>\${copyIcon(record.record.context_id, 'context ID')}</div>
+                <div class="summary-row"><span>Informed by</span><span class="value">\${record.informed_by?.length ?? record.record.informed_by?.length ?? 0} linked record(s)</span><span></span></div>
+              </div>
+            \`;
+            bindReceiptTabs(record);
+            return;
+          }
+          receiptSummaryEl.innerHTML = \`
+            \${tabMarkup}
             <div class="receipt-summary-grid">
               <div class="summary-row"><span>Total records</span><strong>\${run.records.length}</strong><span></span></div>
               <div class="summary-row"><span>Signed records</span><strong>\${signedRecords}</strong><span></span></div>
               <div class="summary-row"><span>Pending signatures</span><strong>\${pendingSignatures}</strong><span></span></div>
-              <div class="summary-row"><span>Merkle root</span><span class="hash">\${shortHash(run.records[0]?.record_hash)}</span>\${copyIcon()}</div>
+              <div class="summary-row"><span>Merkle root</span><span class="hash">\${shortHash(run.records[0]?.record_hash)}</span>\${copyIcon(run.records[0]?.record_hash ?? '', 'Merkle root')}</div>
               <div class="summary-row"><span>Log entry</span><a href="\${logEntry}">cl_\${traceIdForRun(run).slice(4, 20)}</a><span></span></div>
-              <div class="summary-row"><span>Log timestamp</span><strong>\${formatRecordTime(record) + ' UTC'}</strong><span></span></div>
+              <div class="summary-row"><span>Log timestamp</span><strong>\${displayRecordTime(record, record.label) + ' UTC'}</strong><span></span></div>
               <div class="summary-row"><span>Retention</span><strong>30 days (default)</strong><span></span></div>
             </div>
           \`;
+          bindReceiptTabs(record);
         };
         const selectRecord = (record) => {
+          selectedReceiptRecord = record;
           receiptsEl.innerHTML = '<pre>' + pretty(record) + '</pre>';
           renderReceiptSummary(record);
-          verificationEl.querySelectorAll('.event-action').forEach((item) => {
-            item.textContent = item.dataset.readyLabel ?? (record?.proof ? 'Ready' : 'Local');
-          });
+          renderVerificationActions(run, record);
+          updateReceiptControls(record);
         };
         timelineEl.querySelectorAll('.event').forEach((button) => {
           button.addEventListener('click', () => {
@@ -3149,6 +3502,7 @@ export function renderApp(): string {
         currentRun = run;
         runIdLabel.textContent = run.run_id;
         traceIdLabel.textContent = traceIdForRun(run);
+        updateTraceHeaderCopy();
         const started = run.records[0]?.record?.timestamp
           ? new Date(run.records[0].record.timestamp).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
           : 'pending';
@@ -3182,6 +3536,38 @@ export function renderApp(): string {
         }
       }
 
+      document.addEventListener('click', async (event) => {
+        const target = event.target;
+        const copyButton = target.closest?.('[data-copy-value], [data-copy-source], #copyReceipt');
+        if (copyButton && !copyButton.disabled) {
+          const source = copyButton.dataset.copySource
+            ? document.querySelector(copyButton.dataset.copySource)?.textContent
+            : null;
+          const payload = copyButton.id === 'copyReceipt'
+            ? selectedReceiptPayload()
+            : null;
+          const value = payload ? pretty(payload) : source ?? copyButton.dataset.copyValue ?? '';
+          if (await writeClipboard(value)) markCopied(copyButton);
+          return;
+        }
+
+        const verifyButton = target.closest?.('[data-verify-receipt]');
+        if (verifyButton && !verifyButton.disabled && selectedReceiptRecord) {
+          const isVerifiable = selectedReceiptRecord.record_hash?.startsWith('sha256:')
+            && selectedReceiptRecord.record?.signature
+            && selectedReceiptRecord.record?.creator_key;
+          verifyButton.textContent = isVerifiable ? 'Verified' : 'Check failed';
+          verifyButton.classList.toggle('verified', Boolean(isVerifiable));
+          return;
+        }
+
+        const downloadButton = target.closest?.('[data-download-receipt], #downloadReceipt');
+        if (downloadButton && !downloadButton.disabled && selectedReceiptRecord) {
+          const payload = selectedReceiptPayload();
+          if (payload) downloadJson(receiptFileName(selectedReceiptRecord), payload);
+        }
+      });
+
       createButton.addEventListener('click', async () => {
         await startTriggeredRun();
       });
@@ -3191,16 +3577,14 @@ export function renderApp(): string {
         try {
           setBusy(true, 'create');
           currentRun = null;
+          selectedReceiptRecord = null;
           stageDisplayTimes = {};
           runIdLabel.textContent = 'pending';
           traceIdLabel.textContent = 'pending';
+          updateTraceHeaderCopy();
           startedLabel.textContent = nowTime(0);
           receivedLabel.textContent = nowTime(0);
-          receiptsEl.innerHTML = '<p class="empty">View signed record and proof after the first trace record is selected.</p>';
-          receiptSummaryEl.innerHTML = '<p class="empty">Summary appears after a signed record is selected.</p>';
-          verificationEl.querySelectorAll('.event-action').forEach((item) => {
-            item.textContent = 'Pending';
-          });
+          clearReceiptInspector();
           const runPromise = post('/api/runs', {
             prompt: promptInput.value,
           });
@@ -3221,30 +3605,34 @@ export function renderApp(): string {
       resetButton.addEventListener('click', () => {
         if (busy) return;
         currentRun = null;
+        selectedReceiptRecord = null;
         stageDisplayTimes = {};
         runIdLabel.textContent = 'pending';
         traceIdLabel.textContent = 'pending';
+        updateTraceHeaderCopy();
         startedLabel.textContent = 'waiting';
         receivedLabel.textContent = 'waiting';
         proposalEl.innerHTML = '<p class="empty">Run the trigger to see the agent\\'s proposal, exact payload, diff, risk, and approval controls.</p>';
         answerEl.innerHTML = '<p class="empty">No active run.</p>';
         timelineEl.innerHTML = '<p class="empty">Signed records will appear here as the workflow runs.</p>';
-        receiptsEl.innerHTML = '<p class="empty">View signed record and proof after the first trace record is selected.</p>';
-        receiptSummaryEl.innerHTML = '<p class="empty">Summary appears after a signed record is selected.</p>';
-        verificationEl.querySelectorAll('.event-action').forEach((item) => {
-          item.textContent = 'Pending';
-        });
+        clearReceiptInspector();
         setStatus('Ready for incoming alert', 'pending', 'Run the prior trigger to start autonomous triage before the human review gate.', 'trigger');
         updateControls();
       });
 
       updateControls();
+      updateTraceHeaderCopy();
       if (!autoStarted) {
         autoStarted = true;
         simulateErrorInput.checked = new URLSearchParams(window.location.search).get('simulate_error') === '1';
-        requestAnimationFrame(() => {
+        let scheduledStart = false;
+        const beginAutostart = () => {
+          if (scheduledStart) return;
+          scheduledStart = true;
           startTriggeredRun();
-        });
+        };
+        requestAnimationFrame(beginAutostart);
+        window.setTimeout(beginAutostart, 250);
       }
     </script>
   </body>
