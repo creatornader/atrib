@@ -362,7 +362,7 @@ function fixturePlan(prompt: string): PlannedAction {
     action: 'Update rate-limit middleware for the /v1/report route',
     summary:
       'Respond to a GitHub issue webhook by preparing a small repository file update that adds request limiting to the reported route.',
-    risk: 'requires_human_approval: writes repository code that changes production request handling',
+    risk: 'Introduces rate limiting that changes production request handling.',
     payload: {
       operation: 'write_file',
       issue_id: 'workers-issue-4821',
