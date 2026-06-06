@@ -215,6 +215,23 @@ describe('Cloudflare approval trace Worker', () => {
 
     expect(pending.status).toBe('pending_approval')
     expect(labels(pending)).toEqual(['trigger', 'triage', 'proposal'])
+    const pendingRecords = byLabel(pending)
+    const proposalRecord = pendingRecords.get('proposal')!
+    const verification = await postJson<{
+      ok: boolean
+      signature_ok: boolean
+      hash_ok: boolean
+      record_hash: string
+    }>('/api/verify-record', {
+      record: proposalRecord.record,
+      expected_hash: proposalRecord.record_hash,
+    })
+    expect(verification).toMatchObject({
+      ok: true,
+      signature_ok: true,
+      hash_ok: true,
+      record_hash: proposalRecord.record_hash,
+    })
 
     const trace = await approveRun(runId)
     const records = byLabel(trace)

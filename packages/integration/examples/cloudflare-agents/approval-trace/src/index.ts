@@ -19,6 +19,7 @@ import {
   hexEncode,
   sha256,
   signRecord,
+  verifyRecord as verifyAtribRecord,
   type AtribRecord,
   type OnRecordSidecar,
   type ProofBundle,
@@ -1739,6 +1740,22 @@ export default {
         )
       }
 
+      if (url.pathname === '/api/verify-record' && request.method === 'POST') {
+        const body = (await request.json()) as { record?: AtribRecord; expected_hash?: string }
+        if (!body.record) return json({ ok: false, error: 'missing record' }, { status: 400 })
+        const actualHash = recordHash(body.record)
+        const signatureOk = await verifyAtribRecord(body.record)
+        return json({
+          ok: signatureOk && (!body.expected_hash || body.expected_hash === actualHash),
+          signature_ok: signatureOk,
+          hash_ok: !body.expected_hash || body.expected_hash === actualHash,
+          record_hash: actualHash,
+          expected_hash: body.expected_hash ?? null,
+          creator_key: body.record.creator_key,
+          timestamp: body.record.timestamp,
+        })
+      }
+
       const runMatch = url.pathname.match(/^\/api\/runs\/([^/]+)$/u)
       if (runMatch && request.method === 'GET') {
         const runId = decodeURIComponent(runMatch[1]!)
@@ -1793,6 +1810,7 @@ export default {
         endpoints: [
           '/',
           '/api/runs',
+          '/api/verify-record',
           '/api/runs/:runId',
           '/api/runs/:runId/approve',
           '/api/runs/:runId/reject',
