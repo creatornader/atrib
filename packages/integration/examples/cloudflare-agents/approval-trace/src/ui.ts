@@ -508,10 +508,12 @@ export function renderApp(): string {
         border-radius: 999px;
         color: var(--ink);
         display: inline-flex;
+        flex: 0 0 auto;
         font-size: 12px;
         font-weight: 750;
         min-height: 24px;
         padding: 4px 8px;
+        white-space: nowrap;
       }
 
       .hash {
@@ -911,7 +913,7 @@ export function renderApp(): string {
       }
 
       .shell {
-        max-width: 1536px;
+        max-width: none;
         padding: 0 0 0;
       }
 
@@ -1025,6 +1027,7 @@ export function renderApp(): string {
         color: var(--ink);
         display: flex;
         min-height: 52px;
+        min-width: 0;
         padding: 6px 9px;
         position: relative;
       }
@@ -1095,10 +1098,10 @@ export function renderApp(): string {
         border-bottom: 3px solid #fff;
         border-right: 3px solid #fff;
         height: 14px;
-        left: 13px;
+        left: 50%;
         position: absolute;
-        top: 8px;
-        transform: rotate(45deg);
+        top: 50%;
+        transform: translate(-50%, -58%) rotate(45deg);
         width: 7px;
       }
 
@@ -1129,12 +1132,21 @@ export function renderApp(): string {
       .step-copy strong {
         font-size: 14px;
         line-height: 1.15;
+        overflow: hidden;
+        text-overflow: ellipsis;
         white-space: nowrap;
       }
 
       .step-copy span {
         font-size: 12px;
         line-height: 1.25;
+      }
+
+      .step-copy {
+        background: inherit;
+        min-width: 0;
+        position: relative;
+        z-index: 1;
       }
 
       .step-badge {
@@ -1154,13 +1166,14 @@ export function renderApp(): string {
       .grid {
         gap: 10px;
         align-items: start;
-        grid-template-columns: 363px minmax(0, 1fr) 524px;
+        grid-template-columns: minmax(336px, 363px) minmax(620px, 1fr) minmax(438px, 524px);
         margin: 0 10px;
       }
 
       .grid > .panel {
         height: 618px;
-        overflow: hidden;
+        overflow: auto;
+        scrollbar-gutter: stable;
       }
 
       .panel {
@@ -1395,10 +1408,10 @@ export function renderApp(): string {
         border-right: 2px solid #fff;
         content: "";
         height: 6px;
-        left: 4px;
+        left: 50%;
         position: absolute;
-        top: 2px;
-        transform: rotate(45deg);
+        top: 50%;
+        transform: translate(-50%, -58%) rotate(45deg);
         width: 3px;
       }
 
@@ -1446,13 +1459,16 @@ export function renderApp(): string {
         gap: 10px;
         justify-content: space-between;
         margin-bottom: 6px;
+        min-width: 0;
       }
 
       .diff-tools {
         color: var(--muted);
         display: flex;
         font-size: 12px;
-        gap: 10px;
+        gap: 8px;
+        flex: 0 0 auto;
+        white-space: nowrap;
       }
 
       .diff pre {
@@ -1502,7 +1518,8 @@ export function renderApp(): string {
         border-radius: 8px;
         display: grid;
         gap: 8px;
-        grid-template-columns: auto auto minmax(0, 1fr) auto;
+        grid-template-columns: auto auto minmax(0, 1fr) minmax(42px, auto);
+        min-width: 0;
         padding: 8px 10px;
       }
 
@@ -1528,6 +1545,14 @@ export function renderApp(): string {
         padding: 2px 7px;
       }
 
+      .risk-bar .value {
+        font-size: 12px;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
       .primary,
       .secondary,
       .danger {
@@ -1542,9 +1567,10 @@ export function renderApp(): string {
 
       .actions {
         display: grid;
-        grid-template-columns: minmax(190px, 1fr) minmax(176px, 0.9fr) minmax(176px, 0.9fr);
-        gap: 22px;
+        grid-template-columns: minmax(186px, 1.05fr) minmax(156px, 0.9fr) minmax(168px, 0.96fr);
+        gap: 14px;
         margin-top: 4px;
+        min-width: 0;
       }
 
       .action-copy {
@@ -1560,7 +1586,9 @@ export function renderApp(): string {
         font-weight: 650;
         line-height: 1.12;
         opacity: 0.78;
+        overflow: hidden;
         overflow-wrap: normal;
+        text-overflow: ellipsis;
         text-wrap: normal;
       }
 
@@ -1577,7 +1605,10 @@ export function renderApp(): string {
       }
 
       .primary .action-copy small {
-        font-size: 9px;
+        font-size: 8px;
+        letter-spacing: 0;
+        overflow: visible;
+        text-overflow: clip;
         white-space: nowrap;
       }
 
@@ -1638,7 +1669,7 @@ export function renderApp(): string {
         background: #cfd8e5;
         bottom: 26px;
         content: "";
-        left: 74px;
+        left: 68px;
         position: absolute;
         top: 24px;
         width: 2px;
@@ -1652,8 +1683,9 @@ export function renderApp(): string {
         border-radius: 0;
         display: grid;
         gap: 7px;
-        grid-template-columns: 58px 20px minmax(0, 1fr) 132px;
-        padding: 5px 0;
+        grid-template-columns: 54px 20px minmax(0, 1fr) minmax(82px, 120px);
+        min-width: 0;
+        padding: 3px 0;
       }
 
       .event:hover,
@@ -1697,8 +1729,10 @@ export function renderApp(): string {
         border-right: 2px solid #fff;
         content: "";
         height: 7px;
-        margin-top: -2px;
-        transform: rotate(45deg);
+        left: 50%;
+        position: absolute;
+        top: 50%;
+        transform: translate(-50%, -58%) rotate(45deg);
         width: 4px;
       }
 
@@ -1740,7 +1774,7 @@ export function renderApp(): string {
       }
 
       .event-copy strong {
-        font-size: 12px;
+        font-size: 11.5px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -1748,8 +1782,8 @@ export function renderApp(): string {
 
       .event-copy .value {
         color: var(--muted);
-        font-size: 11px;
-        line-height: 1.35;
+        font-size: 10.5px;
+        line-height: 1.25;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -1806,13 +1840,13 @@ export function renderApp(): string {
       .signer-list,
       .trace-integrity {
         border-top: 1px solid var(--line);
-        margin-top: 20px;
-        padding-top: 10px;
+        margin-top: 14px;
+        padding-top: 9px;
       }
 
       .signer-list {
         gap: 0;
-        margin-top: 14px;
+        margin-top: 12px;
       }
 
       .signer-list .trace-section-label {
@@ -1822,10 +1856,10 @@ export function renderApp(): string {
       .signer-row {
         background: #fff;
         border-radius: 0;
-        gap: 8px;
-        grid-template-columns: 24px 78px minmax(0, 1fr) 58px 84px 14px;
-        min-height: 34px;
-        padding: 5px 8px;
+        gap: 7px;
+        grid-template-columns: 24px 74px minmax(0, 1fr) 56px minmax(62px, 82px) 14px;
+        min-height: 30px;
+        padding: 4px 8px;
         box-shadow: none;
       }
 
@@ -2140,6 +2174,56 @@ export function renderApp(): string {
         color: var(--blue);
         font-size: 12px;
         font-weight: 750;
+      }
+
+      @media (max-width: 1450px) and (min-width: 1101px) {
+        .grid {
+          grid-template-columns: minmax(318px, 0.82fr) minmax(560px, 1.2fr) minmax(340px, 0.94fr);
+        }
+
+        .actions {
+          gap: 10px;
+          grid-template-columns: minmax(170px, 1fr) minmax(138px, 0.88fr) minmax(150px, 0.94fr);
+        }
+
+        .event,
+        .event-future {
+          gap: 6px;
+          grid-template-columns: 48px 18px minmax(0, 1fr) minmax(66px, 92px);
+        }
+
+        .record-timeline::before {
+          left: 62px;
+        }
+
+        .event-hash {
+          max-width: 92px;
+        }
+
+        .signer-row {
+          gap: 5px;
+          grid-template-columns: 22px 62px minmax(0, 1fr) 50px minmax(42px, 58px) 12px;
+          padding: 4px 6px;
+        }
+
+        .signer-icon {
+          height: 20px;
+          width: 20px;
+        }
+
+        .signer-icon svg {
+          height: 13px;
+          width: 13px;
+        }
+
+        .signer-row strong,
+        .signer-row .empty {
+          font-size: 11px;
+        }
+
+        .signature-slot {
+          font-size: 10px;
+        }
       }
 
       @media (max-width: 1100px) {
@@ -2464,6 +2548,102 @@ export function renderApp(): string {
         return new Date(Date.now() + offsetMs).toISOString().slice(11, 19);
       }
 
+      function renderBootTimeline(activeIndex) {
+        const activeStage = bootStages[activeIndex] ?? bootStages[bootStages.length - 1];
+        const reached = (key) => bootStages.findIndex((stage) => stage.key === key) <= activeIndex;
+        const bootRows = [
+          {
+            key: 'trigger',
+            name: 'trigger.received',
+            detail: 'GitHub issue webhook',
+            time: stageDisplayTimes.trigger,
+            marker: reached('trigger') ? 'done' : 'future',
+            selected: activeStage.key === 'trigger',
+          },
+          {
+            key: 'context',
+            name: 'triage.completed',
+            detail: 'Intent: add rate limiting',
+            time: stageDisplayTimes.context ?? stageDisplayTimes.policy,
+            marker: reached('context') ? 'done' : 'future',
+            selected: ['context', 'policy'].includes(activeStage.key),
+          },
+          {
+            key: 'proposal',
+            name: 'proposal.generated',
+            detail: 'write_file proposal',
+            time: stageDisplayTimes.proposal,
+            marker: reached('proposal') ? 'done' : 'future',
+            selected: activeStage.key === 'proposal',
+          },
+          {
+            key: 'halt',
+            name: 'human.review.halted',
+            detail: 'Awaiting human decision',
+            time: stageDisplayTimes.halt,
+            marker: reached('halt') ? 'pending' : 'future',
+            selected: activeStage.key === 'halt',
+          },
+          {
+            key: 'mcp',
+            name: 'mcp.execution.resumed',
+            detail: reached('halt') ? 'Pending approval' : 'Waiting for human review',
+            time: '-',
+            marker: 'future',
+            selected: false,
+          },
+          {
+            key: 'audit',
+            name: 'audit.ready',
+            detail: 'Pending',
+            time: '-',
+            marker: 'future',
+            selected: false,
+          },
+        ];
+        const bootSigners = [
+          { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', status: reached('proposal') ? 'Signed' : 'Pending', className: reached('proposal') ? 'signed' : 'pending mcp', sig: reached('proposal') ? '2fb06b13...' : '-' },
+          { kind: 'human', name: 'Human', detail: 'alice@example.com', status: 'Pending', className: 'pending', sig: '-' },
+          { kind: 'mcp', name: 'Action MCP', detail: 'github.write@2.3.1', status: 'Pending', className: 'pending mcp', sig: '-' },
+        ];
+        timelineEl.innerHTML = \`
+          <span class="trace-section-label">Record timeline</span>
+          <div class="record-timeline">
+            \${bootRows.map((row) => \`
+              <div class="event-future \${row.selected ? 'selected' : ''}">
+                <span class="event-time">\${row.time ? row.time.slice(0, 8) : '-'}</span>
+                <span class="event-marker \${row.marker}"></span>
+                <span class="event-copy">
+                  <strong>\${row.name}</strong>
+                  <span class="value">\${row.detail}</span>
+                </span>
+                <span class="event-hash hash">\${row.marker === 'future' ? '-' : 'pending'}</span>
+              </div>
+            \`).join('')}
+          </div>
+          <div class="signer-list">
+            <span class="trace-section-label">Signers</span>
+            \${bootSigners.map((signer) => \`
+              <div class="signer-row">
+                \${signerIcon(signer.kind)}
+                <strong>\${signer.name}</strong>
+                <span class="empty">\${signer.detail}</span>
+                <span class="pill signer-status \${signer.className}">\${signer.status}</span>
+                <span class="signature-slot">Sig: <span class="hash">\${signer.sig}</span></span>\${copyIcon()}
+              </div>
+            \`).join('')}
+          </div>
+          <div class="trace-integrity">
+            <span class="trace-section-label">Trace integrity</span>
+            <div class="integrity-list">
+              <div class="integrity-row"><strong>Merkle root</strong><span class="hash">pending</span>\${copyIcon()}</div>
+              <div class="integrity-row"><strong>Log hash</strong><span class="hash">pending</span>\${copyIcon()}</div>
+              <div class="integrity-row"><strong>Proof status</strong><span class="value">Waiting for first signed record</span><span></span></div>
+            </div>
+          </div>
+        \`;
+      }
+
       function renderBootProgress(activeIndex) {
         const rows = bootStages.map((stage, index) => {
           const done = index < activeIndex;
@@ -2492,20 +2672,7 @@ export function renderApp(): string {
             </div>
           \`;
         }
-        timelineEl.innerHTML = \`
-          <span class="trace-section-label">Record timeline</span>
-          <div class="record-timeline">
-            <button class="event selected" type="button">
-              <span class="event-time">\${nowTime(activeIndex * 1800).slice(0, 8)}</span>
-              <span class="event-marker \${activeStage.key === 'halt' ? 'pending' : ''}"></span>
-              <span class="event-copy">
-                <strong>\${activeStage.key === 'trigger' ? 'trigger.received' : 'agent.' + activeStage.key}</strong>
-                <span class="value">\${activeStage.detail}</span>
-              </span>
-              <span class="event-hash hash">pending</span>
-            </button>
-          </div>
-        \`;
+        renderBootTimeline(activeIndex);
         followElement(answerEl.querySelectorAll('.progress-item')[activeIndex], 'nearest');
         if (activeStage.key === 'halt') followElement(proposalEl, 'nearest');
       }
