@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
+
+interface BrowserTraceResponse {
+  records: Array<{ record: { timestamp: number } }>
+}
 
 async function expectCleanConsole(page: Page, action: () => Promise<void>): Promise<void> {
   const messages: string[] = []
@@ -39,13 +43,60 @@ async function openTimelineRecord(page: Page, label: string): Promise<void> {
   await expect(page.locator('#receipts pre')).toContainText('"record_hash": "sha256:')
 }
 
+async function expectCopies(button: Locator): Promise<void> {
+  await button.click()
+  await expect(button).toHaveAttribute('data-copy-state', 'copied')
+}
+
 test.describe('Cloudflare approval trace browser UI', () => {
   test('clicks through approved execution and opens the signed receipt', async ({ page }) => {
     await expectCleanConsole(page, async () => {
+      await page.context().grantPermissions(['clipboard-write'])
       await createProposal(page)
+
+      const visibleTimes = await page.locator('#answer .progress-time').allTextContents()
+      const populatedTimes = visibleTimes.filter((time) => time !== '-')
+      expect(new Set(populatedTimes).size).toBeGreaterThan(3)
+
+      const runId = await page.locator('#runIdLabel').textContent()
+      expect(runId).toBeTruthy()
+      const pendingRun = await page.evaluate<BrowserTraceResponse, string>(async (id) => {
+        const response = await fetch('/api/runs/' + id)
+        return (await response.json()) as BrowserTraceResponse
+      }, runId ?? '')
+      const pendingTimestamps = pendingRun.records.map(
+        (record) => record.record.timestamp,
+      )
+      expect(new Set(pendingTimestamps).size).toBe(pendingTimestamps.length)
+
+      await page.locator('#riskDetailsToggle').click()
+      await expect(page.locator('#riskDetails')).toBeVisible()
+      await expect(page.locator('#riskDetails')).toContainText('Human review gate')
+
+      await page.getByRole('button', { name: 'Record details' }).click()
+      await expect(page.locator('#receiptSummary')).toContainText('Record hash')
+      await expect(page.locator('#receiptSummary')).toContainText('Timestamp')
+      await page.getByRole('button', { name: 'Summary' }).click()
+
+      await expectCopies(page.getByRole('button', { name: 'Copy trace ID' }))
+      await expectCopies(page.getByRole('button', { name: 'Copy Agent signature' }))
+      await expectCopies(page.locator('.trace-integrity').getByRole('button', { name: 'Copy Merkle root' }))
+      await expectCopies(page.getByRole('button', { name: 'Copy receipt' }))
+      await expect(page.locator('#verification').getByRole('link', { name: 'View proof' })).toHaveAttribute(
+        'href',
+        /log\.atrib\.dev|\/api\/runs\//,
+      )
+      await page.locator('#verification').getByRole('button', { name: 'Verify' }).click()
+      await expect(page.locator('#verification').getByRole('button', { name: 'Verified' })).toBeVisible()
+      const pendingDownload = page.waitForEvent('download')
+      await page.getByRole('button', { name: 'Download receipt' }).click()
+      expect((await pendingDownload).suggestedFilename()).toContain('cloudflare-trace')
+
       await page.getByRole('button', { name: 'Approve and resume' }).click()
 
       await expect(page.locator('#statusTitle')).toHaveText('Trace complete', { timeout: 30_000 })
+      await expect(page.locator('[data-step="halt"]')).toContainText('Approved')
+      await expect(page.locator('[data-step="halt"]')).not.toContainText('Awaiting review')
       await expect(page.locator('#answer')).toContainText('Agent resumed through MCP')
       await expect(page.locator('#answer')).toContainText('Audit ready')
       await expect(page.locator('#answer')).toContainText('repo_files.server/middleware/rate_limit.ts')
@@ -57,6 +108,14 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#receipts pre')).toContainText('"signer": "action_mcp"')
       await expect(page.locator('#receipts pre')).toContainText('"tool_name": "write_file"')
       await expect(page.locator('#receipts pre')).toContainText('"proof": null')
+      await expectCopies(page.getByRole('button', { name: 'Copy Action MCP signature' }))
+      await expect(page.locator('#verification').getByRole('link', { name: 'View proof' })).toHaveAttribute(
+        'href',
+        /log\.atrib\.dev|\/api\/runs\//,
+      )
+      const executionDownload = page.waitForEvent('download')
+      await page.locator('#verification').getByRole('button', { name: 'Download' }).click()
+      expect((await executionDownload).suggestedFilename()).toContain('cloudflare-trace-execution')
     })
   })
 

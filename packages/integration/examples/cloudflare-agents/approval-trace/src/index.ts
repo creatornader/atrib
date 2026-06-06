@@ -143,6 +143,7 @@ interface ApprovalContext {
   status: WorkflowStatus
   context_id: string
   approval_record_hash: string
+  approval_timestamp: number
   approval_token: string
   traceparent: string
   payload_hash: string
@@ -174,6 +175,15 @@ const STABLE_CONNECTOR_ID = 'cloudflare-demo-repository-write-mcp'
 const LOG_BASE_URL = 'https://log.atrib.dev/v1'
 const DEFAULT_TRIGGER_PROMPT =
   'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.'
+const TRACE_RECORD_OFFSETS_MS = {
+  trigger: 0,
+  triage: 275,
+  proposal: 650,
+  approval: 950,
+  rejection: 950,
+  handoff: 1_700,
+  postApprovalPause: 125,
+}
 
 type BaseAgentNamespace = DurableObjectNamespace<Agent<Env, unknown, Record<string, unknown>>>
 
@@ -255,6 +265,14 @@ function serverUrl(env: Env, role: SignerRole): string {
   return env.ATRIB_AGENT_SERVER_URL ?? 'mcp://atrib-cloudflare/agent'
 }
 
+function runTimestamp(baseTimestamp: number, offsetMs: number): number {
+  return Math.max(Date.now(), baseTimestamp + offsetMs)
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function logEndpoint(env: Env): string | undefined {
   const endpoint = env.ATRIB_LOG_ENDPOINT?.trim()
   return endpoint ? endpoint : undefined
@@ -292,6 +310,7 @@ async function signObservation(input: {
   toolName: string
   body: unknown
   informedBy?: string[]
+  timestamp?: number
 }): Promise<AtribRecord> {
   const creatorKey = base64urlEncode(await getPublicKey(input.key))
   const unsigned = {
@@ -301,7 +320,7 @@ async function signObservation(input: {
     chain_root: input.chainRoot,
     event_type: EVENT_TYPE_OBSERVATION_URI,
     context_id: input.contextId,
-    timestamp: Date.now(),
+    timestamp: input.timestamp ?? Date.now(),
     signature: '',
     result_hash: hashUnknown(input.body),
     tool_name: input.toolName,
@@ -316,6 +335,7 @@ function emitNativeEvent(input: {
   agent: string
   name: string
   payload: Record<string, unknown>
+  timestamp?: number
 }): NativeObservabilityEvent {
   const event = {
     channel: input.channel,
@@ -323,7 +343,7 @@ function emitNativeEvent(input: {
     agent: input.agent,
     name: input.name,
     payload: input.payload,
-    timestamp: Date.now(),
+    timestamp: input.timestamp ?? Date.now(),
   }
   genericObservability.emit({
     type: input.type,
@@ -636,6 +656,10 @@ export class ApprovalTraceAgent extends Agent<Env> {
     this.ensureSchema()
     const runId = input.runId ?? crypto.randomUUID()
     const contextId = randomContextId()
+    const runStartedAt = Date.now()
+    const triggerTimestamp = runStartedAt
+    const triageTimestamp = runTimestamp(runStartedAt, TRACE_RECORD_OFFSETS_MS.triage)
+    const proposalTimestamp = runTimestamp(runStartedAt, TRACE_RECORD_OFFSETS_MS.proposal)
     const triggerBody = {
       kind: 'workflow_trigger',
       source: 'github_issue_webhook',
@@ -665,6 +689,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
           issueId: triggerBody.event.issue_id,
           haltCondition: triggerBody.halt_condition,
         },
+        timestamp: triggerTimestamp,
       }),
     )
     const triggerRecord = await signObservation({
@@ -675,6 +700,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       chainRoot: genesisChainRoot(contextId),
       toolName: 'workflow_trigger',
       body: triggerBody,
+      timestamp: triggerTimestamp,
     })
     const triggerHash = recordHash(triggerRecord)
     await this.saveTraceRecord({
@@ -711,6 +737,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
           intent: triageBody.intent,
           policyResult: triageBody.policy_result,
         },
+        timestamp: triageTimestamp,
       }),
     )
     const triageRecord = await signObservation({
@@ -722,6 +749,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       toolName: 'autonomous_triage',
       body: triageBody,
       informedBy: [triggerHash],
+      timestamp: triageTimestamp,
     })
     const triageHash = recordHash(triageRecord)
     await this.saveTraceRecord({
@@ -756,6 +784,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
         agent: 'ApprovalTraceAgent',
         name: runId,
         payload: { prompt: input.prompt },
+        timestamp: proposalTimestamp,
       }),
     )
     const record = await signObservation({
@@ -767,6 +796,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       toolName: 'proposal',
       body,
       informedBy: [triageHash],
+      timestamp: proposalTimestamp,
     })
     const proposalHash = recordHash(record)
     await this.saveTraceRecord({
@@ -809,8 +839,8 @@ export class ApprovalTraceAgent extends Agent<Env> {
           ${plan.planner},
           ${null},
           ${null},
-          ${Date.now()},
-          ${Date.now()}
+          ${runStartedAt},
+          ${proposalTimestamp}
         )
     `
     this.saveNativeEvent(
@@ -821,6 +851,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
         agent: 'ApprovalTraceAgent',
         name: runId,
         payload: { runId, proposalRecordHash: proposalHash, payloadHash },
+        timestamp: proposalTimestamp,
       }),
     )
     return this.getRun(runId)
@@ -833,6 +864,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
     if (workflow.status !== 'pending_approval') {
       throw new Error(`run is not pending approval: ${workflow.status}`)
     }
+    const approvalTimestamp = runTimestamp(workflow.created_at, TRACE_RECORD_OFFSETS_MS.approval)
     const body = {
       kind: 'human_approval',
       reviewer_id: 'browser-demo-human',
@@ -840,7 +872,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       reason: input.reason,
       approved_payload_hash: workflow.payload_hash,
       stable_connector_id: STABLE_CONNECTOR_ID,
-      expires_at: new Date(Date.now() + 1000 * 60 * 30).toISOString(),
+      expires_at: new Date(approvalTimestamp + 1000 * 60 * 30).toISOString(),
     }
     const record = await signObservation({
       env: this.env,
@@ -851,6 +883,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       toolName: 'approval',
       body,
       informedBy: [workflow.proposal_record_hash],
+      timestamp: approvalTimestamp,
     })
     const approvalHash = recordHash(record)
     await this.saveTraceRecord({
@@ -867,7 +900,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
           decision = ${'approved'},
           decision_reason = ${input.reason},
           decision_record_hash = ${approvalHash},
-          updated_at = ${Date.now()}
+          updated_at = ${approvalTimestamp}
       WHERE run_id = ${input.runId}
     `
     this.saveNativeEvent(
@@ -882,6 +915,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
           approvalRecordHash: approvalHash,
           reason: input.reason,
         },
+        timestamp: approvalTimestamp,
       }),
     )
     return {
@@ -889,6 +923,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       status: 'approved',
       context_id: workflow.context_id,
       approval_record_hash: approvalHash,
+      approval_timestamp: approvalTimestamp,
       approval_token: encodeToken(record),
       traceparent: `00-${workflow.context_id}-${randomParentId()}-01`,
       payload_hash: workflow.payload_hash,
@@ -903,6 +938,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
     if (workflow.status !== 'pending_approval') {
       throw new Error(`run is not pending approval: ${workflow.status}`)
     }
+    const rejectionTimestamp = runTimestamp(workflow.created_at, TRACE_RECORD_OFFSETS_MS.rejection)
     const body = {
       kind: 'human_approval',
       reviewer_id: 'browser-demo-human',
@@ -920,6 +956,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       toolName: 'rejection',
       body,
       informedBy: [workflow.proposal_record_hash],
+      timestamp: rejectionTimestamp,
     })
     const rejectionHash = recordHash(record)
     await this.saveTraceRecord({
@@ -936,7 +973,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
           decision = ${'rejected'},
           decision_reason = ${input.reason},
           decision_record_hash = ${rejectionHash},
-          updated_at = ${Date.now()}
+          updated_at = ${rejectionTimestamp}
       WHERE run_id = ${input.runId}
     `
     this.saveNativeEvent(
@@ -951,6 +988,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
           approvalRecordHash: rejectionHash,
           reason: input.reason,
         },
+        timestamp: rejectionTimestamp,
       }),
     )
     return this.getRun(input.runId)
@@ -995,6 +1033,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
             toolName: item.label,
             recordHash: item.record_hash,
           },
+          timestamp: item.record.timestamp,
         }),
       )
     }
@@ -1008,6 +1047,12 @@ export class ApprovalTraceAgent extends Agent<Env> {
     const approval = rows.find((row) => row.label === 'approval')
     const outcome = rows.find((row) => row.label === 'outcome')
     if (!approval || !outcome) throw new Error('approval and outcome records are required')
+    const outcomeRecord = JSON.parse(outcome.record_json) as AtribRecord
+    const handoffTimestamp = Math.max(
+      Date.now(),
+      workflow.created_at + TRACE_RECORD_OFFSETS_MS.handoff,
+      outcomeRecord.timestamp + 250,
+    )
     const body = {
       kind: 'handoff_packet',
       summary: input.failed
@@ -1027,6 +1072,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       toolName: 'handoff',
       body,
       informedBy: [approval.record_hash, outcome.record_hash],
+      timestamp: handoffTimestamp,
     })
     const handoffHash = recordHash(record)
     await this.saveTraceRecord({
@@ -1041,7 +1087,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       UPDATE workflows
       SET status = ${input.failed ? 'failed' : 'succeeded'},
           outcome_record_hash = ${outcome.record_hash},
-          updated_at = ${Date.now()}
+          updated_at = ${handoffTimestamp}
       WHERE run_id = ${input.runId}
     `
     this.saveNativeEvent(
@@ -1052,6 +1098,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
         agent: 'ApprovalTraceAgent',
         name: input.runId,
         payload: { handoffRecordHash: handoffHash },
+        timestamp: handoffTimestamp,
       }),
     )
     this.saveNativeEvent(
@@ -1062,6 +1109,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
         agent: 'ApprovalTraceAgent',
         name: input.runId,
         payload: { status: input.failed ? 'failed' : 'succeeded' },
+        timestamp: handoffTimestamp,
       }),
     )
     return this.getRun(input.runId)
@@ -1166,7 +1214,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       INSERT OR REPLACE INTO observability_events
         (run_id, idx, channel, type, event_json, created_at)
       VALUES
-        (${runId}, ${idx}, ${event.channel}, ${event.type}, ${JSON.stringify(event)}, ${Date.now()})
+        (${runId}, ${idx}, ${event.channel}, ${event.type}, ${JSON.stringify(event)}, ${event.timestamp})
     `
   }
 
@@ -1186,7 +1234,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
           ${input.args === undefined ? null : JSON.stringify(input.args)},
           ${input.result === undefined ? null : JSON.stringify(input.result)},
           ${input.proof ? JSON.stringify(input.proof) : null},
-          ${Date.now()}
+          ${input.record.timestamp}
         )
     `
   }
@@ -1551,7 +1599,7 @@ export class ApprovalActionMcp extends McpAgent<Env> {
           ${label},
           ${signer},
           ${body === undefined ? null : JSON.stringify(body)},
-          ${Date.now()}
+          ${record.timestamp}
         )
     `
   }
@@ -1572,6 +1620,14 @@ async function executeThroughActionMcp(input: {
   })
   await client.connect(transport)
   try {
+    await sleep(
+      Math.max(
+        0,
+        input.approval.approval_timestamp +
+          TRACE_RECORD_OFFSETS_MS.postApprovalPause -
+          Date.now(),
+      ),
+    )
     const meta = {
       atrib: input.approval.approval_token,
       tracestate: `atrib=${input.approval.approval_token}`,
@@ -1587,6 +1643,7 @@ async function executeThroughActionMcp(input: {
     })
     const context = JSON.parse(getTextResult(contextResult)) as ExecutionContext
     const payloadDigest = context.payload_hash.replace(/^sha256:/u, '')
+    await sleep(125)
     const preview = await client.callTool({
       name: 'preview_file_update',
       _meta: meta,
@@ -1601,6 +1658,7 @@ async function executeThroughActionMcp(input: {
     if (previewBody.status !== 'ready') {
       throw new Error(`preview failed: ${JSON.stringify(previewBody)}`)
     }
+    await sleep(125)
     const execution = await client.callTool({
       name: 'write_file',
       _meta: meta,
@@ -1613,6 +1671,7 @@ async function executeThroughActionMcp(input: {
       },
     })
     const executionBody = JSON.parse(getTextResult(execution)) as { status?: string }
+    await sleep(125)
     await client.callTool({ name: 'flush_atrib_queue', arguments: {} })
     const records = await waitForActionRecords(client, context.context_id)
     return {
