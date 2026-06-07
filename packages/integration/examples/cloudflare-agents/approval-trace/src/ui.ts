@@ -1270,7 +1270,7 @@ export function renderApp(): string {
         border-color: #f3a64e;
         border-radius: 8px;
         color: var(--ink);
-        min-height: 64px;
+        min-height: 58px;
         padding: 6px 10px;
         width: auto;
       }
@@ -1455,9 +1455,17 @@ export function renderApp(): string {
         color: #a44900;
       }
 
-      @media (min-width: 1250px) {
+      @media (min-width: 1451px) {
+        .workflow-rail {
+          padding: 0 9px 0 51px;
+        }
+
         .rail-stepper {
-          grid-template-columns: minmax(170px, 223px) minmax(220px, 263px) minmax(280px, 332px) minmax(250px, 1fr) minmax(160px, 200px);
+          grid-template-columns: 272px 244px 370px minmax(250px, 1fr) 200px;
+        }
+
+        .step.halted {
+          width: 331px;
         }
       }
 

@@ -210,6 +210,44 @@ async function expectWorkflowStepCopyHugsContent(page: Page): Promise<void> {
   }
 }
 
+async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
+  const railGeometry = await page.evaluate<
+    Array<{
+      indexX: number | null
+      rectH: number
+      rectW: number
+      rectX: number
+      step: string | null
+    }>
+  >(`Array.from(document.querySelectorAll('.step')).map((step) => {
+    const rect = step.getBoundingClientRect()
+    const index = step.querySelector('.step-index')?.getBoundingClientRect()
+    return {
+      indexX: index ? Math.round(index.x) : null,
+      rectH: Math.round(rect.height),
+      rectW: Math.round(rect.width),
+      rectX: Math.round(rect.x),
+      step: step.getAttribute('data-step'),
+    }
+  })`)
+  const byStep = Object.fromEntries(
+    railGeometry.map((geometry) => [geometry.step, geometry]),
+  )
+  expect(byStep.trigger.indexX).toBeGreaterThanOrEqual(51)
+  expect(byStep.trigger.indexX).toBeLessThanOrEqual(53)
+  expect(byStep.autonomous.indexX).toBeGreaterThanOrEqual(339)
+  expect(byStep.autonomous.indexX).toBeLessThanOrEqual(341)
+  expect(byStep.halt.rectX).toBeGreaterThanOrEqual(598)
+  expect(byStep.halt.rectX).toBeLessThanOrEqual(600)
+  expect(byStep.halt.rectW).toBeGreaterThanOrEqual(330)
+  expect(byStep.halt.rectW).toBeLessThanOrEqual(332)
+  expect(byStep.halt.rectH).toBe(58)
+  expect(byStep.resume.indexX).toBeGreaterThanOrEqual(985)
+  expect(byStep.resume.indexX).toBeLessThanOrEqual(987)
+  expect(byStep.audit.indexX).toBeGreaterThanOrEqual(1326)
+  expect(byStep.audit.indexX).toBeLessThanOrEqual(1328)
+}
+
 async function expectTraceRowsReadable(page: Page): Promise<void> {
   const rowOpacity = await page.evaluate<Array<{ opacity: number; selector: string }>>(
     `Array.from(document.querySelectorAll('.progress-item, #timeline .event, #timeline .event-future')).map((row) => ({
@@ -232,6 +270,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectActionButtonsCentered(page)
       await expectReferenceDesktopPrimaryCaption(page)
       await expectWorkflowStepCopyHugsContent(page)
+      await expectReferenceDesktopRailGeometry(page)
       await expectTraceRowsReadable(page)
 
       const visibleTimes = await page.locator('#answer .progress-time').allTextContents()
