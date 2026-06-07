@@ -1245,8 +1245,15 @@ export function renderApp(): string {
       }
 
       .step:not(:last-child)::after {
-        border-top: 2px solid #c5cfdb;
+        background-image: repeating-linear-gradient(
+          to right,
+          #c5cfdb 0,
+          #c5cfdb 4px,
+          transparent 4px,
+          transparent 7px
+        );
         content: "";
+        height: 2px;
         left: 54px;
         position: absolute;
         right: -16px;
@@ -1256,7 +1263,7 @@ export function renderApp(): string {
       }
 
       .step.done:not(:last-child)::after {
-        border-color: var(--green);
+        background: var(--green);
       }
 
       .step.active,
@@ -1278,8 +1285,6 @@ export function renderApp(): string {
       }
 
       .step.halted:not(:last-child)::after {
-        border-color: #c5cfdb;
-        border-top-style: dashed;
         left: calc(100% + 1px);
         right: -16px;
         width: auto;
@@ -1846,7 +1851,7 @@ export function renderApp(): string {
 
       .diff pre {
         font-size: 10px;
-        line-height: 1.2;
+        line-height: 13.4px;
         max-height: 313px;
       }
 
@@ -1858,7 +1863,7 @@ export function renderApp(): string {
         color: #102033;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 10px;
-        line-height: 1.2;
+        line-height: 13.4px;
         max-height: 313px;
         max-width: 100%;
         height: 298px;
@@ -1872,7 +1877,7 @@ export function renderApp(): string {
         column-gap: 8px;
         display: grid;
         grid-template-columns: 22px minmax(0, 1fr);
-        min-height: 12px;
+        min-height: 13.4px;
         min-width: 0;
         padding: 0 12px;
         width: auto;

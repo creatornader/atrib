@@ -216,6 +216,34 @@ async function expectDiffLineGutter(page: Page): Promise<void> {
   expect(gutter.textAfterGutter).toBe(true)
 }
 
+async function expectDiffRowsFillReferenceFrame(page: Page): Promise<void> {
+  const rhythm = await page.evaluate<{
+    bottomGap: number
+    lineHeight: number
+    topGap: number
+  }>(`(() => {
+    const code = document.querySelector('.diff-code')?.getBoundingClientRect()
+    const rows = Array.from(document.querySelectorAll('.diff-line'))
+    const first = rows[0]?.getBoundingClientRect()
+    const last = rows[rows.length - 1]?.getBoundingClientRect()
+    const style = document.querySelector('.diff-code')
+      ? getComputedStyle(document.querySelector('.diff-code'))
+      : null
+    if (!code || !first || !last || !style) return { bottomGap: 999, lineHeight: 0, topGap: 999 }
+    return {
+      bottomGap: Math.round((code.bottom - last.bottom) * 100) / 100,
+      lineHeight: Number.parseFloat(style.lineHeight),
+      topGap: Math.round((first.top - code.top) * 100) / 100,
+    }
+  })()`)
+  expect(rhythm.lineHeight).toBeGreaterThanOrEqual(13)
+  expect(rhythm.lineHeight).toBeLessThanOrEqual(14)
+  expect(rhythm.topGap).toBeGreaterThanOrEqual(7)
+  expect(rhythm.topGap).toBeLessThanOrEqual(11)
+  expect(rhythm.bottomGap).toBeGreaterThanOrEqual(7)
+  expect(rhythm.bottomGap).toBeLessThanOrEqual(11)
+}
+
 async function expectReferenceDesktopPrimaryCaption(page: Page): Promise<void> {
   const captionGeometry = await page.evaluate<{
     fits: boolean
@@ -298,6 +326,12 @@ async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
       height: number
       width: number
     } | null
+    connectors: Array<{
+      backgroundColor: string
+      backgroundImage: string
+      height: number
+      step: string | null
+    }>
     steps: Array<{
       indexX: number | null
       rectH: number
@@ -317,6 +351,15 @@ async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
         height: Math.round(badgeRect.height),
         width: Math.round(badgeRect.width),
       } : null,
+      connectors: Array.from(document.querySelectorAll('.step:not(:last-child)')).map((step) => {
+        const after = getComputedStyle(step, '::after')
+        return {
+          backgroundColor: after.backgroundColor,
+          backgroundImage: after.backgroundImage,
+          height: Number.parseFloat(after.height),
+          step: step.getAttribute('data-step'),
+        }
+      }),
       steps: Array.from(document.querySelectorAll('.step')).map((step) => {
     const rect = step.getBoundingClientRect()
     const index = step.querySelector('.step-index')?.getBoundingClientRect()
@@ -351,6 +394,15 @@ async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
   expect(railGeometry.badge?.height).toBeLessThanOrEqual(18)
   expect(railGeometry.badge?.width).toBeLessThanOrEqual(112)
   expect(railGeometry.badge?.color).toBe('rgb(164, 73, 0)')
+  const connectors = Object.fromEntries(
+    railGeometry.connectors.map((connector) => [connector.step, connector]),
+  )
+  expect(connectors.trigger.backgroundColor).toBe('rgb(7, 136, 97)')
+  expect(connectors.autonomous.backgroundColor).toBe('rgb(7, 136, 97)')
+  expect(connectors.halt.backgroundImage).toContain('repeating-linear-gradient')
+  expect(connectors.resume.backgroundImage).toContain('repeating-linear-gradient')
+  expect(connectors.halt.height).toBe(2)
+  expect(connectors.resume.height).toBe(2)
 }
 
 async function expectConstrainedDesktopRailGeometry(page: Page): Promise<void> {
@@ -449,6 +501,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('.diff-code')).toContainText('next();')
       await expect(page.locator('.diff-code')).not.toContainText('logRequest')
       await expectDiffLineGutter(page)
+      await expectDiffRowsFillReferenceFrame(page)
 
       await page.locator('#diffWrapToggle').click()
       await expect(page.locator('#diffWrapToggle')).toHaveAttribute('aria-pressed', 'true')
@@ -559,6 +612,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectNoHorizontalOverflow(page)
       await expectActionButtonsCentered(page)
       await expectDiffLineGutter(page)
+      await expectDiffRowsFillReferenceFrame(page)
       await expectWorkflowStepCopyHugsContent(page)
       await expectConstrainedDesktopRailGeometry(page)
       await expectTraceRowsReadable(page)
