@@ -2094,7 +2094,6 @@ export function renderApp(): string {
         margin-left: 0;
         margin-top: 0;
         position: static;
-        transform: translateY(-5px);
         width: 18px;
       }
 

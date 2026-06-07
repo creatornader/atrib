@@ -123,6 +123,7 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
       contentInsideButton: boolean
       iconCopyGap: number
       iconInsideButton: boolean
+      iconTextBlockYDelta: number
       iconLabelYDelta: number
       labelFontSize: number
       labelFits: boolean
@@ -156,6 +157,9 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
       iconInsideButton: icon
         ? icon.left >= buttonRect.left && icon.right <= buttonRect.right && icon.top >= buttonRect.top && icon.bottom <= buttonRect.bottom
         : false,
+      iconTextBlockYDelta: icon && copy
+        ? Math.abs((icon.top + icon.height / 2) - (copy.top + copy.height / 2))
+        : 999,
       iconLabelYDelta: icon && label
         ? Math.abs((icon.top + icon.height / 2) - (label.top + label.height / 2))
         : 999,
@@ -175,7 +179,8 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     expect(geometry.iconCopyGap).toBeGreaterThanOrEqual(8)
     expect(geometry.iconCopyGap).toBeLessThanOrEqual(10)
     expect(geometry.iconInsideButton).toBe(true)
-    expect(geometry.iconLabelYDelta).toBeLessThanOrEqual(1.5)
+    expect(geometry.iconTextBlockYDelta).toBeLessThanOrEqual(1.5)
+    expect(geometry.iconLabelYDelta).toBeGreaterThan(4)
     expect(geometry.labelFontSize).toBeGreaterThanOrEqual(12)
     expect(geometry.captionFontSize).toBeGreaterThanOrEqual(8)
     expect(geometry.labelFits).toBe(true)
