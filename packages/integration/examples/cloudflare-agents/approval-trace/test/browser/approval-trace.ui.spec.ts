@@ -20,6 +20,7 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await page.goto(path)
   await expect(page).toHaveTitle('Cloudflare Agent Trace')
   await expect(page.getByTestId('approval-trace-app')).toBeVisible()
+  await expect(page.locator('#runIdLabel')).not.toHaveText('pending')
   await expect(page.locator('#answer')).toContainText('Trigger received')
   await expect(page.locator('#statusTitle')).toHaveText('Halted for human review', {
     timeout: 15_000,
@@ -32,6 +33,11 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expect(page.getByRole('button', { name: 'Reject' })).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Request changes' })).toBeEnabled()
   await expect(page.locator('#timeline .event')).toHaveCount(3)
+  const timelineColumns = await page.evaluate<string[]>(`Array.from(document.querySelector('#timeline .record-timeline')?.firstElementChild?.children ?? [])
+    .slice(0, 2)
+    .map((child) => String(child.className))`)
+  expect(timelineColumns[0]).toContain('event-marker')
+  expect(timelineColumns[1]).toContain('event-time')
   await expect(page.locator('#answer')).toContainText('Human review halted')
   await expect(page.locator('#answer')).toContainText('Execution is stopped')
 }
@@ -120,6 +126,9 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.locator('#diffWrapToggle').click()
       await expect(page.locator('#diffWrapToggle')).toHaveAttribute('aria-pressed', 'true')
       await expect(page.locator('.diff-code')).toHaveClass(/wrap/)
+      const threeLineDiffCount = await page.locator('.diff-line').count()
+      await page.locator('#diffContext').selectOption('all')
+      await expect.poll(async () => page.locator('.diff-line').count()).toBeGreaterThan(threeLineDiffCount)
       await page.locator('#diffContext').selectOption('6')
       await expect(page.locator('.diff')).toHaveAttribute('data-context-lines', '6')
 
@@ -136,6 +145,12 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#receiptSummary')).toContainText('Record hash')
       await expect(page.locator('#receiptSummary')).toContainText('Timestamp')
       await page.getByRole('tab', { name: 'Summary' }).click()
+      const prettyReceiptLines = await page.locator('#receipts .json-line').count()
+      expect(prettyReceiptLines).toBeGreaterThan(1)
+      await page.locator('#receiptFormat').selectOption('compact')
+      await expect.poll(async () => page.locator('#receipts .json-line').count()).toBe(1)
+      await page.locator('#receiptFormat').selectOption('pretty')
+      await expect.poll(async () => page.locator('#receipts .json-line').count()).toBeGreaterThan(1)
 
       await expectCopies(page.getByRole('button', { name: 'Copy trace ID' }))
       await expectCopies(page.getByRole('button', { name: 'Copy Agent signature' }))
@@ -194,6 +209,17 @@ test.describe('Cloudflare approval trace browser UI', () => {
         timeout: 15_000,
       })
       await expect(page.locator('[data-step="halt"]')).toContainText('Awaiting review')
+      await expectNoHorizontalOverflow(page)
+
+      const firstRunId = await page.locator('#runIdLabel').textContent()
+      await page.locator('#headerMenu').click()
+      await page.locator('[data-header-action="reset"]').click()
+      await expect(page.locator('#runIdLabel')).not.toHaveText('pending')
+      await expect.poll(async () => page.locator('#runIdLabel').textContent()).not.toBe(firstRunId)
+      await expect(page.locator('#answer')).toContainText('Trigger received')
+      await expect(page.locator('#statusTitle')).toHaveText('Halted for human review', {
+        timeout: 15_000,
+      })
       await expectNoHorizontalOverflow(page)
 
       const signerSpacing = await page.evaluate<boolean[]>(`Array.from(document.querySelectorAll('.signer-row'))

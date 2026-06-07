@@ -37,7 +37,7 @@ export function renderApp(): string {
           linear-gradient(180deg, #f8fafc 0, #eef2f7 320px, #e8edf4 100%),
           var(--bg);
         color: var(--text);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", sans-serif;
         max-width: 100%;
         overflow-x: hidden;
       }
@@ -2011,7 +2011,7 @@ export function renderApp(): string {
         background: #cfd8e5;
         bottom: 26px;
         content: "";
-        left: 70px;
+        left: 9px;
         position: absolute;
         top: 24px;
         width: 2px;
@@ -2026,7 +2026,7 @@ export function renderApp(): string {
         border-radius: 0;
         display: grid;
         gap: 7px;
-        grid-template-columns: 54px 20px minmax(0, 1fr) minmax(82px, 120px);
+        grid-template-columns: 20px 54px minmax(0, 1fr) minmax(82px, 120px);
         min-height: 44px;
         min-width: 0;
         padding: 4px 0;
@@ -2436,6 +2436,20 @@ export function renderApp(): string {
         text-transform: none;
       }
 
+      .receipt-format {
+        appearance: auto;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--ink);
+        font: inherit;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        height: 26px;
+        max-width: 156px;
+        padding: 0 6px;
+      }
+
       .icon-button {
         align-items: center;
         background: #fff;
@@ -2799,11 +2813,11 @@ export function renderApp(): string {
         .event,
         .event-future {
           gap: 6px;
-          grid-template-columns: 48px 18px minmax(0, 1fr) minmax(66px, 92px);
+          grid-template-columns: 18px 48px minmax(0, 1fr) minmax(66px, 92px);
         }
 
         .record-timeline::before {
-          left: 62px;
+          left: 8px;
         }
 
         .event-hash {
@@ -2870,7 +2884,7 @@ export function renderApp(): string {
         }
 
         .event {
-          grid-template-columns: 48px 20px minmax(0, 1fr);
+          grid-template-columns: 20px 48px minmax(0, 1fr);
         }
 
         .event-hash {
@@ -2985,7 +2999,10 @@ export function renderApp(): string {
             <h2>Receipt inspector</h2>
             <div class="receipt-controls">
               <span class="label">Format</span>
-              <span class="meta-code">JSON (pretty)</span>
+              <select class="receipt-format" id="receiptFormat" aria-label="Receipt format">
+                <option value="pretty">JSON (pretty)</option>
+                <option value="compact">JSON (compact)</option>
+              </select>
               <button class="icon-button square" id="copyReceipt" type="button" aria-label="Copy receipt" disabled>
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg>
               </button>
@@ -3023,6 +3040,8 @@ export function renderApp(): string {
       let autoFollow = true;
       let stageDisplayTimes = {};
       let selectedReceiptRecord = null;
+      let selectedReceiptView = 'record';
+      let selectedReceiptFormat = 'pretty';
 
       const statusDot = document.querySelector('#statusDot');
       const statusTitle = document.querySelector('#statusTitle');
@@ -3045,6 +3064,7 @@ export function renderApp(): string {
       const traceIdLabel = document.querySelector('#traceIdLabel');
       const copyReceiptButton = document.querySelector('#copyReceipt');
       const downloadReceiptButton = document.querySelector('#downloadReceipt');
+      const receiptFormatSelect = document.querySelector('#receiptFormat');
       const headerMenuButton = document.querySelector('#headerMenu');
       const headerActionsMenu = document.querySelector('#headerActions');
 
@@ -3260,7 +3280,15 @@ export function renderApp(): string {
         return new Date(Date.now() + offsetMs).toISOString().slice(11, 19);
       }
 
-      function renderBootTimeline(activeIndex) {
+      function bootRecordFor(key, run = currentRun) {
+        if (!run) return null;
+        if (key === 'trigger') return run.records.find((record) => record.label === 'trigger');
+        if (key === 'context') return run.records.find((record) => record.label === 'triage');
+        if (key === 'proposal' || key === 'halt') return run.records.find((record) => record.label === 'proposal');
+        return null;
+      }
+
+      function renderBootTimeline(activeIndex, run = currentRun) {
         const activeStage = bootStages[activeIndex] ?? bootStages[bootStages.length - 1];
         const reached = (key) => bootStages.findIndex((stage) => stage.key === key) <= activeIndex;
         const bootRows = [
@@ -3314,24 +3342,31 @@ export function renderApp(): string {
           },
         ];
         const bootSigners = [
-          { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', status: reached('proposal') ? 'Signed' : 'Pending', className: reached('proposal') ? 'signed' : 'pending mcp', sig: reached('proposal') ? '2fb06b13...' : '-' },
+          { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', signer: 'agent', status: reached('proposal') ? 'Signed' : 'Pending', className: reached('proposal') ? 'signed' : 'pending mcp', sig: reached('proposal') && run ? signerSignature(run, 'agent') : '-' },
           { kind: 'human', name: 'Human', detail: 'alice@example.com', status: 'Pending', className: 'pending', sig: '-' },
           { kind: 'mcp', name: 'Action MCP', detail: 'github.write@2.3.1', status: 'Pending', className: 'pending mcp', sig: '-' },
         ];
+        const merkleRoot = reached('trigger') ? run?.records[0]?.record_hash ?? '' : '';
+        const logHash = reached('context') ? run?.records[1]?.record_hash ?? '' : '';
         timelineEl.innerHTML = \`
           <span class="trace-section-label">Record timeline</span>
           <div class="record-timeline">
-            \${bootRows.map((row) => \`
+            \${bootRows.map((row) => {
+              const record = bootRecordFor(row.key, run);
+              const time = row.time ?? (record ? displayRecordTime(record, record.label) + ' UTC' : '');
+              const hash = row.marker === 'future' ? '-' : record ? recordDisplayId(record.record_hash) : 'pending';
+              return \`
               <div class="event-future \${row.selected ? 'selected' : ''}">
-                <span class="event-time">\${row.time ? row.time.slice(0, 8) : '-'}</span>
                 <span class="event-marker \${row.marker}"></span>
+                <span class="event-time">\${time ? time.slice(0, 8) : '-'}</span>
                 <span class="event-copy">
                   <strong>\${row.name}</strong>
                   <span class="value">\${row.detail}</span>
                 </span>
-                <span class="event-hash hash">\${row.marker === 'future' ? '-' : 'pending'}</span>
+                <span class="event-hash hash">\${hash}</span>
               </div>
-            \`).join('')}
+            \`;
+            }).join('')}
           </div>
           <div class="signer-list">
             <span class="trace-section-label">Signers</span>
@@ -3341,22 +3376,22 @@ export function renderApp(): string {
                 <strong>\${signer.name}</strong>
                 <span class="empty">\${signer.detail}</span>
                 <span class="pill signer-status \${signer.className}">\${signer.status}</span>
-                <span class="signature-slot">Sig: <span class="hash">\${signer.sig}</span></span>\${copyIcon('', signer.name + ' signature')}
+                <span class="signature-slot">Sig: <span class="hash">\${signer.sig}</span></span>\${copyIcon(run && signer.signer ? signerRecordHash(run, signer.signer) : '', signer.name + ' signature')}
               </div>
             \`).join('')}
           </div>
           <div class="trace-integrity">
             <span class="trace-section-label">Trace integrity</span>
             <div class="integrity-list">
-              <div class="integrity-row"><strong>Merkle root</strong><span class="hash">pending</span>\${copyIcon('', 'Merkle root')}</div>
-              <div class="integrity-row"><strong>Log hash</strong><span class="hash">pending</span>\${copyIcon('', 'log hash')}</div>
-              <div class="integrity-row proof-row"><strong>Proof status</strong><span class="value">Waiting for first signed record</span><span></span></div>
+              <div class="integrity-row"><strong>Merkle root</strong><span class="hash">\${merkleRoot || 'pending'}</span>\${copyIcon(merkleRoot, 'Merkle root')}</div>
+              <div class="integrity-row"><strong>Log hash</strong><span class="hash">\${logHash || 'pending'}</span>\${copyIcon(logHash, 'log hash')}</div>
+              <div class="integrity-row proof-row"><strong>Proof status</strong><span class="value">\${merkleRoot ? 'Signed records available' : 'Waiting for first signed record'}</span><span></span></div>
             </div>
           </div>
         \`;
       }
 
-      function renderBootProgress(activeIndex) {
+      function renderBootProgress(activeIndex, run = currentRun) {
         const rows = bootStages.map((stage, index) => {
           const done = index < activeIndex;
           const active = index === activeIndex;
@@ -3384,7 +3419,7 @@ export function renderApp(): string {
             </div>
           \`;
         }
-        renderBootTimeline(activeIndex);
+        renderBootTimeline(activeIndex, run);
         followElement(answerEl.querySelectorAll('.progress-item')[activeIndex], 'nearest');
         if (activeStage.key === 'halt') followElement(proposalEl, 'nearest');
       }
@@ -3516,8 +3551,12 @@ export function renderApp(): string {
         return status + (signer.kind === 'mcp' ? ' mcp' : '');
       }
 
+      function traceIdFromRunId(runId) {
+        return 'trc_' + String(runId).replaceAll('-', '').toUpperCase().slice(0, 18);
+      }
+
       function traceIdForRun(run) {
-        return run.trace_packet.trace_id ?? 'trc_' + run.run_id.replaceAll('-', '').toUpperCase().slice(0, 18);
+        return run.trace_packet?.trace_id ?? traceIdFromRunId(run.run_id);
       }
 
       function copyIcon(value = '', label = 'value') {
@@ -3526,8 +3565,24 @@ export function renderApp(): string {
         return '<button class="copy-icon" type="button" aria-label="Copy ' + escapeHtml(label) + '" data-copy-value="' + escapeHtml(normalized) + '" ' + (disabled ? 'disabled' : '') + '><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></button>';
       }
 
-      function renderDiff(diff) {
-        return String(diff).split('\\n').map((line) => {
+      function visibleDiffLines(diff, context = '3') {
+        const lines = String(diff).split('\\n');
+        if (context === 'all') return lines;
+        const contextLines = Number.parseInt(context, 10);
+        if (!Number.isFinite(contextLines)) return lines;
+        let shownContext = 0;
+        return lines.filter((line) => {
+          const changed = (line.startsWith('+') && !line.startsWith('+++'))
+            || (line.startsWith('-') && !line.startsWith('---'))
+            || line.startsWith('@@');
+          if (changed) return true;
+          shownContext += 1;
+          return shownContext <= contextLines;
+        });
+      }
+
+      function renderDiff(diff, context = '3') {
+        return visibleDiffLines(diff, context).map((line) => {
           const kind = line.startsWith('+') && !line.startsWith('+++')
             ? 'add'
             : line.startsWith('-') && !line.startsWith('---')
@@ -3570,8 +3625,12 @@ export function renderApp(): string {
         return JSON.stringify(value, null, 2);
       }
 
+      function formatReceiptJson(value, format = selectedReceiptFormat) {
+        return format === 'compact' ? JSON.stringify(value) : pretty(value);
+      }
+
       function renderReceiptJson(value) {
-        return '<pre>' + pretty(value).split('\\n').map((line, index) => (
+        return '<pre>' + formatReceiptJson(value).split('\\n').map((line, index) => (
           '<span class="json-line"><span class="json-line-number">' + String(index + 1) + '</span><span class="json-line-code">' + escapeHtml(line) + '</span></span>'
         )).join('') + '</pre>';
       }
@@ -3628,7 +3687,7 @@ export function renderApp(): string {
       }
 
       function downloadJson(filename, value) {
-        const blob = new Blob([pretty(value)], { type: 'application/json' });
+        const blob = new Blob([formatReceiptJson(value)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -3647,6 +3706,7 @@ export function renderApp(): string {
 
       function selectedReceiptPayload(record = selectedReceiptRecord) {
         if (!record || !currentRun) return null;
+        if (selectedReceiptView === 'trace') return traceReceiptPayload(currentRun);
         return {
           trace_id: traceIdForRun(currentRun),
           run_id: currentRun.run_id,
@@ -3782,8 +3842,21 @@ export function renderApp(): string {
         if (downloadReceiptButton) downloadReceiptButton.disabled = !hasRecord;
       }
 
+      function selectedReceiptJsonPayload() {
+        if (!selectedReceiptRecord || !currentRun) return null;
+        return selectedReceiptView === 'trace'
+          ? traceReceiptPayload(currentRun)
+          : selectedReceiptRecord;
+      }
+
+      function rerenderSelectedReceiptJson() {
+        const payload = selectedReceiptJsonPayload();
+        if (payload) receiptsEl.innerHTML = renderReceiptJson(payload);
+      }
+
       function clearReceiptInspector() {
         selectedReceiptRecord = null;
+        selectedReceiptView = 'record';
         receiptsEl.innerHTML = '<p class="empty">View signed record and proof after the first trace record is selected.</p>';
         receiptSummaryEl.innerHTML = '<p class="empty">Summary appears after a signed record is selected.</p>';
         renderVerificationActions(null, null);
@@ -3862,7 +3935,7 @@ export function renderApp(): string {
             <span class="label">Target</span>
             <span class="value"><span class="meta-code">\${payload.target_file ?? 'missing'}</span></span>
           </div>
-          <div class="diff">
+          <div class="diff" data-context-lines="3">
             <div>
               <div class="diff-head">
                 <span class="label">Diff (unified)</span>
@@ -3871,7 +3944,7 @@ export function renderApp(): string {
                   <button type="button" id="diffWrapToggle" aria-pressed="false">Wrap</button>
                 </span>
               </div>
-              <div class="diff-code">\${renderDiff(diff)}</div>
+              <div class="diff-code">\${renderDiff(diff, '3')}</div>
             </div>
           </div>
           <div class="risk-heading">Risk assessment</div>
@@ -3908,7 +3981,15 @@ export function renderApp(): string {
           code?.classList.toggle('wrap', !pressed);
         });
         document.querySelector('#diffContext')?.addEventListener('change', (event) => {
-          document.querySelector('.diff')?.setAttribute('data-context-lines', event.currentTarget.value);
+          const context = event.currentTarget.value;
+          const diffRoot = document.querySelector('.diff');
+          const code = document.querySelector('.diff-code');
+          const wrap = document.querySelector('#diffWrapToggle')?.getAttribute('aria-pressed') === 'true';
+          diffRoot?.setAttribute('data-context-lines', context);
+          if (code) {
+            code.innerHTML = renderDiff(diff, context);
+            code.classList.toggle('wrap', wrap);
+          }
         });
         document.querySelector('#approve')?.addEventListener('click', async () => {
           await transition({
@@ -4037,8 +4118,8 @@ export function renderApp(): string {
               const isPendingHuman = false;
               return \`
                 <button class="event" data-hash="\${entry.record_hash}" data-label="\${entry.label}">
-                  <span class="event-time">\${displayRecordTime(record, entry.label, index)}</span>
                   <span class="event-marker \${isPendingHuman ? 'pending' : 'done'}"></span>
+                  <span class="event-time">\${displayRecordTime(record, entry.label, index)}</span>
                   <span class="event-copy">
                     <strong>\${timelineLabel(entry, run)}</strong>
                     <span class="value">\${timelineDetail(entry, run)}</span>
@@ -4049,8 +4130,8 @@ export function renderApp(): string {
             }).join('')}
             \${futureTraceRows(run).map((row) => \`
               <div class="event-future \${row.marker === 'pending' ? 'selected' : ''}">
-                <span class="event-time">\${row.record ? displayRecordTime(row.record, row.displayLabel) : '-'}</span>
                 <span class="event-marker \${row.marker}"></span>
+                <span class="event-time">\${row.record ? displayRecordTime(row.record, row.displayLabel) : '-'}</span>
                 <span class="event-copy">
                   <strong>\${row.name}</strong>
                   <span class="value">\${row.detail}</span>
@@ -4130,7 +4211,8 @@ export function renderApp(): string {
         };
         const selectRecord = (record, options = {}) => {
           selectedReceiptRecord = record;
-          receiptsEl.innerHTML = renderReceiptJson(options.showTrace ? traceReceiptPayload(run) : record);
+          selectedReceiptView = options.showTrace ? 'trace' : 'record';
+          receiptsEl.innerHTML = renderReceiptJson(selectedReceiptJsonPayload());
           renderReceiptSummary(record);
           renderVerificationActions(run, record);
           updateReceiptControls(record);
@@ -4153,9 +4235,8 @@ export function renderApp(): string {
         }
       }
 
-      function render(run) {
+      function applyRunHeader(run) {
         currentRun = run;
-        stageDisplayTimes = {};
         runIdLabel.textContent = run.run_id;
         traceIdLabel.textContent = traceIdForRun(run);
         updateTraceHeaderCopy();
@@ -4164,6 +4245,12 @@ export function renderApp(): string {
           : 'pending';
         startedLabel.textContent = started;
         receivedLabel.textContent = started;
+        updateControls();
+      }
+
+      function render(run) {
+        stageDisplayTimes = {};
+        applyRunHeader(run);
         renderProposal(run);
         renderAnswer(run);
         renderTimeline(run);
@@ -4230,7 +4317,7 @@ export function renderApp(): string {
           const payload = copyButton.id === 'copyReceipt'
             ? selectedReceiptPayload()
             : null;
-          const value = payload ? pretty(payload) : source ?? copyButton.dataset.copyValue ?? '';
+          const value = payload ? formatReceiptJson(payload) : source ?? copyButton.dataset.copyValue ?? '';
           if (await writeClipboard(value)) markCopied(copyButton);
           return;
         }
@@ -4252,27 +4339,38 @@ export function renderApp(): string {
         await startTriggeredRun();
       });
 
+      receiptFormatSelect?.addEventListener('change', () => {
+        selectedReceiptFormat = receiptFormatSelect.value;
+        rerenderSelectedReceiptJson();
+      });
+
       async function startTriggeredRun() {
         if (busy) return;
         try {
           setBusy(true, 'create');
+          const runId = crypto.randomUUID();
           currentRun = null;
           selectedReceiptRecord = null;
+          selectedReceiptView = 'record';
           stageDisplayTimes = {};
-          runIdLabel.textContent = 'pending';
-          traceIdLabel.textContent = 'pending';
+          runIdLabel.textContent = runId;
+          traceIdLabel.textContent = traceIdFromRunId(runId);
           updateTraceHeaderCopy();
           startedLabel.textContent = nowTime(0);
           receivedLabel.textContent = nowTime(0);
           clearReceiptInspector();
-          const runPromise = post('/api/runs', {
+          renderBootProgress(0);
+          const run = await post('/api/runs', {
+            run_id: runId,
             prompt: promptInput.value,
           });
-          for (let index = 0; index < bootStages.length - 1; index += 1) {
-            renderBootProgress(index);
+          applyRunHeader(run);
+          renderBootProgress(0, run);
+          await sleep(1700);
+          for (let index = 1; index < bootStages.length; index += 1) {
+            renderBootProgress(index, run);
             await sleep(1700);
           }
-          const run = await runPromise;
           render(run);
         } catch (error) {
           setStatus('Workflow error', 'error', 'The request failed before the trace could complete.', currentStep);
@@ -4285,20 +4383,7 @@ export function renderApp(): string {
       resetButton.addEventListener('click', () => {
         if (busy) return;
         setHeaderMenuOpen(false);
-        currentRun = null;
-        selectedReceiptRecord = null;
-        stageDisplayTimes = {};
-        runIdLabel.textContent = 'pending';
-        traceIdLabel.textContent = 'pending';
-        updateTraceHeaderCopy();
-        startedLabel.textContent = 'waiting';
-        receivedLabel.textContent = 'waiting';
-        proposalEl.innerHTML = '<p class="empty">Run the trigger to see the agent\\'s proposal, exact payload, diff, risk, and approval controls.</p>';
-        answerEl.innerHTML = '<p class="empty">No active run.</p>';
-        timelineEl.innerHTML = '<p class="empty">Signed records will appear here as the workflow runs.</p>';
-        clearReceiptInspector();
-        setStatus('Ready for incoming alert', 'pending', 'Run the prior trigger to start autonomous triage before the human review gate.', 'trigger');
-        updateControls();
+        startTriggeredRun();
       });
 
       document.addEventListener('keydown', (event) => {
