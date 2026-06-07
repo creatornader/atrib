@@ -118,10 +118,12 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     Array<{
       buttonDisplay: string
       captionFontSize: number
-      groupCenterDelta: number
+      contentCenterDelta: number
+      contentDisplay: string
+      contentInsideButton: boolean
       iconCopyGap: number
       iconInsideButton: boolean
-      iconLabelYDelta: number
+      iconCopyYDelta: number
       labelFontSize: number
       labelFits: boolean
       noLabelIconCollision: boolean
@@ -130,6 +132,7 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     }>
   >(`Array.from(document.querySelectorAll('.actions > button')).map((button) => {
     const buttonRect = button.getBoundingClientRect()
+    const content = button.querySelector('.button-content')?.getBoundingClientRect()
     const icon = button.querySelector('.button-icon')?.getBoundingClientRect()
     const copy = button.querySelector('.action-copy')?.getBoundingClientRect()
     const label = button.querySelector('.button-label')?.getBoundingClientRect()
@@ -137,21 +140,24 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     const labelElement = button.querySelector('.button-label')
     const smallElement = button.querySelector('.action-copy small')
     const buttonStyle = getComputedStyle(button)
+    const contentElement = button.querySelector('.button-content')
     const labelStyle = labelElement ? getComputedStyle(labelElement) : null
     const smallStyle = smallElement ? getComputedStyle(smallElement) : null
     const center = buttonRect.left + buttonRect.width / 2
-    const groupLeft = icon && copy ? Math.min(icon.left, copy.left) : buttonRect.left
-    const groupRight = icon && copy ? Math.max(icon.right, copy.right) : buttonRect.right
     return {
       buttonDisplay: buttonStyle.display,
       captionFontSize: smallStyle ? Number.parseFloat(smallStyle.fontSize) : 0,
-      groupCenterDelta: Math.abs((groupLeft + groupRight) / 2 - center),
+      contentCenterDelta: content ? Math.abs((content.left + content.width / 2) - center) : 999,
+      contentDisplay: contentElement ? getComputedStyle(contentElement).display : '',
+      contentInsideButton: content
+        ? content.left >= buttonRect.left && content.right <= buttonRect.right && content.top >= buttonRect.top && content.bottom <= buttonRect.bottom
+        : false,
       iconCopyGap: icon && copy ? copy.left - icon.right : 0,
       iconInsideButton: icon
         ? icon.left >= buttonRect.left && icon.right <= buttonRect.right && icon.top >= buttonRect.top && icon.bottom <= buttonRect.bottom
         : false,
-      iconLabelYDelta: icon && label
-        ? Math.abs((icon.top + icon.height / 2) - (label.top + label.height / 2))
+      iconCopyYDelta: icon && copy
+        ? Math.abs((icon.top + icon.height / 2) - (copy.top + copy.height / 2))
         : 999,
       labelFontSize: labelStyle ? Number.parseFloat(labelStyle.fontSize) : 0,
       labelFits: label ? label.left >= buttonRect.left && label.right <= buttonRect.right : false,
@@ -162,18 +168,52 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
   })`)
   for (const geometry of buttonGeometry) {
     expect(geometry.buttonDisplay).toBe('flex')
+    expect(geometry.contentDisplay).toBe('flex')
     expect(geometry.textAlign).toBe('left')
-    expect(geometry.groupCenterDelta).toBeLessThanOrEqual(2)
+    expect(geometry.contentCenterDelta).toBeLessThanOrEqual(1.5)
+    expect(geometry.contentInsideButton).toBe(true)
     expect(geometry.iconCopyGap).toBeGreaterThanOrEqual(8)
     expect(geometry.iconCopyGap).toBeLessThanOrEqual(10)
     expect(geometry.iconInsideButton).toBe(true)
-    expect(geometry.iconLabelYDelta).toBeLessThanOrEqual(3)
+    expect(geometry.iconCopyYDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.labelFontSize).toBeGreaterThanOrEqual(12)
     expect(geometry.captionFontSize).toBeGreaterThanOrEqual(8)
     expect(geometry.labelFits).toBe(true)
     expect(geometry.noLabelIconCollision).toBe(true)
     expect(geometry.smallFits).toBe(true)
   }
+}
+
+async function expectDiffLineGutter(page: Page): Promise<void> {
+  const gutter = await page.evaluate<{
+    allRowsNumbered: boolean
+    firstLine: string
+    gutterWidth: number
+    lineCount: number
+    numberCount: number
+    textAfterGutter: boolean
+  }>(`(() => {
+    const code = document.querySelector('.diff-code')?.getBoundingClientRect()
+    const rows = Array.from(document.querySelectorAll('.diff-line'))
+    const numbers = Array.from(document.querySelectorAll('.diff-line-no'))
+    const firstNumber = numbers[0]?.getBoundingClientRect()
+    const firstText = document.querySelector('.diff-line-text')?.getBoundingClientRect()
+    return {
+      allRowsNumbered: rows.every((row, index) => row.querySelector('.diff-line-no')?.textContent === String(index + 1)),
+      firstLine: numbers[0]?.textContent ?? '',
+      gutterWidth: firstNumber ? Math.round(firstNumber.width) : 0,
+      lineCount: rows.length,
+      numberCount: numbers.length,
+      textAfterGutter: Boolean(code && firstNumber && firstText && firstNumber.left >= code.left && firstText.left > firstNumber.right),
+    }
+  })()`)
+  expect(gutter.lineCount).toBeGreaterThan(1)
+  expect(gutter.numberCount).toBe(gutter.lineCount)
+  expect(gutter.firstLine).toBe('1')
+  expect(gutter.allRowsNumbered).toBe(true)
+  expect(gutter.gutterWidth).toBeGreaterThanOrEqual(20)
+  expect(gutter.gutterWidth).toBeLessThanOrEqual(24)
+  expect(gutter.textAfterGutter).toBe(true)
 }
 
 async function expectReferenceDesktopPrimaryCaption(page: Page): Promise<void> {
@@ -408,6 +448,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('.diff-code')).toContainText('const config = getConfig();')
       await expect(page.locator('.diff-code')).toContainText('next();')
       await expect(page.locator('.diff-code')).not.toContainText('logRequest')
+      await expectDiffLineGutter(page)
 
       await page.locator('#diffWrapToggle').click()
       await expect(page.locator('#diffWrapToggle')).toHaveAttribute('aria-pressed', 'true')
@@ -418,6 +459,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.locator('#diffContext').selectOption('6')
       await expect(page.locator('.diff')).toHaveAttribute('data-context-lines', '6')
       await expect(page.locator('.diff-code')).toContainText('logRequest')
+      await expectDiffLineGutter(page)
 
       await page.locator('#headerMenu').click()
       await expect(page.locator('#headerActions')).toBeVisible()
@@ -438,6 +480,11 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('[data-run-mode-action="open-json"]')).toBeEnabled()
       await expect(page.locator('[data-run-mode-action="reset"]')).toBeEnabled()
       await expectRunModeMenuAboveContent(page)
+      await page.locator('[data-run-mode-action="live"]').click()
+      await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
+      await expect(page.locator('#runModeActions')).toBeHidden()
+      await page.locator('#runModeMenu').click()
+      await expect(page.locator('#runModeActions')).toBeVisible()
       await page.keyboard.press('Escape')
       await expect(page.locator('#runModeActions')).toBeHidden()
 
@@ -511,6 +558,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('[data-step="halt"]')).toContainText('Awaiting review')
       await expectNoHorizontalOverflow(page)
       await expectActionButtonsCentered(page)
+      await expectDiffLineGutter(page)
       await expectWorkflowStepCopyHugsContent(page)
       await expectConstrainedDesktopRailGeometry(page)
       await expectTraceRowsReadable(page)

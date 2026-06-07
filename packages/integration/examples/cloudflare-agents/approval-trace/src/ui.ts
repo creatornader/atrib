@@ -1868,15 +1868,29 @@ export function renderApp(): string {
       }
 
       .diff-line {
-        display: block;
+        align-items: start;
+        column-gap: 8px;
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
         min-height: 12px;
         min-width: 0;
         padding: 0 12px;
-        white-space: pre;
         width: auto;
       }
 
-      .diff-code.wrap .diff-line {
+      .diff-line-no {
+        color: #94a3b8;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+        user-select: none;
+      }
+
+      .diff-line-text {
+        min-width: 0;
+        white-space: pre;
+      }
+
+      .diff-code.wrap .diff-line-text {
         overflow-wrap: anywhere;
         white-space: pre-wrap;
       }
@@ -1979,7 +1993,6 @@ export function renderApp(): string {
       .danger {
         align-items: center;
         display: flex;
-        gap: 8px;
         justify-content: center;
         min-height: 58px;
         padding: 10px;
@@ -1992,6 +2005,15 @@ export function renderApp(): string {
         grid-template-columns: minmax(190px, 1.08fr) repeat(2, minmax(0, 1fr));
         gap: 12px;
         margin-top: 6px;
+        min-width: 0;
+      }
+
+      .button-content {
+        align-items: center;
+        display: inline-flex;
+        gap: 8px;
+        justify-content: center;
+        max-width: 100%;
         min-width: 0;
       }
 
@@ -2056,16 +2078,16 @@ export function renderApp(): string {
       }
 
       .button-icon {
+        align-self: center;
         align-items: center;
         border-radius: 999px;
         display: inline-flex;
-        align-self: flex-start;
         flex: 0 0 18px;
         height: 18px;
         justify-content: center;
         line-height: 0;
         margin-left: 0;
-        margin-top: 3px;
+        margin-top: 0;
         position: static;
         width: 18px;
       }
@@ -2096,7 +2118,6 @@ export function renderApp(): string {
         .primary,
         .secondary,
         .danger {
-          gap: 8px;
           padding-left: 10px;
           padding-right: 10px;
         }
@@ -3764,7 +3785,7 @@ export function renderApp(): string {
       }
 
       function renderDiff(diff, context = '3') {
-        return visibleDiffLines(diff, context).map((line) => {
+        return visibleDiffLines(diff, context).map((line, index) => {
           const kind = line.startsWith('+') && !line.startsWith('+++')
             ? 'add'
             : line.startsWith('-') && !line.startsWith('---')
@@ -3772,7 +3793,7 @@ export function renderApp(): string {
               : line.startsWith('@@')
                 ? 'meta'
                 : '';
-          return '<span class="diff-line ' + kind + '">' + escapeHtml(line) + '</span>';
+          return '<span class="diff-line ' + kind + '"><span class="diff-line-no">' + String(index + 1) + '</span><span class="diff-line-text">' + escapeHtml(line) + '</span></span>';
         }).join('');
       }
 
@@ -4157,9 +4178,9 @@ export function renderApp(): string {
             <span>Approval signs the exact payload hash, connector id, and target file before execution resumes.</span>
           </div>
           <div class="actions">
-            <button class="primary" id="approve" aria-label="Approve and resume" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span><span class="action-copy"><span class="button-label">Approve &amp; resume</span><small>Allow MCP execution to continue</small></span></button>
-            <button class="danger" id="reject" aria-label="Reject" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 4.5 7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span><span class="action-copy"><span class="button-label">Reject</span><small>Cancel this proposed action</small></span></button>
-            <button class="secondary" id="requestChanges" aria-label="Request changes" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v6H7l-3 3V4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="action-copy"><span class="button-label">Request changes</span><small>Send feedback to agent</small></span></button>
+            <button class="primary" id="approve" aria-label="Approve and resume" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span><span class="action-copy"><span class="button-label">Approve &amp; resume</span><small>Allow MCP execution to continue</small></span></span></button>
+            <button class="danger" id="reject" aria-label="Reject" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 4.5 7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span><span class="action-copy"><span class="button-label">Reject</span><small>Cancel this proposed action</small></span></span></button>
+            <button class="secondary" id="requestChanges" aria-label="Request changes" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v6H7l-3 3V4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="action-copy"><span class="button-label">Request changes</span><small>Send feedback to agent</small></span></span></button>
           </div>
         \`;
         document.querySelector('#riskDetailsToggle')?.addEventListener('click', (event) => {
