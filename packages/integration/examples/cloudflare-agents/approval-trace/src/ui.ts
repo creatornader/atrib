@@ -1831,8 +1831,8 @@ export function renderApp(): string {
       }
 
       .diff pre {
-        font-size: 11.3px;
-        line-height: 1.38;
+        font-size: 10px;
+        line-height: 1.2;
         max-height: 313px;
       }
 
@@ -1840,12 +1840,14 @@ export function renderApp(): string {
         background: #fbfdff;
         border: 1px solid var(--line);
         border-radius: 8px;
+        box-sizing: border-box;
         color: #102033;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: 11.3px;
-        line-height: 1.38;
+        font-size: 10px;
+        line-height: 1.2;
         max-height: 313px;
         max-width: 100%;
+        height: 298px;
         overflow: auto;
         padding: 8px 0;
         width: 100%;
@@ -1853,7 +1855,7 @@ export function renderApp(): string {
 
       .diff-line {
         display: block;
-        min-height: 15.5px;
+        min-height: 12px;
         min-width: 0;
         padding: 0 12px;
         white-space: pre;
@@ -3732,14 +3734,17 @@ export function renderApp(): string {
         if (context === 'all') return lines;
         const contextLines = Number.parseInt(context, 10);
         if (!Number.isFinite(contextLines)) return lines;
-        let shownContext = 0;
+        let shownContextAfterChange = 0;
         return lines.filter((line) => {
           const changed = (line.startsWith('+') && !line.startsWith('+++'))
             || (line.startsWith('-') && !line.startsWith('---'))
             || line.startsWith('@@');
-          if (changed) return true;
-          shownContext += 1;
-          return shownContext <= contextLines;
+          if (changed) {
+            shownContextAfterChange = 0;
+            return true;
+          }
+          shownContextAfterChange += 1;
+          return shownContextAfterChange <= contextLines;
         });
       }
 

@@ -198,6 +198,37 @@ async function expectReferenceDesktopPrimaryCaption(page: Page): Promise<void> {
   expect(captionGeometry.height).toBeLessThanOrEqual(captionGeometry.lineHeight + 1)
 }
 
+async function expectReferenceDesktopCenterStack(page: Page): Promise<void> {
+  const stackGeometry = await page.evaluate<{
+    actionBottomGap: number
+    actionsY: number
+    diffCodeHeight: number
+    panelBottom: number
+    riskBarHeight: number
+  }>(`(() => {
+    const panel = document.querySelector('#proposal')?.closest('.panel')?.getBoundingClientRect()
+    const diffCode = document.querySelector('.diff-code')?.getBoundingClientRect()
+    const riskBar = document.querySelector('.risk-bar')?.getBoundingClientRect()
+    const actions = document.querySelector('.actions')?.getBoundingClientRect()
+    if (!panel || !diffCode || !riskBar || !actions) {
+      return { actionBottomGap: 999, actionsY: 0, diffCodeHeight: 0, panelBottom: 0, riskBarHeight: 0 }
+    }
+    return {
+      actionBottomGap: Math.round(panel.bottom - actions.bottom),
+      actionsY: Math.round(actions.y),
+      diffCodeHeight: Math.round(diffCode.height),
+      panelBottom: Math.round(panel.bottom),
+      riskBarHeight: Math.round(riskBar.height),
+    }
+  })()`)
+  expect(stackGeometry.diffCodeHeight).toBeGreaterThanOrEqual(298)
+  expect(stackGeometry.actionBottomGap).toBeGreaterThanOrEqual(12)
+  expect(stackGeometry.actionBottomGap).toBeLessThanOrEqual(18)
+  expect(stackGeometry.actionsY).toBeGreaterThanOrEqual(690)
+  expect(stackGeometry.actionsY).toBeLessThanOrEqual(698)
+  expect(stackGeometry.riskBarHeight).toBeGreaterThanOrEqual(38)
+}
+
 async function expectWorkflowStepCopyHugsContent(page: Page): Promise<void> {
   const stepGeometry = await page.evaluate<
     Array<{ copyWidth: number; rowWidth: number; step: string | null }>
@@ -300,6 +331,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectNoHorizontalOverflow(page)
       await expectActionButtonsCentered(page)
       await expectReferenceDesktopPrimaryCaption(page)
+      await expectReferenceDesktopCenterStack(page)
       await expect(page.locator('.risk-bar .value')).toHaveText(
         'Introduces rate limiting which may impact client traffic if misconfigured.',
       )
@@ -328,6 +360,9 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.locator('#riskDetailsToggle').click()
       await expect(page.locator('#riskDetails')).toBeVisible()
       await expect(page.locator('#riskDetails')).toContainText('Human review gate')
+      await expect(page.locator('.diff-code')).toContainText('const config = getConfig();')
+      await expect(page.locator('.diff-code')).toContainText('next();')
+      await expect(page.locator('.diff-code')).not.toContainText('logRequest')
 
       await page.locator('#diffWrapToggle').click()
       await expect(page.locator('#diffWrapToggle')).toHaveAttribute('aria-pressed', 'true')
@@ -337,6 +372,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect.poll(async () => page.locator('.diff-line').count()).toBeGreaterThan(threeLineDiffCount)
       await page.locator('#diffContext').selectOption('6')
       await expect(page.locator('.diff')).toHaveAttribute('data-context-lines', '6')
+      await expect(page.locator('.diff-code')).toContainText('logRequest')
 
       await page.locator('#headerMenu').click()
       await expect(page.locator('#headerActions')).toBeVisible()

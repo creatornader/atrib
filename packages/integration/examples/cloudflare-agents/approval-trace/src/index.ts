@@ -363,6 +363,10 @@ function fixturePlan(prompt: string): PlannedAction {
  import { NextFunction, Request, Response } from 'express';
  import { getConfig } from '../config';
 
+ import { logRequest } from '../observability/logging';
+ import { reportMetrics } from '../observability/metrics';
+ import { resolveTenant } from '../tenant';
+
 +import rateLimit from 'express-rate-limit';
 +
 +const limiter = rateLimit({
