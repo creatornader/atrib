@@ -116,8 +116,12 @@ async function expectRunModeMenuAboveContent(page: Page): Promise<void> {
 async function expectActionButtonsCentered(page: Page): Promise<void> {
   const buttonGeometry = await page.evaluate<
     Array<{
+      captionFontSize: number
+      copyCenterDelta: number
       groupDelta: number
       iconCenterYDelta: number
+      labelCenterDelta: number
+      labelFontSize: number
       labelFits: boolean
       noLabelIconCollision: boolean
       smallFits: boolean
@@ -129,12 +133,21 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     const copy = button.querySelector('.action-copy')?.getBoundingClientRect()
     const label = button.querySelector('.button-label')?.getBoundingClientRect()
     const small = button.querySelector('.action-copy small')?.getBoundingClientRect()
+    const labelElement = button.querySelector('.button-label')
+    const smallElement = button.querySelector('.action-copy small')
+    const labelStyle = labelElement ? getComputedStyle(labelElement) : null
+    const smallStyle = smallElement ? getComputedStyle(smallElement) : null
     const center = buttonRect.left + buttonRect.width / 2
     const groupLeft = Math.min(icon?.left ?? buttonRect.left, copy?.left ?? buttonRect.left)
     const groupRight = Math.max(icon?.right ?? buttonRect.right, copy?.right ?? buttonRect.right)
+    const copyCenter = copy ? copy.left + copy.width / 2 : center
     return {
+      captionFontSize: smallStyle ? Number.parseFloat(smallStyle.fontSize) : 0,
+      copyCenterDelta: copy && small ? Math.abs((small.left + small.width / 2) - copyCenter) : 999,
       groupDelta: Math.abs((groupLeft + groupRight) / 2 - center),
       iconCenterYDelta: icon ? Math.abs((icon.top + icon.height / 2) - (buttonRect.top + buttonRect.height / 2)) : 999,
+      labelCenterDelta: copy && label ? Math.abs((label.left + label.width / 2) - copyCenter) : 999,
+      labelFontSize: labelStyle ? Number.parseFloat(labelStyle.fontSize) : 0,
       labelFits: label ? label.left >= buttonRect.left && label.right <= buttonRect.right : false,
       noLabelIconCollision: icon && label ? icon.right + 2 <= label.left : false,
       smallFits: small ? small.left >= buttonRect.left && small.right <= buttonRect.right : false,
@@ -143,12 +156,41 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
   })`)
   for (const geometry of buttonGeometry) {
     expect(geometry.textAlign).toBe('center')
-    expect(geometry.groupDelta).toBeLessThanOrEqual(8)
+    expect(geometry.groupDelta).toBeLessThanOrEqual(4)
     expect(geometry.iconCenterYDelta).toBeLessThanOrEqual(1)
+    expect(geometry.labelCenterDelta).toBeLessThanOrEqual(2)
+    expect(geometry.copyCenterDelta).toBeLessThanOrEqual(2)
+    expect(geometry.labelFontSize).toBeGreaterThanOrEqual(12)
+    expect(geometry.captionFontSize).toBeGreaterThanOrEqual(9)
     expect(geometry.labelFits).toBe(true)
     expect(geometry.noLabelIconCollision).toBe(true)
     expect(geometry.smallFits).toBe(true)
   }
+}
+
+async function expectReferenceDesktopPrimaryCaption(page: Page): Promise<void> {
+  const captionGeometry = await page.evaluate<{
+    fits: boolean
+    height: number
+    lineHeight: number
+    whiteSpace: string
+  }>(`(() => {
+    const button = document.querySelector('#approve')
+    const caption = button?.querySelector('.action-copy small')
+    if (!button || !caption) return { fits: false, height: 999, lineHeight: 0, whiteSpace: '' }
+    const buttonRect = button.getBoundingClientRect()
+    const captionRect = caption.getBoundingClientRect()
+    const style = getComputedStyle(caption)
+    return {
+      fits: captionRect.left >= buttonRect.left && captionRect.right <= buttonRect.right,
+      height: captionRect.height,
+      lineHeight: Number.parseFloat(style.lineHeight),
+      whiteSpace: style.whiteSpace,
+    }
+  })()`)
+  expect(captionGeometry.whiteSpace).toBe('nowrap')
+  expect(captionGeometry.fits).toBe(true)
+  expect(captionGeometry.height).toBeLessThanOrEqual(captionGeometry.lineHeight + 1)
 }
 
 async function expectWorkflowStepCopyHugsContent(page: Page): Promise<void> {
@@ -183,10 +225,12 @@ async function expectTraceRowsReadable(page: Page): Promise<void> {
 test.describe('Cloudflare approval trace browser UI', () => {
   test('clicks through approved execution and opens the signed receipt', async ({ page }) => {
     await expectCleanConsole(page, async () => {
+      await page.setViewportSize({ width: 1536, height: 1024 })
       await page.context().grantPermissions(['clipboard-write'])
       await createProposal(page)
       await expectNoHorizontalOverflow(page)
       await expectActionButtonsCentered(page)
+      await expectReferenceDesktopPrimaryCaption(page)
       await expectWorkflowStepCopyHugsContent(page)
       await expectTraceRowsReadable(page)
 
@@ -227,7 +271,10 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.keyboard.press('Escape')
       await expect(page.locator('#headerActions')).toBeHidden()
 
+      await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-haspopup', 'menu')
+      await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
       await page.locator('#runModeMenu').click()
+      await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'true')
       await expect(page.locator('#runModeActions')).toBeVisible()
       await expect(page.locator('[data-run-mode-action="live"]')).toHaveAttribute('aria-checked', 'true')
       await expect(page.locator('[data-run-mode-action="open-json"]')).toBeEnabled()

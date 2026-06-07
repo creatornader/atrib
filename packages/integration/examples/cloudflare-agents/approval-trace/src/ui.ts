@@ -1946,18 +1946,17 @@ export function renderApp(): string {
       .secondary,
       .danger {
         align-items: center;
-        display: grid;
-        gap: 10px;
-        grid-template-columns: 22px minmax(0, 1fr);
+        display: flex;
+        gap: 9px;
         justify-content: center;
         min-height: 58px;
-        padding: 10px 12px;
+        padding: 10px 13px;
         text-align: center;
       }
 
       .actions {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: minmax(0, 1.08fr) repeat(2, minmax(0, 1fr));
         gap: 12px;
         margin-top: 6px;
         min-width: 0;
@@ -1968,16 +1967,19 @@ export function renderApp(): string {
         display: grid;
         gap: 2px;
         justify-items: center;
+        max-width: calc(100% - 31px);
         min-width: 0;
         padding: 0;
         text-align: center;
-        width: 100%;
+        width: auto;
       }
 
       .action-copy small {
         color: inherit;
+        display: block;
         font-size: 9px;
         font-weight: 650;
+        justify-self: center;
         line-height: 1.15;
         opacity: 0.78;
         overflow: visible;
@@ -1990,6 +1992,7 @@ export function renderApp(): string {
         display: block;
         font-size: 12px;
         font-weight: 850;
+        justify-self: center;
         line-height: 1.12;
         white-space: nowrap;
       }
@@ -1999,7 +2002,7 @@ export function renderApp(): string {
       }
 
       .primary .action-copy small {
-        font-size: 8px;
+        font-size: 9px;
         letter-spacing: 0;
         overflow: visible;
         text-overflow: clip;
@@ -2023,9 +2026,9 @@ export function renderApp(): string {
         align-items: center;
         border-radius: 999px;
         display: inline-flex;
+        flex: 0 0 22px;
         height: 22px;
         justify-content: center;
-        justify-self: end;
         line-height: 0;
         margin-left: 0;
         width: 22px;
@@ -2051,6 +2054,26 @@ export function renderApp(): string {
         border: 1px solid #cbd5e1;
         border-radius: 6px;
         color: #334155;
+      }
+
+      @media (min-width: 1451px) {
+        .primary,
+        .secondary,
+        .danger {
+          gap: 8px;
+          padding-left: 8px;
+          padding-right: 8px;
+        }
+
+        .action-copy {
+          max-width: calc(100% - 30px);
+          width: max-content;
+        }
+
+        .action-copy small,
+        .primary .action-copy small {
+          white-space: nowrap;
+        }
       }
 
       .primary .action-copy,
