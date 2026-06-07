@@ -2966,42 +2966,45 @@ export function renderApp(): string {
       }
 
       .verification-result {
-        background: #fbfdff;
-        border: 1px solid var(--line);
-        border-radius: 8px;
+        background: transparent;
+        border: 0;
+        border-top: 1px solid var(--line);
+        border-radius: 0;
         display: grid;
-        gap: 7px;
-        margin-top: 10px;
-        padding: 9px 10px;
+        gap: 8px;
+        margin-top: 8px;
+        padding: 8px 0 0;
       }
 
       .verification-result.checking {
-        background: #f7fbff;
+        background: transparent;
         border-color: #cfe0f8;
       }
 
       .verification-result.failed {
-        background: #fff7f7;
+        background: transparent;
         border-color: #ffc9c9;
       }
 
       .verification-step {
-        align-items: center;
+        align-items: start;
         display: grid;
         font-size: 12px;
-        gap: 7px;
+        gap: 8px;
         grid-template-columns: 16px minmax(0, 1fr);
+        min-height: 31px;
       }
 
       .verification-step > div {
         display: grid;
-        gap: 2px;
+        gap: 3px;
         min-width: 0;
       }
 
       .verification-step strong {
         display: block;
         font-size: 12px;
+        font-weight: 750;
         line-height: 1.25;
       }
 
@@ -3021,6 +3024,7 @@ export function renderApp(): string {
         display: inline-flex;
         height: 14px;
         justify-content: center;
+        margin-top: 1px;
         width: 14px;
       }
 

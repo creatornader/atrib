@@ -446,6 +446,60 @@ async function expectReferenceVerificationRows(page: Page): Promise<void> {
   }
 }
 
+async function expectVerificationResultRhythm(page: Page): Promise<void> {
+  const result = await page.evaluate<{
+    background: string
+    borderLeftWidth: string
+    borderTopWidth: string
+    rowGap: number
+    rows: Array<{
+      detailTop: number
+      detailWidth: number
+      dotTop: number
+      height: number
+      labelBottom: number
+      text: string
+      verticalGap: number
+    }>
+  }>(`(() => {
+    const result = document.querySelector('#verificationResult')
+    const resultStyle = result ? getComputedStyle(result) : null
+    return {
+      background: resultStyle?.backgroundColor ?? '',
+      borderLeftWidth: resultStyle?.borderLeftWidth ?? '',
+      borderTopWidth: resultStyle?.borderTopWidth ?? '',
+      rowGap: resultStyle ? Number.parseFloat(resultStyle.rowGap) : 0,
+      rows: Array.from(document.querySelectorAll('#verificationResult .verification-step')).map((row) => {
+        const rect = row.getBoundingClientRect()
+        const dot = row.querySelector('.verification-dot')?.getBoundingClientRect()
+        const copy = row.querySelector(':scope > div')
+        const label = copy?.querySelector('strong')?.getBoundingClientRect()
+        const detail = copy?.querySelector('span')?.getBoundingClientRect()
+        return {
+          detailTop: Math.round((detail?.top ?? 0) * 100) / 100,
+          detailWidth: Math.round((detail?.width ?? 0) * 100) / 100,
+          dotTop: Math.round((dot?.top ?? 0) * 100) / 100,
+          height: Math.round(rect.height * 100) / 100,
+          labelBottom: Math.round((label?.bottom ?? 0) * 100) / 100,
+          text: row.textContent?.trim().replace(/\\s+/g, ' ') ?? '',
+          verticalGap: label && detail ? Math.round((detail.top - label.bottom) * 100) / 100 : -999,
+        }
+      }),
+    }
+  })()`)
+  expect(result.background).toBe('rgba(0, 0, 0, 0)')
+  expect(result.borderTopWidth).toBe('1px')
+  expect(result.borderLeftWidth).toBe('0px')
+  expect(result.rowGap).toBe(8)
+  expect(result.rows).toHaveLength(3)
+  for (const row of result.rows) {
+    expect(row.height).toBeGreaterThanOrEqual(31)
+    expect(row.verticalGap).toBeGreaterThanOrEqual(2)
+    expect(row.detailWidth).toBeGreaterThan(200)
+    expect(row.dotTop).toBeLessThan(row.detailTop)
+  }
+}
+
 async function expectPendingSignerHashReadable(page: Page): Promise<void> {
   const signature = await page.evaluate<{
     hashText: string
@@ -824,6 +878,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#verificationResult')).toContainText('Record hash matches')
       await expect(page.locator('#verificationResult')).toContainText('Signature valid')
       await expect(page.locator('#verificationResult')).toContainText('Receipt verified')
+      await expectVerificationResultRhythm(page)
       await expect(page.locator('#verification').getByRole('button', { name: 'Verified' })).toBeVisible()
       const pendingDownload = page.waitForEvent('download')
       await page.getByRole('button', { name: 'Download receipt' }).click()
