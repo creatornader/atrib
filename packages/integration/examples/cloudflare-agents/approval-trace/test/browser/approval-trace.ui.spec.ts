@@ -97,12 +97,63 @@ async function expectHeaderMenuAboveContent(page: Page): Promise<void> {
   expect(menuHit).toBe(true)
 }
 
+async function expectRunModeMenuAboveContent(page: Page): Promise<void> {
+  const menuHit = await page.evaluate<boolean>(`(() => {
+    const menu = document.querySelector('#runModeActions')
+    if (!menu || menu.hidden) return false
+    const rect = menu.getBoundingClientRect()
+    const x = Math.floor(rect.left + rect.width / 2)
+    const y = Math.floor(rect.top + Math.min(rect.height - 2, 18))
+    return Boolean(document.elementFromPoint(x, y)?.closest('#runModeActions'))
+  })()`)
+  expect(menuHit).toBe(true)
+}
+
+async function expectActionButtonsCentered(page: Page): Promise<void> {
+  const buttonGeometry = await page.evaluate<
+    Array<{
+      groupDelta: number
+      iconCenterYDelta: number
+      labelFits: boolean
+      noLabelIconCollision: boolean
+      smallFits: boolean
+      textAlign: string
+    }>
+  >(`Array.from(document.querySelectorAll('.actions > button')).map((button) => {
+    const buttonRect = button.getBoundingClientRect()
+    const icon = button.querySelector('.button-icon')?.getBoundingClientRect()
+    const copy = button.querySelector('.action-copy')?.getBoundingClientRect()
+    const label = button.querySelector('.button-label')?.getBoundingClientRect()
+    const small = button.querySelector('.action-copy small')?.getBoundingClientRect()
+    const center = buttonRect.left + buttonRect.width / 2
+    const groupLeft = Math.min(icon?.left ?? buttonRect.left, copy?.left ?? buttonRect.left)
+    const groupRight = Math.max(icon?.right ?? buttonRect.right, copy?.right ?? buttonRect.right)
+    return {
+      groupDelta: Math.abs((groupLeft + groupRight) / 2 - center),
+      iconCenterYDelta: icon ? Math.abs((icon.top + icon.height / 2) - (buttonRect.top + buttonRect.height / 2)) : 999,
+      labelFits: label ? label.left >= buttonRect.left && label.right <= buttonRect.right : false,
+      noLabelIconCollision: icon && label ? icon.right + 2 <= label.left : false,
+      smallFits: small ? small.left >= buttonRect.left && small.right <= buttonRect.right : false,
+      textAlign: copy ? getComputedStyle(button.querySelector('.action-copy')).textAlign : '',
+    }
+  })`)
+  for (const geometry of buttonGeometry) {
+    expect(geometry.textAlign).toBe('center')
+    expect(geometry.groupDelta).toBeLessThanOrEqual(8)
+    expect(geometry.iconCenterYDelta).toBeLessThanOrEqual(1)
+    expect(geometry.labelFits).toBe(true)
+    expect(geometry.noLabelIconCollision).toBe(true)
+    expect(geometry.smallFits).toBe(true)
+  }
+}
+
 test.describe('Cloudflare approval trace browser UI', () => {
   test('clicks through approved execution and opens the signed receipt', async ({ page }) => {
     await expectCleanConsole(page, async () => {
       await page.context().grantPermissions(['clipboard-write'])
       await createProposal(page)
       await expectNoHorizontalOverflow(page)
+      await expectActionButtonsCentered(page)
 
       const visibleTimes = await page.locator('#answer .progress-time').allTextContents()
       const populatedTimes = visibleTimes.filter((time) => time !== '-')
@@ -140,6 +191,15 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectHeaderMenuAboveContent(page)
       await page.keyboard.press('Escape')
       await expect(page.locator('#headerActions')).toBeHidden()
+
+      await page.locator('#runModeMenu').click()
+      await expect(page.locator('#runModeActions')).toBeVisible()
+      await expect(page.locator('[data-run-mode-action="live"]')).toHaveAttribute('aria-checked', 'true')
+      await expect(page.locator('[data-run-mode-action="open-json"]')).toBeEnabled()
+      await expect(page.locator('[data-run-mode-action="reset"]')).toBeEnabled()
+      await expectRunModeMenuAboveContent(page)
+      await page.keyboard.press('Escape')
+      await expect(page.locator('#runModeActions')).toBeHidden()
 
       await page.getByRole('tab', { name: 'Record details' }).click()
       await expect(page.locator('#receiptSummary')).toContainText('Record hash')
@@ -210,6 +270,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       })
       await expect(page.locator('[data-step="halt"]')).toContainText('Awaiting review')
       await expectNoHorizontalOverflow(page)
+      await expectActionButtonsCentered(page)
 
       const firstRunId = await page.locator('#runIdLabel').textContent()
       await page.locator('#headerMenu').click()

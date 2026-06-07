@@ -1043,8 +1043,27 @@ export function renderApp(): string {
         width: 16px;
       }
 
+      .run-mode-wrap {
+        display: inline-flex;
+        position: relative;
+        white-space: nowrap;
+      }
+
       .meta-pill {
         gap: 8px;
+      }
+
+      button.meta-pill {
+        cursor: pointer;
+        font: inherit;
+      }
+
+      button.meta-pill:hover,
+      button.meta-pill:focus-visible,
+      button.meta-pill[aria-expanded="true"] {
+        border-color: #b8c8f6;
+        color: var(--blue);
+        outline: 0;
       }
 
       .meta-pill.live-run::after {
@@ -1107,12 +1126,31 @@ export function renderApp(): string {
         z-index: 100;
       }
 
+      .run-mode-menu {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: 0 14px 32px rgba(18, 27, 42, 0.16);
+        display: grid;
+        left: 0;
+        min-width: 178px;
+        padding: 5px;
+        position: absolute;
+        top: 40px;
+        z-index: 100;
+      }
+
       .header-actions-menu[hidden] {
         display: none;
       }
 
+      .run-mode-menu[hidden] {
+        display: none;
+      }
+
       .header-actions-menu button,
-      .header-actions-menu a {
+      .header-actions-menu a,
+      .run-mode-menu button {
         align-items: center;
         background: transparent;
         border-radius: 6px;
@@ -1130,9 +1168,15 @@ export function renderApp(): string {
       .header-actions-menu button:hover,
       .header-actions-menu button:focus-visible,
       .header-actions-menu a:hover,
-      .header-actions-menu a:focus-visible {
+      .header-actions-menu a:focus-visible,
+      .run-mode-menu button:hover,
+      .run-mode-menu button:focus-visible {
         background: #f4f7fb;
         outline: 0;
+      }
+
+      .run-mode-menu button[aria-checked="true"] {
+        color: var(--green);
       }
 
       .meta-pill,
@@ -1901,10 +1945,11 @@ export function renderApp(): string {
         align-items: center;
         display: grid;
         gap: 10px;
-        grid-template-columns: 22px auto;
+        grid-template-columns: 22px minmax(0, 1fr);
         justify-content: center;
         min-height: 58px;
         padding: 10px 12px;
+        text-align: center;
       }
 
       .actions {
@@ -1916,11 +1961,14 @@ export function renderApp(): string {
       }
 
       .action-copy {
+        box-sizing: border-box;
         display: grid;
         gap: 2px;
+        justify-items: center;
         min-width: 0;
-        justify-items: start;
-        text-align: left;
+        padding: 0;
+        text-align: center;
+        width: 100%;
       }
 
       .action-copy small {
@@ -1937,14 +1985,14 @@ export function renderApp(): string {
 
       .button-label {
         display: block;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 850;
         line-height: 1.12;
         white-space: nowrap;
       }
 
       .primary .button-label {
-        font-size: 13px;
+        font-size: 12px;
       }
 
       .primary .action-copy small {
@@ -1952,7 +2000,7 @@ export function renderApp(): string {
         letter-spacing: 0;
         overflow: visible;
         text-overflow: clip;
-        white-space: nowrap;
+        white-space: normal;
       }
 
       .primary {
@@ -1974,7 +2022,7 @@ export function renderApp(): string {
         display: inline-flex;
         height: 22px;
         justify-content: center;
-        justify-self: start;
+        justify-self: end;
         line-height: 0;
         margin-left: 0;
         width: 22px;
@@ -2914,7 +2962,14 @@ export function renderApp(): string {
           </div>
         </div>
         <div class="header-meta">
-          <span class="meta-pill live-run"><span class="dot ok"></span>Live run</span>
+          <span class="run-mode-wrap">
+            <button class="meta-pill live-run" id="runModeMenu" type="button" aria-label="Run mode" aria-controls="runModeActions" aria-expanded="false" aria-haspopup="menu"><span class="dot ok"></span><span>Live run</span></button>
+            <div class="run-mode-menu" id="runModeActions" role="menu" hidden>
+              <button type="button" role="menuitemradio" aria-checked="true" data-run-mode-action="live">Live run</button>
+              <button type="button" role="menuitem" data-run-mode-action="open-json">Open trace JSON</button>
+              <button type="button" role="menuitem" data-run-mode-action="reset">Reset demo</button>
+            </div>
+          </span>
           <span class="run-id-meta">Run ID <span class="meta-code" id="runIdLabel">pending</span><button class="copy-icon" type="button" aria-label="Copy run ID" data-copy-source="#runIdLabel" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></button></span>
           <span>Region <span class="meta-code">IAD</span><span class="region-status-dot" aria-hidden="true"></span></span>
           <span>Started <span id="startedLabel">waiting</span></span>
@@ -3074,6 +3129,8 @@ export function renderApp(): string {
       const receiptFormatSelect = document.querySelector('#receiptFormat');
       const headerMenuButton = document.querySelector('#headerMenu');
       const headerActionsMenu = document.querySelector('#headerActions');
+      const runModeButton = document.querySelector('#runModeMenu');
+      const runModeActionsMenu = document.querySelector('#runModeActions');
 
       const bootStages = [
         {
@@ -3453,7 +3510,7 @@ export function renderApp(): string {
         if (approve) {
           approve.disabled = busy || !hasPendingApproval;
           const label = approve.querySelector('.button-label');
-          if (label) label.textContent = busy && activeLabel === 'approve' ? 'Resuming agent...' : 'Approve and resume';
+          if (label) label.textContent = busy && activeLabel === 'approve' ? 'Resuming agent...' : 'Approve & resume';
         }
         if (reject) {
           reject.disabled = busy || !hasPendingApproval;
@@ -3805,9 +3862,15 @@ export function renderApp(): string {
         headerActionsMenu.hidden = !open;
       }
 
+      function setRunModeMenuOpen(open) {
+        if (!runModeButton || !runModeActionsMenu) return;
+        runModeButton.setAttribute('aria-expanded', String(open));
+        runModeActionsMenu.hidden = !open;
+      }
+
       function updateHeaderMenuControls() {
         if (!headerActionsMenu) return;
-        headerActionsMenu.querySelectorAll('[data-header-action="open-json"], [data-header-action="reset"]').forEach((button) => {
+        document.querySelectorAll('[data-header-action="open-json"], [data-header-action="reset"], [data-run-mode-action="open-json"], [data-run-mode-action="reset"]').forEach((button) => {
           button.disabled = !currentRun || busy;
         });
       }
@@ -3991,7 +4054,7 @@ export function renderApp(): string {
             <span>Approval signs the exact payload hash, connector id, and target file before execution resumes.</span>
           </div>
           <div class="actions">
-            <button class="primary" id="approve" aria-label="Approve and resume" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span><span class="action-copy"><span class="button-label">Approve and resume</span><small>Allow MCP execution to continue</small></span></button>
+            <button class="primary" id="approve" aria-label="Approve and resume" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span><span class="action-copy"><span class="button-label">Approve &amp; resume</span><small>Allow MCP execution to continue</small></span></button>
             <button class="danger" id="reject" aria-label="Reject" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 4.5 7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span><span class="action-copy"><span class="button-label">Reject</span><small>Cancel this proposed action</small></span></button>
             <button class="secondary" id="requestChanges" aria-label="Request changes" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v6H7l-3 3V4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="action-copy"><span class="button-label">Request changes</span><small>Send feedback to agent</small></span></button>
           </div>
@@ -4318,7 +4381,30 @@ export function renderApp(): string {
         const target = event.target;
         const menuButton = target.closest?.('#headerMenu');
         if (menuButton) {
+          setRunModeMenuOpen(false);
           setHeaderMenuOpen(menuButton.getAttribute('aria-expanded') !== 'true');
+          return;
+        }
+
+        const runModeTrigger = target.closest?.('#runModeMenu');
+        if (runModeTrigger) {
+          setHeaderMenuOpen(false);
+          setRunModeMenuOpen(runModeTrigger.getAttribute('aria-expanded') !== 'true');
+          return;
+        }
+
+        const runModeAction = target.closest?.('[data-run-mode-action]');
+        if (runModeAction && !runModeAction.disabled) {
+          const action = runModeAction.dataset.runModeAction;
+          setRunModeMenuOpen(false);
+          if (action === 'open-json' && currentRun) {
+            window.open('/api/runs/' + currentRun.run_id, '_blank', 'noreferrer');
+            return;
+          }
+          if (action === 'reset') {
+            resetButton.click();
+            return;
+          }
           return;
         }
 
@@ -4342,6 +4428,10 @@ export function renderApp(): string {
 
         if (headerActionsMenu && !target.closest?.('#headerActions')) {
           setHeaderMenuOpen(false);
+        }
+
+        if (runModeActionsMenu && !target.closest?.('#runModeActions')) {
+          setRunModeMenuOpen(false);
         }
 
         const copyButton = target.closest?.('[data-copy-value], [data-copy-source], #copyReceipt');
@@ -4418,11 +4508,15 @@ export function renderApp(): string {
       resetButton.addEventListener('click', () => {
         if (busy) return;
         setHeaderMenuOpen(false);
+        setRunModeMenuOpen(false);
         startTriggeredRun();
       });
 
       document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') setHeaderMenuOpen(false);
+        if (event.key === 'Escape') {
+          setHeaderMenuOpen(false);
+          setRunModeMenuOpen(false);
+        }
       });
 
       updateControls();
