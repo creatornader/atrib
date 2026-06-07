@@ -765,7 +765,7 @@ export function renderApp(): string {
 
       .progress-item,
       .event {
-        animation: itemIn 360ms ease both;
+        transition: background-color 160ms ease, color 160ms ease;
       }
 
       .progress-item {
@@ -1364,9 +1364,12 @@ export function renderApp(): string {
         background: #fff;
         display: grid;
         gap: 3px;
+        justify-self: start;
+        max-width: 100%;
         min-width: 0;
         padding: 0 4px;
         position: relative;
+        width: max-content;
         z-index: 1;
       }
 
@@ -2087,6 +2090,10 @@ export function renderApp(): string {
         padding: 4px 0;
       }
 
+      .event {
+        grid-template-columns: 20px 54px minmax(0, 1fr) minmax(82px, 112px) 14px;
+      }
+
       .event:hover,
       .event:focus-visible,
       .event.selected {
@@ -2206,6 +2213,26 @@ export function renderApp(): string {
         text-overflow: ellipsis;
         white-space: nowrap;
         word-break: normal;
+      }
+
+      .event-cue {
+        align-self: center;
+        color: #6b778c;
+        display: inline-flex;
+        height: 14px;
+        justify-content: center;
+        opacity: 0.85;
+        width: 14px;
+      }
+
+      .event-cue::before {
+        border-right: 1.5px solid currentColor;
+        border-top: 1.5px solid currentColor;
+        content: "";
+        height: 6px;
+        margin-top: 3px;
+        transform: rotate(45deg);
+        width: 6px;
       }
 
       .trace-section-label {
@@ -2871,6 +2898,10 @@ export function renderApp(): string {
           grid-template-columns: 18px 48px minmax(0, 1fr) minmax(66px, 92px);
         }
 
+        .event {
+          grid-template-columns: 18px 48px minmax(0, 1fr) minmax(58px, 82px) 12px;
+        }
+
         .record-timeline::before {
           left: 8px;
         }
@@ -2945,6 +2976,10 @@ export function renderApp(): string {
         .event-hash {
           grid-column: 3;
           justify-self: start;
+        }
+
+        .event-cue {
+          display: none;
         }
       }
     </style>
@@ -4223,6 +4258,7 @@ export function renderApp(): string {
                     <span class="value">\${timelineDetail(entry, run)}</span>
                   </span>
                   <span class="event-hash hash">\${recordDisplayId(entry.record_hash)}</span>
+                  <span class="event-cue" aria-hidden="true"></span>
                 </button>
               \`;
             }).join('')}
@@ -4327,7 +4363,7 @@ export function renderApp(): string {
         const preferredButton = timelineEl.querySelector(\`.event[data-label="\${preferredLabel}"]\`) ?? timelineEl.querySelector('.event');
         if (preferredButton) {
           timelineEl.querySelectorAll('.event').forEach((item) => item.classList.remove('selected'));
-          preferredButton.classList.add('selected');
+          if (run.status !== 'pending_approval') preferredButton.classList.add('selected');
           const preferredRecord = run.records.find((item) => item.record_hash === preferredButton.dataset.hash);
           if (preferredRecord) selectRecord(preferredRecord, { showTrace: true });
         }

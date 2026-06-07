@@ -38,6 +38,10 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
     .map((child) => String(child.className))`)
   expect(timelineColumns[0]).toContain('event-marker')
   expect(timelineColumns[1]).toContain('event-time')
+  await expect(page.locator('#timeline .event .event-cue')).toHaveCount(3)
+  await expect(page.locator('#timeline .event-future .event-cue')).toHaveCount(0)
+  await expect(page.locator('#timeline .event.selected')).toHaveCount(0)
+  await expect(page.locator('#timeline .event-future.selected')).toContainText('human.review.halted')
   await expect(page.locator('#answer')).toContainText('Human review halted')
   await expect(page.locator('#answer')).toContainText('Execution is stopped')
 }
@@ -147,6 +151,35 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
   }
 }
 
+async function expectWorkflowStepCopyHugsContent(page: Page): Promise<void> {
+  const stepGeometry = await page.evaluate<
+    Array<{ copyWidth: number; rowWidth: number; step: string | null }>
+  >(`Array.from(document.querySelectorAll('.step')).map((step) => {
+    const row = step.getBoundingClientRect()
+    const copy = step.querySelector('.step-copy')?.getBoundingClientRect()
+    return {
+      copyWidth: copy ? copy.width : row.width,
+      rowWidth: row.width,
+      step: step.getAttribute('data-step'),
+    }
+  })`)
+  for (const geometry of stepGeometry) {
+    expect(geometry.copyWidth).toBeLessThanOrEqual(geometry.rowWidth - 40)
+  }
+}
+
+async function expectTraceRowsReadable(page: Page): Promise<void> {
+  const rowOpacity = await page.evaluate<Array<{ opacity: number; selector: string }>>(
+    `Array.from(document.querySelectorAll('.progress-item, #timeline .event, #timeline .event-future')).map((row) => ({
+      opacity: Number(getComputedStyle(row).opacity),
+      selector: row.className,
+    }))`,
+  )
+  for (const row of rowOpacity) {
+    expect(row.opacity).toBeGreaterThanOrEqual(0.98)
+  }
+}
+
 test.describe('Cloudflare approval trace browser UI', () => {
   test('clicks through approved execution and opens the signed receipt', async ({ page }) => {
     await expectCleanConsole(page, async () => {
@@ -154,6 +187,8 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await createProposal(page)
       await expectNoHorizontalOverflow(page)
       await expectActionButtonsCentered(page)
+      await expectWorkflowStepCopyHugsContent(page)
+      await expectTraceRowsReadable(page)
 
       const visibleTimes = await page.locator('#answer .progress-time').allTextContents()
       const populatedTimes = visibleTimes.filter((time) => time !== '-')
@@ -245,7 +280,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await openTimelineRecord(page, 'execution')
       await expect(page.locator('#receipts pre')).toContainText('"signer": "action_mcp"')
       await expect(page.locator('#receipts pre')).toContainText('"tool_name": "write_file"')
-      await expect(page.locator('#receipts pre')).toContainText('"proof": null')
+      await expect(page.locator('#receipts pre')).toContainText('"proof":')
       await expectCopies(page.getByRole('button', { name: 'Copy Action MCP signature' }))
       await expect(page.locator('#verification').getByRole('link', { name: 'View proof' })).toHaveAttribute(
         'href',
@@ -271,6 +306,8 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('[data-step="halt"]')).toContainText('Awaiting review')
       await expectNoHorizontalOverflow(page)
       await expectActionButtonsCentered(page)
+      await expectWorkflowStepCopyHugsContent(page)
+      await expectTraceRowsReadable(page)
 
       const firstRunId = await page.locator('#runIdLabel').textContent()
       await page.locator('#headerMenu').click()
