@@ -2066,9 +2066,8 @@ export function renderApp(): string {
         display: flex;
         justify-content: center;
         min-height: 58px;
-        padding: 10px;
+        padding: 10px 14px;
         position: relative;
-        text-align: left;
       }
 
       .actions {
@@ -2081,11 +2080,13 @@ export function renderApp(): string {
 
       .button-content {
         align-items: center;
-        display: flex;
+        display: grid;
+        gap: 8px;
+        grid-template-columns: 18px minmax(0, max-content);
         justify-content: center;
         max-width: 100%;
         min-width: 0;
-        width: 100%;
+        width: auto;
       }
 
       .button-content::after {
@@ -2093,7 +2094,7 @@ export function renderApp(): string {
       }
 
       .action-copy {
-        align-items: center;
+        align-items: flex-start;
         box-sizing: border-box;
         display: flex;
         flex-direction: column;
@@ -2101,9 +2102,9 @@ export function renderApp(): string {
         justify-content: center;
         max-width: 100%;
         min-width: 0;
-        padding: 0 18px;
-        text-align: center;
-        width: 100%;
+        padding: 0;
+        text-align: left;
+        width: auto;
       }
 
       .action-copy small {
@@ -2111,21 +2112,19 @@ export function renderApp(): string {
         display: block;
         font-size: 9px;
         font-weight: 600;
-        justify-self: center;
         line-height: 1.15;
         opacity: 0.78;
         overflow: visible;
         overflow-wrap: anywhere;
         text-overflow: clip;
         white-space: normal;
-        width: 100%;
+        width: max-content;
       }
 
       .button-label {
         display: block;
         font-size: 13px;
         font-weight: 800;
-        justify-self: center;
         line-height: 1.12;
         max-width: 100%;
         white-space: nowrap;
@@ -2166,7 +2165,6 @@ export function renderApp(): string {
       }
 
       .button-icon {
-        align-self: center;
         align-items: center;
         border-radius: 999px;
         display: inline-flex;
@@ -2174,11 +2172,7 @@ export function renderApp(): string {
         height: 18px;
         justify-content: center;
         line-height: 0;
-        left: 12px;
         margin: 0;
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
         width: 18px;
       }
 
@@ -2208,8 +2202,8 @@ export function renderApp(): string {
         .primary,
         .secondary,
         .danger {
-          padding-left: 10px;
-          padding-right: 10px;
+          padding-left: 14px;
+          padding-right: 14px;
         }
 
         .action-copy {

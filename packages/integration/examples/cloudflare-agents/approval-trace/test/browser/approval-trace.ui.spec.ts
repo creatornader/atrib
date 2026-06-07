@@ -170,22 +170,21 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     Array<{
       buttonDisplay: string
       captionFontSize: number
-      captionFitsCopy: boolean
       captionMuted: boolean
       contentCenterDelta: number
       contentDisplay: string
       contentInsideButton: boolean
       copyCenterDelta: number
+      copyLeftAlignDelta: number
       iconCopyGap: number
       iconInsideButton: boolean
-      iconTextBlockYDelta: number
       iconLabelYDelta: number
-      labelCopyCenterDelta: number
+      iconTextBlockYDelta: number
       labelFontSize: number
       labelFits: boolean
       labelWeight: number
       noLabelIconCollision: boolean
-      smallCopyCenterDelta: number
+      smallLeftAlignDelta: number
       smallFits: boolean
       textAlign: string
     }>
@@ -206,7 +205,6 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     return {
       buttonDisplay: buttonStyle.display,
       captionFontSize: smallStyle ? Number.parseFloat(smallStyle.fontSize) : 0,
-      captionFitsCopy: small && copy ? small.left >= copy.left && small.right <= copy.right + 1 : false,
       captionMuted: button.id === 'approve' || (smallStyle ? smallStyle.color === 'rgb(71, 85, 105)' : false),
       contentCenterDelta: content ? Math.abs((content.left + content.width / 2) - center) : 999,
       contentDisplay: contentElement ? getComputedStyle(contentElement).display : '',
@@ -214,49 +212,46 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
         ? content.left >= buttonRect.left && content.right <= buttonRect.right && content.top >= buttonRect.top && content.bottom <= buttonRect.bottom
         : false,
       copyCenterDelta: copy ? Math.abs((copy.left + copy.width / 2) - center) : 999,
+      copyLeftAlignDelta: copy && label ? Math.abs(copy.left - label.left) : 999,
       iconCopyGap: icon && copy ? copy.left - icon.right : 0,
       iconInsideButton: icon
         ? icon.left >= buttonRect.left && icon.right <= buttonRect.right && icon.top >= buttonRect.top && icon.bottom <= buttonRect.bottom
         : false,
-      iconTextBlockYDelta: icon && copy
-        ? Math.abs((icon.top + icon.height / 2) - (copy.top + copy.height / 2))
-        : 999,
       iconLabelYDelta: icon && label
         ? Math.abs((icon.top + icon.height / 2) - (label.top + label.height / 2))
         : 999,
-      labelCopyCenterDelta: label && copy
-        ? Math.abs((label.left + label.width / 2) - (copy.left + copy.width / 2))
+      iconTextBlockYDelta: icon && copy
+        ? Math.abs((icon.top + icon.height / 2) - (copy.top + copy.height / 2))
         : 999,
       labelFontSize: labelStyle ? Number.parseFloat(labelStyle.fontSize) : 0,
       labelFits: label ? label.left >= buttonRect.left && label.right <= buttonRect.right : false,
       labelWeight: labelStyle ? Number.parseFloat(labelStyle.fontWeight) : 0,
       noLabelIconCollision: icon && label ? icon.right + 2 <= label.left : false,
-      smallCopyCenterDelta: small && copy
-        ? Math.abs((small.left + small.width / 2) - (copy.left + copy.width / 2))
-        : 999,
+      smallLeftAlignDelta: small && label ? Math.abs(small.left - label.left) : 999,
       smallFits: small ? small.left >= buttonRect.left && small.right <= buttonRect.right : false,
       textAlign: copy ? getComputedStyle(button.querySelector('.action-copy')).textAlign : '',
     }
   })`)
   for (const geometry of buttonGeometry) {
     expect(geometry.buttonDisplay).toBe('flex')
-    expect(geometry.contentDisplay).toBe('flex')
-    expect(geometry.textAlign).toBe('center')
+    expect(geometry.contentDisplay).toBe('grid')
+    expect(geometry.textAlign).toBe('left')
     expect(geometry.contentCenterDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.contentInsideButton).toBe(true)
-    expect(geometry.copyCenterDelta).toBeLessThanOrEqual(1.5)
+    expect(geometry.copyCenterDelta).toBeGreaterThan(8)
+    expect(geometry.iconCopyGap).toBeGreaterThanOrEqual(7)
+    expect(geometry.iconCopyGap).toBeLessThanOrEqual(9)
     expect(geometry.iconInsideButton).toBe(true)
     expect(geometry.iconTextBlockYDelta).toBeLessThanOrEqual(1.5)
-    expect(geometry.iconLabelYDelta).toBeGreaterThan(4)
-    expect(geometry.labelCopyCenterDelta).toBeLessThanOrEqual(1)
+    expect(geometry.iconLabelYDelta).toBeGreaterThan(3)
+    expect(geometry.copyLeftAlignDelta).toBeLessThanOrEqual(0.5)
     expect(geometry.labelFontSize).toBeGreaterThanOrEqual(13)
     expect(geometry.labelWeight).toBeGreaterThanOrEqual(800)
-    expect(geometry.captionFitsCopy).toBe(true)
     expect(geometry.captionFontSize).toBeGreaterThanOrEqual(8)
     expect(geometry.captionMuted).toBe(true)
     expect(geometry.labelFits).toBe(true)
     expect(geometry.noLabelIconCollision).toBe(true)
-    expect(geometry.smallCopyCenterDelta).toBeLessThanOrEqual(1)
+    expect(geometry.smallLeftAlignDelta).toBeLessThanOrEqual(0.5)
     expect(geometry.smallFits).toBe(true)
   }
 }
