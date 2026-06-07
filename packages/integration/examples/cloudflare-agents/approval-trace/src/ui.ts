@@ -1167,6 +1167,25 @@ export function renderApp(): string {
         white-space: nowrap;
       }
 
+      .run-mode-menu button {
+        display: grid;
+        gap: 7px;
+        grid-template-columns: 12px minmax(0, 1fr);
+      }
+
+      .run-mode-menu button::before {
+        color: transparent;
+        content: "";
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1;
+      }
+
+      .run-mode-menu button[aria-checked="true"]::before {
+        color: var(--green);
+        content: "✓";
+      }
+
       .header-actions-menu button:hover,
       .header-actions-menu button:focus-visible,
       .header-actions-menu a:hover,
@@ -2045,7 +2064,7 @@ export function renderApp(): string {
         color: inherit;
         display: block;
         font-size: 9px;
-        font-weight: 650;
+        font-weight: 600;
         justify-self: start;
         line-height: 1.15;
         opacity: 0.78;
@@ -2053,12 +2072,13 @@ export function renderApp(): string {
         overflow-wrap: anywhere;
         text-overflow: clip;
         white-space: normal;
+        width: 100%;
       }
 
       .button-label {
         display: block;
         font-size: 12px;
-        font-weight: 850;
+        font-weight: 800;
         justify-self: start;
         line-height: 1.12;
         white-space: nowrap;
@@ -2070,6 +2090,7 @@ export function renderApp(): string {
 
       .primary .action-copy small {
         font-size: 9px;
+        font-weight: 500;
         letter-spacing: 0;
         overflow: visible;
         text-overflow: clip;
@@ -2087,6 +2108,13 @@ export function renderApp(): string {
 
       .danger {
         background: #fff;
+      }
+
+      .danger .action-copy small,
+      .secondary .action-copy small {
+        color: #475569;
+        font-weight: 500;
+        opacity: 1;
       }
 
       .button-icon {
@@ -2136,7 +2164,7 @@ export function renderApp(): string {
 
         .action-copy {
           max-width: 100%;
-          width: auto;
+          width: max-content;
         }
 
         .action-copy small,
@@ -2759,6 +2787,10 @@ export function renderApp(): string {
         gap: 6px;
       }
 
+      .verify-list {
+        gap: 5px;
+      }
+
       .summary-row {
         display: grid;
         font-size: 12px;
@@ -2775,14 +2807,30 @@ export function renderApp(): string {
       }
 
       .verify-row {
-        border-radius: 7px;
+        background: transparent;
+        border: 0;
+        border-radius: 0;
         grid-template-columns: 34px minmax(0, 1fr) minmax(72px, auto);
-        min-height: 40px;
-        padding: 5px 9px;
+        min-height: 42px;
+        padding: 6px 0;
       }
 
       .verify-row > div {
         min-width: 0;
+      }
+
+      .verify-row strong {
+        display: block;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.25;
+      }
+
+      .verify-row .empty {
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.25;
+        margin-top: 2px;
       }
 
       .verify-icon {

@@ -118,6 +118,8 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     Array<{
       buttonDisplay: string
       captionFontSize: number
+      captionFitsCopy: boolean
+      captionMuted: boolean
       contentCenterDelta: number
       contentDisplay: string
       contentInsideButton: boolean
@@ -127,6 +129,7 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
       iconLabelYDelta: number
       labelFontSize: number
       labelFits: boolean
+      labelWeight: number
       noLabelIconCollision: boolean
       smallFits: boolean
       textAlign: string
@@ -148,6 +151,8 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     return {
       buttonDisplay: buttonStyle.display,
       captionFontSize: smallStyle ? Number.parseFloat(smallStyle.fontSize) : 0,
+      captionFitsCopy: small && copy ? small.left >= copy.left && small.right <= copy.right + 1 : false,
+      captionMuted: button.id === 'approve' || (smallStyle ? smallStyle.color === 'rgb(71, 85, 105)' : false),
       contentCenterDelta: content ? Math.abs((content.left + content.width / 2) - center) : 999,
       contentDisplay: contentElement ? getComputedStyle(contentElement).display : '',
       contentInsideButton: content
@@ -165,6 +170,7 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
         : 999,
       labelFontSize: labelStyle ? Number.parseFloat(labelStyle.fontSize) : 0,
       labelFits: label ? label.left >= buttonRect.left && label.right <= buttonRect.right : false,
+      labelWeight: labelStyle ? Number.parseFloat(labelStyle.fontWeight) : 0,
       noLabelIconCollision: icon && label ? icon.right + 2 <= label.left : false,
       smallFits: small ? small.left >= buttonRect.left && small.right <= buttonRect.right : false,
       textAlign: copy ? getComputedStyle(button.querySelector('.action-copy')).textAlign : '',
@@ -182,7 +188,10 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     expect(geometry.iconTextBlockYDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.iconLabelYDelta).toBeGreaterThan(4)
     expect(geometry.labelFontSize).toBeGreaterThanOrEqual(12)
+    expect(geometry.labelWeight).toBeGreaterThanOrEqual(800)
+    expect(geometry.captionFitsCopy).toBe(true)
     expect(geometry.captionFontSize).toBeGreaterThanOrEqual(8)
+    expect(geometry.captionMuted).toBe(true)
     expect(geometry.labelFits).toBe(true)
     expect(geometry.noLabelIconCollision).toBe(true)
     expect(geometry.smallFits).toBe(true)
@@ -294,6 +303,55 @@ async function expectReferenceDesktopRiskTextFits(page: Page): Promise<void> {
   expect(riskGeometry.gap).toBeLessThanOrEqual(7)
   expect(riskGeometry.textOverflow).toBe('clip')
   expect(riskGeometry.scrollWidth).toBeLessThanOrEqual(riskGeometry.clientWidth + 1)
+}
+
+async function expectReferenceVerificationRows(page: Page): Promise<void> {
+  const rows = await page.evaluate<
+    Array<{
+      borderWidth: string
+      detailFontSize: number
+      iconHeight: number
+      minHeight: number
+      paddingLeft: number
+      paddingRight: number
+      radius: string
+      rowGap: number
+      strongFontSize: number
+      strongWeight: number
+    }>
+  >(`Array.from(document.querySelectorAll('#verification .verify-row')).map((row) => {
+    const style = getComputedStyle(row)
+    const icon = row.querySelector('.verify-icon')?.getBoundingClientRect()
+    const strong = row.querySelector('strong')
+    const detail = row.querySelector('.empty')
+    const strongStyle = strong ? getComputedStyle(strong) : null
+    const detailStyle = detail ? getComputedStyle(detail) : null
+    return {
+      borderWidth: style.borderTopWidth,
+      detailFontSize: detailStyle ? Number.parseFloat(detailStyle.fontSize) : 0,
+      iconHeight: icon ? Math.round(icon.height) : 0,
+      minHeight: Math.round(row.getBoundingClientRect().height),
+      paddingLeft: Number.parseFloat(style.paddingLeft),
+      paddingRight: Number.parseFloat(style.paddingRight),
+      radius: style.borderTopLeftRadius,
+      rowGap: Number.parseFloat(style.columnGap),
+      strongFontSize: strongStyle ? Number.parseFloat(strongStyle.fontSize) : 0,
+      strongWeight: strongStyle ? Number.parseFloat(strongStyle.fontWeight) : 0,
+    }
+  })`)
+  expect(rows).toHaveLength(3)
+  for (const row of rows) {
+    expect(row.borderWidth).toBe('0px')
+    expect(row.radius).toBe('0px')
+    expect(row.paddingLeft).toBe(0)
+    expect(row.paddingRight).toBe(0)
+    expect(row.detailFontSize).toBe(11)
+    expect(row.minHeight).toBeGreaterThanOrEqual(42)
+    expect(row.iconHeight).toBe(28)
+    expect(row.rowGap).toBe(8)
+    expect(row.strongFontSize).toBe(12)
+    expect(row.strongWeight).toBe(700)
+  }
 }
 
 async function expectReferenceDesktopCenterStack(page: Page): Promise<void> {
@@ -558,6 +616,11 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'true')
       await expect(page.locator('#runModeActions')).toBeVisible()
       await expect(page.locator('[data-run-mode-action="live"]')).toHaveAttribute('aria-checked', 'true')
+      await expect(
+        page.locator('[data-run-mode-action="live"]').evaluate((element) =>
+          getComputedStyle(element, '::before').content,
+        ),
+      ).resolves.toBe('"✓"')
       await expect(page.locator('[data-run-mode-action="open-json"]')).toBeEnabled()
       await expect(page.locator('[data-run-mode-action="reset"]')).toBeEnabled()
       await expectRunModeMenuAboveContent(page)
@@ -588,6 +651,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
         'href',
         /log\.atrib\.dev|\/api\/runs\//,
       )
+      await expectReferenceVerificationRows(page)
       await page.locator('#verification').getByRole('button', { name: 'Verify' }).click()
       await expect(page.locator('#verificationResult')).toContainText('Record hash matches')
       await expect(page.locator('#verificationResult')).toContainText('Signature valid')
