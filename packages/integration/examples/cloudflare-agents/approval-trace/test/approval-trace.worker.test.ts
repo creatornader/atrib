@@ -21,6 +21,7 @@ type WorkflowStatus =
   | 'pending_approval'
   | 'approved'
   | 'rejected'
+  | 'changes_requested'
   | 'executing'
   | 'succeeded'
   | 'failed'
@@ -43,9 +44,9 @@ interface TraceResponse {
   context_id: string
   trace_packet: {
     answer: {
-      decision: 'approved' | 'rejected' | null
+      decision: 'approved' | 'rejected' | 'changes_requested' | null
       executed: boolean
-      outcome: 'not_run' | 'success' | 'error' | 'pending'
+      outcome: 'not_run' | 'revision_requested' | 'success' | 'error' | 'pending'
       changed: string[]
       diagnostic: string | null
     }
@@ -162,6 +163,12 @@ async function approveRun(runId: string, simulateError = false): Promise<TraceRe
 async function rejectRun(runId: string): Promise<TraceResponse> {
   return postJson<TraceResponse>(`/api/runs/${runId}/reject`, {
     reason: 'The reviewer decided this issue reply should not be published.',
+  })
+}
+
+async function requestChanges(runId: string): Promise<TraceResponse> {
+  return postJson<TraceResponse>(`/api/runs/${runId}/request-changes`, {
+    feedback: 'The reviewer requested a smaller repository file update.',
   })
 }
 
@@ -332,6 +339,34 @@ describe('Cloudflare approval trace Worker', () => {
       decision: 'rejected',
       executed: false,
       outcome: 'not_run',
+      changed: [],
+    })
+    expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([])
+  })
+
+  it('signs requested changes without rejecting or executing the action MCP path', async () => {
+    const runId = 'changes-requested-local-e2e'
+    await createRun(runId)
+    const trace = await requestChanges(runId)
+    const records = byLabel(trace)
+    const proposal = records.get('proposal')!
+    const feedback = records.get('change_request')!
+
+    expect(trace.status).toBe('changes_requested')
+    expect(labels(trace)).toEqual(['trigger', 'triage', 'proposal', 'change_request'])
+    await expectSignedTrace(trace)
+    expect(sorted(feedback.record.informed_by)).toEqual([proposal.record_hash])
+    expect(trace.records.some((record) => record.label === 'rejection')).toBe(false)
+    expect(trace.records.some((record) => record.signer === 'action_mcp')).toBe(false)
+    expect(feedback.body).toMatchObject({
+      kind: 'human_review_feedback',
+      decision: 'changes_requested',
+      next_step: 'agent_revision',
+    })
+    expect(trace.trace_packet.answer).toMatchObject({
+      decision: 'changes_requested',
+      executed: false,
+      outcome: 'revision_requested',
       changed: [],
     })
     expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([])

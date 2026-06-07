@@ -31,10 +31,11 @@ type WorkflowStatus =
   | 'pending_approval'
   | 'approved'
   | 'rejected'
+  | 'changes_requested'
   | 'executing'
   | 'succeeded'
   | 'failed'
-type Decision = 'approved' | 'rejected' | null
+type Decision = 'approved' | 'rejected' | 'changes_requested' | null
 type SignerRole = 'agent' | 'human' | 'action_mcp'
 
 interface Env {
@@ -182,6 +183,7 @@ const TRACE_RECORD_OFFSETS_MS = {
   proposal: 650,
   approval: 950,
   rejection: 950,
+  changesRequested: 950,
   handoff: 1_700,
   postApprovalPause: 125,
 }
@@ -512,7 +514,7 @@ function tracePacket(
   const get = (label: string) => parsed.find((entry) => entry.label === label)
   const trigger = get('trigger')
   const triage = get('triage')
-  const decision = get('approval') ?? get('rejection')
+  const decision = get('approval') ?? get('rejection') ?? get('change_request')
   const execution = get('execution')
   const outcome = get('outcome')
   const handoff = get('handoff')
@@ -535,7 +537,9 @@ function tracePacket(
       decision: workflow?.decision ?? null,
       executed: Boolean(execution),
       outcome:
-        workflow?.status === 'rejected'
+        workflow?.status === 'changes_requested'
+          ? 'revision_requested'
+          : workflow?.status === 'rejected'
           ? 'not_run'
           : outcomeBody?.status === 'error'
             ? 'error'
@@ -995,6 +999,78 @@ export class ApprovalTraceAgent extends Agent<Env> {
     return this.getRun(input.runId)
   }
 
+  async requestChanges(input: { runId: string; feedback: string }): Promise<unknown> {
+    this.ensureSchema()
+    const workflow = this.getWorkflowRow(input.runId)
+    if (!workflow) throw new Error(`run not found: ${input.runId}`)
+    if (workflow.status !== 'pending_approval') {
+      throw new Error(`run is not pending approval: ${workflow.status}`)
+    }
+    const feedbackTimestamp = runTimestamp(
+      workflow.created_at,
+      TRACE_RECORD_OFFSETS_MS.changesRequested,
+    )
+    const body = {
+      kind: 'human_review_feedback',
+      reviewer_id: 'browser-demo-human',
+      decision: 'changes_requested',
+      feedback: input.feedback,
+      requested_changes: [
+        'Keep the rate-limit guard, but narrow the change to /v1/report only.',
+        'Return a revised proposal before the action MCP writes repository files.',
+      ],
+      approved_payload_hash: workflow.payload_hash,
+      stable_connector_id: STABLE_CONNECTOR_ID,
+      next_step: 'agent_revision',
+    }
+    const record = await signObservation({
+      env: this.env,
+      role: 'human',
+      key: privateKey(this.env.ATRIB_HUMAN_APPROVER_PRIVATE_KEY),
+      contextId: workflow.context_id,
+      chainRoot: workflow.proposal_record_hash,
+      toolName: 'change_request',
+      body,
+      informedBy: [workflow.proposal_record_hash],
+      timestamp: feedbackTimestamp,
+    })
+    const feedbackHash = recordHash(record)
+    await this.saveTraceRecord({
+      runId: input.runId,
+      label: 'change_request',
+      signer: 'human',
+      record,
+      body,
+      proof: await submitRecord(this.env, record),
+    })
+    this.sql`
+      UPDATE workflows
+      SET status = ${'changes_requested'},
+          decision = ${'changes_requested'},
+          decision_reason = ${input.feedback},
+          decision_record_hash = ${feedbackHash},
+          updated_at = ${feedbackTimestamp}
+      WHERE run_id = ${input.runId}
+    `
+    this.saveNativeEvent(
+      input.runId,
+      emitNativeEvent({
+        channel: 'agents:message',
+        type: 'tool:review_feedback',
+        agent: 'ApprovalTraceAgent',
+        name: input.runId,
+        payload: {
+          approved: false,
+          changesRequested: true,
+          feedbackRecordHash: feedbackHash,
+          feedback: input.feedback,
+        },
+        timestamp: feedbackTimestamp,
+      }),
+    )
+    return this.getRun(input.runId)
+  }
+
   async markExecuting(runId: string): Promise<void> {
     this.ensureSchema()
     this.sql`
@@ -1182,6 +1258,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
           WHEN 'proposal' THEN 3
           WHEN 'approval' THEN 4
           WHEN 'rejection' THEN 4
+          WHEN 'change_request' THEN 4
           WHEN 'preview' THEN 5
           WHEN 'execution' THEN 6
           WHEN 'outcome' THEN 7
@@ -1805,6 +1882,24 @@ export default {
         )
       }
 
+      const requestChangesMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/request-changes$/u)
+      if (requestChangesMatch && request.method === 'POST') {
+        const runId = decodeURIComponent(requestChangesMatch[1]!)
+        const body = (await request.json()) as { feedback?: string }
+        const agent = await getTraceAgent(env, runId)
+        const current = (await agent.getRun(runId)) as { status: WorkflowStatus | null }
+        if (current.status === null) return errorJson(new Error(`run not found: ${runId}`))
+        if (current.status !== 'pending_approval') {
+          return errorJson(new Error(`run is not pending approval: ${current.status}`))
+        }
+        return json(
+          await agent.requestChanges({
+            runId,
+            feedback: body.feedback ?? 'Request a narrower repository file update.',
+          }),
+        )
+      }
+
       return json({
         ok: true,
         endpoints: [
@@ -1814,6 +1909,7 @@ export default {
           '/api/runs/:runId',
           '/api/runs/:runId/approve',
           '/api/runs/:runId/reject',
+          '/api/runs/:runId/request-changes',
           '/action-mcp',
         ],
       })

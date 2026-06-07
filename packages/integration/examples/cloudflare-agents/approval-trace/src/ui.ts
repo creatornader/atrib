@@ -1402,6 +1402,12 @@ export function renderApp(): string {
         color: #be123c;
       }
 
+      .step-badge.requested {
+        background: #fff8ed;
+        border-color: #ffd09a;
+        color: #a44900;
+      }
+
       @media (min-width: 1250px) {
         .rail-stepper {
           grid-template-columns: minmax(170px, 223px) minmax(220px, 263px) minmax(280px, 332px) minmax(250px, 1fr) minmax(160px, 200px);
@@ -1895,16 +1901,16 @@ export function renderApp(): string {
         align-items: center;
         display: grid;
         gap: 10px;
-        grid-template-columns: 22px minmax(0, 1fr);
-        justify-content: stretch;
+        grid-template-columns: 22px auto;
+        justify-content: center;
         min-height: 58px;
-        padding: 9px 12px;
+        padding: 10px 12px;
       }
 
       .actions {
         display: grid;
-        grid-template-columns: 190px 174px 170px;
-        gap: 20px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
         margin-top: 6px;
         min-width: 0;
       }
@@ -1913,6 +1919,7 @@ export function renderApp(): string {
         display: grid;
         gap: 2px;
         min-width: 0;
+        justify-items: start;
         text-align: left;
       }
 
@@ -1920,12 +1927,12 @@ export function renderApp(): string {
         color: inherit;
         font-size: 9px;
         font-weight: 650;
-        line-height: 1.12;
+        line-height: 1.15;
         opacity: 0.78;
         overflow: visible;
-        overflow-wrap: normal;
+        overflow-wrap: anywhere;
         text-overflow: clip;
-        text-wrap: normal;
+        white-space: normal;
       }
 
       .button-label {
@@ -2807,7 +2814,7 @@ export function renderApp(): string {
 
         .actions {
           gap: 10px;
-          grid-template-columns: minmax(170px, 1fr) minmax(138px, 0.88fr) minmax(150px, 0.94fr);
+          grid-template-columns: repeat(3, minmax(0, 1fr));
         }
 
         .event,
@@ -3115,6 +3122,7 @@ export function renderApp(): string {
         proposal: 4800,
         approval: 6200,
         rejection: 6200,
+        change_request: 6200,
         preview: 7400,
         execution: 8600,
         outcome: 9800,
@@ -3152,7 +3160,7 @@ export function renderApp(): string {
         const trigger = run?.records.find((record) => record.label === 'trigger');
         const triage = run?.records.find((record) => record.label === 'triage');
         const proposal = run?.records.find((record) => record.label === 'proposal');
-        const decision = run?.records.find((record) => record.label === 'approval' || record.label === 'rejection');
+        const decision = run?.records.find((record) => record.label === 'approval' || record.label === 'rejection' || record.label === 'change_request');
         const triggerTime = stageDisplayTimes.trigger ?? (trigger ? displayRecordTime(trigger, 'trigger') + ' UTC' : 'Pending');
         const triageTime = stageDisplayTimes.context ?? (triage ? displayRecordTime(triage, 'triage') + ' UTC' : 'Pending');
         const proposalTime = stageDisplayTimes.proposal ?? (proposal ? displayRecordTime(proposal, 'proposal') + ' UTC' : 'Pending');
@@ -3179,7 +3187,7 @@ export function renderApp(): string {
         const badge = workflowSteps.querySelector('[data-step-badge="halt"]');
         const haltStep = workflowSteps.querySelector('[data-step="halt"]');
         if (!title || !badge) return;
-        badge.classList.remove('approved', 'rejected');
+        badge.classList.remove('approved', 'rejected', 'requested');
         badge.hidden = false;
         if (!run) {
           title.textContent = 'Human review halted';
@@ -3196,6 +3204,12 @@ export function renderApp(): string {
           title.textContent = 'Human review rejected';
           badge.textContent = 'Rejected';
           badge.classList.add('rejected');
+          return;
+        }
+        if (run.status === 'changes_requested') {
+          title.textContent = 'Changes requested';
+          badge.textContent = 'Needs revision';
+          badge.classList.add('requested');
           return;
         }
         if (run.status === 'approved' || run.status === 'executing') {
@@ -3435,6 +3449,7 @@ export function renderApp(): string {
         simulateErrorInput.disabled = busy || !canSetFailureMode;
         const approve = document.querySelector('#approve');
         const reject = document.querySelector('#reject');
+        const requestChanges = document.querySelector('#requestChanges');
         if (approve) {
           approve.disabled = busy || !hasPendingApproval;
           const label = approve.querySelector('.button-label');
@@ -3444,6 +3459,11 @@ export function renderApp(): string {
           reject.disabled = busy || !hasPendingApproval;
           const label = reject.querySelector('.button-label');
           if (label) label.textContent = busy && activeLabel === 'reject' ? 'Rejecting...' : 'Reject';
+        }
+        if (requestChanges) {
+          requestChanges.disabled = busy || !hasPendingApproval;
+          const label = requestChanges.querySelector('.button-label');
+          if (label) label.textContent = busy && activeLabel === 'request' ? 'Requesting...' : 'Request changes';
         }
         updateHeaderMenuControls();
       }
@@ -3482,6 +3502,7 @@ export function renderApp(): string {
         if (entry.label === 'proposal') return 'write_file proposal';
         if (entry.label === 'approval') return 'Human approved payload';
         if (entry.label === 'rejection') return 'Human rejected payload';
+        if (entry.label === 'change_request') return 'Human requested revision';
         if (entry.label === 'preview') return 'MCP preview completed';
         if (entry.label === 'execution') return run.status === 'failed' ? 'MCP execution attempted' : 'MCP execution resumed';
         if (entry.label === 'outcome') return run.status === 'failed' ? 'Diagnostic outcome signed' : 'Repository update signed';
@@ -3495,6 +3516,7 @@ export function renderApp(): string {
         if (entry.label === 'proposal') return 'proposal.generated';
         if (entry.label === 'approval') return 'human.approval.signed';
         if (entry.label === 'rejection') return 'human.rejection.signed';
+        if (entry.label === 'change_request') return 'human.change_request.signed';
         if (entry.label === 'preview') return 'mcp.preview.completed';
         if (entry.label === 'execution') return 'mcp.execution.resumed';
         if (entry.label === 'outcome') return run.status === 'failed' ? 'diagnostic.signed' : 'repository.update.signed';
@@ -3505,7 +3527,7 @@ export function renderApp(): string {
       function futureTraceRows(run) {
         const labels = new Set(run.trace_packet.timeline.map((entry) => entry.label));
         const rows = [];
-        if (!labels.has('approval') && !labels.has('rejection')) {
+        if (!labels.has('approval') && !labels.has('rejection') && !labels.has('change_request')) {
           const proposal = run.records.find((record) => record.label === 'proposal');
           rows.push({
             name: 'human.review.halted',
@@ -3600,8 +3622,8 @@ export function renderApp(): string {
           return run.records.find((record) => record.label === 'triage');
         }
         if (rowTitle === 'Proposed action generated') return run.records.find((record) => record.label === 'proposal');
-        if (rowTitle === 'Human review halted' || rowTitle === 'Human review recorded') {
-          return run.records.find((record) => record.label === 'approval' || record.label === 'rejection')
+        if (rowTitle === 'Human review halted' || rowTitle === 'Human review recorded' || rowTitle === 'Human review feedback sent') {
+          return run.records.find((record) => record.label === 'approval' || record.label === 'rejection' || record.label === 'change_request')
             ?? run.records.find((record) => record.label === 'proposal');
         }
         if (rowTitle === 'Agent resumed through MCP') return run.records.find((record) => record.label === 'execution');
@@ -3644,7 +3666,7 @@ export function renderApp(): string {
           trace_id: traceIdForRun(run),
           run_id: run.run_id,
           status: run.status === 'pending_approval' ? 'human_review_halted' : run.status,
-          current_step: run.status === 'pending_approval' ? 3 : ['succeeded', 'failed', 'rejected'].includes(run.status) ? 5 : 4,
+          current_step: run.status === 'pending_approval' || run.status === 'changes_requested' ? 3 : ['succeeded', 'failed', 'rejected'].includes(run.status) ? 5 : 4,
           created_at: createdAt,
           records: run.trace_packet.timeline.map((entry) => {
             const record = run.records.find((item) => item.record_hash === entry.record_hash);
@@ -3885,6 +3907,11 @@ export function renderApp(): string {
               title: 'Rejected before execution',
               detail: 'The human decision is signed. The agent did not run the MCP action.',
             };
+          case 'changes_requested':
+            return {
+              title: 'Revision requested before execution',
+              detail: 'The human feedback is signed. The agent must revise the payload before MCP execution can resume.',
+            };
           default:
             return {
               title: run.status.replaceAll('_', ' '),
@@ -3908,6 +3935,10 @@ export function renderApp(): string {
         }
         if (run.status === 'rejected') {
           setStatus('Rejected', 'error', 'The human decision is signed. No execution ran.', 'audit');
+          return;
+        }
+        if (run.status === 'changes_requested') {
+          setStatus('Changes requested', 'pending', 'The human feedback is signed. MCP execution remains blocked until the agent revises the proposal.', 'halt');
           return;
         }
         setStatus(run.status.replaceAll('_', ' '), 'pending', 'The workflow is still running.', 'resume');
@@ -4017,11 +4048,11 @@ export function renderApp(): string {
         document.querySelector('#requestChanges')?.addEventListener('click', async () => {
           await transition({
             title: 'Requesting changes',
-            detail: 'The human decision is being signed as a no-execute review outcome.',
+            detail: 'The reviewer feedback is being signed. The agent will need to revise before MCP execution.',
             step: 'halt',
-            activeLabel: 'reject',
-            fn: async () => post('/api/runs/' + run.run_id + '/reject', {
-              reason: 'The reviewer requested a smaller repository file update.',
+            activeLabel: 'request',
+            fn: async () => post('/api/runs/' + run.run_id + '/request-changes', {
+              feedback: 'The reviewer requested a smaller repository file update.',
             }),
           });
         });
@@ -4032,6 +4063,8 @@ export function renderApp(): string {
         const answer = run.trace_packet.answer;
         const publicUrl = run.trace_packet.handoff?.public_context_url;
         const auditReady = ['succeeded', 'failed', 'rejected'].includes(run.status);
+        const changesRequested = run.status === 'changes_requested';
+        const showReviewResult = auditReady || changesRequested;
         const labels = new Set(run.records.map((record) => record.label));
         const stageRows = [
           {
@@ -4055,20 +4088,22 @@ export function renderApp(): string {
             done: labels.has('proposal'),
           },
           {
-            title: run.status === 'pending_approval' ? 'Human review halted' : 'Human review recorded',
-            detail: answer.decision ? 'Decision: ' + answer.decision : 'Execution is stopped until a human signs approval or rejection.',
+            title: run.status === 'pending_approval' ? 'Human review halted' : changesRequested ? 'Human review feedback sent' : 'Human review recorded',
+            detail: answer.decision ? 'Decision: ' + answer.decision : 'Execution is stopped until a human signs approval, rejection, or feedback.',
             done: Boolean(answer.decision),
             halted: run.status === 'pending_approval',
           },
           {
-            title: answer.executed ? 'Agent resumed through MCP' : 'Resume not started',
-            detail: answer.executed ? 'The action MCP ran only after approval.' : 'Rejected or waiting for approval.',
+            title: answer.executed ? 'Agent resumed through MCP' : changesRequested ? 'Revision requested' : 'Resume not started',
+            detail: answer.executed ? 'The action MCP ran only after approval.' : changesRequested ? 'MCP execution stays blocked while the agent revises.' : 'Rejected or waiting for approval.',
             done: answer.executed,
           },
           {
-            title: auditReady ? 'Audit ready' : 'Audit assembling',
+            title: auditReady ? 'Audit ready' : changesRequested ? 'Revision pending' : 'Audit assembling',
             detail: auditReady
               ? 'Public log context and trace JSON are ready.'
+              : changesRequested
+                ? 'Signed feedback is in the trace; terminal audit waits for a revised proposal.'
               : 'Receipts appear as the run progresses; terminal audit waits for a decision.',
             done: auditReady,
           },
@@ -4087,15 +4122,15 @@ export function renderApp(): string {
               </div>
             \`).join('')}
           </div>
-          \${auditReady ? \`
+          \${showReviewResult ? \`
             <div class="metric-row">
               <div class="metric">
-                <span class="label">Execution result</span>
-                <span class="value">\${answer.executed ? answer.outcome : 'not run'}</span>
+                <span class="label">\${changesRequested ? 'Review result' : 'Execution result'}</span>
+                <span class="value">\${changesRequested ? 'changes requested' : answer.executed ? answer.outcome : 'not run'}</span>
               </div>
               <div class="metric">
-                <span class="label">Changed rows</span>
-                <span class="value">\${answer.changed.length ? answer.changed.join(', ') : 'none'}</span>
+                <span class="label">\${changesRequested ? 'Next step' : 'Changed rows'}</span>
+                <span class="value">\${changesRequested ? 'agent revision' : answer.changed.length ? answer.changed.join(', ') : 'none'}</span>
               </div>
             </div>
           \` : ''}
@@ -4225,7 +4260,7 @@ export function renderApp(): string {
             selectRecord(record);
           });
         });
-        const preferredLabel = run.status === 'pending_approval' ? 'proposal' : run.status === 'rejected' ? 'rejection' : run.status === 'failed' ? 'outcome' : 'handoff';
+        const preferredLabel = run.status === 'pending_approval' ? 'proposal' : run.status === 'changes_requested' ? 'change_request' : run.status === 'rejected' ? 'rejection' : run.status === 'failed' ? 'outcome' : 'handoff';
         const preferredButton = timelineEl.querySelector(\`.event[data-label="\${preferredLabel}"]\`) ?? timelineEl.querySelector('.event');
         if (preferredButton) {
           timelineEl.querySelectorAll('.event').forEach((item) => item.classList.remove('selected'));

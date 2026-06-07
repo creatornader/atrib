@@ -254,6 +254,27 @@ test.describe('Cloudflare approval trace browser UI', () => {
     })
   })
 
+  test('requests changes without signing a rejection or running MCP', async ({ page }) => {
+    await expectCleanConsole(page, async () => {
+      await createProposal(page)
+      await page.getByRole('button', { name: 'Request changes' }).click()
+
+      await expect(page.locator('#statusTitle')).toHaveText('Changes requested')
+      await expect(page.locator('[data-step="halt"]')).toContainText('Needs revision')
+      await expect(page.locator('#answer')).toContainText('Revision requested')
+      await expect(page.locator('#answer')).toContainText('agent revision')
+      await expect(page.locator('#timeline .event')).toHaveCount(4)
+      await expect(page.locator('#timeline')).toContainText('human.change_request.signed')
+      await expect(page.locator('#timeline')).not.toContainText('human.rejection.signed')
+      await expect(page.locator('#timeline')).not.toContainText('action_mcp')
+
+      await openTimelineRecord(page, 'change_request')
+      await expect(page.locator('#receipts pre')).toContainText('"kind": "human_review_feedback"')
+      await expect(page.locator('#receipts pre')).toContainText('"decision": "changes_requested"')
+      await expect(page.locator('#receipts pre')).toContainText('"next_step": "agent_revision"')
+    })
+  })
+
   test('clicks through diagnostic error and opens the outcome receipt', async ({ page }) => {
     await expectCleanConsole(page, async () => {
       await createProposal(page, '/?simulate_error=1')
