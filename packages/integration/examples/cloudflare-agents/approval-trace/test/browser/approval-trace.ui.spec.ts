@@ -116,12 +116,12 @@ async function expectRunModeMenuAboveContent(page: Page): Promise<void> {
 async function expectActionButtonsCentered(page: Page): Promise<void> {
   const buttonGeometry = await page.evaluate<
     Array<{
+      buttonDisplay: string
       captionFontSize: number
-      captionCenterDelta: number
-      copyCenterDelta: number
+      groupCenterDelta: number
+      iconCopyGap: number
       iconInsideButton: boolean
       iconLabelYDelta: number
-      labelCenterDelta: number
       labelFontSize: number
       labelFits: boolean
       noLabelIconCollision: boolean
@@ -136,21 +136,23 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     const small = button.querySelector('.action-copy small')?.getBoundingClientRect()
     const labelElement = button.querySelector('.button-label')
     const smallElement = button.querySelector('.action-copy small')
+    const buttonStyle = getComputedStyle(button)
     const labelStyle = labelElement ? getComputedStyle(labelElement) : null
     const smallStyle = smallElement ? getComputedStyle(smallElement) : null
     const center = buttonRect.left + buttonRect.width / 2
-    const copyCenter = copy ? copy.left + copy.width / 2 : center
+    const groupLeft = icon && copy ? Math.min(icon.left, copy.left) : buttonRect.left
+    const groupRight = icon && copy ? Math.max(icon.right, copy.right) : buttonRect.right
     return {
+      buttonDisplay: buttonStyle.display,
       captionFontSize: smallStyle ? Number.parseFloat(smallStyle.fontSize) : 0,
-      captionCenterDelta: small ? Math.abs((small.left + small.width / 2) - center) : 999,
-      copyCenterDelta: copy ? Math.abs(copyCenter - center) : 999,
+      groupCenterDelta: Math.abs((groupLeft + groupRight) / 2 - center),
+      iconCopyGap: icon && copy ? copy.left - icon.right : 0,
       iconInsideButton: icon
         ? icon.left >= buttonRect.left && icon.right <= buttonRect.right && icon.top >= buttonRect.top && icon.bottom <= buttonRect.bottom
         : false,
       iconLabelYDelta: icon && label
         ? Math.abs((icon.top + icon.height / 2) - (label.top + label.height / 2))
         : 999,
-      labelCenterDelta: label ? Math.abs((label.left + label.width / 2) - center) : 999,
       labelFontSize: labelStyle ? Number.parseFloat(labelStyle.fontSize) : 0,
       labelFits: label ? label.left >= buttonRect.left && label.right <= buttonRect.right : false,
       noLabelIconCollision: icon && label ? icon.right + 2 <= label.left : false,
@@ -159,14 +161,15 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     }
   })`)
   for (const geometry of buttonGeometry) {
-    expect(geometry.textAlign).toBe('center')
-    expect(geometry.copyCenterDelta).toBeLessThanOrEqual(1)
-    expect(geometry.labelCenterDelta).toBeLessThanOrEqual(2)
-    expect(geometry.captionCenterDelta).toBeLessThanOrEqual(2)
+    expect(geometry.buttonDisplay).toBe('flex')
+    expect(geometry.textAlign).toBe('left')
+    expect(geometry.groupCenterDelta).toBeLessThanOrEqual(2)
+    expect(geometry.iconCopyGap).toBeGreaterThanOrEqual(8)
+    expect(geometry.iconCopyGap).toBeLessThanOrEqual(10)
     expect(geometry.iconInsideButton).toBe(true)
-    expect(geometry.iconLabelYDelta).toBeLessThanOrEqual(1.5)
+    expect(geometry.iconLabelYDelta).toBeLessThanOrEqual(3)
     expect(geometry.labelFontSize).toBeGreaterThanOrEqual(12)
-    expect(geometry.captionFontSize).toBeGreaterThanOrEqual(9)
+    expect(geometry.captionFontSize).toBeGreaterThanOrEqual(8)
     expect(geometry.labelFits).toBe(true)
     expect(geometry.noLabelIconCollision).toBe(true)
     expect(geometry.smallFits).toBe(true)
@@ -385,6 +388,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
 
       await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-haspopup', 'menu')
       await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
+      await expect(page.locator('#runModeMenu .menu-chevron')).toBeVisible()
       await page.locator('#runModeMenu').click()
       await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'true')
       await expect(page.locator('#runModeActions')).toBeVisible()

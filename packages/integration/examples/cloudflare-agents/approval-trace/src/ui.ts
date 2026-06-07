@@ -1066,14 +1066,16 @@ export function renderApp(): string {
         outline: 0;
       }
 
-      .meta-pill.live-run::after {
-        border-bottom: 1.5px solid currentColor;
-        border-right: 1.5px solid currentColor;
-        content: "";
-        height: 5px;
-        margin-left: 2px;
-        transform: translateY(-2px) rotate(45deg);
-        width: 5px;
+      .meta-pill.live-run .menu-chevron {
+        color: #475569;
+        height: 12px;
+        margin-left: -2px;
+        transition: transform 160ms ease;
+        width: 12px;
+      }
+
+      .meta-pill.live-run[aria-expanded="true"] .menu-chevron {
+        transform: rotate(180deg);
       }
 
       .region-status-dot {
@@ -1123,7 +1125,7 @@ export function renderApp(): string {
         position: absolute;
         right: 0;
         top: 42px;
-        z-index: 100;
+        z-index: 1000;
       }
 
       .run-mode-menu {
@@ -1137,7 +1139,7 @@ export function renderApp(): string {
         padding: 5px;
         position: absolute;
         top: 40px;
-        z-index: 100;
+        z-index: 1000;
       }
 
       .header-actions-menu[hidden] {
@@ -1965,17 +1967,17 @@ export function renderApp(): string {
       .danger {
         align-items: center;
         display: flex;
-        gap: 0;
+        gap: 8px;
         justify-content: center;
         min-height: 58px;
         padding: 10px;
         position: relative;
-        text-align: center;
+        text-align: left;
       }
 
       .actions {
         display: grid;
-        grid-template-columns: minmax(0, 1.08fr) repeat(2, minmax(0, 1fr));
+        grid-template-columns: minmax(190px, 1.08fr) repeat(2, minmax(0, 1fr));
         gap: 12px;
         margin-top: 6px;
         min-width: 0;
@@ -1985,12 +1987,12 @@ export function renderApp(): string {
         box-sizing: border-box;
         display: grid;
         gap: 2px;
-        justify-items: center;
+        justify-items: start;
         max-width: 100%;
         min-width: 0;
         padding: 0;
-        text-align: center;
-        width: 100%;
+        text-align: left;
+        width: auto;
       }
 
       .action-copy small {
@@ -1998,7 +2000,7 @@ export function renderApp(): string {
         display: block;
         font-size: 9px;
         font-weight: 650;
-        justify-self: center;
+        justify-self: start;
         line-height: 1.15;
         opacity: 0.78;
         overflow: visible;
@@ -2011,7 +2013,7 @@ export function renderApp(): string {
         display: block;
         font-size: 12px;
         font-weight: 850;
-        justify-self: center;
+        justify-self: start;
         line-height: 1.12;
         white-space: nowrap;
       }
@@ -2045,14 +2047,14 @@ export function renderApp(): string {
         align-items: center;
         border-radius: 999px;
         display: inline-flex;
+        align-self: flex-start;
         flex: 0 0 18px;
         height: 18px;
         justify-content: center;
-        left: 7px;
         line-height: 0;
         margin-left: 0;
-        position: absolute;
-        top: 13px;
+        margin-top: 3px;
+        position: static;
         width: 18px;
       }
 
@@ -2082,14 +2084,14 @@ export function renderApp(): string {
         .primary,
         .secondary,
         .danger {
-          gap: 0;
+          gap: 8px;
           padding-left: 10px;
           padding-right: 10px;
         }
 
         .action-copy {
           max-width: 100%;
-          width: 100%;
+          width: auto;
         }
 
         .action-copy small,
@@ -2934,11 +2936,12 @@ export function renderApp(): string {
 
         .actions {
           gap: 10px;
-          grid-template-columns: minmax(0, 1.12fr) repeat(2, minmax(0, 1fr));
+          grid-template-columns: minmax(190px, 1.12fr) repeat(2, minmax(0, 1fr));
         }
 
         .action-copy small,
         .primary .action-copy small {
+          font-size: 8px;
           white-space: nowrap;
         }
 
@@ -3048,7 +3051,7 @@ export function renderApp(): string {
         </div>
         <div class="header-meta">
           <span class="run-mode-wrap">
-            <button class="meta-pill live-run" id="runModeMenu" type="button" aria-label="Run mode" aria-controls="runModeActions" aria-expanded="false" aria-haspopup="menu"><span class="dot ok"></span><span>Live run</span></button>
+            <button class="meta-pill live-run" id="runModeMenu" type="button" aria-label="Run mode" aria-controls="runModeActions" aria-expanded="false" aria-haspopup="menu"><span class="dot ok"></span><span>Live run</span><svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg></button>
             <div class="run-mode-menu" id="runModeActions" role="menu" hidden>
               <button type="button" role="menuitemradio" aria-checked="true" data-run-mode-action="live">Live run</button>
               <button type="button" role="menuitem" data-run-mode-action="open-json">Open trace JSON</button>
