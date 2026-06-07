@@ -141,6 +141,35 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   expect(overflow.nodes).toEqual([])
 }
 
+async function expectWorkflowOverviewVisible(page: Page): Promise<void> {
+  await expect
+    .poll(async () => page.evaluate(`Math.round(document.querySelector('.hero')?.getBoundingClientRect().top ?? -999)`))
+    .toBeGreaterThanOrEqual(0)
+  const overview = await page.evaluate<{
+    firstRailStepTop: number
+    headerBottom: number
+    headerTop: number
+    railTop: number
+    scrollY: number
+  }>(`(() => {
+    const header = document.querySelector('.hero')?.getBoundingClientRect()
+    const rail = document.querySelector('.workflow-rail')?.getBoundingClientRect()
+    const firstStep = document.querySelector('.rail-stepper .step')?.getBoundingClientRect()
+    return {
+      firstRailStepTop: Math.round(firstStep?.top ?? -999),
+      headerBottom: Math.round(header?.bottom ?? -999),
+      headerTop: Math.round(header?.top ?? -999),
+      railTop: Math.round(rail?.top ?? -999),
+      scrollY: Math.round(window.scrollY),
+    }
+  })()`)
+  expect(overview.scrollY).toBe(0)
+  expect(overview.headerTop).toBeGreaterThanOrEqual(0)
+  expect(overview.headerBottom).toBeLessThanOrEqual(64)
+  expect(overview.railTop).toBeGreaterThanOrEqual(68)
+  expect(overview.firstRailStepTop).toBeGreaterThanOrEqual(72)
+}
+
 async function expectHeaderMenuAboveContent(page: Page): Promise<void> {
   const menuHit = await page.evaluate<boolean>(`(() => {
     const menu = document.querySelector('#headerActions')
@@ -180,6 +209,7 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
       iconInsideButton: boolean
       iconLabelYDelta: number
       iconTextBlockYDelta: number
+      labelCaptionCenterDelta: number
       labelFontSize: number
       labelFits: boolean
       labelWeight: number
@@ -223,6 +253,9 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
       iconTextBlockYDelta: icon && copy
         ? Math.abs((icon.top + icon.height / 2) - (copy.top + copy.height / 2))
         : 999,
+      labelCaptionCenterDelta: label && small
+        ? Math.abs((label.left + label.width / 2) - (small.left + small.width / 2))
+        : 999,
       labelFontSize: labelStyle ? Number.parseFloat(labelStyle.fontSize) : 0,
       labelFits: label ? label.left >= buttonRect.left && label.right <= buttonRect.right : false,
       labelWeight: labelStyle ? Number.parseFloat(labelStyle.fontWeight) : 0,
@@ -235,23 +268,22 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
   for (const geometry of buttonGeometry) {
     expect(geometry.buttonDisplay).toBe('flex')
     expect(geometry.contentDisplay).toBe('grid')
-    expect(geometry.textAlign).toBe('left')
+    expect(geometry.textAlign).toBe('center')
     expect(geometry.contentCenterDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.contentInsideButton).toBe(true)
     expect(geometry.copyCenterDelta).toBeGreaterThan(8)
+    expect(geometry.labelCaptionCenterDelta).toBeLessThanOrEqual(1)
     expect(geometry.iconCopyGap).toBeGreaterThanOrEqual(7)
     expect(geometry.iconCopyGap).toBeLessThanOrEqual(9)
     expect(geometry.iconInsideButton).toBe(true)
     expect(geometry.iconTextBlockYDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.iconLabelYDelta).toBeGreaterThan(3)
-    expect(geometry.copyLeftAlignDelta).toBeLessThanOrEqual(0.5)
     expect(geometry.labelFontSize).toBeGreaterThanOrEqual(13)
     expect(geometry.labelWeight).toBeGreaterThanOrEqual(800)
     expect(geometry.captionFontSize).toBeGreaterThanOrEqual(8)
     expect(geometry.captionMuted).toBe(true)
     expect(geometry.labelFits).toBe(true)
     expect(geometry.noLabelIconCollision).toBe(true)
-    expect(geometry.smallLeftAlignDelta).toBeLessThanOrEqual(0.5)
     expect(geometry.smallFits).toBe(true)
   }
 }
@@ -914,7 +946,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
 
   test('keeps the desktop trace layout contained through the live stages', async ({ page }) => {
     await expectCleanConsole(page, async () => {
-      await page.setViewportSize({ width: 1365, height: 768 })
+      await page.setViewportSize({ width: 1280, height: 720 })
       await page.goto('/')
       await expect(page).toHaveTitle('Cloudflare Agent Trace')
       await expect(page.getByTestId('approval-trace-app')).toBeVisible()
@@ -925,6 +957,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       })
       await expect(page.locator('[data-step="halt"]')).toContainText('Awaiting review')
       await expectNoHorizontalOverflow(page)
+      await expectWorkflowOverviewVisible(page)
       await expectActionButtonsCentered(page)
       await expectDiffLineGutter(page)
       await expectDiffRowsFillReferenceFrame(page)
@@ -942,6 +975,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
         timeout: 15_000,
       })
       await expectNoHorizontalOverflow(page)
+      await expectWorkflowOverviewVisible(page)
 
       const signerSpacing = await page.evaluate<boolean[]>(`Array.from(document.querySelectorAll('.signer-row'))
         .map((row) => {

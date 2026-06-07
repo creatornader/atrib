@@ -1425,7 +1425,7 @@ export function renderApp(): string {
       .step[data-step="halt"] .step-copy .step-meta-line {
         align-items: center;
         display: flex;
-        gap: 8px;
+        gap: 4px;
         line-height: 1;
         margin-top: 0;
         min-width: 0;
@@ -2082,11 +2082,11 @@ export function renderApp(): string {
         align-items: center;
         display: grid;
         gap: 8px;
-        grid-template-columns: 18px minmax(0, max-content);
+        grid-template-columns: 18px minmax(0, var(--action-copy-width, max-content));
         justify-content: center;
         max-width: 100%;
         min-width: 0;
-        width: auto;
+        width: min(100%, calc(26px + var(--action-copy-width, 0px)));
       }
 
       .button-content::after {
@@ -2094,7 +2094,7 @@ export function renderApp(): string {
       }
 
       .action-copy {
-        align-items: flex-start;
+        align-items: center;
         box-sizing: border-box;
         display: flex;
         flex-direction: column;
@@ -2103,8 +2103,8 @@ export function renderApp(): string {
         max-width: 100%;
         min-width: 0;
         padding: 0;
-        text-align: left;
-        width: auto;
+        text-align: center;
+        width: var(--action-copy-width, auto);
       }
 
       .action-copy small {
@@ -2116,9 +2116,10 @@ export function renderApp(): string {
         opacity: 0.78;
         overflow: visible;
         overflow-wrap: anywhere;
+        text-align: center;
         text-overflow: clip;
         white-space: normal;
-        width: max-content;
+        width: auto;
       }
 
       .button-label {
@@ -2127,8 +2128,9 @@ export function renderApp(): string {
         font-weight: 800;
         line-height: 1.12;
         max-width: 100%;
+        text-align: center;
         white-space: nowrap;
-        width: max-content;
+        width: auto;
       }
 
       .primary .button-label {
@@ -2145,15 +2147,18 @@ export function renderApp(): string {
       }
 
       .primary {
+        --action-copy-width: 148px;
         background: #078861;
         box-shadow: 0 10px 22px rgba(7, 136, 97, 0.18);
       }
 
       .secondary {
+        --action-copy-width: 124px;
         background: #fff;
       }
 
       .danger {
+        --action-copy-width: 126px;
         background: #fff;
       }
 
@@ -2208,7 +2213,6 @@ export function renderApp(): string {
 
         .action-copy {
           max-width: 100%;
-          width: max-content;
         }
 
         .action-copy small,
@@ -3092,6 +3096,10 @@ export function renderApp(): string {
       }
 
       @media (max-width: 1450px) and (min-width: 1101px) {
+        .rail-stepper {
+          grid-template-columns: minmax(126px, 0.9fr) minmax(190px, 1.05fr) minmax(252px, 1.2fr) minmax(222px, 1.2fr) minmax(136px, 0.8fr);
+        }
+
         .grid {
           grid-template-columns: minmax(318px, 0.82fr) minmax(560px, 1.2fr) minmax(340px, 0.94fr);
         }
@@ -3099,6 +3107,15 @@ export function renderApp(): string {
         .actions {
           gap: 10px;
           grid-template-columns: minmax(190px, 1fr) repeat(2, minmax(180px, 0.95fr));
+        }
+
+        .primary {
+          --action-copy-width: 134px;
+        }
+
+        .danger,
+        .secondary {
+          --action-copy-width: 114px;
         }
 
         .action-copy small,
@@ -3562,6 +3579,17 @@ export function renderApp(): string {
         });
       }
 
+      function followWorkflowOverview() {
+        if (!autoFollow) return;
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        requestAnimationFrame(() => {
+          window.scrollTo({
+            top: 0,
+            behavior: reduceMotion ? 'auto' : 'smooth',
+          });
+        });
+      }
+
       function escapeHtml(value) {
         return String(value)
           .replaceAll('&', '&amp;')
@@ -3758,8 +3786,11 @@ export function renderApp(): string {
           \`;
         }
         renderBootTimeline(activeIndex, run);
-        followElement(answerEl.querySelectorAll('.progress-item')[activeIndex], 'nearest');
-        if (activeStage.key === 'halt') followElement(proposalEl, 'nearest');
+        if (activeStage.key === 'halt') {
+          followWorkflowOverview();
+        } else {
+          followElement(answerEl.querySelectorAll('.progress-item')[activeIndex], 'nearest');
+        }
       }
 
       function updateControls(activeLabel = '') {
@@ -4649,7 +4680,7 @@ export function renderApp(): string {
         updateStepTimes(run);
         updateControls();
         if (run.status === 'pending_approval') {
-          followElement(document.querySelector('#approve'), 'nearest');
+          followWorkflowOverview();
         } else if (['succeeded', 'failed', 'rejected'].includes(run.status)) {
           followElement(document.querySelector('.receipt-panel'), 'start');
         }
