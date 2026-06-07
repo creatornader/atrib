@@ -117,9 +117,10 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
   const buttonGeometry = await page.evaluate<
     Array<{
       captionFontSize: number
+      captionCenterDelta: number
       copyCenterDelta: number
-      groupDelta: number
-      iconCenterYDelta: number
+      iconInsideButton: boolean
+      iconLabelYDelta: number
       labelCenterDelta: number
       labelFontSize: number
       labelFits: boolean
@@ -138,15 +139,18 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     const labelStyle = labelElement ? getComputedStyle(labelElement) : null
     const smallStyle = smallElement ? getComputedStyle(smallElement) : null
     const center = buttonRect.left + buttonRect.width / 2
-    const groupLeft = Math.min(icon?.left ?? buttonRect.left, copy?.left ?? buttonRect.left)
-    const groupRight = Math.max(icon?.right ?? buttonRect.right, copy?.right ?? buttonRect.right)
     const copyCenter = copy ? copy.left + copy.width / 2 : center
     return {
       captionFontSize: smallStyle ? Number.parseFloat(smallStyle.fontSize) : 0,
-      copyCenterDelta: copy && small ? Math.abs((small.left + small.width / 2) - copyCenter) : 999,
-      groupDelta: Math.abs((groupLeft + groupRight) / 2 - center),
-      iconCenterYDelta: icon ? Math.abs((icon.top + icon.height / 2) - (buttonRect.top + buttonRect.height / 2)) : 999,
-      labelCenterDelta: copy && label ? Math.abs((label.left + label.width / 2) - copyCenter) : 999,
+      captionCenterDelta: small ? Math.abs((small.left + small.width / 2) - center) : 999,
+      copyCenterDelta: copy ? Math.abs(copyCenter - center) : 999,
+      iconInsideButton: icon
+        ? icon.left >= buttonRect.left && icon.right <= buttonRect.right && icon.top >= buttonRect.top && icon.bottom <= buttonRect.bottom
+        : false,
+      iconLabelYDelta: icon && label
+        ? Math.abs((icon.top + icon.height / 2) - (label.top + label.height / 2))
+        : 999,
+      labelCenterDelta: label ? Math.abs((label.left + label.width / 2) - center) : 999,
       labelFontSize: labelStyle ? Number.parseFloat(labelStyle.fontSize) : 0,
       labelFits: label ? label.left >= buttonRect.left && label.right <= buttonRect.right : false,
       noLabelIconCollision: icon && label ? icon.right + 2 <= label.left : false,
@@ -156,10 +160,11 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
   })`)
   for (const geometry of buttonGeometry) {
     expect(geometry.textAlign).toBe('center')
-    expect(geometry.groupDelta).toBeLessThanOrEqual(4)
-    expect(geometry.iconCenterYDelta).toBeLessThanOrEqual(1)
+    expect(geometry.copyCenterDelta).toBeLessThanOrEqual(1)
     expect(geometry.labelCenterDelta).toBeLessThanOrEqual(2)
-    expect(geometry.copyCenterDelta).toBeLessThanOrEqual(2)
+    expect(geometry.captionCenterDelta).toBeLessThanOrEqual(2)
+    expect(geometry.iconInsideButton).toBe(true)
+    expect(geometry.iconLabelYDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.labelFontSize).toBeGreaterThanOrEqual(12)
     expect(geometry.captionFontSize).toBeGreaterThanOrEqual(9)
     expect(geometry.labelFits).toBe(true)
@@ -295,6 +300,12 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectNoHorizontalOverflow(page)
       await expectActionButtonsCentered(page)
       await expectReferenceDesktopPrimaryCaption(page)
+      await expect(page.locator('.risk-bar .value')).toHaveText(
+        'Introduces rate limiting which may impact client traffic if misconfigured.',
+      )
+      await expect(
+        page.locator('.risk-bar').evaluate((element) => getComputedStyle(element).backgroundColor),
+      ).resolves.toBe('rgb(255, 255, 255)')
       await expectWorkflowStepCopyHugsContent(page)
       await expectReferenceDesktopRailGeometry(page)
       await expectTraceRowsReadable(page)

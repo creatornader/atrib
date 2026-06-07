@@ -1881,7 +1881,7 @@ export function renderApp(): string {
 
       .risk-bar {
         align-items: center;
-        background: #fff8ed;
+        background: #fff;
         border: 1px solid #ffd09a;
         border-radius: 8px;
         display: grid;
@@ -1963,10 +1963,11 @@ export function renderApp(): string {
       .danger {
         align-items: center;
         display: flex;
-        gap: 9px;
+        gap: 0;
         justify-content: center;
         min-height: 58px;
-        padding: 10px 13px;
+        padding: 10px;
+        position: relative;
         text-align: center;
       }
 
@@ -1983,11 +1984,11 @@ export function renderApp(): string {
         display: grid;
         gap: 2px;
         justify-items: center;
-        max-width: calc(100% - 31px);
+        max-width: 100%;
         min-width: 0;
         padding: 0;
         text-align: center;
-        width: auto;
+        width: 100%;
       }
 
       .action-copy small {
@@ -2042,12 +2043,15 @@ export function renderApp(): string {
         align-items: center;
         border-radius: 999px;
         display: inline-flex;
-        flex: 0 0 22px;
-        height: 22px;
+        flex: 0 0 18px;
+        height: 18px;
         justify-content: center;
+        left: 7px;
         line-height: 0;
         margin-left: 0;
-        width: 22px;
+        position: absolute;
+        top: 13px;
+        width: 18px;
       }
 
       .button-icon svg {
@@ -2076,14 +2080,14 @@ export function renderApp(): string {
         .primary,
         .secondary,
         .danger {
-          gap: 8px;
-          padding-left: 8px;
-          padding-right: 8px;
+          gap: 0;
+          padding-left: 10px;
+          padding-right: 10px;
         }
 
         .action-copy {
-          max-width: calc(100% - 30px);
-          width: max-content;
+          max-width: 100%;
+          width: 100%;
         }
 
         .action-copy small,
@@ -2928,7 +2932,12 @@ export function renderApp(): string {
 
         .actions {
           gap: 10px;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: minmax(0, 1.12fr) repeat(2, minmax(0, 1fr));
+        }
+
+        .action-copy small,
+        .primary .action-copy small {
+          white-space: nowrap;
         }
 
         .event,
