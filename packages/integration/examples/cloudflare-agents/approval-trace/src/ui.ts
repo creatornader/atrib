@@ -777,7 +777,12 @@ export function renderApp(): string {
       }
 
       .diff {
+        display: block;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
         grid-template-columns: 1fr;
+        width: 100%;
       }
 
       .diff pre {
@@ -999,7 +1004,7 @@ export function renderApp(): string {
 
       .header-meta {
         flex: 1 1 auto;
-        gap: 12px;
+        gap: 18px;
         justify-content: flex-start;
       }
 
@@ -1018,6 +1023,17 @@ export function renderApp(): string {
         text-overflow: ellipsis;
         vertical-align: middle;
         white-space: nowrap;
+      }
+
+      .run-id-meta {
+        align-items: center;
+        display: inline-flex;
+        gap: 7px;
+      }
+
+      .run-id-meta .copy-icon {
+        height: 16px;
+        width: 16px;
       }
 
       .meta-pill {
@@ -1148,6 +1164,7 @@ export function renderApp(): string {
       .step.halted {
         background: #fff8ed;
         border-color: #f3a64e;
+        color: var(--ink);
         justify-self: center;
         min-height: 58px;
         padding: 8px 14px;
@@ -1240,13 +1257,14 @@ export function renderApp(): string {
       }
 
       .step-copy {
-        background: inherit;
+        background: #fff;
         min-width: 0;
         position: relative;
         z-index: 1;
       }
 
       .step.halted .step-copy {
+        background: #fff8ed;
         display: grid;
         gap: 3px;
       }
@@ -1297,6 +1315,62 @@ export function renderApp(): string {
         color: var(--blue);
       }
 
+      @media (min-width: 1451px) {
+        .rail-stepper {
+          display: block;
+          height: 72px;
+        }
+
+        .step {
+          position: absolute;
+          top: 7px;
+        }
+
+        .step[data-step="trigger"] {
+          left: 10px;
+          width: 286px;
+        }
+
+        .step[data-step="autonomous"] {
+          left: 300px;
+          width: 270px;
+        }
+
+        .step[data-step="halt"] {
+          left: 569px;
+        }
+
+        .step[data-step="resume"] {
+          left: 966px;
+          width: 300px;
+        }
+
+        .step[data-step="audit"] {
+          left: 1288px;
+          width: 190px;
+        }
+
+        .step[data-step="trigger"]::after {
+          left: 158px;
+          width: 128px;
+        }
+
+        .step[data-step="autonomous"]::after {
+          left: 148px;
+          width: 121px;
+        }
+
+        .step.halted:not(:last-child)::after {
+          left: 332px;
+          width: 74px;
+        }
+
+        .step[data-step="resume"]::after {
+          left: 130px;
+          width: 154px;
+        }
+      }
+
       .step-badge.approved {
         background: #e9f8ef;
         border-color: #b9e5cb;
@@ -1312,7 +1386,7 @@ export function renderApp(): string {
       .grid {
         gap: 10px;
         align-items: start;
-        grid-template-columns: minmax(336px, 363px) minmax(620px, 1fr) minmax(438px, 524px);
+        grid-template-columns: 363px 610px 523px;
         margin: 0 10px;
       }
 
@@ -1338,10 +1412,11 @@ export function renderApp(): string {
         border-bottom: 1px solid var(--line);
         color: var(--ink);
         display: flex;
-        font-size: 12px;
-        font-weight: 850;
-        justify-content: space-between;
-        letter-spacing: 0.05em;
+        font-size: 11.5px;
+        font-weight: 800;
+        gap: 7px;
+        justify-content: flex-start;
+        letter-spacing: 0.035em;
         margin: 0;
         min-height: 38px;
         padding: 0 14px;
@@ -1382,7 +1457,7 @@ export function renderApp(): string {
       }
 
       .trigger-source {
-        font-size: 15px;
+        font-size: 14px;
       }
 
       .trigger-details {
@@ -1402,9 +1477,17 @@ export function renderApp(): string {
         padding: 14px 16px;
       }
 
+      .proposal,
+      .timeline {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
       .proposal {
         display: grid;
         gap: 10px;
+        min-width: 0;
+        overflow: hidden;
       }
 
       .prompt {
@@ -1468,7 +1551,7 @@ export function renderApp(): string {
         border: 0;
         border-radius: 0;
         column-gap: 10px;
-        grid-template-columns: 120px minmax(0, 1fr);
+        grid-template-columns: max-content minmax(0, 1fr);
         padding: 0;
       }
 
@@ -1518,17 +1601,25 @@ export function renderApp(): string {
       }
 
       .progress-item .dot {
-        border: 2px solid #fff;
-        box-shadow: 0 0 0 1px #c7d2df;
-        height: 14px;
-        margin-left: 2px;
+        border: 0;
+        box-shadow: none;
+        box-sizing: border-box;
+        display: inline-flex;
+        height: 16px;
+        justify-self: center;
+        margin-left: 0;
         position: relative;
-        width: 14px;
+        width: 16px;
         z-index: 1;
       }
 
       .dot.future {
         background: #fff;
+      }
+
+      .progress-item .dot.future {
+        border: 1.5px solid #a8b4c3;
+        box-shadow: none;
       }
 
       .progress-item.halted {
@@ -1541,7 +1632,6 @@ export function renderApp(): string {
 
       .progress-item.proposal .dot.ok {
         background: var(--blue);
-        box-shadow: 0 0 0 1px #b8c8f6;
       }
 
       .progress-item:not(.proposal) .dot.ok {
@@ -1553,15 +1643,16 @@ export function renderApp(): string {
         border-bottom: 2px solid #fff;
         border-right: 2px solid #fff;
         content: "";
-        height: 6px;
-        left: 50%;
+        height: 8px;
+        left: 5px;
         position: absolute;
-        top: 50%;
-        transform: translate(-50%, -55%) rotate(45deg);
-        width: 3px;
+        top: 2px;
+        transform: rotate(45deg);
+        width: 4px;
       }
 
       .progress-item.halted .dot.pending {
+        background: var(--orange);
         font-size: 0;
       }
 
@@ -1570,18 +1661,19 @@ export function renderApp(): string {
         background: #fff;
         border-radius: 1px;
         content: "";
-        height: 7px;
+        height: 8px;
         position: absolute;
-        top: 2px;
+        top: 50%;
+        transform: translateY(-50%);
         width: 2px;
       }
 
       .progress-item.halted .dot.pending::before {
-        left: 4px;
+        left: 5px;
       }
 
       .progress-item.halted .dot.pending::after {
-        right: 4px;
+        right: 5px;
       }
 
       .run-state {
@@ -1605,7 +1697,9 @@ export function renderApp(): string {
         gap: 10px;
         justify-content: space-between;
         margin-bottom: 6px;
+        max-width: 100%;
         min-width: 0;
+        width: 100%;
       }
 
       .diff-tools {
@@ -1618,9 +1712,9 @@ export function renderApp(): string {
       }
 
       .diff pre {
-        font-size: 12px;
-        line-height: 1.55;
-        max-height: 300px;
+        font-size: 11.3px;
+        line-height: 1.38;
+        max-height: 313px;
       }
 
       .diff-code {
@@ -1629,18 +1723,22 @@ export function renderApp(): string {
         border-radius: 8px;
         color: #102033;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: 12px;
-        line-height: 1.55;
-        max-height: 302px;
+        font-size: 11.3px;
+        line-height: 1.38;
+        max-height: 313px;
+        max-width: 100%;
         overflow: auto;
         padding: 8px 0;
+        width: 100%;
       }
 
       .diff-line {
         display: block;
-        min-height: 18px;
+        min-height: 15.5px;
+        min-width: 0;
         padding: 0 12px;
-        white-space: pre-wrap;
+        white-space: pre;
+        width: auto;
       }
 
       .diff-line.add {
@@ -1750,8 +1848,8 @@ export function renderApp(): string {
 
       .actions {
         display: grid;
-        grid-template-columns: minmax(194px, 1.08fr) minmax(164px, 0.92fr) minmax(174px, 0.98fr);
-        gap: 16px;
+        grid-template-columns: 190px 174px 170px;
+        gap: 20px;
         margin-top: 6px;
         min-width: 0;
       }
@@ -1858,7 +1956,7 @@ export function renderApp(): string {
         background: #cfd8e5;
         bottom: 26px;
         content: "";
-        left: 68px;
+        left: 70px;
         position: absolute;
         top: 24px;
         width: 2px;
@@ -1901,17 +1999,19 @@ export function renderApp(): string {
       .event-marker {
         align-items: center;
         background: var(--green);
-        border: 2px solid #fff;
+        border: 0;
         border-radius: 999px;
-        box-shadow: 0 0 0 1px #b7d7c8;
+        box-shadow: none;
+        box-sizing: border-box;
         color: #fff;
         display: inline-flex;
         font-size: 10px;
-        height: 17px;
+        height: 18px;
         justify-content: center;
+        justify-self: center;
         margin-top: 3px;
         position: relative;
-        width: 17px;
+        width: 18px;
         z-index: 1;
       }
 
@@ -1919,17 +2019,16 @@ export function renderApp(): string {
         border-bottom: 2px solid #fff;
         border-right: 2px solid #fff;
         content: "";
-        height: 7px;
-        left: 50%;
+        height: 8px;
+        left: 6px;
         position: absolute;
-        top: 50%;
-        transform: translate(-50%, -55%) rotate(45deg);
+        top: 3px;
+        transform: rotate(45deg);
         width: 4px;
       }
 
       .event-marker.pending {
         background: var(--orange);
-        box-shadow: 0 0 0 1px #ffd09a;
         font-size: 0;
       }
 
@@ -1940,22 +2039,23 @@ export function renderApp(): string {
         content: "";
         height: 8px;
         position: absolute;
-        top: 3px;
+        top: 50%;
+        transform: translateY(-50%);
         width: 2px;
       }
 
       .event-marker.pending::before {
-        left: 5px;
+        left: 6px;
       }
 
       .event-marker.pending::after {
-        right: 5px;
+        right: 6px;
       }
 
       .event-marker.future {
         background: #fff;
-        box-shadow: 0 0 0 1px #a8b4c3;
-        border-color: #fff;
+        border: 1.5px solid #a8b4c3;
+        box-shadow: none;
       }
 
       .event-copy {
@@ -2037,7 +2137,7 @@ export function renderApp(): string {
 
       .signer-list {
         gap: 0;
-        margin-top: 30px;
+        margin-top: 14px;
       }
 
       .signer-list .trace-section-label {
@@ -2047,10 +2147,10 @@ export function renderApp(): string {
       .signer-row {
         background: #fff;
         border-radius: 0;
-        gap: 8px;
-        grid-template-columns: 26px 74px minmax(112px, 1fr) 62px minmax(84px, 108px) 16px;
-        min-height: 34px;
-        padding: 5px 9px;
+        gap: 7px;
+        grid-template-columns: 24px 72px minmax(112px, 1fr) 58px minmax(84px, 106px) 16px;
+        min-height: 31px;
+        padding: 3px 8px;
         box-shadow: none;
       }
 
@@ -2096,14 +2196,14 @@ export function renderApp(): string {
         align-items: center;
         border-radius: 7px;
         display: inline-flex;
-        height: 24px;
+        height: 22px;
         justify-content: center;
-        width: 24px;
+        width: 22px;
       }
 
       .signer-icon svg {
-        height: 16px;
-        width: 16px;
+        height: 15px;
+        width: 15px;
       }
 
       .signer-icon.agent {
@@ -2219,11 +2319,12 @@ export function renderApp(): string {
       .receipt-grid {
         display: block;
         margin-top: 10px;
-        padding: 0 10px;
+        padding: 0;
       }
 
       .receipt-panel {
         grid-column: auto;
+        min-height: 248px;
         scroll-margin-top: 12px;
       }
 
@@ -2303,7 +2404,7 @@ export function renderApp(): string {
       }
 
       .receipt-shell {
-        grid-template-columns: minmax(420px, 1.05fr) minmax(360px, 0.9fr) minmax(420px, 1fr);
+        grid-template-columns: minmax(500px, 520px) minmax(430px, 458px) minmax(520px, 1fr);
       }
 
       .receipt-section {
@@ -2315,10 +2416,10 @@ export function renderApp(): string {
         border: 1px solid var(--line);
         color: #102033;
         font-size: 12px;
-        line-height: 1.42;
-        max-height: 160px;
+        line-height: 1.38;
+        max-height: 194px;
         overflow: auto;
-        padding: 8px 10px;
+        padding: 6px 10px;
         position: relative;
       }
 
@@ -2408,8 +2509,8 @@ export function renderApp(): string {
       .verify-row {
         border-radius: 7px;
         grid-template-columns: 34px minmax(0, 1fr) minmax(72px, auto);
-        min-height: 42px;
-        padding: 6px 9px;
+        min-height: 40px;
+        padding: 5px 9px;
       }
 
       .verify-row > div {
@@ -2432,21 +2533,21 @@ export function renderApp(): string {
       }
 
       .verify-icon.log {
-        background: #f3f8ff;
-        border-color: #d4e5fb;
-        color: #0969da;
+        background: #fff;
+        border-color: var(--line);
+        color: #4b5563;
       }
 
       .verify-icon.sig {
-        background: #fff7ed;
-        border-color: #fed7aa;
-        color: #b35a00;
+        background: #fff;
+        border-color: var(--line);
+        color: #4b5563;
       }
 
       .verify-icon.get {
-        background: #eefbf4;
-        border-color: #c7efd6;
-        color: #078861;
+        background: #fff;
+        border-color: var(--line);
+        color: #4b5563;
       }
 
       .verify-row .event-action {
@@ -2703,7 +2804,7 @@ export function renderApp(): string {
         </div>
         <div class="header-meta">
           <span class="meta-pill live-run"><span class="dot ok"></span>Live run</span>
-          <span>Run ID <span class="meta-code" id="runIdLabel">pending</span></span>
+          <span class="run-id-meta">Run ID <span class="meta-code" id="runIdLabel">pending</span><button class="copy-icon" type="button" aria-label="Copy run ID" data-copy-source="#runIdLabel" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></button></span>
           <span>Region <span class="meta-code">IAD</span><span class="region-status-dot" aria-hidden="true"></span></span>
           <span>Started <span id="startedLabel">waiting</span></span>
           <button class="header-menu" type="button" aria-label="More run actions"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.25" fill="currentColor"/><circle cx="8" cy="8" r="1.25" fill="currentColor"/><circle cx="12.5" cy="8" r="1.25" fill="currentColor"/></svg></button>
@@ -2719,11 +2820,11 @@ export function renderApp(): string {
           </div>
         </div>
         <div class="rail-stepper" id="workflowSteps">
-          <span class="step active" data-step="trigger"><span class="step-index">1</span><span class="step-copy"><strong>Trigger</strong><span data-step-time="trigger">Pending</span></span></span>
-          <span class="step" data-step="autonomous"><span class="step-index">2</span><span class="step-copy"><strong>Autonomous triage</strong><span data-step-time="autonomous">Pending</span></span></span>
+          <span class="step active" data-step="trigger"><span class="step-index">1</span><span class="step-copy"><strong>1. Trigger</strong><span data-step-time="trigger">Pending</span></span></span>
+          <span class="step" data-step="autonomous"><span class="step-index">2</span><span class="step-copy"><strong>2. Autonomous triage</strong><span data-step-time="autonomous">Pending</span></span></span>
           <span class="step" data-step="halt"><span class="step-index">3</span><span class="step-copy"><strong><span class="step-number-label">3. </span><span data-step-title="halt">Human review halted</span></strong><span class="step-meta-line"><span data-step-time="halt">Pending</span><span class="step-badge" data-step-badge="halt">Awaiting review</span></span></span></span>
-          <span class="step" data-step="resume"><span class="step-index">4</span><span class="step-copy"><strong>MCP execution resumed</strong><span data-step-time="resume">Pending</span></span></span>
-          <span class="step" data-step="audit"><span class="step-index">5</span><span class="step-copy"><strong>Audit ready</strong><span data-step-time="audit">Pending</span></span></span>
+          <span class="step" data-step="resume"><span class="step-index">4</span><span class="step-copy"><strong>4. MCP execution resumed</strong><span data-step-time="resume">Pending</span></span></span>
+          <span class="step" data-step="audit"><span class="step-index">5</span><span class="step-copy"><strong>5. Audit ready</strong><span data-step-time="audit">Pending</span></span></span>
         </div>
       </section>
 
@@ -2807,6 +2908,7 @@ export function renderApp(): string {
               <p class="empty">Summary appears after a signed record is selected.</p>
             </div>
             <div class="receipt-section" id="verification">
+              <span class="trace-section-label">Verification</span>
               <div class="verify-list">
                 <div class="verify-row"><span class="verify-icon log" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5.2 7V5.2a2.8 2.8 0 1 1 5.6 0V7M4 7h8v6.5H4V7Zm4 3v1.4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span><div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><button class="event-action" type="button" disabled>Pending</button></div>
                 <div class="verify-row"><span class="verify-icon sig" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5 8.5 7 10l4-4.5M3.5 2.5h9v11h-9v-11Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span><div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" disabled>Pending</button></div>
@@ -3224,7 +3326,8 @@ export function renderApp(): string {
 
       function shortHash(hash) {
         if (!hash) return 'missing';
-        return hash.slice(0, 18) + '...' + hash.slice(-8);
+        const normalized = String(hash).replace(/^sha256:/, '');
+        return normalized.slice(0, 18) + '...' + normalized.slice(-8);
       }
 
       function recordDisplayId(hash) {
@@ -3367,6 +3470,30 @@ export function renderApp(): string {
         )).join('') + '</pre>';
       }
 
+      function traceReceiptPayload(run = currentRun) {
+        if (!run) return null;
+        const createdAt = run.records[0]?.record?.timestamp
+          ? new Date(run.records[0].record.timestamp).toISOString()
+          : null;
+        return {
+          trace_id: traceIdForRun(run),
+          run_id: run.run_id,
+          status: run.status === 'pending_approval' ? 'human_review_halted' : run.status,
+          current_step: run.status === 'pending_approval' ? 3 : ['succeeded', 'failed', 'rejected'].includes(run.status) ? 5 : 4,
+          created_at: createdAt,
+          records: run.trace_packet.timeline.map((entry) => {
+            const record = run.records.find((item) => item.record_hash === entry.record_hash);
+            return {
+              record_id: recordDisplayId(entry.record_hash),
+              timestamp: record?.record?.timestamp ? new Date(record.record.timestamp).toISOString() : null,
+              event: entry.event,
+              label: entry.label,
+              record_hash: entry.record_hash,
+            };
+          }),
+        };
+      }
+
       async function writeClipboard(text) {
         const value = String(text ?? '');
         if (!value) return false;
@@ -3444,14 +3571,14 @@ export function renderApp(): string {
 
       function verificationRowsMarkup(run = currentRun, record = selectedReceiptRecord) {
         if (!run || !record) {
-          return '<div class="verify-list">'
+          return '<span class="trace-section-label">Verification</span><div class="verify-list">'
             + '<div class="verify-row">' + verifyIcon('log') + '<div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><button class="event-action" type="button" disabled>Pending</button></div>'
             + '<div class="verify-row">' + verifyIcon('sig') + '<div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" disabled>Pending</button></div>'
             + '<div class="verify-row">' + verifyIcon('get') + '<div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><button class="event-action" type="button" disabled>Pending</button></div>'
             + '</div>';
         }
         const proofUrl = proofTargetForRun(run);
-        return '<div class="verify-list">'
+        return '<span class="trace-section-label">Verification</span><div class="verify-list">'
           + '<div class="verify-row">' + verifyIcon('log') + '<div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><a class="event-action" href="' + escapeHtml(proofUrl) + '" target="_blank" rel="noreferrer">View proof ' + actionGlyph('external') + '</a></div>'
           + '<div class="verify-row">' + verifyIcon('sig') + '<div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" data-verify-receipt>Verify ' + actionGlyph('external') + '</button></div>'
           + '<div class="verify-row">' + verifyIcon('get') + '<div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><button class="event-action" type="button" data-download-receipt>Download ' + actionGlyph('download') + '</button></div>'
@@ -3478,9 +3605,10 @@ export function renderApp(): string {
       }
 
       function updateTraceHeaderCopy() {
-        const button = document.querySelector('[data-copy-source="#traceIdLabel"]');
-        if (!button) return;
-        button.disabled = !traceIdLabel.textContent || traceIdLabel.textContent === 'pending';
+        const traceButton = document.querySelector('[data-copy-source="#traceIdLabel"]');
+        if (traceButton) traceButton.disabled = !traceIdLabel.textContent || traceIdLabel.textContent === 'pending';
+        const runButton = document.querySelector('[data-copy-source="#runIdLabel"]');
+        if (runButton) runButton.disabled = !runIdLabel.textContent || runIdLabel.textContent === 'pending';
       }
 
       function renderVerificationActions(run = currentRun, record = selectedReceiptRecord) {
@@ -3770,6 +3898,7 @@ export function renderApp(): string {
         ];
         timelineEl.innerHTML = run.trace_packet.timeline.length
           ? \`
+          <span class="trace-section-label">Record timeline</span>
           <div class="record-timeline">
             \${run.trace_packet.timeline.map((entry, index) => {
               const record = run.records.find((item) => item.record_hash === entry.record_hash);
@@ -3867,9 +3996,9 @@ export function renderApp(): string {
           \`;
           bindReceiptTabs(record);
         };
-        const selectRecord = (record) => {
+        const selectRecord = (record, options = {}) => {
           selectedReceiptRecord = record;
-          receiptsEl.innerHTML = renderReceiptJson(record);
+          receiptsEl.innerHTML = renderReceiptJson(options.showTrace ? traceReceiptPayload(run) : record);
           renderReceiptSummary(record);
           renderVerificationActions(run, record);
           updateReceiptControls(record);
@@ -3884,7 +4013,12 @@ export function renderApp(): string {
         });
         const preferredLabel = run.status === 'pending_approval' ? 'proposal' : run.status === 'rejected' ? 'rejection' : run.status === 'failed' ? 'outcome' : 'handoff';
         const preferredButton = timelineEl.querySelector(\`.event[data-label="\${preferredLabel}"]\`) ?? timelineEl.querySelector('.event');
-        preferredButton?.click();
+        if (preferredButton) {
+          timelineEl.querySelectorAll('.event').forEach((item) => item.classList.remove('selected'));
+          preferredButton.classList.add('selected');
+          const preferredRecord = run.records.find((item) => item.record_hash === preferredButton.dataset.hash);
+          if (preferredRecord) selectRecord(preferredRecord, { showTrace: true });
+        }
       }
 
       function render(run) {

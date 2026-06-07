@@ -380,7 +380,7 @@ function fixturePlan(prompt: string): PlannedAction {
 +}];`
   return {
     planner: 'fixture',
-    action: 'Update rate-limit middleware for the /v1/report route',
+    action: 'Update file in repository',
     summary:
       'Respond to a GitHub issue webhook by preparing a small repository file update that adds request limiting to the reported route.',
     risk: 'Introduces rate limiting that changes production request handling.',
