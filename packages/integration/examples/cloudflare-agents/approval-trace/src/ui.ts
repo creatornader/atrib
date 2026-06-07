@@ -736,8 +736,9 @@ export function renderApp(): string {
         color: #111827;
         display: block;
         flex: 0 0 auto;
-        height: 24px;
-        width: 24px;
+        height: 25px;
+        overflow: visible;
+        width: 25px;
       }
 
       .trigger-details {
@@ -955,7 +956,8 @@ export function renderApp(): string {
       }
 
       .shell {
-        max-width: none;
+        margin: 0 auto;
+        max-width: 1536px;
         padding: 0 0 0;
       }
 
@@ -1022,6 +1024,44 @@ export function renderApp(): string {
         gap: 8px;
       }
 
+      .meta-pill.live-run::after {
+        border-bottom: 1.5px solid currentColor;
+        border-right: 1.5px solid currentColor;
+        content: "";
+        height: 5px;
+        margin-left: 2px;
+        transform: translateY(-2px) rotate(45deg);
+        width: 5px;
+      }
+
+      .region-status-dot {
+        background: var(--green);
+        border-radius: 999px;
+        display: inline-block;
+        height: 8px;
+        margin-left: 6px;
+        vertical-align: 1px;
+        width: 8px;
+      }
+
+      .header-menu {
+        align-items: center;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink);
+        display: inline-flex;
+        height: 32px;
+        justify-content: center;
+        padding: 0;
+        width: 32px;
+      }
+
+      .header-menu svg {
+        height: 16px;
+        width: 16px;
+      }
+
       .meta-pill,
       .meta-code {
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
@@ -1034,7 +1074,7 @@ export function renderApp(): string {
         gap: 16px;
         grid-template-columns: 1fr;
         margin-bottom: 6px;
-        min-height: 64px;
+        min-height: 72px;
         padding: 0 30px 0;
       }
 
@@ -1079,7 +1119,7 @@ export function renderApp(): string {
         display: flex;
         min-height: 52px;
         min-width: 0;
-        padding: 6px 9px;
+        padding: 6px 10px;
         position: relative;
       }
 
@@ -1100,15 +1140,17 @@ export function renderApp(): string {
       .step.active,
       .step.halted,
       .step.error {
-        background: #fff;
-        border-color: #ccd7e5;
-        box-shadow: var(--shadow-tight);
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
       }
 
       .step.halted {
         background: #fff8ed;
         border-color: #f3a64e;
         justify-self: center;
+        min-height: 58px;
+        padding: 8px 14px;
         width: 332px;
       }
 
@@ -1134,8 +1176,9 @@ export function renderApp(): string {
         flex: 0 0 auto;
         font-size: 14px;
         font-weight: 800;
-        height: 34px;
-        width: 34px;
+        height: 38px;
+        margin-right: 11px;
+        width: 38px;
         z-index: 1;
       }
 
@@ -1148,17 +1191,19 @@ export function renderApp(): string {
         content: "";
         border-bottom: 3px solid #fff;
         border-right: 3px solid #fff;
-        height: 14px;
+        height: 15px;
         left: 50%;
         position: absolute;
         top: 50%;
-        transform: translate(-50%, -58%) rotate(45deg);
-        width: 7px;
+        transform: translate(-50%, -56%) rotate(45deg);
+        width: 8px;
       }
 
       .step.halted .step-index {
         font-size: 0;
+        height: 42px;
         position: relative;
+        width: 42px;
       }
 
       .step.halted .step-index::before,
@@ -1168,16 +1213,17 @@ export function renderApp(): string {
         content: "";
         height: 15px;
         position: absolute;
-        top: 9px;
+        top: 50%;
+        transform: translateY(-50%);
         width: 4px;
       }
 
       .step.halted .step-index::before {
-        left: 12px;
+        left: 14px;
       }
 
       .step.halted .step-index::after {
-        right: 12px;
+        right: 14px;
       }
 
       .step-copy strong {
@@ -1200,6 +1246,33 @@ export function renderApp(): string {
         z-index: 1;
       }
 
+      .step.halted .step-copy {
+        display: grid;
+        gap: 3px;
+      }
+
+      .step.halted .step-copy strong {
+        display: block;
+        font-size: 14px;
+        font-weight: 850;
+        line-height: 1.1;
+      }
+
+      .step.halted .step-copy .step-number-label,
+      .step.halted .step-copy [data-step-title] {
+        display: inline;
+        margin-top: 0;
+      }
+
+      .step.halted .step-copy .step-meta-line {
+        align-items: center;
+        display: flex;
+        gap: 10px;
+        line-height: 1;
+        margin-top: 0;
+        min-width: 0;
+      }
+
       .step-badge {
         background: #fff0dc;
         border: 1px solid #ffd09a;
@@ -1209,13 +1282,19 @@ export function renderApp(): string {
         font-size: 10px;
         font-weight: 850;
         line-height: 1;
-        margin-left: 7px;
+        margin-left: 0;
         padding: 3px 6px;
+        text-transform: uppercase;
         vertical-align: 1px;
       }
 
       .step-copy strong [data-step-title] {
         display: inline;
+      }
+
+      .step.halted + .step .step-index {
+        border-color: var(--blue);
+        color: var(--blue);
       }
 
       .step-badge.approved {
@@ -1478,7 +1557,7 @@ export function renderApp(): string {
         left: 50%;
         position: absolute;
         top: 50%;
-        transform: translate(-50%, -58%) rotate(45deg);
+        transform: translate(-50%, -55%) rotate(45deg);
         width: 3px;
       }
 
@@ -1662,18 +1741,18 @@ export function renderApp(): string {
       .danger {
         align-items: center;
         display: grid;
-        gap: 8px;
-        grid-template-columns: 20px minmax(0, 1fr);
+        gap: 10px;
+        grid-template-columns: 22px minmax(0, 1fr);
         justify-content: stretch;
         min-height: 58px;
-        padding: 9px 10px;
+        padding: 9px 12px;
       }
 
       .actions {
         display: grid;
-        grid-template-columns: minmax(186px, 1.05fr) minmax(156px, 0.9fr) minmax(168px, 0.96fr);
-        gap: 14px;
-        margin-top: 4px;
+        grid-template-columns: minmax(194px, 1.08fr) minmax(164px, 0.92fr) minmax(174px, 0.98fr);
+        gap: 16px;
+        margin-top: 6px;
         min-width: 0;
       }
 
@@ -1686,33 +1765,33 @@ export function renderApp(): string {
 
       .action-copy small {
         color: inherit;
-        font-size: 9.5px;
+        font-size: 9px;
         font-weight: 650;
         line-height: 1.12;
         opacity: 0.78;
-        overflow: hidden;
+        overflow: visible;
         overflow-wrap: normal;
-        text-overflow: ellipsis;
+        text-overflow: clip;
         text-wrap: normal;
       }
 
       .button-label {
         display: block;
-        font-size: 12.5px;
+        font-size: 13px;
         font-weight: 850;
         line-height: 1.12;
         white-space: nowrap;
       }
 
       .primary .button-label {
-        font-size: 12.5px;
+        font-size: 13px;
       }
 
       .primary .action-copy small {
         font-size: 8px;
         letter-spacing: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        overflow: visible;
+        text-overflow: clip;
         white-space: nowrap;
       }
 
@@ -1731,30 +1810,36 @@ export function renderApp(): string {
 
       .button-icon {
         align-items: center;
-        border: 1px solid currentColor;
         border-radius: 999px;
         display: inline-flex;
-        height: 18px;
+        height: 22px;
         justify-content: center;
         justify-self: start;
         line-height: 0;
         margin-left: 0;
-        width: 18px;
+        width: 22px;
       }
 
       .button-icon svg {
         display: block;
-        height: 11px;
-        width: 11px;
+        height: 14px;
+        width: 14px;
       }
 
       .primary .button-icon {
-        border-color: rgba(255, 255, 255, 0.78);
+        border: 0;
+        color: #fff;
       }
 
-      .danger .button-icon,
+      .danger .button-icon {
+        border: 1.5px solid currentColor;
+        color: var(--red);
+      }
+
       .secondary .button-icon {
-        margin-top: -1px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        color: #334155;
       }
 
       .primary .action-copy,
@@ -1781,6 +1866,7 @@ export function renderApp(): string {
 
       .event,
       .event-future {
+        align-items: center;
         animation-duration: 180ms;
         background: transparent;
         border: 0;
@@ -1788,8 +1874,9 @@ export function renderApp(): string {
         display: grid;
         gap: 7px;
         grid-template-columns: 54px 20px minmax(0, 1fr) minmax(82px, 120px);
+        min-height: 44px;
         min-width: 0;
-        padding: 3px 0;
+        padding: 4px 0;
       }
 
       .event:hover,
@@ -1836,7 +1923,7 @@ export function renderApp(): string {
         left: 50%;
         position: absolute;
         top: 50%;
-        transform: translate(-50%, -58%) rotate(45deg);
+        transform: translate(-50%, -55%) rotate(45deg);
         width: 4px;
       }
 
@@ -1950,7 +2037,7 @@ export function renderApp(): string {
 
       .signer-list {
         gap: 0;
-        margin-top: 12px;
+        margin-top: 30px;
       }
 
       .signer-list .trace-section-label {
@@ -1960,10 +2047,10 @@ export function renderApp(): string {
       .signer-row {
         background: #fff;
         border-radius: 0;
-        gap: 7px;
-        grid-template-columns: 24px 74px minmax(0, 1fr) 56px minmax(62px, 82px) 14px;
-        min-height: 30px;
-        padding: 4px 8px;
+        gap: 8px;
+        grid-template-columns: 26px 74px minmax(112px, 1fr) 62px minmax(84px, 108px) 16px;
+        min-height: 34px;
+        padding: 5px 9px;
         box-shadow: none;
       }
 
@@ -2009,14 +2096,14 @@ export function renderApp(): string {
         align-items: center;
         border-radius: 7px;
         display: inline-flex;
-        height: 22px;
+        height: 24px;
         justify-content: center;
-        width: 22px;
+        width: 24px;
       }
 
       .signer-icon svg {
-        height: 15px;
-        width: 15px;
+        height: 16px;
+        width: 16px;
       }
 
       .signer-icon.agent {
@@ -2220,7 +2307,7 @@ export function renderApp(): string {
       }
 
       .receipt-section {
-        padding: 12px 14px;
+        padding: 10px 14px;
       }
 
       .json pre {
@@ -2228,17 +2315,35 @@ export function renderApp(): string {
         border: 1px solid var(--line);
         color: #102033;
         font-size: 12px;
-        line-height: 1.5;
-        max-height: 210px;
-        padding: 10px 12px 10px 36px;
+        line-height: 1.42;
+        max-height: 160px;
+        overflow: auto;
+        padding: 8px 10px;
         position: relative;
+      }
+
+      .json-line {
+        display: grid;
+        grid-template-columns: 24px minmax(0, 1fr);
+      }
+
+      .json-line-number {
+        color: #94a3b8;
+        padding-right: 10px;
+        text-align: right;
+        user-select: none;
+      }
+
+      .json-line-code {
+        min-width: 0;
+        white-space: pre;
       }
 
       .receipt-tabs {
         border-bottom: 1px solid var(--line);
         display: flex;
         gap: 34px;
-        margin: -12px -14px 10px;
+        margin: -10px -14px 8px;
         padding: 0 26px;
       }
 
@@ -2249,7 +2354,7 @@ export function renderApp(): string {
         cursor: pointer;
         font-size: 12px;
         font-weight: 700;
-        min-height: 34px;
+        min-height: 30px;
         padding: 0;
         position: relative;
       }
@@ -2282,14 +2387,15 @@ export function renderApp(): string {
       .receipt-summary-grid,
       .verification-list {
         display: grid;
-        gap: 8px;
+        gap: 6px;
       }
 
       .summary-row {
         display: grid;
         font-size: 12px;
-        gap: 8px;
+        gap: 6px;
         grid-template-columns: 130px minmax(0, 1fr) auto;
+        line-height: 1.18;
       }
 
       .summary-row .hash,
@@ -2302,8 +2408,8 @@ export function renderApp(): string {
       .verify-row {
         border-radius: 7px;
         grid-template-columns: 34px minmax(0, 1fr) minmax(72px, auto);
-        min-height: 44px;
-        padding: 7px 9px;
+        min-height: 42px;
+        padding: 6px 9px;
       }
 
       .verify-row > div {
@@ -2596,10 +2702,11 @@ export function renderApp(): string {
           </div>
         </div>
         <div class="header-meta">
-          <span class="meta-pill"><span class="dot ok"></span>Live run</span>
+          <span class="meta-pill live-run"><span class="dot ok"></span>Live run</span>
           <span>Run ID <span class="meta-code" id="runIdLabel">pending</span></span>
-          <span>Region <span class="meta-code">IAD</span></span>
+          <span>Region <span class="meta-code">IAD</span><span class="region-status-dot" aria-hidden="true"></span></span>
           <span>Started <span id="startedLabel">waiting</span></span>
+          <button class="header-menu" type="button" aria-label="More run actions"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.25" fill="currentColor"/><circle cx="8" cy="8" r="1.25" fill="currentColor"/><circle cx="12.5" cy="8" r="1.25" fill="currentColor"/></svg></button>
         </div>
       </section>
 
@@ -2614,7 +2721,7 @@ export function renderApp(): string {
         <div class="rail-stepper" id="workflowSteps">
           <span class="step active" data-step="trigger"><span class="step-index">1</span><span class="step-copy"><strong>Trigger</strong><span data-step-time="trigger">Pending</span></span></span>
           <span class="step" data-step="autonomous"><span class="step-index">2</span><span class="step-copy"><strong>Autonomous triage</strong><span data-step-time="autonomous">Pending</span></span></span>
-          <span class="step" data-step="halt"><span class="step-index">3</span><span class="step-copy"><strong><span data-step-title="halt">Human review halted</span> <span class="step-badge" data-step-badge="halt">Awaiting review</span></strong><span data-step-time="halt">Pending</span></span></span>
+          <span class="step" data-step="halt"><span class="step-index">3</span><span class="step-copy"><strong><span class="step-number-label">3. </span><span data-step-title="halt">Human review halted</span></strong><span class="step-meta-line"><span data-step-time="halt">Pending</span><span class="step-badge" data-step-badge="halt">Awaiting review</span></span></span></span>
           <span class="step" data-step="resume"><span class="step-index">4</span><span class="step-copy"><strong>MCP execution resumed</strong><span data-step-time="resume">Pending</span></span></span>
           <span class="step" data-step="audit"><span class="step-index">5</span><span class="step-copy"><strong>Audit ready</strong><span data-step-time="audit">Pending</span></span></span>
         </div>
@@ -2626,7 +2733,7 @@ export function renderApp(): string {
           <div class="trigger-card">
             <span class="section-label">Prior trigger</span>
             <div class="trigger-source">
-              <svg class="github-mark" viewBox="0 0 16 16" aria-hidden="true">
+              <svg class="github-mark" viewBox="-1 -1 18 18" aria-hidden="true">
                 <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1 8 3.87c.68 0 1.36.09 2 .26 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
               </svg>
               <span>GitHub issue webhook</span>
@@ -2795,6 +2902,16 @@ export function renderApp(): string {
         handoff: 11200,
       };
 
+      const progressDisplayOffsets = {
+        trigger: 0,
+        context: 1200,
+        policy: 2600,
+        proposal: 4800,
+        halt: 6200,
+        resume: 8600,
+        audit: 11200,
+      };
+
       function renderSteps(step, kind = 'pending') {
         currentStep = step;
         const order = ['trigger', 'autonomous', 'halt', 'resume', 'audit'];
@@ -2802,8 +2919,9 @@ export function renderApp(): string {
         workflowSteps.querySelectorAll('.step').forEach((item) => {
           const itemIndex = order.indexOf(item.dataset.step);
           item.className = 'step';
-          if (itemIndex < activeIndex) item.classList.add('done');
-          if (item.dataset.step === step) {
+          const activeDone = kind === 'ok' && itemIndex === activeIndex;
+          if (itemIndex < activeIndex || activeDone) item.classList.add('done');
+          if (item.dataset.step === step && !activeDone) {
             item.classList.add(step === 'halt' ? 'halted' : kind === 'error' ? 'error' : 'active');
           }
         });
@@ -2926,7 +3044,7 @@ export function renderApp(): string {
         if (key && stageDisplayTimes[key]) return stageDisplayTimes[key];
         if (!active) return '-';
         const record = progressRecordFor(run, title);
-        return displayRecordTime(record, record?.label ?? key) + ' UTC';
+        return formatRecordTime(record, progressDisplayOffsets[key] ?? recordDisplayOffsets[record?.label ?? key] ?? 0) + ' UTC';
       }
 
       function formatRecordTime(record, offsetMs = 0) {
@@ -3243,6 +3361,12 @@ export function renderApp(): string {
         return JSON.stringify(value, null, 2);
       }
 
+      function renderReceiptJson(value) {
+        return '<pre>' + pretty(value).split('\\n').map((line, index) => (
+          '<span class="json-line"><span class="json-line-number">' + String(index + 1) + '</span><span class="json-line-code">' + escapeHtml(line) + '</span></span>'
+        )).join('') + '</pre>';
+      }
+
       async function writeClipboard(text) {
         const value = String(text ?? '');
         if (!value) return false;
@@ -3372,8 +3496,9 @@ export function renderApp(): string {
         const existingResult = verificationEl.querySelector('#verificationResult');
         if (existingResult) existingResult.remove();
         verificationEl.insertAdjacentHTML('beforeend', verificationCheckingMarkup(record));
+        followElement(verificationEl.querySelector('#verificationResult'), 'nearest');
         try {
-          await sleep(250);
+          await sleep(850);
           const result = await post('/api/verify-record', {
             record: record.record,
             expected_hash: record.record_hash,
@@ -3381,6 +3506,7 @@ export function renderApp(): string {
           const ok = Boolean(result?.ok);
           const resultEl = verificationEl.querySelector('#verificationResult');
           if (resultEl) resultEl.outerHTML = verificationResultMarkup(result, record);
+          followElement(verificationEl.querySelector('#verificationResult'), 'nearest');
           button.innerHTML = (ok ? 'Verified ' : 'Check failed ') + actionGlyph(ok ? 'check' : 'external');
           button.classList.toggle('verified', ok);
           button.classList.toggle('failed', !ok);
@@ -3706,9 +3832,9 @@ export function renderApp(): string {
           const pendingSignatures = signers.filter((signer) => signer.status === 'Pending').length;
           const logEntry = run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id;
           const tabMarkup = \`
-            <div class="receipt-tabs">
-              <button class="receipt-tab \${activeTab === 'summary' ? 'active' : ''}" type="button" data-receipt-tab="summary">Summary</button>
-              <button class="receipt-tab \${activeTab === 'details' ? 'active' : ''}" type="button" data-receipt-tab="details">Record details</button>
+            <div class="receipt-tabs" role="tablist" aria-label="Receipt inspector views">
+              <button class="receipt-tab \${activeTab === 'summary' ? 'active' : ''}" type="button" role="tab" aria-selected="\${activeTab === 'summary' ? 'true' : 'false'}" data-receipt-tab="summary">Summary</button>
+              <button class="receipt-tab \${activeTab === 'details' ? 'active' : ''}" type="button" role="tab" aria-selected="\${activeTab === 'details' ? 'true' : 'false'}" data-receipt-tab="details">Record details</button>
             </div>
           \`;
           if (activeTab === 'details') {
@@ -3743,7 +3869,7 @@ export function renderApp(): string {
         };
         const selectRecord = (record) => {
           selectedReceiptRecord = record;
-          receiptsEl.innerHTML = '<pre>' + pretty(record) + '</pre>';
+          receiptsEl.innerHTML = renderReceiptJson(record);
           renderReceiptSummary(record);
           renderVerificationActions(run, record);
           updateReceiptControls(record);
@@ -3763,6 +3889,7 @@ export function renderApp(): string {
 
       function render(run) {
         currentRun = run;
+        stageDisplayTimes = {};
         runIdLabel.textContent = run.run_id;
         traceIdLabel.textContent = traceIdForRun(run);
         updateTraceHeaderCopy();
@@ -3847,9 +3974,9 @@ export function renderApp(): string {
           const runPromise = post('/api/runs', {
             prompt: promptInput.value,
           });
-          for (let index = 0; index < bootStages.length; index += 1) {
+          for (let index = 0; index < bootStages.length - 1; index += 1) {
             renderBootProgress(index);
-            await sleep(index === bootStages.length - 1 ? 1200 : 1700);
+            await sleep(1700);
           }
           const run = await runPromise;
           render(run);

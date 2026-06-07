@@ -73,10 +73,10 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#riskDetails')).toBeVisible()
       await expect(page.locator('#riskDetails')).toContainText('Human review gate')
 
-      await page.getByRole('button', { name: 'Record details' }).click()
+      await page.getByRole('tab', { name: 'Record details' }).click()
       await expect(page.locator('#receiptSummary')).toContainText('Record hash')
       await expect(page.locator('#receiptSummary')).toContainText('Timestamp')
-      await page.getByRole('button', { name: 'Summary' }).click()
+      await page.getByRole('tab', { name: 'Summary' }).click()
 
       await expectCopies(page.getByRole('button', { name: 'Copy trace ID' }))
       await expectCopies(page.getByRole('button', { name: 'Copy Agent signature' }))
