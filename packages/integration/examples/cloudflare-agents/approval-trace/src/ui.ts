@@ -1716,6 +1716,27 @@ export function renderApp(): string {
         min-width: 0;
       }
 
+      .proposal .metric .pill {
+        font-size: 12px;
+        line-height: 1.25;
+        min-height: 22px;
+        padding: 2px 7px;
+      }
+
+      .proposal .metric .meta-code {
+        font-size: 12px;
+        line-height: 1.25;
+        padding: 2px 7px;
+      }
+
+      .proposal .diff-head .label {
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0;
+        text-transform: none;
+      }
+
       .label {
         letter-spacing: 0.04em;
       }
@@ -2433,7 +2454,7 @@ export function renderApp(): string {
         background: #fff;
         border-radius: 0;
         gap: 7px;
-        grid-template-columns: 24px 78px minmax(88px, 1fr) minmax(52px, auto) minmax(58px, 92px) 16px;
+        grid-template-columns: 24px 76px minmax(72px, 1fr) minmax(52px, auto) minmax(112px, 126px) 16px;
         min-height: 31px;
         padding: 3px 8px;
         box-shadow: none;
@@ -2546,7 +2567,7 @@ export function renderApp(): string {
       .signature-slot .hash {
         display: inline-block;
         font-size: 10px;
-        max-width: 100%;
+        max-width: calc(100% - 24px);
         overflow: hidden;
         text-overflow: ellipsis;
         vertical-align: bottom;
@@ -3052,7 +3073,7 @@ export function renderApp(): string {
         font-size: 12px;
         font-weight: 750;
         justify-content: space-between;
-        margin: 2px 0 -4px;
+        margin: 15px 0 -4px;
       }
 
       .risk-details-toggle svg {
@@ -3108,7 +3129,7 @@ export function renderApp(): string {
 
         .signer-row {
           gap: 5px;
-          grid-template-columns: 22px 72px minmax(0, 1fr) minmax(46px, auto) minmax(30px, 44px) 12px;
+          grid-template-columns: 22px 56px minmax(0, 1fr) minmax(46px, auto) minmax(112px, 126px) 12px;
           padding: 4px 6px;
         }
 

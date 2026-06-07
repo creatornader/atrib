@@ -44,6 +44,7 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expect(page.locator('#timeline .event-future.selected')).toContainText('human.review.halted')
   await expect(page.locator('#answer')).toContainText('Human review halted')
   await expect(page.locator('#answer')).toContainText('Execution is stopped')
+  await expectPendingSignerHashReadable(page)
   await expectReferenceLeftProgressTypography(page)
 }
 
@@ -320,6 +321,40 @@ async function expectDiffRowsFillReferenceFrame(page: Page): Promise<void> {
   expect(rhythm.bottomGap).toBeLessThanOrEqual(11)
 }
 
+async function expectReferenceProposalPanelChrome(page: Page): Promise<void> {
+  const chrome = await page.evaluate<{
+    actionPill: { fontSize: number; height: number }
+    diffLabel: { fontSize: number; text: string; textTransform: string }
+    targetCode: { fontSize: number; height: number }
+  }>(`(() => {
+    const measure = (selector) => {
+      const element = document.querySelector(selector)
+      const rect = element?.getBoundingClientRect()
+      const style = element ? getComputedStyle(element) : null
+      return rect && style
+        ? {
+            fontSize: Number.parseFloat(style.fontSize),
+            height: Math.round(rect.height * 100) / 100,
+            text: element.textContent?.trim() ?? '',
+            textTransform: style.textTransform,
+          }
+        : { fontSize: 0, height: 999, text: '', textTransform: '' }
+    }
+    return {
+      actionPill: measure('#proposal .metric .pill'),
+      diffLabel: measure('#proposal .diff-head .label'),
+      targetCode: measure('#proposal .metric .meta-code'),
+    }
+  })()`)
+  expect(chrome.actionPill.fontSize).toBe(12)
+  expect(chrome.actionPill.height).toBeLessThanOrEqual(24)
+  expect(chrome.targetCode.fontSize).toBe(12)
+  expect(chrome.targetCode.height).toBeLessThanOrEqual(24)
+  expect(chrome.diffLabel.text).toBe('Diff (unified)')
+  expect(chrome.diffLabel.textTransform).toBe('none')
+  expect(chrome.diffLabel.fontSize).toBe(13)
+}
+
 async function expectReferenceDesktopPrimaryCaption(page: Page): Promise<void> {
   const captionGeometry = await page.evaluate<{
     fits: boolean
@@ -414,6 +449,31 @@ async function expectReferenceVerificationRows(page: Page): Promise<void> {
     expect(row.strongFontSize).toBe(12)
     expect(row.strongWeight).toBe(700)
   }
+}
+
+async function expectPendingSignerHashReadable(page: Page): Promise<void> {
+  const signature = await page.evaluate<{
+    hashText: string
+    hashWidth: number
+    slotWidth: number
+    visibleHashFits: boolean
+  }>(`(() => {
+    const firstRow = document.querySelector('.signer-row')
+    const slot = firstRow?.querySelector('.signature-slot')
+    const hash = firstRow?.querySelector('.signature-slot .hash')
+    const slotRect = slot?.getBoundingClientRect()
+    const hashRect = hash?.getBoundingClientRect()
+    return {
+      hashText: hash?.textContent?.trim() ?? '',
+      hashWidth: Math.round((hashRect?.width ?? 0) * 100) / 100,
+      slotWidth: Math.round((slotRect?.width ?? 0) * 100) / 100,
+      visibleHashFits: hash ? hash.scrollWidth <= hash.clientWidth + 1 : false,
+    }
+  })()`)
+  expect(signature.hashText).toMatch(/^[a-f0-9]{10}\.\.\.[a-f0-9]{4}$/)
+  expect(signature.slotWidth).toBeGreaterThanOrEqual(112)
+  expect(signature.hashWidth).toBeGreaterThanOrEqual(76)
+  expect(signature.visibleHashFits).toBe(true)
 }
 
 async function expectReferenceReceiptJsonSyntax(page: Page): Promise<void> {
@@ -659,6 +719,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await createProposal(page)
       await expectNoHorizontalOverflow(page)
       await expectActionButtonsCentered(page)
+      await expectReferenceProposalPanelChrome(page)
       await expectReferenceDesktopPrimaryCaption(page)
       await expectReferenceDesktopCenterStack(page)
       await expect(page.locator('.risk-bar .value')).toHaveText(
