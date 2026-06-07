@@ -38,6 +38,8 @@ export function renderApp(): string {
           var(--bg);
         color: var(--text);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        max-width: 100%;
+        overflow-x: hidden;
       }
 
       button,
@@ -964,6 +966,7 @@ export function renderApp(): string {
         margin: 0 auto;
         max-width: 1536px;
         padding: 0 0 0;
+        width: 100%;
       }
 
       .hero {
@@ -1006,6 +1009,7 @@ export function renderApp(): string {
         flex: 1 1 auto;
         gap: 18px;
         justify-content: flex-start;
+        position: relative;
       }
 
       .header-meta > span:nth-child(3) {
@@ -1073,9 +1077,59 @@ export function renderApp(): string {
         width: 32px;
       }
 
+      .header-menu:hover,
+      .header-menu:focus-visible,
+      .header-menu[aria-expanded="true"] {
+        border-color: #b8c8f6;
+        color: var(--blue);
+        outline: 0;
+      }
+
       .header-menu svg {
         height: 16px;
         width: 16px;
+      }
+
+      .header-actions-menu {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: 0 14px 32px rgba(18, 27, 42, 0.16);
+        display: grid;
+        min-width: 178px;
+        padding: 5px;
+        position: absolute;
+        right: 0;
+        top: 42px;
+        z-index: 20;
+      }
+
+      .header-actions-menu[hidden] {
+        display: none;
+      }
+
+      .header-actions-menu button,
+      .header-actions-menu a {
+        align-items: center;
+        background: transparent;
+        border-radius: 6px;
+        color: var(--ink);
+        display: flex;
+        font-size: 12px;
+        font-weight: 700;
+        min-height: 30px;
+        padding: 7px 9px;
+        text-align: left;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .header-actions-menu button:hover,
+      .header-actions-menu button:focus-visible,
+      .header-actions-menu a:hover,
+      .header-actions-menu a:focus-visible {
+        background: #f4f7fb;
+        outline: 0;
       }
 
       .meta-pill,
@@ -1121,8 +1175,8 @@ export function renderApp(): string {
       .rail-stepper {
         align-items: center;
         display: grid;
-        gap: 12px;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 16px;
+        grid-template-columns: minmax(126px, 1fr) minmax(196px, 1.18fr) minmax(236px, 1.12fr) minmax(242px, 1.36fr) minmax(142px, 0.9fr);
         position: relative;
         width: 100%;
       }
@@ -1132,20 +1186,23 @@ export function renderApp(): string {
         background: transparent;
         border: 1px solid transparent;
         color: var(--ink);
-        display: flex;
-        min-height: 52px;
+        display: grid;
+        gap: 10px;
+        grid-template-columns: 38px minmax(0, 1fr);
+        min-height: 64px;
         min-width: 0;
-        padding: 6px 10px;
+        padding: 6px 0;
         position: relative;
       }
 
       .step:not(:last-child)::after {
         border-top: 2px solid #c5cfdb;
         content: "";
-        left: 168px;
+        left: 54px;
         position: absolute;
-        top: 26px;
-        width: calc(100% - 178px);
+        right: -16px;
+        top: 31px;
+        width: auto;
         z-index: 0;
       }
 
@@ -1164,18 +1221,19 @@ export function renderApp(): string {
       .step.halted {
         background: #fff8ed;
         border-color: #f3a64e;
+        border-radius: 8px;
         color: var(--ink);
-        justify-self: center;
-        min-height: 58px;
-        padding: 8px 14px;
-        width: 332px;
+        min-height: 64px;
+        padding: 6px 10px;
+        width: auto;
       }
 
       .step.halted:not(:last-child)::after {
         border-color: #c5cfdb;
         border-top-style: dashed;
-        left: calc(100% + 8px);
-        width: 78px;
+        left: calc(100% + 1px);
+        right: -16px;
+        width: auto;
       }
 
       .step.done {
@@ -1194,33 +1252,32 @@ export function renderApp(): string {
         font-size: 14px;
         font-weight: 800;
         height: 38px;
-        margin-right: 11px;
         width: 38px;
         z-index: 1;
       }
 
       .step.done .step-index {
+        color: #fff;
         font-size: 0;
         position: relative;
       }
 
       .step.done .step-index::after {
         content: "";
-        border-bottom: 3px solid #fff;
-        border-right: 3px solid #fff;
-        height: 15px;
+        background: currentColor;
+        height: 22px;
         left: 50%;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
         position: absolute;
         top: 50%;
-        transform: translate(-50%, -56%) rotate(45deg);
-        width: 8px;
+        transform: translate(-50%, -50%);
+        width: 22px;
       }
 
       .step.halted .step-index {
         font-size: 0;
-        height: 42px;
         position: relative;
-        width: 42px;
       }
 
       .step.halted .step-index::before,
@@ -1236,11 +1293,11 @@ export function renderApp(): string {
       }
 
       .step.halted .step-index::before {
-        left: 14px;
+        left: 13px;
       }
 
       .step.halted .step-index::after {
-        right: 14px;
+        right: 13px;
       }
 
       .step-copy strong {
@@ -1258,37 +1315,48 @@ export function renderApp(): string {
 
       .step-copy {
         background: #fff;
+        display: grid;
+        gap: 3px;
         min-width: 0;
+        padding: 0 4px;
         position: relative;
         z-index: 1;
       }
 
       .step.halted .step-copy {
         background: #fff8ed;
-        display: grid;
-        gap: 3px;
       }
 
-      .step.halted .step-copy strong {
+      .step.done .step-copy,
+      .step.active .step-copy,
+      .step.error .step-copy {
+        background: #fff;
+      }
+
+      .step[data-step="halt"] .step-copy strong {
         display: block;
         font-size: 14px;
         font-weight: 850;
         line-height: 1.1;
       }
 
-      .step.halted .step-copy .step-number-label,
-      .step.halted .step-copy [data-step-title] {
+      .step[data-step="halt"] .step-copy .step-number-label,
+      .step[data-step="halt"] .step-copy [data-step-title] {
         display: inline;
         margin-top: 0;
       }
 
-      .step.halted .step-copy .step-meta-line {
+      .step[data-step="halt"] .step-copy .step-meta-line {
         align-items: center;
         display: flex;
         gap: 10px;
         line-height: 1;
         margin-top: 0;
         min-width: 0;
+      }
+
+      .step[data-step="halt"] [data-step-time="halt"] {
+        white-space: nowrap;
       }
 
       .step-badge {
@@ -1306,6 +1374,10 @@ export function renderApp(): string {
         vertical-align: 1px;
       }
 
+      .step-badge[hidden] {
+        display: none;
+      }
+
       .step-copy strong [data-step-title] {
         display: inline;
       }
@@ -1313,62 +1385,6 @@ export function renderApp(): string {
       .step.halted + .step .step-index {
         border-color: var(--blue);
         color: var(--blue);
-      }
-
-      @media (min-width: 1451px) {
-        .rail-stepper {
-          display: block;
-          height: 72px;
-        }
-
-        .step {
-          position: absolute;
-          top: 7px;
-        }
-
-        .step[data-step="trigger"] {
-          left: 10px;
-          width: 286px;
-        }
-
-        .step[data-step="autonomous"] {
-          left: 300px;
-          width: 270px;
-        }
-
-        .step[data-step="halt"] {
-          left: 569px;
-        }
-
-        .step[data-step="resume"] {
-          left: 966px;
-          width: 300px;
-        }
-
-        .step[data-step="audit"] {
-          left: 1288px;
-          width: 190px;
-        }
-
-        .step[data-step="trigger"]::after {
-          left: 158px;
-          width: 128px;
-        }
-
-        .step[data-step="autonomous"]::after {
-          left: 148px;
-          width: 121px;
-        }
-
-        .step.halted:not(:last-child)::after {
-          left: 332px;
-          width: 74px;
-        }
-
-        .step[data-step="resume"]::after {
-          left: 130px;
-          width: 154px;
-        }
       }
 
       .step-badge.approved {
@@ -1383,10 +1399,17 @@ export function renderApp(): string {
         color: #be123c;
       }
 
+      @media (min-width: 1250px) {
+        .rail-stepper {
+          grid-template-columns: minmax(170px, 223px) minmax(220px, 263px) minmax(280px, 332px) minmax(250px, 1fr) minmax(160px, 200px);
+        }
+      }
+
       .grid {
         gap: 10px;
         align-items: start;
-        grid-template-columns: 363px 610px 523px;
+        grid-template-columns: minmax(318px, 363px) minmax(500px, 610px) minmax(340px, 523px);
+        justify-content: center;
         margin: 0 10px;
       }
 
@@ -1601,11 +1624,14 @@ export function renderApp(): string {
       }
 
       .progress-item .dot {
+        align-items: center;
         border: 0;
+        border-radius: 999px;
         box-shadow: none;
         box-sizing: border-box;
         display: inline-flex;
         height: 16px;
+        justify-content: center;
         justify-self: center;
         margin-left: 0;
         position: relative;
@@ -1636,19 +1662,18 @@ export function renderApp(): string {
 
       .progress-item:not(.proposal) .dot.ok {
         background: var(--green);
+        color: #fff;
         font-size: 0;
       }
 
       .progress-item:not(.proposal) .dot.ok::after {
-        border-bottom: 2px solid #fff;
-        border-right: 2px solid #fff;
         content: "";
-        height: 8px;
-        left: 5px;
+        background: currentColor;
+        height: 10px;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
         position: absolute;
-        top: 2px;
-        transform: rotate(45deg);
-        width: 4px;
+        width: 10px;
       }
 
       .progress-item.halted .dot.pending {
@@ -1711,6 +1736,28 @@ export function renderApp(): string {
         white-space: nowrap;
       }
 
+      .diff-tools select,
+      .diff-tools button {
+        background: transparent;
+        border: 0;
+        border-radius: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 650;
+        min-height: 24px;
+        padding: 2px 4px;
+      }
+
+      .diff-tools select:hover,
+      .diff-tools select:focus-visible,
+      .diff-tools button:hover,
+      .diff-tools button:focus-visible,
+      .diff-tools button[aria-pressed="true"] {
+        background: #f4f7fb;
+        color: var(--ink);
+        outline: 0;
+      }
+
       .diff pre {
         font-size: 11.3px;
         line-height: 1.38;
@@ -1739,6 +1786,11 @@ export function renderApp(): string {
         padding: 0 12px;
         white-space: pre;
         width: auto;
+      }
+
+      .diff-code.wrap .diff-line {
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
       }
 
       .diff-line.add {
@@ -2016,15 +2068,13 @@ export function renderApp(): string {
       }
 
       .event-marker.done::after {
-        border-bottom: 2px solid #fff;
-        border-right: 2px solid #fff;
         content: "";
-        height: 8px;
-        left: 6px;
+        background: currentColor;
+        height: 11px;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
         position: absolute;
-        top: 3px;
-        transform: rotate(45deg);
-        width: 4px;
+        width: 11px;
       }
 
       .event-marker.pending {
@@ -2091,6 +2141,7 @@ export function renderApp(): string {
         color: #44536a;
         font-size: 11px;
         max-width: 132px;
+        min-width: 0;
         overflow: hidden;
         overflow-wrap: normal;
         text-align: right;
@@ -2148,7 +2199,7 @@ export function renderApp(): string {
         background: #fff;
         border-radius: 0;
         gap: 7px;
-        grid-template-columns: 24px 72px minmax(112px, 1fr) 58px minmax(84px, 106px) 16px;
+        grid-template-columns: 24px 78px minmax(88px, 1fr) minmax(52px, auto) minmax(58px, 92px) 16px;
         min-height: 31px;
         padding: 3px 8px;
         box-shadow: none;
@@ -2177,6 +2228,8 @@ export function renderApp(): string {
 
       .signer-row strong {
         font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
         white-space: nowrap;
       }
 
@@ -2250,13 +2303,20 @@ export function renderApp(): string {
         align-self: center;
         color: var(--muted);
         font-size: 11px;
+        min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
       .signature-slot .hash {
+        display: inline-block;
         font-size: 10px;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: bottom;
+        white-space: nowrap;
       }
 
       .copy-icon {
@@ -2298,7 +2358,8 @@ export function renderApp(): string {
         display: grid;
         font-size: 12px;
         gap: 8px;
-        grid-template-columns: 94px minmax(0, 1fr) auto;
+        grid-template-columns: 94px minmax(0, 1fr) 16px;
+        min-width: 0;
       }
 
       .integrity-row strong {
@@ -2309,6 +2370,22 @@ export function renderApp(): string {
       .integrity-row .hash {
         overflow: hidden;
         text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .integrity-row .value {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .integrity-row.proof-row {
+        grid-template-columns: 94px minmax(0, 1fr) auto;
+      }
+
+      .trace-integrity .event-action {
+        justify-self: end;
         white-space: nowrap;
       }
 
@@ -2404,7 +2481,7 @@ export function renderApp(): string {
       }
 
       .receipt-shell {
-        grid-template-columns: minmax(500px, 520px) minmax(430px, 458px) minmax(520px, 1fr);
+        grid-template-columns: minmax(360px, 520px) minmax(320px, 458px) minmax(360px, 1fr);
       }
 
       .receipt-section {
@@ -2612,12 +2689,22 @@ export function renderApp(): string {
         grid-template-columns: 16px minmax(0, 1fr);
       }
 
+      .verification-step > div {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+
       .verification-step strong {
+        display: block;
         font-size: 12px;
+        line-height: 1.25;
       }
 
       .verification-step span:last-child {
         color: var(--muted);
+        display: block;
+        line-height: 1.25;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -2722,7 +2809,7 @@ export function renderApp(): string {
 
         .signer-row {
           gap: 5px;
-          grid-template-columns: 22px 62px minmax(0, 1fr) 50px minmax(42px, 58px) 12px;
+          grid-template-columns: 22px 72px minmax(0, 1fr) minmax(46px, auto) minmax(30px, 44px) 12px;
           padding: 4px 6px;
         }
 
@@ -2807,7 +2894,12 @@ export function renderApp(): string {
           <span class="run-id-meta">Run ID <span class="meta-code" id="runIdLabel">pending</span><button class="copy-icon" type="button" aria-label="Copy run ID" data-copy-source="#runIdLabel" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></button></span>
           <span>Region <span class="meta-code">IAD</span><span class="region-status-dot" aria-hidden="true"></span></span>
           <span>Started <span id="startedLabel">waiting</span></span>
-          <button class="header-menu" type="button" aria-label="More run actions"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.25" fill="currentColor"/><circle cx="8" cy="8" r="1.25" fill="currentColor"/><circle cx="12.5" cy="8" r="1.25" fill="currentColor"/></svg></button>
+          <button class="header-menu" id="headerMenu" type="button" aria-label="More run actions" aria-controls="headerActions" aria-expanded="false" aria-haspopup="menu"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.25" fill="currentColor"/><circle cx="8" cy="8" r="1.25" fill="currentColor"/><circle cx="12.5" cy="8" r="1.25" fill="currentColor"/></svg></button>
+          <div class="header-actions-menu" id="headerActions" role="menu" hidden>
+            <button type="button" role="menuitem" data-header-action="copy-link">Copy run link</button>
+            <button type="button" role="menuitem" data-header-action="open-json">Open trace JSON</button>
+            <button type="button" role="menuitem" data-header-action="reset">Reset demo</button>
+          </div>
         </div>
       </section>
 
@@ -2950,6 +3042,8 @@ export function renderApp(): string {
       const traceIdLabel = document.querySelector('#traceIdLabel');
       const copyReceiptButton = document.querySelector('#copyReceipt');
       const downloadReceiptButton = document.querySelector('#downloadReceipt');
+      const headerMenuButton = document.querySelector('#headerMenu');
+      const headerActionsMenu = document.querySelector('#headerActions');
 
       const bootStages = [
         {
@@ -3060,9 +3154,17 @@ export function renderApp(): string {
       function updateHaltStepState(run = currentRun) {
         const title = workflowSteps.querySelector('[data-step-title="halt"]');
         const badge = workflowSteps.querySelector('[data-step-badge="halt"]');
+        const haltStep = workflowSteps.querySelector('[data-step="halt"]');
         if (!title || !badge) return;
         badge.classList.remove('approved', 'rejected');
-        if (!run || run.status === 'pending_approval') {
+        badge.hidden = false;
+        if (!run) {
+          title.textContent = 'Human review halted';
+          badge.textContent = 'Awaiting review';
+          badge.hidden = !haltStep?.classList.contains('halted');
+          return;
+        }
+        if (run.status === 'pending_approval') {
           title.textContent = 'Human review halted';
           badge.textContent = 'Awaiting review';
           return;
@@ -3245,7 +3347,7 @@ export function renderApp(): string {
             <div class="integrity-list">
               <div class="integrity-row"><strong>Merkle root</strong><span class="hash">pending</span>\${copyIcon('', 'Merkle root')}</div>
               <div class="integrity-row"><strong>Log hash</strong><span class="hash">pending</span>\${copyIcon('', 'log hash')}</div>
-              <div class="integrity-row"><strong>Proof status</strong><span class="value">Waiting for first signed record</span><span></span></div>
+              <div class="integrity-row proof-row"><strong>Proof status</strong><span class="value">Waiting for first signed record</span><span></span></div>
             </div>
           </div>
         \`;
@@ -3305,6 +3407,7 @@ export function renderApp(): string {
           const label = reject.querySelector('.button-label');
           if (label) label.textContent = busy && activeLabel === 'reject' ? 'Rejecting...' : 'Reject';
         }
+        updateHeaderMenuControls();
       }
 
       function setBusy(next, activeLabel = '') {
@@ -3611,6 +3714,19 @@ export function renderApp(): string {
         if (runButton) runButton.disabled = !runIdLabel.textContent || runIdLabel.textContent === 'pending';
       }
 
+      function setHeaderMenuOpen(open) {
+        if (!headerMenuButton || !headerActionsMenu) return;
+        headerMenuButton.setAttribute('aria-expanded', String(open));
+        headerActionsMenu.hidden = !open;
+      }
+
+      function updateHeaderMenuControls() {
+        if (!headerActionsMenu) return;
+        headerActionsMenu.querySelectorAll('[data-header-action="open-json"], [data-header-action="reset"]').forEach((button) => {
+          button.disabled = !currentRun || busy;
+        });
+      }
+
       function renderVerificationActions(run = currentRun, record = selectedReceiptRecord) {
         verificationEl.innerHTML = verificationRowsMarkup(run, record);
       }
@@ -3747,7 +3863,10 @@ export function renderApp(): string {
             <div>
               <div class="diff-head">
                 <span class="label">Diff (unified)</span>
-                <span class="diff-tools"><span>Context</span><span>3 lines</span><span>Wrap</span></span>
+                <span class="diff-tools">
+                  <label>Context <select id="diffContext" aria-label="Diff context"><option value="3">3 lines</option><option value="6">6 lines</option><option value="all">All</option></select></label>
+                  <button type="button" id="diffWrapToggle" aria-pressed="false">Wrap</button>
+                </span>
               </div>
               <div class="diff-code">\${renderDiff(diff)}</div>
             </div>
@@ -3777,6 +3896,16 @@ export function renderApp(): string {
           const expanded = button.getAttribute('aria-expanded') === 'true';
           button.setAttribute('aria-expanded', String(!expanded));
           details.hidden = expanded;
+        });
+        document.querySelector('#diffWrapToggle')?.addEventListener('click', (event) => {
+          const button = event.currentTarget;
+          const code = document.querySelector('.diff-code');
+          const pressed = button.getAttribute('aria-pressed') === 'true';
+          button.setAttribute('aria-pressed', String(!pressed));
+          code?.classList.toggle('wrap', !pressed);
+        });
+        document.querySelector('#diffContext')?.addEventListener('change', (event) => {
+          document.querySelector('.diff')?.setAttribute('data-context-lines', event.currentTarget.value);
         });
         document.querySelector('#approve')?.addEventListener('click', async () => {
           await transition({
@@ -3944,7 +4073,7 @@ export function renderApp(): string {
             <div class="integrity-list">
               <div class="integrity-row"><strong>Merkle root</strong><span class="hash">\${run.records[0]?.record_hash ?? 'pending'}</span>\${copyIcon(run.records[0]?.record_hash ?? '', 'Merkle root')}</div>
               <div class="integrity-row"><strong>Log hash</strong><span class="hash">\${run.records[1]?.record_hash ?? 'pending'}</span>\${copyIcon(run.records[1]?.record_hash ?? '', 'log hash')}</div>
-              <div class="integrity-row"><strong>Proof status</strong><span class="value">Included in Cloudflare Integrity Log</span><a class="event-action" href="\${run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id}" target="_blank" rel="noreferrer">View proof</a></div>
+              <div class="integrity-row proof-row"><strong>Proof status</strong><span class="value">Included in Cloudflare Integrity Log</span><a class="event-action" href="\${run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id}" target="_blank" rel="noreferrer">View proof</a></div>
             </div>
           </div>
         \`
@@ -4062,6 +4191,34 @@ export function renderApp(): string {
 
       document.addEventListener('click', async (event) => {
         const target = event.target;
+        const menuButton = target.closest?.('#headerMenu');
+        if (menuButton) {
+          setHeaderMenuOpen(menuButton.getAttribute('aria-expanded') !== 'true');
+          return;
+        }
+
+        const menuAction = target.closest?.('[data-header-action]');
+        if (menuAction && !menuAction.disabled) {
+          const action = menuAction.dataset.headerAction;
+          setHeaderMenuOpen(false);
+          if (action === 'copy-link') {
+            if (await writeClipboard(window.location.href)) markCopied(menuAction);
+            return;
+          }
+          if (action === 'open-json' && currentRun) {
+            window.open('/api/runs/' + currentRun.run_id, '_blank', 'noreferrer');
+            return;
+          }
+          if (action === 'reset') {
+            resetButton.click();
+            return;
+          }
+        }
+
+        if (headerActionsMenu && !target.closest?.('#headerActions')) {
+          setHeaderMenuOpen(false);
+        }
+
         const copyButton = target.closest?.('[data-copy-value], [data-copy-source], #copyReceipt');
         if (copyButton && !copyButton.disabled) {
           const source = copyButton.dataset.copySource
@@ -4124,6 +4281,7 @@ export function renderApp(): string {
 
       resetButton.addEventListener('click', () => {
         if (busy) return;
+        setHeaderMenuOpen(false);
         currentRun = null;
         selectedReceiptRecord = null;
         stageDisplayTimes = {};
@@ -4138,6 +4296,10 @@ export function renderApp(): string {
         clearReceiptInspector();
         setStatus('Ready for incoming alert', 'pending', 'Run the prior trigger to start autonomous triage before the human review gate.', 'trigger');
         updateControls();
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') setHeaderMenuOpen(false);
       });
 
       updateControls();

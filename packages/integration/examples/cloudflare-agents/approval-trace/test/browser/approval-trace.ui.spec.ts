@@ -48,11 +48,43 @@ async function expectCopies(button: Locator): Promise<void> {
   await expect(button).toHaveAttribute('data-copy-state', 'copied')
 }
 
+async function expectNoHorizontalOverflow(page: Page): Promise<void> {
+  const overflow = await page.evaluate<{
+    bodyWidth: number
+    documentWidth: number
+    nodes: Array<{ className: string; tagName: string; text: string }>
+    viewportWidth: number
+  }>(`(() => {
+    const nodes = Array.from(document.querySelectorAll('*'))
+      .map((element) => {
+        const rect = element.getBoundingClientRect()
+        if (rect.width === 0 || rect.height === 0) return null
+        if (rect.left >= -1 && rect.right <= window.innerWidth + 1) return null
+        return {
+          className: String(element.className),
+          tagName: element.tagName,
+          text: element.textContent?.trim().replace(/\s+/g, ' ').slice(0, 80) ?? '',
+        }
+      })
+      .filter(Boolean)
+    return {
+      bodyWidth: document.body.scrollWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      nodes,
+      viewportWidth: window.innerWidth,
+    }
+  })()`)
+  expect(overflow.bodyWidth).toBeLessThanOrEqual(overflow.viewportWidth)
+  expect(overflow.documentWidth).toBeLessThanOrEqual(overflow.viewportWidth)
+  expect(overflow.nodes).toEqual([])
+}
+
 test.describe('Cloudflare approval trace browser UI', () => {
   test('clicks through approved execution and opens the signed receipt', async ({ page }) => {
     await expectCleanConsole(page, async () => {
       await page.context().grantPermissions(['clipboard-write'])
       await createProposal(page)
+      await expectNoHorizontalOverflow(page)
 
       const visibleTimes = await page.locator('#answer .progress-time').allTextContents()
       const populatedTimes = visibleTimes.filter((time) => time !== '-')
@@ -72,6 +104,20 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.locator('#riskDetailsToggle').click()
       await expect(page.locator('#riskDetails')).toBeVisible()
       await expect(page.locator('#riskDetails')).toContainText('Human review gate')
+
+      await page.locator('#diffWrapToggle').click()
+      await expect(page.locator('#diffWrapToggle')).toHaveAttribute('aria-pressed', 'true')
+      await expect(page.locator('.diff-code')).toHaveClass(/wrap/)
+      await page.locator('#diffContext').selectOption('6')
+      await expect(page.locator('.diff')).toHaveAttribute('data-context-lines', '6')
+
+      await page.locator('#headerMenu').click()
+      await expect(page.locator('#headerActions')).toBeVisible()
+      await expect(page.locator('[data-header-action="copy-link"]')).toBeEnabled()
+      await expect(page.locator('[data-header-action="open-json"]')).toBeEnabled()
+      await expect(page.locator('[data-header-action="reset"]')).toBeEnabled()
+      await page.keyboard.press('Escape')
+      await expect(page.locator('#headerActions')).toBeHidden()
 
       await page.getByRole('tab', { name: 'Record details' }).click()
       await expect(page.locator('#receiptSummary')).toContainText('Record hash')
@@ -98,6 +144,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.getByRole('button', { name: 'Approve and resume' }).click()
 
       await expect(page.locator('#statusTitle')).toHaveText('Trace complete', { timeout: 30_000 })
+      await expectNoHorizontalOverflow(page)
       await expect(page.locator('[data-step="halt"]')).toContainText('Approved')
       await expect(page.locator('[data-step="halt"]')).not.toContainText('Awaiting review')
       await expect(page.locator('#answer')).toContainText('Agent resumed through MCP')
@@ -119,6 +166,36 @@ test.describe('Cloudflare approval trace browser UI', () => {
       const executionDownload = page.waitForEvent('download')
       await page.locator('#verification').getByRole('button', { name: 'Download' }).click()
       expect((await executionDownload).suggestedFilename()).toContain('cloudflare-trace-execution')
+    })
+  })
+
+  test('keeps the desktop trace layout contained through the live stages', async ({ page }) => {
+    await expectCleanConsole(page, async () => {
+      await page.setViewportSize({ width: 1365, height: 768 })
+      await page.goto('/')
+      await expect(page).toHaveTitle('Cloudflare Agent Trace')
+      await expect(page.getByTestId('approval-trace-app')).toBeVisible()
+      await expectNoHorizontalOverflow(page)
+
+      await expect(page.locator('#statusTitle')).toHaveText('Halted for human review', {
+        timeout: 15_000,
+      })
+      await expect(page.locator('[data-step="halt"]')).toContainText('Awaiting review')
+      await expectNoHorizontalOverflow(page)
+
+      const signerSpacing = await page.evaluate<boolean[]>(`Array.from(document.querySelectorAll('.signer-row'))
+        .map((row) => {
+          const cells = Array.from(row.children).map((child) => child.getBoundingClientRect())
+          const nameCell = cells[1]
+          const detailCell = cells[2]
+          return Boolean(nameCell && detailCell && nameCell.right < detailCell.left)
+        })`)
+      expect(signerSpacing).toEqual([true, true, true])
+
+      await page.getByRole('button', { name: 'Approve and resume' }).click()
+      await expect(page.locator('#statusTitle')).toHaveText('Trace complete', { timeout: 30_000 })
+      await expect(page.locator('[data-step="halt"]')).toContainText('Approved')
+      await expectNoHorizontalOverflow(page)
     })
   })
 
