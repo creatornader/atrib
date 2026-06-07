@@ -211,15 +211,34 @@ async function expectWorkflowStepCopyHugsContent(page: Page): Promise<void> {
 }
 
 async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
-  const railGeometry = await page.evaluate<
-    Array<{
+  const railGeometry = await page.evaluate<{
+    badge: {
+      color: string
+      fontSize: number
+      fontWeight: number
+      height: number
+      width: number
+    } | null
+    steps: Array<{
       indexX: number | null
       rectH: number
       rectW: number
       rectX: number
       step: string | null
     }>
-  >(`Array.from(document.querySelectorAll('.step')).map((step) => {
+  }>(`(() => {
+    const badge = document.querySelector('[data-step-badge="halt"]')
+    const badgeRect = badge?.getBoundingClientRect()
+    const badgeStyle = badge ? getComputedStyle(badge) : null
+    return {
+      badge: badge && badgeRect && badgeStyle ? {
+        color: badgeStyle.color,
+        fontSize: Number.parseFloat(badgeStyle.fontSize),
+        fontWeight: Number.parseFloat(badgeStyle.fontWeight),
+        height: Math.round(badgeRect.height),
+        width: Math.round(badgeRect.width),
+      } : null,
+      steps: Array.from(document.querySelectorAll('.step')).map((step) => {
     const rect = step.getBoundingClientRect()
     const index = step.querySelector('.step-index')?.getBoundingClientRect()
     return {
@@ -229,9 +248,11 @@ async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
       rectX: Math.round(rect.x),
       step: step.getAttribute('data-step'),
     }
-  })`)
+      }),
+    }
+  })()`)
   const byStep = Object.fromEntries(
-    railGeometry.map((geometry) => [geometry.step, geometry]),
+    railGeometry.steps.map((geometry) => [geometry.step, geometry]),
   )
   expect(byStep.trigger.indexX).toBeGreaterThanOrEqual(51)
   expect(byStep.trigger.indexX).toBeLessThanOrEqual(53)
@@ -246,6 +267,11 @@ async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
   expect(byStep.resume.indexX).toBeLessThanOrEqual(987)
   expect(byStep.audit.indexX).toBeGreaterThanOrEqual(1326)
   expect(byStep.audit.indexX).toBeLessThanOrEqual(1328)
+  expect(railGeometry.badge?.fontSize).toBe(10)
+  expect(railGeometry.badge?.fontWeight).toBeGreaterThanOrEqual(800)
+  expect(railGeometry.badge?.height).toBeLessThanOrEqual(18)
+  expect(railGeometry.badge?.width).toBeLessThanOrEqual(112)
+  expect(railGeometry.badge?.color).toBe('rgb(164, 73, 0)')
 }
 
 async function expectTraceRowsReadable(page: Page): Promise<void> {

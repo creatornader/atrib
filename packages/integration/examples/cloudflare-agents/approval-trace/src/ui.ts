@@ -1399,7 +1399,7 @@ export function renderApp(): string {
       .step[data-step="halt"] .step-copy .step-meta-line {
         align-items: center;
         display: flex;
-        gap: 10px;
+        gap: 16px;
         line-height: 1;
         margin-top: 0;
         min-width: 0;
@@ -1419,9 +1419,17 @@ export function renderApp(): string {
         font-weight: 850;
         line-height: 1;
         margin-left: 0;
-        padding: 3px 6px;
+        padding: 3px 4px;
         text-transform: uppercase;
         vertical-align: 1px;
+      }
+
+      .step[data-step="halt"] .step-copy .step-badge {
+        color: #a44900;
+        font-size: 10px;
+        font-weight: 850;
+        line-height: 1;
+        margin-top: 0;
       }
 
       .step-badge[hidden] {
