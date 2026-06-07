@@ -174,6 +174,7 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
       contentCenterDelta: number
       contentDisplay: string
       contentInsideButton: boolean
+      copyCenterDelta: number
       iconCopyGap: number
       iconInsideButton: boolean
       iconTextBlockYDelta: number
@@ -211,6 +212,7 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
       contentInsideButton: content
         ? content.left >= buttonRect.left && content.right <= buttonRect.right && content.top >= buttonRect.top && content.bottom <= buttonRect.bottom
         : false,
+      copyCenterDelta: copy ? Math.abs((copy.left + copy.width / 2) - center) : 999,
       iconCopyGap: icon && copy ? copy.left - icon.right : 0,
       iconInsideButton: icon
         ? icon.left >= buttonRect.left && icon.right <= buttonRect.right && icon.top >= buttonRect.top && icon.bottom <= buttonRect.bottom
@@ -241,8 +243,7 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     expect(geometry.textAlign).toBe('center')
     expect(geometry.contentCenterDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.contentInsideButton).toBe(true)
-    expect(geometry.iconCopyGap).toBeGreaterThanOrEqual(8)
-    expect(geometry.iconCopyGap).toBeLessThanOrEqual(10)
+    expect(geometry.copyCenterDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.iconInsideButton).toBe(true)
     expect(geometry.iconTextBlockYDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.iconLabelYDelta).toBeGreaterThan(4)
@@ -665,7 +666,9 @@ test.describe('Cloudflare approval trace browser UI', () => {
       )
       await expectReferenceDesktopRiskTextFits(page)
       await expect(
-        page.locator('.risk-bar').evaluate((element) => getComputedStyle(element).backgroundColor),
+        page.locator('.risk-bar').evaluate((element) =>
+          element.ownerDocument.defaultView?.getComputedStyle(element).backgroundColor ?? '',
+        ),
       ).resolves.toBe('rgb(255, 255, 255)')
       await expectWorkflowStepCopyHugsContent(page)
       await expectReferenceDesktopRailGeometry(page)
@@ -717,14 +720,15 @@ test.describe('Cloudflare approval trace browser UI', () => {
 
       await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-haspopup', 'menu')
       await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
+      await expect(page.getByRole('button', { name: 'Live run' })).toBeVisible()
       await expect(page.locator('#runModeMenu .menu-chevron')).toBeVisible()
-      await page.locator('#runModeMenu').click()
+      await page.getByRole('button', { name: 'Live run' }).click()
       await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'true')
       await expect(page.locator('#runModeActions')).toBeVisible()
       await expect(page.locator('[data-run-mode-action="live"]')).toHaveAttribute('aria-checked', 'true')
       await expect(
         page.locator('[data-run-mode-action="live"]').evaluate((element) =>
-          getComputedStyle(element, '::before').content,
+          element.ownerDocument.defaultView?.getComputedStyle(element, '::before').content ?? '',
         ),
       ).resolves.toBe('"✓"')
       await expect(page.locator('[data-run-mode-action="open-json"]')).toBeEnabled()

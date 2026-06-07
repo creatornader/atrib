@@ -2052,7 +2052,7 @@ export function renderApp(): string {
 
       .actions {
         display: grid;
-        grid-template-columns: minmax(190px, 1.08fr) repeat(2, minmax(0, 1fr));
+        grid-template-columns: minmax(190px, 1.08fr) repeat(2, minmax(180px, 1fr));
         gap: 12px;
         margin-top: 6px;
         min-width: 0;
@@ -2060,23 +2060,29 @@ export function renderApp(): string {
 
       .button-content {
         align-items: center;
-        display: inline-flex;
-        gap: 8px;
+        display: flex;
         justify-content: center;
         max-width: 100%;
         min-width: 0;
+        width: 100%;
+      }
+
+      .button-content::after {
+        content: none;
       }
 
       .action-copy {
+        align-items: center;
         box-sizing: border-box;
-        display: grid;
+        display: flex;
+        flex-direction: column;
         gap: 2px;
-        justify-items: center;
+        justify-content: center;
         max-width: 100%;
         min-width: 0;
-        padding: 0;
+        padding: 0 18px;
         text-align: center;
-        width: max-content;
+        width: 100%;
       }
 
       .action-copy small {
@@ -2100,7 +2106,9 @@ export function renderApp(): string {
         font-weight: 800;
         justify-self: center;
         line-height: 1.12;
+        max-width: 100%;
         white-space: nowrap;
+        width: max-content;
       }
 
       .primary .button-label {
@@ -2145,9 +2153,11 @@ export function renderApp(): string {
         height: 18px;
         justify-content: center;
         line-height: 0;
-        margin-left: 0;
-        margin-top: 0;
-        position: static;
+        left: 12px;
+        margin: 0;
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
         width: 18px;
       }
 
@@ -3069,7 +3079,7 @@ export function renderApp(): string {
 
         .actions {
           gap: 10px;
-          grid-template-columns: minmax(190px, 1.12fr) repeat(2, minmax(0, 1fr));
+          grid-template-columns: minmax(190px, 1fr) repeat(2, minmax(180px, 0.95fr));
         }
 
         .action-copy small,
@@ -3159,6 +3169,10 @@ export function renderApp(): string {
           grid-template-columns: 20px 48px minmax(0, 1fr);
         }
 
+        .actions {
+          grid-template-columns: 1fr;
+        }
+
         .event-hash {
           grid-column: 3;
           justify-self: start;
@@ -3184,7 +3198,7 @@ export function renderApp(): string {
         </div>
         <div class="header-meta">
           <span class="run-mode-wrap">
-            <button class="meta-pill live-run" id="runModeMenu" type="button" aria-label="Run mode" aria-controls="runModeActions" aria-expanded="false" aria-haspopup="menu"><span class="dot ok"></span><span>Live run</span><svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg></button>
+            <button class="meta-pill live-run" id="runModeMenu" type="button" aria-controls="runModeActions" aria-expanded="false" aria-haspopup="menu"><span class="dot ok"></span><span>Live run</span><svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg></button>
             <div class="run-mode-menu" id="runModeActions" role="menu" hidden>
               <button type="button" role="menuitemradio" aria-checked="true" data-run-mode-action="live">Live run</button>
               <button type="button" role="menuitem" data-run-mode-action="open-json">Open trace JSON</button>
