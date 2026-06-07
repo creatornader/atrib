@@ -1593,6 +1593,11 @@ export function renderApp(): string {
         font-size: 14px;
       }
 
+      .trigger-card .detail-row strong {
+        font-size: 13px;
+        font-weight: 400;
+      }
+
       .trigger-details {
         gap: 8px;
         margin-top: 2px;
@@ -1661,6 +1666,14 @@ export function renderApp(): string {
         letter-spacing: 0.04em;
         margin-bottom: 4px;
         text-transform: uppercase;
+      }
+
+      #answer > .section-label {
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0;
+        margin-bottom: 7px;
+        text-transform: none;
       }
 
       textarea {
@@ -1762,8 +1775,14 @@ export function renderApp(): string {
         background: transparent;
       }
 
+      .progress-item strong {
+        font-size: 13px;
+        font-weight: 400;
+      }
+
       .progress-item.halted strong {
         color: #9a4a00;
+        font-weight: 700;
       }
 
       .progress-item.proposal .dot.ok {
@@ -3502,9 +3521,22 @@ export function renderApp(): string {
         return new Date(Date.now() + offsetMs).toISOString().slice(11, 19) + ' UTC';
       }
 
+      function formatHeaderDate(value) {
+        const date = value ? new Date(value) : new Date();
+        const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+        const day = date.getUTCDate();
+        const year = date.getUTCFullYear();
+        const time = date.toISOString().slice(11, 19);
+        return month + ' ' + day + ', ' + year + ' ' + time + ' UTC';
+      }
+
       function displayRecordTime(record, label = record?.label, fallbackIndex = 0) {
         const offset = recordDisplayOffsets[label] ?? fallbackIndex * 1000;
         return formatRecordTime(record, offset);
+      }
+
+      function progressTimeLabel(value) {
+        return String(value ?? '-').replace(/ UTC$/, '');
       }
 
       function progressKeyForTitle(title) {
@@ -3520,10 +3552,10 @@ export function renderApp(): string {
 
       function progressDisplayTime(run, title, active) {
         const key = progressKeyForTitle(title);
-        if (key && stageDisplayTimes[key]) return stageDisplayTimes[key];
+        if (key && stageDisplayTimes[key]) return progressTimeLabel(stageDisplayTimes[key]);
         if (!active) return '-';
         const record = progressRecordFor(run, title);
-        return formatRecordTime(record, progressDisplayOffsets[key] ?? recordDisplayOffsets[record?.label ?? key] ?? 0) + ' UTC';
+        return formatRecordTime(record, progressDisplayOffsets[key] ?? recordDisplayOffsets[record?.label ?? key] ?? 0);
       }
 
       function formatRecordTime(record, offsetMs = 0) {
@@ -3656,7 +3688,7 @@ export function renderApp(): string {
                 <strong>\${stage.title}</strong>
                 <span>\${stage.detail}</span>
               </div>
-              <span class="progress-time">\${done || active ? stageDisplayTimes[stage.key] : '-'}</span>
+              <span class="progress-time">\${done || active ? progressTimeLabel(stageDisplayTimes[stage.key]) : '-'}</span>
             </div>
           \`;
         }).join('');
@@ -4524,7 +4556,7 @@ export function renderApp(): string {
         traceIdLabel.textContent = traceIdForRun(run);
         updateTraceHeaderCopy();
         const started = run.records[0]?.record?.timestamp
-          ? new Date(run.records[0].record.timestamp).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+          ? formatHeaderDate(run.records[0].record.timestamp)
           : 'pending';
         startedLabel.textContent = started;
         receivedLabel.textContent = started;
@@ -4666,8 +4698,8 @@ export function renderApp(): string {
           runIdLabel.textContent = runId;
           traceIdLabel.textContent = traceIdFromRunId(runId);
           updateTraceHeaderCopy();
-          startedLabel.textContent = nowTime(0);
-          receivedLabel.textContent = nowTime(0);
+          startedLabel.textContent = formatHeaderDate();
+          receivedLabel.textContent = formatHeaderDate();
           clearReceiptInspector();
           renderBootProgress(0);
           const run = await post('/api/runs', {

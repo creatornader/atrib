@@ -44,6 +44,7 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expect(page.locator('#timeline .event-future.selected')).toContainText('human.review.halted')
   await expect(page.locator('#answer')).toContainText('Human review halted')
   await expect(page.locator('#answer')).toContainText('Execution is stopped')
+  await expectReferenceLeftProgressTypography(page)
 }
 
 async function openTimelineRecord(page: Page, label: string): Promise<void> {
@@ -56,6 +57,56 @@ async function openTimelineRecord(page: Page, label: string): Promise<void> {
 async function expectCopies(button: Locator): Promise<void> {
   await button.click()
   await expect(button).toHaveAttribute('data-copy-state', 'copied')
+}
+
+async function expectReferenceLeftProgressTypography(page: Page): Promise<void> {
+  const progress = await page.evaluate<{
+    detailWeights: number[]
+    receivedText: string
+    rowWeights: Array<{ text: string; weight: number }>
+    sectionLabel: {
+      fontSize: number
+      fontWeight: number
+      text: string
+      textTransform: string
+    } | null
+    times: string[]
+  }>(`(() => {
+    const sectionLabel = document.querySelector('#answer > .section-label')
+    const sectionStyle = sectionLabel ? getComputedStyle(sectionLabel) : null
+    return {
+      detailWeights: Array.from(document.querySelectorAll('.trigger-card .detail-row strong'))
+        .map((element) => Number.parseFloat(getComputedStyle(element).fontWeight)),
+      receivedText: document.querySelector('#receivedLabel')?.textContent?.trim() ?? '',
+      rowWeights: Array.from(document.querySelectorAll('#answer .progress-item strong'))
+        .map((element) => ({ text: element.textContent?.trim() ?? '', weight: Number.parseFloat(getComputedStyle(element).fontWeight) })),
+      sectionLabel: sectionLabel && sectionStyle ? {
+        fontSize: Number.parseFloat(sectionStyle.fontSize),
+        fontWeight: Number.parseFloat(sectionStyle.fontWeight),
+        text: sectionLabel.textContent?.trim() ?? '',
+        textTransform: sectionStyle.textTransform,
+      } : null,
+      times: Array.from(document.querySelectorAll('#answer .progress-time'))
+        .map((element) => element.textContent?.trim() ?? ''),
+    }
+  })()`)
+  expect(progress.sectionLabel?.text).toBe('Agent progress')
+  expect(progress.sectionLabel?.textTransform).toBe('none')
+  expect(progress.sectionLabel?.fontSize).toBe(14)
+  expect(progress.sectionLabel?.fontWeight).toBe(700)
+  expect(progress.receivedText).toMatch(/^[A-Z][a-z]{2} \d{1,2}, \d{4} \d{2}:\d{2}:\d{2} UTC$/)
+  expect(progress.detailWeights.every((weight) => weight <= 400)).toBe(true)
+  for (const row of progress.rowWeights) {
+    if (row.text === 'Human review halted') {
+      expect(row.weight).toBe(700)
+    } else {
+      expect(row.weight).toBe(400)
+    }
+  }
+  for (const time of progress.times.filter((value) => value !== '-')) {
+    expect(time).not.toContain('UTC')
+    expect(time).toMatch(/^\d{2}:\d{2}:\d{2}$/)
+  }
 }
 
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
