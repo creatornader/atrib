@@ -313,6 +313,48 @@ async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
   expect(railGeometry.badge?.color).toBe('rgb(164, 73, 0)')
 }
 
+async function expectConstrainedDesktopRailGeometry(page: Page): Promise<void> {
+  const railGeometry = await page.evaluate<{
+    badge: {
+      fitsInHalted: boolean
+      height: number
+      text: string
+      whiteSpace: string
+      width: number
+    } | null
+    meta: {
+      height: number
+      width: number
+    } | null
+  }>(`(() => {
+    const badge = document.querySelector('[data-step-badge="halt"]')
+    const halted = document.querySelector('[data-step="halt"]')
+    const meta = document.querySelector('[data-step="halt"] .step-meta-line')
+    const badgeRect = badge?.getBoundingClientRect()
+    const haltedRect = halted?.getBoundingClientRect()
+    const metaRect = meta?.getBoundingClientRect()
+    return {
+      badge: badge && badgeRect ? {
+        fitsInHalted: haltedRect ? badgeRect.left >= haltedRect.left && badgeRect.right <= haltedRect.right : false,
+        height: Math.round(badgeRect.height),
+        text: badge.textContent?.trim() ?? '',
+        whiteSpace: getComputedStyle(badge).whiteSpace,
+        width: Math.round(badgeRect.width),
+      } : null,
+      meta: meta && metaRect ? {
+        height: Math.round(metaRect.height),
+        width: Math.round(metaRect.width),
+      } : null,
+    }
+  })()`)
+  expect(railGeometry.badge?.text).toBe('Awaiting review')
+  expect(railGeometry.badge?.whiteSpace).toBe('nowrap')
+  expect(railGeometry.badge?.fitsInHalted).toBe(true)
+  expect(railGeometry.badge?.height).toBeLessThanOrEqual(18)
+  expect(railGeometry.badge?.width).toBeGreaterThanOrEqual(86)
+  expect(railGeometry.meta?.height).toBeLessThanOrEqual(18)
+}
+
 async function expectTraceRowsReadable(page: Page): Promise<void> {
   const rowOpacity = await page.evaluate<Array<{ opacity: number; selector: string }>>(
     `Array.from(document.querySelectorAll('.progress-item, #timeline .event, #timeline .event-future')).map((row) => ({
@@ -470,6 +512,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectNoHorizontalOverflow(page)
       await expectActionButtonsCentered(page)
       await expectWorkflowStepCopyHugsContent(page)
+      await expectConstrainedDesktopRailGeometry(page)
       await expectTraceRowsReadable(page)
 
       const firstRunId = await page.locator('#runIdLabel').textContent()

@@ -1401,7 +1401,7 @@ export function renderApp(): string {
       .step[data-step="halt"] .step-copy .step-meta-line {
         align-items: center;
         display: flex;
-        gap: 16px;
+        gap: 8px;
         line-height: 1;
         margin-top: 0;
         min-width: 0;
@@ -1417,18 +1417,20 @@ export function renderApp(): string {
         border-radius: 999px;
         color: #a44900;
         display: inline-flex;
-        font-size: 10px;
+        flex: 0 0 auto;
+        font-size: 8px;
         font-weight: 850;
         line-height: 1;
         margin-left: 0;
-        padding: 3px 4px;
+        padding: 3px 6px;
         text-transform: uppercase;
         vertical-align: 1px;
+        white-space: nowrap;
       }
 
       .step[data-step="halt"] .step-copy .step-badge {
         color: #a44900;
-        font-size: 10px;
+        font-size: 8px;
         font-weight: 850;
         line-height: 1;
         margin-top: 0;
@@ -1476,6 +1478,16 @@ export function renderApp(): string {
 
         .step.halted {
           width: 331px;
+        }
+
+        .step[data-step="halt"] .step-copy .step-meta-line {
+          gap: 16px;
+        }
+
+        .step-badge,
+        .step[data-step="halt"] .step-copy .step-badge {
+          font-size: 10px;
+          padding: 3px 4px;
         }
       }
 
