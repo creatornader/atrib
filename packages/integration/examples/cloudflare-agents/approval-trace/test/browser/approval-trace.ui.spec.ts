@@ -178,10 +178,12 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
       iconInsideButton: boolean
       iconTextBlockYDelta: number
       iconLabelYDelta: number
+      labelCopyCenterDelta: number
       labelFontSize: number
       labelFits: boolean
       labelWeight: number
       noLabelIconCollision: boolean
+      smallCopyCenterDelta: number
       smallFits: boolean
       textAlign: string
     }>
@@ -219,10 +221,16 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
       iconLabelYDelta: icon && label
         ? Math.abs((icon.top + icon.height / 2) - (label.top + label.height / 2))
         : 999,
+      labelCopyCenterDelta: label && copy
+        ? Math.abs((label.left + label.width / 2) - (copy.left + copy.width / 2))
+        : 999,
       labelFontSize: labelStyle ? Number.parseFloat(labelStyle.fontSize) : 0,
       labelFits: label ? label.left >= buttonRect.left && label.right <= buttonRect.right : false,
       labelWeight: labelStyle ? Number.parseFloat(labelStyle.fontWeight) : 0,
       noLabelIconCollision: icon && label ? icon.right + 2 <= label.left : false,
+      smallCopyCenterDelta: small && copy
+        ? Math.abs((small.left + small.width / 2) - (copy.left + copy.width / 2))
+        : 999,
       smallFits: small ? small.left >= buttonRect.left && small.right <= buttonRect.right : false,
       textAlign: copy ? getComputedStyle(button.querySelector('.action-copy')).textAlign : '',
     }
@@ -230,7 +238,7 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
   for (const geometry of buttonGeometry) {
     expect(geometry.buttonDisplay).toBe('flex')
     expect(geometry.contentDisplay).toBe('flex')
-    expect(geometry.textAlign).toBe('left')
+    expect(geometry.textAlign).toBe('center')
     expect(geometry.contentCenterDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.contentInsideButton).toBe(true)
     expect(geometry.iconCopyGap).toBeGreaterThanOrEqual(8)
@@ -238,13 +246,15 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     expect(geometry.iconInsideButton).toBe(true)
     expect(geometry.iconTextBlockYDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.iconLabelYDelta).toBeGreaterThan(4)
-    expect(geometry.labelFontSize).toBeGreaterThanOrEqual(12)
+    expect(geometry.labelCopyCenterDelta).toBeLessThanOrEqual(1)
+    expect(geometry.labelFontSize).toBeGreaterThanOrEqual(13)
     expect(geometry.labelWeight).toBeGreaterThanOrEqual(800)
     expect(geometry.captionFitsCopy).toBe(true)
     expect(geometry.captionFontSize).toBeGreaterThanOrEqual(8)
     expect(geometry.captionMuted).toBe(true)
     expect(geometry.labelFits).toBe(true)
     expect(geometry.noLabelIconCollision).toBe(true)
+    expect(geometry.smallCopyCenterDelta).toBeLessThanOrEqual(1)
     expect(geometry.smallFits).toBe(true)
   }
 }

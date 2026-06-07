@@ -2071,12 +2071,12 @@ export function renderApp(): string {
         box-sizing: border-box;
         display: grid;
         gap: 2px;
-        justify-items: start;
+        justify-items: center;
         max-width: 100%;
         min-width: 0;
         padding: 0;
-        text-align: left;
-        width: auto;
+        text-align: center;
+        width: max-content;
       }
 
       .action-copy small {
@@ -2084,7 +2084,7 @@ export function renderApp(): string {
         display: block;
         font-size: 9px;
         font-weight: 600;
-        justify-self: start;
+        justify-self: center;
         line-height: 1.15;
         opacity: 0.78;
         overflow: visible;
@@ -2096,15 +2096,15 @@ export function renderApp(): string {
 
       .button-label {
         display: block;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 800;
-        justify-self: start;
+        justify-self: center;
         line-height: 1.12;
         white-space: nowrap;
       }
 
       .primary .button-label {
-        font-size: 12px;
+        font-size: 13px;
       }
 
       .primary .action-copy small {
@@ -2153,8 +2153,8 @@ export function renderApp(): string {
 
       .button-icon svg {
         display: block;
-        height: 14px;
-        width: 14px;
+        height: 15px;
+        width: 15px;
       }
 
       .primary .button-icon {
