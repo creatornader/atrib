@@ -79,6 +79,18 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   expect(overflow.nodes).toEqual([])
 }
 
+async function expectHeaderMenuAboveContent(page: Page): Promise<void> {
+  const menuHit = await page.evaluate<boolean>(`(() => {
+    const menu = document.querySelector('#headerActions')
+    if (!menu || menu.hidden) return false
+    const rect = menu.getBoundingClientRect()
+    const x = Math.floor(rect.left + rect.width / 2)
+    const y = Math.floor(rect.top + Math.min(rect.height - 2, 18))
+    return Boolean(document.elementFromPoint(x, y)?.closest('#headerActions'))
+  })()`)
+  expect(menuHit).toBe(true)
+}
+
 test.describe('Cloudflare approval trace browser UI', () => {
   test('clicks through approved execution and opens the signed receipt', async ({ page }) => {
     await expectCleanConsole(page, async () => {
@@ -116,6 +128,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('[data-header-action="copy-link"]')).toBeEnabled()
       await expect(page.locator('[data-header-action="open-json"]')).toBeEnabled()
       await expect(page.locator('[data-header-action="reset"]')).toBeEnabled()
+      await expectHeaderMenuAboveContent(page)
       await page.keyboard.press('Escape')
       await expect(page.locator('#headerActions')).toBeHidden()
 

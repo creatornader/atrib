@@ -978,7 +978,10 @@ export function renderApp(): string {
         justify-content: flex-start;
         margin-bottom: 8px;
         min-height: 62px;
+        overflow: visible;
         padding: 10px 28px;
+        position: relative;
+        z-index: 30;
       }
 
       .hero::after {
@@ -1101,7 +1104,7 @@ export function renderApp(): string {
         position: absolute;
         right: 0;
         top: 42px;
-        z-index: 20;
+        z-index: 100;
       }
 
       .header-actions-menu[hidden] {
