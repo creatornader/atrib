@@ -3106,7 +3106,7 @@ export function renderApp(): string {
 
         .actions {
           gap: 10px;
-          grid-template-columns: minmax(190px, 1fr) repeat(2, minmax(180px, 0.95fr));
+          grid-template-columns: minmax(0, 1.05fr) repeat(2, minmax(0, 0.95fr));
         }
 
         .primary {

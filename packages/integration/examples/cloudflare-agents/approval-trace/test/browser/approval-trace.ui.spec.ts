@@ -198,6 +198,7 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
   const buttonGeometry = await page.evaluate<
     Array<{
       buttonDisplay: string
+      buttonInsideActions: boolean
       captionFontSize: number
       captionMuted: boolean
       contentCenterDelta: number
@@ -219,6 +220,7 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
       textAlign: string
     }>
   >(`Array.from(document.querySelectorAll('.actions > button')).map((button) => {
+    const actionsRect = document.querySelector('.actions')?.getBoundingClientRect()
     const buttonRect = button.getBoundingClientRect()
     const content = button.querySelector('.button-content')?.getBoundingClientRect()
     const icon = button.querySelector('.button-icon')?.getBoundingClientRect()
@@ -234,6 +236,9 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     const center = buttonRect.left + buttonRect.width / 2
     return {
       buttonDisplay: buttonStyle.display,
+      buttonInsideActions: actionsRect
+        ? buttonRect.left >= actionsRect.left - 0.5 && buttonRect.right <= actionsRect.right + 0.5
+        : false,
       captionFontSize: smallStyle ? Number.parseFloat(smallStyle.fontSize) : 0,
       captionMuted: button.id === 'approve' || (smallStyle ? smallStyle.color === 'rgb(71, 85, 105)' : false),
       contentCenterDelta: content ? Math.abs((content.left + content.width / 2) - center) : 999,
@@ -267,6 +272,7 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
   })`)
   for (const geometry of buttonGeometry) {
     expect(geometry.buttonDisplay).toBe('flex')
+    expect(geometry.buttonInsideActions).toBe(true)
     expect(geometry.contentDisplay).toBe('grid')
     expect(geometry.textAlign).toBe('center')
     expect(geometry.contentCenterDelta).toBeLessThanOrEqual(1.5)
