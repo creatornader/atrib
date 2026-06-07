@@ -1920,7 +1920,7 @@ export function renderApp(): string {
         border: 1px solid #ffd09a;
         border-radius: 8px;
         display: grid;
-        gap: 8px;
+        gap: 7px;
         grid-template-columns: auto auto minmax(0, 1fr) minmax(42px, auto);
         min-width: 0;
         padding: 8px 10px;
@@ -1954,6 +1954,13 @@ export function renderApp(): string {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+
+      @media (min-width: 1451px) {
+        .risk-bar .value {
+          overflow: visible;
+          text-overflow: clip;
+        }
       }
 
       .risk-details-toggle {

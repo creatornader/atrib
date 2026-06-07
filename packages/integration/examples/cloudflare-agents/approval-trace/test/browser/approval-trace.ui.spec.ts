@@ -274,6 +274,28 @@ async function expectReferenceDesktopPrimaryCaption(page: Page): Promise<void> {
   expect(captionGeometry.height).toBeLessThanOrEqual(captionGeometry.lineHeight + 1)
 }
 
+async function expectReferenceDesktopRiskTextFits(page: Page): Promise<void> {
+  const riskGeometry = await page.evaluate<{
+    clientWidth: number
+    gap: number
+    scrollWidth: number
+    textOverflow: string
+  }>(`(() => {
+    const bar = document.querySelector('.risk-bar')
+    const value = bar?.querySelector('.value')
+    const style = value ? getComputedStyle(value) : null
+    return {
+      clientWidth: value?.clientWidth ?? 0,
+      gap: bar ? Number.parseFloat(getComputedStyle(bar).columnGap) : 0,
+      scrollWidth: value?.scrollWidth ?? 999,
+      textOverflow: style?.textOverflow ?? '',
+    }
+  })()`)
+  expect(riskGeometry.gap).toBeLessThanOrEqual(7)
+  expect(riskGeometry.textOverflow).toBe('clip')
+  expect(riskGeometry.scrollWidth).toBeLessThanOrEqual(riskGeometry.clientWidth + 1)
+}
+
 async function expectReferenceDesktopCenterStack(page: Page): Promise<void> {
   const stackGeometry = await page.evaluate<{
     actionBottomGap: number
@@ -477,6 +499,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('.risk-bar .value')).toHaveText(
         'Introduces rate limiting which may impact client traffic if misconfigured.',
       )
+      await expectReferenceDesktopRiskTextFits(page)
       await expect(
         page.locator('.risk-bar').evaluate((element) => getComputedStyle(element).backgroundColor),
       ).resolves.toBe('rgb(255, 255, 255)')
