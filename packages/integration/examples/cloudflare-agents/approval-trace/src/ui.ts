@@ -2080,13 +2080,12 @@ export function renderApp(): string {
 
       .button-content {
         align-items: center;
-        display: grid;
-        gap: 8px;
-        grid-template-columns: 18px minmax(0, var(--action-copy-width, max-content));
+        display: flex;
         justify-content: center;
         max-width: 100%;
         min-width: 0;
-        width: min(100%, calc(26px + var(--action-copy-width, 0px)));
+        position: relative;
+        width: 100%;
       }
 
       .button-content::after {
@@ -2147,7 +2146,7 @@ export function renderApp(): string {
       }
 
       .primary {
-        --action-copy-width: 148px;
+        --action-copy-width: 140px;
         background: #078861;
         box-shadow: 0 10px 22px rgba(7, 136, 97, 0.18);
       }
@@ -2177,7 +2176,11 @@ export function renderApp(): string {
         height: 18px;
         justify-content: center;
         line-height: 0;
+        left: calc(50% - (var(--action-copy-width, 124px) / 2) - 26px);
         margin: 0;
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
         width: 18px;
       }
 
@@ -3110,12 +3113,12 @@ export function renderApp(): string {
         }
 
         .primary {
-          --action-copy-width: 134px;
+          --action-copy-width: 124px;
         }
 
         .danger,
         .secondary {
-          --action-copy-width: 114px;
+          --action-copy-width: 112px;
         }
 
         .action-copy small,
@@ -3936,6 +3939,20 @@ export function renderApp(): string {
         return run.trace_packet?.trace_id ?? traceIdFromRunId(run.run_id);
       }
 
+      function runDisplayId(runId) {
+        const normalized = String(runId ?? '').trim();
+        if (!normalized) return 'pending';
+        if (normalized.startsWith('run_')) return normalized;
+        return 'run_' + normalized.replaceAll('-', '').toUpperCase().slice(0, 22);
+      }
+
+      function setRunId(rawRunId) {
+        const normalized = String(rawRunId ?? '').trim();
+        runIdLabel.textContent = runDisplayId(normalized);
+        runIdLabel.dataset.runId = normalized;
+        runIdLabel.title = normalized;
+      }
+
       function copyIcon(value = '', label = 'value') {
         const normalized = String(value ?? '');
         const disabled = !normalized || normalized === '-' || normalized === 'pending';
@@ -4659,7 +4676,7 @@ export function renderApp(): string {
 
       function applyRunHeader(run) {
         currentRun = run;
-        runIdLabel.textContent = run.run_id;
+        setRunId(run.run_id);
         traceIdLabel.textContent = traceIdForRun(run);
         updateTraceHeaderCopy();
         const started = run.records[0]?.record?.timestamp
@@ -4802,7 +4819,7 @@ export function renderApp(): string {
           selectedReceiptRecord = null;
           selectedReceiptView = 'record';
           stageDisplayTimes = {};
-          runIdLabel.textContent = runId;
+          setRunId(runId);
           traceIdLabel.textContent = traceIdFromRunId(runId);
           updateTraceHeaderCopy();
           startedLabel.textContent = formatHeaderDate();

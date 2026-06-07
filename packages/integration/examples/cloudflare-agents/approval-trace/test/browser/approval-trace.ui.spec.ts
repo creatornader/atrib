@@ -21,6 +21,8 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expect(page).toHaveTitle('Cloudflare Agent Trace')
   await expect(page.getByTestId('approval-trace-app')).toBeVisible()
   await expect(page.locator('#runIdLabel')).not.toHaveText('pending')
+  await expect(page.locator('#runIdLabel')).toHaveText(/^run_[A-Z0-9]+/)
+  await expect(page.locator('#runIdLabel')).toHaveAttribute('data-run-id', /.+/)
   await expect(page.locator('#answer')).toContainText('Trigger received')
   await expect(page.locator('#statusTitle')).toHaveText('Halted for human review', {
     timeout: 15_000,
@@ -273,11 +275,11 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
   for (const geometry of buttonGeometry) {
     expect(geometry.buttonDisplay).toBe('flex')
     expect(geometry.buttonInsideActions).toBe(true)
-    expect(geometry.contentDisplay).toBe('grid')
+    expect(geometry.contentDisplay).toBe('flex')
     expect(geometry.textAlign).toBe('center')
     expect(geometry.contentCenterDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.contentInsideButton).toBe(true)
-    expect(geometry.copyCenterDelta).toBeGreaterThan(8)
+    expect(geometry.copyCenterDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.labelCaptionCenterDelta).toBeLessThanOrEqual(1)
     expect(geometry.iconCopyGap).toBeGreaterThanOrEqual(7)
     expect(geometry.iconCopyGap).toBeLessThanOrEqual(9)
@@ -826,7 +828,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       const populatedTimes = visibleTimes.filter((time) => time !== '-')
       expect(new Set(populatedTimes).size).toBeGreaterThan(3)
 
-      const runId = await page.locator('#runIdLabel').textContent()
+      const runId = await page.locator('#runIdLabel').getAttribute('data-run-id')
       expect(runId).toBeTruthy()
       const pendingRun = await page.evaluate<BrowserTraceResponse, string>(async (id) => {
         const response = await fetch('/api/runs/' + id)
@@ -975,6 +977,8 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.locator('#headerMenu').click()
       await page.locator('[data-header-action="reset"]').click()
       await expect(page.locator('#runIdLabel')).not.toHaveText('pending')
+      await expect(page.locator('#runIdLabel')).toHaveText(/^run_[A-Z0-9]+/)
+      await expect(page.locator('#runIdLabel')).toHaveAttribute('data-run-id', /.+/)
       await expect.poll(async () => page.locator('#runIdLabel').textContent()).not.toBe(firstRunId)
       await expect(page.locator('#answer')).toContainText('Trigger received')
       await expect(page.locator('#statusTitle')).toHaveText('Halted for human review', {
