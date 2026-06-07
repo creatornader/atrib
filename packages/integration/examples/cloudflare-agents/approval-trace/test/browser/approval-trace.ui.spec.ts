@@ -415,6 +415,51 @@ async function expectReferenceVerificationRows(page: Page): Promise<void> {
   }
 }
 
+async function expectReferenceReceiptJsonSyntax(page: Page): Promise<void> {
+  const syntax = await page.evaluate<{
+    borderWidth: string
+    gutterWidth: number
+    keyColor: string
+    keyCount: number
+    lineCount: number
+    maxHeight: number
+    numberColor: string
+    stringColor: string
+    stringCount: number
+    tenthLineNumber: string
+  }>(`(() => {
+    const pre = document.querySelector('#receipts pre')
+    const preStyle = pre ? getComputedStyle(pre) : null
+    const numbers = Array.from(document.querySelectorAll('#receipts .json-line-number'))
+    const firstNumber = numbers[0]?.getBoundingClientRect()
+    const key = document.querySelector('#receipts .json-token.key')
+    const string = document.querySelector('#receipts .json-token.string')
+    const number = document.querySelector('#receipts .json-token.number')
+    return {
+      borderWidth: preStyle?.borderTopWidth ?? '',
+      gutterWidth: firstNumber ? Math.round(firstNumber.width) : 0,
+      keyColor: key ? getComputedStyle(key).color : '',
+      keyCount: document.querySelectorAll('#receipts .json-token.key').length,
+      lineCount: document.querySelectorAll('#receipts .json-line').length,
+      maxHeight: preStyle ? Number.parseFloat(preStyle.maxHeight) : 0,
+      numberColor: number ? getComputedStyle(number).color : '',
+      stringColor: string ? getComputedStyle(string).color : '',
+      stringCount: document.querySelectorAll('#receipts .json-token.string').length,
+      tenthLineNumber: numbers[9]?.textContent ?? '',
+    }
+  })()`)
+  expect(syntax.borderWidth).toBe('0px')
+  expect(syntax.gutterWidth).toBeGreaterThanOrEqual(34)
+  expect(syntax.keyCount).toBeGreaterThan(4)
+  expect(syntax.lineCount).toBeGreaterThan(1)
+  expect(syntax.maxHeight).toBeGreaterThanOrEqual(208)
+  expect(syntax.stringCount).toBeGreaterThan(4)
+  expect(syntax.tenthLineNumber).toBe('10')
+  expect(syntax.keyColor).toBe('rgb(195, 58, 101)')
+  expect(syntax.stringColor).toBe('rgb(40, 79, 147)')
+  expect(syntax.numberColor).toBe('rgb(29, 118, 101)')
+}
+
 async function expectReferenceDesktopCenterStack(page: Page): Promise<void> {
   const stackGeometry = await page.evaluate<{
     actionBottomGap: number
@@ -699,10 +744,12 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.getByRole('tab', { name: 'Summary' }).click()
       const prettyReceiptLines = await page.locator('#receipts .json-line').count()
       expect(prettyReceiptLines).toBeGreaterThan(1)
+      await expectReferenceReceiptJsonSyntax(page)
       await page.locator('#receiptFormat').selectOption('compact')
       await expect.poll(async () => page.locator('#receipts .json-line').count()).toBe(1)
       await page.locator('#receiptFormat').selectOption('pretty')
       await expect.poll(async () => page.locator('#receipts .json-line').count()).toBeGreaterThan(1)
+      await expectReferenceReceiptJsonSyntax(page)
 
       await expectCopies(page.getByRole('button', { name: 'Copy trace ID' }))
       await expectCopies(page.getByRole('button', { name: 'Copy Agent signature' }))

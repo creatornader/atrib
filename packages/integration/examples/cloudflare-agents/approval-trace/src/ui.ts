@@ -2728,11 +2728,11 @@ export function renderApp(): string {
 
       .json pre {
         background: #fff;
-        border: 1px solid var(--line);
+        border: 0;
         color: #102033;
         font-size: 12px;
         line-height: 1.38;
-        max-height: 194px;
+        max-height: 208px;
         overflow: auto;
         padding: 6px 10px;
         position: relative;
@@ -2740,7 +2740,7 @@ export function renderApp(): string {
 
       .json-line {
         display: grid;
-        grid-template-columns: 24px minmax(0, 1fr);
+        grid-template-columns: 34px minmax(0, 1fr);
       }
 
       .json-line-number {
@@ -2753,6 +2753,27 @@ export function renderApp(): string {
       .json-line-code {
         min-width: 0;
         white-space: pre;
+      }
+
+      .json-token.key {
+        color: #c33a65;
+        font-weight: 650;
+      }
+
+      .json-token.string {
+        color: #284f93;
+      }
+
+      .json-token.number {
+        color: #1d7665;
+      }
+
+      .json-token.literal {
+        color: #8b4c9b;
+      }
+
+      .json-token.punctuation {
+        color: #6b7280;
       }
 
       .receipt-tabs {
@@ -3924,9 +3945,31 @@ export function renderApp(): string {
         return format === 'compact' ? JSON.stringify(value) : pretty(value);
       }
 
+      function highlightJsonValueFragment(fragment) {
+        const token = fragment.match(/^(\\s*)("(?:\\\\.|[^"\\\\])*"|-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?|true|false|null)(.*)$/);
+        if (!token) return escapeHtml(fragment);
+        const type = token[2].startsWith('"')
+          ? 'string'
+          : token[2] === 'true' || token[2] === 'false' || token[2] === 'null'
+            ? 'literal'
+            : 'number';
+        return escapeHtml(token[1])
+          + '<span class="json-token ' + type + '">' + escapeHtml(token[2]) + '</span>'
+          + escapeHtml(token[3]);
+      }
+
+      function highlightJsonLine(line) {
+        const key = line.match(/^(\\s*)("(?:\\\\.|[^"\\\\])*"):(.*)$/);
+        if (!key) return highlightJsonValueFragment(line);
+        return escapeHtml(key[1])
+          + '<span class="json-token key">' + escapeHtml(key[2]) + '</span>'
+          + '<span class="json-token punctuation">:</span>'
+          + highlightJsonValueFragment(key[3]);
+      }
+
       function renderReceiptJson(value) {
         return '<pre>' + formatReceiptJson(value).split('\\n').map((line, index) => (
-          '<span class="json-line"><span class="json-line-number">' + String(index + 1) + '</span><span class="json-line-code">' + escapeHtml(line) + '</span></span>'
+          '<span class="json-line"><span class="json-line-number">' + String(index + 1) + '</span><span class="json-line-code">' + highlightJsonLine(line) + '</span></span>'
         )).join('') + '</pre>';
       }
 
