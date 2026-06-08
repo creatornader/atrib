@@ -3418,7 +3418,7 @@ export function renderApp(): string {
         },
         {
           key: 'policy',
-          title: 'Policy and intent analysis',
+          title: 'Policy & intent analysis',
           detail: 'The agent classified the request as a repository write that must stop for review.',
           step: 'autonomous',
         },
@@ -3624,7 +3624,7 @@ export function renderApp(): string {
       function progressKeyForTitle(title) {
         if (title === 'Trigger received') return 'trigger';
         if (title === 'Context gathered') return 'context';
-        if (title === 'Policy and intent analysis') return 'policy';
+        if (title === 'Policy & intent analysis') return 'policy';
         if (title === 'Proposed action generated') return 'proposal';
         if (title === 'Human review halted' || title === 'Human review recorded') return 'halt';
         if (title === 'Agent resumed through MCP') return 'resume';
@@ -3990,7 +3990,7 @@ export function renderApp(): string {
 
       function progressRecordFor(run, rowTitle) {
         if (rowTitle === 'Trigger received') return run.records.find((record) => record.label === 'trigger');
-        if (rowTitle === 'Context gathered' || rowTitle === 'Policy and intent analysis') {
+        if (rowTitle === 'Context gathered' || rowTitle === 'Policy & intent analysis') {
           return run.records.find((record) => record.label === 'triage');
         }
         if (rowTitle === 'Proposed action generated') return run.records.find((record) => record.label === 'proposal');
@@ -4478,7 +4478,7 @@ export function renderApp(): string {
             done: labels.has('triage'),
           },
           {
-            title: 'Policy and intent analysis',
+            title: 'Policy & intent analysis',
             detail: labels.has('triage') ? 'Repository writes require human review before MCP execution.' : 'Waiting for policy analysis.',
             done: labels.has('triage'),
           },

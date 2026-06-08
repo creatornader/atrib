@@ -28,7 +28,7 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
     timeout: 15_000,
   })
   await expect(page.locator('#answer')).toContainText('Context gathered')
-  await expect(page.locator('#answer')).toContainText('Policy and intent analysis')
+  await expect(page.locator('#answer')).toContainText('Policy & intent analysis')
   await expect(page.locator('#answer')).toContainText('Proposed action generated')
   await expect(page.locator('#answer')).toContainText('Human review halted')
   await expect(page.getByRole('button', { name: 'Approve and resume' })).toBeEnabled()
