@@ -199,23 +199,20 @@ async function expectRunModeMenuAboveContent(page: Page): Promise<void> {
   expect(menuHit).toBe(true)
 }
 
-async function expectActionButtonsCentered(page: Page): Promise<void> {
+async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> {
   const buttonGeometry = await page.evaluate<
     Array<{
       buttonDisplay: string
       buttonInsideActions: boolean
       captionFontSize: number
       captionMuted: boolean
-      contentCenterDelta: number
       contentDisplay: string
       contentInsideButton: boolean
-      copyCenterDelta: number
       copyLeftAlignDelta: number
       iconCopyGap: number
       iconInsideButton: boolean
       iconLabelYDelta: number
       iconTextBlockYDelta: number
-      labelCaptionCenterDelta: number
       labelFontSize: number
       labelFits: boolean
       labelWeight: number
@@ -238,7 +235,6 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     const contentElement = button.querySelector('.button-content')
     const labelStyle = labelElement ? getComputedStyle(labelElement) : null
     const smallStyle = smallElement ? getComputedStyle(smallElement) : null
-    const center = buttonRect.left + buttonRect.width / 2
     return {
       buttonDisplay: buttonStyle.display,
       buttonInsideActions: actionsRect
@@ -246,12 +242,10 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
         : false,
       captionFontSize: smallStyle ? Number.parseFloat(smallStyle.fontSize) : 0,
       captionMuted: button.id === 'approve' || (smallStyle ? smallStyle.color === 'rgb(71, 85, 105)' : false),
-      contentCenterDelta: content ? Math.abs((content.left + content.width / 2) - center) : 999,
       contentDisplay: contentElement ? getComputedStyle(contentElement).display : '',
       contentInsideButton: content
         ? content.left >= buttonRect.left && content.right <= buttonRect.right && content.top >= buttonRect.top && content.bottom <= buttonRect.bottom
         : false,
-      copyCenterDelta: copy ? Math.abs((copy.left + copy.width / 2) - center) : 999,
       copyLeftAlignDelta: copy && label ? Math.abs(copy.left - label.left) : 999,
       iconCopyGap: icon && copy ? copy.left - icon.right : 0,
       iconInsideButton: icon
@@ -262,9 +256,6 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
         : 999,
       iconTextBlockYDelta: icon && copy
         ? Math.abs((icon.top + icon.height / 2) - (copy.top + copy.height / 2))
-        : 999,
-      labelCaptionCenterDelta: label && small
-        ? Math.abs((label.left + label.width / 2) - (small.left + small.width / 2))
         : 999,
       labelFontSize: labelStyle ? Number.parseFloat(labelStyle.fontSize) : 0,
       labelFits: label ? label.left >= buttonRect.left && label.right <= buttonRect.right : false,
@@ -279,13 +270,12 @@ async function expectActionButtonsCentered(page: Page): Promise<void> {
     expect(geometry.buttonDisplay).toBe('flex')
     expect(geometry.buttonInsideActions).toBe(true)
     expect(geometry.contentDisplay).toBe('flex')
-    expect(geometry.textAlign).toBe('center')
-    expect(geometry.contentCenterDelta).toBeLessThanOrEqual(1.5)
+    expect(geometry.textAlign).toBe('left')
     expect(geometry.contentInsideButton).toBe(true)
-    expect(geometry.copyCenterDelta).toBeLessThanOrEqual(1.5)
-    expect(geometry.labelCaptionCenterDelta).toBeLessThanOrEqual(1)
+    expect(geometry.copyLeftAlignDelta).toBeLessThanOrEqual(1)
+    expect(geometry.smallLeftAlignDelta).toBeLessThanOrEqual(1)
     expect(geometry.iconCopyGap).toBeGreaterThanOrEqual(7)
-    expect(geometry.iconCopyGap).toBeLessThanOrEqual(9)
+    expect(geometry.iconCopyGap).toBeLessThanOrEqual(10)
     expect(geometry.iconInsideButton).toBe(true)
     expect(geometry.iconTextBlockYDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.iconLabelYDelta).toBeGreaterThan(3)
@@ -863,7 +853,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.context().grantPermissions(['clipboard-write'])
       await createProposal(page)
       await expectNoHorizontalOverflow(page)
-      await expectActionButtonsCentered(page)
+      await expectActionButtonsUseReferenceLayout(page)
       await expectReferenceProposalPanelChrome(page)
       await expectReferenceDesktopPrimaryCaption(page)
       await expectReferenceDesktopCenterStack(page)
@@ -1023,7 +1013,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('[data-step="halt"]')).toContainText('Awaiting review')
       await expectNoHorizontalOverflow(page)
       await expectWorkflowOverviewVisible(page)
-      await expectActionButtonsCentered(page)
+      await expectActionButtonsUseReferenceLayout(page)
       await expectDiffLineGutter(page)
       await expectDiffRowsFillReferenceFrame(page)
       await expectWorkflowStepCopyHugsContent(page)

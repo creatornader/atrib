@@ -2064,7 +2064,7 @@ export function renderApp(): string {
       .danger {
         align-items: center;
         display: flex;
-        justify-content: center;
+        justify-content: flex-start;
         min-height: 58px;
         padding: 10px 14px;
         position: relative;
@@ -2081,7 +2081,8 @@ export function renderApp(): string {
       .button-content {
         align-items: center;
         display: flex;
-        justify-content: center;
+        gap: 9px;
+        justify-content: flex-start;
         max-width: 100%;
         min-width: 0;
         position: relative;
@@ -2093,7 +2094,7 @@ export function renderApp(): string {
       }
 
       .action-copy {
-        align-items: center;
+        align-items: flex-start;
         box-sizing: border-box;
         display: flex;
         flex-direction: column;
@@ -2102,8 +2103,8 @@ export function renderApp(): string {
         max-width: 100%;
         min-width: 0;
         padding: 0;
-        text-align: center;
-        width: var(--action-copy-width, auto);
+        text-align: left;
+        width: auto;
       }
 
       .action-copy small {
@@ -2115,7 +2116,7 @@ export function renderApp(): string {
         opacity: 0.78;
         overflow: visible;
         overflow-wrap: anywhere;
-        text-align: center;
+        text-align: left;
         text-overflow: clip;
         white-space: normal;
         width: auto;
@@ -2127,7 +2128,7 @@ export function renderApp(): string {
         font-weight: 800;
         line-height: 1.12;
         max-width: 100%;
-        text-align: center;
+        text-align: left;
         white-space: nowrap;
         width: auto;
       }
@@ -2146,18 +2147,15 @@ export function renderApp(): string {
       }
 
       .primary {
-        --action-copy-width: 140px;
         background: #078861;
         box-shadow: 0 10px 22px rgba(7, 136, 97, 0.18);
       }
 
       .secondary {
-        --action-copy-width: 124px;
         background: #fff;
       }
 
       .danger {
-        --action-copy-width: 126px;
         background: #fff;
       }
 
@@ -2176,11 +2174,9 @@ export function renderApp(): string {
         height: 18px;
         justify-content: center;
         line-height: 0;
-        left: calc(50% - (var(--action-copy-width, 124px) / 2) - 26px);
         margin: 0;
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
+        position: static;
+        transform: none;
         width: 18px;
       }
 
@@ -3118,15 +3114,6 @@ export function renderApp(): string {
         .actions {
           gap: 10px;
           grid-template-columns: minmax(0, 1.05fr) repeat(2, minmax(0, 0.95fr));
-        }
-
-        .primary {
-          --action-copy-width: 124px;
-        }
-
-        .danger,
-        .secondary {
-          --action-copy-width: 112px;
         }
 
         .action-copy small,
