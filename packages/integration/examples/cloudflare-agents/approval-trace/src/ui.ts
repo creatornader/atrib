@@ -2376,6 +2376,10 @@ export function renderApp(): string {
         color: #7a8497;
       }
 
+      .event-future .event-hash {
+        text-align: left;
+      }
+
       .event-hash {
         align-self: center;
         color: #44536a;

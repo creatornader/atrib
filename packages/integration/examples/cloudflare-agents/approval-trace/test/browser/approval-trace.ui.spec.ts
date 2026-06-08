@@ -809,9 +809,11 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
       copyLeft: number
       cueLeft: number | null
       hashLeft: number
+      hashTextAlign: string
       label: string
       markerLeft: number
       markerToTimeGap: number
+      rowClass: string
       timeLeft: number
       timestampToCopyOffset: number
     }>
@@ -822,15 +824,18 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
       const marker = row.querySelector('.event-marker')?.getBoundingClientRect()
       const time = row.querySelector('.event-time')?.getBoundingClientRect()
       const copy = row.querySelector('.event-copy')?.getBoundingClientRect()
-      const hash = row.querySelector('.event-hash')?.getBoundingClientRect()
+      const hashElement = row.querySelector('.event-hash')
+      const hash = hashElement?.getBoundingClientRect()
       const cue = row.querySelector('.event-cue')?.getBoundingClientRect()
       return {
         copyLeft: copy ? Math.round(copy.left) : 0,
         cueLeft: cue ? Math.round(cue.left) : null,
         hashLeft: hash ? Math.round(hash.left) : 0,
+        hashTextAlign: hashElement ? getComputedStyle(hashElement).textAlign : '',
         label: row.querySelector('strong')?.textContent?.trim() ?? '',
         markerLeft: marker ? Math.round(marker.left) : 0,
         markerToTimeGap: marker && time ? Math.round(time.left - marker.right) : 0,
+        rowClass: row.className,
         timeLeft: time ? Math.round(time.left) : 0,
         timestampToCopyOffset: time && copy ? Math.round(copy.left - time.left) : 0,
       }
@@ -847,6 +852,7 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
     expect(row.markerToTimeGap).toBeLessThanOrEqual(10)
     expect(row.timestampToCopyOffset).toBeGreaterThanOrEqual(minTimestampOffset)
     expect(row.timestampToCopyOffset).toBeLessThanOrEqual(maxTimestampOffset)
+    if (row.rowClass.includes('event-future')) expect(row.hashTextAlign).toBe('left')
   }
 }
 
