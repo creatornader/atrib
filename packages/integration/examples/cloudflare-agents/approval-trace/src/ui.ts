@@ -2120,7 +2120,7 @@ export function renderApp(): string {
       }
 
       .action-copy {
-        align-items: flex-start;
+        align-items: center;
         box-sizing: border-box;
         display: flex;
         flex: 0 0 auto;
@@ -2130,7 +2130,7 @@ export function renderApp(): string {
         max-width: 100%;
         min-width: max-content;
         padding: 0;
-        text-align: left;
+        text-align: center;
         width: max-content;
       }
 
@@ -2143,7 +2143,7 @@ export function renderApp(): string {
         opacity: 0.78;
         overflow: visible;
         overflow-wrap: anywhere;
-        text-align: left;
+        text-align: center;
         text-overflow: clip;
         white-space: normal;
         width: auto;
@@ -2155,7 +2155,7 @@ export function renderApp(): string {
         font-weight: 800;
         line-height: 1.12;
         max-width: 100%;
-        text-align: left;
+        text-align: center;
         white-space: nowrap;
         width: auto;
       }
@@ -2165,7 +2165,7 @@ export function renderApp(): string {
       }
 
       .primary .action-copy small {
-        font-size: 8px;
+        font-size: 9px;
         font-weight: 500;
         letter-spacing: 0;
         overflow: visible;
@@ -3159,7 +3159,7 @@ export function renderApp(): string {
 
         .action-copy small,
         .primary .action-copy small {
-          font-size: 8px;
+          font-size: 9px;
           white-space: nowrap;
         }
 

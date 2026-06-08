@@ -324,7 +324,6 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       contentDisplay: string
       contentInsideButton: boolean
       contentJustify: string
-      copyLeftAlignDelta: number
       iconCopyGap: number
       iconInsideButton: boolean
       iconLabelYDelta: number
@@ -333,9 +332,9 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       justify: string
       labelFontSize: number
       labelFits: boolean
+      labelSmallCenterDelta: number
       labelWeight: number
       noLabelIconCollision: boolean
-      smallLeftAlignDelta: number
       smallFits: boolean
       textAlign: string
       visualGroupCenterDeltaX: number
@@ -371,7 +370,6 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       contentInsideButton: content
         ? content.left >= buttonRect.left && content.right <= buttonRect.right && content.top >= buttonRect.top && content.bottom <= buttonRect.bottom
         : false,
-      copyLeftAlignDelta: copy && label ? Math.abs(copy.left - label.left) : 999,
       iconCopyGap: icon && copy ? copy.left - icon.right : 0,
       iconInsideButton: icon
         ? icon.left >= buttonRect.left && icon.right <= buttonRect.right && icon.top >= buttonRect.top && icon.bottom <= buttonRect.bottom
@@ -386,9 +384,11 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       justify: buttonStyle.justifyContent,
       labelFontSize: labelStyle ? Number.parseFloat(labelStyle.fontSize) : 0,
       labelFits: label ? label.left >= buttonRect.left && label.right <= buttonRect.right : false,
+      labelSmallCenterDelta: label && small
+        ? Math.abs((label.left + label.width / 2) - (small.left + small.width / 2))
+        : 999,
       labelWeight: labelStyle ? Number.parseFloat(labelStyle.fontWeight) : 0,
       noLabelIconCollision: icon && label ? icon.right + 2 <= label.left : false,
-      smallLeftAlignDelta: small && label ? Math.abs(small.left - label.left) : 999,
       smallFits: small ? small.left >= buttonRect.left && small.right <= buttonRect.right : false,
       textAlign: copy ? getComputedStyle(button.querySelector('.action-copy')).textAlign : '',
       visualGroupCenterDeltaX: Math.abs(((visualLeft + visualRight) / 2) - (buttonRect.left + buttonRect.width / 2)),
@@ -400,12 +400,11 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
     expect(geometry.justify).toBe('center')
     expect(geometry.contentDisplay).toBe('flex')
     expect(geometry.contentJustify).toBe('center')
-    expect(geometry.textAlign).toBe('left')
+    expect(geometry.textAlign).toBe('center')
     expect(geometry.contentInsideButton).toBe(true)
     expect(geometry.contentCenterDeltaX).toBeLessThanOrEqual(1)
     expect(geometry.visualGroupCenterDeltaX, geometry.id).toBeLessThanOrEqual(3)
-    expect(geometry.copyLeftAlignDelta).toBeLessThanOrEqual(1)
-    expect(geometry.smallLeftAlignDelta).toBeLessThanOrEqual(1)
+    expect(geometry.labelSmallCenterDelta).toBeLessThanOrEqual(1)
     expect(geometry.iconCopyGap).toBeGreaterThanOrEqual(7)
     expect(geometry.iconCopyGap).toBeLessThanOrEqual(10)
     expect(geometry.iconInsideButton).toBe(true)
@@ -413,7 +412,7 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
     expect(geometry.iconLabelYDelta).toBeGreaterThan(3)
     expect(geometry.labelFontSize).toBeGreaterThanOrEqual(13)
     expect(geometry.labelWeight).toBeGreaterThanOrEqual(800)
-    expect(geometry.captionFontSize).toBeGreaterThanOrEqual(8)
+    expect(geometry.captionFontSize).toBe(9)
     expect(geometry.captionMuted).toBe(true)
     expect(geometry.labelFits).toBe(true)
     expect(geometry.noLabelIconCollision).toBe(true)
@@ -573,23 +572,26 @@ async function expectReferenceProposalPanelChrome(page: Page): Promise<void> {
 async function expectReferenceDesktopPrimaryCaption(page: Page): Promise<void> {
   const captionGeometry = await page.evaluate<{
     fits: boolean
+    fontSize: number
     height: number
     lineHeight: number
     whiteSpace: string
   }>(`(() => {
     const button = document.querySelector('#approve')
     const caption = button?.querySelector('.action-copy small')
-    if (!button || !caption) return { fits: false, height: 999, lineHeight: 0, whiteSpace: '' }
+    if (!button || !caption) return { fits: false, fontSize: 0, height: 999, lineHeight: 0, whiteSpace: '' }
     const buttonRect = button.getBoundingClientRect()
     const captionRect = caption.getBoundingClientRect()
     const style = getComputedStyle(caption)
     return {
       fits: captionRect.left >= buttonRect.left && captionRect.right <= buttonRect.right,
+      fontSize: Number.parseFloat(style.fontSize),
       height: captionRect.height,
       lineHeight: Number.parseFloat(style.lineHeight),
       whiteSpace: style.whiteSpace,
     }
   })()`)
+  expect(captionGeometry.fontSize).toBe(9)
   expect(captionGeometry.whiteSpace).toBe('nowrap')
   expect(captionGeometry.fits).toBe(true)
   expect(captionGeometry.height).toBeLessThanOrEqual(captionGeometry.lineHeight + 1)
