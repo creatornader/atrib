@@ -421,6 +421,27 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
     expect(geometry.noLabelIconCollision).toBe(true)
     expect(geometry.smallFits).toBe(true)
   }
+  const actionRow = await page.evaluate<{
+    gaps: number[]
+    viewportWidth: number
+    widths: number[]
+  }>(`(() => {
+    const buttons = Array.from(document.querySelectorAll('.actions > button')).map((button) => button.getBoundingClientRect())
+    return {
+      gaps: buttons.length === 3
+        ? [
+            Math.round(buttons[1].left - buttons[0].right),
+            Math.round(buttons[2].left - buttons[1].right),
+          ]
+        : [],
+      viewportWidth: window.innerWidth,
+      widths: buttons.map((button) => Math.round(button.width)),
+    }
+  })()`)
+  if (actionRow.viewportWidth >= 1451) {
+    expect(actionRow.widths).toEqual([190, 168, 166])
+    expect(actionRow.gaps).toEqual([22, 28])
+  }
 }
 
 async function expectDiffLineGutter(page: Page): Promise<void> {

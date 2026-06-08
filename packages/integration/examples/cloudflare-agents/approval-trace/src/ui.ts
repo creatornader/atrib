@@ -2097,10 +2097,23 @@ export function renderApp(): string {
 
       .actions {
         display: grid;
-        grid-template-columns: minmax(190px, 1.08fr) repeat(2, minmax(180px, 1fr));
-        gap: 12px;
+        gap: 0;
+        grid-template-columns: 190px 22px 168px 28px 166px;
+        justify-content: start;
         margin-top: 6px;
         min-width: 0;
+      }
+
+      .actions .primary {
+        grid-column: 1;
+      }
+
+      .actions .danger {
+        grid-column: 3;
+      }
+
+      .actions .secondary {
+        grid-column: 5;
       }
 
       .button-content {
@@ -2202,7 +2215,7 @@ export function renderApp(): string {
         flex: 0 0 16px;
         height: 16px;
         justify-content: center;
-        left: -3px;
+        left: -11px;
         line-height: 0;
         margin: 0;
         position: absolute;
@@ -3199,10 +3212,20 @@ export function renderApp(): string {
           grid-template-columns: minmax(0, 1.05fr) repeat(2, minmax(0, 0.95fr));
         }
 
+        .actions .primary,
+        .actions .danger,
+        .actions .secondary {
+          grid-column: auto;
+        }
+
         .action-copy small,
         .primary .action-copy small {
           font-size: 9px;
           white-space: nowrap;
+        }
+
+        .button-icon {
+          left: -3px;
         }
 
         .event,
@@ -3279,6 +3302,16 @@ export function renderApp(): string {
         .rail-stepper {
           gap: 8px;
         }
+
+        .button-icon {
+          left: -3px;
+        }
+
+        .actions .primary,
+        .actions .danger,
+        .actions .secondary {
+          grid-column: auto;
+        }
       }
 
       @media (max-width: 720px) {
@@ -3303,6 +3336,12 @@ export function renderApp(): string {
 
         .actions {
           grid-template-columns: 1fr;
+        }
+
+        .actions .primary,
+        .actions .danger,
+        .actions .secondary {
+          grid-column: auto;
         }
 
         .event-hash {
