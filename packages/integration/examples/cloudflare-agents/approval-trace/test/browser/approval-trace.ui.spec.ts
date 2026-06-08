@@ -437,6 +437,61 @@ async function expectDiffRowsFillReferenceFrame(page: Page): Promise<void> {
   expect(rhythm.bottomGap).toBeLessThanOrEqual(11)
 }
 
+async function expectDiffCopyControlUsesReferencePlacement(page: Page): Promise<void> {
+  const geometry = await page.evaluate<{
+    afterWrapGap: number
+    buttonHeight: number
+    buttonWidth: number
+    centerXDelta: number
+    centerYDelta: number
+    hitTargetWorks: boolean
+    iconHeight: number
+    iconWidth: number
+    toolsHeight: number
+  }>(`(() => {
+    const tools = document.querySelector('.diff-tools')?.getBoundingClientRect()
+    const wrap = document.querySelector('#diffWrapToggle')?.getBoundingClientRect()
+    const button = document.querySelector('#copyDiff')?.getBoundingClientRect()
+    const icon = document.querySelector('#copyDiff svg')?.getBoundingClientRect()
+    if (!tools || !wrap || !button || !icon) {
+      return {
+        afterWrapGap: 999,
+        buttonHeight: 0,
+        buttonWidth: 0,
+        centerXDelta: 999,
+        centerYDelta: 999,
+        hitTargetWorks: false,
+        iconHeight: 0,
+        iconWidth: 0,
+        toolsHeight: 0,
+      }
+    }
+    const x = Math.floor(button.left + button.width / 2)
+    const y = Math.floor(button.top + button.height / 2)
+    return {
+      afterWrapGap: Math.round((button.left - wrap.right) * 100) / 100,
+      buttonHeight: Math.round(button.height),
+      buttonWidth: Math.round(button.width),
+      centerXDelta: Math.abs((icon.left + icon.width / 2) - (button.left + button.width / 2)),
+      centerYDelta: Math.abs((icon.top + icon.height / 2) - (button.top + button.height / 2)),
+      hitTargetWorks: Boolean(document.elementFromPoint(x, y)?.closest('#copyDiff')),
+      iconHeight: Math.round(icon.height),
+      iconWidth: Math.round(icon.width),
+      toolsHeight: Math.round(tools.height),
+    }
+  })()`)
+  expect(geometry.afterWrapGap).toBeGreaterThanOrEqual(7)
+  expect(geometry.afterWrapGap).toBeLessThanOrEqual(9)
+  expect(geometry.buttonHeight).toBe(24)
+  expect(geometry.buttonWidth).toBe(24)
+  expect(geometry.iconHeight).toBe(14)
+  expect(geometry.iconWidth).toBe(14)
+  expect(geometry.centerXDelta).toBeLessThanOrEqual(1)
+  expect(geometry.centerYDelta).toBeLessThanOrEqual(1)
+  expect(geometry.toolsHeight).toBeGreaterThanOrEqual(24)
+  expect(geometry.hitTargetWorks).toBe(true)
+}
+
 async function expectReferenceProposalPanelChrome(page: Page): Promise<void> {
   const chrome = await page.evaluate<{
     actionPill: { fontSize: number; height: number }
@@ -1140,6 +1195,8 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('.diff-code')).not.toContainText('logRequest')
       await expectDiffLineGutter(page)
       await expectDiffRowsFillReferenceFrame(page)
+      await expectDiffCopyControlUsesReferencePlacement(page)
+      await expectCopies(page.getByRole('button', { name: 'Copy diff' }))
 
       await page.locator('#diffWrapToggle').click()
       await expect(page.locator('#diffWrapToggle')).toHaveAttribute('aria-pressed', 'true')

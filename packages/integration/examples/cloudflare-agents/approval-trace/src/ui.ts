@@ -1880,6 +1880,7 @@ export function renderApp(): string {
       }
 
       .diff-tools {
+        align-items: center;
         color: var(--muted);
         display: flex;
         font-size: 12px;
@@ -1908,6 +1909,24 @@ export function renderApp(): string {
         background: #f4f7fb;
         color: var(--ink);
         outline: 0;
+      }
+
+      .diff-tools .diff-copy-button {
+        align-items: center;
+        display: inline-flex;
+        height: 24px;
+        justify-content: center;
+        padding: 0;
+        width: 24px;
+      }
+
+      .diff-tools .diff-copy-button svg {
+        height: 14px;
+        width: 14px;
+      }
+
+      .diff-tools .diff-copy-button[data-copy-state="copied"] {
+        color: var(--green);
       }
 
       .diff pre {
@@ -4016,6 +4035,12 @@ export function renderApp(): string {
         }).join('');
       }
 
+      function currentVisibleDiffText() {
+        const lines = Array.from(document.querySelectorAll('.diff-code .diff-line-text'))
+          .map((line) => line.textContent ?? '');
+        return lines.join('\\n');
+      }
+
       function progressRecordFor(run, rowTitle) {
         if (rowTitle === 'Trigger received') return run.records.find((record) => record.label === 'trigger');
         if (rowTitle === 'Context gathered' || rowTitle === 'Policy & intent analysis') {
@@ -4401,6 +4426,7 @@ export function renderApp(): string {
                 <span class="diff-tools">
                   <label>Context <select id="diffContext" aria-label="Diff context"><option value="3">3 lines</option><option value="6">6 lines</option><option value="all">All</option></select></label>
                   <button type="button" id="diffWrapToggle" aria-pressed="false">Wrap</button>
+                  <button type="button" class="diff-copy-button" id="copyDiff" aria-label="Copy diff" data-copy-diff><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></button>
                 </span>
               </div>
               <div class="diff-code">\${renderDiff(diff, '3')}</div>
@@ -4803,7 +4829,7 @@ export function renderApp(): string {
           setRunModeMenuOpen(false);
         }
 
-        const copyButton = target.closest?.('[data-copy-value], [data-copy-source], #copyReceipt');
+        const copyButton = target.closest?.('[data-copy-value], [data-copy-source], [data-copy-diff], #copyReceipt');
         if (copyButton && !copyButton.disabled) {
           const source = copyButton.dataset.copySource
             ? document.querySelector(copyButton.dataset.copySource)?.textContent
@@ -4811,7 +4837,8 @@ export function renderApp(): string {
           const payload = copyButton.id === 'copyReceipt'
             ? selectedReceiptPayload()
             : null;
-          const value = payload ? formatReceiptJson(payload) : source ?? copyButton.dataset.copyValue ?? '';
+          const diff = copyButton.dataset.copyDiff !== undefined ? currentVisibleDiffText() : null;
+          const value = payload ? formatReceiptJson(payload) : diff ?? source ?? copyButton.dataset.copyValue ?? '';
           if (await writeClipboard(value)) markCopied(copyButton);
           return;
         }
