@@ -2770,7 +2770,7 @@ export function renderApp(): string {
         color: #102033;
         font-size: 12px;
         line-height: 1.38;
-        max-height: 208px;
+        max-height: 188px;
         overflow: auto;
         padding: 6px 10px;
         position: relative;

@@ -595,12 +595,42 @@ async function expectReferenceReceiptJsonSyntax(page: Page): Promise<void> {
   expect(syntax.gutterWidth).toBeGreaterThanOrEqual(34)
   expect(syntax.keyCount).toBeGreaterThan(4)
   expect(syntax.lineCount).toBeGreaterThan(1)
-  expect(syntax.maxHeight).toBeGreaterThanOrEqual(208)
+  expect(syntax.maxHeight).toBe(188)
   expect(syntax.stringCount).toBeGreaterThan(4)
   expect(syntax.tenthLineNumber).toBe('10')
   expect(syntax.keyColor).toBe('rgb(195, 58, 101)')
   expect(syntax.stringColor).toBe('rgb(40, 79, 147)')
   expect(syntax.numberColor).toBe('rgb(29, 118, 101)')
+}
+
+async function expectReceiptPanelFitsReferenceViewport(page: Page): Promise<void> {
+  const receiptFit = await page.evaluate<{
+    pageHeight: number
+    preHeight: number
+    receiptBottom: number
+    receiptHeight: number
+    shellHeight: number
+    viewportHeight: number
+  }>(`(() => {
+    const receipt = document.querySelector('.receipt-panel')?.getBoundingClientRect()
+    const shell = document.querySelector('.receipt-shell')?.getBoundingClientRect()
+    const pre = document.querySelector('#receipts pre')?.getBoundingClientRect()
+    return {
+      pageHeight: Math.round(document.body.scrollHeight),
+      preHeight: Math.round(pre?.height ?? 0),
+      receiptBottom: Math.round(receipt?.bottom ?? 0),
+      receiptHeight: Math.round(receipt?.height ?? 0),
+      shellHeight: Math.round(shell?.height ?? 0),
+      viewportHeight: window.innerHeight,
+    }
+  })()`)
+  expect(receiptFit.viewportHeight).toBe(1024)
+  expect(receiptFit.pageHeight).toBeLessThanOrEqual(receiptFit.viewportHeight + 1)
+  expect(receiptFit.receiptBottom).toBeLessThanOrEqual(receiptFit.viewportHeight + 1)
+  expect(receiptFit.receiptHeight).toBeGreaterThanOrEqual(246)
+  expect(receiptFit.receiptHeight).toBeLessThanOrEqual(250)
+  expect(receiptFit.shellHeight).toBeLessThanOrEqual(210)
+  expect(receiptFit.preHeight).toBeLessThanOrEqual(188)
 }
 
 async function expectReferenceDesktopCenterStack(page: Page): Promise<void> {
@@ -899,6 +929,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectReferenceDesktopRailGeometry(page)
       await expectTraceRowsReadable(page)
       await expectReferenceTimelineSpacing(page)
+      await expectReceiptPanelFitsReferenceViewport(page)
 
       const visibleTimes = await page.locator('#answer .progress-time').allTextContents()
       const populatedTimes = visibleTimes.filter((time) => time !== '-')
