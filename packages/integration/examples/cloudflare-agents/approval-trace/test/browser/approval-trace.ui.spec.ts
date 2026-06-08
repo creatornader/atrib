@@ -38,21 +38,20 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expect(page.getByRole('button', { name: 'Approve and resume' })).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Reject' })).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Request changes' })).toBeEnabled()
-  await expect(page.locator('#timeline .event')).toHaveCount(3)
+  await expect(page.locator('#timeline .event')).toHaveCount(4)
   const timelineColumns = await page.evaluate<string[]>(`Array.from(document.querySelector('#timeline .record-timeline')?.firstElementChild?.children ?? [])
     .slice(0, 2)
     .map((child) => String(child.className))`)
   expect(timelineColumns[0]).toContain('event-marker')
   expect(timelineColumns[1]).toContain('event-time')
-  await expect(page.locator('#timeline .event .event-cue')).toHaveCount(3)
-  await expect(page.locator('#timeline .event .event-cue svg')).toHaveCount(3)
+  await expect(page.locator('#timeline .event .event-cue')).toHaveCount(4)
+  await expect(page.locator('#timeline .event .event-cue svg')).toHaveCount(4)
   await expect(page.locator('#timeline .event-future .event-cue')).toHaveCount(0)
-  await expect(page.locator('#timeline .event.selected')).toHaveCount(0)
-  await expect(page.locator('#timeline .event-future.current')).toContainText('human.review.halted')
-  await expect(page.locator('#timeline .event-future.current')).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('#timeline .event.current.selected')).toContainText('human.review.halted')
+  await expect(page.locator('#timeline .event.current.selected')).toHaveAttribute('aria-current', 'step')
   await expect
     .poll(async () => page.locator('#timeline .event-future .event-marker').allTextContents())
-    .toEqual(['', '4', '5'])
+    .toEqual(['4', '5'])
   await expect(page.locator('#answer')).toContainText('Human review halted')
   await expect(page.locator('#answer')).toContainText('Execution is stopped')
   await expectPendingSignerHashReadable(page)
@@ -73,7 +72,7 @@ async function expectSelectedAndCurrentRowsLookDistinct(page: Page): Promise<voi
     selected: { background: string; boxShadow: string } | null
   }>(`(() => {
     const selected = document.querySelector('#timeline .event.selected')
-    const current = document.querySelector('#timeline .event-future.current')
+    const current = document.querySelector('#timeline .current')
     const styleFor = (element) => {
       if (!element) return null
       const style = getComputedStyle(element)
@@ -91,6 +90,37 @@ async function expectSelectedAndCurrentRowsLookDistinct(page: Page): Promise<voi
   expect(rowStyles.selected?.boxShadow).toContain('rgb(9, 105, 218)')
   expect(rowStyles.current?.background).toBe('rgb(255, 247, 236)')
   expect(rowStyles.current?.boxShadow).toContain('rgb(245, 158, 11)')
+}
+
+async function expectSelectedCurrentRowCombinesStates(page: Page): Promise<void> {
+  const combined = await page.evaluate<{
+    ariaCurrent: string | null
+    background: string
+    boxShadow: string
+    markerBackground: string
+    selectedCount: number
+    text: string
+  }>(`(() => {
+    const row = document.querySelector('#timeline .event.current.selected')
+    if (!row) throw new Error('missing combined current selected row')
+    const rowStyle = getComputedStyle(row)
+    const marker = row.querySelector('.event-marker')
+    const markerStyle = marker ? getComputedStyle(marker) : null
+    return {
+      ariaCurrent: row.getAttribute('aria-current'),
+      background: rowStyle.backgroundColor,
+      boxShadow: rowStyle.boxShadow,
+      markerBackground: markerStyle?.backgroundColor ?? '',
+      selectedCount: document.querySelectorAll('#timeline .event.selected').length,
+      text: row.textContent?.replace(/\\s+/g, ' ').trim() ?? '',
+    }
+  })()`)
+  expect(combined.ariaCurrent).toBe('step')
+  expect(combined.background).toBe('rgb(238, 246, 255)')
+  expect(combined.boxShadow).toContain('rgb(9, 105, 218)')
+  expect(combined.markerBackground).toBe('rgb(243, 128, 32)')
+  expect(combined.selectedCount).toBe(1)
+  expect(combined.text).toContain('human.review.halted')
 }
 
 async function expectCopies(button: Locator): Promise<void> {
@@ -1253,6 +1283,7 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
       isRecordRow: boolean
       label: string
       markerLeft: number
+      markerToSignerGap: number | null
       markerToTimeGap: number
       rowClass: string
       signerClass: string
@@ -1280,6 +1311,7 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
         isRecordRow: row.classList.contains('event'),
         label: row.querySelector('strong')?.textContent?.trim() ?? '',
         markerLeft: marker ? Math.round(marker.left) : 0,
+        markerToSignerGap: marker && signerRect ? Math.round(signerRect.left - marker.right) : null,
         markerToTimeGap: marker && time ? Math.round(time.left - marker.right) : 0,
         rowClass: row.className,
         signerClass: signer?.className ?? '',
@@ -1289,21 +1321,23 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
       }
     }),
   }))()`)
-  const minTimestampOffset = timeline.viewportWidth >= 1450 ? 90 : 82
-  const maxTimestampOffset = timeline.viewportWidth >= 1450 ? 100 : 92
+  const minTimestampOffset = timeline.viewportWidth >= 1450 ? 102 : 88
+  const maxTimestampOffset = timeline.viewportWidth >= 1450 ? 110 : 98
+  const minMarkerToSignerGap = timeline.viewportWidth >= 1450 ? 112 : 98
   for (const row of timeline.rows) {
     expect(row.markerLeft).toBeLessThan(row.timeLeft)
     expect(row.timeLeft).toBeLessThan(row.copyLeft)
     expect(row.copyLeft).toBeLessThan(row.hashLeft)
     if (row.cueLeft !== null) expect(row.hashLeft).toBeLessThan(row.cueLeft)
-    expect(row.markerToTimeGap).toBeGreaterThanOrEqual(6)
-    expect(row.markerToTimeGap).toBeLessThanOrEqual(10)
+    expect(row.markerToTimeGap).toBeGreaterThanOrEqual(9)
+    expect(row.markerToTimeGap).toBeLessThanOrEqual(12)
     expect(row.timestampToCopyOffset).toBeGreaterThanOrEqual(minTimestampOffset)
     expect(row.timestampToCopyOffset).toBeLessThanOrEqual(maxTimestampOffset)
     if (row.rowClass.includes('event-future')) expect(row.hashTextAlign).toBe('left')
     if (row.isRecordRow) {
       expect(row.signerWidth).toBe(16)
       expect(row.signerClass).toMatch(/event-signer-icon (agent|human|mcp)/)
+      expect(row.markerToSignerGap).toBeGreaterThanOrEqual(minMarkerToSignerGap)
     }
   }
 }
@@ -1334,6 +1368,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectTraceRowsReadable(page)
       await expectTraceIntegrityProofStatusFits(page)
       await expectReferenceTimelineSpacing(page)
+      await expectSelectedCurrentRowCombinesStates(page)
       await expectReceiptPanelFitsReferenceViewport(page)
       await expectReferenceReceiptToolbarRhythm(page)
 
@@ -1421,9 +1456,12 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.keyboard.press('Escape')
       await expect(page.locator('#runModeActions')).toBeHidden()
 
+      await page.locator('#timeline .event.current').click()
+      await expectSelectedCurrentRowCombinesStates(page)
+
       await page.locator('#timeline .event[data-label="proposal"]').click()
       await expect(page.locator('#timeline .event.selected')).toContainText('proposal.generated')
-      await expect(page.locator('#timeline .event-future.current')).toContainText('human.review.halted')
+      await expect(page.locator('#timeline .event.current')).toContainText('human.review.halted')
       await expectSelectedAndCurrentRowsLookDistinct(page)
 
       await page.getByRole('tab', { name: 'Record details' }).click()

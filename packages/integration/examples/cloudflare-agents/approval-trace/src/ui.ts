@@ -2298,15 +2298,15 @@ export function renderApp(): string {
         border: 0;
         border-radius: 0;
         display: grid;
-        gap: 7px;
-        grid-template-columns: 20px 88px minmax(0, 1fr) minmax(82px, 120px);
+        gap: 10px;
+        grid-template-columns: 20px 94px minmax(0, 1fr) minmax(82px, 120px);
         min-height: 44px;
         min-width: 0;
         padding: 4px 0;
       }
 
       .event {
-        grid-template-columns: 20px 88px minmax(0, 1fr) minmax(82px, 112px) 14px;
+        grid-template-columns: 20px 94px minmax(0, 1fr) minmax(82px, 112px) 14px;
       }
 
       #timeline .record-timeline .event,
@@ -2322,6 +2322,12 @@ export function renderApp(): string {
         outline: 0;
       }
 
+      #timeline .record-timeline .event.current,
+      #timeline .record-timeline .event-future.current {
+        background: #fff7ec;
+        box-shadow: inset 3px 0 0 #f59e0b;
+      }
+
       #timeline .record-timeline .event.selected {
         background: #eef6ff;
         box-shadow: inset 3px 0 0 #0969da;
@@ -2331,11 +2337,6 @@ export function renderApp(): string {
       #timeline .record-timeline .event.selected .event-cue {
         color: #0969da;
         opacity: 1;
-      }
-
-      #timeline .record-timeline .event-future.current {
-        background: #fff7ec;
-        box-shadow: inset 3px 0 0 #f59e0b;
       }
 
       .event-time {
@@ -3281,12 +3282,12 @@ export function renderApp(): string {
 
         .event,
         .event-future {
-          gap: 6px;
-          grid-template-columns: 18px 76px minmax(0, 1fr) minmax(66px, 92px);
+          gap: 10px;
+          grid-template-columns: 18px 82px minmax(0, 1fr) minmax(66px, 92px);
         }
 
         .event {
-          grid-template-columns: 18px 76px minmax(0, 1fr) minmax(58px, 82px) 12px;
+          grid-template-columns: 18px 82px minmax(0, 1fr) minmax(58px, 82px) 12px;
         }
 
         .record-timeline::before {
@@ -4876,8 +4877,24 @@ export function renderApp(): string {
                 </button>
               \`;
             }).join('')}
-            \${futureTraceRows(run).map((row) => \`
-              <div class="event-future \${row.marker === 'pending' ? 'current' : ''}" \${row.marker === 'pending' ? 'aria-current="step"' : ''}>
+            \${futureTraceRows(run).map((row) => {
+              const isCurrent = row.marker === 'pending';
+              if (isCurrent && row.record && row.hash) {
+                return \`
+                <button class="event current" data-hash="\${row.hash}" data-label="\${row.displayLabel ?? row.name}" aria-current="step" aria-label="View receipt details for \${escapeHtml(row.name)}">
+                  <span class="event-marker \${row.marker}">\${row.markerLabel ?? ''}</span>
+                  <span class="event-time">\${displayRecordTime(row.record, row.displayLabel)}</span>
+                  <span class="event-copy">
+                    <span class="event-title-line">\${timelineSignerIcon(row.record)}<strong>\${row.name}</strong></span>
+                    <span class="value">\${row.detail}</span>
+                  </span>
+                  <span class="event-hash hash">\${recordDisplayId(row.hash)}</span>
+                  <span class="event-cue" aria-hidden="true">\${recordDetailsIcon()}</span>
+                </button>
+              \`;
+              }
+              return \`
+              <div class="event-future \${isCurrent ? 'current' : ''}" \${isCurrent ? 'aria-current="step"' : ''}>
                 <span class="event-marker \${row.marker}">\${row.markerLabel ?? ''}</span>
                 <span class="event-time">\${row.record ? displayRecordTime(row.record, row.displayLabel) : '-'}</span>
                 <span class="event-copy">
@@ -4886,7 +4903,8 @@ export function renderApp(): string {
                 </span>
                 <span class="event-hash hash">\${row.hash ? recordDisplayId(row.hash) : '-'}</span>
               </div>
-            \`).join('')}
+            \`;
+            }).join('')}
           </div>
           <div class="signer-list">
             <span class="trace-section-label">Signers</span>
@@ -4974,11 +4992,11 @@ export function renderApp(): string {
             selectRecord(record);
           });
         });
-        const preferredLabel = run.status === 'pending_approval' ? 'proposal' : run.status === 'changes_requested' ? 'change_request' : run.status === 'rejected' ? 'rejection' : run.status === 'failed' ? 'outcome' : 'handoff';
+        const preferredLabel = run.status === 'pending_approval' ? 'approval' : run.status === 'changes_requested' ? 'change_request' : run.status === 'rejected' ? 'rejection' : run.status === 'failed' ? 'outcome' : 'handoff';
         const preferredButton = timelineEl.querySelector(\`.event[data-label="\${preferredLabel}"]\`) ?? timelineEl.querySelector('.event');
         if (preferredButton) {
           timelineEl.querySelectorAll('.event').forEach((item) => item.classList.remove('selected'));
-          if (run.status !== 'pending_approval') preferredButton.classList.add('selected');
+          preferredButton.classList.add('selected');
           const preferredRecord = run.records.find((item) => item.record_hash === preferredButton.dataset.hash);
           if (preferredRecord) selectRecord(preferredRecord, { showTrace: true });
         }
