@@ -2309,17 +2309,33 @@ export function renderApp(): string {
         grid-template-columns: 20px 88px minmax(0, 1fr) minmax(82px, 112px) 14px;
       }
 
-      .event:hover,
-      .event:focus-visible,
-      .event.selected {
+      #timeline .record-timeline .event,
+      #timeline .record-timeline .event-future {
+        transition: color 160ms ease;
+      }
+
+      #timeline .record-timeline .event:hover,
+      #timeline .record-timeline .event:focus-visible {
         background: #fff7ec;
         border-color: transparent;
         box-shadow: none;
         outline: 0;
       }
 
-      .event-future.current {
+      #timeline .record-timeline .event.selected {
+        background: #eef6ff;
+        box-shadow: inset 3px 0 0 #0969da;
+        outline: 0;
+      }
+
+      #timeline .record-timeline .event.selected .event-cue {
+        color: #0969da;
+        opacity: 1;
+      }
+
+      #timeline .record-timeline .event-future.current {
         background: #fff7ec;
+        box-shadow: inset 3px 0 0 #f59e0b;
       }
 
       .event-time {

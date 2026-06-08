@@ -67,6 +67,32 @@ async function openTimelineRecord(page: Page, label: string): Promise<void> {
   await expect(page.locator('#receipts pre')).toContainText('"record_hash": "sha256:')
 }
 
+async function expectSelectedAndCurrentRowsLookDistinct(page: Page): Promise<void> {
+  const rowStyles = await page.evaluate<{
+    current: { background: string; boxShadow: string } | null
+    selected: { background: string; boxShadow: string } | null
+  }>(`(() => {
+    const selected = document.querySelector('#timeline .event.selected')
+    const current = document.querySelector('#timeline .event-future.current')
+    const styleFor = (element) => {
+      if (!element) return null
+      const style = getComputedStyle(element)
+      return {
+        background: style.backgroundColor,
+        boxShadow: style.boxShadow,
+      }
+    }
+    return {
+      current: styleFor(current),
+      selected: styleFor(selected),
+    }
+  })()`)
+  expect(rowStyles.selected?.background).toBe('rgb(238, 246, 255)')
+  expect(rowStyles.selected?.boxShadow).toContain('rgb(9, 105, 218)')
+  expect(rowStyles.current?.background).toBe('rgb(255, 247, 236)')
+  expect(rowStyles.current?.boxShadow).toContain('rgb(245, 158, 11)')
+}
+
 async function expectCopies(button: Locator): Promise<void> {
   await button.click()
   await expect(button).toHaveAttribute('data-copy-state', 'copied')
@@ -1394,6 +1420,11 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#runModeActions')).toBeVisible()
       await page.keyboard.press('Escape')
       await expect(page.locator('#runModeActions')).toBeHidden()
+
+      await page.locator('#timeline .event[data-label="proposal"]').click()
+      await expect(page.locator('#timeline .event.selected')).toContainText('proposal.generated')
+      await expect(page.locator('#timeline .event-future.current')).toContainText('human.review.halted')
+      await expectSelectedAndCurrentRowsLookDistinct(page)
 
       await page.getByRole('tab', { name: 'Record details' }).click()
       await expect(page.locator('#receiptSummary')).toContainText('Record hash')
