@@ -178,29 +178,31 @@ async function expectWorkflowOverviewVisible(page: Page): Promise<void> {
 
 async function expectReferenceHeaderLogoGeometry(page: Page): Promise<void> {
   const logo = await page.evaluate<{
+    fills: string[]
     h1X: number
-    pathHeight: number
-    pathWidth: number
-    pathX: number
-    pathY: number
+    markHeight: number
+    markWidth: number
+    markX: number
+    markY: number
+    pathCount: number
     svgHeight: number
     svgWidth: number
     svgX: number
     viewBox: string | null
   }>(`(() => {
     const svg = document.querySelector('.cloud-mark')
-    const path = svg?.querySelector('path')
+    const paths = Array.from(svg?.querySelectorAll('path') ?? [])
     const h1 = document.querySelector('.hero h1')?.getBoundingClientRect()
     const svgRect = svg?.getBoundingClientRect()
-    const bbox = path?.getBBox()
-    const matrix = path?.getScreenCTM()
+    const bbox = svg?.getBBox()
+    const matrix = svg?.getScreenCTM()
     function transform(x, y) {
       return {
         x: matrix.a * x + matrix.c * y + matrix.e,
         y: matrix.b * x + matrix.d * y + matrix.f,
       }
     }
-    let pathRect = { x: 0, y: 0, width: 0, height: 0 }
+    let markRect = { x: 0, y: 0, width: 0, height: 0 }
     if (bbox && matrix) {
       const points = [
         transform(bbox.x, bbox.y),
@@ -210,7 +212,7 @@ async function expectReferenceHeaderLogoGeometry(page: Page): Promise<void> {
       ]
       const xs = points.map((point) => point.x)
       const ys = points.map((point) => point.y)
-      pathRect = {
+      markRect = {
         x: Math.min(...xs),
         y: Math.min(...ys),
         width: Math.max(...xs) - Math.min(...xs),
@@ -218,11 +220,13 @@ async function expectReferenceHeaderLogoGeometry(page: Page): Promise<void> {
       }
     }
     return {
+      fills: paths.map((path) => path.getAttribute('fill') ?? ''),
       h1X: Math.round(h1?.x ?? 0),
-      pathHeight: Math.round(pathRect.height),
-      pathWidth: Math.round(pathRect.width),
-      pathX: Math.round(pathRect.x),
-      pathY: Math.round(pathRect.y),
+      markHeight: Math.round(markRect.height),
+      markWidth: Math.round(markRect.width),
+      markX: Math.round(markRect.x),
+      markY: Math.round(markRect.y),
+      pathCount: paths.length,
       svgHeight: Math.round(svgRect?.height ?? 0),
       svgWidth: Math.round(svgRect?.width ?? 0),
       svgX: Math.round(svgRect?.x ?? 0),
@@ -232,15 +236,17 @@ async function expectReferenceHeaderLogoGeometry(page: Page): Promise<void> {
   expect(logo.svgX).toBe(29)
   expect(logo.svgWidth).toBe(54)
   expect(logo.svgHeight).toBe(32)
-  expect(logo.viewBox).toBe('2 -1 46 28')
-  expect(logo.pathX).toBeGreaterThanOrEqual(29)
-  expect(logo.pathX).toBeLessThanOrEqual(31)
-  expect(logo.pathY).toBeGreaterThanOrEqual(21)
-  expect(logo.pathY).toBeLessThanOrEqual(23)
-  expect(logo.pathWidth).toBeGreaterThanOrEqual(51)
-  expect(logo.pathWidth).toBeLessThanOrEqual(53)
-  expect(logo.pathHeight).toBeGreaterThanOrEqual(22)
-  expect(logo.pathHeight).toBeLessThanOrEqual(24)
+  expect(logo.viewBox).toBe('0 0 209.51 94.74')
+  expect(logo.pathCount).toBe(2)
+  expect(logo.fills).toEqual(['#f4801f', '#f9ab41'])
+  expect(logo.markX).toBeGreaterThanOrEqual(29)
+  expect(logo.markX).toBeLessThanOrEqual(31)
+  expect(logo.markY).toBeGreaterThanOrEqual(19)
+  expect(logo.markY).toBeLessThanOrEqual(22)
+  expect(logo.markWidth).toBeGreaterThanOrEqual(52)
+  expect(logo.markWidth).toBeLessThanOrEqual(54)
+  expect(logo.markHeight).toBeGreaterThanOrEqual(23)
+  expect(logo.markHeight).toBeLessThanOrEqual(25)
   expect(logo.h1X).toBeGreaterThanOrEqual(98)
   expect(logo.h1X).toBeLessThanOrEqual(101)
 }
@@ -1208,10 +1214,13 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
       cueLeft: number | null
       hashLeft: number
       hashTextAlign: string
+      isRecordRow: boolean
       label: string
       markerLeft: number
       markerToTimeGap: number
       rowClass: string
+      signerClass: string
+      signerWidth: number
       timeLeft: number
       timestampToCopyOffset: number
     }>
@@ -1225,15 +1234,20 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
       const hashElement = row.querySelector('.event-hash')
       const hash = hashElement?.getBoundingClientRect()
       const cue = row.querySelector('.event-cue')?.getBoundingClientRect()
+      const signer = row.querySelector('.event-signer-icon')
+      const signerRect = signer?.getBoundingClientRect()
       return {
         copyLeft: copy ? Math.round(copy.left) : 0,
         cueLeft: cue ? Math.round(cue.left) : null,
         hashLeft: hash ? Math.round(hash.left) : 0,
         hashTextAlign: hashElement ? getComputedStyle(hashElement).textAlign : '',
+        isRecordRow: row.classList.contains('event'),
         label: row.querySelector('strong')?.textContent?.trim() ?? '',
         markerLeft: marker ? Math.round(marker.left) : 0,
         markerToTimeGap: marker && time ? Math.round(time.left - marker.right) : 0,
         rowClass: row.className,
+        signerClass: signer?.className ?? '',
+        signerWidth: signerRect ? Math.round(signerRect.width) : 0,
         timeLeft: time ? Math.round(time.left) : 0,
         timestampToCopyOffset: time && copy ? Math.round(copy.left - time.left) : 0,
       }
@@ -1251,6 +1265,10 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
     expect(row.timestampToCopyOffset).toBeGreaterThanOrEqual(minTimestampOffset)
     expect(row.timestampToCopyOffset).toBeLessThanOrEqual(maxTimestampOffset)
     if (row.rowClass.includes('event-future')) expect(row.hashTextAlign).toBe('left')
+    if (row.isRecordRow) {
+      expect(row.signerWidth).toBe(16)
+      expect(row.signerClass).toMatch(/event-signer-icon (agent|human|mcp)/)
+    }
   }
 }
 
@@ -1315,9 +1333,14 @@ test.describe('Cloudflare approval trace browser UI', () => {
       const threeLineDiffCount = await page.locator('.diff-line').count()
       await page.locator('#diffContext').selectOption('all')
       await expect.poll(async () => page.locator('.diff-line').count()).toBeGreaterThan(threeLineDiffCount)
+      const allLineDiffCount = await page.locator('.diff-line').count()
+      await expect(page.locator('.diff-line').last().locator('.diff-line-text')).not.toHaveText('')
+      await expect(page.locator('.diff-code')).toContainText('reportAudit')
       await page.locator('#diffContext').selectOption('6')
       await expect(page.locator('.diff')).toHaveAttribute('data-context-lines', '6')
       await expect(page.locator('.diff-code')).toContainText('logRequest')
+      await expect(page.locator('.diff-code')).not.toContainText('reportAudit')
+      await expect.poll(async () => page.locator('.diff-line').count()).toBeLessThan(allLineDiffCount)
       await expectDiffLineGutter(page)
 
       await page.locator('#headerMenu').click()

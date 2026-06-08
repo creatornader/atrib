@@ -359,7 +359,7 @@ function emitNativeEvent(input: {
 }
 
 function fixturePlan(prompt: string): PlannedAction {
-  const diff = `@@ -1,6 +1,16 @@
+  const diff = `@@ -1,17 +1,27 @@
  import { NextFunction, Request, Response } from 'express';
  import { getConfig } from '../config';
 
@@ -383,7 +383,18 @@ function fixturePlan(prompt: string): PlannedAction {
    // existing logic
    next();
 -}
-+}];`
++}];
+
+ export function reportHealth(req: Request, res: Response) {
+   const tenant = resolveTenant(req);
+   reportMetrics('report.health', { tenant });
+   res.json({ ok: true, tenant });
+ }
+
+ export function reportAudit(req: Request, res: Response) {
+   logRequest(req, 'report.audit');
+   res.status(204).end();
+ }`
   return {
     planner: 'fixture',
     action: 'Update file in repository',

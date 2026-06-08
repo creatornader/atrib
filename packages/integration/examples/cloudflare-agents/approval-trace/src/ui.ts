@@ -605,7 +605,6 @@ export function renderApp(): string {
       }
 
       .cloud-mark {
-        color: var(--orange);
         flex: 0 0 auto;
         height: 32px;
         width: 38px;
@@ -2254,6 +2253,11 @@ export function renderApp(): string {
           padding-right: 14px;
         }
 
+        .primary .button-icon,
+        .danger .button-icon {
+          left: -3px;
+        }
+
         .action-copy {
           max-width: 100%;
         }
@@ -2394,7 +2398,42 @@ export function renderApp(): string {
         min-width: 0;
       }
 
+      .event-title-line {
+        align-items: center;
+        display: flex;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .event-signer-icon {
+        align-items: center;
+        display: inline-flex;
+        flex: 0 0 16px;
+        height: 16px;
+        justify-content: center;
+        width: 16px;
+      }
+
+      .event-signer-icon svg {
+        display: block;
+        height: 15px;
+        width: 15px;
+      }
+
+      .event-signer-icon.agent {
+        color: #0969da;
+      }
+
+      .event-signer-icon.human {
+        color: #c76a00;
+      }
+
+      .event-signer-icon.mcp {
+        color: #078861;
+      }
+
       .event-copy strong {
+        min-width: 0;
         font-size: 11.5px;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -3359,8 +3398,9 @@ export function renderApp(): string {
     <main class="shell" data-testid="approval-trace-app">
       <section class="hero">
         <div class="brand-row">
-          <svg class="cloud-mark" viewBox="2 -1 46 28" aria-hidden="true">
-            <path fill="currentColor" d="M15.4 25.5h27.8c2.4 0 4.3-1.8 4.3-4.1 0-2.2-1.8-4.1-4-4.1-.5 0-1 .1-1.5.3C40.5 10.5 34.1 5 26.5 5c-7.2 0-13.3 5-14.9 11.7-.6-.2-1.3-.3-2-.3A7.4 7.4 0 0 0 2.3 24c0 .5.4.9.9.9h8.2c.7-3.9 4.1-6.9 8.2-6.9h3.8c.7 0 1.2.5 1.2 1.2s-.5 1.2-1.2 1.2h-3.8a5.9 5.9 0 0 0-5.8 5.1Z"/>
+          <svg class="cloud-mark" viewBox="0 0 209.51 94.74" aria-hidden="true">
+            <path fill="#f4801f" d="M143.05,93.42l1.07-3.71c1.27-4.41.8-8.48-1.34-11.48-2-2.76-5.26-4.38-9.25-4.57L58,72.7a1.47,1.47,0,0,1-1.35-2,2,2,0,0,1,1.75-1.34l76.26-1c9-.41,18.84-7.75,22.27-16.71l4.34-11.36a2.68,2.68,0,0,0,.18-1,3.31,3.31,0,0,0-.06-.54,49.67,49.67,0,0,0-95.49-5.14,22.35,22.35,0,0,0-35,23.42A31.73,31.73,0,0,0,.34,93.45a1.47,1.47,0,0,0,1.45,1.27l139.49,0h0A1.83,1.83,0,0,0,143.05,93.42Z"/>
+            <path fill="#f9ab41" d="M168.22,41.15q-1,0-2.1.06a.88.88,0,0,0-.32.07,1.17,1.17,0,0,0-.76.8l-3,10.26c-1.28,4.41-.81,8.48,1.34,11.48a11.65,11.65,0,0,0,9.24,4.57l16.11,1a1.44,1.44,0,0,1,1.14.62,1.5,1.5,0,0,1,.17,1.37,2,2,0,0,1-1.75,1.34l-16.73,1c-9.09.42-18.88,7.75-22.31,16.7l-1.21,3.16a.9.9,0,0,0,.79,1.22h57.63A1.55,1.55,0,0,0,208,93.63a41.34,41.34,0,0,0-39.76-52.48Z"/>
           </svg>
           <div>
             <h1>Cloudflare Agent Trace</h1>
@@ -3921,7 +3961,7 @@ export function renderApp(): string {
                 <span class="event-marker \${row.marker}"></span>
                 <span class="event-time">\${time ? time.slice(0, 8) : '-'}</span>
                 <span class="event-copy">
-                  <strong>\${row.name}</strong>
+                  <span class="event-title-line">\${row.marker === 'future' || row.key === 'halt' ? '' : timelineSignerIcon(record)}<strong>\${row.name}</strong></span>
                   <span class="value">\${row.detail}</span>
                 </span>
                 <span class="event-hash hash">\${hash}</span>
@@ -4107,6 +4147,32 @@ export function renderApp(): string {
         return '<span class="signer-icon agent"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4h4v3h-4V4Zm-2 4h8a3 3 0 0 1 3 3v4a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-4a3 3 0 0 1 3-3Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"/><path d="M9 12h.01M15 12h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.8"/><path d="M9 15h6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span>';
       }
 
+      function signerKindForRecord(record) {
+        if (!record) return '';
+        if (record.signer === 'human') return 'human';
+        if (record.signer === 'action_mcp') return 'mcp';
+        return 'agent';
+      }
+
+      function signerLabelForKind(kind) {
+        if (kind === 'human') return 'Human';
+        if (kind === 'mcp') return 'Action MCP';
+        return 'Agent';
+      }
+
+      function timelineSignerIcon(record) {
+        const kind = signerKindForRecord(record);
+        if (!kind) return '';
+        const label = signerLabelForKind(kind);
+        if (kind === 'human') {
+          return '<span class="event-signer-icon human" title="Signed by ' + label + '" aria-label="Signed by ' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0" fill="currentColor"/></svg></span>';
+        }
+        if (kind === 'mcp') {
+          return '<span class="event-signer-icon mcp" title="Signed by ' + label + '" aria-label="Signed by ' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v4h2.2a2.3 2.3 0 1 1 0 4.6H15V16h-4.4v2.2a2.3 2.3 0 1 1-4.6 0V16H3v-5h3.2a2 2 0 0 0 0-4H3V3h6Z" fill="currentColor"/></svg></span>';
+        }
+        return '<span class="event-signer-icon agent" title="Signed by ' + label + '" aria-label="Signed by ' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4h4v3h-4V4Zm-2 4h8a3 3 0 0 1 3 3v4a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-4a3 3 0 0 1 3-3Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"/><path d="M9 12h.01M15 12h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.8"/><path d="M9 15h6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span>';
+      }
+
       function signerSignature(run, signer) {
         const record = run.records.find((item) => item.signer === signer);
         if (!record) return '-';
@@ -4153,18 +4219,24 @@ export function renderApp(): string {
 
       function visibleDiffLines(diff, context = '3') {
         const lines = String(diff).split('\\n');
+        while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
         if (context === 'all') return lines;
         const contextLines = Number.parseInt(context, 10);
         if (!Number.isFinite(contextLines)) return lines;
+        const isChangedLine = (line) => (line.startsWith('+') && !line.startsWith('+++'))
+          || (line.startsWith('-') && !line.startsWith('---'))
+          || line.startsWith('@@');
+        const lastChangedIndex = lines.reduce((lastIndex, line, index) => (
+          isChangedLine(line) ? index : lastIndex
+        ), -1);
         let shownContextAfterChange = 0;
-        return lines.filter((line) => {
-          const changed = (line.startsWith('+') && !line.startsWith('+++'))
-            || (line.startsWith('-') && !line.startsWith('---'))
-            || line.startsWith('@@');
+        return lines.filter((line, index) => {
+          const changed = isChangedLine(line);
           if (changed) {
             shownContextAfterChange = 0;
             return true;
           }
+          if (contextLines <= 3 && index > lastChangedIndex) return false;
           shownContextAfterChange += 1;
           return shownContextAfterChange <= contextLines;
         });
@@ -4761,7 +4833,7 @@ export function renderApp(): string {
                   <span class="event-marker \${isPendingHuman ? 'pending' : 'done'}"></span>
                   <span class="event-time">\${displayRecordTime(record, entry.label, index)}</span>
                   <span class="event-copy">
-                    <strong>\${timelineLabel(entry, run)}</strong>
+                    <span class="event-title-line">\${timelineSignerIcon(record)}<strong>\${timelineLabel(entry, run)}</strong></span>
                     <span class="value">\${timelineDetail(entry, run)}</span>
                   </span>
                   <span class="event-hash hash">\${recordDisplayId(entry.record_hash)}</span>
@@ -4774,7 +4846,7 @@ export function renderApp(): string {
                 <span class="event-marker \${row.marker}">\${row.markerLabel ?? ''}</span>
                 <span class="event-time">\${row.record ? displayRecordTime(row.record, row.displayLabel) : '-'}</span>
                 <span class="event-copy">
-                  <strong>\${row.name}</strong>
+                  <span class="event-title-line">\${timelineSignerIcon(row.record)}<strong>\${row.name}</strong></span>
                   <span class="value">\${row.detail}</span>
                 </span>
                 <span class="event-hash hash">\${row.hash ? recordDisplayId(row.hash) : '-'}</span>
