@@ -22,7 +22,7 @@ Both smokes are local and credential-free. They do not call a hosted Mastra
 Platform agent, a live model, or a database. The fake part is the procurement
 approval payload; the MCP server, stdio transport, MCP client, tool listing,
 tool execution path, workflow engine, suspend point, resume call, and snapshot
-store come from `@mastra/core@1.38.0` and `@mastra/mcp@1.9.0`.
+store come from `@mastra/core@1.41.0` and `@mastra/mcp@1.9.1`.
 
 ## What It Proves
 

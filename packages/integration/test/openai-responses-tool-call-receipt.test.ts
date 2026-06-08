@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execFile } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { canonicalRecord, genesisChainRoot, hexEncode, sha256, verifyRecord } from '@atrib/mcp'
@@ -9,6 +10,9 @@ import { OpenAIResponsesToolCallReceiptRecorder } from '../src/openai-responses-
 
 const execFileAsync = promisify(execFile)
 const workspaceRoot = join(process.cwd(), '..', '..')
+const integrationPackageJson = JSON.parse(
+  readFileSync(join(process.cwd(), 'package.json'), 'utf8'),
+) as { devDependencies: Record<string, string> }
 const tsxBin = join(
   workspaceRoot,
   'node_modules',
@@ -70,7 +74,7 @@ describe('OpenAI Responses tool-call receipt example', () => {
     expect(result.ok).toBe(true)
     expect(result.openai_responses).toMatchObject({
       package: 'openai',
-      version: '6.41.0',
+      version: dependencyVersion('openai'),
       client: 'OpenAI',
       api: 'responses.create',
       base_url: 'local-fixture',
@@ -174,3 +178,9 @@ describe('OpenAI Responses tool-call receipt example', () => {
     expect(await verifyRecord(records[1]!)).toBe(true)
   })
 })
+
+function dependencyVersion(name: string): string {
+  const version = integrationPackageJson.devDependencies[name]
+  if (!version) throw new Error(`missing integration devDependency: ${name}`)
+  return version
+}
