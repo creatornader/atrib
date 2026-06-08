@@ -800,6 +800,53 @@ async function expectTraceRowsReadable(page: Page): Promise<void> {
   }
 }
 
+async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
+  const timeline = await page.evaluate<{
+    rows: Array<{
+      copyLeft: number
+      cueLeft: number | null
+      hashLeft: number
+      label: string
+      markerLeft: number
+      markerToTimeGap: number
+      timeLeft: number
+      timestampToCopyOffset: number
+    }>
+    viewportWidth: number
+  }>(`(() => ({
+    viewportWidth: window.innerWidth,
+    rows: Array.from(document.querySelectorAll('#timeline .event, #timeline .event-future')).map((row) => {
+      const marker = row.querySelector('.event-marker')?.getBoundingClientRect()
+      const time = row.querySelector('.event-time')?.getBoundingClientRect()
+      const copy = row.querySelector('.event-copy')?.getBoundingClientRect()
+      const hash = row.querySelector('.event-hash')?.getBoundingClientRect()
+      const cue = row.querySelector('.event-cue')?.getBoundingClientRect()
+      return {
+        copyLeft: copy ? Math.round(copy.left) : 0,
+        cueLeft: cue ? Math.round(cue.left) : null,
+        hashLeft: hash ? Math.round(hash.left) : 0,
+        label: row.querySelector('strong')?.textContent?.trim() ?? '',
+        markerLeft: marker ? Math.round(marker.left) : 0,
+        markerToTimeGap: marker && time ? Math.round(time.left - marker.right) : 0,
+        timeLeft: time ? Math.round(time.left) : 0,
+        timestampToCopyOffset: time && copy ? Math.round(copy.left - time.left) : 0,
+      }
+    }),
+  }))()`)
+  const minTimestampOffset = timeline.viewportWidth >= 1450 ? 90 : 82
+  const maxTimestampOffset = timeline.viewportWidth >= 1450 ? 100 : 92
+  for (const row of timeline.rows) {
+    expect(row.markerLeft).toBeLessThan(row.timeLeft)
+    expect(row.timeLeft).toBeLessThan(row.copyLeft)
+    expect(row.copyLeft).toBeLessThan(row.hashLeft)
+    if (row.cueLeft !== null) expect(row.hashLeft).toBeLessThan(row.cueLeft)
+    expect(row.markerToTimeGap).toBeGreaterThanOrEqual(6)
+    expect(row.markerToTimeGap).toBeLessThanOrEqual(10)
+    expect(row.timestampToCopyOffset).toBeGreaterThanOrEqual(minTimestampOffset)
+    expect(row.timestampToCopyOffset).toBeLessThanOrEqual(maxTimestampOffset)
+  }
+}
+
 test.describe('Cloudflare approval trace browser UI', () => {
   test('clicks through approved execution and opens the signed receipt', async ({ page }) => {
     await expectCleanConsole(page, async () => {
@@ -823,6 +870,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectWorkflowStepCopyHugsContent(page)
       await expectReferenceDesktopRailGeometry(page)
       await expectTraceRowsReadable(page)
+      await expectReferenceTimelineSpacing(page)
 
       const visibleTimes = await page.locator('#answer .progress-time').allTextContents()
       const populatedTimes = visibleTimes.filter((time) => time !== '-')
@@ -972,6 +1020,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectWorkflowStepCopyHugsContent(page)
       await expectConstrainedDesktopRailGeometry(page)
       await expectTraceRowsReadable(page)
+      await expectReferenceTimelineSpacing(page)
 
       const firstRunId = await page.locator('#runIdLabel').textContent()
       await page.locator('#headerMenu').click()

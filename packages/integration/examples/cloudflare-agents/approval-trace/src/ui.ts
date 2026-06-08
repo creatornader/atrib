@@ -2255,14 +2255,14 @@ export function renderApp(): string {
         border-radius: 0;
         display: grid;
         gap: 7px;
-        grid-template-columns: 20px 54px minmax(0, 1fr) minmax(82px, 120px);
+        grid-template-columns: 20px 88px minmax(0, 1fr) minmax(82px, 120px);
         min-height: 44px;
         min-width: 0;
         padding: 4px 0;
       }
 
       .event {
-        grid-template-columns: 20px 54px minmax(0, 1fr) minmax(82px, 112px) 14px;
+        grid-template-columns: 20px 88px minmax(0, 1fr) minmax(82px, 112px) 14px;
       }
 
       .event:hover,
@@ -3130,11 +3130,11 @@ export function renderApp(): string {
         .event,
         .event-future {
           gap: 6px;
-          grid-template-columns: 18px 48px minmax(0, 1fr) minmax(66px, 92px);
+          grid-template-columns: 18px 76px minmax(0, 1fr) minmax(66px, 92px);
         }
 
         .event {
-          grid-template-columns: 18px 48px minmax(0, 1fr) minmax(58px, 82px) 12px;
+          grid-template-columns: 18px 76px minmax(0, 1fr) minmax(58px, 82px) 12px;
         }
 
         .record-timeline::before {
