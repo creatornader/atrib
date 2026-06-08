@@ -337,6 +337,30 @@ async function expectRunModeMenuAboveContent(page: Page): Promise<void> {
   expect(menuHit).toBe(true)
 }
 
+async function expectRunModeMenuLabelsContained(page: Page): Promise<void> {
+  const menuGeometry = await page.evaluate<{
+    buttonOverflow: boolean[]
+    menuWidth: number
+    textInsideMenu: boolean
+  }>(`(() => {
+    const menu = document.querySelector('#runModeActions')
+    if (!menu || menu.hidden) return { buttonOverflow: [], menuWidth: 0, textInsideMenu: false }
+    const menuRect = menu.getBoundingClientRect()
+    const buttons = Array.from(menu.querySelectorAll('button'))
+    return {
+      buttonOverflow: buttons.map((button) => button.scrollWidth > button.clientWidth + 1),
+      menuWidth: Math.round(menuRect.width),
+      textInsideMenu: buttons.every((button) => {
+        const rect = button.getBoundingClientRect()
+        return rect.left >= menuRect.left + 4 && rect.right <= menuRect.right - 4
+      }),
+    }
+  })()`)
+  expect(menuGeometry.menuWidth).toBeGreaterThanOrEqual(224)
+  expect(menuGeometry.buttonOverflow).toEqual([false, false])
+  expect(menuGeometry.textInsideMenu).toBe(true)
+}
+
 async function expectProgressPanelAtTop(page: Page): Promise<void> {
   await expect
     .poll(async () =>
@@ -391,20 +415,22 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       contentCenterDeltaX: number
       contentDisplay: string
       contentInsideButton: boolean
-      contentJustify: string
+      contentJustifyItems: string
       copyCenterDeltaX: number
-      iconCopyGap: number
+      copyDisplay: string
+      headingCenterDeltaX: number
+      headingDisplay: string
+      headingInsideButton: boolean
       iconInsideButton: boolean
       iconLabelGap: number
       iconLabelYDelta: number
-      iconTextBlockYDelta: number
       id: string
       justify: string
       labelFontSize: number
       labelFits: boolean
-      labelSmallCenterDelta: number
       labelWeight: number
       noLabelIconCollision: boolean
+      smallCenterDeltaX: number
       smallFits: boolean
       textAlign: string
     }>
@@ -414,12 +440,15 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
     const content = button.querySelector('.button-content')?.getBoundingClientRect()
     const icon = button.querySelector('.button-icon')?.getBoundingClientRect()
     const copy = button.querySelector('.action-copy')?.getBoundingClientRect()
+    const heading = button.querySelector('.action-heading')?.getBoundingClientRect()
     const label = button.querySelector('.button-label')?.getBoundingClientRect()
     const small = button.querySelector('.action-copy small')?.getBoundingClientRect()
     const labelElement = button.querySelector('.button-label')
     const smallElement = button.querySelector('.action-copy small')
     const buttonStyle = getComputedStyle(button)
     const contentElement = button.querySelector('.button-content')
+    const copyElement = button.querySelector('.action-copy')
+    const headingElement = button.querySelector('.action-heading')
     const labelStyle = labelElement ? getComputedStyle(labelElement) : null
     const smallStyle = smallElement ? getComputedStyle(smallElement) : null
     return {
@@ -433,14 +462,21 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
         ? Math.abs((content.left + content.width / 2) - (buttonRect.left + buttonRect.width / 2))
         : 999,
       contentDisplay: contentElement ? getComputedStyle(contentElement).display : '',
-      contentJustify: contentElement ? getComputedStyle(contentElement).justifyContent : '',
+      contentJustifyItems: contentElement ? getComputedStyle(contentElement).justifyItems : '',
       contentInsideButton: content
         ? content.left >= buttonRect.left && content.right <= buttonRect.right && content.top >= buttonRect.top && content.bottom <= buttonRect.bottom
         : false,
       copyCenterDeltaX: copy
         ? Math.abs((copy.left + copy.width / 2) - (buttonRect.left + buttonRect.width / 2))
         : 999,
-      iconCopyGap: icon && copy ? copy.left - icon.right : 0,
+      copyDisplay: copyElement ? getComputedStyle(copyElement).display : '',
+      headingCenterDeltaX: heading
+        ? Math.abs((heading.left + heading.width / 2) - (buttonRect.left + buttonRect.width / 2))
+        : 999,
+      headingDisplay: headingElement ? getComputedStyle(headingElement).display : '',
+      headingInsideButton: heading
+        ? heading.left >= buttonRect.left && heading.right <= buttonRect.right && heading.top >= buttonRect.top && heading.bottom <= buttonRect.bottom
+        : false,
       iconInsideButton: icon
         ? icon.left >= buttonRect.left && icon.right <= buttonRect.right && icon.top >= buttonRect.top && icon.bottom <= buttonRect.bottom
         : false,
@@ -448,18 +484,15 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       iconLabelYDelta: icon && label
         ? Math.abs((icon.top + icon.height / 2) - (label.top + label.height / 2))
         : 999,
-      iconTextBlockYDelta: icon && copy
-        ? Math.abs((icon.top + icon.height / 2) - (copy.top + copy.height / 2))
-        : 999,
       id: button.id,
       justify: buttonStyle.justifyContent,
       labelFontSize: labelStyle ? Number.parseFloat(labelStyle.fontSize) : 0,
       labelFits: label ? label.left >= buttonRect.left && label.right <= buttonRect.right : false,
-      labelSmallCenterDelta: label && small
-        ? Math.abs((label.left + label.width / 2) - (small.left + small.width / 2))
-        : 999,
       labelWeight: labelStyle ? Number.parseFloat(labelStyle.fontWeight) : 0,
       noLabelIconCollision: icon && label ? icon.right + 2 <= label.left : false,
+      smallCenterDeltaX: small
+        ? Math.abs((small.left + small.width / 2) - (buttonRect.left + buttonRect.width / 2))
+        : 999,
       smallFits: small ? small.left >= buttonRect.left && small.right <= buttonRect.right : false,
       textAlign: copy ? getComputedStyle(button.querySelector('.action-copy')).textAlign : '',
     }
@@ -468,18 +501,20 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
     expect(geometry.buttonDisplay).toBe('flex')
     expect(geometry.buttonInsideActions).toBe(true)
     expect(geometry.justify).toBe('center')
-    expect(geometry.contentDisplay).toBe('block')
-    expect(geometry.contentJustify).toBe('normal')
+    expect(geometry.contentDisplay).toBe('grid')
+    expect(geometry.contentJustifyItems).toBe('center')
+    expect(geometry.copyDisplay).toBe('grid')
+    expect(geometry.headingDisplay).toBe('flex')
     expect(geometry.textAlign).toBe('center')
     expect(geometry.contentInsideButton).toBe(true)
     expect(geometry.contentCenterDeltaX).toBeLessThanOrEqual(1)
     expect(geometry.copyCenterDeltaX, geometry.id).toBeLessThanOrEqual(1)
-    expect(geometry.labelSmallCenterDelta).toBeLessThanOrEqual(1)
-    expect(geometry.iconCopyGap).toBeGreaterThanOrEqual(-8)
-    expect(geometry.iconCopyGap).toBeLessThanOrEqual(10)
+    expect(geometry.headingCenterDeltaX, geometry.id).toBeLessThanOrEqual(1)
+    expect(geometry.smallCenterDeltaX, geometry.id).toBeLessThanOrEqual(1)
+    expect(geometry.headingInsideButton).toBe(true)
     expect(geometry.iconLabelGap).toBeGreaterThanOrEqual(6)
+    expect(geometry.iconLabelGap).toBeLessThanOrEqual(10)
     expect(geometry.iconInsideButton).toBe(true)
-    expect(geometry.iconTextBlockYDelta).toBeLessThanOrEqual(8)
     expect(geometry.iconLabelYDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.labelFontSize).toBeGreaterThanOrEqual(13)
     expect(geometry.labelWeight).toBeGreaterThanOrEqual(800)
@@ -1440,6 +1475,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#runModeActions [data-run-mode-action="open-json"]')).toHaveCount(0)
       await expect(page.locator('#runModeActions [data-run-mode-action="reset"]')).toHaveCount(0)
       await expectRunModeMenuAboveContent(page)
+      await expectRunModeMenuLabelsContained(page)
       await page.locator('[data-run-mode-action="toggle-follow"]').click()
       await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
       await page.locator('#runModeMenu').click()

@@ -1134,11 +1134,14 @@ export function renderApp(): string {
         box-shadow: 0 14px 32px rgba(18, 27, 42, 0.16);
         display: grid;
         left: 0;
-        min-width: 178px;
+        max-width: calc(100vw - 40px);
+        min-width: 224px;
+        overflow: hidden;
         padding: 5px;
         position: absolute;
         top: 40px;
-        z-index: 1000;
+        width: 224px;
+        z-index: 1200;
       }
 
       .header-actions-menu[hidden] {
@@ -1170,6 +1173,8 @@ export function renderApp(): string {
         display: grid;
         gap: 7px;
         grid-template-columns: 12px minmax(0, 1fr);
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .run-mode-menu button::before {
@@ -2116,12 +2121,13 @@ export function renderApp(): string {
       }
 
       .button-content {
-        display: block;
+        align-items: center;
+        display: grid;
         flex: 0 1 auto;
         height: 100%;
+        justify-items: center;
         max-width: 100%;
         min-width: 0;
-        position: relative;
         width: 100%;
       }
 
@@ -2132,20 +2138,24 @@ export function renderApp(): string {
       .action-copy {
         align-items: center;
         box-sizing: border-box;
-        display: flex;
+        display: grid;
         flex: 0 0 auto;
-        flex-direction: column;
         gap: 2px;
         justify-content: center;
-        left: 50%;
         max-width: calc(100% - 42px);
         min-width: 0;
         padding: 0;
-        position: absolute;
         text-align: center;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        width: max-content;
+        width: 100%;
+      }
+
+      .action-heading {
+        align-items: center;
+        display: inline-flex;
+        gap: 8px;
+        justify-content: center;
+        max-width: 100%;
+        min-width: 0;
       }
 
       .action-copy small {
@@ -2214,12 +2224,8 @@ export function renderApp(): string {
         flex: 0 0 16px;
         height: 16px;
         justify-content: center;
-        left: -11px;
         line-height: 0;
         margin: 0;
-        position: absolute;
-        top: calc(50% - 6px);
-        transform: translateY(-50%);
         width: 16px;
       }
 
@@ -2251,11 +2257,6 @@ export function renderApp(): string {
         .danger {
           padding-left: 14px;
           padding-right: 14px;
-        }
-
-        .primary .button-icon,
-        .danger .button-icon {
-          left: -3px;
         }
 
         .action-copy {
@@ -3276,10 +3277,6 @@ export function renderApp(): string {
           white-space: nowrap;
         }
 
-        .button-icon {
-          left: -3px;
-        }
-
         .event,
         .event-future {
           gap: 10px;
@@ -3353,10 +3350,6 @@ export function renderApp(): string {
 
         .rail-stepper {
           gap: 8px;
-        }
-
-        .button-icon {
-          left: -3px;
         }
 
         .actions .primary,
@@ -4701,9 +4694,9 @@ export function renderApp(): string {
             <span>Approval signs the exact payload hash, connector id, and target file before execution resumes.</span>
           </div>
           <div class="actions">
-            <button class="primary" id="approve" aria-label="Approve and resume" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span><span class="action-copy"><span class="button-label">Approve &amp; resume</span><small>Allow MCP execution to continue</small></span></span></button>
-            <button class="danger" id="reject" aria-label="Reject" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 4.5 7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span><span class="action-copy"><span class="button-label">Reject</span><small>Cancel this proposed action</small></span></span></button>
-            <button class="secondary" id="requestChanges" aria-label="Request changes" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v6H7l-3 3V4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="action-copy"><span class="button-label">Request changes</span><small>Send feedback to agent</small></span></span></button>
+            <button class="primary" id="approve" aria-label="Approve and resume" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span><span class="button-label">Approve &amp; resume</span></span><small>Allow MCP execution to continue</small></span></span></button>
+            <button class="danger" id="reject" aria-label="Reject" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 4.5 7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span><span class="button-label">Reject</span></span><small>Cancel this proposed action</small></span></span></button>
+            <button class="secondary" id="requestChanges" aria-label="Request changes" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v6H7l-3 3V4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="button-label">Request changes</span></span><small>Send feedback to agent</small></span></span></button>
           </div>
         \`;
         document.querySelector('#riskDetailsToggle')?.addEventListener('click', (event) => {
