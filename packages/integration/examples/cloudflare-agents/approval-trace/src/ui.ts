@@ -1935,8 +1935,8 @@ export function renderApp(): string {
 
       .diff pre {
         font-size: 10px;
-        line-height: 13.4px;
-        max-height: 313px;
+        line-height: 14.2px;
+        max-height: 315px;
       }
 
       .diff-code {
@@ -1947,10 +1947,10 @@ export function renderApp(): string {
         color: #102033;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 10px;
-        line-height: 13.4px;
-        max-height: 313px;
+        line-height: 14.2px;
+        max-height: 315px;
         max-width: 100%;
-        height: 298px;
+        height: 315px;
         overflow: auto;
         padding: 8px 0;
         width: 100%;
@@ -1961,7 +1961,7 @@ export function renderApp(): string {
         column-gap: 8px;
         display: grid;
         grid-template-columns: 22px minmax(0, 1fr);
-        min-height: 13.4px;
+        min-height: 14.2px;
         min-width: 0;
         padding: 0 12px;
         width: auto;
@@ -3165,7 +3165,7 @@ export function renderApp(): string {
         font-size: 12px;
         font-weight: 750;
         justify-content: space-between;
-        margin: 15px 0 -4px;
+        margin: 0 0 -4px;
       }
 
       .risk-details-toggle svg {

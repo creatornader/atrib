@@ -475,8 +475,8 @@ async function expectDiffRowsFillReferenceFrame(page: Page): Promise<void> {
       topGap: Math.round((first.top - code.top) * 100) / 100,
     }
   })()`)
-  expect(rhythm.lineHeight).toBeGreaterThanOrEqual(13)
-  expect(rhythm.lineHeight).toBeLessThanOrEqual(14)
+  expect(rhythm.lineHeight).toBeGreaterThanOrEqual(14)
+  expect(rhythm.lineHeight).toBeLessThanOrEqual(14.4)
   expect(rhythm.topGap).toBeGreaterThanOrEqual(7)
   expect(rhythm.topGap).toBeLessThanOrEqual(11)
   expect(rhythm.bottomGap).toBeGreaterThanOrEqual(7)
@@ -944,7 +944,8 @@ async function expectReferenceDesktopCenterStack(page: Page): Promise<void> {
       riskBarHeight: Math.round(riskBar.height),
     }
   })()`)
-  expect(stackGeometry.diffCodeHeight).toBeGreaterThanOrEqual(298)
+  expect(stackGeometry.diffCodeHeight).toBeGreaterThanOrEqual(313)
+  expect(stackGeometry.diffCodeHeight).toBeLessThanOrEqual(316)
   expect(stackGeometry.actionBottomGap).toBeGreaterThanOrEqual(12)
   expect(stackGeometry.actionBottomGap).toBeLessThanOrEqual(18)
   expect(stackGeometry.actionsY).toBeGreaterThanOrEqual(690)
