@@ -2509,7 +2509,8 @@ export function renderApp(): string {
 
       .signer-icon {
         align-items: center;
-        border-radius: 7px;
+        background: transparent;
+        border-radius: 0;
         display: inline-flex;
         height: 22px;
         justify-content: center;
@@ -2517,22 +2518,20 @@ export function renderApp(): string {
       }
 
       .signer-icon svg {
-        height: 15px;
-        width: 15px;
+        display: block;
+        height: 20px;
+        width: 20px;
       }
 
       .signer-icon.agent {
-        background: #e8f2ff;
         color: #0969da;
       }
 
       .signer-icon.human {
-        background: #fff3df;
         color: #c76a00;
       }
 
       .signer-icon.mcp {
-        background: #e9f7ef;
         color: #078861;
       }
 
@@ -3164,13 +3163,13 @@ export function renderApp(): string {
         }
 
         .signer-icon {
-          height: 20px;
-          width: 20px;
+          height: 22px;
+          width: 22px;
         }
 
         .signer-icon svg {
-          height: 13px;
-          width: 13px;
+          height: 20px;
+          width: 20px;
         }
 
         .signer-row strong,
@@ -3922,9 +3921,9 @@ export function renderApp(): string {
           return '<span class="signer-icon human"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0" fill="currentColor"/></svg></span>';
         }
         if (kind === 'mcp') {
-          return '<span class="signer-icon mcp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v4h4v6h-4v4H9v-4H5V7h4V3Z" fill="currentColor"/></svg></span>';
+          return '<span class="signer-icon mcp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v4h2.2a2.3 2.3 0 1 1 0 4.6H15V16h-4.4v2.2a2.3 2.3 0 1 1-4.6 0V16H3v-5h3.2a2 2 0 0 0 0-4H3V3h6Z" fill="currentColor"/></svg></span>';
         }
-        return '<span class="signer-icon agent"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v3h3v9a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V7h3V4Zm2 0v3h4V4h-4Zm-1 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm6 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm-5 3h4v-2h-4v2Z" fill="currentColor"/></svg></span>';
+        return '<span class="signer-icon agent"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4h4v3h-4V4Zm-2 4h8a3 3 0 0 1 3 3v4a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-4a3 3 0 0 1 3-3Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"/><path d="M9 12h.01M15 12h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.8"/><path d="M9 15h6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span>';
       }
 
       function signerSignature(run, signer) {

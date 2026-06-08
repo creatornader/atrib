@@ -50,6 +50,7 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expect(page.locator('#answer')).toContainText('Human review halted')
   await expect(page.locator('#answer')).toContainText('Execution is stopped')
   await expectPendingSignerHashReadable(page)
+  await expectReferenceSignerIconTreatment(page)
   await expectReferenceLeftProgressTypography(page)
 }
 
@@ -625,6 +626,49 @@ async function expectPendingSignerHashReadable(page: Page): Promise<void> {
   expect(signature.slotWidth).toBeGreaterThanOrEqual(112)
   expect(signature.hashWidth).toBeGreaterThanOrEqual(76)
   expect(signature.visibleHashFits).toBe(true)
+}
+
+async function expectReferenceSignerIconTreatment(page: Page): Promise<void> {
+  const icons = await page.evaluate<
+    Array<{
+      background: string
+      color: string
+      iconClass: string
+      iconHeight: number
+      iconWidth: number
+      svgHeight: number
+      svgWidth: number
+    }>
+  >(`Array.from(document.querySelectorAll('.signer-icon')).map((icon) => {
+    const svg = icon.querySelector('svg')
+    const iconRect = icon.getBoundingClientRect()
+    const svgRect = svg?.getBoundingClientRect()
+    const style = getComputedStyle(icon)
+    return {
+      background: style.backgroundColor,
+      color: style.color,
+      iconClass: String(icon.className),
+      iconHeight: Math.round(iconRect.height),
+      iconWidth: Math.round(iconRect.width),
+      svgHeight: Math.round(svgRect?.height ?? 0),
+      svgWidth: Math.round(svgRect?.width ?? 0),
+    }
+  })`)
+  expect(icons).toHaveLength(3)
+  const [agent, human, mcp] = icons
+  for (const icon of icons) {
+    expect(icon.background).toBe('rgba(0, 0, 0, 0)')
+    expect(icon.iconWidth).toBe(22)
+    expect(icon.iconHeight).toBe(22)
+    expect(icon.svgWidth).toBe(20)
+    expect(icon.svgHeight).toBe(20)
+  }
+  expect(agent.iconClass).toContain('agent')
+  expect(agent.color).toBe('rgb(9, 105, 218)')
+  expect(human.iconClass).toContain('human')
+  expect(human.color).toBe('rgb(199, 106, 0)')
+  expect(mcp.iconClass).toContain('mcp')
+  expect(mcp.color).toBe('rgb(7, 136, 97)')
 }
 
 async function expectReferenceReceiptJsonSyntax(page: Page): Promise<void> {
