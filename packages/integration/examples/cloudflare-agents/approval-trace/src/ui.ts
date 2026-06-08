@@ -5132,6 +5132,10 @@ export function renderApp(): string {
           renderBootProgress(0, run);
           await sleep(1700);
           for (let index = 1; index < bootStages.length; index += 1) {
+            if (bootStages[index]?.key === 'halt') {
+              render(run);
+              return;
+            }
             renderBootProgress(index, run);
             await sleep(1700);
           }
