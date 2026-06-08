@@ -276,13 +276,17 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       buttonInsideActions: boolean
       captionFontSize: number
       captionMuted: boolean
+      contentCenterDeltaX: number
       contentDisplay: string
       contentInsideButton: boolean
+      contentJustify: string
       copyLeftAlignDelta: number
       iconCopyGap: number
       iconInsideButton: boolean
       iconLabelYDelta: number
       iconTextBlockYDelta: number
+      id: string
+      justify: string
       labelFontSize: number
       labelFits: boolean
       labelWeight: number
@@ -290,6 +294,7 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       smallLeftAlignDelta: number
       smallFits: boolean
       textAlign: string
+      visualGroupCenterDeltaX: number
     }>
   >(`Array.from(document.querySelectorAll('.actions > button')).map((button) => {
     const actionsRect = document.querySelector('.actions')?.getBoundingClientRect()
@@ -305,6 +310,8 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
     const contentElement = button.querySelector('.button-content')
     const labelStyle = labelElement ? getComputedStyle(labelElement) : null
     const smallStyle = smallElement ? getComputedStyle(smallElement) : null
+    const visualLeft = icon ? icon.left : content?.left ?? buttonRect.left
+    const visualRight = Math.max(icon?.right ?? 0, label?.right ?? 0, small?.right ?? 0)
     return {
       buttonDisplay: buttonStyle.display,
       buttonInsideActions: actionsRect
@@ -312,7 +319,11 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
         : false,
       captionFontSize: smallStyle ? Number.parseFloat(smallStyle.fontSize) : 0,
       captionMuted: button.id === 'approve' || (smallStyle ? smallStyle.color === 'rgb(71, 85, 105)' : false),
+      contentCenterDeltaX: content
+        ? Math.abs((content.left + content.width / 2) - (buttonRect.left + buttonRect.width / 2))
+        : 999,
       contentDisplay: contentElement ? getComputedStyle(contentElement).display : '',
+      contentJustify: contentElement ? getComputedStyle(contentElement).justifyContent : '',
       contentInsideButton: content
         ? content.left >= buttonRect.left && content.right <= buttonRect.right && content.top >= buttonRect.top && content.bottom <= buttonRect.bottom
         : false,
@@ -327,6 +338,8 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       iconTextBlockYDelta: icon && copy
         ? Math.abs((icon.top + icon.height / 2) - (copy.top + copy.height / 2))
         : 999,
+      id: button.id,
+      justify: buttonStyle.justifyContent,
       labelFontSize: labelStyle ? Number.parseFloat(labelStyle.fontSize) : 0,
       labelFits: label ? label.left >= buttonRect.left && label.right <= buttonRect.right : false,
       labelWeight: labelStyle ? Number.parseFloat(labelStyle.fontWeight) : 0,
@@ -334,14 +347,19 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       smallLeftAlignDelta: small && label ? Math.abs(small.left - label.left) : 999,
       smallFits: small ? small.left >= buttonRect.left && small.right <= buttonRect.right : false,
       textAlign: copy ? getComputedStyle(button.querySelector('.action-copy')).textAlign : '',
+      visualGroupCenterDeltaX: Math.abs(((visualLeft + visualRight) / 2) - (buttonRect.left + buttonRect.width / 2)),
     }
   })`)
   for (const geometry of buttonGeometry) {
     expect(geometry.buttonDisplay).toBe('flex')
     expect(geometry.buttonInsideActions).toBe(true)
+    expect(geometry.justify).toBe('center')
     expect(geometry.contentDisplay).toBe('flex')
+    expect(geometry.contentJustify).toBe('center')
     expect(geometry.textAlign).toBe('left')
     expect(geometry.contentInsideButton).toBe(true)
+    expect(geometry.contentCenterDeltaX).toBeLessThanOrEqual(1)
+    expect(geometry.visualGroupCenterDeltaX, geometry.id).toBeLessThanOrEqual(3)
     expect(geometry.copyLeftAlignDelta).toBeLessThanOrEqual(1)
     expect(geometry.smallLeftAlignDelta).toBeLessThanOrEqual(1)
     expect(geometry.iconCopyGap).toBeGreaterThanOrEqual(7)

@@ -2066,7 +2066,7 @@ export function renderApp(): string {
       .danger {
         align-items: center;
         display: flex;
-        justify-content: flex-start;
+        justify-content: center;
         min-height: 58px;
         padding: 10px 14px;
         position: relative;
@@ -2082,13 +2082,14 @@ export function renderApp(): string {
 
       .button-content {
         align-items: center;
-        display: flex;
+        display: inline-flex;
+        flex: 0 1 auto;
         gap: 9px;
-        justify-content: flex-start;
+        justify-content: center;
         max-width: 100%;
         min-width: 0;
         position: relative;
-        width: 100%;
+        width: fit-content;
       }
 
       .button-content::after {
@@ -2099,14 +2100,15 @@ export function renderApp(): string {
         align-items: flex-start;
         box-sizing: border-box;
         display: flex;
+        flex: 0 0 auto;
         flex-direction: column;
         gap: 2px;
         justify-content: center;
         max-width: 100%;
-        min-width: 0;
+        min-width: max-content;
         padding: 0;
         text-align: left;
-        width: auto;
+        width: max-content;
       }
 
       .action-copy small {
@@ -2140,7 +2142,7 @@ export function renderApp(): string {
       }
 
       .primary .action-copy small {
-        font-size: 9px;
+        font-size: 8px;
         font-weight: 500;
         letter-spacing: 0;
         overflow: visible;
