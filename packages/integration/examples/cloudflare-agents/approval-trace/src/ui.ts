@@ -1349,6 +1349,8 @@ export function renderApp(): string {
       }
 
       .step.halted .step-index {
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #f97316 100%);
+        border-color: #f59e0b;
         font-size: 0;
         position: relative;
       }
@@ -1356,13 +1358,13 @@ export function renderApp(): string {
       .step.halted .step-index::before,
       .step.halted .step-index::after {
         background: #fff;
-        border-radius: 2px;
+        border-radius: 3px;
         content: "";
-        height: 15px;
+        height: 14px;
         position: absolute;
         top: 50%;
         transform: translateY(-50%);
-        width: 4px;
+        width: 3px;
       }
 
       .step.halted .step-index::before {
@@ -1370,7 +1372,7 @@ export function renderApp(): string {
       }
 
       .step.halted .step-index::after {
-        right: 13px;
+        right: 12px;
       }
 
       .step-copy strong {

@@ -660,6 +660,15 @@ async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
       height: number
       width: number
     } | null
+    haltMarker: {
+      afterRight: number
+      afterWidth: number
+      backgroundImage: string
+      beforeLeft: number
+      beforeWidth: number
+      barHeight: number
+      borderColor: string
+    } | null
     connectors: Array<{
       backgroundColor: string
       backgroundImage: string
@@ -677,6 +686,10 @@ async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
     const badge = document.querySelector('[data-step-badge="halt"]')
     const badgeRect = badge?.getBoundingClientRect()
     const badgeStyle = badge ? getComputedStyle(badge) : null
+    const marker = document.querySelector('[data-step="halt"] .step-index')
+    const markerStyle = marker ? getComputedStyle(marker) : null
+    const markerBefore = marker ? getComputedStyle(marker, '::before') : null
+    const markerAfter = marker ? getComputedStyle(marker, '::after') : null
     return {
       badge: badge && badgeRect && badgeStyle ? {
         color: badgeStyle.color,
@@ -684,6 +697,15 @@ async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
         fontWeight: Number.parseFloat(badgeStyle.fontWeight),
         height: Math.round(badgeRect.height),
         width: Math.round(badgeRect.width),
+      } : null,
+      haltMarker: markerStyle && markerBefore && markerAfter ? {
+        afterRight: Number.parseFloat(markerAfter.right),
+        afterWidth: Number.parseFloat(markerAfter.width),
+        backgroundImage: markerStyle.backgroundImage,
+        beforeLeft: Number.parseFloat(markerBefore.left),
+        beforeWidth: Number.parseFloat(markerBefore.width),
+        barHeight: Number.parseFloat(markerBefore.height),
+        borderColor: markerStyle.borderColor,
       } : null,
       connectors: Array.from(document.querySelectorAll('.step:not(:last-child)')).map((step) => {
         const after = getComputedStyle(step, '::after')
@@ -728,6 +750,13 @@ async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
   expect(railGeometry.badge?.height).toBeLessThanOrEqual(18)
   expect(railGeometry.badge?.width).toBeLessThanOrEqual(112)
   expect(railGeometry.badge?.color).toBe('rgb(164, 73, 0)')
+  expect(railGeometry.haltMarker?.backgroundImage).toContain('linear-gradient')
+  expect(railGeometry.haltMarker?.borderColor).toBe('rgb(245, 158, 11)')
+  expect(railGeometry.haltMarker?.beforeLeft).toBe(13)
+  expect(railGeometry.haltMarker?.afterRight).toBe(12)
+  expect(railGeometry.haltMarker?.beforeWidth).toBe(3)
+  expect(railGeometry.haltMarker?.afterWidth).toBe(3)
+  expect(railGeometry.haltMarker?.barHeight).toBe(14)
   const connectors = Object.fromEntries(
     railGeometry.connectors.map((connector) => [connector.step, connector]),
   )
