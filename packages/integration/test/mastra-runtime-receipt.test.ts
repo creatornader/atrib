@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execFile } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { canonicalRecord, genesisChainRoot, hexEncode, sha256, verifyRecord } from '@atrib/mcp'
@@ -9,6 +10,9 @@ import { MastraRuntimeReceiptRecorder } from '../src/mastra-runtime-receipt.js'
 
 const execFileAsync = promisify(execFile)
 const workspaceRoot = join(process.cwd(), '..', '..')
+const integrationPackageJson = JSON.parse(
+  readFileSync(join(process.cwd(), 'package.json'), 'utf8'),
+) as { devDependencies: Record<string, string> }
 const tsxBin = join(
   workspaceRoot,
   'node_modules',
@@ -58,8 +62,8 @@ describe('Mastra runtime receipt example', () => {
 
     expect(result.ok).toBe(true)
     expect(result.mastra).toMatchObject({
-      core: '1.38.0',
-      mcp: '1.9.0',
+      core: dependencyVersion('@mastra/core'),
+      mcp: dependencyVersion('@mastra/mcp'),
       server: 'MCPServer',
       client: 'MCPClient',
       transport: 'stdio',
@@ -133,7 +137,7 @@ describe('Mastra runtime receipt example', () => {
 
     expect(result.ok).toBe(true)
     expect(result.mastra).toEqual({
-      core: '1.38.0',
+      core: dependencyVersion('@mastra/core'),
       storage: 'InMemoryStore',
       workflow: 'createWorkflow/createStep',
       run: 'Run.start/Run.resume',
@@ -214,3 +218,9 @@ describe('Mastra runtime receipt example', () => {
     expect(await verifyRecord(records[1]!)).toBe(true)
   })
 })
+
+function dependencyVersion(name: string): string {
+  const version = integrationPackageJson.devDependencies[name]
+  if (!version) throw new Error(`missing integration devDependency: ${name}`)
+  return version
+}
