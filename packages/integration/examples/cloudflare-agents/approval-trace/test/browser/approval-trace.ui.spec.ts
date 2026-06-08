@@ -633,6 +633,59 @@ async function expectReceiptPanelFitsReferenceViewport(page: Page): Promise<void
   expect(receiptFit.preHeight).toBeLessThanOrEqual(188)
 }
 
+async function expectReferenceReceiptToolbarRhythm(page: Page): Promise<void> {
+  const toolbar = await page.evaluate<{
+    copyX: number
+    downloadWidth: number
+    downloadX: number
+    formatFontSize: number
+    formatWidth: number
+    formatX: number
+    labelFontSize: number
+    labelX: number
+    titleWidth: number
+    titleX: number
+  }>(`(() => {
+    const title = document.querySelector('.receipt-toolbar h2')
+    const label = document.querySelector('.receipt-controls .label')
+    const format = document.querySelector('#receiptFormat')
+    const copy = document.querySelector('#copyReceipt')
+    const download = document.querySelector('#downloadReceipt')
+    const titleRect = title?.getBoundingClientRect()
+    const labelRect = label?.getBoundingClientRect()
+    const formatRect = format?.getBoundingClientRect()
+    const copyRect = copy?.getBoundingClientRect()
+    const downloadRect = download?.getBoundingClientRect()
+    return {
+      copyX: Math.round(copyRect?.x ?? 0),
+      downloadWidth: Math.round(downloadRect?.width ?? 0),
+      downloadX: Math.round(downloadRect?.x ?? 0),
+      formatFontSize: Number.parseFloat(format ? getComputedStyle(format).fontSize : '0'),
+      formatWidth: Math.round(formatRect?.width ?? 0),
+      formatX: Math.round(formatRect?.x ?? 0),
+      labelFontSize: Number.parseFloat(label ? getComputedStyle(label).fontSize : '0'),
+      labelX: Math.round(labelRect?.x ?? 0),
+      titleWidth: Math.round(titleRect?.width ?? 0),
+      titleX: Math.round(titleRect?.x ?? 0),
+    }
+  })()`)
+  expect(toolbar.titleX).toBeGreaterThanOrEqual(24)
+  expect(toolbar.titleX).toBeLessThanOrEqual(26)
+  expect(toolbar.titleWidth).toBe(123)
+  expect(toolbar.labelX).toBeGreaterThanOrEqual(155)
+  expect(toolbar.labelX).toBeLessThanOrEqual(157)
+  expect(toolbar.labelFontSize).toBe(11)
+  expect(toolbar.formatX).toBeGreaterThanOrEqual(203)
+  expect(toolbar.formatX).toBeLessThanOrEqual(205)
+  expect(toolbar.formatWidth).toBe(121)
+  expect(toolbar.formatFontSize).toBe(12)
+  expect(toolbar.copyX).toBeGreaterThanOrEqual(332)
+  expect(toolbar.copyX).toBeLessThanOrEqual(334)
+  expect(toolbar.downloadX).toBeGreaterThanOrEqual(368)
+  expect(toolbar.downloadX).toBeLessThanOrEqual(370)
+  expect(toolbar.downloadWidth).toBe(128)
+}
+
 async function expectReferenceDesktopCenterStack(page: Page): Promise<void> {
   const stackGeometry = await page.evaluate<{
     actionBottomGap: number
@@ -930,6 +983,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectTraceRowsReadable(page)
       await expectReferenceTimelineSpacing(page)
       await expectReceiptPanelFitsReferenceViewport(page)
+      await expectReferenceReceiptToolbarRhythm(page)
 
       const visibleTimes = await page.locator('#answer .progress-time').allTextContents()
       const populatedTimes = visibleTimes.filter((time) => time !== '-')

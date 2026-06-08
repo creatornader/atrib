@@ -2670,16 +2670,19 @@ export function renderApp(): string {
       .receipt-toolbar {
         align-items: center;
         display: flex;
-        gap: 12px;
+        gap: 8px;
         justify-content: flex-start;
         min-height: 38px;
-        padding: 0 14px;
+        padding: 0 14px 0 24px;
       }
 
       .receipt-toolbar h2 {
         border-bottom: 0;
+        font-size: 11px;
+        letter-spacing: 0.025em;
         min-height: auto;
         padding: 0;
+        white-space: nowrap;
       }
 
       .receipt-controls {
@@ -2690,8 +2693,9 @@ export function renderApp(): string {
 
       .receipt-controls .label {
         color: var(--ink);
-        font-size: 12px;
+        font-size: 11px;
         letter-spacing: 0;
+        line-height: 1;
         text-transform: none;
       }
 
@@ -2707,6 +2711,7 @@ export function renderApp(): string {
         height: 26px;
         max-width: 156px;
         padding: 0 6px;
+        width: 121px;
       }
 
       .icon-button {
@@ -2716,12 +2721,12 @@ export function renderApp(): string {
         border-radius: 6px;
         color: var(--ink);
         display: inline-flex;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 700;
-        gap: 7px;
+        gap: 6px;
         height: 26px;
         justify-content: center;
-        padding: 0 9px;
+        padding: 0 8px;
       }
 
       .icon-button:disabled {
@@ -2751,9 +2756,19 @@ export function renderApp(): string {
         padding: 0;
       }
 
+      #downloadReceipt {
+        gap: 5px;
+        padding: 0 5px;
+      }
+
       .icon-button svg {
         height: 14px;
         width: 14px;
+      }
+
+      #downloadReceipt svg {
+        height: 13px;
+        width: 13px;
       }
 
       .receipt-shell {
