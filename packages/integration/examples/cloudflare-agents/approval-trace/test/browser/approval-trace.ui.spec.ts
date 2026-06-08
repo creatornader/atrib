@@ -1318,6 +1318,7 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
       isRecordRow: boolean
       label: string
       markerLeft: number
+      markerRailGap: number
       markerToSignerGap: number | null
       markerToTimeGap: number
       rowClass: string
@@ -1330,6 +1331,7 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
   }>(`(() => ({
     viewportWidth: window.innerWidth,
     rows: Array.from(document.querySelectorAll('#timeline .event, #timeline .event-future')).map((row) => {
+      const rowRect = row.getBoundingClientRect()
       const marker = row.querySelector('.event-marker')?.getBoundingClientRect()
       const time = row.querySelector('.event-time')?.getBoundingClientRect()
       const copy = row.querySelector('.event-copy')?.getBoundingClientRect()
@@ -1346,6 +1348,7 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
         isRecordRow: row.classList.contains('event'),
         label: row.querySelector('strong')?.textContent?.trim() ?? '',
         markerLeft: marker ? Math.round(marker.left) : 0,
+        markerRailGap: marker ? Math.round(marker.left - rowRect.left - 3) : 0,
         markerToSignerGap: marker && signerRect ? Math.round(signerRect.left - marker.right) : null,
         markerToTimeGap: marker && time ? Math.round(time.left - marker.right) : 0,
         rowClass: row.className,
@@ -1364,6 +1367,7 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
     expect(row.timeLeft).toBeLessThan(row.copyLeft)
     expect(row.copyLeft).toBeLessThan(row.hashLeft)
     if (row.cueLeft !== null) expect(row.hashLeft).toBeLessThan(row.cueLeft)
+    expect(row.markerRailGap).toBeGreaterThanOrEqual(5)
     expect(row.markerToTimeGap).toBeGreaterThanOrEqual(9)
     expect(row.markerToTimeGap).toBeLessThanOrEqual(12)
     expect(row.timestampToCopyOffset).toBeGreaterThanOrEqual(minTimestampOffset)

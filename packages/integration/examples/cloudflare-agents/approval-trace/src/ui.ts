@@ -2285,7 +2285,7 @@ export function renderApp(): string {
         background: #cfd8e5;
         bottom: 26px;
         content: "";
-        left: 9px;
+        left: 17px;
         position: absolute;
         top: 24px;
         width: 2px;
@@ -2298,12 +2298,13 @@ export function renderApp(): string {
         background: transparent;
         border: 0;
         border-radius: 0;
+        box-sizing: border-box;
         display: grid;
         gap: 10px;
         grid-template-columns: 20px 94px minmax(0, 1fr) minmax(82px, 120px);
         min-height: 44px;
         min-width: 0;
-        padding: 4px 0;
+        padding: 4px 0 4px 8px;
       }
 
       .event {
@@ -3288,7 +3289,7 @@ export function renderApp(): string {
         }
 
         .record-timeline::before {
-          left: 8px;
+          left: 16px;
         }
 
         .integrity-row {
