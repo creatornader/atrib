@@ -2342,6 +2342,10 @@ export function renderApp(): string {
         background: #fff;
         border: 1.5px solid #a8b4c3;
         box-shadow: none;
+        color: #5d687a;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
       }
 
       .event-copy {
@@ -3897,10 +3901,10 @@ export function renderApp(): string {
           });
         }
         if (!labels.has('execution')) {
-          rows.push({ name: 'mcp.execution.resumed', detail: 'Pending approval', marker: 'future' });
+          rows.push({ name: 'mcp.execution.resumed', detail: 'Pending approval', marker: 'future', markerLabel: '4' });
         }
         if (!labels.has('handoff')) {
-          rows.push({ name: 'audit.ready', detail: 'Pending', marker: 'future' });
+          rows.push({ name: 'audit.ready', detail: 'Pending', marker: 'future', markerLabel: '5' });
         }
         return rows;
       }
@@ -4569,7 +4573,7 @@ export function renderApp(): string {
             }).join('')}
             \${futureTraceRows(run).map((row) => \`
               <div class="event-future \${row.marker === 'pending' ? 'selected' : ''}">
-                <span class="event-marker \${row.marker}"></span>
+                <span class="event-marker \${row.marker}">\${row.markerLabel ?? ''}</span>
                 <span class="event-time">\${row.record ? displayRecordTime(row.record, row.displayLabel) : '-'}</span>
                 <span class="event-copy">
                   <strong>\${row.name}</strong>

@@ -44,6 +44,9 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expect(page.locator('#timeline .event-future .event-cue')).toHaveCount(0)
   await expect(page.locator('#timeline .event.selected')).toHaveCount(0)
   await expect(page.locator('#timeline .event-future.selected')).toContainText('human.review.halted')
+  await expect
+    .poll(async () => page.locator('#timeline .event-future .event-marker').allTextContents())
+    .toEqual(['', '4', '5'])
   await expect(page.locator('#answer')).toContainText('Human review halted')
   await expect(page.locator('#answer')).toContainText('Execution is stopped')
   await expectPendingSignerHashReadable(page)
