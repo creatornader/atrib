@@ -2104,15 +2104,13 @@ export function renderApp(): string {
       }
 
       .button-content {
-        align-items: center;
-        display: inline-flex;
+        display: block;
         flex: 0 1 auto;
-        gap: 9px;
-        justify-content: center;
+        height: 100%;
         max-width: 100%;
         min-width: 0;
         position: relative;
-        width: fit-content;
+        width: 100%;
       }
 
       .button-content::after {
@@ -2127,10 +2125,14 @@ export function renderApp(): string {
         flex-direction: column;
         gap: 2px;
         justify-content: center;
-        max-width: 100%;
-        min-width: max-content;
+        left: 50%;
+        max-width: calc(100% - 42px);
+        min-width: 0;
         padding: 0;
+        position: absolute;
         text-align: center;
+        top: 50%;
+        transform: translate(-50%, -50%);
         width: max-content;
       }
 
@@ -2197,20 +2199,22 @@ export function renderApp(): string {
         align-items: center;
         border-radius: 999px;
         display: inline-flex;
-        flex: 0 0 18px;
-        height: 18px;
+        flex: 0 0 16px;
+        height: 16px;
         justify-content: center;
+        left: -3px;
         line-height: 0;
         margin: 0;
-        position: static;
-        transform: none;
-        width: 18px;
+        position: absolute;
+        top: calc(50% - 6px);
+        transform: translateY(-50%);
+        width: 16px;
       }
 
       .button-icon svg {
         display: block;
-        height: 15px;
-        width: 15px;
+        height: 14px;
+        width: 14px;
       }
 
       .primary .button-icon {
@@ -2703,8 +2707,14 @@ export function renderApp(): string {
 
       .trace-integrity .event-action {
         font-size: 12px;
+        gap: 4px;
         justify-self: end;
         white-space: nowrap;
+      }
+
+      .trace-integrity .event-action svg {
+        height: 12px;
+        width: 12px;
       }
 
       .verify-row {
@@ -4749,7 +4759,7 @@ export function renderApp(): string {
             <div class="integrity-list">
               <div class="integrity-row"><strong>Merkle root</strong><span class="hash">\${run.records[0]?.record_hash ?? 'pending'}</span>\${copyIcon(run.records[0]?.record_hash ?? '', 'Merkle root')}</div>
               <div class="integrity-row"><strong>Log hash</strong><span class="hash">\${run.records[1]?.record_hash ?? 'pending'}</span>\${copyIcon(run.records[1]?.record_hash ?? '', 'log hash')}</div>
-              <div class="integrity-row proof-row"><strong>Proof status</strong><span class="value proof-status-value"><span class="integrity-proof-dot" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="m5.4 8.1 1.8 1.8 3.5-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="proof-status-text">Included in Cloudflare Integrity Log</span></span><a class="event-action" href="\${run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id}" target="_blank" rel="noreferrer">View proof</a></div>
+              <div class="integrity-row proof-row"><strong>Proof status</strong><span class="value proof-status-value"><span class="integrity-proof-dot" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="m5.4 8.1 1.8 1.8 3.5-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="proof-status-text">Included in Cloudflare Integrity Log</span></span><a class="event-action" href="\${run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id}" target="_blank" rel="noreferrer">View proof \${actionGlyph('external')}</a></div>
             </div>
           </div>
         \`

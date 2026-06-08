@@ -324,8 +324,10 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       contentDisplay: string
       contentInsideButton: boolean
       contentJustify: string
+      copyCenterDeltaX: number
       iconCopyGap: number
       iconInsideButton: boolean
+      iconLabelGap: number
       iconLabelYDelta: number
       iconTextBlockYDelta: number
       id: string
@@ -337,7 +339,6 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       noLabelIconCollision: boolean
       smallFits: boolean
       textAlign: string
-      visualGroupCenterDeltaX: number
     }>
   >(`Array.from(document.querySelectorAll('.actions > button')).map((button) => {
     const actionsRect = document.querySelector('.actions')?.getBoundingClientRect()
@@ -353,8 +354,6 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
     const contentElement = button.querySelector('.button-content')
     const labelStyle = labelElement ? getComputedStyle(labelElement) : null
     const smallStyle = smallElement ? getComputedStyle(smallElement) : null
-    const visualLeft = icon ? icon.left : content?.left ?? buttonRect.left
-    const visualRight = Math.max(icon?.right ?? 0, label?.right ?? 0, small?.right ?? 0)
     return {
       buttonDisplay: buttonStyle.display,
       buttonInsideActions: actionsRect
@@ -370,10 +369,14 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       contentInsideButton: content
         ? content.left >= buttonRect.left && content.right <= buttonRect.right && content.top >= buttonRect.top && content.bottom <= buttonRect.bottom
         : false,
+      copyCenterDeltaX: copy
+        ? Math.abs((copy.left + copy.width / 2) - (buttonRect.left + buttonRect.width / 2))
+        : 999,
       iconCopyGap: icon && copy ? copy.left - icon.right : 0,
       iconInsideButton: icon
         ? icon.left >= buttonRect.left && icon.right <= buttonRect.right && icon.top >= buttonRect.top && icon.bottom <= buttonRect.bottom
         : false,
+      iconLabelGap: icon && label ? label.left - icon.right : 0,
       iconLabelYDelta: icon && label
         ? Math.abs((icon.top + icon.height / 2) - (label.top + label.height / 2))
         : 999,
@@ -391,25 +394,25 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       noLabelIconCollision: icon && label ? icon.right + 2 <= label.left : false,
       smallFits: small ? small.left >= buttonRect.left && small.right <= buttonRect.right : false,
       textAlign: copy ? getComputedStyle(button.querySelector('.action-copy')).textAlign : '',
-      visualGroupCenterDeltaX: Math.abs(((visualLeft + visualRight) / 2) - (buttonRect.left + buttonRect.width / 2)),
     }
   })`)
   for (const geometry of buttonGeometry) {
     expect(geometry.buttonDisplay).toBe('flex')
     expect(geometry.buttonInsideActions).toBe(true)
     expect(geometry.justify).toBe('center')
-    expect(geometry.contentDisplay).toBe('flex')
-    expect(geometry.contentJustify).toBe('center')
+    expect(geometry.contentDisplay).toBe('block')
+    expect(geometry.contentJustify).toBe('normal')
     expect(geometry.textAlign).toBe('center')
     expect(geometry.contentInsideButton).toBe(true)
     expect(geometry.contentCenterDeltaX).toBeLessThanOrEqual(1)
-    expect(geometry.visualGroupCenterDeltaX, geometry.id).toBeLessThanOrEqual(3)
+    expect(geometry.copyCenterDeltaX, geometry.id).toBeLessThanOrEqual(1)
     expect(geometry.labelSmallCenterDelta).toBeLessThanOrEqual(1)
-    expect(geometry.iconCopyGap).toBeGreaterThanOrEqual(7)
+    expect(geometry.iconCopyGap).toBeGreaterThanOrEqual(-8)
     expect(geometry.iconCopyGap).toBeLessThanOrEqual(10)
+    expect(geometry.iconLabelGap).toBeGreaterThanOrEqual(6)
     expect(geometry.iconInsideButton).toBe(true)
-    expect(geometry.iconTextBlockYDelta).toBeLessThanOrEqual(1.5)
-    expect(geometry.iconLabelYDelta).toBeGreaterThan(3)
+    expect(geometry.iconTextBlockYDelta).toBeLessThanOrEqual(8)
+    expect(geometry.iconLabelYDelta).toBeLessThanOrEqual(1.5)
     expect(geometry.labelFontSize).toBeGreaterThanOrEqual(13)
     expect(geometry.labelWeight).toBeGreaterThanOrEqual(800)
     expect(geometry.captionFontSize).toBe(9)
@@ -1140,6 +1143,7 @@ async function expectTraceRowsReadable(page: Page): Promise<void> {
 async function expectTraceIntegrityProofStatusFits(page: Page): Promise<void> {
   const proofStatus = await page.evaluate<{
     fontSize: number
+    externalIconHeight: number
     iconVisible: boolean
     linkFontSize: number
     linkVisible: boolean
@@ -1152,10 +1156,12 @@ async function expectTraceIntegrityProofStatusFits(page: Page): Promise<void> {
     const icon = row?.querySelector('.integrity-proof-dot')
     const text = row?.querySelector('.proof-status-text')
     const link = row?.querySelector('a')
+    const externalIcon = link?.querySelector('svg')
     const valueStyle = value ? getComputedStyle(value) : null
     const linkStyle = link ? getComputedStyle(link) : null
     return {
       fontSize: valueStyle ? Number.parseFloat(valueStyle.fontSize) : 0,
+      externalIconHeight: externalIcon ? Math.round(externalIcon.getBoundingClientRect().height) : 0,
       iconVisible: !!icon && icon.getBoundingClientRect().width === 12,
       linkFontSize: linkStyle ? Number.parseFloat(linkStyle.fontSize) : 0,
       linkVisible: !!link && link.getBoundingClientRect().width > 0,
@@ -1165,6 +1171,7 @@ async function expectTraceIntegrityProofStatusFits(page: Page): Promise<void> {
     }
   })()`)
   expect(proofStatus.fontSize).toBe(12)
+  expect(proofStatus.externalIconHeight).toBe(12)
   expect(proofStatus.iconVisible).toBe(true)
   expect(proofStatus.linkFontSize).toBe(12)
   expect(proofStatus.linkVisible).toBe(true)
