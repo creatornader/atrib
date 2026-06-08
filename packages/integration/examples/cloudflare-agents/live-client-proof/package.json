@@ -13,14 +13,14 @@
     "@atrib/agent": "workspace:*",
     "@atrib/mcp": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "agents": "^0.13.3",
+    "agents": "^0.14.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260602.1",
-    "@types/node": "^25.9.1",
+    "@cloudflare/workers-types": "^4.20260608.1",
+    "@types/node": "^25.9.2",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "wrangler": "^4.96.0"
+    "wrangler": "^4.98.0"
   }
 }
