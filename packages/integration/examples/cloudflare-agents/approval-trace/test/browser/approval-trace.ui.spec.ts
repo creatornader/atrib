@@ -41,9 +41,11 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   expect(timelineColumns[0]).toContain('event-marker')
   expect(timelineColumns[1]).toContain('event-time')
   await expect(page.locator('#timeline .event .event-cue')).toHaveCount(3)
+  await expect(page.locator('#timeline .event .event-cue svg')).toHaveCount(3)
   await expect(page.locator('#timeline .event-future .event-cue')).toHaveCount(0)
   await expect(page.locator('#timeline .event.selected')).toHaveCount(0)
-  await expect(page.locator('#timeline .event-future.selected')).toContainText('human.review.halted')
+  await expect(page.locator('#timeline .event-future.current')).toContainText('human.review.halted')
+  await expect(page.locator('#timeline .event-future.current')).toHaveAttribute('aria-current', 'step')
   await expect
     .poll(async () => page.locator('#timeline .event-future .event-marker').allTextContents())
     .toEqual(['', '4', '5'])
@@ -1019,6 +1021,7 @@ async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
       backgroundColor: string
       backgroundImage: string
       height: number
+      width: number
       step: string | null
     }>
     steps: Array<{
@@ -1059,6 +1062,7 @@ async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
           backgroundColor: after.backgroundColor,
           backgroundImage: after.backgroundImage,
           height: Number.parseFloat(after.height),
+          width: Number.parseFloat(after.width),
           step: step.getAttribute('data-step'),
         }
       }),
@@ -1112,6 +1116,8 @@ async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
   expect(connectors.resume.backgroundImage).toContain('repeating-linear-gradient')
   expect(connectors.halt.height).toBe(2)
   expect(connectors.resume.height).toBe(2)
+  expect(connectors.halt.width).toBeGreaterThanOrEqual(50)
+  expect(connectors.halt.width).toBeLessThanOrEqual(70)
 }
 
 async function expectConstrainedDesktopRailGeometry(page: Page): Promise<void> {
@@ -1365,12 +1371,21 @@ test.describe('Cloudflare approval trace browser UI', () => {
           element.ownerDocument.defaultView?.getComputedStyle(element, '::before').content ?? '',
         ),
       ).resolves.toBe('"✓"')
-      await expect(page.locator('[data-run-mode-action="open-json"]')).toBeEnabled()
-      await expect(page.locator('[data-run-mode-action="reset"]')).toBeEnabled()
+      await expect(page.locator('[data-run-mode-action="toggle-follow"]')).toHaveAttribute('aria-checked', 'true')
+      await expect(page.locator('#runModeActions [data-run-mode-action="open-json"]')).toHaveCount(0)
+      await expect(page.locator('#runModeActions [data-run-mode-action="reset"]')).toHaveCount(0)
       await expectRunModeMenuAboveContent(page)
+      await page.locator('[data-run-mode-action="toggle-follow"]').click()
+      await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
+      await page.locator('#runModeMenu').click()
+      await expect(page.locator('[data-run-mode-action="toggle-follow"]')).toHaveAttribute('aria-checked', 'false')
+      await page.locator('[data-run-mode-action="toggle-follow"]').click()
+      await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
+      await page.locator('#runModeMenu').click()
+      await expect(page.locator('#runModeActions')).toBeVisible()
+      await expect(page.locator('[data-run-mode-action="toggle-follow"]')).toHaveAttribute('aria-checked', 'true')
       await page.locator('[data-run-mode-action="live"]').click()
       await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
-      await expect(page.locator('#runModeActions')).toBeHidden()
       await page.locator('#runModeMenu').click()
       await expect(page.locator('#runModeActions')).toBeVisible()
       await page.keyboard.press('Escape')

@@ -1304,8 +1304,8 @@ export function renderApp(): string {
 
       .step.halted:not(:last-child)::after {
         left: calc(100% + 1px);
-        right: -16px;
-        width: auto;
+        right: auto;
+        width: var(--halt-connector-width, 56px);
       }
 
       .step.done {
@@ -2318,7 +2318,7 @@ export function renderApp(): string {
         outline: 0;
       }
 
-      .event-future.selected {
+      .event-future.current {
         background: #fff7ec;
       }
 
@@ -2483,14 +2483,10 @@ export function renderApp(): string {
         width: 14px;
       }
 
-      .event-cue::before {
-        border-right: 1.5px solid currentColor;
-        border-top: 1.5px solid currentColor;
-        content: "";
-        height: 6px;
-        margin-top: 3px;
-        transform: rotate(45deg);
-        width: 6px;
+      .event-cue svg {
+        display: block;
+        height: 14px;
+        width: 14px;
       }
 
       .trace-section-label {
@@ -3412,8 +3408,7 @@ export function renderApp(): string {
             <button class="meta-pill live-run" id="runModeMenu" type="button" aria-controls="runModeActions" aria-expanded="false" aria-haspopup="menu"><span class="dot ok"></span><span>Live run</span><svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg></button>
             <div class="run-mode-menu" id="runModeActions" role="menu" hidden>
               <button type="button" role="menuitemradio" aria-checked="true" data-run-mode-action="live">Live run</button>
-              <button type="button" role="menuitem" data-run-mode-action="open-json">Open trace JSON</button>
-              <button type="button" role="menuitem" data-run-mode-action="reset">Reset demo</button>
+              <button type="button" role="menuitemcheckbox" aria-checked="true" data-run-mode-action="toggle-follow">Auto-scroll to active stage</button>
             </div>
           </span>
           <span class="run-id-meta">Run ID <span class="meta-code" id="runIdLabel">pending</span><button class="copy-icon" type="button" aria-label="Copy run ID" data-copy-source="#runIdLabel" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></button></span>
@@ -3657,6 +3652,19 @@ export function renderApp(): string {
         });
         updateHaltStepState();
         updateStepTimes();
+        syncRailConnectors();
+      }
+
+      function syncRailConnectors() {
+        const halted = workflowSteps.querySelector('[data-step="halt"]');
+        const resumeMarker = workflowSteps.querySelector('[data-step="resume"] .step-index');
+        if (!halted || !resumeMarker) return;
+        requestAnimationFrame(() => {
+          const haltedRect = halted.getBoundingClientRect();
+          const resumeRect = resumeMarker.getBoundingClientRect();
+          const width = Math.max(18, Math.round(resumeRect.left - haltedRect.right));
+          halted.style.setProperty('--halt-connector-width', width + 'px');
+        });
       }
 
       function updateStepTimes(run = currentRun) {
@@ -3957,7 +3965,7 @@ export function renderApp(): string {
               const time = row.time ?? (record ? displayRecordTime(record, record.label) + ' UTC' : '');
               const hash = row.marker === 'future' ? '-' : record ? recordDisplayId(record.record_hash) : 'pending';
               return \`
-              <div class="event-future \${row.selected ? 'selected' : ''}">
+              <div class="event-future \${row.selected ? 'current' : ''}" \${row.selected ? 'aria-current="step"' : ''}>
                 <span class="event-marker \${row.marker}"></span>
                 <span class="event-time">\${time ? time.slice(0, 8) : '-'}</span>
                 <span class="event-copy">
@@ -4056,6 +4064,7 @@ export function renderApp(): string {
           if (label) label.textContent = busy && activeLabel === 'request' ? 'Requesting...' : 'Request changes';
         }
         updateHeaderMenuControls();
+        updateRunModeControls();
       }
 
       function setBusy(next, activeLabel = '') {
@@ -4171,6 +4180,10 @@ export function renderApp(): string {
           return '<span class="event-signer-icon mcp" title="Signed by ' + label + '" aria-label="Signed by ' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v4h2.2a2.3 2.3 0 1 1 0 4.6H15V16h-4.4v2.2a2.3 2.3 0 1 1-4.6 0V16H3v-5h3.2a2 2 0 0 0 0-4H3V3h6Z" fill="currentColor"/></svg></span>';
         }
         return '<span class="event-signer-icon agent" title="Signed by ' + label + '" aria-label="Signed by ' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4h4v3h-4V4Zm-2 4h8a3 3 0 0 1 3 3v4a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-4a3 3 0 0 1 3-3Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"/><path d="M9 12h.01M15 12h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.8"/><path d="M9 15h6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span>';
+      }
+
+      function recordDetailsIcon() {
+        return '<svg viewBox="0 0 16 16"><path d="M4.25 2.75h5.4l2.1 2.1v8.4h-7.5v-10.5Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.35"/><path d="M9.55 2.8v2.35h2.35M5.7 7h4.6M5.7 9.1h4.6M5.7 11.2h3.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.25"/></svg>';
       }
 
       function signerSignature(run, signer) {
@@ -4475,14 +4488,20 @@ export function renderApp(): string {
       function setRunModeMenuOpen(open) {
         if (!runModeButton || !runModeActionsMenu) return;
         runModeButton.setAttribute('aria-expanded', String(open));
+        updateRunModeControls();
         runModeActionsMenu.hidden = !open;
       }
 
       function updateHeaderMenuControls() {
         if (!headerActionsMenu) return;
-        document.querySelectorAll('[data-header-action="open-json"], [data-header-action="reset"], [data-run-mode-action="open-json"], [data-run-mode-action="reset"]').forEach((button) => {
+        document.querySelectorAll('[data-header-action="open-json"], [data-header-action="reset"]').forEach((button) => {
           button.disabled = !currentRun || busy;
         });
+      }
+
+      function updateRunModeControls() {
+        runModeActionsMenu?.querySelector('[data-run-mode-action="live"]')?.setAttribute('aria-checked', 'true');
+        runModeActionsMenu?.querySelector('[data-run-mode-action="toggle-follow"]')?.setAttribute('aria-checked', String(autoFollow));
       }
 
       function renderVerificationActions(run = currentRun, record = selectedReceiptRecord) {
@@ -4829,7 +4848,7 @@ export function renderApp(): string {
               const record = run.records.find((item) => item.record_hash === entry.record_hash);
               const isPendingHuman = false;
               return \`
-                <button class="event" data-hash="\${entry.record_hash}" data-label="\${entry.label}">
+                <button class="event" data-hash="\${entry.record_hash}" data-label="\${entry.label}" aria-label="View receipt details for \${escapeHtml(timelineLabel(entry, run))}">
                   <span class="event-marker \${isPendingHuman ? 'pending' : 'done'}"></span>
                   <span class="event-time">\${displayRecordTime(record, entry.label, index)}</span>
                   <span class="event-copy">
@@ -4837,12 +4856,12 @@ export function renderApp(): string {
                     <span class="value">\${timelineDetail(entry, run)}</span>
                   </span>
                   <span class="event-hash hash">\${recordDisplayId(entry.record_hash)}</span>
-                  <span class="event-cue" aria-hidden="true"></span>
+                  <span class="event-cue" aria-hidden="true">\${recordDetailsIcon()}</span>
                 </button>
               \`;
             }).join('')}
             \${futureTraceRows(run).map((row) => \`
-              <div class="event-future \${row.marker === 'pending' ? 'selected' : ''}">
+              <div class="event-future \${row.marker === 'pending' ? 'current' : ''}" \${row.marker === 'pending' ? 'aria-current="step"' : ''}>
                 <span class="event-marker \${row.marker}">\${row.markerLabel ?? ''}</span>
                 <span class="event-time">\${row.record ? displayRecordTime(row.record, row.displayLabel) : '-'}</span>
                 <span class="event-copy">
@@ -4933,6 +4952,7 @@ export function renderApp(): string {
         timelineEl.querySelectorAll('.event').forEach((button) => {
           button.addEventListener('click', () => {
             const record = run.records.find((item) => item.record_hash === button.dataset.hash);
+            if (!record) return;
             timelineEl.querySelectorAll('.event').forEach((item) => item.classList.remove('selected'));
             button.classList.add('selected');
             selectRecord(record);
@@ -5015,12 +5035,9 @@ export function renderApp(): string {
         if (runModeAction && !runModeAction.disabled) {
           const action = runModeAction.dataset.runModeAction;
           setRunModeMenuOpen(false);
-          if (action === 'open-json' && currentRun) {
-            window.open('/api/runs/' + currentRun.run_id, '_blank', 'noreferrer');
-            return;
-          }
-          if (action === 'reset') {
-            resetButton.click();
+          if (action === 'toggle-follow') {
+            autoFollow = !autoFollow;
+            updateRunModeControls();
             return;
           }
           return;
@@ -5140,6 +5157,8 @@ export function renderApp(): string {
           setRunModeMenuOpen(false);
         }
       });
+
+      window.addEventListener('resize', syncRailConnectors);
 
       updateControls();
       updateTraceHeaderCopy();
