@@ -1544,6 +1544,7 @@ export function renderApp(): string {
 
       .panel h2 {
         align-items: center;
+        background: rgba(255, 255, 255, 0.98);
         border-bottom: 1px solid var(--line);
         color: var(--ink);
         display: flex;
@@ -1555,6 +1556,9 @@ export function renderApp(): string {
         margin: 0;
         min-height: 38px;
         padding: 0 14px;
+        position: sticky;
+        top: 0;
+        z-index: 3;
       }
 
       .grid > .panel:first-child > h2 {
@@ -3626,6 +3630,54 @@ export function renderApp(): string {
         });
       }
 
+      function resetPanelScroll(target) {
+        const panel = target?.closest?.('.panel');
+        if (panel) panel.scrollTop = 0;
+      }
+
+      function followPanelElement(target) {
+        if (!target || !autoFollow) return;
+        const panel = target.closest?.('.panel');
+        if (!panel) return;
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const alignTarget = (force = false) => {
+          const targetRect = target.getBoundingClientRect();
+          const panelRect = panel.getBoundingClientRect();
+          const stickyHeader = panel.querySelector('h2')?.getBoundingClientRect();
+          const topGuard = stickyHeader ? stickyHeader.bottom + 8 : panelRect.top + 8;
+          const bottomGuard = panelRect.bottom - 10;
+          const bottomDelta = targetRect.bottom - bottomGuard;
+          const topDelta = targetRect.top - topGuard;
+          if (bottomDelta > 0) {
+            const top = panel.scrollTop + bottomDelta;
+            if (force) {
+              panel.scrollTop = top;
+            } else {
+              panel.scrollTo({
+                top,
+                behavior: reduceMotion ? 'auto' : 'smooth',
+              });
+            }
+            return;
+          }
+          if (topDelta < 0) {
+            const top = Math.max(0, panel.scrollTop + topDelta);
+            if (force) {
+              panel.scrollTop = top;
+            } else {
+              panel.scrollTo({
+                top,
+                behavior: reduceMotion ? 'auto' : 'smooth',
+              });
+            }
+          }
+        };
+        requestAnimationFrame(() => {
+          alignTarget();
+          window.setTimeout(() => alignTarget(true), reduceMotion ? 0 : 220);
+        });
+      }
+
       function followWorkflowOverview() {
         if (!autoFollow) return;
         const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -4580,7 +4632,7 @@ export function renderApp(): string {
             \`).join('')}
           </div>
           \${showReviewResult ? \`
-            <div class="metric-row">
+            <div class="metric-row review-result">
               <div class="metric">
                 <span class="label">\${changesRequested ? 'Review result' : 'Execution result'}</span>
                 <span class="value">\${changesRequested ? 'changes requested' : answer.executed ? answer.outcome : 'not run'}</span>
@@ -4753,7 +4805,10 @@ export function renderApp(): string {
         if (run.status === 'pending_approval') {
           followWorkflowOverview();
         } else if (['succeeded', 'failed', 'rejected'].includes(run.status)) {
+          followPanelElement(answerEl.querySelector('.review-result'));
           followElement(document.querySelector('.receipt-panel'), 'start');
+        } else if (run.status === 'changes_requested') {
+          followPanelElement(answerEl.querySelector('.review-result'));
         }
       }
 
@@ -4874,6 +4929,9 @@ export function renderApp(): string {
           selectedReceiptRecord = null;
           selectedReceiptView = 'record';
           stageDisplayTimes = {};
+          resetPanelScroll(answerEl);
+          resetPanelScroll(proposalEl);
+          resetPanelScroll(timelineEl);
           setRunId(runId);
           traceIdLabel.textContent = traceIdFromRunId(runId);
           updateTraceHeaderCopy();

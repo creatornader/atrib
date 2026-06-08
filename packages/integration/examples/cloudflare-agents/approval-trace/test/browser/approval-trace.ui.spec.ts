@@ -269,6 +269,50 @@ async function expectRunModeMenuAboveContent(page: Page): Promise<void> {
   expect(menuHit).toBe(true)
 }
 
+async function expectProgressPanelAtTop(page: Page): Promise<void> {
+  await expect
+    .poll(async () =>
+      page.locator('#answer').evaluate((answer) => {
+        const panel = answer.closest('.panel')
+        return panel ? Math.round(panel.scrollTop) : -1
+      }),
+    )
+    .toBe(0)
+}
+
+async function expectReviewResultVisibleInProgressPanel(page: Page): Promise<void> {
+  await expect
+    .poll(async () =>
+      page.locator('#answer').evaluate((answer) => {
+        const panel = answer.closest('.panel')
+        const result = answer.querySelector('.review-result')
+        const header = panel?.querySelector('h2')
+        const panelRect = panel?.getBoundingClientRect()
+        const resultRect = result?.getBoundingClientRect()
+        const headerRect = header?.getBoundingClientRect()
+        if (!panel || !panelRect || !resultRect || !headerRect) {
+          return { headerVisible: false, resultVisible: false, scrollTop: -1 }
+        }
+        return {
+          headerVisible: headerRect.top >= panelRect.top - 1 && headerRect.bottom <= panelRect.bottom,
+          resultVisible: resultRect.top >= headerRect.bottom + 4 && resultRect.bottom <= panelRect.bottom - 4,
+          scrollTop: Math.round(panel.scrollTop),
+        }
+      }),
+    )
+    .toEqual({
+      headerVisible: true,
+      resultVisible: true,
+      scrollTop: expect.any(Number),
+    })
+
+  const scrollTop = await page.locator('#answer').evaluate((answer) => {
+    const panel = answer.closest('.panel')
+    return panel ? Math.round(panel.scrollTop) : 0
+  })
+  expect(scrollTop).toBeGreaterThan(0)
+}
+
 async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> {
   const buttonGeometry = await page.evaluate<
     Array<{
@@ -1277,6 +1321,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.getByRole('button', { name: 'Approve and resume' }).click()
 
       await expect(page.locator('#statusTitle')).toHaveText('Trace complete', { timeout: 30_000 })
+      await expectReviewResultVisibleInProgressPanel(page)
       await expectNoHorizontalOverflow(page)
       await expect(page.locator('[data-step="halt"]')).toContainText('Approved')
       await expect(page.locator('[data-step="halt"]')).not.toContainText('Awaiting review')
@@ -1335,6 +1380,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#statusTitle')).toHaveText('Halted for human review', {
         timeout: 15_000,
       })
+      await expectProgressPanelAtTop(page)
       await expectNoHorizontalOverflow(page)
       await expectReferenceHeaderLogoGeometry(page)
       await expectWorkflowOverviewVisible(page)
@@ -1350,6 +1396,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
 
       await page.getByRole('button', { name: 'Approve and resume' }).click()
       await expect(page.locator('#statusTitle')).toHaveText('Trace complete', { timeout: 30_000 })
+      await expectReviewResultVisibleInProgressPanel(page)
       await expect(page.locator('[data-step="halt"]')).toContainText('Approved')
       await expectNoHorizontalOverflow(page)
     })
@@ -1361,6 +1408,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.getByRole('button', { name: 'Reject' }).click()
 
       await expect(page.locator('#statusTitle')).toHaveText('Rejected')
+      await expectReviewResultVisibleInProgressPanel(page)
       await expect(page.locator('#reviewStatePill')).toHaveText('REJECTED')
       await expect(page.locator('[data-step="halt"]')).toContainText('Rejected')
       await expect(page.locator('[data-step="resume"]')).not.toHaveClass(/done/)
@@ -1384,6 +1432,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.getByRole('button', { name: 'Request changes' }).click()
 
       await expect(page.locator('#statusTitle')).toHaveText('Changes requested')
+      await expectReviewResultVisibleInProgressPanel(page)
       await expect(page.locator('#reviewStatePill')).toHaveText('NEEDS REVISION')
       await expect(page.locator('[data-step="halt"]')).toContainText('Needs revision')
       await expect(page.locator('[data-step="resume"]')).not.toHaveClass(/done/)
