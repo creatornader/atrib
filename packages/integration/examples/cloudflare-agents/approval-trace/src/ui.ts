@@ -1474,7 +1474,7 @@ export function renderApp(): string {
         display: inline;
       }
 
-      .step.halted + .step .step-index {
+      .step.halted:not(.review-rejected):not(.review-requested) + .step .step-index {
         border-color: var(--blue);
         color: var(--blue);
       }
@@ -1495,6 +1495,23 @@ export function renderApp(): string {
         background: #fff8ed;
         border-color: #ffd09a;
         color: #a44900;
+      }
+
+      .step.branch-ready .step-index {
+        background: var(--green);
+        border-color: var(--green);
+        color: #fff;
+        font-size: 0;
+      }
+
+      .step.branch-ready .step-index::after {
+        content: "";
+        background: currentColor;
+        height: 18px;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
+        position: absolute;
+        width: 18px;
       }
 
       @media (min-width: 1451px) {
@@ -1806,6 +1823,11 @@ export function renderApp(): string {
         background: transparent;
       }
 
+      .progress-item.skipped strong {
+        color: #5d687a;
+        font-weight: 700;
+      }
+
       .progress-item strong {
         font-size: 13px;
         font-weight: 400;
@@ -1863,6 +1885,22 @@ export function renderApp(): string {
 
       .progress-item.halted .dot.pending::after {
         right: 5px;
+      }
+
+      .progress-item .dot.skipped {
+        background: #f8fafc;
+        border: 1.5px solid #a8b4c3;
+        color: #5d687a;
+        font-size: 0;
+      }
+
+      .progress-item .dot.skipped::after {
+        background: currentColor;
+        border-radius: 999px;
+        content: "";
+        height: 2px;
+        position: absolute;
+        width: 8px;
       }
 
       .run-state {
@@ -2407,6 +2445,16 @@ export function renderApp(): string {
 
       .event-marker.future {
         background: #fff;
+        border: 1.5px solid #a8b4c3;
+        box-shadow: none;
+        color: #5d687a;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .event-marker.skipped {
+        background: #f8fafc;
         border: 1.5px solid #a8b4c3;
         box-shadow: none;
         color: #5d687a;
@@ -3522,8 +3570,8 @@ export function renderApp(): string {
           <span class="step active" data-step="trigger"><span class="step-index">1</span><span class="step-copy"><strong>1. Trigger</strong><span data-step-time="trigger">Pending</span></span></span>
           <span class="step" data-step="autonomous"><span class="step-index">2</span><span class="step-copy"><strong>2. Autonomous triage</strong><span data-step-time="autonomous">Pending</span></span></span>
           <span class="step" data-step="halt"><span class="step-index">3</span><span class="step-copy"><strong><span class="step-number-label">3. </span><span data-step-title="halt">Human review halted</span></strong><span class="step-meta-line"><span data-step-time="halt">Pending</span><span class="step-badge" data-step-badge="halt">Awaiting review</span></span></span></span>
-          <span class="step" data-step="resume"><span class="step-index">4</span><span class="step-copy"><strong>4. MCP execution resumed</strong><span data-step-time="resume">Pending</span></span></span>
-          <span class="step" data-step="audit"><span class="step-index">5</span><span class="step-copy"><strong>5. Audit ready</strong><span data-step-time="audit">Pending</span></span></span>
+          <span class="step" data-step="resume"><span class="step-index">4</span><span class="step-copy"><strong><span class="step-number-label">4. </span><span data-step-title="resume">MCP execution resumed</span></strong><span data-step-time="resume">Pending</span></span></span>
+          <span class="step" data-step="audit"><span class="step-index">5</span><span class="step-copy"><strong><span class="step-number-label">5. </span><span data-step-title="audit">Audit ready</span></strong><span data-step-time="audit">Pending</span></span></span>
         </div>
       </section>
 
@@ -3767,12 +3815,21 @@ export function renderApp(): string {
         const haltTime = stageDisplayTimes.halt ?? (haltRecord ? displayRecordTime(haltRecord, haltLabel) + ' UTC' : proposalTime);
         const execution = run?.records.find((record) => record.label === 'execution');
         const handoff = run?.records.find((record) => record.label === 'handoff');
+        const terminalDecisionTime = decision ? displayRecordTime(decision, decision.label) + ' UTC' : 'Pending';
         const stepTimes = {
           trigger: triggerTime,
           autonomous: triageTime,
           halt: haltTime,
-          resume: execution ? displayRecordTime(execution, 'execution') + ' UTC' : 'Pending',
-          audit: handoff ? displayRecordTime(handoff, 'handoff') + ' UTC' : 'Pending',
+          resume: run?.status === 'rejected'
+            ? 'Skipped'
+            : run?.status === 'changes_requested'
+              ? terminalDecisionTime
+              : execution ? displayRecordTime(execution, 'execution') + ' UTC' : 'Pending',
+          audit: run?.status === 'rejected'
+            ? terminalDecisionTime
+            : run?.status === 'changes_requested'
+              ? 'Awaiting revision'
+              : handoff ? displayRecordTime(handoff, 'handoff') + ' UTC' : 'Pending',
         };
         Object.entries(stepTimes).forEach(([key, value]) => {
           const target = workflowSteps.querySelector('[data-step-time="' + key + '"]');
@@ -3782,10 +3839,19 @@ export function renderApp(): string {
 
       function updateHaltStepState(run = currentRun) {
         const title = workflowSteps.querySelector('[data-step-title="halt"]');
+        const resumeTitle = workflowSteps.querySelector('[data-step-title="resume"]');
+        const auditTitle = workflowSteps.querySelector('[data-step-title="audit"]');
         const badge = workflowSteps.querySelector('[data-step-badge="halt"]');
         const haltStep = workflowSteps.querySelector('[data-step="halt"]');
+        const resumeStep = workflowSteps.querySelector('[data-step="resume"]');
+        const auditStep = workflowSteps.querySelector('[data-step="audit"]');
         if (!title || !badge) return;
         badge.classList.remove('approved', 'rejected', 'requested');
+        haltStep?.classList.remove('review-rejected', 'review-requested');
+        resumeStep?.classList.remove('branch-skipped', 'branch-requested', 'branch-ready');
+        auditStep?.classList.remove('branch-skipped', 'branch-requested', 'branch-ready');
+        if (resumeTitle) resumeTitle.textContent = 'MCP execution resumed';
+        if (auditTitle) auditTitle.textContent = 'Audit ready';
         badge.hidden = false;
         if (!run) {
           title.textContent = 'Human review halted';
@@ -3802,12 +3868,22 @@ export function renderApp(): string {
           title.textContent = 'Human review rejected';
           badge.textContent = 'Rejected';
           badge.classList.add('rejected');
+          haltStep?.classList.add('review-rejected');
+          resumeStep?.classList.add('branch-skipped');
+          auditStep?.classList.add('branch-ready');
+          if (resumeTitle) resumeTitle.textContent = 'MCP execution skipped';
+          if (auditTitle) auditTitle.textContent = 'Decision audit ready';
           return;
         }
         if (run.status === 'changes_requested') {
           title.textContent = 'Changes requested';
           badge.textContent = 'Needs revision';
           badge.classList.add('requested');
+          haltStep?.classList.add('review-requested');
+          resumeStep?.classList.add('branch-ready');
+          auditStep?.classList.add('branch-requested');
+          if (resumeTitle) resumeTitle.textContent = 'Feedback returned to agent';
+          if (auditTitle) auditTitle.textContent = 'Revision pending';
           return;
         }
         if (run.status === 'approved' || run.status === 'executing') {
@@ -3956,9 +4032,9 @@ export function renderApp(): string {
         if (title === 'Context gathered') return 'context';
         if (title === 'Policy & intent analysis') return 'policy';
         if (title === 'Proposed action generated') return 'proposal';
-        if (title === 'Human review halted' || title === 'Human review recorded') return 'halt';
-        if (title === 'Agent resumed through MCP') return 'resume';
-        if (title === 'Audit ready') return 'audit';
+        if (title === 'Human review halted' || title === 'Human review recorded' || title === 'Human review feedback sent' || title === 'Human review rejected') return 'halt';
+        if (title === 'Agent resumed through MCP' || title === 'MCP execution skipped' || title === 'Feedback returned to agent') return 'resume';
+        if (title === 'Audit ready' || title === 'Decision audit ready' || title === 'Revised proposal pending') return 'audit';
         return '';
       }
 
@@ -4213,6 +4289,8 @@ export function renderApp(): string {
       function futureTraceRows(run) {
         const labels = new Set(run.trace_packet.timeline.map((entry) => entry.label));
         const rows = [];
+        const rejected = run.status === 'rejected';
+        const changesRequested = run.status === 'changes_requested';
         if (!labels.has('approval') && !labels.has('rejection') && !labels.has('change_request')) {
           const proposal = run.records.find((record) => record.label === 'proposal');
           rows.push({
@@ -4225,10 +4303,18 @@ export function renderApp(): string {
           });
         }
         if (!labels.has('execution')) {
-          rows.push({ name: 'mcp.execution.resumed', detail: 'Pending approval', marker: 'future', markerLabel: '4' });
+          rows.push(rejected
+            ? { name: 'mcp.execution.skipped', detail: 'Blocked by signed rejection', marker: 'skipped', markerLabel: '4' }
+            : changesRequested
+              ? { name: 'agent.feedback.returned', detail: 'Feedback queued revision', marker: 'done' }
+              : { name: 'mcp.execution.resumed', detail: 'Pending approval', marker: 'future', markerLabel: '4' });
         }
         if (!labels.has('handoff')) {
-          rows.push({ name: 'audit.ready', detail: 'Pending', marker: 'future', markerLabel: '5' });
+          rows.push(rejected
+            ? { name: 'decision.audit.ready', detail: 'Rejection receipt ready', marker: 'done' }
+            : changesRequested
+              ? { name: 'revised.proposal.pending', detail: 'Awaiting revised proposal', marker: 'future', markerLabel: '5' }
+              : { name: 'audit.ready', detail: 'Pending', marker: 'future', markerLabel: '5' });
         }
         return rows;
       }
@@ -4380,11 +4466,17 @@ export function renderApp(): string {
           return run.records.find((record) => record.label === 'triage');
         }
         if (rowTitle === 'Proposed action generated') return run.records.find((record) => record.label === 'proposal');
-        if (rowTitle === 'Human review halted' || rowTitle === 'Human review recorded' || rowTitle === 'Human review feedback sent') {
+        if (rowTitle === 'Human review halted' || rowTitle === 'Human review recorded' || rowTitle === 'Human review feedback sent' || rowTitle === 'Human review rejected') {
           return run.records.find((record) => record.label === 'approval' || record.label === 'rejection' || record.label === 'change_request')
             ?? run.records.find((record) => record.label === 'proposal');
         }
         if (rowTitle === 'Agent resumed through MCP') return run.records.find((record) => record.label === 'execution');
+        if (rowTitle === 'MCP execution skipped' || rowTitle === 'Decision audit ready') {
+          return run.records.find((record) => record.label === 'rejection');
+        }
+        if (rowTitle === 'Feedback returned to agent' || rowTitle === 'Revised proposal pending') {
+          return run.records.find((record) => record.label === 'change_request');
+        }
         if (rowTitle === 'Audit ready') {
           return run.records.find((record) => record.label === 'handoff')
             ?? run.records.find((record) => record.label === 'outcome')
@@ -4397,6 +4489,7 @@ export function renderApp(): string {
         const key = progressKeyForTitle(row.title);
         return [
           row.halted ? 'halted' : '',
+          row.skipped ? 'skipped' : '',
           key === 'proposal' ? 'proposal' : '',
           key === 'proposal' && run?.status === 'pending_approval' ? 'pending-proposal' : '',
         ].filter(Boolean).join(' ');
@@ -4883,26 +4976,33 @@ export function renderApp(): string {
             done: labels.has('proposal'),
           },
           {
-            title: run.status === 'pending_approval' ? 'Human review halted' : changesRequested ? 'Human review feedback sent' : 'Human review recorded',
+            title: run.status === 'pending_approval' ? 'Human review halted' : rejected ? 'Human review rejected' : changesRequested ? 'Human review feedback sent' : 'Human review recorded',
             detail: answer.decision ? 'Decision: ' + answer.decision : 'Execution is stopped until a human signs approval, rejection, or feedback.',
             done: Boolean(answer.decision),
             halted: run.status === 'pending_approval',
           },
           {
-            title: answer.executed ? 'Agent resumed through MCP' : changesRequested ? 'Revision requested' : 'Resume not started',
-            detail: answer.executed ? 'The action MCP ran only after approval.' : changesRequested ? 'MCP execution stays blocked while the agent revises.' : 'Rejected or waiting for approval.',
-            done: answer.executed,
+            title: answer.executed ? 'Agent resumed through MCP' : rejected ? 'MCP execution skipped' : changesRequested ? 'Feedback returned to agent' : 'Resume not started',
+            detail: answer.executed
+              ? 'The action MCP ran only after approval.'
+              : rejected
+              ? 'The signed rejection closed the gate before any MCP write.'
+              : changesRequested
+              ? 'Signed feedback has been returned to the agent for revision.'
+              : 'Rejected or waiting for approval.',
+            done: answer.executed || changesRequested,
+            skipped: rejected,
           },
           {
-            title: auditReady ? 'Audit ready' : rejected ? 'MCP audit skipped' : changesRequested ? 'Revision pending' : 'Audit assembling',
+            title: auditReady ? 'Audit ready' : rejected ? 'Decision audit ready' : changesRequested ? 'Revised proposal pending' : 'Audit assembling',
             detail: auditReady
               ? 'Public log context and trace JSON are ready.'
               : rejected
-                ? 'The signed rejection is in the trace; no action MCP receipts exist.'
+                ? 'Signed rejection receipt and public log proof are ready.'
                 : changesRequested
-                ? 'Signed feedback is in the trace; terminal audit waits for a revised proposal.'
+                ? 'Signed feedback is in the trace; the next agent pass must produce a revised proposal.'
               : 'Receipts appear as the run progresses; terminal audit waits for a decision.',
-            done: auditReady,
+            done: auditReady || rejected,
           },
         ];
         answerEl.innerHTML = \`
@@ -4910,12 +5010,12 @@ export function renderApp(): string {
           <div class="progress-list">
             \${stageRows.map((row) => \`
               <div class="progress-item \${progressRowClass(row, run)}">
-                <span class="dot \${row.done ? 'ok' : row.halted ? 'pending' : 'future'}"></span>
+                <span class="dot \${row.done ? 'ok' : row.skipped ? 'skipped' : row.halted ? 'pending' : 'future'}"></span>
                 <div>
                   <strong>\${row.title === 'Resume not started' ? 'MCP execution (pending)' : row.title === 'Audit assembling' ? 'Audit ready (pending)' : row.title}</strong>
                   <span>\${row.detail}</span>
                 </div>
-                <span class="progress-time">\${progressDisplayTime(run, row.title, row.done || row.halted)}</span>
+                <span class="progress-time">\${progressDisplayTime(run, row.title, row.done || row.halted || row.skipped)}</span>
               </div>
             \`).join('')}
           </div>
