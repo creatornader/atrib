@@ -3239,7 +3239,7 @@ export function renderApp(): string {
     <main class="shell" data-testid="approval-trace-app">
       <section class="hero">
         <div class="brand-row">
-          <svg class="cloud-mark" viewBox="0 0 48 32" aria-hidden="true">
+          <svg class="cloud-mark" viewBox="2 -1 46 28" aria-hidden="true">
             <path fill="currentColor" d="M15.4 25.5h27.8c2.4 0 4.3-1.8 4.3-4.1 0-2.2-1.8-4.1-4-4.1-.5 0-1 .1-1.5.3C40.5 10.5 34.1 5 26.5 5c-7.2 0-13.3 5-14.9 11.7-.6-.2-1.3-.3-2-.3A7.4 7.4 0 0 0 2.3 24c0 .5.4.9.9.9h8.2c.7-3.9 4.1-6.9 8.2-6.9h3.8c.7 0 1.2.5 1.2 1.2s-.5 1.2-1.2 1.2h-3.8a5.9 5.9 0 0 0-5.8 5.1Z"/>
           </svg>
           <div>
