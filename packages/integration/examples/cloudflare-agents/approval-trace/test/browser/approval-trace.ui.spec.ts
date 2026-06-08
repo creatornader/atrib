@@ -54,6 +54,7 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
     .toEqual(['4', '5'])
   await expect(page.locator('#answer')).toContainText('Human review halted')
   await expect(page.locator('#answer')).toContainText('Execution is stopped')
+  await expectProposalProgressDot(page, 'pending')
   await expectPendingSignerHashReadable(page)
   await expectReferenceSignerIconTreatment(page)
   await expectReferenceLeftProgressTypography(page)
@@ -853,6 +854,7 @@ async function expectPendingSignerHashReadable(page: Page): Promise<void> {
   const signature = await page.evaluate<{
     hashText: string
     hashWidth: number
+    slotText: string
     slotWidth: number
     visibleHashFits: boolean
   }>(`(() => {
@@ -864,14 +866,43 @@ async function expectPendingSignerHashReadable(page: Page): Promise<void> {
     return {
       hashText: hash?.textContent?.trim() ?? '',
       hashWidth: Math.round((hashRect?.width ?? 0) * 100) / 100,
+      slotText: slot?.textContent?.trim() ?? '',
       slotWidth: Math.round((slotRect?.width ?? 0) * 100) / 100,
       visibleHashFits: hash ? hash.scrollWidth <= hash.clientWidth + 1 : false,
     }
   })()`)
-  expect(signature.hashText).toMatch(/^[a-f0-9]{10}\.\.\.[a-f0-9]{4}$/)
-  expect(signature.slotWidth).toBeGreaterThanOrEqual(112)
-  expect(signature.hashWidth).toBeGreaterThanOrEqual(76)
+  expect(signature.hashText).toMatch(/^[a-f0-9]{6}\.\.\.[a-f0-9]{4}$/)
+  expect(signature.slotText).toMatch(/^Latest:/)
+  expect(signature.slotWidth).toBeGreaterThanOrEqual(72)
+  expect(signature.hashWidth).toBeGreaterThanOrEqual(44)
   expect(signature.visibleHashFits).toBe(true)
+}
+
+async function expectProposalProgressDot(page: Page, expected: 'pending' | 'complete'): Promise<void> {
+  const proposalDot = await page.evaluate<{
+    afterContent: string
+    background: string
+    text: string
+  }>(`(() => {
+    const row = Array.from(document.querySelectorAll('#answer .progress-item'))
+      .find((item) => item.textContent?.includes('Proposed action generated'))
+    const dot = row?.querySelector('.dot')
+    const style = dot ? getComputedStyle(dot) : null
+    const afterStyle = dot ? getComputedStyle(dot, '::after') : null
+    return {
+      afterContent: afterStyle?.content ?? '',
+      background: style?.backgroundColor ?? '',
+      text: row?.textContent?.replace(/\\s+/g, ' ').trim() ?? '',
+    }
+  })()`)
+  expect(proposalDot.text).toContain('Proposed action generated')
+  if (expected === 'pending') {
+    expect(proposalDot.background).toBe('rgb(9, 105, 218)')
+    expect(proposalDot.afterContent).toBe('none')
+  } else {
+    expect(proposalDot.background).toBe('rgb(7, 136, 97)')
+    expect(proposalDot.afterContent).not.toBe('none')
+  }
 }
 
 async function expectReferenceSignerIconTreatment(page: Page): Promise<void> {
@@ -1324,6 +1355,7 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
       rowClass: string
       signerClass: string
       signerWidth: number
+      signerBackground: string
       timeLeft: number
       timestampToCopyOffset: number
     }>
@@ -1352,6 +1384,7 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
         markerToSignerGap: marker && signerRect ? Math.round(signerRect.left - marker.right) : null,
         markerToTimeGap: marker && time ? Math.round(time.left - marker.right) : 0,
         rowClass: row.className,
+        signerBackground: signer ? getComputedStyle(signer).backgroundColor : '',
         signerClass: signer?.className ?? '',
         signerWidth: signerRect ? Math.round(signerRect.width) : 0,
         timeLeft: time ? Math.round(time.left) : 0,
@@ -1374,8 +1407,9 @@ async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
     expect(row.timestampToCopyOffset).toBeLessThanOrEqual(maxTimestampOffset)
     if (row.rowClass.includes('event-future')) expect(row.hashTextAlign).toBe('left')
     if (row.isRecordRow) {
-      expect(row.signerWidth).toBe(16)
+      expect(row.signerWidth).toBe(18)
       expect(row.signerClass).toMatch(/event-signer-icon (agent|human|mcp)/)
+      expect(row.signerBackground).not.toBe('rgba(0, 0, 0, 0)')
       expect(row.markerToSignerGap).toBeGreaterThanOrEqual(minMarkerToSignerGap)
     }
   }
@@ -1518,7 +1552,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectReferenceReceiptJsonSyntax(page)
 
       await expectCopies(page.getByRole('button', { name: 'Copy trace ID' }))
-      await expectCopies(page.getByRole('button', { name: 'Copy Agent signature' }))
+      await expectCopies(page.getByRole('button', { name: 'Copy Agent latest record' }))
       await expectCopies(page.locator('.trace-integrity').getByRole('button', { name: 'Copy Merkle root' }))
       await expectCopies(page.getByRole('button', { name: 'Copy receipt' }))
       await expect(page.locator('#verification').getByRole('link', { name: 'View proof' })).toHaveAttribute(
@@ -1540,6 +1574,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
 
       await expect(page.locator('#statusTitle')).toHaveText('Trace complete', { timeout: 30_000 })
       await expectReviewResultVisibleInProgressPanel(page)
+      await expectProposalProgressDot(page, 'complete')
       await expectNoHorizontalOverflow(page)
       await expect(page.locator('[data-step="halt"]')).toContainText('Approved')
       await expect(page.locator('[data-step="halt"]')).not.toContainText('Awaiting review')
@@ -1554,7 +1589,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#receipts pre')).toContainText('"signer": "action_mcp"')
       await expect(page.locator('#receipts pre')).toContainText('"tool_name": "write_file"')
       await expect(page.locator('#receipts pre')).toContainText('"proof":')
-      await expectCopies(page.getByRole('button', { name: 'Copy Action MCP signature' }))
+      await expectCopies(page.getByRole('button', { name: 'Copy Action MCP latest record' }))
       await expect(page.locator('#verification').getByRole('link', { name: 'View proof' })).toHaveAttribute(
         'href',
         /log\.atrib\.dev|\/api\/runs\//,
@@ -1609,7 +1644,9 @@ test.describe('Cloudflare approval trace browser UI', () => {
           const cells = Array.from(row.children).map((child) => child.getBoundingClientRect())
           const nameCell = cells[1]
           const detailCell = cells[2]
-          return Boolean(nameCell && detailCell && nameCell.right < detailCell.left)
+          return Boolean(nameCell && detailCell && (
+            nameCell.right < detailCell.left || detailCell.top > nameCell.top + 10
+          ))
         })`)
       expect(signerSpacing).toEqual([true, true, true])
 

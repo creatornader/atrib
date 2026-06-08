@@ -1816,17 +1816,13 @@ export function renderApp(): string {
         font-weight: 700;
       }
 
-      .progress-item.proposal .dot.ok {
-        background: var(--blue);
-      }
-
-      .progress-item:not(.proposal) .dot.ok {
+      .progress-item .dot.ok {
         background: var(--green);
         color: #fff;
         font-size: 0;
       }
 
-      .progress-item:not(.proposal) .dot.ok::after {
+      .progress-item .dot.ok::after {
         content: "";
         background: currentColor;
         height: 10px;
@@ -1834,6 +1830,14 @@ export function renderApp(): string {
         -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
         position: absolute;
         width: 10px;
+      }
+
+      .progress-item.proposal.pending-proposal .dot.ok {
+        background: var(--blue);
+      }
+
+      .progress-item.proposal.pending-proposal .dot.ok::after {
+        content: none;
       }
 
       .progress-item.halted .dot.pending {
@@ -2426,28 +2430,36 @@ export function renderApp(): string {
 
       .event-signer-icon {
         align-items: center;
+        border: 1px solid transparent;
+        border-radius: 6px;
         display: inline-flex;
-        flex: 0 0 16px;
-        height: 16px;
+        flex: 0 0 18px;
+        height: 18px;
         justify-content: center;
-        width: 16px;
+        width: 18px;
       }
 
       .event-signer-icon svg {
         display: block;
-        height: 15px;
-        width: 15px;
+        height: 13px;
+        width: 13px;
       }
 
       .event-signer-icon.agent {
+        background: #edf5ff;
+        border-color: #c7dcff;
         color: #0969da;
       }
 
       .event-signer-icon.human {
+        background: #fff1dc;
+        border-color: #ffd09a;
         color: #c76a00;
       }
 
       .event-signer-icon.mcp {
+        background: #e9f8ef;
+        border-color: #b9e5cb;
         color: #078861;
       }
 
@@ -2556,10 +2568,10 @@ export function renderApp(): string {
       .signer-row {
         background: #fff;
         border-radius: 0;
-        gap: 7px;
-        grid-template-columns: 24px 76px minmax(72px, 1fr) minmax(52px, auto) minmax(112px, 126px) 16px;
-        min-height: 31px;
-        padding: 3px 8px;
+        gap: 2px 7px;
+        grid-template-columns: 24px minmax(76px, 1fr) minmax(52px, auto) minmax(124px, 138px) 16px;
+        min-height: 42px;
+        padding: 5px 8px;
         box-shadow: none;
       }
 
@@ -2586,6 +2598,8 @@ export function renderApp(): string {
 
       .signer-row strong {
         font-size: 12px;
+        grid-column: 2;
+        grid-row: 1;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -2593,6 +2607,8 @@ export function renderApp(): string {
 
       .signer-row .empty {
         font-size: 12px;
+        grid-column: 2 / 6;
+        grid-row: 2;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -2608,6 +2624,8 @@ export function renderApp(): string {
         background: transparent;
         border-radius: 0;
         display: inline-flex;
+        grid-column: 1;
+        grid-row: 1 / 3;
         height: 22px;
         justify-content: center;
         width: 22px;
@@ -2634,6 +2652,8 @@ export function renderApp(): string {
       .signer-status {
         border-color: #c7d6e8;
         font-size: 11px;
+        grid-column: 3;
+        grid-row: 1;
         min-height: 20px;
         padding: 2px 6px;
         justify-self: end;
@@ -2660,20 +2680,33 @@ export function renderApp(): string {
         align-self: center;
         color: var(--muted);
         font-size: 11px;
+        grid-column: 4;
+        grid-row: 1;
+        justify-self: end;
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
+      .signature-label,
+      .signature-separator {
+        display: inline-block;
+      }
+
       .signature-slot .hash {
         display: inline-block;
         font-size: 10px;
-        max-width: calc(100% - 24px);
+        max-width: calc(100% - 38px);
         overflow: hidden;
         text-overflow: ellipsis;
         vertical-align: bottom;
         white-space: nowrap;
+      }
+
+      .signer-row .copy-icon {
+        grid-column: 5;
+        grid-row: 1;
       }
 
       .copy-icon {
@@ -3312,12 +3345,15 @@ export function renderApp(): string {
         }
 
         .signer-row {
-          gap: 5px;
-          grid-template-columns: 22px 56px minmax(0, 1fr) minmax(46px, auto) minmax(112px, 126px) 12px;
-          padding: 4px 6px;
+          gap: 2px 7px;
+          grid-template-columns: 22px minmax(54px, 1fr) minmax(48px, auto) minmax(108px, 116px) 14px;
+          min-height: 42px;
+          padding: 5px 7px;
         }
 
         .signer-icon {
+          grid-column: 1;
+          grid-row: 1 / 3;
           height: 22px;
           width: 22px;
         }
@@ -3332,8 +3368,48 @@ export function renderApp(): string {
           font-size: 11px;
         }
 
+        .signer-row strong {
+          grid-column: 2;
+          grid-row: 1;
+        }
+
+        .signer-row .empty {
+          grid-column: 2 / 6;
+          grid-row: 2;
+          max-width: 100%;
+        }
+
+        .signer-status {
+          grid-column: 3;
+          grid-row: 1;
+        }
+
         .signature-slot {
           font-size: 10px;
+          grid-column: 4;
+          grid-row: 1;
+          justify-self: end;
+          max-width: 100%;
+        }
+
+        .signature-slot .signature-label,
+        .signature-slot .signature-separator {
+          clip: rect(0 0 0 0);
+          clip-path: inset(50%);
+          height: 1px;
+          overflow: hidden;
+          position: absolute;
+          white-space: nowrap;
+          width: 1px;
+        }
+
+        .signature-slot .hash {
+          max-width: 100%;
+        }
+
+        .signer-row .copy-icon {
+          grid-column: 5;
+          grid-row: 1;
         }
       }
 
@@ -3962,7 +4038,7 @@ export function renderApp(): string {
           },
         ];
         const bootSigners = [
-          { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', signer: 'agent', status: reached('proposal') ? 'Signed' : 'Pending', className: reached('proposal') ? 'signed' : 'pending mcp', sig: reached('proposal') && run ? signerSignature(run, 'agent') : '-' },
+          { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', signer: 'agent', status: reached('proposal') ? 'Signed' : 'Pending', className: reached('proposal') ? 'signed' : 'pending mcp', sig: reached('proposal') && run ? signerLatestRecordDigest(run, 'agent') : '-' },
           { kind: 'human', name: 'Human', detail: 'alice@example.com', status: 'Pending', className: 'pending', sig: '-' },
           { kind: 'mcp', name: 'Action MCP', detail: 'github.write@2.3.1', status: 'Pending', className: 'pending mcp', sig: '-' },
         ];
@@ -3996,7 +4072,7 @@ export function renderApp(): string {
                 <strong>\${signer.name}</strong>
                 <span class="empty">\${signer.detail}</span>
                 <span class="pill signer-status \${signer.className}">\${signer.status}</span>
-                <span class="signature-slot">Sig: <span class="hash">\${signer.sig}</span></span>\${copyIcon(run && signer.signer ? signerRecordHash(run, signer.signer) : '', signer.name + ' signature')}
+                <span class="signature-slot"><span class="signature-label">Latest</span><span class="signature-separator">:</span> <span class="hash">\${signer.sig}</span></span>\${copyIcon(run && signer.signer ? signerRecordHash(run, signer.signer) : '', signer.name + ' latest record')}
               </div>
             \`).join('')}
           </div>
@@ -4197,15 +4273,28 @@ export function renderApp(): string {
         return '<svg viewBox="0 0 16 16"><path d="M4.25 2.75h5.4l2.1 2.1v8.4h-7.5v-10.5Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.35"/><path d="M9.55 2.8v2.35h2.35M5.7 7h4.6M5.7 9.1h4.6M5.7 11.2h3.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.25"/></svg>';
       }
 
-      function signerSignature(run, signer) {
-        const record = run.records.find((item) => item.signer === signer);
+      function recordsForSigner(run, signer) {
+        return run.records.filter((item) => item.signer === signer);
+      }
+
+      function signerLatestRecord(run, signer) {
+        const records = recordsForSigner(run, signer);
+        return records[records.length - 1];
+      }
+
+      function recordCountLabel(count) {
+        return count === 1 ? '1 record' : count + ' records';
+      }
+
+      function signerLatestRecordDigest(run, signer) {
+        const record = signerLatestRecord(run, signer);
         if (!record) return '-';
         const hash = record.record_hash.replace('sha256:', '');
-        return hash.slice(0, 10) + '...' + hash.slice(-4);
+        return hash.slice(0, 6) + '...' + hash.slice(-4);
       }
 
       function signerRecordHash(run, signer) {
-        return run.records.find((item) => item.signer === signer)?.record_hash ?? '';
+        return signerLatestRecord(run, signer)?.record_hash ?? '';
       }
 
       function signerStatusClass(signer) {
@@ -4304,11 +4393,12 @@ export function renderApp(): string {
         return run.records.find((record) => record.label === 'proposal');
       }
 
-      function progressRowClass(row) {
+      function progressRowClass(row, run) {
         const key = progressKeyForTitle(row.title);
         return [
           row.halted ? 'halted' : '',
           key === 'proposal' ? 'proposal' : '',
+          key === 'proposal' && run?.status === 'pending_approval' ? 'pending-proposal' : '',
         ].filter(Boolean).join(' ');
       }
 
@@ -4819,7 +4909,7 @@ export function renderApp(): string {
           <span class="section-label">Agent progress</span>
           <div class="progress-list">
             \${stageRows.map((row) => \`
-              <div class="progress-item \${progressRowClass(row)}">
+              <div class="progress-item \${progressRowClass(row, run)}">
                 <span class="dot \${row.done ? 'ok' : row.halted ? 'pending' : 'future'}"></span>
                 <div>
                   <strong>\${row.title === 'Resume not started' ? 'MCP execution (pending)' : row.title === 'Audit assembling' ? 'Audit ready (pending)' : row.title}</strong>
@@ -4847,10 +4937,17 @@ export function renderApp(): string {
 
       function renderTimeline(run) {
         const signers = [
-          { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', signer: 'agent', status: run.records.some((record) => record.signer === 'agent') ? 'Signed' : 'Pending' },
-          { kind: 'human', name: 'Human', detail: 'alice@example.com', signer: 'human', status: run.records.some((record) => record.signer === 'human') ? 'Signed' : 'Pending' },
-          { kind: 'mcp', name: 'Action MCP', detail: 'github.write@2.3.1', signer: 'action_mcp', status: run.records.some((record) => record.signer === 'action_mcp') ? 'Signed' : 'Pending' },
-        ];
+          { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', signer: 'agent' },
+          { kind: 'human', name: 'Human', detail: 'alice@example.com', signer: 'human' },
+          { kind: 'mcp', name: 'Action MCP', detail: 'github.write@2.3.1', signer: 'action_mcp' },
+        ].map((signer) => {
+          const records = recordsForSigner(run, signer.signer);
+          return {
+            ...signer,
+            recordCount: records.length,
+            status: records.length ? 'Signed' : 'Pending',
+          };
+        });
         timelineEl.innerHTML = run.trace_packet.timeline.length
           ? \`
           <span class="trace-section-label">Record timeline</span>
@@ -4906,9 +5003,9 @@ export function renderApp(): string {
               <div class="signer-row">
                 \${signerIcon(signer.kind)}
                 <strong>\${signer.name}</strong>
-                <span class="empty">\${signer.detail}</span>
+                <span class="empty">\${signer.detail}\${signer.recordCount ? ' (' + recordCountLabel(signer.recordCount) + ')' : ''}</span>
                 <span class="pill signer-status \${signerStatusClass(signer)}">\${signer.status}</span>
-                <span class="signature-slot">Sig: <span class="hash">\${signerSignature(run, signer.signer)}</span></span>\${copyIcon(signerRecordHash(run, signer.signer), signer.name + ' signature')}
+                <span class="signature-slot"><span class="signature-label">Latest</span><span class="signature-separator">:</span> <span class="hash">\${signerLatestRecordDigest(run, signer.signer)}</span></span>\${copyIcon(signerRecordHash(run, signer.signer), signer.name + ' latest record')}
               </div>
             \`).join('')}
           </div>
@@ -4930,8 +5027,8 @@ export function renderApp(): string {
           });
         };
         const renderReceiptSummary = (record, activeTab = 'summary') => {
-          const signedRecords = signers.filter((signer) => signer.status === 'Signed').length;
-          const pendingSignatures = signers.filter((signer) => signer.status === 'Pending').length;
+          const signedSigners = signers.filter((signer) => signer.status === 'Signed').length;
+          const pendingSigners = signers.filter((signer) => signer.status === 'Pending').length;
           const logEntry = run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id;
           const tabMarkup = \`
             <div class="receipt-tabs" role="tablist" aria-label="Receipt inspector views">
@@ -4959,8 +5056,8 @@ export function renderApp(): string {
             \${tabMarkup}
             <div class="receipt-summary-grid">
               <div class="summary-row"><span>Total records</span><strong>\${run.records.length}</strong><span></span></div>
-              <div class="summary-row"><span>Signed records</span><strong>\${signedRecords}</strong><span></span></div>
-              <div class="summary-row"><span>Pending signatures</span><strong>\${pendingSignatures}</strong><span></span></div>
+              <div class="summary-row"><span>Signed signers</span><strong>\${signedSigners}</strong><span></span></div>
+              <div class="summary-row"><span>Pending signers</span><strong>\${pendingSigners}</strong><span></span></div>
               <div class="summary-row"><span>Merkle root</span><span class="hash">\${shortHash(run.records[0]?.record_hash)}</span>\${copyIcon(run.records[0]?.record_hash ?? '', 'Merkle root')}</div>
               <div class="summary-row"><span>Log entry</span><a href="\${logEntry}">cl_\${traceIdForRun(run).slice(4, 20)}</a><span></span></div>
               <div class="summary-row"><span>Log timestamp</span><strong>\${displayRecordTime(record, record.label) + ' UTC'}</strong><span></span></div>
