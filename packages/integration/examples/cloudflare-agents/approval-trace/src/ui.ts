@@ -3573,7 +3573,19 @@ export function renderApp(): string {
         statusDetail.textContent = detail || 'The workflow is waiting for the next action.';
         renderSteps(step, kind);
         if (reviewStatePill) {
-          reviewStatePill.textContent = step === 'halt' ? 'Paused' : step === 'resume' ? 'Running' : step === 'audit' && kind === 'error' ? 'Needs review' : step === 'audit' ? 'Ready' : 'Waiting';
+          reviewStatePill.textContent = currentRun?.status === 'rejected'
+            ? 'Rejected'
+            : currentRun?.status === 'changes_requested'
+              ? 'Needs revision'
+              : step === 'halt'
+                ? 'Paused'
+                : step === 'resume'
+                  ? 'Running'
+                  : step === 'audit' && kind === 'error'
+                    ? 'Needs review'
+                    : step === 'audit'
+                      ? 'Ready'
+                      : 'Waiting';
           reviewStatePill.textContent = reviewStatePill.textContent.toUpperCase();
           reviewStatePill.classList.toggle('green', step === 'audit' && kind === 'ok');
         }
@@ -4076,7 +4088,7 @@ export function renderApp(): string {
           trace_id: traceIdForRun(run),
           run_id: run.run_id,
           status: run.status === 'pending_approval' ? 'human_review_halted' : run.status,
-          current_step: run.status === 'pending_approval' || run.status === 'changes_requested' ? 3 : ['succeeded', 'failed', 'rejected'].includes(run.status) ? 5 : 4,
+          current_step: ['pending_approval', 'changes_requested', 'rejected'].includes(run.status) ? 3 : ['succeeded', 'failed'].includes(run.status) ? 5 : 4,
           created_at: createdAt,
           records: run.trace_packet.timeline.map((entry) => {
             const record = run.records.find((item) => item.record_hash === entry.record_hash);
@@ -4350,7 +4362,7 @@ export function renderApp(): string {
           return;
         }
         if (run.status === 'rejected') {
-          setStatus('Rejected', 'error', 'The human decision is signed. No execution ran.', 'audit');
+          setStatus('Rejected', 'error', 'The human decision is signed. No execution ran.', 'halt');
           return;
         }
         if (run.status === 'changes_requested') {
@@ -4478,9 +4490,10 @@ export function renderApp(): string {
       function renderAnswer(run) {
         const answer = run.trace_packet.answer;
         const publicUrl = run.trace_packet.handoff?.public_context_url;
-        const auditReady = ['succeeded', 'failed', 'rejected'].includes(run.status);
+        const auditReady = ['succeeded', 'failed'].includes(run.status);
+        const rejected = run.status === 'rejected';
         const changesRequested = run.status === 'changes_requested';
-        const showReviewResult = auditReady || changesRequested;
+        const showReviewResult = auditReady || rejected || changesRequested;
         const labels = new Set(run.records.map((record) => record.label));
         const stageRows = [
           {
@@ -4515,10 +4528,12 @@ export function renderApp(): string {
             done: answer.executed,
           },
           {
-            title: auditReady ? 'Audit ready' : changesRequested ? 'Revision pending' : 'Audit assembling',
+            title: auditReady ? 'Audit ready' : rejected ? 'MCP audit skipped' : changesRequested ? 'Revision pending' : 'Audit assembling',
             detail: auditReady
               ? 'Public log context and trace JSON are ready.'
-              : changesRequested
+              : rejected
+                ? 'The signed rejection is in the trace; no action MCP receipts exist.'
+                : changesRequested
                 ? 'Signed feedback is in the trace; terminal audit waits for a revised proposal.'
               : 'Receipts appear as the run progresses; terminal audit waits for a decision.',
             done: auditReady,

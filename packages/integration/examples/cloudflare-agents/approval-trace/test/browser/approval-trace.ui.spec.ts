@@ -1304,9 +1304,16 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.getByRole('button', { name: 'Reject' }).click()
 
       await expect(page.locator('#statusTitle')).toHaveText('Rejected')
+      await expect(page.locator('#reviewStatePill')).toHaveText('REJECTED')
+      await expect(page.locator('[data-step="halt"]')).toContainText('Rejected')
+      await expect(page.locator('[data-step="resume"]')).not.toHaveClass(/done/)
+      await expect(page.locator('[data-step="audit"]')).not.toHaveClass(/done/)
       await expect(page.locator('#answer')).toContainText('not run')
+      await expect(page.locator('#answer')).toContainText('MCP audit skipped')
+      await expect(page.locator('#answer')).not.toContainText('Audit ready')
       await expect(page.locator('#timeline .event')).toHaveCount(4)
       await expect(page.locator('#timeline')).not.toContainText('action_mcp')
+      await expect(page.locator('#receipts pre')).toContainText('"current_step": 3')
 
       await openTimelineRecord(page, 'rejection')
       await expect(page.locator('#receipts pre')).toContainText('"signer": "human"')
@@ -1320,7 +1327,10 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.getByRole('button', { name: 'Request changes' }).click()
 
       await expect(page.locator('#statusTitle')).toHaveText('Changes requested')
+      await expect(page.locator('#reviewStatePill')).toHaveText('NEEDS REVISION')
       await expect(page.locator('[data-step="halt"]')).toContainText('Needs revision')
+      await expect(page.locator('[data-step="resume"]')).not.toHaveClass(/done/)
+      await expect(page.locator('[data-step="audit"]')).not.toHaveClass(/done/)
       await expect(page.locator('#answer')).toContainText('Revision requested')
       await expect(page.locator('#answer')).toContainText('agent revision')
       await expect(page.locator('#timeline .event')).toHaveCount(4)
