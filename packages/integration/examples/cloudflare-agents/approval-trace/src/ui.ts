@@ -2660,6 +2660,37 @@ export function renderApp(): string {
       }
 
       .integrity-row .value {
+        font-size: 12px;
+        line-height: 1.3;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .proof-status-value {
+        align-items: center;
+        display: flex;
+        gap: 6px;
+      }
+
+      .integrity-proof-dot {
+        align-items: center;
+        color: var(--green);
+        display: inline-flex;
+        flex: 0 0 12px;
+        height: 12px;
+        justify-content: center;
+        width: 12px;
+      }
+
+      .integrity-proof-dot svg {
+        display: block;
+        height: 12px;
+        width: 12px;
+      }
+
+      .proof-status-text {
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -2671,6 +2702,7 @@ export function renderApp(): string {
       }
 
       .trace-integrity .event-action {
+        font-size: 12px;
         justify-self: end;
         white-space: nowrap;
       }
@@ -3175,6 +3207,21 @@ export function renderApp(): string {
 
         .record-timeline::before {
           left: 8px;
+        }
+
+        .integrity-row {
+          gap: 7px;
+          grid-template-columns: 88px minmax(0, 1fr) 16px;
+        }
+
+        .integrity-row.proof-row {
+          gap: 2px 7px;
+          grid-template-columns: 88px minmax(0, 1fr);
+        }
+
+        .integrity-row.proof-row .event-action {
+          grid-column: 2;
+          justify-self: start;
         }
 
         .event-hash {
@@ -4702,7 +4749,7 @@ export function renderApp(): string {
             <div class="integrity-list">
               <div class="integrity-row"><strong>Merkle root</strong><span class="hash">\${run.records[0]?.record_hash ?? 'pending'}</span>\${copyIcon(run.records[0]?.record_hash ?? '', 'Merkle root')}</div>
               <div class="integrity-row"><strong>Log hash</strong><span class="hash">\${run.records[1]?.record_hash ?? 'pending'}</span>\${copyIcon(run.records[1]?.record_hash ?? '', 'log hash')}</div>
-              <div class="integrity-row proof-row"><strong>Proof status</strong><span class="value">Included in Cloudflare Integrity Log</span><a class="event-action" href="\${run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id}" target="_blank" rel="noreferrer">View proof</a></div>
+              <div class="integrity-row proof-row"><strong>Proof status</strong><span class="value proof-status-value"><span class="integrity-proof-dot" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="m5.4 8.1 1.8 1.8 3.5-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="proof-status-text">Included in Cloudflare Integrity Log</span></span><a class="event-action" href="\${run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id}" target="_blank" rel="noreferrer">View proof</a></div>
             </div>
           </div>
         \`

@@ -1137,6 +1137,41 @@ async function expectTraceRowsReadable(page: Page): Promise<void> {
   }
 }
 
+async function expectTraceIntegrityProofStatusFits(page: Page): Promise<void> {
+  const proofStatus = await page.evaluate<{
+    fontSize: number
+    iconVisible: boolean
+    linkFontSize: number
+    linkVisible: boolean
+    textFits: boolean
+    valueClientWidth: number
+    valueScrollWidth: number
+  }>(`(() => {
+    const row = document.querySelector('.integrity-row.proof-row')
+    const value = row?.querySelector('.value')
+    const icon = row?.querySelector('.integrity-proof-dot')
+    const text = row?.querySelector('.proof-status-text')
+    const link = row?.querySelector('a')
+    const valueStyle = value ? getComputedStyle(value) : null
+    const linkStyle = link ? getComputedStyle(link) : null
+    return {
+      fontSize: valueStyle ? Number.parseFloat(valueStyle.fontSize) : 0,
+      iconVisible: !!icon && icon.getBoundingClientRect().width === 12,
+      linkFontSize: linkStyle ? Number.parseFloat(linkStyle.fontSize) : 0,
+      linkVisible: !!link && link.getBoundingClientRect().width > 0,
+      textFits: text ? text.scrollWidth <= text.clientWidth + 1 : false,
+      valueClientWidth: text ? text.clientWidth : 0,
+      valueScrollWidth: text ? text.scrollWidth : 999,
+    }
+  })()`)
+  expect(proofStatus.fontSize).toBe(12)
+  expect(proofStatus.iconVisible).toBe(true)
+  expect(proofStatus.linkFontSize).toBe(12)
+  expect(proofStatus.linkVisible).toBe(true)
+  expect(proofStatus.textFits).toBe(true)
+  expect(proofStatus.valueClientWidth).toBeGreaterThanOrEqual(proofStatus.valueScrollWidth - 1)
+}
+
 async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
   const timeline = await page.evaluate<{
     rows: Array<{
@@ -1214,6 +1249,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectWorkflowStepCopyHugsContent(page)
       await expectReferenceDesktopRailGeometry(page)
       await expectTraceRowsReadable(page)
+      await expectTraceIntegrityProofStatusFits(page)
       await expectReferenceTimelineSpacing(page)
       await expectReceiptPanelFitsReferenceViewport(page)
       await expectReferenceReceiptToolbarRhythm(page)
@@ -1369,6 +1405,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectWorkflowStepCopyHugsContent(page)
       await expectConstrainedDesktopRailGeometry(page)
       await expectTraceRowsReadable(page)
+      await expectTraceIntegrityProofStatusFits(page)
       await expectReferenceTimelineSpacing(page)
 
       const firstRunId = await page.locator('#runIdLabel').textContent()
