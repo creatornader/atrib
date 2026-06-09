@@ -1,4 +1,6 @@
-export function renderApp(): string {
+export function renderApp(options: { region?: string } = {}): string {
+  const region = (options.region ?? 'IAD').replace(/[^A-Za-z0-9-]/gu, '').slice(0, 12) || 'IAD'
+
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -1381,6 +1383,7 @@ export function renderApp(): string {
 
       .step-copy strong {
         font-size: 14px;
+        font-weight: 850;
         line-height: 1.15;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1428,6 +1431,11 @@ export function renderApp(): string {
         margin-top: 0;
       }
 
+      .step-copy strong .step-number-label,
+      .step-copy strong [data-step-title] {
+        font-weight: inherit;
+      }
+
       .step[data-step="halt"] .step-copy .step-meta-line {
         align-items: center;
         display: flex;
@@ -1459,7 +1467,6 @@ export function renderApp(): string {
       }
 
       .step[data-step="halt"] .step-copy .step-badge {
-        color: #a44900;
         font-size: 8px;
         font-weight: 850;
         line-height: 1;
@@ -1494,6 +1501,18 @@ export function renderApp(): string {
       .step-badge.requested {
         background: #fff8ed;
         border-color: #ffd09a;
+        color: #a44900;
+      }
+
+      .step[data-step="halt"] .step-copy .step-badge.approved {
+        color: #047857;
+      }
+
+      .step[data-step="halt"] .step-copy .step-badge.rejected {
+        color: #be123c;
+      }
+
+      .step[data-step="halt"] .step-copy .step-badge.requested {
         color: #a44900;
       }
 
@@ -1587,10 +1606,10 @@ export function renderApp(): string {
       }
 
       .heading-pill {
-        background: #fff0dc;
-        border: 1px solid #ffd09a;
+        background: #f4f7fb;
+        border: 1px solid var(--line);
         border-radius: 999px;
-        color: #a44900;
+        color: var(--muted);
         font-size: 11px;
         font-weight: 800;
         letter-spacing: 0;
@@ -1598,10 +1617,29 @@ export function renderApp(): string {
         text-transform: none;
       }
 
-      .heading-pill.green {
-        background: #e8f7ef;
+      .heading-pill.green,
+      .heading-pill.approved {
+        background: #e9f8ef;
         border-color: #b9e5cb;
-        color: var(--green);
+        color: #047857;
+      }
+
+      .heading-pill.rejected {
+        background: #fff1f2;
+        border-color: #fecdd3;
+        color: #be123c;
+      }
+
+      .heading-pill.requested {
+        background: #fff8ed;
+        border-color: #ffd09a;
+        color: #a44900;
+      }
+
+      .heading-pill.running {
+        background: #edf4ff;
+        border-color: #c7dcff;
+        color: #0969da;
       }
 
       .trigger-card {
@@ -3600,7 +3638,7 @@ export function renderApp(): string {
             </div>
           </span>
           <span class="run-id-meta">Run ID <span class="meta-code" id="runIdLabel">pending</span><button class="copy-icon" type="button" aria-label="Copy run ID" data-copy-source="#runIdLabel" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></button></span>
-          <span>Region <span class="meta-code">IAD</span><span class="region-status-dot" aria-hidden="true"></span></span>
+          <span>Region <span class="meta-code" id="regionLabel">${region}</span><span class="region-status-dot" aria-hidden="true"></span></span>
           <span>Started <span id="startedLabel">waiting</span></span>
           <button class="header-menu" id="headerMenu" type="button" aria-label="More run actions" aria-controls="headerActions" aria-expanded="false" aria-haspopup="menu"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.25" fill="currentColor"/><circle cx="8" cy="8" r="1.25" fill="currentColor"/><circle cx="12.5" cy="8" r="1.25" fill="currentColor"/></svg></button>
           <div class="header-actions-menu" id="headerActions" role="menu" hidden>
@@ -3911,12 +3949,14 @@ export function renderApp(): string {
         if (!run) {
           title.textContent = 'Human review halted';
           badge.textContent = 'Awaiting review';
+          badge.classList.add('requested');
           badge.hidden = !haltStep?.classList.contains('halted');
           return;
         }
         if (run.status === 'pending_approval') {
           title.textContent = hasRevisedProposal(run) ? 'Revised proposal halted' : 'Human review halted';
           badge.textContent = 'Awaiting review';
+          badge.classList.add('requested');
           return;
         }
         if (run.status === 'rejected') {
@@ -3958,22 +3998,22 @@ export function renderApp(): string {
         statusDetail.textContent = detail || 'The workflow is waiting for the next action.';
         renderSteps(step, kind);
         if (reviewStatePill) {
-          reviewStatePill.textContent = currentRun?.status === 'rejected'
-            ? 'Rejected'
-            : currentRun?.status === 'changes_requested'
-              ? 'Needs revision'
-              : step === 'halt'
-                ? 'Paused'
-                : step === 'resume'
-                  ? 'Running'
-                  : step === 'audit' && kind === 'error'
-                    ? 'Needs review'
-                    : step === 'audit'
-                      ? 'Ready'
-                      : 'Waiting';
-          reviewStatePill.textContent = reviewStatePill.textContent.toUpperCase();
-          reviewStatePill.classList.toggle('green', step === 'audit' && kind === 'ok');
+          const state = reviewPillState(currentRun, step, kind);
+          reviewStatePill.textContent = state.text.toUpperCase();
+          reviewStatePill.classList.remove('green', 'approved', 'rejected', 'requested', 'running', 'waiting');
+          reviewStatePill.classList.add(state.className);
+          if (state.className === 'approved') reviewStatePill.classList.add('green');
         }
+      }
+
+      function reviewPillState(run, step, kind) {
+        if (run?.status === 'rejected') return { text: 'Rejected', className: 'rejected' };
+        if (run?.status === 'changes_requested') return { text: 'Needs revision', className: 'requested' };
+        if (step === 'halt') return { text: 'Paused', className: 'requested' };
+        if (step === 'resume') return { text: 'Running', className: 'running' };
+        if (step === 'audit' && kind === 'error') return { text: 'Needs review', className: 'rejected' };
+        if (step === 'audit') return { text: 'Ready', className: 'approved' };
+        return { text: 'Waiting', className: 'waiting' };
       }
 
       function sleep(ms) {

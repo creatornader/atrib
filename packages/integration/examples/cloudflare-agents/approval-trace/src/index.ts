@@ -225,6 +225,11 @@ function html(value: string): Response {
   })
 }
 
+function requestRegion(request: Request): string {
+  const cf = (request as Request & { cf?: { colo?: unknown } }).cf
+  return typeof cf?.colo === 'string' && cf.colo ? cf.colo : 'IAD'
+}
+
 function jsonText(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
@@ -1973,7 +1978,9 @@ export default {
   async fetch(request: Request, env: Env, ctx: globalThis.ExecutionContext): Promise<Response> {
     try {
       const url = new URL(request.url)
-      if (url.pathname === '/' || url.pathname === '/demo') return html(renderApp())
+      if (url.pathname === '/' || url.pathname === '/demo') {
+        return html(renderApp({ region: requestRegion(request) }))
+      }
       if (url.pathname.startsWith('/action-mcp')) return actionMcpHandler.fetch(request, env, ctx)
 
       if (url.pathname === '/api/runs' && request.method === 'POST') {

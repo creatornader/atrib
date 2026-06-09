@@ -20,6 +20,7 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await page.goto(path)
   await expect(page).toHaveTitle('Cloudflare Agent Trace')
   await expect(page.getByTestId('approval-trace-app')).toBeVisible()
+  await expect(page.locator('#regionLabel')).toHaveText(/^[A-Z0-9-]{2,12}$/)
   await expect(page.locator('#runIdLabel')).not.toHaveText('pending')
   await expect(page.locator('#runIdLabel')).toHaveText(/^run_[A-Z0-9]+/)
   await expect(page.locator('#runIdLabel')).toHaveAttribute('data-run-id', /.+/)
@@ -58,6 +59,8 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expectPendingSignerHashReadable(page)
   await expectReferenceSignerIconTreatment(page)
   await expectReferenceLeftProgressTypography(page)
+  await expectWorkflowStepTitlesBold(page)
+  await expectReviewPillMatchesRailBadge(page)
 }
 
 async function openTimelineRecord(page: Page, label: string, receiptLabel = label): Promise<void> {
@@ -1130,6 +1133,49 @@ async function expectWorkflowStepCopyHugsContent(page: Page): Promise<void> {
   }
 }
 
+async function expectWorkflowStepTitlesBold(page: Page): Promise<void> {
+  const weights = await page.evaluate<Array<{ step: string | null; weight: number }>>(
+    `Array.from(document.querySelectorAll('.step')).map((step) => {
+      const title = step.querySelector('.step-copy strong [data-step-title]') ?? step.querySelector('.step-copy strong')
+      return {
+        step: step.getAttribute('data-step'),
+        weight: title ? Number.parseFloat(getComputedStyle(title).fontWeight) : 0,
+      }
+    })`,
+  )
+  expect(weights).toHaveLength(5)
+  for (const item of weights) {
+    expect(item.weight).toBeGreaterThanOrEqual(800)
+  }
+}
+
+async function expectReviewPillMatchesRailBadge(page: Page): Promise<void> {
+  const colors = await page.evaluate<{
+    badge: { background: string; border: string; color: string; text: string } | null
+    pill: { background: string; border: string; color: string; text: string } | null
+  }>(`(() => {
+    const read = (element) => {
+      if (!element) return null
+      const style = getComputedStyle(element)
+      return {
+        background: style.backgroundColor,
+        border: style.borderTopColor,
+        color: style.color,
+        text: element.textContent?.trim() ?? '',
+      }
+    }
+    return {
+      badge: read(document.querySelector('[data-step-badge="halt"]')),
+      pill: read(document.querySelector('#reviewStatePill')),
+    }
+  })()`)
+  expect(colors.pill).not.toBeNull()
+  expect(colors.badge).not.toBeNull()
+  expect(colors.pill?.background).toBe(colors.badge?.background)
+  expect(colors.pill?.border).toBe(colors.badge?.border)
+  expect(colors.pill?.color).toBe(colors.badge?.color)
+}
+
 async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
   const railGeometry = await page.evaluate<{
     badge: {
@@ -1583,6 +1629,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectNoHorizontalOverflow(page)
       await expect(page.locator('[data-step="halt"]')).toContainText('Approved')
       await expect(page.locator('[data-step="halt"]')).not.toContainText('Awaiting review')
+      await expectReviewPillMatchesRailBadge(page)
       await expect(page.locator('#answer')).toContainText('Agent resumed through MCP')
       await expect(page.locator('#answer')).toContainText('Audit ready')
       await expect(page.locator('#answer')).toContainText('repo_files.server/middleware/rate_limit.ts')
@@ -1659,6 +1706,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#statusTitle')).toHaveText('Trace complete', { timeout: 30_000 })
       await expectReviewResultVisibleInProgressPanel(page)
       await expect(page.locator('[data-step="halt"]')).toContainText('Approved')
+      await expectReviewPillMatchesRailBadge(page)
       await expectNoHorizontalOverflow(page)
     })
   })
@@ -1672,6 +1720,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectReviewResultVisibleInProgressPanel(page)
       await expect(page.locator('#reviewStatePill')).toHaveText('REJECTED')
       await expect(page.locator('[data-step="halt"]')).toContainText('Rejected')
+      await expectReviewPillMatchesRailBadge(page)
       await expect(page.locator('[data-step="resume"]')).not.toHaveClass(/done/)
       await expect(page.locator('[data-step="audit"]')).not.toHaveClass(/done/)
       await expect(page.locator('#answer')).toContainText('not run')
@@ -1709,6 +1758,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#reviewStatePill')).toHaveText('PAUSED')
       await expect(page.locator('[data-step="halt"]')).toContainText('Revised proposal halted')
       await expect(page.locator('[data-step="halt"]')).toContainText('Awaiting review')
+      await expectReviewPillMatchesRailBadge(page)
       await expect(page.locator('[data-step="resume"]')).not.toHaveClass(/done/)
       await expect(page.locator('[data-step="audit"]')).not.toHaveClass(/done/)
       await expect(page.locator('#answer')).toContainText('Human review feedback sent')
