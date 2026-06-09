@@ -226,7 +226,9 @@ verified record:
 ### Interactive approval trace
 
 The runnable example at [`approval-trace/`](approval-trace/) turns the two
-Cloudflare surfaces into a human approval workflow:
+Cloudflare surfaces into a human approval workflow. It is framed as an
+approval-envelope proof for Code Mode-shaped side effects, not as native
+`@cloudflare/codemode` HITL:
 
 ```text
 operator request -> agent proposal -> human approval -> MCP execution -> signed outcome -> audit trace
@@ -235,8 +237,10 @@ operator request -> agent proposal -> human approval -> MCP execution -> signed 
 It is intentionally Cloudflare-shaped. The target system is a Durable Object
 SQLite table that models one DDoS ruleset row, the browser approval is the HITL
 gate, and the execution path uses an `McpAgent` action surface wrapped with
-`@atrib/mcp/worker`. The UI focuses on the parts a reviewer needs first:
-decision context, semantic causal chain, trustless audit, and signer separation.
+`@atrib/mcp/worker`. The point is the signed boundary: exact proposal payload,
+human decision over that payload, scoped resumed execution, signed outcome, and
+handoff trace. The UI focuses on the parts a reviewer needs first: decision
+context, semantic causal chain, trustless audit, and signer separation.
 
 Run it with:
 
@@ -256,8 +260,9 @@ Worker plus Durable Object for the host-owned OAuth evidence surfaces from
   keeps upstream OAuth secrets at the host boundary and strips token-shaped
   fields before returning evidence.
 
-This is not a third Cloudflare Agent adapter. It is support infrastructure that
-Cloudflare-hosted MCP/OAuth deployments can run next to either surface when they
+The reference is support infrastructure rather than a third Cloudflare Agent
+adapter. Cloudflare-hosted MCP/OAuth deployments can run it next to either
+surface when they
 need fleet-shared DPoP replay checks or controlled opaque-token introspection.
 It strengthens the Cloudflare authorization-evidence story without replacing
 the approval-trace demo.

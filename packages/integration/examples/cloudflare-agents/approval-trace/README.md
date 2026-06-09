@@ -1,6 +1,8 @@
 # Cloudflare approval trace
 
 Interactive Cloudflare Agents example for atrib-signed human approval traces.
+The example is an approval-envelope proof for Code Mode-shaped side effects,
+not a native `@cloudflare/codemode` HITL implementation.
 
 The app is a safe Cloudflare-shaped workflow:
 
@@ -12,10 +14,19 @@ The simulated target is a Durable Object SQLite table that looks like a
 Cloudflare Workers issue-triage queue. No real Cloudflare account state is
 mutated.
 
+Code Mode is the problem context for the example: generated code can compress
+many side effects behind one execution boundary. This demo keeps the boundary
+explicit. The agent proposes an exact payload first, the workflow halts for a
+human decision, execution resumes only through a scoped `McpAgent` action path,
+and the proposal, decision, execution, outcome, and handoff are signed as
+separate records.
+
 ## What this shows
 
 - A prior trigger starts the agent before the browser approval gate appears.
 - A real browser approval or rejection halts or resumes the workflow.
+- The approval is bound to the proposed payload, not to a vague "continue"
+  action.
 - Agent, human reviewer, and action MCP records use distinct signing keys.
 - The action MCP record has an explicit `informed_by` edge to the human
   approval record.
