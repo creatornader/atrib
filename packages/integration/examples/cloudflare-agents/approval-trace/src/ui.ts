@@ -1,4 +1,6 @@
-export function renderApp(): string {
+export function renderApp(options: { colo?: string } = {}): string {
+  const colo = (options.colo ?? 'IAD').replace(/[^A-Za-z0-9-]/gu, '').slice(0, 12) || 'IAD'
+
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -37,7 +39,9 @@ export function renderApp(): string {
           linear-gradient(180deg, #f8fafc 0, #eef2f7 320px, #e8edf4 100%),
           var(--bg);
         color: var(--text);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", sans-serif;
+        max-width: 100%;
+        overflow-x: hidden;
       }
 
       button,
@@ -603,7 +607,6 @@ export function renderApp(): string {
       }
 
       .cloud-mark {
-        color: var(--orange);
         flex: 0 0 auto;
         height: 32px;
         width: 38px;
@@ -736,8 +739,9 @@ export function renderApp(): string {
         color: #111827;
         display: block;
         flex: 0 0 auto;
-        height: 24px;
-        width: 24px;
+        height: 25px;
+        overflow: visible;
+        width: 25px;
       }
 
       .trigger-details {
@@ -762,7 +766,7 @@ export function renderApp(): string {
 
       .progress-item,
       .event {
-        animation: itemIn 360ms ease both;
+        transition: background-color 160ms ease, color 160ms ease;
       }
 
       .progress-item {
@@ -776,7 +780,12 @@ export function renderApp(): string {
       }
 
       .diff {
+        display: block;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
         grid-template-columns: 1fr;
+        width: 100%;
       }
 
       .diff pre {
@@ -955,8 +964,10 @@ export function renderApp(): string {
       }
 
       .shell {
-        max-width: none;
+        margin: 0 auto;
+        max-width: 1536px;
         padding: 0 0 0;
+        width: 100%;
       }
 
       .hero {
@@ -968,7 +979,10 @@ export function renderApp(): string {
         justify-content: flex-start;
         margin-bottom: 8px;
         min-height: 62px;
+        overflow: visible;
         padding: 10px 28px;
+        position: relative;
+        z-index: 30;
       }
 
       .hero::after {
@@ -997,8 +1011,9 @@ export function renderApp(): string {
 
       .header-meta {
         flex: 1 1 auto;
-        gap: 12px;
+        gap: 18px;
         justify-content: flex-start;
+        position: relative;
       }
 
       .header-meta > span:nth-child(3) {
@@ -1018,8 +1033,177 @@ export function renderApp(): string {
         white-space: nowrap;
       }
 
+      .run-id-meta {
+        align-items: center;
+        display: inline-flex;
+        gap: 7px;
+      }
+
+      .run-id-meta .copy-icon {
+        height: 16px;
+        width: 16px;
+      }
+
+      .run-mode-wrap {
+        display: inline-flex;
+        position: relative;
+        white-space: nowrap;
+      }
+
       .meta-pill {
         gap: 8px;
+      }
+
+      button.meta-pill {
+        cursor: pointer;
+        font: inherit;
+      }
+
+      button.meta-pill:hover,
+      button.meta-pill:focus-visible,
+      button.meta-pill[aria-expanded="true"] {
+        border-color: #b8c8f6;
+        color: var(--blue);
+        outline: 0;
+      }
+
+      .meta-pill.live-run .menu-chevron {
+        color: #475569;
+        height: 12px;
+        margin-left: -2px;
+        transition: transform 160ms ease;
+        width: 12px;
+      }
+
+      .meta-pill.live-run[aria-expanded="true"] .menu-chevron {
+        transform: rotate(180deg);
+      }
+
+      .colo-status-dot {
+        background: var(--green);
+        border-radius: 999px;
+        display: inline-block;
+        height: 8px;
+        margin-left: 6px;
+        vertical-align: 1px;
+        width: 8px;
+      }
+
+      .header-menu {
+        align-items: center;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink);
+        display: inline-flex;
+        height: 32px;
+        justify-content: center;
+        padding: 0;
+        width: 32px;
+      }
+
+      .header-menu:hover,
+      .header-menu:focus-visible,
+      .header-menu[aria-expanded="true"] {
+        border-color: #b8c8f6;
+        color: var(--blue);
+        outline: 0;
+      }
+
+      .header-menu svg {
+        height: 16px;
+        width: 16px;
+      }
+
+      .header-actions-menu {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: 0 14px 32px rgba(18, 27, 42, 0.16);
+        display: grid;
+        min-width: 178px;
+        padding: 5px;
+        position: absolute;
+        right: 0;
+        top: 42px;
+        z-index: 1000;
+      }
+
+      .run-mode-menu {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: 0 14px 32px rgba(18, 27, 42, 0.16);
+        display: grid;
+        left: 0;
+        max-width: calc(100vw - 40px);
+        min-width: 224px;
+        overflow: hidden;
+        padding: 5px;
+        position: absolute;
+        top: 40px;
+        width: 224px;
+        z-index: 1200;
+      }
+
+      .header-actions-menu[hidden] {
+        display: none;
+      }
+
+      .run-mode-menu[hidden] {
+        display: none;
+      }
+
+      .header-actions-menu button,
+      .header-actions-menu a,
+      .run-mode-menu button {
+        align-items: center;
+        background: transparent;
+        border-radius: 6px;
+        color: var(--ink);
+        display: flex;
+        font-size: 12px;
+        font-weight: 700;
+        min-height: 30px;
+        padding: 7px 9px;
+        text-align: left;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .run-mode-menu button {
+        display: grid;
+        gap: 7px;
+        grid-template-columns: 12px minmax(0, 1fr);
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .run-mode-menu button::before {
+        color: transparent;
+        content: "";
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1;
+      }
+
+      .run-mode-menu button[aria-checked="true"]::before {
+        color: var(--green);
+        content: "✓";
+      }
+
+      .header-actions-menu button:hover,
+      .header-actions-menu button:focus-visible,
+      .header-actions-menu a:hover,
+      .header-actions-menu a:focus-visible,
+      .run-mode-menu button:hover,
+      .run-mode-menu button:focus-visible {
+        background: #f4f7fb;
+        outline: 0;
+      }
+
+      .run-mode-menu button[aria-checked="true"] {
+        color: var(--green);
       }
 
       .meta-pill,
@@ -1034,7 +1218,7 @@ export function renderApp(): string {
         gap: 16px;
         grid-template-columns: 1fr;
         margin-bottom: 6px;
-        min-height: 64px;
+        min-height: 72px;
         padding: 0 30px 0;
       }
 
@@ -1065,8 +1249,8 @@ export function renderApp(): string {
       .rail-stepper {
         align-items: center;
         display: grid;
-        gap: 12px;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 16px;
+        grid-template-columns: minmax(126px, 1fr) minmax(196px, 1.18fr) minmax(236px, 1.12fr) minmax(242px, 1.36fr) minmax(142px, 0.9fr);
         position: relative;
         width: 100%;
       }
@@ -1076,47 +1260,59 @@ export function renderApp(): string {
         background: transparent;
         border: 1px solid transparent;
         color: var(--ink);
-        display: flex;
-        min-height: 52px;
+        display: grid;
+        gap: 10px;
+        grid-template-columns: 38px minmax(0, 1fr);
+        min-height: 64px;
         min-width: 0;
-        padding: 6px 9px;
+        padding: 6px 0;
         position: relative;
       }
 
       .step:not(:last-child)::after {
-        border-top: 2px solid #c5cfdb;
+        background-image: repeating-linear-gradient(
+          to right,
+          #c5cfdb 0,
+          #c5cfdb 4px,
+          transparent 4px,
+          transparent 7px
+        );
         content: "";
-        left: 168px;
+        height: 2px;
+        left: 54px;
         position: absolute;
-        top: 26px;
-        width: calc(100% - 178px);
+        right: -16px;
+        top: 31px;
+        width: auto;
         z-index: 0;
       }
 
       .step.done:not(:last-child)::after {
-        border-color: var(--green);
+        background: var(--green);
       }
 
       .step.active,
       .step.halted,
       .step.error {
-        background: #fff;
-        border-color: #ccd7e5;
-        box-shadow: var(--shadow-tight);
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
       }
 
       .step.halted {
         background: #fff8ed;
         border-color: #f3a64e;
-        justify-self: center;
-        width: 332px;
+        border-radius: 8px;
+        color: var(--ink);
+        min-height: 58px;
+        padding: 6px 10px;
+        width: auto;
       }
 
       .step.halted:not(:last-child)::after {
-        border-color: #c5cfdb;
-        border-top-style: dashed;
-        left: calc(100% + 8px);
-        width: 78px;
+        left: calc(100% + 1px);
+        right: auto;
+        width: var(--halt-connector-width, 56px);
       }
 
       .step.done {
@@ -1134,29 +1330,33 @@ export function renderApp(): string {
         flex: 0 0 auto;
         font-size: 14px;
         font-weight: 800;
-        height: 34px;
-        width: 34px;
+        height: 38px;
+        width: 38px;
         z-index: 1;
       }
 
       .step.done .step-index {
+        color: #fff;
         font-size: 0;
         position: relative;
       }
 
       .step.done .step-index::after {
         content: "";
-        border-bottom: 3px solid #fff;
-        border-right: 3px solid #fff;
-        height: 14px;
+        background: currentColor;
+        height: 22px;
         left: 50%;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
         position: absolute;
         top: 50%;
-        transform: translate(-50%, -58%) rotate(45deg);
-        width: 7px;
+        transform: translate(-50%, -50%);
+        width: 22px;
       }
 
       .step.halted .step-index {
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #f97316 100%);
+        border-color: #f59e0b;
         font-size: 0;
         position: relative;
       }
@@ -1164,16 +1364,17 @@ export function renderApp(): string {
       .step.halted .step-index::before,
       .step.halted .step-index::after {
         background: #fff;
-        border-radius: 2px;
+        border-radius: 3px;
         content: "";
-        height: 15px;
+        height: 14px;
         position: absolute;
-        top: 9px;
-        width: 4px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 3px;
       }
 
       .step.halted .step-index::before {
-        left: 12px;
+        left: 13px;
       }
 
       .step.halted .step-index::after {
@@ -1182,6 +1383,7 @@ export function renderApp(): string {
 
       .step-copy strong {
         font-size: 14px;
+        font-weight: 850;
         line-height: 1.15;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1194,10 +1396,57 @@ export function renderApp(): string {
       }
 
       .step-copy {
-        background: inherit;
+        background: #fff;
+        display: grid;
+        gap: 3px;
+        justify-self: start;
+        max-width: 100%;
         min-width: 0;
+        padding: 0 4px;
         position: relative;
+        width: max-content;
         z-index: 1;
+      }
+
+      .step.halted .step-copy {
+        background: #fff8ed;
+      }
+
+      .step.done .step-copy,
+      .step.active .step-copy,
+      .step.error .step-copy {
+        background: #fff;
+      }
+
+      .step[data-step="halt"] .step-copy strong {
+        display: block;
+        font-size: 14px;
+        font-weight: 850;
+        line-height: 1.1;
+      }
+
+      .step[data-step="halt"] .step-copy .step-number-label,
+      .step[data-step="halt"] .step-copy [data-step-title] {
+        display: inline;
+        margin-top: 0;
+      }
+
+      .step-copy strong .step-number-label,
+      .step-copy strong [data-step-title] {
+        font-weight: inherit;
+      }
+
+      .step[data-step="halt"] .step-copy .step-meta-line {
+        align-items: center;
+        display: flex;
+        gap: 4px;
+        line-height: 1;
+        margin-top: 0;
+        min-width: 0;
+      }
+
+      .step[data-step="halt"] [data-step-time="halt"] {
+        white-space: nowrap;
       }
 
       .step-badge {
@@ -1206,16 +1455,35 @@ export function renderApp(): string {
         border-radius: 999px;
         color: #a44900;
         display: inline-flex;
-        font-size: 10px;
+        flex: 0 0 auto;
+        font-size: 8px;
         font-weight: 850;
         line-height: 1;
-        margin-left: 7px;
+        margin-left: 0;
         padding: 3px 6px;
+        text-transform: uppercase;
         vertical-align: 1px;
+        white-space: nowrap;
+      }
+
+      .step[data-step="halt"] .step-copy .step-badge {
+        font-size: 8px;
+        font-weight: 850;
+        line-height: 1;
+        margin-top: 0;
+      }
+
+      .step-badge[hidden] {
+        display: none;
       }
 
       .step-copy strong [data-step-title] {
         display: inline;
+      }
+
+      .step.halted:not(.review-rejected):not(.review-requested) + .step .step-index {
+        border-color: var(--blue);
+        color: var(--blue);
       }
 
       .step-badge.approved {
@@ -1230,10 +1498,70 @@ export function renderApp(): string {
         color: #be123c;
       }
 
+      .step-badge.requested {
+        background: #fff8ed;
+        border-color: #ffd09a;
+        color: #a44900;
+      }
+
+      .step[data-step="halt"] .step-copy .step-badge.approved {
+        color: #047857;
+      }
+
+      .step[data-step="halt"] .step-copy .step-badge.rejected {
+        color: #be123c;
+      }
+
+      .step[data-step="halt"] .step-copy .step-badge.requested {
+        color: #a44900;
+      }
+
+      .step.branch-ready .step-index {
+        background: var(--green);
+        border-color: var(--green);
+        color: #fff;
+        font-size: 0;
+      }
+
+      .step.branch-ready .step-index::after {
+        content: "";
+        background: currentColor;
+        height: 18px;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
+        position: absolute;
+        width: 18px;
+      }
+
+      @media (min-width: 1451px) {
+        .workflow-rail {
+          padding: 0 9px 0 51px;
+        }
+
+        .rail-stepper {
+          grid-template-columns: 272px 244px 370px minmax(250px, 1fr) 200px;
+        }
+
+        .step.halted {
+          width: 331px;
+        }
+
+        .step[data-step="halt"] .step-copy .step-meta-line {
+          gap: 16px;
+        }
+
+        .step-badge,
+        .step[data-step="halt"] .step-copy .step-badge {
+          font-size: 10px;
+          padding: 3px 4px;
+        }
+      }
+
       .grid {
         gap: 10px;
         align-items: start;
-        grid-template-columns: minmax(336px, 363px) minmax(620px, 1fr) minmax(438px, 524px);
+        grid-template-columns: minmax(318px, 363px) minmax(500px, 610px) minmax(340px, 523px);
+        justify-content: center;
         margin: 0 10px;
       }
 
@@ -1256,16 +1584,21 @@ export function renderApp(): string {
 
       .panel h2 {
         align-items: center;
+        background: rgba(255, 255, 255, 0.98);
         border-bottom: 1px solid var(--line);
         color: var(--ink);
         display: flex;
-        font-size: 12px;
-        font-weight: 850;
-        justify-content: space-between;
-        letter-spacing: 0.05em;
+        font-size: 11.5px;
+        font-weight: 800;
+        gap: 7px;
+        justify-content: flex-start;
+        letter-spacing: 0.035em;
         margin: 0;
         min-height: 38px;
         padding: 0 14px;
+        position: sticky;
+        top: 0;
+        z-index: 3;
       }
 
       .grid > .panel:first-child > h2 {
@@ -1273,10 +1606,10 @@ export function renderApp(): string {
       }
 
       .heading-pill {
-        background: #fff0dc;
-        border: 1px solid #ffd09a;
+        background: #f4f7fb;
+        border: 1px solid var(--line);
         border-radius: 999px;
-        color: #a44900;
+        color: var(--muted);
         font-size: 11px;
         font-weight: 800;
         letter-spacing: 0;
@@ -1284,10 +1617,29 @@ export function renderApp(): string {
         text-transform: none;
       }
 
-      .heading-pill.green {
-        background: #e8f7ef;
+      .heading-pill.green,
+      .heading-pill.approved {
+        background: #e9f8ef;
         border-color: #b9e5cb;
-        color: var(--green);
+        color: #047857;
+      }
+
+      .heading-pill.rejected {
+        background: #fff1f2;
+        border-color: #fecdd3;
+        color: #be123c;
+      }
+
+      .heading-pill.requested {
+        background: #fff8ed;
+        border-color: #ffd09a;
+        color: #a44900;
+      }
+
+      .heading-pill.running {
+        background: #edf4ff;
+        border-color: #c7dcff;
+        color: #0969da;
       }
 
       .trigger-card {
@@ -1303,7 +1655,12 @@ export function renderApp(): string {
       }
 
       .trigger-source {
-        font-size: 15px;
+        font-size: 14px;
+      }
+
+      .trigger-card .detail-row strong {
+        font-size: 13px;
+        font-weight: 400;
       }
 
       .trigger-details {
@@ -1323,9 +1680,17 @@ export function renderApp(): string {
         padding: 14px 16px;
       }
 
+      .proposal,
+      .timeline {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
       .proposal {
         display: grid;
         gap: 10px;
+        min-width: 0;
+        overflow: hidden;
       }
 
       .prompt {
@@ -1368,6 +1733,14 @@ export function renderApp(): string {
         text-transform: uppercase;
       }
 
+      #answer > .section-label {
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0;
+        margin-bottom: 7px;
+        text-transform: none;
+      }
+
       textarea {
         min-height: 86px;
       }
@@ -1389,7 +1762,7 @@ export function renderApp(): string {
         border: 0;
         border-radius: 0;
         column-gap: 10px;
-        grid-template-columns: 120px minmax(0, 1fr);
+        grid-template-columns: max-content minmax(0, 1fr);
         padding: 0;
       }
 
@@ -1406,6 +1779,27 @@ export function renderApp(): string {
         display: flex;
         gap: 8px;
         min-width: 0;
+      }
+
+      .proposal .metric .pill {
+        font-size: 12px;
+        line-height: 1.25;
+        min-height: 22px;
+        padding: 2px 7px;
+      }
+
+      .proposal .metric .meta-code {
+        font-size: 12px;
+        line-height: 1.25;
+        padding: 2px 7px;
+      }
+
+      .proposal .diff-head .label {
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0;
+        text-transform: none;
       }
 
       .label {
@@ -1439,12 +1833,18 @@ export function renderApp(): string {
       }
 
       .progress-item .dot {
-        border: 2px solid #fff;
-        box-shadow: 0 0 0 1px #c7d2df;
-        height: 14px;
-        margin-left: 2px;
+        align-items: center;
+        border: 0;
+        border-radius: 999px;
+        box-shadow: none;
+        box-sizing: border-box;
+        display: inline-flex;
+        height: 16px;
+        justify-content: center;
+        justify-self: center;
+        margin-left: 0;
         position: relative;
-        width: 14px;
+        width: 16px;
         z-index: 1;
       }
 
@@ -1452,37 +1852,56 @@ export function renderApp(): string {
         background: #fff;
       }
 
+      .progress-item .dot.future {
+        border: 1.5px solid #a8b4c3;
+        box-shadow: none;
+      }
+
       .progress-item.halted {
         background: transparent;
       }
 
+      .progress-item.skipped strong {
+        color: #5d687a;
+        font-weight: 700;
+      }
+
+      .progress-item strong {
+        font-size: 13px;
+        font-weight: 400;
+      }
+
       .progress-item.halted strong {
         color: #9a4a00;
+        font-weight: 700;
       }
 
-      .progress-item.proposal .dot.ok {
-        background: var(--blue);
-        box-shadow: 0 0 0 1px #b8c8f6;
-      }
-
-      .progress-item:not(.proposal) .dot.ok {
+      .progress-item .dot.ok {
         background: var(--green);
+        color: #fff;
         font-size: 0;
       }
 
-      .progress-item:not(.proposal) .dot.ok::after {
-        border-bottom: 2px solid #fff;
-        border-right: 2px solid #fff;
+      .progress-item .dot.ok::after {
         content: "";
-        height: 6px;
-        left: 50%;
+        background: currentColor;
+        height: 10px;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
         position: absolute;
-        top: 50%;
-        transform: translate(-50%, -58%) rotate(45deg);
-        width: 3px;
+        width: 10px;
+      }
+
+      .progress-item.proposal.pending-proposal .dot.ok {
+        background: var(--blue);
+      }
+
+      .progress-item.proposal.pending-proposal .dot.ok::after {
+        content: none;
       }
 
       .progress-item.halted .dot.pending {
+        background: var(--orange);
         font-size: 0;
       }
 
@@ -1491,18 +1910,35 @@ export function renderApp(): string {
         background: #fff;
         border-radius: 1px;
         content: "";
-        height: 7px;
+        height: 8px;
         position: absolute;
-        top: 2px;
+        top: 50%;
+        transform: translateY(-50%);
         width: 2px;
       }
 
       .progress-item.halted .dot.pending::before {
-        left: 4px;
+        left: 5px;
       }
 
       .progress-item.halted .dot.pending::after {
-        right: 4px;
+        right: 5px;
+      }
+
+      .progress-item .dot.skipped {
+        background: #f8fafc;
+        border: 1.5px solid #a8b4c3;
+        color: #5d687a;
+        font-size: 0;
+      }
+
+      .progress-item .dot.skipped::after {
+        background: currentColor;
+        border-radius: 999px;
+        content: "";
+        height: 2px;
+        position: absolute;
+        width: 8px;
       }
 
       .run-state {
@@ -1526,10 +1962,13 @@ export function renderApp(): string {
         gap: 10px;
         justify-content: space-between;
         margin-bottom: 6px;
+        max-width: 100%;
         min-width: 0;
+        width: 100%;
       }
 
       .diff-tools {
+        align-items: center;
         color: var(--muted);
         display: flex;
         font-size: 12px;
@@ -1538,29 +1977,94 @@ export function renderApp(): string {
         white-space: nowrap;
       }
 
-      .diff pre {
+      .diff-tools select,
+      .diff-tools button {
+        background: transparent;
+        border: 0;
+        border-radius: 6px;
+        color: var(--muted);
         font-size: 12px;
-        line-height: 1.55;
-        max-height: 300px;
+        font-weight: 650;
+        min-height: 24px;
+        padding: 2px 4px;
+      }
+
+      .diff-tools select:hover,
+      .diff-tools select:focus-visible,
+      .diff-tools button:hover,
+      .diff-tools button:focus-visible,
+      .diff-tools button[aria-pressed="true"] {
+        background: #f4f7fb;
+        color: var(--ink);
+        outline: 0;
+      }
+
+      .diff-tools .diff-copy-button {
+        align-items: center;
+        display: inline-flex;
+        height: 24px;
+        justify-content: center;
+        padding: 0;
+        width: 24px;
+      }
+
+      .diff-tools .diff-copy-button svg {
+        height: 14px;
+        width: 14px;
+      }
+
+      .diff-tools .diff-copy-button[data-copy-state="copied"] {
+        color: var(--green);
+      }
+
+      .diff pre {
+        font-size: 10px;
+        line-height: 14.2px;
+        max-height: 315px;
       }
 
       .diff-code {
         background: #fbfdff;
         border: 1px solid var(--line);
         border-radius: 8px;
+        box-sizing: border-box;
         color: #102033;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: 12px;
-        line-height: 1.55;
-        max-height: 302px;
+        font-size: 10px;
+        line-height: 14.2px;
+        max-height: 315px;
+        max-width: 100%;
+        height: 315px;
         overflow: auto;
         padding: 8px 0;
+        width: 100%;
       }
 
       .diff-line {
-        display: block;
-        min-height: 18px;
+        align-items: start;
+        column-gap: 8px;
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        min-height: 14.2px;
+        min-width: 0;
         padding: 0 12px;
+        width: auto;
+      }
+
+      .diff-line-no {
+        color: #94a3b8;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+        user-select: none;
+      }
+
+      .diff-line-text {
+        min-width: 0;
+        white-space: pre;
+      }
+
+      .diff-code.wrap .diff-line-text {
+        overflow-wrap: anywhere;
         white-space: pre-wrap;
       }
 
@@ -1580,11 +2084,11 @@ export function renderApp(): string {
 
       .risk-bar {
         align-items: center;
-        background: #fff8ed;
+        background: #fff;
         border: 1px solid #ffd09a;
         border-radius: 8px;
         display: grid;
-        gap: 8px;
+        gap: 7px;
         grid-template-columns: auto auto minmax(0, 1fr) minmax(42px, auto);
         min-width: 0;
         padding: 8px 10px;
@@ -1657,63 +2161,161 @@ export function renderApp(): string {
         display: none;
       }
 
+      .feedback-summary,
+      .review-feedback-drawer {
+        background: #f8fafc;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: grid;
+        gap: 5px;
+        padding: 8px 10px;
+      }
+
+      .feedback-summary .label,
+      .review-feedback-drawer .label {
+        color: #5f6f86;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        line-height: 1;
+        text-transform: uppercase;
+      }
+
+      .feedback-summary .value {
+        color: var(--ink);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .review-feedback-drawer[hidden] {
+        display: none;
+      }
+
+      .review-feedback-drawer textarea {
+        background: #fff;
+        border: 1px solid #cfd8e6;
+        border-radius: 7px;
+        color: var(--ink);
+        font: 12px/1.35 var(--mono);
+        min-height: 58px;
+        padding: 8px 9px;
+        resize: vertical;
+        width: 100%;
+      }
+
+      .review-feedback-drawer textarea:focus {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.12);
+        outline: 0;
+      }
+
       .primary,
       .secondary,
       .danger {
         align-items: center;
-        display: grid;
-        gap: 8px;
-        grid-template-columns: 20px minmax(0, 1fr);
-        justify-content: stretch;
+        display: flex;
+        justify-content: center;
         min-height: 58px;
-        padding: 9px 10px;
+        padding: 10px 14px;
+        position: relative;
       }
 
       .actions {
         display: grid;
-        grid-template-columns: minmax(186px, 1.05fr) minmax(156px, 0.9fr) minmax(168px, 0.96fr);
-        gap: 14px;
-        margin-top: 4px;
+        gap: 0;
+        grid-template-columns: 190px 22px 168px 28px 166px;
+        justify-content: start;
+        margin-top: 6px;
         min-width: 0;
       }
 
-      .action-copy {
+      .actions .primary {
+        grid-column: 1;
+      }
+
+      .actions .danger {
+        grid-column: 3;
+      }
+
+      .actions .secondary {
+        grid-column: 5;
+      }
+
+      .button-content {
+        align-items: center;
         display: grid;
-        gap: 2px;
+        flex: 0 1 auto;
+        height: 100%;
+        justify-items: center;
+        max-width: 100%;
         min-width: 0;
-        text-align: left;
+        width: 100%;
+      }
+
+      .button-content::after {
+        content: none;
+      }
+
+      .action-copy {
+        align-items: center;
+        box-sizing: border-box;
+        display: grid;
+        flex: 0 0 auto;
+        gap: 2px;
+        justify-content: center;
+        max-width: calc(100% - 42px);
+        min-width: 0;
+        padding: 0;
+        text-align: center;
+        width: 100%;
+      }
+
+      .action-heading {
+        align-items: center;
+        display: inline-flex;
+        gap: 8px;
+        justify-content: center;
+        max-width: 100%;
+        min-width: 0;
       }
 
       .action-copy small {
         color: inherit;
-        font-size: 9.5px;
-        font-weight: 650;
-        line-height: 1.12;
+        display: block;
+        font-size: 9px;
+        font-weight: 600;
+        line-height: 1.15;
         opacity: 0.78;
-        overflow: hidden;
-        overflow-wrap: normal;
-        text-overflow: ellipsis;
-        text-wrap: normal;
+        overflow: visible;
+        overflow-wrap: anywhere;
+        text-align: center;
+        text-overflow: clip;
+        white-space: normal;
+        width: auto;
       }
 
       .button-label {
         display: block;
-        font-size: 12.5px;
-        font-weight: 850;
+        font-size: 13px;
+        font-weight: 800;
         line-height: 1.12;
+        max-width: 100%;
+        text-align: center;
         white-space: nowrap;
+        width: auto;
       }
 
       .primary .button-label {
-        font-size: 12.5px;
+        font-size: 13px;
       }
 
       .primary .action-copy small {
-        font-size: 8px;
+        font-size: 9px;
+        font-weight: 500;
         letter-spacing: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
       }
 
       .primary {
@@ -1729,32 +2331,63 @@ export function renderApp(): string {
         background: #fff;
       }
 
+      .danger .action-copy small,
+      .secondary .action-copy small {
+        color: #475569;
+        font-weight: 500;
+        opacity: 1;
+      }
+
       .button-icon {
         align-items: center;
-        border: 1px solid currentColor;
         border-radius: 999px;
         display: inline-flex;
-        height: 18px;
+        flex: 0 0 16px;
+        height: 16px;
         justify-content: center;
-        justify-self: start;
         line-height: 0;
-        margin-left: 0;
-        width: 18px;
+        margin: 0;
+        width: 16px;
       }
 
       .button-icon svg {
         display: block;
-        height: 11px;
-        width: 11px;
+        height: 14px;
+        width: 14px;
       }
 
       .primary .button-icon {
-        border-color: rgba(255, 255, 255, 0.78);
+        border: 0;
+        color: #fff;
       }
 
-      .danger .button-icon,
+      .danger .button-icon {
+        border: 1.5px solid currentColor;
+        color: var(--red);
+      }
+
       .secondary .button-icon {
-        margin-top: -1px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        color: #334155;
+      }
+
+      @media (min-width: 1451px) {
+        .primary,
+        .secondary,
+        .danger {
+          padding-left: 14px;
+          padding-right: 14px;
+        }
+
+        .action-copy {
+          max-width: 100%;
+        }
+
+        .action-copy small,
+        .primary .action-copy small {
+          white-space: nowrap;
+        }
       }
 
       .primary .action-copy,
@@ -1773,7 +2406,7 @@ export function renderApp(): string {
         background: #cfd8e5;
         bottom: 26px;
         content: "";
-        left: 68px;
+        left: 17px;
         position: absolute;
         top: 24px;
         width: 2px;
@@ -1781,28 +2414,52 @@ export function renderApp(): string {
 
       .event,
       .event-future {
+        align-items: center;
         animation-duration: 180ms;
         background: transparent;
         border: 0;
         border-radius: 0;
+        box-sizing: border-box;
         display: grid;
-        gap: 7px;
-        grid-template-columns: 54px 20px minmax(0, 1fr) minmax(82px, 120px);
+        gap: 10px;
+        grid-template-columns: 20px 94px minmax(0, 1fr) minmax(82px, 120px);
+        min-height: 44px;
         min-width: 0;
-        padding: 3px 0;
+        padding: 4px 0 4px 8px;
       }
 
-      .event:hover,
-      .event:focus-visible,
-      .event.selected {
+      .event {
+        grid-template-columns: 20px 94px minmax(0, 1fr) minmax(82px, 112px) 14px;
+      }
+
+      #timeline .record-timeline .event,
+      #timeline .record-timeline .event-future {
+        transition: color 160ms ease;
+      }
+
+      #timeline .record-timeline .event:hover,
+      #timeline .record-timeline .event:focus-visible {
         background: #fff7ec;
         border-color: transparent;
         box-shadow: none;
         outline: 0;
       }
 
-      .event-future.selected {
+      #timeline .record-timeline .event.current,
+      #timeline .record-timeline .event-future.current {
         background: #fff7ec;
+        box-shadow: inset 3px 0 0 #f59e0b;
+      }
+
+      #timeline .record-timeline .event.selected {
+        background: #eef6ff;
+        box-shadow: inset 3px 0 0 #0969da;
+        outline: 0;
+      }
+
+      #timeline .record-timeline .event.selected .event-cue {
+        color: #0969da;
+        opacity: 1;
       }
 
       .event-time {
@@ -1814,35 +2471,34 @@ export function renderApp(): string {
       .event-marker {
         align-items: center;
         background: var(--green);
-        border: 2px solid #fff;
+        border: 0;
         border-radius: 999px;
-        box-shadow: 0 0 0 1px #b7d7c8;
+        box-shadow: none;
+        box-sizing: border-box;
         color: #fff;
         display: inline-flex;
         font-size: 10px;
-        height: 17px;
+        height: 18px;
         justify-content: center;
+        justify-self: center;
         margin-top: 3px;
         position: relative;
-        width: 17px;
+        width: 18px;
         z-index: 1;
       }
 
       .event-marker.done::after {
-        border-bottom: 2px solid #fff;
-        border-right: 2px solid #fff;
         content: "";
-        height: 7px;
-        left: 50%;
+        background: currentColor;
+        height: 11px;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2 6.5 11 12 4.8' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.1'/%3E%3C/svg%3E") center / contain no-repeat;
         position: absolute;
-        top: 50%;
-        transform: translate(-50%, -58%) rotate(45deg);
-        width: 4px;
+        width: 11px;
       }
 
       .event-marker.pending {
         background: var(--orange);
-        box-shadow: 0 0 0 1px #ffd09a;
         font-size: 0;
       }
 
@@ -1853,22 +2509,37 @@ export function renderApp(): string {
         content: "";
         height: 8px;
         position: absolute;
-        top: 3px;
+        top: 50%;
+        transform: translateY(-50%);
         width: 2px;
       }
 
       .event-marker.pending::before {
-        left: 5px;
+        left: 6px;
       }
 
       .event-marker.pending::after {
-        right: 5px;
+        right: 6px;
       }
 
       .event-marker.future {
         background: #fff;
-        box-shadow: 0 0 0 1px #a8b4c3;
-        border-color: #fff;
+        border: 1.5px solid #a8b4c3;
+        box-shadow: none;
+        color: #5d687a;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .event-marker.skipped {
+        background: #f8fafc;
+        border: 1.5px solid #a8b4c3;
+        box-shadow: none;
+        color: #5d687a;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
       }
 
       .event-copy {
@@ -1877,7 +2548,50 @@ export function renderApp(): string {
         min-width: 0;
       }
 
+      .event-title-line {
+        align-items: center;
+        display: flex;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .event-signer-icon {
+        align-items: center;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        display: inline-flex;
+        flex: 0 0 18px;
+        height: 18px;
+        justify-content: center;
+        width: 18px;
+      }
+
+      .event-signer-icon svg {
+        display: block;
+        height: 13px;
+        width: 13px;
+      }
+
+      .event-signer-icon.agent {
+        background: #edf5ff;
+        border-color: #c7dcff;
+        color: #0969da;
+      }
+
+      .event-signer-icon.human {
+        background: #fff1dc;
+        border-color: #ffd09a;
+        color: #c76a00;
+      }
+
+      .event-signer-icon.mcp {
+        background: #e9f8ef;
+        border-color: #b9e5cb;
+        color: #078861;
+      }
+
       .event-copy strong {
+        min-width: 0;
         font-size: 11.5px;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1899,17 +2613,38 @@ export function renderApp(): string {
         color: #7a8497;
       }
 
+      .event-future .event-hash {
+        text-align: left;
+      }
+
       .event-hash {
         align-self: center;
         color: #44536a;
         font-size: 11px;
         max-width: 132px;
+        min-width: 0;
         overflow: hidden;
         overflow-wrap: normal;
         text-align: right;
         text-overflow: ellipsis;
         white-space: nowrap;
         word-break: normal;
+      }
+
+      .event-cue {
+        align-self: center;
+        color: #6b778c;
+        display: inline-flex;
+        height: 14px;
+        justify-content: center;
+        opacity: 0.85;
+        width: 14px;
+      }
+
+      .event-cue svg {
+        display: block;
+        height: 14px;
+        width: 14px;
       }
 
       .trace-section-label {
@@ -1950,7 +2685,7 @@ export function renderApp(): string {
 
       .signer-list {
         gap: 0;
-        margin-top: 12px;
+        margin-top: 14px;
       }
 
       .signer-list .trace-section-label {
@@ -1960,10 +2695,10 @@ export function renderApp(): string {
       .signer-row {
         background: #fff;
         border-radius: 0;
-        gap: 7px;
-        grid-template-columns: 24px 74px minmax(0, 1fr) 56px minmax(62px, 82px) 14px;
-        min-height: 30px;
-        padding: 4px 8px;
+        gap: 2px 7px;
+        grid-template-columns: 24px minmax(76px, 1fr) minmax(52px, auto) minmax(124px, 138px) 16px;
+        min-height: 42px;
+        padding: 5px 8px;
         box-shadow: none;
       }
 
@@ -1990,11 +2725,17 @@ export function renderApp(): string {
 
       .signer-row strong {
         font-size: 12px;
+        grid-column: 2;
+        grid-row: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
         white-space: nowrap;
       }
 
       .signer-row .empty {
         font-size: 12px;
+        grid-column: 2 / 6;
+        grid-row: 2;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -2007,36 +2748,39 @@ export function renderApp(): string {
 
       .signer-icon {
         align-items: center;
-        border-radius: 7px;
+        background: transparent;
+        border-radius: 0;
         display: inline-flex;
+        grid-column: 1;
+        grid-row: 1 / 3;
         height: 22px;
         justify-content: center;
         width: 22px;
       }
 
       .signer-icon svg {
-        height: 15px;
-        width: 15px;
+        display: block;
+        height: 20px;
+        width: 20px;
       }
 
       .signer-icon.agent {
-        background: #e8f2ff;
         color: #0969da;
       }
 
       .signer-icon.human {
-        background: #fff3df;
         color: #c76a00;
       }
 
       .signer-icon.mcp {
-        background: #e9f7ef;
         color: #078861;
       }
 
       .signer-status {
         border-color: #c7d6e8;
         font-size: 11px;
+        grid-column: 3;
+        grid-row: 1;
         min-height: 20px;
         padding: 2px 6px;
         justify-self: end;
@@ -2059,17 +2803,49 @@ export function renderApp(): string {
         color: #078861;
       }
 
+      .signer-status.blocked {
+        background: #eef2f8;
+        border-color: #cfd8e6;
+        color: #475569;
+      }
+
+      .signer-status.skipped {
+        background: #f8fafc;
+        border-color: #d7e0ec;
+        color: #69758a;
+      }
+
       .signature-slot {
         align-self: center;
         color: var(--muted);
         font-size: 11px;
+        grid-column: 4;
+        grid-row: 1;
+        justify-self: end;
+        min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
+      .signature-label,
+      .signature-separator {
+        display: inline-block;
+      }
+
       .signature-slot .hash {
+        display: inline-block;
         font-size: 10px;
+        max-width: calc(100% - 38px);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: bottom;
+        white-space: nowrap;
+      }
+
+      .signer-row .copy-icon {
+        grid-column: 5;
+        grid-row: 1;
       }
 
       .copy-icon {
@@ -2111,7 +2887,8 @@ export function renderApp(): string {
         display: grid;
         font-size: 12px;
         gap: 8px;
-        grid-template-columns: 94px minmax(0, 1fr) auto;
+        grid-template-columns: 94px minmax(0, 1fr) 16px;
+        min-width: 0;
       }
 
       .integrity-row strong {
@@ -2125,6 +2902,60 @@ export function renderApp(): string {
         white-space: nowrap;
       }
 
+      .integrity-row .value {
+        font-size: 12px;
+        line-height: 1.3;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .proof-status-value {
+        align-items: center;
+        display: flex;
+        gap: 6px;
+      }
+
+      .integrity-proof-dot {
+        align-items: center;
+        color: var(--green);
+        display: inline-flex;
+        flex: 0 0 12px;
+        height: 12px;
+        justify-content: center;
+        width: 12px;
+      }
+
+      .integrity-proof-dot svg {
+        display: block;
+        height: 12px;
+        width: 12px;
+      }
+
+      .proof-status-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .integrity-row.proof-row {
+        grid-template-columns: 94px minmax(0, 1fr) auto;
+      }
+
+      .trace-integrity .event-action {
+        font-size: 12px;
+        gap: 4px;
+        justify-self: end;
+        white-space: nowrap;
+      }
+
+      .trace-integrity .event-action svg {
+        height: 12px;
+        width: 12px;
+      }
+
       .verify-row {
         background: #fff;
       }
@@ -2132,27 +2963,31 @@ export function renderApp(): string {
       .receipt-grid {
         display: block;
         margin-top: 10px;
-        padding: 0 10px;
+        padding: 0;
       }
 
       .receipt-panel {
         grid-column: auto;
+        min-height: 248px;
         scroll-margin-top: 12px;
       }
 
       .receipt-toolbar {
         align-items: center;
         display: flex;
-        gap: 12px;
+        gap: 8px;
         justify-content: flex-start;
         min-height: 38px;
-        padding: 0 14px;
+        padding: 0 14px 0 24px;
       }
 
       .receipt-toolbar h2 {
         border-bottom: 0;
+        font-size: 11px;
+        letter-spacing: 0.025em;
         min-height: auto;
         padding: 0;
+        white-space: nowrap;
       }
 
       .receipt-controls {
@@ -2163,9 +2998,25 @@ export function renderApp(): string {
 
       .receipt-controls .label {
         color: var(--ink);
-        font-size: 12px;
+        font-size: 11px;
         letter-spacing: 0;
+        line-height: 1;
         text-transform: none;
+      }
+
+      .receipt-format {
+        appearance: auto;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--ink);
+        font: inherit;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        height: 26px;
+        max-width: 156px;
+        padding: 0 6px;
+        width: 121px;
       }
 
       .icon-button {
@@ -2175,12 +3026,12 @@ export function renderApp(): string {
         border-radius: 6px;
         color: var(--ink);
         display: inline-flex;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 700;
-        gap: 7px;
+        gap: 6px;
         height: 26px;
         justify-content: center;
-        padding: 0 9px;
+        padding: 0 8px;
       }
 
       .icon-button:disabled {
@@ -2210,35 +3061,84 @@ export function renderApp(): string {
         padding: 0;
       }
 
+      #downloadReceipt {
+        gap: 5px;
+        padding: 0 5px;
+      }
+
       .icon-button svg {
         height: 14px;
         width: 14px;
       }
 
+      #downloadReceipt svg {
+        height: 13px;
+        width: 13px;
+      }
+
       .receipt-shell {
-        grid-template-columns: minmax(420px, 1.05fr) minmax(360px, 0.9fr) minmax(420px, 1fr);
+        grid-template-columns: minmax(360px, 520px) minmax(320px, 458px) minmax(360px, 1fr);
       }
 
       .receipt-section {
-        padding: 12px 14px;
+        padding: 10px 14px;
       }
 
       .json pre {
         background: #fff;
-        border: 1px solid var(--line);
+        border: 0;
         color: #102033;
         font-size: 12px;
-        line-height: 1.5;
-        max-height: 210px;
-        padding: 10px 12px 10px 36px;
+        line-height: 1.38;
+        max-height: 188px;
+        overflow: auto;
+        padding: 6px 10px;
         position: relative;
+      }
+
+      .json-line {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr);
+      }
+
+      .json-line-number {
+        color: #94a3b8;
+        padding-right: 10px;
+        text-align: right;
+        user-select: none;
+      }
+
+      .json-line-code {
+        min-width: 0;
+        white-space: pre;
+      }
+
+      .json-token.key {
+        color: #c33a65;
+        font-weight: 650;
+      }
+
+      .json-token.string {
+        color: #284f93;
+      }
+
+      .json-token.number {
+        color: #1d7665;
+      }
+
+      .json-token.literal {
+        color: #8b4c9b;
+      }
+
+      .json-token.punctuation {
+        color: #6b7280;
       }
 
       .receipt-tabs {
         border-bottom: 1px solid var(--line);
         display: flex;
         gap: 34px;
-        margin: -12px -14px 10px;
+        margin: -10px -14px 8px;
         padding: 0 26px;
       }
 
@@ -2249,7 +3149,7 @@ export function renderApp(): string {
         cursor: pointer;
         font-size: 12px;
         font-weight: 700;
-        min-height: 34px;
+        min-height: 30px;
         padding: 0;
         position: relative;
       }
@@ -2282,14 +3182,19 @@ export function renderApp(): string {
       .receipt-summary-grid,
       .verification-list {
         display: grid;
-        gap: 8px;
+        gap: 6px;
+      }
+
+      .verify-list {
+        gap: 5px;
       }
 
       .summary-row {
         display: grid;
         font-size: 12px;
-        gap: 8px;
+        gap: 6px;
         grid-template-columns: 130px minmax(0, 1fr) auto;
+        line-height: 1.18;
       }
 
       .summary-row .hash,
@@ -2300,14 +3205,30 @@ export function renderApp(): string {
       }
 
       .verify-row {
-        border-radius: 7px;
+        background: transparent;
+        border: 0;
+        border-radius: 0;
         grid-template-columns: 34px minmax(0, 1fr) minmax(72px, auto);
-        min-height: 44px;
-        padding: 7px 9px;
+        min-height: 42px;
+        padding: 6px 0;
       }
 
       .verify-row > div {
         min-width: 0;
+      }
+
+      .verify-row strong {
+        display: block;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.25;
+      }
+
+      .verify-row .empty {
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.25;
+        margin-top: 2px;
       }
 
       .verify-icon {
@@ -2326,21 +3247,21 @@ export function renderApp(): string {
       }
 
       .verify-icon.log {
-        background: #f3f8ff;
-        border-color: #d4e5fb;
-        color: #0969da;
+        background: #fff;
+        border-color: var(--line);
+        color: #4b5563;
       }
 
       .verify-icon.sig {
-        background: #fff7ed;
-        border-color: #fed7aa;
-        color: #b35a00;
+        background: #fff;
+        border-color: var(--line);
+        color: #4b5563;
       }
 
       .verify-icon.get {
-        background: #eefbf4;
-        border-color: #c7efd6;
-        color: #078861;
+        background: #fff;
+        border-color: var(--line);
+        color: #4b5563;
       }
 
       .verify-row .event-action {
@@ -2378,39 +3299,52 @@ export function renderApp(): string {
       }
 
       .verification-result {
-        background: #fbfdff;
-        border: 1px solid var(--line);
-        border-radius: 8px;
+        background: transparent;
+        border: 0;
+        border-top: 1px solid var(--line);
+        border-radius: 0;
         display: grid;
-        gap: 7px;
-        margin-top: 10px;
-        padding: 9px 10px;
+        gap: 8px;
+        margin-top: 8px;
+        padding: 8px 0 0;
       }
 
       .verification-result.checking {
-        background: #f7fbff;
+        background: transparent;
         border-color: #cfe0f8;
       }
 
       .verification-result.failed {
-        background: #fff7f7;
+        background: transparent;
         border-color: #ffc9c9;
       }
 
       .verification-step {
-        align-items: center;
+        align-items: start;
         display: grid;
         font-size: 12px;
-        gap: 7px;
+        gap: 8px;
         grid-template-columns: 16px minmax(0, 1fr);
+        min-height: 31px;
+      }
+
+      .verification-step > div {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
       }
 
       .verification-step strong {
+        display: block;
         font-size: 12px;
+        font-weight: 750;
+        line-height: 1.25;
       }
 
       .verification-step span:last-child {
         color: var(--muted);
+        display: block;
+        line-height: 1.25;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -2423,6 +3357,7 @@ export function renderApp(): string {
         display: inline-flex;
         height: 14px;
         justify-content: center;
+        margin-top: 1px;
         width: 14px;
       }
 
@@ -2469,7 +3404,7 @@ export function renderApp(): string {
         font-size: 12px;
         font-weight: 750;
         justify-content: space-between;
-        margin: 2px 0 -4px;
+        margin: 0 0 -4px;
       }
 
       .risk-details-toggle svg {
@@ -2490,23 +3425,58 @@ export function renderApp(): string {
       }
 
       @media (max-width: 1450px) and (min-width: 1101px) {
+        .rail-stepper {
+          grid-template-columns: minmax(126px, 0.9fr) minmax(190px, 1.05fr) minmax(252px, 1.2fr) minmax(222px, 1.2fr) minmax(136px, 0.8fr);
+        }
+
         .grid {
           grid-template-columns: minmax(318px, 0.82fr) minmax(560px, 1.2fr) minmax(340px, 0.94fr);
         }
 
         .actions {
           gap: 10px;
-          grid-template-columns: minmax(170px, 1fr) minmax(138px, 0.88fr) minmax(150px, 0.94fr);
+          grid-template-columns: minmax(0, 1.05fr) repeat(2, minmax(0, 0.95fr));
+        }
+
+        .actions .primary,
+        .actions .danger,
+        .actions .secondary {
+          grid-column: auto;
+        }
+
+        .action-copy small,
+        .primary .action-copy small {
+          font-size: 9px;
+          white-space: nowrap;
         }
 
         .event,
         .event-future {
-          gap: 6px;
-          grid-template-columns: 48px 18px minmax(0, 1fr) minmax(66px, 92px);
+          gap: 10px;
+          grid-template-columns: 18px 82px minmax(0, 1fr) minmax(66px, 92px);
+        }
+
+        .event {
+          grid-template-columns: 18px 82px minmax(0, 1fr) minmax(58px, 82px) 12px;
         }
 
         .record-timeline::before {
-          left: 62px;
+          left: 16px;
+        }
+
+        .integrity-row {
+          gap: 7px;
+          grid-template-columns: 88px minmax(0, 1fr) 16px;
+        }
+
+        .integrity-row.proof-row {
+          gap: 2px 7px;
+          grid-template-columns: 88px minmax(0, 1fr);
+        }
+
+        .integrity-row.proof-row .event-action {
+          grid-column: 2;
+          justify-self: start;
         }
 
         .event-hash {
@@ -2514,19 +3484,22 @@ export function renderApp(): string {
         }
 
         .signer-row {
-          gap: 5px;
-          grid-template-columns: 22px 62px minmax(0, 1fr) 50px minmax(42px, 58px) 12px;
-          padding: 4px 6px;
+          gap: 2px 7px;
+          grid-template-columns: 22px minmax(54px, 1fr) minmax(48px, auto) minmax(108px, 116px) 14px;
+          min-height: 42px;
+          padding: 5px 7px;
         }
 
         .signer-icon {
-          height: 20px;
-          width: 20px;
+          grid-column: 1;
+          grid-row: 1 / 3;
+          height: 22px;
+          width: 22px;
         }
 
         .signer-icon svg {
-          height: 13px;
-          width: 13px;
+          height: 20px;
+          width: 20px;
         }
 
         .signer-row strong,
@@ -2534,8 +3507,48 @@ export function renderApp(): string {
           font-size: 11px;
         }
 
+        .signer-row strong {
+          grid-column: 2;
+          grid-row: 1;
+        }
+
+        .signer-row .empty {
+          grid-column: 2 / 6;
+          grid-row: 2;
+          max-width: 100%;
+        }
+
+        .signer-status {
+          grid-column: 3;
+          grid-row: 1;
+        }
+
         .signature-slot {
           font-size: 10px;
+          grid-column: 4;
+          grid-row: 1;
+          justify-self: end;
+          max-width: 100%;
+        }
+
+        .signature-slot .signature-label,
+        .signature-slot .signature-separator {
+          clip: rect(0 0 0 0);
+          clip-path: inset(50%);
+          height: 1px;
+          overflow: hidden;
+          position: absolute;
+          white-space: nowrap;
+          width: 1px;
+        }
+
+        .signature-slot .hash {
+          max-width: 100%;
+        }
+
+        .signer-row .copy-icon {
+          grid-column: 5;
+          grid-row: 1;
         }
       }
 
@@ -2553,6 +3566,12 @@ export function renderApp(): string {
 
         .rail-stepper {
           gap: 8px;
+        }
+
+        .actions .primary,
+        .actions .danger,
+        .actions .secondary {
+          grid-column: auto;
         }
       }
 
@@ -2573,12 +3592,26 @@ export function renderApp(): string {
         }
 
         .event {
-          grid-template-columns: 48px 20px minmax(0, 1fr);
+          grid-template-columns: 20px 48px minmax(0, 1fr);
+        }
+
+        .actions {
+          grid-template-columns: 1fr;
+        }
+
+        .actions .primary,
+        .actions .danger,
+        .actions .secondary {
+          grid-column: auto;
         }
 
         .event-hash {
           grid-column: 3;
           justify-self: start;
+        }
+
+        .event-cue {
+          display: none;
         }
       }
     </style>
@@ -2587,8 +3620,9 @@ export function renderApp(): string {
     <main class="shell" data-testid="approval-trace-app">
       <section class="hero">
         <div class="brand-row">
-          <svg class="cloud-mark" viewBox="0 0 48 32" aria-hidden="true">
-            <path fill="currentColor" d="M15.4 25.5h27.8c2.4 0 4.3-1.8 4.3-4.1 0-2.2-1.8-4.1-4-4.1-.5 0-1 .1-1.5.3C40.5 10.5 34.1 5 26.5 5c-7.2 0-13.3 5-14.9 11.7-.6-.2-1.3-.3-2-.3A7.4 7.4 0 0 0 2.3 24c0 .5.4.9.9.9h8.2c.7-3.9 4.1-6.9 8.2-6.9h3.8c.7 0 1.2.5 1.2 1.2s-.5 1.2-1.2 1.2h-3.8a5.9 5.9 0 0 0-5.8 5.1Z"/>
+          <svg class="cloud-mark" viewBox="0 0 209.51 94.74" aria-hidden="true">
+            <path fill="#f4801f" d="M143.05,93.42l1.07-3.71c1.27-4.41.8-8.48-1.34-11.48-2-2.76-5.26-4.38-9.25-4.57L58,72.7a1.47,1.47,0,0,1-1.35-2,2,2,0,0,1,1.75-1.34l76.26-1c9-.41,18.84-7.75,22.27-16.71l4.34-11.36a2.68,2.68,0,0,0,.18-1,3.31,3.31,0,0,0-.06-.54,49.67,49.67,0,0,0-95.49-5.14,22.35,22.35,0,0,0-35,23.42A31.73,31.73,0,0,0,.34,93.45a1.47,1.47,0,0,0,1.45,1.27l139.49,0h0A1.83,1.83,0,0,0,143.05,93.42Z"/>
+            <path fill="#f9ab41" d="M168.22,41.15q-1,0-2.1.06a.88.88,0,0,0-.32.07,1.17,1.17,0,0,0-.76.8l-3,10.26c-1.28,4.41-.81,8.48,1.34,11.48a11.65,11.65,0,0,0,9.24,4.57l16.11,1a1.44,1.44,0,0,1,1.14.62,1.5,1.5,0,0,1,.17,1.37,2,2,0,0,1-1.75,1.34l-16.73,1c-9.09.42-18.88,7.75-22.31,16.7l-1.21,3.16a.9.9,0,0,0,.79,1.22h57.63A1.55,1.55,0,0,0,208,93.63a41.34,41.34,0,0,0-39.76-52.48Z"/>
           </svg>
           <div>
             <h1>Cloudflare Agent Trace</h1>
@@ -2596,10 +3630,22 @@ export function renderApp(): string {
           </div>
         </div>
         <div class="header-meta">
-          <span class="meta-pill"><span class="dot ok"></span>Live run</span>
-          <span>Run ID <span class="meta-code" id="runIdLabel">pending</span></span>
-          <span>Region <span class="meta-code">IAD</span></span>
+          <span class="run-mode-wrap">
+            <button class="meta-pill live-run" id="runModeMenu" type="button" aria-controls="runModeActions" aria-expanded="false" aria-haspopup="menu"><span class="dot ok"></span><span>Live run</span><svg class="menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg></button>
+            <div class="run-mode-menu" id="runModeActions" role="menu" hidden>
+              <button type="button" role="menuitemradio" aria-checked="true" data-run-mode-action="live">Live run</button>
+              <button type="button" role="menuitemcheckbox" aria-checked="true" data-run-mode-action="toggle-follow">Auto-scroll to active stage</button>
+            </div>
+          </span>
+          <span class="run-id-meta">Run ID <span class="meta-code" id="runIdLabel">pending</span><button class="copy-icon" type="button" aria-label="Copy run ID" data-copy-source="#runIdLabel" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></button></span>
+          <span>Colo <span class="meta-code" id="coloLabel">${colo}</span><span class="colo-status-dot" aria-hidden="true"></span></span>
           <span>Started <span id="startedLabel">waiting</span></span>
+          <button class="header-menu" id="headerMenu" type="button" aria-label="More run actions" aria-controls="headerActions" aria-expanded="false" aria-haspopup="menu"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.25" fill="currentColor"/><circle cx="8" cy="8" r="1.25" fill="currentColor"/><circle cx="12.5" cy="8" r="1.25" fill="currentColor"/></svg></button>
+          <div class="header-actions-menu" id="headerActions" role="menu" hidden>
+            <button type="button" role="menuitem" data-header-action="copy-link">Copy run link</button>
+            <button type="button" role="menuitem" data-header-action="open-json">Open trace JSON</button>
+            <button type="button" role="menuitem" data-header-action="reset">Reset demo</button>
+          </div>
         </div>
       </section>
 
@@ -2612,11 +3658,11 @@ export function renderApp(): string {
           </div>
         </div>
         <div class="rail-stepper" id="workflowSteps">
-          <span class="step active" data-step="trigger"><span class="step-index">1</span><span class="step-copy"><strong>Trigger</strong><span data-step-time="trigger">Pending</span></span></span>
-          <span class="step" data-step="autonomous"><span class="step-index">2</span><span class="step-copy"><strong>Autonomous triage</strong><span data-step-time="autonomous">Pending</span></span></span>
-          <span class="step" data-step="halt"><span class="step-index">3</span><span class="step-copy"><strong><span data-step-title="halt">Human review halted</span> <span class="step-badge" data-step-badge="halt">Awaiting review</span></strong><span data-step-time="halt">Pending</span></span></span>
-          <span class="step" data-step="resume"><span class="step-index">4</span><span class="step-copy"><strong>MCP execution resumed</strong><span data-step-time="resume">Pending</span></span></span>
-          <span class="step" data-step="audit"><span class="step-index">5</span><span class="step-copy"><strong>Audit ready</strong><span data-step-time="audit">Pending</span></span></span>
+          <span class="step active" data-step="trigger"><span class="step-index">1</span><span class="step-copy"><strong>1. Trigger</strong><span data-step-time="trigger">Pending</span></span></span>
+          <span class="step" data-step="autonomous"><span class="step-index">2</span><span class="step-copy"><strong>2. Autonomous triage</strong><span data-step-time="autonomous">Pending</span></span></span>
+          <span class="step" data-step="halt"><span class="step-index">3</span><span class="step-copy"><strong><span class="step-number-label">3. </span><span data-step-title="halt">Human review halted</span></strong><span class="step-meta-line"><span data-step-time="halt">Pending</span><span class="step-badge" data-step-badge="halt">Awaiting review</span></span></span></span>
+          <span class="step" data-step="resume"><span class="step-index">4</span><span class="step-copy"><strong><span class="step-number-label">4. </span><span data-step-title="resume">MCP execution resumed</span></strong><span data-step-time="resume">Pending</span></span></span>
+          <span class="step" data-step="audit"><span class="step-index">5</span><span class="step-copy"><strong><span class="step-number-label">5. </span><span data-step-title="audit">Audit ready</span></strong><span data-step-time="audit">Pending</span></span></span>
         </div>
       </section>
 
@@ -2626,7 +3672,7 @@ export function renderApp(): string {
           <div class="trigger-card">
             <span class="section-label">Prior trigger</span>
             <div class="trigger-source">
-              <svg class="github-mark" viewBox="0 0 16 16" aria-hidden="true">
+              <svg class="github-mark" viewBox="-1 -1 18 18" aria-hidden="true">
                 <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1 8 3.87c.68 0 1.36.09 2 .26 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
               </svg>
               <span>GitHub issue webhook</span>
@@ -2682,7 +3728,10 @@ export function renderApp(): string {
             <h2>Receipt inspector</h2>
             <div class="receipt-controls">
               <span class="label">Format</span>
-              <span class="meta-code">JSON (pretty)</span>
+              <select class="receipt-format" id="receiptFormat" aria-label="Receipt format">
+                <option value="pretty">JSON (pretty)</option>
+                <option value="compact">JSON (compact)</option>
+              </select>
               <button class="icon-button square" id="copyReceipt" type="button" aria-label="Copy receipt" disabled>
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg>
               </button>
@@ -2700,6 +3749,7 @@ export function renderApp(): string {
               <p class="empty">Summary appears after a signed record is selected.</p>
             </div>
             <div class="receipt-section" id="verification">
+              <span class="trace-section-label">Verification</span>
               <div class="verify-list">
                 <div class="verify-row"><span class="verify-icon log" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5.2 7V5.2a2.8 2.8 0 1 1 5.6 0V7M4 7h8v6.5H4V7Zm4 3v1.4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span><div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><button class="event-action" type="button" disabled>Pending</button></div>
                 <div class="verify-row"><span class="verify-icon sig" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5 8.5 7 10l4-4.5M3.5 2.5h9v11h-9v-11Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span><div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" disabled>Pending</button></div>
@@ -2719,6 +3769,8 @@ export function renderApp(): string {
       let autoFollow = true;
       let stageDisplayTimes = {};
       let selectedReceiptRecord = null;
+      let selectedReceiptView = 'record';
+      let selectedReceiptFormat = 'pretty';
 
       const statusDot = document.querySelector('#statusDot');
       const statusTitle = document.querySelector('#statusTitle');
@@ -2741,6 +3793,11 @@ export function renderApp(): string {
       const traceIdLabel = document.querySelector('#traceIdLabel');
       const copyReceiptButton = document.querySelector('#copyReceipt');
       const downloadReceiptButton = document.querySelector('#downloadReceipt');
+      const receiptFormatSelect = document.querySelector('#receiptFormat');
+      const headerMenuButton = document.querySelector('#headerMenu');
+      const headerActionsMenu = document.querySelector('#headerActions');
+      const runModeButton = document.querySelector('#runModeMenu');
+      const runModeActionsMenu = document.querySelector('#runModeActions');
 
       const bootStages = [
         {
@@ -2757,7 +3814,7 @@ export function renderApp(): string {
         },
         {
           key: 'policy',
-          title: 'Policy and intent analysis',
+          title: 'Policy & intent analysis',
           detail: 'The agent classified the request as a repository write that must stop for review.',
           step: 'autonomous',
         },
@@ -2787,12 +3844,25 @@ export function renderApp(): string {
         trigger: 0,
         triage: 1200,
         proposal: 4800,
-        approval: 6200,
-        rejection: 6200,
+        approval: 7400,
+        rejection: 7400,
+        change_request: 6200,
+        revision: 7400,
         preview: 7400,
         execution: 8600,
         outcome: 9800,
         handoff: 11200,
+      };
+
+      const progressDisplayOffsets = {
+        trigger: 0,
+        context: 1200,
+        policy: 2600,
+        proposal: 4800,
+        halt: 6200,
+        revision: 7400,
+        resume: 8600,
+        audit: 11200,
       };
 
       function renderSteps(step, kind = 'pending') {
@@ -2802,34 +3872,57 @@ export function renderApp(): string {
         workflowSteps.querySelectorAll('.step').forEach((item) => {
           const itemIndex = order.indexOf(item.dataset.step);
           item.className = 'step';
-          if (itemIndex < activeIndex) item.classList.add('done');
-          if (item.dataset.step === step) {
+          const activeDone = kind === 'ok' && itemIndex === activeIndex;
+          if (itemIndex < activeIndex || activeDone) item.classList.add('done');
+          if (item.dataset.step === step && !activeDone) {
             item.classList.add(step === 'halt' ? 'halted' : kind === 'error' ? 'error' : 'active');
           }
         });
         updateHaltStepState();
         updateStepTimes();
+        syncRailConnectors();
+      }
+
+      function syncRailConnectors() {
+        const halted = workflowSteps.querySelector('[data-step="halt"]');
+        const resumeMarker = workflowSteps.querySelector('[data-step="resume"] .step-index');
+        if (!halted || !resumeMarker) return;
+        requestAnimationFrame(() => {
+          const haltedRect = halted.getBoundingClientRect();
+          const resumeRect = resumeMarker.getBoundingClientRect();
+          const width = Math.max(18, Math.round(resumeRect.left - haltedRect.right));
+          halted.style.setProperty('--halt-connector-width', width + 'px');
+        });
       }
 
       function updateStepTimes(run = currentRun) {
         const trigger = run?.records.find((record) => record.label === 'trigger');
         const triage = run?.records.find((record) => record.label === 'triage');
-        const proposal = run?.records.find((record) => record.label === 'proposal');
-        const decision = run?.records.find((record) => record.label === 'approval' || record.label === 'rejection');
+        const proposal = latestProposalRecord(run);
+        const decision = latestHumanDecisionRecord(run);
         const triggerTime = stageDisplayTimes.trigger ?? (trigger ? displayRecordTime(trigger, 'trigger') + ' UTC' : 'Pending');
         const triageTime = stageDisplayTimes.context ?? (triage ? displayRecordTime(triage, 'triage') + ' UTC' : 'Pending');
-        const proposalTime = stageDisplayTimes.proposal ?? (proposal ? displayRecordTime(proposal, 'proposal') + ' UTC' : 'Pending');
-        const haltRecord = decision ?? proposal;
-        const haltLabel = decision?.label ?? 'approval';
+        const proposalTime = stageDisplayTimes.proposal ?? (proposal ? displayRecordTime(proposal, proposal.label) + ' UTC' : 'Pending');
+        const haltRecord = run?.status === 'pending_approval' ? proposal : decision ?? proposal;
+        const haltLabel = run?.status === 'pending_approval' ? proposal?.label ?? 'approval' : decision?.label ?? 'approval';
         const haltTime = stageDisplayTimes.halt ?? (haltRecord ? displayRecordTime(haltRecord, haltLabel) + ' UTC' : proposalTime);
         const execution = run?.records.find((record) => record.label === 'execution');
         const handoff = run?.records.find((record) => record.label === 'handoff');
+        const terminalDecisionTime = decision ? displayRecordTime(decision, decision.label) + ' UTC' : 'Pending';
         const stepTimes = {
           trigger: triggerTime,
           autonomous: triageTime,
           halt: haltTime,
-          resume: execution ? displayRecordTime(execution, 'execution') + ' UTC' : 'Pending',
-          audit: handoff ? displayRecordTime(handoff, 'handoff') + ' UTC' : 'Pending',
+          resume: run?.status === 'rejected'
+            ? 'Skipped'
+            : run?.status === 'changes_requested'
+              ? terminalDecisionTime
+              : execution ? displayRecordTime(execution, 'execution') + ' UTC' : 'Pending',
+          audit: run?.status === 'rejected'
+            ? terminalDecisionTime
+            : run?.status === 'changes_requested'
+              ? 'Awaiting revision'
+              : handoff ? displayRecordTime(handoff, 'handoff') + ' UTC' : 'Pending',
         };
         Object.entries(stepTimes).forEach(([key, value]) => {
           const target = workflowSteps.querySelector('[data-step-time="' + key + '"]');
@@ -2839,18 +3932,53 @@ export function renderApp(): string {
 
       function updateHaltStepState(run = currentRun) {
         const title = workflowSteps.querySelector('[data-step-title="halt"]');
+        const resumeTitle = workflowSteps.querySelector('[data-step-title="resume"]');
+        const auditTitle = workflowSteps.querySelector('[data-step-title="audit"]');
         const badge = workflowSteps.querySelector('[data-step-badge="halt"]');
+        const haltStep = workflowSteps.querySelector('[data-step="halt"]');
+        const resumeStep = workflowSteps.querySelector('[data-step="resume"]');
+        const auditStep = workflowSteps.querySelector('[data-step="audit"]');
         if (!title || !badge) return;
-        badge.classList.remove('approved', 'rejected');
-        if (!run || run.status === 'pending_approval') {
+        badge.classList.remove('approved', 'rejected', 'requested');
+        haltStep?.classList.remove('review-rejected', 'review-requested');
+        resumeStep?.classList.remove('branch-skipped', 'branch-requested', 'branch-ready');
+        auditStep?.classList.remove('branch-skipped', 'branch-requested', 'branch-ready');
+        if (resumeTitle) resumeTitle.textContent = 'MCP execution resumed';
+        if (auditTitle) auditTitle.textContent = 'Audit ready';
+        badge.hidden = false;
+        if (!run) {
           title.textContent = 'Human review halted';
           badge.textContent = 'Awaiting review';
+          badge.classList.add('requested');
+          badge.hidden = !haltStep?.classList.contains('halted');
+          return;
+        }
+        if (run.status === 'pending_approval') {
+          title.textContent = hasRevisedProposal(run) ? 'Revised proposal halted' : 'Human review halted';
+          badge.textContent = 'Awaiting review';
+          badge.classList.add('requested');
           return;
         }
         if (run.status === 'rejected') {
           title.textContent = 'Human review rejected';
           badge.textContent = 'Rejected';
           badge.classList.add('rejected');
+          haltStep?.classList.add('review-rejected');
+          resumeStep?.classList.add('branch-skipped');
+          auditStep?.classList.add('branch-ready');
+          if (resumeTitle) resumeTitle.textContent = 'MCP execution skipped';
+          if (auditTitle) auditTitle.textContent = 'Decision audit ready';
+          return;
+        }
+        if (run.status === 'changes_requested') {
+          title.textContent = 'Changes requested';
+          badge.textContent = 'Needs revision';
+          badge.classList.add('requested');
+          haltStep?.classList.add('review-requested');
+          resumeStep?.classList.add('branch-ready');
+          auditStep?.classList.add('branch-requested');
+          if (resumeTitle) resumeTitle.textContent = 'Feedback returned to agent';
+          if (auditTitle) auditTitle.textContent = 'Revision pending';
           return;
         }
         if (run.status === 'approved' || run.status === 'executing') {
@@ -2870,10 +3998,22 @@ export function renderApp(): string {
         statusDetail.textContent = detail || 'The workflow is waiting for the next action.';
         renderSteps(step, kind);
         if (reviewStatePill) {
-          reviewStatePill.textContent = step === 'halt' ? 'Paused' : step === 'resume' ? 'Running' : step === 'audit' && kind === 'error' ? 'Needs review' : step === 'audit' ? 'Ready' : 'Waiting';
-          reviewStatePill.textContent = reviewStatePill.textContent.toUpperCase();
-          reviewStatePill.classList.toggle('green', step === 'audit' && kind === 'ok');
+          const state = reviewPillState(currentRun, step, kind);
+          reviewStatePill.textContent = state.text.toUpperCase();
+          reviewStatePill.classList.remove('green', 'approved', 'rejected', 'requested', 'running', 'waiting');
+          reviewStatePill.classList.add(state.className);
+          if (state.className === 'approved') reviewStatePill.classList.add('green');
         }
+      }
+
+      function reviewPillState(run, step, kind) {
+        if (run?.status === 'rejected') return { text: 'Rejected', className: 'rejected' };
+        if (run?.status === 'changes_requested') return { text: 'Needs revision', className: 'requested' };
+        if (step === 'halt') return { text: 'Paused', className: 'requested' };
+        if (step === 'resume') return { text: 'Running', className: 'running' };
+        if (step === 'audit' && kind === 'error') return { text: 'Needs review', className: 'rejected' };
+        if (step === 'audit') return { text: 'Ready', className: 'approved' };
+        return { text: 'Waiting', className: 'waiting' };
       }
 
       function sleep(ms) {
@@ -2892,6 +4032,65 @@ export function renderApp(): string {
         });
       }
 
+      function resetPanelScroll(target) {
+        const panel = target?.closest?.('.panel');
+        if (panel) panel.scrollTop = 0;
+      }
+
+      function followPanelElement(target) {
+        if (!target || !autoFollow) return;
+        const panel = target.closest?.('.panel');
+        if (!panel) return;
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const alignTarget = (force = false) => {
+          const targetRect = target.getBoundingClientRect();
+          const panelRect = panel.getBoundingClientRect();
+          const stickyHeader = panel.querySelector('h2')?.getBoundingClientRect();
+          const topGuard = stickyHeader ? stickyHeader.bottom + 8 : panelRect.top + 8;
+          const bottomGuard = panelRect.bottom - 10;
+          const bottomDelta = targetRect.bottom - bottomGuard;
+          const topDelta = targetRect.top - topGuard;
+          if (bottomDelta > 0) {
+            const top = panel.scrollTop + bottomDelta;
+            if (force) {
+              panel.scrollTop = top;
+            } else {
+              panel.scrollTo({
+                top,
+                behavior: reduceMotion ? 'auto' : 'smooth',
+              });
+            }
+            return;
+          }
+          if (topDelta < 0) {
+            const top = Math.max(0, panel.scrollTop + topDelta);
+            if (force) {
+              panel.scrollTop = top;
+            } else {
+              panel.scrollTo({
+                top,
+                behavior: reduceMotion ? 'auto' : 'smooth',
+              });
+            }
+          }
+        };
+        requestAnimationFrame(() => {
+          alignTarget();
+          window.setTimeout(() => alignTarget(true), reduceMotion ? 0 : 220);
+        });
+      }
+
+      function followWorkflowOverview() {
+        if (!autoFollow) return;
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        requestAnimationFrame(() => {
+          window.scrollTo({
+            top: 0,
+            behavior: reduceMotion ? 'auto' : 'smooth',
+          });
+        });
+      }
+
       function escapeHtml(value) {
         return String(value)
           .replaceAll('&', '&amp;')
@@ -2905,28 +4104,48 @@ export function renderApp(): string {
         return new Date(Date.now() + offsetMs).toISOString().slice(11, 19) + ' UTC';
       }
 
+      function formatHeaderDate(value) {
+        const date = value ? new Date(value) : new Date();
+        const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+        const day = date.getUTCDate();
+        const year = date.getUTCFullYear();
+        const time = date.toISOString().slice(11, 19);
+        return month + ' ' + day + ', ' + year + ' ' + time + ' UTC';
+      }
+
       function displayRecordTime(record, label = record?.label, fallbackIndex = 0) {
         const offset = recordDisplayOffsets[label] ?? fallbackIndex * 1000;
         return formatRecordTime(record, offset);
       }
 
+      function progressTimeLabel(value) {
+        return String(value ?? '-').replace(/ UTC$/, '');
+      }
+
       function progressKeyForTitle(title) {
         if (title === 'Trigger received') return 'trigger';
         if (title === 'Context gathered') return 'context';
-        if (title === 'Policy and intent analysis') return 'policy';
-        if (title === 'Proposed action generated') return 'proposal';
-        if (title === 'Human review halted' || title === 'Human review recorded') return 'halt';
-        if (title === 'Agent resumed through MCP') return 'resume';
-        if (title === 'Audit ready') return 'audit';
+        if (title === 'Policy & intent analysis') return 'policy';
+        if (title === 'Proposed action generated' || title === 'Initial proposal generated') return 'proposal';
+        if (title === 'Revised proposal generated' || title === 'Revised proposal halted') return 'revision';
+        if (title === 'Human review halted' || title === 'Human review recorded' || title === 'Human review feedback sent' || title === 'Human review rejected') return 'halt';
+        if (title === 'Agent resumed through MCP' || title === 'MCP execution skipped' || title === 'Feedback returned to agent') return 'resume';
+        if (title === 'Audit ready' || title === 'Decision audit ready' || title === 'Revised proposal pending') return 'audit';
         return '';
       }
 
       function progressDisplayTime(run, title, active) {
         const key = progressKeyForTitle(title);
-        if (key && stageDisplayTimes[key]) return stageDisplayTimes[key];
+        if (key && stageDisplayTimes[key]) return progressTimeLabel(stageDisplayTimes[key]);
         if (!active) return '-';
         const record = progressRecordFor(run, title);
-        return displayRecordTime(record, record?.label ?? key) + ' UTC';
+        const alignToRecord = ['Human review recorded', 'Human review rejected'].includes(title);
+        return formatRecordTime(
+          record,
+          alignToRecord
+            ? recordDisplayOffsets[record?.label ?? key] ?? 0
+            : progressDisplayOffsets[key] ?? recordDisplayOffsets[record?.label ?? key] ?? 0,
+        );
       }
 
       function formatRecordTime(record, offsetMs = 0) {
@@ -2935,7 +4154,15 @@ export function renderApp(): string {
         return new Date(Date.now() + offsetMs).toISOString().slice(11, 19);
       }
 
-      function renderBootTimeline(activeIndex) {
+      function bootRecordFor(key, run = currentRun) {
+        if (!run) return null;
+        if (key === 'trigger') return run.records.find((record) => record.label === 'trigger');
+        if (key === 'context') return run.records.find((record) => record.label === 'triage');
+        if (key === 'proposal' || key === 'halt') return run.records.find((record) => record.label === 'proposal');
+        return null;
+      }
+
+      function renderBootTimeline(activeIndex, run = currentRun) {
         const activeStage = bootStages[activeIndex] ?? bootStages[bootStages.length - 1];
         const reached = (key) => bootStages.findIndex((stage) => stage.key === key) <= activeIndex;
         const bootRows = [
@@ -2989,24 +4216,31 @@ export function renderApp(): string {
           },
         ];
         const bootSigners = [
-          { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', status: reached('proposal') ? 'Signed' : 'Pending', className: reached('proposal') ? 'signed' : 'pending mcp', sig: reached('proposal') ? '2fb06b13...' : '-' },
+          { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', signer: 'agent', status: reached('proposal') ? 'Signed' : 'Pending', className: reached('proposal') ? 'signed' : 'pending mcp', sig: reached('proposal') && run ? signerLatestRecordDigest(run, 'agent') : '-' },
           { kind: 'human', name: 'Human', detail: 'alice@example.com', status: 'Pending', className: 'pending', sig: '-' },
           { kind: 'mcp', name: 'Action MCP', detail: 'github.write@2.3.1', status: 'Pending', className: 'pending mcp', sig: '-' },
         ];
+        const merkleRoot = reached('trigger') ? run?.records[0]?.record_hash ?? '' : '';
+        const logHash = reached('context') ? run?.records[1]?.record_hash ?? '' : '';
         timelineEl.innerHTML = \`
           <span class="trace-section-label">Record timeline</span>
           <div class="record-timeline">
-            \${bootRows.map((row) => \`
-              <div class="event-future \${row.selected ? 'selected' : ''}">
-                <span class="event-time">\${row.time ? row.time.slice(0, 8) : '-'}</span>
+            \${bootRows.map((row) => {
+              const record = bootRecordFor(row.key, run);
+              const time = row.time ?? (record ? displayRecordTime(record, record.label) + ' UTC' : '');
+              const hash = row.marker === 'future' ? '-' : record ? recordDisplayId(record.record_hash) : 'pending';
+              return \`
+              <div class="event-future \${row.selected ? 'current' : ''}" \${row.selected ? 'aria-current="step"' : ''}>
                 <span class="event-marker \${row.marker}"></span>
+                <span class="event-time">\${time ? time.slice(0, 8) : '-'}</span>
                 <span class="event-copy">
-                  <strong>\${row.name}</strong>
+                  <span class="event-title-line">\${row.marker === 'future' || row.key === 'halt' ? '' : timelineSignerIcon(record)}<strong>\${row.name}</strong></span>
                   <span class="value">\${row.detail}</span>
                 </span>
-                <span class="event-hash hash">\${row.marker === 'future' ? '-' : 'pending'}</span>
+                <span class="event-hash hash">\${hash}</span>
               </div>
-            \`).join('')}
+            \`;
+            }).join('')}
           </div>
           <div class="signer-list">
             <span class="trace-section-label">Signers</span>
@@ -3016,22 +4250,22 @@ export function renderApp(): string {
                 <strong>\${signer.name}</strong>
                 <span class="empty">\${signer.detail}</span>
                 <span class="pill signer-status \${signer.className}">\${signer.status}</span>
-                <span class="signature-slot">Sig: <span class="hash">\${signer.sig}</span></span>\${copyIcon('', signer.name + ' signature')}
+                <span class="signature-slot"><span class="signature-label">Latest</span><span class="signature-separator">:</span> <span class="hash">\${signer.sig}</span></span>\${copyIcon(run && signer.signer ? signerRecordHash(run, signer.signer) : '', signer.name + ' latest record')}
               </div>
             \`).join('')}
           </div>
           <div class="trace-integrity">
             <span class="trace-section-label">Trace integrity</span>
             <div class="integrity-list">
-              <div class="integrity-row"><strong>Merkle root</strong><span class="hash">pending</span>\${copyIcon('', 'Merkle root')}</div>
-              <div class="integrity-row"><strong>Log hash</strong><span class="hash">pending</span>\${copyIcon('', 'log hash')}</div>
-              <div class="integrity-row"><strong>Proof status</strong><span class="value">Waiting for first signed record</span><span></span></div>
+              <div class="integrity-row"><strong>Merkle root</strong><span class="hash">\${merkleRoot || 'pending'}</span>\${copyIcon(merkleRoot, 'Merkle root')}</div>
+              <div class="integrity-row"><strong>Log hash</strong><span class="hash">\${logHash || 'pending'}</span>\${copyIcon(logHash, 'log hash')}</div>
+              <div class="integrity-row proof-row"><strong>Proof status</strong><span class="value">\${merkleRoot ? 'Signed records available' : 'Waiting for first signed record'}</span><span></span></div>
             </div>
           </div>
         \`;
       }
 
-      function renderBootProgress(activeIndex) {
+      function renderBootProgress(activeIndex, run = currentRun) {
         const rows = bootStages.map((stage, index) => {
           const done = index < activeIndex;
           const active = index === activeIndex;
@@ -3044,7 +4278,7 @@ export function renderApp(): string {
                 <strong>\${stage.title}</strong>
                 <span>\${stage.detail}</span>
               </div>
-              <span class="progress-time">\${done || active ? stageDisplayTimes[stage.key] : '-'}</span>
+              <span class="progress-time">\${done || active ? progressTimeLabel(stageDisplayTimes[stage.key]) : '-'}</span>
             </div>
           \`;
         }).join('');
@@ -3059,9 +4293,12 @@ export function renderApp(): string {
             </div>
           \`;
         }
-        renderBootTimeline(activeIndex);
-        followElement(answerEl.querySelectorAll('.progress-item')[activeIndex], 'nearest');
-        if (activeStage.key === 'halt') followElement(proposalEl, 'nearest');
+        renderBootTimeline(activeIndex, run);
+        if (activeStage.key === 'halt') {
+          followWorkflowOverview();
+        } else {
+          followElement(answerEl.querySelectorAll('.progress-item')[activeIndex], 'nearest');
+        }
       }
 
       function updateControls(activeLabel = '') {
@@ -3075,16 +4312,29 @@ export function renderApp(): string {
         simulateErrorInput.disabled = busy || !canSetFailureMode;
         const approve = document.querySelector('#approve');
         const reject = document.querySelector('#reject');
+        const requestChanges = document.querySelector('#requestChanges');
+        const reviewFeedback = document.querySelector('#reviewFeedback');
+        const reviewFeedbackDrawer = document.querySelector('#reviewFeedbackDrawer');
         if (approve) {
           approve.disabled = busy || !hasPendingApproval;
           const label = approve.querySelector('.button-label');
-          if (label) label.textContent = busy && activeLabel === 'approve' ? 'Resuming agent...' : 'Approve and resume';
+          if (label) label.textContent = busy && activeLabel === 'approve' ? 'Resuming agent...' : 'Approve & resume';
         }
         if (reject) {
           reject.disabled = busy || !hasPendingApproval;
           const label = reject.querySelector('.button-label');
           if (label) label.textContent = busy && activeLabel === 'reject' ? 'Rejecting...' : 'Reject';
         }
+        if (requestChanges) {
+          requestChanges.disabled = busy || !hasPendingApproval;
+          const drawerOpen = Boolean(reviewFeedbackDrawer && !reviewFeedbackDrawer.hidden);
+          requestChanges.setAttribute('aria-expanded', String(drawerOpen));
+          const label = requestChanges.querySelector('.button-label');
+          if (label) label.textContent = busy && activeLabel === 'request' ? 'Requesting...' : drawerOpen ? 'Sign feedback' : 'Request changes';
+        }
+        if (reviewFeedback) reviewFeedback.disabled = busy || !hasPendingApproval;
+        updateHeaderMenuControls();
+        updateRunModeControls();
       }
 
       function setBusy(next, activeLabel = '') {
@@ -3106,7 +4356,8 @@ export function renderApp(): string {
 
       function shortHash(hash) {
         if (!hash) return 'missing';
-        return hash.slice(0, 18) + '...' + hash.slice(-8);
+        const normalized = String(hash).replace(/^sha256:/, '');
+        return normalized.slice(0, 18) + '...' + normalized.slice(-8);
       }
 
       function recordDisplayId(hash) {
@@ -3118,8 +4369,10 @@ export function renderApp(): string {
         if (entry.label === 'trigger') return 'GitHub issue webhook';
         if (entry.label === 'triage') return 'Intent: add rate limiting';
         if (entry.label === 'proposal') return 'write_file proposal';
+        if (entry.label === 'revision') return 'Revised write_file proposal';
         if (entry.label === 'approval') return 'Human approved payload';
         if (entry.label === 'rejection') return 'Human rejected payload';
+        if (entry.label === 'change_request') return 'Human requested revision';
         if (entry.label === 'preview') return 'MCP preview completed';
         if (entry.label === 'execution') return run.status === 'failed' ? 'MCP execution attempted' : 'MCP execution resumed';
         if (entry.label === 'outcome') return run.status === 'failed' ? 'Diagnostic outcome signed' : 'Repository update signed';
@@ -3131,8 +4384,10 @@ export function renderApp(): string {
         if (entry.label === 'trigger') return 'trigger.received';
         if (entry.label === 'triage') return 'triage.completed';
         if (entry.label === 'proposal') return 'proposal.generated';
+        if (entry.label === 'revision') return 'proposal.revised';
         if (entry.label === 'approval') return 'human.approval.signed';
         if (entry.label === 'rejection') return 'human.rejection.signed';
+        if (entry.label === 'change_request') return 'human.change_request.signed';
         if (entry.label === 'preview') return 'mcp.preview.completed';
         if (entry.label === 'execution') return 'mcp.execution.resumed';
         if (entry.label === 'outcome') return run.status === 'failed' ? 'diagnostic.signed' : 'repository.update.signed';
@@ -3143,22 +4398,33 @@ export function renderApp(): string {
       function futureTraceRows(run) {
         const labels = new Set(run.trace_packet.timeline.map((entry) => entry.label));
         const rows = [];
-        if (!labels.has('approval') && !labels.has('rejection')) {
-          const proposal = run.records.find((record) => record.label === 'proposal');
+        const rejected = run.status === 'rejected';
+        const changesRequested = run.status === 'changes_requested';
+        if (run.status === 'pending_approval' || (!labels.has('approval') && !labels.has('rejection') && !labels.has('change_request'))) {
+          const proposal = latestProposalRecord(run);
           rows.push({
             name: 'human.review.halted',
-            detail: 'Awaiting human decision',
+            detail: hasRevisedProposal(run) ? 'Awaiting decision on revised proposal' : 'Awaiting human decision',
             marker: 'pending',
             record: proposal,
             displayLabel: 'approval',
+            timeLabel: proposal?.label ?? 'proposal',
             hash: proposal?.record_hash,
           });
         }
         if (!labels.has('execution')) {
-          rows.push({ name: 'mcp.execution.resumed', detail: 'Pending approval', marker: 'future' });
+          rows.push(rejected
+            ? { name: 'mcp.execution.skipped', detail: 'Blocked by signed rejection', marker: 'skipped', markerLabel: '4' }
+            : changesRequested
+              ? { name: 'agent.feedback.returned', detail: 'Feedback queued revision', marker: 'done' }
+              : { name: 'mcp.execution.resumed', detail: 'Pending approval', marker: 'future', markerLabel: '4' });
         }
         if (!labels.has('handoff')) {
-          rows.push({ name: 'audit.ready', detail: 'Pending', marker: 'future' });
+          rows.push(rejected
+            ? { name: 'decision.audit.ready', detail: 'Rejection receipt ready', marker: 'done' }
+            : changesRequested
+              ? { name: 'revised.proposal.pending', detail: 'Awaiting revised proposal', marker: 'future', markerLabel: '5' }
+              : { name: 'audit.ready', detail: 'Pending', marker: 'future', markerLabel: '5' });
         }
         return rows;
       }
@@ -3168,20 +4434,92 @@ export function renderApp(): string {
           return '<span class="signer-icon human"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0" fill="currentColor"/></svg></span>';
         }
         if (kind === 'mcp') {
-          return '<span class="signer-icon mcp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v4h4v6h-4v4H9v-4H5V7h4V3Z" fill="currentColor"/></svg></span>';
+          return '<span class="signer-icon mcp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v4h2.2a2.3 2.3 0 1 1 0 4.6H15V16h-4.4v2.2a2.3 2.3 0 1 1-4.6 0V16H3v-5h3.2a2 2 0 0 0 0-4H3V3h6Z" fill="currentColor"/></svg></span>';
         }
-        return '<span class="signer-icon agent"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v3h3v9a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V7h3V4Zm2 0v3h4V4h-4Zm-1 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm6 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm-5 3h4v-2h-4v2Z" fill="currentColor"/></svg></span>';
+        return '<span class="signer-icon agent"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4h4v3h-4V4Zm-2 4h8a3 3 0 0 1 3 3v4a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-4a3 3 0 0 1 3-3Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"/><path d="M9 12h.01M15 12h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.8"/><path d="M9 15h6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span>';
       }
 
-      function signerSignature(run, signer) {
-        const record = run.records.find((item) => item.signer === signer);
+      function signerKindForRecord(record) {
+        if (!record) return '';
+        if (record.signer === 'human') return 'human';
+        if (record.signer === 'action_mcp') return 'mcp';
+        return 'agent';
+      }
+
+      function signerLabelForKind(kind) {
+        if (kind === 'human') return 'Human';
+        if (kind === 'mcp') return 'Action MCP';
+        return 'Agent';
+      }
+
+      function timelineSignerIcon(record) {
+        const kind = signerKindForRecord(record);
+        if (!kind) return '';
+        const label = signerLabelForKind(kind);
+        if (kind === 'human') {
+          return '<span class="event-signer-icon human" title="Signed by ' + label + '" aria-label="Signed by ' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0" fill="currentColor"/></svg></span>';
+        }
+        if (kind === 'mcp') {
+          return '<span class="event-signer-icon mcp" title="Signed by ' + label + '" aria-label="Signed by ' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v4h2.2a2.3 2.3 0 1 1 0 4.6H15V16h-4.4v2.2a2.3 2.3 0 1 1-4.6 0V16H3v-5h3.2a2 2 0 0 0 0-4H3V3h6Z" fill="currentColor"/></svg></span>';
+        }
+        return '<span class="event-signer-icon agent" title="Signed by ' + label + '" aria-label="Signed by ' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4h4v3h-4V4Zm-2 4h8a3 3 0 0 1 3 3v4a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-4a3 3 0 0 1 3-3Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"/><path d="M9 12h.01M15 12h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.8"/><path d="M9 15h6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span>';
+      }
+
+      function recordDetailsIcon() {
+        return '<svg viewBox="0 0 16 16"><path d="M4.25 2.75h5.4l2.1 2.1v8.4h-7.5v-10.5Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.35"/><path d="M9.55 2.8v2.35h2.35M5.7 7h4.6M5.7 9.1h4.6M5.7 11.2h3.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.25"/></svg>';
+      }
+
+      function recordsForSigner(run, signer) {
+        return run.records.filter((item) => item.signer === signer);
+      }
+
+      function latestRecordByLabel(run, labels) {
+        if (!run) return null;
+        const wanted = new Set(labels);
+        return [...run.records].reverse().find((record) => wanted.has(record.label)) ?? null;
+      }
+
+      function latestProposalRecord(run = currentRun) {
+        return latestRecordByLabel(run, ['revision', 'proposal']);
+      }
+
+      function latestChangeRequestRecord(run = currentRun) {
+        return latestRecordByLabel(run, ['change_request']);
+      }
+
+      function latestHumanDecisionRecord(run = currentRun) {
+        return latestRecordByLabel(run, ['approval', 'rejection', 'change_request']);
+      }
+
+      function hasRevisedProposal(run = currentRun) {
+        return Boolean(latestRecordByLabel(run, ['revision']));
+      }
+
+      function signerLatestRecord(run, signer) {
+        const records = recordsForSigner(run, signer);
+        return records[records.length - 1];
+      }
+
+      function recordCountLabel(count) {
+        return count === 1 ? '1 record' : count + ' records';
+      }
+
+      function signerLatestRecordDigest(run, signer) {
+        const record = signerLatestRecord(run, signer);
         if (!record) return '-';
         const hash = record.record_hash.replace('sha256:', '');
-        return hash.slice(0, 10) + '...' + hash.slice(-4);
+        return hash.slice(0, 6) + '...' + hash.slice(-4);
       }
 
       function signerRecordHash(run, signer) {
-        return run.records.find((item) => item.signer === signer)?.record_hash ?? '';
+        return signerLatestRecord(run, signer)?.record_hash ?? '';
+      }
+
+      function signerStatusForRun(run, signer, recordCount) {
+        if (recordCount > 0) return 'Signed';
+        if (signer.signer === 'action_mcp' && run.status === 'rejected') return 'Skipped';
+        if (signer.signer === 'action_mcp' && (run.status === 'changes_requested' || hasRevisedProposal(run))) return 'Blocked';
+        return 'Pending';
       }
 
       function signerStatusClass(signer) {
@@ -3189,8 +4527,26 @@ export function renderApp(): string {
         return status + (signer.kind === 'mcp' ? ' mcp' : '');
       }
 
+      function traceIdFromRunId(runId) {
+        return 'trc_' + String(runId).replaceAll('-', '').toUpperCase().slice(0, 18);
+      }
+
       function traceIdForRun(run) {
-        return run.trace_packet.trace_id ?? 'trc_' + run.run_id.replaceAll('-', '').toUpperCase().slice(0, 18);
+        return run.trace_packet?.trace_id ?? traceIdFromRunId(run.run_id);
+      }
+
+      function runDisplayId(runId) {
+        const normalized = String(runId ?? '').trim();
+        if (!normalized) return 'pending';
+        if (normalized.startsWith('run_')) return normalized;
+        return 'run_' + normalized.replaceAll('-', '').toUpperCase().slice(0, 22);
+      }
+
+      function setRunId(rawRunId) {
+        const normalized = String(rawRunId ?? '').trim();
+        runIdLabel.textContent = runDisplayId(normalized);
+        runIdLabel.dataset.runId = normalized;
+        runIdLabel.title = normalized;
       }
 
       function copyIcon(value = '', label = 'value') {
@@ -3199,8 +4555,33 @@ export function renderApp(): string {
         return '<button class="copy-icon" type="button" aria-label="Copy ' + escapeHtml(label) + '" data-copy-value="' + escapeHtml(normalized) + '" ' + (disabled ? 'disabled' : '') + '><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></button>';
       }
 
-      function renderDiff(diff) {
-        return String(diff).split('\\n').map((line) => {
+      function visibleDiffLines(diff, context = '3') {
+        const lines = String(diff).split('\\n');
+        while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+        if (context === 'all') return lines;
+        const contextLines = Number.parseInt(context, 10);
+        if (!Number.isFinite(contextLines)) return lines;
+        const isChangedLine = (line) => (line.startsWith('+') && !line.startsWith('+++'))
+          || (line.startsWith('-') && !line.startsWith('---'))
+          || line.startsWith('@@');
+        const lastChangedIndex = lines.reduce((lastIndex, line, index) => (
+          isChangedLine(line) ? index : lastIndex
+        ), -1);
+        let shownContextAfterChange = 0;
+        return lines.filter((line, index) => {
+          const changed = isChangedLine(line);
+          if (changed) {
+            shownContextAfterChange = 0;
+            return true;
+          }
+          if (contextLines <= 3 && index > lastChangedIndex) return false;
+          shownContextAfterChange += 1;
+          return shownContextAfterChange <= contextLines;
+        });
+      }
+
+      function renderDiff(diff, context = '3') {
+        return visibleDiffLines(diff, context).map((line, index) => {
           const kind = line.startsWith('+') && !line.startsWith('+++')
             ? 'add'
             : line.startsWith('-') && !line.startsWith('---')
@@ -3208,21 +4589,39 @@ export function renderApp(): string {
               : line.startsWith('@@')
                 ? 'meta'
                 : '';
-          return '<span class="diff-line ' + kind + '">' + escapeHtml(line) + '</span>';
+          return '<span class="diff-line ' + kind + '"><span class="diff-line-no">' + String(index + 1) + '</span><span class="diff-line-text">' + escapeHtml(line) + '</span></span>';
         }).join('');
+      }
+
+      function currentVisibleDiffText() {
+        const lines = Array.from(document.querySelectorAll('.diff-code .diff-line-text'))
+          .map((line) => line.textContent ?? '');
+        return lines.join('\\n');
       }
 
       function progressRecordFor(run, rowTitle) {
         if (rowTitle === 'Trigger received') return run.records.find((record) => record.label === 'trigger');
-        if (rowTitle === 'Context gathered' || rowTitle === 'Policy and intent analysis') {
+        if (rowTitle === 'Context gathered' || rowTitle === 'Policy & intent analysis') {
           return run.records.find((record) => record.label === 'triage');
         }
-        if (rowTitle === 'Proposed action generated') return run.records.find((record) => record.label === 'proposal');
-        if (rowTitle === 'Human review halted' || rowTitle === 'Human review recorded') {
-          return run.records.find((record) => record.label === 'approval' || record.label === 'rejection')
-            ?? run.records.find((record) => record.label === 'proposal');
+        if (rowTitle === 'Proposed action generated' || rowTitle === 'Initial proposal generated') return run.records.find((record) => record.label === 'proposal');
+        if (rowTitle === 'Revised proposal generated') return latestProposalRecord(run);
+        if (rowTitle === 'Human review halted' || rowTitle === 'Revised proposal halted') {
+          return latestProposalRecord(run);
+        }
+        if (rowTitle === 'Human review feedback sent') {
+          return latestChangeRequestRecord(run) ?? latestProposalRecord(run);
+        }
+        if (rowTitle === 'Human review recorded' || rowTitle === 'Human review rejected') {
+          return latestHumanDecisionRecord(run) ?? latestProposalRecord(run);
         }
         if (rowTitle === 'Agent resumed through MCP') return run.records.find((record) => record.label === 'execution');
+        if (rowTitle === 'MCP execution skipped' || rowTitle === 'Decision audit ready') {
+          return run.records.find((record) => record.label === 'rejection');
+        }
+        if (rowTitle === 'Feedback returned to agent' || rowTitle === 'Revised proposal pending') {
+          return run.records.find((record) => record.label === 'change_request');
+        }
         if (rowTitle === 'Audit ready') {
           return run.records.find((record) => record.label === 'handoff')
             ?? run.records.find((record) => record.label === 'outcome')
@@ -3231,16 +4630,74 @@ export function renderApp(): string {
         return run.records.find((record) => record.label === 'proposal');
       }
 
-      function progressRowClass(row) {
+      function progressRowClass(row, run) {
         const key = progressKeyForTitle(row.title);
         return [
           row.halted ? 'halted' : '',
+          row.skipped ? 'skipped' : '',
           key === 'proposal' ? 'proposal' : '',
+          key === 'proposal' && run?.status === 'pending_approval' ? 'pending-proposal' : '',
         ].filter(Boolean).join(' ');
       }
 
       function pretty(value) {
         return JSON.stringify(value, null, 2);
+      }
+
+      function formatReceiptJson(value, format = selectedReceiptFormat) {
+        return format === 'compact' ? JSON.stringify(value) : pretty(value);
+      }
+
+      function highlightJsonValueFragment(fragment) {
+        const token = fragment.match(/^(\\s*)("(?:\\\\.|[^"\\\\])*"|-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?|true|false|null)(.*)$/);
+        if (!token) return escapeHtml(fragment);
+        const type = token[2].startsWith('"')
+          ? 'string'
+          : token[2] === 'true' || token[2] === 'false' || token[2] === 'null'
+            ? 'literal'
+            : 'number';
+        return escapeHtml(token[1])
+          + '<span class="json-token ' + type + '">' + escapeHtml(token[2]) + '</span>'
+          + escapeHtml(token[3]);
+      }
+
+      function highlightJsonLine(line) {
+        const key = line.match(/^(\\s*)("(?:\\\\.|[^"\\\\])*"):(.*)$/);
+        if (!key) return highlightJsonValueFragment(line);
+        return escapeHtml(key[1])
+          + '<span class="json-token key">' + escapeHtml(key[2]) + '</span>'
+          + '<span class="json-token punctuation">:</span>'
+          + highlightJsonValueFragment(key[3]);
+      }
+
+      function renderReceiptJson(value) {
+        return '<pre>' + formatReceiptJson(value).split('\\n').map((line, index) => (
+          '<span class="json-line"><span class="json-line-number">' + String(index + 1) + '</span><span class="json-line-code">' + highlightJsonLine(line) + '</span></span>'
+        )).join('') + '</pre>';
+      }
+
+      function traceReceiptPayload(run = currentRun) {
+        if (!run) return null;
+        const createdAt = run.records[0]?.record?.timestamp
+          ? new Date(run.records[0].record.timestamp).toISOString()
+          : null;
+        return {
+          trace_id: traceIdForRun(run),
+          run_id: run.run_id,
+          status: run.status === 'pending_approval' ? 'human_review_halted' : run.status,
+          current_step: ['pending_approval', 'changes_requested', 'rejected'].includes(run.status) ? 3 : ['succeeded', 'failed'].includes(run.status) ? 5 : 4,
+          created_at: createdAt,
+          records: run.trace_packet.timeline.map((entry) => {
+            const record = run.records.find((item) => item.record_hash === entry.record_hash);
+            return {
+              record_id: recordDisplayId(entry.record_hash),
+              timestamp: record?.record?.timestamp ? new Date(record.record.timestamp).toISOString() : null,
+              event: entry.event,
+              label: entry.label,
+              record_hash: entry.record_hash,
+            };
+          }),
+        };
       }
 
       async function writeClipboard(text) {
@@ -3271,7 +4728,7 @@ export function renderApp(): string {
       }
 
       function downloadJson(filename, value) {
-        const blob = new Blob([pretty(value)], { type: 'application/json' });
+        const blob = new Blob([formatReceiptJson(value)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -3290,6 +4747,7 @@ export function renderApp(): string {
 
       function selectedReceiptPayload(record = selectedReceiptRecord) {
         if (!record || !currentRun) return null;
+        if (selectedReceiptView === 'trace') return traceReceiptPayload(currentRun);
         return {
           trace_id: traceIdForRun(currentRun),
           run_id: currentRun.run_id,
@@ -3320,14 +4778,14 @@ export function renderApp(): string {
 
       function verificationRowsMarkup(run = currentRun, record = selectedReceiptRecord) {
         if (!run || !record) {
-          return '<div class="verify-list">'
+          return '<span class="trace-section-label">Verification</span><div class="verify-list">'
             + '<div class="verify-row">' + verifyIcon('log') + '<div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><button class="event-action" type="button" disabled>Pending</button></div>'
             + '<div class="verify-row">' + verifyIcon('sig') + '<div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" disabled>Pending</button></div>'
             + '<div class="verify-row">' + verifyIcon('get') + '<div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><button class="event-action" type="button" disabled>Pending</button></div>'
             + '</div>';
         }
         const proofUrl = proofTargetForRun(run);
-        return '<div class="verify-list">'
+        return '<span class="trace-section-label">Verification</span><div class="verify-list">'
           + '<div class="verify-row">' + verifyIcon('log') + '<div><strong>Verify in Cloudflare Integrity Log</strong><span class="empty">Check inclusion and consistency proof</span></div><a class="event-action" href="' + escapeHtml(proofUrl) + '" target="_blank" rel="noreferrer">View proof ' + actionGlyph('external') + '</a></div>'
           + '<div class="verify-row">' + verifyIcon('sig') + '<div><strong>Verify receipt signature</strong><span class="empty">Validate signer and record hashes</span></div><button class="event-action" type="button" data-verify-receipt>Verify ' + actionGlyph('external') + '</button></div>'
           + '<div class="verify-row">' + verifyIcon('get') + '<div><strong>Download transparency proof</strong><span class="empty">CT-style proof for this receipt</span></div><button class="event-action" type="button" data-download-receipt>Download ' + actionGlyph('download') + '</button></div>'
@@ -3354,9 +4812,35 @@ export function renderApp(): string {
       }
 
       function updateTraceHeaderCopy() {
-        const button = document.querySelector('[data-copy-source="#traceIdLabel"]');
-        if (!button) return;
-        button.disabled = !traceIdLabel.textContent || traceIdLabel.textContent === 'pending';
+        const traceButton = document.querySelector('[data-copy-source="#traceIdLabel"]');
+        if (traceButton) traceButton.disabled = !traceIdLabel.textContent || traceIdLabel.textContent === 'pending';
+        const runButton = document.querySelector('[data-copy-source="#runIdLabel"]');
+        if (runButton) runButton.disabled = !runIdLabel.textContent || runIdLabel.textContent === 'pending';
+      }
+
+      function setHeaderMenuOpen(open) {
+        if (!headerMenuButton || !headerActionsMenu) return;
+        headerMenuButton.setAttribute('aria-expanded', String(open));
+        headerActionsMenu.hidden = !open;
+      }
+
+      function setRunModeMenuOpen(open) {
+        if (!runModeButton || !runModeActionsMenu) return;
+        runModeButton.setAttribute('aria-expanded', String(open));
+        updateRunModeControls();
+        runModeActionsMenu.hidden = !open;
+      }
+
+      function updateHeaderMenuControls() {
+        if (!headerActionsMenu) return;
+        document.querySelectorAll('[data-header-action="open-json"], [data-header-action="reset"]').forEach((button) => {
+          button.disabled = !currentRun || busy;
+        });
+      }
+
+      function updateRunModeControls() {
+        runModeActionsMenu?.querySelector('[data-run-mode-action="live"]')?.setAttribute('aria-checked', 'true');
+        runModeActionsMenu?.querySelector('[data-run-mode-action="toggle-follow"]')?.setAttribute('aria-checked', String(autoFollow));
       }
 
       function renderVerificationActions(run = currentRun, record = selectedReceiptRecord) {
@@ -3372,8 +4856,9 @@ export function renderApp(): string {
         const existingResult = verificationEl.querySelector('#verificationResult');
         if (existingResult) existingResult.remove();
         verificationEl.insertAdjacentHTML('beforeend', verificationCheckingMarkup(record));
+        followElement(verificationEl.querySelector('#verificationResult'), 'nearest');
         try {
-          await sleep(250);
+          await sleep(850);
           const result = await post('/api/verify-record', {
             record: record.record,
             expected_hash: record.record_hash,
@@ -3381,6 +4866,7 @@ export function renderApp(): string {
           const ok = Boolean(result?.ok);
           const resultEl = verificationEl.querySelector('#verificationResult');
           if (resultEl) resultEl.outerHTML = verificationResultMarkup(result, record);
+          followElement(verificationEl.querySelector('#verificationResult'), 'nearest');
           button.innerHTML = (ok ? 'Verified ' : 'Check failed ') + actionGlyph(ok ? 'check' : 'external');
           button.classList.toggle('verified', ok);
           button.classList.toggle('failed', !ok);
@@ -3409,8 +4895,21 @@ export function renderApp(): string {
         if (downloadReceiptButton) downloadReceiptButton.disabled = !hasRecord;
       }
 
+      function selectedReceiptJsonPayload() {
+        if (!selectedReceiptRecord || !currentRun) return null;
+        return selectedReceiptView === 'trace'
+          ? traceReceiptPayload(currentRun)
+          : selectedReceiptRecord;
+      }
+
+      function rerenderSelectedReceiptJson() {
+        const payload = selectedReceiptJsonPayload();
+        if (payload) receiptsEl.innerHTML = renderReceiptJson(payload);
+      }
+
       function clearReceiptInspector() {
         selectedReceiptRecord = null;
+        selectedReceiptView = 'record';
         receiptsEl.innerHTML = '<p class="empty">View signed record and proof after the first trace record is selected.</p>';
         receiptSummaryEl.innerHTML = '<p class="empty">Summary appears after a signed record is selected.</p>';
         renderVerificationActions(null, null);
@@ -3420,6 +4919,12 @@ export function renderApp(): string {
       function runStateCopy(run) {
         switch (run.status) {
           case 'pending_approval':
+            if (hasRevisedProposal(run)) {
+              return {
+                title: 'Revised proposal ready for review',
+                detail: 'The agent incorporated signed feedback and halted again before MCP execution.',
+              };
+            }
             return {
               title: 'Halted for human review',
               detail: 'The agent has stopped before publishing. Approval resumes execution through the action MCP.',
@@ -3439,6 +4944,11 @@ export function renderApp(): string {
               title: 'Rejected before execution',
               detail: 'The human decision is signed. The agent did not run the MCP action.',
             };
+          case 'changes_requested':
+            return {
+              title: 'Revision requested before execution',
+              detail: 'The human feedback is signed. The agent must revise the payload before MCP execution can resume.',
+            };
           default:
             return {
               title: run.status.replaceAll('_', ' '),
@@ -3449,7 +4959,14 @@ export function renderApp(): string {
 
       function setStatusForRun(run) {
         if (run.status === 'pending_approval') {
-          setStatus('Halted for human review', 'pending', 'Autonomous triage is complete. Review the payload before the agent can resume.', 'halt');
+          setStatus(
+            hasRevisedProposal(run) ? 'Revised proposal ready for review' : 'Halted for human review',
+            'pending',
+            hasRevisedProposal(run)
+              ? 'The agent signed a revised payload from the requested changes. Review it before MCP execution can resume.'
+              : 'Autonomous triage is complete. Review the payload before the agent can resume.',
+            'halt',
+          );
           return;
         }
         if (run.status === 'succeeded') {
@@ -3461,14 +4978,19 @@ export function renderApp(): string {
           return;
         }
         if (run.status === 'rejected') {
-          setStatus('Rejected', 'error', 'The human decision is signed. No execution ran.', 'audit');
+          setStatus('Rejected', 'error', 'The human decision is signed. No execution ran.', 'halt');
+          return;
+        }
+        if (run.status === 'changes_requested') {
+          setStatus('Changes requested', 'pending', 'The human feedback is signed. MCP execution remains blocked until the agent revises the proposal.', 'halt');
           return;
         }
         setStatus(run.status.replaceAll('_', ' '), 'pending', 'The workflow is still running.', 'resume');
       }
 
       function renderProposal(run) {
-        const proposal = run.records.find((record) => record.label === 'proposal');
+        const proposal = latestProposalRecord(run);
+        const feedbackRecord = latestChangeRequestRecord(run);
         const body = proposal?.body ?? {};
         const payload = body.proposed_payload ?? {};
         const before = payload.before ?? {};
@@ -3489,13 +5011,17 @@ export function renderApp(): string {
             <span class="label">Target</span>
             <span class="value"><span class="meta-code">\${payload.target_file ?? 'missing'}</span></span>
           </div>
-          <div class="diff">
+          <div class="diff" data-context-lines="3">
             <div>
               <div class="diff-head">
                 <span class="label">Diff (unified)</span>
-                <span class="diff-tools"><span>Context</span><span>3 lines</span><span>Wrap</span></span>
+                <span class="diff-tools">
+                  <label>Context <select id="diffContext" aria-label="Diff context"><option value="3">3 lines</option><option value="6">6 lines</option><option value="all">All</option></select></label>
+                  <button type="button" id="diffWrapToggle" aria-pressed="false">Wrap</button>
+                  <button type="button" class="diff-copy-button" id="copyDiff" aria-label="Copy diff" data-copy-diff><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></button>
+                </span>
               </div>
-              <div class="diff-code">\${renderDiff(diff)}</div>
+              <div class="diff-code">\${renderDiff(diff, '3')}</div>
             </div>
           </div>
           <div class="risk-heading">Risk assessment</div>
@@ -3510,11 +5036,23 @@ export function renderApp(): string {
             <span>This proposal changes repository code for a production Workers route. The agent must halt before the action MCP writes the file.</span>
             <span>Approval signs the exact payload hash, connector id, and target file before execution resumes.</span>
           </div>
+          \${feedbackRecord ? \`
+            <div class="feedback-summary">
+              <span class="label">Last requested change</span>
+              <span class="value">\${escapeHtml(feedbackRecord.body?.feedback ?? feedbackRecord.body?.reviewer_feedback ?? 'Reviewer requested a revision.')}</span>
+            </div>
+          \` : ''}
           <div class="actions">
-            <button class="primary" id="approve" aria-label="Approve and resume" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span><span class="action-copy"><span class="button-label">Approve and resume</span><small>Allow MCP execution to continue</small></span></button>
-            <button class="danger" id="reject" aria-label="Reject" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 4.5 7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span><span class="action-copy"><span class="button-label">Reject</span><small>Cancel this proposed action</small></span></button>
-            <button class="secondary" id="requestChanges" aria-label="Request changes" \${disabled ? 'disabled' : ''}><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v6H7l-3 3V4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="action-copy"><span class="button-label">Request changes</span><small>Send feedback to agent</small></span></button>
+            <button class="primary" id="approve" aria-label="Approve and resume" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span><span class="button-label">Approve &amp; resume</span></span><small>Allow MCP execution to continue</small></span></span></button>
+            <button class="danger" id="reject" aria-label="Reject" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 4.5 7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span><span class="button-label">Reject</span></span><small>Cancel this proposed action</small></span></span></button>
+            <button class="secondary" id="requestChanges" aria-label="Request changes" aria-expanded="false" aria-controls="reviewFeedbackDrawer" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v6H7l-3 3V4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="button-label">Request changes</span></span><small>Send feedback to agent</small></span></span></button>
           </div>
+          \${run.status === 'pending_approval' ? \`
+            <label class="review-feedback-drawer" id="reviewFeedbackDrawer" hidden>
+              <span class="label">Requested changes</span>
+              <textarea id="reviewFeedback" rows="3">Please narrow this to the /v1/report route only and return a revised proposal before any MCP write.</textarea>
+            </label>
+          \` : ''}
         \`;
         document.querySelector('#riskDetailsToggle')?.addEventListener('click', (event) => {
           const button = event.currentTarget;
@@ -3523,6 +5061,24 @@ export function renderApp(): string {
           const expanded = button.getAttribute('aria-expanded') === 'true';
           button.setAttribute('aria-expanded', String(!expanded));
           details.hidden = expanded;
+        });
+        document.querySelector('#diffWrapToggle')?.addEventListener('click', (event) => {
+          const button = event.currentTarget;
+          const code = document.querySelector('.diff-code');
+          const pressed = button.getAttribute('aria-pressed') === 'true';
+          button.setAttribute('aria-pressed', String(!pressed));
+          code?.classList.toggle('wrap', !pressed);
+        });
+        document.querySelector('#diffContext')?.addEventListener('change', (event) => {
+          const context = event.currentTarget.value;
+          const diffRoot = document.querySelector('.diff');
+          const code = document.querySelector('.diff-code');
+          const wrap = document.querySelector('#diffWrapToggle')?.getAttribute('aria-pressed') === 'true';
+          diffRoot?.setAttribute('data-context-lines', context);
+          if (code) {
+            code.innerHTML = renderDiff(diff, context);
+            code.classList.toggle('wrap', wrap);
+          }
         });
         document.querySelector('#approve')?.addEventListener('click', async () => {
           await transition({
@@ -3548,13 +5104,24 @@ export function renderApp(): string {
           });
         });
         document.querySelector('#requestChanges')?.addEventListener('click', async () => {
+          const drawer = document.querySelector('#reviewFeedbackDrawer');
+          const input = document.querySelector('#reviewFeedback');
+          if (drawer?.hidden) {
+            drawer.hidden = false;
+            updateControls();
+            followPanelElement(drawer);
+            input?.focus();
+            return;
+          }
+          const feedback = document.querySelector('#reviewFeedback')?.value?.trim()
+            || 'Please narrow this to the /v1/report route only and return a revised proposal before any MCP write.';
           await transition({
             title: 'Requesting changes',
-            detail: 'The human decision is being signed as a no-execute review outcome.',
+            detail: 'The reviewer feedback is being signed. The agent will revise and return to human review.',
             step: 'halt',
-            activeLabel: 'reject',
-            fn: async () => post('/api/runs/' + run.run_id + '/reject', {
-              reason: 'The reviewer requested a smaller repository file update.',
+            activeLabel: 'request',
+            fn: async () => post('/api/runs/' + run.run_id + '/request-changes', {
+              feedback,
             }),
           });
         });
@@ -3564,8 +5131,14 @@ export function renderApp(): string {
       function renderAnswer(run) {
         const answer = run.trace_packet.answer;
         const publicUrl = run.trace_packet.handoff?.public_context_url;
-        const auditReady = ['succeeded', 'failed', 'rejected'].includes(run.status);
+        const auditReady = ['succeeded', 'failed'].includes(run.status);
+        const rejected = run.status === 'rejected';
+        const changesRequested = run.status === 'changes_requested';
         const labels = new Set(run.records.map((record) => record.label));
+        const revised = hasRevisedProposal(run);
+        const feedback = latestChangeRequestRecord(run);
+        const reviewLoopActive = Boolean(feedback) && !auditReady && !rejected && !changesRequested;
+        const showReviewResult = auditReady || rejected || changesRequested || Boolean(feedback);
         const stageRows = [
           {
             title: 'Trigger received',
@@ -3578,57 +5151,80 @@ export function renderApp(): string {
             done: labels.has('triage'),
           },
           {
-            title: 'Policy and intent analysis',
+            title: 'Policy & intent analysis',
             detail: labels.has('triage') ? 'Repository writes require human review before MCP execution.' : 'Waiting for policy analysis.',
             done: labels.has('triage'),
           },
           {
-            title: 'Proposed action generated',
+            title: revised ? 'Initial proposal generated' : 'Proposed action generated',
             detail: labels.has('proposal') ? 'Agent prepared a write_file payload, diff, risk note, and payload hash.' : 'Agent has not planned yet.',
             done: labels.has('proposal'),
           },
+          ...(feedback ? [{
+            title: 'Human review feedback sent',
+            detail: 'Reviewer feedback was signed and returned to the agent.',
+            done: true,
+          }] : []),
+          ...(revised ? [{
+            title: 'Revised proposal generated',
+            detail: 'The agent narrowed the file update and signed a new payload hash.',
+            done: true,
+          }] : []),
           {
-            title: run.status === 'pending_approval' ? 'Human review halted' : 'Human review recorded',
-            detail: answer.decision ? 'Decision: ' + answer.decision : 'Execution is stopped until a human signs approval or rejection.',
+            title: run.status === 'pending_approval' ? revised ? 'Revised proposal halted' : 'Human review halted' : rejected ? 'Human review rejected' : changesRequested ? 'Human review feedback sent' : 'Human review recorded',
+            detail: answer.decision ? 'Decision: ' + answer.decision : revised ? 'Execution is stopped again until a human signs the revised proposal.' : 'Execution is stopped until a human signs approval, rejection, or feedback.',
             done: Boolean(answer.decision),
             halted: run.status === 'pending_approval',
           },
           {
-            title: answer.executed ? 'Agent resumed through MCP' : 'Resume not started',
-            detail: answer.executed ? 'The action MCP ran only after approval.' : 'Rejected or waiting for approval.',
-            done: answer.executed,
+            title: answer.executed ? 'Agent resumed through MCP' : rejected ? 'MCP execution skipped' : changesRequested ? 'Feedback returned to agent' : 'Resume not started',
+            detail: answer.executed
+              ? 'The action MCP ran only after approval.'
+              : rejected
+              ? 'The signed rejection closed the gate before any MCP write.'
+              : changesRequested
+              ? 'Signed feedback has been returned to the agent for revision.'
+              : revised
+              ? 'Waiting on approval for the revised proposal.'
+              : 'Rejected or waiting for approval.',
+            done: answer.executed || changesRequested,
+            skipped: rejected,
           },
           {
-            title: auditReady ? 'Audit ready' : 'Audit assembling',
+            title: auditReady ? 'Audit ready' : rejected ? 'Decision audit ready' : changesRequested ? 'Revised proposal pending' : 'Audit assembling',
             detail: auditReady
               ? 'Public log context and trace JSON are ready.'
+              : rejected
+                ? 'Signed rejection receipt and public log proof are ready.'
+                : changesRequested
+                ? 'Signed feedback is in the trace; the next agent pass must produce a revised proposal.'
               : 'Receipts appear as the run progresses; terminal audit waits for a decision.',
-            done: auditReady,
+            done: auditReady || rejected,
           },
         ];
         answerEl.innerHTML = \`
           <span class="section-label">Agent progress</span>
           <div class="progress-list">
             \${stageRows.map((row) => \`
-              <div class="progress-item \${progressRowClass(row)}">
-                <span class="dot \${row.done ? 'ok' : row.halted ? 'pending' : 'future'}"></span>
+              <div class="progress-item \${progressRowClass(row, run)}">
+                <span class="dot \${row.done ? 'ok' : row.skipped ? 'skipped' : row.halted ? 'pending' : 'future'}"></span>
                 <div>
                   <strong>\${row.title === 'Resume not started' ? 'MCP execution (pending)' : row.title === 'Audit assembling' ? 'Audit ready (pending)' : row.title}</strong>
                   <span>\${row.detail}</span>
                 </div>
-                <span class="progress-time">\${progressDisplayTime(run, row.title, row.done || row.halted)}</span>
+                <span class="progress-time">\${progressDisplayTime(run, row.title, row.done || row.halted || row.skipped)}</span>
               </div>
             \`).join('')}
           </div>
-          \${auditReady ? \`
-            <div class="metric-row">
+          \${showReviewResult ? \`
+            <div class="metric-row review-result">
               <div class="metric">
-                <span class="label">Execution result</span>
-                <span class="value">\${answer.executed ? answer.outcome : 'not run'}</span>
+                <span class="label">\${changesRequested || reviewLoopActive ? 'Review result' : 'Execution result'}</span>
+                <span class="value">\${changesRequested || reviewLoopActive ? 'changes requested' : answer.executed ? answer.outcome : 'not run'}</span>
               </div>
               <div class="metric">
-                <span class="label">Changed rows</span>
-                <span class="value">\${answer.changed.length ? answer.changed.join(', ') : 'none'}</span>
+                <span class="label">\${changesRequested || reviewLoopActive ? 'Next step' : 'Changed rows'}</span>
+                <span class="value">\${changesRequested ? 'agent revision' : reviewLoopActive && run.status === 'pending_approval' ? 'review revised proposal' : answer.changed.length ? answer.changed.join(', ') : 'none'}</span>
               </div>
             </div>
           \` : ''}
@@ -3638,39 +5234,66 @@ export function renderApp(): string {
 
       function renderTimeline(run) {
         const signers = [
-          { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', signer: 'agent', status: run.records.some((record) => record.signer === 'agent') ? 'Signed' : 'Pending' },
-          { kind: 'human', name: 'Human', detail: 'alice@example.com', signer: 'human', status: run.records.some((record) => record.signer === 'human') ? 'Signed' : 'Pending' },
-          { kind: 'mcp', name: 'Action MCP', detail: 'github.write@2.3.1', signer: 'action_mcp', status: run.records.some((record) => record.signer === 'action_mcp') ? 'Signed' : 'Pending' },
-        ];
+          { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', signer: 'agent' },
+          { kind: 'human', name: 'Human', detail: 'alice@example.com', signer: 'human' },
+          { kind: 'mcp', name: 'Action MCP', detail: 'github.write@2.3.1', signer: 'action_mcp' },
+        ].map((signer) => {
+          const records = recordsForSigner(run, signer.signer);
+          const recordCount = records.length;
+          return {
+            ...signer,
+            recordCount,
+            status: signerStatusForRun(run, signer, recordCount),
+          };
+        });
         timelineEl.innerHTML = run.trace_packet.timeline.length
           ? \`
+          <span class="trace-section-label">Record timeline</span>
           <div class="record-timeline">
             \${run.trace_packet.timeline.map((entry, index) => {
               const record = run.records.find((item) => item.record_hash === entry.record_hash);
               const isPendingHuman = false;
               return \`
-                <button class="event" data-hash="\${entry.record_hash}" data-label="\${entry.label}">
-                  <span class="event-time">\${displayRecordTime(record, entry.label, index)}</span>
+                <button class="event" data-hash="\${entry.record_hash}" data-label="\${entry.label}" aria-label="View receipt details for \${escapeHtml(timelineLabel(entry, run))}">
                   <span class="event-marker \${isPendingHuman ? 'pending' : 'done'}"></span>
+                  <span class="event-time">\${displayRecordTime(record, entry.label, index)}</span>
                   <span class="event-copy">
-                    <strong>\${timelineLabel(entry, run)}</strong>
+                    <span class="event-title-line">\${timelineSignerIcon(record)}<strong>\${timelineLabel(entry, run)}</strong></span>
                     <span class="value">\${timelineDetail(entry, run)}</span>
                   </span>
                   <span class="event-hash hash">\${recordDisplayId(entry.record_hash)}</span>
+                  <span class="event-cue" aria-hidden="true">\${recordDetailsIcon()}</span>
                 </button>
               \`;
             }).join('')}
-            \${futureTraceRows(run).map((row) => \`
-              <div class="event-future \${row.marker === 'pending' ? 'selected' : ''}">
+            \${futureTraceRows(run).map((row) => {
+              const isCurrent = row.marker === 'pending';
+              if (isCurrent && row.record && row.hash) {
+                return \`
+                <button class="event current" data-hash="\${row.hash}" data-label="\${row.displayLabel ?? row.name}" aria-current="step" aria-label="View receipt details for \${escapeHtml(row.name)}">
+                  <span class="event-marker \${row.marker}">\${row.markerLabel ?? ''}</span>
+                  <span class="event-time">\${displayRecordTime(row.record, row.timeLabel ?? row.displayLabel)}</span>
+                  <span class="event-copy">
+                    <span class="event-title-line">\${timelineSignerIcon(row.record)}<strong>\${row.name}</strong></span>
+                    <span class="value">\${row.detail}</span>
+                  </span>
+                  <span class="event-hash hash">\${recordDisplayId(row.hash)}</span>
+                  <span class="event-cue" aria-hidden="true">\${recordDetailsIcon()}</span>
+                </button>
+              \`;
+              }
+              return \`
+              <div class="event-future \${isCurrent ? 'current' : ''}" \${isCurrent ? 'aria-current="step"' : ''}>
+                <span class="event-marker \${row.marker}">\${row.markerLabel ?? ''}</span>
                 <span class="event-time">\${row.record ? displayRecordTime(row.record, row.displayLabel) : '-'}</span>
-                <span class="event-marker \${row.marker}"></span>
                 <span class="event-copy">
-                  <strong>\${row.name}</strong>
+                  <span class="event-title-line">\${timelineSignerIcon(row.record)}<strong>\${row.name}</strong></span>
                   <span class="value">\${row.detail}</span>
                 </span>
                 <span class="event-hash hash">\${row.hash ? recordDisplayId(row.hash) : '-'}</span>
               </div>
-            \`).join('')}
+            \`;
+            }).join('')}
           </div>
           <div class="signer-list">
             <span class="trace-section-label">Signers</span>
@@ -3678,9 +5301,9 @@ export function renderApp(): string {
               <div class="signer-row">
                 \${signerIcon(signer.kind)}
                 <strong>\${signer.name}</strong>
-                <span class="empty">\${signer.detail}</span>
+                <span class="empty">\${signer.detail}\${signer.recordCount ? ' (' + recordCountLabel(signer.recordCount) + ')' : ''}</span>
                 <span class="pill signer-status \${signerStatusClass(signer)}">\${signer.status}</span>
-                <span class="signature-slot">Sig: <span class="hash">\${signerSignature(run, signer.signer)}</span></span>\${copyIcon(signerRecordHash(run, signer.signer), signer.name + ' signature')}
+                <span class="signature-slot"><span class="signature-label">Latest</span><span class="signature-separator">:</span> <span class="hash">\${signerLatestRecordDigest(run, signer.signer)}</span></span>\${copyIcon(signerRecordHash(run, signer.signer), signer.name + ' latest record')}
               </div>
             \`).join('')}
           </div>
@@ -3689,7 +5312,7 @@ export function renderApp(): string {
             <div class="integrity-list">
               <div class="integrity-row"><strong>Merkle root</strong><span class="hash">\${run.records[0]?.record_hash ?? 'pending'}</span>\${copyIcon(run.records[0]?.record_hash ?? '', 'Merkle root')}</div>
               <div class="integrity-row"><strong>Log hash</strong><span class="hash">\${run.records[1]?.record_hash ?? 'pending'}</span>\${copyIcon(run.records[1]?.record_hash ?? '', 'log hash')}</div>
-              <div class="integrity-row"><strong>Proof status</strong><span class="value">Included in Cloudflare Integrity Log</span><a class="event-action" href="\${run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id}" target="_blank" rel="noreferrer">View proof</a></div>
+              <div class="integrity-row proof-row"><strong>Proof status</strong><span class="value proof-status-value"><span class="integrity-proof-dot" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="m5.4 8.1 1.8 1.8 3.5-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="proof-status-text">Included in Cloudflare Integrity Log</span></span><a class="event-action" href="\${run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id}" target="_blank" rel="noreferrer">View proof \${actionGlyph('external')}</a></div>
             </div>
           </div>
         \`
@@ -3702,13 +5325,15 @@ export function renderApp(): string {
           });
         };
         const renderReceiptSummary = (record, activeTab = 'summary') => {
-          const signedRecords = signers.filter((signer) => signer.status === 'Signed').length;
-          const pendingSignatures = signers.filter((signer) => signer.status === 'Pending').length;
+          const signedSigners = signers.filter((signer) => signer.status === 'Signed').length;
+          const pendingSigners = signers.filter((signer) => signer.status === 'Pending').length;
+          const blockedSigners = signers.filter((signer) => signer.status === 'Blocked').length;
+          const skippedSigners = signers.filter((signer) => signer.status === 'Skipped').length;
           const logEntry = run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id;
           const tabMarkup = \`
-            <div class="receipt-tabs">
-              <button class="receipt-tab \${activeTab === 'summary' ? 'active' : ''}" type="button" data-receipt-tab="summary">Summary</button>
-              <button class="receipt-tab \${activeTab === 'details' ? 'active' : ''}" type="button" data-receipt-tab="details">Record details</button>
+            <div class="receipt-tabs" role="tablist" aria-label="Receipt inspector views">
+              <button class="receipt-tab \${activeTab === 'summary' ? 'active' : ''}" type="button" role="tab" aria-selected="\${activeTab === 'summary' ? 'true' : 'false'}" data-receipt-tab="summary">Summary</button>
+              <button class="receipt-tab \${activeTab === 'details' ? 'active' : ''}" type="button" role="tab" aria-selected="\${activeTab === 'details' ? 'true' : 'false'}" data-receipt-tab="details">Record details</button>
             </div>
           \`;
           if (activeTab === 'details') {
@@ -3731,8 +5356,10 @@ export function renderApp(): string {
             \${tabMarkup}
             <div class="receipt-summary-grid">
               <div class="summary-row"><span>Total records</span><strong>\${run.records.length}</strong><span></span></div>
-              <div class="summary-row"><span>Signed records</span><strong>\${signedRecords}</strong><span></span></div>
-              <div class="summary-row"><span>Pending signatures</span><strong>\${pendingSignatures}</strong><span></span></div>
+              <div class="summary-row"><span>Signed signers</span><strong>\${signedSigners}</strong><span></span></div>
+              <div class="summary-row"><span>Pending signers</span><strong>\${pendingSigners}</strong><span></span></div>
+              \${blockedSigners ? '<div class="summary-row"><span>Blocked signers</span><strong>' + blockedSigners + '</strong><span></span></div>' : ''}
+              \${skippedSigners ? '<div class="summary-row"><span>Skipped signers</span><strong>' + skippedSigners + '</strong><span></span></div>' : ''}
               <div class="summary-row"><span>Merkle root</span><span class="hash">\${shortHash(run.records[0]?.record_hash)}</span>\${copyIcon(run.records[0]?.record_hash ?? '', 'Merkle root')}</div>
               <div class="summary-row"><span>Log entry</span><a href="\${logEntry}">cl_\${traceIdForRun(run).slice(4, 20)}</a><span></span></div>
               <div class="summary-row"><span>Log timestamp</span><strong>\${displayRecordTime(record, record.label) + ' UTC'}</strong><span></span></div>
@@ -3741,9 +5368,10 @@ export function renderApp(): string {
           \`;
           bindReceiptTabs(record);
         };
-        const selectRecord = (record) => {
+        const selectRecord = (record, options = {}) => {
           selectedReceiptRecord = record;
-          receiptsEl.innerHTML = '<pre>' + pretty(record) + '</pre>';
+          selectedReceiptView = options.showTrace ? 'trace' : 'record';
+          receiptsEl.innerHTML = renderReceiptJson(selectedReceiptJsonPayload());
           renderReceiptSummary(record);
           renderVerificationActions(run, record);
           updateReceiptControls(record);
@@ -3751,26 +5379,38 @@ export function renderApp(): string {
         timelineEl.querySelectorAll('.event').forEach((button) => {
           button.addEventListener('click', () => {
             const record = run.records.find((item) => item.record_hash === button.dataset.hash);
+            if (!record) return;
             timelineEl.querySelectorAll('.event').forEach((item) => item.classList.remove('selected'));
             button.classList.add('selected');
             selectRecord(record);
           });
         });
-        const preferredLabel = run.status === 'pending_approval' ? 'proposal' : run.status === 'rejected' ? 'rejection' : run.status === 'failed' ? 'outcome' : 'handoff';
+        const preferredLabel = run.status === 'pending_approval' ? 'approval' : run.status === 'changes_requested' ? 'change_request' : run.status === 'rejected' ? 'rejection' : run.status === 'failed' ? 'outcome' : 'handoff';
         const preferredButton = timelineEl.querySelector(\`.event[data-label="\${preferredLabel}"]\`) ?? timelineEl.querySelector('.event');
-        preferredButton?.click();
+        if (preferredButton) {
+          timelineEl.querySelectorAll('.event').forEach((item) => item.classList.remove('selected'));
+          preferredButton.classList.add('selected');
+          const preferredRecord = run.records.find((item) => item.record_hash === preferredButton.dataset.hash);
+          if (preferredRecord) selectRecord(preferredRecord, { showTrace: true });
+        }
       }
 
-      function render(run) {
+      function applyRunHeader(run) {
         currentRun = run;
-        runIdLabel.textContent = run.run_id;
+        setRunId(run.run_id);
         traceIdLabel.textContent = traceIdForRun(run);
         updateTraceHeaderCopy();
         const started = run.records[0]?.record?.timestamp
-          ? new Date(run.records[0].record.timestamp).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+          ? formatHeaderDate(run.records[0].record.timestamp)
           : 'pending';
         startedLabel.textContent = started;
         receivedLabel.textContent = started;
+        updateControls();
+      }
+
+      function render(run) {
+        stageDisplayTimes = {};
+        applyRunHeader(run);
         renderProposal(run);
         renderAnswer(run);
         renderTimeline(run);
@@ -3778,9 +5418,12 @@ export function renderApp(): string {
         updateStepTimes(run);
         updateControls();
         if (run.status === 'pending_approval') {
-          followElement(document.querySelector('#approve'), 'nearest');
+          followWorkflowOverview();
         } else if (['succeeded', 'failed', 'rejected'].includes(run.status)) {
+          followPanelElement(answerEl.querySelector('.review-result'));
           followElement(document.querySelector('.receipt-panel'), 'start');
+        } else if (run.status === 'changes_requested') {
+          followPanelElement(answerEl.querySelector('.review-result'));
         }
       }
 
@@ -3801,7 +5444,59 @@ export function renderApp(): string {
 
       document.addEventListener('click', async (event) => {
         const target = event.target;
-        const copyButton = target.closest?.('[data-copy-value], [data-copy-source], #copyReceipt');
+        const menuButton = target.closest?.('#headerMenu');
+        if (menuButton) {
+          setRunModeMenuOpen(false);
+          setHeaderMenuOpen(menuButton.getAttribute('aria-expanded') !== 'true');
+          return;
+        }
+
+        const runModeTrigger = target.closest?.('#runModeMenu');
+        if (runModeTrigger) {
+          setHeaderMenuOpen(false);
+          setRunModeMenuOpen(runModeTrigger.getAttribute('aria-expanded') !== 'true');
+          return;
+        }
+
+        const runModeAction = target.closest?.('[data-run-mode-action]');
+        if (runModeAction && !runModeAction.disabled) {
+          const action = runModeAction.dataset.runModeAction;
+          setRunModeMenuOpen(false);
+          if (action === 'toggle-follow') {
+            autoFollow = !autoFollow;
+            updateRunModeControls();
+            return;
+          }
+          return;
+        }
+
+        const menuAction = target.closest?.('[data-header-action]');
+        if (menuAction && !menuAction.disabled) {
+          const action = menuAction.dataset.headerAction;
+          setHeaderMenuOpen(false);
+          if (action === 'copy-link') {
+            if (await writeClipboard(window.location.href)) markCopied(menuAction);
+            return;
+          }
+          if (action === 'open-json' && currentRun) {
+            window.open('/api/runs/' + currentRun.run_id, '_blank', 'noreferrer');
+            return;
+          }
+          if (action === 'reset') {
+            resetButton.click();
+            return;
+          }
+        }
+
+        if (headerActionsMenu && !target.closest?.('#headerActions')) {
+          setHeaderMenuOpen(false);
+        }
+
+        if (runModeActionsMenu && !target.closest?.('#runModeActions')) {
+          setRunModeMenuOpen(false);
+        }
+
+        const copyButton = target.closest?.('[data-copy-value], [data-copy-source], [data-copy-diff], #copyReceipt');
         if (copyButton && !copyButton.disabled) {
           const source = copyButton.dataset.copySource
             ? document.querySelector(copyButton.dataset.copySource)?.textContent
@@ -3809,7 +5504,8 @@ export function renderApp(): string {
           const payload = copyButton.id === 'copyReceipt'
             ? selectedReceiptPayload()
             : null;
-          const value = payload ? pretty(payload) : source ?? copyButton.dataset.copyValue ?? '';
+          const diff = copyButton.dataset.copyDiff !== undefined ? currentVisibleDiffText() : null;
+          const value = payload ? formatReceiptJson(payload) : diff ?? source ?? copyButton.dataset.copyValue ?? '';
           if (await writeClipboard(value)) markCopied(copyButton);
           return;
         }
@@ -3831,27 +5527,45 @@ export function renderApp(): string {
         await startTriggeredRun();
       });
 
+      receiptFormatSelect?.addEventListener('change', () => {
+        selectedReceiptFormat = receiptFormatSelect.value;
+        rerenderSelectedReceiptJson();
+      });
+
       async function startTriggeredRun() {
         if (busy) return;
         try {
           setBusy(true, 'create');
+          const runId = crypto.randomUUID();
           currentRun = null;
           selectedReceiptRecord = null;
+          selectedReceiptView = 'record';
           stageDisplayTimes = {};
-          runIdLabel.textContent = 'pending';
-          traceIdLabel.textContent = 'pending';
+          resetPanelScroll(answerEl);
+          resetPanelScroll(proposalEl);
+          resetPanelScroll(timelineEl);
+          setRunId(runId);
+          traceIdLabel.textContent = traceIdFromRunId(runId);
           updateTraceHeaderCopy();
-          startedLabel.textContent = nowTime(0);
-          receivedLabel.textContent = nowTime(0);
+          startedLabel.textContent = formatHeaderDate();
+          receivedLabel.textContent = formatHeaderDate();
           clearReceiptInspector();
-          const runPromise = post('/api/runs', {
+          renderBootProgress(0);
+          const run = await post('/api/runs', {
+            run_id: runId,
             prompt: promptInput.value,
           });
-          for (let index = 0; index < bootStages.length; index += 1) {
-            renderBootProgress(index);
-            await sleep(index === bootStages.length - 1 ? 1200 : 1700);
+          applyRunHeader(run);
+          renderBootProgress(0, run);
+          await sleep(1700);
+          for (let index = 1; index < bootStages.length; index += 1) {
+            if (bootStages[index]?.key === 'halt') {
+              render(run);
+              return;
+            }
+            renderBootProgress(index, run);
+            await sleep(1700);
           }
-          const run = await runPromise;
           render(run);
         } catch (error) {
           setStatus('Workflow error', 'error', 'The request failed before the trace could complete.', currentStep);
@@ -3863,21 +5577,19 @@ export function renderApp(): string {
 
       resetButton.addEventListener('click', () => {
         if (busy) return;
-        currentRun = null;
-        selectedReceiptRecord = null;
-        stageDisplayTimes = {};
-        runIdLabel.textContent = 'pending';
-        traceIdLabel.textContent = 'pending';
-        updateTraceHeaderCopy();
-        startedLabel.textContent = 'waiting';
-        receivedLabel.textContent = 'waiting';
-        proposalEl.innerHTML = '<p class="empty">Run the trigger to see the agent\\'s proposal, exact payload, diff, risk, and approval controls.</p>';
-        answerEl.innerHTML = '<p class="empty">No active run.</p>';
-        timelineEl.innerHTML = '<p class="empty">Signed records will appear here as the workflow runs.</p>';
-        clearReceiptInspector();
-        setStatus('Ready for incoming alert', 'pending', 'Run the prior trigger to start autonomous triage before the human review gate.', 'trigger');
-        updateControls();
+        setHeaderMenuOpen(false);
+        setRunModeMenuOpen(false);
+        startTriggeredRun();
       });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          setHeaderMenuOpen(false);
+          setRunModeMenuOpen(false);
+        }
+      });
+
+      window.addEventListener('resize', syncRailConnectors);
 
       updateControls();
       updateTraceHeaderCopy();

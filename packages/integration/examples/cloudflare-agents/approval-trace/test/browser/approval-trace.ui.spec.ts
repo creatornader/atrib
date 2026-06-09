@@ -20,27 +20,111 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await page.goto(path)
   await expect(page).toHaveTitle('Cloudflare Agent Trace')
   await expect(page.getByTestId('approval-trace-app')).toBeVisible()
+  await expect(page.locator('#coloLabel')).toHaveText(/^[A-Z0-9-]{2,12}$/)
+  await expect(page.locator('#runIdLabel')).not.toHaveText('pending')
+  await expect(page.locator('#runIdLabel')).toHaveText(/^run_[A-Z0-9]+/)
+  await expect(page.locator('#runIdLabel')).toHaveAttribute('data-run-id', /.+/)
   await expect(page.locator('#answer')).toContainText('Trigger received')
   await expect(page.locator('#statusTitle')).toHaveText('Halted for human review', {
     timeout: 15_000,
   })
   await expect(page.locator('#answer')).toContainText('Context gathered')
-  await expect(page.locator('#answer')).toContainText('Policy and intent analysis')
+  await expect(page.locator('#answer')).toContainText('Policy & intent analysis')
   await expect(page.locator('#answer')).toContainText('Proposed action generated')
   await expect(page.locator('#answer')).toContainText('Human review halted')
+  await expect(page.locator('#proposal')).toContainText('Proposed action')
+  await expect(page.locator('#proposal')).toContainText('Diff (unified)')
+  await expect(page.locator('#receipts pre')).toContainText('"trace_id"')
+  await expect(page.locator('#receiptSummary')).toContainText('Total records')
   await expect(page.getByRole('button', { name: 'Approve and resume' })).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Reject' })).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Request changes' })).toBeEnabled()
-  await expect(page.locator('#timeline .event')).toHaveCount(3)
+  await expect(page.locator('#timeline .event')).toHaveCount(4)
+  const timelineColumns = await page.evaluate<string[]>(`Array.from(document.querySelector('#timeline .record-timeline')?.firstElementChild?.children ?? [])
+    .slice(0, 2)
+    .map((child) => String(child.className))`)
+  expect(timelineColumns[0]).toContain('event-marker')
+  expect(timelineColumns[1]).toContain('event-time')
+  await expect(page.locator('#timeline .event .event-cue')).toHaveCount(4)
+  await expect(page.locator('#timeline .event .event-cue svg')).toHaveCount(4)
+  await expect(page.locator('#timeline .event-future .event-cue')).toHaveCount(0)
+  await expect(page.locator('#timeline .event.current.selected')).toContainText('human.review.halted')
+  await expect(page.locator('#timeline .event.current.selected')).toHaveAttribute('aria-current', 'step')
+  await expect
+    .poll(async () => page.locator('#timeline .event-future .event-marker').allTextContents())
+    .toEqual(['4', '5'])
   await expect(page.locator('#answer')).toContainText('Human review halted')
   await expect(page.locator('#answer')).toContainText('Execution is stopped')
+  await expectProposalProgressDot(page, 'pending')
+  await expectPendingSignerHashReadable(page)
+  await expectReferenceSignerIconTreatment(page)
+  await expectReferenceLeftProgressTypography(page)
+  await expectWorkflowStepTitlesBold(page)
+  await expectReviewPillMatchesRailBadge(page)
 }
 
-async function openTimelineRecord(page: Page, label: string): Promise<void> {
+async function openTimelineRecord(page: Page, label: string, receiptLabel = label): Promise<void> {
   await page.locator('#timeline .event').filter({ hasText: label }).click()
   await expect(page.locator('#timeline .event.selected')).toContainText(label)
-  await expect(page.locator('#receipts pre')).toContainText(`"label": "${label}"`)
+  await expect(page.locator('#receipts pre')).toContainText(`"label": "${receiptLabel}"`)
   await expect(page.locator('#receipts pre')).toContainText('"record_hash": "sha256:')
+}
+
+async function expectSelectedAndCurrentRowsLookDistinct(page: Page): Promise<void> {
+  const rowStyles = await page.evaluate<{
+    current: { background: string; boxShadow: string } | null
+    selected: { background: string; boxShadow: string } | null
+  }>(`(() => {
+    const selected = document.querySelector('#timeline .event.selected')
+    const current = document.querySelector('#timeline .current')
+    const styleFor = (element) => {
+      if (!element) return null
+      const style = getComputedStyle(element)
+      return {
+        background: style.backgroundColor,
+        boxShadow: style.boxShadow,
+      }
+    }
+    return {
+      current: styleFor(current),
+      selected: styleFor(selected),
+    }
+  })()`)
+  expect(rowStyles.selected?.background).toBe('rgb(238, 246, 255)')
+  expect(rowStyles.selected?.boxShadow).toContain('rgb(9, 105, 218)')
+  expect(rowStyles.current?.background).toBe('rgb(255, 247, 236)')
+  expect(rowStyles.current?.boxShadow).toContain('rgb(245, 158, 11)')
+}
+
+async function expectSelectedCurrentRowCombinesStates(page: Page): Promise<void> {
+  const combined = await page.evaluate<{
+    ariaCurrent: string | null
+    background: string
+    boxShadow: string
+    markerBackground: string
+    selectedCount: number
+    text: string
+  }>(`(() => {
+    const row = document.querySelector('#timeline .event.current.selected')
+    if (!row) throw new Error('missing combined current selected row')
+    const rowStyle = getComputedStyle(row)
+    const marker = row.querySelector('.event-marker')
+    const markerStyle = marker ? getComputedStyle(marker) : null
+    return {
+      ariaCurrent: row.getAttribute('aria-current'),
+      background: rowStyle.backgroundColor,
+      boxShadow: rowStyle.boxShadow,
+      markerBackground: markerStyle?.backgroundColor ?? '',
+      selectedCount: document.querySelectorAll('#timeline .event.selected').length,
+      text: row.textContent?.replace(/\\s+/g, ' ').trim() ?? '',
+    }
+  })()`)
+  expect(combined.ariaCurrent).toBe('step')
+  expect(combined.background).toBe('rgb(238, 246, 255)')
+  expect(combined.boxShadow).toContain('rgb(9, 105, 218)')
+  expect(combined.markerBackground).toBe('rgb(243, 128, 32)')
+  expect(combined.selectedCount).toBe(1)
+  expect(combined.text).toContain('human.review.halted')
 }
 
 async function expectCopies(button: Locator): Promise<void> {
@@ -48,17 +132,1375 @@ async function expectCopies(button: Locator): Promise<void> {
   await expect(button).toHaveAttribute('data-copy-state', 'copied')
 }
 
+async function expectReferenceLeftProgressTypography(page: Page): Promise<void> {
+  const progress = await page.evaluate<{
+    detailWeights: number[]
+    receivedText: string
+    rowWeights: Array<{ text: string; weight: number }>
+    sectionLabel: {
+      fontSize: number
+      fontWeight: number
+      text: string
+      textTransform: string
+    } | null
+    times: string[]
+  }>(`(() => {
+    const sectionLabel = document.querySelector('#answer > .section-label')
+    const sectionStyle = sectionLabel ? getComputedStyle(sectionLabel) : null
+    return {
+      detailWeights: Array.from(document.querySelectorAll('.trigger-card .detail-row strong'))
+        .map((element) => Number.parseFloat(getComputedStyle(element).fontWeight)),
+      receivedText: document.querySelector('#receivedLabel')?.textContent?.trim() ?? '',
+      rowWeights: Array.from(document.querySelectorAll('#answer .progress-item strong'))
+        .map((element) => ({ text: element.textContent?.trim() ?? '', weight: Number.parseFloat(getComputedStyle(element).fontWeight) })),
+      sectionLabel: sectionLabel && sectionStyle ? {
+        fontSize: Number.parseFloat(sectionStyle.fontSize),
+        fontWeight: Number.parseFloat(sectionStyle.fontWeight),
+        text: sectionLabel.textContent?.trim() ?? '',
+        textTransform: sectionStyle.textTransform,
+      } : null,
+      times: Array.from(document.querySelectorAll('#answer .progress-time'))
+        .map((element) => element.textContent?.trim() ?? ''),
+    }
+  })()`)
+  expect(progress.sectionLabel?.text).toBe('Agent progress')
+  expect(progress.sectionLabel?.textTransform).toBe('none')
+  expect(progress.sectionLabel?.fontSize).toBe(14)
+  expect(progress.sectionLabel?.fontWeight).toBe(700)
+  expect(progress.receivedText).toMatch(/^[A-Z][a-z]{2} \d{1,2}, \d{4} \d{2}:\d{2}:\d{2} UTC$/)
+  expect(progress.detailWeights.every((weight) => weight <= 400)).toBe(true)
+  for (const row of progress.rowWeights) {
+    if (row.text === 'Human review halted') {
+      expect(row.weight).toBe(700)
+    } else {
+      expect(row.weight).toBe(400)
+    }
+  }
+  for (const time of progress.times.filter((value) => value !== '-')) {
+    expect(time).not.toContain('UTC')
+    expect(time).toMatch(/^\d{2}:\d{2}:\d{2}$/)
+  }
+}
+
+async function expectNoHorizontalOverflow(page: Page): Promise<void> {
+  const overflow = await page.evaluate<{
+    bodyWidth: number
+    documentWidth: number
+    nodes: Array<{ className: string; tagName: string; text: string }>
+    viewportWidth: number
+  }>(`(() => {
+    const nodes = Array.from(document.querySelectorAll('*'))
+      .map((element) => {
+        const rect = element.getBoundingClientRect()
+        if (rect.width === 0 || rect.height === 0) return null
+        if (rect.left >= -1 && rect.right <= window.innerWidth + 1) return null
+        return {
+          className: String(element.className),
+          tagName: element.tagName,
+          text: element.textContent?.trim().replace(/\s+/g, ' ').slice(0, 80) ?? '',
+        }
+      })
+      .filter(Boolean)
+    return {
+      bodyWidth: document.body.scrollWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      nodes,
+      viewportWidth: window.innerWidth,
+    }
+  })()`)
+  expect(overflow.bodyWidth).toBeLessThanOrEqual(overflow.viewportWidth)
+  expect(overflow.documentWidth).toBeLessThanOrEqual(overflow.viewportWidth)
+  expect(overflow.nodes).toEqual([])
+}
+
+async function expectWorkflowOverviewVisible(page: Page): Promise<void> {
+  await expect
+    .poll(async () => page.evaluate(`Math.round(document.querySelector('.hero')?.getBoundingClientRect().top ?? -999)`))
+    .toBeGreaterThanOrEqual(0)
+  const overview = await page.evaluate<{
+    firstRailStepTop: number
+    headerBottom: number
+    headerTop: number
+    railTop: number
+    scrollY: number
+  }>(`(() => {
+    const header = document.querySelector('.hero')?.getBoundingClientRect()
+    const rail = document.querySelector('.workflow-rail')?.getBoundingClientRect()
+    const firstStep = document.querySelector('.rail-stepper .step')?.getBoundingClientRect()
+    return {
+      firstRailStepTop: Math.round(firstStep?.top ?? -999),
+      headerBottom: Math.round(header?.bottom ?? -999),
+      headerTop: Math.round(header?.top ?? -999),
+      railTop: Math.round(rail?.top ?? -999),
+      scrollY: Math.round(window.scrollY),
+    }
+  })()`)
+  expect(overview.scrollY).toBe(0)
+  expect(overview.headerTop).toBeGreaterThanOrEqual(0)
+  expect(overview.headerBottom).toBeLessThanOrEqual(64)
+  expect(overview.railTop).toBeGreaterThanOrEqual(68)
+  expect(overview.firstRailStepTop).toBeGreaterThanOrEqual(72)
+}
+
+async function expectReferenceHeaderLogoGeometry(page: Page): Promise<void> {
+  const logo = await page.evaluate<{
+    fills: string[]
+    h1X: number
+    markHeight: number
+    markWidth: number
+    markX: number
+    markY: number
+    pathCount: number
+    svgHeight: number
+    svgWidth: number
+    svgX: number
+    viewBox: string | null
+  }>(`(() => {
+    const svg = document.querySelector('.cloud-mark')
+    const paths = Array.from(svg?.querySelectorAll('path') ?? [])
+    const h1 = document.querySelector('.hero h1')?.getBoundingClientRect()
+    const svgRect = svg?.getBoundingClientRect()
+    const bbox = svg?.getBBox()
+    const matrix = svg?.getScreenCTM()
+    function transform(x, y) {
+      return {
+        x: matrix.a * x + matrix.c * y + matrix.e,
+        y: matrix.b * x + matrix.d * y + matrix.f,
+      }
+    }
+    let markRect = { x: 0, y: 0, width: 0, height: 0 }
+    if (bbox && matrix) {
+      const points = [
+        transform(bbox.x, bbox.y),
+        transform(bbox.x + bbox.width, bbox.y),
+        transform(bbox.x, bbox.y + bbox.height),
+        transform(bbox.x + bbox.width, bbox.y + bbox.height),
+      ]
+      const xs = points.map((point) => point.x)
+      const ys = points.map((point) => point.y)
+      markRect = {
+        x: Math.min(...xs),
+        y: Math.min(...ys),
+        width: Math.max(...xs) - Math.min(...xs),
+        height: Math.max(...ys) - Math.min(...ys),
+      }
+    }
+    return {
+      fills: paths.map((path) => path.getAttribute('fill') ?? ''),
+      h1X: Math.round(h1?.x ?? 0),
+      markHeight: Math.round(markRect.height),
+      markWidth: Math.round(markRect.width),
+      markX: Math.round(markRect.x),
+      markY: Math.round(markRect.y),
+      pathCount: paths.length,
+      svgHeight: Math.round(svgRect?.height ?? 0),
+      svgWidth: Math.round(svgRect?.width ?? 0),
+      svgX: Math.round(svgRect?.x ?? 0),
+      viewBox: svg?.getAttribute('viewBox') ?? null,
+    }
+  })()`)
+  expect(logo.svgX).toBe(29)
+  expect(logo.svgWidth).toBe(54)
+  expect(logo.svgHeight).toBe(32)
+  expect(logo.viewBox).toBe('0 0 209.51 94.74')
+  expect(logo.pathCount).toBe(2)
+  expect(logo.fills).toEqual(['#f4801f', '#f9ab41'])
+  expect(logo.markX).toBeGreaterThanOrEqual(29)
+  expect(logo.markX).toBeLessThanOrEqual(31)
+  expect(logo.markY).toBeGreaterThanOrEqual(19)
+  expect(logo.markY).toBeLessThanOrEqual(22)
+  expect(logo.markWidth).toBeGreaterThanOrEqual(52)
+  expect(logo.markWidth).toBeLessThanOrEqual(54)
+  expect(logo.markHeight).toBeGreaterThanOrEqual(23)
+  expect(logo.markHeight).toBeLessThanOrEqual(25)
+  expect(logo.h1X).toBeGreaterThanOrEqual(98)
+  expect(logo.h1X).toBeLessThanOrEqual(101)
+}
+
+async function expectHeaderMenuAboveContent(page: Page): Promise<void> {
+  const menuHit = await page.evaluate<boolean>(`(() => {
+    const menu = document.querySelector('#headerActions')
+    if (!menu || menu.hidden) return false
+    const rect = menu.getBoundingClientRect()
+    const x = Math.floor(rect.left + rect.width / 2)
+    const y = Math.floor(rect.top + Math.min(rect.height - 2, 18))
+    return Boolean(document.elementFromPoint(x, y)?.closest('#headerActions'))
+  })()`)
+  expect(menuHit).toBe(true)
+}
+
+async function expectRunModeMenuAboveContent(page: Page): Promise<void> {
+  const menuHit = await page.evaluate<boolean>(`(() => {
+    const menu = document.querySelector('#runModeActions')
+    if (!menu || menu.hidden) return false
+    const rect = menu.getBoundingClientRect()
+    const x = Math.floor(rect.left + rect.width / 2)
+    const y = Math.floor(rect.top + Math.min(rect.height - 2, 18))
+    return Boolean(document.elementFromPoint(x, y)?.closest('#runModeActions'))
+  })()`)
+  expect(menuHit).toBe(true)
+}
+
+async function expectRunModeMenuLabelsContained(page: Page): Promise<void> {
+  const menuGeometry = await page.evaluate<{
+    buttonOverflow: boolean[]
+    menuWidth: number
+    textInsideMenu: boolean
+  }>(`(() => {
+    const menu = document.querySelector('#runModeActions')
+    if (!menu || menu.hidden) return { buttonOverflow: [], menuWidth: 0, textInsideMenu: false }
+    const menuRect = menu.getBoundingClientRect()
+    const buttons = Array.from(menu.querySelectorAll('button'))
+    return {
+      buttonOverflow: buttons.map((button) => button.scrollWidth > button.clientWidth + 1),
+      menuWidth: Math.round(menuRect.width),
+      textInsideMenu: buttons.every((button) => {
+        const rect = button.getBoundingClientRect()
+        return rect.left >= menuRect.left + 4 && rect.right <= menuRect.right - 4
+      }),
+    }
+  })()`)
+  expect(menuGeometry.menuWidth).toBeGreaterThanOrEqual(224)
+  expect(menuGeometry.buttonOverflow).toEqual([false, false])
+  expect(menuGeometry.textInsideMenu).toBe(true)
+}
+
+async function expectProgressPanelAtTop(page: Page): Promise<void> {
+  await expect
+    .poll(async () =>
+      page.locator('#answer').evaluate((answer) => {
+        const panel = answer.closest('.panel')
+        return panel ? Math.round(panel.scrollTop) : -1
+      }),
+    )
+    .toBe(0)
+}
+
+async function expectReviewResultVisibleInProgressPanel(page: Page): Promise<void> {
+  await expect
+    .poll(async () =>
+      page.locator('#answer').evaluate((answer) => {
+        const panel = answer.closest('.panel')
+        const result = answer.querySelector('.review-result')
+        const header = panel?.querySelector('h2')
+        const panelRect = panel?.getBoundingClientRect()
+        const resultRect = result?.getBoundingClientRect()
+        const headerRect = header?.getBoundingClientRect()
+        if (!panel || !panelRect || !resultRect || !headerRect) {
+          return { headerVisible: false, resultVisible: false, scrollTop: -1 }
+        }
+        return {
+          headerVisible: headerRect.top >= panelRect.top - 1 && headerRect.bottom <= panelRect.bottom,
+          resultVisible: resultRect.top >= headerRect.bottom + 4 && resultRect.bottom <= panelRect.bottom - 4,
+          scrollTop: Math.round(panel.scrollTop),
+        }
+      }),
+    )
+    .toEqual({
+      headerVisible: true,
+      resultVisible: true,
+      scrollTop: expect.any(Number),
+    })
+
+  const scrollTop = await page.locator('#answer').evaluate((answer) => {
+    const panel = answer.closest('.panel')
+    return panel ? Math.round(panel.scrollTop) : 0
+  })
+  expect(scrollTop).toBeGreaterThan(0)
+}
+
+async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> {
+  const buttonGeometry = await page.evaluate<
+    Array<{
+      buttonDisplay: string
+      buttonInsideActions: boolean
+      captionFontSize: number
+      captionMuted: boolean
+      contentCenterDeltaX: number
+      contentDisplay: string
+      contentInsideButton: boolean
+      contentJustifyItems: string
+      copyCenterDeltaX: number
+      copyDisplay: string
+      headingCenterDeltaX: number
+      headingDisplay: string
+      headingInsideButton: boolean
+      iconInsideButton: boolean
+      iconLabelGap: number
+      iconLabelYDelta: number
+      id: string
+      justify: string
+      labelFontSize: number
+      labelFits: boolean
+      labelWeight: number
+      noLabelIconCollision: boolean
+      smallCenterDeltaX: number
+      smallFits: boolean
+      textAlign: string
+    }>
+  >(`Array.from(document.querySelectorAll('.actions > button')).map((button) => {
+    const actionsRect = document.querySelector('.actions')?.getBoundingClientRect()
+    const buttonRect = button.getBoundingClientRect()
+    const content = button.querySelector('.button-content')?.getBoundingClientRect()
+    const icon = button.querySelector('.button-icon')?.getBoundingClientRect()
+    const copy = button.querySelector('.action-copy')?.getBoundingClientRect()
+    const heading = button.querySelector('.action-heading')?.getBoundingClientRect()
+    const label = button.querySelector('.button-label')?.getBoundingClientRect()
+    const small = button.querySelector('.action-copy small')?.getBoundingClientRect()
+    const labelElement = button.querySelector('.button-label')
+    const smallElement = button.querySelector('.action-copy small')
+    const buttonStyle = getComputedStyle(button)
+    const contentElement = button.querySelector('.button-content')
+    const copyElement = button.querySelector('.action-copy')
+    const headingElement = button.querySelector('.action-heading')
+    const labelStyle = labelElement ? getComputedStyle(labelElement) : null
+    const smallStyle = smallElement ? getComputedStyle(smallElement) : null
+    return {
+      buttonDisplay: buttonStyle.display,
+      buttonInsideActions: actionsRect
+        ? buttonRect.left >= actionsRect.left - 0.5 && buttonRect.right <= actionsRect.right + 0.5
+        : false,
+      captionFontSize: smallStyle ? Number.parseFloat(smallStyle.fontSize) : 0,
+      captionMuted: button.id === 'approve' || (smallStyle ? smallStyle.color === 'rgb(71, 85, 105)' : false),
+      contentCenterDeltaX: content
+        ? Math.abs((content.left + content.width / 2) - (buttonRect.left + buttonRect.width / 2))
+        : 999,
+      contentDisplay: contentElement ? getComputedStyle(contentElement).display : '',
+      contentJustifyItems: contentElement ? getComputedStyle(contentElement).justifyItems : '',
+      contentInsideButton: content
+        ? content.left >= buttonRect.left && content.right <= buttonRect.right && content.top >= buttonRect.top && content.bottom <= buttonRect.bottom
+        : false,
+      copyCenterDeltaX: copy
+        ? Math.abs((copy.left + copy.width / 2) - (buttonRect.left + buttonRect.width / 2))
+        : 999,
+      copyDisplay: copyElement ? getComputedStyle(copyElement).display : '',
+      headingCenterDeltaX: heading
+        ? Math.abs((heading.left + heading.width / 2) - (buttonRect.left + buttonRect.width / 2))
+        : 999,
+      headingDisplay: headingElement ? getComputedStyle(headingElement).display : '',
+      headingInsideButton: heading
+        ? heading.left >= buttonRect.left && heading.right <= buttonRect.right && heading.top >= buttonRect.top && heading.bottom <= buttonRect.bottom
+        : false,
+      iconInsideButton: icon
+        ? icon.left >= buttonRect.left && icon.right <= buttonRect.right && icon.top >= buttonRect.top && icon.bottom <= buttonRect.bottom
+        : false,
+      iconLabelGap: icon && label ? label.left - icon.right : 0,
+      iconLabelYDelta: icon && label
+        ? Math.abs((icon.top + icon.height / 2) - (label.top + label.height / 2))
+        : 999,
+      id: button.id,
+      justify: buttonStyle.justifyContent,
+      labelFontSize: labelStyle ? Number.parseFloat(labelStyle.fontSize) : 0,
+      labelFits: label ? label.left >= buttonRect.left && label.right <= buttonRect.right : false,
+      labelWeight: labelStyle ? Number.parseFloat(labelStyle.fontWeight) : 0,
+      noLabelIconCollision: icon && label ? icon.right + 2 <= label.left : false,
+      smallCenterDeltaX: small
+        ? Math.abs((small.left + small.width / 2) - (buttonRect.left + buttonRect.width / 2))
+        : 999,
+      smallFits: small ? small.left >= buttonRect.left && small.right <= buttonRect.right : false,
+      textAlign: copy ? getComputedStyle(button.querySelector('.action-copy')).textAlign : '',
+    }
+  })`)
+  for (const geometry of buttonGeometry) {
+    expect(geometry.buttonDisplay).toBe('flex')
+    expect(geometry.buttonInsideActions).toBe(true)
+    expect(geometry.justify).toBe('center')
+    expect(geometry.contentDisplay).toBe('grid')
+    expect(geometry.contentJustifyItems).toBe('center')
+    expect(geometry.copyDisplay).toBe('grid')
+    expect(geometry.headingDisplay).toBe('flex')
+    expect(geometry.textAlign).toBe('center')
+    expect(geometry.contentInsideButton).toBe(true)
+    expect(geometry.contentCenterDeltaX).toBeLessThanOrEqual(1)
+    expect(geometry.copyCenterDeltaX, geometry.id).toBeLessThanOrEqual(1)
+    expect(geometry.headingCenterDeltaX, geometry.id).toBeLessThanOrEqual(1)
+    expect(geometry.smallCenterDeltaX, geometry.id).toBeLessThanOrEqual(1)
+    expect(geometry.headingInsideButton).toBe(true)
+    expect(geometry.iconLabelGap).toBeGreaterThanOrEqual(6)
+    expect(geometry.iconLabelGap).toBeLessThanOrEqual(10)
+    expect(geometry.iconInsideButton).toBe(true)
+    expect(geometry.iconLabelYDelta).toBeLessThanOrEqual(1.5)
+    expect(geometry.labelFontSize).toBeGreaterThanOrEqual(13)
+    expect(geometry.labelWeight).toBeGreaterThanOrEqual(800)
+    expect(geometry.captionFontSize).toBe(9)
+    expect(geometry.captionMuted).toBe(true)
+    expect(geometry.labelFits).toBe(true)
+    expect(geometry.noLabelIconCollision).toBe(true)
+    expect(geometry.smallFits).toBe(true)
+  }
+  const actionRow = await page.evaluate<{
+    gaps: number[]
+    viewportWidth: number
+    widths: number[]
+  }>(`(() => {
+    const buttons = Array.from(document.querySelectorAll('.actions > button')).map((button) => button.getBoundingClientRect())
+    return {
+      gaps: buttons.length === 3
+        ? [
+            Math.round(buttons[1].left - buttons[0].right),
+            Math.round(buttons[2].left - buttons[1].right),
+          ]
+        : [],
+      viewportWidth: window.innerWidth,
+      widths: buttons.map((button) => Math.round(button.width)),
+    }
+  })()`)
+  if (actionRow.viewportWidth >= 1451) {
+    expect(actionRow.widths).toEqual([190, 168, 166])
+    expect(actionRow.gaps).toEqual([22, 28])
+  }
+}
+
+async function expectDiffLineGutter(page: Page): Promise<void> {
+  const gutter = await page.evaluate<{
+    allRowsNumbered: boolean
+    firstLine: string
+    gutterWidth: number
+    lineCount: number
+    numberCount: number
+    textAfterGutter: boolean
+  }>(`(() => {
+    const code = document.querySelector('.diff-code')?.getBoundingClientRect()
+    const rows = Array.from(document.querySelectorAll('.diff-line'))
+    const numbers = Array.from(document.querySelectorAll('.diff-line-no'))
+    const firstNumber = numbers[0]?.getBoundingClientRect()
+    const firstText = document.querySelector('.diff-line-text')?.getBoundingClientRect()
+    return {
+      allRowsNumbered: rows.every((row, index) => row.querySelector('.diff-line-no')?.textContent === String(index + 1)),
+      firstLine: numbers[0]?.textContent ?? '',
+      gutterWidth: firstNumber ? Math.round(firstNumber.width) : 0,
+      lineCount: rows.length,
+      numberCount: numbers.length,
+      textAfterGutter: Boolean(code && firstNumber && firstText && firstNumber.left >= code.left && firstText.left > firstNumber.right),
+    }
+  })()`)
+  expect(gutter.lineCount).toBeGreaterThan(1)
+  expect(gutter.numberCount).toBe(gutter.lineCount)
+  expect(gutter.firstLine).toBe('1')
+  expect(gutter.allRowsNumbered).toBe(true)
+  expect(gutter.gutterWidth).toBeGreaterThanOrEqual(20)
+  expect(gutter.gutterWidth).toBeLessThanOrEqual(24)
+  expect(gutter.textAfterGutter).toBe(true)
+}
+
+async function expectDiffRowsFillReferenceFrame(page: Page): Promise<void> {
+  const rhythm = await page.evaluate<{
+    bottomGap: number
+    lineHeight: number
+    topGap: number
+  }>(`(() => {
+    const code = document.querySelector('.diff-code')?.getBoundingClientRect()
+    const rows = Array.from(document.querySelectorAll('.diff-line'))
+    const first = rows[0]?.getBoundingClientRect()
+    const last = rows[rows.length - 1]?.getBoundingClientRect()
+    const style = document.querySelector('.diff-code')
+      ? getComputedStyle(document.querySelector('.diff-code'))
+      : null
+    if (!code || !first || !last || !style) return { bottomGap: 999, lineHeight: 0, topGap: 999 }
+    return {
+      bottomGap: Math.round((code.bottom - last.bottom) * 100) / 100,
+      lineHeight: Number.parseFloat(style.lineHeight),
+      topGap: Math.round((first.top - code.top) * 100) / 100,
+    }
+  })()`)
+  expect(rhythm.lineHeight).toBeGreaterThanOrEqual(14)
+  expect(rhythm.lineHeight).toBeLessThanOrEqual(14.4)
+  expect(rhythm.topGap).toBeGreaterThanOrEqual(7)
+  expect(rhythm.topGap).toBeLessThanOrEqual(11)
+  expect(rhythm.bottomGap).toBeGreaterThanOrEqual(7)
+  expect(rhythm.bottomGap).toBeLessThanOrEqual(11)
+}
+
+async function expectDiffCopyControlUsesReferencePlacement(page: Page): Promise<void> {
+  const geometry = await page.evaluate<{
+    afterWrapGap: number
+    buttonHeight: number
+    buttonWidth: number
+    centerXDelta: number
+    centerYDelta: number
+    hitTargetWorks: boolean
+    iconHeight: number
+    iconWidth: number
+    toolsHeight: number
+  }>(`(() => {
+    const tools = document.querySelector('.diff-tools')?.getBoundingClientRect()
+    const wrap = document.querySelector('#diffWrapToggle')?.getBoundingClientRect()
+    const button = document.querySelector('#copyDiff')?.getBoundingClientRect()
+    const icon = document.querySelector('#copyDiff svg')?.getBoundingClientRect()
+    if (!tools || !wrap || !button || !icon) {
+      return {
+        afterWrapGap: 999,
+        buttonHeight: 0,
+        buttonWidth: 0,
+        centerXDelta: 999,
+        centerYDelta: 999,
+        hitTargetWorks: false,
+        iconHeight: 0,
+        iconWidth: 0,
+        toolsHeight: 0,
+      }
+    }
+    const x = Math.floor(button.left + button.width / 2)
+    const y = Math.floor(button.top + button.height / 2)
+    return {
+      afterWrapGap: Math.round((button.left - wrap.right) * 100) / 100,
+      buttonHeight: Math.round(button.height),
+      buttonWidth: Math.round(button.width),
+      centerXDelta: Math.abs((icon.left + icon.width / 2) - (button.left + button.width / 2)),
+      centerYDelta: Math.abs((icon.top + icon.height / 2) - (button.top + button.height / 2)),
+      hitTargetWorks: Boolean(document.elementFromPoint(x, y)?.closest('#copyDiff')),
+      iconHeight: Math.round(icon.height),
+      iconWidth: Math.round(icon.width),
+      toolsHeight: Math.round(tools.height),
+    }
+  })()`)
+  expect(geometry.afterWrapGap).toBeGreaterThanOrEqual(7)
+  expect(geometry.afterWrapGap).toBeLessThanOrEqual(9)
+  expect(geometry.buttonHeight).toBe(24)
+  expect(geometry.buttonWidth).toBe(24)
+  expect(geometry.iconHeight).toBe(14)
+  expect(geometry.iconWidth).toBe(14)
+  expect(geometry.centerXDelta).toBeLessThanOrEqual(1)
+  expect(geometry.centerYDelta).toBeLessThanOrEqual(1)
+  expect(geometry.toolsHeight).toBeGreaterThanOrEqual(24)
+  expect(geometry.hitTargetWorks).toBe(true)
+}
+
+async function expectReferenceProposalPanelChrome(page: Page): Promise<void> {
+  const chrome = await page.evaluate<{
+    actionPill: { fontSize: number; height: number }
+    diffLabel: { fontSize: number; text: string; textTransform: string }
+    targetCode: { fontSize: number; height: number }
+  }>(`(() => {
+    const measure = (selector) => {
+      const element = document.querySelector(selector)
+      const rect = element?.getBoundingClientRect()
+      const style = element ? getComputedStyle(element) : null
+      return rect && style
+        ? {
+            fontSize: Number.parseFloat(style.fontSize),
+            height: Math.round(rect.height * 100) / 100,
+            text: element.textContent?.trim() ?? '',
+            textTransform: style.textTransform,
+          }
+        : { fontSize: 0, height: 999, text: '', textTransform: '' }
+    }
+    return {
+      actionPill: measure('#proposal .metric .pill'),
+      diffLabel: measure('#proposal .diff-head .label'),
+      targetCode: measure('#proposal .metric .meta-code'),
+    }
+  })()`)
+  expect(chrome.actionPill.fontSize).toBe(12)
+  expect(chrome.actionPill.height).toBeLessThanOrEqual(24)
+  expect(chrome.targetCode.fontSize).toBe(12)
+  expect(chrome.targetCode.height).toBeLessThanOrEqual(24)
+  expect(chrome.diffLabel.text).toBe('Diff (unified)')
+  expect(chrome.diffLabel.textTransform).toBe('none')
+  expect(chrome.diffLabel.fontSize).toBe(13)
+}
+
+async function expectReferenceDesktopPrimaryCaption(page: Page): Promise<void> {
+  const captionGeometry = await page.evaluate<{
+    fits: boolean
+    fontSize: number
+    height: number
+    lineHeight: number
+    whiteSpace: string
+  }>(`(() => {
+    const button = document.querySelector('#approve')
+    const caption = button?.querySelector('.action-copy small')
+    if (!button || !caption) return { fits: false, fontSize: 0, height: 999, lineHeight: 0, whiteSpace: '' }
+    const buttonRect = button.getBoundingClientRect()
+    const captionRect = caption.getBoundingClientRect()
+    const style = getComputedStyle(caption)
+    return {
+      fits: captionRect.left >= buttonRect.left && captionRect.right <= buttonRect.right,
+      fontSize: Number.parseFloat(style.fontSize),
+      height: captionRect.height,
+      lineHeight: Number.parseFloat(style.lineHeight),
+      whiteSpace: style.whiteSpace,
+    }
+  })()`)
+  expect(captionGeometry.fontSize).toBe(9)
+  expect(captionGeometry.whiteSpace).toBe('nowrap')
+  expect(captionGeometry.fits).toBe(true)
+  expect(captionGeometry.height).toBeLessThanOrEqual(captionGeometry.lineHeight + 1)
+}
+
+async function expectReferenceDesktopRiskTextFits(page: Page): Promise<void> {
+  const riskGeometry = await page.evaluate<{
+    gap: number
+    detailsInside: boolean
+    visualGap: number
+    textOverflow: string
+  }>(`(() => {
+    const bar = document.querySelector('.risk-bar')
+    const value = bar?.querySelector('.value')
+    const details = bar?.querySelector('.risk-details-toggle')
+    const style = value ? getComputedStyle(value) : null
+    const barRect = bar?.getBoundingClientRect()
+    const valueRect = value?.getBoundingClientRect()
+    const detailsRect = details?.getBoundingClientRect()
+    return {
+      gap: bar ? Number.parseFloat(getComputedStyle(bar).columnGap) : 0,
+      detailsInside: Boolean(barRect && detailsRect && detailsRect.right <= barRect.right + 1),
+      visualGap: valueRect && detailsRect ? Math.round(detailsRect.left - valueRect.right) : -999,
+      textOverflow: style?.textOverflow ?? '',
+    }
+  })()`)
+  expect(riskGeometry.gap).toBeLessThanOrEqual(7)
+  expect(riskGeometry.textOverflow).toBe('ellipsis')
+  expect(riskGeometry.visualGap).toBeGreaterThanOrEqual(4)
+  expect(riskGeometry.detailsInside).toBe(true)
+}
+
+async function expectReferenceVerificationRows(page: Page): Promise<void> {
+  const rows = await page.evaluate<
+    Array<{
+      borderWidth: string
+      detailFontSize: number
+      iconHeight: number
+      minHeight: number
+      paddingLeft: number
+      paddingRight: number
+      radius: string
+      rowGap: number
+      strongFontSize: number
+      strongWeight: number
+    }>
+  >(`Array.from(document.querySelectorAll('#verification .verify-row')).map((row) => {
+    const style = getComputedStyle(row)
+    const icon = row.querySelector('.verify-icon')?.getBoundingClientRect()
+    const strong = row.querySelector('strong')
+    const detail = row.querySelector('.empty')
+    const strongStyle = strong ? getComputedStyle(strong) : null
+    const detailStyle = detail ? getComputedStyle(detail) : null
+    return {
+      borderWidth: style.borderTopWidth,
+      detailFontSize: detailStyle ? Number.parseFloat(detailStyle.fontSize) : 0,
+      iconHeight: icon ? Math.round(icon.height) : 0,
+      minHeight: Math.round(row.getBoundingClientRect().height),
+      paddingLeft: Number.parseFloat(style.paddingLeft),
+      paddingRight: Number.parseFloat(style.paddingRight),
+      radius: style.borderTopLeftRadius,
+      rowGap: Number.parseFloat(style.columnGap),
+      strongFontSize: strongStyle ? Number.parseFloat(strongStyle.fontSize) : 0,
+      strongWeight: strongStyle ? Number.parseFloat(strongStyle.fontWeight) : 0,
+    }
+  })`)
+  expect(rows).toHaveLength(3)
+  for (const row of rows) {
+    expect(row.borderWidth).toBe('0px')
+    expect(row.radius).toBe('0px')
+    expect(row.paddingLeft).toBe(0)
+    expect(row.paddingRight).toBe(0)
+    expect(row.detailFontSize).toBe(11)
+    expect(row.minHeight).toBeGreaterThanOrEqual(42)
+    expect(row.iconHeight).toBe(28)
+    expect(row.rowGap).toBe(8)
+    expect(row.strongFontSize).toBe(12)
+    expect(row.strongWeight).toBe(700)
+  }
+}
+
+async function expectVerificationResultRhythm(page: Page): Promise<void> {
+  const result = await page.evaluate<{
+    background: string
+    borderLeftWidth: string
+    borderTopWidth: string
+    rowGap: number
+    rows: Array<{
+      detailTop: number
+      detailWidth: number
+      dotTop: number
+      height: number
+      labelBottom: number
+      text: string
+      verticalGap: number
+    }>
+  }>(`(() => {
+    const result = document.querySelector('#verificationResult')
+    const resultStyle = result ? getComputedStyle(result) : null
+    return {
+      background: resultStyle?.backgroundColor ?? '',
+      borderLeftWidth: resultStyle?.borderLeftWidth ?? '',
+      borderTopWidth: resultStyle?.borderTopWidth ?? '',
+      rowGap: resultStyle ? Number.parseFloat(resultStyle.rowGap) : 0,
+      rows: Array.from(document.querySelectorAll('#verificationResult .verification-step')).map((row) => {
+        const rect = row.getBoundingClientRect()
+        const dot = row.querySelector('.verification-dot')?.getBoundingClientRect()
+        const copy = row.querySelector(':scope > div')
+        const label = copy?.querySelector('strong')?.getBoundingClientRect()
+        const detail = copy?.querySelector('span')?.getBoundingClientRect()
+        return {
+          detailTop: Math.round((detail?.top ?? 0) * 100) / 100,
+          detailWidth: Math.round((detail?.width ?? 0) * 100) / 100,
+          dotTop: Math.round((dot?.top ?? 0) * 100) / 100,
+          height: Math.round(rect.height * 100) / 100,
+          labelBottom: Math.round((label?.bottom ?? 0) * 100) / 100,
+          text: row.textContent?.trim().replace(/\\s+/g, ' ') ?? '',
+          verticalGap: label && detail ? Math.round((detail.top - label.bottom) * 100) / 100 : -999,
+        }
+      }),
+    }
+  })()`)
+  expect(result.background).toBe('rgba(0, 0, 0, 0)')
+  expect(result.borderTopWidth).toBe('1px')
+  expect(result.borderLeftWidth).toBe('0px')
+  expect(result.rowGap).toBe(8)
+  expect(result.rows).toHaveLength(3)
+  for (const row of result.rows) {
+    expect(row.height).toBeGreaterThanOrEqual(31)
+    expect(row.verticalGap).toBeGreaterThanOrEqual(2)
+    expect(row.detailWidth).toBeGreaterThan(200)
+    expect(row.dotTop).toBeLessThan(row.detailTop)
+  }
+}
+
+async function expectPendingSignerHashReadable(page: Page): Promise<void> {
+  const signature = await page.evaluate<{
+    hashText: string
+    hashWidth: number
+    slotText: string
+    slotWidth: number
+    visibleHashFits: boolean
+  }>(`(() => {
+    const firstRow = document.querySelector('.signer-row')
+    const slot = firstRow?.querySelector('.signature-slot')
+    const hash = firstRow?.querySelector('.signature-slot .hash')
+    const slotRect = slot?.getBoundingClientRect()
+    const hashRect = hash?.getBoundingClientRect()
+    return {
+      hashText: hash?.textContent?.trim() ?? '',
+      hashWidth: Math.round((hashRect?.width ?? 0) * 100) / 100,
+      slotText: slot?.textContent?.trim() ?? '',
+      slotWidth: Math.round((slotRect?.width ?? 0) * 100) / 100,
+      visibleHashFits: hash ? hash.scrollWidth <= hash.clientWidth + 1 : false,
+    }
+  })()`)
+  expect(signature.hashText).toMatch(/^[a-f0-9]{6}\.\.\.[a-f0-9]{4}$/)
+  expect(signature.slotText).toMatch(/^Latest:/)
+  expect(signature.slotWidth).toBeGreaterThanOrEqual(72)
+  expect(signature.hashWidth).toBeGreaterThanOrEqual(44)
+  expect(signature.visibleHashFits).toBe(true)
+}
+
+async function expectProposalProgressDot(page: Page, expected: 'pending' | 'complete'): Promise<void> {
+  const proposalDot = await page.evaluate<{
+    afterContent: string
+    background: string
+    text: string
+  }>(`(() => {
+    const row = Array.from(document.querySelectorAll('#answer .progress-item'))
+      .find((item) => item.textContent?.includes('Proposed action generated'))
+    const dot = row?.querySelector('.dot')
+    const style = dot ? getComputedStyle(dot) : null
+    const afterStyle = dot ? getComputedStyle(dot, '::after') : null
+    return {
+      afterContent: afterStyle?.content ?? '',
+      background: style?.backgroundColor ?? '',
+      text: row?.textContent?.replace(/\\s+/g, ' ').trim() ?? '',
+    }
+  })()`)
+  expect(proposalDot.text).toContain('Proposed action generated')
+  if (expected === 'pending') {
+    expect(proposalDot.background).toBe('rgb(9, 105, 218)')
+    expect(proposalDot.afterContent).toBe('none')
+  } else {
+    expect(proposalDot.background).toBe('rgb(7, 136, 97)')
+    expect(proposalDot.afterContent).not.toBe('none')
+  }
+}
+
+async function expectReferenceSignerIconTreatment(page: Page): Promise<void> {
+  const icons = await page.evaluate<
+    Array<{
+      background: string
+      color: string
+      iconClass: string
+      iconHeight: number
+      iconWidth: number
+      svgHeight: number
+      svgWidth: number
+    }>
+  >(`Array.from(document.querySelectorAll('.signer-icon')).map((icon) => {
+    const svg = icon.querySelector('svg')
+    const iconRect = icon.getBoundingClientRect()
+    const svgRect = svg?.getBoundingClientRect()
+    const style = getComputedStyle(icon)
+    return {
+      background: style.backgroundColor,
+      color: style.color,
+      iconClass: String(icon.className),
+      iconHeight: Math.round(iconRect.height),
+      iconWidth: Math.round(iconRect.width),
+      svgHeight: Math.round(svgRect?.height ?? 0),
+      svgWidth: Math.round(svgRect?.width ?? 0),
+    }
+  })`)
+  expect(icons).toHaveLength(3)
+  const [agent, human, mcp] = icons
+  for (const icon of icons) {
+    expect(icon.background).toBe('rgba(0, 0, 0, 0)')
+    expect(icon.iconWidth).toBe(22)
+    expect(icon.iconHeight).toBe(22)
+    expect(icon.svgWidth).toBe(20)
+    expect(icon.svgHeight).toBe(20)
+  }
+  expect(agent.iconClass).toContain('agent')
+  expect(agent.color).toBe('rgb(9, 105, 218)')
+  expect(human.iconClass).toContain('human')
+  expect(human.color).toBe('rgb(199, 106, 0)')
+  expect(mcp.iconClass).toContain('mcp')
+  expect(mcp.color).toBe('rgb(7, 136, 97)')
+}
+
+async function expectReferenceReceiptJsonSyntax(page: Page): Promise<void> {
+  const syntax = await page.evaluate<{
+    borderWidth: string
+    gutterWidth: number
+    keyColor: string
+    keyCount: number
+    lineCount: number
+    maxHeight: number
+    numberColor: string
+    stringColor: string
+    stringCount: number
+    tenthLineNumber: string
+  }>(`(() => {
+    const pre = document.querySelector('#receipts pre')
+    const preStyle = pre ? getComputedStyle(pre) : null
+    const numbers = Array.from(document.querySelectorAll('#receipts .json-line-number'))
+    const firstNumber = numbers[0]?.getBoundingClientRect()
+    const key = document.querySelector('#receipts .json-token.key')
+    const string = document.querySelector('#receipts .json-token.string')
+    const number = document.querySelector('#receipts .json-token.number')
+    return {
+      borderWidth: preStyle?.borderTopWidth ?? '',
+      gutterWidth: firstNumber ? Math.round(firstNumber.width) : 0,
+      keyColor: key ? getComputedStyle(key).color : '',
+      keyCount: document.querySelectorAll('#receipts .json-token.key').length,
+      lineCount: document.querySelectorAll('#receipts .json-line').length,
+      maxHeight: preStyle ? Number.parseFloat(preStyle.maxHeight) : 0,
+      numberColor: number ? getComputedStyle(number).color : '',
+      stringColor: string ? getComputedStyle(string).color : '',
+      stringCount: document.querySelectorAll('#receipts .json-token.string').length,
+      tenthLineNumber: numbers[9]?.textContent ?? '',
+    }
+  })()`)
+  expect(syntax.borderWidth).toBe('0px')
+  expect(syntax.gutterWidth).toBeGreaterThanOrEqual(34)
+  expect(syntax.keyCount).toBeGreaterThan(4)
+  expect(syntax.lineCount).toBeGreaterThan(1)
+  expect(syntax.maxHeight).toBe(188)
+  expect(syntax.stringCount).toBeGreaterThan(4)
+  expect(syntax.tenthLineNumber).toBe('10')
+  expect(syntax.keyColor).toBe('rgb(195, 58, 101)')
+  expect(syntax.stringColor).toBe('rgb(40, 79, 147)')
+  expect(syntax.numberColor).toBe('rgb(29, 118, 101)')
+}
+
+async function expectReceiptPanelFitsReferenceViewport(page: Page): Promise<void> {
+  const receiptFit = await page.evaluate<{
+    pageHeight: number
+    preHeight: number
+    receiptBottom: number
+    receiptHeight: number
+    shellHeight: number
+    viewportHeight: number
+  }>(`(() => {
+    const receipt = document.querySelector('.receipt-panel')?.getBoundingClientRect()
+    const shell = document.querySelector('.receipt-shell')?.getBoundingClientRect()
+    const pre = document.querySelector('#receipts pre')?.getBoundingClientRect()
+    return {
+      pageHeight: Math.round(document.body.scrollHeight),
+      preHeight: Math.round(pre?.height ?? 0),
+      receiptBottom: Math.round(receipt?.bottom ?? 0),
+      receiptHeight: Math.round(receipt?.height ?? 0),
+      shellHeight: Math.round(shell?.height ?? 0),
+      viewportHeight: window.innerHeight,
+    }
+  })()`)
+  expect(receiptFit.viewportHeight).toBe(1024)
+  expect(receiptFit.pageHeight).toBeLessThanOrEqual(receiptFit.viewportHeight + 1)
+  expect(receiptFit.receiptBottom).toBeLessThanOrEqual(receiptFit.viewportHeight + 1)
+  expect(receiptFit.receiptHeight).toBeGreaterThanOrEqual(246)
+  expect(receiptFit.receiptHeight).toBeLessThanOrEqual(250)
+  expect(receiptFit.shellHeight).toBeLessThanOrEqual(210)
+  expect(receiptFit.preHeight).toBeLessThanOrEqual(188)
+}
+
+async function expectReferenceReceiptToolbarRhythm(page: Page): Promise<void> {
+  const toolbar = await page.evaluate<{
+    copyX: number
+    downloadWidth: number
+    downloadX: number
+    formatFontSize: number
+    formatWidth: number
+    formatX: number
+    labelFontSize: number
+    labelX: number
+    titleWidth: number
+    titleX: number
+  }>(`(() => {
+    const title = document.querySelector('.receipt-toolbar h2')
+    const label = document.querySelector('.receipt-controls .label')
+    const format = document.querySelector('#receiptFormat')
+    const copy = document.querySelector('#copyReceipt')
+    const download = document.querySelector('#downloadReceipt')
+    const titleRect = title?.getBoundingClientRect()
+    const labelRect = label?.getBoundingClientRect()
+    const formatRect = format?.getBoundingClientRect()
+    const copyRect = copy?.getBoundingClientRect()
+    const downloadRect = download?.getBoundingClientRect()
+    return {
+      copyX: Math.round(copyRect?.x ?? 0),
+      downloadWidth: Math.round(downloadRect?.width ?? 0),
+      downloadX: Math.round(downloadRect?.x ?? 0),
+      formatFontSize: Number.parseFloat(format ? getComputedStyle(format).fontSize : '0'),
+      formatWidth: Math.round(formatRect?.width ?? 0),
+      formatX: Math.round(formatRect?.x ?? 0),
+      labelFontSize: Number.parseFloat(label ? getComputedStyle(label).fontSize : '0'),
+      labelX: Math.round(labelRect?.x ?? 0),
+      titleWidth: Math.round(titleRect?.width ?? 0),
+      titleX: Math.round(titleRect?.x ?? 0),
+    }
+  })()`)
+  expect(toolbar.titleX).toBeGreaterThanOrEqual(24)
+  expect(toolbar.titleX).toBeLessThanOrEqual(26)
+  expect(toolbar.titleWidth).toBe(123)
+  expect(toolbar.labelX).toBeGreaterThanOrEqual(155)
+  expect(toolbar.labelX).toBeLessThanOrEqual(157)
+  expect(toolbar.labelFontSize).toBe(11)
+  expect(toolbar.formatX).toBeGreaterThanOrEqual(203)
+  expect(toolbar.formatX).toBeLessThanOrEqual(205)
+  expect(toolbar.formatWidth).toBe(121)
+  expect(toolbar.formatFontSize).toBe(12)
+  expect(toolbar.copyX).toBeGreaterThanOrEqual(332)
+  expect(toolbar.copyX).toBeLessThanOrEqual(334)
+  expect(toolbar.downloadX).toBeGreaterThanOrEqual(368)
+  expect(toolbar.downloadX).toBeLessThanOrEqual(370)
+  expect(toolbar.downloadWidth).toBe(128)
+}
+
+async function expectReferenceDesktopCenterStack(page: Page): Promise<void> {
+  const stackGeometry = await page.evaluate<{
+    actionBottomGap: number
+    actionsY: number
+    diffCodeHeight: number
+    panelBottom: number
+    riskBarHeight: number
+  }>(`(() => {
+    const panel = document.querySelector('#proposal')?.closest('.panel')?.getBoundingClientRect()
+    const diffCode = document.querySelector('.diff-code')?.getBoundingClientRect()
+    const riskBar = document.querySelector('.risk-bar')?.getBoundingClientRect()
+    const actions = document.querySelector('.actions')?.getBoundingClientRect()
+    if (!panel || !diffCode || !riskBar || !actions) {
+      return { actionBottomGap: 999, actionsY: 0, diffCodeHeight: 0, panelBottom: 0, riskBarHeight: 0 }
+    }
+    return {
+      actionBottomGap: Math.round(panel.bottom - actions.bottom),
+      actionsY: Math.round(actions.y),
+      diffCodeHeight: Math.round(diffCode.height),
+      panelBottom: Math.round(panel.bottom),
+      riskBarHeight: Math.round(riskBar.height),
+    }
+  })()`)
+  expect(stackGeometry.diffCodeHeight).toBeGreaterThanOrEqual(313)
+  expect(stackGeometry.diffCodeHeight).toBeLessThanOrEqual(316)
+  expect(stackGeometry.actionBottomGap).toBeGreaterThanOrEqual(12)
+  expect(stackGeometry.actionBottomGap).toBeLessThanOrEqual(18)
+  expect(stackGeometry.actionsY).toBeGreaterThanOrEqual(690)
+  expect(stackGeometry.actionsY).toBeLessThanOrEqual(698)
+  expect(stackGeometry.riskBarHeight).toBeGreaterThanOrEqual(38)
+}
+
+async function expectWorkflowStepCopyHugsContent(page: Page): Promise<void> {
+  const stepGeometry = await page.evaluate<
+    Array<{ copyWidth: number; rowWidth: number; step: string | null }>
+  >(`Array.from(document.querySelectorAll('.step')).map((step) => {
+    const row = step.getBoundingClientRect()
+    const copy = step.querySelector('.step-copy')?.getBoundingClientRect()
+    return {
+      copyWidth: copy ? copy.width : row.width,
+      rowWidth: row.width,
+      step: step.getAttribute('data-step'),
+    }
+  })`)
+  for (const geometry of stepGeometry) {
+    expect(geometry.copyWidth).toBeLessThanOrEqual(geometry.rowWidth - 40)
+  }
+}
+
+async function expectWorkflowStepTitlesBold(page: Page): Promise<void> {
+  const weights = await page.evaluate<Array<{ step: string | null; weight: number }>>(
+    `Array.from(document.querySelectorAll('.step')).map((step) => {
+      const title = step.querySelector('.step-copy strong [data-step-title]') ?? step.querySelector('.step-copy strong')
+      return {
+        step: step.getAttribute('data-step'),
+        weight: title ? Number.parseFloat(getComputedStyle(title).fontWeight) : 0,
+      }
+    })`,
+  )
+  expect(weights).toHaveLength(5)
+  for (const item of weights) {
+    expect(item.weight).toBeGreaterThanOrEqual(800)
+  }
+}
+
+async function expectReviewPillMatchesRailBadge(page: Page): Promise<void> {
+  const colors = await page.evaluate<{
+    badge: { background: string; border: string; color: string; text: string } | null
+    pill: { background: string; border: string; color: string; text: string } | null
+  }>(`(() => {
+    const read = (element) => {
+      if (!element) return null
+      const style = getComputedStyle(element)
+      return {
+        background: style.backgroundColor,
+        border: style.borderTopColor,
+        color: style.color,
+        text: element.textContent?.trim() ?? '',
+      }
+    }
+    return {
+      badge: read(document.querySelector('[data-step-badge="halt"]')),
+      pill: read(document.querySelector('#reviewStatePill')),
+    }
+  })()`)
+  expect(colors.pill).not.toBeNull()
+  expect(colors.badge).not.toBeNull()
+  expect(colors.pill?.background).toBe(colors.badge?.background)
+  expect(colors.pill?.border).toBe(colors.badge?.border)
+  expect(colors.pill?.color).toBe(colors.badge?.color)
+}
+
+async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
+  const railGeometry = await page.evaluate<{
+    badge: {
+      color: string
+      fontSize: number
+      fontWeight: number
+      height: number
+      width: number
+    } | null
+    haltMarker: {
+      afterRight: number
+      afterWidth: number
+      backgroundImage: string
+      beforeLeft: number
+      beforeWidth: number
+      barHeight: number
+      borderColor: string
+    } | null
+    connectors: Array<{
+      backgroundColor: string
+      backgroundImage: string
+      height: number
+      width: number
+      step: string | null
+    }>
+    steps: Array<{
+      indexX: number | null
+      rectH: number
+      rectW: number
+      rectX: number
+      step: string | null
+    }>
+  }>(`(() => {
+    const badge = document.querySelector('[data-step-badge="halt"]')
+    const badgeRect = badge?.getBoundingClientRect()
+    const badgeStyle = badge ? getComputedStyle(badge) : null
+    const marker = document.querySelector('[data-step="halt"] .step-index')
+    const markerStyle = marker ? getComputedStyle(marker) : null
+    const markerBefore = marker ? getComputedStyle(marker, '::before') : null
+    const markerAfter = marker ? getComputedStyle(marker, '::after') : null
+    return {
+      badge: badge && badgeRect && badgeStyle ? {
+        color: badgeStyle.color,
+        fontSize: Number.parseFloat(badgeStyle.fontSize),
+        fontWeight: Number.parseFloat(badgeStyle.fontWeight),
+        height: Math.round(badgeRect.height),
+        width: Math.round(badgeRect.width),
+      } : null,
+      haltMarker: markerStyle && markerBefore && markerAfter ? {
+        afterRight: Number.parseFloat(markerAfter.right),
+        afterWidth: Number.parseFloat(markerAfter.width),
+        backgroundImage: markerStyle.backgroundImage,
+        beforeLeft: Number.parseFloat(markerBefore.left),
+        beforeWidth: Number.parseFloat(markerBefore.width),
+        barHeight: Number.parseFloat(markerBefore.height),
+        borderColor: markerStyle.borderColor,
+      } : null,
+      connectors: Array.from(document.querySelectorAll('.step:not(:last-child)')).map((step) => {
+        const after = getComputedStyle(step, '::after')
+        return {
+          backgroundColor: after.backgroundColor,
+          backgroundImage: after.backgroundImage,
+          height: Number.parseFloat(after.height),
+          width: Number.parseFloat(after.width),
+          step: step.getAttribute('data-step'),
+        }
+      }),
+      steps: Array.from(document.querySelectorAll('.step')).map((step) => {
+    const rect = step.getBoundingClientRect()
+    const index = step.querySelector('.step-index')?.getBoundingClientRect()
+    return {
+      indexX: index ? Math.round(index.x) : null,
+      rectH: Math.round(rect.height),
+      rectW: Math.round(rect.width),
+      rectX: Math.round(rect.x),
+      step: step.getAttribute('data-step'),
+    }
+      }),
+    }
+  })()`)
+  const byStep = Object.fromEntries(
+    railGeometry.steps.map((geometry) => [geometry.step, geometry]),
+  )
+  expect(byStep.trigger.indexX).toBeGreaterThanOrEqual(51)
+  expect(byStep.trigger.indexX).toBeLessThanOrEqual(53)
+  expect(byStep.autonomous.indexX).toBeGreaterThanOrEqual(339)
+  expect(byStep.autonomous.indexX).toBeLessThanOrEqual(341)
+  expect(byStep.halt.rectX).toBeGreaterThanOrEqual(598)
+  expect(byStep.halt.rectX).toBeLessThanOrEqual(600)
+  expect(byStep.halt.rectW).toBeGreaterThanOrEqual(330)
+  expect(byStep.halt.rectW).toBeLessThanOrEqual(332)
+  expect(byStep.halt.rectH).toBe(58)
+  expect(byStep.resume.indexX).toBeGreaterThanOrEqual(985)
+  expect(byStep.resume.indexX).toBeLessThanOrEqual(987)
+  expect(byStep.audit.indexX).toBeGreaterThanOrEqual(1326)
+  expect(byStep.audit.indexX).toBeLessThanOrEqual(1328)
+  expect(railGeometry.badge?.fontSize).toBe(10)
+  expect(railGeometry.badge?.fontWeight).toBeGreaterThanOrEqual(800)
+  expect(railGeometry.badge?.height).toBeLessThanOrEqual(18)
+  expect(railGeometry.badge?.width).toBeLessThanOrEqual(112)
+  expect(railGeometry.badge?.color).toBe('rgb(164, 73, 0)')
+  expect(railGeometry.haltMarker?.backgroundImage).toContain('linear-gradient')
+  expect(railGeometry.haltMarker?.borderColor).toBe('rgb(245, 158, 11)')
+  expect(railGeometry.haltMarker?.beforeLeft).toBe(13)
+  expect(railGeometry.haltMarker?.afterRight).toBe(12)
+  expect(railGeometry.haltMarker?.beforeWidth).toBe(3)
+  expect(railGeometry.haltMarker?.afterWidth).toBe(3)
+  expect(railGeometry.haltMarker?.barHeight).toBe(14)
+  const connectors = Object.fromEntries(
+    railGeometry.connectors.map((connector) => [connector.step, connector]),
+  )
+  expect(connectors.trigger.backgroundColor).toBe('rgb(7, 136, 97)')
+  expect(connectors.autonomous.backgroundColor).toBe('rgb(7, 136, 97)')
+  expect(connectors.halt.backgroundImage).toContain('repeating-linear-gradient')
+  expect(connectors.resume.backgroundImage).toContain('repeating-linear-gradient')
+  expect(connectors.halt.height).toBe(2)
+  expect(connectors.resume.height).toBe(2)
+  expect(connectors.halt.width).toBeGreaterThanOrEqual(50)
+  expect(connectors.halt.width).toBeLessThanOrEqual(70)
+}
+
+async function expectConstrainedDesktopRailGeometry(page: Page): Promise<void> {
+  const railGeometry = await page.evaluate<{
+    badge: {
+      fitsInHalted: boolean
+      height: number
+      text: string
+      whiteSpace: string
+      width: number
+    } | null
+    meta: {
+      height: number
+      width: number
+    } | null
+  }>(`(() => {
+    const badge = document.querySelector('[data-step-badge="halt"]')
+    const halted = document.querySelector('[data-step="halt"]')
+    const meta = document.querySelector('[data-step="halt"] .step-meta-line')
+    const badgeRect = badge?.getBoundingClientRect()
+    const haltedRect = halted?.getBoundingClientRect()
+    const metaRect = meta?.getBoundingClientRect()
+    return {
+      badge: badge && badgeRect ? {
+        fitsInHalted: haltedRect ? badgeRect.left >= haltedRect.left && badgeRect.right <= haltedRect.right : false,
+        height: Math.round(badgeRect.height),
+        text: badge.textContent?.trim() ?? '',
+        whiteSpace: getComputedStyle(badge).whiteSpace,
+        width: Math.round(badgeRect.width),
+      } : null,
+      meta: meta && metaRect ? {
+        height: Math.round(metaRect.height),
+        width: Math.round(metaRect.width),
+      } : null,
+    }
+  })()`)
+  expect(railGeometry.badge?.text).toBe('Awaiting review')
+  expect(railGeometry.badge?.whiteSpace).toBe('nowrap')
+  expect(railGeometry.badge?.fitsInHalted).toBe(true)
+  expect(railGeometry.badge?.height).toBeLessThanOrEqual(18)
+  expect(railGeometry.badge?.width).toBeGreaterThanOrEqual(86)
+  expect(railGeometry.meta?.height).toBeLessThanOrEqual(18)
+}
+
+async function expectTraceRowsReadable(page: Page): Promise<void> {
+  const rowOpacity = await page.evaluate<Array<{ opacity: number; selector: string }>>(
+    `Array.from(document.querySelectorAll('.progress-item, #timeline .event, #timeline .event-future')).map((row) => ({
+      opacity: Number(getComputedStyle(row).opacity),
+      selector: row.className,
+    }))`,
+  )
+  for (const row of rowOpacity) {
+    expect(row.opacity).toBeGreaterThanOrEqual(0.98)
+  }
+}
+
+async function expectTraceIntegrityProofStatusFits(page: Page): Promise<void> {
+  const proofStatus = await page.evaluate<{
+    fontSize: number
+    externalIconHeight: number
+    iconVisible: boolean
+    linkFontSize: number
+    linkVisible: boolean
+    textFits: boolean
+    valueClientWidth: number
+    valueScrollWidth: number
+  }>(`(() => {
+    const row = document.querySelector('.integrity-row.proof-row')
+    const value = row?.querySelector('.value')
+    const icon = row?.querySelector('.integrity-proof-dot')
+    const text = row?.querySelector('.proof-status-text')
+    const link = row?.querySelector('a')
+    const externalIcon = link?.querySelector('svg')
+    const valueStyle = value ? getComputedStyle(value) : null
+    const linkStyle = link ? getComputedStyle(link) : null
+    return {
+      fontSize: valueStyle ? Number.parseFloat(valueStyle.fontSize) : 0,
+      externalIconHeight: externalIcon ? Math.round(externalIcon.getBoundingClientRect().height) : 0,
+      iconVisible: !!icon && icon.getBoundingClientRect().width === 12,
+      linkFontSize: linkStyle ? Number.parseFloat(linkStyle.fontSize) : 0,
+      linkVisible: !!link && link.getBoundingClientRect().width > 0,
+      textFits: text ? text.scrollWidth <= text.clientWidth + 1 : false,
+      valueClientWidth: text ? text.clientWidth : 0,
+      valueScrollWidth: text ? text.scrollWidth : 999,
+    }
+  })()`)
+  expect(proofStatus.fontSize).toBe(12)
+  expect(proofStatus.externalIconHeight).toBe(12)
+  expect(proofStatus.iconVisible).toBe(true)
+  expect(proofStatus.linkFontSize).toBe(12)
+  expect(proofStatus.linkVisible).toBe(true)
+  expect(proofStatus.textFits).toBe(true)
+  expect(proofStatus.valueClientWidth).toBeGreaterThanOrEqual(proofStatus.valueScrollWidth - 1)
+}
+
+async function expectReferenceTimelineSpacing(page: Page): Promise<void> {
+  const timeline = await page.evaluate<{
+    rows: Array<{
+      copyLeft: number
+      cueLeft: number | null
+      hashLeft: number
+      hashTextAlign: string
+      isRecordRow: boolean
+      label: string
+      markerLeft: number
+      markerRailGap: number
+      markerToSignerGap: number | null
+      markerToTimeGap: number
+      rowClass: string
+      signerClass: string
+      signerWidth: number
+      signerBackground: string
+      timeLeft: number
+      timestampToCopyOffset: number
+    }>
+    viewportWidth: number
+  }>(`(() => ({
+    viewportWidth: window.innerWidth,
+    rows: Array.from(document.querySelectorAll('#timeline .event, #timeline .event-future')).map((row) => {
+      const rowRect = row.getBoundingClientRect()
+      const marker = row.querySelector('.event-marker')?.getBoundingClientRect()
+      const time = row.querySelector('.event-time')?.getBoundingClientRect()
+      const copy = row.querySelector('.event-copy')?.getBoundingClientRect()
+      const hashElement = row.querySelector('.event-hash')
+      const hash = hashElement?.getBoundingClientRect()
+      const cue = row.querySelector('.event-cue')?.getBoundingClientRect()
+      const signer = row.querySelector('.event-signer-icon')
+      const signerRect = signer?.getBoundingClientRect()
+      return {
+        copyLeft: copy ? Math.round(copy.left) : 0,
+        cueLeft: cue ? Math.round(cue.left) : null,
+        hashLeft: hash ? Math.round(hash.left) : 0,
+        hashTextAlign: hashElement ? getComputedStyle(hashElement).textAlign : '',
+        isRecordRow: row.classList.contains('event'),
+        label: row.querySelector('strong')?.textContent?.trim() ?? '',
+        markerLeft: marker ? Math.round(marker.left) : 0,
+        markerRailGap: marker ? Math.round(marker.left - rowRect.left - 3) : 0,
+        markerToSignerGap: marker && signerRect ? Math.round(signerRect.left - marker.right) : null,
+        markerToTimeGap: marker && time ? Math.round(time.left - marker.right) : 0,
+        rowClass: row.className,
+        signerBackground: signer ? getComputedStyle(signer).backgroundColor : '',
+        signerClass: signer?.className ?? '',
+        signerWidth: signerRect ? Math.round(signerRect.width) : 0,
+        timeLeft: time ? Math.round(time.left) : 0,
+        timestampToCopyOffset: time && copy ? Math.round(copy.left - time.left) : 0,
+      }
+    }),
+  }))()`)
+  const minTimestampOffset = timeline.viewportWidth >= 1450 ? 102 : 88
+  const maxTimestampOffset = timeline.viewportWidth >= 1450 ? 110 : 98
+  const minMarkerToSignerGap = timeline.viewportWidth >= 1450 ? 112 : 98
+  for (const row of timeline.rows) {
+    expect(row.markerLeft).toBeLessThan(row.timeLeft)
+    expect(row.timeLeft).toBeLessThan(row.copyLeft)
+    expect(row.copyLeft).toBeLessThan(row.hashLeft)
+    if (row.cueLeft !== null) expect(row.hashLeft).toBeLessThan(row.cueLeft)
+    expect(row.markerRailGap).toBeGreaterThanOrEqual(5)
+    expect(row.markerToTimeGap).toBeGreaterThanOrEqual(9)
+    expect(row.markerToTimeGap).toBeLessThanOrEqual(12)
+    expect(row.timestampToCopyOffset).toBeGreaterThanOrEqual(minTimestampOffset)
+    expect(row.timestampToCopyOffset).toBeLessThanOrEqual(maxTimestampOffset)
+    if (row.rowClass.includes('event-future')) expect(row.hashTextAlign).toBe('left')
+    if (row.isRecordRow) {
+      expect(row.signerWidth).toBe(18)
+      expect(row.signerClass).toMatch(/event-signer-icon (agent|human|mcp)/)
+      expect(row.signerBackground).not.toBe('rgba(0, 0, 0, 0)')
+      expect(row.markerToSignerGap).toBeGreaterThanOrEqual(minMarkerToSignerGap)
+    }
+  }
+}
+
 test.describe('Cloudflare approval trace browser UI', () => {
   test('clicks through approved execution and opens the signed receipt', async ({ page }) => {
     await expectCleanConsole(page, async () => {
+      await page.setViewportSize({ width: 1536, height: 1024 })
       await page.context().grantPermissions(['clipboard-write'])
       await createProposal(page)
+      await expectNoHorizontalOverflow(page)
+      await expectReferenceHeaderLogoGeometry(page)
+      await expectActionButtonsUseReferenceLayout(page)
+      await expectReferenceProposalPanelChrome(page)
+      await expectReferenceDesktopPrimaryCaption(page)
+      await expectReferenceDesktopCenterStack(page)
+      await expect(page.locator('.risk-bar .value')).toHaveText(
+        'Introduces rate limiting which may impact client traffic if misconfigured.',
+      )
+      await expectReferenceDesktopRiskTextFits(page)
+      await expect(
+        page.locator('.risk-bar').evaluate((element) =>
+          element.ownerDocument.defaultView?.getComputedStyle(element).backgroundColor ?? '',
+        ),
+      ).resolves.toBe('rgb(255, 255, 255)')
+      await expectWorkflowStepCopyHugsContent(page)
+      await expectReferenceDesktopRailGeometry(page)
+      await expectTraceRowsReadable(page)
+      await expectTraceIntegrityProofStatusFits(page)
+      await expectReferenceTimelineSpacing(page)
+      await expectSelectedCurrentRowCombinesStates(page)
+      await expectReceiptPanelFitsReferenceViewport(page)
+      await expectReferenceReceiptToolbarRhythm(page)
 
       const visibleTimes = await page.locator('#answer .progress-time').allTextContents()
       const populatedTimes = visibleTimes.filter((time) => time !== '-')
       expect(new Set(populatedTimes).size).toBeGreaterThan(3)
 
-      const runId = await page.locator('#runIdLabel').textContent()
+      const runId = await page.locator('#runIdLabel').getAttribute('data-run-id')
       expect(runId).toBeTruthy()
       const pendingRun = await page.evaluate<BrowserTraceResponse, string>(async (id) => {
         const response = await fetch('/api/runs/' + id)
@@ -72,24 +1514,108 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.locator('#riskDetailsToggle').click()
       await expect(page.locator('#riskDetails')).toBeVisible()
       await expect(page.locator('#riskDetails')).toContainText('Human review gate')
+      await expect(page.locator('.diff-code')).toContainText('const config = getConfig();')
+      await expect(page.locator('.diff-code')).toContainText('next();')
+      await expect(page.locator('.diff-code')).not.toContainText('logRequest')
+      await expectDiffLineGutter(page)
+      await expectDiffRowsFillReferenceFrame(page)
+      await expectDiffCopyControlUsesReferencePlacement(page)
+      await expectCopies(page.getByRole('button', { name: 'Copy diff' }))
 
-      await page.getByRole('button', { name: 'Record details' }).click()
+      await page.locator('#diffWrapToggle').click()
+      await expect(page.locator('#diffWrapToggle')).toHaveAttribute('aria-pressed', 'true')
+      await expect(page.locator('.diff-code')).toHaveClass(/wrap/)
+      const threeLineDiffCount = await page.locator('.diff-line').count()
+      await page.locator('#diffContext').selectOption('all')
+      await expect.poll(async () => page.locator('.diff-line').count()).toBeGreaterThan(threeLineDiffCount)
+      const allLineDiffCount = await page.locator('.diff-line').count()
+      await expect(page.locator('.diff-line').last().locator('.diff-line-text')).not.toHaveText('')
+      await expect(page.locator('.diff-code')).toContainText('reportAudit')
+      await page.locator('#diffContext').selectOption('6')
+      await expect(page.locator('.diff')).toHaveAttribute('data-context-lines', '6')
+      await expect(page.locator('.diff-code')).toContainText('logRequest')
+      await expect(page.locator('.diff-code')).not.toContainText('reportAudit')
+      await expect.poll(async () => page.locator('.diff-line').count()).toBeLessThan(allLineDiffCount)
+      await expectDiffLineGutter(page)
+
+      await page.locator('#headerMenu').click()
+      await expect(page.locator('#headerActions')).toBeVisible()
+      await expect(page.locator('[data-header-action="copy-link"]')).toBeEnabled()
+      await expect(page.locator('[data-header-action="open-json"]')).toBeEnabled()
+      await expect(page.locator('[data-header-action="reset"]')).toBeEnabled()
+      await expectHeaderMenuAboveContent(page)
+      await page.keyboard.press('Escape')
+      await expect(page.locator('#headerActions')).toBeHidden()
+
+      await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-haspopup', 'menu')
+      await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
+      await expect(page.getByRole('button', { name: 'Live run' })).toBeVisible()
+      await expect(page.locator('#runModeMenu .menu-chevron')).toBeVisible()
+      await page.getByRole('button', { name: 'Live run' }).click()
+      await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'true')
+      await expect(page.locator('#runModeActions')).toBeVisible()
+      await expect(page.locator('[data-run-mode-action="live"]')).toHaveAttribute('aria-checked', 'true')
+      await expect(
+        page.locator('[data-run-mode-action="live"]').evaluate((element) =>
+          element.ownerDocument.defaultView?.getComputedStyle(element, '::before').content ?? '',
+        ),
+      ).resolves.toBe('"✓"')
+      await expect(page.locator('[data-run-mode-action="toggle-follow"]')).toHaveAttribute('aria-checked', 'true')
+      await expect(page.locator('#runModeActions [data-run-mode-action="open-json"]')).toHaveCount(0)
+      await expect(page.locator('#runModeActions [data-run-mode-action="reset"]')).toHaveCount(0)
+      await expectRunModeMenuAboveContent(page)
+      await expectRunModeMenuLabelsContained(page)
+      await page.locator('[data-run-mode-action="toggle-follow"]').click()
+      await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
+      await page.locator('#runModeMenu').click()
+      await expect(page.locator('[data-run-mode-action="toggle-follow"]')).toHaveAttribute('aria-checked', 'false')
+      await page.locator('[data-run-mode-action="toggle-follow"]').click()
+      await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
+      await page.locator('#runModeMenu').click()
+      await expect(page.locator('#runModeActions')).toBeVisible()
+      await expect(page.locator('[data-run-mode-action="toggle-follow"]')).toHaveAttribute('aria-checked', 'true')
+      await page.locator('[data-run-mode-action="live"]').click()
+      await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
+      await page.locator('#runModeMenu').click()
+      await expect(page.locator('#runModeActions')).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(page.locator('#runModeActions')).toBeHidden()
+
+      await page.locator('#timeline .event.current').click()
+      await expectSelectedCurrentRowCombinesStates(page)
+
+      await page.locator('#timeline .event[data-label="proposal"]').click()
+      await expect(page.locator('#timeline .event.selected')).toContainText('proposal.generated')
+      await expect(page.locator('#timeline .event.current')).toContainText('human.review.halted')
+      await expectSelectedAndCurrentRowsLookDistinct(page)
+
+      await page.getByRole('tab', { name: 'Record details' }).click()
       await expect(page.locator('#receiptSummary')).toContainText('Record hash')
       await expect(page.locator('#receiptSummary')).toContainText('Timestamp')
-      await page.getByRole('button', { name: 'Summary' }).click()
+      await page.getByRole('tab', { name: 'Summary' }).click()
+      const prettyReceiptLines = await page.locator('#receipts .json-line').count()
+      expect(prettyReceiptLines).toBeGreaterThan(1)
+      await expectReferenceReceiptJsonSyntax(page)
+      await page.locator('#receiptFormat').selectOption('compact')
+      await expect.poll(async () => page.locator('#receipts .json-line').count()).toBe(1)
+      await page.locator('#receiptFormat').selectOption('pretty')
+      await expect.poll(async () => page.locator('#receipts .json-line').count()).toBeGreaterThan(1)
+      await expectReferenceReceiptJsonSyntax(page)
 
       await expectCopies(page.getByRole('button', { name: 'Copy trace ID' }))
-      await expectCopies(page.getByRole('button', { name: 'Copy Agent signature' }))
+      await expectCopies(page.getByRole('button', { name: 'Copy Agent latest record' }))
       await expectCopies(page.locator('.trace-integrity').getByRole('button', { name: 'Copy Merkle root' }))
       await expectCopies(page.getByRole('button', { name: 'Copy receipt' }))
       await expect(page.locator('#verification').getByRole('link', { name: 'View proof' })).toHaveAttribute(
         'href',
         /log\.atrib\.dev|\/api\/runs\//,
       )
+      await expectReferenceVerificationRows(page)
       await page.locator('#verification').getByRole('button', { name: 'Verify' }).click()
       await expect(page.locator('#verificationResult')).toContainText('Record hash matches')
       await expect(page.locator('#verificationResult')).toContainText('Signature valid')
       await expect(page.locator('#verificationResult')).toContainText('Receipt verified')
+      await expectVerificationResultRhythm(page)
       await expect(page.locator('#verification').getByRole('button', { name: 'Verified' })).toBeVisible()
       const pendingDownload = page.waitForEvent('download')
       await page.getByRole('button', { name: 'Download receipt' }).click()
@@ -98,8 +1624,12 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.getByRole('button', { name: 'Approve and resume' }).click()
 
       await expect(page.locator('#statusTitle')).toHaveText('Trace complete', { timeout: 30_000 })
+      await expectReviewResultVisibleInProgressPanel(page)
+      await expectProposalProgressDot(page, 'complete')
+      await expectNoHorizontalOverflow(page)
       await expect(page.locator('[data-step="halt"]')).toContainText('Approved')
       await expect(page.locator('[data-step="halt"]')).not.toContainText('Awaiting review')
+      await expectReviewPillMatchesRailBadge(page)
       await expect(page.locator('#answer')).toContainText('Agent resumed through MCP')
       await expect(page.locator('#answer')).toContainText('Audit ready')
       await expect(page.locator('#answer')).toContainText('repo_files.server/middleware/rate_limit.ts')
@@ -110,8 +1640,8 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await openTimelineRecord(page, 'execution')
       await expect(page.locator('#receipts pre')).toContainText('"signer": "action_mcp"')
       await expect(page.locator('#receipts pre')).toContainText('"tool_name": "write_file"')
-      await expect(page.locator('#receipts pre')).toContainText('"proof": null')
-      await expectCopies(page.getByRole('button', { name: 'Copy Action MCP signature' }))
+      await expect(page.locator('#receipts pre')).toContainText('"proof":')
+      await expectCopies(page.getByRole('button', { name: 'Copy Action MCP latest record' }))
       await expect(page.locator('#verification').getByRole('link', { name: 'View proof' })).toHaveAttribute(
         'href',
         /log\.atrib\.dev|\/api\/runs\//,
@@ -122,19 +1652,146 @@ test.describe('Cloudflare approval trace browser UI', () => {
     })
   })
 
+  test('keeps the desktop trace layout contained through the live stages', async ({ page }) => {
+    await expectCleanConsole(page, async () => {
+      await page.setViewportSize({ width: 1280, height: 720 })
+      await page.goto('/')
+      await expect(page).toHaveTitle('Cloudflare Agent Trace')
+      await expect(page.getByTestId('approval-trace-app')).toBeVisible()
+      await expectNoHorizontalOverflow(page)
+
+      await expect(page.locator('#statusTitle')).toHaveText('Halted for human review', {
+        timeout: 15_000,
+      })
+      await expect(page.locator('[data-step="halt"]')).toContainText('Awaiting review')
+      await expectNoHorizontalOverflow(page)
+      await expectWorkflowOverviewVisible(page)
+      await expectActionButtonsUseReferenceLayout(page)
+      await expectDiffLineGutter(page)
+      await expectDiffRowsFillReferenceFrame(page)
+      await expectWorkflowStepCopyHugsContent(page)
+      await expectConstrainedDesktopRailGeometry(page)
+      await expectTraceRowsReadable(page)
+      await expectTraceIntegrityProofStatusFits(page)
+      await expectReferenceTimelineSpacing(page)
+
+      const firstRunId = await page.locator('#runIdLabel').textContent()
+      await page.locator('#headerMenu').click()
+      await page.locator('[data-header-action="reset"]').click()
+      await expect(page.locator('#runIdLabel')).not.toHaveText('pending')
+      await expect(page.locator('#runIdLabel')).toHaveText(/^run_[A-Z0-9]+/)
+      await expect(page.locator('#runIdLabel')).toHaveAttribute('data-run-id', /.+/)
+      await expect.poll(async () => page.locator('#runIdLabel').textContent()).not.toBe(firstRunId)
+      await expect(page.locator('#answer')).toContainText('Trigger received')
+      await expect(page.locator('#statusTitle')).toHaveText('Halted for human review', {
+        timeout: 15_000,
+      })
+      await expectProgressPanelAtTop(page)
+      await expectNoHorizontalOverflow(page)
+      await expectReferenceHeaderLogoGeometry(page)
+      await expectWorkflowOverviewVisible(page)
+
+      const signerSpacing = await page.evaluate<boolean[]>(`Array.from(document.querySelectorAll('.signer-row'))
+        .map((row) => {
+          const cells = Array.from(row.children).map((child) => child.getBoundingClientRect())
+          const nameCell = cells[1]
+          const detailCell = cells[2]
+          return Boolean(nameCell && detailCell && (
+            nameCell.right < detailCell.left || detailCell.top > nameCell.top + 10
+          ))
+        })`)
+      expect(signerSpacing).toEqual([true, true, true])
+
+      await page.getByRole('button', { name: 'Approve and resume' }).click()
+      await expect(page.locator('#statusTitle')).toHaveText('Trace complete', { timeout: 30_000 })
+      await expectReviewResultVisibleInProgressPanel(page)
+      await expect(page.locator('[data-step="halt"]')).toContainText('Approved')
+      await expectReviewPillMatchesRailBadge(page)
+      await expectNoHorizontalOverflow(page)
+    })
+  })
+
   test('clicks through rejection and shows no action MCP record', async ({ page }) => {
     await expectCleanConsole(page, async () => {
       await createProposal(page)
       await page.getByRole('button', { name: 'Reject' }).click()
 
       await expect(page.locator('#statusTitle')).toHaveText('Rejected')
+      await expectReviewResultVisibleInProgressPanel(page)
+      await expect(page.locator('#reviewStatePill')).toHaveText('REJECTED')
+      await expect(page.locator('[data-step="halt"]')).toContainText('Rejected')
+      await expectReviewPillMatchesRailBadge(page)
+      await expect(page.locator('[data-step="resume"]')).not.toHaveClass(/done/)
+      await expect(page.locator('[data-step="audit"]')).not.toHaveClass(/done/)
       await expect(page.locator('#answer')).toContainText('not run')
+      await expect(page.locator('#answer')).toContainText('MCP execution skipped')
+      await expect(page.locator('#answer')).toContainText('Decision audit ready')
+      await expect(page.locator('#answer')).not.toContainText('Audit ready')
       await expect(page.locator('#timeline .event')).toHaveCount(4)
+      await expect(page.locator('#timeline')).toContainText('mcp.execution.skipped')
+      await expect(page.locator('#timeline')).toContainText('decision.audit.ready')
+      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText('Skipped')
       await expect(page.locator('#timeline')).not.toContainText('action_mcp')
+      await expect(page.locator('[data-step="resume"]')).toContainText('MCP execution skipped')
+      await expect(page.locator('[data-step="audit"]')).toContainText('Decision audit ready')
+      await expect(page.locator('#receipts pre')).toContainText('"current_step": 3')
 
       await openTimelineRecord(page, 'rejection')
       await expect(page.locator('#receipts pre')).toContainText('"signer": "human"')
       await expect(page.locator('#receipts pre')).toContainText('"decision": "rejected"')
+    })
+  })
+
+  test('requests changes, shows a revised proposal, and approves it', async ({ page }) => {
+    await expectCleanConsole(page, async () => {
+      await createProposal(page)
+      await expect(page.locator('#reviewFeedbackDrawer')).toBeHidden()
+      await page.getByRole('button', { name: 'Request changes' }).click()
+      await expect(page.locator('#reviewFeedback')).toBeVisible()
+      await page.locator('#reviewFeedback').fill(
+        'Keep the limiter scoped to /v1/report, lower the cap, and show me a revised proposal before any MCP write.',
+      )
+      await expect(page.locator('#requestChanges')).toContainText('Sign feedback')
+      await page.locator('#requestChanges').click()
+
+      await expect(page.locator('#statusTitle')).toHaveText('Revised proposal ready for review')
+      await expect(page.locator('#reviewStatePill')).toHaveText('PAUSED')
+      await expect(page.locator('[data-step="halt"]')).toContainText('Revised proposal halted')
+      await expect(page.locator('[data-step="halt"]')).toContainText('Awaiting review')
+      await expectReviewPillMatchesRailBadge(page)
+      await expect(page.locator('[data-step="resume"]')).not.toHaveClass(/done/)
+      await expect(page.locator('[data-step="audit"]')).not.toHaveClass(/done/)
+      await expect(page.locator('#answer')).toContainText('Human review feedback sent')
+      await expect(page.locator('#answer')).toContainText('Revised proposal generated')
+      await expect(page.locator('#answer')).toContainText('Revised proposal halted')
+      await expect(page.locator('#answer')).toContainText('review revised proposal')
+      await expect(page.locator('#timeline .event')).toHaveCount(6)
+      await expect(page.locator('#timeline')).toContainText('human.change_request.signed')
+      await expect(page.locator('#timeline')).toContainText('proposal.revised')
+      await expect(page.locator('#timeline')).toContainText('human.review.halted')
+      await expect(page.locator('#timeline')).toContainText('Awaiting decision on revised proposal')
+      await expect(page.locator('#timeline')).not.toContainText('human.rejection.signed')
+      await expect(page.locator('#timeline')).not.toContainText('action_mcp')
+      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText('Blocked')
+      await expect(page.locator('[data-step="resume"]')).toContainText('MCP execution resumed')
+      await expect(page.locator('[data-step="audit"]')).toContainText('Audit ready')
+
+      await openTimelineRecord(page, 'change_request')
+      await expect(page.locator('#receipts pre')).toContainText('"kind": "human_review_feedback"')
+      await expect(page.locator('#receipts pre')).toContainText('"decision": "changes_requested"')
+      await expect(page.locator('#receipts pre')).toContainText('"next_step": "agent_revision"')
+
+      await openTimelineRecord(page, 'proposal.revised', 'revision')
+      await expect(page.locator('#receipts pre')).toContainText('"kind": "agent_revised_proposal"')
+      await expect(page.locator('#receipts pre')).toContainText('"reviewer_feedback"')
+
+      await page.getByRole('button', { name: 'Approve and resume' }).click()
+      await expect(page.locator('#statusTitle')).toHaveText('Trace complete')
+      await expect(page.locator('#answer')).toContainText('Agent resumed through MCP')
+      await expect(page.locator('#answer')).toContainText('Audit ready')
+      await expect(page.locator('#timeline')).toContainText('mcp.execution.resumed')
+      await expect(page.locator('#timeline')).toContainText('audit.ready')
+      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText('Signed')
     })
   })
 

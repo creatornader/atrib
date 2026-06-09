@@ -233,6 +233,7 @@ async function verifyTrace(
   const push = (name: string, ok: boolean, detail?: string) => checks.push({ name, ok, detail })
   const byLabel = new Map(trace.records.map((record) => [record.label, record]))
   const trigger = byLabel.get('trigger')
+  const triage = byLabel.get('triage')
   const proposal = byLabel.get('proposal')
   const approval = byLabel.get('approval') ?? byLabel.get('rejection')
   const execution = byLabel.get('execution')
@@ -254,6 +255,7 @@ async function verifyTrace(
   }
 
   push(`${trace.run_id}: trigger exists`, Boolean(trigger))
+  push(`${trace.run_id}: triage exists`, Boolean(triage))
   push(`${trace.run_id}: proposal exists`, Boolean(proposal))
   push(`${trace.run_id}: decision exists`, Boolean(approval))
   push(
@@ -267,15 +269,27 @@ async function verifyTrace(
       .every((node) => node.verification_state === 'signature_valid'),
   )
   push(
-    `${trace.run_id}: proposal points at trigger`,
-    Boolean(trigger && proposal && refsEqual(proposal.record.informed_by, [trigger.record_hash])),
+    `${trace.run_id}: triage points at trigger`,
+    Boolean(trigger && triage && refsEqual(triage.record.informed_by, [trigger.record_hash])),
   )
   push(
-    `${trace.run_id}: graph trigger edge`,
+    `${trace.run_id}: graph trigger-to-triage edge`,
     Boolean(
       trigger &&
+      triage &&
+      hasGraphEdge(graph, 'INFORMED_BY', triage.record_hash, trigger.record_hash),
+    ),
+  )
+  push(
+    `${trace.run_id}: proposal points at triage`,
+    Boolean(triage && proposal && refsEqual(proposal.record.informed_by, [triage.record_hash])),
+  )
+  push(
+    `${trace.run_id}: graph triage-to-proposal edge`,
+    Boolean(
+      triage &&
       proposal &&
-      hasGraphEdge(graph, 'INFORMED_BY', proposal.record_hash, trigger.record_hash),
+      hasGraphEdge(graph, 'INFORMED_BY', proposal.record_hash, triage.record_hash),
     ),
   )
   push(
@@ -403,9 +417,10 @@ async function main() {
         page.includes('data-testid="approval-trace-app"') &&
         page.includes('Cloudflare Agent Trace') &&
         page.includes('Human review halted') &&
-        page.includes('Trigger and progress') &&
+        page.includes('Trigger &amp; progress') &&
         page.includes('write_file') &&
-        page.includes('Signed records will appear here as the workflow runs.') &&
+        page.includes('Record timeline') &&
+        page.includes('Receipt inspector') &&
         page.includes('Approve and resume'),
     },
   ]
