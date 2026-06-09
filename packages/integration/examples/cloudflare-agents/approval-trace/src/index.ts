@@ -225,7 +225,7 @@ function html(value: string): Response {
   })
 }
 
-function requestRegion(request: Request): string {
+function requestColo(request: Request): string {
   const cf = (request as Request & { cf?: { colo?: unknown } }).cf
   return typeof cf?.colo === 'string' && cf.colo ? cf.colo : 'IAD'
 }
@@ -1979,7 +1979,7 @@ export default {
     try {
       const url = new URL(request.url)
       if (url.pathname === '/' || url.pathname === '/demo') {
-        return html(renderApp({ region: requestRegion(request) }))
+        return html(renderApp({ colo: requestColo(request) }))
       }
       if (url.pathname.startsWith('/action-mcp')) return actionMcpHandler.fetch(request, env, ctx)
 

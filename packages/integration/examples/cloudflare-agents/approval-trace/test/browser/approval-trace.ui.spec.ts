@@ -20,7 +20,7 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await page.goto(path)
   await expect(page).toHaveTitle('Cloudflare Agent Trace')
   await expect(page.getByTestId('approval-trace-app')).toBeVisible()
-  await expect(page.locator('#regionLabel')).toHaveText(/^[A-Z0-9-]{2,12}$/)
+  await expect(page.locator('#coloLabel')).toHaveText(/^[A-Z0-9-]{2,12}$/)
   await expect(page.locator('#runIdLabel')).not.toHaveText('pending')
   await expect(page.locator('#runIdLabel')).toHaveText(/^run_[A-Z0-9]+/)
   await expect(page.locator('#runIdLabel')).toHaveAttribute('data-run-id', /.+/)
