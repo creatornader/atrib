@@ -21,6 +21,7 @@
     "calc-demo": "tsx scripts/calc-demo.ts",
     "ap2-live-interop": "tsx scripts/ap2-live-interop.ts",
     "ap2-local-participant": "tsx scripts/generate-ap2-local-participant-artifacts.ts",
+    "ap2-google-live-capture": "tsx scripts/capture-google-ap2-live-sample.ts",
     "ap2-google-sample-extract": "tsx scripts/extract-google-ap2-sample-artifacts.ts",
     "mem0-wrapper-demo": "tsx examples/mem0/mem0-wrapper-demo.ts",
     "mem0-oss-compat-smoke": "tsx examples/mem0/mem0-oss-compat-smoke.ts",
