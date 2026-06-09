@@ -404,7 +404,7 @@ function fixturePlan(prompt: string): PlannedAction {
  }`
   return {
     planner: 'fixture',
-    action: 'Update file in repository',
+    action: 'Prepare Code Mode-shaped repository side effect',
     summary:
       'Respond to a GitHub issue webhook by preparing a small repository file update that adds request limiting to the reported route.',
     risk: 'Introduces rate limiting which may impact client traffic if misconfigured.',
@@ -482,7 +482,7 @@ function revisedPlanFromFeedback(
  }`
   return {
     planner: 'fixture',
-    action: 'Update file in repository',
+    action: 'Prepare revised Code Mode-shaped repository side effect',
     summary:
       'Revise the repository file update after human feedback by keeping the guard scoped to the reported route.',
     risk: 'Narrows the limiter to /v1/report and lowers the default cap before any MCP write runs.',
