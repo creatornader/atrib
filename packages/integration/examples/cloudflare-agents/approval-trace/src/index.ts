@@ -184,6 +184,8 @@ const TRACE_RECORD_OFFSETS_MS = {
   approval: 950,
   rejection: 950,
   changesRequested: 950,
+  revision: 1_450,
+  reviewDecisionDelay: 1_600,
   handoff: 1_700,
   postApprovalPause: 125,
 }
@@ -432,6 +434,72 @@ function fixturePlan(prompt: string): PlannedAction {
   }
 }
 
+function revisedPlanFromFeedback(
+  priorPayload: PlannedAction['payload'],
+  feedback: string,
+): PlannedAction {
+  const diff = `@@ -1,17 +1,30 @@
+ import { NextFunction, Request, Response } from 'express';
+ import { getConfig } from '../config';
+
+ import { logRequest } from '../observability/logging';
+ import { reportMetrics } from '../observability/metrics';
+ import { resolveTenant } from '../tenant';
+
++import rateLimit from 'express-rate-limit';
++
++const reportLimiter = rateLimit({
++  windowMs: 60 * 1000,
++  max: 60,
++  standardHeaders: true,
++  legacyHeaders: false,
++  skip: (req) => req.path !== '/v1/report',
++});
+
+ const config = getConfig();
+
+-export function reportHandler(req: Request, res: Response, next: NextFunction) {
++export const reportHandler = [reportLimiter, (req: Request, res: Response, next: NextFunction) => {
+   // existing logic
+   next();
+-}
++}];
+
+ export function reportHealth(req: Request, res: Response) {
+   const tenant = resolveTenant(req);
+   reportMetrics('report.health', { tenant });
+   res.json({ ok: true, tenant });
+ }
+
+ export function reportAudit(req: Request, res: Response) {
+   logRequest(req, 'report.audit');
+   res.status(204).end();
+ }`
+  return {
+    planner: 'fixture',
+    action: 'Update file in repository',
+    summary:
+      'Revise the repository file update after human feedback by keeping the guard scoped to the reported route.',
+    risk: 'Narrows the limiter to /v1/report and lowers the default cap before any MCP write runs.',
+    payload: {
+      ...priorPayload,
+      version: priorPayload.version + 1,
+      after: {
+        ...priorPayload.after,
+        rate_limit: {
+          window_ms: 60_000,
+          max: 60,
+          standard_headers: true,
+          legacy_headers: false,
+          scope: '/v1/report',
+        },
+        note: `Revised after human feedback: ${feedback.slice(0, 140)}`,
+      },
+      diff,
+    },
+  }
+}
+
 async function planAction(env: Env, prompt: string): Promise<PlannedAction> {
   if (!env.OPENAI_API_KEY) return fixturePlan(prompt)
   const baseUrl = env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1'
@@ -529,7 +597,8 @@ function tracePacket(
   const get = (label: string) => parsed.find((entry) => entry.label === label)
   const trigger = get('trigger')
   const triage = get('triage')
-  const decision = get('approval') ?? get('rejection') ?? get('change_request')
+  const latestProposal =
+    [...parsed].reverse().find((entry) => entry.label === 'revision') ?? get('proposal')
   const execution = get('execution')
   const outcome = get('outcome')
   const handoff = get('handoff')
@@ -577,7 +646,7 @@ function tracePacket(
         name: 'Decision context',
         evidence:
           'The proposal signs the exact Cloudflare-shaped payload before the reviewer approves.',
-        evidence_labels: ['proposal'],
+        evidence_labels: [latestProposal?.label ?? 'proposal'],
       },
       {
         name: 'Semantic causal chain',
@@ -884,7 +953,11 @@ export class ApprovalTraceAgent extends Agent<Env> {
     if (workflow.status !== 'pending_approval') {
       throw new Error(`run is not pending approval: ${workflow.status}`)
     }
-    const approvalTimestamp = runTimestamp(workflow.created_at, TRACE_RECORD_OFFSETS_MS.approval)
+    const proposalTimestamp = this.currentProposalTimestamp(workflow)
+    const approvalTimestamp = Math.max(
+      runTimestamp(workflow.created_at, TRACE_RECORD_OFFSETS_MS.approval),
+      proposalTimestamp + TRACE_RECORD_OFFSETS_MS.reviewDecisionDelay,
+    )
     const body = {
       kind: 'human_approval',
       reviewer_id: 'browser-demo-human',
@@ -958,7 +1031,11 @@ export class ApprovalTraceAgent extends Agent<Env> {
     if (workflow.status !== 'pending_approval') {
       throw new Error(`run is not pending approval: ${workflow.status}`)
     }
-    const rejectionTimestamp = runTimestamp(workflow.created_at, TRACE_RECORD_OFFSETS_MS.rejection)
+    const proposalTimestamp = this.currentProposalTimestamp(workflow)
+    const rejectionTimestamp = Math.max(
+      runTimestamp(workflow.created_at, TRACE_RECORD_OFFSETS_MS.rejection),
+      proposalTimestamp + TRACE_RECORD_OFFSETS_MS.reviewDecisionDelay,
+    )
     const body = {
       kind: 'human_approval',
       reviewer_id: 'browser-demo-human',
@@ -1025,11 +1102,17 @@ export class ApprovalTraceAgent extends Agent<Env> {
       workflow.created_at,
       TRACE_RECORD_OFFSETS_MS.changesRequested,
     )
+    const proposalTimestamp = this.currentProposalTimestamp(workflow)
+    const reviewFeedbackTimestamp = Math.max(
+      feedbackTimestamp,
+      proposalTimestamp + TRACE_RECORD_OFFSETS_MS.reviewDecisionDelay,
+    )
+    const feedback = input.feedback.trim() || 'Request a narrower repository file update.'
     const body = {
       kind: 'human_review_feedback',
       reviewer_id: 'browser-demo-human',
       decision: 'changes_requested',
-      feedback: input.feedback,
+      feedback,
       requested_changes: [
         'Keep the rate-limit guard, but narrow the change to /v1/report only.',
         'Return a revised proposal before the action MCP writes repository files.',
@@ -1047,7 +1130,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       toolName: 'change_request',
       body,
       informedBy: [workflow.proposal_record_hash],
-      timestamp: feedbackTimestamp,
+      timestamp: reviewFeedbackTimestamp,
     })
     const feedbackHash = recordHash(record)
     await this.saveTraceRecord({
@@ -1058,15 +1141,6 @@ export class ApprovalTraceAgent extends Agent<Env> {
       body,
       proof: await submitRecord(this.env, record),
     })
-    this.sql`
-      UPDATE workflows
-      SET status = ${'changes_requested'},
-          decision = ${'changes_requested'},
-          decision_reason = ${input.feedback},
-          decision_record_hash = ${feedbackHash},
-          updated_at = ${feedbackTimestamp}
-      WHERE run_id = ${input.runId}
-    `
     this.saveNativeEvent(
       input.runId,
       emitNativeEvent({
@@ -1078,9 +1152,82 @@ export class ApprovalTraceAgent extends Agent<Env> {
           approved: false,
           changesRequested: true,
           feedbackRecordHash: feedbackHash,
-          feedback: input.feedback,
+          feedback,
         },
-        timestamp: feedbackTimestamp,
+        timestamp: reviewFeedbackTimestamp,
+      }),
+    )
+    const priorPayload = JSON.parse(workflow.payload_json) as PlannedAction['payload']
+    const revision = revisedPlanFromFeedback(priorPayload, feedback)
+    const revisionPayloadHash = hashUnknown(revision.payload)
+    const revisionTimestamp = Math.max(
+      Date.now(),
+      workflow.created_at + TRACE_RECORD_OFFSETS_MS.revision,
+      reviewFeedbackTimestamp + 650,
+    )
+    const revisionBody = {
+      kind: 'agent_revised_proposal',
+      prompt: workflow.prompt,
+      revision_number: 2,
+      prior_proposal_record_hash: workflow.proposal_record_hash,
+      feedback_record_hash: feedbackHash,
+      reviewer_feedback: feedback,
+      planner: revision.planner,
+      action: revision.action,
+      summary: revision.summary,
+      risk: revision.risk,
+      stable_connector_id: STABLE_CONNECTOR_ID,
+      proposed_payload_hash: revisionPayloadHash,
+      proposed_payload: revision.payload,
+      approval_question:
+        'Should the agent write this revised repository file update and resume MCP execution?',
+    }
+    const revisionRecord = await signObservation({
+      env: this.env,
+      role: 'agent',
+      key: privateKey(this.env.ATRIB_AGENT_PRIVATE_KEY),
+      contextId: workflow.context_id,
+      chainRoot: feedbackHash,
+      toolName: 'revised_proposal',
+      body: revisionBody,
+      informedBy: [workflow.proposal_record_hash, feedbackHash],
+      timestamp: revisionTimestamp,
+    })
+    const revisionHash = recordHash(revisionRecord)
+    await this.saveTraceRecord({
+      runId: input.runId,
+      label: 'revision',
+      signer: 'agent',
+      record: revisionRecord,
+      body: revisionBody,
+      proof: await submitRecord(this.env, revisionRecord),
+    })
+    this.sql`
+      UPDATE workflows
+      SET status = ${'pending_approval'},
+          proposal_record_hash = ${revisionHash},
+          payload_hash = ${revisionPayloadHash},
+          payload_json = ${JSON.stringify(revision.payload)},
+          planner = ${revision.planner},
+          decision = ${null},
+          decision_reason = ${feedback},
+          decision_record_hash = ${null},
+          updated_at = ${revisionTimestamp}
+      WHERE run_id = ${input.runId}
+    `
+    this.saveNativeEvent(
+      input.runId,
+      emitNativeEvent({
+        channel: 'agents:message',
+        type: 'message:revision',
+        agent: 'ApprovalTraceAgent',
+        name: input.runId,
+        payload: {
+          revisionRecordHash: revisionHash,
+          feedbackRecordHash: feedbackHash,
+          payloadHash: revisionPayloadHash,
+        },
+        timestamp: revisionTimestamp,
       }),
     )
     return this.getRun(input.runId)
@@ -1271,18 +1418,27 @@ export class ApprovalTraceAgent extends Agent<Env> {
           WHEN 'trigger' THEN 1
           WHEN 'triage' THEN 2
           WHEN 'proposal' THEN 3
-          WHEN 'approval' THEN 4
-          WHEN 'rejection' THEN 4
           WHEN 'change_request' THEN 4
-          WHEN 'preview' THEN 5
-          WHEN 'execution' THEN 6
-          WHEN 'outcome' THEN 7
-          WHEN 'handoff' THEN 8
+          WHEN 'revision' THEN 5
+          WHEN 'approval' THEN 6
+          WHEN 'rejection' THEN 6
+          WHEN 'preview' THEN 7
+          WHEN 'execution' THEN 8
+          WHEN 'outcome' THEN 9
+          WHEN 'handoff' THEN 10
           ELSE 99
         END ASC,
         created_at ASC
     `,
     ]
+  }
+
+  private currentProposalTimestamp(workflow: WorkflowRow): number {
+    const row = this
+      .getRecordRows(workflow.run_id)
+      .find((record) => record.record_hash === workflow.proposal_record_hash)
+    if (!row) return workflow.updated_at
+    return (JSON.parse(row.record_json) as AtribRecord).timestamp
   }
 
   private getNativeRows(runId: string): NativeObservabilityRow[] {

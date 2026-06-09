@@ -60,10 +60,10 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expectReferenceLeftProgressTypography(page)
 }
 
-async function openTimelineRecord(page: Page, label: string): Promise<void> {
+async function openTimelineRecord(page: Page, label: string, receiptLabel = label): Promise<void> {
   await page.locator('#timeline .event').filter({ hasText: label }).click()
   await expect(page.locator('#timeline .event.selected')).toContainText(label)
-  await expect(page.locator('#receipts pre')).toContainText(`"label": "${label}"`)
+  await expect(page.locator('#receipts pre')).toContainText(`"label": "${receiptLabel}"`)
   await expect(page.locator('#receipts pre')).toContainText('"record_hash": "sha256:')
 }
 
@@ -727,24 +727,29 @@ async function expectReferenceDesktopPrimaryCaption(page: Page): Promise<void> {
 
 async function expectReferenceDesktopRiskTextFits(page: Page): Promise<void> {
   const riskGeometry = await page.evaluate<{
-    clientWidth: number
     gap: number
-    scrollWidth: number
+    detailsInside: boolean
+    visualGap: number
     textOverflow: string
   }>(`(() => {
     const bar = document.querySelector('.risk-bar')
     const value = bar?.querySelector('.value')
+    const details = bar?.querySelector('.risk-details-toggle')
     const style = value ? getComputedStyle(value) : null
+    const barRect = bar?.getBoundingClientRect()
+    const valueRect = value?.getBoundingClientRect()
+    const detailsRect = details?.getBoundingClientRect()
     return {
-      clientWidth: value?.clientWidth ?? 0,
       gap: bar ? Number.parseFloat(getComputedStyle(bar).columnGap) : 0,
-      scrollWidth: value?.scrollWidth ?? 999,
+      detailsInside: Boolean(barRect && detailsRect && detailsRect.right <= barRect.right + 1),
+      visualGap: valueRect && detailsRect ? Math.round(detailsRect.left - valueRect.right) : -999,
       textOverflow: style?.textOverflow ?? '',
     }
   })()`)
   expect(riskGeometry.gap).toBeLessThanOrEqual(7)
-  expect(riskGeometry.textOverflow).toBe('clip')
-  expect(riskGeometry.scrollWidth).toBeLessThanOrEqual(riskGeometry.clientWidth + 1)
+  expect(riskGeometry.textOverflow).toBe('ellipsis')
+  expect(riskGeometry.visualGap).toBeGreaterThanOrEqual(4)
+  expect(riskGeometry.detailsInside).toBe(true)
 }
 
 async function expectReferenceVerificationRows(page: Page): Promise<void> {
@@ -1676,6 +1681,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#timeline .event')).toHaveCount(4)
       await expect(page.locator('#timeline')).toContainText('mcp.execution.skipped')
       await expect(page.locator('#timeline')).toContainText('decision.audit.ready')
+      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText('Skipped')
       await expect(page.locator('#timeline')).not.toContainText('action_mcp')
       await expect(page.locator('[data-step="resume"]')).toContainText('MCP execution skipped')
       await expect(page.locator('[data-step="audit"]')).toContainText('Decision audit ready')
@@ -1687,33 +1693,55 @@ test.describe('Cloudflare approval trace browser UI', () => {
     })
   })
 
-  test('requests changes without signing a rejection or running MCP', async ({ page }) => {
+  test('requests changes, shows a revised proposal, and approves it', async ({ page }) => {
     await expectCleanConsole(page, async () => {
       await createProposal(page)
+      await expect(page.locator('#reviewFeedbackDrawer')).toBeHidden()
       await page.getByRole('button', { name: 'Request changes' }).click()
+      await expect(page.locator('#reviewFeedback')).toBeVisible()
+      await page.locator('#reviewFeedback').fill(
+        'Keep the limiter scoped to /v1/report, lower the cap, and show me a revised proposal before any MCP write.',
+      )
+      await expect(page.locator('#requestChanges')).toContainText('Sign feedback')
+      await page.locator('#requestChanges').click()
 
-      await expect(page.locator('#statusTitle')).toHaveText('Changes requested')
-      await expectReviewResultVisibleInProgressPanel(page)
-      await expect(page.locator('#reviewStatePill')).toHaveText('NEEDS REVISION')
-      await expect(page.locator('[data-step="halt"]')).toContainText('Needs revision')
+      await expect(page.locator('#statusTitle')).toHaveText('Revised proposal ready for review')
+      await expect(page.locator('#reviewStatePill')).toHaveText('PAUSED')
+      await expect(page.locator('[data-step="halt"]')).toContainText('Revised proposal halted')
+      await expect(page.locator('[data-step="halt"]')).toContainText('Awaiting review')
       await expect(page.locator('[data-step="resume"]')).not.toHaveClass(/done/)
       await expect(page.locator('[data-step="audit"]')).not.toHaveClass(/done/)
-      await expect(page.locator('#answer')).toContainText('Feedback returned to agent')
-      await expect(page.locator('#answer')).toContainText('Revised proposal pending')
-      await expect(page.locator('#answer')).toContainText('agent revision')
-      await expect(page.locator('#timeline .event')).toHaveCount(4)
+      await expect(page.locator('#answer')).toContainText('Human review feedback sent')
+      await expect(page.locator('#answer')).toContainText('Revised proposal generated')
+      await expect(page.locator('#answer')).toContainText('Revised proposal halted')
+      await expect(page.locator('#answer')).toContainText('review revised proposal')
+      await expect(page.locator('#timeline .event')).toHaveCount(6)
       await expect(page.locator('#timeline')).toContainText('human.change_request.signed')
-      await expect(page.locator('#timeline')).toContainText('agent.feedback.returned')
-      await expect(page.locator('#timeline')).toContainText('revised.proposal.pending')
+      await expect(page.locator('#timeline')).toContainText('proposal.revised')
+      await expect(page.locator('#timeline')).toContainText('human.review.halted')
+      await expect(page.locator('#timeline')).toContainText('Awaiting decision on revised proposal')
       await expect(page.locator('#timeline')).not.toContainText('human.rejection.signed')
       await expect(page.locator('#timeline')).not.toContainText('action_mcp')
-      await expect(page.locator('[data-step="resume"]')).toContainText('Feedback returned to agent')
-      await expect(page.locator('[data-step="audit"]')).toContainText('Revision pending')
+      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText('Blocked')
+      await expect(page.locator('[data-step="resume"]')).toContainText('MCP execution resumed')
+      await expect(page.locator('[data-step="audit"]')).toContainText('Audit ready')
 
       await openTimelineRecord(page, 'change_request')
       await expect(page.locator('#receipts pre')).toContainText('"kind": "human_review_feedback"')
       await expect(page.locator('#receipts pre')).toContainText('"decision": "changes_requested"')
       await expect(page.locator('#receipts pre')).toContainText('"next_step": "agent_revision"')
+
+      await openTimelineRecord(page, 'proposal.revised', 'revision')
+      await expect(page.locator('#receipts pre')).toContainText('"kind": "agent_revised_proposal"')
+      await expect(page.locator('#receipts pre')).toContainText('"reviewer_feedback"')
+
+      await page.getByRole('button', { name: 'Approve and resume' }).click()
+      await expect(page.locator('#statusTitle')).toHaveText('Trace complete')
+      await expect(page.locator('#answer')).toContainText('Agent resumed through MCP')
+      await expect(page.locator('#answer')).toContainText('Audit ready')
+      await expect(page.locator('#timeline')).toContainText('mcp.execution.resumed')
+      await expect(page.locator('#timeline')).toContainText('audit.ready')
+      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText('Signed')
     })
   })
 

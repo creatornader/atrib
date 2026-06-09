@@ -2086,13 +2086,6 @@ export function renderApp(): string {
         white-space: nowrap;
       }
 
-      @media (min-width: 1451px) {
-        .risk-bar .value {
-          overflow: visible;
-          text-overflow: clip;
-        }
-      }
-
       .risk-details-toggle {
         align-items: center;
         background: transparent;
@@ -2128,6 +2121,54 @@ export function renderApp(): string {
 
       .risk-details[hidden] {
         display: none;
+      }
+
+      .feedback-summary,
+      .review-feedback-drawer {
+        background: #f8fafc;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: grid;
+        gap: 5px;
+        padding: 8px 10px;
+      }
+
+      .feedback-summary .label,
+      .review-feedback-drawer .label {
+        color: #5f6f86;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        line-height: 1;
+        text-transform: uppercase;
+      }
+
+      .feedback-summary .value {
+        color: var(--ink);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .review-feedback-drawer[hidden] {
+        display: none;
+      }
+
+      .review-feedback-drawer textarea {
+        background: #fff;
+        border: 1px solid #cfd8e6;
+        border-radius: 7px;
+        color: var(--ink);
+        font: 12px/1.35 var(--mono);
+        min-height: 58px;
+        padding: 8px 9px;
+        resize: vertical;
+        width: 100%;
+      }
+
+      .review-feedback-drawer textarea:focus {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.12);
+        outline: 0;
       }
 
       .primary,
@@ -2722,6 +2763,18 @@ export function renderApp(): string {
         background: #e9f8ef;
         border-color: #b9e5cb;
         color: #078861;
+      }
+
+      .signer-status.blocked {
+        background: #eef2f8;
+        border-color: #cfd8e6;
+        color: #475569;
+      }
+
+      .signer-status.skipped {
+        background: #f8fafc;
+        border-color: #d7e0ec;
+        color: #69758a;
       }
 
       .signature-slot {
@@ -3753,9 +3806,10 @@ export function renderApp(): string {
         trigger: 0,
         triage: 1200,
         proposal: 4800,
-        approval: 6200,
-        rejection: 6200,
+        approval: 7400,
+        rejection: 7400,
         change_request: 6200,
+        revision: 7400,
         preview: 7400,
         execution: 8600,
         outcome: 9800,
@@ -3768,6 +3822,7 @@ export function renderApp(): string {
         policy: 2600,
         proposal: 4800,
         halt: 6200,
+        revision: 7400,
         resume: 8600,
         audit: 11200,
       };
@@ -3805,13 +3860,13 @@ export function renderApp(): string {
       function updateStepTimes(run = currentRun) {
         const trigger = run?.records.find((record) => record.label === 'trigger');
         const triage = run?.records.find((record) => record.label === 'triage');
-        const proposal = run?.records.find((record) => record.label === 'proposal');
-        const decision = run?.records.find((record) => record.label === 'approval' || record.label === 'rejection' || record.label === 'change_request');
+        const proposal = latestProposalRecord(run);
+        const decision = latestHumanDecisionRecord(run);
         const triggerTime = stageDisplayTimes.trigger ?? (trigger ? displayRecordTime(trigger, 'trigger') + ' UTC' : 'Pending');
         const triageTime = stageDisplayTimes.context ?? (triage ? displayRecordTime(triage, 'triage') + ' UTC' : 'Pending');
-        const proposalTime = stageDisplayTimes.proposal ?? (proposal ? displayRecordTime(proposal, 'proposal') + ' UTC' : 'Pending');
-        const haltRecord = decision ?? proposal;
-        const haltLabel = decision?.label ?? 'approval';
+        const proposalTime = stageDisplayTimes.proposal ?? (proposal ? displayRecordTime(proposal, proposal.label) + ' UTC' : 'Pending');
+        const haltRecord = run?.status === 'pending_approval' ? proposal : decision ?? proposal;
+        const haltLabel = run?.status === 'pending_approval' ? proposal?.label ?? 'approval' : decision?.label ?? 'approval';
         const haltTime = stageDisplayTimes.halt ?? (haltRecord ? displayRecordTime(haltRecord, haltLabel) + ' UTC' : proposalTime);
         const execution = run?.records.find((record) => record.label === 'execution');
         const handoff = run?.records.find((record) => record.label === 'handoff');
@@ -3860,7 +3915,7 @@ export function renderApp(): string {
           return;
         }
         if (run.status === 'pending_approval') {
-          title.textContent = 'Human review halted';
+          title.textContent = hasRevisedProposal(run) ? 'Revised proposal halted' : 'Human review halted';
           badge.textContent = 'Awaiting review';
           return;
         }
@@ -4031,7 +4086,8 @@ export function renderApp(): string {
         if (title === 'Trigger received') return 'trigger';
         if (title === 'Context gathered') return 'context';
         if (title === 'Policy & intent analysis') return 'policy';
-        if (title === 'Proposed action generated') return 'proposal';
+        if (title === 'Proposed action generated' || title === 'Initial proposal generated') return 'proposal';
+        if (title === 'Revised proposal generated' || title === 'Revised proposal halted') return 'revision';
         if (title === 'Human review halted' || title === 'Human review recorded' || title === 'Human review feedback sent' || title === 'Human review rejected') return 'halt';
         if (title === 'Agent resumed through MCP' || title === 'MCP execution skipped' || title === 'Feedback returned to agent') return 'resume';
         if (title === 'Audit ready' || title === 'Decision audit ready' || title === 'Revised proposal pending') return 'audit';
@@ -4043,7 +4099,13 @@ export function renderApp(): string {
         if (key && stageDisplayTimes[key]) return progressTimeLabel(stageDisplayTimes[key]);
         if (!active) return '-';
         const record = progressRecordFor(run, title);
-        return formatRecordTime(record, progressDisplayOffsets[key] ?? recordDisplayOffsets[record?.label ?? key] ?? 0);
+        const alignToRecord = ['Human review recorded', 'Human review rejected'].includes(title);
+        return formatRecordTime(
+          record,
+          alignToRecord
+            ? recordDisplayOffsets[record?.label ?? key] ?? 0
+            : progressDisplayOffsets[key] ?? recordDisplayOffsets[record?.label ?? key] ?? 0,
+        );
       }
 
       function formatRecordTime(record, offsetMs = 0) {
@@ -4211,6 +4273,8 @@ export function renderApp(): string {
         const approve = document.querySelector('#approve');
         const reject = document.querySelector('#reject');
         const requestChanges = document.querySelector('#requestChanges');
+        const reviewFeedback = document.querySelector('#reviewFeedback');
+        const reviewFeedbackDrawer = document.querySelector('#reviewFeedbackDrawer');
         if (approve) {
           approve.disabled = busy || !hasPendingApproval;
           const label = approve.querySelector('.button-label');
@@ -4223,9 +4287,12 @@ export function renderApp(): string {
         }
         if (requestChanges) {
           requestChanges.disabled = busy || !hasPendingApproval;
+          const drawerOpen = Boolean(reviewFeedbackDrawer && !reviewFeedbackDrawer.hidden);
+          requestChanges.setAttribute('aria-expanded', String(drawerOpen));
           const label = requestChanges.querySelector('.button-label');
-          if (label) label.textContent = busy && activeLabel === 'request' ? 'Requesting...' : 'Request changes';
+          if (label) label.textContent = busy && activeLabel === 'request' ? 'Requesting...' : drawerOpen ? 'Sign feedback' : 'Request changes';
         }
+        if (reviewFeedback) reviewFeedback.disabled = busy || !hasPendingApproval;
         updateHeaderMenuControls();
         updateRunModeControls();
       }
@@ -4262,6 +4329,7 @@ export function renderApp(): string {
         if (entry.label === 'trigger') return 'GitHub issue webhook';
         if (entry.label === 'triage') return 'Intent: add rate limiting';
         if (entry.label === 'proposal') return 'write_file proposal';
+        if (entry.label === 'revision') return 'Revised write_file proposal';
         if (entry.label === 'approval') return 'Human approved payload';
         if (entry.label === 'rejection') return 'Human rejected payload';
         if (entry.label === 'change_request') return 'Human requested revision';
@@ -4276,6 +4344,7 @@ export function renderApp(): string {
         if (entry.label === 'trigger') return 'trigger.received';
         if (entry.label === 'triage') return 'triage.completed';
         if (entry.label === 'proposal') return 'proposal.generated';
+        if (entry.label === 'revision') return 'proposal.revised';
         if (entry.label === 'approval') return 'human.approval.signed';
         if (entry.label === 'rejection') return 'human.rejection.signed';
         if (entry.label === 'change_request') return 'human.change_request.signed';
@@ -4291,14 +4360,15 @@ export function renderApp(): string {
         const rows = [];
         const rejected = run.status === 'rejected';
         const changesRequested = run.status === 'changes_requested';
-        if (!labels.has('approval') && !labels.has('rejection') && !labels.has('change_request')) {
-          const proposal = run.records.find((record) => record.label === 'proposal');
+        if (run.status === 'pending_approval' || (!labels.has('approval') && !labels.has('rejection') && !labels.has('change_request'))) {
+          const proposal = latestProposalRecord(run);
           rows.push({
             name: 'human.review.halted',
-            detail: 'Awaiting human decision',
+            detail: hasRevisedProposal(run) ? 'Awaiting decision on revised proposal' : 'Awaiting human decision',
             marker: 'pending',
             record: proposal,
             displayLabel: 'approval',
+            timeLabel: proposal?.label ?? 'proposal',
             hash: proposal?.record_hash,
           });
         }
@@ -4363,6 +4433,28 @@ export function renderApp(): string {
         return run.records.filter((item) => item.signer === signer);
       }
 
+      function latestRecordByLabel(run, labels) {
+        if (!run) return null;
+        const wanted = new Set(labels);
+        return [...run.records].reverse().find((record) => wanted.has(record.label)) ?? null;
+      }
+
+      function latestProposalRecord(run = currentRun) {
+        return latestRecordByLabel(run, ['revision', 'proposal']);
+      }
+
+      function latestChangeRequestRecord(run = currentRun) {
+        return latestRecordByLabel(run, ['change_request']);
+      }
+
+      function latestHumanDecisionRecord(run = currentRun) {
+        return latestRecordByLabel(run, ['approval', 'rejection', 'change_request']);
+      }
+
+      function hasRevisedProposal(run = currentRun) {
+        return Boolean(latestRecordByLabel(run, ['revision']));
+      }
+
       function signerLatestRecord(run, signer) {
         const records = recordsForSigner(run, signer);
         return records[records.length - 1];
@@ -4381,6 +4473,13 @@ export function renderApp(): string {
 
       function signerRecordHash(run, signer) {
         return signerLatestRecord(run, signer)?.record_hash ?? '';
+      }
+
+      function signerStatusForRun(run, signer, recordCount) {
+        if (recordCount > 0) return 'Signed';
+        if (signer.signer === 'action_mcp' && run.status === 'rejected') return 'Skipped';
+        if (signer.signer === 'action_mcp' && (run.status === 'changes_requested' || hasRevisedProposal(run))) return 'Blocked';
+        return 'Pending';
       }
 
       function signerStatusClass(signer) {
@@ -4465,10 +4564,16 @@ export function renderApp(): string {
         if (rowTitle === 'Context gathered' || rowTitle === 'Policy & intent analysis') {
           return run.records.find((record) => record.label === 'triage');
         }
-        if (rowTitle === 'Proposed action generated') return run.records.find((record) => record.label === 'proposal');
-        if (rowTitle === 'Human review halted' || rowTitle === 'Human review recorded' || rowTitle === 'Human review feedback sent' || rowTitle === 'Human review rejected') {
-          return run.records.find((record) => record.label === 'approval' || record.label === 'rejection' || record.label === 'change_request')
-            ?? run.records.find((record) => record.label === 'proposal');
+        if (rowTitle === 'Proposed action generated' || rowTitle === 'Initial proposal generated') return run.records.find((record) => record.label === 'proposal');
+        if (rowTitle === 'Revised proposal generated') return latestProposalRecord(run);
+        if (rowTitle === 'Human review halted' || rowTitle === 'Revised proposal halted') {
+          return latestProposalRecord(run);
+        }
+        if (rowTitle === 'Human review feedback sent') {
+          return latestChangeRequestRecord(run) ?? latestProposalRecord(run);
+        }
+        if (rowTitle === 'Human review recorded' || rowTitle === 'Human review rejected') {
+          return latestHumanDecisionRecord(run) ?? latestProposalRecord(run);
         }
         if (rowTitle === 'Agent resumed through MCP') return run.records.find((record) => record.label === 'execution');
         if (rowTitle === 'MCP execution skipped' || rowTitle === 'Decision audit ready') {
@@ -4774,6 +4879,12 @@ export function renderApp(): string {
       function runStateCopy(run) {
         switch (run.status) {
           case 'pending_approval':
+            if (hasRevisedProposal(run)) {
+              return {
+                title: 'Revised proposal ready for review',
+                detail: 'The agent incorporated signed feedback and halted again before MCP execution.',
+              };
+            }
             return {
               title: 'Halted for human review',
               detail: 'The agent has stopped before publishing. Approval resumes execution through the action MCP.',
@@ -4808,7 +4919,14 @@ export function renderApp(): string {
 
       function setStatusForRun(run) {
         if (run.status === 'pending_approval') {
-          setStatus('Halted for human review', 'pending', 'Autonomous triage is complete. Review the payload before the agent can resume.', 'halt');
+          setStatus(
+            hasRevisedProposal(run) ? 'Revised proposal ready for review' : 'Halted for human review',
+            'pending',
+            hasRevisedProposal(run)
+              ? 'The agent signed a revised payload from the requested changes. Review it before MCP execution can resume.'
+              : 'Autonomous triage is complete. Review the payload before the agent can resume.',
+            'halt',
+          );
           return;
         }
         if (run.status === 'succeeded') {
@@ -4831,7 +4949,8 @@ export function renderApp(): string {
       }
 
       function renderProposal(run) {
-        const proposal = run.records.find((record) => record.label === 'proposal');
+        const proposal = latestProposalRecord(run);
+        const feedbackRecord = latestChangeRequestRecord(run);
         const body = proposal?.body ?? {};
         const payload = body.proposed_payload ?? {};
         const before = payload.before ?? {};
@@ -4877,11 +4996,23 @@ export function renderApp(): string {
             <span>This proposal changes repository code for a production Workers route. The agent must halt before the action MCP writes the file.</span>
             <span>Approval signs the exact payload hash, connector id, and target file before execution resumes.</span>
           </div>
+          \${feedbackRecord ? \`
+            <div class="feedback-summary">
+              <span class="label">Last requested change</span>
+              <span class="value">\${escapeHtml(feedbackRecord.body?.feedback ?? feedbackRecord.body?.reviewer_feedback ?? 'Reviewer requested a revision.')}</span>
+            </div>
+          \` : ''}
           <div class="actions">
             <button class="primary" id="approve" aria-label="Approve and resume" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span><span class="button-label">Approve &amp; resume</span></span><small>Allow MCP execution to continue</small></span></span></button>
             <button class="danger" id="reject" aria-label="Reject" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 4.5 7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span><span class="button-label">Reject</span></span><small>Cancel this proposed action</small></span></span></button>
-            <button class="secondary" id="requestChanges" aria-label="Request changes" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v6H7l-3 3V4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="button-label">Request changes</span></span><small>Send feedback to agent</small></span></span></button>
+            <button class="secondary" id="requestChanges" aria-label="Request changes" aria-expanded="false" aria-controls="reviewFeedbackDrawer" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v6H7l-3 3V4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="button-label">Request changes</span></span><small>Send feedback to agent</small></span></span></button>
           </div>
+          \${run.status === 'pending_approval' ? \`
+            <label class="review-feedback-drawer" id="reviewFeedbackDrawer" hidden>
+              <span class="label">Requested changes</span>
+              <textarea id="reviewFeedback" rows="3">Please narrow this to the /v1/report route only and return a revised proposal before any MCP write.</textarea>
+            </label>
+          \` : ''}
         \`;
         document.querySelector('#riskDetailsToggle')?.addEventListener('click', (event) => {
           const button = event.currentTarget;
@@ -4933,13 +5064,24 @@ export function renderApp(): string {
           });
         });
         document.querySelector('#requestChanges')?.addEventListener('click', async () => {
+          const drawer = document.querySelector('#reviewFeedbackDrawer');
+          const input = document.querySelector('#reviewFeedback');
+          if (drawer?.hidden) {
+            drawer.hidden = false;
+            updateControls();
+            followPanelElement(drawer);
+            input?.focus();
+            return;
+          }
+          const feedback = document.querySelector('#reviewFeedback')?.value?.trim()
+            || 'Please narrow this to the /v1/report route only and return a revised proposal before any MCP write.';
           await transition({
             title: 'Requesting changes',
-            detail: 'The reviewer feedback is being signed. The agent will need to revise before MCP execution.',
+            detail: 'The reviewer feedback is being signed. The agent will revise and return to human review.',
             step: 'halt',
             activeLabel: 'request',
             fn: async () => post('/api/runs/' + run.run_id + '/request-changes', {
-              feedback: 'The reviewer requested a smaller repository file update.',
+              feedback,
             }),
           });
         });
@@ -4952,8 +5094,11 @@ export function renderApp(): string {
         const auditReady = ['succeeded', 'failed'].includes(run.status);
         const rejected = run.status === 'rejected';
         const changesRequested = run.status === 'changes_requested';
-        const showReviewResult = auditReady || rejected || changesRequested;
         const labels = new Set(run.records.map((record) => record.label));
+        const revised = hasRevisedProposal(run);
+        const feedback = latestChangeRequestRecord(run);
+        const reviewLoopActive = Boolean(feedback) && !auditReady && !rejected && !changesRequested;
+        const showReviewResult = auditReady || rejected || changesRequested || Boolean(feedback);
         const stageRows = [
           {
             title: 'Trigger received',
@@ -4971,13 +5116,23 @@ export function renderApp(): string {
             done: labels.has('triage'),
           },
           {
-            title: 'Proposed action generated',
+            title: revised ? 'Initial proposal generated' : 'Proposed action generated',
             detail: labels.has('proposal') ? 'Agent prepared a write_file payload, diff, risk note, and payload hash.' : 'Agent has not planned yet.',
             done: labels.has('proposal'),
           },
+          ...(feedback ? [{
+            title: 'Human review feedback sent',
+            detail: 'Reviewer feedback was signed and returned to the agent.',
+            done: true,
+          }] : []),
+          ...(revised ? [{
+            title: 'Revised proposal generated',
+            detail: 'The agent narrowed the file update and signed a new payload hash.',
+            done: true,
+          }] : []),
           {
-            title: run.status === 'pending_approval' ? 'Human review halted' : rejected ? 'Human review rejected' : changesRequested ? 'Human review feedback sent' : 'Human review recorded',
-            detail: answer.decision ? 'Decision: ' + answer.decision : 'Execution is stopped until a human signs approval, rejection, or feedback.',
+            title: run.status === 'pending_approval' ? revised ? 'Revised proposal halted' : 'Human review halted' : rejected ? 'Human review rejected' : changesRequested ? 'Human review feedback sent' : 'Human review recorded',
+            detail: answer.decision ? 'Decision: ' + answer.decision : revised ? 'Execution is stopped again until a human signs the revised proposal.' : 'Execution is stopped until a human signs approval, rejection, or feedback.',
             done: Boolean(answer.decision),
             halted: run.status === 'pending_approval',
           },
@@ -4989,6 +5144,8 @@ export function renderApp(): string {
               ? 'The signed rejection closed the gate before any MCP write.'
               : changesRequested
               ? 'Signed feedback has been returned to the agent for revision.'
+              : revised
+              ? 'Waiting on approval for the revised proposal.'
               : 'Rejected or waiting for approval.',
             done: answer.executed || changesRequested,
             skipped: rejected,
@@ -5022,12 +5179,12 @@ export function renderApp(): string {
           \${showReviewResult ? \`
             <div class="metric-row review-result">
               <div class="metric">
-                <span class="label">\${changesRequested ? 'Review result' : 'Execution result'}</span>
-                <span class="value">\${changesRequested ? 'changes requested' : answer.executed ? answer.outcome : 'not run'}</span>
+                <span class="label">\${changesRequested || reviewLoopActive ? 'Review result' : 'Execution result'}</span>
+                <span class="value">\${changesRequested || reviewLoopActive ? 'changes requested' : answer.executed ? answer.outcome : 'not run'}</span>
               </div>
               <div class="metric">
-                <span class="label">\${changesRequested ? 'Next step' : 'Changed rows'}</span>
-                <span class="value">\${changesRequested ? 'agent revision' : answer.changed.length ? answer.changed.join(', ') : 'none'}</span>
+                <span class="label">\${changesRequested || reviewLoopActive ? 'Next step' : 'Changed rows'}</span>
+                <span class="value">\${changesRequested ? 'agent revision' : reviewLoopActive && run.status === 'pending_approval' ? 'review revised proposal' : answer.changed.length ? answer.changed.join(', ') : 'none'}</span>
               </div>
             </div>
           \` : ''}
@@ -5042,10 +5199,11 @@ export function renderApp(): string {
           { kind: 'mcp', name: 'Action MCP', detail: 'github.write@2.3.1', signer: 'action_mcp' },
         ].map((signer) => {
           const records = recordsForSigner(run, signer.signer);
+          const recordCount = records.length;
           return {
             ...signer,
-            recordCount: records.length,
-            status: records.length ? 'Signed' : 'Pending',
+            recordCount,
+            status: signerStatusForRun(run, signer, recordCount),
           };
         });
         timelineEl.innerHTML = run.trace_packet.timeline.length
@@ -5074,7 +5232,7 @@ export function renderApp(): string {
                 return \`
                 <button class="event current" data-hash="\${row.hash}" data-label="\${row.displayLabel ?? row.name}" aria-current="step" aria-label="View receipt details for \${escapeHtml(row.name)}">
                   <span class="event-marker \${row.marker}">\${row.markerLabel ?? ''}</span>
-                  <span class="event-time">\${displayRecordTime(row.record, row.displayLabel)}</span>
+                  <span class="event-time">\${displayRecordTime(row.record, row.timeLabel ?? row.displayLabel)}</span>
                   <span class="event-copy">
                     <span class="event-title-line">\${timelineSignerIcon(row.record)}<strong>\${row.name}</strong></span>
                     <span class="value">\${row.detail}</span>
@@ -5129,6 +5287,8 @@ export function renderApp(): string {
         const renderReceiptSummary = (record, activeTab = 'summary') => {
           const signedSigners = signers.filter((signer) => signer.status === 'Signed').length;
           const pendingSigners = signers.filter((signer) => signer.status === 'Pending').length;
+          const blockedSigners = signers.filter((signer) => signer.status === 'Blocked').length;
+          const skippedSigners = signers.filter((signer) => signer.status === 'Skipped').length;
           const logEntry = run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id;
           const tabMarkup = \`
             <div class="receipt-tabs" role="tablist" aria-label="Receipt inspector views">
@@ -5158,6 +5318,8 @@ export function renderApp(): string {
               <div class="summary-row"><span>Total records</span><strong>\${run.records.length}</strong><span></span></div>
               <div class="summary-row"><span>Signed signers</span><strong>\${signedSigners}</strong><span></span></div>
               <div class="summary-row"><span>Pending signers</span><strong>\${pendingSigners}</strong><span></span></div>
+              \${blockedSigners ? '<div class="summary-row"><span>Blocked signers</span><strong>' + blockedSigners + '</strong><span></span></div>' : ''}
+              \${skippedSigners ? '<div class="summary-row"><span>Skipped signers</span><strong>' + skippedSigners + '</strong><span></span></div>' : ''}
               <div class="summary-row"><span>Merkle root</span><span class="hash">\${shortHash(run.records[0]?.record_hash)}</span>\${copyIcon(run.records[0]?.record_hash ?? '', 'Merkle root')}</div>
               <div class="summary-row"><span>Log entry</span><a href="\${logEntry}">cl_\${traceIdForRun(run).slice(4, 20)}</a><span></span></div>
               <div class="summary-row"><span>Log timestamp</span><strong>\${displayRecordTime(record, record.label) + ' UTC'}</strong><span></span></div>

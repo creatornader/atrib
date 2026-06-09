@@ -344,18 +344,22 @@ describe('Cloudflare approval trace Worker', () => {
     expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([])
   })
 
-  it('signs requested changes without rejecting or executing the action MCP path', async () => {
+  it('signs requested changes, revises, and waits for second approval', async () => {
     const runId = 'changes-requested-local-e2e'
     await createRun(runId)
     const trace = await requestChanges(runId)
     const records = byLabel(trace)
     const proposal = records.get('proposal')!
     const feedback = records.get('change_request')!
+    const revision = records.get('revision')!
 
-    expect(trace.status).toBe('changes_requested')
-    expect(labels(trace)).toEqual(['trigger', 'triage', 'proposal', 'change_request'])
+    expect(trace.status).toBe('pending_approval')
+    expect(labels(trace)).toEqual(['trigger', 'triage', 'proposal', 'change_request', 'revision'])
     await expectSignedTrace(trace)
     expect(sorted(feedback.record.informed_by)).toEqual([proposal.record_hash])
+    expect(sorted(revision.record.informed_by)).toEqual(
+      [proposal.record_hash, feedback.record_hash].sort(),
+    )
     expect(trace.records.some((record) => record.label === 'rejection')).toBe(false)
     expect(trace.records.some((record) => record.signer === 'action_mcp')).toBe(false)
     expect(feedback.body).toMatchObject({
@@ -363,13 +367,45 @@ describe('Cloudflare approval trace Worker', () => {
       decision: 'changes_requested',
       next_step: 'agent_revision',
     })
+    expect(revision.body).toMatchObject({
+      kind: 'agent_revised_proposal',
+      revision_number: 2,
+      feedback_record_hash: feedback.record_hash,
+    })
     expect(trace.trace_packet.answer).toMatchObject({
-      decision: 'changes_requested',
+      decision: null,
       executed: false,
-      outcome: 'revision_requested',
+      outcome: 'pending',
       changed: [],
     })
     expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([])
+
+    const approved = await approveRun(runId)
+    const approvedRecords = byLabel(approved)
+    const approval = approvedRecords.get('approval')!
+    expect(approved.status).toBe('succeeded')
+    expect(labels(approved)).toEqual([
+      'trigger',
+      'triage',
+      'proposal',
+      'change_request',
+      'revision',
+      'approval',
+      'preview',
+      'execution',
+      'outcome',
+      'handoff',
+    ])
+    expect(sorted(approval.record.informed_by)).toEqual([revision.record_hash])
+    expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([
+      expect.objectContaining({
+        file: 'server/middleware/rate_limit.ts',
+        rate_limit: expect.objectContaining({
+          max: 60,
+          scope: '/v1/report',
+        }),
+      }),
+    ])
   })
 
   it('records a diagnostic outcome when the approved action fails', async () => {
