@@ -1,6 +1,6 @@
 {
   "name": "@atrib/cloudflare-live-client-proof",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "private": true,
   "type": "module",
   "description": "Live Cloudflare Agent.addMcpServer proof for atrib client attribution.",

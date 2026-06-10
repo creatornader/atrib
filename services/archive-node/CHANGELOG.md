@@ -1,5 +1,13 @@
 # @atrib/archive-node
 
+## 0.1.28
+
+### Patch Changes
+
+- Updated dependencies [3de7d59]
+  - @atrib/mcp@0.17.3
+  - @atrib/verify@0.7.5
+
 ## 0.1.27
 
 ### Patch Changes

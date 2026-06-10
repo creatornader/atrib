@@ -1,6 +1,6 @@
 {
   "name": "@atrib/archive-node",
-  "version": "0.1.27",
+  "version": "0.1.28",
   "description": "atrib spec §2.12 record body archive HTTP service",
   "license": "Apache-2.0",
   "private": true,
