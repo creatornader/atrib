@@ -1,5 +1,11 @@
 # @atrib/recall
 
+## 0.12.12
+
+### Patch Changes
+
+- 2dc1a06: Read annotation and revision targets from signed top-level fields when building display summaries, annotation/revision aggregations, and local recall graph edges. Sidecar content remains a legacy fallback, and aggregation accepts both `topics` and `topic_tags`.
+
 ## 0.12.11
 
 ### Patch Changes
