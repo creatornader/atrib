@@ -34,10 +34,14 @@ export {
   EVENT_TYPE_DIRECTORY_ANCHOR_URI,
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_REVISION_URI,
+  EVENT_TYPE_SHORT_NAMES,
+  EVENT_TYPE_SHORT_TO_URI,
   NORMATIVE_EVENT_TYPE_URIS,
+  normalizeEventType,
   isValidEventTypeUri,
   isNormativeEventTypeUri,
 } from './types.js'
+export type { EventTypeShortName } from './types.js'
 
 // Core primitives
 export { base64urlEncode, base64urlDecode } from './base64url.js'
@@ -68,7 +72,11 @@ export {
   clearRecordReferenceResolverCacheForTests,
   defaultRecordReferenceResolver,
 } from './record-reference.js'
-export type { LocalRecordReferenceResolver, RecordReferenceResolution } from './record-reference.js'
+export type {
+  DefaultRecordReferenceResolverOptions,
+  LocalRecordReferenceResolver,
+  RecordReferenceResolution,
+} from './record-reference.js'
 export { encodeToken, decodeToken } from './token.js'
 
 // Harness session-id discovery (D083)

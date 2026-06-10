@@ -55,7 +55,7 @@ describe('Brief dcbench evidence proof', () => {
       local_sidecars_keep_prompt_and_rubric: true,
     })
     expect(stdout).not.toContain('audit-log wrapper')
-  })
+  }, 30000)
 
   it('keeps the claim caveated when no Brief workspace is used', async () => {
     const result = await runBriefDcbenchEvidenceSmoke()

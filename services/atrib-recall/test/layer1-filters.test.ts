@@ -410,7 +410,7 @@ describe('rank_by=relevance', () => {
   it('record_hash-shaped rank_anchor does NOT inject as a BM25 query', async () => {
     // When rank_anchor parses as sha256:<64-hex>, the relevance component
     // collapses to 0, the recall path treats it as a causal_distance
-    // anchor (still stub-accepted) rather than a free-form query.
+    // anchor rather than a free-form query.
     // Uses a future timestamp (recency clamps to exactly 1.0) + a
     // critical annotation so the record clears the
     // ATRIB_RECALL_NOISE_FLOOR=0.6 default (D086). Without the annotation,
@@ -617,7 +617,7 @@ describe('toc=true response shape', () => {
     expect(entry.superseded_by).toBeUndefined()
   })
 
-  it('layer_1_warnings is empty when toc=true (no longer stub-accepted)', async () => {
+  it('does not surface layer_1_warnings when toc=true', async () => {
     const lone = await makeSigned({ timestamp: 1700000000000 })
     writeFileSync(file, JSON.stringify(lone))
     // recall() doesn't surface layer_1_warnings directly; that's the MCP

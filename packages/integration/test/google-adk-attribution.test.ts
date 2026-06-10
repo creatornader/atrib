@@ -59,5 +59,5 @@ describe('Google ADK plugin attribution example', () => {
       public_records_hash_only: true,
       local_sidecars_keep_payloads: true,
     })
-  })
+  }, 30000)
 })

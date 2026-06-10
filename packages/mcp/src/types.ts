@@ -175,6 +175,28 @@ export const EVENT_TYPE_ANNOTATION_URI = 'https://atrib.dev/v1/types/annotation'
 // should weight as the current position.
 export const EVENT_TYPE_REVISION_URI = 'https://atrib.dev/v1/types/revision'
 
+/** Short aliases accepted by agent-facing tools for atrib normative event types. */
+export const EVENT_TYPE_SHORT_NAMES = [
+  'tool_call',
+  'transaction',
+  'observation',
+  'directory_anchor',
+  'annotation',
+  'revision',
+] as const
+
+export type EventTypeShortName = (typeof EVENT_TYPE_SHORT_NAMES)[number]
+
+/** Map from short aliases to canonical atrib normative event_type URIs. */
+export const EVENT_TYPE_SHORT_TO_URI: Record<EventTypeShortName, string> = {
+  tool_call: EVENT_TYPE_TOOL_CALL_URI,
+  transaction: EVENT_TYPE_TRANSACTION_URI,
+  observation: EVENT_TYPE_OBSERVATION_URI,
+  directory_anchor: EVENT_TYPE_DIRECTORY_ANCHOR_URI,
+  annotation: EVENT_TYPE_ANNOTATION_URI,
+  revision: EVENT_TYPE_REVISION_URI,
+}
+
 /** atrib normative event_type URI set (spec 1.2.4). */
 export const NORMATIVE_EVENT_TYPE_URIS = new Set([
   EVENT_TYPE_TOOL_CALL_URI,
@@ -184,6 +206,16 @@ export const NORMATIVE_EVENT_TYPE_URIS = new Set([
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_REVISION_URI,
 ] as const)
+
+/**
+ * Normalize an atrib normative short alias to its canonical URI form.
+ *
+ * Unknown values are returned unchanged so callers can still pass extension
+ * URIs through the spec-level `isValidEventTypeUri` validator.
+ */
+export function normalizeEventType(value: string): string {
+  return (EVENT_TYPE_SHORT_TO_URI as Record<string, string>)[value] ?? value
+}
 
 /**
  * Validate an event_type URI per spec 1.4.5.

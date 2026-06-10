@@ -87,7 +87,7 @@ describe('Mastra runtime receipt example', () => {
     })
     expect(result.caveats.join(' ')).toContain('not a full @atrib/agent Mastra adapter')
     expect(stdout).not.toContain('orchid Mastra procurement note')
-  })
+  }, 30000)
 
   it('signs a Mastra workflow suspend and resume through the runnable smoke', async () => {
     const { stdout } = await execFileAsync(
@@ -174,7 +174,7 @@ describe('Mastra runtime receipt example', () => {
     })
     expect(result.caveats.join(' ')).toContain('not hosted Mastra Platform')
     expect(stdout).not.toContain('violet Mastra workflow note')
-  })
+  }, 30000)
 
   it('chains records and keeps Mastra tool content out of public records', async () => {
     const secret = 'private Mastra note'

@@ -23,6 +23,8 @@ import type { WrapConfig } from './config.js'
 import { resolveKey, type ResolvedKey } from './keys.js'
 import { loadAutoChainSeed, persistRecord } from './mirror.js'
 
+const RECORD_REFERENCE_LOCAL_LOOKUP_TIMEOUT_MS = 500
+
 export type LogFn = (
   level: 'info' | 'warn' | 'error',
   msg: string,
@@ -137,6 +139,7 @@ export function buildRecordReferenceResolver(
     const resolution = await defaultRecordReferenceResolver(
       candidate.recordHash,
       config.logEndpoint,
+      { localLookupTimeoutMs: RECORD_REFERENCE_LOCAL_LOOKUP_TIMEOUT_MS },
     )
     if (resolution === 'found') return true
 

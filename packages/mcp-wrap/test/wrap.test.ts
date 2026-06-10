@@ -8,8 +8,14 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, it, expect, vi } from 'vitest'
-import { canonicalRecord, hexEncode, sha256, type AtribRecord } from '@atrib/mcp'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+import {
+  canonicalRecord,
+  clearRecordReferenceResolverCacheForTests,
+  hexEncode,
+  sha256,
+  type AtribRecord,
+} from '@atrib/mcp'
 import {
   buildInformedBy,
   buildPreCallTransform,
@@ -42,6 +48,34 @@ const VALID_RECORD: AtribRecord = {
   timestamp: 1000,
   signature: 'A'.repeat(86),
 }
+
+let isolatedRecordsDir: string
+let priorRecordsDir: string | undefined
+let priorMirrorFile: string | undefined
+let priorAutochainSource: string | undefined
+
+beforeEach(() => {
+  isolatedRecordsDir = mkdtempSync(join(tmpdir(), 'atrib-wrap-records-dir-'))
+  priorRecordsDir = process.env['ATRIB_RECORDS_DIR']
+  priorMirrorFile = process.env['ATRIB_MIRROR_FILE']
+  priorAutochainSource = process.env['ATRIB_AUTOCHAIN_SOURCE']
+  process.env['ATRIB_RECORDS_DIR'] = isolatedRecordsDir
+  delete process.env['ATRIB_MIRROR_FILE']
+  delete process.env['ATRIB_AUTOCHAIN_SOURCE']
+  clearRecordReferenceResolverCacheForTests()
+})
+
+afterEach(() => {
+  if (priorRecordsDir === undefined) delete process.env['ATRIB_RECORDS_DIR']
+  else process.env['ATRIB_RECORDS_DIR'] = priorRecordsDir
+  if (priorMirrorFile === undefined) delete process.env['ATRIB_MIRROR_FILE']
+  else process.env['ATRIB_MIRROR_FILE'] = priorMirrorFile
+  if (priorAutochainSource === undefined) delete process.env['ATRIB_AUTOCHAIN_SOURCE']
+  else process.env['ATRIB_AUTOCHAIN_SOURCE'] = priorAutochainSource
+  clearRecordReferenceResolverCacheForTests()
+  rmSync(isolatedRecordsDir, { recursive: true, force: true })
+  vi.restoreAllMocks()
+})
 
 describe('buildPreCallTransform', () => {
   it('returns undefined when no tools have injectReceiptId set', () => {
@@ -251,7 +285,6 @@ describe('buildRecordReferenceResolver', () => {
       )
     } finally {
       rmSync(dir, { recursive: true, force: true })
-      vi.restoreAllMocks()
     }
   })
 })

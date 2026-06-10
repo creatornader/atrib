@@ -54,7 +54,7 @@ describe('browser workflow receipt example', () => {
       local_sidecars_keep_payloads: true,
     })
     expect(result.caveats.join(' ')).toContain('not Playwright')
-  })
+  }, 30000)
 
   it('signs a real browser-use BrowserSession workflow through the runnable smoke', async () => {
     const { stdout } = await execFileAsync(

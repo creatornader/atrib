@@ -227,6 +227,35 @@ describe('MCP protocol surface', () => {
     }
   })
 
+  it('accepts observation event_type filtering over the MCP schema', async () => {
+    const toolCall = await makeSignedEvent(1700000000000, EVENT_TYPE_TOOL_CALL_URI)
+    const observation = await makeSignedEvent(1700000001000, EVENT_TYPE_OBSERVATION_URI)
+    writeFileSync(recordFile, [toolCall, observation].map((r) => JSON.stringify(r)).join('\n'))
+
+    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_my_attribution_history',
+          arguments: { compact: true, event_type: 'observation' },
+        },
+        3,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        total: number
+        records: Array<{ event_type?: string }>
+      }
+      expect(payload.total).toBe(1)
+      expect(payload.records[0]?.event_type).toBe(EVENT_TYPE_OBSERVATION_URI)
+    } finally {
+      client.close()
+    }
+  })
+
   it('rejects unknown tool names with a JSON-RPC error', async () => {
     const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
     try {
@@ -337,7 +366,7 @@ describe('MCP protocol surface', () => {
       expect(entry.timestamp).toBe(1700000000000)
       // TOC drops the heavy AtribRecord fields.
       expect(entry.event_type).toBeUndefined()
-      // toc is no longer stub-accepted; layer_1_warnings is not surfaced.
+      // All Layer 1 filters are enforced; layer_1_warnings is not surfaced.
       expect(payload.layer_1_warnings).toBeUndefined()
     } finally {
       client.close()

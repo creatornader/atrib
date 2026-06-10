@@ -4,7 +4,19 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as ed from '@noble/ed25519'
-import { canonicalRecord, sha256, hexEncode, verifyRecord, type AtribRecord } from '@atrib/mcp'
+import {
+  EVENT_TYPE_ANNOTATION_URI,
+  EVENT_TYPE_DIRECTORY_ANCHOR_URI,
+  EVENT_TYPE_OBSERVATION_URI,
+  EVENT_TYPE_REVISION_URI,
+  EVENT_TYPE_TOOL_CALL_URI,
+  EVENT_TYPE_TRANSACTION_URI,
+  canonicalRecord,
+  sha256,
+  hexEncode,
+  verifyRecord,
+  type AtribRecord,
+} from '@atrib/mcp'
 import { createAtribEmitServer, __test_only__ as __index_test_only__ } from '../src/index.js'
 import { buildAndSignEmitRecord, __test_only__ } from '../src/sign.js'
 import { createSubmissionQueue } from '@atrib/mcp'
@@ -582,6 +594,81 @@ describe('D083 harness session-id discovery (consumer integration)', () => {
     expect(result.context_id).toMatch(/^[0-9a-f]{32}$/)
     expect(result.context_id).not.toBe('38af29c4fc3a4f888fec392501b8a0a9')
   })
+})
+
+describe('event_type shorthand aliases', () => {
+  const { handleEmit } = __index_test_only__
+  const targetHash = `sha256:${'a'.repeat(64)}`
+
+  it.each([
+    {
+      alias: 'tool_call',
+      expected: EVENT_TYPE_TOOL_CALL_URI,
+      content: { what: 'tool-call alias normalized' },
+    },
+    {
+      alias: 'transaction',
+      expected: EVENT_TYPE_TRANSACTION_URI,
+      content: { what: 'transaction alias normalized' },
+    },
+    {
+      alias: 'observation',
+      expected: EVENT_TYPE_OBSERVATION_URI,
+      content: { what: 'observation alias normalized' },
+    },
+    {
+      alias: 'directory_anchor',
+      expected: EVENT_TYPE_DIRECTORY_ANCHOR_URI,
+      content: { what: 'directory-anchor alias normalized' },
+    },
+    {
+      alias: 'annotation',
+      expected: EVENT_TYPE_ANNOTATION_URI,
+      content: { summary: 'annotation alias normalized', importance: 'high' },
+      extra: { annotates: targetHash },
+    },
+    {
+      alias: 'revision',
+      expected: EVENT_TYPE_REVISION_URI,
+      content: {
+        prior_position: 'event aliases were caller burden',
+        new_position: 'event aliases normalize at the boundary',
+        reason: 'agent-facing tools accept natural shorthand',
+      },
+      extra: { revises: targetHash },
+    },
+  ])(
+    'normalizes $alias shorthand before signing and returns a real record_hash',
+    async ({ alias, expected, content, extra }) => {
+      const seed = await freshKey()
+      const submitted: AtribRecord[] = []
+      const queue = {
+        submit: (record: AtribRecord) => {
+          submitted.push(record)
+        },
+        flush: async () => {},
+        getProof: async () => null,
+      } as unknown as ReturnType<typeof createSubmissionQueue>
+
+      const result = await handleEmit({
+        input: {
+          event_type: alias,
+          content,
+          context_id: 'd'.repeat(32),
+          ...extra,
+        },
+        key: { privateKey: seed, source: 'env' },
+        queue,
+      })
+
+      expect(result.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(submitted.length).toBe(1)
+      const record = submitted[0]!
+      expect(record.event_type).toBe(expected)
+      expect(result.record_hash).toBe(`sha256:${hexEncode(sha256(canonicalRecord(record)))}`)
+      expect(await verifyRecord(record)).toBe(true)
+    },
+  )
 })
 
 describe('producer sidecar routing (substrate-health by-producer aggregation)', () => {

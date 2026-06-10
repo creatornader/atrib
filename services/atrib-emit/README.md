@@ -19,6 +19,9 @@ mcp__atrib-emit__emit({
   // Required
   event_type: string,           // URI per spec §1.2.4. Common normative values:
                                 // 'https://atrib.dev/v1/types/observation', '...annotation', '...revision'.
+                                // Shorthand aliases are accepted for the atrib normative types:
+                                // 'observation', 'annotation', 'revision', 'tool_call',
+                                // 'transaction', and 'directory_anchor'.
                                 // Extension URIs in any namespace are also valid.
   content: Record<string, unknown>,  // Semantic content of the event. Stored in the local mirror.
                                      // By default, args_hash commits to JCS(content).
