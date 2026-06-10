@@ -23,6 +23,11 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { parseConfig } from './config.js'
+import {
+  installWrapperLifecycle,
+  type WrapperShutdownDetails,
+  type WrapperShutdownReason,
+} from './lifecycle.js'
 import { ensureSecureDir, secureAppend } from './paths.js'
 import { wrap } from './wrap.js'
 
@@ -57,9 +62,14 @@ async function main(): Promise<void> {
   // File logger. Wrapper stderr is invisible in most MCP hosts (Claude Code,
   // Cursor discard it). A file log is the only operator-visible debug surface.
   const log = (level: 'info' | 'warn' | 'error', msg: string, extra?: Record<string, unknown>) => {
-    const logFile = config.logFile ?? join(homedir(), '.atrib', 'logs',
-      config.name === config.agent ? `${config.name}.log` : `${config.name}-${config.agent}.log`,
-    )
+    const logFile =
+      config.logFile ??
+      join(
+        homedir(),
+        '.atrib',
+        'logs',
+        config.name === config.agent ? `${config.name}.log` : `${config.name}-${config.agent}.log`,
+      )
     if (!logFile) return
     try {
       ensureSecureDir(dirname(logFile))
@@ -102,13 +112,19 @@ async function main(): Promise<void> {
   await result.proxy.server.connect(transport)
   log('info', 'wrapper ready, awaiting host stdio')
 
-  const shutdown = async () => {
-    log('info', 'wrapper shutting down')
+  const shutdown = async (reason: WrapperShutdownReason, details: WrapperShutdownDetails = {}) => {
+    log('info', 'wrapper shutting down', { reason, ...details })
+    try {
+      await transport.close()
+    } catch (err) {
+      log('warn', 'host transport close failed during shutdown', {
+        reason,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
     await result.proxy.close()
-    process.exit(0)
   }
-  process.on('SIGINT', shutdown)
-  process.on('SIGTERM', shutdown)
+  installWrapperLifecycle({ shutdown, log })
 }
 
 main().catch((err) => {

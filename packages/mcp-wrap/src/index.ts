@@ -16,3 +16,11 @@ export { resolveKey } from './keys.js'
 export type { ResolvedKey } from './keys.js'
 export { loadAutoChainSeed, persistRecord } from './mirror.js'
 export { ensureSecureDir, secureAppend } from './paths.js'
+export { installWrapperLifecycle } from './lifecycle.js'
+export type {
+  InstalledWrapperLifecycle,
+  WrapperLifecycleLog,
+  WrapperLifecycleOptions,
+  WrapperShutdownDetails,
+  WrapperShutdownReason,
+} from './lifecycle.js'
