@@ -14,6 +14,7 @@ import { hexEncode, sha256 } from './hash.js'
 import type { UnsignedAtribRecord } from './types.js'
 
 export const LOCAL_SUBSTRATE_REQUEST_SCHEMA = 'atrib.local-substrate-coordinator.request.v0'
+export const LOCAL_SUBSTRATE_RESPONSE_SCHEMA = 'atrib.local-substrate-coordinator.response.v0'
 export const LOCAL_SUBSTRATE_HEALTH_SCHEMA = 'atrib.local-substrate-coordinator.health.v0'
 
 export const LOCAL_SUBSTRATE_HARNESS_CLASSES = [
@@ -30,6 +31,10 @@ export const LOCAL_SUBSTRATE_OPERATIONS = [
 ] as const
 
 export type LocalSubstrateOperation = (typeof LOCAL_SUBSTRATE_OPERATIONS)[number]
+
+export const LOCAL_SUBSTRATE_RESPONSE_STATUSES = ['accepted', 'rejected'] as const
+
+export type LocalSubstrateResponseStatus = (typeof LOCAL_SUBSTRATE_RESPONSE_STATUSES)[number]
 
 export const LOCAL_SUBSTRATE_CREATOR_KEY_POLICIES = [
   'implicit-single-creator',
@@ -103,6 +108,17 @@ export interface LocalSubstrateHealthReport {
   }
 }
 
+export interface LocalSubstrateCoordinatorResponse {
+  schema: typeof LOCAL_SUBSTRATE_RESPONSE_SCHEMA
+  operation: LocalSubstrateOperation
+  status: LocalSubstrateResponseStatus
+  record_hash?: string
+  receipt_id?: string
+  rejection_reason?: string
+  warnings?: string[]
+  health_report?: LocalSubstrateHealthReport
+}
+
 export interface LocalSubstrateValidationIssue {
   path: string
   message: string
@@ -116,6 +132,96 @@ export interface LocalSubstrateValidationResult {
 export interface ValidateLocalSubstrateRequestOptions {
   expectedHarnessClass?: LocalSubstrateHarnessClass
   directRecordBody?: UnsignedAtribRecord
+}
+
+export interface ValidateLocalSubstrateResponseOptions {
+  request?: LocalSubstrateCoordinatorRequest
+}
+
+export interface LocalSubstrateTransportOptions {
+  timeoutMs: number
+  signal?: AbortSignal
+}
+
+export type LocalSubstrateCoordinatorTransport = (
+  request: LocalSubstrateCoordinatorRequest,
+  options: LocalSubstrateTransportOptions,
+) => Promise<unknown>
+
+export interface TryLocalSubstrateCoordinatorOptions extends ValidateLocalSubstrateRequestOptions {
+  transport: LocalSubstrateCoordinatorTransport
+  timeoutMs?: number
+  now?: () => number
+}
+
+export type TryLocalSubstrateCoordinatorResult =
+  | {
+      ok: true
+      status: 'accepted'
+      response: LocalSubstrateCoordinatorResponse
+      elapsed_ms: number
+    }
+  | {
+      ok: false
+      status: 'invalid_request'
+      issues: LocalSubstrateValidationIssue[]
+      elapsed_ms: number
+    }
+  | {
+      ok: false
+      status: 'invalid_response'
+      issues: LocalSubstrateValidationIssue[]
+      raw_response: unknown
+      elapsed_ms: number
+    }
+  | {
+      ok: false
+      status: 'rejected'
+      response: LocalSubstrateCoordinatorResponse
+      reason?: string
+      elapsed_ms: number
+    }
+  | {
+      ok: false
+      status: 'unavailable'
+      reason: string
+      elapsed_ms: number
+    }
+
+export interface CreateHttpLocalSubstrateTransportOptions {
+  fetch?: typeof fetch
+  headers?: Record<string, string>
+}
+
+export interface BuildLocalSubstrateHealthReportInput {
+  coordinator: {
+    pid: number
+    version: string
+    transport: string
+    creatorKeyScope?: string
+  }
+  queues?: {
+    logSubmissionDepth?: number
+    archiveSubmissionDepth?: number
+  }
+  wal?: {
+    pending?: number
+    joined?: number
+    orphanReceipts?: number
+  }
+  activeContextIds?: readonly string[]
+  activeWrapperPids?: readonly number[]
+  staleChildPids?: readonly number[]
+  activeWrappers?: number
+  staleChildren?: number
+}
+
+export interface LocalSubstrateHealthProbeResult {
+  ok: boolean
+  status: 'healthy' | 'degraded' | 'invalid'
+  report: LocalSubstrateHealthReport
+  issues: LocalSubstrateValidationIssue[]
+  warnings: string[]
 }
 
 export interface LocalSubstrateFixture {
@@ -143,6 +249,7 @@ const CONTEXT_ID_RE = /^[0-9a-f]{32}$/
 
 const harnessClasses = new Set<string>(LOCAL_SUBSTRATE_HARNESS_CLASSES)
 const operations = new Set<string>(LOCAL_SUBSTRATE_OPERATIONS)
+const responseStatuses = new Set<string>(LOCAL_SUBSTRATE_RESPONSE_STATUSES)
 const creatorKeyPolicies = new Set<string>(LOCAL_SUBSTRATE_CREATOR_KEY_POLICIES)
 
 const encoder = new TextEncoder()
@@ -458,6 +565,12 @@ export function validateLocalSubstrateHealthReport(
     isNonEmptyString,
     'must be a non-empty string',
   )
+  if (
+    coordinator.creator_key_scope !== undefined &&
+    !isNonEmptyString(coordinator.creator_key_scope)
+  ) {
+    push(issues, 'coordinator.creator_key_scope', 'must be a non-empty string when present')
+  }
 
   const queues = isObject(report.queues) ? report.queues : {}
   if (!isObject(report.queues)) push(issues, 'queues', 'must be an object')
@@ -518,6 +631,263 @@ export function validateLocalSubstrateHealthReport(
   }
 
   return { ok: issues.length === 0, issues }
+}
+
+export function validateLocalSubstrateResponse(
+  response: unknown,
+  options: ValidateLocalSubstrateResponseOptions = {},
+): LocalSubstrateValidationResult {
+  const issues: LocalSubstrateValidationIssue[] = []
+
+  if (!isObject(response)) {
+    return {
+      ok: false,
+      issues: [{ path: '$', message: 'response must be an object' }],
+    }
+  }
+
+  if (response.schema !== LOCAL_SUBSTRATE_RESPONSE_SCHEMA) {
+    push(issues, 'schema', `must be ${LOCAL_SUBSTRATE_RESPONSE_SCHEMA}`)
+  }
+  if (typeof response.operation !== 'string' || !operations.has(response.operation)) {
+    push(issues, 'operation', `must be one of ${LOCAL_SUBSTRATE_OPERATIONS.join(', ')}`)
+  }
+  if (options.request !== undefined && response.operation !== options.request.operation) {
+    push(issues, 'operation', 'must match request.operation')
+  }
+  if (typeof response.status !== 'string' || !responseStatuses.has(response.status)) {
+    push(issues, 'status', `must be one of ${LOCAL_SUBSTRATE_RESPONSE_STATUSES.join(', ')}`)
+  }
+  if (
+    response.record_hash !== undefined &&
+    (typeof response.record_hash !== 'string' || !HASH_RE.test(response.record_hash))
+  ) {
+    push(issues, 'record_hash', 'must be sha256:<64-lowerhex> when present')
+  }
+  if (response.receipt_id !== undefined && !isNonEmptyString(response.receipt_id)) {
+    push(issues, 'receipt_id', 'must be a non-empty string when present')
+  }
+  if (response.rejection_reason !== undefined && !isNonEmptyString(response.rejection_reason)) {
+    push(issues, 'rejection_reason', 'must be a non-empty string when present')
+  }
+  if (
+    response.warnings !== undefined &&
+    (!Array.isArray(response.warnings) ||
+      response.warnings.some((warning) => !isNonEmptyString(warning)))
+  ) {
+    push(issues, 'warnings', 'must contain only non-empty strings')
+  }
+  if (response.status === 'rejected' && !isNonEmptyString(response.rejection_reason)) {
+    push(issues, 'rejection_reason', 'rejected responses must describe the reason')
+  }
+  if (response.status === 'accepted' && !isNonEmptyString(response.record_hash)) {
+    push(issues, 'record_hash', 'accepted responses must include the signed record hash')
+  }
+  if (
+    response.status === 'accepted' &&
+    response.operation === 'enqueue_record_and_join_receipt' &&
+    !isNonEmptyString(response.receipt_id)
+  ) {
+    push(issues, 'receipt_id', 'accepted WAL join responses must include a receipt id')
+  }
+  if (response.health_report !== undefined) {
+    const healthResult = validateLocalSubstrateHealthReport(response.health_report)
+    for (const issue of healthResult.issues) {
+      push(issues, `health_report.${issue.path}`, issue.message)
+    }
+  }
+
+  return { ok: issues.length === 0, issues }
+}
+
+function elapsedMs(startedAt: number, now: () => number): number {
+  return Math.max(0, now() - startedAt)
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+async function callWithTimeout(
+  transport: LocalSubstrateCoordinatorTransport,
+  request: LocalSubstrateCoordinatorRequest,
+  timeoutMs: number,
+): Promise<unknown> {
+  const controller = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | null = null
+  try {
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        controller.abort()
+        reject(new Error(`local substrate coordinator timed out after ${timeoutMs}ms`))
+      }, timeoutMs)
+      if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
+        ;(timer as { unref: () => void }).unref()
+      }
+    })
+    return await Promise.race([
+      transport(request, { timeoutMs, signal: controller.signal }),
+      timeout,
+    ])
+  } finally {
+    if (timer !== null) clearTimeout(timer)
+  }
+}
+
+export async function tryLocalSubstrateCoordinator(
+  request: LocalSubstrateCoordinatorRequest,
+  options: TryLocalSubstrateCoordinatorOptions,
+): Promise<TryLocalSubstrateCoordinatorResult> {
+  const now = options.now ?? Date.now
+  const startedAt = now()
+  const requestValidation = validateLocalSubstrateRequest(request, {
+    ...(options.expectedHarnessClass !== undefined
+      ? { expectedHarnessClass: options.expectedHarnessClass }
+      : {}),
+    ...(options.directRecordBody !== undefined
+      ? { directRecordBody: options.directRecordBody }
+      : {}),
+  })
+  if (!requestValidation.ok) {
+    return {
+      ok: false,
+      status: 'invalid_request',
+      issues: requestValidation.issues,
+      elapsed_ms: elapsedMs(startedAt, now),
+    }
+  }
+
+  const timeoutMs = Math.max(1, options.timeoutMs ?? 500)
+  let rawResponse: unknown
+  try {
+    rawResponse = await callWithTimeout(options.transport, request, timeoutMs)
+  } catch (error) {
+    return {
+      ok: false,
+      status: 'unavailable',
+      reason: errorMessage(error),
+      elapsed_ms: elapsedMs(startedAt, now),
+    }
+  }
+
+  const responseValidation = validateLocalSubstrateResponse(rawResponse, { request })
+  if (!responseValidation.ok) {
+    return {
+      ok: false,
+      status: 'invalid_response',
+      issues: responseValidation.issues,
+      raw_response: rawResponse,
+      elapsed_ms: elapsedMs(startedAt, now),
+    }
+  }
+
+  const response = rawResponse as LocalSubstrateCoordinatorResponse
+  if (response.status === 'accepted') {
+    return {
+      ok: true,
+      status: 'accepted',
+      response,
+      elapsed_ms: elapsedMs(startedAt, now),
+    }
+  }
+
+  return {
+    ok: false,
+    status: 'rejected',
+    response,
+    ...(response.rejection_reason !== undefined ? { reason: response.rejection_reason } : {}),
+    elapsed_ms: elapsedMs(startedAt, now),
+  }
+}
+
+export function createHttpLocalSubstrateTransport(
+  endpoint: string,
+  options: CreateHttpLocalSubstrateTransportOptions = {},
+): LocalSubstrateCoordinatorTransport {
+  return async (request, transportOptions) => {
+    const fetchImpl = options.fetch ?? globalThis.fetch
+    if (typeof fetchImpl !== 'function') {
+      throw new Error('fetch is unavailable for local substrate HTTP transport')
+    }
+    const response = await fetchImpl(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(options.headers ?? {}),
+      },
+      body: JSON.stringify(request),
+      ...(transportOptions.signal !== undefined ? { signal: transportOptions.signal } : {}),
+    })
+    if (!response.ok) {
+      throw new Error(`local substrate coordinator returned HTTP ${response.status}`)
+    }
+    return response.json()
+  }
+}
+
+export function buildLocalSubstrateHealthReport(
+  input: BuildLocalSubstrateHealthReportInput,
+): LocalSubstrateHealthReport {
+  const activeContexts = [...new Set(input.activeContextIds ?? [])].sort()
+  const activeWrappers = input.activeWrappers ?? input.activeWrapperPids?.length
+  const staleChildren = input.staleChildren ?? input.staleChildPids?.length ?? 0
+
+  return {
+    schema: LOCAL_SUBSTRATE_HEALTH_SCHEMA,
+    coordinator: {
+      pid: input.coordinator.pid,
+      version: input.coordinator.version,
+      transport: input.coordinator.transport,
+      ...(input.coordinator.creatorKeyScope !== undefined
+        ? { creator_key_scope: input.coordinator.creatorKeyScope }
+        : {}),
+    },
+    queues: {
+      log_submission_depth: input.queues?.logSubmissionDepth ?? 0,
+      ...(input.queues?.archiveSubmissionDepth !== undefined
+        ? { archive_submission_depth: input.queues.archiveSubmissionDepth }
+        : {}),
+    },
+    wal: {
+      pending: input.wal?.pending ?? 0,
+      ...(input.wal?.joined !== undefined ? { joined: input.wal.joined } : {}),
+      orphan_receipts: input.wal?.orphanReceipts ?? 0,
+    },
+    contexts: {
+      active: activeContexts,
+    },
+    processes: {
+      ...(activeWrappers !== undefined ? { active_wrappers: activeWrappers } : {}),
+      stale_children: staleChildren,
+    },
+  }
+}
+
+export function probeLocalSubstrateHealth(
+  input: BuildLocalSubstrateHealthReportInput,
+): LocalSubstrateHealthProbeResult {
+  const report = buildLocalSubstrateHealthReport(input)
+  const validation = validateLocalSubstrateHealthReport(report)
+  const warnings: string[] = []
+
+  if (validation.ok) {
+    if (report.processes.stale_children > 0) {
+      warnings.push(`stale child process count is ${report.processes.stale_children}`)
+    }
+    if (report.wal.orphan_receipts > 0) {
+      warnings.push(`orphan receipt count is ${report.wal.orphan_receipts}`)
+    }
+  }
+
+  const status = !validation.ok ? 'invalid' : warnings.length > 0 ? 'degraded' : 'healthy'
+
+  return {
+    ok: validation.ok && warnings.length === 0,
+    status,
+    report,
+    issues: validation.issues,
+    warnings,
+  }
 }
 
 export function validateLocalSubstrateFixture(

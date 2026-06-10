@@ -2,12 +2,19 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
+  buildLocalSubstrateHealthReport,
+  createHttpLocalSubstrateTransport,
   hashLocalSubstrateRecordBody,
   localSubstrateRecordBodiesEqual,
+  probeLocalSubstrateHealth,
+  tryLocalSubstrateCoordinator,
   validateLocalSubstrateFixture,
   validateLocalSubstrateHealthReport,
   validateLocalSubstrateRequest,
+  validateLocalSubstrateResponse,
   type LocalSubstrateCoordinatorRequest,
+  type LocalSubstrateCoordinatorResponse,
   type LocalSubstrateFixture,
   type LocalSubstrateHarnessClass,
 } from '../src/index.js'
@@ -168,5 +175,211 @@ describe('local substrate coordinator contract', () => {
       path: 'processes.stale_children',
       message: 'must be a non-negative integer',
     })
+  })
+
+  it('validates coordinator responses against the request operation', () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
+    const valid: LocalSubstrateCoordinatorResponse = {
+      schema: LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
+      operation: fixture.input.coordinator_request.operation,
+      status: 'accepted',
+      record_hash: `sha256:${'1'.repeat(64)}`,
+      warnings: ['queued for archive submission'],
+      health_report: fixture.input.health_report,
+    }
+    const mismatch = {
+      ...valid,
+      operation: 'enqueue_record_and_join_receipt',
+    }
+
+    expect(
+      validateLocalSubstrateResponse(valid, { request: fixture.input.coordinator_request }).ok,
+    ).toBe(true)
+    expect(
+      validateLocalSubstrateResponse(mismatch, { request: fixture.input.coordinator_request })
+        .issues,
+    ).toContainEqual({
+      path: 'operation',
+      message: 'must match request.operation',
+    })
+    expect(
+      validateLocalSubstrateResponse({
+        schema: LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
+        operation: fixture.input.coordinator_request.operation,
+        status: 'accepted',
+      }).issues,
+    ).toContainEqual({
+      path: 'record_hash',
+      message: 'accepted responses must include the signed record hash',
+    })
+  })
+
+  it('requires WAL join responses to return receipt ids', () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/watcher-wal-annotation.json')
+    const missingReceipt: LocalSubstrateCoordinatorResponse = {
+      schema: LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
+      operation: fixture.input.coordinator_request.operation,
+      status: 'accepted',
+      record_hash: `sha256:${'4'.repeat(64)}`,
+    }
+
+    expect(
+      validateLocalSubstrateResponse(missingReceipt, {
+        request: fixture.input.coordinator_request,
+      }).issues,
+    ).toContainEqual({
+      path: 'receipt_id',
+      message: 'accepted WAL join responses must include a receipt id',
+    })
+  })
+
+  it('does not call coordinator transport for invalid requests', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
+    const invalid = {
+      ...fixture.input.coordinator_request,
+      schema: 'wrong-schema',
+    } as unknown as LocalSubstrateCoordinatorRequest
+    let called = false
+
+    const result = await tryLocalSubstrateCoordinator(invalid, {
+      expectedHarnessClass: fixture.harness_class,
+      directRecordBody: fixture.input.direct_record_body,
+      transport: async () => {
+        called = true
+        return {}
+      },
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.status).toBe('invalid_request')
+    expect(called).toBe(false)
+  })
+
+  it('classifies accepted, rejected, invalid, and unavailable coordinator attempts', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
+    const request = fixture.input.coordinator_request
+    const accepted = await tryLocalSubstrateCoordinator(request, {
+      timeoutMs: 100,
+      transport: async (_request, options) => {
+        expect(options.timeoutMs).toBe(100)
+        expect(options.signal).toBeDefined()
+        return {
+          schema: LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
+          operation: request.operation,
+          status: 'accepted',
+          record_hash: `sha256:${'2'.repeat(64)}`,
+        }
+      },
+    })
+    const rejected = await tryLocalSubstrateCoordinator(request, {
+      transport: async () => ({
+        schema: LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
+        operation: request.operation,
+        status: 'rejected',
+        rejection_reason: 'coordinator disabled by operator policy',
+      }),
+    })
+    const invalid = await tryLocalSubstrateCoordinator(request, {
+      transport: async () => ({
+        schema: LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
+        operation: request.operation,
+        status: 'accepted',
+        record_hash: 'not-a-record-hash',
+      }),
+    })
+    const unavailable = await tryLocalSubstrateCoordinator(request, {
+      timeoutMs: 5,
+      transport: async () => {
+        await new Promise(() => undefined)
+      },
+    })
+
+    expect(accepted.ok).toBe(true)
+    expect(accepted.status).toBe('accepted')
+    expect(rejected.ok).toBe(false)
+    expect(rejected.status).toBe('rejected')
+    expect(invalid.ok).toBe(false)
+    expect(invalid.status).toBe('invalid_response')
+    expect(unavailable.ok).toBe(false)
+    expect(unavailable.status).toBe('unavailable')
+    expect(unavailable.reason).toMatch(/timed out/)
+  })
+
+  it('posts coordinator requests over the explicit HTTP transport', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
+    const response: LocalSubstrateCoordinatorResponse = {
+      schema: LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
+      operation: fixture.input.coordinator_request.operation,
+      status: 'accepted',
+      record_hash: `sha256:${'3'.repeat(64)}`,
+    }
+    const seen: Array<{ url: string; init: RequestInit }> = []
+    const fetchImpl: typeof fetch = async (input, init) => {
+      seen.push({ url: String(input), init: init ?? {} })
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+    const transport = createHttpLocalSubstrateTransport('http://127.0.0.1:8787/atrib', {
+      fetch: fetchImpl,
+      headers: { 'x-test': 'yes' },
+    })
+
+    const raw = await transport(fixture.input.coordinator_request, { timeoutMs: 50 })
+
+    expect(raw).toEqual(response)
+    expect(seen).toHaveLength(1)
+    expect(seen[0]!.url).toBe('http://127.0.0.1:8787/atrib')
+    expect(seen[0]!.init.method).toBe('POST')
+    expect(seen[0]!.init.headers).toMatchObject({
+      'content-type': 'application/json',
+      'x-test': 'yes',
+    })
+    expect(JSON.parse(String(seen[0]!.init.body))).toEqual(fixture.input.coordinator_request)
+  })
+
+  it('builds and probes read-only health reports for rollout gating', () => {
+    const report = buildLocalSubstrateHealthReport({
+      coordinator: {
+        pid: 101,
+        version: '0.0.0-test',
+        transport: 'unix:/tmp/atrib-substrate.sock',
+        creatorKeyScope: 'single',
+      },
+      queues: { logSubmissionDepth: 2, archiveSubmissionDepth: 1 },
+      wal: { pending: 3, joined: 10, orphanReceipts: 1 },
+      activeContextIds: [
+        'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      ],
+      activeWrapperPids: [201, 202],
+      staleChildPids: [301],
+    })
+    const probe = probeLocalSubstrateHealth({
+      coordinator: {
+        pid: 101,
+        version: '0.0.0-test',
+        transport: 'unix:/tmp/atrib-substrate.sock',
+        creatorKeyScope: 'single',
+      },
+      queues: { logSubmissionDepth: 2, archiveSubmissionDepth: 1 },
+      wal: { pending: 3, joined: 10, orphanReceipts: 1 },
+      activeContextIds: report.contexts.active,
+      activeWrappers: report.processes.active_wrappers,
+      staleChildren: report.processes.stale_children,
+    })
+
+    expect(report.contexts.active).toEqual([
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    ])
+    expect(report.processes.active_wrappers).toBe(2)
+    expect(report.processes.stale_children).toBe(1)
+    expect(validateLocalSubstrateHealthReport(report).ok).toBe(true)
+    expect(probe.ok).toBe(false)
+    expect(probe.status).toBe('degraded')
+    expect(probe.warnings).toEqual(['stale child process count is 1', 'orphan receipt count is 1'])
   })
 })
