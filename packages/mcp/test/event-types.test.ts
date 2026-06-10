@@ -34,4 +34,18 @@ describe('event_type aliases', () => {
     const uri = 'https://example.com/v1/types/custom'
     expect(normalizeEventType(uri)).toBe(uri)
   })
+
+  it('normalizes common atrib.dev typo URI forms for normative leaves', () => {
+    for (const path of ['/event/', '/events/', '/v1/event/', '/v1/events/']) {
+      expect(normalizeEventType(`https://atrib.dev${path}observation`)).toBe(
+        EVENT_TYPE_OBSERVATION_URI,
+      )
+      expect(normalizeEventType(`https://atrib.dev${path}annotation`)).toBe(
+        EVENT_TYPE_ANNOTATION_URI,
+      )
+      expect(normalizeEventType(`https://atrib.dev${path}revision`)).toBe(
+        EVENT_TYPE_REVISION_URI,
+      )
+    }
+  })
 })

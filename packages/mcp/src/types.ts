@@ -197,6 +197,26 @@ export const EVENT_TYPE_SHORT_TO_URI: Record<EventTypeShortName, string> = {
   revision: EVENT_TYPE_REVISION_URI,
 }
 
+/**
+ * Agent-facing compatibility aliases for atrib's own normative event types.
+ *
+ * The spec URI is `https://atrib.dev/v1/types/{leaf}`. In live dogfood, agents
+ * have also produced typo variants such as `https://atrib.dev/event/observation`
+ * and `https://atrib.dev/events/observation`. Those are syntactically valid
+ * extension URIs, but treating them as extensions makes observation records
+ * disappear from normal event_type filters. Normalize only atrib.dev typo paths
+ * whose final leaf is already in the normative vocabulary.
+ */
+export const EVENT_TYPE_ALIAS_TO_URI: Record<string, string> = {
+  ...EVENT_TYPE_SHORT_TO_URI,
+}
+
+for (const name of EVENT_TYPE_SHORT_NAMES) {
+  for (const path of ['/event/', '/events/', '/v1/event/', '/v1/events/']) {
+    EVENT_TYPE_ALIAS_TO_URI[`https://atrib.dev${path}${name}`] = EVENT_TYPE_SHORT_TO_URI[name]
+  }
+}
+
 /** atrib normative event_type URI set (spec 1.2.4). */
 export const NORMATIVE_EVENT_TYPE_URIS = new Set([
   EVENT_TYPE_TOOL_CALL_URI,
@@ -214,7 +234,7 @@ export const NORMATIVE_EVENT_TYPE_URIS = new Set([
  * URIs through the spec-level `isValidEventTypeUri` validator.
  */
 export function normalizeEventType(value: string): string {
-  return (EVENT_TYPE_SHORT_TO_URI as Record<string, string>)[value] ?? value
+  return EVENT_TYPE_ALIAS_TO_URI[value] ?? value
 }
 
 /**
