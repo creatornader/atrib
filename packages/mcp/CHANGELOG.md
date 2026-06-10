@@ -1,5 +1,11 @@
 # @atrib/mcp
 
+## 0.17.2
+
+### Patch Changes
+
+- ed766a4: Normalize common `atrib.dev` typo event type URIs to canonical normative event types.
+
 ## 0.17.1
 
 ### Patch Changes
