@@ -45,10 +45,8 @@
  * the graph alongside the embedding store.
  */
 
-import { genesisChainRoot } from '@atrib/mcp'
-import type {
-  AtribRecord,
-} from '@atrib/mcp'
+import { genesisChainRoot, EVENT_TYPE_ANNOTATION_URI, EVENT_TYPE_REVISION_URI } from '@atrib/mcp'
+import type { AtribRecord } from '@atrib/mcp'
 import type { LoadedRecord } from './aggregations.js'
 
 export type EdgeType = 'CHAIN_PRECEDES' | 'INFORMED_BY' | 'ANNOTATES' | 'REVISES'
@@ -80,6 +78,19 @@ export type GraphEdge = {
  * anchor", which is symmetric); ANNOTATES and REVISES likewise.
  */
 export type LocalGraph = Map<string, GraphEdge[]>
+
+function isRecordRef(value: unknown): value is string {
+  return typeof value === 'string' && /^sha256:[0-9a-f]{64}$/.test(value)
+}
+
+function targetRef(lr: LoadedRecord, field: 'annotates' | 'revises'): string | undefined {
+  const topLevel = (lr.record as AtribRecord & { annotates?: unknown; revises?: unknown })[field]
+  if (isRecordRef(topLevel)) return topLevel
+  const c =
+    lr.content && typeof lr.content === 'object' ? (lr.content as Record<string, unknown>) : null
+  const legacy = c?.[field]
+  return isRecordRef(legacy) ? legacy : undefined
+}
 
 /**
  * Build the local Layer 1 graph from loaded records. Returns adjacency
@@ -145,23 +156,15 @@ export function buildLocalGraph(loaded: LoadedRecord[]): LocalGraph {
       }
     }
 
-    // ANNOTATES: annotation record -> target. content.annotates lives in
-    // _local.content on a D062 envelope; bare-record annotations have no
-    // body to read (the §8.1 posture); skip those.
-    if (lr.content && typeof lr.content === 'object') {
-      const c = lr.content as { annotates?: unknown; revises?: unknown }
-      if (
-        typeof c.annotates === 'string' &&
-        lr.record.event_type === 'https://atrib.dev/v1/types/annotation'
-      ) {
-        addUndirected(lr.record_hash, c.annotates, 'ANNOTATES')
-      }
-      if (
-        typeof c.revises === 'string' &&
-        lr.record.event_type === 'https://atrib.dev/v1/types/revision'
-      ) {
-        addUndirected(lr.record_hash, c.revises, 'REVISES')
-      }
+    // ANNOTATES / REVISES: the structural target is signed top-level per
+    // §1.2.7 / §1.2.9. Accept sidecar content as a legacy fallback only.
+    if (lr.record.event_type === EVENT_TYPE_ANNOTATION_URI) {
+      const target = targetRef(lr, 'annotates')
+      if (target) addUndirected(lr.record_hash, target, 'ANNOTATES')
+    }
+    if (lr.record.event_type === EVENT_TYPE_REVISION_URI) {
+      const target = targetRef(lr, 'revises')
+      if (target) addUndirected(lr.record_hash, target, 'REVISES')
     }
   }
   return graph

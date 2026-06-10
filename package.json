@@ -21,7 +21,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "doc-sync": "node scripts/check-doc-sync.mjs",
+    "doc-sync": "node scripts/check-doc-sync.mjs && node packages/integration/scripts/check-demo-record-surfaces.mjs",
     "typos": "typos .",
     "clean": "turbo clean",
     "version-packages": "changeset version",

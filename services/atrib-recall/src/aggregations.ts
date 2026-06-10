@@ -4,13 +4,12 @@
  * Layer 1 aggregation helpers for the recall semantic surface.
  *
  * Annotation records (D058, event_type = EVENT_TYPE_ANNOTATION_URI) carry
- * their importance + topic_tags + summary in `content.*`, with the target
- * record_hash in `content.annotates`. Per the §8.3 privacy posture the
- * public log carries only content_id (kind hash); the actual content body
- * lives in the local mirror's D062 envelope at `_local.content`. To compute
- * "what annotations does record X have?" the recall server must walk the
- * mirror, recover `_local.content` per envelope, and bin annotations by
- * their `content.annotates` target.
+ * their target record_hash in signed top-level `record.annotates`.
+ * Importance + topics + summary live in the D062 `_local.content` sidecar.
+ * Legacy mirrors may also carry `content.annotates`, so readers accept it
+ * as a fallback. To compute "what annotations does record X have?" the
+ * recall server walks the mirror, recovers `_local.content` per envelope,
+ * and bins annotations by the signed target.
  *
  * This module isolates that walk + bin step plus the record_hash helper
  * needed to key the result map. The existing `loadRecords` / `recall` paths
@@ -41,16 +40,15 @@ import { IMPORTANCE_NUMERIC } from './index.js'
  * A mirror record paired with its D062 sidecar content (when present) and
  * its content-addressable record_hash (computed at load time). The
  * record_hash form is `sha256:<64-hex>` per spec §2.3, matches what the
- * log entries commit to and what `informed_by` / `content.annotates` /
- * `content.revises` reference.
+ * log entries commit to and what `informed_by` / `annotates` / `revises`
+ * reference.
  *
  * `content` is the deserialized `_local.content` from a D062 envelope mirror
  * line, or a derived equivalent from known legacy sidecar fields such as
  * `_local.toolName`, `_local.args`, `_local.result`, `_local.input`, and
  * `_local.output`. Producers writing bare AtribRecord lines yield
- * `content: undefined` here; annotation aggregation simply skips those
- * records (the §8.1 posture: no body disclosed). Code that wants to read
- * annotation importance / topics / summary MUST handle the undefined case.
+ * `content: undefined` here. Code that wants to read annotation
+ * importance / topics / summary MUST handle the undefined case.
  */
 export type LoadedRecord = {
   record: AtribRecord
@@ -77,6 +75,31 @@ export function computeRecordHash(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
 }
 
+function isRecordRef(value: unknown): value is string {
+  return typeof value === 'string' && /^sha256:[0-9a-f]{64}$/.test(value)
+}
+
+function objectContent(content: unknown): Record<string, unknown> | null {
+  return content && typeof content === 'object' ? (content as Record<string, unknown>) : null
+}
+
+function targetRef(lr: LoadedRecord, field: 'annotates' | 'revises'): string | undefined {
+  const topLevel = (lr.record as AtribRecord & { annotates?: unknown; revises?: unknown })[field]
+  if (isRecordRef(topLevel)) return topLevel
+  const c = objectContent(lr.content)
+  const legacy = c?.[field]
+  return isRecordRef(legacy) ? legacy : undefined
+}
+
+function contentStrings(
+  content: Record<string, unknown>,
+  primary: 'topics' | 'topic_tags',
+): string[] {
+  const values = content[primary]
+  if (!Array.isArray(values)) return []
+  return values.filter((v): v is string => typeof v === 'string' && v.length > 0)
+}
+
 /**
  * Pull the inner AtribRecord and recall-readable local content out of one
  * parsed mirror line. Returns null when the line is neither shape or is
@@ -91,9 +114,10 @@ function extractLoaded(
 ): { record: AtribRecord; content?: unknown; producer?: string } | null {
   if (!parsed || typeof parsed !== 'object') return null
   const obj = parsed as Record<string, unknown>
-  const envelopeRecord = (typeof obj.record === 'object' && obj.record !== null)
-    ? (obj.record as Record<string, unknown>)
-    : null
+  const envelopeRecord =
+    typeof obj.record === 'object' && obj.record !== null
+      ? (obj.record as Record<string, unknown>)
+      : null
   const candidate = envelopeRecord ?? obj
   if (
     typeof candidate.spec_version !== 'string' ||
@@ -101,6 +125,8 @@ function extractLoaded(
     typeof candidate.context_id !== 'string' ||
     typeof candidate.creator_key !== 'string' ||
     typeof candidate.chain_root !== 'string' ||
+    typeof candidate.timestamp !== 'number' ||
+    !Number.isFinite(candidate.timestamp) ||
     typeof candidate.signature !== 'string'
   ) {
     return null
@@ -160,9 +186,7 @@ export function loadLoaded(path: string): LoadedRecord[] {
  * skipped (a file rotated mid-scan shouldn't error the whole call).
  * Returns the union of loaded entries plus the list of files scanned.
  */
-export function loadLoadedFromDir(
-  dir: string,
-): { loaded: LoadedRecord[]; files: string[] } {
+export function loadLoadedFromDir(dir: string): { loaded: LoadedRecord[]; files: string[] } {
   if (!existsSync(dir)) return { loaded: [], files: [] }
   let entries: string[] = []
   try {
@@ -193,13 +217,9 @@ export function loadLoadedFromDir(
  * scan. Re-evaluates env vars on each call so test harnesses that mutate
  * process.env per-test get the value they set.
  */
-export function discoverLoaded(
-  recordFile?: string,
-): { loaded: LoadedRecord[]; files: string[] } {
+export function discoverLoaded(recordFile?: string): { loaded: LoadedRecord[]; files: string[] } {
   const envFile = process.env.ATRIB_RECORD_FILE
-  const envDir =
-    process.env.ATRIB_MIRROR_DIR ??
-    join(process.env.HOME ?? '', '.atrib', 'records')
+  const envDir = process.env.ATRIB_MIRROR_DIR ?? join(process.env.HOME ?? '', '.atrib', 'records')
   const explicit = recordFile ?? envFile
   if (explicit) {
     return { loaded: loadLoaded(explicit), files: [explicit] }
@@ -210,8 +230,8 @@ export function discoverLoaded(
 /**
  * Per-record annotation summary: max importance across all annotations
  * pointing at the record (or undefined if none), the union of all
- * topic_tags arrays carried by those annotations, and the most-recent
- * summary string. "Most recent" here means the last annotation by
+ * topics / topic_tags arrays carried by those annotations, and the
+ * most-recent summary string. "Most recent" here means the last annotation by
  * timestamp; ties (rare in practice) resolve to the last array index
  * (mirror order).
  *
@@ -228,14 +248,15 @@ export type AnnotationSummary = {
 
 /**
  * Walk loaded records, identify D058 annotation records, and bin them by
- * `content.annotates` target. Returns Map<target_record_hash,
+ * signed `record.annotates` target. Returns Map<target_record_hash,
  * AnnotationSummary>. Records with no annotations pointing at them
  * receive no entry (callers should default to undefined).
  *
- * Annotation records WITHOUT a `_local.content` sidecar (legacy bare
- * mirrors that didn't preserve content) are skipped entirely; the §8.1
- * privacy posture means the annotation's importance / topics / summary
- * are not knowable from the public AtribRecord alone.
+ * Annotation records WITHOUT a `_local.content` sidecar can still add graph
+ * edges elsewhere because the signed target is top-level, but they cannot
+ * contribute importance / topics / summary here. This aggregation skips
+ * body-less annotations so callers do not mistake an empty object for a
+ * usable semantic summary.
  *
  * Spec references:
  *   - D058: annotation event_type byte 0x05, URI form annotation
@@ -255,17 +276,11 @@ export function aggregateAnnotationsByRecord(
 
   for (const lr of loaded) {
     if (lr.record.event_type !== EVENT_TYPE_ANNOTATION_URI) continue
-    if (lr.content === undefined || lr.content === null) continue
-    if (typeof lr.content !== 'object') continue
-    const c = lr.content as {
-      annotates?: unknown
-      importance?: unknown
-      topic_tags?: unknown
-      summary?: unknown
-    }
-    if (typeof c.annotates !== 'string' || c.annotates.length === 0) continue
+    const target = targetRef(lr, 'annotates')
+    if (!target) continue
+    const c = objectContent(lr.content)
+    if (!c) continue
 
-    const target = c.annotates
     const bin = bins.get(target) ?? {
       importances: [],
       topics: new Set<string>(),
@@ -275,10 +290,8 @@ export function aggregateAnnotationsByRecord(
     if (typeof c.importance === 'string' && c.importance in IMPORTANCE_NUMERIC) {
       bin.importances.push(c.importance as ImportanceLabel)
     }
-    if (Array.isArray(c.topic_tags)) {
-      for (const t of c.topic_tags) {
-        if (typeof t === 'string' && t.length > 0) bin.topics.add(t)
-      }
+    for (const t of [...contentStrings(c, 'topics'), ...contentStrings(c, 'topic_tags')]) {
+      bin.topics.add(t)
     }
     if (typeof c.summary === 'string' && lr.record.timestamp >= bin.summary_ts) {
       bin.summary = c.summary
@@ -293,9 +306,7 @@ export function aggregateAnnotationsByRecord(
     const max_importance =
       bin.importances.length === 0
         ? undefined
-        : bin.importances.reduce((a, b) =>
-            IMPORTANCE_NUMERIC[a] >= IMPORTANCE_NUMERIC[b] ? a : b,
-          )
+        : bin.importances.reduce((a, b) => (IMPORTANCE_NUMERIC[a] >= IMPORTANCE_NUMERIC[b] ? a : b))
     const summary: AnnotationSummary = {}
     if (max_importance !== undefined) summary.max_importance = max_importance
     if (bin.topics.size > 0) summary.topics = [...bin.topics].sort()
@@ -307,7 +318,7 @@ export function aggregateAnnotationsByRecord(
 
 /**
  * Walk loaded records, identify D059 revision records, and bin them by
- * `content.revises` target. Returns Map<target_record_hash,
+ * signed `record.revises` target. Returns Map<target_record_hash,
  * revision_record_hashes[]>. The value array contains the record_hashes
  * of every revision pointing at the target (immediate revisions only;
  * chain traversal is the caller's responsibility, the recall_revisions
@@ -317,29 +328,23 @@ export function aggregateAnnotationsByRecord(
  * the caller sees revisions in the order they were issued. Ties resolve
  * to mirror-iteration order.
  *
- * Revision records WITHOUT a `_local.content` sidecar are skipped per the
- * §8.1 bare-record posture, without content, the `revises` target is
- * unknowable. Revision records WITH content but no `revises` field are
- * also skipped (the revision is malformed).
+ * Revision records WITHOUT a `_local.content` sidecar still carry their
+ * target at signed top level, so they remain structurally traversable.
+ * Revision records with no top-level or legacy sidecar target are skipped.
  *
  * Spec references:
  *   - D059: revision event_type byte 0x06, URI form revision
  *   - §8.3: salted-commitment posture (body lives in _local; log has only content_id)
  *   - §1.2.4: event_type URI form (required for revision records)
  */
-export function aggregateRevisionsByRecord(
-  loaded: LoadedRecord[],
-): Map<string, string[]> {
+export function aggregateRevisionsByRecord(loaded: LoadedRecord[]): Map<string, string[]> {
   type Entry = { hash: string; ts: number }
   const bins = new Map<string, Entry[]>()
 
   for (const lr of loaded) {
     if (lr.record.event_type !== EVENT_TYPE_REVISION_URI) continue
-    if (lr.content === undefined || lr.content === null) continue
-    if (typeof lr.content !== 'object') continue
-    const c = lr.content as { revises?: unknown }
-    if (typeof c.revises !== 'string' || c.revises.length === 0) continue
-    const target = c.revises
+    const target = targetRef(lr, 'revises')
+    if (!target) continue
     const list = bins.get(target) ?? []
     list.push({ hash: lr.record_hash, ts: lr.record.timestamp })
     bins.set(target, list)
@@ -348,7 +353,10 @@ export function aggregateRevisionsByRecord(
   const out = new Map<string, string[]>()
   for (const [target, entries] of bins) {
     entries.sort((a, b) => a.ts - b.ts)
-    out.set(target, entries.map((e) => e.hash))
+    out.set(
+      target,
+      entries.map((e) => e.hash),
+    )
   }
   return out
 }

@@ -28,6 +28,8 @@ interface MakeOpts {
   content_id?: string
   chain_root?: string
   informed_by?: string[]
+  annotates?: string
+  revises?: string
 }
 
 async function makeSigned(opts: MakeOpts = {}): Promise<AtribRecord> {
@@ -44,6 +46,8 @@ async function makeSigned(opts: MakeOpts = {}): Promise<AtribRecord> {
     signature: '',
   }
   if (opts.informed_by) record.informed_by = opts.informed_by
+  if (opts.annotates) record.annotates = opts.annotates
+  if (opts.revises) record.revises = opts.revises
   return signRecord(record as AtribRecord, KEY)
 }
 
@@ -142,6 +146,21 @@ describe('buildLocalGraph', () => {
     expect(g.get(targetHash)).toContainEqual({ type: 'ANNOTATES', target: annoHash, weight: 2 })
   })
 
+  it('emits ANNOTATES from top-level annotates without local content', async () => {
+    const target = await makeSigned({ timestamp: 1 })
+    const targetHash = computeRecordHash(target)
+    const anno = await makeSigned({
+      event_type: EVENT_TYPE_ANNOTATION_URI,
+      timestamp: 2,
+      content_id: `sha256:${'a'.repeat(64)}`,
+      annotates: targetHash,
+    })
+    const g = buildLocalGraph([loaded(target), loaded(anno)])
+    const annoHash = computeRecordHash(anno)
+    expect(g.get(annoHash)).toContainEqual({ type: 'ANNOTATES', target: targetHash, weight: 2 })
+    expect(g.get(targetHash)).toContainEqual({ type: 'ANNOTATES', target: annoHash, weight: 2 })
+  })
+
   it('emits REVISES from revision -> target', async () => {
     const orig = await makeSigned({ timestamp: 1 })
     const origHash = computeRecordHash(orig)
@@ -150,16 +169,28 @@ describe('buildLocalGraph', () => {
       timestamp: 2,
       content_id: `sha256:${'r'.repeat(64)}`,
     })
-    const g = buildLocalGraph([
-      loaded(orig),
-      loaded(rev, { revises: origHash }),
-    ])
+    const g = buildLocalGraph([loaded(orig), loaded(rev, { revises: origHash })])
     const revHash = computeRecordHash(rev)
     expect(g.get(revHash)).toContainEqual({ type: 'REVISES', target: origHash, weight: 2 })
     expect(g.get(origHash)).toContainEqual({ type: 'REVISES', target: revHash, weight: 2 })
   })
 
-  it('skips ANNOTATES/REVISES when annotation/revision has no _local.content', async () => {
+  it('emits REVISES from top-level revises without local content', async () => {
+    const orig = await makeSigned({ timestamp: 1 })
+    const origHash = computeRecordHash(orig)
+    const rev = await makeSigned({
+      event_type: EVENT_TYPE_REVISION_URI,
+      timestamp: 2,
+      content_id: `sha256:${'r'.repeat(64)}`,
+      revises: origHash,
+    })
+    const g = buildLocalGraph([loaded(orig), loaded(rev)])
+    const revHash = computeRecordHash(rev)
+    expect(g.get(revHash)).toContainEqual({ type: 'REVISES', target: origHash, weight: 2 })
+    expect(g.get(origHash)).toContainEqual({ type: 'REVISES', target: revHash, weight: 2 })
+  })
+
+  it('skips ANNOTATES/REVISES when no structural target exists', async () => {
     const target = await makeSigned({ timestamp: 1 })
     const anno = await makeSigned({
       event_type: EVENT_TYPE_ANNOTATION_URI,
@@ -302,11 +333,7 @@ describe('walkFrom', () => {
     })
     const annoHash = computeRecordHash(anno)
     // r1 -- CHAIN_PRECEDES (1) -- r2; r1 -- ANNOTATES via anno (2) -- anno
-    const g = buildLocalGraph([
-      loaded(r1),
-      loaded(r2),
-      loaded(anno, { annotates: r1Hash }),
-    ])
+    const g = buildLocalGraph([loaded(r1), loaded(r2), loaded(anno, { annotates: r1Hash })])
     const walk = walkFrom(g, r1Hash)
     expect(walk[0]?.record_hash).toBe(r2Hash) // distance 1
     expect(walk[0]?.distance).toBe(1)
