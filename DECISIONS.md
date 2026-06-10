@@ -6383,3 +6383,52 @@ Candidate demo:
 - [P039](#p039-support-and-rca-signed-investigation-demo), support/RCA demo.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P042: Local substrate coordinator for long-lived and multi-harness dogfood
+
+**Source:** live Codex MCP process audit on 2026-06-10, repeated stale bridge child-process incidents, the operator's reminder that atrib must work across long-lived local agents and always-on assistants, and the earlier [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback), [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess), [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape), [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers), [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), and [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox) lessons. Local watcher WAL and receipt join-back incidents add the read/write reconciliation pressure.
+
+**The decision in question:** should atrib introduce an optional host-owned local substrate coordinator beneath all harness adapters, rather than keep adding MCP bundles, hook helpers, watcher-specific queues, and per-harness fixes?
+
+**Why this is not just [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) again:** [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) was emit-only spawn amortization. [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess) and [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape) removed that need for hook-class producers. The current issue is wider: Codex and Claude Code startup-spawn MCP children multiply cognitive-primitive processes per active bundle, bridge-backed always-on assistants may use bash/curl paths rather than an MCP host, scheduled long-lived producers need stable process ownership, and local watcher pipelines need WAL drain plus receipt join-back. A single aggregated MCP server would reduce one symptom and miss the system boundary.
+
+**Candidate shape.** One optional local service per creator identity or trusted host boundary, reachable over a Unix socket or explicit localhost transport, supervised by the host (launchd locally, container supervisor in server deployments). It owns shared substrate work only:
+
+- key resolution and signing request policy, subject to [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox)
+- `resolveChainRoot`, source-aware `informed_by` validation, and parent-child context threading
+- mirror/WAL append, receipt token generation, log submission queue, archive submission, and receipt join-back
+- local read indexes for recall, trace, and summarize, built from the same mirror and sidecars
+- health reporting: pid, socket, version, queue depth, WAL backlog, active contexts, stale wrapper/process detections
+
+Adapters stay thin:
+
+- Claude Code and Codex hooks plus stdio/HTTP MCP adapters inject session context and call the coordinator
+- bridge-backed always-on assistant wrappers call the same local service without becoming MCP hosts
+- long-lived heartbeat, critic, and prerun producers use the same socket under supervisor ownership
+- local knowledge-base watchers enqueue records and join receipts through the coordinator instead of each watcher owning sync details
+- Inspect/eval and sandboxed runtimes keep per-run env contexts and [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox) signer-proxy boundaries explicit
+
+**Non-negotiables.**
+
+1. No mandatory daemon for first-time users. Existing in-process, CLI, and stdio paths remain valid.
+2. No new cognitive primitive or event type. This is deployment architecture, not protocol vocabulary.
+3. No silent key multiplexing. Multiple creator keys mean separate sockets or explicit signer selection with policy.
+4. No primary-path blocking. Coordinator unavailable means fallback or no-op under [§5.8](atrib-spec.md#58-degradation-contract).
+5. No host-specific assumptions in core. Harness context discovery remains registry-driven per [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers).
+6. Signed bytes must stay identical to existing producer paths by routing through the existing signing and verifier code.
+
+**First work if accepted:** write the coordinator contract and fixture tests before moving a hot path. The first dogfood slice should prove one startup-spawn harness (Codex or Claude Code), one long-lived assistant or scheduled-producer harness, and one local watcher WAL path can use the same coordinator contract without changing record bytes. A process-health report should gate rollout before any default config change.
+
+**Likely outcome (not committed):** accept after a design packet validates the contract against current startup-spawn harnesses, bridge-backed always-on assistants, scheduled long-lived producers, and local watcher process models. If accepted, promote this into an ADR that supersedes [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) for local hot paths while preserving [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback)'s fallback and single-creator-key invariants.
+
+**Cross-references.**
+
+- [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback), the earlier emit-only daemon design.
+- [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess) and [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape), the hook-path correction that avoided an unnecessary daemon on short-lived Node hooks.
+- [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers), harness context discovery.
+- [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), the measurement surface a coordinator health report should extend.
+- [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox), signer isolation for sandboxed producers.
+- [P002](#p002-agent-bridge-on-atrib-substrate), agent-bridge on atrib substrate.
+- [P027](#p027-deployment-architecture-for-host-side-hook-helpers-symlink-from-repo-vs-published-cli), hook helper deployment architecture.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
