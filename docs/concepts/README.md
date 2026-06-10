@@ -29,6 +29,7 @@ The logical layering — foundations first, then structure, then guarantees, the
 | 10 | [Integration patterns (runtime adapters)](10-integration-patterns.md) | [§9](../../atrib-spec.md#9-runtime-integration-patterns), [D069](../../DECISIONS.md#d069-runtime-integration-patterns--first-class-peers-no-canonical-path) | STUB |
 | 11 | [The six cognitive primitives](11-cognitive-primitives.md) | [D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) | STUB |
 | 12 | [Delegation and capabilities](12-delegation-and-capabilities.md) | [§5.5.6](../../atrib-spec.md#556-generic-authorization-evidence-blocks), [§6.7](../../atrib-spec.md#67-capability-declarations) | DRAFT |
+| 13 | [Local substrate coordinator](13-local-substrate-coordinator.md) | [P042](../../DECISIONS.md#p042-local-substrate-coordinator-for-long-lived-and-multi-harness-dogfood), [§5.8](../../atrib-spec.md#58-degradation-contract), [§5.9](../../atrib-spec.md#59-local-mirror-conventions) | DRAFT |
 
 ## Discovery order (how atrib was actually built)
 

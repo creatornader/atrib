@@ -6419,6 +6419,8 @@ Adapters stay thin:
 
 **First work if accepted:** write the coordinator contract and fixture tests before moving a hot path. The first dogfood slice should prove one startup-spawn harness (Codex or Claude Code), one long-lived assistant or scheduled-producer harness, and one local watcher WAL path can use the same coordinator contract without changing record bytes. A process-health report should gate rollout before any default config change.
 
+**Design packet shipped 2026-06-10:** [`docs/concepts/13-local-substrate-coordinator.md`](docs/concepts/13-local-substrate-coordinator.md) defines the host-owned boundary, non-negotiables, fixture contract, worked startup-spawn example, and rollout gate. [`spec/conformance/local-substrate-coordinator/`](spec/conformance/local-substrate-coordinator/) pins the first executable contract across `startup-spawn`, `long-lived-agent`, and `watcher-wal` harness classes; `pnpm doc-sync` runs `scripts/check-local-substrate-coordinator-fixtures.mjs` so body-equality, fallback, and health-report gates stay checked.
+
 **Likely outcome (not committed):** accept after a design packet validates the contract against current startup-spawn harnesses, bridge-backed always-on assistants, scheduled long-lived producers, and local watcher process models. If accepted, promote this into an ADR that supersedes [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) for local hot paths while preserving [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback)'s fallback and single-creator-key invariants.
 
 **Cross-references.**

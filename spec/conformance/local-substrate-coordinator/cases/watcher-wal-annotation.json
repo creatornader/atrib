@@ -1,0 +1,89 @@
+{
+  "name": "watcher-wal-annotation",
+  "harness_class": "watcher-wal",
+  "description": "A local knowledge-base watcher drains an annotation WAL entry through the coordinator and receives enough receipt metadata to join back to the source markdown row.",
+  "input": {
+    "coordinator_request": {
+      "schema": "atrib.local-substrate-coordinator.request.v0",
+      "operation": "enqueue_record_and_join_receipt",
+      "producer": {
+        "name": "local-knowledge-base-synthesis-watcher",
+        "harness_class": "watcher-wal",
+        "pid": 61102,
+        "transport": "wal-file-to-unix-socket",
+        "creator_key_policy": "explicit-watcher-creator"
+      },
+      "context": {
+        "source": "watcher-wal",
+        "context_id": "3333444455556666777788889999aaaa",
+        "chain_tail": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "join_back_target": "vault/state/synthesis/2026-06-10.md#observation-42"
+      },
+      "record_body": {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "event_type": "https://atrib.dev/v1/types/annotation",
+        "context_id": "3333444455556666777788889999aaaa",
+        "timestamp": 1781131202000,
+        "tool_name": "local-knowledge-base.observe.synthesize",
+        "args_hash": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "annotates": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "informed_by": ["sha256:9999999999999999999999999999999999999999999999999999999999999999"]
+      },
+      "wal": {
+        "entry_id": "wal-2026-06-10-annotation-42",
+        "source_path": "vault/state/synthesis/2026-06-10.md",
+        "receipt_join_field": "atrib_receipt_id"
+      },
+      "degradation": {
+        "if_unavailable": "leave the WAL entry queued and do not fabricate a receipt",
+        "primary_path_blocking": false
+      }
+    },
+    "direct_record_body": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "event_type": "https://atrib.dev/v1/types/annotation",
+      "context_id": "3333444455556666777788889999aaaa",
+      "timestamp": 1781131202000,
+      "tool_name": "local-knowledge-base.observe.synthesize",
+      "args_hash": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "annotates": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "informed_by": ["sha256:9999999999999999999999999999999999999999999999999999999999999999"]
+    },
+    "health_report": {
+      "schema": "atrib.local-substrate-coordinator.health.v0",
+      "coordinator": {
+        "pid": 43210,
+        "version": "0.0.0-fixture",
+        "transport": "unix:/tmp/atrib-substrate.sock",
+        "creator_key_scope": "single"
+      },
+      "queues": {
+        "log_submission_depth": 1,
+        "archive_submission_depth": 0
+      },
+      "wal": {
+        "pending": 3,
+        "joined": 42,
+        "orphan_receipts": 0
+      },
+      "contexts": {
+        "active": ["3333444455556666777788889999aaaa"]
+      },
+      "processes": {
+        "active_wrappers": 0,
+        "stale_children": 0
+      }
+    }
+  },
+  "expected": {
+    "record_bytes_unchanged": true,
+    "canonical_record_body_sha256": "sha256:5bdc2b5574bc3206a43a451b9f8c88cc1b28a86b0356bb99429fc05a2ad86443",
+    "fallback_required": true
+  }
+}

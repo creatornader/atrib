@@ -107,6 +107,7 @@ atrib/
       3.2.4/                   # Full graph edge derivation conformance corpus (§3.2.4, D101). Covers all nine edge types, all-pairs session edges, and dangling producer-declared references.
       4.6/                     # Calculation conformance corpus (test vectors for §4.6)
       6/                       # Public-key directory conformance corpus (test vectors for §6, D034). Skeleton; fixtures land alongside the directory implementation.
+      local-substrate-coordinator/ # P042 design-gate corpus for the optional host-owned coordinator contract. Covers startup-spawn harnesses, long-lived local agents, and watcher WAL paths before any default config change.
 ```
 
 Public packages are intended for npm publication. Private workspace packages and services (`log-dev`, `integration`, `cloudflare-live-proof`, `cloudflare-live-client-proof`, `cloudflare-approval-trace`, `cloudflare-oauth-evidence-infra`, `log-node`, `graph-node`, `directory-node`, `archive-node`, `dashboard`) are fixtures, proof harnesses, deployed services, examples, or product surfaces with `private: true` in their `package.json` so they cannot be accidentally published. The `directory-bridge` Rust crate is source-only, its WASM build artifacts ship inside `@atrib/directory` (see [`packages/directory-bridge/README.md`](packages/directory-bridge/README.md) for the build procedure).
