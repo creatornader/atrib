@@ -115,7 +115,7 @@
       "path": "examples/google-stack-chain",
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
-      "commands": ["google-stack-chain-proof", "google-stack-chain-visual"]
+      "commands": ["google-stack-chain-proof", "google-evidence-runtime", "google-stack-chain-visual"]
     },
     {
       "id": "openai-agents-runtime",

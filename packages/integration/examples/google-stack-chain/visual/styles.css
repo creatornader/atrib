@@ -98,7 +98,7 @@ code {
   color: var(--blue);
   font-size: 12px;
   font-weight: 780;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
   margin: 0 0 6px;
   text-transform: uppercase;
 }
@@ -167,6 +167,7 @@ h1 {
 }
 
 .layout {
+  align-items: start;
   display: grid;
   gap: 16px;
   grid-template-columns: 300px minmax(660px, 1fr) 370px;
@@ -196,6 +197,10 @@ h1 {
   background: var(--panel-soft);
 }
 
+.runtime-card {
+  border-color: #c5d1e4;
+}
+
 .panel-head {
   align-items: center;
   display: flex;
@@ -205,7 +210,7 @@ h1 {
 
 .panel h2 {
   font-size: 13px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   line-height: 1.2;
   margin: 0;
   text-transform: uppercase;
@@ -279,7 +284,7 @@ tbody tr:focus-visible {
   color: #b9c2d2;
   font-size: 12px;
   font-weight: 760;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -309,7 +314,7 @@ tbody tr:focus-visible {
   color: var(--muted);
   font-size: 12px;
   font-weight: 780;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
   line-height: 1.25;
   margin: 0;
   text-transform: uppercase;
@@ -320,6 +325,88 @@ tbody tr:focus-visible {
   line-height: 1.35;
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.runtime-reason {
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.42;
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.runtime-chip {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 780;
+  min-height: 26px;
+  padding: 5px 9px;
+}
+
+.runtime-chip.idle {
+  background: var(--ink-soft);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.runtime-chip.pending {
+  background: var(--blue-soft);
+  border: 1px solid #bbccfb;
+  color: var(--blue);
+}
+
+.runtime-chip.good {
+  background: var(--green-soft);
+  border: 1px solid #b6dfc9;
+  color: var(--green);
+}
+
+.runtime-chip.bad {
+  background: var(--red-soft);
+  border: 1px solid #f0b8c0;
+  color: var(--red);
+}
+
+.runtime-facts {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.runtime-checks li.ok::before {
+  background: var(--green);
+}
+
+.runtime-checks li.bad::before {
+  background: var(--red);
+}
+
+.runtime-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.secondary-action {
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 760;
+  min-height: 44px;
+  padding: 9px;
+}
+
+.secondary-action:hover {
+  border-color: #334155;
+}
+
+.secondary-action:disabled {
+  background: var(--panel-soft);
+  border-color: var(--line);
+  color: #9aa5b5;
+  cursor: not-allowed;
 }
 
 .value-list,
@@ -339,9 +426,11 @@ tbody tr:focus-visible {
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.42;
+  overflow-wrap: anywhere;
   padding: 9px 10px 9px 30px;
   position: relative;
   text-wrap: pretty;
+  word-break: break-word;
 }
 
 .value-list li {
@@ -572,7 +661,7 @@ tbody tr:focus-visible {
 table {
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 0;
+  min-width: 700px;
   table-layout: fixed;
   width: 100%;
 }
@@ -596,7 +685,7 @@ th {
   color: var(--muted);
   font-size: 12px;
   font-weight: 780;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -629,7 +718,10 @@ td:nth-child(3) {
 
 th:nth-child(1),
 td:nth-child(1) {
-  width: 92px;
+  min-width: 108px;
+  overflow-wrap: normal;
+  white-space: nowrap;
+  width: 108px;
 }
 
 th:nth-child(2),
@@ -921,7 +1013,7 @@ td:nth-child(5) {
     content: attr(data-label);
     font-size: 12px;
     font-weight: 780;
-    letter-spacing: 0.04em;
+    letter-spacing: 0;
     text-transform: uppercase;
   }
 

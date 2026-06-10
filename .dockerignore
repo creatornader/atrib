@@ -1,5 +1,5 @@
-# Reduce Docker build context. Only include packages and services
-# needed by the Dockerfiles (log-node needs mcp; graph-node needs mcp + verify).
+# Reduce Docker build context. Keep workspace packages available because
+# service Dockerfiles and the Google evidence runtime build from one repo root.
 
 .git
 node_modules
@@ -9,12 +9,6 @@ dist
 *.tgz
 coverage
 .turbo
-
-# Workspace packages not needed by either service
-packages/agent
-packages/integration
-packages/log-dev
-packages/cli
 
 # Non-code directories
 services/log/

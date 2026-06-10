@@ -54,6 +54,43 @@
             </dl>
           </section>
 
+          <section class="panel compact runtime-card" aria-label="live runtime verifier">
+            <div class="panel-head">
+              <h2>Live runtime</h2>
+              <span class="runtime-chip idle" id="runtimeStatus">Static</span>
+            </div>
+            <p class="runtime-reason" id="runtimeReason">
+              Configure a runtime URL to verify the AP2 replay through Cloud Run.
+            </p>
+            <dl class="facts runtime-facts">
+              <div>
+                <dt>Decision</dt>
+                <dd id="runtimeDecision">not connected</dd>
+              </div>
+              <div>
+                <dt>Record</dt>
+                <dd><code id="runtimeRecordHash">pending</code></dd>
+              </div>
+              <div>
+                <dt>Content</dt>
+                <dd><code id="runtimeContentId">pending</code></dd>
+              </div>
+              <div>
+                <dt>Source</dt>
+                <dd id="runtimeSource">static snapshot</dd>
+              </div>
+            </dl>
+            <ul class="check-list runtime-checks" id="runtimeChecks"></ul>
+            <div class="runtime-actions">
+              <button class="secondary-action" id="refreshRuntime" type="button">
+                Refresh
+              </button>
+              <button class="secondary-action" id="writeRuntimeAnalytics" type="button">
+                Write BigQuery row
+              </button>
+            </div>
+          </section>
+
           <section class="panel compact">
             <div class="panel-head">
               <h2>What it gives Google</h2>
@@ -155,6 +192,7 @@
     </main>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="./proof-snapshot.js"></script>
+    <script src="./runtime-config.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>
