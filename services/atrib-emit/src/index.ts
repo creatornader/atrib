@@ -358,14 +358,15 @@ async function handleEmit({
 
   // Multi-producer chain composition per spec §1.2.3 / D067. Single source
   // of truth in @atrib/mcp's inheritChainContext: caller-supplied verbatim
-  // when both fields supplied, else cascade through env-tail (cross-producer
-  // handoff) and mirror-file inheritance (filtered to the same context_id),
-  // falling back to genesis. When caller omits context_id entirely, the
-  // helper inherits BOTH context_id and chain_root from the mirror's most
-  // recent record. The cognitive-extractor hook spawning atrib-emit with
-  // ATRIB_CHAIN_TAIL_<context_id> + the agent's context_id is the primary
-  // case that needs preserving; pre-fix this produced isolated genesis records
-  // because atrib-emit's local resolver short-circuited on caller context.
+  // when both fields are supplied, else cascade through env-tail
+  // (cross-producer handoff) and mirror-file inheritance filtered to the same
+  // context_id, falling back to genesis. When caller omits context_id entirely,
+  // D072 synthesizes a fresh orphan context instead of inheriting another
+  // session from the mirror tail. The cognitive-extractor hook spawning
+  // atrib-emit with ATRIB_CHAIN_TAIL_<context_id> plus the agent's context_id
+  // is the primary case that needs preserving; pre-fix this produced isolated
+  // genesis records because atrib-emit's local resolver short-circuited on
+  // caller context.
   const chain = await inheritChainContext({
     callerContextId,
     callerChainRoot: input.chain_root,

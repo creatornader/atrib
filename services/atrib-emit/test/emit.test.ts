@@ -4,6 +4,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as ed from '@noble/ed25519'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_DIRECTORY_ANCHOR_URI,
@@ -22,6 +25,34 @@ import { buildAndSignEmitRecord, __test_only__ } from '../src/sign.js'
 import { createSubmissionQueue } from '@atrib/mcp'
 
 const LOCAL_LOG = 'http://127.0.0.1:0/v1/entries'
+
+let testEnvPriorMirrorFile: string | undefined
+let testEnvPriorAutochainSource: string | undefined
+let testEnvPriorRecordsDir: string | undefined
+let testEnvTmpDir: string | undefined
+
+beforeEach(async () => {
+  testEnvPriorMirrorFile = process.env['ATRIB_MIRROR_FILE']
+  testEnvPriorAutochainSource = process.env['ATRIB_AUTOCHAIN_SOURCE']
+  testEnvPriorRecordsDir = process.env['ATRIB_RECORDS_DIR']
+  testEnvTmpDir = await mkdtemp(join(tmpdir(), 'atrib-emit-test-'))
+  process.env['ATRIB_MIRROR_FILE'] = join(testEnvTmpDir, 'mirror.jsonl')
+  process.env['ATRIB_AUTOCHAIN_SOURCE'] = process.env['ATRIB_MIRROR_FILE']
+  process.env['ATRIB_RECORDS_DIR'] = testEnvTmpDir
+})
+
+afterEach(async () => {
+  if (testEnvTmpDir) {
+    await rm(testEnvTmpDir, { recursive: true, force: true })
+    testEnvTmpDir = undefined
+  }
+  if (testEnvPriorMirrorFile === undefined) delete process.env['ATRIB_MIRROR_FILE']
+  else process.env['ATRIB_MIRROR_FILE'] = testEnvPriorMirrorFile
+  if (testEnvPriorAutochainSource === undefined) delete process.env['ATRIB_AUTOCHAIN_SOURCE']
+  else process.env['ATRIB_AUTOCHAIN_SOURCE'] = testEnvPriorAutochainSource
+  if (testEnvPriorRecordsDir === undefined) delete process.env['ATRIB_RECORDS_DIR']
+  else process.env['ATRIB_RECORDS_DIR'] = testEnvPriorRecordsDir
+})
 
 async function freshKey(): Promise<Uint8Array> {
   const seed = new Uint8Array(32)
@@ -615,6 +646,11 @@ describe('event_type shorthand aliases', () => {
       alias: 'observation',
       expected: EVENT_TYPE_OBSERVATION_URI,
       content: { what: 'observation alias normalized' },
+    },
+    {
+      alias: 'https://atrib.dev/event/observation',
+      expected: EVENT_TYPE_OBSERVATION_URI,
+      content: { what: 'observation typo URI normalized' },
     },
     {
       alias: 'directory_anchor',
