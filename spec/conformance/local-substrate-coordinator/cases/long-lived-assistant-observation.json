@@ -1,0 +1,79 @@
+{
+  "name": "long-lived-assistant-observation",
+  "harness_class": "long-lived-agent",
+  "description": "A long-lived local assistant or scheduled producer emits an observation through the same coordinator boundary without becoming an MCP host.",
+  "input": {
+    "coordinator_request": {
+      "schema": "atrib.local-substrate-coordinator.request.v0",
+      "operation": "sign_record",
+      "producer": {
+        "name": "sido-bridge-runtime",
+        "harness_class": "long-lived-agent",
+        "pid": 52104,
+        "transport": "localhost-http-to-unix-socket",
+        "creator_key_policy": "explicit-single-creator"
+      },
+      "context": {
+        "source": "supervisor-state",
+        "context_id": "22223333444455556666777788889999",
+        "chain_tail": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "record_body": {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "22223333444455556666777788889999",
+        "timestamp": 1781131201000,
+        "tool_name": "atrib-emit",
+        "args_hash": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+      },
+      "degradation": {
+        "if_unavailable": "fall back to direct emit CLI or skip the observation under spec section 5.8",
+        "primary_path_blocking": false
+      }
+    },
+    "direct_record_body": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "22223333444455556666777788889999",
+      "timestamp": 1781131201000,
+      "tool_name": "atrib-emit",
+      "args_hash": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    },
+    "health_report": {
+      "schema": "atrib.local-substrate-coordinator.health.v0",
+      "coordinator": {
+        "pid": 43210,
+        "version": "0.0.0-fixture",
+        "transport": "unix:/tmp/atrib-substrate.sock",
+        "creator_key_scope": "single"
+      },
+      "queues": {
+        "log_submission_depth": 2,
+        "archive_submission_depth": 1
+      },
+      "wal": {
+        "pending": 0,
+        "joined": 18,
+        "orphan_receipts": 0
+      },
+      "contexts": {
+        "active": ["22223333444455556666777788889999"]
+      },
+      "processes": {
+        "active_wrappers": 0,
+        "stale_children": 0
+      }
+    }
+  },
+  "expected": {
+    "record_bytes_unchanged": true,
+    "canonical_record_body_sha256": "sha256:65f7d8f434a93166a7bffe94d66c91c45e6682470b10e0c9260ac19b78423b9c",
+    "fallback_required": true
+  }
+}

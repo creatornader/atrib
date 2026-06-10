@@ -1,0 +1,23 @@
+{
+  "spec_section": "P042",
+  "spec_title": "Local substrate coordinator contract",
+  "decision_link": "P042",
+  "generated_at": 1781131200000,
+  "generator": "manual design packet, checked by scripts/check-local-substrate-coordinator-fixtures.mjs",
+  "cases": [
+    {
+      "file": "cases/startup-spawn-codex-tool-call.json",
+      "name": "startup-spawn-codex-tool-call"
+    },
+    {
+      "file": "cases/long-lived-assistant-observation.json",
+      "name": "long-lived-assistant-observation"
+    },
+    {
+      "file": "cases/watcher-wal-annotation.json",
+      "name": "watcher-wal-annotation"
+    }
+  ],
+  "required_harness_classes": ["startup-spawn", "long-lived-agent", "watcher-wal"],
+  "note": "This corpus is an informative P042 design gate, not a new protocol section. It pins the coordinator boundary before any default config change: adapters may call a host-owned coordinator, but the unsigned record body sent to the existing signer must stay byte-identical to the direct producer path."
+}

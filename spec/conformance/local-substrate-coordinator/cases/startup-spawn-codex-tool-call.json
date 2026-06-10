@@ -1,0 +1,84 @@
+{
+  "name": "startup-spawn-codex-tool-call",
+  "harness_class": "startup-spawn",
+  "description": "A Codex or Claude Code startup-spawn MCP child asks a host-owned coordinator to sign the same tool_call body that the current wrapper path would sign directly.",
+  "input": {
+    "coordinator_request": {
+      "schema": "atrib.local-substrate-coordinator.request.v0",
+      "operation": "sign_record",
+      "producer": {
+        "name": "codex-mcp-wrapper",
+        "harness_class": "startup-spawn",
+        "pid": 32101,
+        "transport": "stdio-child-to-unix-socket",
+        "creator_key_policy": "implicit-single-creator"
+      },
+      "context": {
+        "source": "harness-env",
+        "context_id": "11112222333344445555666677778888",
+        "chain_tail": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "parent_record_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "record_body": {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "11112222333344445555666677778888",
+        "timestamp": 1781131200000,
+        "tool_name": "agent-bridge.post_context",
+        "args_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "result_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "informed_by": ["sha256:4444444444444444444444444444444444444444444444444444444444444444"]
+      },
+      "degradation": {
+        "if_unavailable": "fall back to the current wrapper signing path or no-op under spec section 5.8",
+        "primary_path_blocking": false
+      }
+    },
+    "direct_record_body": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "11112222333344445555666677778888",
+      "timestamp": 1781131200000,
+      "tool_name": "agent-bridge.post_context",
+      "args_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "result_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "informed_by": ["sha256:4444444444444444444444444444444444444444444444444444444444444444"]
+    },
+    "health_report": {
+      "schema": "atrib.local-substrate-coordinator.health.v0",
+      "coordinator": {
+        "pid": 43210,
+        "version": "0.0.0-fixture",
+        "transport": "unix:/tmp/atrib-substrate.sock",
+        "creator_key_scope": "single"
+      },
+      "queues": {
+        "log_submission_depth": 0,
+        "archive_submission_depth": 0
+      },
+      "wal": {
+        "pending": 0,
+        "joined": 4,
+        "orphan_receipts": 0
+      },
+      "contexts": {
+        "active": ["11112222333344445555666677778888"]
+      },
+      "processes": {
+        "active_wrappers": 1,
+        "stale_children": 0
+      }
+    }
+  },
+  "expected": {
+    "record_bytes_unchanged": true,
+    "canonical_record_body_sha256": "sha256:9896136392197af7f474b51f479d3b8cdf5c38afd07b307da515584bc3f196cb",
+    "fallback_required": true
+  }
+}
