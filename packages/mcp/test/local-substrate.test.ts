@@ -3,16 +3,24 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
+  base64urlEncode,
   buildLocalSubstrateHealthReport,
+  canonicalRecord,
   createHttpLocalSubstrateTransport,
+  createInProcessLocalSubstrateCoordinator,
+  encodeToken,
   hashLocalSubstrateRecordBody,
+  hexEncode,
   localSubstrateRecordBodiesEqual,
   probeLocalSubstrateHealth,
+  sha256,
   tryLocalSubstrateCoordinator,
   validateLocalSubstrateFixture,
   validateLocalSubstrateHealthReport,
   validateLocalSubstrateRequest,
   validateLocalSubstrateResponse,
+  verifyRecord,
+  type AtribRecord,
   type LocalSubstrateCoordinatorRequest,
   type LocalSubstrateCoordinatorResponse,
   type LocalSubstrateFixture,
@@ -33,6 +41,10 @@ interface Manifest {
 
 function readJson<T>(relativePath: string): T {
   return JSON.parse(readFileSync(new URL(relativePath, `file://${corpusRoot}/`), 'utf8')) as T
+}
+
+function fixtureSeed(value: number): string {
+  return base64urlEncode(new Uint8Array(32).fill(value))
 }
 
 describe('local substrate coordinator contract', () => {
@@ -337,6 +349,116 @@ describe('local substrate coordinator contract', () => {
       'x-test': 'yes',
     })
     expect(JSON.parse(String(seen[0]!.init.body))).toEqual(fixture.input.coordinator_request)
+  })
+
+  it('signs startup-spawn records through the in-process coordinator prototype', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
+    const observed: AtribRecord[] = []
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: fixtureSeed(0x11),
+      logSubmission: 'disabled',
+      onRecord: (record) => {
+        observed.push(record)
+      },
+      health: {
+        pid: 401,
+        version: '0.0.0-test',
+        transport: 'in-process-test',
+        activeWrapperPids: [501],
+      },
+    })
+
+    const result = await tryLocalSubstrateCoordinator(fixture.input.coordinator_request, {
+      transport: coordinator.transport,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.status).toBe('accepted')
+    if (!result.ok) {
+      throw new Error(result.status)
+    }
+
+    expect(observed).toHaveLength(1)
+    const signed = observed[0]!
+    expect(await verifyRecord(signed)).toBe(true)
+    expect(signed.signature).not.toBe('')
+    expect(result.response.record_hash).toBe(`sha256:${hexEncode(sha256(canonicalRecord(signed)))}`)
+    expect(result.response.receipt_id).toBe(encodeToken(signed))
+    expect(result.response.health_report?.contexts.active).toEqual([
+      fixture.input.coordinator_request.record_body.context_id,
+    ])
+    expect(result.response.health_report?.processes.active_wrappers).toBe(1)
+    expect(coordinator.health().status).toBe('healthy')
+
+    await coordinator.flush()
+    coordinator.destroy()
+  })
+
+  it('rejects in-process requests when the signer does not match the body', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
+    const observed: AtribRecord[] = []
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: fixtureSeed(0x22),
+      logSubmission: 'disabled',
+      onRecord: (record) => {
+        observed.push(record)
+      },
+    })
+
+    const result = await tryLocalSubstrateCoordinator(fixture.input.coordinator_request, {
+      transport: coordinator.transport,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.status).toBe('rejected')
+    if (result.status !== 'rejected') {
+      throw new Error(result.status)
+    }
+    expect(result.reason).toBe('record_body.creator_key does not match coordinator signer')
+    expect(observed).toHaveLength(0)
+
+    coordinator.destroy()
+  })
+
+  it('keeps the in-process prototype scoped to startup-spawn by default', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/long-lived-assistant-observation.json')
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: fixtureSeed(0x11),
+      logSubmission: 'disabled',
+    })
+
+    const result = await tryLocalSubstrateCoordinator(fixture.input.coordinator_request, {
+      transport: coordinator.transport,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.status).toBe('rejected')
+    if (result.status !== 'rejected') {
+      throw new Error(result.status)
+    }
+    expect(result.reason).toBe('unsupported harness class: long-lived-agent')
+
+    coordinator.destroy()
+  })
+
+  it('rejects in-process requests after destroy', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: fixtureSeed(0x11),
+      logSubmission: 'disabled',
+    })
+
+    coordinator.destroy()
+    const result = await tryLocalSubstrateCoordinator(fixture.input.coordinator_request, {
+      transport: coordinator.transport,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.status).toBe('rejected')
+    if (result.status !== 'rejected') {
+      throw new Error(result.status)
+    }
+    expect(result.reason).toBe('coordinator destroyed')
   })
 
   it('builds and probes read-only health reports for rollout gating', () => {

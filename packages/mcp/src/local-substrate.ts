@@ -10,8 +10,16 @@
  */
 
 import canonicalize from 'canonicalize'
+import { base64urlDecode, base64urlEncode } from './base64url.js'
+import { canonicalRecord } from './canon.js'
 import { hexEncode, sha256 } from './hash.js'
-import type { UnsignedAtribRecord } from './types.js'
+import { getPublicKey, signRecord } from './signing.js'
+import { createSubmissionQueue } from './submission.js'
+import { encodeToken } from './token.js'
+import { EVENT_TYPE_TRANSACTION_URI } from './types.js'
+import { zeroize } from './zeroize.js'
+import type { AtribRecord, UnsignedAtribRecord } from './types.js'
+import type { ArchiveSubmissionOptions, ProofBundle, SubmissionQueue } from './submission.js'
 
 export const LOCAL_SUBSTRATE_REQUEST_SCHEMA = 'atrib.local-substrate-coordinator.request.v0'
 export const LOCAL_SUBSTRATE_RESPONSE_SCHEMA = 'atrib.local-substrate-coordinator.response.v0'
@@ -222,6 +230,55 @@ export interface LocalSubstrateHealthProbeResult {
   report: LocalSubstrateHealthReport
   issues: LocalSubstrateValidationIssue[]
   warnings: string[]
+}
+
+export interface LocalSubstrateCoordinatorRecordContext {
+  request: LocalSubstrateCoordinatorRequest
+  record_hash: string
+  receipt_id: string
+}
+
+export type LocalSubstrateCoordinatorRecordObserver = (
+  record: AtribRecord,
+  context: LocalSubstrateCoordinatorRecordContext,
+) => void | Promise<void>
+
+export type LocalSubstrateHealthValue<T> = T | (() => T)
+
+export interface InProcessLocalSubstrateCoordinatorHealthOptions {
+  pid?: number
+  version?: string
+  transport?: string
+  creatorKeyScope?: string
+  logSubmissionDepth?: LocalSubstrateHealthValue<number>
+  archiveSubmissionDepth?: LocalSubstrateHealthValue<number | undefined>
+  walPending?: LocalSubstrateHealthValue<number>
+  walJoined?: LocalSubstrateHealthValue<number | undefined>
+  walOrphanReceipts?: LocalSubstrateHealthValue<number>
+  activeContextIds?: LocalSubstrateHealthValue<readonly string[]>
+  activeWrapperPids?: LocalSubstrateHealthValue<readonly number[] | undefined>
+  staleChildPids?: LocalSubstrateHealthValue<readonly number[] | undefined>
+  activeWrappers?: LocalSubstrateHealthValue<number | undefined>
+  staleChildren?: LocalSubstrateHealthValue<number | undefined>
+}
+
+export interface CreateInProcessLocalSubstrateCoordinatorOptions {
+  creatorKey: string
+  supportedHarnessClasses?: readonly LocalSubstrateHarnessClass[]
+  logEndpoint?: string
+  logSubmission?: 'enabled' | 'disabled'
+  archiveSubmission?: ArchiveSubmissionOptions
+  maxQueueDepth?: number
+  onRecord?: LocalSubstrateCoordinatorRecordObserver
+  health?: InProcessLocalSubstrateCoordinatorHealthOptions
+}
+
+export interface InProcessLocalSubstrateCoordinator {
+  transport: LocalSubstrateCoordinatorTransport
+  health: () => LocalSubstrateHealthProbeResult
+  flush: () => Promise<void>
+  getProof: (recordHash: string) => ProofBundle | undefined
+  destroy: () => void
 }
 
 export interface LocalSubstrateFixture {
@@ -708,6 +765,38 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function createLocalSubstrateNoopSubmissionQueue(): SubmissionQueue {
+  return {
+    submit() {},
+    getProof() {
+      return undefined
+    },
+    async flush() {},
+  }
+}
+
+function valueOf<T>(value: LocalSubstrateHealthValue<T> | undefined): T | undefined {
+  return typeof value === 'function' ? (value as () => T)() : value
+}
+
+function recordHashRef(record: AtribRecord): string {
+  return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
+}
+
+function rejectedLocalSubstrateResponse(
+  request: LocalSubstrateCoordinatorRequest,
+  rejectionReason: string,
+  healthReport: LocalSubstrateHealthReport,
+): LocalSubstrateCoordinatorResponse {
+  return {
+    schema: LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
+    operation: request.operation,
+    status: 'rejected',
+    rejection_reason: rejectionReason,
+    health_report: healthReport,
+  }
+}
+
 async function callWithTimeout(
   transport: LocalSubstrateCoordinatorTransport,
   request: LocalSubstrateCoordinatorRequest,
@@ -887,6 +976,164 @@ export function probeLocalSubstrateHealth(
     report,
     issues: validation.issues,
     warnings,
+  }
+}
+
+export function createInProcessLocalSubstrateCoordinator(
+  options: CreateInProcessLocalSubstrateCoordinatorOptions,
+): InProcessLocalSubstrateCoordinator {
+  const privateKey = base64urlDecode(options.creatorKey)
+  if (privateKey.length !== 32) {
+    throw new Error('local substrate coordinator creatorKey must decode to 32 bytes')
+  }
+
+  const supportedHarnessClasses = new Set<LocalSubstrateHarnessClass>(
+    options.supportedHarnessClasses ?? ['startup-spawn'],
+  )
+  const activeContexts = new Set<string>()
+  const queue: SubmissionQueue =
+    options.logSubmission === 'disabled'
+      ? createLocalSubstrateNoopSubmissionQueue()
+      : createSubmissionQueue(options.logEndpoint, {
+          ...(options.maxQueueDepth !== undefined ? { maxQueueDepth: options.maxQueueDepth } : {}),
+          ...(options.archiveSubmission !== undefined
+            ? { archiveSubmission: options.archiveSubmission }
+            : {}),
+        })
+  const publicKeyReady = getPublicKey(new Uint8Array(privateKey)).then(base64urlEncode)
+  let destroyed = false
+
+  const health = (): LocalSubstrateHealthProbeResult => {
+    const healthOptions = options.health ?? {}
+    const archiveSubmissionDepth = valueOf(healthOptions.archiveSubmissionDepth)
+    const walJoined = valueOf(healthOptions.walJoined)
+    const activeWrapperPids = valueOf(healthOptions.activeWrapperPids)
+    const staleChildPids = valueOf(healthOptions.staleChildPids)
+    const activeWrappers = valueOf(healthOptions.activeWrappers)
+    const staleChildren = valueOf(healthOptions.staleChildren)
+
+    return probeLocalSubstrateHealth({
+      coordinator: {
+        pid: healthOptions.pid ?? 0,
+        version: healthOptions.version ?? '0.0.0-in-process',
+        transport: healthOptions.transport ?? 'in-process',
+        ...(healthOptions.creatorKeyScope !== undefined
+          ? { creatorKeyScope: healthOptions.creatorKeyScope }
+          : {}),
+      },
+      queues: {
+        logSubmissionDepth: valueOf(healthOptions.logSubmissionDepth) ?? 0,
+        ...(archiveSubmissionDepth !== undefined ? { archiveSubmissionDepth } : {}),
+      },
+      wal: {
+        pending: valueOf(healthOptions.walPending) ?? 0,
+        ...(walJoined !== undefined ? { joined: walJoined } : {}),
+        orphanReceipts: valueOf(healthOptions.walOrphanReceipts) ?? 0,
+      },
+      activeContextIds: valueOf(healthOptions.activeContextIds) ?? [...activeContexts],
+      ...(activeWrapperPids !== undefined ? { activeWrapperPids } : {}),
+      ...(staleChildPids !== undefined ? { staleChildPids } : {}),
+      ...(activeWrappers !== undefined ? { activeWrappers } : {}),
+      ...(staleChildren !== undefined ? { staleChildren } : {}),
+    })
+  }
+
+  const transport: LocalSubstrateCoordinatorTransport = async (request, transportOptions) => {
+    if (transportOptions.signal?.aborted) {
+      throw new Error('local substrate coordinator call aborted')
+    }
+
+    const requestValidation = validateLocalSubstrateRequest(request)
+    if (!requestValidation.ok) {
+      throw new Error(
+        `invalid local substrate coordinator request: ${requestValidation.issues
+          .map((issue) => `${issue.path} ${issue.message}`)
+          .join('; ')}`,
+      )
+    }
+
+    const healthReport = health().report
+    if (destroyed) {
+      return rejectedLocalSubstrateResponse(request, 'coordinator destroyed', healthReport)
+    }
+
+    if (!supportedHarnessClasses.has(request.producer.harness_class)) {
+      return rejectedLocalSubstrateResponse(
+        request,
+        `unsupported harness class: ${request.producer.harness_class}`,
+        healthReport,
+      )
+    }
+
+    if (request.operation !== 'sign_record') {
+      return rejectedLocalSubstrateResponse(
+        request,
+        `unsupported operation for in-process coordinator: ${request.operation}`,
+        healthReport,
+      )
+    }
+
+    const publicKeyB64 = await publicKeyReady
+    if (transportOptions.signal?.aborted) {
+      throw new Error('local substrate coordinator call aborted')
+    }
+    if (destroyed) {
+      return rejectedLocalSubstrateResponse(request, 'coordinator destroyed', health().report)
+    }
+    if (request.record_body.creator_key !== publicKeyB64) {
+      return rejectedLocalSubstrateResponse(
+        request,
+        'record_body.creator_key does not match coordinator signer',
+        health().report,
+      )
+    }
+
+    const unsigned = { ...request.record_body, signature: '' } as AtribRecord
+    const signed = await signRecord(unsigned, privateKey)
+    const recordHash = recordHashRef(signed)
+    const receiptId = encodeToken(signed)
+    activeContexts.add(request.record_body.context_id)
+
+    if (options.onRecord) {
+      try {
+        const observed = options.onRecord(signed, {
+          request,
+          record_hash: recordHash,
+          receipt_id: receiptId,
+        })
+        void Promise.resolve(observed).catch(() => undefined)
+      } catch {
+        // §5.8: observer failures never affect coordinator responses.
+      }
+    }
+
+    try {
+      queue.submit(signed, signed.event_type === EVENT_TYPE_TRANSACTION_URI ? 'high' : 'normal')
+    } catch {
+      // §5.8: queue failures never affect coordinator responses.
+    }
+
+    return {
+      schema: LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
+      operation: request.operation,
+      status: 'accepted',
+      record_hash: recordHash,
+      receipt_id: receiptId,
+      health_report: health().report,
+    } satisfies LocalSubstrateCoordinatorResponse
+  }
+
+  return {
+    transport,
+    health,
+    flush: () => queue.flush(),
+    getProof: (recordHash) => queue.getProof(recordHash.replace(/^sha256:/, '')),
+    destroy: () => {
+      if (!destroyed) {
+        zeroize(privateKey)
+        destroyed = true
+      }
+    },
   }
 }
 
