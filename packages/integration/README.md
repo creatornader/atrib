@@ -65,6 +65,32 @@ Every signature, every chain hash, and every transaction event in that output is
 
 Every example has a `README.md` next to it explaining what's wired up and which lines a real customer would copy.
 
+## Demo Record Treatment
+
+Example-generated records fall into three classes. Keep these classes separate
+when reading the public log, writing examples, or turning demo output into
+outreach proof.
+
+| Class                       | Examples                                                                                                    | Treatment                                                                                                                                                                                                                                     |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Offline and local demos** | `pnpm demo`, Google ADK smokes, Google stack chain proof, framework memory smokes, graph/conformance tests  | Sign real records, but keep them in local process memory, local sidecars, local dev logs, or fixture files. These records prove the integration boundary without writing to `log.atrib.dev` or `archive.atrib.dev`.                           |
+| **Public proof generators** | Cloudflare live Worker proofs, Cloudflare approval trace deploys, proof-log receipt, live MCP/OAuth archive | Intentionally submit narrow, inspectable records to the public log and, when needed, the archive service. Treat those records as public proof artifacts tied to a run, not as operator memory or default recall context.                      |
+| **Live capture artifacts**  | AP2 Google live capture, upstream AP2 sample extraction, local participant artifacts                        | Capture upstream events and write signed artifacts for verifier replay. They should only become public log records when an explicit proof script says so. External protocol signatures remain verifier evidence, not atrib signer identities. |
+
+The default Vitest suite must not contact production atrib services. The
+integration test setup rejects fetches to `log.atrib.dev`, `archive.atrib.dev`,
+`graph.atrib.dev`, `directory.atrib.dev`, and `explore.atrib.dev`. Tests should
+use localhost endpoints, in-process dev logs, or a fully mocked fetch. Public
+proof commands run outside Vitest and must state in their README or command docs
+when they publish public records.
+
+When a new demo writes to the public log, store or print enough run metadata to
+separate it from dogfood memory later: the command name, example path,
+`context_id`, record hashes, signer role, endpoint, and caveats. Public demo
+records are valid protocol evidence, but they should not be counted as evidence
+that the operator's daily cognitive-primitive loop is healthy unless the query is
+explicitly scoped to that demo signer or context.
+
 ## AP2 Live Interop
 
 `@atrib/integration` includes an opt-in AP2 reference artifact harness for runs produced by `google-agentic-commerce/AP2` samples or a compatible AP2 participant.

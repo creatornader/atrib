@@ -5814,6 +5814,91 @@ behavior without duplicating mirror and log lookup code.
 - [`services/atrib-emit/src/reference-resolution.ts`](services/atrib-emit/src/reference-resolution.ts),
   shared resolver reuse.
 
+## D117: Demo records are classified by execution surface
+
+**Date:** 2026-06-10
+
+**Status:** Accepted
+
+**Extends:** [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence),
+[D070](#d070-record-body-archive-layer),
+[D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface),
+and [D097](#d097-ap2-live-interop-artifact-harness-is-opt-in).
+
+**Context.** `@atrib/integration` now contains local demos, framework smokes,
+Cloudflare live proofs, AP2 capture tools, proof-log receipts, OAuth archive
+fixtures, and deterministic Google stack proofs. They all create real signed
+records, but they do not all mean the same thing.
+
+The recurring record-health audits surfaced the risk: if test records, public
+proof records, live-capture artifacts, and the operator's cognitive-primitive
+records are treated as one undifferentiated pool, recall and graph-health
+analysis can overstate or understate what happened. A public Cloudflare proof is
+valuable protocol evidence, but it is not the same signal as a daily
+`atrib-emit` observation from an agent session. An AP2 fixture transaction is a
+verifier replay artifact, but it is not a real merchant settlement unless the
+external AP2 participant supplied the live evidence.
+
+**Decision.** Demo-generated records are classified by execution surface:
+
+- **Offline and local demos** sign real records but keep them in process memory,
+  local sidecars, local dev logs, or fixture artifacts. They must not contact
+  production atrib services during default tests.
+- **Public proof generators** intentionally submit narrow, inspectable records
+  to `log.atrib.dev` and, when needed, `archive.atrib.dev`. They must be named
+  and documented as public proof commands.
+- **Live capture artifacts** collect upstream protocol events and write verifier
+  replay artifacts. They only become public log records when a command explicitly
+  says it is producing a public proof.
+
+The default `@atrib/integration` Vitest suite now refuses fetches to production
+atrib services: `log.atrib.dev`, `archive.atrib.dev`, `graph.atrib.dev`,
+`directory.atrib.dev`, and `explore.atrib.dev`. Tests must use local endpoints,
+in-process dev logs, or mocked fetches. Live proof scripts run outside Vitest.
+
+Public demo records are valid protocol evidence, but they are not default
+operator memory. Health checks and recall flows should scope them by command,
+example path, signer role, `context_id`, or run artifact before using them as
+evidence about dogfood sessions.
+
+**Alternatives rejected.**
+
+- _Forbid examples from writing public records._ Rejected. Public proof records
+  are useful for demos, explorer QA, and partner-facing artifacts.
+- _Treat every example record as normal dogfood memory._ Rejected. That would
+  pollute recall and make operator health checks confuse scripted proof traffic
+  with lived agent history.
+- _Require every demo to use a private local log._ Rejected. Some demos are meant
+  to prove inclusion, archive retrieval, and public explorer behavior against
+  deployed services.
+- _Let each example decide without a repo-wide rule._ Rejected. The same
+  structural bug class has already appeared through test harness leakage and
+  unresolved reference residue, so record treatment needs one shared rule.
+
+**Consequences.**
+
+- Future demo work must state which record class it belongs to.
+- Default tests fail loudly on accidental production fetches from the integration
+  package.
+- Public proof records should be queried as proof artifacts, not mixed into
+  unscoped recall summaries about the operator's sessions.
+- The same signed record format remains valid across all three classes. The
+  difference is governance, endpoints, and interpretation, not cryptographic
+  validity.
+
+**Cross-references.**
+
+- [`packages/integration/README.md`](packages/integration/README.md), demo record
+  treatment table.
+- [`packages/integration/test/setup.ts`](packages/integration/test/setup.ts),
+  production endpoint fetch guard.
+- [`packages/integration/examples/cloudflare-agents/`](packages/integration/examples/cloudflare-agents/),
+  live public proof examples.
+- [`packages/integration/examples/google-stack-chain/`](packages/integration/examples/google-stack-chain/),
+  local deterministic Google proof chain.
+- [`packages/integration/examples/proof-log-receipt/`](packages/integration/examples/proof-log-receipt/),
+  public proof-log and archive receipt.
+
 ---
 
 # Pending decisions
