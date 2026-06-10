@@ -24,6 +24,7 @@ import {
   hexEncode,
   inheritChainContext,
   isValidEventTypeUri,
+  normalizeEventType,
   parentRecordHashFromEnv,
   resolveEnvContextId,
   SHA256_REF_PATTERN,
@@ -63,6 +64,8 @@ const EmitInput = z.object({
     .describe(
       'Event type URI per spec §1.2.4. Common normative values: ' +
         "'https://atrib.dev/v1/types/observation', '...annotation', '...revision'. " +
+        "The shorthand aliases 'observation', 'annotation', 'revision', 'tool_call', " +
+        "'transaction', and 'directory_anchor' are accepted and normalized before signing. " +
         'Extension URIs in any namespace OK.',
     ),
   content: z
@@ -272,8 +275,9 @@ async function handleEmit({
   recordReferenceResolver,
 }: HandleEmitInput): Promise<EmitOutput> {
   const warnings: string[] = []
+  const eventType = normalizeEventType(input.event_type)
 
-  if (!isValidEventTypeUri(input.event_type)) {
+  if (!isValidEventTypeUri(eventType)) {
     return emptyOutput(input.context_id ?? randomContextId(), [
       `event_type is not a valid absolute URI per §1.4.5: ${input.event_type}`,
     ])
@@ -313,13 +317,13 @@ async function handleEmit({
   // reject violations; we surface as warnings-only per §5.8 so callers see why
   // we refused to sign rather than getting back a malformed record. Use the
   // @atrib/mcp normative constant so the URI string lives in one place.
-  if (input.event_type === EVENT_TYPE_ANNOTATION_URI && !input.annotates) {
+  if (eventType === EVENT_TYPE_ANNOTATION_URI && !input.annotates) {
     return emptyOutput(input.context_id ?? randomContextId(), [
       'annotation event_type requires annotates per §1.2.7 (D058); ' +
         'omitted records would fail validator admission',
     ])
   }
-  if (input.annotates && input.event_type !== EVENT_TYPE_ANNOTATION_URI) {
+  if (input.annotates && eventType !== EVENT_TYPE_ANNOTATION_URI) {
     return emptyOutput(input.context_id ?? randomContextId(), [
       'annotates is FORBIDDEN on non-annotation event_types per §1.2.7 (D058); ' +
         `received event_type=${input.event_type}`,
@@ -330,13 +334,13 @@ async function handleEmit({
   // the annotates invariant above. Validators MUST reject violations; we
   // surface as warnings-only per §5.8 so callers see why we refused to sign
   // rather than getting back a malformed record.
-  if (input.event_type === EVENT_TYPE_REVISION_URI && !input.revises) {
+  if (eventType === EVENT_TYPE_REVISION_URI && !input.revises) {
     return emptyOutput(input.context_id ?? randomContextId(), [
       'revision event_type requires revises per §1.2.9 (D059); ' +
         'omitted records would fail validator admission',
     ])
   }
-  if (input.revises && input.event_type !== EVENT_TYPE_REVISION_URI) {
+  if (input.revises && eventType !== EVENT_TYPE_REVISION_URI) {
     return emptyOutput(input.context_id ?? randomContextId(), [
       'revises is FORBIDDEN on non-revision event_types per §1.2.9 (D059); ' +
         `received event_type=${input.event_type}`,
@@ -409,7 +413,7 @@ async function handleEmit({
   try {
     record = await buildAndSignEmitRecord({
       privateKey: key.privateKey,
-      eventType: input.event_type,
+      eventType,
       contextId,
       chainRoot,
       content: input.content,

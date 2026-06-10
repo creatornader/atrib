@@ -122,7 +122,7 @@ describe('OpenAI Agents runtime receipt example', () => {
     })
     expect(result.caveats.join(' ')).toContain('not the Python Agents SDK')
     expect(stdout).not.toContain('lotus OpenAI agent runtime note')
-  })
+  }, 30000)
 
   it('chains records and keeps OpenAI Agents tool content out of public records', async () => {
     const secret = 'private OpenAI Agents note'

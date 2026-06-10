@@ -2,11 +2,11 @@
 
 MCP server for atrib. Lets agents query their own provable past from the local signed-record mirror with per-record signature verification.
 
-The consumer-side counterpart to `@atrib/emit`: emit produces signed records, recall reads them back and exposes them to the agent through seven MCP tools. Each returned record carries a `signature_verified` boolean so a poorly-written agent treats tampered records as such.
+The consumer-side counterpart to `@atrib/emit`: emit produces signed records, recall reads them back and exposes them to the agent through eight MCP tools. Each returned record carries a `signature_verified` boolean so a poorly-written agent treats tampered records as such.
 
 ## Tool surface
 
-Seven MCP tools cover the cognitive surface of the local mirror.
+Eight MCP tools cover the cognitive surface of the local mirror.
 
 ### `recall_my_attribution_history`
 
@@ -21,9 +21,9 @@ mcp__atrib-recall__recall_my_attribution_history({
                                  // mirror may hold records from other signers (multi-agent flows,
                                  // transactions with counterparty signatures, etc.); use this filter
                                  // to scope strictly to your own past.
-  event_type?: 'tool_call' | 'transaction' | 'annotation' | 'revision',
+  event_type?: 'tool_call' | 'transaction' | 'observation' | 'annotation' | 'revision' | 'directory_anchor' | string,
                                  // Filter to a single event kind. Short-form names are normalized
-                                 // to the URI form.
+                                 // to the URI form. Full event_type URIs are also accepted.
   content_id?: string,           // sha256:... exact match on §1.2.2 content_id.
   tool_name?: string,            // §8.2 disclosed tool name; records without disclosure excluded.
   args_hash?: string,            // sha256:... §8.3 args_hash exact match.
@@ -65,7 +65,7 @@ mcp__atrib-recall__recall_my_attribution_history({
 })
 ```
 
-Returns `{ total, returned, filtered_out_by_verification, record_files, record_file, log_origin, pagination_caveat, records }`. Each record carries `record_hash` (always, per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) — so the result is chainable into other primitives without a verbose-mode round-trip), `annotations` (when annotation records point at it), and `superseded_by` (when revision records point at it).
+Returns `{ total, returned, filtered_out_by_verification, record_files, record_file, log_origin, pagination_caveat, records }`. Each record carries `record_hash` (always, per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), so the result is chainable into other primitives without a verbose-mode round-trip), `annotations` (when annotation records point at it), and `superseded_by` (when revision records point at it).
 
 Every call to this tool (and every sibling tool below) writes a per-call jsonl entry to `~/.atrib/state/read-primitives/calls.jsonl` for the unified loop-closure analyzer per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement). Silent-failure per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract); the tool response is unaffected by instrumentation failures. The `ATRIB_READ_PRIMITIVES_LOG` env var overrides the default path for tests.
 
@@ -81,21 +81,21 @@ Every call to this tool (and every sibling tool below) writes a per-call jsonl e
 
 - `mcp__atrib-recall__recall_session_chain({ context_id?, limit?, include_content? })` - returns all records in a context_id, ordered chronologically (oldest-first). The natural traversal of the CHAIN_PRECEDES topology for a single session/trace. Each entry carries `record_hash`, `event_type`, `timestamp`, `display_summary`, `display_producer`, `age`, plus signed causal/tool fields when present (`informed_by`, `tool_name`, `args_hash`, `result_hash`). When `include_content` is true, each entry also includes the [D062](../../DECISIONS.md#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence) local mirror body as `local_content` and the local producer label as `local_producer`. Defaults false to keep the session chain cheap. When `context_id` is omitted, falls back to `resolveEnvContextId` (the same precedence as the other tools: `ATRIB_CONTEXT_ID` env, then a [D083](../../DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)-registered harness env like `CLAUDE_CODE_SESSION_ID`).
 
-- `mcp__atrib-recall__recall_orphans({ context_id?, event_type?, creator_key?, limit? })` - returns records that are NOT cited by any other record via `informed_by` (loose ends — decisions or observations the agent made but never followed up on). Optionally scoped to one context_id, one event_type, or one creator_key. Newest-first ordering. Useful for the agent to discover dropped balls (e.g. "I noted X but never built on it").
+- `mcp__atrib-recall__recall_orphans({ context_id?, event_type?, creator_key?, limit? })` - returns records that are NOT cited by any other record via `informed_by` (loose ends: decisions or observations the agent made but never followed up on). Optionally scoped to one context_id, one event_type, or one creator_key. Newest-first ordering. Useful for the agent to discover dropped balls (e.g. "I noted X but never built on it").
 
-- `mcp__atrib-recall__recall_by_signer({ min_records? })` - aggregates the local mirror by `creator_key`. Returns distinct creators present + per-creator record count + earliest/latest timestamp. Pure aggregation; no records returned directly — use `recall_my_attribution_history` with the `creator_key` filter to drill into one creator's records. Useful when the mirror is multi-signer.
+- `mcp__atrib-recall__recall_by_signer({ min_records? })` - aggregates the local mirror by `creator_key`. Returns distinct creators present + per-creator record count + earliest/latest timestamp. Pure aggregation; no records returned directly. Use `recall_my_attribution_history` with the `creator_key` filter to drill into one creator's records. Useful when the mirror is multi-signer.
 
 ### Tunable weights
 
 The Park et al. ranking weights and recency time constant are environment-tunable for per-axis sensitivity studies:
 
-| Env var | Default | Role |
-|---|---|---|
-| `ATRIB_RECALL_ALPHA` | 0.3 | Recency component weight |
-| `ATRIB_RECALL_BETA` | 0.3 | Importance component weight |
-| `ATRIB_RECALL_GAMMA` | 0.4 | Relevance (BM25) component weight |
-| `ATRIB_RECALL_TAU_DAYS` | 7 | Exponential-decay time constant for recency |
-| `ATRIB_RECALL_NOISE_FLOOR` | 0.6 | Anti-noise threshold for `rank_by=relevance` (see below) |
+| Env var                    | Default | Role                                                     |
+| -------------------------- | ------- | -------------------------------------------------------- |
+| `ATRIB_RECALL_ALPHA`       | 0.3     | Recency component weight                                 |
+| `ATRIB_RECALL_BETA`        | 0.3     | Importance component weight                              |
+| `ATRIB_RECALL_GAMMA`       | 0.4     | Relevance (BM25) component weight                        |
+| `ATRIB_RECALL_TAU_DAYS`    | 7       | Exponential-decay time constant for recency              |
+| `ATRIB_RECALL_NOISE_FLOOR` | 0.6     | Anti-noise threshold for `rank_by=relevance` (see below) |
 
 The implementation does not enforce that alpha + beta + gamma sum to 1.0; the operator-facing defaults do. See [D085](../../DECISIONS.md#d085-recall-calibration-defaults-survey-grounded-rationale) for the survey-grounded rationale: `ALPHA=0.3` matches CrewAI's `recency_weight=0.3` (the only normalized-weights peer in a 2026-05-23 OSS survey); `TAU_DAYS=7` produces a ~4.85-day half-life inside the field range and close to Park et al.'s ~5.75-day empirical anchor.
 
@@ -103,11 +103,11 @@ The implementation does not enforce that alpha + beta + gamma sum to 1.0; the op
 
 Compact recall responses carry three derived fields per record so the agent can scan results without dereferencing opaque hashes:
 
-| Field | Source |
-|---|---|
-| `display_summary` | Annotation summary if present, else per-event_type synthesis from record fields + `_local.content` (tool_call: `call <tool_name>(<args>)`; observation: first 80 chars of `what`; transaction: `<amount> to <merchant> via <protocol>`; annotation: `annotates <hash>: [<importance>] <summary>`; revision: `revises <hash>: <new_position>`; directory_anchor: `directory anchor <root>`; extension URI: tail). Capped at 120 chars. |
-| `display_producer` | `_local.producer` sidecar label (e.g. `atrib-emit-cli`, `claude-hooks-builtin-2b`). Falls back to `key:<8hex>` of the creator key. Answers **which local code signed the record**, not which human or organization. The complementary `display_signer` field (AKD-backed identity claim) is planned as a separate field; repurposing `display_producer` for AKD lookups would conflate two distinct trust signals. |
-| `age` | Relative time string (`just now`, `5m ago`, `3h ago`, `3d ago`, ISO date for older than 30 days). Returns `"unknown"` for non-finite timestamps. |
+| Field              | Source                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `display_summary`  | Annotation summary if present, else per-event_type synthesis from record fields + `_local.content` (tool_call: `call <tool_name>(<args>)`; observation: first 80 chars of `what`; transaction: `<amount> to <merchant> via <protocol>`; annotation: `annotates <hash>: [<importance>] <summary>`; revision: `revises <hash>: <new_position>`; directory_anchor: `directory anchor <root>`; extension URI: tail). Capped at 120 chars. |
+| `display_producer` | `_local.producer` sidecar label (e.g. `atrib-emit-cli`, `claude-hooks-builtin-2b`). Falls back to `key:<8hex>` of the creator key. Answers **which local code signed the record**, not which human or organization. The complementary `display_signer` field (AKD-backed identity claim) is planned as a separate field; repurposing `display_producer` for AKD lookups would conflate two distinct trust signals.                    |
+| `age`              | Relative time string (`just now`, `5m ago`, `3h ago`, `3d ago`, ISO date for older than 30 days). Returns `"unknown"` for non-finite timestamps.                                                                                                                                                                                                                                                                                      |
 
 `recall_by_content` and `recall_walk` carry the same fields starting in the 0.8.0 audit-pass-1 follow-up.
 
@@ -127,11 +127,11 @@ Signature verification is local-only. A passing `signature_verified` proves the 
 
 ## Configuration
 
-| Env var | Required | Purpose |
-|---|---|---|
-| `ATRIB_RECORD_FILE` | optional | Path to a single signed-record jsonl mirror to read. When set, overrides directory scanning. Back-compat with pre-0.4.0 callers that pinned a specific producer's mirror. No default. |
-| `ATRIB_MIRROR_DIR` | optional | Directory to scan; recall reads every `*.jsonl` inside. Default: `~/.atrib/records/` (the spec [§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions) well-known per-agent mirror namespace). When unset, this is the path used. |
-| `ATRIB_LOG_ORIGIN` | optional | Origin used in human-readable response messages. Default: `log.atrib.dev` |
+| Env var             | Required | Purpose                                                                                                                                                                                                                                                                     |
+| ------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ATRIB_RECORD_FILE` | optional | Path to a single signed-record jsonl mirror to read. When set, overrides directory scanning. Back-compat with pre-0.4.0 callers that pinned a specific producer's mirror. No default.                                                                                       |
+| `ATRIB_MIRROR_DIR`  | optional | Directory to scan; recall reads every `*.jsonl` inside. Default: `~/.atrib/records/` (the spec [§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions) well-known per-agent mirror namespace). When unset, this is the path used. |
+| `ATRIB_LOG_ORIGIN`  | optional | Origin used in human-readable response messages. Default: `log.atrib.dev`                                                                                                                                                                                                   |
 
 **Mirror discovery priority** (per spec [§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions)): if `ATRIB_RECORD_FILE` is set, recall reads that single file. Otherwise recall scans `ATRIB_MIRROR_DIR` and merges every `*.jsonl` inside. The directory-scan default unifies recall across producers without recall having to know per-producer naming conventions; any producer that follows the spec convention just shows up.
 
@@ -143,9 +143,9 @@ Signature verification is local-only. A passing `signature_verified` proves the 
     "atrib-recall": {
       "command": "node",
       "args": ["/abs/path/to/atrib/services/atrib-recall/dist/index.js"],
-      "env": {}
-    }
-  }
+      "env": {},
+    },
+  },
 }
 ```
 
@@ -156,9 +156,9 @@ Or run via `npx`:
   "mcpServers": {
     "atrib-recall": {
       "command": "npx",
-      "args": ["-y", "@atrib/recall"]
-    }
-  }
+      "args": ["-y", "@atrib/recall"],
+    },
+  },
 }
 ```
 

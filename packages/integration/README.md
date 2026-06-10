@@ -69,7 +69,7 @@ Every example has a `README.md` next to it explaining what's wired up and which 
 
 `@atrib/integration` includes an opt-in AP2 reference artifact harness for runs produced by `google-agentic-commerce/AP2` samples or a compatible AP2 participant.
 
-Full upstream AP2 scenario launches are credential-gated and stay outside default CI. Do not commit `.env` files or API keys. A successful upstream run should be exported into the JSON artifact contract below, then checked through the same harness as local fixtures.
+Full upstream AP2 scenario launches require Google model auth or Vertex ADC and stay outside default CI. Do not commit `.env` files or API keys. A successful upstream run should be exported into the JSON artifact contract below, then checked through the same harness as local fixtures.
 
 The harness does not start AP2 services in default CI. Instead, it reads AP2 result and evidence artifacts, then runs the production atrib detector and verifier:
 
@@ -111,6 +111,27 @@ The extractor reads captured A2A function-response events, finds `complete_check
 The extractor accepts the official raw `.temp-db` mandate-chain files. The committed Google sample fixture stores the same public sample JWT and SD-JWT material in split form, then rejoins it at runtime so secret scanners do not treat presentation artifacts as credentials.
 
 The boundary is intentional: the AP2 merchant ES256 receipt signature remains verifier evidence. The generated atrib transaction record still uses local Ed25519 agent and counterparty signers unless a real AP2 participant supplies an atrib signer for the same transaction bytes.
+
+To capture a fresh official Google AP2 human-not-present card run, first start the upstream sample from a local `google-agentic-commerce/AP2` checkout. This works with either `GOOGLE_API_KEY` or Vertex ADC:
+
+```bash
+cd /tmp/google-ap2-reference
+GOOGLE_GENAI_USE_VERTEXAI=true \
+GOOGLE_CLOUD_PROJECT=atrib-ap2-demo \
+GOOGLE_CLOUD_LOCATION=global \
+  bash code/samples/python/scenarios/a2a/human-not-present/cards/run.sh
+```
+
+With those services running, drive the AP2 A2A flow and emit the atrib packet:
+
+```bash
+pnpm --filter @atrib/integration ap2-google-live-capture \
+  --out-dir /tmp/google-ap2-live-capture \
+  --temp-db-dir /tmp/google-ap2-reference/code/samples/python/scenarios/a2a/human-not-present/cards/.temp-db \
+  --context-id google-ap2-live-vertex-20260609
+```
+
+The capture script sends the delegated-drop request, approves the mandate, triggers the merchant price-drop endpoint, waits for `purchase_complete`, writes `events.json` and `transcript.json`, then runs the same extractor and interop verifier with counterparty attestation required. If `--temp-db-dir` is omitted, it writes only the captured A2A events and transcript so the operator can inspect them before extraction.
 
 The fixture directory [`test/fixtures/ap2-reference/`](test/fixtures/ap2-reference/) contains compact AP2 receipt JWT artifacts generated from the official `google-agentic-commerce/AP2` Python SDK. Regenerate them from a local AP2 checkout with:
 

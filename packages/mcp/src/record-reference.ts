@@ -1,14 +1,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { readdir, readFile } from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import * as readline from 'node:readline'
 import { canonicalRecord } from './canon.js'
 import { hexEncode, sha256 } from './hash.js'
 import { SHA256_REF_PATTERN } from './refs.js'
 import type { AtribRecord } from './types.js'
 
 export type RecordReferenceResolution = 'found' | 'not-found' | 'unknown'
+
+export interface DefaultRecordReferenceResolverOptions {
+  /**
+   * Optional wall-clock budget for local mirror scanning. When exceeded, log
+   * lookup may still prove the record exists, but a miss is reported as
+   * `unknown` because local evidence was not fully searched.
+   */
+  localLookupTimeoutMs?: number | undefined
+  /** Optional wall-clock budget for public log lookup. Defaults to 750ms. */
+  logLookupTimeoutMs?: number | undefined
+}
 
 export type LocalRecordReferenceResolver = (
   recordHash: string,
@@ -27,16 +40,28 @@ let localRecordHashCache: Set<string> | undefined
 export async function defaultRecordReferenceResolver(
   recordHash: string,
   logEndpoint?: string | undefined,
+  options: DefaultRecordReferenceResolverOptions = {},
 ): Promise<RecordReferenceResolution> {
   if (!SHA256_REF_PATTERN.test(recordHash)) return 'not-found'
 
+  let localLookupIncomplete = false
   try {
-    if (await hasLocalRecordHash(recordHash)) return 'found'
+    const localResult = await withOptionalTimeout(
+      hasLocalRecordHash(recordHash),
+      options.localLookupTimeoutMs,
+    )
+    if (localResult === 'timeout') {
+      localLookupIncomplete = true
+    } else if (localResult) {
+      return 'found'
+    }
   } catch {
-    return 'unknown'
+    localLookupIncomplete = true
   }
 
-  return lookupLogRecord(recordHash, logEndpoint)
+  const logResolution = await lookupLogRecord(recordHash, logEndpoint, options.logLookupTimeoutMs)
+  if (logResolution === 'found') return 'found'
+  return localLookupIncomplete ? 'unknown' : logResolution
 }
 
 async function hasLocalRecordHash(recordHash: string): Promise<boolean> {
@@ -52,22 +77,21 @@ async function loadLocalRecordHashes(): Promise<Set<string>> {
   const files = await localMirrorFiles()
 
   for (const file of files) {
-    let text: string
     try {
-      text = await readFile(file, 'utf8')
+      const stream = createReadStream(file, { encoding: 'utf8' })
+      const rl = readline.createInterface({ input: stream, crlfDelay: Infinity })
+      for await (const line of rl) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        try {
+          const parsed = JSON.parse(trimmed) as unknown
+          collectMirrorHashes(parsed, hashes)
+        } catch {
+          continue
+        }
+      }
     } catch {
       continue
-    }
-
-    for (const line of text.split('\n')) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
-      try {
-        const parsed = JSON.parse(trimmed) as unknown
-        collectMirrorHashes(parsed, hashes)
-      } catch {
-        continue
-      }
     }
   }
 
@@ -131,11 +155,12 @@ function hashRecord(record: AtribRecord): string {
 async function lookupLogRecord(
   recordHash: string,
   logEndpoint?: string | undefined,
+  timeoutMs = 750,
 ): Promise<RecordReferenceResolution> {
   const lookupUrl = `${logLookupBase(logEndpoint)}/lookup/${recordHash.slice('sha256:'.length)}`
   try {
     const response = await fetch(lookupUrl, {
-      signal: AbortSignal.timeout(750),
+      signal: AbortSignal.timeout(timeoutMs),
     })
     if (response.status === 404) return 'not-found'
     if (!response.ok) return 'unknown'
@@ -149,6 +174,25 @@ function logLookupBase(logEndpoint?: string | undefined): string {
   const raw = logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT'] ?? 'https://log.atrib.dev/v1'
   const withoutEntries = raw.replace(/\/entries\/?$/, '')
   return withoutEntries.replace(/\/$/, '')
+}
+
+async function withOptionalTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs?: number | undefined,
+): Promise<T | 'timeout'> {
+  if (!timeoutMs || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<'timeout'>((resolve) => {
+        timer = setTimeout(() => resolve('timeout'), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 export function clearRecordReferenceResolverCacheForTests(): void {

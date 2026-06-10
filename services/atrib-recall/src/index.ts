@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * @atrib/recall - recall_my_attribution_history MCP server.
+ * @atrib/recall - local signed-record recall MCP server.
  *
- * Exposes a single tool to the host agent: recall_my_attribution_history.
+ * Exposes the base recall tool plus sibling query-shape tools to the host agent.
  * Reads signed-record jsonl mirrors (per spec §5.9), VERIFIES the Ed25519
  * signature on each record before returning it, and tags every entry with
  * signature_verified so the agent can distinguish provable past from tampered
@@ -37,30 +37,20 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   verifyRecord,
-  EVENT_TYPE_TOOL_CALL_URI,
-  EVENT_TYPE_TRANSACTION_URI,
-  EVENT_TYPE_ANNOTATION_URI,
-  EVENT_TYPE_REVISION_URI,
-  EVENT_TYPE_OBSERVATION_URI,
-  EVENT_TYPE_DIRECTORY_ANCHOR_URI,
+  EVENT_TYPE_SHORT_NAMES,
+  isValidEventTypeUri,
+  normalizeEventType,
   resolveEnvContextId,
   logReadPrimitiveCall,
 } from '@atrib/mcp'
-import type { AtribRecord } from '@atrib/mcp'
+import type { AtribRecord, EventTypeShortName } from '@atrib/mcp'
 
-// Short-form event_type names accepted by the recall MCP schema map onto
-// their atrib-normative URI form (spec §1.2.4). Records sign the URI form
-// per §1.4.5 + isValidEventTypeUri; without this mapping, a recall caller
-// passing `event_type: 'tool_call'` would silently get zero results because
-// the raw equality compare against `r.event_type` would never match the URI.
-const EVENT_TYPE_SHORT_TO_URI: Record<string, string> = {
-  tool_call: EVENT_TYPE_TOOL_CALL_URI,
-  transaction: EVENT_TYPE_TRANSACTION_URI,
-  annotation: EVENT_TYPE_ANNOTATION_URI,
-  revision: EVENT_TYPE_REVISION_URI,
-  observation: EVENT_TYPE_OBSERVATION_URI,
-  directory_anchor: EVENT_TYPE_DIRECTORY_ANCHOR_URI,
-}
+const EventTypeFilterSchema = z.union([
+  z.enum(EVENT_TYPE_SHORT_NAMES),
+  z.string().refine((value) => isValidEventTypeUri(value), {
+    message: 'event_type must be an atrib shorthand alias or a syntactically valid absolute URI',
+  }),
+])
 
 // Layer 1 importance grading (per the recall semantic surface design). The five
 // canonical importance levels carried in annotation content per D058. The
@@ -164,24 +154,12 @@ import {
   tokenize,
   indexableTokensForRecord,
 } from './scoring.js'
-import {
-  buildLocalGraph,
-  shortestDistances,
-  walkFrom,
-} from './graph.js'
+import { buildLocalGraph, shortestDistances, walkFrom } from './graph.js'
 import type { EdgeType } from './graph.js'
-import {
-  synthesizeDisplaySummary,
-  resolveDisplayProducer,
-  formatAge,
-} from './legibility.js'
+import { synthesizeDisplaySummary, resolveDisplayProducer, formatAge } from './legibility.js'
 
 const ATRIB_RECORD_FILE = process.env.ATRIB_RECORD_FILE
-const ATRIB_MIRROR_DIR = process.env.ATRIB_MIRROR_DIR ?? join(
-  homedir(),
-  '.atrib',
-  'records',
-)
+const ATRIB_MIRROR_DIR = process.env.ATRIB_MIRROR_DIR ?? join(homedir(), '.atrib', 'records')
 const ATRIB_LOG_ORIGIN = process.env.ATRIB_LOG_ORIGIN ?? 'log.atrib.dev'
 
 // Resolved once at module-init via @atrib/mcp's resolveEnvContextId
@@ -200,9 +178,10 @@ function extractRecord(parsed: unknown): AtribRecord | null {
   const obj = parsed as Record<string, unknown>
   // D062 envelope: { record: {...}, proof?, _local?, written_at? }.
   // Legacy bare: the AtribRecord fields sit at the top level.
-  const candidate = (typeof obj.record === 'object' && obj.record !== null)
-    ? (obj.record as Record<string, unknown>)
-    : obj
+  const candidate =
+    typeof obj.record === 'object' && obj.record !== null
+      ? (obj.record as Record<string, unknown>)
+      : obj
   if (
     typeof candidate.spec_version === 'string' &&
     typeof candidate.event_type === 'string' &&
@@ -288,7 +267,7 @@ interface RecallArgs {
    * this filter to scope strictly to your own past.
    */
   creator_key?: string
-  event_type?: 'tool_call' | 'transaction' | 'annotation' | 'revision'
+  event_type?: EventTypeShortName | string
   /**
    * Optional exact match on `record.content_id` (`sha256:<64-hex>`). Per spec
    * §1.2.2, content_id is `sha256(serverUrl + ":" + toolName)`. Filtering by
@@ -545,8 +524,7 @@ function rankByRelevance(
   // contribute 0 relevance (recency + importance only).
   const looksLikeRecordHash =
     typeof rankAnchor === 'string' && /^sha256:[0-9a-f]{64}$/.test(rankAnchor)
-  const queryTokens =
-    rankAnchor && !looksLikeRecordHash ? tokenize(rankAnchor) : []
+  const queryTokens = rankAnchor && !looksLikeRecordHash ? tokenize(rankAnchor) : []
 
   // Build the BM25 index over the filtered set's indexable text. Per
   // D086, indexable text is per-event_type record content (from the D062
@@ -572,9 +550,7 @@ function rankByRelevance(
     // extends BM25 over record content so high-relevance hits routinely
     // exceed 1.0 and would otherwise dominate parkScore and invalidate
     // the noise-floor calibration.
-    const rawRel = queryTokens.length > 0
-      ? bm25Score(idx, lr.record_hash, queryTokens)
-      : 0
+    const rawRel = queryTokens.length > 0 ? bm25Score(idx, lr.record_hash, queryTokens) : 0
     const rel = Math.min(rawRel, 1)
     const s = parkScore(r, i, rel, ATRIB_RECALL_ALPHA, ATRIB_RECALL_BETA, ATRIB_RECALL_GAMMA)
     scores.set(lr.record_hash, s)
@@ -722,8 +698,9 @@ function extractRecordHashFieldsFromMcpResult(result: unknown): string[] {
   const pattern = /^sha256:[0-9a-f]{64}$/
   const content = (result as { content?: unknown })?.content
   const text =
-    Array.isArray(content) && typeof (content[0] as { text?: unknown } | undefined)?.text === 'string'
-      ? ((content[0] as { text: string }).text)
+    Array.isArray(content) &&
+    typeof (content[0] as { text?: unknown } | undefined)?.text === 'string'
+      ? (content[0] as { text: string }).text
       : undefined
   let root: unknown = result
   if (text) {
@@ -762,9 +739,7 @@ function extractRecordHashFieldsFromMcpResult(result: unknown): string[] {
  * per spec §1.4); the same record present in two mirrors will appear twice
  * here unless the caller dedupes.
  */
-export function discoverRecords(
-  recordFile?: string,
-): { records: AtribRecord[]; files: string[] } {
+export function discoverRecords(recordFile?: string): { records: AtribRecord[]; files: string[] } {
   const explicit = recordFile ?? ATRIB_RECORD_FILE
   if (explicit) {
     return { records: loadRecords(explicit), files: [explicit] }
@@ -772,10 +747,7 @@ export function discoverRecords(
   return loadRecordsFromDir(ATRIB_MIRROR_DIR)
 }
 
-export async function recall(
-  args: RecallArgs,
-  recordFile?: string,
-): Promise<RecallResult> {
+export async function recall(args: RecallArgs, recordFile?: string): Promise<RecallResult> {
   // Defaults: compact=true (small responses) and include_unverified=false
   // (no tampered records). The verbose+include-tampered combo is opt-in.
   // Rationale: a poorly-written agent that doesn't check signature_verified
@@ -794,15 +766,15 @@ export async function recall(
   const effectiveContextId = args.context_id ?? ATRIB_CONTEXT_ID_DEFAULT
 
   let filtered = all
-  if (effectiveContextId) filtered = filtered.filter((lr) => lr.record.context_id === effectiveContextId)
+  if (effectiveContextId)
+    filtered = filtered.filter((lr) => lr.record.context_id === effectiveContextId)
   if (args.creator_key) {
     filtered = filtered.filter((lr) => lr.record.creator_key === args.creator_key)
   }
   if (args.event_type) {
-    // Schema accepts short form ('tool_call'|'transaction'); records carry
-    // the URI form. Normalize before comparison; pass URIs through as-is so
-    // a forward-compatible caller passing the URI directly still matches.
-    const targetUri = EVENT_TYPE_SHORT_TO_URI[args.event_type] ?? args.event_type
+    // Schema accepts short form ('tool_call'|'transaction'|'observation'|...);
+    // records carry full URI form, so normalize before comparison.
+    const targetUri = normalizeEventType(args.event_type)
     filtered = filtered.filter((lr) => lr.record.event_type === targetUri)
   }
   if (args.content_id) filtered = filtered.filter((lr) => lr.record.content_id === args.content_id)
@@ -945,22 +917,29 @@ export async function recall(
   }
 }
 
+function readPackageVersion(): string {
+  try {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+      version?: unknown
+    }
+    return typeof pkg.version === 'string' ? pkg.version : '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+}
+
 const server = new McpServer({
   name: 'atrib-recall',
-  // Keep in sync with package.json. The Layer 1 stub scaffolding ships
-  // under the 0.4.0 surface (additive optional schema params + 4 stub
-  // tools that return "Layer 1 in progress" notice); the version bump
-  // happens via the queued changeset on next publication run.
-  version: '0.4.0',
+  version: readPackageVersion(),
 })
 
 // The recall semantic surface (as defined in the public protocol specification).
-// Five distinct MCP tools: recall_my_attribution_history is the base
+// Eight distinct MCP tools: recall_my_attribution_history is the base
 // filter-and-page tool; recall_annotations + recall_revisions return
 // aggregated annotation summaries / revision chains for a specific
 // record_hash; recall_walk traverses the local Layer 1 derived graph;
-// recall_by_content runs BM25 free-form retrieval over annotation
-// summaries + topic tags.
+// recall_by_content runs BM25 free-form retrieval; recall_session_chain,
+// recall_orphans, and recall_by_signer cover common agent lookup shapes.
 
 server.registerTool(
   'recall_my_attribution_history',
@@ -972,7 +951,7 @@ server.registerTool(
       'compact=false and include_unverified=true respectively. Local signature verification proves ' +
       '"this record was signed by that creator_key"; it does NOT prove log inclusion (fetch a log ' +
       'inclusion proof to confirm). Filter by context_id (specific trace), event_type ' +
-      '(tool_call|transaction), content_id (specific tool on specific server), tool_name (disclosed ' +
+      '(tool_call|transaction|observation|annotation|revision|directory_anchor or a full URI), content_id (specific tool on specific server), tool_name (disclosed ' +
       'name per §8.2), or args_hash (canonical-args commitment per §8.3). Filters are AND-combined; ' +
       'omit all of them for cross-trace history. Results are sorted newest-first. Pagination uses ' +
       'offset; new records appended between calls invalidate offset stability. See the ' +
@@ -990,17 +969,18 @@ server.registerTool(
         .string()
         .optional()
         .describe(
-          "Optional exact match on record.creator_key (base64url-encoded Ed25519 public key, 43 chars). " +
-            "Filters the local mirror to records signed by this specific creator. Omit to see all signers " +
+          'Optional exact match on record.creator_key (base64url-encoded Ed25519 public key, 43 chars). ' +
+            'Filters the local mirror to records signed by this specific creator. Omit to see all signers ' +
             "present in the mirror; the tool name says 'my attribution history' but the mirror may contain " +
-            "records from other creators when multi-agent flows ship records into a shared mirror. Use " +
-            "your own creator_key (resolvable from the @atrib/cli key-show output, or `getPublicKey()` " +
-            "called on your seed) when you want to scope strictly to your own past.",
+            'records from other creators when multi-agent flows ship records into a shared mirror. Use ' +
+            'your own creator_key (resolvable from the @atrib/cli key-show output, or `getPublicKey()` ' +
+            'called on your seed) when you want to scope strictly to your own past.',
         ),
-      event_type: z
-        .enum(['tool_call', 'transaction'])
-        .optional()
-        .describe('Optional filter to a single event kind. Most calls leave this unset.'),
+      event_type: EventTypeFilterSchema.optional().describe(
+        'Optional filter to a single event kind. Accepts atrib shorthand aliases ' +
+          '(tool_call, transaction, observation, annotation, revision, directory_anchor) ' +
+          'or a full event_type URI. Most calls leave this unset.',
+      ),
       content_id: z
         .string()
         .optional()
@@ -1050,14 +1030,8 @@ server.registerTool(
             'response (their count is reported in filtered_out_by_verification). Set to true to ' +
             'include them - useful when investigating tampered or partial mirror state.',
         ),
-      // ─── New schema params: accepted now; enforcement in flight. Each ───
-      //    of the seven params below is currently STUB-ACCEPTED: the schema
-      //    validates the value and the handler ignores it (returns the same
-      //    results it would return without the param). The response payload
-      //    includes a layer_1_warnings array listing which stub-accepted
-      //    params were silently ignored, so callers can detect the pre-impl
-      //    state without having to read source. Full enforcement implementation
-      //    lands in upcoming releases.
+      // Layer 1 semantic filters. These are enforced in the handler below and
+      // share the same response metadata path as the base filters.
       min_importance: z
         .enum(['critical', 'high', 'medium', 'low', 'noise'])
         .optional()
@@ -1125,34 +1099,15 @@ server.registerTool(
       'recall_my_attribution_history',
       args,
       async () => {
-        // Layer 1 stub-acceptance: detect newly-accepted Layer 1 params, run the
-        // existing 0.4.0 recall path (which ignores them), and return the
-        // result with a layer_1_warnings array listing exactly which stub-
-        // accepted params were silently ignored. Callers can detect the
-        // pre-implementation state without having to read source.
-        // All seven Layer 1 surface parameters are now enforced
-        // (min_importance, topic_tags, include_revised, min_signers,
-        // rank_by, rank_anchor, toc). The layer_1_warnings array stays in
-        // the response shape (per the original wire contract) but is now
-        // always empty unless a future Layer extension lands more
-        // stub-accepted params.
-        const ignored: string[] = []
+        // All Layer 1 surface parameters are enforced by recall() above:
+        // min_importance, topic_tags, include_revised, min_signers,
+        // rank_by, rank_anchor, and toc.
         const result = await recall(args as RecallArgs)
-        const augmented = ignored.length > 0
-          ? {
-              ...result,
-              layer_1_warnings: ignored.map((k) => ({
-                param: k,
-                status: 'stub-accepted',
-                note: `Layer 1 param '${k}' was supplied; handler ignored it (full enforcement lands in upcoming release). Result reflects 0.4.0 behavior as if the param was not set.`,
-              })),
-            }
-          : result
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(augmented, null, 2),
+              text: JSON.stringify(result, null, 2),
             },
           ],
         }
@@ -1162,31 +1117,31 @@ server.registerTool(
 )
 
 // ─── Layer 1 sibling tools ───
-// recall_walk, recall_annotations, recall_revisions, recall_by_content
-// expose the cognitive surface beyond the base filter-and-page tool.
+// Sibling tools expose common agent lookup shapes beyond the base
+// filter-and-page tool.
 
 server.registerTool(
   'recall_walk',
   {
     description:
-      "Walk the local derived graph from a starting record_hash. Returns records reachable via the requested edge types up to the given hop depth, ordered by ascending weighted distance. Layer 1 covers four edge types: CHAIN_PRECEDES (weight 1), INFORMED_BY (weight 1), ANNOTATES (weight 2), REVISES (weight 2). SESSION_PRECEDES, SESSION_PARALLEL, CONVERGES_ON, CROSS_SESSION, and PROVENANCE_OF are deferred to subsequent releases. Useful for tracing the local causal neighborhood of a record before re-attempting a similar action.",
+      'Walk the local derived graph from a starting record_hash. Returns records reachable via the requested edge types up to the given hop depth, ordered by ascending weighted distance. Layer 1 covers four edge types: CHAIN_PRECEDES (weight 1), INFORMED_BY (weight 1), ANNOTATES (weight 2), REVISES (weight 2). SESSION_PRECEDES, SESSION_PARALLEL, CONVERGES_ON, CROSS_SESSION, and PROVENANCE_OF are deferred to subsequent releases. Useful for tracing the local causal neighborhood of a record before re-attempting a similar action.',
     inputSchema: {
       from_record_hash: z
         .string()
         .describe(
-          "Starting record hash (sha256:<64-hex>). The walk begins here and expands through the local derived graph.",
+          'Starting record hash (sha256:<64-hex>). The walk begins here and expands through the local derived graph.',
         ),
       edge_types: z
         .array(z.enum(['CHAIN_PRECEDES', 'INFORMED_BY', 'ANNOTATES', 'REVISES']))
         .optional()
         .describe(
-          "Optional list of Layer 1 edge types to follow. Default: all four. Unknown values are rejected by the schema.",
+          'Optional list of Layer 1 edge types to follow. Default: all four. Unknown values are rejected by the schema.',
         ),
       depth: z
         .number()
         .optional()
         .describe(
-          "Maximum hop count (NOT cumulative weight). Default 3. Higher values may return many records; paginate downstream if needed.",
+          'Maximum hop count (NOT cumulative weight). Default 3. Higher values may return many records; paginate downstream if needed.',
         ),
     },
   },
@@ -1197,9 +1152,7 @@ server.registerTool(
       async () => {
         const { loaded } = discoverLoaded()
         const graph = buildLocalGraph(loaded)
-        const edgeTypes = args.edge_types
-          ? new Set(args.edge_types as EdgeType[])
-          : undefined
+        const edgeTypes = args.edge_types ? new Set(args.edge_types as EdgeType[]) : undefined
         const depth = typeof args.depth === 'number' ? args.depth : 3
         const walk = walkFrom(graph, args.from_record_hash, edgeTypes, depth)
         // Layer 1 v2 legibility: join walked hashes back to their loaded
@@ -1261,7 +1214,7 @@ server.registerTool(
       record_hash: z
         .string()
         .describe(
-          "Record hash (sha256:<64-hex>) of the record whose annotations should be retrieved. Annotations are D058 records whose content.annotates field equals this hash.",
+          'Record hash (sha256:<64-hex>) of the record whose annotations should be retrieved. Annotations are D058 records whose content.annotates field equals this hash.',
         ),
     },
   },
@@ -1299,7 +1252,7 @@ server.registerTool(
       record_hash: z
         .string()
         .describe(
-          "Record hash (sha256:<64-hex>) of the record whose revision chain should be retrieved. Revisions are D059 records whose content.revises field equals this hash (or chain back to it).",
+          'Record hash (sha256:<64-hex>) of the record whose revision chain should be retrieved. Revisions are D059 records whose content.revises field equals this hash (or chain back to it).',
         ),
     },
   },
@@ -1402,7 +1355,7 @@ server.registerTool(
         .number()
         .optional()
         .describe(
-          "Top-k results to return (default 10, max 50). Final ordering uses Park et al. weighted-sum scoring: alpha*recency + beta*importance + gamma*BM25_relevance. Weights are tunable via ATRIB_RECALL_ALPHA/BETA/GAMMA env vars.",
+          'Top-k results to return (default 10, max 50). Final ordering uses Park et al. weighted-sum scoring: alpha*recency + beta*importance + gamma*BM25_relevance. Weights are tunable via ATRIB_RECALL_ALPHA/BETA/GAMMA env vars.',
         ),
     },
   },
@@ -1423,10 +1376,15 @@ server.registerTool(
         const scored = loaded.map((lr) => {
           const r = recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS)
           const i = importanceScore(annotationsByRecord.get(lr.record_hash))
-          const rel = queryTokens.length > 0
-            ? bm25Score(idx, lr.record_hash, queryTokens)
-            : 0
-          const score = parkScore(r, i, rel, ATRIB_RECALL_ALPHA, ATRIB_RECALL_BETA, ATRIB_RECALL_GAMMA)
+          const rel = queryTokens.length > 0 ? bm25Score(idx, lr.record_hash, queryTokens) : 0
+          const score = parkScore(
+            r,
+            i,
+            rel,
+            ATRIB_RECALL_ALPHA,
+            ATRIB_RECALL_BETA,
+            ATRIB_RECALL_GAMMA,
+          )
           return { lr, score, recency: r, importance: i, relevance: rel }
         })
         scored.sort((a, b) => {
@@ -1516,7 +1474,12 @@ server.registerTool(
               {
                 type: 'text',
                 text: JSON.stringify(
-                  { context_id: null, count: 0, records: [], warning: 'no context_id supplied or resolvable via env' },
+                  {
+                    context_id: null,
+                    count: 0,
+                    records: [],
+                    warning: 'no context_id supplied or resolvable via env',
+                  },
                   null,
                   2,
                 ),
@@ -1565,10 +1528,12 @@ server.registerTool(
                       display_producer: resolveDisplayProducer(lr.record, lr.producer),
                       age: formatAge(lr.record.timestamp, now),
                     }
-                    const informedBy = (lr.record as AtribRecord & { informed_by?: string[] }).informed_by
+                    const informedBy = (lr.record as AtribRecord & { informed_by?: string[] })
+                      .informed_by
                     const toolName = (lr.record as AtribRecord & { tool_name?: string }).tool_name
                     const argsHash = (lr.record as AtribRecord & { args_hash?: string }).args_hash
-                    const resultHash = (lr.record as AtribRecord & { result_hash?: string }).result_hash
+                    const resultHash = (lr.record as AtribRecord & { result_hash?: string })
+                      .result_hash
                     if (Array.isArray(informedBy) && informedBy.length > 0) {
                       entry.informed_by = informedBy
                     }
@@ -1606,25 +1571,20 @@ server.registerTool(
       context_id: z
         .string()
         .optional()
-        .describe(
-          "Optional 32-hex context_id to scope orphan-discovery to one session/trace.",
-        ),
-      event_type: z
-        .enum(['tool_call', 'transaction', 'annotation', 'revision', 'observation', 'directory_anchor'])
-        .optional()
-        .describe(
-          "Optional filter to one event_type. Most useful with 'observation' to find unfollowed noting/discovery events.",
-        ),
+        .describe('Optional 32-hex context_id to scope orphan-discovery to one session/trace.'),
+      event_type: EventTypeFilterSchema.optional().describe(
+        "Optional filter to one event_type alias or full URI. Most useful with 'observation' to find unfollowed noting/discovery events.",
+      ),
       creator_key: z
         .string()
         .optional()
         .describe(
-          "Optional exact match on record.creator_key (base64url). Filters orphan-discovery to records signed by one creator.",
+          'Optional exact match on record.creator_key (base64url). Filters orphan-discovery to records signed by one creator.',
         ),
       limit: z
         .number()
         .optional()
-        .describe("Maximum records to return (default 50, max 500), newest-first."),
+        .describe('Maximum records to return (default 50, max 500), newest-first.'),
     },
   },
   async (args) =>
@@ -1651,7 +1611,7 @@ server.registerTool(
           orphans = orphans.filter((lr) => lr.record.creator_key === args.creator_key)
         }
         if (args.event_type) {
-          const targetUri = EVENT_TYPE_SHORT_TO_URI[args.event_type] ?? args.event_type
+          const targetUri = normalizeEventType(args.event_type)
           orphans = orphans.filter((lr) => lr.record.event_type === targetUri)
         }
         orphans.sort((a, b) => b.record.timestamp - a.record.timestamp)
@@ -1706,7 +1666,9 @@ server.registerTool(
       min_records: z
         .number()
         .optional()
-        .describe("Optional minimum record count to include a creator in the result. Default 1 (include all)."),
+        .describe(
+          'Optional minimum record count to include a creator in the result. Default 1 (include all).',
+        ),
     },
   },
   async (args) =>
@@ -1715,15 +1677,22 @@ server.registerTool(
       args,
       async () => {
         const { loaded } = discoverLoaded()
-        type SignerStat = { creator_key: string; count: number; latest_timestamp: number; earliest_timestamp: number }
+        type SignerStat = {
+          creator_key: string
+          count: number
+          latest_timestamp: number
+          earliest_timestamp: number
+        }
         const byKey = new Map<string, SignerStat>()
         for (const lr of loaded) {
           const key = lr.record.creator_key
           const existing = byKey.get(key)
           if (existing) {
             existing.count++
-            if (lr.record.timestamp > existing.latest_timestamp) existing.latest_timestamp = lr.record.timestamp
-            if (lr.record.timestamp < existing.earliest_timestamp) existing.earliest_timestamp = lr.record.timestamp
+            if (lr.record.timestamp > existing.latest_timestamp)
+              existing.latest_timestamp = lr.record.timestamp
+            if (lr.record.timestamp < existing.earliest_timestamp)
+              existing.earliest_timestamp = lr.record.timestamp
           } else {
             byKey.set(key, {
               creator_key: key,

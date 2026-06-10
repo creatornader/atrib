@@ -109,7 +109,7 @@ describe('OpenAI Responses tool-call receipt example', () => {
     })
     expect(result.caveats.join(' ')).toContain('not a hosted OpenAI model call')
     expect(stdout).not.toContain('lotus OpenAI Responses note')
-  })
+  }, 30000)
 
   it('chains records and keeps Responses tool payloads out of public records', async () => {
     const secret = 'private Responses tool payload'

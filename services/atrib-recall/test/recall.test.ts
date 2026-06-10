@@ -14,6 +14,8 @@ import {
   canonicalRecord,
   EVENT_TYPE_TOOL_CALL_URI,
   EVENT_TYPE_TRANSACTION_URI,
+  EVENT_TYPE_OBSERVATION_URI,
+  EVENT_TYPE_DIRECTORY_ANCHOR_URI,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import { loadRecords, loadRecordsFromDir, discoverRecords, recall } from '../src/index.js'
@@ -199,19 +201,46 @@ describe('recall', () => {
     expect(onlyKey2.total).toBe(1)
     expect((onlyKey2.records[0] as { creator_key: string }).creator_key).toBe(key2)
     // Filter to a creator not in the mirror → empty.
-    expect((await recall({ creator_key: base64urlEncode(new Uint8Array(32).fill(0)) }, recordFile)).total).toBe(0)
+    expect(
+      (await recall({ creator_key: base64urlEncode(new Uint8Array(32).fill(0)) }, recordFile))
+        .total,
+    ).toBe(0)
   })
 
   it('filters by event_type', async () => {
     const records = [
-      await makeSigned({ event_type: EVENT_TYPE_TOOL_CALL_URI, timestamp: 1, content_id: `sha256:${'a'.repeat(64)}` }),
-      await makeSigned({ event_type: EVENT_TYPE_TRANSACTION_URI, timestamp: 2, content_id: `sha256:${'b'.repeat(64)}` }),
-      await makeSigned({ event_type: EVENT_TYPE_TOOL_CALL_URI, timestamp: 3, content_id: `sha256:${'c'.repeat(64)}` }),
+      await makeSigned({
+        event_type: EVENT_TYPE_TOOL_CALL_URI,
+        timestamp: 1,
+        content_id: `sha256:${'a'.repeat(64)}`,
+      }),
+      await makeSigned({
+        event_type: EVENT_TYPE_TRANSACTION_URI,
+        timestamp: 2,
+        content_id: `sha256:${'b'.repeat(64)}`,
+      }),
+      await makeSigned({
+        event_type: EVENT_TYPE_TOOL_CALL_URI,
+        timestamp: 3,
+        content_id: `sha256:${'c'.repeat(64)}`,
+      }),
+      await makeSigned({
+        event_type: EVENT_TYPE_OBSERVATION_URI,
+        timestamp: 4,
+        content_id: `sha256:${'d'.repeat(64)}`,
+      }),
+      await makeSigned({
+        event_type: EVENT_TYPE_DIRECTORY_ANCHOR_URI,
+        timestamp: 5,
+        content_id: `sha256:${'e'.repeat(64)}`,
+      }),
     ]
     writeFileSync(recordFile, records.map((r) => JSON.stringify(r)).join('\n'))
 
     expect((await recall({ event_type: 'transaction' }, recordFile)).total).toBe(1)
     expect((await recall({ event_type: 'tool_call' }, recordFile)).total).toBe(2)
+    expect((await recall({ event_type: 'observation' }, recordFile)).total).toBe(1)
+    expect((await recall({ event_type: 'directory_anchor' }, recordFile)).total).toBe(1)
   })
 
   it('filters by content_id (exact match)', async () => {
@@ -282,7 +311,12 @@ describe('recall', () => {
       // Matches all three
       await makeSigned({ timestamp: 1, content_id: cidA, tool_name: 'Edit', args_hash: hashA }),
       // Matches content_id + tool_name only
-      await makeSigned({ timestamp: 2, content_id: cidA, tool_name: 'Edit', args_hash: `sha256:${'2'.repeat(64)}` }),
+      await makeSigned({
+        timestamp: 2,
+        content_id: cidA,
+        tool_name: 'Edit',
+        args_hash: `sha256:${'2'.repeat(64)}`,
+      }),
       // Matches content_id only
       await makeSigned({ timestamp: 3, content_id: cidA, tool_name: 'Bash', args_hash: hashA }),
       // Matches none
@@ -380,10 +414,10 @@ describe('envelope parsing (D062 sidecar form)', () => {
   it('coexists in one file with bare records (mixed shapes)', async () => {
     const r1 = await makeSigned({ timestamp: 1, content_id: `sha256:${'1'.repeat(64)}` })
     const r2 = await makeSigned({ timestamp: 2, content_id: `sha256:${'2'.repeat(64)}` })
-    writeFileSync(recordFile, [
-      JSON.stringify(r1),
-      JSON.stringify({ record: r2, _local: {} }),
-    ].join('\n'))
+    writeFileSync(
+      recordFile,
+      [JSON.stringify(r1), JSON.stringify({ record: r2, _local: {} })].join('\n'),
+    )
     expect(loadRecords(recordFile)).toHaveLength(2)
   })
 

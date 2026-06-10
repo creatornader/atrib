@@ -242,7 +242,7 @@ function buildDescription(): CliDescription {
     envelope_schema: {
       required: {
         event_type:
-          'URI per spec §1.2.4. Normative: https://atrib.dev/v1/types/{observation,annotation,revision,tool_call,transaction}.',
+          'URI per spec §1.2.4. Normative: https://atrib.dev/v1/types/{observation,annotation,revision,tool_call,transaction,directory_anchor}. Shorthand aliases for those leaves are accepted.',
         content: 'Object of any shape. Becomes the signed semantic payload.',
       },
       optional: {
