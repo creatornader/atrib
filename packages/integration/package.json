@@ -1,6 +1,6 @@
 {
   "name": "@atrib/integration",
-  "version": "0.0.26",
+  "version": "0.0.27",
   "description": "Cross-package integration tests + runnable framework examples for atrib (private).",
   "license": "Apache-2.0",
   "repository": {
