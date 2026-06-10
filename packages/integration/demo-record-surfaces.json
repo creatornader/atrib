@@ -1,0 +1,271 @@
+{
+  "schema": "atrib.integration.demo-record-surfaces.v1",
+  "record_classes": {
+    "offline-local": "Signs or verifies local records only. No public atrib record is created by the surface.",
+    "public-proof": "Creates narrow public atrib records for an inspectable proof run.",
+    "live-capture": "Captures upstream protocol events and writes verifier replay artifacts. Public atrib records require a separate explicit proof step."
+  },
+  "endpoint_postures": {
+    "local-only": "Uses local files, in-process services, localhost, or mocked endpoints.",
+    "public-read": "May read public atrib endpoints but does not write public records.",
+    "public-write": "Writes to public atrib services by design.",
+    "upstream-capture": "Talks to an upstream non-atrib system to capture protocol artifacts."
+  },
+  "surfaces": [
+    {
+      "id": "end-to-end-demo",
+      "path": "examples/end-to-end",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["demo"]
+    },
+    {
+      "id": "claude-agent-sdk",
+      "path": "examples/claude-agent-sdk",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": []
+    },
+    {
+      "id": "cloudflare-live-proofs",
+      "path": "examples/cloudflare-agents",
+      "record_class": "public-proof",
+      "endpoint_posture": "public-write",
+      "commands": []
+    },
+    {
+      "id": "cloudflare-oauth-evidence-infra",
+      "path": "examples/cloudflare-agents/oauth-evidence-infra",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": []
+    },
+    {
+      "id": "vercel-ai-sdk",
+      "path": "examples/vercel-ai-sdk",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": []
+    },
+    {
+      "id": "langchain-js",
+      "path": "examples/langchain-js",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": []
+    },
+    {
+      "id": "langgraph-store",
+      "path": "examples/langgraph-store",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["langgraph-store-smoke"]
+    },
+    {
+      "id": "langgraph-python-checkpointer",
+      "path": "examples/langgraph-python-checkpointer",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["langgraph-python-checkpointer-smoke"]
+    },
+    {
+      "id": "llamaindex-memory",
+      "path": "examples/llamaindex-memory",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["llamaindex-memory-smoke"]
+    },
+    {
+      "id": "llamaindex-python-memory",
+      "path": "examples/llamaindex-python-memory",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["llamaindex-python-memory-smoke"]
+    },
+    {
+      "id": "letta-memory",
+      "path": "examples/letta-memory",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["letta-memory-smoke"]
+    },
+    {
+      "id": "a2a-handoff",
+      "path": "examples/a2a-handoff",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["a2a-handoff-proof"]
+    },
+    {
+      "id": "google-adk",
+      "path": "examples/google-adk",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["google-adk-plugin-smoke"]
+    },
+    {
+      "id": "google-adk-python",
+      "path": "examples/google-adk-python",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["google-adk-python-plugin-smoke"]
+    },
+    {
+      "id": "google-stack-chain",
+      "path": "examples/google-stack-chain",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["google-stack-chain-proof", "google-stack-chain-visual"]
+    },
+    {
+      "id": "openai-agents-runtime",
+      "path": "examples/openai-agents-runtime",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["openai-agents-runtime-smoke"]
+    },
+    {
+      "id": "openai-responses",
+      "path": "examples/openai-responses",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["openai-responses-tool-call-smoke"]
+    },
+    {
+      "id": "mastra-runtime",
+      "path": "examples/mastra-runtime",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["mastra-runtime-smoke", "mastra-workflow-suspend-resume-smoke"]
+    },
+    {
+      "id": "microsoft-agent-framework",
+      "path": "examples/microsoft-agent-framework",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["microsoft-agent-framework-workflow-smoke"]
+    },
+    {
+      "id": "browser-workflow",
+      "path": "examples/browser-workflow",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": [
+        "browser-workflow-receipt-smoke",
+        "browser-use-workflow-receipt-smoke",
+        "stagehand-workflow-receipt-smoke"
+      ]
+    },
+    {
+      "id": "brief-dcbench",
+      "path": "examples/brief-dcbench",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["brief-dcbench-evidence-smoke"]
+    },
+    {
+      "id": "proof-log-receipt",
+      "path": "examples/proof-log-receipt",
+      "record_class": "public-proof",
+      "endpoint_posture": "public-write",
+      "commands": ["proof-log-receipt"]
+    },
+    {
+      "id": "evidence-packet-eval",
+      "path": "examples/evidence-packet-eval",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["evidence-packet-eval", "evidence-packet-inspect"]
+    },
+    {
+      "id": "trace-repair-suspect",
+      "path": "examples/trace-repair-suspect",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["trace-repair-suspect"]
+    },
+    {
+      "id": "openinference",
+      "path": "examples/openinference",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["openinference-cognitive-loop", "openinference-dual-export-smoke"]
+    },
+    {
+      "id": "mem0",
+      "path": "examples/mem0",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": [
+        "mem0-wrapper-demo",
+        "mem0-oss-compat-smoke",
+        "mem0-oss-full-cycle-smoke",
+        "mem0-client-smoke",
+        "mem0-python-oss-smoke"
+      ]
+    },
+    {
+      "id": "graphiti",
+      "path": "examples/graphiti",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["graphiti-mcp-smoke", "graphiti-core-ollama-smoke"]
+    },
+    {
+      "id": "signer-proxy",
+      "path": "examples/signer-proxy",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["signer-proxy-demo"]
+    },
+    {
+      "id": "calc-demo",
+      "path": "scripts/calc-demo.ts",
+      "record_class": "offline-local",
+      "endpoint_posture": "public-read",
+      "commands": ["calc-demo"]
+    },
+    {
+      "id": "ap2-live-interop",
+      "path": "scripts/ap2-live-interop.ts",
+      "record_class": "live-capture",
+      "endpoint_posture": "local-only",
+      "commands": ["ap2-live-interop"]
+    },
+    {
+      "id": "ap2-local-participant",
+      "path": "scripts/generate-ap2-local-participant-artifacts.ts",
+      "record_class": "live-capture",
+      "endpoint_posture": "local-only",
+      "commands": ["ap2-local-participant"]
+    },
+    {
+      "id": "ap2-google-live-capture",
+      "path": "scripts/capture-google-ap2-live-sample.ts",
+      "record_class": "live-capture",
+      "endpoint_posture": "upstream-capture",
+      "commands": ["ap2-google-live-capture"]
+    },
+    {
+      "id": "ap2-google-sample-extract",
+      "path": "scripts/extract-google-ap2-sample-artifacts.ts",
+      "record_class": "live-capture",
+      "endpoint_posture": "local-only",
+      "commands": ["ap2-google-sample-extract"]
+    },
+    {
+      "id": "mcp-oauth-evidence",
+      "path": "scripts/mcp-oauth-evidence.ts",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["mcp-oauth-evidence"]
+    },
+    {
+      "id": "mcp-oauth-live-archive",
+      "path": "scripts/mcp-oauth-live-archive.ts",
+      "record_class": "public-proof",
+      "endpoint_posture": "public-write",
+      "commands": ["mcp-oauth-live-archive"]
+    }
+  ]
+}

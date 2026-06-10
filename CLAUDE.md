@@ -42,6 +42,7 @@ atrib/
     memory-tool/               # @atrib/memory-tool: Anthropic Memory Tool handler wrapper (public). Wraps TypeScript Memory Tool handlers, signs create/replace/insert/delete/rename commands as atrib tool_call records, and keeps storage backend-owned by the host.
     log-dev/                   # @atrib/log-dev: in-memory dev Merkle log stub (PRIVATE, dev only)
     integration/               # @atrib/integration: cross-package tests + runnable framework examples (private)
+      demo-record-surfaces.json # Machine-readable D117 demo record treatment manifest. Classifies integration execution surfaces by record class (offline/local, public proof, live capture) and endpoint posture (local-only, public-read, public-write, upstream-capture); checked by pnpm doc-sync.
       scripts/
         ap2-live-interop.ts    # Opt-in AP2 reference artifact harness. Reads AP2 result + AP2/VI evidence JSON, optionally verifies an atrib transaction-record artifact with counterparty attestation, and exits nonzero on drift.
         mcp-oauth-evidence.ts  # Local MCP/OAuth producer-to-verifier harness. Captures validated authInfo into sidecar evidence, verifies DPoP and scope constraints through `verifyRecord().evidence[]`, and proves raw bearer tokens stay local-only.

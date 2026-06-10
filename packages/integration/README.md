@@ -77,6 +77,19 @@ outreach proof.
 | **Public proof generators** | Cloudflare live Worker proofs, Cloudflare approval trace deploys, proof-log receipt, live MCP/OAuth archive | Intentionally submit narrow, inspectable records to the public log and, when needed, the archive service. Treat those records as public proof artifacts tied to a run, not as operator memory or default recall context.                      |
 | **Live capture artifacts**  | AP2 Google live capture, upstream AP2 sample extraction, local participant artifacts                        | Capture upstream events and write signed artifacts for verifier replay. They should only become public log records when an explicit proof script says so. External protocol signatures remain verifier evidence, not atrib signer identities. |
 
+The machine-readable source for current surfaces is
+[`demo-record-surfaces.json`](demo-record-surfaces.json). It tracks both the
+record class and the endpoint posture because those are different axes. For
+example, `calc-demo` may read the public checkpoint while still using only local
+input records, so it is an offline/local record surface with public-read endpoint
+posture. Public proof generators are the only class that should use
+public-write endpoint posture.
+
+`pnpm doc-sync` runs
+[`scripts/check-demo-record-surfaces.mjs`](scripts/check-demo-record-surfaces.mjs)
+so new integration package commands and top-level example directories must have
+a class before CI passes.
+
 The default Vitest suite must not contact production atrib services. The
 integration test setup rejects fetches to `log.atrib.dev`, `archive.atrib.dev`,
 `graph.atrib.dev`, `directory.atrib.dev`, and `explore.atrib.dev`. Tests should
