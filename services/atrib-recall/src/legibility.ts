@@ -55,7 +55,7 @@ export function synthesizeDisplaySummary(
   }
 
   // 2. Per-event_type synthesis.
-  const c = isObject(content) ? content as Record<string, unknown> : {}
+  const c = isObject(content) ? (content as Record<string, unknown>) : {}
   const recordToolName = (record as AtribRecord & { tool_name?: string }).tool_name
   const sidecarToolName = stringFrom(c.tool_name ?? c.toolName)
   const tool_name = recordToolName ?? sidecarToolName
@@ -65,7 +65,10 @@ export function synthesizeDisplaySummary(
       const args = c.args ?? c.input ?? c.arguments
       if (tool_name) {
         if (isObject(args)) {
-          const argsExcerpt = stringifyArgsBrief(args as Record<string, unknown>, ARGS_EXCERPT_MAX_LEN)
+          const argsExcerpt = stringifyArgsBrief(
+            args as Record<string, unknown>,
+            ARGS_EXCERPT_MAX_LEN,
+          )
           return truncate(`call ${tool_name}(${argsExcerpt})`, SUMMARY_MAX_LEN)
         }
         return `call ${tool_name}`
@@ -97,12 +100,10 @@ export function synthesizeDisplaySummary(
       return 'directory anchor'
     }
     case `${ATRIB_EVENT_TYPE_PREFIX}annotation`: {
-      const annotates = c.annotates
+      const annotates = (record as AtribRecord & { annotates?: unknown }).annotates ?? c.annotates
       const importance = c.importance
       const summary = c.summary
-      const annotatesShort = typeof annotates === 'string'
-        ? shortHash(annotates)
-        : 'unknown'
+      const annotatesShort = typeof annotates === 'string' ? shortHash(annotates) : 'unknown'
       if (typeof summary === 'string' && summary.length > 0) {
         const impTag = importance ? `[${String(importance)}] ` : ''
         return truncate(`annotates ${annotatesShort}: ${impTag}${summary}`, SUMMARY_MAX_LEN)
@@ -110,11 +111,9 @@ export function synthesizeDisplaySummary(
       return `annotates ${annotatesShort}`
     }
     case `${ATRIB_EVENT_TYPE_PREFIX}revision`: {
-      const revises = c.revises
+      const revises = (record as AtribRecord & { revises?: unknown }).revises ?? c.revises
       const newPos = c.new_position
-      const revisesShort = typeof revises === 'string'
-        ? shortHash(revises)
-        : 'unknown'
+      const revisesShort = typeof revises === 'string' ? shortHash(revises) : 'unknown'
       if (typeof newPos === 'string' && newPos.length > 0) {
         return truncate(`revises ${revisesShort}: ${newPos}`, SUMMARY_MAX_LEN)
       }
@@ -151,10 +150,7 @@ export function synthesizeDisplaySummary(
  * identity needs to surface, add display_signer as a NEW field, do
  * not change this function's semantics.
  */
-export function resolveDisplayProducer(
-  record: AtribRecord,
-  producer: string | undefined,
-): string {
+export function resolveDisplayProducer(record: AtribRecord, producer: string | undefined): string {
   if (producer && producer.length > 0) {
     return producer
   }

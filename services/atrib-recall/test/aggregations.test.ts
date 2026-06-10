@@ -30,6 +30,8 @@ interface MakeRecordOpts {
   event_type?: string
   timestamp?: number
   content_id?: string
+  annotates?: string
+  revises?: string
 }
 
 async function makeSigned(opts: MakeRecordOpts = {}): Promise<AtribRecord> {
@@ -45,6 +47,8 @@ async function makeSigned(opts: MakeRecordOpts = {}): Promise<AtribRecord> {
     timestamp: opts.timestamp ?? 1700000000000,
     signature: '',
   }
+  if (opts.annotates) Object.assign(record, { annotates: opts.annotates })
+  if (opts.revises) Object.assign(record, { revises: opts.revises })
   return signRecord(record as AtribRecord, KEY)
 }
 
@@ -109,15 +113,18 @@ describe('loadLoaded', () => {
 
   it('derives content from wrapper sidecar fields when _local.content is absent', async () => {
     const r = await makeSigned()
-    writeFileSync(file, JSON.stringify({
-      record: r,
-      _local: {
-        producer: 'mcp-wrap',
-        toolName: 'search_web',
-        args: { query: 'OpenInference sidecar recall' },
-        result: { hits: 2 },
-      },
-    }))
+    writeFileSync(
+      file,
+      JSON.stringify({
+        record: r,
+        _local: {
+          producer: 'mcp-wrap',
+          toolName: 'search_web',
+          args: { query: 'OpenInference sidecar recall' },
+          result: { hits: 2 },
+        },
+      }),
+    )
     const loaded = loadLoaded(file)
     expect(loaded).toHaveLength(1)
     expect(loaded[0]!.content).toEqual({
@@ -130,17 +137,20 @@ describe('loadLoaded', () => {
 
   it('derives OpenInference observation content from legacy callback sidecars', async () => {
     const r = await makeSigned({ event_type: 'https://atrib.dev/v1/types/observation' })
-    writeFileSync(file, JSON.stringify({
-      record: r,
-      _local: {
-        traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
-        spanId: '00f067aa0ba902b7',
-        spanKind: 'LLM',
-        spanName: 'generate-text',
-        input: '{"prompt":"compare Langfuse"}',
-        output: '{"text":"sidecar content"}',
-      },
-    }))
+    writeFileSync(
+      file,
+      JSON.stringify({
+        record: r,
+        _local: {
+          traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+          spanId: '00f067aa0ba902b7',
+          spanKind: 'LLM',
+          spanName: 'generate-text',
+          input: '{"prompt":"compare Langfuse"}',
+          output: '{"text":"sidecar content"}',
+        },
+      }),
+    )
     const loaded = loadLoaded(file)
     expect(loaded).toHaveLength(1)
     expect(loaded[0]!.content).toMatchObject({
@@ -157,10 +167,7 @@ describe('loadLoaded', () => {
   it('mixes bare + envelope lines in one file', async () => {
     const bare = await makeSigned({ timestamp: 1 })
     const wrapped = await makeSigned({ timestamp: 2 })
-    writeFileSync(
-      file,
-      [JSON.stringify(bare), envelope(wrapped, { foo: 'bar' })].join('\n'),
-    )
+    writeFileSync(file, [JSON.stringify(bare), envelope(wrapped, { foo: 'bar' })].join('\n'))
     const loaded = loadLoaded(file)
     expect(loaded).toHaveLength(2)
     expect(loaded[0]!.content).toBeUndefined()
@@ -177,6 +184,22 @@ describe('loadLoaded', () => {
     writeFileSync(
       file,
       [JSON.stringify({ spec_version: 'atrib/1.0' }), JSON.stringify({})].join('\n'),
+    )
+    expect(loadLoaded(file)).toEqual([])
+  })
+
+  it('rejects mirror records that use timestamp_ms instead of signed timestamp', async () => {
+    const r = await makeSigned()
+    const { timestamp, ...withoutTimestamp } = r
+    writeFileSync(
+      file,
+      [
+        JSON.stringify({ ...withoutTimestamp, timestamp_ms: timestamp }),
+        JSON.stringify({
+          record: { ...withoutTimestamp, timestamp_ms: timestamp },
+          _local: { content: { foo: 'bar' } },
+        }),
+      ].join('\n'),
     )
     expect(loadLoaded(file)).toEqual([])
   })
@@ -264,6 +287,33 @@ describe('aggregateAnnotationsByRecord', () => {
     })
   })
 
+  it('bins a top-level annotation target when content omits annotates', async () => {
+    const target = await makeSigned({ timestamp: 1 })
+    const targetHash = computeRecordHash(target)
+    const anno = await makeSigned({
+      event_type: EVENT_TYPE_ANNOTATION_URI,
+      timestamp: 2,
+      annotates: targetHash,
+    })
+    const out = aggregateAnnotationsByRecord([
+      { record: target, record_hash: targetHash },
+      {
+        record: anno,
+        record_hash: computeRecordHash(anno),
+        content: {
+          importance: 'high',
+          topics: ['lifecycle', 'precompact'],
+          summary: 'session boundary',
+        },
+      },
+    ])
+    expect(out.get(targetHash)).toEqual({
+      max_importance: 'high',
+      topics: ['lifecycle', 'precompact'],
+      summary: 'session boundary',
+    })
+  })
+
   it('reduces multiple annotations: max importance, union topics, latest summary', async () => {
     const target = await makeSigned({ timestamp: 1 })
     const targetHash = computeRecordHash(target)
@@ -280,7 +330,12 @@ describe('aggregateAnnotationsByRecord', () => {
       {
         record: a2,
         record_hash: computeRecordHash(a2),
-        content: { annotates: targetHash, importance: 'high', topic_tags: ['b'], summary: 'newest' },
+        content: {
+          annotates: targetHash,
+          importance: 'high',
+          topic_tags: ['b'],
+          summary: 'newest',
+        },
       },
       {
         record: a3,
@@ -324,8 +379,16 @@ describe('aggregateAnnotationsByRecord', () => {
     const a1 = await makeSigned({ event_type: EVENT_TYPE_ANNOTATION_URI, timestamp: 10 })
     const a2 = await makeSigned({ event_type: EVENT_TYPE_ANNOTATION_URI, timestamp: 11 })
     const out = aggregateAnnotationsByRecord([
-      { record: a1, record_hash: computeRecordHash(a1), content: { annotates: h1, importance: 'medium' } },
-      { record: a2, record_hash: computeRecordHash(a2), content: { annotates: h2, importance: 'low' } },
+      {
+        record: a1,
+        record_hash: computeRecordHash(a1),
+        content: { annotates: h1, importance: 'medium' },
+      },
+      {
+        record: a2,
+        record_hash: computeRecordHash(a2),
+        content: { annotates: h2, importance: 'low' },
+      },
     ])
     expect(out.size).toBe(2)
     expect(out.get(h1)!.max_importance).toBe('medium')
@@ -346,12 +409,17 @@ describe('aggregateRevisionsByRecord', () => {
     expect(out.size).toBe(0)
   })
 
-  it('skips revision records without _local.content (§8.1 bare posture)', async () => {
-    const rev = await makeSigned({ event_type: EVENT_TYPE_REVISION_URI })
-    const out = aggregateRevisionsByRecord([
-      { record: rev, record_hash: computeRecordHash(rev) },
-    ])
-    expect(out.size).toBe(0)
+  it('bins a top-level revision target without local content', async () => {
+    const orig = await makeSigned({ timestamp: 1 })
+    const origHash = computeRecordHash(orig)
+    const rev = await makeSigned({
+      event_type: EVENT_TYPE_REVISION_URI,
+      timestamp: 2,
+      revises: origHash,
+    })
+    const revHash = computeRecordHash(rev)
+    const out = aggregateRevisionsByRecord([{ record: rev, record_hash: revHash }])
+    expect(out.get(origHash)).toEqual([revHash])
   })
 
   it('skips revisions without a revises target', async () => {

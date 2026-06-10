@@ -2,11 +2,7 @@
 
 import { describe, it, expect } from 'vitest'
 import type { AtribRecord } from '@atrib/mcp'
-import {
-  synthesizeDisplaySummary,
-  resolveDisplayProducer,
-  formatAge,
-} from '../src/legibility.js'
+import { synthesizeDisplaySummary, resolveDisplayProducer, formatAge } from '../src/legibility.js'
 
 const ATRIB = 'https://atrib.dev/v1/types/'
 const FAKE_KEY = '_'.repeat(43)
@@ -31,16 +27,24 @@ function record(
 describe('synthesizeDisplaySummary', () => {
   it('annotation summary always wins when present', () => {
     const r = record(`${ATRIB}tool_call`, { tool_name: 'Bash' } as Partial<AtribRecord>)
-    const result = synthesizeDisplaySummary(r, { args: { command: 'ls' } }, {
-      summary: 'this is the annotation summary',
-      max_importance: 'high',
-    })
+    const result = synthesizeDisplaySummary(
+      r,
+      { args: { command: 'ls' } },
+      {
+        summary: 'this is the annotation summary',
+        max_importance: 'high',
+      },
+    )
     expect(result).toBe('this is the annotation summary')
   })
 
   it('tool_call synth includes tool_name + arg excerpt', () => {
     const r = record(`${ATRIB}tool_call`, { tool_name: 'Bash' } as Partial<AtribRecord>)
-    const result = synthesizeDisplaySummary(r, { args: { command: 'ls -la', cwd: '/tmp' } }, undefined)
+    const result = synthesizeDisplaySummary(
+      r,
+      { args: { command: 'ls -la', cwd: '/tmp' } },
+      undefined,
+    )
     expect(result).toMatch(/^call Bash\(.*command=.*\)$/)
   })
 
@@ -101,11 +105,10 @@ describe('synthesizeDisplaySummary', () => {
   })
 
   it('annotation surfaces target hash + importance + summary', () => {
-    const r = record(`${ATRIB}annotation`)
+    const r = record(`${ATRIB}annotation`, { annotates: `sha256:${'a'.repeat(64)}` })
     const result = synthesizeDisplaySummary(
       r,
       {
-        annotates: `sha256:${'a'.repeat(64)}`,
         importance: 'high',
         summary: 'this prior record matters',
       },
@@ -116,12 +119,25 @@ describe('synthesizeDisplaySummary', () => {
     expect(result).toContain('this prior record matters')
   })
 
-  it('revision surfaces target hash + new_position', () => {
-    const r = record(`${ATRIB}revision`)
+  it('annotation target falls back to legacy sidecar content', () => {
+    const r = record(`${ATRIB}annotation`)
     const result = synthesizeDisplaySummary(
       r,
       {
-        revises: `sha256:${'b'.repeat(64)}`,
+        annotates: `sha256:${'a'.repeat(64)}`,
+        summary: 'legacy sidecar target',
+      },
+      undefined,
+    )
+    expect(result).toContain('annotates sha256:')
+    expect(result).toContain('legacy sidecar target')
+  })
+
+  it('revision surfaces target hash + new_position', () => {
+    const r = record(`${ATRIB}revision`, { revises: `sha256:${'b'.repeat(64)}` })
+    const result = synthesizeDisplaySummary(
+      r,
+      {
         new_position: 'updated stance here',
       },
       undefined,
@@ -162,12 +178,16 @@ describe('resolveDisplayProducer', () => {
   })
 
   it('returns "key:<8hex>" fallback when producer is missing', () => {
-    const r = record(`${ATRIB}tool_call`, { creator_key: 'abcdef0123456789xyzwvut' } as Partial<AtribRecord>)
+    const r = record(`${ATRIB}tool_call`, {
+      creator_key: 'abcdef0123456789xyzwvut',
+    } as Partial<AtribRecord>)
     expect(resolveDisplayProducer(r, undefined)).toBe('key:abcdef01')
   })
 
   it('returns "key:<8hex>" fallback when producer is empty string', () => {
-    const r = record(`${ATRIB}tool_call`, { creator_key: 'abcdef0123456789' } as Partial<AtribRecord>)
+    const r = record(`${ATRIB}tool_call`, {
+      creator_key: 'abcdef0123456789',
+    } as Partial<AtribRecord>)
     expect(resolveDisplayProducer(r, '')).toBe('key:abcdef01')
   })
 

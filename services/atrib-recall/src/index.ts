@@ -1209,12 +1209,12 @@ server.registerTool(
   'recall_annotations',
   {
     description:
-      "Return the aggregated annotation summary for a record: maximum annotation importance across all D058 annotation records pointing at it, the union of their topic_tags, and the most recent summary string. Useful for surfacing the agent's prior critique on a record before re-attempting a similar action. Returns null annotations field when no annotation points at the record.",
+      "Return the aggregated annotation summary for a record: maximum annotation importance across all D058 annotation records pointing at it, the union of their topic tags, and the most recent summary string. Useful for surfacing the agent's prior critique on a record before re-attempting a similar action. Returns null annotations field when no annotation points at the record.",
     inputSchema: {
       record_hash: z
         .string()
         .describe(
-          'Record hash (sha256:<64-hex>) of the record whose annotations should be retrieved. Annotations are D058 records whose content.annotates field equals this hash.',
+          'Record hash (sha256:<64-hex>) of the record whose annotations should be retrieved. Annotations are D058 records whose signed annotates field equals this hash.',
         ),
     },
   },
@@ -1252,7 +1252,7 @@ server.registerTool(
       record_hash: z
         .string()
         .describe(
-          'Record hash (sha256:<64-hex>) of the record whose revision chain should be retrieved. Revisions are D059 records whose content.revises field equals this hash (or chain back to it).',
+          'Record hash (sha256:<64-hex>) of the record whose revision chain should be retrieved. Revisions are D059 records whose signed revises field equals this hash (or chain back to it).',
         ),
     },
   },
@@ -1349,7 +1349,7 @@ server.registerTool(
       query: z
         .string()
         .describe(
-          "Free-form text query. Matches against each record's annotation summary + topic_tags via BM25. Records with no annotation contribute no relevance signal (will only surface via the recency + importance fallback).",
+          "Free-form text query. Matches against each record's per-event_type content plus annotation summary and topics via BM25. Records with no indexable text contribute no relevance signal and only surface through the recency or importance fallback.",
         ),
       k: z
         .number()
