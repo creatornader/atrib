@@ -146,6 +146,7 @@ export async function createAtribProxy(options: AtribProxyOptions): Promise<Atri
     name: `atrib-proxy:${options.name}`,
     version: options.version ?? '0.0.0',
   })
+  let upstreamClosed = false
   await upstreamClient.connect(upstreamTransport)
 
   // ── 2. Snapshot upstream tool catalog ────────────────────────────────
@@ -205,6 +206,8 @@ export async function createAtribProxy(options: AtribProxyOptions): Promise<Atri
     server: wrappedServer,
     upstreamClient,
     async close() {
+      if (upstreamClosed) return
+      upstreamClosed = true
       await upstreamClient.close()
     },
   }

@@ -354,11 +354,7 @@ describe('createAtribProxy', () => {
       atrib: { creatorKey: PROXY_KEY, serverUrl: PROXY_URL },
     })
 
-    // Calling close() twice must not throw. idempotency check
     await proxy.close()
-    // Second close on an already-closed Client may throw or be a no-op
-    // depending on SDK version. We only require the first close to succeed
-    // and not crash the test.
-    expect(true).toBe(true)
+    await expect(proxy.close()).resolves.toBeUndefined()
   })
 })
