@@ -1,5 +1,11 @@
 # @atrib/mcp
 
+## 0.17.3
+
+### Patch Changes
+
+- 3de7d59: Shut down stdio wrappers when host stdin closes, the parent process exits, or the wrapper is reparented after a host restart. Make MCP proxy close idempotent so duplicate lifecycle events do not turn cleanup into a new error.
+
 ## 0.17.2
 
 ### Patch Changes
