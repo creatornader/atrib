@@ -65,6 +65,8 @@ node scripts/check-local-substrate-coordinator-fixtures.mjs
 
 The validator checks body equality, pinned canonical hashes, non-blocking fallback, and the health-report fields needed before rollout.
 
+The shared TypeScript contract lives in `@atrib/mcp` as `validateLocalSubstrateRequest`, `validateLocalSubstrateHealthReport`, `validateLocalSubstrateFixture`, and `hashLocalSubstrateRecordBody`. These helpers are the integration target for wrappers, emit-like producers, and watcher pipelines; a coordinator prototype should consume that surface rather than minting a parallel schema.
+
 ## Worked Example
 
 A Codex thread starts and its MCP wrapper has a tool call to sign. In the current direct path, the wrapper builds an unsigned atrib record body, resolves `chain_root`, signs the body, appends the mirror, and queues submission.

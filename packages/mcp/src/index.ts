@@ -126,6 +126,38 @@ export {
 } from './local-sidecar.js'
 export type { LocalSidecarLike } from './local-sidecar.js'
 
+// P042 local substrate coordinator contract. This is a typed adapter boundary,
+// not a daemon or a new event surface.
+export {
+  LOCAL_SUBSTRATE_CREATOR_KEY_POLICIES,
+  LOCAL_SUBSTRATE_HARNESS_CLASSES,
+  LOCAL_SUBSTRATE_HEALTH_SCHEMA,
+  LOCAL_SUBSTRATE_OPERATIONS,
+  LOCAL_SUBSTRATE_REQUEST_SCHEMA,
+  canonicalLocalSubstrateRecordBody,
+  hashLocalSubstrateRecordBody,
+  localSubstrateRecordBodiesEqual,
+  validateLocalSubstrateFixture,
+  validateLocalSubstrateHealthReport,
+  validateLocalSubstrateRequest,
+} from './local-substrate.js'
+export type {
+  LocalSubstrateContext,
+  LocalSubstrateCoordinatorRequest,
+  LocalSubstrateCreatorKeyPolicy,
+  LocalSubstrateDegradationPolicy,
+  LocalSubstrateFixture,
+  LocalSubstrateHarnessClass,
+  LocalSubstrateHealthReport,
+  LocalSubstrateOperation,
+  LocalSubstrateProducer,
+  LocalSubstrateValidationIssue,
+  LocalSubstrateValidationResult,
+  LocalSubstrateWalJoin,
+  ValidateLocalSubstrateFixtureOptions,
+  ValidateLocalSubstrateRequestOptions,
+} from './local-substrate.js'
+
 // MCP/OAuth sidecar evidence capture. Producer-side helper for local mirrors.
 export { buildMcpOAuthEvidenceFromExtra } from './oauth-evidence.js'
 export type {
