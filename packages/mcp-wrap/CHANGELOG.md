@@ -1,5 +1,20 @@
 # @atrib/mcp-wrap
 
+## 0.7.1
+
+### Patch Changes
+
+- 5ee04c5: Bound configured `informedByPaths` validation.
+
+  The wrapper still checks its configured mirror first, then sibling local mirrors
+  and log lookup per [D116](../DECISIONS.md#d116-producer-side-informed_by-validation-is-source-aware).
+  The sibling mirror scan now has a 500ms budget so a cold or large dogfood mirror
+  cannot stall the wrapped tool path. Timed-out lookups are treated as unvalidated
+  refs and dropped before signing.
+
+- Updated dependencies [5ee04c5]
+  - @atrib/mcp@0.17.1
+
 ## 0.7.0
 
 ### Minor Changes

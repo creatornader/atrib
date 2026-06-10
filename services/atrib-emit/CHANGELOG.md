@@ -1,5 +1,19 @@
 # @atrib/emit
 
+## 0.14.16
+
+### Patch Changes
+
+- 5ee04c5: Accept shorthand `event_type` aliases for atrib's normative event types.
+
+  Calls such as `event_type: "observation"` now sign a canonical
+  `https://atrib.dev/v1/types/observation` record instead of returning a
+  warnings-only `sha256:unknown` response. The signed record format stays
+  unchanged; only the input boundary is more forgiving.
+
+- Updated dependencies [5ee04c5]
+  - @atrib/mcp@0.17.1
+
 ## 0.14.15
 
 ### Patch Changes
