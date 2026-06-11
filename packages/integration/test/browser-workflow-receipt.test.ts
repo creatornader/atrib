@@ -20,6 +20,9 @@ const tsxBin = join(
   '.bin',
   process.platform === 'win32' ? 'tsx.cmd' : 'tsx',
 )
+const runStagehandSmoke =
+  process.env.ATRIB_RUN_STAGEHAND_BROWSER_SMOKE === '1' || process.env.CI !== 'true'
+const stagehandSmokeIt = runStagehandSmoke ? it : it.skip
 
 describe('browser workflow receipt example', () => {
   it('signs a deterministic browser-action sequence through the runnable smoke', async () => {
@@ -97,7 +100,7 @@ describe('browser workflow receipt example', () => {
     expect(stdout).not.toContain('private browser-use note')
   }, 30000)
 
-  it('signs a local Stagehand workflow through the runnable smoke', async () => {
+  stagehandSmokeIt('signs a local Stagehand workflow through the runnable smoke', async () => {
     const { stdout } = await execFileAsync(
       tsxBin,
       ['examples/browser-workflow/stagehand-workflow-receipt-smoke.ts'],
