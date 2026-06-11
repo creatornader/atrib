@@ -9,7 +9,9 @@ import {
   canonicalRecord,
   createHttpLocalSubstrateTransport,
   createInProcessLocalSubstrateCoordinator,
+  createLocalSubstrateCoordinatorHttpHandler,
   encodeToken,
+  handleLocalSubstrateCoordinatorHttpRequest,
   hashLocalSubstrateRecordBody,
   hexEncode,
   localSubstrateRecordBodiesEqual,
@@ -371,6 +373,94 @@ describe('local substrate coordinator contract', () => {
       'x-test': 'yes',
     })
     expect(JSON.parse(String(seen[0]!.init.body))).toEqual(fixture.input.coordinator_request)
+  })
+
+  it('serves coordinator POST and health over the shared HTTP handler', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
+    const observed: AtribRecord[] = []
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: fixtureSeed(0x11),
+      logSubmission: 'disabled',
+      onRecord: (record) => {
+        observed.push(record)
+      },
+      health: {
+        pid: 777,
+        version: '0.0.0-test',
+        transport: 'http://127.0.0.1:8787/atrib/local-substrate',
+      },
+    })
+    const handler = createLocalSubstrateCoordinatorHttpHandler(coordinator)
+    const fetchImpl: typeof fetch = async (input, init) => {
+      return (
+        (await handler(new Request(String(input), init))) ??
+        new Response('not found', { status: 404 })
+      )
+    }
+    const transport = createHttpLocalSubstrateTransport(
+      'http://127.0.0.1:8787/atrib/local-substrate',
+      { fetch: fetchImpl },
+    )
+
+    const result = await tryLocalSubstrateCoordinator(fixture.input.coordinator_request, {
+      transport,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.status).toBe('accepted')
+    expect(observed).toHaveLength(1)
+
+    const healthResponse = await handler(
+      new Request('http://127.0.0.1:8787/atrib/local-substrate/health'),
+    )
+    expect(healthResponse?.status).toBe(200)
+    const health = (await healthResponse!.json()) as ReturnType<typeof coordinator.health>
+    expect(health.status).toBe('healthy')
+    expect(health.report.coordinator.pid).toBe(777)
+    expect(health.report.contexts.active).toEqual([
+      fixture.input.coordinator_request.record_body.context_id,
+    ])
+
+    const headResponse = await handler(
+      new Request('http://127.0.0.1:8787/atrib/local-substrate', { method: 'HEAD' }),
+    )
+    expect(headResponse?.status).toBe(200)
+    expect(await headResponse!.text()).toBe('')
+
+    coordinator.destroy()
+  })
+
+  it('keeps HTTP service request failures outside the coordinator hot path', async () => {
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: fixtureSeed(0x11),
+      logSubmission: 'disabled',
+    })
+
+    const invalidRequest = await handleLocalSubstrateCoordinatorHttpRequest(
+      coordinator,
+      'POST',
+      '/atrib/local-substrate',
+      { schema: 'wrong-schema' },
+    )
+    const missing = await handleLocalSubstrateCoordinatorHttpRequest(
+      coordinator,
+      'GET',
+      '/not-an-atrib-route',
+    )
+    const invalidJson = await createLocalSubstrateCoordinatorHttpHandler(coordinator)(
+      new Request('http://127.0.0.1:8787/atrib/local-substrate', {
+        method: 'POST',
+        body: 'not-json',
+      }),
+    )
+
+    expect(invalidRequest?.status).toBe(400)
+    expect(JSON.parse(invalidRequest!.body)).toMatchObject({ error: 'invalid_request' })
+    expect(missing).toBeNull()
+    expect(invalidJson?.status).toBe(400)
+    expect(await invalidJson!.json()).toMatchObject({ error: 'invalid_json' })
+
+    coordinator.destroy()
   })
 
   it('signs startup-spawn records through the in-process coordinator prototype', async () => {

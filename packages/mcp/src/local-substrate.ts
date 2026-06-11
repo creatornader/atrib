@@ -24,6 +24,8 @@ import type { ArchiveSubmissionOptions, ProofBundle, SubmissionQueue } from './s
 export const LOCAL_SUBSTRATE_REQUEST_SCHEMA = 'atrib.local-substrate-coordinator.request.v0'
 export const LOCAL_SUBSTRATE_RESPONSE_SCHEMA = 'atrib.local-substrate-coordinator.response.v0'
 export const LOCAL_SUBSTRATE_HEALTH_SCHEMA = 'atrib.local-substrate-coordinator.health.v0'
+export const LOCAL_SUBSTRATE_HTTP_DEFAULT_PATH = '/atrib/local-substrate'
+export const LOCAL_SUBSTRATE_HTTP_DEFAULT_HEALTH_PATH = '/atrib/local-substrate/health'
 
 export const LOCAL_SUBSTRATE_HARNESS_CLASSES = [
   'startup-spawn',
@@ -210,6 +212,23 @@ export type TryLocalSubstrateCoordinatorResult =
 export interface CreateHttpLocalSubstrateTransportOptions {
   fetch?: typeof fetch
   headers?: Record<string, string>
+}
+
+export interface LocalSubstrateCoordinatorService {
+  transport: LocalSubstrateCoordinatorTransport
+  health: () => LocalSubstrateHealthProbeResult
+}
+
+export interface LocalSubstrateCoordinatorHttpOptions {
+  endpointPath?: string
+  healthPath?: string
+  timeoutMs?: number
+}
+
+export interface LocalSubstrateCoordinatorHttpResult {
+  status: number
+  headers: Record<string, string>
+  body: string
 }
 
 export interface BuildLocalSubstrateHealthReportInput {
@@ -819,6 +838,41 @@ function rejectedLocalSubstrateResponse(
   }
 }
 
+function localSubstrateHttpPaths(
+  options: LocalSubstrateCoordinatorHttpOptions = {},
+): { endpointPath: string; healthPath: string } {
+  return {
+    endpointPath: options.endpointPath ?? LOCAL_SUBSTRATE_HTTP_DEFAULT_PATH,
+    healthPath: options.healthPath ?? LOCAL_SUBSTRATE_HTTP_DEFAULT_HEALTH_PATH,
+  }
+}
+
+function jsonHttpResult(
+  status: number,
+  body: unknown,
+  options: { head?: boolean; headers?: Record<string, string> } = {},
+): LocalSubstrateCoordinatorHttpResult {
+  return {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers ?? {}),
+    },
+    body: options.head ? '' : JSON.stringify(body),
+  }
+}
+
+function methodNotAllowed(allow: string): LocalSubstrateCoordinatorHttpResult {
+  return {
+    status: 405,
+    headers: {
+      Allow: allow,
+      'Content-Type': 'text/plain',
+    },
+    body: 'Method Not Allowed',
+  }
+}
+
 async function callWithTimeout(
   transport: LocalSubstrateCoordinatorTransport,
   request: LocalSubstrateCoordinatorRequest,
@@ -933,6 +987,108 @@ export function createHttpLocalSubstrateTransport(
       throw new Error(`local substrate coordinator returned HTTP ${response.status}`)
     }
     return response.json()
+  }
+}
+
+export async function handleLocalSubstrateCoordinatorHttpRequest(
+  coordinator: LocalSubstrateCoordinatorService,
+  method: string,
+  pathname: string,
+  body?: unknown,
+  options: LocalSubstrateCoordinatorHttpOptions = {},
+): Promise<LocalSubstrateCoordinatorHttpResult | null> {
+  const { endpointPath, healthPath } = localSubstrateHttpPaths(options)
+  const isHead = method === 'HEAD'
+
+  if (pathname === healthPath || (pathname === endpointPath && (method === 'GET' || isHead))) {
+    if (method !== 'GET' && !isHead) {
+      return methodNotAllowed('GET, HEAD')
+    }
+    return jsonHttpResult(200, coordinator.health(), { head: isHead })
+  }
+
+  if (pathname !== endpointPath) {
+    return null
+  }
+
+  if (method !== 'POST') {
+    return methodNotAllowed('GET, HEAD, POST')
+  }
+
+  const requestValidation = validateLocalSubstrateRequest(body)
+  if (!requestValidation.ok) {
+    return jsonHttpResult(400, {
+      error: 'invalid_request',
+      issues: requestValidation.issues,
+    })
+  }
+
+  const request = body as LocalSubstrateCoordinatorRequest
+  let rawResponse: unknown
+  try {
+    rawResponse = await coordinator.transport(request, {
+      timeoutMs: Math.max(1, options.timeoutMs ?? 500),
+    })
+  } catch (error) {
+    return jsonHttpResult(503, {
+      error: 'unavailable',
+      reason: errorMessage(error),
+      health_report: coordinator.health().report,
+    })
+  }
+
+  const responseValidation = validateLocalSubstrateResponse(rawResponse, { request })
+  if (!responseValidation.ok) {
+    return jsonHttpResult(502, {
+      error: 'invalid_response',
+      issues: responseValidation.issues,
+      health_report: coordinator.health().report,
+    })
+  }
+
+  return jsonHttpResult(200, rawResponse)
+}
+
+export function createLocalSubstrateCoordinatorHttpHandler(
+  coordinator: LocalSubstrateCoordinatorService,
+  options: LocalSubstrateCoordinatorHttpOptions = {},
+): (request: Request) => Promise<Response | null> {
+  return async (request: Request): Promise<Response | null> => {
+    const url = new URL(request.url)
+    const { endpointPath } = localSubstrateHttpPaths(options)
+    let body: unknown
+
+    if (request.method === 'POST' && url.pathname === endpointPath) {
+      try {
+        body = await request.json()
+      } catch {
+        return new Response(
+          JSON.stringify({
+            error: 'invalid_json',
+            message: 'request body must be JSON',
+          }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+    }
+
+    const result = await handleLocalSubstrateCoordinatorHttpRequest(
+      coordinator,
+      request.method,
+      url.pathname,
+      body,
+      options,
+    )
+
+    if (!result) return null
+
+    return new Response(request.method === 'HEAD' ? null : result.body, {
+      status: result.status,
+      headers: result.headers,
+    })
   }
 }
 
