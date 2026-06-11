@@ -1,5 +1,12 @@
 # @atrib/annotate
 
+## 0.2.31
+
+### Patch Changes
+
+- Updated dependencies [10cc623]
+  - @atrib/emit@0.15.0
+
 ## 0.2.30
 
 ### Patch Changes
