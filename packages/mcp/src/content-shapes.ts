@@ -58,13 +58,15 @@ export interface ExtractIndexableTextOptions {
 
 /**
  * Observation content per the EmitInput Zod schema in services/atrib-emit.
- * Indexable fields: `what`, `why_noted`, `topics`. `informed_by` is a list
- * of sha256 record_hash refs (not human-readable text) and is omitted from
- * the indexable surface.
+ * Indexable fields: `what`, `why_noted`, `intent`, `rationale`, `topics`.
+ * `informed_by` is a list of sha256 record_hash refs (not human-readable
+ * text) and is omitted from the indexable surface.
  */
 export interface ObservationContent {
   what?: unknown
   why_noted?: unknown
+  intent?: unknown
+  rationale?: unknown
   topics?: unknown
   informed_by?: unknown
   source?: unknown
@@ -213,6 +215,8 @@ export function extractObservationText(c: ObservationContent, cap: number): stri
   const parts: string[] = []
   pushString(parts, c.what, cap)
   pushString(parts, c.why_noted, cap)
+  pushString(parts, c.intent, cap)
+  pushString(parts, c.rationale, cap)
   pushTopics(parts, c.topics)
   pushString(parts, c.source, cap)
   pushString(parts, c.span_kind, cap)
@@ -298,12 +302,7 @@ function extractExtensionText(content: unknown, cap: number): string {
   return out.join(' ')
 }
 
-function walkStrings(
-  v: unknown,
-  out: string[],
-  depth: number,
-  cap: number,
-): void {
+function walkStrings(v: unknown, out: string[], depth: number, cap: number): void {
   if (depth > MAX_WALK_DEPTH) return
   if (typeof v === 'string') {
     if (v.length === 0) return

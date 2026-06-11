@@ -119,6 +119,8 @@ describe('buildUserMessage', () => {
         span_kind: 'LLM',
         span_name: 'generate-text',
         model_name: 'qwen3.5',
+        intent: 'compare proof traces without storing prompts in public records',
+        rationale: 'the operator needs recall-readable local context',
         prompt_version: 'billing-v4',
         prompt: 'compare Langfuse trace shape to atrib evidence shape',
         output: 'keep observability data local and recall-readable',
@@ -131,6 +133,8 @@ describe('buildUserMessage', () => {
     expect(text).toContain('source: openinference')
     expect(text).toContain('span_kind: LLM')
     expect(text).toContain('model: qwen3.5')
+    expect(text).toContain('intent: compare proof traces')
+    expect(text).toContain('rationale: the operator needs recall-readable local context')
     expect(text).toContain('prompt_version: billing-v4')
     expect(text).toContain('compare Langfuse trace shape')
     expect(text).toContain('keep observability data local')

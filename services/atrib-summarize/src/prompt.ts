@@ -36,10 +36,7 @@ export function buildSystemPrompt(): string {
  * Render the user message: a chronological digest of every record fed
  * to the LLM, followed by the focus question (if any).
  */
-export function buildUserMessage(
-  records: IndexedRecord[],
-  focus: string | undefined,
-): string {
+export function buildUserMessage(records: IndexedRecord[], focus: string | undefined): string {
   const sortedAsc = [...records].sort((a, b) => a.record.timestamp - b.record.timestamp)
   const lines: string[] = []
   lines.push(`# Records to synthesize (${records.length}, oldest-first)`)
@@ -55,7 +52,9 @@ export function buildUserMessage(
     lines.push(focus.trim())
   } else {
     lines.push(`# Default focus`)
-    lines.push('Summarize what the agent did and why, surfacing the decisions that shaped the work and the causal chain.')
+    lines.push(
+      'Summarize what the agent did and why, surfacing the decisions that shaped the work and the causal chain.',
+    )
   }
   return lines.join('\n')
 }
@@ -93,32 +92,47 @@ function renderRecord(r: IndexedRecord): string {
       if (typeof c['model_name'] === 'string') out.push(`model: ${c['model_name']}`)
       if (typeof c['what'] === 'string') out.push(`what: ${c['what']}`)
       if (typeof c['why_noted'] === 'string') out.push(`why_noted: ${c['why_noted']}`)
+      if (typeof c['intent'] === 'string') out.push(`intent: ${c['intent']}`)
+      if (typeof c['rationale'] === 'string') out.push(`rationale: ${c['rationale']}`)
       if (typeof c['summary'] === 'string') out.push(`summary: ${c['summary']}`)
       if (typeof c['importance'] === 'string') out.push(`importance: ${c['importance']}`)
-      if (typeof c['prior_position'] === 'string') out.push(`prior_position: ${c['prior_position']}`)
+      if (typeof c['prior_position'] === 'string')
+        out.push(`prior_position: ${c['prior_position']}`)
       if (typeof c['new_position'] === 'string') out.push(`new_position: ${c['new_position']}`)
       if (typeof c['reason'] === 'string') out.push(`reason: ${c['reason']}`)
       if (typeof c['prompt'] === 'string') out.push(`prompt: ${c['prompt'].slice(0, 1200)}`)
-      if (typeof c['prompt_messages'] === 'string') out.push(`prompt_messages: ${c['prompt_messages'].slice(0, 1200)}`)
-      if (typeof c['prompt_template'] === 'string') out.push(`prompt_template: ${c['prompt_template'].slice(0, 1200)}`)
-      if (typeof c['prompt_version'] === 'string') out.push(`prompt_version: ${c['prompt_version']}`)
-      if (typeof c['input'] === 'string') out.push(`input (truncated): ${c['input'].slice(0, 1200)}`)
-      if (typeof c['output'] === 'string') out.push(`output (truncated): ${c['output'].slice(0, 1200)}`)
+      if (typeof c['prompt_messages'] === 'string')
+        out.push(`prompt_messages: ${c['prompt_messages'].slice(0, 1200)}`)
+      if (typeof c['prompt_template'] === 'string')
+        out.push(`prompt_template: ${c['prompt_template'].slice(0, 1200)}`)
+      if (typeof c['prompt_version'] === 'string')
+        out.push(`prompt_version: ${c['prompt_version']}`)
+      if (typeof c['input'] === 'string')
+        out.push(`input (truncated): ${c['input'].slice(0, 1200)}`)
+      if (typeof c['output'] === 'string')
+        out.push(`output (truncated): ${c['output'].slice(0, 1200)}`)
       if (c['args']) out.push(`args (truncated): ${JSON.stringify(c['args']).slice(0, 1200)}`)
       if (c['result']) out.push(`result (truncated): ${JSON.stringify(c['result']).slice(0, 1200)}`)
-      if (c['usage_details']) out.push(`usage_details: ${JSON.stringify(c['usage_details']).slice(0, 600)}`)
-      if (c['cost_details']) out.push(`cost_details: ${JSON.stringify(c['cost_details']).slice(0, 600)}`)
-      if (c['score_details']) out.push(`score_details: ${JSON.stringify(c['score_details']).slice(0, 600)}`)
+      if (c['usage_details'])
+        out.push(`usage_details: ${JSON.stringify(c['usage_details']).slice(0, 600)}`)
+      if (c['cost_details'])
+        out.push(`cost_details: ${JSON.stringify(c['cost_details']).slice(0, 600)}`)
+      if (c['score_details'])
+        out.push(`score_details: ${JSON.stringify(c['score_details']).slice(0, 600)}`)
       if (c['metadata']) out.push(`metadata: ${JSON.stringify(c['metadata']).slice(0, 600)}`)
       if (Array.isArray(c['topics'])) {
-        out.push(`topics: ${(c['topics'] as unknown[]).filter((x): x is string => typeof x === 'string').join(', ')}`)
+        out.push(
+          `topics: ${(c['topics'] as unknown[]).filter((x): x is string => typeof x === 'string').join(', ')}`,
+        )
       }
     }
     // Tool-call sidecar may have args/result; keep brief to control prompt size.
     if (sc.args) out.push(`args (truncated): ${JSON.stringify(sc.args).slice(0, 1200)}`)
     if (sc.result) out.push(`result (truncated): ${JSON.stringify(sc.result).slice(0, 1200)}`)
   } else {
-    out.push('(no semantic sidecar available, record predates local-mirror sidecar pattern; only cryptographic metadata is present)')
+    out.push(
+      '(no semantic sidecar available, record predates local-mirror sidecar pattern; only cryptographic metadata is present)',
+    )
   }
   return out.join('\n')
 }

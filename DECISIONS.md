@@ -5901,6 +5901,111 @@ evidence about dogfood sessions.
 
 ---
 
+## D118: Primary trace path is a presentation rule over trace and chain
+
+**Date:** 2026-06-11
+
+**Status:** Accepted
+
+**Extends:** [D054](#d054-unified-public-explorer), [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), [D068](#d068-trace-operations-split-provenance-trace-vs-causal-chain), [D086](#d086-bm25-indexes-all-event-type-content-shapes-not-just-annotations), and [D108](#d108-openinference-is-an-observability-intake-layer-not-a-replacement-trace-store).
+
+**Context.** The TIBET / Humotica review surfaced a real product lesson. A
+one-parent token chain is easy to explain and easy to follow. atrib's graph is
+more expressive: a record can have a structural chain parent, several
+`informed_by` parents, an annotation target, a revision target, a provenance
+anchor, a human approval record, capability evidence, and transaction evidence.
+That expressiveness is correct for verification, but it makes the first-read
+path harder for a human.
+
+[D068](#d068-trace-operations-split-provenance-trace-vs-causal-chain) already
+split `/v1/trace/{record_hash}` and `/v1/chain/{record_hash}` because they
+answer different questions. `/v1/trace` walks producer-claimed ancestry.
+`/v1/chain` walks substrate-derived chain order. Merging those into one
+protocol endpoint would blur the structure-vs-claims boundary. Leaving the
+dashboard with only a full DAG and a chain list made the opposite mistake: the
+human reader had no obvious "read this first" line.
+
+The same review clarified the intent/rationale boundary. TIBET's `erachter`
+field makes stated intent visible. atrib can already carry equivalent local
+sidecar text, but the implementation did not consistently index or summarize
+`intent` and `rationale`. Human approval was also easy to misread: atrib already
+supports a human-controlled key signing an ordinary record, as the Cloudflare
+approval-trace proof demonstrates, but it does not yet have native human
+authorization edge types.
+
+**Decision.**
+
+1. The public explorer trace route now renders a **primary trace path** above
+   the full graph.
+2. The primary path is computed over the dashboard's merged trace + chain graph,
+   not by changing graph-node's APIs.
+3. The selection order is deterministic: `INFORMED_BY`, `REVISES`, `ANNOTATES`,
+   `PROVENANCE_OF`, then `CHAIN_PRECEDES`. For several resolved parents with
+   the same edge type, the newest timestamp wins; ties sort by record hash.
+4. The primary path is presentation metadata only. It is not a graph edge, not a
+   validity condition, and not an input to settlement calculation.
+5. `/v1/trace` and `/v1/chain` remain separate protocol endpoints per [D068](#d068-trace-operations-split-provenance-trace-vs-causal-chain).
+6. `_local.content.intent` and `_local.content.rationale` are first-class local
+   cognitive fields. Recall indexes them, `atrib-trace` surfaces them in compact
+   sidecar summaries, and `atrib-summarize` includes them in prompt input.
+7. Human-attested approval or intent is represented now as separate signed
+   evidence: a record under a human-controlled `creator_key`, or an archive /
+   external evidence block, linked by `informed_by` when it informs a later
+   action. Native `APPROVED_BY`, `AUTHORIZED_BY`, `ATTESTED_BY`, or
+   `DELEGATED_TO` edges remain deferred under [P004](#p004-human-direct-signing-as-a-first-class-identity-class-post-day-1).
+
+**Alternatives rejected.**
+
+- _Flatten the protocol to a single parent pointer._ Rejected. It would make
+  traces easier to explain but would lose real multi-parent structure, including
+  human approvals, diagnostics, revisions, and cross-session anchors.
+- _Extend `/v1/trace` to also walk `CHAIN_PRECEDES`._ Rejected again for the
+  same reason as [D068](#d068-trace-operations-split-provenance-trace-vs-causal-chain):
+  producer claims and substrate structure should stay separate at the API
+  boundary.
+- _Promote human authorization edge types now._ Rejected. The current
+  approval-trace pattern already proves separate human signatures and
+  `informed_by` continuity. Native edge vocabulary needs real adopter pressure
+  because it also brings key-management UX and identity-taxonomy work.
+- _Make `intent` or `rationale` validity-critical._ Rejected. Signed intent is
+  still a signed claim. It can guide readers and agents, but it does not prove
+  sincerity, completeness, or human authorization.
+
+**Consequences.**
+
+- The explorer now borrows TIBET's explanation strength without adopting
+  TIBET's one-parent limitation.
+- Agents and humans get a stable first-read trace path while auditors can still
+  inspect the full multi-edge graph.
+- `intent` and `rationale` are useful to recall, trace, and summarize without
+  becoming public-log fields.
+- Existing human approval support is documented as "separate signed record now;
+  native authorization edges later."
+- P004 stays pending, but its scope is narrower: first-class human identity
+  classes and authorization edge derivation, not basic human signing.
+
+**Cross-references.**
+
+- [§3.4.5](atrib-spec.md#345-get-v1tracerecord_hash), provenance trace.
+- [§3.4.6](atrib-spec.md#346-get-v1chainrecord_hash), causal chain.
+- [§5.9.3](atrib-spec.md#593-the-_local-sidecar-shape), local sidecar shape.
+- [`apps/dashboard/graph-utils.mjs`](apps/dashboard/graph-utils.mjs), primary
+  trace path helper.
+- [`apps/dashboard/index.html`](apps/dashboard/index.html), explorer trace
+  rendering.
+- [`packages/mcp/src/content-shapes.ts`](packages/mcp/src/content-shapes.ts),
+  recall-readable content extraction.
+- [`services/atrib-trace/src/index.ts`](services/atrib-trace/src/index.ts),
+  compact sidecar summaries.
+- [`services/atrib-summarize/src/prompt.ts`](services/atrib-summarize/src/prompt.ts),
+  summary prompt rendering.
+- [`packages/integration/examples/cloudflare-agents/approval-trace/`](packages/integration/examples/cloudflare-agents/approval-trace/),
+  human approval proof with separate signing keys.
+- [`docs/concepts/14-tibet-humotica-crosswalk.md`](docs/concepts/14-tibet-humotica-crosswalk.md),
+  TIBET / Humotica comparison.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -5956,6 +6061,8 @@ These will get full ADRs when we act on them. Recorded here so they remain finda
 **Source:** Signer-taxonomy design pass 2026-04-30, design question #8 (resolved: humans-direct allowed, post-day-1).
 
 **The decision in question:** humans signing atrib records directly (distinct from agent-direction-of-human). Edge types to model the relationship: `AUTHORIZED_BY` (human → agent record), `ATTESTED_BY` (human → claim), `APPROVED_BY` (human → decision), `DELEGATED_TO` (human → agent). Spec changes: new edge types in [§3.2.3](atrib-spec.md#323-edge-types) + derivation rules in [§3.2.4](atrib-spec.md#324-edge-derivation-rules). Identity-resolution changes: humans get a distinct `claim_type` (currently `self_attested` covers both).
+
+**Current baseline after [D118](#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain):** a human-controlled key can already sign an ordinary atrib record. The Cloudflare approval-trace proof uses this pattern: agent proposal, human approval, action MCP execution, and outcome records use separate signing keys, and execution points at the human approval record through `informed_by`. P004 is about native human identity classes and authorization edge derivation, not basic signing support.
 
 **Why deferred.** Day 1 dogfood doesn't require it. Compliance-shaped use cases (regulator wants on-graph proof of human authorization) need it; we're not pursuing those use cases yet.
 
