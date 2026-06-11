@@ -69,6 +69,12 @@ async function main() {
   console.log(`  endpoint:           ${cyan(LOG_ENDPOINT)}`)
   console.log(`  tree size:          ${bold(String(total))} entries`)
   console.log(`  distinct signers:   ${bold(String(stats.distinct_signers))} ${dim('creator_keys')}`)
+  if (typeof stats.active_signers_24h === 'number') {
+    console.log(`  active signers 24h: ${bold(String(stats.active_signers_24h))} ${dim('creator_keys')}`)
+  }
+  if (typeof stats.active_signers_7d === 'number') {
+    console.log(`  active signers 7d:  ${bold(String(stats.active_signers_7d))} ${dim('creator_keys')}`)
+  }
   console.log(`  oldest entry:       ${fmtTimestamp(stats.oldest_timestamp_ms)}`)
   console.log(`  newest entry:       ${fmtTimestamp(stats.newest_timestamp_ms)}`)
   console.log()

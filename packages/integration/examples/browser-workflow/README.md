@@ -19,6 +19,10 @@ pnpm --filter @atrib/integration browser-use-workflow-receipt-smoke
 pnpm --filter @atrib/integration stagehand-workflow-receipt-smoke
 ```
 
+The Stagehand smoke is opt-in inside CI because local CDP startup can time out
+on shared runners. Set `ATRIB_RUN_STAGEHAND_BROWSER_SMOKE=1` when a CI job is
+meant to exercise that browser session directly.
+
 ## What It Proves
 
 - A browser/workflow agent action sequence can be represented as signed atrib
