@@ -134,6 +134,29 @@ ATRIB_LOCAL_SUBSTRATE_MODE=shadow
 
 This path is deliberately not coordinator-owned commit mode. It proves `atrib-emit`, `atrib-emit-cli`, `@atrib/annotate`, and `@atrib/revise` can reach the same contract as startup-spawn wrappers with byte-identical input, without double-committing a record or adding a daemon requirement.
 
+## Watcher-WAL coordinator commit
+
+Short-lived watcher drains can opt into coordinator-owned commit by adding a top-level `local_substrate` envelope to the `atrib-emit-cli` JSON input. This is not controlled by `ATRIB_LOCAL_SUBSTRATE_MODE=shadow`; the envelope is explicit so normal CLI emits keep their direct local queue path.
+
+```json
+{
+  "event_type": "https://atrib.dev/v1/types/observation",
+  "content": { "what": "queued observation" },
+  "context_id": "deadbeef00000000deadbeef00000000",
+  "local_substrate": {
+    "operation": "enqueue_record_and_join_receipt",
+    "wal": {
+      "entry_id": "wal-123",
+      "source_path": "vault/state/observations/2026-06-11.md",
+      "receipt_join_field": "atrib_receipt_id",
+      "join_back_target": "vault/state/observations/2026-06-11.md#row"
+    }
+  }
+}
+```
+
+The CLI reads the endpoint from `local_substrate.endpoint` or `ATRIB_LOCAL_SUBSTRATE_ENDPOINT`. If the coordinator accepts and returns the expected `record_hash`, the CLI skips its own log-submission queue and returns the coordinator `receipt_id`. If the coordinator is unavailable, rejects the request, or returns a mismatched hash, the CLI signs and submits through the existing local queue and reports the fallback in `warnings`.
+
 ## Local substrate host binary
 
 `@atrib/emit` also ships `atrib-local-substrate`, the opt-in host process for the P042 local-substrate coordinator. It is not an MCP server. It resolves the same signing key as `atrib-emit`, starts the shared Node HTTP coordinator binding, and serves `POST /atrib/local-substrate` plus read-only health probes.
@@ -166,7 +189,7 @@ ATRIB_LOCAL_SUBSTRATE_ENDPOINT=http://127.0.0.1:8787/atrib/local-substrate
 ATRIB_LOCAL_SUBSTRATE_MODE=shadow
 ```
 
-Default dogfood configs should wait for the process-health rollout gate in [`docs/concepts/13-local-substrate-coordinator.md`](../../docs/concepts/13-local-substrate-coordinator.md). The binary proves the host-owned surface can run. It does not by itself prove process-count reduction across Codex, Claude Code, OpenClaw, Hermes, and watcher producers.
+Broad default dogfood configs should wait for the process-health rollout gate in [`docs/concepts/13-local-substrate-coordinator.md`](../../docs/concepts/13-local-substrate-coordinator.md). The binary proves the host-owned surface can run. It does not by itself prove process-count reduction across Codex, Claude Code, OpenClaw, Hermes, and watcher producers.
 
 ## Three binaries
 

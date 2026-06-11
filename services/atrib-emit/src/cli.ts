@@ -59,7 +59,8 @@ import { readFileSync, realpathSync, accessSync, constants as fsConstants } from
 import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { emitInProcess } from './index.js'
+import { createHttpLocalSubstrateTransport } from '@atrib/mcp'
+import { emitInProcess, type EmitLocalSubstrateCommitOptions } from './index.js'
 import { resolveKey } from './keys.js'
 
 type Subcommand = 'emit' | 'doctor'
@@ -268,6 +269,8 @@ function buildDescription(): CliDescription {
           'sha256:<64-hex> commitment to canonical result bytes per §8.3 salted-commitment posture.',
         producer:
           'Producer label routed to mirror sidecar `_local.producer`. Defaults to "atrib-emit-cli"; hook helpers override with finer attribution (e.g. "claude-hooks-builtin-2b").',
+        local_substrate:
+          'Optional watcher-WAL coordinator commit envelope: { operation: "enqueue_record_and_join_receipt", wal: { entry_id, source_path, receipt_join_field, join_back_target }, endpoint?, timeout_ms? }. Falls back to local signing when unavailable.',
       },
     },
     output_schema: {
@@ -336,7 +339,7 @@ function buildDescription(): CliDescription {
       {
         name: 'ATRIB_LOCAL_SUBSTRATE_MODE',
         description:
-          'Optional local-substrate mode. Only "shadow" is honored; commit mode stays disabled for emit.',
+          'Optional local-substrate mode. The default emit path honors "shadow"; CLI watcher-WAL commit is enabled by an explicit local_substrate envelope.',
         required: false,
       },
       {
@@ -555,6 +558,11 @@ interface RawEnvelope {
    * `'claude-hooks-mcp-2a'`) pass it here to override.
    */
   producer?: unknown
+  /**
+   * Optional watcher-WAL coordinator commit envelope. Older helpers ignore
+   * this field, so callers can pass it while keeping the legacy fallback.
+   */
+  local_substrate?: unknown
 }
 
 // The CLI's wire envelope mirrors what callers passed to the MCP-transport
@@ -577,6 +585,84 @@ function buildEmitInput(envelope: RawEnvelope): Record<string, unknown> {
   if (envelope.args_hash !== undefined) out['args_hash'] = envelope.args_hash
   if (envelope.result_hash !== undefined) out['result_hash'] = envelope.result_hash
   return out
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function asNonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function parseOptionalPositiveIntValue(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined
+}
+
+function buildLocalSubstrateCommitOption(
+  envelope: RawEnvelope,
+  producerLabel: string,
+): EmitLocalSubstrateCommitOptions | undefined {
+  const spec = envelope.local_substrate
+  if (!isObject(spec)) return undefined
+
+  const operation = asNonEmptyString(spec.operation)
+  const mode = asNonEmptyString(spec.mode)
+  const wantsCommit =
+    operation === 'enqueue_record_and_join_receipt' ||
+    mode === 'watcher-wal-commit' ||
+    mode === 'commit'
+  if (!wantsCommit) return undefined
+
+  const wal = isObject(spec.wal) ? spec.wal : undefined
+  const entryId = asNonEmptyString(wal?.entry_id)
+  const sourcePath = asNonEmptyString(wal?.source_path)
+  const receiptJoinField = asNonEmptyString(wal?.receipt_join_field)
+  const joinBackTarget = asNonEmptyString(wal?.join_back_target)
+  if (!entryId || !sourcePath || !receiptJoinField || !joinBackTarget) {
+    writeStderrLine(
+      'atrib-emit-cli: local_substrate commit skipped; wal entry_id, source_path, receipt_join_field, and join_back_target are required',
+    )
+    return undefined
+  }
+
+  const endpoint =
+    asNonEmptyString(spec.endpoint) ?? asNonEmptyString(process.env['ATRIB_LOCAL_SUBSTRATE_ENDPOINT'])
+  if (!endpoint) {
+    writeStderrLine(
+      'atrib-emit-cli: local_substrate commit skipped; ATRIB_LOCAL_SUBSTRATE_ENDPOINT is unset',
+    )
+    return undefined
+  }
+
+  const timeoutMs =
+    parseOptionalPositiveIntValue(spec.timeout_ms) ??
+    parseOptionalPositiveIntValue(process.env['ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS'])
+
+  return {
+    transport: createHttpLocalSubstrateTransport(endpoint),
+    producer: {
+      name: asNonEmptyString(spec.producer_name) ?? producerLabel,
+      harness_class: 'watcher-wal',
+      pid: process.pid,
+      transport: asNonEmptyString(spec.transport) ?? 'cli-stdin-wal',
+      creator_key_policy: 'explicit-watcher-creator',
+    },
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+    wal: {
+      entry_id: entryId,
+      source_path: sourcePath,
+      receipt_join_field: receiptJoinField,
+      join_back_target: joinBackTarget,
+    },
+    onWarning: (message, detail) => {
+      writeStderrLine(
+        detail === undefined ? message : `${message}: ${JSON.stringify(detail).slice(0, 500)}`,
+      )
+    },
+  }
 }
 
 function writeStdoutJson(value: unknown): void {
@@ -685,11 +771,22 @@ export async function main(argv: readonly string[]): Promise<number> {
     typeof envelope.producer === 'string' && envelope.producer.length > 0
       ? envelope.producer
       : 'atrib-emit-cli'
-  const options: { logEndpoint?: string; flushDeadlineMs?: number; producer: string } = {
+  const options: {
+    logEndpoint?: string
+    flushDeadlineMs?: number
+    producer: string
+    localSubstrate?: false
+    localSubstrateCommit?: EmitLocalSubstrateCommitOptions
+  } = {
     producer: envelopeProducer,
   }
   if (parsed.logEndpoint !== undefined) options.logEndpoint = parsed.logEndpoint
   if (parsed.flushDeadlineMs !== undefined) options.flushDeadlineMs = parsed.flushDeadlineMs
+  const localSubstrateCommit = buildLocalSubstrateCommitOption(envelope, envelopeProducer)
+  if (localSubstrateCommit !== undefined) {
+    options.localSubstrate = false
+    options.localSubstrateCommit = localSubstrateCommit
+  }
 
   const t0 = Date.now()
   try {
