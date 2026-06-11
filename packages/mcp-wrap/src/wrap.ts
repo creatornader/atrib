@@ -11,6 +11,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   createAtribProxy,
+  createHttpLocalSubstrateTransport,
   defaultRecordReferenceResolver,
   recordHashExistsInMirror,
   resolveEnvContextId,
@@ -60,6 +61,9 @@ export function buildPreCallTransform(config: WrapConfig): PreCallTransform | un
 }
 
 type InformedByHook = NonNullable<AtribOptions['informedBy']>
+type LocalSubstrateAttemptHook = NonNullable<
+  NonNullable<AtribOptions['localSubstrate']>['onAttempt']
+>
 
 function valueAtPath(value: unknown, path: string): unknown {
   let current = value
@@ -162,6 +166,26 @@ function defaultPaths(config: WrapConfig): { logFile: string; recordFile: string
   }
 }
 
+function buildLocalSubstrateAttemptLogger(log: LogFn): LocalSubstrateAttemptHook {
+  return (attempt) => {
+    const result = attempt.result
+    const level = result.ok && attempt.recordHashMatches !== false ? 'info' : 'warn'
+    log(level, 'local substrate shadow attempt completed', {
+      status: result.status,
+      elapsed_ms: result.elapsed_ms,
+      expected_record_hash: attempt.expectedRecordHash,
+      record_hash_matches: attempt.recordHashMatches,
+      response_record_hash: result.ok ? result.response.record_hash : undefined,
+      reason:
+        result.status === 'rejected' || result.status === 'unavailable' ? result.reason : undefined,
+      issue_count:
+        result.status === 'invalid_request' || result.status === 'invalid_response'
+          ? result.issues.length
+          : undefined,
+    })
+  }
+}
+
 /**
  * Wrap an MCP server per the supplied config. Returns the live AtribProxy
  * plus the resolved key info (for caller-side bootstrap logging).
@@ -195,6 +219,11 @@ export async function wrap(
   const preCallTransform = buildPreCallTransform(config)
   const informedBy = buildInformedBy(config)
   const recordReferenceResolver = buildRecordReferenceResolver(config, recordFile, log)
+  const localSubstrateTransport = config.localSubstrate
+    ? createHttpLocalSubstrateTransport(config.localSubstrate.endpoint, {
+        ...(config.localSubstrate.headers ? { headers: config.localSubstrate.headers } : {}),
+      })
+    : undefined
 
   const proxy = await createAtribProxy({
     name: `${config.name}-${config.agent}`,
@@ -219,6 +248,24 @@ export async function wrap(
       ...(informedBy ? { informedBy } : {}),
       recordReferenceResolver,
       ...(config.disclosure ? { disclosure: config.disclosure } : {}),
+      ...(config.localSubstrate && localSubstrateTransport
+        ? {
+            localSubstrate: {
+              transport: localSubstrateTransport,
+              ...(config.localSubstrate.timeoutMs !== undefined
+                ? { timeoutMs: config.localSubstrate.timeoutMs }
+                : {}),
+              producer: {
+                name: `${config.name}-${config.agent}`,
+                harness_class: 'startup-spawn',
+                pid: process.pid,
+                transport: 'stdio-mcp-wrapper',
+                creator_key_policy: 'explicit-single-creator',
+              },
+              onAttempt: buildLocalSubstrateAttemptLogger(log),
+            },
+          }
+        : {}),
       // Persists the signed record + optional pre-sign sidecar. The sidecar
       // carries the upstream tool name + raw args + raw result so consumers
       // like atrib-trace and atrib-summarize can surface semantic context.

@@ -65,7 +65,7 @@ node scripts/check-local-substrate-coordinator-fixtures.mjs
 
 The validator checks body equality, pinned canonical hashes, non-blocking fallback, and the health-report fields needed before rollout.
 
-The shared TypeScript contract lives in `@atrib/mcp` as request and response validators, canonical body hashing, fixture validation, an opt-in coordinator client shim, explicit HTTP transport helper, an in-process startup-spawn prototype, and read-only health-probe helpers. Wrappers, emit-like producers, and watcher pipelines should consume that surface rather than minting a parallel schema. The prototype is still opt-in; the package defines the adapter boundary and rollout-gate probes without making a daemon required.
+The shared TypeScript contract lives in `@atrib/mcp` as request and response validators, canonical body hashing, fixture validation, an opt-in coordinator client shim, explicit HTTP transport helper, an in-process startup-spawn prototype, middleware shadow probes, and read-only health-probe helpers. Wrappers, emit-like producers, and watcher pipelines should consume that surface rather than minting a parallel schema. The prototype is still opt-in; the package defines the adapter boundary and rollout-gate probes without making a daemon required.
 
 ## Worked Example
 
@@ -77,6 +77,7 @@ With a coordinator, the wrapper builds the same unsigned body and sends:
 {
   "schema": "atrib.local-substrate-coordinator.request.v0",
   "operation": "sign_record",
+  "mode": "shadow_probe",
   "producer": {
     "name": "codex-mcp-wrapper",
     "harness_class": "startup-spawn"
@@ -91,9 +92,11 @@ With a coordinator, the wrapper builds the same unsigned body and sends:
 
 The coordinator may own the queue, mirror, and health report. It may not add fields to the record body before signing. The fixture pins that property by hashing the canonical record body and comparing it to the direct path.
 
+Current `@atrib/mcp-wrap` wiring uses `mode: "shadow_probe"`, not coordinator-owned commit. In this mode, the wrapper still signs, mirrors, attaches outbound context, and queues submission locally. The coordinator validates and signs the same unsigned body, returns a hash, and skips queue or mirror side effects. The wrapper log records whether that hash matched the local path. This avoids duplicate commits while proving the real startup-spawn adapter can reach the coordinator with byte-identical input.
+
 ## Rollout Gate
 
-The current implementation slice provides an in-process startup-spawn prototype behind an opt-in API. It should not become default, and should not expand to other harness classes, until a process-health report shows:
+The current implementation slice provides an in-process startup-spawn prototype plus `@atrib/mcp-wrap` HTTP shadow probes behind opt-in config. It should not become default, and should not expand to other harness classes, until a process-health report shows:
 
 - one startup-spawn harness can call the coordinator without extra stale children
 - one long-lived local assistant or scheduled producer can call it under supervisor ownership

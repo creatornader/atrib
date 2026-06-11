@@ -140,4 +140,49 @@ describe('wrap wiring', () => {
     const options = createAtribProxyMock.mock.calls[0]?.[0]
     expect(options?.atrib.archiveSubmission).toEqual({ endpoint: 'https://archive.test/v1' })
   })
+
+  it('passes local substrate shadow config to @atrib/mcp', async () => {
+    const { wrap } = await import('../src/wrap.js')
+    const { createAtribProxy } = await import('@atrib/mcp')
+    const createAtribProxyMock = vi.mocked(createAtribProxy)
+    createAtribProxyMock.mockClear()
+
+    const dir = mkdtempSync(join(tmpdir(), 'atrib-wrap-local-substrate-'))
+    const recordFile = join(dir, 'records.jsonl')
+
+    try {
+      await wrap(
+        {
+          ...makeConfig(recordFile),
+          localSubstrate: {
+            mode: 'shadow',
+            endpoint: 'http://127.0.0.1:8787/atrib/local-substrate',
+            timeoutMs: 25,
+            headers: { 'x-test': 'yes' },
+          },
+        } as unknown as WrapConfig,
+        {
+          resolveKey: async () => ({
+            seedB64url: 'seed',
+            source: 'env',
+            publicKeyB64url: 'pub',
+          }),
+        },
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+
+    const options = createAtribProxyMock.mock.calls[0]?.[0]
+    expect(options?.atrib.localSubstrate?.timeoutMs).toBe(25)
+    expect(typeof options?.atrib.localSubstrate?.transport).toBe('function')
+    expect(typeof options?.atrib.localSubstrate?.onAttempt).toBe('function')
+    expect(options?.atrib.localSubstrate?.producer).toMatchObject({
+      name: 'agent-bridge-codex',
+      harness_class: 'startup-spawn',
+      pid: process.pid,
+      transport: 'stdio-mcp-wrapper',
+      creator_key_policy: 'explicit-single-creator',
+    })
+  })
 })

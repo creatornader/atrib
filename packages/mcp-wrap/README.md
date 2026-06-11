@@ -61,6 +61,11 @@ API key or the production atrib log.
   "serverUrl": "mcp://agent-bridge.local",
   "logEndpoint": "https://log.atrib.dev/v1/entries",
   "archiveSubmission": { "endpoint": "https://archive.atrib.dev/v1" },
+  "localSubstrate": {
+    "mode": "shadow",
+    "endpoint": "http://127.0.0.1:8787/atrib/local-substrate",
+    "timeoutMs": 50,
+  },
   "autoChain": true,
   "contextIdSource": "harness",
   "autoChainFallback": "fresh",
@@ -89,6 +94,7 @@ API key or the production atrib log.
 | `serverUrl`                    | yes      | (no default)                            | Canonical URL for `content_id` derivation per spec [§1.2.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#122-content_id-derivation). Path segment for `agent` is appended automatically.                                                                                                                                                                                                                                                                                                                                                                     |
 | `logEndpoint`                  | no       | `https://log.atrib.dev/v1/entries`      | Submission endpoint. Override for local development against `@atrib/log-dev` or a local log-node.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `archiveSubmission`            | no       | unset                                   | Optional Record Body Archive submission config. Set `{ "endpoint": "https://archive.atrib.dev/v1" }` only for records whose bodies and selected verifier evidence may be public. The wrapper passes it through to `@atrib/mcp`; archive submission happens after log proof and does not send local sidecar args or results.                                                                                                                                                                                                                                                   |
+| `localSubstrate`               | no       | unset                                   | Optional startup-spawn shadow probe. Set `{ "mode": "shadow", "endpoint": "http://127.0.0.1:8787/atrib/local-substrate" }` to send the exact unsigned record body to a local substrate coordinator via the shared HTTP transport. The wrapper still signs, mirrors, and submits locally; the coordinator response is logged for rollout telemetry and hash comparison.                                                                                                                                                                                                      |
 | `autoChain`                    | no       | `true`                                  | Chain successive tool calls within this wrapper's process lifetime. Required for CHAIN_PRECEDES edges from stdio hosts.                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `contextIdSource`              | no       | `none`                                  | Set to `harness` to read the active host session from `@atrib/mcp` harness discovery when inbound MCP metadata is absent.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `autoChainFallback`            | no       | `stable-process`                        | `stable-process` keeps the historical wrapper-wide context when no caller context exists. `fresh` gives no-context calls separate genesis contexts while still chaining calls that have a resolved context.                                                                                                                                                                                                                                                                                                                                                                   |
@@ -103,6 +109,18 @@ API key or the production atrib log.
 If an upstream runtime spawns this wrapper as a child producer and already has the parent spawn record hash, use `@atrib/mcp` `buildSubagentProducerEnv()` to build the child process env. The helper sets `ATRIB_CONTEXT_ID=<parent-context-id>`, `ATRIB_CHAIN_TAIL_<parent-context-id>=<latest-tail-record-hash>`, and `ATRIB_PARENT_RECORD_HASH=<parent-dispatch-record-hash>` when the inputs are canonical. The underlying `@atrib/mcp` middleware reads `ATRIB_PARENT_RECORD_HASH` at startup and applies the valid hash to the first successful wrapper-signed record's `informed_by` field per [D115](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle). Invalid values are ignored. Failed tool calls do not consume the seed.
 
 `informedByPaths` is intentionally exact and should point only at record hashes the upstream service has already verified or made durable. Before signing, the wrapper checks the configured wrapper mirror, then checks sibling local mirrors under `ATRIB_AUTOCHAIN_SOURCE`, `ATRIB_MIRROR_FILE`, and `ATRIB_RECORDS_DIR` / `~/.atrib/records` with a 500ms local scan budget before falling back to the log lookup endpoint. Refs that are missing or unvalidated are dropped and logged as wrapper warnings. Do not point `informedByPaths` at temp smoke outputs, body commitments, transcript snippets, or human-readable proof labels. Those belong in sidecar evidence or a Pattern 3 packet, not in signed `informed_by`.
+
+## Local substrate shadow probes
+
+`localSubstrate` is the first real wrapper path for P042 coordinator work. It is deliberately shadow-only:
+
+1. `@atrib/mcp` builds the same unsigned record body it would sign directly.
+2. The wrapper sends that body to the configured endpoint with request `mode: "shadow_probe"` and a startup-spawn producer envelope.
+3. The wrapper signs, mirrors, and queues the record locally as before.
+4. The coordinator signs or rejects the body without owning queue or mirror side effects.
+5. The wrapper log records the coordinator status, elapsed time, expected local hash, returned hash, and whether the hashes matched.
+
+This proves the actual startup-spawn wrapper can reach the coordinator with byte-identical input without double-committing a record. Full coordinator-owned signing needs a later contract that returns or owns the signed record body, mirror append, outbound context, and submission queue together.
 
 ## Key resolution
 
@@ -138,7 +156,8 @@ For each tool call through the wrapped MCP:
 6. Submits to the log endpoint via the priority queue.
 7. If `archiveSubmission` is set, submits the signed record body, log proof,
    and selected verifier evidence to the archive.
-8. autoChain bookkeeping advances so the next call links to this one.
+8. If `localSubstrate` is set, sends a shadow probe and logs the outcome.
+9. autoChain bookkeeping advances so the next call links to this one.
 
 When the subagent env bundle carries `ATRIB_PARENT_RECORD_HASH`, step 1 also adds that parent hash to the first successful record's `informed_by` set before signing.
 

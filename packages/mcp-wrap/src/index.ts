@@ -3,8 +3,19 @@
 // signed-record mirror, autoChain seed loading, per-tool gating) without
 // re-implementing it around createAtribProxy.
 
-export { parseConfig, WrapConfigSchema, ToolOverrideSchema, DisclosureSchema } from './config.js'
-export type { WrapConfig, ToolOverride, DisclosureConfig } from './config.js'
+export {
+  parseConfig,
+  WrapConfigSchema,
+  ToolOverrideSchema,
+  DisclosureSchema,
+  LocalSubstrateSchema,
+} from './config.js'
+export type {
+  WrapConfig,
+  ToolOverride,
+  DisclosureConfig,
+  LocalSubstrateConfig,
+} from './config.js'
 export {
   wrap,
   buildPreCallTransform,

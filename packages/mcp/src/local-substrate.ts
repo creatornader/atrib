@@ -40,6 +40,10 @@ export const LOCAL_SUBSTRATE_OPERATIONS = [
 
 export type LocalSubstrateOperation = (typeof LOCAL_SUBSTRATE_OPERATIONS)[number]
 
+export const LOCAL_SUBSTRATE_REQUEST_MODES = ['commit', 'shadow_probe'] as const
+
+export type LocalSubstrateRequestMode = (typeof LOCAL_SUBSTRATE_REQUEST_MODES)[number]
+
 export const LOCAL_SUBSTRATE_RESPONSE_STATUSES = ['accepted', 'rejected'] as const
 
 export type LocalSubstrateResponseStatus = (typeof LOCAL_SUBSTRATE_RESPONSE_STATUSES)[number]
@@ -83,6 +87,13 @@ export interface LocalSubstrateWalJoin {
 export interface LocalSubstrateCoordinatorRequest {
   schema: typeof LOCAL_SUBSTRATE_REQUEST_SCHEMA
   operation: LocalSubstrateOperation
+  /**
+   * `commit` lets the coordinator own its configured side effects. `shadow_probe`
+   * asks it to validate and sign the exact body, then return the hash without
+   * queueing or mirroring so a direct producer can keep owning the hot path.
+   * Absence preserves the original commit behavior.
+   */
+  mode?: LocalSubstrateRequestMode
   producer: LocalSubstrateProducer
   context?: LocalSubstrateContext
   record_body: UnsignedAtribRecord
@@ -306,6 +317,7 @@ const CONTEXT_ID_RE = /^[0-9a-f]{32}$/
 
 const harnessClasses = new Set<string>(LOCAL_SUBSTRATE_HARNESS_CLASSES)
 const operations = new Set<string>(LOCAL_SUBSTRATE_OPERATIONS)
+const requestModes = new Set<string>(LOCAL_SUBSTRATE_REQUEST_MODES)
 const responseStatuses = new Set<string>(LOCAL_SUBSTRATE_RESPONSE_STATUSES)
 const creatorKeyPolicies = new Set<string>(LOCAL_SUBSTRATE_CREATOR_KEY_POLICIES)
 
@@ -425,6 +437,15 @@ export function validateLocalSubstrateRequest(
   }
   if (typeof request.operation !== 'string' || !operations.has(request.operation)) {
     push(issues, 'operation', `must be one of ${LOCAL_SUBSTRATE_OPERATIONS.join(', ')}`)
+  }
+  if (
+    request.mode !== undefined &&
+    (typeof request.mode !== 'string' || !requestModes.has(request.mode))
+  ) {
+    push(issues, 'mode', `must be one of ${LOCAL_SUBSTRATE_REQUEST_MODES.join(', ')}`)
+  }
+  if (request.mode === 'shadow_probe' && request.operation !== 'sign_record') {
+    push(issues, 'mode', 'shadow_probe is only valid for sign_record requests')
   }
 
   const producer = request.producer
@@ -1094,7 +1115,9 @@ export function createInProcessLocalSubstrateCoordinator(
     const receiptId = encodeToken(signed)
     activeContexts.add(request.record_body.context_id)
 
-    if (options.onRecord) {
+    const shadowProbe = request.mode === 'shadow_probe'
+
+    if (!shadowProbe && options.onRecord) {
       try {
         const observed = options.onRecord(signed, {
           request,
@@ -1107,10 +1130,12 @@ export function createInProcessLocalSubstrateCoordinator(
       }
     }
 
-    try {
-      queue.submit(signed, signed.event_type === EVENT_TYPE_TRANSACTION_URI ? 'high' : 'normal')
-    } catch {
-      // §5.8: queue failures never affect coordinator responses.
+    if (!shadowProbe) {
+      try {
+        queue.submit(signed, signed.event_type === EVENT_TYPE_TRANSACTION_URI ? 'high' : 'normal')
+      } catch {
+        // §5.8: queue failures never affect coordinator responses.
+      }
     }
 
     return {
