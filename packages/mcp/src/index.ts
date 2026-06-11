@@ -131,6 +131,16 @@ export type { LocalSidecarLike } from './local-sidecar.js'
 // P042 local substrate coordinator contract. This is a typed adapter boundary,
 // not a daemon or a new event surface.
 export {
+  LOCAL_SUBSTRATE_NODE_DEFAULT_HOST,
+  LOCAL_SUBSTRATE_NODE_DEFAULT_MAX_BODY_BYTES,
+  LOCAL_SUBSTRATE_NODE_DEFAULT_PORT,
+  bindLocalSubstrateCoordinatorNodeServer,
+} from './local-substrate-node.js'
+export type {
+  LocalSubstrateNodeServerHandle,
+  LocalSubstrateNodeServerOptions,
+} from './local-substrate-node.js'
+export {
   LOCAL_SUBSTRATE_CREATOR_KEY_POLICIES,
   LOCAL_SUBSTRATE_HARNESS_CLASSES,
   LOCAL_SUBSTRATE_HEALTH_SCHEMA,
