@@ -127,8 +127,32 @@ const METRICS = [
     name: 'distinct_creator_keys',
     tier: 1,
     status: 'decision-tied',
-    decisionSupported: 'is more than one party signing records (multi-agent ecosystem)',
+    decisionSupported: 'how many signer keys have ever written to the public log',
     run: (ctx) => new Set(ctx.entries.map((e) => toHex(e.creatorKey))).size,
+  },
+  {
+    name: 'active_creator_keys_24h',
+    tier: 1,
+    status: 'decision-tied',
+    decisionSupported: 'how many signer keys wrote to the public log in the last 24h',
+    run: (ctx) => {
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000
+      return new Set(
+        ctx.entries.filter((e) => e.ts >= cutoff).map((e) => toHex(e.creatorKey)),
+      ).size
+    },
+  },
+  {
+    name: 'active_creator_keys_7d',
+    tier: 1,
+    status: 'decision-tied',
+    decisionSupported: 'how many signer keys wrote to the public log in the last 7d',
+    run: (ctx) => {
+      const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+      return new Set(
+        ctx.entries.filter((e) => e.ts >= cutoff).map((e) => toHex(e.creatorKey)),
+      ).size
+    },
   },
   {
     name: 'distinct_context_ids',
@@ -309,6 +333,8 @@ function printSummary(snapshot) {
   console.log(`  log:                    ${snapshot.log.endpoint}`)
   console.log(`  tree_size:              ${m.tree_size ?? '(empty)'}`)
   console.log(`  distinct_creator_keys:  ${m.distinct_creator_keys ?? 0}`)
+  console.log(`  active_creator_keys_24h:${String(m.active_creator_keys_24h ?? 0).padStart(4)}`)
+  console.log(`  active_creator_keys_7d: ${String(m.active_creator_keys_7d ?? 0).padStart(4)}`)
   console.log(`  distinct_context_ids:   ${m.distinct_context_ids ?? 0}`)
   if (m.chain_depth) {
     const cd = m.chain_depth

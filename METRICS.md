@@ -29,7 +29,8 @@ Is the substrate being used in non-trivial ways, or is it sitting idle on a serv
 |---|---|---|---|
 | Records on log | `/v1/checkpoint` tree size | should grow | Real attribution events happen |
 | Records per day (rolling 7-day avg) | derived from successive checkpoint size | not collapsing to 0 | Use is sustained, not a one-time burst |
-| Distinct creator_keys | scan `/v1/tile/entries/*` for unique creator_key bytes | growing slowly toward >1 | More than one signer means an actual ecosystem, not just the operator |
+| Distinct creator_keys | scan `/v1/tile/entries/*` for unique creator_key bytes | growing slowly toward >1 | Cumulative signer diversity across the log. It is not an active actor count |
+| Active creator_keys in last 24h / 7d | `/v1/stats` or scan `/v1/tile/entries/*` by timestamp | non-zero and not dominated by one-off proofs | Current signer activity without confusing old demo keys for live actors |
 | Chain depth distribution (median, p95, max) | persisted record JSONLs grouped by context_id | median > 1 means chains form | The "agents reason from a past" claim is empirical |
 | `tool_call` vs `transaction` ratio | scan entries for `event_type` byte | non-zero transactions | Economic events flow through, not just chatter |
 | Active wrappers | count atrib-wrapped MCP-client jsonl mirror files (operator-local convention; default `~/.atrib/records/*.jsonl`) | growing toward >1 | More than one consumer is wired to atrib at any time |
@@ -111,7 +112,7 @@ Cadence: re-read at the same review meetings as the higher tiers. The point is t
 
 1. Tier 0 is already automated via the daily `verify-log` workflow. Nothing to add.
 
-2. Tier 1 needs a `scripts/metrics.mjs` that runs against `log.atrib.dev` and emits weekly JSON: tree size delta, distinct creator_keys, chain depth distribution, tx ratio. Estimate: 1-2 hours. Output committed to `metrics/` directory weekly.
+2. Tier 1 needs a `scripts/metrics.mjs` that runs against `log.atrib.dev` and emits weekly JSON: tree size delta, cumulative and active creator_keys, chain depth distribution, tx ratio. Estimate: 1-2 hours. Output committed to `metrics/` directory weekly.
 
 3. Tier 2 starts when the first npm package gets published. Until then, the cell is "n/a, packages not published."
 

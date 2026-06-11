@@ -59,6 +59,8 @@ describe('metrics METRICS array shape', () => {
     const names = (METRICS as MetricEntry[]).map((m) => m.name)
     expect(names).toContain('tree_size')
     expect(names).toContain('distinct_creator_keys')
+    expect(names).toContain('active_creator_keys_24h')
+    expect(names).toContain('active_creator_keys_7d')
     expect(names).toContain('chain_depth')
     expect(names).toContain('event_type_ratio')
   })
@@ -87,6 +89,36 @@ describe('metric: distinct_creator_keys', () => {
 
   it('returns 0 for empty input', () => {
     expect(m.run({ entries: [] })).toBe(0)
+  })
+})
+
+describe('metrics: active_creator_keys windows', () => {
+  const active24h = (METRICS as MetricEntry[]).find(
+    (x) => x.name === 'active_creator_keys_24h',
+  )!
+  const active7d = (METRICS as MetricEntry[]).find(
+    (x) => x.name === 'active_creator_keys_7d',
+  )!
+
+  it('counts unique creator_key values inside each active window', () => {
+    const now = Date.now()
+    const k1 = new Uint8Array(32).fill(1)
+    const k2 = new Uint8Array(32).fill(2)
+    const k3 = new Uint8Array(32).fill(3)
+    const entries = [
+      makeEntry({ creatorKey: k1, ts: now - 60_000 }),
+      makeEntry({ creatorKey: k1, ts: now - 2 * 60_000 }),
+      makeEntry({ creatorKey: k2, ts: now - 2 * 24 * 60 * 60_000 }),
+      makeEntry({ creatorKey: k3, ts: now - 10 * 24 * 60 * 60_000 }),
+    ]
+
+    expect(active24h.run({ entries })).toBe(1)
+    expect(active7d.run({ entries })).toBe(2)
+  })
+
+  it('returns 0 for empty input', () => {
+    expect(active24h.run({ entries: [] })).toBe(0)
+    expect(active7d.run({ entries: [] })).toBe(0)
   })
 })
 

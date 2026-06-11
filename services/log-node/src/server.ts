@@ -551,7 +551,9 @@ function handleLogPubkey(res: ServerResponse, signer: CheckpointSigner): void {
  * Response shape:
  *   {
  *     "tree_size": <int>,
- *     "distinct_signers": <int>,
+ *     "distinct_signers": <int>,       // cumulative signer keys ever seen
+ *     "active_signers_24h": <int>,     // signer keys with >=1 record in the last 24h
+ *     "active_signers_7d": <int>,      // signer keys with >=1 record in the last 7d
  *     "oldest_timestamp_ms": <int> | null,
  *     "newest_timestamp_ms": <int> | null,
  *     "entries_by_event_type": {
@@ -1145,6 +1147,8 @@ function publicFilterShape(filters: LogEntryFilters): Record<string, string | nu
 function handleStats(res: ServerResponse, tree: MerkleTree): void {
   const size = tree.size
   const signers = new Set<string>()
+  const activeSigners24h = new Set<string>()
+  const activeSigners7d = new Set<string>()
   let oldestTs: number | null = null
   let newestTs: number | null = null
   const eventTypeCounts = {
@@ -1157,6 +1161,9 @@ function handleStats(res: ServerResponse, tree: MerkleTree): void {
     extension: 0,
     reserved: 0,
   }
+  const nowMs = Date.now()
+  const cutoff24h = nowMs - 24 * 60 * 60 * 1000
+  const cutoff7d = nowMs - 7 * 24 * 60 * 60 * 1000
 
   for (let i = 0; i < size; i++) {
     const e = tree.entryBytes(i)
@@ -1171,6 +1178,8 @@ function handleStats(res: ServerResponse, tree: MerkleTree): void {
     const ts = Number(view.getBigUint64(81, false))
     if (oldestTs === null || ts < oldestTs) oldestTs = ts
     if (newestTs === null || ts > newestTs) newestTs = ts
+    if (ts >= cutoff24h) activeSigners24h.add(creatorKeyHex)
+    if (ts >= cutoff7d) activeSigners7d.add(creatorKeyHex)
 
     const eventType = e[89]!
     if (eventType === 0x01) eventTypeCounts.tool_call += 1
@@ -1187,6 +1196,8 @@ function handleStats(res: ServerResponse, tree: MerkleTree): void {
   sendJson(res, 200, {
     tree_size: size,
     distinct_signers: signers.size,
+    active_signers_24h: activeSigners24h.size,
+    active_signers_7d: activeSigners7d.size,
     oldest_timestamp_ms: oldestTs,
     newest_timestamp_ms: newestTs,
     entries_by_event_type: eventTypeCounts,

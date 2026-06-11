@@ -328,6 +328,8 @@ describe('GET /v1/stats', () => {
     const stats = (await res.json()) as {
       tree_size: number
       distinct_signers: number
+      active_signers_24h: number
+      active_signers_7d: number
       oldest_timestamp_ms: number | null
       newest_timestamp_ms: number | null
       entries_by_event_type: {
@@ -341,6 +343,9 @@ describe('GET /v1/stats', () => {
 
     expect(stats.tree_size).toBeGreaterThanOrEqual(4)
     expect(stats.distinct_signers).toBeGreaterThanOrEqual(4)
+    expect(stats.active_signers_24h).toBeGreaterThanOrEqual(4)
+    expect(stats.active_signers_7d).toBeGreaterThanOrEqual(stats.active_signers_24h)
+    expect(stats.active_signers_7d).toBeLessThanOrEqual(stats.distinct_signers)
     expect(stats.oldest_timestamp_ms).toBeGreaterThan(0)
     expect(stats.newest_timestamp_ms).toBeGreaterThan(0)
     expect(stats.newest_timestamp_ms!).toBeGreaterThanOrEqual(stats.oldest_timestamp_ms!)
