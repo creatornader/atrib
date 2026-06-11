@@ -61,6 +61,8 @@ Or run as a one-off subprocess via `pnpm --filter @atrib/annotate start`.
 - `ATRIB_AUTOCHAIN_SOURCE`: optional cross-producer chain inheritance source.
 - `ATRIB_LOG_ENDPOINT`: log.atrib.dev override (e.g. for self-hosted log nodes).
 - `ATRIB_CONTEXT_ID`: default context_id per [D078](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default).
+- `ATRIB_LOCAL_SUBSTRATE_ENDPOINT` + `ATRIB_LOCAL_SUBSTRATE_MODE=shadow`: opt-in P042 local-substrate shadow probe inherited from `@atrib/emit`. The annotation is still signed, mirrored, and queued locally.
+- `ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS`: optional timeout for that shadow probe.
 
 ## Relationship to @atrib/emit
 

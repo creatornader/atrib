@@ -14,13 +14,21 @@ import {
   EVENT_TYPE_REVISION_URI,
   EVENT_TYPE_TOOL_CALL_URI,
   EVENT_TYPE_TRANSACTION_URI,
+  base64urlEncode,
   canonicalRecord,
+  createInProcessLocalSubstrateCoordinator,
   sha256,
   hexEncode,
   verifyRecord,
   type AtribRecord,
+  type LocalSubstrateCoordinatorRequest,
 } from '@atrib/mcp'
-import { createAtribEmitServer, __test_only__ as __index_test_only__ } from '../src/index.js'
+import {
+  createAtribEmitServer,
+  resolveEmitLocalSubstrateShadowFromEnv,
+  __test_only__ as __index_test_only__,
+  type EmitLocalSubstrateShadowAttempt,
+} from '../src/index.js'
 import { buildAndSignEmitRecord, __test_only__ } from '../src/sign.js'
 import { createSubmissionQueue } from '@atrib/mcp'
 
@@ -60,6 +68,24 @@ async function freshKey(): Promise<Uint8Array> {
   // Sanity: derives a real Ed25519 keypair.
   await ed.getPublicKeyAsync(seed)
   return seed
+}
+
+async function waitFor<T>(
+  read: () => T | undefined,
+  message: string,
+  attempts = 50,
+): Promise<T> {
+  for (let i = 0; i < attempts; i++) {
+    const value = read()
+    if (value !== undefined) return value
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  throw new Error(message)
+}
+
+function unsignedBody(record: AtribRecord): Record<string, unknown> {
+  const { signature: _signature, ...body } = record
+  return body as Record<string, unknown>
 }
 
 describe('buildAndSignEmitRecord', () => {
@@ -375,6 +401,160 @@ describe('handleEmit validation paths', () => {
   // (where validation passes and the record submits) live in integration.test.ts
   // because they need a real HTTP log stub. The unit tests above focus on the
   // pre-submission rejection paths, which never hit the queue.
+})
+
+describe('local substrate shadow probe (P042 long-lived producer path)', () => {
+  const { handleEmit } = __index_test_only__
+
+  it('sends the exact unsigned emit record body to the coordinator', async () => {
+    const seed = await freshKey()
+    const submitted: AtribRecord[] = []
+    const seenRequests: LocalSubstrateCoordinatorRequest[] = []
+    const attempts: EmitLocalSubstrateShadowAttempt[] = []
+    let coordinatorRecordCount = 0
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: base64urlEncode(seed),
+      supportedHarnessClasses: ['long-lived-agent'],
+      logSubmission: 'disabled',
+      onRecord: () => {
+        coordinatorRecordCount++
+      },
+    })
+    const queue = {
+      submit: (record: AtribRecord) => {
+        submitted.push(record)
+      },
+      flush: async () => {},
+      getProof: () => undefined,
+    } as unknown as ReturnType<typeof createSubmissionQueue>
+
+    try {
+      const result = await handleEmit({
+        input: {
+          event_type: 'observation',
+          content: { what: 'long-lived shadow probe', topics: ['p042'] },
+          context_id: '1'.repeat(32),
+        },
+        key: { privateKey: seed, source: 'env' },
+        queue,
+        producer: 'atrib-emit-test',
+        localSubstrate: {
+          transport: async (request, options) => {
+            seenRequests.push(request)
+            return coordinator.transport(request, options)
+          },
+          producer: {
+            name: 'atrib-emit-test',
+            harness_class: 'long-lived-agent',
+            pid: 4242,
+            transport: 'test-transport',
+            creator_key_policy: 'explicit-single-creator',
+          },
+          onAttempt: (attempt) => {
+            attempts.push(attempt)
+          },
+        },
+      })
+
+      expect(result.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(submitted.length).toBe(1)
+      const request = await waitFor(() => seenRequests[0], 'shadow request was not sent')
+      const attempt = await waitFor(() => attempts[0], 'shadow attempt was not observed')
+      expect(request.mode).toBe('shadow_probe')
+      expect(request.operation).toBe('sign_record')
+      expect(request.producer.harness_class).toBe('long-lived-agent')
+      expect(request.context).toEqual({
+        source: '@atrib/emit',
+        context_id: '1'.repeat(32),
+        chain_tail: submitted[0]!.chain_root,
+      })
+      expect(request.record_body).toEqual(unsignedBody(submitted[0]!))
+      expect(attempt.expectedRecordHash).toBe(result.record_hash)
+      expect(attempt.responseRecordHash).toBe(result.record_hash)
+      expect(attempt.recordHashMatches).toBe(true)
+      expect(coordinatorRecordCount).toBe(0)
+    } finally {
+      coordinator.destroy()
+    }
+  })
+
+  it('classifies coordinator unavailability without affecting emit', async () => {
+    const seed = await freshKey()
+    const submitted: AtribRecord[] = []
+    const attempts: EmitLocalSubstrateShadowAttempt[] = []
+    const queue = {
+      submit: (record: AtribRecord) => {
+        submitted.push(record)
+      },
+      flush: async () => {},
+      getProof: () => undefined,
+    } as unknown as ReturnType<typeof createSubmissionQueue>
+
+    const result = await handleEmit({
+      input: {
+        event_type: 'observation',
+        content: { what: 'shadow unavailable fallback' },
+        context_id: '2'.repeat(32),
+      },
+      key: { privateKey: seed, source: 'env' },
+      queue,
+      localSubstrate: {
+        transport: async () => {
+          throw new Error('coordinator offline')
+        },
+        onAttempt: (attempt) => {
+          attempts.push(attempt)
+        },
+      },
+    })
+
+    expect(result.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(submitted.length).toBe(1)
+    const attempt = await waitFor(() => attempts[0], 'shadow fallback attempt was not observed')
+    expect(attempt.result.ok).toBe(false)
+    expect(attempt.result.status).toBe('unavailable')
+    expect(attempt.recordHashMatches).toBe(false)
+    expect(
+      attempt.result.status === 'unavailable' ? attempt.result.reason : '',
+    ).toContain('coordinator offline')
+  })
+
+  it('resolves opt-in HTTP shadow config from env without enabling commit mode', async () => {
+    const env = {
+      ATRIB_LOCAL_SUBSTRATE_ENDPOINT: 'http://127.0.0.1:8787/atrib/local-substrate',
+      ATRIB_LOCAL_SUBSTRATE_MODE: 'shadow',
+      ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS: '25',
+    } as NodeJS.ProcessEnv
+    const localSubstrate = resolveEmitLocalSubstrateShadowFromEnv({
+      env,
+      producer: 'atrib-emit-cli',
+      transport: 'emit-in-process',
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            schema: 'atrib.local-substrate-coordinator.response.v0',
+            operation: 'sign_record',
+            status: 'rejected',
+            rejection_reason: 'test response',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    })
+
+    expect(localSubstrate).toBeDefined()
+    expect(localSubstrate!.timeoutMs).toBe(25)
+    expect(localSubstrate!.producer).toMatchObject({
+      name: 'atrib-emit-cli',
+      harness_class: 'long-lived-agent',
+      transport: 'emit-in-process',
+      creator_key_policy: 'explicit-single-creator',
+    })
+    expect(
+      resolveEmitLocalSubstrateShadowFromEnv({
+        env: { ...env, ATRIB_LOCAL_SUBSTRATE_MODE: 'commit' },
+      }),
+    ).toBeUndefined()
+  })
 })
 
 describe('ATRIB_PARENT_RECORD_HASH env seeding (D104)', () => {

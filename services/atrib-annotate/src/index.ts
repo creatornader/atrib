@@ -18,8 +18,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import {
+  resolveEmitLocalSubstrateShadowFromEnv,
   handleEmit,
   resolveKey,
+  type EmitLocalSubstrateShadowOptions,
   type ResolvedKey,
 } from '@atrib/emit'
 import {
@@ -89,6 +91,11 @@ export interface CreateAtribAnnotateServerOptions {
   key?: ResolvedKey
   /** Override the log endpoint (defaults to env or @atrib/mcp default). */
   logEndpoint?: string | undefined
+  /**
+   * Optional long-lived-agent local substrate shadow probe. `undefined` reads
+   * opt-in env config; `false` disables env config for this server.
+   */
+  localSubstrate?: EmitLocalSubstrateShadowOptions | false | undefined
 }
 
 /**
@@ -103,6 +110,14 @@ export async function createAtribAnnotateServer(
   const key = options.key ?? (await resolveKey())
   const logEndpoint = options.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT']
   const queue: SubmissionQueue = createSubmissionQueue(logEndpoint)
+  const localSubstrate =
+    options.localSubstrate === false
+      ? undefined
+      : (options.localSubstrate ??
+        resolveEmitLocalSubstrateShadowFromEnv({
+          producer: 'atrib-annotate',
+          transport: 'stdio-mcp-server',
+        }))
 
   const mcp = new McpServer({ name: 'atrib-annotate', version: '0.1.0' })
 
@@ -135,6 +150,7 @@ export async function createAtribAnnotateServer(
         key,
         queue,
         producer: 'atrib-annotate',
+        localSubstrate,
       })
       const out: AnnotateOutput = {
         record_hash: result.record_hash,

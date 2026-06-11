@@ -18,7 +18,9 @@ import { join } from 'node:path'
 import {
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_REVISION_URI,
+  LOCAL_SUBSTRATE_REQUEST_SCHEMA,
   canonicalRecord,
+  createHttpLocalSubstrateTransport,
   createSubmissionQueue,
   genesisChainRoot,
   hexEncode,
@@ -29,9 +31,17 @@ import {
   resolveEnvContextId,
   SHA256_REF_PATTERN,
   sha256,
+  tryLocalSubstrateCoordinator,
   type AtribRecord,
+  type LocalSubstrateCoordinatorRequest,
+  type LocalSubstrateCoordinatorTransport,
+  type LocalSubstrateDegradationPolicy,
+  type LocalSubstrateHarnessClass,
+  type LocalSubstrateProducer,
   type ProofBundle,
   type SubmissionQueue,
+  type TryLocalSubstrateCoordinatorResult,
+  type UnsignedAtribRecord,
 } from '@atrib/mcp'
 import { resolveKey, type ResolvedKey } from './keys.js'
 import { filterResolvableInformedBy, type RecordReferenceResolver } from './reference-resolution.js'
@@ -186,6 +196,52 @@ type EmitOutput = {
   warnings: string[]
 }
 
+export interface EmitLocalSubstrateShadowAttempt {
+  result: TryLocalSubstrateCoordinatorResult
+  expectedRecordHash: string
+  responseRecordHash?: string
+  recordHashMatches: boolean
+}
+
+export interface EmitLocalSubstrateShadowOptions {
+  /** Coordinator transport. HTTP, Unix-socket adapters, and tests all plug in here. */
+  transport: LocalSubstrateCoordinatorTransport
+  /**
+   * Producer envelope written outside the signed record bytes. Defaults to a
+   * long-lived-agent envelope for the current process and producer label.
+   */
+  producer?: LocalSubstrateProducer | undefined
+  /** Per-call timeout for the shadow probe. Defaults to 500ms. */
+  timeoutMs?: number | undefined
+  /** Degradation posture written into the coordinator request envelope. */
+  fallback?: LocalSubstrateDegradationPolicy | undefined
+  /**
+   * Wait for the bounded shadow attempt before returning. Short-lived
+   * producers use this so the process does not exit before telemetry lands.
+   */
+  waitForAttempt?: boolean | undefined
+  /** Observer hook for tests, telemetry, or rollout reports. Never blocks emit. */
+  onAttempt?: ((attempt: EmitLocalSubstrateShadowAttempt) => void | Promise<void>) | undefined
+  /** Warning hook for mismatch or observer failures. Never affects emit. */
+  onWarning?: ((message: string, detail?: unknown) => void) | undefined
+}
+
+export interface ResolveEmitLocalSubstrateShadowFromEnvOptions {
+  env?: NodeJS.ProcessEnv | undefined
+  producer?: string | undefined
+  harnessClass?: LocalSubstrateHarnessClass | undefined
+  transport?: string | undefined
+  waitForAttempt?: boolean | undefined
+  fetch?: typeof fetch | undefined
+}
+
+const DEFAULT_LOCAL_SUBSTRATE_DEGRADATION: LocalSubstrateDegradationPolicy = {
+  if_unavailable: 'sign locally in producer and continue without coordinator receipt',
+  primary_path_blocking: false,
+}
+
+const DEFAULT_LOCAL_SUBSTRATE_TIMEOUT_MS = 500
+
 export interface AtribEmitServer {
   /** Underlying McpServer; expose for testing or composition. */
   mcp: McpServer
@@ -200,6 +256,11 @@ export interface CreateAtribEmitServerOptions {
   logEndpoint?: string | undefined
   /** Override informed_by record lookup, primarily for tests and embedded hosts. */
   recordReferenceResolver?: RecordReferenceResolver | undefined
+  /**
+   * Optional long-lived-agent local substrate shadow probe. `undefined` reads
+   * opt-in env config; `false` disables env config for this server.
+   */
+  localSubstrate?: EmitLocalSubstrateShadowOptions | false | undefined
 }
 
 /**
@@ -232,6 +293,11 @@ export async function createAtribEmitServer(
         queue,
         logEndpoint,
         recordReferenceResolver: options.recordReferenceResolver,
+        localSubstrate: resolveLocalSubstrateOption(options.localSubstrate, {
+          producer: 'atrib-emit',
+          transport: 'stdio-mcp-server',
+          waitForAttempt: false,
+        }),
       })
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
@@ -259,6 +325,7 @@ interface HandleEmitInput {
   producer?: string
   logEndpoint?: string | undefined
   recordReferenceResolver?: RecordReferenceResolver | undefined
+  localSubstrate?: EmitLocalSubstrateShadowOptions | undefined
 }
 
 /**
@@ -273,6 +340,7 @@ async function handleEmit({
   producer,
   logEndpoint,
   recordReferenceResolver,
+  localSubstrate,
 }: HandleEmitInput): Promise<EmitOutput> {
   const warnings: string[] = []
   const eventType = normalizeEventType(input.event_type)
@@ -431,6 +499,20 @@ async function handleEmit({
   }
 
   const recordHash = record.signature ? hashRecord(record) : null
+  const unsignedRecordBody = unsignedRecordBodyFromSigned(record)
+  let localSubstrateShadow: Promise<void> | undefined
+
+  if (recordHash && localSubstrate) {
+    localSubstrateShadow = dispatchEmitLocalSubstrateShadow({
+      localSubstrate,
+      recordBody: unsignedRecordBody,
+      expectedRecordHash: recordHash,
+      contextId,
+      chainRoot,
+      parentRecordHash: validParentHash,
+      producerLabel: producer ?? 'atrib-emit',
+    })
+  }
 
   // Submit asynchronously; the queue handles retry + degradation per §5.8.
   // Cognitive events default to normal priority, annotations/observations
@@ -454,6 +536,10 @@ async function handleEmit({
 
   if (!proof) {
     warnings.push('submission queued; proof not yet available (poll the log later if needed)')
+  }
+
+  if (localSubstrate?.waitForAttempt && localSubstrateShadow) {
+    await localSubstrateShadow
   }
 
   return {
@@ -482,6 +568,178 @@ function randomContextId(): string {
 
 function hashRecord(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
+}
+
+function unsignedRecordBodyFromSigned(record: AtribRecord): UnsignedAtribRecord {
+  const { signature: _signature, ...body } = record
+  return body as UnsignedAtribRecord
+}
+
+function localSubstrateProducer(
+  producerLabel: string,
+  options?: {
+    harnessClass?: LocalSubstrateHarnessClass | undefined
+    transport?: string | undefined
+  },
+): LocalSubstrateProducer {
+  return {
+    name: producerLabel,
+    harness_class: options?.harnessClass ?? 'long-lived-agent',
+    pid: process.pid,
+    transport: options?.transport ?? 'emit-in-process',
+    creator_key_policy: 'explicit-single-creator',
+  }
+}
+
+function parsePositiveInt(value: string | undefined): number | undefined {
+  if (value === undefined || value.trim().length === 0) return undefined
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined
+}
+
+export function resolveEmitLocalSubstrateShadowFromEnv(
+  options: ResolveEmitLocalSubstrateShadowFromEnvOptions = {},
+): EmitLocalSubstrateShadowOptions | undefined {
+  const env = options.env ?? process.env
+  const endpoint = env['ATRIB_LOCAL_SUBSTRATE_ENDPOINT']
+  if (!endpoint) return undefined
+
+  const mode = env['ATRIB_LOCAL_SUBSTRATE_MODE'] ?? 'shadow'
+  if (mode === 'off' || mode === 'disabled' || mode === 'false') return undefined
+  if (mode !== 'shadow') return undefined
+
+  const timeoutMs = parsePositiveInt(env['ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS'])
+  return {
+    transport: createHttpLocalSubstrateTransport(endpoint, {
+      ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
+    }),
+    producer: localSubstrateProducer(options.producer ?? 'atrib-emit', {
+      harnessClass: options.harnessClass,
+      transport: options.transport,
+    }),
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+    ...(options.waitForAttempt !== undefined ? { waitForAttempt: options.waitForAttempt } : {}),
+  }
+}
+
+function resolveLocalSubstrateOption(
+  option: EmitLocalSubstrateShadowOptions | false | undefined,
+  defaults: {
+    producer: string
+    transport: string
+    harnessClass?: LocalSubstrateHarnessClass | undefined
+    waitForAttempt?: boolean | undefined
+  },
+): EmitLocalSubstrateShadowOptions | undefined {
+  if (option === false) return undefined
+  if (option) {
+    return {
+      ...option,
+      waitForAttempt: option.waitForAttempt ?? defaults.waitForAttempt,
+      producer:
+        option.producer ??
+        localSubstrateProducer(defaults.producer, {
+          transport: defaults.transport,
+          harnessClass: defaults.harnessClass,
+        }),
+    }
+  }
+  return resolveEmitLocalSubstrateShadowFromEnv(defaults)
+}
+
+function dispatchEmitLocalSubstrateShadow(input: {
+  localSubstrate: EmitLocalSubstrateShadowOptions
+  recordBody: UnsignedAtribRecord
+  expectedRecordHash: string
+  contextId: string
+  chainRoot: string
+  parentRecordHash?: string | undefined
+  producerLabel: string
+}): Promise<void> {
+  const producer =
+    input.localSubstrate.producer ??
+    localSubstrateProducer(input.producerLabel, { transport: 'emit-in-process' })
+  const request: LocalSubstrateCoordinatorRequest = {
+    schema: LOCAL_SUBSTRATE_REQUEST_SCHEMA,
+    operation: 'sign_record',
+    mode: 'shadow_probe',
+    producer,
+    context: {
+      source: '@atrib/emit',
+      context_id: input.contextId,
+      chain_tail: input.chainRoot,
+      ...(input.parentRecordHash !== undefined
+        ? { parent_record_hash: input.parentRecordHash }
+        : {}),
+    },
+    record_body: input.recordBody,
+    degradation: input.localSubstrate.fallback ?? DEFAULT_LOCAL_SUBSTRATE_DEGRADATION,
+  }
+
+  return tryLocalSubstrateCoordinator(request, {
+    transport: input.localSubstrate.transport,
+    timeoutMs: input.localSubstrate.timeoutMs ?? DEFAULT_LOCAL_SUBSTRATE_TIMEOUT_MS,
+    expectedHarnessClass: producer.harness_class,
+    directRecordBody: input.recordBody,
+  })
+    .then((result) => {
+      const responseRecordHash =
+        result.ok || result.status === 'rejected' ? result.response?.record_hash : undefined
+      const recordHashMatches = responseRecordHash === input.expectedRecordHash
+      if (result.ok && !recordHashMatches) {
+        notifyLocalSubstrateWarning(
+          input.localSubstrate,
+          'local substrate shadow record_hash mismatch',
+          {
+            expected_record_hash: input.expectedRecordHash,
+            response_record_hash: responseRecordHash ?? null,
+          },
+        )
+      }
+      if (input.localSubstrate.onAttempt) {
+        try {
+          const observed = input.localSubstrate.onAttempt({
+            result,
+            expectedRecordHash: input.expectedRecordHash,
+            ...(responseRecordHash !== undefined ? { responseRecordHash } : {}),
+            recordHashMatches,
+          })
+          void Promise.resolve(observed).catch((error) => {
+            notifyLocalSubstrateWarning(
+              input.localSubstrate,
+              'local substrate shadow observer rejected',
+              error,
+            )
+          })
+        } catch (error) {
+          notifyLocalSubstrateWarning(
+            input.localSubstrate,
+            'local substrate shadow observer threw',
+            error,
+          )
+        }
+      }
+    })
+    .catch((error) => {
+      notifyLocalSubstrateWarning(
+        input.localSubstrate,
+        'local substrate shadow probe failed unexpectedly',
+        error,
+      )
+    })
+}
+
+function notifyLocalSubstrateWarning(
+  localSubstrate: EmitLocalSubstrateShadowOptions,
+  message: string,
+  detail?: unknown,
+): void {
+  if (!localSubstrate.onWarning) return
+  try {
+    localSubstrate.onWarning(`atrib-emit: ${message}`, detail)
+  } catch {
+    // Warning observers must not affect the signed emit path.
+  }
 }
 
 /**
@@ -528,6 +786,11 @@ export interface EmitInProcessOptions {
   flushDeadlineMs?: number
   /** Override informed_by record lookup, primarily for tests and embedded hosts. */
   recordReferenceResolver?: RecordReferenceResolver | undefined
+  /**
+   * Optional long-lived-agent local substrate shadow probe. `undefined` reads
+   * opt-in env config; `false` disables env config for this call.
+   */
+  localSubstrate?: EmitLocalSubstrateShadowOptions | false | undefined
 }
 
 const DEFAULT_FLUSH_DEADLINE_MS = 5000
@@ -574,6 +837,11 @@ export async function emitInProcess(
     producer: options.producer,
     logEndpoint,
     recordReferenceResolver: options.recordReferenceResolver,
+    localSubstrate: resolveLocalSubstrateOption(options.localSubstrate, {
+      producer: options.producer ?? 'atrib-emit',
+      transport: 'emit-in-process',
+      waitForAttempt: true,
+    }),
   })
   // Drain before returning, bounded by flushDeadlineMs. The typical caller
   // is a detached hook process that exits right after this resolves; we
