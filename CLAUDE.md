@@ -29,6 +29,8 @@ atrib/
   PRIOR-ART.md                 # Prior art & standards map: every spec/protocol atrib builds on, organized by layer
   METRICS.md                   # Tiered metrics framework + lifecycle states + quarterly evolution review for the dogfood experiment
   docs/publishing-new-npm-package.md # Runsheet for creating and publishing a new public npm package.
+  scripts/
+    prove-local-substrate-process-health.mjs # P042 process-health proof. Builds on the fixture corpus by starting/probing a real local-substrate host, exercising startup-spawn, long-lived-agent, and watcher-WAL requests over HTTP, and checking stale-child/orphan/fallback gates before default dogfood config changes.
   metrics/                     # Dated JSON snapshots from `pnpm --filter @atrib/log-node metrics`
   packages/
     mcp/                       # @atrib/mcp: MCP server middleware (public)

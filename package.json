@@ -22,6 +22,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "doc-sync": "node scripts/check-doc-sync.mjs && node packages/integration/scripts/check-demo-record-surfaces.mjs && node scripts/check-local-substrate-coordinator-fixtures.mjs",
+    "prove:local-substrate": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/emit build && node scripts/prove-local-substrate-process-health.mjs",
     "typos": "typos .",
     "clean": "turbo clean",
     "version-packages": "changeset version",

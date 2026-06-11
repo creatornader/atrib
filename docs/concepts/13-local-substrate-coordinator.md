@@ -111,4 +111,8 @@ The current implementation slices provide an in-process startup-spawn prototype,
 - one watcher WAL path can queue, drain, and join receipts without orphan or mismatch regressions
 - coordinator unavailability leaves primary agent work unaffected
 
+`pnpm prove:local-substrate` is the first repo-owned process-health proof. It builds `@atrib/mcp` and `@atrib/emit`, starts the real `atrib-local-substrate` host on an ephemeral loopback port, sends the three conformance fixtures through HTTP, checks watcher receipt issuance, validates final health, asserts zero stale children and zero orphan receipts, and proves the client classifies an unavailable coordinator as `unavailable` rather than blocking. The script can also target a live dogfood coordinator with `--use-existing <endpoint>` and `--health-endpoint <endpoint>`.
+
+Passing that proof means the host binary can satisfy the local contract in isolation. It does not prove any operator's startup-spawn harnesses, long-lived local agents, or watcher configs are wired through it yet, and it does not justify a default config flip by itself.
+
 That report should extend [D084](../../DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) rather than create another private health surface.
