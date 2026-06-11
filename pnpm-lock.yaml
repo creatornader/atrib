@@ -671,6 +671,46 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.2)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)(yaml@2.9.0))
 
+  services/atrib-primitives:
+    dependencies:
+      '@atrib/annotate':
+        specifier: workspace:*
+        version: link:../atrib-annotate
+      '@atrib/emit':
+        specifier: workspace:*
+        version: link:../atrib-emit
+      '@atrib/recall':
+        specifier: workspace:*
+        version: link:../atrib-recall
+      '@atrib/revise':
+        specifier: workspace:*
+        version: link:../atrib-revise
+      '@atrib/summarize':
+        specifier: workspace:*
+        version: link:../atrib-summarize
+      '@atrib/trace':
+        specifier: workspace:*
+        version: link:../atrib-trace
+      '@atrib/verify-mcp':
+        specifier: workspace:*
+        version: link:../atrib-verify
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.2
+        version: 25.9.2
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.2)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)(yaml@2.9.0))
+
   services/atrib-recall:
     dependencies:
       '@atrib/mcp':

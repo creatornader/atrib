@@ -88,7 +88,7 @@ export interface AtribAnnotateServer {
 
 export interface CreateAtribAnnotateServerOptions {
   /** Override the resolved key (primarily for testing). */
-  key?: ResolvedKey
+  key?: ResolvedKey | null | undefined
   /** Override the log endpoint (defaults to env or @atrib/mcp default). */
   logEndpoint?: string | undefined
   /**
@@ -107,7 +107,7 @@ export interface CreateAtribAnnotateServerOptions {
 export async function createAtribAnnotateServer(
   options: CreateAtribAnnotateServerOptions = {},
 ): Promise<AtribAnnotateServer> {
-  const key = options.key ?? (await resolveKey())
+  const resolveServerKey = createServerKeyResolver(options)
   const logEndpoint = options.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT']
   const queue: SubmissionQueue = createSubmissionQueue(logEndpoint)
   const localSubstrate =
@@ -147,7 +147,7 @@ export async function createAtribAnnotateServer(
           ...(input.context_id ? { context_id: input.context_id } : {}),
           ...(input.informed_by ? { informed_by: input.informed_by } : {}),
         },
-        key,
+        key: await resolveServerKey(),
         queue,
         producer: 'atrib-annotate',
         localSubstrate,
@@ -168,5 +168,19 @@ export async function createAtribAnnotateServer(
   return {
     mcp,
     flush: () => queue.flush(),
+  }
+}
+
+function createServerKeyResolver(
+  options: CreateAtribAnnotateServerOptions,
+): () => Promise<ResolvedKey | null> {
+  if (Object.prototype.hasOwnProperty.call(options, 'key')) {
+    const fixed = options.key ?? null
+    return async () => fixed
+  }
+  let resolved: Promise<ResolvedKey | null> | null = null
+  return async () => {
+    resolved ??= resolveKey()
+    return resolved
   }
 }

@@ -14,7 +14,7 @@ atrib has several valid ways to sign records today: in-process middleware, CLI h
 - local watcher pipelines need WAL drain, receipt join-back, and orphan detection
 - stale child processes and notification hooks can survive after the agent session that created them
 
-Adding one more MCP server would only shrink one process list. The wider boundary is host ownership: one local substrate surface that can coordinate signing, mirror/WAL work, submission queues, read indexes, and health reporting for several harness styles.
+Adding one combined MCP runtime can shrink one process list. It does not solve signer ownership, watcher WAL join-back, or health reporting by itself. The wider boundary is host ownership: one local substrate surface that can coordinate signing, mirror/WAL work, submission queues, read indexes, and health reporting for several harness styles.
 
 ## Shape
 
@@ -102,11 +102,14 @@ The service-hosting slice exposes the same coordinator through `createLocalSubst
 
 `@atrib/emit` ships the first host-owned process for that boundary as `atrib-local-substrate`. The binary uses the same bounded `resolveKey()` path as `atrib-emit`, binds loopback HTTP at `127.0.0.1:8787` by default, supports the three fixture harness classes, prints a ready event for supervisors, and drains the submission queue on SIGTERM/SIGINT with a bounded shutdown timeout. It is opt-in. Agents still need `ATRIB_LOCAL_SUBSTRATE_ENDPOINT=http://127.0.0.1:8787/atrib/local-substrate` before their shadow probes call it.
 
+`@atrib/primitives-runtime` is a separate process-count slice. It mounts the seven public primitive packages in process and exposes their 15 physical MCP tools through one stdio server named `atrib-primitives`. It is private to the workspace and meant for dogfood configs where Codex, Claude Code, or another startup-spawn harness would otherwise launch seven atrib primitive child processes per thread. It does not own signing policy, WAL commit, receipt join-back, or health reporting beyond the MCP runtime itself; those stay with the local substrate coordinator track.
+
 ## Rollout Gate
 
 The current implementation slices provide an in-process startup-spawn prototype, watcher-WAL commit-mode proof, `@atrib/mcp-wrap` HTTP shadow probes, `@atrib/emit` long-lived-agent shadow probes, shared Fetch/plain-result/Node HTTP handlers, and the `atrib-local-substrate` host binary behind opt-in config. They should not become default until a process-health report shows:
 
 - one startup-spawn harness can call the coordinator without extra stale children
+- one startup-spawn harness can use `atrib-primitives` when the desired rollout gate is MCP child-process count rather than coordinator signing
 - one long-lived local assistant or scheduled producer can call it under supervisor ownership
 - one watcher WAL path can queue, drain, and join receipts without orphan or mismatch regressions
 - coordinator unavailability leaves primary agent work unaffected

@@ -138,6 +138,7 @@ export const ATRIB_RECALL_NOISE_FLOOR = parseFloat(process.env.ATRIB_RECALL_NOIS
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { z } from 'zod'
 import {
   aggregateAnnotationsByRecord,
@@ -226,7 +227,7 @@ export function loadRecords(path: string): AtribRecord[] {
  */
 export function loadRecordsFromDir(dir: string): { records: AtribRecord[]; files: string[] } {
   if (!existsSync(dir)) return { records: [], files: [] }
-  let entries: string[] = []
+  let entries: string[]
   try {
     entries = readdirSync(dir).filter((name) => name.endsWith('.jsonl'))
   } catch {
@@ -633,7 +634,7 @@ async function annotateVerification(
 ): Promise<VerifiedBundle[]> {
   return Promise.all(
     loaded.map(async (lr) => {
-      let ok = false
+      let ok: boolean
       try {
         ok = await verifyRecord(lr.record)
       } catch {
@@ -928,10 +929,9 @@ function readPackageVersion(): string {
   }
 }
 
-const server = new McpServer({
-  name: 'atrib-recall',
-  version: readPackageVersion(),
-})
+export interface AtribRecallServer {
+  mcp: McpServer
+}
 
 // The recall semantic surface (as defined in the public protocol specification).
 // Eight distinct MCP tools: recall_my_attribution_history is the base
@@ -940,6 +940,7 @@ const server = new McpServer({
 // record_hash; recall_walk traverses the local Layer 1 derived graph;
 // recall_by_content runs BM25 free-form retrieval; recall_session_chain,
 // recall_orphans, and recall_by_signer cover common agent lookup shapes.
+export function registerAtribRecallTools(server: McpServer): void {
 
 server.registerTool(
   'recall_my_attribution_history',
@@ -1727,5 +1728,23 @@ server.registerTool(
     ),
 )
 
-const transport = new StdioServerTransport()
-await server.connect(transport)
+}
+
+export function createAtribRecallServer(): AtribRecallServer {
+  const mcp = new McpServer({
+    name: 'atrib-recall',
+    version: readPackageVersion(),
+  })
+  registerAtribRecallTools(mcp)
+  return { mcp }
+}
+
+async function main(): Promise<void> {
+  const { mcp } = createAtribRecallServer()
+  const transport = new StdioServerTransport()
+  await mcp.connect(transport)
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main()
+}
