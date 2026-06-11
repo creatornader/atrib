@@ -21,6 +21,11 @@ const PRIMITIVE_SERVERS = [
   'atrib-verify',
 ]
 
+process.stdout.on('error', (error) => {
+  if (error?.code === 'EPIPE') process.exit(0)
+  throw error
+})
+
 function usage() {
   return `Usage:
   node scripts/report-local-substrate-topology.mjs [options]
@@ -163,6 +168,12 @@ function summarizeProcesses(processes) {
   }))
   const byPid = new Map(rows.map((row) => [row.pid, row]))
   const primitiveRuntime = rows.filter((row) => row.service === 'atrib-primitives')
+  const primitiveRuntimeHttp = primitiveRuntime.filter(
+    (row) => primitiveRuntimeTransport(row) === 'streamable-http',
+  )
+  const primitiveRuntimeStdio = primitiveRuntime.filter(
+    (row) => primitiveRuntimeTransport(row) === 'stdio',
+  )
   const coordinator = rows.filter((row) => row.service === 'atrib-local-substrate')
   const bridge = rows.filter((row) => row.service === 'agent-bridge')
   const standalone = rows.filter((row) => PRIMITIVE_SERVERS.includes(row.service))
@@ -188,6 +199,7 @@ function summarizeProcesses(processes) {
       return {
         ppid,
         parent_service: parent?.service ?? 'unknown',
+        transport: unique(group.map((row) => primitiveRuntimeTransport(row))).join('+'),
         process_count: group.length,
         pids: group.map((row) => row.pid).sort((a, b) => a - b),
         ...startWindow(group),
@@ -199,6 +211,8 @@ function summarizeProcesses(processes) {
     total_processes_seen: rows.length,
     coordinator_processes: coordinator.length,
     primitive_runtime_processes: primitiveRuntime.length,
+    primitive_runtime_http_processes: primitiveRuntimeHttp.length,
+    primitive_runtime_stdio_processes: primitiveRuntimeStdio.length,
     standalone_primitive_processes: standalone.length,
     standalone_primitive_groups: standaloneGroups.length,
     duplicate_primitive_groups: standaloneGroups.filter((group) => group.process_count >= 3).length,
@@ -206,6 +220,12 @@ function summarizeProcesses(processes) {
     runtime_groups: runtimeGroups,
     standalone_groups: standaloneGroups,
   }
+}
+
+function primitiveRuntimeTransport(row) {
+  return row.command.includes('--transport streamable-http') || row.command.includes('--http')
+    ? 'streamable-http'
+    : 'stdio'
 }
 
 function startWindow(rows) {
@@ -236,6 +256,7 @@ function summarizeCodexConfig(path) {
     return missingConfig('codex', path)
   }
   const text = readFileSync(path, 'utf8')
+  const blocks = parseTomlMcpServerBlocks(text)
   const serverNames = [...text.matchAll(/^\[mcp_servers\.([^\]\s]+)\]/gm)].map((match) =>
     match[1].replace(/^"|"$/g, ''),
   )
@@ -244,6 +265,9 @@ function summarizeCodexConfig(path) {
     path,
     serverNames,
     text,
+    primitiveHttpEndpoints: serverNames.includes('atrib-primitives')
+      ? unique([urlFromTomlBlock(blocks.get('atrib-primitives'))])
+      : [],
   })
 }
 
@@ -257,16 +281,26 @@ function summarizeClaudeConfig(path) {
       parsed.mcpServers && typeof parsed.mcpServers === 'object' ? parsed.mcpServers : {}
     const serverNames = Object.keys(servers)
     const endpointValues = []
+    const primitiveHttpEndpoints = []
     for (const server of Object.values(servers)) {
       const env = server && typeof server === 'object' ? server.env : undefined
       if (env?.ATRIB_LOCAL_SUBSTRATE_ENDPOINT)
         endpointValues.push(env.ATRIB_LOCAL_SUBSTRATE_ENDPOINT)
+    }
+    const primitiveServer = servers['atrib-primitives']
+    if (
+      primitiveServer &&
+      typeof primitiveServer === 'object' &&
+      typeof primitiveServer.url === 'string'
+    ) {
+      primitiveHttpEndpoints.push(primitiveServer.url)
     }
     return summarizeServerConfig({
       name: 'claude-code',
       path,
       serverNames,
       endpointValues,
+      primitiveHttpEndpoints,
       text: JSON.stringify(servers),
     })
   } catch (error) {
@@ -278,6 +312,7 @@ function summarizeClaudeConfig(path) {
       has_primitives_runtime: false,
       standalone_primitive_servers: [],
       local_substrate_endpoints: [],
+      primitive_http_endpoints: [],
     }
   }
 }
@@ -290,10 +325,18 @@ function missingConfig(name, path) {
     has_primitives_runtime: false,
     standalone_primitive_servers: [],
     local_substrate_endpoints: [],
+    primitive_http_endpoints: [],
   }
 }
 
-function summarizeServerConfig({ name, path, serverNames, text, endpointValues = [] }) {
+function summarizeServerConfig({
+  name,
+  path,
+  serverNames,
+  text,
+  endpointValues = [],
+  primitiveHttpEndpoints = [],
+}) {
   const standalone = serverNames
     .filter((serverName) => PRIMITIVE_SERVERS.includes(serverName))
     .sort()
@@ -311,7 +354,32 @@ function summarizeServerConfig({ name, path, serverNames, text, endpointValues =
     has_primitives_runtime: serverNames.includes('atrib-primitives'),
     standalone_primitive_servers: standalone,
     local_substrate_endpoints: unique(endpoints),
+    primitive_http_endpoints: unique(primitiveHttpEndpoints),
   }
+}
+
+function parseTomlMcpServerBlocks(text) {
+  const blocks = new Map()
+  let current = null
+  let lines = []
+  for (const line of text.split('\n')) {
+    const match = line.match(/^\[mcp_servers\.([^\]]+)\]\s*$/)
+    if (match) {
+      if (current) blocks.set(current, lines.join('\n'))
+      current = match[1].replace(/^["']|["']$/g, '')
+      lines = []
+    } else if (current) {
+      lines.push(line)
+    }
+  }
+  if (current) blocks.set(current, lines.join('\n'))
+  return blocks
+}
+
+function urlFromTomlBlock(block) {
+  if (!block) return undefined
+  const match = block.match(/^\s*url\s*=\s*["']([^"']+)["']/m)
+  return match?.[1]
 }
 
 function parseLaunchAgent(path) {
@@ -432,6 +500,14 @@ async function collectLiveSnapshot({ timeoutMs = DEFAULT_HEALTH_TIMEOUT_MS } = {
     if (!endpoint) continue
     coordinatorHealth.push(await fetchHealth(endpoint, timeoutMs))
   }
+  const primitiveRuntimeEndpoints = unique(
+    configs.flatMap((config) => config.primitive_http_endpoints ?? []),
+  )
+  const primitiveRuntimeHealth = []
+  for (const endpoint of primitiveRuntimeEndpoints) {
+    if (!endpoint) continue
+    primitiveRuntimeHealth.push(await fetchHealth(endpoint, timeoutMs))
+  }
   return {
     schema: SNAPSHOT_SCHEMA,
     source: 'live',
@@ -440,6 +516,7 @@ async function collectLiveSnapshot({ timeoutMs = DEFAULT_HEALTH_TIMEOUT_MS } = {
     configs,
     launch_agents: launchAgents,
     coordinator_health: coordinatorHealth,
+    primitive_runtime_health: primitiveRuntimeHealth,
   }
 }
 
@@ -469,11 +546,30 @@ function healthSummary(items) {
   })
 }
 
+function primitiveRuntimeHealthSummary(items) {
+  return items.map((item) => {
+    const report = item.report ?? {}
+    return {
+      endpoint: item.endpoint,
+      reachable: Boolean(item.reachable),
+      status: item.status,
+      pid: report.primitive_runtime?.pid,
+      version: report.primitive_runtime?.version,
+      transport: report.primitive_runtime?.transport,
+      tool_count: report.primitive_runtime?.tool_count,
+      active_sessions: report.sessions?.active,
+      opened_sessions: report.sessions?.opened,
+      reason: item.reason,
+      http_status: item.http_status,
+    }
+  })
+}
+
 function gate(name, status, detail) {
   return { name, status, detail }
 }
 
-function buildGates({ processSummary, configs, launchAgents, health }) {
+function buildGates({ processSummary, configs, launchAgents, health, primitiveHealth }) {
   const reachableHealth = health.filter((item) => item.reachable && item.status === 'healthy')
   const unhealthyReachable = health.filter((item) => item.reachable && item.status !== 'healthy')
   const unreachable = health.filter((item) => !item.reachable)
@@ -543,6 +639,9 @@ function buildGates({ processSummary, configs, launchAgents, health }) {
 
   const existingConfigs = configs.filter((config) => config.exists)
   const configsWithRuntime = existingConfigs.filter((config) => config.has_primitives_runtime)
+  const configsWithPrimitiveHttp = existingConfigs.filter(
+    (config) => (config.primitive_http_endpoints ?? []).length > 0,
+  )
   const configsWithEndpoint = existingConfigs.filter(
     (config) => (config.local_substrate_endpoints ?? []).length > 0,
   )
@@ -568,6 +667,44 @@ function buildGates({ processSummary, configs, launchAgents, health }) {
         'startup-spawn-config',
         configsWithRuntime.length > 0 ? 'warn' : 'fail',
         `${configsWithRuntime.length}/${existingConfigs.length} config(s) use atrib-primitives, ${configsWithEndpoint.length}/${existingConfigs.length} have local-substrate endpoints, ${configsWithStandalone.length} still declare standalone primitives`,
+      ),
+    )
+  }
+
+  const healthyPrimitiveHttp = primitiveHealth.filter(
+    (item) => item.reachable && item.status === 'healthy',
+  )
+  const configsNeedHttp = existingConfigs.length > 0
+  if (
+    processSummary.primitive_runtime_http_processes > 0 &&
+    healthyPrimitiveHttp.length > 0 &&
+    (!configsNeedHttp || configsWithPrimitiveHttp.length === existingConfigs.length)
+  ) {
+    gates.push(
+      gate(
+        'host-owned-primitives-http',
+        'pass',
+        `${processSummary.primitive_runtime_http_processes} host-owned primitive HTTP process(es), ${configsWithPrimitiveHttp.length}/${existingConfigs.length} config(s) point at HTTP`,
+      ),
+    )
+  } else if (
+    processSummary.primitive_runtime_http_processes > 0 ||
+    healthyPrimitiveHttp.length > 0 ||
+    configsWithPrimitiveHttp.length > 0
+  ) {
+    gates.push(
+      gate(
+        'host-owned-primitives-http',
+        'warn',
+        `${processSummary.primitive_runtime_http_processes} primitive HTTP process(es), ${healthyPrimitiveHttp.length} healthy endpoint(s), ${configsWithPrimitiveHttp.length}/${existingConfigs.length} config(s) point at HTTP`,
+      ),
+    )
+  } else {
+    gates.push(
+      gate(
+        'host-owned-primitives-http',
+        'fail',
+        'no shared primitive HTTP runtime is running or configured',
       ),
     )
   }
@@ -626,8 +763,11 @@ function buildReport(input, options = {}) {
   const configs = Array.isArray(snapshot.configs) ? snapshot.configs : []
   const launchAgents = Array.isArray(snapshot.launch_agents) ? snapshot.launch_agents : []
   const health = Array.isArray(snapshot.coordinator_health) ? snapshot.coordinator_health : []
+  const primitiveHealth = Array.isArray(snapshot.primitive_runtime_health)
+    ? snapshot.primitive_runtime_health
+    : []
   const processSummary = summarizeProcesses(processes)
-  const gates = buildGates({ processSummary, configs, launchAgents, health })
+  const gates = buildGates({ processSummary, configs, launchAgents, health, primitiveHealth })
   const status = statusFromGates(gates)
 
   return {
@@ -640,6 +780,8 @@ function buildReport(input, options = {}) {
         .length,
       configured_coordinators: launchAgents.filter((agent) => agent.kind === 'coordinator').length,
       primitive_runtime_processes: processSummary.primitive_runtime_processes,
+      primitive_runtime_http_processes: processSummary.primitive_runtime_http_processes,
+      primitive_runtime_stdio_processes: processSummary.primitive_runtime_stdio_processes,
       standalone_primitive_processes: processSummary.standalone_primitive_processes,
       duplicate_primitive_groups: processSummary.duplicate_primitive_groups,
       watcher_wal_launch_agents: launchAgents.filter((agent) => agent.kind === 'watcher-wal')
@@ -647,6 +789,7 @@ function buildReport(input, options = {}) {
     },
     gates,
     coordinators: healthSummary(health),
+    primitive_runtimes: primitiveRuntimeHealthSummary(primitiveHealth),
     process_inventory: processSummary,
     config_surfaces: configs,
     launch_agents: launchAgents,
@@ -669,6 +812,11 @@ function recommendationsFor({ status, gates, processSummary }) {
       'restart or reconfigure startup-spawn harnesses that still launch standalone atrib primitive servers',
     )
   }
+  if (gates.find((item) => item.name === 'host-owned-primitives-http')?.status !== 'pass') {
+    recommendations.push(
+      'start one loopback atrib-primitives Streamable HTTP host and point startup-spawn MCP configs at it before broad process-sharing rollout',
+    )
+  }
   if (gates.find((item) => item.name === 'startup-spawn-config')?.status !== 'pass') {
     recommendations.push(
       'keep Codex and Claude Code config on atrib-primitives plus explicit local-substrate endpoints',
@@ -686,7 +834,7 @@ function formatTextReport(report) {
   const lines = [
     `local-substrate topology: ${report.summary.status}`,
     `coordinators: healthy=${report.summary.healthy_coordinators}, configured=${report.summary.configured_coordinators}`,
-    `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes}, standalone-primitives=${report.summary.standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
+    `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, stdio=${report.summary.primitive_runtime_stdio_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
     '',
     'gates:',

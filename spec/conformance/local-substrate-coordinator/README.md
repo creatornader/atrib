@@ -56,11 +56,11 @@ The host proof does not inspect the real dogfood process tree. The topology repo
 pnpm report:local-substrate
 ```
 
-The report reads local process rows, sanitized Codex and Claude Code MCP config summaries, launchd metadata for `com.nader.atrib-local-substrate.*` and `com.nader.atrib-drain`, and coordinator health probes. It reports whether the host-owned coordinator is healthy, whether startup-spawn harnesses have collapsed onto `atrib-primitives`, and whether the watcher-WAL launch agent points at a healthy coordinator endpoint.
+The report reads local process rows, sanitized Codex and Claude Code MCP config summaries, launchd metadata for `com.nader.atrib-local-substrate.*` and `com.nader.atrib-drain`, coordinator health probes, and primitive-runtime HTTP health probes. It reports whether the host-owned coordinator is healthy, whether startup-spawn harnesses have collapsed onto `atrib-primitives`, whether startup-spawn configs point at a shared primitive HTTP host, and whether the watcher-WAL launch agent points at a healthy coordinator endpoint.
 
 Fixture snapshots live in [`topology/`](topology/). They pin two states:
 
-- `healthy-collapsed-startup-spawn.json`: coordinator services are healthy, Codex and Claude Code use `atrib-primitives`, and no standalone primitive bundle remains.
+- `healthy-collapsed-startup-spawn.json`: coordinator services are healthy, Codex and Claude Code point at one loopback `atrib-primitives` Streamable HTTP host, and no standalone primitive bundle remains.
 - `mixed-duplicated-startup-spawn.json`: a coordinator is healthy, but a startup-spawn harness still has standalone primitive processes alongside `atrib-primitives`.
 
-`scripts/check-local-substrate-topology-report.mjs` validates those snapshots and runs through `pnpm doc-sync`. A live `mixed` report means the coordinator can be running correctly while the startup-spawn migration is still incomplete.
+`scripts/check-local-substrate-topology-report.mjs` validates those snapshots and runs through `pnpm doc-sync`. A live `mixed` report means the coordinator can be running correctly while startup-spawn process collapse or shared primitive hosting is still incomplete.
