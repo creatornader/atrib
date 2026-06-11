@@ -32,6 +32,12 @@ interface LogStub {
   close: () => Promise<void>
 }
 
+interface CoordinatorStub {
+  url: string
+  received: unknown[]
+  close: () => Promise<void>
+}
+
 async function startLogStub(): Promise<LogStub> {
   const received: unknown[] = []
   let nextIdx = 0
@@ -61,6 +67,55 @@ async function startLogStub(): Promise<LogStub> {
   if (!addr || typeof addr === 'string') throw new Error('no address')
   return {
     url: `http://127.0.0.1:${addr.port}/v1/entries`,
+    received,
+    close: () =>
+      new Promise<void>((resolve, reject) =>
+        server.close((err) => (err ? reject(err) : resolve())),
+      ),
+  }
+}
+
+async function startCoordinatorStub(): Promise<CoordinatorStub> {
+  const received: unknown[] = []
+  const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
+    if (req.method === 'POST' && req.url === '/atrib/local-substrate') {
+      let body = ''
+      req.on('data', (c) => (body += c))
+      req.on('end', () => {
+        const request = JSON.parse(body) as { operation?: string }
+        received.push(request)
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(
+          JSON.stringify({
+            schema: 'atrib.local-substrate-coordinator.response.v0',
+            operation: request.operation ?? 'enqueue_record_and_join_receipt',
+            status: 'rejected',
+            rejection_reason: 'test coordinator rejection',
+            health_report: {
+              schema: 'atrib.local-substrate-coordinator.health.v0',
+              coordinator: {
+                pid: 123,
+                version: '0.0.0-test',
+                transport: 'http-test',
+              },
+              queues: { log_submission_depth: 0 },
+              wal: { pending: 0, orphan_receipts: 0 },
+              contexts: { active: [] },
+              processes: { stale_children: 0 },
+            },
+          }),
+        )
+      })
+    } else {
+      res.writeHead(404)
+      res.end()
+    }
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const addr = server.address()
+  if (!addr || typeof addr === 'string') throw new Error('no address')
+  return {
+    url: `http://127.0.0.1:${addr.port}/atrib/local-substrate`,
     received,
     close: () =>
       new Promise<void>((resolve, reject) =>
@@ -211,6 +266,60 @@ describe('atrib-emit-cli wire contract', () => {
     const defaultMirrorPath = join(home, '.atrib', 'records', 'atrib-emit-cli-default-test.jsonl')
     const mirrorText = await readFile(defaultMirrorPath, 'utf8')
     expect(mirrorText).toContain('cli-default-mirror-path')
+  })
+
+  it('sends local_substrate watcher-WAL metadata to the coordinator and falls back on rejection', async () => {
+    const coordinator = await startCoordinatorStub()
+    try {
+      const envelope = {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'cli-watcher-wal-commit', topics: ['cli-test'] },
+        context_id: 'aaaabbbbccccddddeeeeffff00001114',
+        local_substrate: {
+          operation: 'enqueue_record_and_join_receipt',
+          wal: {
+            entry_id: 'wal-cli-test',
+            source_path: 'vault/state/observations/2026-06-11.md',
+            receipt_join_field: 'atrib_receipt_id',
+            join_back_target: 'vault/state/observations/2026-06-11.md#cli-test',
+          },
+        },
+      }
+
+      const r = await runCli(['--log-endpoint', log.url], JSON.stringify(envelope), {
+        ATRIB_PRIVATE_KEY: seedHex,
+        ATRIB_MIRROR_FILE: mirrorPath,
+        ATRIB_AUTOCHAIN_SOURCE: mirrorPath,
+        ATRIB_LOCAL_SUBSTRATE_ENDPOINT: coordinator.url,
+      })
+
+      expect(r.code).toBe(0)
+      const out = JSON.parse(r.stdout) as { record_hash: string; warnings: string[] }
+      expect(out.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(out.warnings.some((w) => w.includes('local substrate watcher-WAL commit failed'))).toBe(
+        true,
+      )
+      expect(log.received.length).toBe(1)
+      expect(coordinator.received).toHaveLength(1)
+      expect(coordinator.received[0]).toMatchObject({
+        operation: 'enqueue_record_and_join_receipt',
+        producer: {
+          name: 'atrib-emit-cli',
+          harness_class: 'watcher-wal',
+          transport: 'cli-stdin-wal',
+        },
+        context: {
+          join_back_target: 'vault/state/observations/2026-06-11.md#cli-test',
+        },
+        wal: {
+          entry_id: 'wal-cli-test',
+          source_path: 'vault/state/observations/2026-06-11.md',
+          receipt_join_field: 'atrib_receipt_id',
+        },
+      })
+    } finally {
+      await coordinator.close()
+    }
   })
 
   it('unknown CLI flag: exits 0 with an invalid-arguments fallback', async () => {

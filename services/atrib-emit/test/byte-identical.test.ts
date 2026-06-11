@@ -21,7 +21,9 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import * as ed from '@noble/ed25519'
 import {
+  base64urlEncode,
   canonicalRecord,
+  createInProcessLocalSubstrateCoordinator,
   createSubmissionQueue,
   hexEncode,
   sha256,
@@ -260,5 +262,84 @@ describe('D081 byte-identicality: emitInProcess vs handleEmit', () => {
     expect(
       r.warnings.some((w) => w.startsWith('submission queued; proof not yet available')),
     ).toBe(false)
+  })
+
+  it('delegates watcher-WAL commit to the local substrate coordinator and skips local queue submission', async () => {
+    const seed = await fixedSeed()
+    const observed: AtribRecord[] = []
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: base64urlEncode(seed),
+      supportedHarnessClasses: ['watcher-wal'],
+      logSubmission: 'disabled',
+      onRecord: (record) => {
+        observed.push(record)
+      },
+    })
+
+    const r = await emitInProcess(
+      {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'watcher-wal-commit', topics: ['local-substrate'] },
+        context_id: '11112222333344445555666677778888',
+      },
+      {
+        key: { privateKey: seed, source: 'env' },
+        logEndpoint: log.url,
+        localSubstrateCommit: {
+          transport: coordinator.transport,
+          wal: {
+            entry_id: 'wal-test-commit',
+            source_path: 'vault/state/observations/2026-06-11.md',
+            receipt_join_field: 'atrib_receipt_id',
+            join_back_target: 'vault/state/observations/2026-06-11.md#test',
+          },
+        },
+      },
+    )
+
+    expect(log.received.length).toBe(0)
+    expect(observed).toHaveLength(1)
+    expect(await verifyRecord(observed[0]!)).toBe(true)
+    expect(r.record_hash).toBe(`sha256:${hexEncode(sha256(canonicalRecord(observed[0]!)))}`)
+    expect(r.receipt_id).toMatch(/^[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{43}$/)
+    expect(r.warnings).toContain(
+      'submission delegated to local substrate coordinator; proof not available in this process',
+    )
+
+    coordinator.destroy()
+  })
+
+  it('falls back to local queue submission when watcher-WAL commit is unavailable', async () => {
+    const seed = await fixedSeed()
+    const r = await emitInProcess(
+      {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'watcher-wal-fallback', topics: ['local-substrate'] },
+        context_id: '22223333444455556666777788889999',
+      },
+      {
+        key: { privateKey: seed, source: 'env' },
+        logEndpoint: log.url,
+        localSubstrateCommit: {
+          transport: async () => {
+            throw new Error('coordinator offline')
+          },
+          wal: {
+            entry_id: 'wal-test-fallback',
+            source_path: 'vault/state/observations/2026-06-11.md',
+            receipt_join_field: 'atrib_receipt_id',
+            join_back_target: 'vault/state/observations/2026-06-11.md#fallback',
+          },
+        },
+      },
+    )
+
+    expect(log.received.length).toBe(1)
+    expect(r.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(r.receipt_id).toBeUndefined()
+    expect(r.warnings.some((w) => w.includes('local substrate watcher-WAL commit failed'))).toBe(
+      true,
+    )
+    expect(r.log_index).not.toBeNull()
   })
 })

@@ -38,6 +38,7 @@ import {
   type LocalSubstrateDegradationPolicy,
   type LocalSubstrateHarnessClass,
   type LocalSubstrateProducer,
+  type LocalSubstrateWalJoin,
   type ProofBundle,
   type SubmissionQueue,
   type TryLocalSubstrateCoordinatorResult,
@@ -193,6 +194,7 @@ type EmitOutput = {
   log_index: number | null
   inclusion_proof: ProofBundle['inclusion_proof'] | null
   context_id: string
+  receipt_id?: string
   warnings: string[]
 }
 
@@ -226,6 +228,37 @@ export interface EmitLocalSubstrateShadowOptions {
   onWarning?: ((message: string, detail?: unknown) => void) | undefined
 }
 
+export interface EmitLocalSubstrateCommitAttempt {
+  result: TryLocalSubstrateCoordinatorResult
+  expectedRecordHash: string
+  responseRecordHash?: string
+  recordHashMatches: boolean
+}
+
+export interface EmitLocalSubstrateWalCommitMetadata extends LocalSubstrateWalJoin {
+  join_back_target: string
+}
+
+export interface EmitLocalSubstrateCommitOptions {
+  /** Coordinator transport. HTTP, Unix-socket adapters, and tests all plug in here. */
+  transport: LocalSubstrateCoordinatorTransport
+  /**
+   * Producer envelope written outside the signed record bytes. Defaults to a
+   * watcher-WAL envelope for the current process and producer label.
+   */
+  producer?: LocalSubstrateProducer | undefined
+  /** Per-call timeout for the commit request. Defaults to 500ms. */
+  timeoutMs?: number | undefined
+  /** Degradation posture written into the coordinator request envelope. */
+  fallback?: LocalSubstrateDegradationPolicy | undefined
+  /** WAL join-back metadata required by the watcher-WAL coordinator contract. */
+  wal: EmitLocalSubstrateWalCommitMetadata
+  /** Observer hook for tests, telemetry, or rollout reports. Never blocks fallback. */
+  onAttempt?: ((attempt: EmitLocalSubstrateCommitAttempt) => void | Promise<void>) | undefined
+  /** Warning hook for mismatch or observer failures. Never affects emit. */
+  onWarning?: ((message: string, detail?: unknown) => void) | undefined
+}
+
 export interface ResolveEmitLocalSubstrateShadowFromEnvOptions {
   env?: NodeJS.ProcessEnv | undefined
   producer?: string | undefined
@@ -237,6 +270,11 @@ export interface ResolveEmitLocalSubstrateShadowFromEnvOptions {
 
 const DEFAULT_LOCAL_SUBSTRATE_DEGRADATION: LocalSubstrateDegradationPolicy = {
   if_unavailable: 'sign locally in producer and continue without coordinator receipt',
+  primary_path_blocking: false,
+}
+
+const DEFAULT_LOCAL_SUBSTRATE_WATCHER_DEGRADATION: LocalSubstrateDegradationPolicy = {
+  if_unavailable: 'sign locally in producer and write the WAL receipt through the existing drain',
   primary_path_blocking: false,
 }
 
@@ -338,6 +376,7 @@ interface HandleEmitInput {
   logEndpoint?: string | undefined
   recordReferenceResolver?: RecordReferenceResolver | undefined
   localSubstrate?: EmitLocalSubstrateShadowOptions | undefined
+  localSubstrateCommit?: EmitLocalSubstrateCommitOptions | undefined
 }
 
 /**
@@ -353,6 +392,7 @@ async function handleEmit({
   logEndpoint,
   recordReferenceResolver,
   localSubstrate,
+  localSubstrateCommit,
 }: HandleEmitInput): Promise<EmitOutput> {
   const warnings: string[] = []
   const eventType = normalizeEventType(input.event_type)
@@ -513,6 +553,8 @@ async function handleEmit({
   const recordHash = record.signature ? hashRecord(record) : null
   const unsignedRecordBody = unsignedRecordBodyFromSigned(record)
   let localSubstrateShadow: Promise<void> | undefined
+  let localSubstrateCommitted = false
+  let localSubstrateReceiptId: string | undefined
 
   if (recordHash && localSubstrate) {
     localSubstrateShadow = dispatchEmitLocalSubstrateShadow({
@@ -526,10 +568,29 @@ async function handleEmit({
     })
   }
 
+  if (recordHash && localSubstrateCommit) {
+    const commit = await dispatchEmitLocalSubstrateCommit({
+      localSubstrate: localSubstrateCommit,
+      recordBody: unsignedRecordBody,
+      expectedRecordHash: recordHash,
+      contextId,
+      chainRoot,
+      parentRecordHash: validParentHash,
+      producerLabel: producer ?? 'atrib-emit',
+    })
+    warnings.push(...commit.warnings)
+    if (commit.accepted) {
+      localSubstrateCommitted = true
+      localSubstrateReceiptId = commit.receiptId
+    }
+  }
+
   // Submit asynchronously; the queue handles retry + degradation per §5.8.
   // Cognitive events default to normal priority, annotations/observations
   // never need to block the agent.
-  queue.submit(record, 'normal')
+  if (!localSubstrateCommitted) {
+    queue.submit(record, 'normal')
+  }
 
   // Best-effort mirror; mirrorRecord internally swallows errors per §5.8.
   // Persist the pre-sign `content` payload as a `_local` sidecar so
@@ -546,7 +607,9 @@ async function handleEmit({
   // and the proof shows up on a later poll via getProof.
   const proof = recordHash ? (getProofFor(queue, recordHash) ?? null) : null
 
-  if (!proof) {
+  if (!proof && localSubstrateCommitted) {
+    warnings.push('submission delegated to local substrate coordinator; proof not available in this process')
+  } else if (!proof) {
     warnings.push('submission queued; proof not yet available (poll the log later if needed)')
   }
 
@@ -559,6 +622,7 @@ async function handleEmit({
     log_index: proof?.log_index ?? null,
     inclusion_proof: proof?.inclusion_proof ?? null,
     context_id: contextId,
+    ...(localSubstrateReceiptId !== undefined ? { receipt_id: localSubstrateReceiptId } : {}),
     warnings,
   }
 }
@@ -600,6 +664,21 @@ function localSubstrateProducer(
     pid: process.pid,
     transport: options?.transport ?? 'emit-in-process',
     creator_key_policy: 'explicit-single-creator',
+  }
+}
+
+function watcherWalLocalSubstrateProducer(
+  producerLabel: string,
+  options?: {
+    transport?: string | undefined
+  },
+): LocalSubstrateProducer {
+  return {
+    name: producerLabel,
+    harness_class: 'watcher-wal',
+    pid: process.pid,
+    transport: options?.transport ?? 'emit-in-process-wal',
+    creator_key_policy: 'explicit-watcher-creator',
   }
 }
 
@@ -741,6 +820,114 @@ function dispatchEmitLocalSubstrateShadow(input: {
     })
 }
 
+async function dispatchEmitLocalSubstrateCommit(input: {
+  localSubstrate: EmitLocalSubstrateCommitOptions
+  recordBody: UnsignedAtribRecord
+  expectedRecordHash: string
+  contextId: string
+  chainRoot: string
+  parentRecordHash?: string | undefined
+  producerLabel: string
+}): Promise<{ accepted: boolean; receiptId?: string; warnings: string[] }> {
+  const warnings: string[] = []
+  const producer =
+    input.localSubstrate.producer ??
+    watcherWalLocalSubstrateProducer(input.producerLabel, { transport: 'emit-in-process-wal' })
+  const request: LocalSubstrateCoordinatorRequest = {
+    schema: LOCAL_SUBSTRATE_REQUEST_SCHEMA,
+    operation: 'enqueue_record_and_join_receipt',
+    producer,
+    context: {
+      source: '@atrib/emit',
+      context_id: input.contextId,
+      chain_tail: input.chainRoot,
+      ...(input.parentRecordHash !== undefined
+        ? { parent_record_hash: input.parentRecordHash }
+        : {}),
+      join_back_target: input.localSubstrate.wal.join_back_target,
+    },
+    record_body: input.recordBody,
+    wal: {
+      entry_id: input.localSubstrate.wal.entry_id,
+      source_path: input.localSubstrate.wal.source_path,
+      receipt_join_field: input.localSubstrate.wal.receipt_join_field,
+    },
+    degradation: input.localSubstrate.fallback ?? DEFAULT_LOCAL_SUBSTRATE_WATCHER_DEGRADATION,
+  }
+
+  const result = await tryLocalSubstrateCoordinator(request, {
+    transport: input.localSubstrate.transport,
+    timeoutMs: input.localSubstrate.timeoutMs ?? DEFAULT_LOCAL_SUBSTRATE_TIMEOUT_MS,
+    expectedHarnessClass: producer.harness_class,
+    directRecordBody: input.recordBody,
+  })
+
+  const responseRecordHash =
+    result.ok || result.status === 'rejected' ? result.response?.record_hash : undefined
+  const recordHashMatches = responseRecordHash === input.expectedRecordHash
+
+  if (input.localSubstrate.onAttempt) {
+    try {
+      const observed = input.localSubstrate.onAttempt({
+        result,
+        expectedRecordHash: input.expectedRecordHash,
+        ...(responseRecordHash !== undefined ? { responseRecordHash } : {}),
+        recordHashMatches,
+      })
+      await Promise.resolve(observed)
+    } catch (error) {
+      notifyLocalSubstrateCommitWarning(
+        input.localSubstrate,
+        'local substrate commit observer threw',
+        error,
+      )
+    }
+  }
+
+  if (!result.ok) {
+    const reason =
+      result.status === 'rejected'
+        ? (result.reason ?? 'rejected')
+        : result.status === 'unavailable'
+          ? result.reason
+          : result.issues.map((issue) => `${issue.path} ${issue.message}`).join('; ')
+    warnings.push(`local substrate watcher-WAL commit failed (${result.status}: ${reason}); signed locally`)
+    return { accepted: false, warnings }
+  }
+
+  if (!recordHashMatches) {
+    notifyLocalSubstrateCommitWarning(
+      input.localSubstrate,
+      'local substrate commit record_hash mismatch',
+      {
+        expected_record_hash: input.expectedRecordHash,
+        response_record_hash: responseRecordHash ?? null,
+      },
+    )
+    warnings.push('local substrate watcher-WAL commit record_hash mismatch; signed locally')
+    return { accepted: false, warnings }
+  }
+
+  return {
+    accepted: true,
+    ...(result.response.receipt_id !== undefined ? { receiptId: result.response.receipt_id } : {}),
+    warnings,
+  }
+}
+
+function notifyLocalSubstrateCommitWarning(
+  localSubstrate: EmitLocalSubstrateCommitOptions,
+  message: string,
+  detail?: unknown,
+): void {
+  if (!localSubstrate.onWarning) return
+  try {
+    localSubstrate.onWarning(`atrib-emit: ${message}`, detail)
+  } catch {
+    // Warning observers must not affect the signed emit path.
+  }
+}
+
 function notifyLocalSubstrateWarning(
   localSubstrate: EmitLocalSubstrateShadowOptions,
   message: string,
@@ -803,6 +990,13 @@ export interface EmitInProcessOptions {
    * opt-in env config; `false` disables env config for this call.
    */
   localSubstrate?: EmitLocalSubstrateShadowOptions | false | undefined
+  /**
+   * Optional watcher-WAL coordinator commit. When accepted, emitInProcess
+   * mirrors the local sidecar but skips its own log submission queue because
+   * the coordinator owns that side effect. On rejection or timeout, the
+   * existing local queue path remains the fallback.
+   */
+  localSubstrateCommit?: EmitLocalSubstrateCommitOptions | false | undefined
 }
 
 const DEFAULT_FLUSH_DEADLINE_MS = 5000
@@ -854,6 +1048,8 @@ export async function emitInProcess(
       transport: 'emit-in-process',
       waitForAttempt: true,
     }),
+    localSubstrateCommit:
+      options.localSubstrateCommit === false ? undefined : options.localSubstrateCommit,
   })
   // Drain before returning, bounded by flushDeadlineMs. The typical caller
   // is a detached hook process that exits right after this resolves; we
