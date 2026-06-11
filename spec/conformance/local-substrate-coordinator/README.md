@@ -47,3 +47,20 @@ node scripts/prove-local-substrate-process-health.mjs \
 ## Rollout Meaning
 
 Passing this corpus does not mean the coordinator should become default. It means the next implementation slice may build a local prototype against this boundary. Passing `pnpm prove:local-substrate` means the host binary satisfies the corpus over HTTP in isolation. The default remains direct in-process, CLI, or stdio signing until dogfood config proves the same behavior across real startup-spawn harnesses, long-lived local agents, and watcher WAL paths without stale child buildup or receipt mismatch.
+
+## Topology Report
+
+The host proof does not inspect the real dogfood process tree. The topology report fills that gap:
+
+```sh
+pnpm report:local-substrate
+```
+
+The report reads local process rows, sanitized Codex and Claude Code MCP config summaries, launchd metadata for `com.nader.atrib-local-substrate.*` and `com.nader.atrib-drain`, and coordinator health probes. It reports whether the host-owned coordinator is healthy, whether startup-spawn harnesses have collapsed onto `atrib-primitives`, and whether the watcher-WAL launch agent points at a healthy coordinator endpoint.
+
+Fixture snapshots live in [`topology/`](topology/). They pin two states:
+
+- `healthy-collapsed-startup-spawn.json`: coordinator services are healthy, Codex and Claude Code use `atrib-primitives`, and no standalone primitive bundle remains.
+- `mixed-duplicated-startup-spawn.json`: a coordinator is healthy, but a startup-spawn harness still has standalone primitive processes alongside `atrib-primitives`.
+
+`scripts/check-local-substrate-topology-report.mjs` validates those snapshots and runs through `pnpm doc-sync`. A live `mixed` report means the coordinator can be running correctly while the startup-spawn migration is still incomplete.

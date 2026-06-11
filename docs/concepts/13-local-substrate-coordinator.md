@@ -118,4 +118,12 @@ The current implementation slices provide an in-process startup-spawn prototype,
 
 Passing that proof means the host binary can satisfy the local contract in isolation. Live dogfood adoption still needs a separate topology report. As of the first watcher-WAL adoption slice, the local knowledge-base drain is wired through a coordinator and a live probe reached the public log, but existing Codex and Claude Code bundles still need a full restart before process-count reduction can be measured cleanly.
 
-That report should extend [D084](../../DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) rather than create another private health surface.
+That report now lives at [`scripts/report-local-substrate-topology.mjs`](../../scripts/report-local-substrate-topology.mjs). It reads process rows, sanitized Codex and Claude Code MCP config summaries, launchd service metadata, and local coordinator health probes. It separates four gates: coordinator health, startup-spawn MCP process collapse, startup-spawn config, and watcher-WAL routing. The fixture-backed checker runs in `pnpm doc-sync`, so a healthy isolated host proof cannot hide a mixed live topology with duplicated primitive bundles.
+
+Use it before any wider default rollout:
+
+```sh
+pnpm report:local-substrate
+```
+
+A `ready_for_default_trial` status means the topology evidence supports a controlled default trial. A `mixed` status means at least one route is still partly migrated. A `blocked` status means no healthy coordinator endpoint answered. Future versions should extend [D084](../../DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) rather than create another private health surface.

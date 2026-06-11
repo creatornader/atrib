@@ -32,6 +32,7 @@ atrib/
   docs/outreach/aauth-evidence-packet.md # Draft AAuth evidence outreach packet and route plan.
   scripts/
     prove-local-substrate-process-health.mjs # P042 process-health proof. Builds on the fixture corpus by starting/probing a real local-substrate host, exercising startup-spawn, long-lived-agent, and watcher-WAL requests over HTTP, and checking stale-child/orphan/fallback gates before default dogfood config changes.
+    report-local-substrate-topology.mjs # P042 live dogfood topology report. Reads process rows, sanitized startup-spawn configs, launchd service metadata, and coordinator health probes to separate healthy coordinators from duplicated MCP primitive bundles.
   metrics/                     # Dated JSON snapshots from `pnpm --filter @atrib/log-node metrics`
   packages/
     mcp/                       # @atrib/mcp: MCP server middleware (public)
@@ -112,7 +113,7 @@ atrib/
       3.2.4/                   # Full graph edge derivation conformance corpus (§3.2.4, D101). Covers all nine edge types, all-pairs session edges, and dangling producer-declared references.
       4.6/                     # Calculation conformance corpus (test vectors for §4.6)
       6/                       # Public-key directory conformance corpus (test vectors for §6, D034). Skeleton; fixtures land alongside the directory implementation.
-      local-substrate-coordinator/ # P042 design-gate corpus for the optional host-owned coordinator contract. Covers startup-spawn harnesses, long-lived local agents, and watcher WAL paths before any default config change.
+      local-substrate-coordinator/ # P042 design-gate corpus for the optional host-owned coordinator contract. Covers startup-spawn harnesses, long-lived local agents, watcher WAL paths, and topology-report snapshots before any default config change.
 ```
 
 Public packages are intended for npm publication. Private workspace packages and services (`log-dev`, `integration`, `cloudflare-live-proof`, `cloudflare-live-client-proof`, `cloudflare-approval-trace`, `cloudflare-oauth-evidence-infra`, `log-node`, `graph-node`, `directory-node`, `archive-node`, `primitives-runtime`, `dashboard`) are fixtures, proof harnesses, deployed services, examples, local runtimes, or product surfaces with `private: true` in their `package.json` so they cannot be accidentally published. The `directory-bridge` Rust crate is source-only, its WASM build artifacts ship inside `@atrib/directory` (see [`packages/directory-bridge/README.md`](packages/directory-bridge/README.md) for the build procedure).

@@ -1,0 +1,147 @@
+{
+  "name": "mixed-duplicated-startup-spawn",
+  "snapshot": {
+    "schema": "atrib.local-substrate-topology-snapshot.v0",
+    "source": "fixture",
+    "processes": [
+      {
+        "pid": 100,
+        "ppid": 1,
+        "service": "codex-app-server",
+        "command": "codex app-server"
+      },
+      {
+        "pid": 110,
+        "ppid": 100,
+        "service": "atrib-primitives",
+        "command": "node services/atrib-primitives/dist/index.js"
+      },
+      {
+        "pid": 120,
+        "ppid": 100,
+        "service": "atrib-emit",
+        "command": "node services/atrib-emit/dist/main.js"
+      },
+      {
+        "pid": 121,
+        "ppid": 100,
+        "service": "atrib-annotate",
+        "command": "node services/atrib-annotate/dist/main.js"
+      },
+      {
+        "pid": 122,
+        "ppid": 100,
+        "service": "atrib-revise",
+        "command": "node services/atrib-revise/dist/main.js"
+      },
+      {
+        "pid": 123,
+        "ppid": 100,
+        "service": "atrib-recall",
+        "command": "node services/atrib-recall/dist/index.js"
+      },
+      {
+        "pid": 124,
+        "ppid": 100,
+        "service": "atrib-trace",
+        "command": "node services/atrib-trace/dist/main.js"
+      },
+      {
+        "pid": 125,
+        "ppid": 100,
+        "service": "atrib-summarize",
+        "command": "node services/atrib-summarize/dist/main.js"
+      },
+      {
+        "pid": 126,
+        "ppid": 100,
+        "service": "atrib-verify",
+        "command": "node services/atrib-verify/dist/main.js"
+      },
+      {
+        "pid": 300,
+        "ppid": 1,
+        "service": "atrib-local-substrate",
+        "command": "node services/atrib-emit/dist/local-substrate-host.js --port 8797"
+      }
+    ],
+    "configs": [
+      {
+        "name": "codex",
+        "path": "~/.codex/config.toml",
+        "exists": true,
+        "server_count": 1,
+        "has_primitives_runtime": true,
+        "standalone_primitive_servers": [],
+        "local_substrate_endpoints": ["http://127.0.0.1:8797/atrib/local-substrate"]
+      },
+      {
+        "name": "claude-code",
+        "path": "~/.claude.json",
+        "exists": true,
+        "server_count": 1,
+        "has_primitives_runtime": true,
+        "standalone_primitive_servers": [],
+        "local_substrate_endpoints": ["http://127.0.0.1:8788/atrib/local-substrate"]
+      }
+    ],
+    "launch_agents": [
+      {
+        "label": "com.nader.atrib-local-substrate.codex",
+        "kind": "coordinator",
+        "endpoint": "http://127.0.0.1:8797/atrib/local-substrate",
+        "agent": "codex"
+      },
+      {
+        "label": "com.nader.atrib-drain",
+        "kind": "watcher-wal",
+        "endpoint": "http://127.0.0.1:8797/atrib/local-substrate",
+        "agent": "knowledge-watcher"
+      }
+    ],
+    "coordinator_health": [
+      {
+        "endpoint": "http://127.0.0.1:8797/atrib/local-substrate",
+        "reachable": true,
+        "status": "healthy",
+        "report": {
+          "coordinator": {
+            "pid": 300,
+            "version": "0.15.0",
+            "transport": "node-http",
+            "creator_key_scope": "keychain:atrib-creator-codex"
+          },
+          "queues": {
+            "log_submission_depth": 0
+          },
+          "wal": {
+            "pending": 0,
+            "orphan_receipts": 0
+          },
+          "contexts": {
+            "active": []
+          },
+          "processes": {
+            "active_wrappers": 0,
+            "stale_children": 0
+          }
+        }
+      }
+    ]
+  },
+  "expected": {
+    "status": "mixed",
+    "summary": {
+      "primitive_runtime_processes": 1,
+      "standalone_primitive_processes": 7,
+      "duplicate_primitive_groups": 1
+    },
+    "gates": {
+      "coordinator-health": "pass",
+      "startup-spawn-mcp-collapse": "warn",
+      "startup-spawn-config": "pass",
+      "watcher-wal-route": "pass",
+      "broad-default-readiness": "fail"
+    }
+  }
+}
