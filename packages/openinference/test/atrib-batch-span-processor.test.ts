@@ -2,16 +2,8 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { BasicTracerProvider } from '@opentelemetry/sdk-trace-base'
-import {
-  base64urlEncode,
-  getPublicKey,
-  verifyRecord,
-  type AtribRecord,
-} from '@atrib/mcp'
-import {
-  AtribBatchSpanProcessor,
-  type AtribBatchEntry,
-} from '../src/index.js'
+import { base64urlEncode, getPublicKey, verifyRecord, type AtribRecord } from '@atrib/mcp'
+import { AtribBatchSpanProcessor, type AtribBatchEntry } from '../src/index.js'
 
 const TEST_KEY_BYTES = new Uint8Array(32).fill(7)
 
@@ -36,6 +28,18 @@ function emitToolSpan(provider: BasicTracerProvider, name: string): void {
   span.setAttribute('openinference.span.kind', 'TOOL')
   span.setAttribute('tool.name', name)
   span.end()
+}
+
+async function waitFor(
+  predicate: () => boolean,
+  timeoutMs = 1_000,
+  intervalMs = 10,
+): Promise<void> {
+  const started = Date.now()
+  while (Date.now() - started < timeoutMs) {
+    if (predicate()) return
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
 }
 
 describe('AtribBatchSpanProcessor', () => {
@@ -93,13 +97,17 @@ describe('AtribBatchSpanProcessor', () => {
     )
     const provider = new BasicTracerProvider({ spanProcessors: [processor] })
 
-    emitToolSpan(provider, 'a')
-    // Wait longer than the scheduled delay to let the timer fire.
-    await new Promise((r) => setTimeout(r, 60))
+    try {
+      emitToolSpan(provider, 'a')
+      // Wait for the scheduled timer path. The timer is intentionally short for
+      // test speed, but CI/turbo load can delay the async signing + timer turn.
+      await waitFor(() => calls.length === 1)
 
-    expect(calls.length).toBe(1)
-    expect(calls[0]).toBe(1)
-    await processor.shutdown()
+      expect(calls.length).toBe(1)
+      expect(calls[0]).toBe(1)
+    } finally {
+      await processor.shutdown()
+    }
   })
 
   it('shutdown drains pending records', async () => {

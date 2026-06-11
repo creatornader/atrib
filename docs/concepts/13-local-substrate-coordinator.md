@@ -65,6 +65,8 @@ node scripts/check-local-substrate-coordinator-fixtures.mjs
 
 The validator checks body equality, pinned canonical hashes, non-blocking fallback, and the health-report fields needed before rollout.
 
+The shared TypeScript contract lives in `@atrib/mcp` as request and response validators, canonical body hashing, fixture validation, an opt-in coordinator client shim, explicit HTTP transport helper, an in-process startup-spawn prototype, and read-only health-probe helpers. Wrappers, emit-like producers, and watcher pipelines should consume that surface rather than minting a parallel schema. The prototype is still opt-in; the package defines the adapter boundary and rollout-gate probes without making a daemon required.
+
 ## Worked Example
 
 A Codex thread starts and its MCP wrapper has a tool call to sign. In the current direct path, the wrapper builds an unsigned atrib record body, resolves `chain_root`, signs the body, appends the mirror, and queues submission.
@@ -91,7 +93,7 @@ The coordinator may own the queue, mirror, and health report. It may not add fie
 
 ## Rollout Gate
 
-The next implementation slice can build a local prototype behind an opt-in flag. It should not become default until a process-health report shows:
+The current implementation slice provides an in-process startup-spawn prototype behind an opt-in API. It should not become default, and should not expand to other harness classes, until a process-health report shows:
 
 - one startup-spawn harness can call the coordinator without extra stale children
 - one long-lived local assistant or scheduled producer can call it under supervisor ownership

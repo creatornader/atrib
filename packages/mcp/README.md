@@ -180,13 +180,39 @@ Returns a `SubmissionQueue`-aware wrapper exposing:
 - `flush()`: drain pending submissions before shutdown (idempotent)
 - `getProof(recordHash)`: retrieve a cached proof bundle by record hash
 
+### Local substrate coordinator contract
+
+Per [P042](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p042-local-substrate-coordinator-for-long-lived-and-multi-harness-dogfood), `@atrib/mcp` exports the shared request and health-report contract for optional host-owned local coordinators:
+
+```typescript
+import {
+  buildLocalSubstrateHealthReport,
+  createHttpLocalSubstrateTransport,
+  createInProcessLocalSubstrateCoordinator,
+  validateLocalSubstrateRequest,
+  tryLocalSubstrateCoordinator,
+  probeLocalSubstrateHealth,
+  validateLocalSubstrateHealthReport,
+  validateLocalSubstrateResponse,
+  hashLocalSubstrateRecordBody,
+} from '@atrib/mcp'
+```
+
+These helpers let startup-spawn MCP wrappers, long-lived agents, and watcher WAL pipelines target one boundary before any coordinator becomes a runtime dependency. The invariant is strict: the coordinator request carries an unsigned `record_body`, and `hashLocalSubstrateRecordBody()` hashes the canonical body that the existing signing path would sign. Coordinator envelopes, health metadata, WAL join fields, and fallback policy never enter the signed record bytes.
+
+`tryLocalSubstrateCoordinator()` is an opt-in client shim. Callers provide the transport, so Unix sockets, launchd-owned localhost services, containers, and tests can share the same validation path without pulling a daemon into this package. It validates the request before transport, validates the response against the request operation, and classifies outcomes as `accepted`, `rejected`, `invalid_request`, `invalid_response`, or `unavailable`. `createHttpLocalSubstrateTransport()` is the explicit JSON-over-HTTP helper for hosts that choose that transport.
+
+`createInProcessLocalSubstrateCoordinator()` is the first opt-in prototype for startup-spawn trials. It exposes a coordinator transport without creating a daemon, signs only when the unsigned body's `creator_key` matches the coordinator signer, returns the real `record_hash` and receipt token, accepts caller-owned health counters, and leaves log submission optional for tests. Its default harness scope is `startup-spawn`; long-lived agents and watcher WAL paths need their own rollout evidence before they are enabled.
+
+`buildLocalSubstrateHealthReport()` and `probeLocalSubstrateHealth()` build read-only rollout-gate reports for queue depth, WAL join state, active contexts, wrapper counts, and stale child counts. Probe warnings are advisory. They do not change signing, submission, or primary tool-call behavior.
+
 ### `createAtribProxy(options): Promise<AtribProxy>`
 
 In-process surrogate `McpServer` that forwards every tool call to an upstream MCP server and attributes them at the proxy layer. Used by the Claude Agent SDK adapter (Case B) and any host that accepts a real `McpServer` instance but where the actual tools live in a third-party MCP server. See `packages/integration/examples/claude-agent-sdk/case-b-third-party-mcp.ts` for the full pattern.
 
 ### Lower-level primitives
 
-For advanced use cases (custom transports, manual signing, recommendation calculation), the package also exports the cryptographic and serialization primitives directly: `signRecord`, `signTransactionRecord`, `signTransactionAttestation`, `verifyRecord`, `canonicalRecord`, `canonicalCrossAttestationInput`, `computeContentId`, `genesisChainRoot`, `chainRoot`, `encodeToken`, `decodeToken`, `base64urlEncode`, `base64urlDecode`, `sha256`, `hexEncode`, `hexDecode`, plus event-type helpers (`EVENT_TYPE_SHORT_NAMES`, `EVENT_TYPE_SHORT_TO_URI`, `normalizeEventType`), the W3C trace-context helpers (`readInboundContext`, `writeOutboundContext`, `parseTracestateAtrib`, `parseBaggageAtribSession`, `extractTraceId`, `mergeTracestate`, `mergeBaggageAtribSession`), the record-reference helpers (`SHA256_REF_PATTERN`, `extractRecordHashes`, `extractRecordReferenceCandidates`, `ATRIB_PARENT_RECORD_HASH_ENV`, `parentRecordHashFromEnv`, `defaultRecordReferenceResolver`, `recordHashExistsInMirror`), the subagent env helpers (`ATRIB_CONTEXT_ID_ENV`, `chainTailEnvName`, `buildSubagentProducerEnv`), the harness session-id discovery helpers per [D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) (`resolveEnvContextId`, `KNOWN_HARNESS_DISCOVERIES`), the read-primitive instrumentation helpers per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) (`logReadPrimitiveCall`, `extractRecordHashesFromMcpResult`), the normative content-shape extractors per [D086](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content) (`extractIndexableText`, per-event_type extractors and type defs, see the dedicated section below), and the submission queue itself (`createSubmissionQueue`).
+For advanced use cases (custom transports, manual signing, recommendation calculation), the package also exports the cryptographic and serialization primitives directly: `signRecord`, `signTransactionRecord`, `signTransactionAttestation`, `verifyRecord`, `canonicalRecord`, `canonicalCrossAttestationInput`, `computeContentId`, `genesisChainRoot`, `chainRoot`, `encodeToken`, `decodeToken`, `base64urlEncode`, `base64urlDecode`, `sha256`, `hexEncode`, `hexDecode`, plus event-type helpers (`EVENT_TYPE_SHORT_NAMES`, `EVENT_TYPE_SHORT_TO_URI`, `normalizeEventType`), the W3C trace-context helpers (`readInboundContext`, `writeOutboundContext`, `parseTracestateAtrib`, `parseBaggageAtribSession`, `extractTraceId`, `mergeTracestate`, `mergeBaggageAtribSession`), the record-reference helpers (`SHA256_REF_PATTERN`, `extractRecordHashes`, `extractRecordReferenceCandidates`, `ATRIB_PARENT_RECORD_HASH_ENV`, `parentRecordHashFromEnv`, `defaultRecordReferenceResolver`, `recordHashExistsInMirror`), the subagent env helpers (`ATRIB_CONTEXT_ID_ENV`, `chainTailEnvName`, `buildSubagentProducerEnv`), the harness session-id discovery helpers per [D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) (`resolveEnvContextId`, `KNOWN_HARNESS_DISCOVERIES`), the read-primitive instrumentation helpers per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) (`logReadPrimitiveCall`, `extractRecordHashesFromMcpResult`), the P042 local-substrate helpers (`validateLocalSubstrateRequest`, `validateLocalSubstrateResponse`, `validateLocalSubstrateHealthReport`, `hashLocalSubstrateRecordBody`, `tryLocalSubstrateCoordinator`, `createHttpLocalSubstrateTransport`, `createInProcessLocalSubstrateCoordinator`, `buildLocalSubstrateHealthReport`, `probeLocalSubstrateHealth`), the normative content-shape extractors per [D086](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content) (`extractIndexableText`, per-event_type extractors and type defs, see the dedicated section below), and the submission queue itself (`createSubmissionQueue`).
 
 ### Read-primitive instrumentation ([D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) Surface 6)
 
