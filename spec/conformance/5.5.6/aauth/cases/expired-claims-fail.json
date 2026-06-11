@@ -1,0 +1,25 @@
+{
+  "name": "expired-claims-fail",
+  "kind": "claims",
+  "input": {
+    "protocol": "aauth",
+    "tokenKind": "agent_token",
+    "claimsVerified": true,
+    "claims": {
+      "iss": "https://ap.example",
+      "dwk": "aauth-agent.json",
+      "sub": "aauth:researcher@example.com",
+      "jti": "agent-jti-expired",
+      "iat": 1699999000,
+      "exp": 1699999900
+    },
+    "issuer": "https://ap.example",
+    "expectedAgent": "aauth:researcher@example.com",
+    "nowSeconds": 1700000100
+  },
+  "expected": {
+    "valid": false,
+    "constraints": [{ "type": "exp", "status": "failed" }],
+    "errors": ["aauth_evidence constraint failed: exp"]
+  }
+}

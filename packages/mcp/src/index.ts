@@ -216,6 +216,21 @@ export type {
   McpRequestExtraLike,
 } from './oauth-evidence.js'
 
+// AAuth sidecar evidence capture. Producer-side helper for AAuth
+// callback-shaped events from clients, middleware, or audit sinks.
+export { buildAAuthEvidenceFromEvent } from './aauth-evidence.js'
+export type {
+  AAuthEvidenceCaptureOptions,
+  CapturedAAuthAccessMode,
+  CapturedAAuthEvidence,
+  CapturedAAuthHttpSignatureEvidence,
+  CapturedAAuthMissionClaim,
+  CapturedAAuthR3Evidence,
+  CapturedAAuthResourceMetadataEvidence,
+  CapturedAAuthTokenClaims,
+  CapturedAAuthTokenKind,
+} from './aauth-evidence.js'
+
 // Context (for advanced usage)
 export {
   readInboundContext,

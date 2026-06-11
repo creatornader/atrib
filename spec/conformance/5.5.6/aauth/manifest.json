@@ -1,0 +1,34 @@
+{
+  "name": "AAuth authorization evidence",
+  "section": "5.5.6",
+  "cases": [
+    {
+      "name": "valid-agent-token-signature-pass",
+      "file": "cases/valid-agent-token-signature-pass.json"
+    },
+    {
+      "name": "resource-token-scope-pass",
+      "file": "cases/resource-token-scope-pass.json"
+    },
+    {
+      "name": "auth-token-act-mission-r3-pass",
+      "file": "cases/auth-token-act-mission-r3-pass.json"
+    },
+    {
+      "name": "cnf-mismatch-fails",
+      "file": "cases/cnf-mismatch-fails.json"
+    },
+    {
+      "name": "expired-claims-fail",
+      "file": "cases/expired-claims-fail.json"
+    },
+    {
+      "name": "aauth-access-missing-authorization-coverage-fails",
+      "file": "cases/aauth-access-missing-authorization-coverage-fails.json"
+    },
+    {
+      "name": "auth-token-missing-act-fails",
+      "file": "cases/auth-token-missing-act-fails.json"
+    }
+  ]
+}

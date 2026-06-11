@@ -1,0 +1,37 @@
+{
+  "name": "aauth-access-missing-authorization-coverage-fails",
+  "kind": "claims",
+  "input": {
+    "protocol": "aauth",
+    "tokenKind": "auth_token",
+    "accessMode": "aauth-access-token",
+    "claimsVerified": true,
+    "claims": {
+      "iss": "https://ps.example",
+      "dwk": "aauth-person.json",
+      "aud": "https://api.example",
+      "agent": "aauth:researcher@example.com",
+      "sub": "user-pairwise-123",
+      "scope": "files:read",
+      "jti": "auth-jti-access",
+      "iat": 1700000000,
+      "exp": 1700000300,
+      "act": { "sub": "aauth:researcher@example.com" }
+    },
+    "issuer": "https://ps.example",
+    "audience": "https://api.example",
+    "expectedAgent": "aauth:researcher@example.com",
+    "expectedActSubject": "aauth:researcher@example.com",
+    "httpSignature": {
+      "verified": true,
+      "scheme": "jwt",
+      "coveredComponents": ["@method", "@authority", "@path", "signature-key"]
+    },
+    "nowSeconds": 1700000100
+  },
+  "expected": {
+    "valid": false,
+    "constraints": [{ "type": "http_signature.authorization_covered", "status": "failed" }],
+    "errors": ["aauth_evidence constraint failed: http_signature.authorization_covered"]
+  }
+}

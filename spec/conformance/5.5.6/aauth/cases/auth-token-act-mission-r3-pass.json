@@ -1,0 +1,66 @@
+{
+  "name": "auth-token-act-mission-r3-pass",
+  "kind": "jwt",
+  "includeCnfJwk": true,
+  "bindCnfJkt": true,
+  "bindHttpSignature": true,
+  "input": {
+    "protocol": "aauth",
+    "tokenKind": "auth_token",
+    "accessMode": "auth-token",
+    "issuer": "https://ps.example",
+    "audience": "https://api.example",
+    "resource": "https://api.example",
+    "expectedAgent": "aauth:researcher@example.com",
+    "expectedSubject": "user-pairwise-123",
+    "expectedActSubject": "aauth:researcher@example.com",
+    "requiredScopes": ["files:read"],
+    "requiredMission": {
+      "approver": "https://ps.example/person/alice",
+      "s256": "mission-s256-1"
+    },
+    "r3": {
+      "expectedS256": "r3-s256-1",
+      "documentHashVerified": true
+    },
+    "nowSeconds": 1700000100,
+    "httpSignature": {
+      "verified": true,
+      "scheme": "jwt",
+      "coveredComponents": ["@method", "@authority", "@path", "signature-key"]
+    }
+  },
+  "jwtClaims": {
+    "iss": "https://ps.example",
+    "dwk": "aauth-person.json",
+    "aud": "https://api.example",
+    "agent": "aauth:researcher@example.com",
+    "sub": "user-pairwise-123",
+    "scope": "files:read files:write",
+    "jti": "auth-jti-1",
+    "iat": 1700000000,
+    "exp": 1700000300,
+    "act": { "sub": "aauth:researcher@example.com" },
+    "mission": {
+      "approver": "https://ps.example/person/alice",
+      "s256": "mission-s256-1"
+    },
+    "r3_uri": "https://api.example/.well-known/r3/files.json",
+    "r3_s256": "r3-s256-1",
+    "r3_granted": ["files.read"]
+  },
+  "expected": {
+    "valid": true,
+    "constraints": [
+      { "type": "aauth.token_type", "status": "passed" },
+      { "type": "audience", "status": "passed" },
+      { "type": "resource", "status": "passed" },
+      { "type": "scope", "status": "passed" },
+      { "type": "act.sub", "status": "passed" },
+      { "type": "mission.s256", "status": "passed" },
+      { "type": "r3.s256", "status": "passed" },
+      { "type": "r3.document_hash", "status": "passed" }
+    ],
+    "errors": []
+  }
+}

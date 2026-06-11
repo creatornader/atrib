@@ -4195,7 +4195,7 @@ The generic result shape is:
 
 ```
 {
-  protocol: 'oauth2' | 'mcp_oauth' | 'ap2_vi' | string,
+  protocol: 'oauth2' | 'mcp_oauth' | 'aauth' | 'ap2_vi' | string,
   valid: boolean,
   issuer: string | null,
   subject: string | null,
@@ -4232,15 +4232,26 @@ The OAuth / MCP adapter does not mint tokens, run OAuth redirects, call token-in
 
 `@atrib/verify` also exposes a host-owned token-introspection helper. The helper posts to the caller's configured introspection endpoint, applies caller-supplied client authentication and expectation checks, and returns a caller-supplied introspection response for the evidence verifier. `verifyRecord()` and `verifyOAuthAuthorizationEvidence()` still do not perform hidden network calls.
 
+The second generic adapter is AAuth authorization evidence. It accepts an AAuth agent token, resource token, or auth token with caller-supplied trusted JWKS, caller-verified claims, or decoded claims under an explicit signature policy. The verifier does not fetch AAuth metadata, fetch JWKS, mint tokens, call a Person Server, call an Authorization Server, or perform user interaction. The verifier checks:
+
+1. AAuth JWT `typ`, signature, `iss`, `aud`, `exp`, `iat`, and clock skew when a JWT and JWKS are supplied.
+2. Resource binding through token `aud`, token `resource`, and caller-supplied `aauth-resource.json` facts such as `access_mode`.
+3. Required scopes from `scope` or `scp`.
+4. Optional agent, subject, `parent_agent`, `act.sub`, and mission constraints.
+5. Optional HTTP Message Signature evidence: caller-verified signature status, covered components, `Authorization` coverage for `AAuth-Access`, and signing-key binding through `cnf.jwk` or `agent_jkt`.
+6. Optional R3 document hash or issuer constraints when a resource registration record is available.
+
+The AAuth adapter is verifier-side evidence. It does not make AAuth a new atrib `event_type`, graph edge, identity directory, or authorization issuer. It records which AAuth facts a verifier accepted for a signed atrib action.
+
 Deployments that require process-shared or fleet-shared DPoP replay protection pass a `dpopReplayCache` implementation into the evidence verifier. The cache contract is atomic `checkAndRemember(key, expiresAtSeconds)`, so hosts can back it with Redis, Durable Objects, Postgres, or another shared store. The bundled memory cache is for one-process deployments and tests. The bundled HTTP-backed adapter posts `{ key, key_id, expires_at_seconds }` to a host-owned endpoint and expects `{ "accepted": true }` for a new proof or `{ "accepted": false }` for replay.
 
 A non-normative Cloudflare Worker and Durable Object reference for the HTTP replay-cache endpoint and host-owned introspection proxy lives at `packages/integration/examples/cloudflare-agents/oauth-evidence-infra/`. It is an implementation example for hosts; it is not required by this specification.
 
-`@atrib/mcp` MAY capture MCP/OAuth evidence from an MCP HTTP transport's already-validated `authInfo` and request metadata into the local mirror sidecar. Producer-side capture MUST NOT persist the raw bearer token by default. The reference implementation stores verified claims, a one-way token hash when configured, optional DPoP proof material, and verifier constraints. It also records resolved local facts such as `tool_name` so `verifyRecord()` can evaluate capability envelopes without changing the signed record bytes.
+`@atrib/mcp` MAY capture MCP/OAuth evidence from an MCP HTTP transport's already-validated `authInfo` and request metadata into the local mirror sidecar. It MAY also capture AAuth evidence from AAuth client callbacks, server verification results, or audit-sink events into the same sidecar shape. Producer-side capture MUST NOT persist raw bearer tokens or raw AAuth JWTs by default. The reference implementation stores verified claims or decoded token facts, a one-way token hash when configured, optional DPoP or HTTP signature material, and verifier constraints. It also records resolved local facts such as `tool_name` so `verifyRecord()` can evaluate capability envelopes without changing the signed record bytes.
 
 `@atrib/mcp` MAY submit archived record bodies and selected sidecar evidence through [§2.12](#212-record-body-archive-layer) when a producer explicitly configures an archive endpoint. This producer path runs after log acceptance, submits the returned proof bundle with the signed record body, and excludes raw local sidecar `args` and `result` fields by default.
 
-The offline conformance corpus for this adapter lives at `spec/conformance/5.5.6/oauth/`. It covers verified claims, JWT access tokens, MCP resource binding, scope attenuation failures, caller-supplied introspection responses, and DPoP proof checks.
+The offline conformance corpora for these adapters live at `spec/conformance/5.5.6/oauth/` and `spec/conformance/5.5.6/aauth/`. They cover verified claims, JWT access tokens, MCP resource binding, scope attenuation failures, caller-supplied introspection responses, DPoP proof checks, AAuth token types, AAuth resource binding, AAuth-Access authorization coverage, mission evidence, and HTTP signature binding.
 
 This section is intentionally at the verifier layer. Authorization systems decide what an agent is allowed to do. atrib records what the agent did, who signed the record, how it links to prior work, and which external evidence a verifier accepted. See [D109](DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks).
 
@@ -4401,7 +4412,7 @@ The following field names are normative when present (producers SHOULD use these
 | `args`                  | object | The MCP tool call arguments as invoked. Populated by wrapper-side producers per the wrapped call.                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `result`                | object | The MCP tool's result object, captured BEFORE any host-side mutation (e.g. before atrib middleware writes its propagation token to `result._meta`). Populated by wrapper-side producers.                                                                                                                                                                                                                                                                                                                   |
 | `content`               | object | The pre-sign content payload as supplied to the producer, or a normalized local content payload derived from the producer's runtime evidence. Populated by `atrib-emit`-style producers per the `content` argument the agent passed; typically carries `what`, `why_noted`, `intent`, `rationale`, `topics`, `summary`, `importance` (depending on `event_type`). OpenInference producers SHOULD use this field for recall-readable span metadata rather than adding span metadata to the signed `record`. |
-| `authorizationEvidence` | array  | Optional verifier-ready external authorization evidence captured from the host runtime, such as MCP/OAuth evidence from already-validated `authInfo`. This field is local-only and MUST NOT include raw bearer tokens by default. Consumers can pass it to `verifyRecord(record, { authorizationEvidence })` to populate `evidence[]`.                                                                                                                                                                     |
+| `authorizationEvidence` | array  | Optional verifier-ready external authorization evidence captured from the host runtime, such as MCP/OAuth evidence from already-validated `authInfo` or AAuth evidence from already-validated callbacks, verification results, or audit events. This field is local-only and MUST NOT include raw bearer tokens or raw AAuth JWTs by default. Consumers can pass it to `verifyRecord(record, { authorizationEvidence })` to populate `evidence[]`.                                                         |
 | `resolvedFacts`         | object | Optional local facts resolved from the payload or runtime event, such as `{ "tool_name": "read_file" }`. Consumers can pass it to `verifyRecord(record, { resolvedFacts })` so capability-envelope checks can use facts that are not in the compact signed record.                                                                                                                                                                                                                                         |
 
 Producers MAY add additional fields beyond this list. Consumers MUST tolerate unknown fields and SHOULD pass them through unchanged when re-emitting (e.g. when `atrib-trace` surfaces a sidecar summary for downstream tools).

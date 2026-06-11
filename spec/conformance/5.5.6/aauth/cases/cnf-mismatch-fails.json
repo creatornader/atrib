@@ -1,0 +1,32 @@
+{
+  "name": "cnf-mismatch-fails",
+  "kind": "jwt",
+  "includeCnfJwk": true,
+  "input": {
+    "protocol": "aauth",
+    "tokenKind": "auth_token",
+    "issuer": "https://ps.example",
+    "audience": "https://api.example",
+    "expectedAgent": "aauth:researcher@example.com",
+    "expectedActSubject": "aauth:researcher@example.com",
+    "expectedCnfJkt": "different-thumbprint",
+    "nowSeconds": 1700000100
+  },
+  "jwtClaims": {
+    "iss": "https://ps.example",
+    "dwk": "aauth-person.json",
+    "aud": "https://api.example",
+    "agent": "aauth:researcher@example.com",
+    "sub": "user-pairwise-123",
+    "scope": "files:read",
+    "jti": "auth-jti-cnf-mismatch",
+    "iat": 1700000000,
+    "exp": 1700000300,
+    "act": { "sub": "aauth:researcher@example.com" }
+  },
+  "expected": {
+    "valid": false,
+    "constraints": [{ "type": "cnf.jwk", "status": "failed" }],
+    "errors": ["aauth_evidence constraint failed: cnf.jwk"]
+  }
+}
