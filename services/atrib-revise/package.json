@@ -1,6 +1,6 @@
 {
   "name": "@atrib/revise",
-  "version": "0.2.27",
+  "version": "0.2.28",
   "description": "MCP server for atrib. Lets agents supersede a prior signed position with a stated reason. Adds a REVISES graph edge so the contradiction is a first-class node rather than a silent edit.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
