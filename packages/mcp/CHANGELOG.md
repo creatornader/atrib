@@ -1,5 +1,11 @@
 # @atrib/mcp
 
+## 0.17.5
+
+### Patch Changes
+
+- 61c1ec7: Allow the in-process local substrate coordinator to accept watcher-WAL commit requests with explicit receipt join metadata. Add shared Fetch, plain-result, and Node HTTP service handlers for hosts that expose the same coordinator through a supervised local endpoint.
+
 ## 0.17.4
 
 ### Patch Changes
