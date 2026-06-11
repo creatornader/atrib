@@ -1,5 +1,23 @@
 # @atrib/mcp
 
+## 0.17.4
+
+### Patch Changes
+
+- 95cd2ca: Add opt-in local substrate coordinator client and health-probe helpers for P042. The new APIs validate requests and responses, classify unavailable coordinators without blocking primary work, provide an explicit HTTP transport helper, and build rollout-gate health reports without adding a required daemon.
+- 95cd2ca: Add exported local substrate coordinator contract helpers for P042. The new
+  surface validates coordinator requests, health reports, and fixture packets,
+  and computes canonical unsigned record-body hashes so startup-spawn wrappers,
+  long-lived agents, and watcher WAL pipelines can share the same adapter
+  boundary without changing signed record bytes.
+- 95cd2ca: Add an opt-in in-process local substrate coordinator prototype for P042 startup-spawn trials. The helper exposes a transport for the shared coordinator client, signs only bodies whose creator key matches the coordinator signer, reports health through the P042 probe shape, and keeps the default scope to startup-spawn without making a daemon required.
+- c738147: Add opt-in local substrate shadow wiring for startup-spawn wrappers. `@atrib/mcp`
+  now accepts a transport-backed shadow option that sends the exact unsigned record
+  body to a coordinator with `mode: "shadow_probe"`, compares the returned hash to
+  the local signer, and keeps local signing, mirror append, outbound context, and
+  queue submission authoritative. `@atrib/mcp-wrap` exposes the first JSON config
+  path through an HTTP endpoint and logs each shadow attempt for rollout checks.
+
 ## 0.17.3
 
 ### Patch Changes

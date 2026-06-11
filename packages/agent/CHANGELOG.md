@@ -1,5 +1,16 @@
 # @atrib/agent
 
+## 0.2.19
+
+### Patch Changes
+
+- Updated dependencies [95cd2ca]
+- Updated dependencies [95cd2ca]
+- Updated dependencies [95cd2ca]
+- Updated dependencies [c738147]
+  - @atrib/mcp@0.17.4
+  - @atrib/verify@0.7.6
+
 ## 0.2.18
 
 ### Patch Changes

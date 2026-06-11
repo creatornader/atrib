@@ -1,5 +1,16 @@
 # @atrib/emit
 
+## 0.14.19
+
+### Patch Changes
+
+- 3a83ab3: Add opt-in local-substrate shadow probes to the emit signing path. The direct emit path remains authoritative while `handleEmit`, `emitInProcess`, `atrib-emit-cli`, annotate, and revise can send the exact unsigned record body to a P042 coordinator for non-blocking hash comparison.
+- Updated dependencies [95cd2ca]
+- Updated dependencies [95cd2ca]
+- Updated dependencies [95cd2ca]
+- Updated dependencies [c738147]
+  - @atrib/mcp@0.17.4
+
 ## 0.14.18
 
 ### Patch Changes
