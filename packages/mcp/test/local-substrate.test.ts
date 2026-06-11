@@ -5,6 +5,7 @@ import {
   LOCAL_SUBSTRATE_REQUEST_MODES,
   LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
   base64urlEncode,
+  bindLocalSubstrateCoordinatorNodeServer,
   buildLocalSubstrateHealthReport,
   canonicalRecord,
   createHttpLocalSubstrateTransport,
@@ -461,6 +462,88 @@ describe('local substrate coordinator contract', () => {
     expect(await invalidJson!.json()).toMatchObject({ error: 'invalid_json' })
 
     coordinator.destroy()
+  })
+
+  it('binds a loopback Node HTTP server for supervised local hosts', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
+    const observed: AtribRecord[] = []
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: fixtureSeed(0x11),
+      logSubmission: 'disabled',
+      onRecord: (record) => {
+        observed.push(record)
+      },
+      health: {
+        pid: 888,
+        version: '0.0.0-node-test',
+        transport: 'node-http',
+      },
+    })
+    const server = await bindLocalSubstrateCoordinatorNodeServer(coordinator, { port: 0 })
+
+    try {
+      const result = await tryLocalSubstrateCoordinator(fixture.input.coordinator_request, {
+        transport: createHttpLocalSubstrateTransport(server.endpoint),
+      })
+      const health = await fetch(server.healthEndpoint)
+      const missing = await fetch(`${server.url}/not-an-atrib-route`)
+      const head = await fetch(server.endpoint, { method: 'HEAD' })
+
+      expect(server.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
+      expect(result.ok).toBe(true)
+      expect(result.status).toBe('accepted')
+      expect(observed).toHaveLength(1)
+      expect(health.status).toBe(200)
+      expect(((await health.json()) as ReturnType<typeof coordinator.health>).report.coordinator.pid).toBe(
+        888,
+      )
+      expect(missing.status).toBe(404)
+      expect(await missing.json()).toEqual({ error: 'not_found' })
+      expect(head.status).toBe(200)
+      expect(head.headers.get('access-control-allow-origin')).toBeNull()
+      expect(await head.text()).toBe('')
+    } finally {
+      await server.close()
+      coordinator.destroy()
+    }
+  })
+
+  it('rejects bad Node HTTP bodies before the coordinator hot path', async () => {
+    let called = false
+    const coordinator = {
+      transport: async () => {
+        called = true
+        return {}
+      },
+      health: () =>
+        probeLocalSubstrateHealth({
+          coordinator: {
+            pid: 999,
+            version: '0.0.0-node-test',
+            transport: 'node-http',
+          },
+        }),
+    }
+    const server = await bindLocalSubstrateCoordinatorNodeServer(coordinator, {
+      port: 0,
+      maxBodyBytes: 8,
+    })
+
+    try {
+      const invalidJson = await fetch(server.endpoint, { method: 'POST', body: 'not-json' })
+      const tooLarge = await fetch(server.endpoint, {
+        method: 'POST',
+        body: JSON.stringify({ bigger: 'than-eight-bytes' }),
+      })
+
+      expect(invalidJson.status).toBe(400)
+      expect(await invalidJson.json()).toMatchObject({ error: 'invalid_json' })
+      expect(tooLarge.status).toBe(413)
+      expect(await tooLarge.json()).toMatchObject({ error: 'payload_too_large' })
+      expect(called).toBe(false)
+    } finally {
+      await server.close()
+    }
   })
 
   it('signs startup-spawn records through the in-process coordinator prototype', async () => {

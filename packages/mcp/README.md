@@ -187,6 +187,7 @@ Per [P042](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p042-loc
 ```typescript
 import {
   LOCAL_SUBSTRATE_REQUEST_MODES,
+  bindLocalSubstrateCoordinatorNodeServer,
   createLocalSubstrateCoordinatorHttpHandler,
   buildLocalSubstrateHealthReport,
   createHttpLocalSubstrateTransport,
@@ -206,6 +207,8 @@ These helpers let startup-spawn MCP wrappers, long-lived agents, and watcher WAL
 `tryLocalSubstrateCoordinator()` is an opt-in client shim. Callers provide the transport, so Unix sockets, launchd-owned localhost services, containers, and tests can share the same validation path without pulling a daemon into this package. It validates the request before transport, validates the response against the request operation, and classifies outcomes as `accepted`, `rejected`, `invalid_request`, `invalid_response`, or `unavailable`. `createHttpLocalSubstrateTransport()` is the explicit JSON-over-HTTP helper for hosts that choose that transport.
 
 `createLocalSubstrateCoordinatorHttpHandler()` is the matching server-side Fetch handler for hosts that want a supervised local service. It serves `POST /atrib/local-substrate` for coordinator requests plus `GET`/`HEAD /atrib/local-substrate` and `/atrib/local-substrate/health` for read-only health. `handleLocalSubstrateCoordinatorHttpRequest()` exposes the same routing as a plain result object for Express, Fastify, Node HTTP, launchd-owned daemons, or tests. Bad JSON and invalid requests return HTTP errors before the coordinator hot path runs; valid application-level rejections still return the signed response envelope so clients can classify them as `rejected`.
+
+`bindLocalSubstrateCoordinatorNodeServer()` is the Node HTTP binding for supervised local hosts. It binds to `127.0.0.1:8787` by default, exposes the same coordinator paths, caps request bodies at 1 MiB unless configured otherwise, and returns normal JSON errors for malformed or oversized bodies before calling the coordinator. It does not emit CORS headers by default; browser-facing hosts should set their own origin policy. This gives launchd, shell scripts, or tests a concrete host process without adding a new MCP server or package.
 
 `mode: "shadow_probe"` is the current startup-spawn rollout path. It asks the coordinator to validate and sign the exact unsigned body, return the hash, and skip coordinator-owned queue or mirror side effects. The middleware still signs, mirrors, and submits locally. This proves wrapper-to-coordinator reachability and record-byte equality without double-committing a record.
 
