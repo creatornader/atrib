@@ -33,6 +33,7 @@ import {
   computeGraphBBox,
   computeNeighborhood,
   normalizeGraphRecordHash,
+  buildPrimaryTracePath,
   graphNodeActionHash,
   graphReferenceStatus,
   isGraphReferenceNode,
@@ -45,9 +46,18 @@ import {
 } from '../graph-utils.mjs'
 
 // Helper: build a graphData wire-format object.
-function graph(nodes, edges) { return { nodes, edges } }
-function n(id, event_type = 'tool_call') { return { id, event_type } }
-function e(source, target, type = 'CHAIN_PRECEDES') { return { source, target, type } }
+function graph(nodes, edges) {
+  return { nodes, edges }
+}
+function n(id, event_type = 'tool_call') {
+  return { id, event_type }
+}
+function e(source, target, type = 'CHAIN_PRECEDES') {
+  return { source, target, type }
+}
+function h(char) {
+  return `sha256:${char.repeat(64)}`
+}
 function recent(recordHash, contextId, timestampMs, eventType = 'tool_call') {
   return {
     record_hash: recordHash,
@@ -149,9 +159,7 @@ describe('selectLayout', () => {
 
 describe('computeNodeDegrees', () => {
   it('counts incoming + outgoing edges per node', () => {
-    const degrees = computeNodeDegrees([
-      e('a', 'b'), e('a', 'c'), e('c', 'b'),
-    ])
+    const degrees = computeNodeDegrees([e('a', 'b'), e('a', 'c'), e('c', 'b')])
     expect(degrees.get('a')).toBe(2) // 2 outgoing
     expect(degrees.get('b')).toBe(2) // 2 incoming
     expect(degrees.get('c')).toBe(2) // 1 incoming + 1 outgoing
@@ -182,18 +190,17 @@ describe('computeNodeDegrees', () => {
 
 describe('hasParallelEdges', () => {
   it('returns true when two edges share a directed source and target', () => {
-    expect(hasParallelEdges([
-      e('a', 'b', 'CHAIN_PRECEDES'),
-      e('a', 'b', 'INFORMED_BY'),
-    ])).toBe(true)
+    expect(hasParallelEdges([e('a', 'b', 'CHAIN_PRECEDES'), e('a', 'b', 'INFORMED_BY')])).toBe(true)
   })
 
   it('returns false for reverse-direction and unrelated edges', () => {
-    expect(hasParallelEdges([
-      e('a', 'b', 'CHAIN_PRECEDES'),
-      e('b', 'a', 'INFORMED_BY'),
-      e('a', 'c', 'ANNOTATES'),
-    ])).toBe(false)
+    expect(
+      hasParallelEdges([
+        e('a', 'b', 'CHAIN_PRECEDES'),
+        e('b', 'a', 'INFORMED_BY'),
+        e('a', 'c', 'ANNOTATES'),
+      ]),
+    ).toBe(false)
   })
 
   it('returns false for an empty edge list', () => {
@@ -217,23 +224,31 @@ describe('reference node helpers', () => {
   })
 
   it('only makes external reference placeholders clickable', () => {
-    expect(graphNodeActionHash({
-      event_type: 'dangling_node',
-      reference_status: 'external',
-      reference_hash: `sha256:${hash}`,
-    })).toBe(`sha256:${hash}`)
+    expect(
+      graphNodeActionHash({
+        event_type: 'dangling_node',
+        reference_status: 'external',
+        reference_hash: `sha256:${hash}`,
+      }),
+    ).toBe(`sha256:${hash}`)
 
-    expect(graphNodeActionHash({
-      event_type: 'dangling_node',
-      reference_status: 'missing',
-      reference_hash: `sha256:${hash}`,
-      id: `dangling:sha256:${hash}`,
-    })).toBe('')
+    expect(
+      graphNodeActionHash({
+        event_type: 'dangling_node',
+        reference_status: 'missing',
+        reference_hash: `sha256:${hash}`,
+        id: `dangling:sha256:${hash}`,
+      }),
+    ).toBe('')
   })
 
   it('keeps normal record nodes clickable by id or record_hash', () => {
-    expect(graphNodeActionHash({ event_type: 'tool_call', id: `sha256:${hash}` })).toBe(`sha256:${hash}`)
-    expect(graphNodeActionHash({ event_type: 'tool_call', record_hash: `sha256:${hash}` })).toBe(`sha256:${hash}`)
+    expect(graphNodeActionHash({ event_type: 'tool_call', id: `sha256:${hash}` })).toBe(
+      `sha256:${hash}`,
+    )
+    expect(graphNodeActionHash({ event_type: 'tool_call', record_hash: `sha256:${hash}` })).toBe(
+      `sha256:${hash}`,
+    )
   })
 
   it('classifies reference statuses and legend entries for distinct visual treatment', () => {
@@ -241,12 +256,16 @@ describe('reference node helpers', () => {
     expect(graphReferenceStatus({ reference_status: 'missing' })).toBe('missing')
     expect(graphReferenceStatus({ reference_status: 'wat' })).toBe('unresolved')
 
-    expect(graphNodeLegendEntry({ event_type: 'dangling_node', reference_status: 'external' })).toEqual({
+    expect(
+      graphNodeLegendEntry({ event_type: 'dangling_node', reference_status: 'external' }),
+    ).toEqual({
       key: 'external_reference',
       className: 'external_reference',
       label: 'external reference',
     })
-    expect(graphNodeLegendEntry({ event_type: 'dangling_node', reference_status: 'missing' })).toEqual({
+    expect(
+      graphNodeLegendEntry({ event_type: 'dangling_node', reference_status: 'missing' }),
+    ).toEqual({
       key: 'missing_reference',
       className: 'missing_reference',
       label: 'missing reference',
@@ -288,9 +307,27 @@ describe('reference node helpers', () => {
 
   it('counts reference links separately from reference nodes', () => {
     const edges = [
-      { source: 'a', target: 'dangling-a', type: 'INFORMED_BY', dangling: true, reference_status: 'external' },
-      { source: 'b', target: 'dangling-a', type: 'ANNOTATES', dangling: true, reference_status: 'external' },
-      { source: 'c', target: 'dangling-b', type: 'REVISES', dangling: true, reference_status: 'missing' },
+      {
+        source: 'a',
+        target: 'dangling-a',
+        type: 'INFORMED_BY',
+        dangling: true,
+        reference_status: 'external',
+      },
+      {
+        source: 'b',
+        target: 'dangling-a',
+        type: 'ANNOTATES',
+        dangling: true,
+        reference_status: 'external',
+      },
+      {
+        source: 'c',
+        target: 'dangling-b',
+        type: 'REVISES',
+        dangling: true,
+        reference_status: 'missing',
+      },
       { source: 'a', target: 'b', type: 'CHAIN_PRECEDES' },
     ]
 
@@ -299,6 +336,85 @@ describe('reference node helpers', () => {
       missing: 1,
       unresolved: 0,
     })
+  })
+})
+
+describe('buildPrimaryTracePath', () => {
+  it('prefers producer-claimed ancestry over the structural chain parent', () => {
+    const start = h('c')
+    const chainParent = h('a')
+    const claimedParent = h('b')
+    const result = buildPrimaryTracePath(
+      graph(
+        [
+          { id: chainParent, event_type: 'tool_call', timestamp: 1000 },
+          { id: claimedParent, event_type: 'observation', timestamp: 1001 },
+          { id: start, event_type: 'tool_call', timestamp: 1002 },
+        ],
+        [e(chainParent, start, 'CHAIN_PRECEDES'), e(start, claimedParent, 'INFORMED_BY')],
+      ),
+      start,
+    )
+
+    expect(result.nodes.map((node) => node.record_hash)).toEqual([start, claimedParent])
+    expect(result.edges.map((edge) => edge.type)).toEqual(['INFORMED_BY'])
+    expect(result.terminal_reason).toBe('no-parent')
+  })
+
+  it('falls back to the chain parent when no producer claim is present', () => {
+    const start = h('c')
+    const chainParent = h('a')
+    const result = buildPrimaryTracePath(
+      graph(
+        [
+          { id: chainParent, event_type: 'tool_call', timestamp: 1000 },
+          { id: start, event_type: 'tool_call', timestamp: 1002 },
+        ],
+        [e(chainParent, start, 'CHAIN_PRECEDES')],
+      ),
+      start,
+    )
+
+    expect(result.nodes.map((node) => node.record_hash)).toEqual([start, chainParent])
+    expect(result.edges.map((edge) => edge.type)).toEqual(['CHAIN_PRECEDES'])
+  })
+
+  it('chooses the newest resolved parent when several claim edges share a rank', () => {
+    const start = h('c')
+    const older = h('a')
+    const newer = h('b')
+    const result = buildPrimaryTracePath(
+      graph(
+        [
+          { id: older, event_type: 'observation', timestamp: 1000 },
+          { id: newer, event_type: 'observation', timestamp: 1005 },
+          { id: start, event_type: 'tool_call', timestamp: 1010 },
+        ],
+        [e(start, older, 'INFORMED_BY'), e(start, newer, 'INFORMED_BY')],
+      ),
+      start,
+    )
+
+    expect(result.nodes.map((node) => node.record_hash)).toEqual([start, newer])
+  })
+
+  it('reports start-not-found for synthetic or absent start nodes', () => {
+    const result = buildPrimaryTracePath(
+      graph(
+        [
+          {
+            id: 'dangling:sha256:' + 'a'.repeat(64),
+            event_type: 'dangling_node',
+            reference_status: 'missing',
+          },
+        ],
+        [],
+      ),
+      h('a'),
+    )
+
+    expect(result.nodes).toEqual([])
+    expect(result.terminal_reason).toBe('start-not-found')
   })
 })
 
@@ -378,7 +494,12 @@ describe('computeGraphBBox', () => {
   })
 
   it('skips non-finite positions and returns null when all positions are non-finite', () => {
-    expect(computeGraphBBox([{ x: NaN, y: 0 }, { x: 0, y: Infinity }])).toBeNull()
+    expect(
+      computeGraphBBox([
+        { x: NaN, y: 0 },
+        { x: 0, y: Infinity },
+      ]),
+    ).toBeNull()
   })
 
   it('skips non-finite positions but still computes bbox over the finite ones', () => {
@@ -499,9 +620,15 @@ describe('degreeCentralityFromGraph', () => {
     const nodeIds = Object.keys(adjacency)
     return {
       order: nodeIds.length,
-      forEachNode(cb) { for (const id of nodeIds) cb(id) },
-      degree(id) { return adjacency[id] ?? 0 },
-      hasNode(id) { return id in adjacency },
+      forEachNode(cb) {
+        for (const id of nodeIds) cb(id)
+      },
+      degree(id) {
+        return adjacency[id] ?? 0
+      },
+      hasNode(id) {
+        return id in adjacency
+      },
     }
   }
 
@@ -529,7 +656,9 @@ describe('computeNeighborhood', () => {
   // edge-keyed multigraph. Edges keyed by source + '->' + target + '#' + idx.
   function mockMultiGraph(nodes, edges) {
     return {
-      hasNode(id) { return nodes.includes(id) },
+      hasNode(id) {
+        return nodes.includes(id)
+      },
       forEachEdge(nodeOrCallback, cb) {
         // graphology supports two signatures; we use forEachEdge(node, cb)
         const node = nodeOrCallback
@@ -552,7 +681,12 @@ describe('computeNeighborhood', () => {
     // Star graph: hub connects to a, b, c.
     const g = mockMultiGraph(
       ['hub', 'a', 'b', 'c', 'far'],
-      [['e1', 'hub', 'a'], ['e2', 'hub', 'b'], ['e3', 'hub', 'c'], ['e4', 'a', 'far']],
+      [
+        ['e1', 'hub', 'a'],
+        ['e2', 'hub', 'b'],
+        ['e3', 'hub', 'c'],
+        ['e4', 'a', 'far'],
+      ],
     )
     const nb = computeNeighborhood(g, 'hub')
     expect(nb).not.toBeNull()
@@ -581,7 +715,11 @@ describe('computeNeighborhood', () => {
   it('handles multi-edges between the same pair (each gets its own edge key)', () => {
     const g = mockMultiGraph(
       ['a', 'b'],
-      [['e1', 'a', 'b'], ['e2', 'a', 'b'], ['e3', 'a', 'b']],
+      [
+        ['e1', 'a', 'b'],
+        ['e2', 'a', 'b'],
+        ['e3', 'a', 'b'],
+      ],
     )
     const nb = computeNeighborhood(g, 'a')
     expect(nb.nodes).toEqual(new Set(['a', 'b']))
@@ -645,15 +783,18 @@ describe('clusterSeedPositions', () => {
 
   it('places nodes of the same event_type in the same cluster region', () => {
     const nodes = [
-      n('a', 'tool_call'), n('b', 'tool_call'), n('c', 'tool_call'),
-      n('x', 'transaction'), n('y', 'transaction'),
+      n('a', 'tool_call'),
+      n('b', 'tool_call'),
+      n('c', 'tool_call'),
+      n('x', 'transaction'),
+      n('y', 'transaction'),
     ]
     const positions = clusterSeedPositions(nodes, { clusterRadius: 1000, intraClusterRadius: 100 })
     // Tool_call nodes should be near each other; same for transactions.
-    const toolCallPositions = ['a', 'b', 'c'].map(id => positions.get(id))
-    const txPositions = ['x', 'y'].map(id => positions.get(id))
+    const toolCallPositions = ['a', 'b', 'c'].map((id) => positions.get(id))
+    const txPositions = ['x', 'y'].map((id) => positions.get(id))
     // Centroid of each cluster
-    const centroidOf = ps => ({
+    const centroidOf = (ps) => ({
       x: ps.reduce((s, p) => s + p.x, 0) / ps.length,
       y: ps.reduce((s, p) => s + p.y, 0) / ps.length,
     })
@@ -664,7 +805,10 @@ describe('clusterSeedPositions', () => {
     const interClusterDist = Math.hypot(tcCenter.x - txCenter.x, tcCenter.y - txCenter.y)
     expect(interClusterDist).toBeGreaterThan(500)
     // Distance within a cluster should be much smaller
-    const intraDist = Math.hypot(toolCallPositions[0].x - toolCallPositions[1].x, toolCallPositions[0].y - toolCallPositions[1].y)
+    const intraDist = Math.hypot(
+      toolCallPositions[0].x - toolCallPositions[1].x,
+      toolCallPositions[0].y - toolCallPositions[1].y,
+    )
     expect(intraDist).toBeLessThan(interClusterDist)
   })
 
@@ -720,16 +864,13 @@ describe('buildReplayGraphFromEntries', () => {
   })
 
   it('keeps the newest entries when a limit is supplied', () => {
-    const replay = buildReplayGraphFromEntries([
-      recent('a', 'ctx', 1000),
-      recent('b', 'ctx', 2000),
-      recent('c', 'ctx', 3000),
-    ], { limit: 2 })
+    const replay = buildReplayGraphFromEntries(
+      [recent('a', 'ctx', 1000), recent('b', 'ctx', 2000), recent('c', 'ctx', 3000)],
+      { limit: 2 },
+    )
 
     expect(replay.nodes.map((node) => node.id)).toEqual(['b', 'c'])
-    expect(replay.edges).toEqual([
-      { source: 'b', target: 'c', type: 'CHAIN_PRECEDES' },
-    ])
+    expect(replay.edges).toEqual([{ source: 'b', target: 'c', type: 'CHAIN_PRECEDES' }])
   })
 
   it('drops malformed entries instead of creating broken graph edges', () => {
@@ -774,9 +915,11 @@ describe('computeDemoLaneOffset', () => {
 
   it('adds a deterministic wave to same-type chains', () => {
     const offsets = Array.from({ length: 6 }, (_, i) =>
-      computeDemoLaneOffset(n(`t${i}`, 'tool_call'), i, 6))
+      computeDemoLaneOffset(n(`t${i}`, 'tool_call'), i, 6),
+    )
     expect(new Set(offsets).size).toBeGreaterThan(1)
-    expect(offsets).toEqual(Array.from({ length: 6 }, (_, i) =>
-      computeDemoLaneOffset(n(`t${i}`, 'tool_call'), i, 6)))
+    expect(offsets).toEqual(
+      Array.from({ length: 6 }, (_, i) => computeDemoLaneOffset(n(`t${i}`, 'tool_call'), i, 6)),
+    )
   })
 })

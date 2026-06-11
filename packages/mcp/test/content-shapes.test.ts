@@ -19,14 +19,18 @@ import {
 } from '../src/index.js'
 
 describe('extractIndexableText: normative event types', () => {
-  it('observation: pulls what + why_noted + topics', () => {
+  it('observation: pulls what + why_noted + intent + rationale + topics', () => {
     const text = extractIndexableText(EVENT_TYPE_OBSERVATION_URI, {
       what: 'decided to require TLD',
       why_noted: 'prevents accepting localhost-style emails',
+      intent: 'reject ambiguous production account identifiers',
+      rationale: 'domain-like values are safer for downstream tenant matching',
       topics: ['email', 'validation', 'edge-cases'],
     })
     expect(text).toContain('decided to require TLD')
     expect(text).toContain('prevents accepting localhost-style emails')
+    expect(text).toContain('reject ambiguous production account identifiers')
+    expect(text).toContain('domain-like values are safer')
     expect(text).toContain('email')
     expect(text).toContain('validation')
     expect(text).toContain('edge-cases')
@@ -154,11 +158,7 @@ describe('extractIndexableText: normative event types', () => {
 describe('extractIndexableText: field-length cap', () => {
   it('truncates a single field at fieldCap', () => {
     const huge = 'x'.repeat(5000)
-    const text = extractIndexableText(
-      EVENT_TYPE_OBSERVATION_URI,
-      { what: huge },
-      { fieldCap: 100 },
-    )
+    const text = extractIndexableText(EVENT_TYPE_OBSERVATION_URI, { what: huge }, { fieldCap: 100 })
     expect(text.length).toBe(100)
     expect(text).toBe('x'.repeat(100))
   })
@@ -202,9 +202,7 @@ describe('extractIndexableText: malformed input', () => {
   })
 
   it('returns empty string when content object has wrong-typed fields', () => {
-    expect(
-      extractIndexableText(EVENT_TYPE_OBSERVATION_URI, { what: 42 }),
-    ).toBe('')
+    expect(extractIndexableText(EVENT_TYPE_OBSERVATION_URI, { what: 42 })).toBe('')
   })
 
   it('drops wrong-typed topic entries silently', () => {
@@ -271,20 +269,12 @@ describe('per-event_type extractors (direct)', () => {
   })
 
   it('extractAnnotationText preserves backward-compatible summary+topics output', () => {
-    const text = extractAnnotationText(
-      { summary: 'matters', topics: ['x'] },
-      DEFAULT_FIELD_CAP,
-    )
+    const text = extractAnnotationText({ summary: 'matters', topics: ['x'] }, DEFAULT_FIELD_CAP)
     expect(text).toBe('matters x')
   })
 
   it('extractRevisionText returns "" when no text fields present', () => {
-    expect(
-      extractRevisionText(
-        { revises: 'sha256:' + 'd'.repeat(64) },
-        DEFAULT_FIELD_CAP,
-      ),
-    ).toBe('')
+    expect(extractRevisionText({ revises: 'sha256:' + 'd'.repeat(64) }, DEFAULT_FIELD_CAP)).toBe('')
   })
 
   it('extractToolCallText returns "" when no recognizable fields', () => {

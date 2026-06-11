@@ -302,7 +302,7 @@ Per-event_type extraction (also exported individually for callers that know the 
 
 | event_type         | Indexable fields                                                                       | Function                                                 |
 | ------------------ | -------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `observation`      | `what + why_noted + topics`                                                            | `extractObservationText(content, fieldCap)`              |
+| `observation`      | `what + why_noted + intent + rationale + topics`                                       | `extractObservationText(content, fieldCap)`              |
 | `annotation`       | `summary + topics`                                                                     | `extractAnnotationText(content, fieldCap)`               |
 | `revision`         | `prior_position + new_position + reason + topics`                                      | `extractRevisionText(content, fieldCap)`                 |
 | `tool_call`        | `tool_name + args/input/arguments + result/output/response` (JSON-stringified, capped) | `extractToolCallText(content, fieldCap)`                 |

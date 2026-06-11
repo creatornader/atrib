@@ -45,7 +45,9 @@ async function buildSigned(
   return { record, record_hash }
 }
 
-function indexize(records: { record: AtribRecord; record_hash: string }[]): Map<string, IndexedRecord> {
+function indexize(
+  records: { record: AtribRecord; record_hash: string }[],
+): Map<string, IndexedRecord> {
   const m = new Map<string, IndexedRecord>()
   for (const { record, record_hash } of records) {
     m.set(record_hash, { record, record_hash, source: 'test' })
@@ -55,11 +57,7 @@ function indexize(records: { record: AtribRecord; record_hash: string }[]): Map<
 
 describe('traceBackward', () => {
   it('returns empty visited + start_hash in dangling when start_hash is not in index', () => {
-    const result = traceBackward(
-      'sha256:' + 'f'.repeat(64),
-      3,
-      new Map(),
-    )
+    const result = traceBackward('sha256:' + 'f'.repeat(64), 3, new Map())
     expect(result.visited).toEqual([])
     expect(result.dangling).toEqual(['sha256:' + 'f'.repeat(64)])
     expect(result.warnings.length).toBe(1)
@@ -193,33 +191,43 @@ describe('summarizeSidecar — per-event_type content shape handling (D086)', ()
   }
 
   it('observation: surfaces `what` as the primary text', () => {
-    const result = summarizeSidecar(mockLoaded({
-      what: 'decided to require TLD for email validation',
-      why_noted: 'prevents accepting localhost',
-      topics: ['email', 'validation'],
-    }))
+    const result = summarizeSidecar(
+      mockLoaded({
+        what: 'decided to require TLD for email validation',
+        why_noted: 'prevents accepting localhost',
+        intent: 'reject ambiguous account identifiers',
+        rationale: 'domain-like values are safer for tenant matching',
+        topics: ['email', 'validation'],
+      }),
+    )
     expect(result?.what).toBe('decided to require TLD for email validation')
+    expect(result?.intent).toBe('reject ambiguous account identifiers')
+    expect(result?.rationale).toBe('domain-like values are safer for tenant matching')
     expect(result?.topics).toEqual(['email', 'validation'])
   })
 
   it('annotation: surfaces `summary` as the primary text', () => {
-    const result = summarizeSidecar(mockLoaded({
-      summary: 'this decision shaped the substrate hypothesis',
-      importance: 'critical',
-      topics: ['design'],
-    }))
+    const result = summarizeSidecar(
+      mockLoaded({
+        summary: 'this decision shaped the substrate hypothesis',
+        importance: 'critical',
+        topics: ['design'],
+      }),
+    )
     expect(result?.what).toBe('this decision shaped the substrate hypothesis')
     expect(result?.importance).toBe('critical')
     expect(result?.topics).toEqual(['design'])
   })
 
   it('revision: surfaces `new_position` as the primary text (D086 normative field)', () => {
-    const result = summarizeSidecar(mockLoaded({
-      new_position: 'accept localhost in non-strict mode',
-      reason: 'developer feedback during testing',
-      importance: 'high',
-      topics: ['email', 'strictness'],
-    }))
+    const result = summarizeSidecar(
+      mockLoaded({
+        new_position: 'accept localhost in non-strict mode',
+        reason: 'developer feedback during testing',
+        importance: 'high',
+        topics: ['email', 'strictness'],
+      }),
+    )
     expect(result?.what).toBe('accept localhost in non-strict mode')
     expect(result?.importance).toBe('high')
     expect(result?.topics).toEqual(['email', 'strictness'])
@@ -229,10 +237,12 @@ describe('summarizeSidecar — per-event_type content shape handling (D086)', ()
     // Pre-D086 extractor records used summary+rationale on observation.
     // These records are immutable on the log; trace must still surface
     // their text via the legacy fallback path.
-    const result = summarizeSidecar(mockLoaded({
-      summary: 'legacy extractor-emit text from pre-D086 era',
-      rationale: 'because the old hook used summary not what',
-    }))
+    const result = summarizeSidecar(
+      mockLoaded({
+        summary: 'legacy extractor-emit text from pre-D086 era',
+        rationale: 'because the old hook used summary not what',
+      }),
+    )
     expect(result?.what).toBe('legacy extractor-emit text from pre-D086 era')
   })
 
@@ -240,24 +250,28 @@ describe('summarizeSidecar — per-event_type content shape handling (D086)', ()
     // Defensive: if a record has multiple text fields (e.g. an extension
     // URI mixing observation+revision shapes), `what` wins because it's
     // the most common case and matches the observation normative.
-    const result = summarizeSidecar(mockLoaded({
-      what: 'primary-what',
-      new_position: 'secondary-new-position',
-      summary: 'tertiary-summary',
-    }))
+    const result = summarizeSidecar(
+      mockLoaded({
+        what: 'primary-what',
+        new_position: 'secondary-new-position',
+        summary: 'tertiary-summary',
+      }),
+    )
     expect(result?.what).toBe('primary-what')
   })
 
   it('OpenInference: surfaces span identity and prompt version', () => {
-    const result = summarizeSidecar(mockLoaded({
-      source: 'openinference',
-      span_kind: 'LLM',
-      span_name: 'generate-text',
-      model_name: 'qwen3.5',
-      prompt_version: 'billing-v4',
-      prompt: 'compare Langfuse trace shape to atrib evidence shape',
-      topics: ['openinference', 'llm'],
-    }))
+    const result = summarizeSidecar(
+      mockLoaded({
+        source: 'openinference',
+        span_kind: 'LLM',
+        span_name: 'generate-text',
+        model_name: 'qwen3.5',
+        prompt_version: 'billing-v4',
+        prompt: 'compare Langfuse trace shape to atrib evidence shape',
+        topics: ['openinference', 'llm'],
+      }),
+    )
     expect(result?.span_kind).toBe('LLM')
     expect(result?.span_name).toBe('generate-text')
     expect(result?.model_name).toBe('qwen3.5')
@@ -273,11 +287,13 @@ describe('summarizeSidecar — per-event_type content shape handling (D086)', ()
   })
 
   it('returns undefined when sidecar has no recognizable text field', () => {
-    const result = summarizeSidecar(mockLoaded({
-      lifecycle_event: 'sessionend',
-      cwd: '/some/path',
-      session_id: 'abc',
-    }))
+    const result = summarizeSidecar(
+      mockLoaded({
+        lifecycle_event: 'sessionend',
+        cwd: '/some/path',
+        session_id: 'abc',
+      }),
+    )
     // No what/new_position/summary present, but also no topics/importance/
     // toolName/producer. summarizeSidecar should return undefined.
     expect(result).toBeUndefined()
@@ -293,12 +309,27 @@ describe('compact trace payload', () => {
   it('can include signed tool fields and D062 local content', async () => {
     const upstream = await buildSigned('01', 2000)
     const downstream = await buildSigned('02', 1000, [upstream.record_hash])
-    ;(downstream.record as AtribRecord & { tool_name?: string; args_hash?: string; result_hash?: string }).tool_name =
-      'diagnostic_config_parser_probe'
-    ;(downstream.record as AtribRecord & { tool_name?: string; args_hash?: string; result_hash?: string }).args_hash =
-      `sha256:${'1'.repeat(64)}`
-    ;(downstream.record as AtribRecord & { tool_name?: string; args_hash?: string; result_hash?: string }).result_hash =
-      `sha256:${'2'.repeat(64)}`
+    ;(
+      downstream.record as AtribRecord & {
+        tool_name?: string
+        args_hash?: string
+        result_hash?: string
+      }
+    ).tool_name = 'diagnostic_config_parser_probe'
+    ;(
+      downstream.record as AtribRecord & {
+        tool_name?: string
+        args_hash?: string
+        result_hash?: string
+      }
+    ).args_hash = `sha256:${'1'.repeat(64)}`
+    ;(
+      downstream.record as AtribRecord & {
+        tool_name?: string
+        args_hash?: string
+        result_hash?: string
+      }
+    ).result_hash = `sha256:${'2'.repeat(64)}`
     const byHash = indexize([upstream, downstream])
     byHash.set(downstream.record_hash, {
       ...byHash.get(downstream.record_hash)!,
@@ -394,7 +425,11 @@ describe('buildReverseInformedByIndex', () => {
     const parent = await buildSigned('a', 100)
     const child = await buildSigned('b', 50, [parent.record_hash])
     // Mutate the child's informed_by to include a non-string (defensive parse).
-    ;(child.record as { informed_by?: unknown }).informed_by = [parent.record_hash, 42 as unknown as string, null]
+    ;(child.record as { informed_by?: unknown }).informed_by = [
+      parent.record_hash,
+      42 as unknown as string,
+      null,
+    ]
     const idx = indexize([parent, child])
     const reverse = buildReverseInformedByIndex(idx)
     // Only the valid string ref makes it in.
@@ -405,11 +440,7 @@ describe('buildReverseInformedByIndex', () => {
 
 describe('traceForward', () => {
   it('returns empty visited + start_hash in dangling when start_hash is not in index', () => {
-    const result = traceForward(
-      'sha256:' + 'f'.repeat(64),
-      3,
-      new Map(),
-    )
+    const result = traceForward('sha256:' + 'f'.repeat(64), 3, new Map())
     expect(result.direction).toBe('forward')
     expect(result.visited).toEqual([])
     expect(result.dangling).toEqual(['sha256:' + 'f'.repeat(64)])
@@ -447,8 +478,12 @@ describe('traceForward', () => {
     expect(result.visited).toHaveLength(2)
     const hashes = result.visited.map((v) => v.record_hash).sort()
     expect(hashes).toEqual([parent.record_hash, child.record_hash].sort())
-    expect(result.visited.find((v) => v.record_hash === parent.record_hash)?.next_informed_by).toEqual([child.record_hash])
-    expect(result.visited.find((v) => v.record_hash === child.record_hash)?.parent_hashes).toEqual([parent.record_hash])
+    expect(
+      result.visited.find((v) => v.record_hash === parent.record_hash)?.next_informed_by,
+    ).toEqual([child.record_hash])
+    expect(result.visited.find((v) => v.record_hash === child.record_hash)?.parent_hashes).toEqual([
+      parent.record_hash,
+    ])
   })
 
   it('walks multi-hop chain forward to depth bound', async () => {

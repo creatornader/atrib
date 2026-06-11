@@ -37,11 +37,7 @@ import { extractIndexableText } from '@atrib/mcp'
  * days. Returns a value in (0, 1]; 1 when ts == now, decays toward 0 as
  * age increases. Half-life is ln(2) * tau ≈ 0.693 * tau days.
  */
-export function recencyScore(
-  recordTimestampMs: number,
-  nowMs: number,
-  tauDays: number,
-): number {
+export function recencyScore(recordTimestampMs: number, nowMs: number, tauDays: number): number {
   if (tauDays <= 0) return 1
   const ageDays = Math.max(0, (nowMs - recordTimestampMs) / 86400000)
   return Math.exp(-ageDays / tauDays)
@@ -103,11 +99,7 @@ export type BM25Index = {
  * Returns an index ready for `bm25Score`. Time-complexity is linear in
  * total token count across the corpus.
  */
-export function buildBM25Index(
-  corpus: BM25Doc[],
-  k1 = 1.5,
-  b = 0.75,
-): BM25Index {
+export function buildBM25Index(corpus: BM25Doc[], k1 = 1.5, b = 0.75): BM25Index {
   const docs = new Map<string, { length: number; tf: Map<string, number> }>()
   const df = new Map<string, number>()
   let totalLength = 0
@@ -140,11 +132,7 @@ export function buildBM25Index(
  * lookups. Returns 0 for docs not in the index (rather than throwing)
  * since the recall flow may filter the corpus after indexing.
  */
-export function bm25Score(
-  index: BM25Index,
-  docId: string,
-  queryTokens: string[],
-): number {
+export function bm25Score(index: BM25Index, docId: string, queryTokens: string[]): number {
   const doc = index.docs.get(docId)
   if (!doc) return 0
   if (queryTokens.length === 0) return 0
@@ -155,8 +143,7 @@ export function bm25Score(
     if (!tf) continue
     const idf = index.idf.get(qt) ?? 0
     const numerator = tf * (index.k1 + 1)
-    const denominator =
-      tf + index.k1 * (1 - index.b + index.b * (doc.length / index.avgdl))
+    const denominator = tf + index.k1 * (1 - index.b + index.b * (doc.length / index.avgdl))
     score += idf * (numerator / denominator)
   }
   return score
@@ -191,9 +178,7 @@ export function parkScore(
  * deliberately does NOT touch record content; for the full corpus shape
  * use `indexableTokensForRecord`.
  */
-export function indexableTextFromAnnotation(
-  summary: AnnotationSummary | undefined,
-): string[] {
+export function indexableTextFromAnnotation(summary: AnnotationSummary | undefined): string[] {
   if (!summary) return []
   const parts: string[] = []
   if (summary.summary) parts.push(summary.summary)
@@ -207,7 +192,8 @@ export function indexableTextFromAnnotation(
  *
  *   1. Per-event_type record content from the D062 sidecar, extracted
  *      via @atrib/mcp `extractIndexableText` against the record's
- *      `event_type` URI. For observation: what + why_noted + topics.
+ *      `event_type` URI. For observation: what + why_noted + intent +
+ *      rationale + topics.
  *      For tool_call: tool_name + args excerpt + result excerpt. For
  *      annotation: summary + topics. Etc. See @atrib/mcp/content-shapes
  *      for the per-shape contract.
@@ -231,9 +217,7 @@ export function indexableTokensForRecord(
   const annotationTokens = indexableTextFromAnnotation(annotation)
   if (!contentText) return annotationTokens
   const contentTokens = tokenize(contentText)
-  return annotationTokens.length === 0
-    ? contentTokens
-    : contentTokens.concat(annotationTokens)
+  return annotationTokens.length === 0 ? contentTokens : contentTokens.concat(annotationTokens)
 }
 
 /**

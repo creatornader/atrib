@@ -1248,6 +1248,50 @@
   }
   .trace-controls .actions a:hover { color: var(--accent); border-color: var(--accent); }
 
+  .primary-trace-path { margin-top: 24px; }
+  .primary-trace-path .path-note {
+    margin: 0 0 12px;
+    color: var(--text-3);
+    font: 13px/1.55 var(--font-sans);
+  }
+  .primary-trace-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .primary-trace-list li {
+    display: grid;
+    grid-template-columns: minmax(108px, auto) minmax(110px, auto) minmax(220px, 1fr) minmax(92px, auto);
+    gap: 10px;
+    align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .primary-trace-list li:last-child { border-bottom: none; }
+  .primary-trace-list .via {
+    color: var(--text-3);
+    font: 11px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .primary-trace-list a {
+    color: var(--text);
+    text-decoration: none;
+    word-break: break-all;
+  }
+  .primary-trace-list a:hover {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+  @media (max-width: 720px) {
+    .primary-trace-list li {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+  }
+
   .trace-graph {
     position: relative;
     width: 100%;
@@ -1775,6 +1819,7 @@ import {
   computeGraphBBox,
   computeNeighborhood,
   normalizeGraphRecordHash,
+  buildPrimaryTracePath,
   graphNodeActionHash,
   graphReferenceStatus,
   referenceStatusLabel,
@@ -1785,7 +1830,7 @@ import {
   buildReplayGraphFromEntries,
   computeDemoGraphSignature,
   computeDemoLaneOffset,
-} from '/graph-utils.mjs?v=2026-05-25-graph-counts'
+} from '/graph-utils.mjs?v=2026-06-11-primary-trace-path'
 
 /*
  * atrib explorer, D054 option 1.
@@ -5701,6 +5746,76 @@ function mergeGraphs(a, b) {
   return out
 }
 
+function primaryTraceEdgeLabel(type) {
+  const map = {
+    INFORMED_BY: 'informed_by',
+    REVISES: 'revises',
+    ANNOTATES: 'annotates',
+    PROVENANCE_OF: 'provenance_of',
+    CHAIN_PRECEDES: 'chain_precedes',
+  }
+  return map[type] || String(type || 'edge').toLowerCase()
+}
+
+function renderPrimaryTracePathPanel(path) {
+  const sectionHead = el('div', { class: 'panel-head' },
+    el('h2', {}, 'primary trace path'),
+    el('span', { class: 'meta' }, 'producer claims first, chain fallback'),
+  )
+
+  if (!path || !Array.isArray(path.nodes) || path.nodes.length === 0) {
+    return el('section', { class: 'panel primary-trace-path' },
+      sectionHead,
+      el('div', { class: 'panel-body' },
+        el('div', { class: 'empty' }, 'No primary path resolved for this record.'),
+      ),
+    )
+  }
+
+  if (path.nodes.length === 1) {
+    return el('section', { class: 'panel primary-trace-path' },
+      sectionHead,
+      el('div', { class: 'panel-body' },
+        el('p', { class: 'path-note' },
+          'The start record has no resolved producer-claimed parent or chain predecessor in the current response.',
+        ),
+        el('ol', { class: 'primary-trace-list' },
+          renderPrimaryTracePathItem(path.nodes[0], null),
+        ),
+      ),
+    )
+  }
+
+  const items = path.nodes.map((node, index) =>
+    renderPrimaryTracePathItem(node, index === 0 ? null : path.edges[index - 1]),
+  )
+
+  return el('section', { class: 'panel primary-trace-path' },
+    sectionHead,
+    el('div', { class: 'panel-body' },
+      el('p', { class: 'path-note' },
+        'One deterministic reading path over the merged provenance and chain graph. The full graph below keeps every resolved edge.',
+      ),
+      el('ol', { class: 'primary-trace-list' }, items),
+    ),
+  )
+}
+
+function renderPrimaryTracePathItem(node, edge) {
+  const recordHash = node.record_hash || ''
+  const via = edge ? `via ${primaryTraceEdgeLabel(edge.type)}` : 'start'
+  return el('li', {},
+    el('span', { class: 'via' }, via),
+    renderEventChip(node.event_type, node.creator_key, node.event_type_uri),
+    recordHash
+      ? el('a', { href: `/action/${recordHash}`, class: 'mono' }, shorten(recordHash, 14, 6))
+      : el('span', { class: 'mono' }, 'unknown'),
+    node.timestamp
+      ? el('span', { class: 'meta', style: 'font-size: 12px; text-align: right;' }, timeAgo(node.timestamp))
+      : el('span', { class: 'meta', style: 'font-size: 12px; text-align: right;' }, 'n/a'),
+  )
+}
+
 // Render a compact "Chain predecessors" section as a linear sequence of
 // record links. The chain endpoint per §3.4.6 walks chain_precedes
 // backward, substrate-derived ordering, distinct from the
@@ -5919,6 +6034,7 @@ async function renderTrace(rawHash) {
     edgeLegendRow,
   )
   const truncationSlot = el('div')
+  const primaryPathSlot = el('div')
   const startSummary = el('section', { class: 'panel', style: 'margin-top: 24px;' },
     el('div', { class: 'panel-head' },
       el('h2', {}, 'start record'),
@@ -5929,6 +6045,7 @@ async function renderTrace(rawHash) {
   )
 
   root.append(
+    primaryPathSlot,
     el('section', { class: 'panel flush' },
       el('div', { class: 'panel-head' },
         el('h2', {}, 'ancestry graph'),
@@ -6052,6 +6169,9 @@ async function renderTrace(rawHash) {
   const graph = mergeGraphs(traceGraph, chainGraph)
   const nodeCount = graph.nodes.length
   const edgeCount = graph.edges.length
+  primaryPathSlot.replaceChildren(
+    renderPrimaryTracePathPanel(buildPrimaryTracePath(graph, fullHash, depth)),
+  )
 
   // Pre-resolve identity claims so renderIdentityLabel can pull synchronously.
   const creatorKeys = [...new Set(graph.nodes.map((n) => n.creator_key).filter(Boolean))]

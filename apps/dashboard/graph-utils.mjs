@@ -131,6 +131,140 @@ export function normalizeGraphRecordHash(value) {
   return ''
 }
 
+export const PRIMARY_TRACE_EDGE_ORDER = [
+  'INFORMED_BY',
+  'REVISES',
+  'ANNOTATES',
+  'PROVENANCE_OF',
+  'CHAIN_PRECEDES',
+]
+
+const PRIMARY_TRACE_EDGE_RANK = new Map(
+  PRIMARY_TRACE_EDGE_ORDER.map((type, index) => [type, index]),
+)
+
+function primaryTraceNodeSummary(node, recordHash) {
+  return {
+    record_hash: recordHash,
+    event_type: node?.event_type || 'unknown',
+    event_type_uri: node?.event_type_uri || null,
+    creator_key: node?.creator_key || null,
+    context_id: node?.context_id || null,
+    timestamp: typeof node?.timestamp === 'number' ? node.timestamp : null,
+  }
+}
+
+function primaryTraceCandidate(edge, currentHash) {
+  if (!edge || !PRIMARY_TRACE_EDGE_RANK.has(edge.type)) return null
+
+  const source = normalizeGraphRecordHash(edge.source)
+  const target = normalizeGraphRecordHash(edge.target)
+
+  if (edge.type !== 'CHAIN_PRECEDES' && source === currentHash && target) {
+    return {
+      edge_type: edge.type,
+      to: target,
+      direction: 'producer_claim',
+    }
+  }
+
+  if (edge.type === 'CHAIN_PRECEDES' && target === currentHash && source) {
+    return {
+      edge_type: edge.type,
+      to: source,
+      direction: 'structural_parent',
+    }
+  }
+
+  return null
+}
+
+/**
+ * Pick one readable backward path through a merged trace + chain graph.
+ *
+ * The graph itself remains the source of truth. This helper is only a
+ * presentation rule for humans: follow producer-claimed ancestry first, then
+ * fall back to the structural chain parent when no claim edge is present.
+ */
+export function buildPrimaryTracePath(graphData, startHash, maxHops = 20) {
+  const startRecordHash = normalizeGraphRecordHash(startHash)
+  const nodesByHash = new Map()
+  for (const node of graphData?.nodes || []) {
+    if (isGraphReferenceNode(node) && graphReferenceStatus(node) !== 'external') continue
+    const recordHash = normalizeGraphRecordHash(node)
+    if (!recordHash || nodesByHash.has(recordHash)) continue
+    nodesByHash.set(recordHash, node)
+  }
+
+  if (!startRecordHash || !nodesByHash.has(startRecordHash)) {
+    return {
+      start_record_hash: startRecordHash,
+      selection_policy: PRIMARY_TRACE_EDGE_ORDER,
+      nodes: [],
+      edges: [],
+      terminal_reason: 'start-not-found',
+    }
+  }
+
+  const pathNodes = [primaryTraceNodeSummary(nodesByHash.get(startRecordHash), startRecordHash)]
+  const pathEdges = []
+  const visited = new Set([startRecordHash])
+  let currentHash = startRecordHash
+  let terminalReason = 'no-parent'
+
+  for (let hop = 0; hop < maxHops; hop++) {
+    const allCandidates = []
+    for (const edge of graphData?.edges || []) {
+      const candidate = primaryTraceCandidate(edge, currentHash)
+      if (!candidate) continue
+      if (!nodesByHash.has(candidate.to)) continue
+      allCandidates.push(candidate)
+    }
+
+    const candidates = allCandidates.filter((candidate) => !visited.has(candidate.to))
+    if (candidates.length === 0) {
+      terminalReason = allCandidates.some((candidate) => visited.has(candidate.to))
+        ? 'cycle'
+        : 'no-parent'
+      break
+    }
+
+    candidates.sort((a, b) => {
+      const rankA = PRIMARY_TRACE_EDGE_RANK.get(a.edge_type) ?? Number.MAX_SAFE_INTEGER
+      const rankB = PRIMARY_TRACE_EDGE_RANK.get(b.edge_type) ?? Number.MAX_SAFE_INTEGER
+      if (rankA !== rankB) return rankA - rankB
+      const nodeA = nodesByHash.get(a.to)
+      const nodeB = nodesByHash.get(b.to)
+      const tsA = typeof nodeA?.timestamp === 'number' ? nodeA.timestamp : 0
+      const tsB = typeof nodeB?.timestamp === 'number' ? nodeB.timestamp : 0
+      if (tsA !== tsB) return tsB - tsA
+      return a.to < b.to ? -1 : a.to > b.to ? 1 : 0
+    })
+
+    const chosen = candidates[0]
+    pathEdges.push({
+      from: currentHash,
+      to: chosen.to,
+      type: chosen.edge_type,
+      direction: chosen.direction,
+    })
+    currentHash = chosen.to
+    visited.add(currentHash)
+    pathNodes.push(primaryTraceNodeSummary(nodesByHash.get(currentHash), currentHash))
+    terminalReason = 'no-parent'
+  }
+
+  if (pathEdges.length >= maxHops) terminalReason = 'depth-limit'
+
+  return {
+    start_record_hash: startRecordHash,
+    selection_policy: PRIMARY_TRACE_EDGE_ORDER,
+    nodes: pathNodes,
+    edges: pathEdges,
+    terminal_reason: terminalReason,
+  }
+}
+
 export function graphReferenceStatus(value) {
   const status = value?.reference_status
   return status === 'external' || status === 'missing' ? status : 'unresolved'
@@ -144,7 +278,11 @@ export function referenceStatusLabel(status) {
 
 export function isGraphReferenceNode(node) {
   if (!node) return false
-  return node.event_type === 'dangling_node' || node.event_type === 'gap_node' || Boolean(node.reference_status)
+  return (
+    node.event_type === 'dangling_node' ||
+    node.event_type === 'gap_node' ||
+    Boolean(node.reference_status)
+  )
 }
 
 export function summarizeGraphNodes(nodes = []) {
@@ -328,7 +466,10 @@ export function computeNeighborhood(graph, hoveredId) {
  * degenerate FA2 step).
  */
 export function computeGraphBBox(positionsLike) {
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity
   let count = 0
   if (typeof positionsLike?.forEachNode === 'function') {
     positionsLike.forEachNode((_id, attrs) => {
@@ -506,7 +647,10 @@ export function buildReplayGraphFromEntries(entries, options = {}) {
  */
 export function computeDemoGraphSignature(graph) {
   const nodes = Array.isArray(graph?.nodes)
-    ? graph.nodes.map((node) => node.id).sort().join('|')
+    ? graph.nodes
+        .map((node) => node.id)
+        .sort()
+        .join('|')
     : ''
   const edges = Array.isArray(graph?.edges)
     ? graph.edges
@@ -539,9 +683,8 @@ export function computeDemoLaneOffset(node, index, totalNodes = 0) {
   }
   const baseLane = laneByEventType[eventType] ?? 0
   const wave = ((Math.max(0, index) % 5) - 2) * 18
-  const arc = totalNodes > 1
-    ? Math.sin((Math.max(0, index) / Math.max(1, totalNodes - 1)) * Math.PI) * 22
-    : 0
+  const arc =
+    totalNodes > 1 ? Math.sin((Math.max(0, index) / Math.max(1, totalNodes - 1)) * Math.PI) * 22 : 0
   return baseLane + wave + arc
 }
 

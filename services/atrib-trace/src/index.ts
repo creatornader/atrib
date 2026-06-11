@@ -17,10 +17,7 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import {
-  resolveEnvContextId,
-  logReadPrimitiveCall,
-} from '@atrib/mcp'
+import { resolveEnvContextId, logReadPrimitiveCall } from '@atrib/mcp'
 import { loadAllRecords } from './storage.js'
 import { traceBackward, traceForward, type TraceVisited } from './trace.js'
 
@@ -28,38 +25,63 @@ const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
 const HEX_32_PATTERN = /^[0-9a-f]{32}$/
 
 const TraceInput = z.object({
-  record_hash: z.string().regex(SHA256_REF_PATTERN).describe(
-    "The 'sha256:<64-hex>' record_hash to start from. Walks backward via " +
-    'informed_by edges from this record.',
-  ),
-  context_id: z.string().regex(HEX_32_PATTERN).optional().describe(
-    'Optional 32-hex context_id scope. When set, edges crossing into a ' +
-    'different context_id surface as dangling rather than expanding the ' +
-    'walk. Defaults to process.env.ATRIB_CONTEXT_ID when valid; omit at ' +
-    'the env-var level to walk cross-context. Used by Inspect-style ' +
-    'harnesses to keep each arm\'s trace inside its own context per D072.',
-  ),
-  depth: z.number().int().min(0).max(10).optional().describe(
-    'Maximum hop count from the starting record. Use 0 to return only ' +
-    'the start record. Defaults to 3. Bounded ' +
-    'at 10 to keep responses tractable; deeper chains should be walked ' +
-    'in pieces by re-rooting at a returned upstream hash.',
-  ),
-  max_nodes: z.number().int().min(1).max(500).optional().describe(
-    'Hard cap on total visited records. Defaults to 200. Prevents pathological ' +
-    'fan-out (a record with hundreds of informed_by entries) from exploding ' +
-    'the response.',
-  ),
-  compact: z.boolean().optional().describe(
-    'When true (the default), per-record output omits signature/content_id/' +
-    'spec_version/chain_root to keep the response small. Set false for full ' +
-    'record bytes (useful for re-verification).',
-  ),
-  include_content: z.boolean().optional().describe(
-    'When true and compact=true, include the D062 local mirror body as ' +
-    'local_content and local_producer on each visited record. Defaults false ' +
-    'so trace stays cheap for ordinary causal walks.',
-  ),
+  record_hash: z
+    .string()
+    .regex(SHA256_REF_PATTERN)
+    .describe(
+      "The 'sha256:<64-hex>' record_hash to start from. Walks backward via " +
+        'informed_by edges from this record.',
+    ),
+  context_id: z
+    .string()
+    .regex(HEX_32_PATTERN)
+    .optional()
+    .describe(
+      'Optional 32-hex context_id scope. When set, edges crossing into a ' +
+        'different context_id surface as dangling rather than expanding the ' +
+        'walk. Defaults to process.env.ATRIB_CONTEXT_ID when valid; omit at ' +
+        'the env-var level to walk cross-context. Used by Inspect-style ' +
+        "harnesses to keep each arm's trace inside its own context per D072.",
+    ),
+  depth: z
+    .number()
+    .int()
+    .min(0)
+    .max(10)
+    .optional()
+    .describe(
+      'Maximum hop count from the starting record. Use 0 to return only ' +
+        'the start record. Defaults to 3. Bounded ' +
+        'at 10 to keep responses tractable; deeper chains should be walked ' +
+        'in pieces by re-rooting at a returned upstream hash.',
+    ),
+  max_nodes: z
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .optional()
+    .describe(
+      'Hard cap on total visited records. Defaults to 200. Prevents pathological ' +
+        'fan-out (a record with hundreds of informed_by entries) from exploding ' +
+        'the response.',
+    ),
+  compact: z
+    .boolean()
+    .optional()
+    .describe(
+      'When true (the default), per-record output omits signature/content_id/' +
+        'spec_version/chain_root to keep the response small. Set false for full ' +
+        'record bytes (useful for re-verification).',
+    ),
+  include_content: z
+    .boolean()
+    .optional()
+    .describe(
+      'When true and compact=true, include the D062 local mirror body as ' +
+        'local_content and local_producer on each visited record. Defaults false ' +
+        'so trace stays cheap for ordinary causal walks.',
+    ),
 })
 
 interface CompactVisited {
@@ -90,6 +112,8 @@ interface CompactVisited {
     model_name?: string
     prompt_version?: string
     topics?: string[]
+    intent?: string
+    rationale?: string
     /**
      * First 200 chars of the record's human-readable content, derived
      * per event_type from the @atrib/mcp normative shapes (D086):
@@ -130,8 +154,17 @@ export function summarizeSidecar(
   if (c && typeof c['span_name'] === 'string') out.span_name = c['span_name']
   if (c && typeof c['model_name'] === 'string') out.model_name = c['model_name']
   if (c && typeof c['prompt_version'] === 'string') out.prompt_version = c['prompt_version']
+  if (c && typeof c['intent'] === 'string') {
+    out.intent = c['intent'].length > 200 ? c['intent'].slice(0, 197) + '...' : c['intent']
+  }
+  if (c && typeof c['rationale'] === 'string') {
+    out.rationale =
+      c['rationale'].length > 200 ? c['rationale'].slice(0, 197) + '...' : c['rationale']
+  }
   if (c && Array.isArray(c['topics'])) {
-    out.topics = (c['topics'] as unknown[]).filter((t): t is string => typeof t === 'string').slice(0, 6)
+    out.topics = (c['topics'] as unknown[])
+      .filter((t): t is string => typeof t === 'string')
+      .slice(0, 6)
   }
   // Per-event_type human-readable text. The `what` slot here is generic
   // (it's the human-scannable summary regardless of event_type); the
@@ -210,8 +243,9 @@ export function extractRecordHashFieldsFromMcpResult(result: unknown): string[] 
   const pattern = /^sha256:[0-9a-f]{64}$/
   const content = (result as { content?: unknown })?.content
   const text =
-    Array.isArray(content) && typeof (content[0] as { text?: unknown } | undefined)?.text === 'string'
-      ? ((content[0] as { text: string }).text)
+    Array.isArray(content) &&
+    typeof (content[0] as { text?: unknown } | undefined)?.text === 'string'
+      ? (content[0] as { text: string }).text
       : undefined
   let root: unknown = result
   if (text) {
@@ -263,7 +297,9 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
           direction: result.direction,
           depth_requested: result.depth_requested,
           depth_reached: result.depth_reached,
-          visited: result.visited.map((v) => compactVisited(v, danglingSet, byHash, includeContent)),
+          visited: result.visited.map((v) =>
+            compactVisited(v, danglingSet, byHash, includeContent),
+          ),
           dangling: result.dangling,
           truncated_by_depth: result.truncated_by_depth,
           truncated_by_cap: result.truncated_by_cap,
@@ -277,7 +313,7 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
     {
       title: 'trace informed_by chain backward',
       description:
-        'Walk a record\'s informed_by chain backward to surface the reasoning ' +
+        "Walk a record's informed_by chain backward to surface the reasoning " +
         'chain that led to it. Reads from the local signed-record mirror ' +
         '(~/.atrib/records/*.jsonl). Returns the records visited, parent links ' +
         'so the caller can reconstruct the tree, and dangling hashes (records ' +
@@ -308,7 +344,16 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
             ...(contextId ? { contextId } : {}),
           })
           return {
-            content: [{ type: 'text', text: JSON.stringify(buildPayload(result, byHash, compact, includeContent), null, 2) }],
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  buildPayload(result, byHash, compact, includeContent),
+                  null,
+                  2,
+                ),
+              },
+            ],
           }
         },
         extractRecordHashFieldsFromMcpResult,
@@ -348,7 +393,16 @@ export async function createAtribTraceServer(): Promise<AtribTraceServer> {
             ...(contextId ? { contextId } : {}),
           })
           return {
-            content: [{ type: 'text', text: JSON.stringify(buildPayload(result, byHash, compact, includeContent), null, 2) }],
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  buildPayload(result, byHash, compact, includeContent),
+                  null,
+                  2,
+                ),
+              },
+            ],
           }
         },
         extractRecordHashFieldsFromMcpResult,
