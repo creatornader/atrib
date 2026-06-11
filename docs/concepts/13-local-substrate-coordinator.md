@@ -65,7 +65,7 @@ node scripts/check-local-substrate-coordinator-fixtures.mjs
 
 The validator checks body equality, pinned canonical hashes, non-blocking fallback, and the health-report fields needed before rollout.
 
-The shared TypeScript contract lives in `@atrib/mcp` as request and response validators, canonical body hashing, fixture validation, an opt-in coordinator client shim, explicit HTTP transport helper, an in-process startup-spawn prototype, middleware shadow probes, and read-only health-probe helpers. Wrappers, emit-like producers, and watcher pipelines should consume that surface rather than minting a parallel schema. The prototype is still opt-in; the package defines the adapter boundary and rollout-gate probes without making a daemon required.
+The shared TypeScript contract lives in `@atrib/mcp` as request and response validators, canonical body hashing, fixture validation, an opt-in coordinator client shim, explicit HTTP transport helper, a matching server-side HTTP handler, an in-process coordinator prototype, middleware shadow probes, and read-only health-probe helpers. Wrappers, emit-like producers, and watcher pipelines should consume that surface rather than minting a parallel schema. The prototype and HTTP handler are still opt-in; the package defines the adapter boundary and rollout-gate probes without making a daemon required.
 
 ## Worked Example
 
@@ -96,9 +96,13 @@ Current `@atrib/mcp-wrap` wiring uses `mode: "shadow_probe"`, not coordinator-ow
 
 `@atrib/emit` uses the same shadow-only posture for the `long-lived-agent` class. The emit path validates and signs the record locally, strips `signature` back out to recover the exact unsigned body, and sends that body to the coordinator with a `long-lived-agent` producer envelope. `emitInProcess()` waits only for the configured shadow timeout so short-lived hook producers do not exit before telemetry lands; the emit MCP server can keep the attempt in the background. `atrib-emit-cli`, `@atrib/annotate`, and `@atrib/revise` can opt in through `ATRIB_LOCAL_SUBSTRATE_ENDPOINT` with `ATRIB_LOCAL_SUBSTRATE_MODE=shadow`, or through an explicit transport in embedded hosts. The response is telemetry only: local signing, mirror append, and queue submission remain the committed path.
 
+The watcher-WAL prototype uses commit mode rather than shadow mode. A watcher sends `operation: "enqueue_record_and_join_receipt"` with explicit WAL metadata: `entry_id`, `source_path`, and `receipt_join_field`. The in-process coordinator signs the same unsigned body, returns `record_hash` plus `receipt_id`, calls its observer with the WAL metadata, and exposes WAL pending/joined/orphan counts in the health report. This proves the coordinator can own the receipt boundary for one watcher path without mutating signed bytes. It is not yet a launchd-owned daemon or default runtime.
+
+The service-hosting slice exposes the same coordinator through `createLocalSubstrateCoordinatorHttpHandler()`. A host can attach that handler to Node HTTP, Hono, Bun, Deno, launchd supervision, or an equivalent local runtime. `POST /atrib/local-substrate` accepts coordinator requests. `GET` or `HEAD /atrib/local-substrate` and `/atrib/local-substrate/health` return the read-only health probe. This is a hosting boundary only; it does not add another package, MCP server, event type, or default background process.
+
 ## Rollout Gate
 
-The current implementation slices provide an in-process startup-spawn prototype, `@atrib/mcp-wrap` HTTP shadow probes, and `@atrib/emit` long-lived-agent shadow probes behind opt-in config. They should not become default until a process-health report shows:
+The current implementation slices provide an in-process startup-spawn prototype, watcher-WAL commit-mode proof, `@atrib/mcp-wrap` HTTP shadow probes, `@atrib/emit` long-lived-agent shadow probes, and a shared HTTP handler for supervised local service hosts behind opt-in config. They should not become default until a process-health report shows:
 
 - one startup-spawn harness can call the coordinator without extra stale children
 - one long-lived local assistant or scheduled producer can call it under supervisor ownership

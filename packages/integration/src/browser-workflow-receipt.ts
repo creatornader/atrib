@@ -562,6 +562,22 @@ export async function runBrowserUseWorkflowReceiptSmoke(): Promise<BrowserUseWor
 }
 
 export async function runStagehandWorkflowReceiptSmoke(): Promise<StagehandWorkflowSmokeResult> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await runStagehandWorkflowReceiptSmokeOnce()
+    } catch (error) {
+      lastError = error
+      if (attempt === 3 || !isTransientStagehandLocalBrowserError(error)) {
+        throw error
+      }
+      await delay(250 * attempt)
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+}
+
+async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflowSmokeResult> {
   const privateKey = new Uint8Array(32).fill(26)
   const contextId = '737461676568616e642d70726f6f6630'
   const privatePhrase = 'private stagehand note: vendor risk reviewed'
@@ -581,6 +597,7 @@ export async function runStagehandWorkflowReceiptSmoke(): Promise<StagehandWorkf
     now: timestampClock(1_779_840_200_000),
   })
 
+  let actionFailed = false
   try {
     await stagehand.init()
     const page = stagehand.context.pages()[0]
@@ -762,9 +779,34 @@ export async function runStagehandWorkflowReceiptSmoke(): Promise<StagehandWorkf
           finalReceipt.confirmation_id === 'stagehand-workflow-receipt-001',
       },
     }
+  } catch (error) {
+    actionFailed = true
+    throw error
   } finally {
-    await stagehand.close()
+    try {
+      await stagehand.close()
+    } catch (error) {
+      if (!actionFailed) {
+        throw error
+      }
+    }
   }
+}
+
+function isTransientStagehandLocalBrowserError(error: unknown): boolean {
+  return /connect ECONNREFUSED 127\.0\.0\.1/i.test(errorMessageWithCauses(error))
+}
+
+function errorMessageWithCauses(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = 'cause' in error ? (error as Error & { cause?: unknown }).cause : undefined
+    return `${error.name}: ${error.message}\n${cause === undefined ? '' : errorMessageWithCauses(cause)}`
+  }
+  return String(error)
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export function resolveBrowserWorkflowPrivateKey(value?: Uint8Array | string): Uint8Array {

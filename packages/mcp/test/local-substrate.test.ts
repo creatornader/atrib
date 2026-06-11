@@ -9,7 +9,9 @@ import {
   canonicalRecord,
   createHttpLocalSubstrateTransport,
   createInProcessLocalSubstrateCoordinator,
+  createLocalSubstrateCoordinatorHttpHandler,
   encodeToken,
+  handleLocalSubstrateCoordinatorHttpRequest,
   hashLocalSubstrateRecordBody,
   hexEncode,
   localSubstrateRecordBodiesEqual,
@@ -373,6 +375,94 @@ describe('local substrate coordinator contract', () => {
     expect(JSON.parse(String(seen[0]!.init.body))).toEqual(fixture.input.coordinator_request)
   })
 
+  it('serves coordinator POST and health over the shared HTTP handler', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
+    const observed: AtribRecord[] = []
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: fixtureSeed(0x11),
+      logSubmission: 'disabled',
+      onRecord: (record) => {
+        observed.push(record)
+      },
+      health: {
+        pid: 777,
+        version: '0.0.0-test',
+        transport: 'http://127.0.0.1:8787/atrib/local-substrate',
+      },
+    })
+    const handler = createLocalSubstrateCoordinatorHttpHandler(coordinator)
+    const fetchImpl: typeof fetch = async (input, init) => {
+      return (
+        (await handler(new Request(String(input), init))) ??
+        new Response('not found', { status: 404 })
+      )
+    }
+    const transport = createHttpLocalSubstrateTransport(
+      'http://127.0.0.1:8787/atrib/local-substrate',
+      { fetch: fetchImpl },
+    )
+
+    const result = await tryLocalSubstrateCoordinator(fixture.input.coordinator_request, {
+      transport,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.status).toBe('accepted')
+    expect(observed).toHaveLength(1)
+
+    const healthResponse = await handler(
+      new Request('http://127.0.0.1:8787/atrib/local-substrate/health'),
+    )
+    expect(healthResponse?.status).toBe(200)
+    const health = (await healthResponse!.json()) as ReturnType<typeof coordinator.health>
+    expect(health.status).toBe('healthy')
+    expect(health.report.coordinator.pid).toBe(777)
+    expect(health.report.contexts.active).toEqual([
+      fixture.input.coordinator_request.record_body.context_id,
+    ])
+
+    const headResponse = await handler(
+      new Request('http://127.0.0.1:8787/atrib/local-substrate', { method: 'HEAD' }),
+    )
+    expect(headResponse?.status).toBe(200)
+    expect(await headResponse!.text()).toBe('')
+
+    coordinator.destroy()
+  })
+
+  it('keeps HTTP service request failures outside the coordinator hot path', async () => {
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: fixtureSeed(0x11),
+      logSubmission: 'disabled',
+    })
+
+    const invalidRequest = await handleLocalSubstrateCoordinatorHttpRequest(
+      coordinator,
+      'POST',
+      '/atrib/local-substrate',
+      { schema: 'wrong-schema' },
+    )
+    const missing = await handleLocalSubstrateCoordinatorHttpRequest(
+      coordinator,
+      'GET',
+      '/not-an-atrib-route',
+    )
+    const invalidJson = await createLocalSubstrateCoordinatorHttpHandler(coordinator)(
+      new Request('http://127.0.0.1:8787/atrib/local-substrate', {
+        method: 'POST',
+        body: 'not-json',
+      }),
+    )
+
+    expect(invalidRequest?.status).toBe(400)
+    expect(JSON.parse(invalidRequest!.body)).toMatchObject({ error: 'invalid_request' })
+    expect(missing).toBeNull()
+    expect(invalidJson?.status).toBe(400)
+    expect(await invalidJson!.json()).toMatchObject({ error: 'invalid_json' })
+
+    coordinator.destroy()
+  })
+
   it('signs startup-spawn records through the in-process coordinator prototype', async () => {
     const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
     const observed: AtribRecord[] = []
@@ -411,6 +501,63 @@ describe('local substrate coordinator contract', () => {
     ])
     expect(result.response.health_report?.processes.active_wrappers).toBe(1)
     expect(coordinator.health().status).toBe('healthy')
+
+    await coordinator.flush()
+    coordinator.destroy()
+  })
+
+  it('signs watcher WAL records through commit mode with receipt join metadata', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/watcher-wal-annotation.json')
+    const observed: Array<{ record: AtribRecord; receiptId: string; walEntryId?: string }> = []
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: fixtureSeed(0x11),
+      supportedHarnessClasses: ['watcher-wal'],
+      logSubmission: 'disabled',
+      onRecord: (record, context) => {
+        observed.push({
+          record,
+          receiptId: context.receipt_id,
+          walEntryId: context.request.wal?.entry_id,
+        })
+      },
+      health: {
+        pid: 402,
+        version: '0.0.0-test',
+        transport: 'in-process-test',
+        walPending: 1,
+        walJoined: 42,
+        walOrphanReceipts: 0,
+      },
+    })
+
+    const result = await tryLocalSubstrateCoordinator(fixture.input.coordinator_request, {
+      expectedHarnessClass: 'watcher-wal',
+      directRecordBody: fixture.input.direct_record_body,
+      transport: coordinator.transport,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.status).toBe('accepted')
+    if (!result.ok) {
+      throw new Error(result.status)
+    }
+
+    expect(observed).toHaveLength(1)
+    const signed = observed[0]!.record
+    expect(await verifyRecord(signed)).toBe(true)
+    expect(observed[0]!.receiptId).toBe(result.response.receipt_id)
+    expect(observed[0]!.walEntryId).toBe(fixture.input.coordinator_request.wal?.entry_id)
+    expect(result.response.operation).toBe('enqueue_record_and_join_receipt')
+    expect(result.response.receipt_id).toBe(encodeToken(signed))
+    expect(result.response.record_hash).toBe(`sha256:${hexEncode(sha256(canonicalRecord(signed)))}`)
+    expect(result.response.health_report?.contexts.active).toEqual([
+      fixture.input.coordinator_request.record_body.context_id,
+    ])
+    expect(result.response.health_report?.wal).toMatchObject({
+      pending: 1,
+      joined: 42,
+      orphan_receipts: 0,
+    })
 
     await coordinator.flush()
     coordinator.destroy()
