@@ -1,0 +1,29 @@
+{
+  "name": "auth-token-missing-act-fails",
+  "kind": "claims",
+  "input": {
+    "protocol": "aauth",
+    "tokenKind": "auth_token",
+    "claimsVerified": true,
+    "claims": {
+      "iss": "https://ps.example",
+      "dwk": "aauth-person.json",
+      "aud": "https://api.example",
+      "agent": "aauth:researcher@example.com",
+      "sub": "user-pairwise-123",
+      "scope": "files:read",
+      "jti": "auth-jti-missing-act",
+      "iat": 1700000000,
+      "exp": 1700000300
+    },
+    "issuer": "https://ps.example",
+    "audience": "https://api.example",
+    "expectedAgent": "aauth:researcher@example.com",
+    "nowSeconds": 1700000100
+  },
+  "expected": {
+    "valid": false,
+    "constraints": [{ "type": "act.sub", "status": "failed" }],
+    "errors": ["aauth_evidence constraint failed: act.sub"]
+  }
+}

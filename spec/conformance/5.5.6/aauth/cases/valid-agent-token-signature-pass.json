@@ -1,0 +1,39 @@
+{
+  "name": "valid-agent-token-signature-pass",
+  "kind": "jwt",
+  "includeCnfJwk": true,
+  "bindCnfJkt": true,
+  "bindHttpSignature": true,
+  "input": {
+    "protocol": "aauth",
+    "tokenKind": "agent_token",
+    "accessMode": "agent-token",
+    "issuer": "https://ap.example",
+    "expectedAgent": "aauth:researcher@example.com",
+    "nowSeconds": 1700000100,
+    "httpSignature": {
+      "verified": true,
+      "scheme": "jwt",
+      "coveredComponents": ["@method", "@authority", "@path", "signature-key"]
+    }
+  },
+  "jwtClaims": {
+    "iss": "https://ap.example",
+    "dwk": "aauth-agent.json",
+    "sub": "aauth:researcher@example.com",
+    "jti": "agent-jti-1",
+    "iat": 1700000000,
+    "exp": 1700000600
+  },
+  "expected": {
+    "valid": true,
+    "constraints": [
+      { "type": "aauth.token_type", "status": "passed" },
+      { "type": "agent", "status": "passed" },
+      { "type": "cnf.jwk", "status": "passed" },
+      { "type": "http_signature.verified", "status": "passed" },
+      { "type": "http_signature.cnf_binding", "status": "passed" }
+    ],
+    "errors": []
+  }
+}

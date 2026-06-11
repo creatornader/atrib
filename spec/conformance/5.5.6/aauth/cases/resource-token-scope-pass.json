@@ -1,0 +1,36 @@
+{
+  "name": "resource-token-scope-pass",
+  "kind": "jwt",
+  "bindAgentJkt": true,
+  "input": {
+    "protocol": "aauth",
+    "tokenKind": "resource_token",
+    "accessMode": "auth-token",
+    "issuer": "https://resource.example",
+    "audience": "https://ps.example",
+    "expectedAgent": "aauth:researcher@example.com",
+    "requiredScopes": ["files:read"],
+    "nowSeconds": 1700000100
+  },
+  "jwtClaims": {
+    "iss": "https://resource.example",
+    "dwk": "aauth-resource.json",
+    "aud": "https://ps.example",
+    "agent": "aauth:researcher@example.com",
+    "scope": "files:read files:write",
+    "jti": "resource-jti-1",
+    "iat": 1700000000,
+    "exp": 1700000300
+  },
+  "expected": {
+    "valid": true,
+    "constraints": [
+      { "type": "aauth.token_type", "status": "passed" },
+      { "type": "audience", "status": "passed" },
+      { "type": "agent", "status": "passed" },
+      { "type": "scope", "status": "passed" },
+      { "type": "agent_jkt", "status": "passed" }
+    ],
+    "errors": []
+  }
+}

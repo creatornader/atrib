@@ -259,6 +259,49 @@ The shared endpoint must atomically remember the posted key until `expires_at_se
 
 Producer-side MCP capture lives in `@atrib/mcp` behind the opt-in `authorizationEvidence` option. The producer writes evidence into the local-only sidecar without storing raw bearer tokens by default. Verifiers can pass that sidecar's `authorizationEvidence` and `resolvedFacts` to `verifyRecord()`.
 
+### `verifyAAuthAuthorizationEvidence(evidence): Promise<AAuthAuthorizationEvidenceVerification>`
+
+Verifier-side AAuth authorization evidence checking. This runs outside the record signature path and does not fetch AAuth metadata, fetch JWKS, mint tokens, call a PS, call an AS, or perform user interaction. Callers supply a compact AAuth JWT plus trusted JWKS, caller-verified claims, or decoded claims under an explicit `signaturePolicy`.
+
+```typescript
+import { verifyRecord } from '@atrib/verify'
+
+const result = await verifyRecord(record, {
+  authorizationEvidence: [
+    {
+      protocol: 'aauth',
+      tokenKind: 'auth_token',
+      accessMode: 'auth-token',
+      tokenJwt: authTokenJwt,
+      jwks: [issuerJwk],
+      issuer: 'https://ps.example',
+      audience: 'https://api.example',
+      resource: 'https://api.example',
+      requiredScopes: ['files:read'],
+      expectedAgent: 'aauth:researcher@example.com',
+      expectedActSubject: 'aauth:researcher@example.com',
+      httpSignature: {
+        verified: true,
+        scheme: 'jwt',
+        coveredComponents: ['@method', '@authority', '@path', 'signature-key'],
+        signingKeyJkt,
+      },
+    },
+  ],
+})
+```
+
+Checks performed when evidence is present:
+
+- AAuth JWT type (`aa-agent+jwt`, `aa-resource+jwt`, or `aa-auth+jwt`), signature, `iss`, `aud`, `exp`, `iat`, and clock-skew checks when `tokenJwt` and `jwks` are supplied.
+- Resource binding through `aud`, token `resource`, and caller-supplied `aauth-resource.json` facts such as `access_mode`.
+- Required scopes from the token `scope` claim.
+- Agent, subject, `parent_agent`, `act.sub`, and mission reference checks.
+- HTTP Message Signature evidence: caller-verified signature status, covered components, `Authorization` coverage for `AAuth-Access`, and signing-key binding through `cnf.jwk` / `agent_jkt`.
+- Optional R3 document hash checks when the caller supplies R3 evidence.
+
+The default signature policy is `require`. Missing trusted keys or unverified decoded claims make the evidence block invalid. Use `signaturePolicy: "best-effort"` or `"off"` only for advisory review where the caller has already made its own trust decision. The offline corpus for this adapter lives at [`spec/conformance/5.5.6/aauth/`](https://github.com/creatornader/atrib/blob/main/spec/conformance/5.5.6/aauth/).
+
 ### `verifyAp2ViEvidence(...)` and `verifyAp2ViEvidenceAsync(...)`
 
 AP2 / Verifiable Intent evidence checking for merchants and auditors. This runs outside the transaction detector path. It does not alter the graph, the settlement calculation, or record validity. It answers a narrower question: did the AP2 receipts and VI mandate chain form a coherent evidence bundle?
@@ -352,6 +395,7 @@ For advanced use (custom calculators, alternative signing flows), the package al
 - `verifyAp2ViEvidenceAsync(bundle, options?)`: compact AP2 receipt JWT verification, async VI SD-JWT / VC conformance, plus decoded evidence checks. `verifyRecord()` and `AtribVerifier.verify()` call this when supplied with `ap2ViEvidence`
 - `verifyAuthorizationEvidence(evidence)`: generic external authorization evidence dispatch for `verifyRecord()` evidence blocks
 - `verifyOAuthAuthorizationEvidence(evidence)`: OAuth / MCP authorization evidence checks for access-token JWTs or caller-verified claims
+- `verifyAAuthAuthorizationEvidence(evidence)`: AAuth authorization evidence checks for agent, resource, and auth tokens plus caller-verified HTTP signature facts
 - `introspectOAuthToken(options)`: host-owned OAuth token introspection helper for opaque-token evidence
 - `oauthEvidenceFromIntrospectionResult(result, base?)`: adapter from host-owned introspection result to OAuth evidence input
 - `createFetchDpopReplayCache(options)`: HTTP-backed DPoP replay-cache adapter for fleet-shared replay checks

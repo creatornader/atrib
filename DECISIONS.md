@@ -6006,6 +6006,109 @@ authorization edge types.
 
 ---
 
+## D119: AAuth evidence stays verifier-side
+
+**Date:** 2026-06-11
+
+**Status:** Accepted
+
+**Extends:** [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks),
+[D110](#d110-mcpoauth-evidence-capture-closes-the-producer-to-verifier-loop),
+[D111](#d111-host-owned-oauth-evidence-infrastructure),
+[D115](#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle),
+and [D116](#d116-producer-side-informed_by-validation-is-source-aware).
+
+**Context.** AAuth draft -02 defines an agent authorization protocol with
+per-instance agent identifiers, HTTP Message Signature proof of possession,
+agent/resource/auth tokens, `AAuth-Access`, missions, sub-agents, and Person
+Server / Authorization Server governance. It is adjacent to MCP/OAuth evidence,
+but it is not the same protocol surface: AAuth models agent identity and
+authorization across trust domains, while atrib records signed action history
+and durable verifier evidence.
+
+AAuth also names the audit gap atrib can help close. Request-time
+authentication proves the request was authorized at that moment. Long-term
+audit needs captured verification evidence because keys rotate, tokens expire,
+and metadata can change. That evidence belongs beside MCP/OAuth and AP2 / VI
+evidence in atrib's verifier layer.
+
+**Decision.** AAuth is a concrete generic authorization evidence adapter under
+`evidence[]` with `protocol: "aauth"`. It is not a new atrib `event_type`,
+graph edge, directory identity class, payment detector, or settlement input.
+
+`@atrib/verify` verifies caller-supplied AAuth JWTs and JWKS, caller-verified
+claims, or decoded claims under an explicit signature policy. It checks token
+type, issuer, audience, expiry, resource binding, scopes, agent and subject
+constraints, `parent_agent`, `act.sub`, mission references, HTTP Message
+Signature facts, `AAuth-Access` `Authorization` coverage, key binding through
+`cnf.jwk` or `agent_jkt`, and optional R3 facts. The verifier performs no hidden
+network fetches, metadata discovery, token minting, Person Server calls,
+Authorization Server calls, or user interaction.
+
+`@atrib/mcp` exposes `buildAAuthEvidenceFromEvent()` as the producer-side bridge
+for hosts that already receive AAuth events. The helper accepts TypeScript
+`createAAuthFetch()` / `onEvent` shaped callbacks, server verification-result
+shapes such as .NET `AAuthVerificationResult`, and Person Server audit-sink
+style events. It emits verifier-ready sidecar evidence with decoded token facts,
+caller-supplied verification status, HTTP signature facts, configured
+constraints, and a one-way token hash when token material is visible. It does
+not store raw AAuth JWTs by default.
+
+The offline corpus lives at `spec/conformance/5.5.6/aauth/`. It covers
+agent/resource/auth token cases, signature verification, `cnf` binding,
+expiry failures, mission and R3 evidence, `AAuth-Access` authorization coverage,
+and missing actor claims.
+
+The outreach path is artifact-first. The draft packet lives at
+[`docs/outreach/aauth-evidence-packet.md`](docs/outreach/aauth-evidence-packet.md).
+No external outreach is implied by this ADR.
+
+**Alternatives rejected.**
+
+- _Create an `aauth_authorization` event type._ Rejected. AAuth authorization is
+  external verifier evidence for an action, not a new class of action in the
+  atrib log.
+- _Treat AAuth as a subtype of MCP/OAuth._ Rejected. It shares the same evidence
+  lane, but its token types, access modes, missions, sub-agent fields, and HTTP
+  signature binding rules differ enough to deserve a protocol-specific adapter.
+- _Let the verifier fetch AAuth metadata and JWKS itself._ Rejected. The generic
+  evidence contract keeps network and trust policy host-owned. Hidden fetches
+  would make verification harder to reproduce.
+- _Persist raw AAuth JWTs by default._ Rejected. Sidecars and archive evidence
+  should preserve verifier facts and hashes by default. Raw tokens remain
+  caller-owned sensitive material.
+- _Lead with a partnership pitch._ Rejected. The useful first contact is a small
+  source-backed artifact tied to AAuth's audit and non-repudiation questions.
+
+**Consequences.**
+
+- AAuth evidence can render beside MCP/OAuth and AP2 / VI evidence without
+  changing base record validity, graph derivation, or settlement calculation.
+- The integration point is stable even if AAuth SDK event names change: producers
+  can map any verified callback, verification result, or audit event into the
+  same `protocol: "aauth"` evidence shape.
+- atrib has a concrete artifact for engaging AAuth maintainers: a verifier
+  adapter, conformance corpus, producer capture helper, and route packet.
+- Future work should wire the helper into a runnable AAuth TypeScript or .NET
+  example before any stronger public claim.
+
+**Cross-references.**
+
+- [§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks), generic
+  authorization evidence blocks.
+- [`packages/verify/src/aauth-evidence.ts`](packages/verify/src/aauth-evidence.ts),
+  AAuth evidence verifier.
+- [`packages/mcp/src/aauth-evidence.ts`](packages/mcp/src/aauth-evidence.ts),
+  producer-side AAuth evidence capture helper.
+- [`packages/verify/test/aauth-evidence-conformance.test.ts`](packages/verify/test/aauth-evidence-conformance.test.ts),
+  verifier conformance coverage.
+- [`packages/mcp/test/aauth-evidence.test.ts`](packages/mcp/test/aauth-evidence.test.ts),
+  capture helper coverage.
+- [`spec/conformance/5.5.6/aauth/`](spec/conformance/5.5.6/aauth/), offline
+  AAuth evidence corpus.
+- [`docs/outreach/aauth-evidence-packet.md`](docs/outreach/aauth-evidence-packet.md),
+  draft outreach packet.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

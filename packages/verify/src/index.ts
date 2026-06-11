@@ -45,6 +45,25 @@ export type {
   OAuthTokenCheck,
 } from './authorization-evidence.js'
 
+export { verifyAAuthAuthorizationEvidence } from './aauth-evidence.js'
+export type {
+  AAuthAccessMode,
+  AAuthActClaim,
+  AAuthAuthorizationEvidenceInput,
+  AAuthAuthorizationEvidenceVerification,
+  AAuthEvidenceProtocol,
+  AAuthHttpSignatureCheck,
+  AAuthHttpSignatureEvidence,
+  AAuthMissionClaim,
+  AAuthR3Check,
+  AAuthR3Evidence,
+  AAuthResourceMetadataEvidence,
+  AAuthSignaturePolicy,
+  AAuthTokenCheck,
+  AAuthTokenClaims,
+  AAuthTokenKind,
+} from './aauth-evidence.js'
+
 export {
   FetchDpopReplayCache,
   MemoryDpopReplayCache,

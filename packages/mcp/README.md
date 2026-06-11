@@ -136,6 +136,28 @@ The middleware stores this evidence only in the local sidecar passed to `onRecor
 
 The same sidecar also includes `resolvedFacts: { tool_name }` for tool calls. Verifiers can pass those facts to `verifyRecord(record, { resolvedFacts })` so capability envelopes that constrain `tool_names` can be evaluated from local body material instead of surfacing as unresolved.
 
+### Producer-side AAuth evidence capture
+
+Use `buildAAuthEvidenceFromEvent()` when a host already receives AAuth client callbacks, server verification results, or audit-sink events and wants verifier-ready evidence in the local sidecar:
+
+```typescript
+import { buildAAuthEvidenceFromEvent } from '@atrib/mcp'
+
+const evidence = buildAAuthEvidenceFromEvent(aauthEvent, {
+  tokenKind: 'auth_token',
+  accessMode: 'auth-token',
+  claimsVerified: true,
+  expectedAgent: 'aauth:researcher@example.com',
+  expectedActSubject: 'aauth:researcher@example.com',
+  requiredScopes: ['files:read'],
+  httpSignatureVerified: true,
+})
+```
+
+The helper accepts event shapes with `agentToken`, `resourceToken`, `authToken`, `jwt`, `claims`, `decodedClaims`, `tokenClaims`, `request`, `signedRequest`, `retryRequest`, or `headers`. That covers the current TypeScript `createAAuthFetch()` callback shape, AAuth server middleware verification results, and Person Server audit-sink style events without importing AAuth packages into `@atrib/mcp`.
+
+The returned evidence object uses `protocol: 'aauth'`. It stores decoded token facts, caller-supplied verification status, configured constraints, optional HTTP signature facts, and a one-way `token_hash` when token material is visible. It does not store the raw AAuth JWT by default.
+
 ### Optional archive submission
 
 Set `archiveSubmission` when a producer wants public body retrieval for records whose privacy posture allows it:
@@ -149,7 +171,7 @@ atrib(server, {
 })
 ```
 
-The archive path is best-effort and non-blocking. It runs after log submission succeeds and uses the returned proof bundle, so the archive can reject uncommitted bodies. When OAuth evidence capture is enabled, only `authorizationEvidence` and `resolvedFacts` are sent with the archive submission. The middleware does not send local sidecar `args` or `result` fields to the archive.
+The archive path is best-effort and non-blocking. It runs after log submission succeeds and uses the returned proof bundle, so the archive can reject uncommitted bodies. When authorization evidence capture is enabled, only `authorizationEvidence` and `resolvedFacts` are sent with the archive submission. The middleware does not send local sidecar `args` or `result` fields to the archive.
 
 ### Parent-child threading
 
@@ -224,7 +246,7 @@ In-process surrogate `McpServer` that forwards every tool call to an upstream MC
 
 ### Lower-level primitives
 
-For advanced use cases (custom transports, manual signing, recommendation calculation), the package also exports the cryptographic and serialization primitives directly: `signRecord`, `signTransactionRecord`, `signTransactionAttestation`, `verifyRecord`, `canonicalRecord`, `canonicalCrossAttestationInput`, `computeContentId`, `genesisChainRoot`, `chainRoot`, `encodeToken`, `decodeToken`, `base64urlEncode`, `base64urlDecode`, `sha256`, `hexEncode`, `hexDecode`, plus event-type helpers (`EVENT_TYPE_SHORT_NAMES`, `EVENT_TYPE_SHORT_TO_URI`, `normalizeEventType`), the W3C trace-context helpers (`readInboundContext`, `writeOutboundContext`, `parseTracestateAtrib`, `parseBaggageAtribSession`, `extractTraceId`, `mergeTracestate`, `mergeBaggageAtribSession`), the record-reference helpers (`SHA256_REF_PATTERN`, `extractRecordHashes`, `extractRecordReferenceCandidates`, `ATRIB_PARENT_RECORD_HASH_ENV`, `parentRecordHashFromEnv`, `defaultRecordReferenceResolver`, `recordHashExistsInMirror`), the subagent env helpers (`ATRIB_CONTEXT_ID_ENV`, `chainTailEnvName`, `buildSubagentProducerEnv`), the harness session-id discovery helpers per [D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) (`resolveEnvContextId`, `KNOWN_HARNESS_DISCOVERIES`), the read-primitive instrumentation helpers per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) (`logReadPrimitiveCall`, `extractRecordHashesFromMcpResult`), the P042 local-substrate helpers (`LOCAL_SUBSTRATE_REQUEST_MODES`, `validateLocalSubstrateRequest`, `validateLocalSubstrateResponse`, `validateLocalSubstrateHealthReport`, `hashLocalSubstrateRecordBody`, `tryLocalSubstrateCoordinator`, `createHttpLocalSubstrateTransport`, `createLocalSubstrateCoordinatorHttpHandler`, `handleLocalSubstrateCoordinatorHttpRequest`, `createInProcessLocalSubstrateCoordinator`, `buildLocalSubstrateHealthReport`, `probeLocalSubstrateHealth`), the normative content-shape extractors per [D086](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content) (`extractIndexableText`, per-event_type extractors and type defs, see the dedicated section below), and the submission queue itself (`createSubmissionQueue`).
+For advanced use cases (custom transports, manual signing, recommendation calculation), the package also exports the cryptographic and serialization primitives directly: `signRecord`, `signTransactionRecord`, `signTransactionAttestation`, `verifyRecord`, `canonicalRecord`, `canonicalCrossAttestationInput`, `computeContentId`, `genesisChainRoot`, `chainRoot`, `encodeToken`, `decodeToken`, `base64urlEncode`, `base64urlDecode`, `sha256`, `hexEncode`, `hexDecode`, plus event-type helpers (`EVENT_TYPE_SHORT_NAMES`, `EVENT_TYPE_SHORT_TO_URI`, `normalizeEventType`), the W3C trace-context helpers (`readInboundContext`, `writeOutboundContext`, `parseTracestateAtrib`, `parseBaggageAtribSession`, `extractTraceId`, `mergeTracestate`, `mergeBaggageAtribSession`), the record-reference helpers (`SHA256_REF_PATTERN`, `extractRecordHashes`, `extractRecordReferenceCandidates`, `ATRIB_PARENT_RECORD_HASH_ENV`, `parentRecordHashFromEnv`, `defaultRecordReferenceResolver`, `recordHashExistsInMirror`), the subagent env helpers (`ATRIB_CONTEXT_ID_ENV`, `chainTailEnvName`, `buildSubagentProducerEnv`), the AAuth evidence helper (`buildAAuthEvidenceFromEvent`), the harness session-id discovery helpers per [D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) (`resolveEnvContextId`, `KNOWN_HARNESS_DISCOVERIES`), the read-primitive instrumentation helpers per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) (`logReadPrimitiveCall`, `extractRecordHashesFromMcpResult`), the P042 local-substrate helpers (`LOCAL_SUBSTRATE_REQUEST_MODES`, `validateLocalSubstrateRequest`, `validateLocalSubstrateResponse`, `validateLocalSubstrateHealthReport`, `hashLocalSubstrateRecordBody`, `tryLocalSubstrateCoordinator`, `createHttpLocalSubstrateTransport`, `createLocalSubstrateCoordinatorHttpHandler`, `handleLocalSubstrateCoordinatorHttpRequest`, `createInProcessLocalSubstrateCoordinator`, `buildLocalSubstrateHealthReport`, `probeLocalSubstrateHealth`), the normative content-shape extractors per [D086](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content) (`extractIndexableText`, per-event_type extractors and type defs, see the dedicated section below), and the submission queue itself (`createSubmissionQueue`).
 
 ### Read-primitive instrumentation ([D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) Surface 6)
 

@@ -10,6 +10,11 @@ import {
   jwtVerify,
 } from 'jose'
 import type { JWK, JSONWebKeySet, JWTPayload, JWTVerifyOptions } from 'jose'
+import { verifyAAuthAuthorizationEvidence } from './aauth-evidence.js'
+import type {
+  AAuthAuthorizationEvidenceInput,
+  AAuthAuthorizationEvidenceVerification,
+} from './aauth-evidence.js'
 import type { DpopReplayCache, DpopReplayCacheKey } from './dpop-replay-cache.js'
 
 export type EvidenceCheckStatus = 'passed' | 'failed' | 'unresolved' | 'not_checked'
@@ -780,14 +785,44 @@ export async function verifyOAuthAuthorizationEvidence(
 
 export type AuthorizationEvidenceInput =
   | {
+      protocol?: 'aauth'
+      aauth: AAuthAuthorizationEvidenceInput
+    }
+  | {
       protocol?: OAuthEvidenceProtocol
       oauth: OAuthAuthorizationEvidenceInput
     }
+  | AAuthAuthorizationEvidenceInput
   | OAuthAuthorizationEvidenceInput
+
+function isAAuthAuthorizationEvidenceInput(
+  evidence: AuthorizationEvidenceInput,
+): evidence is AAuthAuthorizationEvidenceInput {
+  if (evidence.protocol === 'aauth') return true
+  return (
+    'tokenKind' in evidence ||
+    'accessMode' in evidence ||
+    'expectedAgent' in evidence ||
+    'expectedActSubject' in evidence ||
+    'expectedParentAgent' in evidence ||
+    'requiredMission' in evidence ||
+    'httpSignature' in evidence ||
+    'r3' in evidence
+  )
+}
 
 export async function verifyAuthorizationEvidence(
   evidence: AuthorizationEvidenceInput,
-): Promise<EvidenceVerificationBlock> {
+): Promise<EvidenceVerificationBlock | AAuthAuthorizationEvidenceVerification> {
+  if ('aauth' in evidence) {
+    return verifyAAuthAuthorizationEvidence({
+      ...evidence.aauth,
+      protocol: 'aauth',
+    })
+  }
+  if (isAAuthAuthorizationEvidenceInput(evidence)) {
+    return verifyAAuthAuthorizationEvidence(evidence)
+  }
   if ('oauth' in evidence) {
     const protocol = evidence.protocol ?? evidence.oauth.protocol
     return verifyOAuthAuthorizationEvidence(
