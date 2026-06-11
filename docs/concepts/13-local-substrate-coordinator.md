@@ -94,9 +94,11 @@ The coordinator may own the queue, mirror, and health report. It may not add fie
 
 Current `@atrib/mcp-wrap` wiring uses `mode: "shadow_probe"`, not coordinator-owned commit. In this mode, the wrapper still signs, mirrors, attaches outbound context, and queues submission locally. The coordinator validates and signs the same unsigned body, returns a hash, and skips queue or mirror side effects. The wrapper log records whether that hash matched the local path. This avoids duplicate commits while proving the real startup-spawn adapter can reach the coordinator with byte-identical input.
 
+`@atrib/emit` uses the same shadow-only posture for the `long-lived-agent` class. The emit path validates and signs the record locally, strips `signature` back out to recover the exact unsigned body, and sends that body to the coordinator with a `long-lived-agent` producer envelope. `emitInProcess()` waits only for the configured shadow timeout so short-lived hook producers do not exit before telemetry lands; the emit MCP server can keep the attempt in the background. `atrib-emit-cli`, `@atrib/annotate`, and `@atrib/revise` can opt in through `ATRIB_LOCAL_SUBSTRATE_ENDPOINT` with `ATRIB_LOCAL_SUBSTRATE_MODE=shadow`, or through an explicit transport in embedded hosts. The response is telemetry only: local signing, mirror append, and queue submission remain the committed path.
+
 ## Rollout Gate
 
-The current implementation slice provides an in-process startup-spawn prototype plus `@atrib/mcp-wrap` HTTP shadow probes behind opt-in config. It should not become default, and should not expand to other harness classes, until a process-health report shows:
+The current implementation slices provide an in-process startup-spawn prototype, `@atrib/mcp-wrap` HTTP shadow probes, and `@atrib/emit` long-lived-agent shadow probes behind opt-in config. They should not become default until a process-health report shows:
 
 - one startup-spawn harness can call the coordinator without extra stale children
 - one long-lived local assistant or scheduled producer can call it under supervisor ownership

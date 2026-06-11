@@ -51,7 +51,9 @@
 // Environment variables (honored exactly as emitInProcess + resolveKey do):
 //   ATRIB_LOG_ENDPOINT, ATRIB_MIRROR_FILE, ATRIB_AUTOCHAIN_SOURCE,
 //   ATRIB_AGENT, ATRIB_PRIVATE_KEY, ATRIB_KEYCHAIN_TIMEOUT_MS,
-//   ATRIB_OP_TIMEOUT_MS.
+//   ATRIB_OP_TIMEOUT_MS. Optional P042 shadow probes also read
+//   ATRIB_LOCAL_SUBSTRATE_ENDPOINT, ATRIB_LOCAL_SUBSTRATE_MODE=shadow, and
+//   ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS.
 
 import { readFileSync, realpathSync, accessSync, constants as fsConstants } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -323,6 +325,23 @@ function buildDescription(): CliDescription {
       {
         name: 'ATRIB_CONTEXT_ID',
         description: 'Default 32-hex context_id when envelope omits one (D078).',
+        required: false,
+      },
+      {
+        name: 'ATRIB_LOCAL_SUBSTRATE_ENDPOINT',
+        description:
+          'Optional P042 coordinator endpoint. When set with shadow mode, emitInProcess sends a bounded local-substrate shadow probe.',
+        required: false,
+      },
+      {
+        name: 'ATRIB_LOCAL_SUBSTRATE_MODE',
+        description:
+          'Optional local-substrate mode. Only "shadow" is honored; commit mode stays disabled for emit.',
+        required: false,
+      },
+      {
+        name: 'ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS',
+        description: 'Optional per-shadow-probe timeout in ms; defaults to 500.',
         required: false,
       },
       {
