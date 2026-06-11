@@ -416,6 +416,63 @@ describe('local substrate coordinator contract', () => {
     coordinator.destroy()
   })
 
+  it('signs watcher WAL records through commit mode with receipt join metadata', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/watcher-wal-annotation.json')
+    const observed: Array<{ record: AtribRecord; receiptId: string; walEntryId?: string }> = []
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: fixtureSeed(0x11),
+      supportedHarnessClasses: ['watcher-wal'],
+      logSubmission: 'disabled',
+      onRecord: (record, context) => {
+        observed.push({
+          record,
+          receiptId: context.receipt_id,
+          walEntryId: context.request.wal?.entry_id,
+        })
+      },
+      health: {
+        pid: 402,
+        version: '0.0.0-test',
+        transport: 'in-process-test',
+        walPending: 1,
+        walJoined: 42,
+        walOrphanReceipts: 0,
+      },
+    })
+
+    const result = await tryLocalSubstrateCoordinator(fixture.input.coordinator_request, {
+      expectedHarnessClass: 'watcher-wal',
+      directRecordBody: fixture.input.direct_record_body,
+      transport: coordinator.transport,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.status).toBe('accepted')
+    if (!result.ok) {
+      throw new Error(result.status)
+    }
+
+    expect(observed).toHaveLength(1)
+    const signed = observed[0]!.record
+    expect(await verifyRecord(signed)).toBe(true)
+    expect(observed[0]!.receiptId).toBe(result.response.receipt_id)
+    expect(observed[0]!.walEntryId).toBe(fixture.input.coordinator_request.wal?.entry_id)
+    expect(result.response.operation).toBe('enqueue_record_and_join_receipt')
+    expect(result.response.receipt_id).toBe(encodeToken(signed))
+    expect(result.response.record_hash).toBe(`sha256:${hexEncode(sha256(canonicalRecord(signed)))}`)
+    expect(result.response.health_report?.contexts.active).toEqual([
+      fixture.input.coordinator_request.record_body.context_id,
+    ])
+    expect(result.response.health_report?.wal).toMatchObject({
+      pending: 1,
+      joined: 42,
+      orphan_receipts: 0,
+    })
+
+    await coordinator.flush()
+    coordinator.destroy()
+  })
+
   it('shadow probes sign startup-spawn bodies without committing coordinator side effects', async () => {
     const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
     const observed: AtribRecord[] = []

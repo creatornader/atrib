@@ -317,6 +317,7 @@ const CONTEXT_ID_RE = /^[0-9a-f]{32}$/
 
 const harnessClasses = new Set<string>(LOCAL_SUBSTRATE_HARNESS_CLASSES)
 const operations = new Set<string>(LOCAL_SUBSTRATE_OPERATIONS)
+const inProcessSupportedOperations = new Set<LocalSubstrateOperation>(LOCAL_SUBSTRATE_OPERATIONS)
 const requestModes = new Set<string>(LOCAL_SUBSTRATE_REQUEST_MODES)
 const responseStatuses = new Set<string>(LOCAL_SUBSTRATE_RESPONSE_STATUSES)
 const creatorKeyPolicies = new Set<string>(LOCAL_SUBSTRATE_CREATOR_KEY_POLICIES)
@@ -1086,7 +1087,7 @@ export function createInProcessLocalSubstrateCoordinator(
       )
     }
 
-    if (request.operation !== 'sign_record') {
+    if (!inProcessSupportedOperations.has(request.operation)) {
       return rejectedLocalSubstrateResponse(
         request,
         `unsupported operation for in-process coordinator: ${request.operation}`,
