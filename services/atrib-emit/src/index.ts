@@ -251,7 +251,7 @@ export interface AtribEmitServer {
 
 export interface CreateAtribEmitServerOptions {
   /** Override the resolved key (primarily for testing). */
-  key?: ResolvedKey
+  key?: ResolvedKey | null | undefined
   /** Override the log endpoint (defaults to env or @atrib/mcp default). */
   logEndpoint?: string | undefined
   /** Override informed_by record lookup, primarily for tests and embedded hosts. */
@@ -272,7 +272,7 @@ export interface CreateAtribEmitServerOptions {
 export async function createAtribEmitServer(
   options: CreateAtribEmitServerOptions = {},
 ): Promise<AtribEmitServer> {
-  const key = options.key ?? (await resolveKey())
+  const resolveServerKey = createServerKeyResolver(options)
   const logEndpoint = options.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT']
   const queue: SubmissionQueue = createSubmissionQueue(logEndpoint)
 
@@ -289,7 +289,7 @@ export async function createAtribEmitServer(
       const input = EmitInput.parse(rawInput)
       const result = await handleEmit({
         input,
-        key,
+        key: await resolveServerKey(),
         queue,
         logEndpoint,
         recordReferenceResolver: options.recordReferenceResolver,
@@ -308,6 +308,18 @@ export async function createAtribEmitServer(
   return {
     mcp,
     flush: () => queue.flush(),
+  }
+}
+
+function createServerKeyResolver(options: CreateAtribEmitServerOptions): () => Promise<ResolvedKey | null> {
+  if (Object.prototype.hasOwnProperty.call(options, 'key')) {
+    const fixed = options.key ?? null
+    return async () => fixed
+  }
+  let resolved: Promise<ResolvedKey | null> | null = null
+  return async () => {
+    resolved ??= resolveKey()
+    return resolved
   }
 }
 

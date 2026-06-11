@@ -21,10 +21,11 @@
   "main": "./dist/index.js",
   "bin": {
     "atrib-emit": "./dist/main.js",
-    "atrib-emit-cli": "./dist/cli.js"
+    "atrib-emit-cli": "./dist/cli.js",
+    "atrib-local-substrate": "./dist/local-substrate-host.js"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc && chmod +x dist/main.js dist/cli.js",
+    "build": "rm -rf dist && tsc && chmod +x dist/main.js dist/cli.js dist/local-substrate-host.js",
     "start": "node dist/main.js",
     "dev": "tsx src/main.ts",
     "test": "vitest run"

@@ -1,0 +1,38 @@
+{
+  "name": "@atrib/primitives-runtime",
+  "version": "0.1.0",
+  "description": "Private local MCP runtime that exposes all atrib cognitive primitives from one stdio process.",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "atrib-primitives": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc && chmod +x dist/index.js",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@atrib/annotate": "workspace:*",
+    "@atrib/emit": "workspace:*",
+    "@atrib/recall": "workspace:*",
+    "@atrib/revise": "workspace:*",
+    "@atrib/summarize": "workspace:*",
+    "@atrib/trace": "workspace:*",
+    "@atrib/verify-mcp": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "files": [
+    "dist"
+  ]
+}

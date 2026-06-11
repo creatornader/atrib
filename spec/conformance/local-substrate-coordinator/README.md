@@ -29,6 +29,21 @@ The validator checks:
 - health reports include pid, version, transport, queue depth, WAL backlog, active contexts, and stale-child detection
 - each pinned record-body hash matches the fixture
 
+## Process-Health Proof
+
+The fixture validator proves the schema and byte-equivalence contract. The host process proof runs the same fixtures through a real loopback coordinator:
+
+```sh
+pnpm prove:local-substrate
+```
+
+That command builds `@atrib/mcp` and `@atrib/emit`, starts `atrib-local-substrate` on an ephemeral loopback port, sends all three fixture requests over HTTP, checks watcher receipt issuance, validates the final health report, asserts zero stale children and zero orphan receipts, and proves unavailable coordinators classify as `unavailable` for fallback handling. For a live coordinator already running under a supervisor, use:
+
+```sh
+node scripts/prove-local-substrate-process-health.mjs \
+  --use-existing http://127.0.0.1:8787/atrib/local-substrate
+```
+
 ## Rollout Meaning
 
-Passing this corpus does not mean the coordinator should become default. It means the next implementation slice may build a local prototype against this boundary. The default remains direct in-process, CLI, or stdio signing until a process-health report shows the prototype handles startup-spawn harnesses, long-lived local agents, and watcher WAL paths on the same host without stale child buildup or receipt mismatch.
+Passing this corpus does not mean the coordinator should become default. It means the next implementation slice may build a local prototype against this boundary. Passing `pnpm prove:local-substrate` means the host binary satisfies the corpus over HTTP in isolation. The default remains direct in-process, CLI, or stdio signing until dogfood config proves the same behavior across real startup-spawn harnesses, long-lived local agents, and watcher WAL paths without stale child buildup or receipt mismatch.

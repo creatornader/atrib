@@ -29,6 +29,8 @@ atrib/
   PRIOR-ART.md                 # Prior art & standards map: every spec/protocol atrib builds on, organized by layer
   METRICS.md                   # Tiered metrics framework + lifecycle states + quarterly evolution review for the dogfood experiment
   docs/publishing-new-npm-package.md # Runsheet for creating and publishing a new public npm package.
+  scripts/
+    prove-local-substrate-process-health.mjs # P042 process-health proof. Builds on the fixture corpus by starting/probing a real local-substrate host, exercising startup-spawn, long-lived-agent, and watcher-WAL requests over HTTP, and checking stale-child/orphan/fallback gates before default dogfood config changes.
   metrics/                     # Dated JSON snapshots from `pnpm --filter @atrib/log-node metrics`
   packages/
     mcp/                       # @atrib/mcp: MCP server middleware (public)
@@ -95,6 +97,7 @@ atrib/
     atrib-trace/               # MCP server for backward causal-chain walking. Consumer-side cognitive primitive #5 of D079: reads the local mirror (per §5.9), follows `informed_by` edges backward from a starting record_hash, surfaces sidecar_summary per visited record (tool_name, span kind/name, model, prompt version, topics, importance). Read-only; does not sign. Stdio binary; same process model as atrib-emit.
     atrib-summarize/           # MCP server for narrative synthesis across N records. Consumer-side cognitive primitive #6 of D079: reads N records by context_id and/or record_hashes from the local mirror, calls an OpenAI-compatible LLM (defaults to NIM qwen3.5-397b) to produce a narrative, including normalized sidecar content such as OpenInference prompt/output/usage/cost metadata when present. Closes the consumer-side cognitive loop (agents read context, not raw records). Stdio binary; same process model as atrib-emit.
     atrib-verify/              # MCP server exposing the `atrib-verify` tool. Consumer-side cognitive primitive #7 of D079/D106: verifies counterparty handoff evidence before a receiving agent links follow-up work through `informed_by`. Read-only; does not sign. Stdio binary; same process model as atrib-emit.
+    atrib-primitives/          # Private local MCP runtime. Mounts the seven primitive packages in process and exposes their 15 physical MCP tools through one stdio server for dogfood harnesses that would otherwise spawn seven atrib child processes per thread.
   spec/
     conformance/
       1.2.6/                   # provenance_token conformance corpus (test vectors for §1.2.6, D044). Generator at packages/log-dev/scripts/generate-conformance-1.2.6.ts; reference test at packages/verify/test/conformance-1.2.6.test.ts. Four cases cover canonical-form invariance, derivation rule, genesis-only invariant, absence-not-null contract.
@@ -110,7 +113,7 @@ atrib/
       local-substrate-coordinator/ # P042 design-gate corpus for the optional host-owned coordinator contract. Covers startup-spawn harnesses, long-lived local agents, and watcher WAL paths before any default config change.
 ```
 
-Public packages are intended for npm publication. Private workspace packages and services (`log-dev`, `integration`, `cloudflare-live-proof`, `cloudflare-live-client-proof`, `cloudflare-approval-trace`, `cloudflare-oauth-evidence-infra`, `log-node`, `graph-node`, `directory-node`, `archive-node`, `dashboard`) are fixtures, proof harnesses, deployed services, examples, or product surfaces with `private: true` in their `package.json` so they cannot be accidentally published. The `directory-bridge` Rust crate is source-only, its WASM build artifacts ship inside `@atrib/directory` (see [`packages/directory-bridge/README.md`](packages/directory-bridge/README.md) for the build procedure).
+Public packages are intended for npm publication. Private workspace packages and services (`log-dev`, `integration`, `cloudflare-live-proof`, `cloudflare-live-client-proof`, `cloudflare-approval-trace`, `cloudflare-oauth-evidence-infra`, `log-node`, `graph-node`, `directory-node`, `archive-node`, `primitives-runtime`, `dashboard`) are fixtures, proof harnesses, deployed services, examples, local runtimes, or product surfaces with `private: true` in their `package.json` so they cannot be accidentally published. The `directory-bridge` Rust crate is source-only, its WASM build artifacts ship inside `@atrib/directory` (see [`packages/directory-bridge/README.md`](packages/directory-bridge/README.md) for the build procedure).
 
 ## Hub doc
 
@@ -206,12 +209,13 @@ Read `DESIGN.md` before making visual, UI writing, explorer, website, share-imag
 
 ### Monorepo
 
-This is a TypeScript monorepo with **twenty-six workspace packages**:
+This is a TypeScript monorepo with **twenty-seven workspace packages**:
 
 - **Eight public SDK and integration packages** (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`, `@atrib/cli`, `@atrib/mcp-wrap`, `@atrib/directory`, `@atrib/openinference`, `@atrib/memory-tool`)
 - **Seven cognitive-primitive MCP servers** (`@atrib/emit`, `@atrib/annotate`, `@atrib/revise`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`, `@atrib/verify-mcp`) - published to npm with binaries
 - **Two private test/example packages** (`@atrib/log-dev`, `@atrib/integration`)
 - **Four private deployable-service packages** (`@atrib/log-node`, `@atrib/graph-node`, `@atrib/directory-node`, `@atrib/archive-node`)
+- **One private local-runtime package** (`@atrib/primitives-runtime`)
 - **One private product-surface package** (`@atrib/dashboard`)
 - **Four private Cloudflare example packages** (`@atrib/cloudflare-live-proof`, `@atrib/cloudflare-live-client-proof`, `@atrib/cloudflare-approval-trace`, `@atrib/cloudflare-oauth-evidence-infra`)
 

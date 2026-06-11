@@ -435,6 +435,13 @@ services/atrib-verify  MCP server for counterparty handoff evidence checks
       freshness, then returns accepted hashes for `informed_by`. Read-only;
       it does not fetch archives or sign records.
 
+services/atrib-primitives  Private local runtime for all cognitive primitives
+  └── Mounts the seven primitive packages in process and exposes their 15
+      physical MCP tools through one stdio server. This is a dogfood runtime
+      for startup-spawn harnesses that would otherwise launch one child
+      process per primitive. It does not replace the public primitive packages
+      or add a protocol event type.
+
 services/archive-node  Record Body Archive Layer (§2.12), deployed at https://archive.atrib.dev/v1
   └── Separate from log-node by design. Stores canonical record bodies
       content-addressed by record_hash, confirms each accepted body is
@@ -445,7 +452,7 @@ services/archive-node  Record Body Archive Layer (§2.12), deployed at https://a
       contract.
 ```
 
-The fifteen designed-public packages are published to npm via Trusted Publishing OIDC: eight SDK and integration packages (`mcp`, `agent`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`, `memory-tool`) and seven cognitive-primitive MCP servers (`emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, `verify-mcp`). The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, and dashboard) are workspace fixtures, proof harnesses, deployed services, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence; no separate deployment is needed.
+The fifteen designed-public packages are published to npm via Trusted Publishing OIDC: eight SDK and integration packages (`mcp`, `agent`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`, `memory-tool`) and seven cognitive-primitive MCP servers (`emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, `verify-mcp`). The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, local runtimes, and dashboard) are workspace fixtures, proof harnesses, deployed services, dogfood runtimes, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence. The private `@atrib/primitives-runtime` binary composes them into one local stdio server for harness configs that need fewer child processes; no separate deployment is needed.
 
 Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hashes` for SHA-256, `canonicalize` for JCS. Framework dependencies are structural-typed, never hard-imported.
 

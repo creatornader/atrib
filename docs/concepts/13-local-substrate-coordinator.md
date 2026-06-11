@@ -14,7 +14,7 @@ atrib has several valid ways to sign records today: in-process middleware, CLI h
 - local watcher pipelines need WAL drain, receipt join-back, and orphan detection
 - stale child processes and notification hooks can survive after the agent session that created them
 
-Adding one more MCP server would only shrink one process list. The wider boundary is host ownership: one local substrate surface that can coordinate signing, mirror/WAL work, submission queues, read indexes, and health reporting for several harness styles.
+Adding one combined MCP runtime can shrink one process list. It does not solve signer ownership, watcher WAL join-back, or health reporting by itself. The wider boundary is host ownership: one local substrate surface that can coordinate signing, mirror/WAL work, submission queues, read indexes, and health reporting for several harness styles.
 
 ## Shape
 
@@ -98,15 +98,24 @@ Current `@atrib/mcp-wrap` wiring uses `mode: "shadow_probe"`, not coordinator-ow
 
 The watcher-WAL prototype uses commit mode rather than shadow mode. A watcher sends `operation: "enqueue_record_and_join_receipt"` with explicit WAL metadata: `entry_id`, `source_path`, and `receipt_join_field`. The in-process coordinator signs the same unsigned body, returns `record_hash` plus `receipt_id`, calls its observer with the WAL metadata, and exposes WAL pending/joined/orphan counts in the health report. This proves the coordinator can own the receipt boundary for one watcher path without mutating signed bytes. It is not yet a launchd-owned daemon or default runtime.
 
-The service-hosting slice exposes the same coordinator through `createLocalSubstrateCoordinatorHttpHandler()`. A host can attach that handler to Hono, Bun, Deno, launchd supervision, or an equivalent local runtime. `bindLocalSubstrateCoordinatorNodeServer()` is the Node HTTP binding for the same route contract. `POST /atrib/local-substrate` accepts coordinator requests. `GET` or `HEAD /atrib/local-substrate` and `/atrib/local-substrate/health` return the read-only health probe. The Node binding is loopback by default, rejects malformed or oversized JSON before the coordinator hot path, and leaves browser CORS policy to the host. This is a hosting boundary only; it does not add another package, MCP server, event type, or default background process.
+The service-hosting slice exposes the same coordinator through `createLocalSubstrateCoordinatorHttpHandler()`. A host can attach that handler to Hono, Bun, Deno, launchd supervision, or an equivalent local runtime. `bindLocalSubstrateCoordinatorNodeServer()` is the Node HTTP binding for the same route contract. `POST /atrib/local-substrate` accepts coordinator requests. `GET` or `HEAD /atrib/local-substrate` and `/atrib/local-substrate/health` return the read-only health probe. The Node binding is loopback by default, rejects malformed or oversized JSON before the coordinator hot path, and leaves browser CORS policy to the host. This is a hosting boundary only; it does not add another MCP server, event type, or cognitive primitive.
+
+`@atrib/emit` ships the first host-owned process for that boundary as `atrib-local-substrate`. The binary uses the same bounded `resolveKey()` path as `atrib-emit`, binds loopback HTTP at `127.0.0.1:8787` by default, supports the three fixture harness classes, prints a ready event for supervisors, and drains the submission queue on SIGTERM/SIGINT with a bounded shutdown timeout. It is opt-in. Agents still need `ATRIB_LOCAL_SUBSTRATE_ENDPOINT=http://127.0.0.1:8787/atrib/local-substrate` before their shadow probes call it.
+
+`@atrib/primitives-runtime` is a separate process-count slice. It mounts the seven public primitive packages in process and exposes their 15 physical MCP tools through one stdio server named `atrib-primitives`. It is private to the workspace and meant for dogfood configs where Codex, Claude Code, or another startup-spawn harness would otherwise launch seven atrib primitive child processes per thread. It does not own signing policy, WAL commit, receipt join-back, or health reporting beyond the MCP runtime itself; those stay with the local substrate coordinator track.
 
 ## Rollout Gate
 
-The current implementation slices provide an in-process startup-spawn prototype, watcher-WAL commit-mode proof, `@atrib/mcp-wrap` HTTP shadow probes, `@atrib/emit` long-lived-agent shadow probes, and shared Fetch/plain-result/Node HTTP handlers for supervised local service hosts behind opt-in config. They should not become default until a process-health report shows:
+The current implementation slices provide an in-process startup-spawn prototype, watcher-WAL commit-mode proof, `@atrib/mcp-wrap` HTTP shadow probes, `@atrib/emit` long-lived-agent shadow probes, shared Fetch/plain-result/Node HTTP handlers, and the `atrib-local-substrate` host binary behind opt-in config. They should not become default until a process-health report shows:
 
 - one startup-spawn harness can call the coordinator without extra stale children
+- one startup-spawn harness can use `atrib-primitives` when the desired rollout gate is MCP child-process count rather than coordinator signing
 - one long-lived local assistant or scheduled producer can call it under supervisor ownership
 - one watcher WAL path can queue, drain, and join receipts without orphan or mismatch regressions
 - coordinator unavailability leaves primary agent work unaffected
+
+`pnpm prove:local-substrate` is the first repo-owned process-health proof. It builds `@atrib/mcp` and `@atrib/emit`, starts the real `atrib-local-substrate` host on an ephemeral loopback port, sends the three conformance fixtures through HTTP, checks watcher receipt issuance, validates final health, asserts zero stale children and zero orphan receipts, and proves the client classifies an unavailable coordinator as `unavailable` rather than blocking. The script can also target a live dogfood coordinator with `--use-existing <endpoint>` and `--health-endpoint <endpoint>`.
+
+Passing that proof means the host binary can satisfy the local contract in isolation. It does not prove any operator's startup-spawn harnesses, long-lived local agents, or watcher configs are wired through it yet, and it does not justify a default config flip by itself.
 
 That report should extend [D084](../../DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) rather than create another private health surface.
