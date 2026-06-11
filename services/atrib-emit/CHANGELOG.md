@@ -1,5 +1,12 @@
 # @atrib/emit
 
+## 0.14.21
+
+### Patch Changes
+
+- 466a55c: Resolve write-primitive signing keys lazily on tool calls instead of during MCP server startup, and let recall be embedded without taking over stdio on import. This keeps standalone binaries compatible while allowing a private combined primitives runtime to start and list tools without waiting on keychain access.
+- 466a55c: Add `atrib-local-substrate`, an opt-in loopback HTTP host for the P042 local-substrate coordinator. The binary reuses `@atrib/emit` key resolution, serves startup-spawn, long-lived-agent, and watcher-WAL coordinator requests, reports health, and drains on shutdown.
+
 ## 0.14.20
 
 ### Patch Changes

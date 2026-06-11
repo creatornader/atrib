@@ -1,5 +1,11 @@
 # @atrib/recall
 
+## 0.12.16
+
+### Patch Changes
+
+- 466a55c: Resolve write-primitive signing keys lazily on tool calls instead of during MCP server startup, and let recall be embedded without taking over stdio on import. This keeps standalone binaries compatible while allowing a private combined primitives runtime to start and list tools without waiting on keychain access.
+
 ## 0.12.15
 
 ### Patch Changes

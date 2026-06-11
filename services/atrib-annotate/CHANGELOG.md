@@ -1,5 +1,14 @@
 # @atrib/annotate
 
+## 0.2.30
+
+### Patch Changes
+
+- 466a55c: Resolve write-primitive signing keys lazily on tool calls instead of during MCP server startup, and let recall be embedded without taking over stdio on import. This keeps standalone binaries compatible while allowing a private combined primitives runtime to start and list tools without waiting on keychain access.
+- Updated dependencies [466a55c]
+- Updated dependencies [466a55c]
+  - @atrib/emit@0.14.21
+
 ## 0.2.29
 
 ### Patch Changes
