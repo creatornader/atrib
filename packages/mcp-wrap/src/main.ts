@@ -103,6 +103,7 @@ async function main(): Promise<void> {
   log('info', 'wrapper starting', {
     serverUrl: config.serverUrl,
     logEndpoint: config.logEndpoint,
+    localSubstrateMode: config.localSubstrate?.mode,
     upstreamCommand: config.upstream.command,
     keySource: result.key.source,
     pid: process.pid,

@@ -44,6 +44,15 @@ export const ArchiveSubmissionSchema = z.object({
 
 export type ArchiveSubmissionConfig = z.infer<typeof ArchiveSubmissionSchema>
 
+export const LocalSubstrateSchema = z.object({
+  mode: z.literal('shadow').default('shadow'),
+  endpoint: z.string().url(),
+  timeoutMs: z.number().int().positive().optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+})
+
+export type LocalSubstrateConfig = z.infer<typeof LocalSubstrateSchema>
+
 export const WrapConfigSchema = z.object({
   /**
    * Logical name for THIS wrapped server. Used in:
@@ -99,6 +108,13 @@ export const WrapConfigSchema = z.object({
    * verifier evidence outside the producer's local mirror.
    */
   archiveSubmission: ArchiveSubmissionSchema.optional(),
+
+  /**
+   * Optional startup-spawn local substrate shadow probe. The wrapper sends the
+   * exact unsigned record body to this endpoint in shadow mode, while the
+   * wrapper still signs and commits locally.
+   */
+  localSubstrate: LocalSubstrateSchema.optional(),
 
   /**
    * Whether to chain successive tool calls within this wrapper's process

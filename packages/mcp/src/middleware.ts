@@ -27,11 +27,24 @@ import { createSubmissionQueue } from './submission.js'
 import { zeroize } from './zeroize.js'
 import { EVENT_TYPE_TOOL_CALL_URI, EVENT_TYPE_TRANSACTION_URI } from './types.js'
 import { buildMcpOAuthEvidenceFromExtra } from './oauth-evidence.js'
-import type { AtribRecord } from './types.js'
+import {
+  LOCAL_SUBSTRATE_REQUEST_SCHEMA,
+  tryLocalSubstrateCoordinator,
+  type LocalSubstrateCoordinatorRequest,
+  type LocalSubstrateCoordinatorTransport,
+  type LocalSubstrateDegradationPolicy,
+  type LocalSubstrateProducer,
+  type TryLocalSubstrateCoordinatorResult,
+} from './local-substrate.js'
+import type { AtribRecord, UnsignedAtribRecord } from './types.js'
 import type { ArchiveSubmissionOptions, SubmissionQueue, ProofBundle } from './submission.js'
 import type { CapturedMcpOAuthEvidence, McpOAuthEvidenceCaptureOptions } from './oauth-evidence.js'
 
 const HEX_32 = /^[0-9a-f]{32}$/
+const DEFAULT_LOCAL_SUBSTRATE_SHADOW_DEGRADATION: LocalSubstrateDegradationPolicy = {
+  if_unavailable: 'sign locally in producer and continue without coordinator receipt',
+  primary_path_blocking: false,
+}
 
 /** Context passed to a {@link PreCallTransform} callback. */
 export interface PreCallTransformContext {
@@ -97,6 +110,29 @@ export interface RecordReferenceCandidate {
 export type RecordReferenceResolver = (
   candidate: RecordReferenceCandidate,
 ) => boolean | Promise<boolean>
+
+export interface LocalSubstrateShadowAttempt {
+  request: LocalSubstrateCoordinatorRequest
+  result: TryLocalSubstrateCoordinatorResult
+  expectedRecordHash: string
+  recordHashMatches?: boolean
+}
+
+export interface LocalSubstrateShadowOptions {
+  /** Coordinator transport. Library callers can use HTTP, Unix sockets, or tests. */
+  transport: LocalSubstrateCoordinatorTransport
+  /** Producer identity written into the coordinator envelope. */
+  producer: LocalSubstrateProducer
+  /** Per-attempt timeout. Defaults to the shared client helper default. */
+  timeoutMs?: number
+  /** Fallback posture written into the coordinator envelope. */
+  degradation?: LocalSubstrateDegradationPolicy
+  /**
+   * Optional observer for rollout telemetry. It fires after the direct path has
+   * signed locally, and any observer error is caught per §5.8.
+   */
+  onAttempt?: (attempt: LocalSubstrateShadowAttempt) => void | Promise<void>
+}
 
 /**
  * Pre-sign payload context passed to `onRecord` alongside the signed
@@ -326,6 +362,13 @@ export interface AtribOptions {
     args?: 'omit' | 'plain-sha256' | 'salted-sha256'
     result?: 'omit' | 'plain-sha256' | 'salted-sha256'
   }
+  /**
+   * Opt-in local substrate shadow probe. The middleware sends the exact
+   * unsigned record body to a coordinator in `shadow_probe` mode, then still
+   * signs, mirrors, and submits locally. This proves startup-spawn reachability
+   * without moving ownership of queue or mirror side effects.
+   */
+  localSubstrate?: LocalSubstrateShadowOptions
 }
 
 /** Extended McpServer with atrib-specific methods. */
@@ -555,19 +598,14 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   }
 
   /**
-   * Build + sign an attribution record from a tools/call request. Pure
-   * function over (request, closure-scoped key + options), no side effects.
-   * autoChain bookkeeping, onRecord, writeOutboundContext, and queue.submit
-   * are intentionally NOT performed here; the caller decides when to commit
-   * those (post-success only).
-   */
-  /**
    * Build + sign a record from the request. When `resultForHash` is
    * supplied, the disclosure.result dial drives result_hash / result_salt
    * computation against the JCS canonicalization of that object.
    * Pre-call signing (preCallTransform path) calls without resultForHash
    * because the handler hasn't returned yet; disclosure.result is
-   * silently ignored on that path with a warning.
+   * silently ignored on that path with a warning. The optional local
+   * substrate shadow probe is fire-and-forget and never replaces local
+   * signing in this path.
    */
   const buildSignedRecord = async (
     request: Record<string, unknown>,
@@ -780,7 +818,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
       }
     }
 
-    const record: AtribRecord = {
+    const record: UnsignedAtribRecord = {
       spec_version: 'atrib/1.0',
       content_id: contentId,
       creator_key: publicKeyB64!,
@@ -788,7 +826,6 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
       event_type: eventType,
       context_id: contextId,
       timestamp: Date.now(),
-      signature: '',
       ...(argsHashField ? { args_hash: argsHashField } : {}),
       ...(argsSaltField ? { args_salt: argsSaltField } : {}),
       ...(informedByList ? { informed_by: informedByList } : {}),
@@ -796,11 +833,34 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
       ...(resultSaltField ? { result_salt: resultSaltField } : {}),
       ...(sessionToken ? { session_token: sessionToken } : {}),
       ...(toolNameField !== undefined ? { tool_name: toolNameField } : {}),
-    } as AtribRecord
+    } as UnsignedAtribRecord
 
     // §1.4.2: Sign the record
-    const signed = await signRecord(record, privateKey)
+    const signed = await signRecord({ ...record, signature: '' } as AtribRecord, privateKey)
     const recordHashHex = hexEncode(sha256(canonicalRecord(signed)))
+    dispatchLocalSubstrateShadow(
+      {
+        schema: LOCAL_SUBSTRATE_REQUEST_SCHEMA,
+        operation: 'sign_record',
+        mode: 'shadow_probe',
+        producer: options.localSubstrate?.producer ?? {
+          name: 'unknown-producer',
+          harness_class: 'startup-spawn',
+        },
+        context: {
+          source: '@atrib/mcp',
+          context_id: contextId,
+          chain_tail: chainRootValue,
+          ...(parentRecordHashSeeded && parentRecordHashSeed
+            ? { parent_record_hash: parentRecordHashSeed }
+            : {}),
+        },
+        record_body: record,
+        degradation:
+          options.localSubstrate?.degradation ?? DEFAULT_LOCAL_SUBSTRATE_SHADOW_DEGRADATION,
+      },
+      `sha256:${recordHashHex}`,
+    )
 
     return {
       signed,
@@ -811,6 +871,50 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
       eventType,
       parentRecordHashSeeded,
     }
+  }
+
+  const dispatchLocalSubstrateShadow = (
+    request: LocalSubstrateCoordinatorRequest,
+    expectedRecordHash: string,
+  ): void => {
+    const shadow = options.localSubstrate
+    if (!shadow) return
+
+    void tryLocalSubstrateCoordinator(request, {
+      transport: shadow.transport,
+      ...(shadow.timeoutMs !== undefined ? { timeoutMs: shadow.timeoutMs } : {}),
+      expectedHarnessClass: shadow.producer.harness_class,
+      directRecordBody: request.record_body,
+    })
+      .then((result) => {
+        const actualRecordHash = result.ok ? result.response.record_hash : undefined
+        const recordHashMatches =
+          actualRecordHash !== undefined ? actualRecordHash === expectedRecordHash : undefined
+        if (recordHashMatches === false) {
+          console.warn('atrib: local substrate shadow record_hash mismatch', {
+            expected: expectedRecordHash,
+            actual: actualRecordHash,
+          })
+        }
+        if (shadow.onAttempt) {
+          try {
+            const observed = shadow.onAttempt({
+              request,
+              result,
+              expectedRecordHash,
+              ...(recordHashMatches !== undefined ? { recordHashMatches } : {}),
+            })
+            void Promise.resolve(observed).catch((error) => {
+              console.warn('atrib: local substrate shadow observer rejected', error)
+            })
+          } catch (error) {
+            console.warn('atrib: local substrate shadow observer threw', error)
+          }
+        }
+      })
+      .catch((error) => {
+        console.warn('atrib: local substrate shadow probe failed unexpectedly', error)
+      })
   }
 
   /**

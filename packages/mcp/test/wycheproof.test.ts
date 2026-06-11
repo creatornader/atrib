@@ -37,6 +37,7 @@ interface WycheproofTestFile {
 }
 
 let testData: WycheproofTestFile | null = null
+const WYCHEPROOF_FETCH_TIMEOUT_MS = 30_000
 
 beforeAll(async () => {
   const url =
@@ -47,7 +48,7 @@ beforeAll(async () => {
     return
   }
   testData = (await res.json()) as WycheproofTestFile
-})
+}, WYCHEPROOF_FETCH_TIMEOUT_MS)
 
 describe('Wycheproof Ed25519 vectors', () => {
   it('fetched test data successfully', () => {

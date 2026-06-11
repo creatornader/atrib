@@ -39,6 +39,24 @@ describe('parseConfig', () => {
     expect(config.archiveSubmission).toEqual({ endpoint: 'https://archive.test/v1' })
   })
 
+  it('parses opt-in local substrate shadow config', () => {
+    const config = parseConfig({
+      ...MINIMAL,
+      localSubstrate: {
+        endpoint: 'http://127.0.0.1:8787/atrib/local-substrate',
+        timeoutMs: 50,
+        headers: { 'x-atrib-substrate': 'dogfood' },
+      },
+    })
+
+    expect(config.localSubstrate).toEqual({
+      mode: 'shadow',
+      endpoint: 'http://127.0.0.1:8787/atrib/local-substrate',
+      timeoutMs: 50,
+      headers: { 'x-atrib-substrate': 'dogfood' },
+    })
+  })
+
   it('honors autoChain false', () => {
     const config = parseConfig({ ...MINIMAL, autoChain: false })
     expect(config.autoChain).toBe(false)
@@ -139,5 +157,14 @@ describe('parseConfig', () => {
 
   it('rejects logEndpoint that is not a URL', () => {
     expect(() => parseConfig({ ...MINIMAL, logEndpoint: 'not a url' })).toThrow()
+  })
+
+  it('rejects local substrate endpoint that is not a URL', () => {
+    expect(() =>
+      parseConfig({
+        ...MINIMAL,
+        localSubstrate: { endpoint: 'not a url' },
+      }),
+    ).toThrow()
   })
 })

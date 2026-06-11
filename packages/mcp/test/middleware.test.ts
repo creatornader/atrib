@@ -4,10 +4,13 @@ import { base64urlEncode } from '../src/base64url.js'
 import { getPublicKey } from '../src/signing.js'
 import * as signingModule from '../src/signing.js'
 import { decodeToken } from '../src/token.js'
-import { hexEncode } from '../src/hash.js'
+import { canonicalRecord } from '../src/canon.js'
+import { hexEncode, sha256 } from '../src/hash.js'
+import { LOCAL_SUBSTRATE_RESPONSE_SCHEMA } from '../src/local-substrate.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AtribRecord } from '../src/types.js'
-import type { OnRecordSidecar } from '../src/middleware.js'
+import type { LocalSubstrateShadowAttempt, OnRecordSidecar } from '../src/middleware.js'
+import type { LocalSubstrateCoordinatorRequest } from '../src/local-substrate.js'
 
 // Deterministic test key
 const TEST_PRIVATE_KEY = new Uint8Array(32).fill(42)
@@ -77,6 +80,23 @@ function createToolCallRequest(toolName: string, meta?: Record<string, unknown>)
         ...meta,
       },
     },
+  }
+}
+
+async function waitForProbe(done: Promise<void>): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    await Promise.race([
+      done,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('timed out waiting for local substrate probe')),
+          1000,
+        )
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
   }
 }
 
@@ -1049,6 +1069,128 @@ describe('atrib() middleware', () => {
 
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('no serverUrl provided'))
       warnSpy.mockRestore()
+    })
+  })
+
+  describe('localSubstrate shadow probe', () => {
+    it('sends the exact unsigned body while keeping local signing authoritative', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const resultObj = { content: [{ type: 'text', text: 'ok' }] }
+      const originalHandler = vi.fn().mockResolvedValue(resultObj)
+      const captured: AtribRecord[] = []
+      const seenRequests: LocalSubstrateCoordinatorRequest[] = []
+      const attempts: LocalSubstrateShadowAttempt[] = []
+      let resolveAttempt!: () => void
+      const attemptDone = new Promise<void>((resolve) => {
+        resolveAttempt = resolve
+      })
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        logSubmission: 'disabled',
+        onRecord: (record) => {
+          captured.push(record)
+        },
+        localSubstrate: {
+          producer: {
+            name: 'test-wrapper',
+            harness_class: 'startup-spawn',
+            pid: 123,
+            transport: 'stdio-mcp-wrapper',
+            creator_key_policy: 'explicit-single-creator',
+          },
+          transport: async (request) => {
+            seenRequests.push(request)
+            const signed = await signingModule.signRecord(
+              { ...request.record_body, signature: '' } as AtribRecord,
+              TEST_PRIVATE_KEY,
+            )
+            return {
+              schema: LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
+              operation: request.operation,
+              status: 'accepted',
+              record_hash: `sha256:${hexEncode(sha256(canonicalRecord(signed)))}`,
+            }
+          },
+          onAttempt: (attempt) => {
+            attempts.push(attempt)
+            resolveAttempt()
+          },
+        },
+      })
+      registerToolHandler(originalHandler)
+
+      await getToolHandler()!(createToolCallRequest('search_web'), {})
+      await waitForProbe(attemptDone)
+
+      expect(captured).toHaveLength(1)
+      expect(seenRequests).toHaveLength(1)
+      const request = seenRequests[0]!
+      const { signature: _signature, ...unsignedCommitted } = captured[0]!
+      expect(request.mode).toBe('shadow_probe')
+      expect(request.operation).toBe('sign_record')
+      expect(request.producer).toMatchObject({
+        name: 'test-wrapper',
+        harness_class: 'startup-spawn',
+        pid: 123,
+        transport: 'stdio-mcp-wrapper',
+        creator_key_policy: 'explicit-single-creator',
+      })
+      expect(request.context).toMatchObject({
+        source: '@atrib/mcp',
+        context_id: captured[0]!.context_id,
+        chain_tail: captured[0]!.chain_root,
+      })
+      expect(request.record_body).toEqual(unsignedCommitted)
+      expect(attempts).toHaveLength(1)
+      expect(attempts[0]!.recordHashMatches).toBe(true)
+      expect((resultObj as { _meta?: { atrib?: string } })._meta?.atrib).toBeDefined()
+    })
+
+    it('classifies coordinator unavailability without affecting the tool result', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const resultObj = { content: [{ type: 'text', text: 'ok' }] }
+      const captured: AtribRecord[] = []
+      const attempts: LocalSubstrateShadowAttempt[] = []
+      let resolveAttempt!: () => void
+      const attemptDone = new Promise<void>((resolve) => {
+        resolveAttempt = resolve
+      })
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        logSubmission: 'disabled',
+        onRecord: (record) => {
+          captured.push(record)
+        },
+        localSubstrate: {
+          producer: { name: 'test-wrapper', harness_class: 'startup-spawn' },
+          transport: async () => {
+            throw new Error('coordinator offline')
+          },
+          onAttempt: (attempt) => {
+            attempts.push(attempt)
+            resolveAttempt()
+          },
+        },
+      })
+      registerToolHandler(vi.fn().mockResolvedValue(resultObj))
+
+      const result = await getToolHandler()!(createToolCallRequest('search_web'), {})
+      await waitForProbe(attemptDone)
+
+      expect(result).toBe(resultObj)
+      expect(captured).toHaveLength(1)
+      expect((resultObj as { _meta?: { atrib?: string } })._meta?.atrib).toBeDefined()
+      expect(attempts).toHaveLength(1)
+      expect(attempts[0]!.result.ok).toBe(false)
+      expect(attempts[0]!.result.status).toBe('unavailable')
+      if (attempts[0]!.result.status !== 'unavailable') {
+        throw new Error(attempts[0]!.result.status)
+      }
+      expect(attempts[0]!.result.reason).toContain('coordinator offline')
     })
   })
 

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  LOCAL_SUBSTRATE_REQUEST_MODES,
   LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
   base64urlEncode,
   buildLocalSubstrateHealthReport,
@@ -169,6 +170,27 @@ describe('local substrate coordinator contract', () => {
         },
       ]),
     )
+  })
+
+  it('accepts shadow_probe only for startup-spawn sign requests', () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
+    const request: LocalSubstrateCoordinatorRequest = {
+      ...fixture.input.coordinator_request,
+      mode: 'shadow_probe',
+    }
+
+    expect(LOCAL_SUBSTRATE_REQUEST_MODES).toContain('shadow_probe')
+    expect(validateLocalSubstrateRequest(request).ok).toBe(true)
+
+    expect(
+      validateLocalSubstrateRequest({
+        ...request,
+        operation: 'enqueue_record_and_join_receipt',
+      }).issues,
+    ).toContainEqual({
+      path: 'mode',
+      message: 'shadow_probe is only valid for sign_record requests',
+    })
   })
 
   it('keeps coordinator health reports non-blocking and rollout-gate shaped', () => {
@@ -391,6 +413,39 @@ describe('local substrate coordinator contract', () => {
     expect(coordinator.health().status).toBe('healthy')
 
     await coordinator.flush()
+    coordinator.destroy()
+  })
+
+  it('shadow probes sign startup-spawn bodies without committing coordinator side effects', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
+    const observed: AtribRecord[] = []
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: fixtureSeed(0x11),
+      logSubmission: 'disabled',
+      onRecord: (record) => {
+        observed.push(record)
+      },
+    })
+
+    const result = await tryLocalSubstrateCoordinator(
+      {
+        ...fixture.input.coordinator_request,
+        mode: 'shadow_probe',
+      },
+      {
+        transport: coordinator.transport,
+      },
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.status).toBe('accepted')
+    if (!result.ok) {
+      throw new Error(result.status)
+    }
+    expect(result.response.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(result.response.receipt_id).toBeDefined()
+    expect(observed).toHaveLength(0)
+
     coordinator.destroy()
   })
 
