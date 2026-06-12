@@ -1,5 +1,11 @@
 # @atrib/emit
 
+## 0.15.2
+
+### Patch Changes
+
+- 07b0649: Retry missing MCP server key resolution after a bounded cooldown instead of caching a transient Keychain miss for the lifetime of a long-lived emit server.
+
 ## 0.15.1
 
 ### Patch Changes
