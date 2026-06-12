@@ -1,5 +1,12 @@
 # @atrib/integration
 
+## 0.0.31
+
+### Patch Changes
+
+- Updated dependencies [986c930]
+  - @atrib/mcp-wrap@0.8.0
+
 ## 0.0.30
 
 ### Patch Changes

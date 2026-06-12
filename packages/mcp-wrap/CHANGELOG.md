@@ -1,5 +1,11 @@
 # @atrib/mcp-wrap
 
+## 0.8.0
+
+### Minor Changes
+
+- 986c930: Add injected upstream transport support so host-owned MCP runtimes can wrap in-process servers without spawning stdio children.
+
 ## 0.7.5
 
 ### Patch Changes
