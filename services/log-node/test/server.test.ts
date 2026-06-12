@@ -327,6 +327,7 @@ describe('GET /v1/stats', () => {
     expect(res.status).toBe(200)
     const stats = (await res.json()) as {
       tree_size: number
+      lifetime_signers: number
       distinct_signers: number
       active_signers_24h: number
       active_signers_7d: number
@@ -342,10 +343,11 @@ describe('GET /v1/stats', () => {
     }
 
     expect(stats.tree_size).toBeGreaterThanOrEqual(4)
+    expect(stats.lifetime_signers).toBe(stats.distinct_signers)
     expect(stats.distinct_signers).toBeGreaterThanOrEqual(4)
     expect(stats.active_signers_24h).toBeGreaterThanOrEqual(4)
     expect(stats.active_signers_7d).toBeGreaterThanOrEqual(stats.active_signers_24h)
-    expect(stats.active_signers_7d).toBeLessThanOrEqual(stats.distinct_signers)
+    expect(stats.active_signers_7d).toBeLessThanOrEqual(stats.lifetime_signers)
     expect(stats.oldest_timestamp_ms).toBeGreaterThan(0)
     expect(stats.newest_timestamp_ms).toBeGreaterThan(0)
     expect(stats.newest_timestamp_ms!).toBeGreaterThanOrEqual(stats.oldest_timestamp_ms!)

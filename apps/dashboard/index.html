@@ -2400,7 +2400,7 @@ async function renderOverview() {
   root.append(el('div', { class: 'pulse-strip', id: 'pulse-strip' },
     pulseStat('log health', '—'),
     pulseStat('protected history', '—'),
-    pulseStat('signing actors', '—'),
+    pulseStat('active signers', '—'),
     pulseStat('proof status', '—'),
   ))
 
@@ -2696,6 +2696,24 @@ function logHealthStat(recent, stats) {
   return pulseStat('log health', '—', 'no records yet')
 }
 
+function signerActivityStat(stats) {
+  const active7d = typeof stats.active_signers_7d === 'number' ? stats.active_signers_7d : null
+  const active24h = typeof stats.active_signers_24h === 'number' ? stats.active_signers_24h : null
+  const lifetime =
+    typeof stats.lifetime_signers === 'number'
+      ? stats.lifetime_signers
+      : typeof stats.distinct_signers === 'number'
+        ? stats.distinct_signers
+        : null
+  const value = active7d ?? active24h ?? lifetime
+  const windowLabel = active7d !== null ? 'last 7d' : active24h !== null ? 'last 24h' : 'lifetime'
+  const sub =
+    lifetime !== null && windowLabel !== 'lifetime'
+      ? `${windowLabel}, ${formatCount(lifetime)} lifetime public-log keys`
+      : 'creator keys with records'
+  return pulseStat('active signers', value !== null ? formatCount(value) : '—', sub)
+}
+
 function updatePulseStrip(stats, checkpoint, recent = null) {
   const strip = document.getElementById('pulse-strip')
   if (!strip) return
@@ -2719,7 +2737,7 @@ function updatePulseStrip(stats, checkpoint, recent = null) {
   strip.replaceChildren(
     logHealthStat(recent, stats),
     pulseStat('protected history', formatCount(stats.tree_size), 'signed records committed'),
-    pulseStat('signing actors', formatCount(stats.distinct_signers), 'creator keys with records'),
+    signerActivityStat(stats),
     pulseStat(
       'proof status',
       cp.rootHash ? 'signed snapshot' : '—',
@@ -6307,7 +6325,7 @@ async function renderAnchoring() {
     const total = Object.values(eb).reduce((a, b) => a + b, 0)
     stack.append(el('div', { class: 'pulse-strip' },
       pulseStat('tree size', String(stats.tree_size ?? '—'), 'total signed entries'),
-      pulseStat('signers', String(stats.distinct_signers ?? '—'), 'distinct creator_keys'),
+      signerActivityStat(stats),
       pulseStat('time span',
         stats.oldest_timestamp_ms && stats.newest_timestamp_ms
           ? `${Math.max(1, Math.round((stats.newest_timestamp_ms - stats.oldest_timestamp_ms) / (1000 * 60 * 60)))}h`

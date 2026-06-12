@@ -551,7 +551,8 @@ function handleLogPubkey(res: ServerResponse, signer: CheckpointSigner): void {
  * Response shape:
  *   {
  *     "tree_size": <int>,
- *     "distinct_signers": <int>,       // cumulative signer keys ever seen
+ *     "lifetime_signers": <int>,       // cumulative signer keys ever seen
+ *     "distinct_signers": <int>,       // legacy alias for lifetime_signers
  *     "active_signers_24h": <int>,     // signer keys with >=1 record in the last 24h
  *     "active_signers_7d": <int>,      // signer keys with >=1 record in the last 7d
  *     "oldest_timestamp_ms": <int> | null,
@@ -1195,6 +1196,7 @@ function handleStats(res: ServerResponse, tree: MerkleTree): void {
   res.setHeader('cache-control', 'public, max-age=10')
   sendJson(res, 200, {
     tree_size: size,
+    lifetime_signers: signers.size,
     distinct_signers: signers.size,
     active_signers_24h: activeSigners24h.size,
     active_signers_7d: activeSigners7d.size,

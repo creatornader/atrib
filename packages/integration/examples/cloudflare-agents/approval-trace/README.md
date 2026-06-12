@@ -67,11 +67,13 @@ clicks the approval, rejection, and diagnostic-error paths in Chromium, and
 asserts that the signed timeline records open the receipt/proof panel. It does
 not submit records to the public log.
 
-The proof script creates `.tmp/secrets.json` with demo-only signing keys, deploys
-the Worker, drives approved, rejected, and diagnostic-error runs through the same
-HTTP endpoints the UI uses, and verifies record hashes, signatures, public
-inclusion proofs, causal edges, and graph-node derivation for the generated
-records.
+The proof script uses stable demo-only signing keys from
+`~/.atrib/secrets/cloudflare-approval-trace.json`, syncs them into
+`.tmp/secrets.json` for Wrangler, deploys the Worker, drives approved, rejected,
+and diagnostic-error runs through the same HTTP endpoints the UI uses, and
+verifies record hashes, signatures, public inclusion proofs, causal edges, and
+graph-node derivation for the generated records. Set
+`ATRIB_APPROVAL_TRACE_SECRETS_PATH` to point at another local secrets file.
 
 The demo does not publish to the graph or directory services. It keeps the
 runtime proof small: records are signed, submitted to the public log, persisted
@@ -86,8 +88,9 @@ For local development:
 pnpm --filter @atrib/cloudflare-approval-trace dev
 ```
 
-The dev script derives `.tmp/dev.vars` from `.tmp/secrets.json` before starting
-Wrangler. The generated file stays ignored and local.
+The dev script prepares the stable demo signing keys, derives `.tmp/dev.vars`
+from `.tmp/secrets.json`, and then starts Wrangler. The generated files stay
+ignored and local.
 
 ## Optional model planner
 

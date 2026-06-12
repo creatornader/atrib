@@ -5,77 +5,158 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 
 const BINARY = resolve(__dirname, '..', 'dist', 'index.js')
+const EXPECTED_TOOL_NAMES = [
+  'atrib-annotate',
+  'atrib-revise',
+  'atrib-verify',
+  'emit',
+  'recall_annotations',
+  'recall_by_content',
+  'recall_by_signer',
+  'recall_my_attribution_history',
+  'recall_orphans',
+  'recall_revisions',
+  'recall_session_chain',
+  'recall_walk',
+  'summarize',
+  'trace',
+  'trace_forward',
+]
 
-interface JsonRpcResponse {
-  jsonrpc: '2.0'
-  id: number
-  result?: unknown
-  error?: { code: number; message: string }
+interface HttpHost {
+  child: ChildProcessWithoutNullStreams
+  endpoint: string
+  healthEndpoint: string
+  close(): Promise<void>
 }
 
-class McpClient {
-  private child: ChildProcessWithoutNullStreams
-  private buffer = ''
-  private pending = new Map<number, (msg: JsonRpcResponse) => void>()
+function processEnvWith(env: NodeJS.ProcessEnv): Record<string, string> {
+  const merged: Record<string, string> = {}
+  for (const [key, value] of Object.entries({ ...process.env, ...env })) {
+    if (typeof value === 'string') merged[key] = value
+  }
+  return merged
+}
 
-  constructor(env: NodeJS.ProcessEnv) {
-    this.child = spawn('node', [BINARY], {
-      env: { ...process.env, ...env },
-      stdio: ['pipe', 'pipe', 'pipe'],
+async function connectStdioClient(env: NodeJS.ProcessEnv): Promise<Client> {
+  const transport = new StdioClientTransport({
+    command: 'node',
+    args: [BINARY],
+    env: processEnvWith(env),
+    stderr: 'pipe',
+  })
+  const client = new Client({
+    name: 'atrib-primitives-stdio-test',
+    version: '0.0.0',
+  })
+  try {
+    await client.connect(transport)
+    return client
+  } catch (error) {
+    await transport.close().catch(() => {})
+    throw error
+  }
+}
+
+function startHttpHost(env: NodeJS.ProcessEnv, path = '/mcp'): Promise<HttpHost> {
+  return new Promise((resolveHost, rejectHost) => {
+    const child = spawn(
+      'node',
+      [
+        BINARY,
+        '--transport',
+        'streamable-http',
+        '--port',
+        '0',
+        '--path',
+        path,
+        '--json',
+        '--session-idle-ms',
+        '60000',
+      ],
+      {
+        env: processEnvWith(env),
+        stdio: ['pipe', 'pipe', 'pipe'],
+      },
+    )
+    let settled = false
+    let stdout = ''
+    let stderr = ''
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      child.kill('SIGTERM')
+      rejectHost(new Error(`HTTP host did not become ready. stderr=${stderr}`))
+    }, 5000)
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf8')
     })
-    this.child.stdout.on('data', (chunk: Buffer) => {
-      this.buffer += chunk.toString('utf8')
-      let idx = this.buffer.indexOf('\n')
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString('utf8')
+      let idx = stdout.indexOf('\n')
       while (idx >= 0) {
-        const line = this.buffer.slice(0, idx).trim()
-        this.buffer = this.buffer.slice(idx + 1)
+        const line = stdout.slice(0, idx).trim()
+        stdout = stdout.slice(idx + 1)
         if (line) {
-          const msg = JSON.parse(line) as JsonRpcResponse
-          const cb = this.pending.get(msg.id)
-          if (cb) {
-            this.pending.delete(msg.id)
-            cb(msg)
+          try {
+            const ready = JSON.parse(line) as {
+              status?: string
+              endpoint?: string
+              health_endpoint?: string
+            }
+            if (ready.status === 'ready' && ready.endpoint && ready.health_endpoint) {
+              settled = true
+              clearTimeout(timer)
+              resolveHost({
+                child,
+                endpoint: ready.endpoint,
+                healthEndpoint: ready.health_endpoint,
+                close: () => stopChild(child),
+              })
+              return
+            }
+          } catch {
+            // Ignore non-ready stdout lines from child startup.
           }
         }
-        idx = this.buffer.indexOf('\n')
+        idx = stdout.indexOf('\n')
       }
     })
-  }
-
-  send(method: string, params: unknown, id: number): Promise<JsonRpcResponse> {
-    return new Promise((resolveResp, rejectResp) => {
-      this.pending.set(id, resolveResp)
-      this.child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
-      setTimeout(() => {
-        if (this.pending.has(id)) {
-          this.pending.delete(id)
-          rejectResp(new Error(`mcp call ${method} timed out`))
-        }
-      }, 4000)
+    child.once('exit', (code, signal) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      rejectHost(
+        new Error(
+          `HTTP host exited before ready: code=${code ?? 'null'} signal=${signal ?? 'null'} stderr=${stderr}`,
+        ),
+      )
     })
-  }
+  })
+}
 
-  async initialize(): Promise<void> {
-    await this.send(
-      'initialize',
-      {
-        protocolVersion: '2024-11-05',
-        capabilities: {},
-        clientInfo: { name: 'atrib-primitives-test', version: '0.0.0' },
-      },
-      0,
-    )
-    this.child.stdin.write(
-      JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }) + '\n',
-    )
-  }
-
-  close(): void {
-    this.child.stdin.end()
-    this.child.kill('SIGTERM')
-  }
+function stopChild(child: ChildProcessWithoutNullStreams): Promise<void> {
+  return new Promise((resolveStop) => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      resolveStop()
+      return
+    }
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      resolveStop()
+    }, 2000)
+    child.once('exit', () => {
+      clearTimeout(timer)
+      resolveStop()
+    })
+    child.kill('SIGTERM')
+  })
 }
 
 let tmp: string
@@ -93,53 +174,82 @@ afterEach(() => {
 
 describe('atrib-primitives MCP runtime', () => {
   it('lists every cognitive primitive tool from one stdio process', async () => {
-    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    const client = await connectStdioClient({ ATRIB_RECORD_FILE: recordFile })
     try {
-      await client.initialize()
-      const res = await client.send('tools/list', {}, 1)
-      expect(res.error).toBeUndefined()
-      const tools = (res.result as { tools: { name: string }[] }).tools
-      expect(tools.map((tool) => tool.name).sort()).toEqual([
-        'atrib-annotate',
-        'atrib-revise',
-        'atrib-verify',
-        'emit',
-        'recall_annotations',
-        'recall_by_content',
-        'recall_by_signer',
-        'recall_my_attribution_history',
-        'recall_orphans',
-        'recall_revisions',
-        'recall_session_chain',
-        'recall_walk',
-        'summarize',
-        'trace',
-        'trace_forward',
-      ])
+      const listed = await client.listTools()
+      const tools = listed.tools
+      expect(tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
     } finally {
-      client.close()
+      await client.close()
     }
   })
 
   it('routes a child primitive tool call through the combined server', async () => {
-    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    const client = await connectStdioClient({ ATRIB_RECORD_FILE: recordFile })
     try {
-      await client.initialize()
-      const res = await client.send(
-        'tools/call',
-        {
-          name: 'recall_my_attribution_history',
-          arguments: { compact: true },
-        },
-        2,
-      )
-      expect(res.error).toBeUndefined()
-      const result = res.result as { content: { type: string; text: string }[] }
+      const result = await client.callTool({
+        name: 'recall_my_attribution_history',
+        arguments: { compact: true },
+      })
       const payload = JSON.parse(result.content[0]!.text) as { total: number; returned: number }
       expect(payload.total).toBe(0)
       expect(payload.returned).toBe(0)
     } finally {
-      client.close()
+      await client.close()
+    }
+  })
+
+  it('serves the same tools from one host-owned Streamable HTTP process', async () => {
+    const host = await startHttpHost({ ATRIB_AGENT: 'test-agent', ATRIB_RECORD_FILE: recordFile })
+    try {
+      const health = (await (await fetch(host.healthEndpoint)).json()) as {
+        status?: string
+        report?: {
+          primitive_runtime?: { transport?: string; tool_count?: number }
+          profile?: { agent?: string }
+        }
+      }
+      expect(health.status).toBe('healthy')
+      expect(health.report?.primitive_runtime?.transport).toBe('streamable-http')
+      expect(health.report?.primitive_runtime?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
+      expect(health.report?.profile?.agent).toBe('test-agent')
+
+      const transport = new StreamableHTTPClientTransport(new URL(host.endpoint))
+      const client = new Client({
+        name: 'atrib-primitives-http-test',
+        version: '0.0.0',
+      })
+      try {
+        await client.connect(transport)
+        const listed = await client.listTools()
+        expect(listed.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
+        const result = await client.callTool({
+          name: 'recall_my_attribution_history',
+          arguments: { compact: true },
+        })
+        const payload = JSON.parse(result.content[0]!.text) as {
+          total: number
+          returned: number
+        }
+        expect(payload.total).toBe(0)
+        expect(payload.returned).toBe(0)
+      } finally {
+        await client.close()
+      }
+    } finally {
+      await host.close()
+    }
+  })
+
+  it('normalizes repeated trailing slashes in the HTTP path', async () => {
+    const host = await startHttpHost({ ATRIB_RECORD_FILE: recordFile }, 'nested/mcp////')
+    try {
+      expect(new URL(host.endpoint).pathname).toBe('/nested/mcp')
+      expect(new URL(host.healthEndpoint).pathname).toBe('/nested/mcp/health')
+      const health = (await (await fetch(host.healthEndpoint)).json()) as { status?: string }
+      expect(health.status).toBe('healthy')
+    } finally {
+      await host.close()
     }
   })
 })

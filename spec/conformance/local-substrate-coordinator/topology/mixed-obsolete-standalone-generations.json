@@ -1,0 +1,220 @@
+{
+  "name": "mixed-obsolete-standalone-generations",
+  "snapshot": {
+    "schema": "atrib.local-substrate-topology-snapshot.v0",
+    "source": "fixture",
+    "processes": [
+      {
+        "pid": 100,
+        "ppid": 1,
+        "service": "codex-app-server",
+        "started_at": "2026-06-11T21:00:00.000Z",
+        "command": "codex app-server"
+      },
+      {
+        "pid": 210,
+        "ppid": 100,
+        "service": "atrib-recall",
+        "started_at": "2026-06-11T21:14:22.000Z",
+        "command": "node services/atrib-recall/dist/index.js"
+      },
+      {
+        "pid": 211,
+        "ppid": 100,
+        "service": "atrib-revise",
+        "started_at": "2026-06-11T21:14:22.000Z",
+        "command": "node services/atrib-revise/dist/main.js"
+      },
+      {
+        "pid": 212,
+        "ppid": 100,
+        "service": "atrib-annotate",
+        "started_at": "2026-06-11T21:14:22.000Z",
+        "command": "node services/atrib-annotate/dist/main.js"
+      },
+      {
+        "pid": 213,
+        "ppid": 100,
+        "service": "atrib-trace",
+        "started_at": "2026-06-11T21:14:22.000Z",
+        "command": "node services/atrib-trace/dist/main.js"
+      },
+      {
+        "pid": 214,
+        "ppid": 100,
+        "service": "atrib-verify",
+        "started_at": "2026-06-11T21:14:22.000Z",
+        "command": "node services/atrib-verify/dist/main.js"
+      },
+      {
+        "pid": 215,
+        "ppid": 100,
+        "service": "atrib-summarize",
+        "started_at": "2026-06-11T21:14:23.000Z",
+        "command": "node services/atrib-summarize/dist/main.js"
+      },
+      {
+        "pid": 216,
+        "ppid": 100,
+        "service": "atrib-emit",
+        "started_at": "2026-06-11T21:14:23.000Z",
+        "command": "node services/atrib-emit/dist/main.js"
+      },
+      {
+        "pid": 310,
+        "ppid": 100,
+        "service": "atrib-verify",
+        "started_at": "2026-06-11T21:34:03.000Z",
+        "command": "node services/atrib-verify/dist/main.js"
+      },
+      {
+        "pid": 311,
+        "ppid": 100,
+        "service": "atrib-emit",
+        "started_at": "2026-06-11T21:34:03.000Z",
+        "command": "node services/atrib-emit/dist/main.js"
+      },
+      {
+        "pid": 312,
+        "ppid": 100,
+        "service": "atrib-recall",
+        "started_at": "2026-06-11T21:34:03.000Z",
+        "command": "node services/atrib-recall/dist/index.js"
+      },
+      {
+        "pid": 313,
+        "ppid": 100,
+        "service": "atrib-annotate",
+        "started_at": "2026-06-11T21:34:03.000Z",
+        "command": "node services/atrib-annotate/dist/main.js"
+      },
+      {
+        "pid": 314,
+        "ppid": 100,
+        "service": "atrib-trace",
+        "started_at": "2026-06-11T21:34:03.000Z",
+        "command": "node services/atrib-trace/dist/main.js"
+      },
+      {
+        "pid": 315,
+        "ppid": 100,
+        "service": "atrib-revise",
+        "started_at": "2026-06-11T21:34:03.000Z",
+        "command": "node services/atrib-revise/dist/main.js"
+      },
+      {
+        "pid": 316,
+        "ppid": 100,
+        "service": "atrib-summarize",
+        "started_at": "2026-06-11T21:34:03.000Z",
+        "command": "node services/atrib-summarize/dist/main.js"
+      },
+      {
+        "pid": 410,
+        "ppid": 100,
+        "service": "atrib-primitives",
+        "started_at": "2026-06-11T23:59:44.000Z",
+        "command": "node services/atrib-primitives/dist/index.js"
+      },
+      {
+        "pid": 500,
+        "ppid": 1,
+        "service": "atrib-local-substrate",
+        "started_at": "2026-06-11T20:00:00.000Z",
+        "command": "node services/atrib-emit/dist/local-substrate-host.js --port 8797"
+      }
+    ],
+    "configs": [
+      {
+        "name": "codex",
+        "path": "~/.codex/config.toml",
+        "exists": true,
+        "server_count": 1,
+        "has_primitives_runtime": true,
+        "standalone_primitive_servers": [],
+        "local_substrate_endpoints": ["http://127.0.0.1:8797/atrib/local-substrate"]
+      },
+      {
+        "name": "claude-code",
+        "path": "~/.claude.json",
+        "exists": true,
+        "server_count": 1,
+        "has_primitives_runtime": true,
+        "standalone_primitive_servers": [],
+        "local_substrate_endpoints": ["http://127.0.0.1:8788/atrib/local-substrate"]
+      }
+    ],
+    "launch_agents": [
+      {
+        "label": "com.nader.atrib-local-substrate.codex",
+        "kind": "coordinator",
+        "endpoint": "http://127.0.0.1:8797/atrib/local-substrate",
+        "agent": "codex"
+      },
+      {
+        "label": "com.nader.atrib-drain",
+        "kind": "watcher-wal",
+        "endpoint": "http://127.0.0.1:8797/atrib/local-substrate",
+        "agent": "knowledge-watcher"
+      }
+    ],
+    "long_lived_agents": [
+      {
+        "label": "ai.hermes.gateway",
+        "kind": "long-lived-agent",
+        "endpoint": "http://127.0.0.1:8797/atrib/local-substrate",
+        "agent": "hermes"
+      }
+    ],
+    "coordinator_health": [
+      {
+        "endpoint": "http://127.0.0.1:8797/atrib/local-substrate",
+        "reachable": true,
+        "status": "healthy",
+        "report": {
+          "coordinator": {
+            "pid": 500,
+            "version": "0.15.0",
+            "transport": "node-http",
+            "creator_key_scope": "keychain:atrib-creator-codex"
+          },
+          "queues": {
+            "log_submission_depth": 0
+          },
+          "wal": {
+            "pending": 0,
+            "orphan_receipts": 0
+          },
+          "contexts": {
+            "active": []
+          },
+          "processes": {
+            "active_wrappers": 0,
+            "stale_children": 0
+          }
+        }
+      }
+    ]
+  },
+  "expected": {
+    "status": "mixed",
+    "summary": {
+      "primitive_runtime_processes": 1,
+      "primitive_runtime_stdio_processes": 1,
+      "standalone_primitive_processes": 14,
+      "standalone_primitive_generations": 2,
+      "complete_standalone_primitive_generations": 2,
+      "obsolete_standalone_primitive_processes": 14,
+      "obsolete_standalone_primitive_generations": 2,
+      "duplicate_primitive_groups": 1
+    },
+    "gates": {
+      "coordinator-health": "pass",
+      "startup-spawn-mcp-collapse": "warn",
+      "startup-spawn-config": "pass",
+      "long-lived-agent-route": "pass",
+      "watcher-wal-route": "pass",
+      "broad-default-readiness": "fail"
+    }
+  }
+}
