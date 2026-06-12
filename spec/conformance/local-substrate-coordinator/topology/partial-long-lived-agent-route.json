@@ -259,7 +259,38 @@
         "valid_context_id": true,
         "mtime_ms": 1781250000000
       }
-    ]
+    ],
+    "knowledge_base_receipt_report": {
+      "path": "~/.atrib/state/knowledge-base-reports/receipt-join-latest.json",
+      "exists": true,
+      "status": "clean",
+      "generated_at": "2026-06-10T23:00:00.000Z",
+      "age_ms": 3600000,
+      "max_age_ms": 108000000,
+      "stale": false,
+      "days": 7,
+      "observations": {
+        "entries": 631,
+        "pending_receipt_joins": 0
+      },
+      "annotations": {
+        "entries": 645,
+        "pending_receipt_or_parent_joins": 0
+      },
+      "wal": {
+        "queued": 0,
+        "quarantined": 0,
+        "receipted": 0
+      },
+      "pending": {
+        "observations": 0,
+        "annotations": 0,
+        "wal_queued": 0,
+        "wal_quarantined": 0,
+        "total": 0
+      },
+      "caveats": 2
+    }
   },
   "expected": {
     "status": "mixed",
@@ -278,7 +309,9 @@
       "bridge_runtime_http_endpoints": 2,
       "bridge_runtime_http_healthy": 2,
       "active_session_profiles": 2,
-      "active_session_profiles_valid": 2
+      "active_session_profiles_valid": 2,
+      "knowledge_base_receipt_report_status": "clean",
+      "knowledge_base_receipt_pending_total": 0
     },
     "gates": {
       "coordinator-health": "pass",
@@ -289,7 +322,8 @@
       "long-lived-agent-route": "warn",
       "broad-default-readiness": "fail",
       "host-owned-bridge-http": "pass",
-      "host-owned-active-session-context": "pass"
+      "host-owned-active-session-context": "pass",
+      "knowledge-base-receipt-join-back": "pass"
     }
   }
 }
