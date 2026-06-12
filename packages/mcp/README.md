@@ -336,7 +336,7 @@ The shapes are normative. Producers that emit these event_types are expected to 
 
 `@atrib/recall@0.11.0+` uses `extractIndexableText` to build its BM25 corpus; before [D086](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content) it indexed only annotation summaries. `@atrib/trace@0.5.0+` uses the same shapes in `summarizeSidecar` to surface revision content alongside observation `what` and annotation `summary`.
 
-### Harness discovery: env-var + file-fallback ([D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) v1 + v2)
+### Harness discovery: env-var + file-fallback ([D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) v1 + v2 + v3)
 
 `resolveEnvContextId` derives a default `context_id` for cognitive-primitive MCP servers (`@atrib/emit`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`) when the caller omits one. Precedence:
 
@@ -351,14 +351,18 @@ The `HarnessDiscovery` interface:
 ```ts
 interface HarnessDiscovery {
   envVar: string // documented env var name
-  fallbackFile?: () => string // optional, returns per-instance state file path
+  fallbackFile?: (env?: NodeJS.ProcessEnv) => string // optional state file path
   parse(value: string): string | null // env or file value → 32-hex or null
 }
 ```
 
 The file-fallback path is for harnesses that spawn MCP children at process startup, before any per-session env exists. The harness's hook layer (operator-side) writes the state file from a session-aware context; the registry entry's `fallbackFile` thunk returns the matching path. File-read constraints: maximum 128 bytes, trimmed whitespace, silent failure on all errors.
 
-The included Claude Code entry uses `~/.claude/state/active-session-id-${process.ppid}` (per-PPID keyed so concurrent Claude Code instances don't collide). The matching writer is a SessionStart-equivalent hook in the host's hook layer; the writer reads `CLAUDE_CODE_SESSION_ID` from its env (Claude Code provides it to hook subprocesses) and writes the file atomically.
+The included Claude Code entry uses `~/.claude/state/active-session-id-${process.ppid}` (per-PPID keyed so concurrent Claude Code instances don't collide). The matching writer is a SessionStart-equivalent hook in the host's hook layer; the writer reads `CLAUDE_CODE_SESSION_ID` from its env (Claude Code provides it to hook subprocesses) and writes the file atomically. The per-PPID fallback is skipped when `process.ppid <= 1`, because launchd-owned hosts must use the profile fallback instead of treating `active-session-id-1` as session evidence.
+
+The included Codex entry reads `CODEX_THREAD_ID` when a child process inherits Codex's per-thread env. For long-lived local primitive hosts whose parent process is not the Codex app server, the registry also includes a profile fallback entry. If `ATRIB_ACTIVE_SESSION_PROFILE` or `ATRIB_AGENT` is a safe profile name, the reader checks `~/.claude/state/active-session-id-<profile>`. The Codex hook writer prefers `CODEX_THREAD_ID` and maintains `active-session-id-codex`, so a launchd-owned `atrib-primitives` process with `ATRIB_AGENT=codex` can find the active session even when `process.ppid` is `1`. Hook-envelope session ids are not trusted by default; `ATRIB_ACTIVE_SESSION_TRUST_HOOK_SESSION_ID=1` is only for harnesses whose envelope id is known to be stable.
+
+The profile fallback is a host-owned single-active-session route. If two simultaneous sessions share the same profile name, the latest writer wins. Callers that need per-call disambiguation must pass `context_id` explicitly.
 
 Adding a new harness: add a registry entry. If the harness spawns MCP children per-session, set only `envVar`. If at startup, add `fallbackFile` and ship a corresponding writer in the harness's host integration (typically a SessionStart-equivalent hook).
 

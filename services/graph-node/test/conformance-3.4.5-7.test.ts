@@ -88,7 +88,9 @@ beforeAll(async () => {
   close = handle.close
 })
 
-afterAll(async () => { await close() })
+afterAll(async () => {
+  await close()
+})
 
 async function ingestAll(records: AtribRecord[]): Promise<void> {
   for (const r of records) {
@@ -145,13 +147,15 @@ describe('§3.4.5 conformance: provenance trace', () => {
       for (let i = 0; i < c.input.records.length; i++) {
         if (c.expected.record_indexes_in_response.includes(i)) continue
         const excludedHash = `sha256:${hashHex(c.input.records[i]!)}`
-        expect(actualHashSet, `record at index ${i} should NOT be in trace response`).not.toContain(excludedHash)
+        expect(actualHashSet, `record at index ${i} should NOT be in trace response`).not.toContain(
+          excludedHash,
+        )
       }
     })
   }
 })
 
-describe('§3.4.6 conformance: causal chain', () => {
+describe('§3.4.6 conformance: chronology chain', () => {
   const cases = loadCases<ChainCase>('3.4.6')
 
   for (const c of cases) {
@@ -176,7 +180,9 @@ describe('§3.4.6 conformance: causal chain', () => {
       for (let i = 0; i < c.input.records.length; i++) {
         if (c.expected.record_indexes_in_response.includes(i)) continue
         const excludedHash = `sha256:${hashHex(c.input.records[i]!)}`
-        expect(actualHashSet, `record at index ${i} should NOT be in chain response`).not.toContain(excludedHash)
+        expect(actualHashSet, `record at index ${i} should NOT be in chain response`).not.toContain(
+          excludedHash,
+        )
       }
     })
   }
@@ -203,7 +209,9 @@ describe('§3.4.7 conformance: creator activity-map', () => {
       params.set('since', String(sortedTs[0]!))
       params.set('until', String(sortedTs[sortedTs.length - 1]!))
 
-      const res = await fetch(`${url}/v1/creators/${encodeURIComponent(creatorKey)}/graph?${params.toString()}`)
+      const res = await fetch(
+        `${url}/v1/creators/${encodeURIComponent(creatorKey)}/graph?${params.toString()}`,
+      )
       expect(res.ok, `creator-graph returned ${res.status}`).toBe(true)
       const body = await res.json()
 
@@ -218,12 +226,16 @@ describe('§3.4.7 conformance: creator activity-map', () => {
       // expectation from the generator's REFERENCE_TIME_MS so cross-impl
       // verifiers can replay the corpus without sharing the constant.
       if (c.expected.effective_window_first_record_index !== null) {
-        expect(body.effective_window.since).toBe(sortedTs[c.expected.effective_window_first_record_index])
+        expect(body.effective_window.since).toBe(
+          sortedTs[c.expected.effective_window_first_record_index],
+        )
       } else {
         expect(body.effective_window.since).toBe(null)
       }
       if (c.expected.effective_window_last_record_index !== null) {
-        expect(body.effective_window.until).toBe(sortedTs[c.expected.effective_window_last_record_index])
+        expect(body.effective_window.until).toBe(
+          sortedTs[c.expected.effective_window_last_record_index],
+        )
       } else {
         expect(body.effective_window.until).toBe(null)
       }
@@ -245,8 +257,12 @@ describe('manifests', () => {
       const manifestPath = join(CORPUS_ROOT, section, 'manifest.json')
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
       const dir = join(CORPUS_ROOT, section, 'cases')
-      const caseFiles = readdirSync(dir).filter((f) => f.endsWith('.json')).sort()
-      const manifestNames = manifest.cases.map((c: { file: string }) => c.file.replace(/^cases\//, '')).sort()
+      const caseFiles = readdirSync(dir)
+        .filter((f) => f.endsWith('.json'))
+        .sort()
+      const manifestNames = manifest.cases
+        .map((c: { file: string }) => c.file.replace(/^cases\//, ''))
+        .sort()
       expect(manifestNames).toEqual(caseFiles)
     })
   }

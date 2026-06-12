@@ -2,10 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import {
-  resolveEnvContextId,
-  KNOWN_HARNESS_DISCOVERIES,
-} from '../src/harness-context.js'
+import { resolveEnvContextId, KNOWN_HARNESS_DISCOVERIES } from '../src/harness-context.js'
 
 describe('resolveEnvContextId — env-only paths (D078 + D083 v1)', () => {
   it('returns ATRIB_CONTEXT_ID when set and valid (D078 precedence)', () => {
@@ -32,6 +29,11 @@ describe('resolveEnvContextId — env-only paths (D078 + D083 v1)', () => {
   it('derives 32-hex from CLAUDE_CODE_SESSION_ID UUID', () => {
     const env = { CLAUDE_CODE_SESSION_ID: '38af29c4-fc3a-4f88-8fec-392501b8a0a9' }
     expect(resolveEnvContextId(env)).toBe('38af29c4fc3a4f888fec392501b8a0a9')
+  })
+
+  it('derives 32-hex from CODEX_THREAD_ID UUID', () => {
+    const env = { CODEX_THREAD_ID: '019eb9e6-93ce-7751-ac81-daa194c303da' }
+    expect(resolveEnvContextId(env)).toBe('019eb9e693ce7751ac81daa194c303da')
   })
 
   it('lowercases CLAUDE_CODE_SESSION_ID before validating', () => {
@@ -71,17 +73,27 @@ describe('resolveEnvContextId — env-only paths (D078 + D083 v1)', () => {
 
 describe('KNOWN_HARNESS_DISCOVERIES', () => {
   it('includes CLAUDE_CODE_SESSION_ID', () => {
-    const claudeCode = KNOWN_HARNESS_DISCOVERIES.find(
-      (d) => d.envVar === 'CLAUDE_CODE_SESSION_ID',
-    )
+    const claudeCode = KNOWN_HARNESS_DISCOVERIES.find((d) => d.envVar === 'CLAUDE_CODE_SESSION_ID')
     expect(claudeCode).toBeDefined()
+  })
+
+  it('includes CODEX_THREAD_ID', () => {
+    const codex = KNOWN_HARNESS_DISCOVERIES.find((d) => d.envVar === 'CODEX_THREAD_ID')
+    expect(codex).toBeDefined()
+  })
+
+  it('includes a profile-state fallback entry', () => {
+    const profile = KNOWN_HARNESS_DISCOVERIES.find((d) => d.envVar === '')
+    expect(profile?.fallbackFile).toBeTypeOf('function')
   })
 
   it('each entry parses a known-good value into 32-hex', () => {
     const fixtures: Record<string, string> = {
       CLAUDE_CODE_SESSION_ID: '38af29c4-fc3a-4f88-8fec-392501b8a0a9',
+      CODEX_THREAD_ID: '019eb9e6-93ce-7751-ac81-daa194c303da',
     }
     for (const discovery of KNOWN_HARNESS_DISCOVERIES) {
+      if (discovery.envVar === '') continue
       const fixture = fixtures[discovery.envVar]
       expect(fixture, `add a known-good fixture for ${discovery.envVar}`).toBeDefined()
       if (fixture !== undefined) {
@@ -92,9 +104,7 @@ describe('KNOWN_HARNESS_DISCOVERIES', () => {
   })
 
   it('Claude Code entry exposes a fallbackFile thunk', () => {
-    const claudeCode = KNOWN_HARNESS_DISCOVERIES.find(
-      (d) => d.envVar === 'CLAUDE_CODE_SESSION_ID',
-    )
+    const claudeCode = KNOWN_HARNESS_DISCOVERIES.find((d) => d.envVar === 'CLAUDE_CODE_SESSION_ID')
     expect(claudeCode?.fallbackFile).toBeTypeOf('function')
     // Calling the thunk produces a path under ~/.claude/state/...
     const path = claudeCode?.fallbackFile?.()
@@ -135,9 +145,7 @@ describe('resolveEnvContextId — file-fallback path (D083 v2)', () => {
   /** Helper: write the per-PPID file the Claude Code discovery thunk would
    * resolve to, with the given content. */
   function writeClaudeStateFile(content: string): void {
-    const claudeCode = KNOWN_HARNESS_DISCOVERIES.find(
-      (d) => d.envVar === 'CLAUDE_CODE_SESSION_ID',
-    )
+    const claudeCode = KNOWN_HARNESS_DISCOVERIES.find((d) => d.envVar === 'CLAUDE_CODE_SESSION_ID')
     if (!claudeCode?.fallbackFile) {
       throw new Error('CLAUDE_CODE_SESSION_ID discovery missing fallbackFile')
     }
@@ -146,10 +154,55 @@ describe('resolveEnvContextId — file-fallback path (D083 v2)', () => {
     writeFileSync(path, content)
   }
 
+  function writeProfileStateFile(profile: string, content: string): void {
+    const profileDiscovery = KNOWN_HARNESS_DISCOVERIES.find((d) => d.envVar === '')
+    if (!profileDiscovery?.fallbackFile) {
+      throw new Error('profile discovery missing fallbackFile')
+    }
+    const path = profileDiscovery.fallbackFile({ ATRIB_AGENT: profile })
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, content)
+  }
+
   it('falls back to state file when CLAUDE_CODE_SESSION_ID env is unset', () => {
     writeClaudeStateFile('38af29c4-fc3a-4f88-8fec-392501b8a0a9\n')
     // Empty env -> env-var path skipped -> file fallback fires
     expect(resolveEnvContextId({})).toBe('38af29c4fc3a4f888fec392501b8a0a9')
+  })
+
+  it('falls back to active-session profile file for launchd-owned runtimes', () => {
+    writeProfileStateFile('codex', '019eb9e6-93ce-7751-ac81-daa194c303da\n')
+    expect(resolveEnvContextId({ ATRIB_AGENT: 'codex' })).toBe('019eb9e693ce7751ac81daa194c303da')
+  })
+
+  it('profile fallback wins over an impossible launchd parent-state file', () => {
+    const parentFile = join(tempHome, '.claude', 'state', 'active-session-id-1')
+    mkdirSync(dirname(parentFile), { recursive: true })
+    writeFileSync(parentFile, '00000000-0000-0000-0000-000000000001')
+    writeProfileStateFile('codex', '019eb9e6-93ce-7751-ac81-daa194c303da\n')
+    const previousPpid = Object.getOwnPropertyDescriptor(process, 'ppid')
+    Object.defineProperty(process, 'ppid', { configurable: true, value: 1 })
+    try {
+      expect(resolveEnvContextId({ ATRIB_AGENT: 'codex' })).toBe('019eb9e693ce7751ac81daa194c303da')
+    } finally {
+      if (previousPpid) Object.defineProperty(process, 'ppid', previousPpid)
+    }
+  })
+
+  it('uses ATRIB_ACTIVE_SESSION_PROFILE before ATRIB_AGENT for profile fallback', () => {
+    writeProfileStateFile('codex', '019eb9e6-93ce-7751-ac81-daa194c303da\n')
+    writeProfileStateFile('claude-code', '38af29c4-fc3a-4f88-8fec-392501b8a0a9\n')
+    expect(
+      resolveEnvContextId({
+        ATRIB_ACTIVE_SESSION_PROFILE: 'claude-code',
+        ATRIB_AGENT: 'codex',
+      }),
+    ).toBe('38af29c4fc3a4f888fec392501b8a0a9')
+  })
+
+  it('ignores unsafe active-session profile names silently', () => {
+    writeProfileStateFile('codex', '019eb9e6-93ce-7751-ac81-daa194c303da\n')
+    expect(resolveEnvContextId({ ATRIB_AGENT: '../codex' })).toBeUndefined()
   })
 
   it('accepts already-stripped 32-hex in state file', () => {

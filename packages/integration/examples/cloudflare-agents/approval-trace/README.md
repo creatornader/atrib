@@ -40,7 +40,7 @@ The important atrib differentiators are:
   follow-up that woke the agent.
 - **Decision context:** the reviewer sees exactly what the agent is asking to
   publish before approving.
-- **Semantic causal chain:** proposal, approval, execution, outcome, and handoff
+- **Signed decision chain:** proposal, approval, execution, outcome, and handoff
   link to each other as signed records.
 - **Trustless audit:** a later reviewer can verify the trace outside the Worker,
   Durable Object database, or transcript.

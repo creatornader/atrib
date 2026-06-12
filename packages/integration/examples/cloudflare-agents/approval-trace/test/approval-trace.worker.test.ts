@@ -7,7 +7,7 @@ import {
   runInDurableObject,
   waitOnExecutionContext,
 } from 'cloudflare:test'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   canonicalRecord,
   hexEncode,
@@ -85,6 +85,10 @@ const testEnv = env as unknown as TestEnv
 const defaultPrompt =
   'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.'
 
+beforeEach(async () => {
+  await reset()
+})
+
 afterEach(async () => {
   await reset()
 })
@@ -131,6 +135,10 @@ function labels(trace: TraceResponse): string[] {
 
 function sorted(values: string[] | undefined): string[] {
   return [...(values ?? [])].sort()
+}
+
+function uniqueRunId(prefix: string): string {
+  return `${prefix}-${crypto.randomUUID()}`
 }
 
 async function expectSignedTrace(trace: TraceResponse): Promise<void> {
@@ -195,7 +203,7 @@ function expectTracePacketBasics(trace: TraceResponse): void {
   expect(trace.trace_packet.differentiators.map((item) => item.name)).toEqual([
     'Autonomous trigger context',
     'Decision context',
-    'Semantic causal chain',
+    'Signed decision chain',
     'Trustless audit',
     'Signer separation',
   ])
@@ -217,7 +225,7 @@ describe('Cloudflare approval trace Worker', () => {
   })
 
   it('runs the approved path with signed causality, observability, and persisted state', async () => {
-    const runId = 'approved-local-e2e'
+    const runId = uniqueRunId('approved-local-e2e')
     const pending = await createRun(runId)
 
     expect(pending.status).toBe('pending_approval')
@@ -319,7 +327,7 @@ describe('Cloudflare approval trace Worker', () => {
   })
 
   it('signs a rejection and does not execute the action MCP path', async () => {
-    const runId = 'rejected-local-e2e'
+    const runId = uniqueRunId('rejected-local-e2e')
     await createRun(runId)
     const trace = await rejectRun(runId)
     const records = byLabel(trace)
@@ -345,7 +353,7 @@ describe('Cloudflare approval trace Worker', () => {
   })
 
   it('signs requested changes, revises, and waits for second approval', async () => {
-    const runId = 'changes-requested-local-e2e'
+    const runId = uniqueRunId('changes-requested-local-e2e')
     await createRun(runId)
     const trace = await requestChanges(runId)
     const records = byLabel(trace)
@@ -409,7 +417,7 @@ describe('Cloudflare approval trace Worker', () => {
   })
 
   it('records a diagnostic outcome when the approved action fails', async () => {
-    const runId = 'error-local-e2e'
+    const runId = uniqueRunId('error-local-e2e')
     await createRun(runId)
     const trace = await approveRun(runId, true)
     const records = byLabel(trace)
@@ -446,7 +454,7 @@ describe('Cloudflare approval trace Worker', () => {
   })
 
   it('rejects stale approval attempts after the run leaves pending review', async () => {
-    const runId = 'stale-approval-local-e2e'
+    const runId = uniqueRunId('stale-approval-local-e2e')
     await createRun(runId)
     await approveRun(runId)
 

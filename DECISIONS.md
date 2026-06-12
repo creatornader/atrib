@@ -2758,7 +2758,7 @@ The implementation shipped 2026-05-04 (commit `e0699b5` for `@atrib/mcp` + `@atr
 
 4. **Sidecar shape varies by producer.** Wrapper-side records get `toolName + args + result`; emit-side records get `content`. Both populate `producer`. The `OnRecordSidecar` TypeScript type has all fields optional, and downstream readers (storage.ts in trace + summarize) just access whichever fields are present. No shape-rigidity needed at the spec level, let producers populate what they have.
 
-5. **Consumer-side payoff is large.** Without the sidecar, `atrib-trace`'s per-record output was event_type + truncated hash + trace_id + creator_key. With the sidecar, output gains `tool_name`, `topics`, first 200 chars of `what`/`summary`, `importance` for annotations. `atrib-summarize` LLM prompts go from "synthesize this list of event_type chronology" to "synthesize this richly-described causal chain". Same code path, ~10x more useful output.
+5. **Consumer-side payoff is large.** Without the sidecar, `atrib-trace`'s per-record output was event_type + truncated hash + trace_id + creator_key. With the sidecar, output gains `tool_name`, `topics`, first 200 chars of `what`/`summary`, `importance` for annotations. `atrib-summarize` LLM prompts go from "synthesize this list of event_type chronology" to "synthesize this richly-described relationship path". Same code path, ~10x more useful output.
 
 6. **The `_local` field naming convention is enough.** Underscore-prefixed envelope-level fields are a standard "this is local-only" convention. No spec mechanism beyond the field name needed to enforce "don't leak this to the log", the structural placement (outside `record`) does it. Producers that go through the standard submission path literally cannot leak `_local` because the queue only sees `record`.
 
@@ -3064,7 +3064,7 @@ The structural problem was duplication of chain-resolution logic across producer
 
 ---
 
-## D068: trace operations split, provenance trace vs causal chain
+## D068: trace operations split, provenance trace vs chronology chain
 
 **Date:** 2026-05-07
 **Context:** graph-node ships a `/v1/trace/{record_hash}` endpoint that walks producer-claimed ancestry edges (INFORMED_BY, ANNOTATES, REVISES). The endpoint exists in the implementation but was not codified in the spec, [§3.4](atrib-spec.md#34-query-api) defined `/v1/graph/...` and `/v1/creators/...` endpoints but said nothing about trace operations. Reviewing the dashboard's trace view surfaced a separate gap: most production records (~71%, the union of `tool_call` records and `observation` records emitted without `informed_by`) show the message "no informed_by, annotates, or revises edges into the resolved set," because those producer-set fields are typically absent. CHAIN_PRECEDES edges, derived structurally from `chain_root` per [§3.2.4](atrib-spec.md#324-edge-derivation-rules), connect those records into their session chain, but the trace endpoint did not walk them.
@@ -3073,9 +3073,9 @@ The structural problem was duplication of chain-resolution logic across producer
 
 **Provenance trace** at [§3.4.5](atrib-spec.md#345-get-v1tracerecord_hash) walks INFORMED_BY, ANNOTATES, REVISES, every edge is derived from a field the producer explicitly set, naming a specific prior record as informing, annotating, or revising the current one. Provenance trace MUST NOT walk CHAIN_PRECEDES.
 
-**Causal chain** at [§3.4.6](atrib-spec.md#346-get-v1chainrecord_hash) walks CHAIN_PRECEDES, the substrate-derived ordering edge linking each record to its immediate predecessor in the same `context_id`. Causal chain MUST NOT walk INFORMED_BY, ANNOTATES, or REVISES.
+**Chronology chain** at [§3.4.6](atrib-spec.md#346-get-v1chainrecord_hash) walks CHAIN_PRECEDES, the substrate-derived ordering edge linking each record to its immediate predecessor in the same `context_id`. Chronology chain MUST NOT walk INFORMED_BY, ANNOTATES, or REVISES.
 
-The two endpoints answer different questions: provenance trace answers "what did the producer claim informed this record?" and causal chain answers "what did the substrate observe came before this record in the same context_id?" Consumers needing both views compose the responses client-side.
+The two endpoints answer different questions: provenance trace answers "what did the producer claim informed this record?" and chronology chain answers "what did the substrate observe came before this record in the same context_id?" Consumers needing both views compose the responses client-side.
 
 **Rationale.** The structure-vs-claims separation is the same boundary [§1.2.5](atrib-spec.md#125-informed_by) establishes for `informed_by` (optional, signed claim) and [§1.2.6](atrib-spec.md#126-provenance_token) for `provenance_token` (signed claim, genesis-only). The graph layer ([§3.1](atrib-spec.md#31-design-principles-and-rationale) "the graph records structure, not causality") declares the same boundary at the data-model level. A trace operation that walked both layers would conflate "what the agent said happened" with "what the substrate observed happened", the exact distinction this protocol's invariants exist to preserve.
 
@@ -3085,7 +3085,7 @@ The two endpoints answer different questions: provenance trace answers "what did
 
 2. _Single `/v1/trace/{record_hash}` walking all four ancestor edge types._ Rejected for the same reason as alternative 1, with the additional cost that backward-compatibility for existing consumers expecting only producer-claimed edges would require a versioning shim.
 
-3. _Leave the gap in place._ Rejected. The dashboard's "no ancestors" message, repeated across the majority of production records, made it look as though the substrate had failed to capture causal ordering. The substrate had captured it (in `chain_root`); the trace endpoint had simply not surfaced it. Codifying both operations resolves the apparent gap without inventing new edge types or modifying producer behavior.
+3. _Leave the gap in place._ Rejected. The dashboard's "no ancestors" message, repeated across the majority of production records, made it look as though the substrate had failed to capture chronology ordering. The substrate had captured it (in `chain_root`); the trace endpoint had simply not surfaced it. Codifying both operations resolves the apparent gap without inventing new edge types or modifying producer behavior.
 
 **Consequences.**
 
@@ -3098,11 +3098,11 @@ The two endpoints answer different questions: provenance trace answers "what did
 **Cross-references.**
 
 - [§3.4.5](atrib-spec.md#345-get-v1tracerecord_hash) (provenance trace operation)
-- [§3.4.6](atrib-spec.md#346-get-v1chainrecord_hash) (causal chain operation)
+- [§3.4.6](atrib-spec.md#346-get-v1chainrecord_hash) (chronology chain operation)
 - [§3.1](atrib-spec.md#31-design-principles-and-rationale) (the structure-vs-claims principle this decision applies)
 - [§3.2.3](atrib-spec.md#323-edge-types) (the edge-type taxonomy the two operations partition)
 - [§3.2.4](atrib-spec.md#324-edge-derivation-rules) (CHAIN_PRECEDES derivation)
-- [§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records) (chain_root contract feeding causal chain)
+- [§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records) (chain_root contract feeding chronology chain)
 - [§1.2.5](atrib-spec.md#125-informed_by) (informed_by feeding provenance trace)
 - [§1.2.7](atrib-spec.md#127-annotates) (annotates feeding provenance trace)
 - [§1.2.9](atrib-spec.md#129-revises) (revises feeding provenance trace)
@@ -3999,6 +3999,43 @@ Writer responsibility lives in the operator's hook layer, not in `@atrib/mcp`. T
 - [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail), orphan handling; v2 closes the empirical orphan path for in-process MCP children.
 - [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), mirror sidecar shape; the producer label (`_local.producer`) already distinguishes hook-source vs MCP-child-source records, making the orphan-vs-correct-context split visible post-fix.
 
+**Update 2026-06-12 (v3): profile fallback for host-owned primitive runtimes.**
+
+The v2 per-PPID file fallback assumed the session-aware hook writer and the cognitive-primitive reader share the same parent PID. That holds for startup-spawn MCP children directly parented by Claude Code. It fails for host-owned long-lived runtimes. The live Codex incident on 2026-06-12 produced a signed observation under synthesized context `be019206517df21b99c9d6eab59bdde7` because the Codex `atrib-primitives` Streamable HTTP process was launchd-owned (`process.ppid = 1`) while Codex hooks wrote the active session file under the Codex app-server PID. The reader looked for `~/.claude/state/active-session-id-1`, found nothing, and correctly fell through to [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail)'s fresh-orphan path.
+
+This was real graph-shape damage, not a logging cosmetic. The record was committed to the public log and recoverable by cross-context trace, but it sat as a genesis node in the synthesized context. Its `informed_by` targets were dangling out-of-scope for that context, so the active session chain did not naturally include the conclusion.
+
+**Decision (v3 additive).** Extend the [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) registry with two Codex-compatible routes:
+
+1. `CODEX_THREAD_ID`, parsed as UUID or already-stripped 32-hex, for per-session child processes that inherit Codex's thread env.
+2. A file-only profile fallback that checks `~/.claude/state/active-session-id-<profile>` when `ATRIB_ACTIVE_SESSION_PROFILE` or `ATRIB_AGENT` is a safe profile name (`[A-Za-z0-9._-]{1,64}`).
+
+The reference Codex hook writer now writes both the existing per-PID file and `active-session-id-codex`. It prefers `CODEX_THREAD_ID` over the hook envelope's `session_id`, because the live 2026-06-12 Codex hook envelope surfaced IDs that changed across tool calls while `CODEX_THREAD_ID` stayed tied to the thread. The writer does not trust hook-envelope session ids by default. Operators can opt into that legacy fallback with `ATRIB_ACTIVE_SESSION_TRUST_HOOK_SESSION_ID=1` only for harnesses whose envelope id is known to be stable. A launchd-owned `atrib-primitives` process with `ATRIB_AGENT=codex` can therefore resolve the active Codex session even though its parent PID is not the Codex app-server PID.
+
+The per-PID Claude fallback is still scoped to interactive startup-spawn children. It skips `process.ppid <= 1` so launchd-owned hosts never treat `active-session-id-1` as session evidence before reaching the profile fallback.
+
+Precedence remains conservative:
+
+1. Explicit `ATRIB_CONTEXT_ID`.
+2. Registered concrete harness env vars, including `CLAUDE_CODE_SESSION_ID` and `CODEX_THREAD_ID`.
+3. Registered file fallbacks, including per-PPID and profile-scoped files.
+4. `undefined`, allowing the caller to keep the [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) fresh-orphan behavior.
+
+**Alternatives considered (v3).**
+
+- _Edit or replay the orphaned record into the active context._ Rejected. Records are immutable; repair must happen through a new signed observation, annotation, or revision, not by altering history.
+- _Make `resolveEnvContextId` scan for the newest active-session file._ Rejected. Recency is not a session boundary. It would silently conflate two running agents when files from different profiles exist.
+- _Use one global `active-session-id` file._ Rejected for the same reason as v2: concurrent agents would overwrite each other.
+- _Disable [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) orphan creation when session discovery fails._ Rejected. That would turn a visible graph-shape failure into lost evidence. The right failure mode is signed, isolated, and diagnosable.
+
+**Consequences (v3).**
+
+- The launchd-owned Codex primitive host no longer depends on `process.ppid` matching the Codex app-server PID. It depends on an explicit profile declaration (`ATRIB_ACTIVE_SESSION_PROFILE` or `ATRIB_AGENT`) plus a matching hook writer.
+- Codex hook-envelope ids are not session identity evidence unless explicitly trusted. This prevents MCP PreToolUse hooks from overwriting `active-session-id-codex` with per-call ids immediately before a primitive reads the file.
+- The profile route supports one active session per profile. If two simultaneous sessions share the same profile name, the latest hook writer wins. Agents that need per-call disambiguation must pass `context_id` explicitly.
+- Historical orphan records remain immutable. Cross-context trace and later signed commentary can explain them, but the old records do not move into the active session chain.
+- The local topology report now has a `host-owned-active-session-context` gate. It reads `~/.claude/state/active-session-id-<profile>` for every healthy primitive HTTP profile, validates that the file contains a UUID or 32-hex context id, and keeps broad-default readiness closed when a host-owned runtime cannot prove profile fallback. The first live run found `codex` healthy and `claude-code` missing, which means the process/config surface was healthier than the context-routing surface.
+
 ## D084: Read-primitive instrumentation for empirical loop-closure measurement
 
 **Date:** 2026-05-23
@@ -4167,13 +4204,13 @@ The recommendation in `services/atrib-recall/README.md` is: **extension URI prod
 
 ---
 
-## D087: Signed diagnostic outcome + causal trace replay as canonical repair pattern
+## D087: Signed diagnostic outcome + trace replay as canonical repair pattern
 
 **Date:** 2026-05-25
 
-**Context.** The first clean behavior-impact repair result (P0, 2026-05-25) showed that when a harness signs an implementation record, signs a diagnostic outcome record that is causally linked to that implementation via `informed_by`, and surfaces both through `atrib-recall`, a later agent step improves versus the same setup without recall. The next locked result (P1, 2026-05-25) narrowed the read surface from whole-session recall to `atrib-trace` rooted at the diagnostic record; the improvement survived. The important correction during P1 was consumer semantics: the model initially traced the right records but sometimes preserved old implementation behavior over the diagnostic expected/actual failures. Adding a generic repair rule ("diagnostic outcome evidence overrides the implementation ancestor it evaluates") made the result stable.
+**Context.** The first clean behavior-impact repair result (P0, 2026-05-25) showed that when a harness signs an implementation record, signs a diagnostic outcome record that is linked to that implementation via `informed_by`, and surfaces both through `atrib-recall`, a later agent step improves versus the same setup without recall. The next locked result (P1, 2026-05-25) narrowed the read surface from whole-session recall to `atrib-trace` rooted at the diagnostic record; the improvement survived. The important correction during P1 was consumer semantics: the model initially traced the right records but sometimes preserved old implementation behavior over the diagnostic expected/actual failures. Adding a generic repair rule ("diagnostic outcome evidence overrides the implementation ancestor it evaluates") made the result stable.
 
-**Decision.** Formalize "signed diagnostic outcome + causal trace replay" as the canonical atrib usage pattern for repair/refinement tasks. The pattern is:
+**Decision.** Formalize "signed diagnostic outcome + trace replay" as the canonical atrib usage pattern for repair/refinement tasks. The pattern is:
 
 1. Sign the implementation/action record.
 2. Sign a diagnostic/evaluator `tool_call` record whose `informed_by` references the implementation/action record.
@@ -4186,7 +4223,7 @@ This is a pattern-level decision, not a wire-format change. Diagnostic outcomes 
 **Alternatives considered.**
 
 - _Dedicated diagnostic event_type._ Rejected for now. The current need is consumer interpretation of an evaluator tool_call, not new graph derivation. Promotion would need a distinct cognitive purpose and graph effect per [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary).
-- _Whole-session recall as the canonical pattern._ Rejected as too broad. P0 proved recall can work, but P1 showed the more precise primitive is a causal trace rooted at the diagnostic record.
+- _Whole-session recall as the canonical pattern._ Rejected as too broad. P0 proved recall can work, but P1 showed the more precise primitive is a trace rooted at the diagnostic record.
 - _Rely on spontaneous agent use of the six primitives._ Rejected as the next proof step. Empirical read/write primitive adoption is near zero in current agent runs, so the durable pattern must work through harness-mediated consumption before testing how much agency can be handed back.
 - _Treat diagnostic precedence as task-specific prompt magic._ Rejected. The rule is generic evidence semantics for repair/refinement tasks: an outcome record evaluates its `informed_by` ancestor.
 
@@ -4765,7 +4802,7 @@ Direct `atrib-emit-cli` also defaults its mirror path to `~/.atrib/records/atrib
 - [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), local sidecar persistence.
 - [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), explicit cognitive primitives.
 - [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape), CLI distribution.
-- [D087](#d087-signed-diagnostic-outcome--causal-trace-replay), signed diagnostic outcome and replay.
+- [D087](#d087-signed-diagnostic-outcome--trace-replay), signed diagnostic outcome and replay.
 - [§1.2.2](atrib-spec.md#122-content_id), `content_id`.
 - [§8.3](atrib-spec.md#83-salted-commitment-posture), content commitments.
 
@@ -5907,7 +5944,7 @@ evidence about dogfood sessions.
 
 **Status:** Accepted
 
-**Extends:** [D054](#d054-unified-public-explorer), [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), [D068](#d068-trace-operations-split-provenance-trace-vs-causal-chain), [D086](#d086-bm25-indexes-all-event-type-content-shapes-not-just-annotations), and [D108](#d108-openinference-is-an-observability-intake-layer-not-a-replacement-trace-store).
+**Extends:** [D054](#d054-unified-public-explorer), [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), [D068](#d068-trace-operations-split-provenance-trace-vs-chronology-chain), [D086](#d086-bm25-indexes-all-event-type-content-shapes-not-just-annotations), and [D108](#d108-openinference-is-an-observability-intake-layer-not-a-replacement-trace-store).
 
 **Context.** The TIBET / Humotica review surfaced a real product lesson. A
 one-parent token chain is easy to explain and easy to follow. atrib's graph is
@@ -5917,7 +5954,7 @@ anchor, a human approval record, capability evidence, and transaction evidence.
 That expressiveness is correct for verification, but it makes the first-read
 path harder for a human.
 
-[D068](#d068-trace-operations-split-provenance-trace-vs-causal-chain) already
+[D068](#d068-trace-operations-split-provenance-trace-vs-chronology-chain) already
 split `/v1/trace/{record_hash}` and `/v1/chain/{record_hash}` because they
 answer different questions. `/v1/trace` walks producer-claimed ancestry.
 `/v1/chain` walks substrate-derived chain order. Merging those into one
@@ -5944,7 +5981,7 @@ authorization edge types.
    the same edge type, the newest timestamp wins; ties sort by record hash.
 4. The primary path is presentation metadata only. It is not a graph edge, not a
    validity condition, and not an input to settlement calculation.
-5. `/v1/trace` and `/v1/chain` remain separate protocol endpoints per [D068](#d068-trace-operations-split-provenance-trace-vs-causal-chain).
+5. `/v1/trace` and `/v1/chain` remain separate protocol endpoints per [D068](#d068-trace-operations-split-provenance-trace-vs-chronology-chain).
 6. `_local.content.intent` and `_local.content.rationale` are first-class local
    cognitive fields. Recall indexes them, `atrib-trace` surfaces them in compact
    sidecar summaries, and `atrib-summarize` includes them in prompt input.
@@ -5960,7 +5997,7 @@ authorization edge types.
   traces easier to explain but would lose real multi-parent structure, including
   human approvals, diagnostics, revisions, and cross-session anchors.
 - _Extend `/v1/trace` to also walk `CHAIN_PRECEDES`._ Rejected again for the
-  same reason as [D068](#d068-trace-operations-split-provenance-trace-vs-causal-chain):
+  same reason as [D068](#d068-trace-operations-split-provenance-trace-vs-chronology-chain):
   producer claims and substrate structure should stay separate at the API
   boundary.
 - _Promote human authorization edge types now._ Rejected. The current
@@ -5987,7 +6024,7 @@ authorization edge types.
 **Cross-references.**
 
 - [§3.4.5](atrib-spec.md#345-get-v1tracerecord_hash), provenance trace.
-- [§3.4.6](atrib-spec.md#346-get-v1chainrecord_hash), causal chain.
+- [§3.4.6](atrib-spec.md#346-get-v1chainrecord_hash), chronology chain.
 - [§5.9.3](atrib-spec.md#593-the-_local-sidecar-shape), local sidecar shape.
 - [`apps/dashboard/graph-utils.mjs`](apps/dashboard/graph-utils.mjs), primary
   trace path helper.
@@ -6467,7 +6504,7 @@ The packet would carry:
 
 - [§7.8](atrib-spec.md#78-cross-harness-continuation-packets), informative continuation-packet pattern.
 - [D070](#d070-record-body-archive-layer), Record Body Archive Layer.
-- [D087](#d087-signed-diagnostic-outcome--causal-trace-replay), signed diagnostic outcome pattern.
+- [D087](#d087-signed-diagnostic-outcome--trace-replay), signed diagnostic outcome pattern.
 - [P037](#p037-skill-and-domain-context-provenance-for-agent-investigations), skill/context provenance.
 - [P038](#p038-hosted-agent-diagnostic-records-for-mcp-auth-skill-loading-and-code-context-gaps), hosted-agent diagnostics.
 - [P039](#p039-support-and-rca-signed-investigation-demo), support/RCA demo.
@@ -6522,7 +6559,7 @@ Diagnostic classes to capture:
 
 **Considerations.**
 
-- [D087](#d087-signed-diagnostic-outcome--causal-trace-replay) already supplies the pattern. A diagnostic is a `tool_call` or extension record linked with `informed_by`, not a new event_type.
+- [D087](#d087-signed-diagnostic-outcome--trace-replay) already supplies the pattern. A diagnostic is a `tool_call` or extension record linked with `informed_by`, not a new event_type.
 - These diagnostics are especially useful when a hosted result is handed to a local harness. The receiver can see whether it should trust the prior result, redo part of the investigation, or continue from the signed evidence.
 - Some diagnostics can expose sensitive tool names or credential topology. Use privacy postures from [§8](atrib-spec.md#8-privacy-postures).
 
@@ -6530,7 +6567,7 @@ Diagnostic classes to capture:
 
 **Cross-references.**
 
-- [D087](#d087-signed-diagnostic-outcome--causal-trace-replay), diagnostic outcome pattern.
+- [D087](#d087-signed-diagnostic-outcome--trace-replay), diagnostic outcome pattern.
 - [P036](#p036-cross-harness-continuation-packet-for-supportrca-investigations), continuation packet.
 - [P039](#p039-support-and-rca-signed-investigation-demo), support/RCA demo.
 
@@ -6549,7 +6586,7 @@ Candidate demo:
 - Fake Axiom-shaped wide logs with tenant context and request `extras`.
 - Agent queries logs, reads the code path, emits hypotheses, revises at least one wrong hypothesis, runs a diagnostic, and signs a final investigation summary.
 - Continuation packet lets a local Claude Code or Codex session continue from the hosted run.
-- Explorer view shows the signed causal chain without exposing private ticket or log bodies by default.
+- Explorer view shows the signed investigation trace without exposing private ticket or log bodies by default.
 
 **Considerations.**
 
@@ -6565,7 +6602,7 @@ Candidate demo:
 - [P036](#p036-cross-harness-continuation-packet-for-supportrca-investigations), continuation packet.
 - [P037](#p037-skill-and-domain-context-provenance-for-agent-investigations), skill/context provenance.
 - [P038](#p038-hosted-agent-diagnostic-records-for-mcp-auth-skill-loading-and-code-context-gaps), hosted-agent diagnostics.
-- [D087](#d087-signed-diagnostic-outcome--causal-trace-replay), diagnostic outcome pattern.
+- [D087](#d087-signed-diagnostic-outcome--trace-replay), diagnostic outcome pattern.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 

@@ -3,7 +3,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { __test_only__ } from '../src/index.js'
 import { callLlm, resolveLlmConfig } from '../src/llm.js'
 import { buildUserMessage } from '../src/prompt.js'
@@ -12,9 +12,14 @@ import type { IndexedRecord } from '../src/storage.js'
 const { selectRecords, handleSummarize } = __test_only__
 
 const ENV_KEYS = [
+  'ATRIB_CONTEXT_ID',
+  'ATRIB_AGENT',
+  'ATRIB_ACTIVE_SESSION_PROFILE',
   'ATRIB_SUMMARIZE_API_KEY',
   'ATRIB_SUMMARIZE_BASE_URL',
   'ATRIB_SUMMARIZE_MODEL',
+  'CLAUDE_CODE_SESSION_ID',
+  'CODEX_THREAD_ID',
   'NVIDIA_API_KEY',
   'NVIDIA_NIM_API_KEY',
   'CEREBRAS_API_KEY',
@@ -22,8 +27,16 @@ const ENV_KEYS = [
 ]
 const ORIGINAL_HOME = process.env['HOME']
 
-afterEach(() => {
+function clearTestEnv() {
   for (const key of ENV_KEYS) delete process.env[key]
+}
+
+beforeEach(() => {
+  clearTestEnv()
+})
+
+afterEach(() => {
+  clearTestEnv()
   if (ORIGINAL_HOME === undefined) delete process.env['HOME']
   else process.env['HOME'] = ORIGINAL_HOME
   vi.restoreAllMocks()

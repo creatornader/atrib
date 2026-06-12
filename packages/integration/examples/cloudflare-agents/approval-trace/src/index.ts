@@ -629,12 +629,12 @@ function tracePacket(
         workflow?.status === 'changes_requested'
           ? 'revision_requested'
           : workflow?.status === 'rejected'
-          ? 'not_run'
-          : outcomeBody?.status === 'error'
-            ? 'error'
-            : outcomeBody?.status === 'success'
-              ? 'success'
-              : 'pending',
+            ? 'not_run'
+            : outcomeBody?.status === 'error'
+              ? 'error'
+              : outcomeBody?.status === 'success'
+                ? 'success'
+                : 'pending',
       changed: Array.isArray(outcomeBody?.changed_rows) ? outcomeBody.changed_rows : [],
       diagnostic: outcomeBody?.diagnostic ?? null,
     },
@@ -654,7 +654,7 @@ function tracePacket(
         evidence_labels: [latestProposal?.label ?? 'proposal'],
       },
       {
-        name: 'Semantic causal chain',
+        name: 'Signed decision chain',
         evidence:
           'Each transition points at the signed record it depended on, from proposal to approval to execution to outcome.',
         evidence_labels: parsed.map((entry) => entry.label),
@@ -1439,9 +1439,9 @@ export class ApprovalTraceAgent extends Agent<Env> {
   }
 
   private currentProposalTimestamp(workflow: WorkflowRow): number {
-    const row = this
-      .getRecordRows(workflow.run_id)
-      .find((record) => record.record_hash === workflow.proposal_record_hash)
+    const row = this.getRecordRows(workflow.run_id).find(
+      (record) => record.record_hash === workflow.proposal_record_hash,
+    )
     if (!row) return workflow.updated_at
     return (JSON.parse(row.record_json) as AtribRecord).timestamp
   }
@@ -1599,7 +1599,8 @@ export class ApprovalActionMcp extends McpAgent<Env> {
     this.server.registerTool(
       'write_file',
       {
-        description: 'Apply the approved Cloudflare repository file update to Durable Object SQLite.',
+        description:
+          'Apply the approved Cloudflare repository file update to Durable Object SQLite.',
         inputSchema: {
           approval_record_hash: z.string(),
           stable_connector_id: z.string(),
@@ -1798,9 +1799,7 @@ export class ApprovalActionMcp extends McpAgent<Env> {
   private persistActionRecord(record: AtribRecord, sidecar?: OnRecordSidecar): void {
     const hash = recordHash(record)
     const label =
-      sidecar?.toolName === 'write_file'
-        ? 'execution'
-        : (sidecar?.toolName ?? 'tool_call')
+      sidecar?.toolName === 'write_file' ? 'execution' : (sidecar?.toolName ?? 'tool_call')
     this.storeRecord(hash, record, sidecar ?? {}, label, 'action_mcp')
     if (sidecar?.toolName === 'write_file') {
       void this.signAndStoreOutcome(record, sidecar).catch((error) => {
@@ -1877,9 +1876,7 @@ async function executeThroughActionMcp(input: {
     await sleep(
       Math.max(
         0,
-        input.approval.approval_timestamp +
-          TRACE_RECORD_OFFSETS_MS.postApprovalPause -
-          Date.now(),
+        input.approval.approval_timestamp + TRACE_RECORD_OFFSETS_MS.postApprovalPause - Date.now(),
       ),
     )
     const meta = {
