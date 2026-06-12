@@ -208,6 +208,9 @@
       "long-lived-agent-route": "pass",
       "broad-default-readiness": "fail",
       "host-owned-bridge-http": "fail"
-    }
+    },
+    "recommendations": [
+      "start one loopback Agent Bridge Streamable HTTP host per startup-spawn agent profile before removing per-thread bridge wrappers"
+    ]
   }
 }

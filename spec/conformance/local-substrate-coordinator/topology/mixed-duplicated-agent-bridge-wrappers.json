@@ -303,6 +303,9 @@
       "long-lived-agent-route": "pass",
       "broad-default-readiness": "fail",
       "host-owned-bridge-http": "pass"
-    }
+    },
+    "recommendations": [
+      "fully quit or restart startup-spawn hosts that still own duplicate bridge wrapper/upstream pairs"
+    ]
   }
 }
