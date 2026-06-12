@@ -1,5 +1,5 @@
 {
-  "name": "missing-long-lived-agent-route",
+  "name": "missing-host-owned-bridge-http",
   "snapshot": {
     "schema": "atrib.local-substrate-topology-snapshot.v0",
     "source": "fixture",
@@ -34,23 +34,23 @@
         "name": "codex",
         "path": "~/.codex/config.toml",
         "exists": true,
-        "server_count": 2,
+        "server_count": 1,
         "has_primitives_runtime": true,
         "standalone_primitive_servers": [],
         "local_substrate_endpoints": [],
         "primitive_http_endpoints": ["http://127.0.0.1:8796/mcp"],
-        "bridge_http_endpoints": ["http://127.0.0.1:8794/mcp"]
+        "bridge_http_endpoints": []
       },
       {
         "name": "claude-code",
         "path": "~/.claude.json",
         "exists": true,
-        "server_count": 2,
+        "server_count": 1,
         "has_primitives_runtime": true,
         "standalone_primitive_servers": [],
         "local_substrate_endpoints": [],
         "primitive_http_endpoints": ["http://127.0.0.1:8795/mcp"],
-        "bridge_http_endpoints": ["http://127.0.0.1:8793/mcp"]
+        "bridge_http_endpoints": []
       }
     ],
     "launch_agents": [
@@ -73,7 +73,14 @@
         "agent": "knowledge-watcher"
       }
     ],
-    "long_lived_agents": [],
+    "long_lived_agents": [
+      {
+        "label": "ai.hermes.gateway",
+        "kind": "long-lived-agent",
+        "endpoint": "http://127.0.0.1:8788/atrib/local-substrate",
+        "agent": "hermes"
+      }
+    ],
     "coordinator_health": [
       {
         "endpoint": "http://127.0.0.1:8797/atrib/local-substrate",
@@ -178,54 +185,7 @@
         }
       }
     ],
-    "bridge_runtime_health": [
-      {
-        "endpoint": "http://127.0.0.1:8794/mcp",
-        "reachable": true,
-        "status": "healthy",
-        "report": {
-          "bridge_runtime": {
-            "pid": 112,
-            "version": "0.1.0",
-            "transport": "streamable-http",
-            "upstream": "in-process",
-            "tool_count": 3
-          },
-          "profile": {
-            "agent": "codex"
-          },
-          "sessions": {
-            "active": 1,
-            "opened": 3,
-            "closed": 2,
-            "idle_timeout_ms": 43200000
-          }
-        }
-      },
-      {
-        "endpoint": "http://127.0.0.1:8793/mcp",
-        "reachable": true,
-        "status": "healthy",
-        "report": {
-          "bridge_runtime": {
-            "pid": 113,
-            "version": "0.1.0",
-            "transport": "streamable-http",
-            "upstream": "in-process",
-            "tool_count": 3
-          },
-          "profile": {
-            "agent": "claude-code"
-          },
-          "sessions": {
-            "active": 1,
-            "opened": 2,
-            "closed": 1,
-            "idle_timeout_ms": 43200000
-          }
-        }
-      }
-    ]
+    "bridge_runtime_health": []
   },
   "expected": {
     "status": "mixed",
@@ -235,9 +195,9 @@
       "primitive_runtime_stdio_processes": 0,
       "standalone_primitive_processes": 0,
       "duplicate_primitive_groups": 0,
-      "long_lived_agent_routes": 0,
-      "bridge_runtime_http_endpoints": 2,
-      "bridge_runtime_http_healthy": 2
+      "long_lived_agent_routes": 1,
+      "bridge_runtime_http_endpoints": 0,
+      "bridge_runtime_http_healthy": 0
     },
     "gates": {
       "coordinator-health": "pass",
@@ -245,9 +205,9 @@
       "startup-spawn-config": "pass",
       "host-owned-primitives-http": "pass",
       "watcher-wal-route": "pass",
-      "long-lived-agent-route": "warn",
+      "long-lived-agent-route": "pass",
       "broad-default-readiness": "fail",
-      "host-owned-bridge-http": "pass"
+      "host-owned-bridge-http": "fail"
     }
   }
 }

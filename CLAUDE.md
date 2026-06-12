@@ -32,7 +32,7 @@ atrib/
   docs/outreach/aauth-evidence-packet.md # Draft AAuth evidence outreach packet and route plan.
   scripts/
     prove-local-substrate-process-health.mjs # P042 process-health proof. Builds on the fixture corpus by starting/probing a real local-substrate host, exercising startup-spawn, long-lived-agent, and watcher-WAL requests over HTTP, and checking stale-child/orphan/fallback gates before default dogfood config changes.
-    report-local-substrate-topology.mjs # P042 live dogfood topology report. Reads process rows, sanitized startup-spawn configs, launchd service metadata, optional route-registry evidence, bridge wrapper groups, and health probes to separate healthy coordinators from duplicated or obsolete MCP primitive generations.
+    report-local-substrate-topology.mjs # P042 live dogfood topology report. Reads process rows, sanitized startup-spawn configs, launchd service metadata, optional route-registry evidence, primitive and bridge HTTP health, bridge wrapper groups, and coordinator health to separate healthy routes from duplicated or obsolete child generations.
   metrics/                     # Dated JSON snapshots from `pnpm --filter @atrib/log-node metrics`
   packages/
     mcp/                       # @atrib/mcp: MCP server middleware (public)

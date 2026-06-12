@@ -286,7 +286,9 @@ function summarizeBridgeProcesses(rows, byPid) {
   const wrapperGroups = [...groupBy(wrappers, (row) => row.ppid).entries()]
     .map(([ppid, group]) => {
       const parent = byPid.get(ppid)
-      const upstreamChildren = group.flatMap((wrapper) => upstreamsByWrapperPid.get(wrapper.pid) ?? [])
+      const upstreamChildren = group.flatMap(
+        (wrapper) => upstreamsByWrapperPid.get(wrapper.pid) ?? [],
+      )
       return {
         ppid,
         parent_service: parent?.service ?? 'unknown',
@@ -449,6 +451,9 @@ function summarizeCodexConfig(path) {
     primitiveHttpEndpoints: serverNames.includes('atrib-primitives')
       ? unique([urlFromTomlBlock(blocks.get('atrib-primitives'))])
       : [],
+    bridgeHttpEndpoints: serverNames.includes('agent-bridge')
+      ? unique([urlFromTomlBlock(blocks.get('agent-bridge'))])
+      : [],
   })
 }
 
@@ -463,6 +468,7 @@ function summarizeClaudeConfig(path) {
     const serverNames = Object.keys(servers)
     const endpointValues = []
     const primitiveHttpEndpoints = []
+    const bridgeHttpEndpoints = []
     for (const server of Object.values(servers)) {
       const env = server && typeof server === 'object' ? server.env : undefined
       if (env?.ATRIB_LOCAL_SUBSTRATE_ENDPOINT)
@@ -476,12 +482,17 @@ function summarizeClaudeConfig(path) {
     ) {
       primitiveHttpEndpoints.push(primitiveServer.url)
     }
+    const bridgeServer = servers['agent-bridge']
+    if (bridgeServer && typeof bridgeServer === 'object' && typeof bridgeServer.url === 'string') {
+      bridgeHttpEndpoints.push(bridgeServer.url)
+    }
     return summarizeServerConfig({
       name: 'claude-code',
       path,
       serverNames,
       endpointValues,
       primitiveHttpEndpoints,
+      bridgeHttpEndpoints,
       text: JSON.stringify(servers),
     })
   } catch (error) {
@@ -494,6 +505,7 @@ function summarizeClaudeConfig(path) {
       standalone_primitive_servers: [],
       local_substrate_endpoints: [],
       primitive_http_endpoints: [],
+      bridge_http_endpoints: [],
     }
   }
 }
@@ -507,6 +519,7 @@ function missingConfig(name, path) {
     standalone_primitive_servers: [],
     local_substrate_endpoints: [],
     primitive_http_endpoints: [],
+    bridge_http_endpoints: [],
   }
 }
 
@@ -517,6 +530,7 @@ function summarizeServerConfig({
   text,
   endpointValues = [],
   primitiveHttpEndpoints = [],
+  bridgeHttpEndpoints = [],
 }) {
   const standalone = serverNames
     .filter((serverName) => PRIMITIVE_SERVERS.includes(serverName))
@@ -536,6 +550,7 @@ function summarizeServerConfig({
     standalone_primitive_servers: standalone,
     local_substrate_endpoints: unique(endpoints),
     primitive_http_endpoints: unique(primitiveHttpEndpoints),
+    bridge_http_endpoints: unique(bridgeHttpEndpoints),
   }
 }
 
@@ -607,8 +622,7 @@ function parseLongLivedAgent(path) {
     const envFile = longLivedEnvFileFromProgramArguments(args)
     const fileEnv = envFile ? readSafeEnvFile(envFile) : {}
     const endpoint =
-      firstEnvValue(env, SAFE_ENDPOINT_ENV_KEYS) ??
-      firstEnvValue(fileEnv, SAFE_ENDPOINT_ENV_KEYS)
+      firstEnvValue(env, SAFE_ENDPOINT_ENV_KEYS) ?? firstEnvValue(fileEnv, SAFE_ENDPOINT_ENV_KEYS)
     const agent =
       firstEnvValue(env, SAFE_AGENT_ENV_KEYS) ??
       firstEnvValue(fileEnv, SAFE_AGENT_ENV_KEYS) ??
@@ -940,6 +954,14 @@ async function collectLiveSnapshot({
     if (!endpoint) continue
     primitiveRuntimeHealth.push(await fetchHealth(endpoint, timeoutMs))
   }
+  const bridgeRuntimeEndpoints = unique(
+    configs.flatMap((config) => config.bridge_http_endpoints ?? []),
+  )
+  const bridgeRuntimeHealth = []
+  for (const endpoint of bridgeRuntimeEndpoints) {
+    if (!endpoint) continue
+    bridgeRuntimeHealth.push(await fetchHealth(endpoint, timeoutMs))
+  }
   return {
     schema: SNAPSHOT_SCHEMA,
     source: 'live',
@@ -950,6 +972,7 @@ async function collectLiveSnapshot({
     long_lived_agents: longLivedAgents,
     coordinator_health: coordinatorHealth,
     primitive_runtime_health: primitiveRuntimeHealth,
+    bridge_runtime_health: bridgeRuntimeHealth,
   }
 }
 
@@ -1001,6 +1024,27 @@ function primitiveRuntimeHealthSummary(items) {
   })
 }
 
+function bridgeRuntimeHealthSummary(items) {
+  return items.map((item) => {
+    const report = item.report ?? {}
+    return {
+      endpoint: item.endpoint,
+      reachable: Boolean(item.reachable),
+      status: item.status,
+      pid: report.bridge_runtime?.pid,
+      version: report.bridge_runtime?.version,
+      transport: report.bridge_runtime?.transport,
+      upstream: report.bridge_runtime?.upstream,
+      tool_count: report.bridge_runtime?.tool_count,
+      agent: report.profile?.agent,
+      active_sessions: report.sessions?.active,
+      opened_sessions: report.sessions?.opened,
+      reason: item.reason,
+      http_status: item.http_status,
+    }
+  })
+}
+
 function localSubstrateEndpointsForConfig(config, primitiveHealthByEndpoint) {
   return unique([
     ...(config.local_substrate_endpoints ?? []),
@@ -1041,6 +1085,7 @@ function buildGates({
   longLivedAgents,
   health,
   primitiveHealth,
+  bridgeHealth,
 }) {
   const reachableHealth = health.filter((item) => item.reachable && item.status === 'healthy')
   const unhealthyReachable = health.filter((item) => item.reachable && item.status !== 'healthy')
@@ -1119,6 +1164,9 @@ function buildGates({
   const configsWithRuntime = existingConfigs.filter((config) => config.has_primitives_runtime)
   const configsWithPrimitiveHttp = existingConfigs.filter(
     (config) => (config.primitive_http_endpoints ?? []).length > 0,
+  )
+  const configsWithBridgeHttp = existingConfigs.filter(
+    (config) => (config.bridge_http_endpoints ?? []).length > 0,
   )
   const healthyPrimitiveHttp = primitiveHealth.filter(
     (item) => item.reachable && item.status === 'healthy',
@@ -1211,14 +1259,65 @@ function buildGates({
     )
   }
 
-  if (processSummary.bridge_processes === 0) {
+  const healthyBridgeHttp = bridgeHealth.filter(
+    (item) => item.reachable && item.status === 'healthy',
+  )
+  const healthyBridgeHttpByEndpoint = new Map(
+    healthyBridgeHttp.map((item) => [item.endpoint, item]),
+  )
+  const bridgeHttpConfigRoutes = configsWithBridgeHttp.flatMap((config) =>
+    (config.bridge_http_endpoints ?? []).map((endpoint) => ({
+      config: config.name,
+      endpoint,
+      profileAgent: healthyBridgeHttpByEndpoint.get(endpoint)?.report?.profile?.agent,
+    })),
+  )
+  const configuredBridgeHttpEndpoints = unique(
+    configsWithBridgeHttp.flatMap((config) => config.bridge_http_endpoints ?? []),
+  )
+  const healthyBridgeHttpEndpoints = new Set(healthyBridgeHttp.map((item) => item.endpoint))
+  const unhealthyConfiguredBridgeEndpoints = configuredBridgeHttpEndpoints.filter(
+    (endpoint) => !healthyBridgeHttpEndpoints.has(endpoint),
+  )
+  const bridgeAgentScopedEndpointCountOk =
+    configuredBridgeHttpEndpoints.length >= configsWithBridgeHttp.length
+  const bridgeProfileMismatches = bridgeHttpConfigRoutes.filter(
+    (route) => route.profileAgent !== route.config,
+  )
+  if (
+    existingConfigs.length > 0 &&
+    configsWithBridgeHttp.length === existingConfigs.length &&
+    unhealthyConfiguredBridgeEndpoints.length === 0 &&
+    bridgeAgentScopedEndpointCountOk &&
+    bridgeProfileMismatches.length === 0
+  ) {
     gates.push(
       gate(
-        'bridge-wrapper-footprint',
+        'host-owned-bridge-http',
         'pass',
-        'no bridge wrapper process evidence found',
+        `${configuredBridgeHttpEndpoints.length} healthy agent-scoped bridge HTTP endpoint(s), ${configsWithBridgeHttp.length}/${existingConfigs.length} config(s) point at HTTP`,
       ),
     )
+  } else if (healthyBridgeHttp.length > 0 || configsWithBridgeHttp.length > 0) {
+    gates.push(
+      gate(
+        'host-owned-bridge-http',
+        'warn',
+        `${healthyBridgeHttp.length} healthy endpoint(s), ${configuredBridgeHttpEndpoints.length} configured endpoint(s), ${configsWithBridgeHttp.length}/${existingConfigs.length} config(s) point at HTTP, ${bridgeProfileMismatches.length} profile mismatch(es)`,
+      ),
+    )
+  } else {
+    gates.push(
+      gate(
+        'host-owned-bridge-http',
+        'fail',
+        'no agent-scoped bridge HTTP runtime is running or configured',
+      ),
+    )
+  }
+
+  if (processSummary.bridge_processes === 0) {
+    gates.push(gate('bridge-wrapper-footprint', 'pass', 'no bridge wrapper process evidence found'))
   } else if (
     processSummary.duplicate_bridge_wrapper_groups === 0 &&
     processSummary.bridge_wrappers_without_upstream === 0 &&
@@ -1330,6 +1429,9 @@ function buildReport(input, options = {}) {
   const primitiveHealth = Array.isArray(snapshot.primitive_runtime_health)
     ? snapshot.primitive_runtime_health
     : []
+  const bridgeHealth = Array.isArray(snapshot.bridge_runtime_health)
+    ? snapshot.bridge_runtime_health
+    : []
   const processSummary = annotateStandaloneConfigDrift(summarizeProcesses(processes), configs)
   const reachableEndpoints = new Set(
     health
@@ -1344,6 +1446,7 @@ function buildReport(input, options = {}) {
     longLivedAgents,
     health,
     primitiveHealth,
+    bridgeHealth,
   })
   const status = statusFromGates(gates)
 
@@ -1371,6 +1474,12 @@ function buildReport(input, options = {}) {
       bridge_processes: processSummary.bridge_processes,
       bridge_wrapper_processes: processSummary.bridge_wrapper_processes,
       bridge_upstream_processes: processSummary.bridge_upstream_processes,
+      bridge_runtime_http_endpoints: unique(
+        configs.flatMap((config) => config.bridge_http_endpoints ?? []),
+      ).length,
+      bridge_runtime_http_healthy: bridgeHealth.filter(
+        (item) => item.reachable && item.status === 'healthy',
+      ).length,
       duplicate_bridge_wrapper_groups: processSummary.duplicate_bridge_wrapper_groups,
       bridge_wrappers_without_upstream: processSummary.bridge_wrappers_without_upstream,
       bridge_upstreams_without_wrapper: processSummary.bridge_upstreams_without_wrapper,
@@ -1385,6 +1494,7 @@ function buildReport(input, options = {}) {
     gates,
     coordinators: healthSummary(health),
     primitive_runtimes: primitiveRuntimeHealthSummary(primitiveHealth),
+    bridge_runtimes: bridgeRuntimeHealthSummary(bridgeHealth),
     process_inventory: processSummary,
     config_surfaces: configs,
     launch_agents: launchAgents,
@@ -1421,6 +1531,11 @@ function recommendationsFor({ status, gates, processSummary }) {
       'start one loopback atrib-primitives Streamable HTTP host per startup-spawn agent profile before broad process-sharing rollout',
     )
   }
+  if (gates.find((item) => item.name === 'host-owned-bridge-http')?.status !== 'pass') {
+    recommendations.push(
+      'start one loopback Agent Bridge Streamable HTTP host per startup-spawn agent profile before removing per-thread bridge wrappers',
+    )
+  }
   if (gates.find((item) => item.name === 'startup-spawn-config')?.status !== 'pass') {
     recommendations.push(
       'keep Codex and Claude Code config on atrib-primitives plus explicit local-substrate endpoints',
@@ -1428,7 +1543,7 @@ function recommendationsFor({ status, gates, processSummary }) {
   }
   if (gates.find((item) => item.name === 'bridge-wrapper-footprint')?.status !== 'pass') {
     recommendations.push(
-      'restart startup-spawn hosts that own duplicate bridge wrappers, then plan a host-owned bridge route if duplicates recur',
+      'move startup-spawn bridge config to host-owned HTTP, then restart hosts that own duplicate bridge wrappers',
     )
   }
   if (gates.find((item) => item.name === 'watcher-wal-route')?.status !== 'pass') {
@@ -1450,6 +1565,7 @@ function formatTextReport(report) {
     `coordinators: healthy=${report.summary.healthy_coordinators}, configured=${report.summary.configured_coordinators}`,
     `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, stdio=${report.summary.primitive_runtime_stdio_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
     `bridge processes: wrappers=${report.summary.bridge_wrapper_processes}, upstream=${report.summary.bridge_upstream_processes}, duplicate-groups=${report.summary.duplicate_bridge_wrapper_groups}`,
+    `host-owned bridge HTTP: healthy=${report.summary.bridge_runtime_http_healthy}/${report.summary.bridge_runtime_http_endpoints}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
     `long-lived agent routes: healthy=${report.summary.long_lived_agent_routes_healthy}/${report.summary.long_lived_agents}, configured=${report.summary.long_lived_agent_routes_configured}, missing=${report.summary.long_lived_agent_routes_missing}`,
     '',

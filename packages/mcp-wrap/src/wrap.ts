@@ -9,6 +9,7 @@
 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import {
   createAtribProxy,
   createHttpLocalSubstrateTransport,
@@ -38,6 +39,13 @@ export interface WrapDeps {
   resolveKey?: (agent: string) => Promise<ResolvedKey>
   /** Logger. Defaults to a no-op when not provided (silent operation). */
   log?: LogFn
+  /**
+   * Optional pre-built upstream transport. When present, wrap() connects the
+   * atrib proxy to this transport instead of spawning config.upstream.command.
+   * This lets host-owned runtimes mount an upstream MCP server in process while
+   * preserving the same signing, mirror, autoChain, and receipt-injection path.
+   */
+  upstreamTransport?: Transport
 }
 
 /**
@@ -225,15 +233,19 @@ export async function wrap(
       })
     : undefined
 
+  const upstream = deps.upstreamTransport
+    ? ({ type: 'inMemory', transport: deps.upstreamTransport } as const)
+    : ({
+        type: 'stdio',
+        command: config.upstream.command,
+        ...(config.upstream.args ? { args: config.upstream.args } : {}),
+        ...(config.upstream.env ? { env: config.upstream.env } : {}),
+      } as const)
+
   const proxy = await createAtribProxy({
     name: `${config.name}-${config.agent}`,
     version: '0.1.0',
-    upstream: {
-      type: 'stdio',
-      command: config.upstream.command,
-      ...(config.upstream.args ? { args: config.upstream.args } : {}),
-      ...(config.upstream.env ? { env: config.upstream.env } : {}),
-    },
+    upstream,
     atrib: {
       creatorKey: key.seedB64url,
       serverUrl: `${config.serverUrl}/${config.agent}`,
