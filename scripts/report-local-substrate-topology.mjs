@@ -568,6 +568,16 @@ function primitiveRuntimeHealthSummary(items) {
   })
 }
 
+function localSubstrateEndpointsForConfig(config, primitiveHealthByEndpoint) {
+  return unique([
+    ...(config.local_substrate_endpoints ?? []),
+    ...(config.primitive_http_endpoints ?? []).map(
+      (endpoint) =>
+        primitiveHealthByEndpoint.get(endpoint)?.report?.profile?.local_substrate_endpoint,
+    ),
+  ])
+}
+
 function gate(name, status, detail) {
   return { name, status, detail }
 }
@@ -645,8 +655,14 @@ function buildGates({ processSummary, configs, launchAgents, health, primitiveHe
   const configsWithPrimitiveHttp = existingConfigs.filter(
     (config) => (config.primitive_http_endpoints ?? []).length > 0,
   )
+  const healthyPrimitiveHttp = primitiveHealth.filter(
+    (item) => item.reachable && item.status === 'healthy',
+  )
+  const healthyPrimitiveHttpByEndpoint = new Map(
+    healthyPrimitiveHttp.map((item) => [item.endpoint, item]),
+  )
   const configsWithEndpoint = existingConfigs.filter(
-    (config) => (config.local_substrate_endpoints ?? []).length > 0,
+    (config) => localSubstrateEndpointsForConfig(config, healthyPrimitiveHttpByEndpoint).length > 0,
   )
   const configsWithStandalone = existingConfigs.filter(
     (config) => (config.standalone_primitive_servers ?? []).length > 0,
@@ -674,12 +690,6 @@ function buildGates({ processSummary, configs, launchAgents, health, primitiveHe
     )
   }
 
-  const healthyPrimitiveHttp = primitiveHealth.filter(
-    (item) => item.reachable && item.status === 'healthy',
-  )
-  const healthyPrimitiveHttpByEndpoint = new Map(
-    healthyPrimitiveHttp.map((item) => [item.endpoint, item]),
-  )
   const primitiveHttpConfigRoutes = configsWithPrimitiveHttp.flatMap((config) =>
     (config.primitive_http_endpoints ?? []).map((endpoint) => ({
       config: config.name,

@@ -37,7 +37,7 @@
         "server_count": 1,
         "has_primitives_runtime": true,
         "standalone_primitive_servers": [],
-        "local_substrate_endpoints": ["http://127.0.0.1:8797/atrib/local-substrate"],
+        "local_substrate_endpoints": [],
         "primitive_http_endpoints": ["http://127.0.0.1:8796/mcp"]
       },
       {
@@ -47,7 +47,7 @@
         "server_count": 1,
         "has_primitives_runtime": true,
         "standalone_primitive_servers": [],
-        "local_substrate_endpoints": ["http://127.0.0.1:8788/atrib/local-substrate"],
+        "local_substrate_endpoints": [],
         "primitive_http_endpoints": ["http://127.0.0.1:8795/mcp"]
       }
     ],
