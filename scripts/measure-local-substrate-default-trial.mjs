@@ -1,0 +1,335 @@
+#!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
+/* global process */
+
+import { readFileSync, writeFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { buildReport, collectLiveSnapshot } from './report-local-substrate-topology.mjs'
+
+const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
+const SCHEMA = 'atrib.local-substrate-default-trial-measurement.v0'
+const DEFAULT_HEALTH_TIMEOUT_MS = 1500
+
+function usage() {
+  return `Usage:
+  node scripts/measure-local-substrate-default-trial.mjs [options]
+
+Options:
+  --json                  Print JSON instead of the text summary.
+  --report <path>         Write the measurement report to a JSON file.
+  --snapshot <path>       Build the measurement from a topology fixture snapshot.
+  --route-registry <path> Read supervised agent routes from a JSON registry.
+  --knowledge-base-receipt-report <path>
+                          Read the knowledge-base receipt join-back report.
+  --timeout-ms <n>        Live coordinator health timeout. Defaults to 1500.
+  --help                  Print this help.
+
+The measurement consumes the same topology evidence as
+report-local-substrate-topology.mjs and fails closed unless the process
+footprint, shared HTTP surfaces, coordinator health, watcher receipt join-back,
+and long-lived routes are all ready for a controlled default trial.
+`
+}
+
+function parseArgs(argv) {
+  const out = {
+    json: false,
+    reportPath: undefined,
+    snapshotPath: undefined,
+    routeRegistryPath: undefined,
+    knowledgeBaseReceiptReportPath: undefined,
+    timeoutMs: DEFAULT_HEALTH_TIMEOUT_MS,
+    help: false,
+  }
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg === '--json') {
+      out.json = true
+    } else if (arg === '--report') {
+      out.reportPath = requireValue(argv, ++i, '--report')
+    } else if (arg === '--snapshot') {
+      out.snapshotPath = requireValue(argv, ++i, '--snapshot')
+    } else if (arg === '--route-registry') {
+      out.routeRegistryPath = requireValue(argv, ++i, '--route-registry')
+    } else if (arg === '--knowledge-base-receipt-report') {
+      out.knowledgeBaseReceiptReportPath = requireValue(
+        argv,
+        ++i,
+        '--knowledge-base-receipt-report',
+      )
+    } else if (arg === '--timeout-ms') {
+      out.timeoutMs = parsePositiveInt(requireValue(argv, ++i, '--timeout-ms'), '--timeout-ms')
+    } else if (arg === '--help' || arg === '-h') {
+      out.help = true
+    } else {
+      throw new Error(`unknown argument: ${arg}`)
+    }
+  }
+
+  return out
+}
+
+function requireValue(argv, index, flag) {
+  const value = argv[index]
+  if (value === undefined) throw new Error(`${flag} requires a value`)
+  return value
+}
+
+function parsePositiveInt(raw, name) {
+  const n = Number(raw)
+  if (!Number.isInteger(n) || n <= 0) {
+    throw new Error(`${name} must be a positive integer`)
+  }
+  return n
+}
+
+function readJson(path) {
+  return JSON.parse(readFileSync(path, 'utf8'))
+}
+
+function gate(name, passed, detail) {
+  return {
+    name,
+    status: passed ? 'pass' : 'fail',
+    detail,
+  }
+}
+
+function gateStatus(report, name) {
+  return report.gates.find((item) => item.name === name)?.status
+}
+
+function allCoordinatorsClean(report) {
+  return (
+    report.coordinators.length > 0 &&
+    report.coordinators.every(
+      (coordinator) =>
+        coordinator.reachable === true &&
+        coordinator.status === 'healthy' &&
+        Number(coordinator.log_submission_depth ?? 0) === 0 &&
+        Number(coordinator.stale_children ?? 0) === 0 &&
+        Number(coordinator.orphan_receipts ?? 0) === 0,
+    )
+  )
+}
+
+function buildDefaultTrialGates(report) {
+  const summary = report.summary
+  const topologyReady =
+    summary.status === 'ready_for_default_trial' &&
+    gateStatus(report, 'broad-default-readiness') === 'pass'
+  const noStaleStartupSpawnProcesses =
+    summary.standalone_primitive_processes === 0 &&
+    summary.bridge_wrapper_processes === 0 &&
+    summary.bridge_upstream_processes === 0 &&
+    summary.duplicate_primitive_groups === 0 &&
+    summary.duplicate_bridge_wrapper_groups === 0 &&
+    summary.restart_targets === 0
+  const hostOwnedHttpSurfaces =
+    summary.primitive_runtime_processes > 0 &&
+    summary.primitive_runtime_processes === summary.primitive_runtime_http_processes &&
+    summary.primitive_runtime_stdio_processes === 0 &&
+    summary.primitive_runtime_http_shared === summary.primitive_runtime_http_processes &&
+    summary.active_session_profiles > 0 &&
+    summary.active_session_profiles_valid === summary.active_session_profiles &&
+    summary.bridge_runtime_http_endpoints > 0 &&
+    summary.bridge_runtime_http_healthy === summary.bridge_runtime_http_endpoints
+  const coordinatorHealthClean = allCoordinatorsClean(report)
+  const watcherWalAndReceiptsClean =
+    summary.watcher_wal_launch_agents > 0 &&
+    summary.knowledge_base_receipt_report_status === 'clean' &&
+    summary.knowledge_base_receipt_pending_total === 0 &&
+    summary.knowledge_base_wal_queued === 0 &&
+    summary.knowledge_base_wal_quarantined === 0
+  const longLivedRoutesHealthy =
+    summary.long_lived_agent_routes > 0 &&
+    summary.long_lived_agent_routes_healthy === summary.long_lived_agent_routes &&
+    summary.long_lived_agent_routes_missing === 0
+
+  return [
+    gate(
+      'topology-ready',
+      topologyReady,
+      topologyReady
+        ? 'topology report status is ready_for_default_trial'
+        : `topology report status is ${summary.status}`,
+    ),
+    gate(
+      'no-stale-startup-spawn-processes',
+      noStaleStartupSpawnProcesses,
+      noStaleStartupSpawnProcesses
+        ? 'no standalone primitive children, bridge wrappers, duplicate groups, or restart targets remain'
+        : `standalone=${summary.standalone_primitive_processes}, bridge_wrappers=${summary.bridge_wrapper_processes}, bridge_upstream=${summary.bridge_upstream_processes}, restart_targets=${summary.restart_targets}`,
+    ),
+    gate(
+      'host-owned-http-surfaces',
+      hostOwnedHttpSurfaces,
+      hostOwnedHttpSurfaces
+        ? 'startup-spawn profiles use shared primitive HTTP and healthy bridge HTTP surfaces'
+        : `primitive_http_shared=${summary.primitive_runtime_http_shared}/${summary.primitive_runtime_http_processes}, active_session_profiles=${summary.active_session_profiles_valid}/${summary.active_session_profiles}, bridge_http=${summary.bridge_runtime_http_healthy}/${summary.bridge_runtime_http_endpoints}`,
+    ),
+    gate(
+      'coordinator-health-clean',
+      coordinatorHealthClean,
+      coordinatorHealthClean
+        ? 'all known coordinators are healthy with empty queues and no stale children or orphan receipts'
+        : 'one or more known coordinators are unreachable, unhealthy, queued, stale, or orphaned',
+    ),
+    gate(
+      'watcher-wal-and-receipts-clean',
+      watcherWalAndReceiptsClean,
+      watcherWalAndReceiptsClean
+        ? 'watcher-WAL route is present and the receipt join-back report is clean'
+        : `watchers=${summary.watcher_wal_launch_agents}, receipt_status=${summary.knowledge_base_receipt_report_status}, pending=${summary.knowledge_base_receipt_pending_total}, wal_queued=${summary.knowledge_base_wal_queued}, wal_quarantined=${summary.knowledge_base_wal_quarantined}`,
+    ),
+    gate(
+      'long-lived-routes-healthy',
+      longLivedRoutesHealthy,
+      longLivedRoutesHealthy
+        ? 'every known long-lived route points at a healthy coordinator endpoint'
+        : `healthy=${summary.long_lived_agent_routes_healthy}/${summary.long_lived_agent_routes}, missing=${summary.long_lived_agent_routes_missing}`,
+    ),
+  ]
+}
+
+function buildDefaultTrialMeasurement(report, options = {}) {
+  const gates = buildDefaultTrialGates(report)
+  const ready = gates.every((item) => item.status === 'pass')
+  const summary = report.summary
+  const blockers = gates
+    .filter((item) => item.status !== 'pass')
+    .map((item) => ({ gate: item.name, detail: item.detail }))
+
+  return {
+    schema: SCHEMA,
+    generated_at: options.generatedAt ?? new Date().toISOString(),
+    source: report.source,
+    status: ready ? 'ready_for_default_trial' : 'not_ready',
+    topology: {
+      generated_at: report.generated_at,
+      status: summary.status,
+      gates: report.gates.map((item) => ({
+        name: item.name,
+        status: item.status,
+      })),
+    },
+    process_footprint: {
+      coordinators: {
+        configured: summary.configured_coordinators,
+        healthy: summary.healthy_coordinators,
+      },
+      startup_spawn: {
+        primitive_runtime_processes: summary.primitive_runtime_processes,
+        primitive_runtime_http_processes: summary.primitive_runtime_http_processes,
+        primitive_runtime_http_shared: summary.primitive_runtime_http_shared,
+        primitive_runtime_stdio_processes: summary.primitive_runtime_stdio_processes,
+        standalone_primitive_processes: summary.standalone_primitive_processes,
+        standalone_primitive_generations: summary.standalone_primitive_generations,
+        duplicate_primitive_groups: summary.duplicate_primitive_groups,
+        restart_targets: summary.restart_targets,
+      },
+      bridge: {
+        runtime_http_endpoints: summary.bridge_runtime_http_endpoints,
+        runtime_http_healthy: summary.bridge_runtime_http_healthy,
+        wrapper_processes: summary.bridge_wrapper_processes,
+        upstream_processes: summary.bridge_upstream_processes,
+        duplicate_wrapper_groups: summary.duplicate_bridge_wrapper_groups,
+      },
+      active_session_profiles: {
+        total: summary.active_session_profiles,
+        valid: summary.active_session_profiles_valid,
+      },
+      watcher_wal: {
+        launch_agents: summary.watcher_wal_launch_agents,
+        receipt_report_status: summary.knowledge_base_receipt_report_status,
+        receipt_pending_total: summary.knowledge_base_receipt_pending_total,
+        wal_queued: summary.knowledge_base_wal_queued,
+        wal_quarantined: summary.knowledge_base_wal_quarantined,
+      },
+      long_lived_agents: {
+        total: summary.long_lived_agents,
+        routes: summary.long_lived_agent_routes,
+        healthy_routes: summary.long_lived_agent_routes_healthy,
+        missing_routes: summary.long_lived_agent_routes_missing,
+        route_endpoints: summary.long_lived_agent_route_endpoints,
+      },
+    },
+    gates,
+    blockers,
+    recommendations: ready
+      ? [
+          'use this measurement as the controlled default-trial baseline and rerun it after every startup-spawn restart or route config edit',
+        ]
+      : report.recommendations,
+  }
+}
+
+function formatTextMeasurement(measurement) {
+  const lines = [
+    `local-substrate default-trial measurement: ${measurement.status}`,
+    `topology: ${measurement.topology.status}`,
+    `coordinators: healthy=${measurement.process_footprint.coordinators.healthy}/${measurement.process_footprint.coordinators.configured}`,
+    `startup-spawn: primitive-http-shared=${measurement.process_footprint.startup_spawn.primitive_runtime_http_shared}/${measurement.process_footprint.startup_spawn.primitive_runtime_http_processes}, standalone=${measurement.process_footprint.startup_spawn.standalone_primitive_processes}, restart-targets=${measurement.process_footprint.startup_spawn.restart_targets}`,
+    `bridge: http=${measurement.process_footprint.bridge.runtime_http_healthy}/${measurement.process_footprint.bridge.runtime_http_endpoints}, wrappers=${measurement.process_footprint.bridge.wrapper_processes}, upstream=${measurement.process_footprint.bridge.upstream_processes}`,
+    `watcher-WAL: launch-agents=${measurement.process_footprint.watcher_wal.launch_agents}, receipt-status=${measurement.process_footprint.watcher_wal.receipt_report_status}, pending=${measurement.process_footprint.watcher_wal.receipt_pending_total}`,
+    `long-lived routes: healthy=${measurement.process_footprint.long_lived_agents.healthy_routes}/${measurement.process_footprint.long_lived_agents.routes}, missing=${measurement.process_footprint.long_lived_agents.missing_routes}`,
+    '',
+    'measurement gates:',
+  ]
+  for (const item of measurement.gates) {
+    lines.push(`  ${item.status.toUpperCase()} ${item.name}: ${item.detail}`)
+  }
+  if (measurement.recommendations.length > 0) {
+    lines.push('', 'next:')
+    for (const recommendation of measurement.recommendations) {
+      lines.push(`  - ${recommendation}`)
+    }
+  }
+  return `${lines.join('\n')}\n`
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2))
+  if (args.help) {
+    process.stdout.write(usage())
+    return
+  }
+
+  const snapshotInput = args.snapshotPath
+    ? readJson(args.snapshotPath)
+    : await collectLiveSnapshot({
+        timeoutMs: args.timeoutMs,
+        routeRegistryPath: args.routeRegistryPath,
+        knowledgeBaseReceiptReportPath: args.knowledgeBaseReceiptReportPath,
+      })
+  const snapshot = snapshotInput?.snapshot ?? snapshotInput
+  const topology = buildReport(snapshot)
+  const measurement = buildDefaultTrialMeasurement(topology)
+
+  if (args.reportPath) {
+    const absolute = resolve(ROOT, args.reportPath)
+    writeFileSync(absolute, `${JSON.stringify(measurement, null, 2)}\n`)
+  }
+
+  process.stdout.write(
+    args.json ? `${JSON.stringify(measurement, null, 2)}\n` : formatTextMeasurement(measurement),
+  )
+
+  if (measurement.status !== 'ready_for_default_trial') {
+    process.exitCode = 1
+  }
+}
+
+const invokedPath = process.argv[1] ? pathToFileURL(process.argv[1]).href : undefined
+if (import.meta.url === invokedPath) {
+  main().catch((error) => {
+    process.stderr.write(
+      `${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+    )
+    process.exit(1)
+  })
+}
+
+export { SCHEMA, buildDefaultTrialMeasurement, formatTextMeasurement }

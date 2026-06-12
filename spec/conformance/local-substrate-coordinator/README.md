@@ -76,3 +76,13 @@ Fixture snapshots live in [`topology/`](topology/). They pin these states:
 - `restart-required-obsolete-agent-bridge-wrappers.json`: startup-spawn primitive, bridge HTTP, session-state, watcher-WAL, and long-lived routes pass, but still-running startup-spawn hosts own obsolete bridge wrapper/upstream pairs.
 
 `scripts/check-local-substrate-topology-report.mjs` validates those snapshots and runs through `pnpm doc-sync`. A live `restart_required` report means host-owned routing, runtime, active-session, watcher-WAL, and long-lived-agent gates pass, but still-running startup-spawn hosts own only obsolete child processes from pre-migration config. Restart the parents listed in `restart_targets[]` before treating the broad-default gate as ready. A live `mixed` report means at least one routing, runtime, session-state, watcher-WAL, long-lived-agent, or non-obsolete process-footprint gate remains incomplete.
+
+## Default-Trial Measurement
+
+The topology report is diagnostic. The default-trial measurement is the post-restart gate:
+
+```sh
+pnpm measure:local-substrate
+```
+
+The measurement reuses the topology collector, then fails closed unless the topology is `ready_for_default_trial`, no stale startup-spawn primitive or bridge wrapper processes remain, every configured startup-spawn profile uses shared primitive HTTP plus healthy bridge HTTP, all known coordinators have empty queues and no stale children or orphan receipts, the watcher receipt join-back report is clean, and every known long-lived route points at a healthy coordinator endpoint. Use `--report <path>` to write a JSON baseline for rollout notes. `scripts/check-local-substrate-default-trial-measurement.mjs` pins the ready case plus restart-residue, receipt-backlog, and missing-long-lived-route failures, and it runs through `pnpm doc-sync`.
