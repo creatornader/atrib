@@ -12,6 +12,7 @@ import {
   collectRegisteredStartupSpawnConfigs,
   registeredLongLivedAgentsFromRegistry,
   registeredStartupSpawnConfigsFromRegistry,
+  routeRegistryDiagnosticsFromRegistry,
 } from './report-local-substrate-topology.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -134,6 +135,20 @@ function checkRouteRegistryNormalization() {
     fail('route registry startup config: non-loopback primitive endpoint was not ignored')
   }
 
+  const wrongSchemaDiagnostics = routeRegistryDiagnosticsFromRegistry(
+    {
+      schema: 'atrib.local-substrate-route-registry.v99',
+      routes: [],
+    },
+    { registryPath: '/tmp/atrib-local-substrate-routes.json' },
+  )
+  if (
+    wrongSchemaDiagnostics.length !== 1 ||
+    wrongSchemaDiagnostics[0].status !== 'invalid_schema'
+  ) {
+    fail('route registry diagnostics: wrong schema was not reported')
+  }
+
   const dir = mkdtempSync(join(tmpdir(), 'atrib-topology-'))
   try {
     const envPath = join(dir, 'future.env')
@@ -182,6 +197,47 @@ function checkRouteRegistryNormalization() {
     }
   } finally {
     rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+function checkRouteRegistryDiagnosticsGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  snapshot.route_registry = [
+    {
+      path: '~/.atrib/local-substrate/routes.json',
+      exists: true,
+      status: 'invalid_schema',
+      schema: 'atrib.local-substrate-route-registry.v99',
+      expected_schema: 'atrib.local-substrate-route-registry.v0',
+    },
+  ]
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'mixed') {
+    fail(`route registry diagnostics gate: expected status mixed, got ${report.summary.status}`)
+  }
+  if (report.summary.route_registry_status !== 'problem') {
+    fail(
+      `route registry diagnostics gate: expected summary.route_registry_status=problem, got ${report.summary.route_registry_status}`,
+    )
+  }
+  const routeRegistryGate = report.gates.find((gate) => gate.name === 'route-registry')
+  if (routeRegistryGate?.status !== 'fail') {
+    fail('route registry diagnostics gate: expected route-registry=fail')
+  }
+  const broadGate = report.gates.find((gate) => gate.name === 'broad-default-readiness')
+  if (broadGate?.status !== 'fail') {
+    fail('route registry diagnostics gate: expected broad-default-readiness=fail')
+  }
+  if (
+    !report.recommendations.includes(
+      'fix the local route registry before relying on future harness coverage in the topology report',
+    )
+  ) {
+    fail('route registry diagnostics gate: expected route-registry recommendation')
   }
 }
 
@@ -300,6 +356,7 @@ function main() {
     for (const file of files) checkFixture(join(FIXTURE_DIR, file))
   }
   checkRouteRegistryNormalization()
+  checkRouteRegistryDiagnosticsGate()
   checkCombinedRestartResidueClassification()
 
   if (failures.length > 0) {

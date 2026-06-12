@@ -778,6 +778,73 @@ function collectRegisteredStartupSpawnConfigs(routeRegistryPath = DEFAULT_ROUTE_
   }
 }
 
+function collectRouteRegistryDiagnostics(routeRegistryPath = DEFAULT_ROUTE_REGISTRY_PATH) {
+  const expandedPath = expandHomePath(routeRegistryPath)
+  if (!expandedPath) return []
+  const path = displayPath(expandedPath)
+  if (!existsSync(expandedPath)) {
+    return [{ path, exists: false, status: 'absent' }]
+  }
+  try {
+    return routeRegistryDiagnosticsFromRegistry(readJson(expandedPath), {
+      registryPath: expandedPath,
+    })
+  } catch (error) {
+    return [
+      {
+        path,
+        exists: true,
+        status: 'parse_error',
+        reason: error instanceof Error ? error.message : String(error),
+      },
+    ]
+  }
+}
+
+function routeRegistryDiagnosticsFromRegistry(registry, { registryPath } = {}) {
+  const path = registryPath ? displayPath(registryPath) : undefined
+  if (Array.isArray(registry)) {
+    return [{ path, exists: true, status: 'valid', entries: registry.length }]
+  }
+  if (!registry || typeof registry !== 'object') {
+    return [
+      {
+        path,
+        exists: true,
+        status: 'invalid_shape',
+        reason: 'registry root must be an object or array',
+      },
+    ]
+  }
+  if (registry.schema && registry.schema !== ROUTE_REGISTRY_SCHEMA) {
+    return [
+      {
+        path,
+        exists: true,
+        status: 'invalid_schema',
+        schema: stringValue(registry.schema),
+        expected_schema: ROUTE_REGISTRY_SCHEMA,
+      },
+    ]
+  }
+  const routes = routeRegistryEntries(registry)
+  if (
+    routes.length === 0 &&
+    !Array.isArray(registry.routes) &&
+    !Array.isArray(registry.long_lived_agents)
+  ) {
+    return [
+      {
+        path,
+        exists: true,
+        status: 'invalid_shape',
+        reason: 'registry object must include routes[] or long_lived_agents[]',
+      },
+    ]
+  }
+  return [{ path, exists: true, status: 'valid', entries: routes.length }]
+}
+
 function registeredLongLivedAgentsFromRegistry(registry, { registryPath } = {}) {
   const routes = routeRegistryEntries(registry)
   const out = []
@@ -1135,6 +1202,7 @@ async function collectLiveSnapshot({
 } = {}) {
   const launchAgents = collectLaunchAgents()
   const longLivedAgents = collectLongLivedAgents({ routeRegistryPath })
+  const routeRegistryDiagnostics = collectRouteRegistryDiagnostics(routeRegistryPath)
   const configs = dedupeServerConfigs([
     summarizeCodexConfig(join(HOME, '.codex/config.toml')),
     summarizeClaudeConfig(join(HOME, '.claude.json')),
@@ -1177,6 +1245,7 @@ async function collectLiveSnapshot({
     configs,
     launch_agents: launchAgents,
     long_lived_agents: longLivedAgents,
+    route_registry: routeRegistryDiagnostics,
     coordinator_health: coordinatorHealth,
     primitive_runtime_health: primitiveRuntimeHealth,
     active_session_state: activeSessionState,
@@ -1358,7 +1427,29 @@ function buildGates({
   primitiveHealth,
   activeSessionState,
   bridgeHealth,
+  routeRegistry,
 }) {
+  const registryProblems = routeRegistry.filter(
+    (item) => item.exists && item.status !== 'valid' && item.status !== 'absent',
+  )
+  const registryValid = routeRegistry.filter((item) => item.exists && item.status === 'valid')
+
+  const gates = []
+  if (registryProblems.length > 0) {
+    gates.push(
+      gate(
+        'route-registry',
+        'fail',
+        `${registryProblems.length} route registry problem(s); future harness routes may be invisible`,
+      ),
+    )
+  } else if (registryValid.length > 0) {
+    const entries = registryValid.reduce((sum, item) => sum + Number(item.entries ?? 0), 0)
+    gates.push(gate('route-registry', 'pass', `${entries} registered route entries`))
+  } else {
+    gates.push(gate('route-registry', 'pass', 'optional route registry absent'))
+  }
+
   const reachableHealth = health.filter((item) => item.reachable && item.status === 'healthy')
   const unhealthyReachable = health.filter((item) => item.reachable && item.status !== 'healthy')
   const unreachable = health.filter((item) => !item.reachable)
@@ -1368,7 +1459,6 @@ function buildGates({
       Number(item.report?.wal?.orphan_receipts ?? 0) > 0,
   )
 
-  const gates = []
   if (reachableHealth.length === 0) {
     gates.push(
       gate(
@@ -1854,6 +1944,7 @@ function buildReport(input, options = {}) {
   const bridgeHealth = Array.isArray(snapshot.bridge_runtime_health)
     ? snapshot.bridge_runtime_health
     : []
+  const routeRegistry = Array.isArray(snapshot.route_registry) ? snapshot.route_registry : []
   const processSummary = annotateBridgeConfigDrift(
     annotateStandaloneConfigDrift(summarizeProcesses(processes), configs),
     configs,
@@ -1873,9 +1964,14 @@ function buildReport(input, options = {}) {
     primitiveHealth,
     activeSessionState,
     bridgeHealth,
+    routeRegistry,
   })
   const status = statusFromGates(gates, processSummary)
   const restartTargets = restartTargetsFor(processSummary)
+  const registryProblems = routeRegistry.filter(
+    (item) => item.exists && item.status !== 'valid' && item.status !== 'absent',
+  )
+  const registryValid = routeRegistry.filter((item) => item.exists && item.status === 'valid')
 
   return {
     schema: SCHEMA,
@@ -1886,6 +1982,8 @@ function buildReport(input, options = {}) {
       healthy_coordinators: health.filter((item) => item.reachable && item.status === 'healthy')
         .length,
       configured_coordinators: launchAgents.filter((agent) => agent.kind === 'coordinator').length,
+      route_registry_status:
+        registryProblems.length > 0 ? 'problem' : registryValid.length > 0 ? 'valid' : 'absent',
       primitive_runtime_processes: processSummary.primitive_runtime_processes,
       primitive_runtime_http_processes: processSummary.primitive_runtime_http_processes,
       primitive_runtime_stdio_processes: processSummary.primitive_runtime_stdio_processes,
@@ -1936,6 +2034,7 @@ function buildReport(input, options = {}) {
     primitive_runtimes: primitiveRuntimeHealthSummary(primitiveHealth),
     active_session_state: activeSessionStateSummary(activeSessionState),
     bridge_runtimes: bridgeRuntimeHealthSummary(bridgeHealth),
+    route_registry: routeRegistry,
     process_inventory: processSummary,
     restart_targets: restartTargets,
     config_surfaces: configs,
@@ -1954,6 +2053,11 @@ function recommendationsFor({ status, gates, processSummary }) {
   if (gates.find((item) => item.name === 'coordinator-health')?.status !== 'pass') {
     recommendations.push(
       'restore healthy local-substrate coordinator endpoints before relying on coordinator-owned paths',
+    )
+  }
+  if (gates.find((item) => item.name === 'route-registry')?.status !== 'pass') {
+    recommendations.push(
+      'fix the local route registry before relying on future harness coverage in the topology report',
     )
   }
   if (obsoleteStandaloneResidue(processSummary)) {
@@ -2019,6 +2123,7 @@ function formatTextReport(report) {
   const lines = [
     `local-substrate topology: ${report.summary.status}`,
     `coordinators: healthy=${report.summary.healthy_coordinators}, configured=${report.summary.configured_coordinators}`,
+    `route registry: ${report.summary.route_registry_status}`,
     `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, stdio=${report.summary.primitive_runtime_stdio_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
     `bridge processes: wrappers=${report.summary.bridge_wrapper_processes}, upstream=${report.summary.bridge_upstream_processes}, duplicate-groups=${report.summary.duplicate_bridge_wrapper_groups}`,
     `host-owned bridge HTTP: healthy=${report.summary.bridge_runtime_http_healthy}/${report.summary.bridge_runtime_http_endpoints}`,
@@ -2091,8 +2196,10 @@ export {
   collectLiveSnapshot,
   collectRegisteredLongLivedAgents,
   collectRegisteredStartupSpawnConfigs,
+  collectRouteRegistryDiagnostics,
   formatTextReport,
   registeredLongLivedAgentsFromRegistry,
   registeredStartupSpawnConfigsFromRegistry,
+  routeRegistryDiagnosticsFromRegistry,
   summarizeProcesses,
 }
