@@ -20,6 +20,7 @@ const PRIMITIVE_SERVERS = [
   'atrib-summarize',
   'atrib-verify',
 ]
+const PRIMITIVE_GENERATION_WINDOW_MS = 5000
 const LONG_LIVED_AGENT_LABELS = new Set(['ai.hermes.gateway', 'ai.openclaw.gateway'])
 const SAFE_ENDPOINT_ENV_KEYS = [
   'ATRIB_LOCAL_SUBSTRATE_ENDPOINT',
@@ -187,12 +188,17 @@ function summarizeProcesses(processes) {
   const standaloneGroups = [...groupBy(standalone, (row) => row.ppid).entries()]
     .map(([ppid, group]) => {
       const parent = byPid.get(ppid)
+      const generations = standalonePrimitiveGenerations(group)
       return {
         ppid,
         parent_service: parent?.service ?? 'unknown',
         parent_label: parent ? processLabel(parent) : 'unknown',
+        config_surface: startupSurfaceForParentService(parent?.service),
         process_count: group.length,
         services: unique(group.map((row) => row.service)).sort(),
+        generation_count: generations.length,
+        complete_generation_count: generations.filter((generation) => generation.complete).length,
+        generations,
         pids: group.map((row) => row.pid).sort((a, b) => a - b),
         ...startWindow(group),
       }
@@ -221,10 +227,106 @@ function summarizeProcesses(processes) {
     primitive_runtime_stdio_processes: primitiveRuntimeStdio.length,
     standalone_primitive_processes: standalone.length,
     standalone_primitive_groups: standaloneGroups.length,
+    standalone_primitive_generations: standaloneGroups.reduce(
+      (sum, group) => sum + group.generation_count,
+      0,
+    ),
+    complete_standalone_primitive_generations: standaloneGroups.reduce(
+      (sum, group) => sum + group.complete_generation_count,
+      0,
+    ),
     duplicate_primitive_groups: standaloneGroups.filter((group) => group.process_count >= 3).length,
+    obsolete_standalone_primitive_processes: 0,
+    obsolete_standalone_primitive_generations: 0,
     bridge_processes: bridge.length,
     runtime_groups: runtimeGroups,
     standalone_groups: standaloneGroups,
+  }
+}
+
+function startupSurfaceForParentService(service) {
+  if (service === 'codex-app-server') return 'codex'
+  if (service === 'claude-code') return 'claude-code'
+  return undefined
+}
+
+function standalonePrimitiveGenerations(rows) {
+  const sorted = [...rows].sort((a, b) => {
+    const aTime = timestampMs(a.started_at)
+    const bTime = timestampMs(b.started_at)
+    if (aTime !== undefined && bTime !== undefined && aTime !== bTime) return aTime - bTime
+    if (aTime !== undefined && bTime === undefined) return -1
+    if (aTime === undefined && bTime !== undefined) return 1
+    return a.pid - b.pid
+  })
+
+  const generations = []
+  for (const row of sorted) {
+    const time = timestampMs(row.started_at)
+    const current = generations[generations.length - 1]
+    const startsNewGeneration =
+      !current ||
+      (current.reference_ms === undefined && time !== undefined) ||
+      (current.reference_ms !== undefined && time === undefined) ||
+      (current.reference_ms !== undefined &&
+        time !== undefined &&
+        time - current.reference_ms > PRIMITIVE_GENERATION_WINDOW_MS)
+    if (startsNewGeneration) {
+      generations.push({
+        reference_ms: time,
+        rows: [row],
+      })
+    } else {
+      current.rows.push(row)
+    }
+  }
+
+  return generations.map((generation) => {
+    const services = unique(generation.rows.map((row) => row.service)).sort()
+    return {
+      process_count: generation.rows.length,
+      complete: PRIMITIVE_SERVERS.every((service) => services.includes(service)),
+      services,
+      pids: generation.rows.map((row) => row.pid).sort((a, b) => a - b),
+      ...startWindow(generation.rows),
+    }
+  })
+}
+
+function timestampMs(value) {
+  if (typeof value !== 'string') return undefined
+  const parsed = Date.parse(value)
+  return Number.isNaN(parsed) ? undefined : parsed
+}
+
+function annotateStandaloneConfigDrift(processSummary, configs) {
+  const byName = new Map(configs.map((config) => [config.name, config]))
+  const standaloneGroups = processSummary.standalone_groups.map((group) => {
+    const config = group.config_surface ? byName.get(group.config_surface) : undefined
+    const configDeclaresRuntime = Boolean(config?.has_primitives_runtime)
+    const configDeclaresStandalone = (config?.standalone_primitive_servers ?? []).length > 0
+    const obsolete_config_drift =
+      Boolean(config?.exists) && configDeclaresRuntime && !configDeclaresStandalone
+    return {
+      ...group,
+      config_declares_primitives_runtime: configDeclaresRuntime,
+      config_declares_standalone_primitives: configDeclaresStandalone,
+      obsolete_config_drift,
+    }
+  })
+
+  const obsoleteGroups = standaloneGroups.filter((group) => group.obsolete_config_drift)
+  return {
+    ...processSummary,
+    standalone_groups: standaloneGroups,
+    obsolete_standalone_primitive_processes: obsoleteGroups.reduce(
+      (sum, group) => sum + group.process_count,
+      0,
+    ),
+    obsolete_standalone_primitive_generations: obsoleteGroups.reduce(
+      (sum, group) => sum + group.generation_count,
+      0,
+    ),
   }
 }
 
@@ -731,11 +833,17 @@ function buildGates({
       ),
     )
   } else if (processSummary.primitive_runtime_processes > 0) {
+    const obsoleteAll =
+      processSummary.obsolete_standalone_primitive_processes > 0 &&
+      processSummary.obsolete_standalone_primitive_processes ===
+        processSummary.standalone_primitive_processes
     gates.push(
       gate(
         'startup-spawn-mcp-collapse',
         'warn',
-        `${processSummary.primitive_runtime_processes} atrib-primitives process(es) plus ${processSummary.standalone_primitive_processes} standalone primitive process(es)`,
+        obsoleteAll
+          ? `${processSummary.primitive_runtime_processes} atrib-primitives process(es) plus ${processSummary.standalone_primitive_processes} obsolete standalone primitive process(es) across ${processSummary.obsolete_standalone_primitive_generations} generation(s); current config no longer declares them`
+          : `${processSummary.primitive_runtime_processes} atrib-primitives process(es) plus ${processSummary.standalone_primitive_processes} standalone primitive process(es)`,
       ),
     )
   } else if (processSummary.standalone_primitive_processes > 0) {
@@ -942,7 +1050,7 @@ function buildReport(input, options = {}) {
   const primitiveHealth = Array.isArray(snapshot.primitive_runtime_health)
     ? snapshot.primitive_runtime_health
     : []
-  const processSummary = summarizeProcesses(processes)
+  const processSummary = annotateStandaloneConfigDrift(summarizeProcesses(processes), configs)
   const gates = buildGates({
     processSummary,
     configs,
@@ -966,6 +1074,13 @@ function buildReport(input, options = {}) {
       primitive_runtime_http_processes: processSummary.primitive_runtime_http_processes,
       primitive_runtime_stdio_processes: processSummary.primitive_runtime_stdio_processes,
       standalone_primitive_processes: processSummary.standalone_primitive_processes,
+      standalone_primitive_generations: processSummary.standalone_primitive_generations,
+      complete_standalone_primitive_generations:
+        processSummary.complete_standalone_primitive_generations,
+      obsolete_standalone_primitive_processes:
+        processSummary.obsolete_standalone_primitive_processes,
+      obsolete_standalone_primitive_generations:
+        processSummary.obsolete_standalone_primitive_generations,
       duplicate_primitive_groups: processSummary.duplicate_primitive_groups,
       watcher_wal_launch_agents: launchAgents.filter((agent) => agent.kind === 'watcher-wal')
         .length,
@@ -993,7 +1108,15 @@ function recommendationsFor({ status, gates, processSummary }) {
       'restore healthy local-substrate coordinator endpoints before relying on coordinator-owned paths',
     )
   }
-  if (processSummary.standalone_primitive_processes > 0) {
+  if (
+    processSummary.obsolete_standalone_primitive_processes > 0 &&
+    processSummary.obsolete_standalone_primitive_processes ===
+      processSummary.standalone_primitive_processes
+  ) {
+    recommendations.push(
+      'fully quit or restart startup-spawn hosts that still own obsolete standalone primitive generations',
+    )
+  } else if (processSummary.standalone_primitive_processes > 0) {
     recommendations.push(
       'restart or reconfigure startup-spawn harnesses that still launch standalone atrib primitive servers',
     )
@@ -1025,7 +1148,7 @@ function formatTextReport(report) {
   const lines = [
     `local-substrate topology: ${report.summary.status}`,
     `coordinators: healthy=${report.summary.healthy_coordinators}, configured=${report.summary.configured_coordinators}`,
-    `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, stdio=${report.summary.primitive_runtime_stdio_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
+    `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, stdio=${report.summary.primitive_runtime_stdio_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
     `long-lived agent routes: ${report.summary.long_lived_agent_routes}/${report.summary.long_lived_agents}`,
     '',
