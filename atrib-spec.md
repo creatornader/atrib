@@ -2319,7 +2319,7 @@ The retrieval, evidence-projection, retention, and uncommitted-record cases are 
 
 ## §3 Graph Query Interface
 
-_Seven edge types. Deterministic derivation. Fact layer only._
+_Nine edge types. Deterministic derivation. Fact layer only._
 
 The data model and query API for turning attribution records into a structured provenance graph, the input to policy evaluation and settlement calculation.
 
@@ -2340,6 +2340,8 @@ atrib does NOT certify:
 - That a tool's response was real, absent tool-side attestation. `result_hash` is the agent's claim about what the tool returned; tool-side response signing closes this gap when needed ([§7.6](#76-outcome-verification-patterns)).
 
 These limits define the substrate's value. atrib stays useful because it is honest about what it certifies and what it does not. Reasoning chains and outcome verification are layered on top using the existing primitives (extension URIs + `informed_by` per [D047](DECISIONS.md#d047-harness-side-reasoning-chains-as-informative-7-pattern), tool-side attestation + observation witnessing per [§7.6](#76-outcome-verification-patterns)).
+
+The useful mental model is: **one graph, two planes**. The chronology plane preserves faithful event history: chain and session edges show what happened before what inside a context, and cross-session edges show explicit continuity across contexts. The declared-relationship plane preserves signed claims about how records relate: `informed_by`, `provenance_token`, `annotates`, and `revises` state that the signer treats one record as an input, anchor, comment target, or superseded position. Both planes make up the atrib graph. `/v1/graph` exposes the derived graph for a scope, while `/v1/chain` and `/v1/trace` are projections over that graph: chain isolates chronological continuity, trace isolates declared relationships. The graph is semantic only in this signed-declaration sense; it never infers semantic relationships by reading tool names, responses, or natural-language content.
 
 Contents
 
