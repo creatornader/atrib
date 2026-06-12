@@ -1,5 +1,13 @@
 # @atrib/mcp
 
+## 0.17.6
+
+### Patch Changes
+
+- 7ffd086: Publish active-session profile fallback and trace wording updates.
+
+  `@atrib/mcp` now resolves Codex thread IDs and profile-scoped active-session files for host-owned primitive runtimes. `@atrib/emit` documents and carries the same context inputs. The read primitives align package docs and output wording with chronology plus declared relationship traces.
+
 ## 0.17.5
 
 ### Patch Changes

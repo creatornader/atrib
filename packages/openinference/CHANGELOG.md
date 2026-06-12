@@ -1,5 +1,12 @@
 # @atrib/openinference
 
+## 0.3.11
+
+### Patch Changes
+
+- Updated dependencies [7ffd086]
+  - @atrib/mcp@0.17.6
+
 ## 0.3.10
 
 ### Patch Changes
