@@ -63,7 +63,7 @@ async function connectStdioClient(env: NodeJS.ProcessEnv): Promise<Client> {
   }
 }
 
-function startHttpHost(env: NodeJS.ProcessEnv): Promise<HttpHost> {
+function startHttpHost(env: NodeJS.ProcessEnv, path = '/mcp'): Promise<HttpHost> {
   return new Promise((resolveHost, rejectHost) => {
     const child = spawn(
       'node',
@@ -73,6 +73,8 @@ function startHttpHost(env: NodeJS.ProcessEnv): Promise<HttpHost> {
         'streamable-http',
         '--port',
         '0',
+        '--path',
+        path,
         '--json',
         '--session-idle-ms',
         '60000',
@@ -234,6 +236,18 @@ describe('atrib-primitives MCP runtime', () => {
       } finally {
         await client.close()
       }
+    } finally {
+      await host.close()
+    }
+  })
+
+  it('normalizes repeated trailing slashes in the HTTP path', async () => {
+    const host = await startHttpHost({ ATRIB_RECORD_FILE: recordFile }, 'nested/mcp////')
+    try {
+      expect(new URL(host.endpoint).pathname).toBe('/nested/mcp')
+      expect(new URL(host.healthEndpoint).pathname).toBe('/nested/mcp/health')
+      const health = (await (await fetch(host.healthEndpoint)).json()) as { status?: string }
+      expect(health.status).toBe('healthy')
     } finally {
       await host.close()
     }

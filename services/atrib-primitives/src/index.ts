@@ -219,7 +219,9 @@ export async function createAtribPrimitivesRuntime(): Promise<AtribPrimitivesRun
 
 function normalizeMcpPath(raw: string): string {
   const withSlash = raw.startsWith('/') ? raw : `/${raw}`
-  const trimmed = withSlash.length > 1 ? withSlash.replace(/\/+$/, '') : withSlash
+  let end = withSlash.length
+  while (end > 1 && withSlash.charCodeAt(end - 1) === 47) end -= 1
+  const trimmed = withSlash.slice(0, end)
   return trimmed.length > 0 ? trimmed : DEFAULT_HTTP_PATH
 }
 
