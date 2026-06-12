@@ -271,6 +271,22 @@ function checkCombinedRestartResidueClassification() {
   if (gateStatus('host-owned-active-session-context') !== 'pass') {
     fail('combined restart residue: expected host-owned-active-session-context=pass')
   }
+  if (report.summary.restart_targets !== 1) {
+    fail(
+      `combined restart residue: expected summary.restart_targets=1, got ${report.summary.restart_targets}`,
+    )
+  } else {
+    const target = report.restart_targets[0]
+    if (target.parent_pid !== 100 || target.config_surface !== 'codex') {
+      fail('combined restart residue: expected restart target to point at codex parent pid 100')
+    }
+    if (!target.reasons.includes('obsolete-standalone-primitives')) {
+      fail('combined restart residue: expected obsolete-standalone-primitives reason')
+    }
+    if (!target.reasons.includes('obsolete-bridge-wrapper')) {
+      fail('combined restart residue: expected obsolete-bridge-wrapper reason')
+    }
+  }
 }
 
 function main() {
