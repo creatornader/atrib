@@ -13,22 +13,22 @@
       {
         "pid": 120,
         "ppid": 100,
-        "command": "node /Users/example/repos/atrib-internal/services/agent-bridge-atrib/dist/index.js"
+        "command": "node /opt/atrib/bridge-wrapper/dist/index.js"
       },
       {
         "pid": 121,
         "ppid": 120,
-        "command": "node /Users/example/repos/agent-bridge/dist/index.js"
+        "command": "node /opt/atrib/upstream-bridge/dist/index.js"
       },
       {
         "pid": 122,
         "ppid": 100,
-        "command": "node /Users/example/repos/atrib-internal/services/agent-bridge-atrib/dist/index.js"
+        "command": "node /opt/atrib/bridge-wrapper/dist/index.js"
       },
       {
         "pid": 123,
         "ppid": 122,
-        "command": "node /Users/example/repos/agent-bridge/dist/index.js"
+        "command": "node /opt/atrib/upstream-bridge/dist/index.js"
       },
       {
         "pid": 130,
@@ -38,12 +38,12 @@
       {
         "pid": 131,
         "ppid": 130,
-        "command": "node /Users/example/repos/atrib-internal/services/agent-bridge-atrib/dist/index.js"
+        "command": "node /opt/atrib/bridge-wrapper/dist/index.js"
       },
       {
         "pid": 132,
         "ppid": 131,
-        "command": "node /Users/example/repos/agent-bridge/dist/index.js"
+        "command": "node /opt/atrib/upstream-bridge/dist/index.js"
       },
       {
         "pid": 210,
@@ -246,7 +246,7 @@
       "startup-spawn-mcp-collapse": "pass",
       "startup-spawn-config": "pass",
       "host-owned-primitives-http": "pass",
-      "agent-bridge-wrapper-footprint": "warn",
+      "bridge-wrapper-footprint": "warn",
       "watcher-wal-route": "pass",
       "long-lived-agent-route": "pass",
       "broad-default-readiness": "fail"

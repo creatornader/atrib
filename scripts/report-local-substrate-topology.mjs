@@ -176,8 +176,10 @@ function serviceNameForCommand(command) {
       return name
     }
   }
-  if (command.includes('/services/agent-bridge-atrib/dist/')) return 'agent-bridge-atrib'
-  if (command.includes('/agent-bridge/dist/')) return 'agent-bridge'
+  if (command.includes('/bridge-wrapper/dist/')) return 'bridge-wrapper'
+  if (command.includes('/agent-bridge/dist/') || command.includes('/upstream-bridge/dist/')) {
+    return 'bridge-upstream'
+  }
   if (command.includes('codex app-server')) return 'codex-app-server'
   if (command === 'claude' || command.startsWith('claude ') || /\/claude(?:\s|$)/.test(command)) {
     return 'claude-code'
@@ -266,10 +268,19 @@ function summarizeProcesses(processes) {
 }
 
 function summarizeBridgeProcesses(rows, byPid) {
-  const wrappers = rows.filter((row) => row.service === 'agent-bridge-atrib')
-  const upstreams = rows.filter((row) => row.service === 'agent-bridge')
+  const upstreams = rows.filter((row) => row.service === 'bridge-upstream')
+  const explicitWrappers = rows.filter((row) => row.service === 'bridge-wrapper')
+  const inferredWrappers = upstreams
+    .map((row) => byPid.get(row.ppid))
+    .filter(Boolean)
+    .filter((row) => row.service !== 'bridge-upstream')
+  const wrapperByPid = new Map()
+  for (const row of [...explicitWrappers, ...inferredWrappers]) {
+    wrapperByPid.set(row.pid, { ...row, service: 'bridge-wrapper' })
+  }
+  const wrappers = [...wrapperByPid.values()]
   const upstreamsByWrapperPid = groupBy(
-    upstreams.filter((row) => byPid.get(row.ppid)?.service === 'agent-bridge-atrib'),
+    upstreams.filter((row) => wrapperByPid.has(row.ppid)),
     (row) => row.ppid,
   )
   const wrapperGroups = [...groupBy(wrappers, (row) => row.ppid).entries()]
@@ -292,9 +303,7 @@ function summarizeBridgeProcesses(rows, byPid) {
   const wrappersWithoutUpstream = wrappers.filter(
     (row) => (upstreamsByWrapperPid.get(row.pid) ?? []).length === 0,
   )
-  const upstreamsWithoutWrapper = upstreams.filter(
-    (row) => byPid.get(row.ppid)?.service !== 'agent-bridge-atrib',
-  )
+  const upstreamsWithoutWrapper = upstreams.filter((row) => !wrapperByPid.has(row.ppid))
   return {
     bridge_processes: wrappers.length + upstreams.length,
     bridge_wrapper_processes: wrappers.length,
@@ -1205,9 +1214,9 @@ function buildGates({
   if (processSummary.bridge_processes === 0) {
     gates.push(
       gate(
-        'agent-bridge-wrapper-footprint',
+        'bridge-wrapper-footprint',
         'pass',
-        'no Agent Bridge wrapper process evidence found',
+        'no bridge wrapper process evidence found',
       ),
     )
   } else if (
@@ -1217,17 +1226,17 @@ function buildGates({
   ) {
     gates.push(
       gate(
-        'agent-bridge-wrapper-footprint',
+        'bridge-wrapper-footprint',
         'pass',
-        `${processSummary.bridge_wrapper_processes} Agent Bridge wrapper process(es), ${processSummary.bridge_upstream_processes} upstream child process(es), no duplicate wrapper groups`,
+        `${processSummary.bridge_wrapper_processes} bridge wrapper process(es), ${processSummary.bridge_upstream_processes} upstream child process(es), no duplicate wrapper groups`,
       ),
     )
   } else {
     gates.push(
       gate(
-        'agent-bridge-wrapper-footprint',
+        'bridge-wrapper-footprint',
         'warn',
-        `${processSummary.bridge_wrapper_processes} Agent Bridge wrapper process(es), ${processSummary.bridge_upstream_processes} upstream child process(es), ${processSummary.duplicate_bridge_wrapper_groups} duplicate wrapper group(s), ${processSummary.bridge_wrappers_without_upstream} wrapper(s) without upstream, ${processSummary.bridge_upstreams_without_wrapper} upstream process(es) without wrapper`,
+        `${processSummary.bridge_wrapper_processes} bridge wrapper process(es), ${processSummary.bridge_upstream_processes} upstream child process(es), ${processSummary.duplicate_bridge_wrapper_groups} duplicate wrapper group(s), ${processSummary.bridge_wrappers_without_upstream} wrapper(s) without upstream, ${processSummary.bridge_upstreams_without_wrapper} upstream process(es) without wrapper`,
       ),
     )
   }
@@ -1417,9 +1426,9 @@ function recommendationsFor({ status, gates, processSummary }) {
       'keep Codex and Claude Code config on atrib-primitives plus explicit local-substrate endpoints',
     )
   }
-  if (gates.find((item) => item.name === 'agent-bridge-wrapper-footprint')?.status !== 'pass') {
+  if (gates.find((item) => item.name === 'bridge-wrapper-footprint')?.status !== 'pass') {
     recommendations.push(
-      'restart startup-spawn hosts that own duplicate Agent Bridge wrappers, then plan a host-owned bridge route if duplicates recur',
+      'restart startup-spawn hosts that own duplicate bridge wrappers, then plan a host-owned bridge route if duplicates recur',
     )
   }
   if (gates.find((item) => item.name === 'watcher-wal-route')?.status !== 'pass') {
@@ -1440,7 +1449,7 @@ function formatTextReport(report) {
     `local-substrate topology: ${report.summary.status}`,
     `coordinators: healthy=${report.summary.healthy_coordinators}, configured=${report.summary.configured_coordinators}`,
     `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, stdio=${report.summary.primitive_runtime_stdio_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
-    `Agent Bridge processes: wrappers=${report.summary.bridge_wrapper_processes}, upstream=${report.summary.bridge_upstream_processes}, duplicate-groups=${report.summary.duplicate_bridge_wrapper_groups}`,
+    `bridge processes: wrappers=${report.summary.bridge_wrapper_processes}, upstream=${report.summary.bridge_upstream_processes}, duplicate-groups=${report.summary.duplicate_bridge_wrapper_groups}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
     `long-lived agent routes: healthy=${report.summary.long_lived_agent_routes_healthy}/${report.summary.long_lived_agents}, configured=${report.summary.long_lived_agent_routes_configured}, missing=${report.summary.long_lived_agent_routes_missing}`,
     '',
