@@ -1508,6 +1508,7 @@ function recommendationsFor({ status, gates, processSummary }) {
     return ['run a restart-to-measure pass before widening default config']
   }
   const recommendations = []
+  const gateStatus = (name) => gates.find((item) => item.name === name)?.status
   if (gates.find((item) => item.name === 'coordinator-health')?.status !== 'pass') {
     recommendations.push(
       'restore healthy local-substrate coordinator endpoints before relying on coordinator-owned paths',
@@ -1541,10 +1542,16 @@ function recommendationsFor({ status, gates, processSummary }) {
       'keep Codex and Claude Code config on atrib-primitives plus explicit local-substrate endpoints',
     )
   }
-  if (gates.find((item) => item.name === 'bridge-wrapper-footprint')?.status !== 'pass') {
-    recommendations.push(
-      'move startup-spawn bridge config to host-owned HTTP, then restart hosts that own duplicate bridge wrappers',
-    )
+  if (gateStatus('bridge-wrapper-footprint') !== 'pass') {
+    if (gateStatus('host-owned-bridge-http') === 'pass') {
+      recommendations.push(
+        'fully quit or restart startup-spawn hosts that still own duplicate bridge wrapper/upstream pairs',
+      )
+    } else {
+      recommendations.push(
+        'move startup-spawn bridge config to host-owned HTTP, then restart hosts that own duplicate bridge wrappers',
+      )
+    }
   }
   if (gates.find((item) => item.name === 'watcher-wal-route')?.status !== 'pass') {
     recommendations.push(

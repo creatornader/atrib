@@ -49,6 +49,14 @@ function checkFixture(path) {
       fail(`${label}: expected summary.${field}=${expectedValue}, got ${report.summary[field]}`)
     }
   }
+
+  if (Array.isArray(fixture.expected?.recommendations)) {
+    const actual = JSON.stringify(report.recommendations)
+    const expected = JSON.stringify(fixture.expected.recommendations)
+    if (actual !== expected) {
+      fail(`${label}: expected recommendations ${expected}, got ${actual}`)
+    }
+  }
 }
 
 function checkRouteRegistryNormalization() {
