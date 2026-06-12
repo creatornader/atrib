@@ -129,19 +129,21 @@
         "name": "codex",
         "path": "~/.codex/config.toml",
         "exists": true,
-        "server_count": 1,
+        "server_count": 2,
         "has_primitives_runtime": true,
         "standalone_primitive_servers": [],
-        "local_substrate_endpoints": ["http://127.0.0.1:8797/atrib/local-substrate"]
+        "local_substrate_endpoints": ["http://127.0.0.1:8797/atrib/local-substrate"],
+        "bridge_http_endpoints": ["http://127.0.0.1:8794/mcp"]
       },
       {
         "name": "claude-code",
         "path": "~/.claude.json",
         "exists": true,
-        "server_count": 1,
+        "server_count": 2,
         "has_primitives_runtime": true,
         "standalone_primitive_servers": [],
-        "local_substrate_endpoints": ["http://127.0.0.1:8788/atrib/local-substrate"]
+        "local_substrate_endpoints": ["http://127.0.0.1:8788/atrib/local-substrate"],
+        "bridge_http_endpoints": ["http://127.0.0.1:8793/mcp"]
       }
     ],
     "launch_agents": [
@@ -194,6 +196,54 @@
           }
         }
       }
+    ],
+    "bridge_runtime_health": [
+      {
+        "endpoint": "http://127.0.0.1:8794/mcp",
+        "reachable": true,
+        "status": "healthy",
+        "report": {
+          "bridge_runtime": {
+            "pid": 112,
+            "version": "0.1.0",
+            "transport": "streamable-http",
+            "upstream": "in-process",
+            "tool_count": 3
+          },
+          "profile": {
+            "agent": "codex"
+          },
+          "sessions": {
+            "active": 1,
+            "opened": 3,
+            "closed": 2,
+            "idle_timeout_ms": 43200000
+          }
+        }
+      },
+      {
+        "endpoint": "http://127.0.0.1:8793/mcp",
+        "reachable": true,
+        "status": "healthy",
+        "report": {
+          "bridge_runtime": {
+            "pid": 113,
+            "version": "0.1.0",
+            "transport": "streamable-http",
+            "upstream": "in-process",
+            "tool_count": 3
+          },
+          "profile": {
+            "agent": "claude-code"
+          },
+          "sessions": {
+            "active": 1,
+            "opened": 2,
+            "closed": 1,
+            "idle_timeout_ms": 43200000
+          }
+        }
+      }
     ]
   },
   "expected": {
@@ -206,7 +256,9 @@
       "complete_standalone_primitive_generations": 2,
       "obsolete_standalone_primitive_processes": 14,
       "obsolete_standalone_primitive_generations": 2,
-      "duplicate_primitive_groups": 1
+      "duplicate_primitive_groups": 1,
+      "bridge_runtime_http_endpoints": 2,
+      "bridge_runtime_http_healthy": 2
     },
     "gates": {
       "coordinator-health": "pass",
@@ -214,7 +266,8 @@
       "startup-spawn-config": "pass",
       "long-lived-agent-route": "pass",
       "watcher-wal-route": "pass",
-      "broad-default-readiness": "fail"
+      "broad-default-readiness": "fail",
+      "host-owned-bridge-http": "pass"
     }
   }
 }

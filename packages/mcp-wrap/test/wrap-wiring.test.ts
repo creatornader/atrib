@@ -141,6 +141,36 @@ describe('wrap wiring', () => {
     expect(options?.atrib.archiveSubmission).toEqual({ endpoint: 'https://archive.test/v1' })
   })
 
+  it('uses an injected upstream transport instead of spawning stdio', async () => {
+    const { wrap } = await import('../src/wrap.js')
+    const { createAtribProxy } = await import('@atrib/mcp')
+    const createAtribProxyMock = vi.mocked(createAtribProxy)
+    createAtribProxyMock.mockClear()
+
+    const dir = mkdtempSync(join(tmpdir(), 'atrib-wrap-in-memory-'))
+    const recordFile = join(dir, 'records.jsonl')
+    const upstreamTransport = { start: vi.fn(), send: vi.fn(), close: vi.fn() } as never
+
+    try {
+      await wrap(makeConfig(recordFile), {
+        resolveKey: async () => ({
+          seedB64url: 'seed',
+          source: 'env',
+          publicKeyB64url: 'pub',
+        }),
+        upstreamTransport,
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+
+    const options = createAtribProxyMock.mock.calls[0]?.[0]
+    expect(options?.upstream).toEqual({
+      type: 'inMemory',
+      transport: upstreamTransport,
+    })
+  })
+
   it('passes local substrate shadow config to @atrib/mcp', async () => {
     const { wrap } = await import('../src/wrap.js')
     const { createAtribProxy } = await import('@atrib/mcp')
