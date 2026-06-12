@@ -2,10 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 /* global process */
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildReport } from './report-local-substrate-topology.mjs'
+import {
+  buildReport,
+  collectRegisteredLongLivedAgents,
+  registeredLongLivedAgentsFromRegistry,
+} from './report-local-substrate-topology.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const FIXTURE_DIR = join(ROOT, 'spec/conformance/local-substrate-coordinator/topology')
@@ -46,6 +51,70 @@ function checkFixture(path) {
   }
 }
 
+function checkRouteRegistryNormalization() {
+  const routes = registeredLongLivedAgentsFromRegistry(
+    {
+      schema: 'atrib.local-substrate-route-registry.v0',
+      routes: [
+        {
+          kind: 'long-lived-agent',
+          label: 'ai.future.gateway',
+          agent: 'future',
+          endpoint: 'http://127.0.0.1:8899/atrib/local-substrate',
+        },
+      ],
+    },
+    { registryPath: '/tmp/atrib-local-substrate-routes.json' },
+  )
+  if (routes.length !== 1) {
+    fail(`route registry: expected 1 normalized route, got ${routes.length}`)
+  } else if (routes[0].source !== 'registry' || routes[0].agent !== 'future') {
+    fail('route registry: direct route did not preserve source and agent')
+  }
+
+  const dir = mkdtempSync(join(tmpdir(), 'atrib-topology-'))
+  try {
+    const envPath = join(dir, 'future.env')
+    const registryPath = join(dir, 'routes.json')
+    writeFileSync(
+      envPath,
+      [
+        'ATRIB_AGENT=future-env',
+        'ATRIB_LOCAL_SUBSTRATE_ENDPOINT=http://127.0.0.1:8898/atrib/local-substrate',
+        'SECRET_TOKEN=must-not-leak',
+      ].join('\n'),
+    )
+    writeFileSync(
+      registryPath,
+      JSON.stringify({
+        schema: 'atrib.local-substrate-route-registry.v0',
+        routes: [
+          {
+            kind: 'long-lived-agent',
+            label: 'ai.future-env.gateway',
+            env_file: envPath,
+          },
+        ],
+      }),
+    )
+
+    const envRoutes = collectRegisteredLongLivedAgents(registryPath)
+    const route = envRoutes[0]
+    const serialized = JSON.stringify(envRoutes)
+    if (envRoutes.length !== 1) {
+      fail(`route registry env file: expected 1 normalized route, got ${envRoutes.length}`)
+    } else if (route.agent !== 'future-env') {
+      fail(`route registry env file: expected future-env agent, got ${route.agent}`)
+    } else if (route.endpoint !== 'http://127.0.0.1:8898/atrib/local-substrate') {
+      fail(`route registry env file: endpoint was not read from safe env keys`)
+    } else if (serialized.includes('must-not-leak') || serialized.includes('SECRET_TOKEN')) {
+      fail('route registry env file: unsafe env value leaked into normalized route')
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 function main() {
   if (!existsSync(FIXTURE_DIR)) {
     fail(`missing fixture directory ${FIXTURE_DIR}`)
@@ -56,6 +125,7 @@ function main() {
     if (files.length === 0) fail('missing local-substrate topology fixtures')
     for (const file of files) checkFixture(join(FIXTURE_DIR, file))
   }
+  checkRouteRegistryNormalization()
 
   if (failures.length > 0) {
     for (const failure of failures) process.stderr.write(`FAIL ${failure}\n`)

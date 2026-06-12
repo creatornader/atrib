@@ -10,6 +10,8 @@ import { pathToFileURL } from 'node:url'
 const HOME = process.env.HOME || ''
 const SCHEMA = 'atrib.local-substrate-topology-report.v0'
 const SNAPSHOT_SCHEMA = 'atrib.local-substrate-topology-snapshot.v0'
+const ROUTE_REGISTRY_SCHEMA = 'atrib.local-substrate-route-registry.v0'
+const DEFAULT_ROUTE_REGISTRY_PATH = join(HOME, '.atrib/local-substrate/routes.json')
 const DEFAULT_HEALTH_TIMEOUT_MS = 400
 const PRIMITIVE_SERVERS = [
   'atrib-emit',
@@ -22,6 +24,11 @@ const PRIMITIVE_SERVERS = [
 ]
 const PRIMITIVE_GENERATION_WINDOW_MS = 5000
 const LONG_LIVED_AGENT_LABELS = new Set(['ai.hermes.gateway', 'ai.openclaw.gateway'])
+const LOCAL_SUBSTRATE_INFRA_LABELS = new Set(['com.nader.atrib-drain'])
+const LOCAL_SUBSTRATE_INFRA_LABEL_PREFIXES = [
+  'com.nader.atrib-local-substrate.',
+  'com.nader.atrib-primitives.',
+]
 const SAFE_ENDPOINT_ENV_KEYS = [
   'ATRIB_LOCAL_SUBSTRATE_ENDPOINT',
   'SECOND_BRAIN_ATRIB_LOCAL_SUBSTRATE_ENDPOINT',
@@ -40,12 +47,13 @@ function usage() {
 Options:
   --json                  Print JSON instead of the text summary.
   --snapshot <path>       Build the report from a fixture snapshot.
+  --route-registry <path> Read supervised agent routes from a JSON registry.
   --timeout-ms <n>        Live coordinator health timeout. Defaults to 400.
   --help                  Print this help.
 
 The live report reads process rows, local MCP config summaries, launchd
-service metadata, and local-substrate health probes. It does not print raw
-config files or environment secrets.
+service metadata, an optional supervised route registry, and local-substrate
+health probes. It does not print raw config files or environment secrets.
 `
 }
 
@@ -53,6 +61,7 @@ function parseArgs(argv) {
   const out = {
     json: false,
     snapshotPath: undefined,
+    routeRegistryPath: DEFAULT_ROUTE_REGISTRY_PATH,
     timeoutMs: DEFAULT_HEALTH_TIMEOUT_MS,
     help: false,
   }
@@ -63,6 +72,8 @@ function parseArgs(argv) {
       out.json = true
     } else if (arg === '--snapshot') {
       out.snapshotPath = requireValue(argv, ++i, '--snapshot')
+    } else if (arg === '--route-registry') {
+      out.routeRegistryPath = requireValue(argv, ++i, '--route-registry')
     } else if (arg === '--timeout-ms') {
       out.timeoutMs = parsePositiveInt(requireValue(argv, ++i, '--timeout-ms'), '--timeout-ms')
     } else if (arg === '--help' || arg === '-h') {
@@ -100,6 +111,13 @@ function readJson(path) {
 function displayPath(path) {
   if (!HOME || !path.startsWith(HOME)) return path
   return `~${path.slice(HOME.length)}`
+}
+
+function expandHomePath(path) {
+  if (!path) return undefined
+  if (path === '~') return HOME
+  if (path.startsWith('~/')) return join(HOME, path.slice(2))
+  return path
 }
 
 function run(command, args) {
@@ -524,7 +542,7 @@ function parseLongLivedAgent(path) {
   try {
     const parsed = JSON.parse(stdout)
     const label = String(parsed.Label ?? '')
-    if (!LONG_LIVED_AGENT_LABELS.has(label)) return undefined
+    if (isLocalSubstrateInfraLabel(label)) return undefined
 
     const args = Array.isArray(parsed.ProgramArguments) ? parsed.ProgramArguments.map(String) : []
     const env =
@@ -533,25 +551,38 @@ function parseLongLivedAgent(path) {
         : {}
     const envFile = longLivedEnvFileFromProgramArguments(args)
     const fileEnv = envFile ? readSafeEnvFile(envFile) : {}
+    const endpoint =
+      firstEnvValue(env, SAFE_ENDPOINT_ENV_KEYS) ??
+      firstEnvValue(fileEnv, SAFE_ENDPOINT_ENV_KEYS)
+    const agent =
+      firstEnvValue(env, SAFE_AGENT_ENV_KEYS) ??
+      firstEnvValue(fileEnv, SAFE_AGENT_ENV_KEYS) ??
+      agentNameFromLongLivedLabel(label)
+    const isKnownLongLivedAgent = LONG_LIVED_AGENT_LABELS.has(label)
+    const isSelfDeclaredLongLivedAgent = Boolean(endpoint && agent)
+    if (!isKnownLongLivedAgent && !isSelfDeclaredLongLivedAgent) return undefined
 
     return {
       label,
       path: displayPath(path),
       kind: 'long-lived-agent',
+      source: 'launchd',
       program: args[0] ?? undefined,
-      endpoint:
-        firstEnvValue(env, SAFE_ENDPOINT_ENV_KEYS) ??
-        firstEnvValue(fileEnv, SAFE_ENDPOINT_ENV_KEYS),
-      agent:
-        firstEnvValue(env, SAFE_AGENT_ENV_KEYS) ??
-        firstEnvValue(fileEnv, SAFE_AGENT_ENV_KEYS) ??
-        agentNameFromLongLivedLabel(label),
+      endpoint,
+      agent,
       env_file: envFile ? displayPath(envFile) : undefined,
       start_interval: parsed.StartInterval ?? undefined,
     }
   } catch {
     return undefined
   }
+}
+
+function isLocalSubstrateInfraLabel(label) {
+  return (
+    LOCAL_SUBSTRATE_INFRA_LABELS.has(label) ||
+    LOCAL_SUBSTRATE_INFRA_LABEL_PREFIXES.some((prefix) => label.startsWith(prefix))
+  )
 }
 
 function firstEnvValue(env, keys) {
@@ -571,7 +602,13 @@ function longLivedEnvFileFromProgramArguments(args) {
 function readSafeEnvFile(path) {
   const out = {}
   const safeKeys = new Set([...SAFE_ENDPOINT_ENV_KEYS, ...SAFE_AGENT_ENV_KEYS])
-  for (const rawLine of readFileSync(path, 'utf8').split('\n')) {
+  let text = ''
+  try {
+    text = readFileSync(path, 'utf8')
+  } catch {
+    return out
+  }
+  for (const rawLine of text.split('\n')) {
     const line = rawLine.trim()
     if (!line || line.startsWith('#')) continue
     const match = line.match(/^(?:export\s+)?([A-Z0-9_]+)=(.*)$/)
@@ -595,6 +632,139 @@ function agentNameFromLongLivedLabel(label) {
   if (label === 'ai.hermes.gateway') return 'hermes'
   if (label === 'ai.openclaw.gateway') return 'openclaw'
   return undefined
+}
+
+function collectRegisteredLongLivedAgents(routeRegistryPath = DEFAULT_ROUTE_REGISTRY_PATH) {
+  const expandedPath = expandHomePath(routeRegistryPath)
+  if (!expandedPath || !existsSync(expandedPath)) return []
+  try {
+    return registeredLongLivedAgentsFromRegistry(readJson(expandedPath), {
+      registryPath: expandedPath,
+    })
+  } catch (error) {
+    return [
+      {
+        label: 'route-registry-parse-error',
+        path: displayPath(expandedPath),
+        kind: 'long-lived-agent',
+        source: 'registry',
+        parse_error: error instanceof Error ? error.message : String(error),
+      },
+    ]
+  }
+}
+
+function registeredLongLivedAgentsFromRegistry(registry, { registryPath } = {}) {
+  const routes = routeRegistryEntries(registry)
+  const out = []
+  for (let index = 0; index < routes.length; index++) {
+    const route = routes[index]
+    const normalized = normalizeRegistryLongLivedAgent(route, {
+      index,
+      registryPath,
+    })
+    if (normalized) out.push(normalized)
+  }
+  return dedupeLongLivedAgents(out)
+}
+
+function routeRegistryEntries(registry) {
+  if (Array.isArray(registry)) return registry
+  if (!registry || typeof registry !== 'object') return []
+  if (registry.schema && registry.schema !== ROUTE_REGISTRY_SCHEMA) {
+    return []
+  }
+  if (Array.isArray(registry.routes)) return registry.routes
+  if (Array.isArray(registry.long_lived_agents)) return registry.long_lived_agents
+  return []
+}
+
+function normalizeRegistryLongLivedAgent(route, { index, registryPath } = {}) {
+  if (!route || typeof route !== 'object') return undefined
+  const kind = stringValue(route.kind) ?? 'long-lived-agent'
+  if (kind !== 'long-lived-agent') return undefined
+
+  const rawEnvFile = stringValue(route.env_file) ?? stringValue(route.envFile)
+  const envFile = rawEnvFile ? expandHomePath(rawEnvFile) : undefined
+  const fileEnv = envFile && existsSync(envFile) ? readSafeEnvFile(envFile) : {}
+  const endpoint = stringValue(route.endpoint) ?? firstEnvValue(fileEnv, SAFE_ENDPOINT_ENV_KEYS)
+  const agent = stringValue(route.agent) ?? firstEnvValue(fileEnv, SAFE_AGENT_ENV_KEYS)
+  const label =
+    stringValue(route.label) ??
+    (agent ? `registry:${agent}` : undefined) ??
+    (endpoint ? `registry:${endpoint}` : undefined) ??
+    `registry:${index + 1}`
+  const hasRouteEvidence = Boolean(label || agent || endpoint || rawEnvFile)
+  if (!hasRouteEvidence) return undefined
+
+  return withoutUndefinedValues({
+    label,
+    path: registryPath ? displayPath(registryPath) : undefined,
+    kind: 'long-lived-agent',
+    source: 'registry',
+    program: stringValue(route.program),
+    endpoint,
+    agent,
+    env_file: envFile ? displayPath(envFile) : rawEnvFile,
+    env_file_exists: envFile ? existsSync(envFile) : undefined,
+    start_interval: route.start_interval,
+  })
+}
+
+function stringValue(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function withoutUndefinedValues(input) {
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined))
+}
+
+function dedupeLongLivedAgents(agents) {
+  const byKey = new Map()
+  for (const agent of agents) {
+    const key = longLivedAgentKey(agent)
+    const existing = byKey.get(key)
+    if (!existing) {
+      byKey.set(key, agent)
+      continue
+    }
+    byKey.set(key, mergeLongLivedAgent(existing, agent))
+  }
+  return [...byKey.values()].sort((a, b) =>
+    String(a.agent ?? a.label).localeCompare(String(b.agent ?? b.label)),
+  )
+}
+
+function longLivedAgentKey(agent) {
+  if (agent.label) return `label:${agent.label}`
+  if (agent.agent) return `agent:${agent.agent}`
+  if (agent.endpoint) return `endpoint:${agent.endpoint}`
+  return `path:${agent.path ?? 'unknown'}`
+}
+
+function mergeLongLivedAgent(a, b) {
+  const paths = unique([a.path, b.path])
+  const merged = {
+    ...withoutUndefinedValues(a),
+    ...withoutUndefinedValues(b),
+    source: uniqueSourceValues(a.source, b.source).join('+'),
+    path: a.path ?? b.path,
+  }
+  if (paths.length > 1) merged.paths = paths
+  if (!a.endpoint && b.endpoint) merged.endpoint = b.endpoint
+  if (!a.agent && b.agent) merged.agent = b.agent
+  if (a.env_file && b.env_file && a.env_file !== b.env_file) {
+    merged.env_file = unique([a.env_file, b.env_file]).join(', ')
+  }
+  return merged
+}
+
+function uniqueSourceValues(...values) {
+  return unique(
+    values.flatMap((value) =>
+      typeof value === 'string' ? value.split('+').map((item) => item.trim()) : [],
+    ),
+  )
 }
 
 function endpointFromProgramArguments(args) {
@@ -624,14 +794,18 @@ function collectLaunchAgents() {
     .sort((a, b) => String(a.label).localeCompare(String(b.label)))
 }
 
-function collectLongLivedAgents() {
+function collectLongLivedAgents({ routeRegistryPath = DEFAULT_ROUTE_REGISTRY_PATH } = {}) {
   const dir = join(HOME, 'Library/LaunchAgents')
-  if (!existsSync(dir)) return []
-  return readdirSync(dir)
-    .filter((name) => name.endsWith('.plist'))
-    .map((name) => parseLongLivedAgent(join(dir, name)))
-    .filter(Boolean)
-    .sort((a, b) => String(a.label).localeCompare(String(b.label)))
+  const launchdAgents = existsSync(dir)
+    ? readdirSync(dir)
+        .filter((name) => name.endsWith('.plist'))
+        .map((name) => parseLongLivedAgent(join(dir, name)))
+        .filter(Boolean)
+    : []
+  return dedupeLongLivedAgents([
+    ...launchdAgents,
+    ...collectRegisteredLongLivedAgents(routeRegistryPath),
+  ])
 }
 
 function healthEndpointFor(endpoint) {
@@ -683,9 +857,12 @@ async function fetchHealth(endpoint, timeoutMs) {
   }
 }
 
-async function collectLiveSnapshot({ timeoutMs = DEFAULT_HEALTH_TIMEOUT_MS } = {}) {
+async function collectLiveSnapshot({
+  timeoutMs = DEFAULT_HEALTH_TIMEOUT_MS,
+  routeRegistryPath = DEFAULT_ROUTE_REGISTRY_PATH,
+} = {}) {
   const launchAgents = collectLaunchAgents()
-  const longLivedAgents = collectLongLivedAgents()
+  const longLivedAgents = collectLongLivedAgents({ routeRegistryPath })
   const configs = [
     summarizeCodexConfig(join(HOME, '.codex/config.toml')),
     summarizeClaudeConfig(join(HOME, '.claude.json')),
@@ -1009,7 +1186,7 @@ function buildGates({
       gate(
         'long-lived-agent-route',
         'pass',
-        `${longLivedRoutes.healthy}/${longLivedRoutes.total} known long-lived launch agent(s) point at a healthy coordinator endpoint`,
+        `${longLivedRoutes.healthy}/${longLivedRoutes.total} known long-lived agent route(s) point at a healthy coordinator endpoint`,
       ),
     )
   } else if (longLivedRoutes.configured > 0) {
@@ -1017,7 +1194,7 @@ function buildGates({
       gate(
         'long-lived-agent-route',
         'warn',
-        `${longLivedRoutes.healthy}/${longLivedRoutes.total} known long-lived launch agent(s) point at a healthy coordinator endpoint; ${longLivedRoutes.missing} missing endpoint(s), ${longLivedRoutes.unhealthy} unhealthy endpoint(s)`,
+        `${longLivedRoutes.healthy}/${longLivedRoutes.total} known long-lived agent route(s) point at a healthy coordinator endpoint; ${longLivedRoutes.missing} missing endpoint(s), ${longLivedRoutes.unhealthy} unhealthy endpoint(s)`,
       ),
     )
   } else if (longLivedRoutes.total > 0) {
@@ -1025,7 +1202,7 @@ function buildGates({
       gate(
         'long-lived-agent-route',
         'warn',
-        'known long-lived launch agent evidence exists, but no coordinator endpoint is configured',
+        'known long-lived agent route evidence exists, but no coordinator endpoint is configured',
       ),
     )
   } else {
@@ -1165,7 +1342,7 @@ function recommendationsFor({ status, gates, processSummary }) {
   }
   if (gates.find((item) => item.name === 'long-lived-agent-route')?.status !== 'pass') {
     recommendations.push(
-      'point every known long-lived launch agent at a healthy coordinator endpoint before broad rollout',
+      'point every known long-lived agent route at a healthy coordinator endpoint before broad rollout',
     )
   }
   return recommendations
@@ -1201,7 +1378,10 @@ async function main() {
   }
   const snapshot = args.snapshotPath
     ? readJson(args.snapshotPath)
-    : await collectLiveSnapshot({ timeoutMs: args.timeoutMs })
+    : await collectLiveSnapshot({
+        timeoutMs: args.timeoutMs,
+        routeRegistryPath: args.routeRegistryPath,
+      })
   const report = buildReport(snapshot)
   process.stdout.write(
     args.json ? `${JSON.stringify(report, null, 2)}\n` : formatTextReport(report),
@@ -1218,4 +1398,12 @@ if (import.meta.url === invokedPath) {
   })
 }
 
-export { SNAPSHOT_SCHEMA, buildReport, collectLiveSnapshot, formatTextReport, summarizeProcesses }
+export {
+  SNAPSHOT_SCHEMA,
+  buildReport,
+  collectLiveSnapshot,
+  collectRegisteredLongLivedAgents,
+  formatTextReport,
+  registeredLongLivedAgentsFromRegistry,
+  summarizeProcesses,
+}
