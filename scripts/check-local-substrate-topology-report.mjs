@@ -185,6 +185,94 @@ function checkRouteRegistryNormalization() {
   }
 }
 
+function checkCombinedRestartResidueClassification() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  snapshot.processes.push(
+    {
+      pid: 100,
+      ppid: 1,
+      service: 'codex-app-server',
+      command: 'codex app-server',
+    },
+    {
+      pid: 120,
+      ppid: 100,
+      service: 'atrib-emit',
+      command: 'node services/atrib-emit/dist/main.js',
+    },
+    {
+      pid: 121,
+      ppid: 100,
+      service: 'atrib-annotate',
+      command: 'node services/atrib-annotate/dist/main.js',
+    },
+    {
+      pid: 122,
+      ppid: 100,
+      service: 'atrib-revise',
+      command: 'node services/atrib-revise/dist/main.js',
+    },
+    {
+      pid: 123,
+      ppid: 100,
+      service: 'atrib-recall',
+      command: 'node services/atrib-recall/dist/index.js',
+    },
+    {
+      pid: 124,
+      ppid: 100,
+      service: 'atrib-trace',
+      command: 'node services/atrib-trace/dist/main.js',
+    },
+    {
+      pid: 125,
+      ppid: 100,
+      service: 'atrib-summarize',
+      command: 'node services/atrib-summarize/dist/main.js',
+    },
+    {
+      pid: 126,
+      ppid: 100,
+      service: 'atrib-verify',
+      command: 'node services/atrib-verify/dist/main.js',
+    },
+    {
+      pid: 130,
+      ppid: 100,
+      command: 'node /opt/atrib/bridge-wrapper/dist/index.js',
+    },
+    {
+      pid: 131,
+      ppid: 130,
+      command: 'node /opt/atrib/upstream-bridge/dist/index.js',
+    },
+  )
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'restart_required') {
+    fail(`combined restart residue: expected status restart_required, got ${report.summary.status}`)
+  }
+  const gateStatus = (name) => report.gates.find((gate) => gate.name === name)?.status
+  if (gateStatus('startup-spawn-mcp-collapse') !== 'warn') {
+    fail('combined restart residue: expected startup-spawn-mcp-collapse=warn')
+  }
+  if (gateStatus('bridge-wrapper-footprint') !== 'warn') {
+    fail('combined restart residue: expected bridge-wrapper-footprint=warn')
+  }
+  if (gateStatus('host-owned-primitives-http') !== 'pass') {
+    fail('combined restart residue: expected host-owned-primitives-http=pass')
+  }
+  if (gateStatus('host-owned-bridge-http') !== 'pass') {
+    fail('combined restart residue: expected host-owned-bridge-http=pass')
+  }
+  if (gateStatus('host-owned-active-session-context') !== 'pass') {
+    fail('combined restart residue: expected host-owned-active-session-context=pass')
+  }
+}
+
 function main() {
   if (!existsSync(FIXTURE_DIR)) {
     fail(`missing fixture directory ${FIXTURE_DIR}`)
@@ -196,6 +284,7 @@ function main() {
     for (const file of files) checkFixture(join(FIXTURE_DIR, file))
   }
   checkRouteRegistryNormalization()
+  checkCombinedRestartResidueClassification()
 
   if (failures.length > 0) {
     for (const failure of failures) process.stderr.write(`FAIL ${failure}\n`)

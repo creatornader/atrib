@@ -1401,10 +1401,7 @@ function buildGates({
       ),
     )
   } else if (processSummary.primitive_runtime_processes > 0) {
-    const obsoleteAll =
-      processSummary.obsolete_standalone_primitive_processes > 0 &&
-      processSummary.obsolete_standalone_primitive_processes ===
-        processSummary.standalone_primitive_processes
+    const obsoleteAll = obsoleteStandaloneResidue(processSummary)
     gates.push(
       gate(
         'startup-spawn-mcp-collapse',
@@ -1723,12 +1720,53 @@ function buildGates({
   return gates
 }
 
-function statusFromGates(gates) {
+function obsoleteStandaloneResidue(processSummary) {
+  return (
+    processSummary.obsolete_standalone_primitive_processes > 0 &&
+    processSummary.obsolete_standalone_primitive_processes ===
+      processSummary.standalone_primitive_processes
+  )
+}
+
+function obsoleteBridgeResidue(processSummary) {
+  return (
+    processSummary.obsolete_bridge_wrapper_processes > 0 &&
+    processSummary.obsolete_bridge_wrapper_processes === processSummary.bridge_wrapper_processes &&
+    processSummary.obsolete_bridge_upstream_processes === processSummary.bridge_upstream_processes
+  )
+}
+
+function restartResidueGate(gateResult, processSummary) {
+  if (gateResult.status === 'pass') return true
+  if (gateResult.name === 'broad-default-readiness') return true
+  if (gateResult.name === 'startup-spawn-mcp-collapse') {
+    return gateResult.status === 'warn' && obsoleteStandaloneResidue(processSummary)
+  }
+  if (gateResult.name === 'bridge-wrapper-footprint') {
+    return gateResult.status === 'warn' && obsoleteBridgeResidue(processSummary)
+  }
+  return false
+}
+
+function onlyRestartResidueRemains(gates, processSummary) {
+  const nonPassGates = gates.filter(
+    (gateResult) => gateResult.status !== 'pass' && gateResult.name !== 'broad-default-readiness',
+  )
+  return (
+    nonPassGates.length > 0 &&
+    nonPassGates.every((gateResult) => restartResidueGate(gateResult, processSummary))
+  )
+}
+
+function statusFromGates(gates, processSummary) {
   if (gates.find((item) => item.name === 'broad-default-readiness')?.status === 'pass') {
     return 'ready_for_default_trial'
   }
   if (gates.some((item) => item.status === 'fail' && item.name === 'coordinator-health')) {
     return 'blocked'
+  }
+  if (onlyRestartResidueRemains(gates, processSummary)) {
+    return 'restart_required'
   }
   return 'mixed'
 }
@@ -1771,7 +1809,7 @@ function buildReport(input, options = {}) {
     activeSessionState,
     bridgeHealth,
   })
-  const status = statusFromGates(gates)
+  const status = statusFromGates(gates, processSummary)
 
   return {
     schema: SCHEMA,
@@ -1850,11 +1888,7 @@ function recommendationsFor({ status, gates, processSummary }) {
       'restore healthy local-substrate coordinator endpoints before relying on coordinator-owned paths',
     )
   }
-  if (
-    processSummary.obsolete_standalone_primitive_processes > 0 &&
-    processSummary.obsolete_standalone_primitive_processes ===
-      processSummary.standalone_primitive_processes
-  ) {
+  if (obsoleteStandaloneResidue(processSummary)) {
     recommendations.push(
       'fully quit or restart startup-spawn hosts that still own obsolete standalone primitive generations',
     )
