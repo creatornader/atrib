@@ -52,8 +52,9 @@ Options:
   --help                  Print this help.
 
 The live report reads process rows, local MCP config summaries, launchd
-service metadata, an optional supervised route registry, and local-substrate
-health probes. It does not print raw config files or environment secrets.
+service metadata, an optional route registry for supervised agents and
+startup-spawn config summaries, and local-substrate health probes. It does not
+print raw config files or environment secrets.
 `
 }
 
@@ -723,6 +724,18 @@ function collectRegisteredLongLivedAgents(routeRegistryPath = DEFAULT_ROUTE_REGI
   }
 }
 
+function collectRegisteredStartupSpawnConfigs(routeRegistryPath = DEFAULT_ROUTE_REGISTRY_PATH) {
+  const expandedPath = expandHomePath(routeRegistryPath)
+  if (!expandedPath || !existsSync(expandedPath)) return []
+  try {
+    return registeredStartupSpawnConfigsFromRegistry(readJson(expandedPath), {
+      registryPath: expandedPath,
+    })
+  } catch {
+    return []
+  }
+}
+
 function registeredLongLivedAgentsFromRegistry(registry, { registryPath } = {}) {
   const routes = routeRegistryEntries(registry)
   const out = []
@@ -735,6 +748,20 @@ function registeredLongLivedAgentsFromRegistry(registry, { registryPath } = {}) 
     if (normalized) out.push(normalized)
   }
   return dedupeLongLivedAgents(out)
+}
+
+function registeredStartupSpawnConfigsFromRegistry(registry, { registryPath } = {}) {
+  const routes = routeRegistryEntries(registry)
+  const out = []
+  for (let index = 0; index < routes.length; index++) {
+    const route = routes[index]
+    const normalized = normalizeRegistryStartupSpawnConfig(route, {
+      index,
+      registryPath,
+    })
+    if (normalized) out.push(normalized)
+  }
+  return dedupeServerConfigs(out)
 }
 
 function routeRegistryEntries(registry) {
@@ -780,12 +807,146 @@ function normalizeRegistryLongLivedAgent(route, { index, registryPath } = {}) {
   })
 }
 
+function normalizeRegistryStartupSpawnConfig(route, { index, registryPath } = {}) {
+  if (!route || typeof route !== 'object') return undefined
+  const kind = stringValue(route.kind)
+  if (kind !== 'startup-spawn-config') return undefined
+
+  const serverNames = stringList(route.server_names ?? route.serverNames)
+  const name =
+    stringValue(route.name) ??
+    stringValue(route.agent) ??
+    stringValue(route.profile) ??
+    `registry-startup-spawn-${index + 1}`
+  const standalone = unique([
+    ...stringList(route.standalone_primitive_servers ?? route.standalonePrimitiveServers),
+    ...serverNames,
+  ])
+    .filter((serverName) => PRIMITIVE_SERVERS.includes(serverName))
+    .sort()
+  const primitiveHttpEndpoints = endpointList(
+    route.primitive_http_endpoints ??
+      route.primitiveHttpEndpoints ??
+      route.primitive_http_endpoint ??
+      route.primitiveHttpEndpoint,
+  )
+  const bridgeHttpEndpoints = endpointList(
+    route.bridge_http_endpoints ??
+      route.bridgeHttpEndpoints ??
+      route.bridge_http_endpoint ??
+      route.bridgeHttpEndpoint,
+  )
+  const localSubstrateEndpoints = endpointList(
+    route.local_substrate_endpoints ??
+      route.localSubstrateEndpoints ??
+      route.local_substrate_endpoint ??
+      route.localSubstrateEndpoint,
+  )
+  const declaresPrimitivesRuntime =
+    typeof route.has_primitives_runtime === 'boolean'
+      ? route.has_primitives_runtime
+      : serverNames.includes('atrib-primitives') || primitiveHttpEndpoints.length > 0
+  const serverCount =
+    positiveInteger(route.server_count) ??
+    (serverNames.length > 0
+      ? serverNames.length
+      : unique([
+          ...(declaresPrimitivesRuntime ? ['atrib-primitives'] : []),
+          ...standalone,
+          ...(bridgeHttpEndpoints.length > 0 ? ['agent-bridge'] : []),
+        ]).length)
+
+  return {
+    name,
+    path: stringValue(route.path)
+      ? displayPath(expandHomePath(route.path))
+      : registryPath
+        ? displayPath(registryPath)
+        : undefined,
+    source: 'registry',
+    exists: route.exists === false ? false : true,
+    server_count: serverCount,
+    has_primitives_runtime: declaresPrimitivesRuntime,
+    standalone_primitive_servers: standalone,
+    local_substrate_endpoints: localSubstrateEndpoints,
+    primitive_http_endpoints: primitiveHttpEndpoints,
+    bridge_http_endpoints: bridgeHttpEndpoints,
+  }
+}
+
 function stringValue(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+function stringList(value) {
+  if (Array.isArray(value)) {
+    return unique(value.map((item) => stringValue(item)))
+  }
+  const single = stringValue(value)
+  return single ? [single] : []
+}
+
+function endpointList(value) {
+  return stringList(value).filter((item) => {
+    try {
+      const url = new URL(item)
+      return (
+        url.protocol === 'http:' &&
+        ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(url.hostname)
+      )
+    } catch {
+      return false
+    }
+  })
+}
+
+function positiveInteger(value) {
+  const n = Number(value)
+  return Number.isInteger(n) && n > 0 ? n : undefined
+}
+
 function withoutUndefinedValues(input) {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined))
+}
+
+function dedupeServerConfigs(configs) {
+  const byName = new Map()
+  for (const config of configs) {
+    const key = config.name
+    const existing = byName.get(key)
+    byName.set(key, existing ? mergeServerConfig(existing, config) : config)
+  }
+  return [...byName.values()]
+}
+
+function mergeServerConfig(a, b) {
+  const paths = unique([a.path, b.path])
+  const merged = {
+    ...a,
+    ...b,
+    path: a.path ?? b.path,
+    exists: Boolean(a.exists || b.exists),
+    server_count: Math.max(Number(a.server_count ?? 0), Number(b.server_count ?? 0)),
+    has_primitives_runtime: Boolean(a.has_primitives_runtime || b.has_primitives_runtime),
+    standalone_primitive_servers: unique([
+      ...(a.standalone_primitive_servers ?? []),
+      ...(b.standalone_primitive_servers ?? []),
+    ]).sort(),
+    local_substrate_endpoints: unique([
+      ...(a.local_substrate_endpoints ?? []),
+      ...(b.local_substrate_endpoints ?? []),
+    ]),
+    primitive_http_endpoints: unique([
+      ...(a.primitive_http_endpoints ?? []),
+      ...(b.primitive_http_endpoints ?? []),
+    ]),
+    bridge_http_endpoints: unique([
+      ...(a.bridge_http_endpoints ?? []),
+      ...(b.bridge_http_endpoints ?? []),
+    ]),
+  }
+  if (paths.length > 1) merged.paths = paths
+  return merged
 }
 
 function dedupeLongLivedAgents(agents) {
@@ -932,10 +1093,11 @@ async function collectLiveSnapshot({
 } = {}) {
   const launchAgents = collectLaunchAgents()
   const longLivedAgents = collectLongLivedAgents({ routeRegistryPath })
-  const configs = [
+  const configs = dedupeServerConfigs([
     summarizeCodexConfig(join(HOME, '.codex/config.toml')),
     summarizeClaudeConfig(join(HOME, '.claude.json')),
-  ]
+    ...collectRegisteredStartupSpawnConfigs(routeRegistryPath),
+  ])
   const endpoints = unique([
     ...launchAgents.map((agent) => agent.endpoint),
     ...longLivedAgents.map((agent) => agent.endpoint),
@@ -1623,7 +1785,9 @@ export {
   buildReport,
   collectLiveSnapshot,
   collectRegisteredLongLivedAgents,
+  collectRegisteredStartupSpawnConfigs,
   formatTextReport,
   registeredLongLivedAgentsFromRegistry,
+  registeredStartupSpawnConfigsFromRegistry,
   summarizeProcesses,
 }
