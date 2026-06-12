@@ -321,6 +321,9 @@ function summarizeBridgeProcesses(rows, byPid) {
     bridge_processes: wrappers.length + upstreams.length,
     bridge_wrapper_processes: wrappers.length,
     bridge_upstream_processes: upstreams.length,
+    obsolete_bridge_wrapper_processes: 0,
+    obsolete_bridge_upstream_processes: 0,
+    obsolete_bridge_wrapper_groups: 0,
     bridge_wrapper_groups: wrapperGroups.length,
     duplicate_bridge_wrapper_groups: wrapperGroups.filter((group) => group.process_count > 1)
       .length,
@@ -413,6 +416,35 @@ function annotateStandaloneConfigDrift(processSummary, configs) {
       (sum, group) => sum + group.generation_count,
       0,
     ),
+  }
+}
+
+function annotateBridgeConfigDrift(processSummary, configs) {
+  const byName = new Map(configs.map((config) => [config.name, config]))
+  const bridgeGroups = processSummary.bridge_groups.map((group) => {
+    const config = group.config_surface ? byName.get(group.config_surface) : undefined
+    const configDeclaresBridgeHttp = (config?.bridge_http_endpoints ?? []).length > 0
+    const obsolete_config_drift = Boolean(config?.exists) && configDeclaresBridgeHttp
+    return {
+      ...group,
+      config_declares_bridge_http: configDeclaresBridgeHttp,
+      obsolete_config_drift,
+    }
+  })
+
+  const obsoleteGroups = bridgeGroups.filter((group) => group.obsolete_config_drift)
+  return {
+    ...processSummary,
+    bridge_groups: bridgeGroups,
+    obsolete_bridge_wrapper_processes: obsoleteGroups.reduce(
+      (sum, group) => sum + group.process_count,
+      0,
+    ),
+    obsolete_bridge_upstream_processes: obsoleteGroups.reduce(
+      (sum, group) => sum + group.upstream_child_processes,
+      0,
+    ),
+    obsolete_bridge_wrapper_groups: obsoleteGroups.length,
   }
 }
 
@@ -1594,6 +1626,14 @@ function buildGates({
 
   if (processSummary.bridge_processes === 0) {
     gates.push(gate('bridge-wrapper-footprint', 'pass', 'no bridge wrapper process evidence found'))
+  } else if (processSummary.obsolete_bridge_wrapper_processes > 0) {
+    gates.push(
+      gate(
+        'bridge-wrapper-footprint',
+        'warn',
+        `${processSummary.obsolete_bridge_wrapper_processes} obsolete bridge wrapper process(es) plus ${processSummary.obsolete_bridge_upstream_processes} upstream child process(es) across ${processSummary.obsolete_bridge_wrapper_groups} group(s); current config points at host-owned bridge HTTP`,
+      ),
+    )
   } else if (
     processSummary.duplicate_bridge_wrapper_groups === 0 &&
     processSummary.bridge_wrappers_without_upstream === 0 &&
@@ -1711,7 +1751,10 @@ function buildReport(input, options = {}) {
   const bridgeHealth = Array.isArray(snapshot.bridge_runtime_health)
     ? snapshot.bridge_runtime_health
     : []
-  const processSummary = annotateStandaloneConfigDrift(summarizeProcesses(processes), configs)
+  const processSummary = annotateBridgeConfigDrift(
+    annotateStandaloneConfigDrift(summarizeProcesses(processes), configs),
+    configs,
+  )
   const reachableEndpoints = new Set(
     health
       .filter((item) => item.reachable && item.status === 'healthy')
@@ -1754,6 +1797,9 @@ function buildReport(input, options = {}) {
       bridge_processes: processSummary.bridge_processes,
       bridge_wrapper_processes: processSummary.bridge_wrapper_processes,
       bridge_upstream_processes: processSummary.bridge_upstream_processes,
+      obsolete_bridge_wrapper_processes: processSummary.obsolete_bridge_wrapper_processes,
+      obsolete_bridge_upstream_processes: processSummary.obsolete_bridge_upstream_processes,
+      obsolete_bridge_wrapper_groups: processSummary.obsolete_bridge_wrapper_groups,
       bridge_runtime_http_endpoints: unique(
         configs.flatMap((config) => config.bridge_http_endpoints ?? []),
       ).length,
@@ -1837,9 +1883,15 @@ function recommendationsFor({ status, gates, processSummary }) {
   }
   if (gateStatus('bridge-wrapper-footprint') !== 'pass') {
     if (gateStatus('host-owned-bridge-http') === 'pass') {
-      recommendations.push(
-        'fully quit or restart startup-spawn hosts that still own duplicate bridge wrapper/upstream pairs',
-      )
+      if (processSummary.obsolete_bridge_wrapper_processes > 0) {
+        recommendations.push(
+          'fully quit or restart startup-spawn hosts that still own obsolete bridge wrapper/upstream pairs',
+        )
+      } else {
+        recommendations.push(
+          'fully quit or restart startup-spawn hosts that still own duplicate bridge wrapper/upstream pairs',
+        )
+      }
     } else {
       recommendations.push(
         'move startup-spawn bridge config to host-owned HTTP, then restart hosts that own duplicate bridge wrappers',

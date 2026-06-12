@@ -1,5 +1,5 @@
 {
-  "name": "mixed-duplicated-agent-bridge-wrappers",
+  "name": "mixed-obsolete-agent-bridge-wrappers",
   "snapshot": {
     "schema": "atrib.local-substrate-topology-snapshot.v0",
     "source": "fixture",
@@ -18,16 +18,6 @@
       {
         "pid": 121,
         "ppid": 120,
-        "command": "node /opt/atrib/upstream-bridge/dist/index.js"
-      },
-      {
-        "pid": 122,
-        "ppid": 100,
-        "command": "node /opt/atrib/bridge-wrapper/dist/index.js"
-      },
-      {
-        "pid": 123,
-        "ppid": 122,
         "command": "node /opt/atrib/upstream-bridge/dist/index.js"
       },
       {
@@ -192,13 +182,12 @@
           },
           "profile": {
             "agent": "codex",
-            "mirror_file": "~/.atrib/records/atrib-emit-codex.jsonl",
             "local_substrate_endpoint": "http://127.0.0.1:8797/atrib/local-substrate"
           },
           "sessions": {
-            "active": 2,
-            "opened": 4,
-            "closed": 2
+            "active": 1,
+            "opened": 1,
+            "closed": 0
           }
         }
       },
@@ -215,13 +204,12 @@
           },
           "profile": {
             "agent": "claude-code",
-            "mirror_file": "~/.atrib/records/atrib-emit-claude-code.jsonl",
             "local_substrate_endpoint": "http://127.0.0.1:8788/atrib/local-substrate"
           },
           "sessions": {
             "active": 1,
-            "opened": 2,
-            "closed": 1
+            "opened": 1,
+            "closed": 0
           }
         }
       }
@@ -233,7 +221,7 @@
         "status": "healthy",
         "report": {
           "bridge_runtime": {
-            "pid": 112,
+            "pid": 212,
             "version": "0.1.0",
             "transport": "streamable-http",
             "upstream": "in-process",
@@ -244,9 +232,8 @@
           },
           "sessions": {
             "active": 1,
-            "opened": 3,
-            "closed": 2,
-            "idle_timeout_ms": 43200000
+            "opened": 1,
+            "closed": 0
           }
         }
       },
@@ -256,7 +243,7 @@
         "status": "healthy",
         "report": {
           "bridge_runtime": {
-            "pid": 113,
+            "pid": 213,
             "version": "0.1.0",
             "transport": "streamable-http",
             "upstream": "in-process",
@@ -267,9 +254,8 @@
           },
           "sessions": {
             "active": 1,
-            "opened": 2,
-            "closed": 1,
-            "idle_timeout_ms": 43200000
+            "opened": 1,
+            "closed": 0
           }
         }
       }
@@ -299,13 +285,13 @@
       "primitive_runtime_stdio_processes": 0,
       "standalone_primitive_processes": 0,
       "duplicate_primitive_groups": 0,
-      "bridge_processes": 6,
-      "bridge_wrapper_processes": 3,
-      "bridge_upstream_processes": 3,
-      "obsolete_bridge_wrapper_processes": 3,
-      "obsolete_bridge_upstream_processes": 3,
+      "bridge_processes": 4,
+      "bridge_wrapper_processes": 2,
+      "bridge_upstream_processes": 2,
+      "obsolete_bridge_wrapper_processes": 2,
+      "obsolete_bridge_upstream_processes": 2,
       "obsolete_bridge_wrapper_groups": 2,
-      "duplicate_bridge_wrapper_groups": 1,
+      "duplicate_bridge_wrapper_groups": 0,
       "bridge_wrappers_without_upstream": 0,
       "bridge_upstreams_without_wrapper": 0,
       "long_lived_agent_routes": 1,
