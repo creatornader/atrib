@@ -20,6 +20,12 @@ const PRIMITIVE_SERVERS = [
   'atrib-summarize',
   'atrib-verify',
 ]
+const LONG_LIVED_AGENT_LABELS = new Set(['ai.hermes.gateway', 'ai.openclaw.gateway'])
+const SAFE_ENDPOINT_ENV_KEYS = [
+  'ATRIB_LOCAL_SUBSTRATE_ENDPOINT',
+  'SECOND_BRAIN_ATRIB_LOCAL_SUBSTRATE_ENDPOINT',
+]
+const SAFE_AGENT_ENV_KEYS = ['ATRIB_AGENT', 'SECOND_BRAIN_ATRIB_AGENT']
 
 process.stdout.on('error', (error) => {
   if (error?.code === 'EPIPE') process.exit(0)
@@ -410,6 +416,85 @@ function parseLaunchAgent(path) {
   }
 }
 
+function parseLongLivedAgent(path) {
+  const stdout = run('plutil', ['-convert', 'json', '-o', '-', path])
+  if (!stdout) return undefined
+  try {
+    const parsed = JSON.parse(stdout)
+    const label = String(parsed.Label ?? '')
+    if (!LONG_LIVED_AGENT_LABELS.has(label)) return undefined
+
+    const args = Array.isArray(parsed.ProgramArguments) ? parsed.ProgramArguments.map(String) : []
+    const env =
+      parsed.EnvironmentVariables && typeof parsed.EnvironmentVariables === 'object'
+        ? parsed.EnvironmentVariables
+        : {}
+    const envFile = longLivedEnvFileFromProgramArguments(args)
+    const fileEnv = envFile ? readSafeEnvFile(envFile) : {}
+
+    return {
+      label,
+      path: displayPath(path),
+      kind: 'long-lived-agent',
+      program: args[0] ?? undefined,
+      endpoint:
+        firstEnvValue(env, SAFE_ENDPOINT_ENV_KEYS) ??
+        firstEnvValue(fileEnv, SAFE_ENDPOINT_ENV_KEYS),
+      agent:
+        firstEnvValue(env, SAFE_AGENT_ENV_KEYS) ??
+        firstEnvValue(fileEnv, SAFE_AGENT_ENV_KEYS) ??
+        agentNameFromLongLivedLabel(label),
+      env_file: envFile ? displayPath(envFile) : undefined,
+      start_interval: parsed.StartInterval ?? undefined,
+    }
+  } catch {
+    return undefined
+  }
+}
+
+function firstEnvValue(env, keys) {
+  for (const key of keys) {
+    if (typeof env?.[key] === 'string' && env[key]) return env[key]
+  }
+  return undefined
+}
+
+function longLivedEnvFileFromProgramArguments(args) {
+  if (args.length < 2) return undefined
+  if (!args[0]?.endsWith('/service-env/ai.openclaw.gateway-env-wrapper.sh')) return undefined
+  const envFile = args[1]
+  return envFile && existsSync(envFile) ? envFile : undefined
+}
+
+function readSafeEnvFile(path) {
+  const out = {}
+  const safeKeys = new Set([...SAFE_ENDPOINT_ENV_KEYS, ...SAFE_AGENT_ENV_KEYS])
+  for (const rawLine of readFileSync(path, 'utf8').split('\n')) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#')) continue
+    const match = line.match(/^(?:export\s+)?([A-Z0-9_]+)=(.*)$/)
+    if (!match || !safeKeys.has(match[1])) continue
+    out[match[1]] = unquoteEnvValue(match[2].trim())
+  }
+  return out
+}
+
+function unquoteEnvValue(value) {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1)
+  }
+  return value
+}
+
+function agentNameFromLongLivedLabel(label) {
+  if (label === 'ai.hermes.gateway') return 'hermes'
+  if (label === 'ai.openclaw.gateway') return 'openclaw'
+  return undefined
+}
+
 function endpointFromProgramArguments(args) {
   const host = valueAfter(args, '--host') ?? '127.0.0.1'
   const port = valueAfter(args, '--port')
@@ -428,10 +513,21 @@ function collectLaunchAgents() {
   return readdirSync(dir)
     .filter(
       (name) =>
-        name === 'com.nader.atrib-drain.plist' ||
-        name.startsWith('com.nader.atrib-local-substrate.'),
+        name.endsWith('.plist') &&
+        (name === 'com.nader.atrib-drain.plist' ||
+          name.startsWith('com.nader.atrib-local-substrate.')),
     )
     .map((name) => parseLaunchAgent(join(dir, name)))
+    .filter(Boolean)
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)))
+}
+
+function collectLongLivedAgents() {
+  const dir = join(HOME, 'Library/LaunchAgents')
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter((name) => name.endsWith('.plist'))
+    .map((name) => parseLongLivedAgent(join(dir, name)))
     .filter(Boolean)
     .sort((a, b) => String(a.label).localeCompare(String(b.label)))
 }
@@ -487,12 +583,14 @@ async function fetchHealth(endpoint, timeoutMs) {
 
 async function collectLiveSnapshot({ timeoutMs = DEFAULT_HEALTH_TIMEOUT_MS } = {}) {
   const launchAgents = collectLaunchAgents()
+  const longLivedAgents = collectLongLivedAgents()
   const configs = [
     summarizeCodexConfig(join(HOME, '.codex/config.toml')),
     summarizeClaudeConfig(join(HOME, '.claude.json')),
   ]
   const endpoints = unique([
     ...launchAgents.map((agent) => agent.endpoint),
+    ...longLivedAgents.map((agent) => agent.endpoint),
     ...configs.flatMap((config) => config.local_substrate_endpoints ?? []),
   ])
   const coordinatorHealth = []
@@ -515,6 +613,7 @@ async function collectLiveSnapshot({ timeoutMs = DEFAULT_HEALTH_TIMEOUT_MS } = {
     processes: collectProcessRows(),
     configs,
     launch_agents: launchAgents,
+    long_lived_agents: longLivedAgents,
     coordinator_health: coordinatorHealth,
     primitive_runtime_health: primitiveRuntimeHealth,
   }
@@ -582,7 +681,14 @@ function gate(name, status, detail) {
   return { name, status, detail }
 }
 
-function buildGates({ processSummary, configs, launchAgents, health, primitiveHealth }) {
+function buildGates({
+  processSummary,
+  configs,
+  launchAgents,
+  longLivedAgents,
+  health,
+  primitiveHealth,
+}) {
   const reachableHealth = health.filter((item) => item.reachable && item.status === 'healthy')
   const unhealthyReachable = health.filter((item) => item.reachable && item.status !== 'healthy')
   const unreachable = health.filter((item) => !item.reachable)
@@ -770,6 +876,36 @@ function buildGates({ processSummary, configs, launchAgents, health, primitiveHe
     gates.push(gate('watcher-wal-route', 'warn', 'no watcher-WAL launch agent evidence found'))
   }
 
+  const longLivedEndpoints = unique(longLivedAgents.map((agent) => agent.endpoint))
+  const longLivedReachable = longLivedEndpoints.some((endpoint) => reachableEndpoints.has(endpoint))
+  if (longLivedAgents.length > 0 && longLivedReachable) {
+    gates.push(
+      gate(
+        'long-lived-agent-route',
+        'pass',
+        'long-lived launch agent points at a healthy coordinator endpoint',
+      ),
+    )
+  } else if (longLivedEndpoints.length > 0) {
+    gates.push(
+      gate(
+        'long-lived-agent-route',
+        'warn',
+        'long-lived launch agent evidence exists, but no endpoint is healthy',
+      ),
+    )
+  } else if (longLivedAgents.length > 0) {
+    gates.push(
+      gate(
+        'long-lived-agent-route',
+        'warn',
+        'long-lived launch agent evidence exists, but no coordinator endpoint is configured',
+      ),
+    )
+  } else {
+    gates.push(gate('long-lived-agent-route', 'warn', 'no long-lived agent route evidence found'))
+  }
+
   const broadReady = gates.every((item) => item.status === 'pass')
   gates.push(
     gate(
@@ -799,12 +935,22 @@ function buildReport(input, options = {}) {
   const processes = Array.isArray(snapshot.processes) ? snapshot.processes : []
   const configs = Array.isArray(snapshot.configs) ? snapshot.configs : []
   const launchAgents = Array.isArray(snapshot.launch_agents) ? snapshot.launch_agents : []
+  const longLivedAgents = Array.isArray(snapshot.long_lived_agents)
+    ? snapshot.long_lived_agents
+    : []
   const health = Array.isArray(snapshot.coordinator_health) ? snapshot.coordinator_health : []
   const primitiveHealth = Array.isArray(snapshot.primitive_runtime_health)
     ? snapshot.primitive_runtime_health
     : []
   const processSummary = summarizeProcesses(processes)
-  const gates = buildGates({ processSummary, configs, launchAgents, health, primitiveHealth })
+  const gates = buildGates({
+    processSummary,
+    configs,
+    launchAgents,
+    longLivedAgents,
+    health,
+    primitiveHealth,
+  })
   const status = statusFromGates(gates)
 
   return {
@@ -823,6 +969,8 @@ function buildReport(input, options = {}) {
       duplicate_primitive_groups: processSummary.duplicate_primitive_groups,
       watcher_wal_launch_agents: launchAgents.filter((agent) => agent.kind === 'watcher-wal')
         .length,
+      long_lived_agents: longLivedAgents.length,
+      long_lived_agent_routes: unique(longLivedAgents.map((agent) => agent.endpoint)).length,
     },
     gates,
     coordinators: healthSummary(health),
@@ -830,6 +978,7 @@ function buildReport(input, options = {}) {
     process_inventory: processSummary,
     config_surfaces: configs,
     launch_agents: launchAgents,
+    long_lived_agents: longLivedAgents,
     recommendations: recommendationsFor({ status, gates, processSummary }),
   }
 }
@@ -864,6 +1013,11 @@ function recommendationsFor({ status, gates, processSummary }) {
       'point watcher-WAL launch agents at a healthy coordinator endpoint before making watcher commit mode default',
     )
   }
+  if (gates.find((item) => item.name === 'long-lived-agent-route')?.status !== 'pass') {
+    recommendations.push(
+      'point at least one long-lived agent or scheduled producer at a healthy coordinator endpoint before broad rollout',
+    )
+  }
   return recommendations
 }
 
@@ -873,6 +1027,7 @@ function formatTextReport(report) {
     `coordinators: healthy=${report.summary.healthy_coordinators}, configured=${report.summary.configured_coordinators}`,
     `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, stdio=${report.summary.primitive_runtime_stdio_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
+    `long-lived agent routes: ${report.summary.long_lived_agent_routes}/${report.summary.long_lived_agents}`,
     '',
     'gates:',
   ]

@@ -56,12 +56,13 @@ The host proof does not inspect the real dogfood process tree. The topology repo
 pnpm report:local-substrate
 ```
 
-The report reads local process rows, sanitized Codex and Claude Code MCP config summaries, launchd metadata for `com.nader.atrib-local-substrate.*` and `com.nader.atrib-drain`, coordinator health probes, and primitive-runtime HTTP health probes. It reports whether the host-owned coordinator is healthy, whether startup-spawn harnesses have collapsed onto `atrib-primitives`, whether startup-spawn configs point at healthy agent-scoped primitive HTTP hosts, and whether the watcher-WAL launch agent points at a healthy coordinator endpoint.
+The report reads local process rows, sanitized Codex and Claude Code MCP config summaries, launchd metadata for `com.nader.atrib-local-substrate.*`, `com.nader.atrib-drain`, and known long-lived local assistants, coordinator health probes, and primitive-runtime HTTP health probes. It reports whether the host-owned coordinator is healthy, whether startup-spawn harnesses have collapsed onto `atrib-primitives`, whether startup-spawn configs point at healthy agent-scoped primitive HTTP hosts, whether the watcher-WAL launch agent points at a healthy coordinator endpoint, and whether at least one supervised long-lived producer points at a healthy coordinator endpoint.
 
-Fixture snapshots live in [`topology/`](topology/). They pin three states:
+Fixture snapshots live in [`topology/`](topology/). They pin four states:
 
-- `healthy-collapsed-startup-spawn.json`: coordinator services are healthy, Codex and Claude Code each point at a loopback `atrib-primitives` Streamable HTTP host for their agent profile, and no standalone primitive bundle remains.
+- `healthy-collapsed-startup-spawn.json`: coordinator services are healthy, Codex and Claude Code each point at a loopback `atrib-primitives` Streamable HTTP host for their agent profile, a supervised long-lived route is present, and no standalone primitive bundle remains.
+- `missing-long-lived-agent-route.json`: startup-spawn, primitive HTTP, and watcher-WAL routing are healthy, but no supervised long-lived route exists, so the broad-default gate stays closed.
 - `mismatched-primitive-http-profile.json`: Codex and Claude Code both point at one primitive HTTP host whose health report belongs to one agent profile, so the broad-default gate stays closed.
 - `mixed-duplicated-startup-spawn.json`: a coordinator is healthy, but a startup-spawn harness still has standalone primitive processes alongside `atrib-primitives`.
 
-`scripts/check-local-substrate-topology-report.mjs` validates those snapshots and runs through `pnpm doc-sync`. A live `mixed` report means the coordinator can be running correctly while startup-spawn process collapse or agent-scoped primitive hosting is still incomplete.
+`scripts/check-local-substrate-topology-report.mjs` validates those snapshots and runs through `pnpm doc-sync`. A live `mixed` report means the coordinator can be running correctly while startup-spawn process collapse, agent-scoped primitive hosting, supervised long-lived routing, or watcher-WAL routing is still incomplete.

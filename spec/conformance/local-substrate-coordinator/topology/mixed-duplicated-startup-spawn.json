@@ -99,6 +99,14 @@
         "agent": "knowledge-watcher"
       }
     ],
+    "long_lived_agents": [
+      {
+        "label": "ai.openclaw.gateway",
+        "kind": "long-lived-agent",
+        "endpoint": "http://127.0.0.1:8797/atrib/local-substrate",
+        "agent": "openclaw"
+      }
+    ],
     "coordinator_health": [
       {
         "endpoint": "http://127.0.0.1:8797/atrib/local-substrate",
@@ -140,6 +148,7 @@
       "coordinator-health": "pass",
       "startup-spawn-mcp-collapse": "warn",
       "startup-spawn-config": "pass",
+      "long-lived-agent-route": "pass",
       "watcher-wal-route": "pass",
       "broad-default-readiness": "fail"
     }
