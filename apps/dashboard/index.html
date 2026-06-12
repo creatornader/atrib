@@ -2699,12 +2699,17 @@ function logHealthStat(recent, stats) {
 function signerActivityStat(stats) {
   const active7d = typeof stats.active_signers_7d === 'number' ? stats.active_signers_7d : null
   const active24h = typeof stats.active_signers_24h === 'number' ? stats.active_signers_24h : null
-  const lifetime = typeof stats.distinct_signers === 'number' ? stats.distinct_signers : null
+  const lifetime =
+    typeof stats.lifetime_signers === 'number'
+      ? stats.lifetime_signers
+      : typeof stats.distinct_signers === 'number'
+        ? stats.distinct_signers
+        : null
   const value = active7d ?? active24h ?? lifetime
   const windowLabel = active7d !== null ? 'last 7d' : active24h !== null ? 'last 24h' : 'lifetime'
   const sub =
     lifetime !== null && windowLabel !== 'lifetime'
-      ? `${windowLabel}, ${formatCount(lifetime)} lifetime keys`
+      ? `${windowLabel}, ${formatCount(lifetime)} lifetime public-log keys`
       : 'creator keys with records'
   return pulseStat('active signers', value !== null ? formatCount(value) : '—', sub)
 }

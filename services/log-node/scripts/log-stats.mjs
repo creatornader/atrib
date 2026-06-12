@@ -62,19 +62,20 @@ async function main() {
 
   const total = stats.tree_size
   const ev = stats.entries_by_event_type
+  const lifetimeSigners = stats.lifetime_signers ?? stats.distinct_signers ?? '?'
 
   console.log()
   console.log(bold('atrib log status'))
   console.log(dim('─'.repeat(60)))
   console.log(`  endpoint:           ${cyan(LOG_ENDPOINT)}`)
   console.log(`  tree size:          ${bold(String(total))} entries`)
-  console.log(`  distinct signers:   ${bold(String(stats.distinct_signers))} ${dim('creator_keys')}`)
-  if (typeof stats.active_signers_24h === 'number') {
-    console.log(`  active signers 24h: ${bold(String(stats.active_signers_24h))} ${dim('creator_keys')}`)
-  }
   if (typeof stats.active_signers_7d === 'number') {
     console.log(`  active signers 7d:  ${bold(String(stats.active_signers_7d))} ${dim('creator_keys')}`)
   }
+  if (typeof stats.active_signers_24h === 'number') {
+    console.log(`  active signers 24h: ${bold(String(stats.active_signers_24h))} ${dim('creator_keys')}`)
+  }
+  console.log(`  lifetime signers:   ${bold(String(lifetimeSigners))} ${dim('public-log creator_keys ever')}`)
   console.log(`  oldest entry:       ${fmtTimestamp(stats.oldest_timestamp_ms)}`)
   console.log(`  newest entry:       ${fmtTimestamp(stats.newest_timestamp_ms)}`)
   console.log()
