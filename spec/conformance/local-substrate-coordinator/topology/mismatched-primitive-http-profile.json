@@ -203,6 +203,15 @@
           }
         }
       }
+    ],
+    "active_session_state": [
+      {
+        "profile": "codex",
+        "path": "~/.claude/state/active-session-id-codex",
+        "exists": true,
+        "valid_context_id": true,
+        "mtime_ms": 1781250000000
+      }
     ]
   },
   "expected": {
@@ -214,7 +223,9 @@
       "standalone_primitive_processes": 0,
       "duplicate_primitive_groups": 0,
       "bridge_runtime_http_endpoints": 2,
-      "bridge_runtime_http_healthy": 2
+      "bridge_runtime_http_healthy": 2,
+      "active_session_profiles": 1,
+      "active_session_profiles_valid": 1
     },
     "gates": {
       "coordinator-health": "pass",
@@ -224,7 +235,8 @@
       "watcher-wal-route": "pass",
       "long-lived-agent-route": "pass",
       "broad-default-readiness": "fail",
-      "host-owned-bridge-http": "pass"
+      "host-owned-bridge-http": "pass",
+      "host-owned-active-session-context": "pass"
     }
   }
 }

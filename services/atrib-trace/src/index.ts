@@ -5,9 +5,9 @@
  * informed_by chain backward to surface the reasoning chain that led to it.
  *
  * Closes the consumer-side cognitive-loop primitive: recall returns raw
- * records; trace returns the causal chain, so an agent asking "why did
- * I do X?" can see "X was informed by Y, which was informed by Z" without
- * manually walking informed_by hash-by-hash.
+ * records; trace returns the declared-relationship path, so an agent asking
+ * "why did I do X?" can see "X claimed Y as input, and Y claimed Z as input"
+ * without manually walking informed_by hash-by-hash.
  *
  * Reads only the local mirror (~/.atrib/records/*.jsonl) for v1, same scope
  * as recall. v2 will fall back to log.atrib.dev/v1/lookup/<hash> for hashes

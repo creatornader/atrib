@@ -3,7 +3,7 @@
 /* global AbortController, URL, clearTimeout, fetch, process, setTimeout */
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -13,6 +13,10 @@ const SNAPSHOT_SCHEMA = 'atrib.local-substrate-topology-snapshot.v0'
 const ROUTE_REGISTRY_SCHEMA = 'atrib.local-substrate-route-registry.v0'
 const DEFAULT_ROUTE_REGISTRY_PATH = join(HOME, '.atrib/local-substrate/routes.json')
 const DEFAULT_HEALTH_TIMEOUT_MS = 400
+const HEX_32 = /^[0-9a-f]{32}$/
+const ACTIVE_SESSION_STATE_MAX_BYTES = 128
+const SAFE_ACTIVE_SESSION_PROFILE = /^[A-Za-z0-9._-]{1,64}$/
+const ACTIVE_SESSION_STATE_DIR = join(HOME, '.claude', 'state')
 const PRIMITIVE_SERVERS = [
   'atrib-emit',
   'atrib-annotate',
@@ -107,6 +111,12 @@ function unique(values) {
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
+}
+
+function parseSessionContextId(value) {
+  if (typeof value !== 'string' || value.length === 0) return undefined
+  const candidate = value.trim().replace(/-/g, '').toLowerCase()
+  return HEX_32.test(candidate) ? candidate : undefined
 }
 
 function displayPath(path) {
@@ -1116,6 +1126,9 @@ async function collectLiveSnapshot({
     if (!endpoint) continue
     primitiveRuntimeHealth.push(await fetchHealth(endpoint, timeoutMs))
   }
+  const activeSessionState = collectActiveSessionState(
+    unique(primitiveRuntimeHealth.map((item) => item.report?.profile?.agent).filter(Boolean)),
+  )
   const bridgeRuntimeEndpoints = unique(
     configs.flatMap((config) => config.bridge_http_endpoints ?? []),
   )
@@ -1134,8 +1147,61 @@ async function collectLiveSnapshot({
     long_lived_agents: longLivedAgents,
     coordinator_health: coordinatorHealth,
     primitive_runtime_health: primitiveRuntimeHealth,
+    active_session_state: activeSessionState,
     bridge_runtime_health: bridgeRuntimeHealth,
   }
+}
+
+function collectActiveSessionState(profiles) {
+  return profiles.map((profile) => {
+    if (!SAFE_ACTIVE_SESSION_PROFILE.test(profile)) {
+      return {
+        profile,
+        exists: false,
+        valid_context_id: false,
+        reason: 'unsafe profile name',
+      }
+    }
+    const path = join(ACTIVE_SESSION_STATE_DIR, `active-session-id-${profile}`)
+    try {
+      const stat = statSync(path)
+      if (!stat.isFile()) {
+        return {
+          profile,
+          path: displayPath(path),
+          exists: false,
+          valid_context_id: false,
+          reason: 'not a file',
+        }
+      }
+      if (stat.size > ACTIVE_SESSION_STATE_MAX_BYTES) {
+        return {
+          profile,
+          path: displayPath(path),
+          exists: true,
+          valid_context_id: false,
+          mtime_ms: Math.round(stat.mtimeMs),
+          reason: 'oversize',
+        }
+      }
+      const contextId = parseSessionContextId(readFileSync(path, 'utf8'))
+      return {
+        profile,
+        path: displayPath(path),
+        exists: true,
+        valid_context_id: Boolean(contextId),
+        mtime_ms: Math.round(stat.mtimeMs),
+      }
+    } catch {
+      return {
+        profile,
+        path: displayPath(path),
+        exists: false,
+        valid_context_id: false,
+        reason: 'missing',
+      }
+    }
+  })
 }
 
 function normalizeSnapshot(snapshot) {
@@ -1184,6 +1250,17 @@ function primitiveRuntimeHealthSummary(items) {
       http_status: item.http_status,
     }
   })
+}
+
+function activeSessionStateSummary(items) {
+  return items.map((item) => ({
+    profile: item.profile,
+    path: item.path,
+    exists: Boolean(item.exists),
+    valid_context_id: Boolean(item.valid_context_id),
+    mtime_ms: item.mtime_ms,
+    reason: item.reason,
+  }))
 }
 
 function bridgeRuntimeHealthSummary(items) {
@@ -1247,6 +1324,7 @@ function buildGates({
   longLivedAgents,
   health,
   primitiveHealth,
+  activeSessionState,
   bridgeHealth,
 }) {
   const reachableHealth = health.filter((item) => item.reachable && item.status === 'healthy')
@@ -1421,6 +1499,42 @@ function buildGates({
     )
   }
 
+  const runtimeProfiles = unique(healthyPrimitiveHttp.map((item) => item.report?.profile?.agent))
+  const activeSessionStateByProfile = new Map(
+    activeSessionState.map((item) => [item.profile, item]),
+  )
+  const runtimeProfilesWithValidState = runtimeProfiles.filter(
+    (profile) => activeSessionStateByProfile.get(profile)?.valid_context_id,
+  )
+  const runtimeProfilesMissingState = runtimeProfiles.filter(
+    (profile) => !activeSessionStateByProfile.get(profile)?.valid_context_id,
+  )
+  if (runtimeProfiles.length === 0) {
+    gates.push(
+      gate(
+        'host-owned-active-session-context',
+        'fail',
+        'no healthy primitive HTTP profile can prove active-session context resolution',
+      ),
+    )
+  } else if (runtimeProfilesMissingState.length === 0) {
+    gates.push(
+      gate(
+        'host-owned-active-session-context',
+        'pass',
+        `${runtimeProfilesWithValidState.length}/${runtimeProfiles.length} primitive HTTP profile(s) have valid active-session state`,
+      ),
+    )
+  } else {
+    gates.push(
+      gate(
+        'host-owned-active-session-context',
+        'warn',
+        `${runtimeProfilesWithValidState.length}/${runtimeProfiles.length} primitive HTTP profile(s) have valid active-session state; missing or invalid: ${runtimeProfilesMissingState.join(', ')}`,
+      ),
+    )
+  }
+
   const healthyBridgeHttp = bridgeHealth.filter(
     (item) => item.reachable && item.status === 'healthy',
   )
@@ -1591,6 +1705,9 @@ function buildReport(input, options = {}) {
   const primitiveHealth = Array.isArray(snapshot.primitive_runtime_health)
     ? snapshot.primitive_runtime_health
     : []
+  const activeSessionState = Array.isArray(snapshot.active_session_state)
+    ? snapshot.active_session_state
+    : []
   const bridgeHealth = Array.isArray(snapshot.bridge_runtime_health)
     ? snapshot.bridge_runtime_health
     : []
@@ -1608,6 +1725,7 @@ function buildReport(input, options = {}) {
     longLivedAgents,
     health,
     primitiveHealth,
+    activeSessionState,
     bridgeHealth,
   })
   const status = statusFromGates(gates)
@@ -1642,6 +1760,13 @@ function buildReport(input, options = {}) {
       bridge_runtime_http_healthy: bridgeHealth.filter(
         (item) => item.reachable && item.status === 'healthy',
       ).length,
+      active_session_profiles: unique(
+        primitiveHealth
+          .filter((item) => item.reachable && item.status === 'healthy')
+          .map((item) => item.report?.profile?.agent),
+      ).length,
+      active_session_profiles_valid: activeSessionState.filter((item) => item.valid_context_id)
+        .length,
       duplicate_bridge_wrapper_groups: processSummary.duplicate_bridge_wrapper_groups,
       bridge_wrappers_without_upstream: processSummary.bridge_wrappers_without_upstream,
       bridge_upstreams_without_wrapper: processSummary.bridge_upstreams_without_wrapper,
@@ -1656,6 +1781,7 @@ function buildReport(input, options = {}) {
     gates,
     coordinators: healthSummary(health),
     primitive_runtimes: primitiveRuntimeHealthSummary(primitiveHealth),
+    active_session_state: activeSessionStateSummary(activeSessionState),
     bridge_runtimes: bridgeRuntimeHealthSummary(bridgeHealth),
     process_inventory: processSummary,
     config_surfaces: configs,
@@ -1692,6 +1818,11 @@ function recommendationsFor({ status, gates, processSummary }) {
   if (gates.find((item) => item.name === 'host-owned-primitives-http')?.status !== 'pass') {
     recommendations.push(
       'start one loopback atrib-primitives Streamable HTTP host per startup-spawn agent profile before broad process-sharing rollout',
+    )
+  }
+  if (gates.find((item) => item.name === 'host-owned-active-session-context')?.status !== 'pass') {
+    recommendations.push(
+      'make every host-owned primitive profile write a valid active-session state file before relying on profile fallback',
     )
   }
   if (gates.find((item) => item.name === 'host-owned-bridge-http')?.status !== 'pass') {
@@ -1735,6 +1866,7 @@ function formatTextReport(report) {
     `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, stdio=${report.summary.primitive_runtime_stdio_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
     `bridge processes: wrappers=${report.summary.bridge_wrapper_processes}, upstream=${report.summary.bridge_upstream_processes}, duplicate-groups=${report.summary.duplicate_bridge_wrapper_groups}`,
     `host-owned bridge HTTP: healthy=${report.summary.bridge_runtime_http_healthy}/${report.summary.bridge_runtime_http_endpoints}`,
+    `active-session profile state: valid=${report.summary.active_session_profiles_valid}/${report.summary.active_session_profiles}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
     `long-lived agent routes: healthy=${report.summary.long_lived_agent_routes_healthy}/${report.summary.long_lived_agents}, configured=${report.summary.long_lived_agent_routes_configured}, missing=${report.summary.long_lived_agent_routes_missing}`,
     '',

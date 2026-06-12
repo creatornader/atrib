@@ -51,9 +51,10 @@
 // Environment variables (honored exactly as emitInProcess + resolveKey do):
 //   ATRIB_LOG_ENDPOINT, ATRIB_MIRROR_FILE, ATRIB_AUTOCHAIN_SOURCE,
 //   ATRIB_AGENT, ATRIB_PRIVATE_KEY, ATRIB_KEYCHAIN_TIMEOUT_MS,
-//   ATRIB_OP_TIMEOUT_MS. Optional P042 shadow probes also read
-//   ATRIB_LOCAL_SUBSTRATE_ENDPOINT, ATRIB_LOCAL_SUBSTRATE_MODE=shadow, and
-//   ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS.
+//   ATRIB_OP_TIMEOUT_MS, ATRIB_CONTEXT_ID, CLAUDE_CODE_SESSION_ID,
+//   CODEX_THREAD_ID, ATRIB_ACTIVE_SESSION_PROFILE. Optional P042 shadow
+//   probes also read ATRIB_LOCAL_SUBSTRATE_ENDPOINT,
+//   ATRIB_LOCAL_SUBSTRATE_MODE=shadow, and ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS.
 
 import { readFileSync, realpathSync, accessSync, constants as fsConstants } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -353,6 +354,18 @@ function buildDescription(): CliDescription {
           'Harness-injected fallback (D083): UUID stripped + lowercased to a 32-hex context_id when ATRIB_CONTEXT_ID is unset. One entry in @atrib/mcp KNOWN_HARNESS_DISCOVERIES.',
         required: false,
       },
+      {
+        name: 'CODEX_THREAD_ID',
+        description:
+          'Codex harness fallback (D083): UUID stripped + lowercased to a 32-hex context_id when ATRIB_CONTEXT_ID is unset.',
+        required: false,
+      },
+      {
+        name: 'ATRIB_ACTIVE_SESSION_PROFILE',
+        description:
+          'Profile name for the host-written active-session state file, e.g. ~/.claude/state/active-session-id-codex. Falls back to ATRIB_AGENT when unset.',
+        required: false,
+      },
     ],
     spec_references: [
       {
@@ -629,7 +642,8 @@ function buildLocalSubstrateCommitOption(
   }
 
   const endpoint =
-    asNonEmptyString(spec.endpoint) ?? asNonEmptyString(process.env['ATRIB_LOCAL_SUBSTRATE_ENDPOINT'])
+    asNonEmptyString(spec.endpoint) ??
+    asNonEmptyString(process.env['ATRIB_LOCAL_SUBSTRATE_ENDPOINT'])
   if (!endpoint) {
     writeStderrLine(
       'atrib-emit-cli: local_substrate commit skipped; ATRIB_LOCAL_SUBSTRATE_ENDPOINT is unset',

@@ -232,6 +232,22 @@
           }
         }
       }
+    ],
+    "active_session_state": [
+      {
+        "profile": "codex",
+        "path": "~/.claude/state/active-session-id-codex",
+        "exists": true,
+        "valid_context_id": true,
+        "mtime_ms": 1781250000000
+      },
+      {
+        "profile": "claude-code",
+        "path": "~/.claude/state/active-session-id-claude-code",
+        "exists": true,
+        "valid_context_id": true,
+        "mtime_ms": 1781250000000
+      }
     ]
   },
   "expected": {
@@ -244,7 +260,9 @@
       "duplicate_primitive_groups": 0,
       "long_lived_agent_routes": 1,
       "bridge_runtime_http_endpoints": 2,
-      "bridge_runtime_http_healthy": 2
+      "bridge_runtime_http_healthy": 2,
+      "active_session_profiles": 2,
+      "active_session_profiles_valid": 2
     },
     "gates": {
       "coordinator-health": "pass",
@@ -254,7 +272,8 @@
       "watcher-wal-route": "pass",
       "long-lived-agent-route": "pass",
       "broad-default-readiness": "pass",
-      "host-owned-bridge-http": "pass"
+      "host-owned-bridge-http": "pass",
+      "host-owned-active-session-context": "pass"
     }
   }
 }

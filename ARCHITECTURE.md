@@ -413,7 +413,7 @@ services/atrib-emit   Two binaries: MCP server `atrib-emit` (interactive)
       autoChain so explicit emits chain cleanly with mechanical tool
       calls in the same session.
 
-services/atrib-trace  MCP server for backward causal-chain walking
+services/atrib-trace  MCP server for backward declared-relationship walking
   └── Consumer-side cognitive primitive, reads the local mirror (per
       §5.9), follows `informed_by` edges backward from a starting record
       hash, surfaces sidecar_summary per visited record (tool name,

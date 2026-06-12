@@ -177,6 +177,29 @@
           }
         }
       }
+    ],
+    "active_session_state": [
+      {
+        "profile": "codex",
+        "path": "~/.claude/state/active-session-id-codex",
+        "exists": true,
+        "valid_context_id": true,
+        "mtime_ms": 1781250000000
+      },
+      {
+        "profile": "claude-code",
+        "path": "~/.claude/state/active-session-id-claude-code",
+        "exists": true,
+        "valid_context_id": true,
+        "mtime_ms": 1781250000000
+      },
+      {
+        "profile": "future-spawn",
+        "path": "~/.claude/state/active-session-id-future-spawn",
+        "exists": true,
+        "valid_context_id": true,
+        "mtime_ms": 1781250000000
+      }
     ]
   },
   "expected": {
@@ -193,7 +216,9 @@
       "long_lived_agent_routes_healthy": 1,
       "long_lived_agent_routes_missing": 0,
       "bridge_runtime_http_endpoints": 3,
-      "bridge_runtime_http_healthy": 3
+      "bridge_runtime_http_healthy": 3,
+      "active_session_profiles": 3,
+      "active_session_profiles_valid": 3
     },
     "gates": {
       "coordinator-health": "pass",
@@ -203,7 +228,8 @@
       "watcher-wal-route": "pass",
       "long-lived-agent-route": "pass",
       "broad-default-readiness": "pass",
-      "host-owned-bridge-http": "pass"
+      "host-owned-bridge-http": "pass",
+      "host-owned-active-session-context": "pass"
     }
   }
 }

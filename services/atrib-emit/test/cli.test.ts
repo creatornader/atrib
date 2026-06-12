@@ -296,9 +296,9 @@ describe('atrib-emit-cli wire contract', () => {
       expect(r.code).toBe(0)
       const out = JSON.parse(r.stdout) as { record_hash: string; warnings: string[] }
       expect(out.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
-      expect(out.warnings.some((w) => w.includes('local substrate watcher-WAL commit failed'))).toBe(
-        true,
-      )
+      expect(
+        out.warnings.some((w) => w.includes('local substrate watcher-WAL commit failed')),
+      ).toBe(true)
       expect(log.received.length).toBe(1)
       expect(coordinator.received).toHaveLength(1)
       expect(coordinator.received[0]).toMatchObject({
@@ -358,6 +358,8 @@ describe('atrib-emit-cli wire contract', () => {
     expect(envNames).toContain('ATRIB_LOG_ENDPOINT')
     expect(envNames).toContain('ATRIB_CONTEXT_ID')
     expect(envNames).toContain('CLAUDE_CODE_SESSION_ID')
+    expect(envNames).toContain('CODEX_THREAD_ID')
+    expect(envNames).toContain('ATRIB_ACTIVE_SESSION_PROFILE')
     // Options include --describe itself (self-documenting)
     expect(desc.options.some((o) => o.flag === '--describe')).toBe(true)
   })
@@ -390,7 +392,11 @@ describe('atrib-emit-cli wire contract', () => {
     expect(r.code).toBe(0)
     const report = JSON.parse(r.stdout) as {
       ok: boolean
-      checks: { key: { ok: boolean }; log_endpoint: { ok: boolean; data?: { tree_size?: number } }; mirror_writable: { ok: boolean } }
+      checks: {
+        key: { ok: boolean }
+        log_endpoint: { ok: boolean; data?: { tree_size?: number } }
+        mirror_writable: { ok: boolean }
+      }
     }
     expect(report.ok).toBe(true)
     expect(report.checks.key.ok).toBe(true)
@@ -400,10 +406,14 @@ describe('atrib-emit-cli wire contract', () => {
   })
 
   it('doctor: exits 1 with diagnostic when log endpoint is unreachable', async () => {
-    const r = await runCli(['doctor', '--json', '--log-endpoint', 'http://127.0.0.1:1/v1/entries'], '', {
-      ATRIB_PRIVATE_KEY: seedHex,
-      ATRIB_MIRROR_FILE: mirrorPath,
-    })
+    const r = await runCli(
+      ['doctor', '--json', '--log-endpoint', 'http://127.0.0.1:1/v1/entries'],
+      '',
+      {
+        ATRIB_PRIVATE_KEY: seedHex,
+        ATRIB_MIRROR_FILE: mirrorPath,
+      },
+    )
     expect(r.code).toBe(1)
     const report = JSON.parse(r.stdout) as {
       ok: boolean

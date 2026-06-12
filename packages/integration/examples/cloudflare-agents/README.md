@@ -240,7 +240,7 @@ gate, and the execution path uses an `McpAgent` action surface wrapped with
 `@atrib/mcp/worker`. The point is the signed boundary: exact proposal payload,
 human decision over that payload, scoped resumed execution, signed outcome, and
 handoff trace. The UI focuses on the parts a reviewer needs first: decision
-context, semantic causal chain, trustless audit, and signer separation.
+context, signed decision chain, trustless audit, and signer separation.
 
 Run it with:
 

@@ -7,7 +7,7 @@
  *
  * Output:
  *   spec/conformance/3.4.5/cases/*.json + manifest.json (provenance trace)
- *   spec/conformance/3.4.6/cases/*.json + manifest.json (causal chain)
+ *   spec/conformance/3.4.6/cases/*.json + manifest.json (chronology chain)
  *   spec/conformance/3.4.7/cases/*.json + manifest.json (creator activity-map)
  *
  * The three sections share helpers (makeRecord, hashing) so they are
@@ -18,7 +18,7 @@
  *     ANNOTATES, REVISES). MUST NOT walk CHAIN_PRECEDES (structure-vs-
  *     claims invariant per §3.1).
  *
- *   §3.4.6 (causal chain): substrate-derived chain_root walk to session
+ *   §3.4.6 (chronology chain): substrate-derived chain_root walk to session
  *     genesis. MUST NOT walk INFORMED_BY / ANNOTATES / REVISES (claims
  *     are not structure).
  *
@@ -80,7 +80,9 @@ async function makeRecord(opts: {
     context_id: ctx,
     creator_key: base64urlEncode(pub),
     event_type: opts.eventType ?? 'https://atrib.dev/v1/types/tool_call',
-    ...(opts.informedBy && opts.informedBy.length > 0 ? { informed_by: [...opts.informedBy].sort() } : {}),
+    ...(opts.informedBy && opts.informedBy.length > 0
+      ? { informed_by: [...opts.informedBy].sort() }
+      : {}),
     ...(opts.revises ? { revises: opts.revises } : {}),
     signature: '',
     timestamp: opts.timestamp,
@@ -115,7 +117,11 @@ function writeCorpus(
     keys: { alice_pubkey: '' }, // Filled at end after we know the key.
     note,
   }
-  writeFileSync(join(SPEC_ROOT, 'spec', 'conformance', section, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8')
+  writeFileSync(
+    join(SPEC_ROOT, 'spec', 'conformance', section, 'manifest.json'),
+    JSON.stringify(manifest, null, 2) + '\n',
+    'utf8',
+  )
   return manifest
 }
 
@@ -164,8 +170,18 @@ async function buildTraceCases(): Promise<CaseOutput<TraceInput, TraceExpected>[
       name: 'linear-informed-by-chain',
       description:
         'Three records linked by informed_by: C→B→A. Trace from C with default depth must surface the full ancestry: {A, B, C}. Records appear in the response regardless of order; the response set membership is the spec-normative property.',
-      input: { records: [a, b, c], start_record_index: 2, depth: 5, include_annotations: true, include_revisions: true },
-      expected: { record_indexes_in_response: [0, 1, 2], truncated_by_depth: false, truncated_by_count: false },
+      input: {
+        records: [a, b, c],
+        start_record_index: 2,
+        depth: 5,
+        include_annotations: true,
+        include_revisions: true,
+      },
+      expected: {
+        record_indexes_in_response: [0, 1, 2],
+        truncated_by_depth: false,
+        truncated_by_count: false,
+      },
     })
   }
 
@@ -194,8 +210,18 @@ async function buildTraceCases(): Promise<CaseOutput<TraceInput, TraceExpected>[
       name: 'chain-precedes-not-walked',
       description:
         'Three records linked by chain_root only (CHAIN_PRECEDES). Trace from C MUST return ONLY {C}, chain_root edges are substrate-derived structure per §3.2.4, not producer claims, and §3.4.5 forbids the trace walk from following them. Conflating the structural and claim layers violates the structure-vs-claims separation justifying §1.2.5 informed_by semantics.',
-      input: { records: [a, b, c], start_record_index: 2, depth: 5, include_annotations: true, include_revisions: true },
-      expected: { record_indexes_in_response: [2], truncated_by_depth: false, truncated_by_count: false },
+      input: {
+        records: [a, b, c],
+        start_record_index: 2,
+        depth: 5,
+        include_annotations: true,
+        include_revisions: true,
+      },
+      expected: {
+        record_indexes_in_response: [2],
+        truncated_by_depth: false,
+        truncated_by_count: false,
+      },
     })
   }
 
@@ -222,8 +248,18 @@ async function buildTraceCases(): Promise<CaseOutput<TraceInput, TraceExpected>[
       name: 'depth-limit-truncates',
       description:
         'Three-record informed_by chain (C→B→A). Trace from C with depth=1 must return {B, C} and set truncated_by_depth=true (B has an unwalked ancestor).',
-      input: { records: [a, b, c], start_record_index: 2, depth: 1, include_annotations: true, include_revisions: true },
-      expected: { record_indexes_in_response: [1, 2], truncated_by_depth: true, truncated_by_count: false },
+      input: {
+        records: [a, b, c],
+        start_record_index: 2,
+        depth: 1,
+        include_annotations: true,
+        include_revisions: true,
+      },
+      expected: {
+        record_indexes_in_response: [1, 2],
+        truncated_by_depth: true,
+        truncated_by_count: false,
+      },
     })
   }
 
@@ -231,7 +267,7 @@ async function buildTraceCases(): Promise<CaseOutput<TraceInput, TraceExpected>[
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// §3.4.6 causal chain
+// §3.4.6 chronology chain
 // ────────────────────────────────────────────────────────────────────────
 
 interface ChainInput {
@@ -294,7 +330,7 @@ async function buildChainCases(): Promise<CaseOutput<ChainInput, ChainExpected>[
     cases.push({
       name: 'informed-by-not-walked',
       description:
-        'Two records: B is informed by A but B carries the genesis chain_root for its context_id. Chain walk from B MUST return ONLY {B}, informed_by is a producer claim, not substrate structure, and §3.4.6 forbids the chain walk from following producer claims. Symmetric counterpart to §3.4.5\'s chain-precedes-not-walked invariant.',
+        "Two records: B is informed by A but B carries the genesis chain_root for its context_id. Chain walk from B MUST return ONLY {B}, informed_by is a producer claim, not substrate structure, and §3.4.6 forbids the chain walk from following producer claims. Symmetric counterpart to §3.4.5's chain-precedes-not-walked invariant.",
       input: { records: [a, b], start_record_index: 1, depth: 5 },
       expected: { record_indexes_in_response: [1], truncated_by_depth: false },
     })
@@ -347,8 +383,8 @@ interface CreatorGraphInput {
 }
 interface CreatorGraphExpected {
   record_count: number
-  edge_types_excluded: string[]   // edge types that MUST NOT appear in graph.edges
-  edge_types_present_at_least_one: string[]  // edge types that MUST appear at least once
+  edge_types_excluded: string[] // edge types that MUST NOT appear in graph.edges
+  edge_types_present_at_least_one: string[] // edge types that MUST appear at least once
   intra_session_edges_filtered: boolean
   // §3.4.7 truncation transparency expectations (added 2026-05-09).
   total_in_window: number
@@ -362,7 +398,9 @@ interface CreatorGraphExpected {
   effective_window_last_record_index: number | null
 }
 
-async function buildCreatorGraphCases(): Promise<CaseOutput<CreatorGraphInput, CreatorGraphExpected>[]> {
+async function buildCreatorGraphCases(): Promise<
+  CaseOutput<CreatorGraphInput, CreatorGraphExpected>[]
+> {
   const ctxA = 'cccccccccccccccccccccccccccccccc'
   const ctxB = 'dddddddddddddddddddddddddddddddd'
   const cases: CaseOutput<CreatorGraphInput, CreatorGraphExpected>[] = []
@@ -413,7 +451,7 @@ async function buildCreatorGraphCases(): Promise<CaseOutput<CreatorGraphInput, C
       truncated: false,
       direction_returned: 'newest',
       effective_window_first_record_index: 0, // a0 (oldest)
-      effective_window_last_record_index: 3,  // b1 (newest)
+      effective_window_last_record_index: 3, // b1 (newest)
     },
   })
 
@@ -456,7 +494,7 @@ async function buildCreatorGraphCases(): Promise<CaseOutput<CreatorGraphInput, C
       truncated: true,
       direction_returned: 'newest',
       effective_window_first_record_index: 2, // b0 (after timestamp-sort ascending)
-      effective_window_last_record_index: 3,  // b1
+      effective_window_last_record_index: 3, // b1
     },
   })
 
@@ -479,7 +517,7 @@ async function buildCreatorGraphCases(): Promise<CaseOutput<CreatorGraphInput, C
       truncated: true,
       direction_returned: 'oldest',
       effective_window_first_record_index: 0, // a0
-      effective_window_last_record_index: 1,  // a1
+      effective_window_last_record_index: 1, // a1
     },
   })
 
@@ -505,7 +543,11 @@ async function main() {
     traceCases as unknown as CaseOutput<unknown, unknown>[],
   )
   traceManifest.keys.alice_pubkey = alicePub
-  writeFileSync(join(SPEC_ROOT, 'spec', 'conformance', '3.4.5', 'manifest.json'), JSON.stringify(traceManifest, null, 2) + '\n', 'utf8')
+  writeFileSync(
+    join(SPEC_ROOT, 'spec', 'conformance', '3.4.5', 'manifest.json'),
+    JSON.stringify(traceManifest, null, 2) + '\n',
+    'utf8',
+  )
 
   const chainManifest = writeCorpus(
     '3.4.6',
@@ -515,7 +557,11 @@ async function main() {
     chainCases as unknown as CaseOutput<unknown, unknown>[],
   )
   chainManifest.keys.alice_pubkey = alicePub
-  writeFileSync(join(SPEC_ROOT, 'spec', 'conformance', '3.4.6', 'manifest.json'), JSON.stringify(chainManifest, null, 2) + '\n', 'utf8')
+  writeFileSync(
+    join(SPEC_ROOT, 'spec', 'conformance', '3.4.6', 'manifest.json'),
+    JSON.stringify(chainManifest, null, 2) + '\n',
+    'utf8',
+  )
 
   const creatorManifest = writeCorpus(
     '3.4.7',
@@ -525,9 +571,15 @@ async function main() {
     creatorCases as unknown as CaseOutput<unknown, unknown>[],
   )
   creatorManifest.keys.alice_pubkey = alicePub
-  writeFileSync(join(SPEC_ROOT, 'spec', 'conformance', '3.4.7', 'manifest.json'), JSON.stringify(creatorManifest, null, 2) + '\n', 'utf8')
+  writeFileSync(
+    join(SPEC_ROOT, 'spec', 'conformance', '3.4.7', 'manifest.json'),
+    JSON.stringify(creatorManifest, null, 2) + '\n',
+    'utf8',
+  )
 
-  console.log(`\nGenerated ${traceCases.length + chainCases.length + creatorCases.length} cases across 3 corpora`)
+  console.log(
+    `\nGenerated ${traceCases.length + chainCases.length + creatorCases.length} cases across 3 corpora`,
+  )
 }
 
 main().catch((e) => {

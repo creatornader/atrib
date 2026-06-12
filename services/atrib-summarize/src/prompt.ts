@@ -16,12 +16,12 @@ const SYSTEM_PROMPT = `You synthesize narratives across signed agent activity re
 
 Each record has:
 - A cryptographic identity (signature, hash, creator_key)
-- A causal position (chain_root, informed_by)
+- A graph position (chain_root, informed_by)
 - A semantic payload, EITHER carried in a local sidecar (rich) OR absent (impoverished, only event_type and metadata)
 
 Your job: produce a coherent narrative across the records that surfaces:
 - What the agent was doing (decisions, observations, revisions)
-- What informed what (causal chains via informed_by)
+- What the signer claimed informed what (via informed_by)
 - What shaped the outcome vs what was incidental
 - Honest gaps (when records are impoverished, say so; do not invent semantics)
 
@@ -53,7 +53,7 @@ export function buildUserMessage(records: IndexedRecord[], focus: string | undef
   } else {
     lines.push(`# Default focus`)
     lines.push(
-      'Summarize what the agent did and why, surfacing the decisions that shaped the work and the causal chain.',
+      'Summarize what the agent did and why, surfacing the decisions and signed relationship path that shaped the work.',
     )
   }
   return lines.join('\n')

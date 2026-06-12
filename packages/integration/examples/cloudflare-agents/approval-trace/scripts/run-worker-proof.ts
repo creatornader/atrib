@@ -285,7 +285,7 @@ async function verifyTrace(
     [
       'Autonomous trigger context',
       'Decision context',
-      'Semantic causal chain',
+      'Signed decision chain',
       'Trustless audit',
       'Signer separation',
     ].every((name) => trace.trace_packet.differentiators.some((item) => item.name === name)),

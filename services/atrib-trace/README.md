@@ -1,8 +1,8 @@
 # @atrib/trace
 
-MCP server exposing the `trace` tool, walks a record's `informed_by` chain backward to surface the reasoning chain that led to it.
+MCP server exposing the `trace` tool, walks a record's `informed_by` chain backward to surface the signed relationship path that led to it.
 
-Closes the consumer-side cognitive-loop primitive: recall returns raw records; trace returns the causal chain, so an agent asking "why did I do X?" can see "X was informed by Y, which was informed by Z" without manually walking `informed_by` hash-by-hash.
+Closes the consumer-side cognitive-loop primitive: recall returns raw records; trace returns the declared-relationship trace, so an agent asking "why did I do X?" can see "X was claimed to be informed by Y, which was claimed to be informed by Z" without manually walking `informed_by` hash-by-hash.
 
 ## Tools
 
@@ -43,7 +43,7 @@ mcp__atrib-trace__trace_forward({  // FORWARD — what was informed by this?
 }
 ```
 
-- `trace` walks `informed_by` BACKWARD (toward causal ancestors). Answers "what informed this record?"
+- `trace` walks `informed_by` BACKWARD (toward declared ancestors). Answers "what did the signer claim informed this record?"
 - `trace_forward` walks `informed_by` FORWARD (records that cited this one). Answers "I made decision X, what did I do because of it?" The dual of `trace`. Same input schema, same response shape.
 - For forward walks, `next_informed_by` carries the CHILDREN visited at the next hop (records citing this one) rather than this record's own informed_by — field name kept for shape-compat with `trace`.
 

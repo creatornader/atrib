@@ -67,10 +67,18 @@ function parseTimeWindow(params: URLSearchParams): ParsedTimeWindow {
   const since = sinceRaw === null ? null : parseTimestampParam(sinceRaw)
   const until = untilRaw === null ? null : parseTimestampParam(untilRaw)
   if (sinceRaw !== null && since === null) {
-    return { since: null, until: null, error: '`since` must be a unix timestamp in milliseconds or an ISO 8601 datetime' }
+    return {
+      since: null,
+      until: null,
+      error: '`since` must be a unix timestamp in milliseconds or an ISO 8601 datetime',
+    }
   }
   if (untilRaw !== null && until === null) {
-    return { since: null, until: null, error: '`until` must be a unix timestamp in milliseconds or an ISO 8601 datetime' }
+    return {
+      since: null,
+      until: null,
+      error: '`until` must be a unix timestamp in milliseconds or an ISO 8601 datetime',
+    }
   }
   if (since !== null && until !== null && since > until) {
     return { since: null, until: null, error: '`since` must be less than or equal to `until`' }
@@ -224,7 +232,12 @@ async function handleRequest(
   // GET /v1/creators/:creator_key/sessions
   const creatorsMatch = url.match(/^\/v1\/creators\/([^/]+)\/sessions(\?.*)?$/)
   if (method === 'GET' && creatorsMatch) {
-    return handleCreatorSessions(res, store, decodeURIComponent(creatorsMatch[1]!), new URL(`http://localhost${url}`).searchParams)
+    return handleCreatorSessions(
+      res,
+      store,
+      decodeURIComponent(creatorsMatch[1]!),
+      new URL(`http://localhost${url}`).searchParams,
+    )
   }
 
   // GET /v1/creators/:creator_key/graph
@@ -247,7 +260,7 @@ async function handleRequest(
     return handleTrace(res, store, traceMatch[1]!, new URL(`http://localhost${url}`).searchParams)
   }
 
-  // GET /v1/chain/:record_hash: substrate-derived causal chain walk per
+  // GET /v1/chain/:record_hash: substrate-derived chronology chain walk per
   // spec §3.4.6 / D068. Walks CHAIN_PRECEDES backward from the starting
   // record, terminating at the session genesis (chain_root = SHA-256(context_id)).
   // Disjoint from /v1/trace which walks producer-claimed ancestry.
@@ -292,10 +305,13 @@ function buildRegistry(store: RecordStore): Map<string, RevocationEntry> {
   return buildRevocationRegistry(minimal)
 }
 
-const revocationRegistryCache = new WeakMap<RecordStore, {
-  recordCount: number
-  registry: Map<string, RevocationEntry>
-}>()
+const revocationRegistryCache = new WeakMap<
+  RecordStore,
+  {
+    recordCount: number
+    registry: Map<string, RevocationEntry>
+  }
+>()
 
 function buildRegistryCached(store: RecordStore): Map<string, RevocationEntry> {
   const recordCount = store.getRecordCount()
@@ -308,10 +324,16 @@ function buildRegistryCached(store: RecordStore): Map<string, RevocationEntry> {
 }
 
 const GRAPH_RESPONSE_CACHE_MAX = 50
-const graphResponseCache = new WeakMap<RecordStore, Map<string, {
-  recordCount: number
-  graph: unknown
-}>>()
+const graphResponseCache = new WeakMap<
+  RecordStore,
+  Map<
+    string,
+    {
+      recordCount: number
+      graph: unknown
+    }
+  >
+>()
 
 function getCachedGraph(store: RecordStore, key: string): unknown | null {
   const cached = graphResponseCache.get(store)?.get(key)
@@ -380,9 +402,12 @@ function compactGraphForExplorer(graph: GraphResponse): unknown {
       if (edge.reference_status !== undefined) compactEdge.reference_status = edge.reference_status
       if (edge.reference_hash !== undefined) compactEdge.reference_hash = edge.reference_hash
       if (edge.reference_token !== undefined) compactEdge.reference_token = edge.reference_token
-      if (edge.reference_context_id !== undefined) compactEdge.reference_context_id = edge.reference_context_id
-      if (edge.reference_event_type !== undefined) compactEdge.reference_event_type = edge.reference_event_type
-      if (edge.reference_log_index !== undefined) compactEdge.reference_log_index = edge.reference_log_index
+      if (edge.reference_context_id !== undefined)
+        compactEdge.reference_context_id = edge.reference_context_id
+      if (edge.reference_event_type !== undefined)
+        compactEdge.reference_event_type = edge.reference_event_type
+      if (edge.reference_log_index !== undefined)
+        compactEdge.reference_log_index = edge.reference_log_index
       if (edge.reason !== undefined) compactEdge.reason = edge.reason
       return compactEdge
     }),
@@ -432,7 +457,13 @@ async function handleGraph(
   params: URLSearchParams,
 ): Promise<void> {
   if (!store.hasContext(contextId)) {
-    return sendProblem(res, 404, 'session-not-found', `No attribution records found for context_id ${contextId}`, `/v1/graph/${contextId}`)
+    return sendProblem(
+      res,
+      404,
+      'session-not-found',
+      `No attribution records found for context_id ${contextId}`,
+      `/v1/graph/${contextId}`,
+    )
   }
 
   const records = store.getRecordsByContextId(contextId)
@@ -482,7 +513,13 @@ async function handleNodes(
   params: URLSearchParams,
 ): Promise<void> {
   if (!store.hasContext(contextId)) {
-    return sendProblem(res, 404, 'session-not-found', `No attribution records found for context_id ${contextId}`, `/v1/graph/${contextId}/nodes`)
+    return sendProblem(
+      res,
+      404,
+      'session-not-found',
+      `No attribution records found for context_id ${contextId}`,
+      `/v1/graph/${contextId}/nodes`,
+    )
   }
 
   const records = store.getRecordsByContextId(contextId)
@@ -499,9 +536,7 @@ async function handleNodes(
   const eventTypeFilter = params.get('event_type')
   if (eventTypeFilter) {
     const normalized = normalizeEventTypeFilter(eventTypeFilter)
-    nodes = nodes.filter(
-      (n) => n.event_type === normalized || n.event_type_uri === eventTypeFilter,
-    )
+    nodes = nodes.filter((n) => n.event_type === normalized || n.event_type_uri === eventTypeFilter)
   }
   const creatorKeyFilter = params.get('creator_key')
   if (creatorKeyFilter) {
@@ -521,7 +556,13 @@ async function handleTransaction(
   contextId: string,
 ): Promise<void> {
   if (!store.hasContext(contextId)) {
-    return sendProblem(res, 404, 'session-not-found', `No records for context_id ${contextId}`, `/v1/graph/${contextId}/transaction`)
+    return sendProblem(
+      res,
+      404,
+      'session-not-found',
+      `No records for context_id ${contextId}`,
+      `/v1/graph/${contextId}/transaction`,
+    )
   }
 
   const records = store.getRecordsByContextId(contextId)
@@ -534,7 +575,13 @@ async function handleTransaction(
   const txNode = graph.nodes.find((n) => n.event_type === 'transaction')
 
   if (!txNode) {
-    return sendProblem(res, 404, 'session-not-found', 'Session exists but no transaction record present', `/v1/graph/${contextId}/transaction`)
+    return sendProblem(
+      res,
+      404,
+      'session-not-found',
+      'Session exists but no transaction record present',
+      `/v1/graph/${contextId}/transaction`,
+    )
   }
 
   sendJson(res, 200, txNode)
@@ -548,7 +595,13 @@ function handleCreatorSessions(
 ): void {
   const window = parseTimeWindow(params)
   if (window.error) {
-    return sendProblem(res, 400, 'invalid-time-window', window.error, `/v1/creators/${creatorKey}/sessions`)
+    return sendProblem(
+      res,
+      400,
+      'invalid-time-window',
+      window.error,
+      `/v1/creators/${creatorKey}/sessions`,
+    )
   }
 
   const sessions = store.getSessionsByCreatorKey(creatorKey)
@@ -594,10 +647,22 @@ async function handleCreatorGraph(
 ): Promise<void> {
   const window = parseTimeWindow(params)
   if (window.error) {
-    return sendProblem(res, 400, 'invalid-time-window', window.error, `/v1/creators/${creatorKey}/graph`)
+    return sendProblem(
+      res,
+      400,
+      'invalid-time-window',
+      window.error,
+      `/v1/creators/${creatorKey}/graph`,
+    )
   }
   const rawLimit = parseInt(params.get('limit') ?? String(ACTIVITY_MAP_DEFAULT_LIMIT), 10)
-  const limit = Math.max(1, Math.min(Number.isNaN(rawLimit) ? ACTIVITY_MAP_DEFAULT_LIMIT : rawLimit, ACTIVITY_MAP_MAX_LIMIT))
+  const limit = Math.max(
+    1,
+    Math.min(
+      Number.isNaN(rawLimit) ? ACTIVITY_MAP_DEFAULT_LIMIT : rawLimit,
+      ACTIVITY_MAP_MAX_LIMIT,
+    ),
+  )
 
   // Pull every record this creator signed across all sessions, then apply the
   // time window. The store already indexes by creator_key → context_ids; we
@@ -749,7 +814,10 @@ async function handleTrace(
   params: URLSearchParams,
 ): Promise<void> {
   const rawDepth = parseInt(params.get('depth') ?? String(TRACE_DEFAULT_DEPTH), 10)
-  const depth = Math.max(1, Math.min(Number.isNaN(rawDepth) ? TRACE_DEFAULT_DEPTH : rawDepth, TRACE_MAX_DEPTH))
+  const depth = Math.max(
+    1,
+    Math.min(Number.isNaN(rawDepth) ? TRACE_DEFAULT_DEPTH : rawDepth, TRACE_MAX_DEPTH),
+  )
   // include_annotations: include ANNOTATES targets in the walk (default true:
   // annotations point at records the agent commented on, so they're part of
   // the cognitive provenance even though §3.2.4 derives them as forward edges
@@ -810,7 +878,11 @@ async function handleTrace(
           }
         }
       }
-      if (typeof r.annotates === 'string' && includeAnnotations && r.annotates.startsWith('sha256:')) {
+      if (
+        typeof r.annotates === 'string' &&
+        includeAnnotations &&
+        r.annotates.startsWith('sha256:')
+      ) {
         candidates.push(r.annotates.slice('sha256:'.length))
       }
       if (typeof r.revises === 'string' && includeRevisions && r.revises.startsWith('sha256:')) {
@@ -871,7 +943,7 @@ async function handleTrace(
   })
 }
 
-// /v1/chain/:record_hash: substrate-derived causal chain walk per §3.4.6.
+// /v1/chain/:record_hash: substrate-derived chronology chain walk per §3.4.6.
 // Walks CHAIN_PRECEDES backward from the starting record, resolving each step
 // via record.chain_root (which carries the prior record's hex hash, prefixed
 // with "sha256:"). Terminates at the session's genesis record where chain_root
@@ -884,7 +956,10 @@ async function handleChain(
   params: URLSearchParams,
 ): Promise<void> {
   const rawDepth = parseInt(params.get('depth') ?? String(TRACE_DEFAULT_DEPTH), 10)
-  const depth = Math.max(1, Math.min(Number.isNaN(rawDepth) ? TRACE_DEFAULT_DEPTH : rawDepth, TRACE_MAX_DEPTH))
+  const depth = Math.max(
+    1,
+    Math.min(Number.isNaN(rawDepth) ? TRACE_DEFAULT_DEPTH : rawDepth, TRACE_MAX_DEPTH),
+  )
 
   // Build a hash index once per request so we can resolve chain_root references
   // back to records. Mirrors handleTrace's approach.
@@ -980,12 +1055,24 @@ async function handleIngest(
   const record = parsed as AtribRecord
   const validation = validateSubmission(record)
   if (!validation.ok) {
-    return sendProblem(res, 400, 'validation-failed', validation.error ?? 'Validation failed', '/v1/ingest')
+    return sendProblem(
+      res,
+      400,
+      'validation-failed',
+      validation.error ?? 'Validation failed',
+      '/v1/ingest',
+    )
   }
 
   const valid = await verifyRecord(record)
   if (!valid) {
-    return sendProblem(res, 400, 'signature-invalid', 'Ed25519 signature verification failed', '/v1/ingest')
+    return sendProblem(
+      res,
+      400,
+      'signature-invalid',
+      'Ed25519 signature verification failed',
+      '/v1/ingest',
+    )
   }
 
   // x-atrib-log-index: optional, advisory. log-node sends it on fanout

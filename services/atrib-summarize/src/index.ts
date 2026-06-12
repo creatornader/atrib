@@ -6,8 +6,8 @@
  * an OpenAI-compatible LLM to synthesize a narrative across them.
  *
  * Closes the consumer-side cognitive-loop primitive companion to trace:
- * trace returns the causal chain (structural); summarize returns the
- * synthesized meaning across that chain (semantic). Both read the same
+ * trace returns the declared-relationship path; summarize returns the
+ * synthesized meaning across the selected records. Both read the same
  * local mirror including the optional _local sidecar.
  *
  * LLM access via OpenAI-compatible HTTP. Defaults to NVIDIA NIM with the
@@ -31,30 +31,53 @@ const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
 const HEX_32_PATTERN = /^[0-9a-f]{32}$/
 
 const SummarizeInput = z.object({
-  context_id: z.string().regex(HEX_32_PATTERN).optional().describe(
-    "When supplied, summarize every record sharing this 32-hex trace identifier. " +
-    "Mutually composable with record_hashes: if both, the union of records is used.",
-  ),
-  record_hashes: z.array(z.string().regex(SHA256_REF_PATTERN)).optional().describe(
-    "Explicit list of 'sha256:<64-hex>' record hashes to summarize. Records not " +
-    "in the local mirror are silently skipped (use trace to inspect dangling).",
-  ),
-  focus: z.string().min(1).max(2000).optional().describe(
-    'Optional steering for the synthesis (e.g. "what decisions did I make", ' +
-    '"why did I revise X", "which claims shaped the outcome"). Defaults to a ' +
-    'general "summarize what the agent did and why" focus.',
-  ),
-  max_records: z.number().int().min(1).max(200).optional().describe(
-    'Cap on records fed to the LLM, default 50. Records beyond the cap (after ' +
-    'sorting by timestamp ascending) are skipped and counted in records_skipped. ' +
-    'Increase carefully, large prompts run slower + cost more + risk model ' +
-    'context limits.',
-  ),
-  model: z.string().min(1).max(200).optional().describe(
-    'Override the configured model for this call. Format depends on provider ' +
-    '(NVIDIA NIM uses e.g. "qwen/qwen3.5-397b-a17b"). Defaults to env ' +
-    'ATRIB_SUMMARIZE_MODEL or the package default.',
-  ),
+  context_id: z
+    .string()
+    .regex(HEX_32_PATTERN)
+    .optional()
+    .describe(
+      'When supplied, summarize every record sharing this 32-hex trace identifier. ' +
+        'Mutually composable with record_hashes: if both, the union of records is used.',
+    ),
+  record_hashes: z
+    .array(z.string().regex(SHA256_REF_PATTERN))
+    .optional()
+    .describe(
+      "Explicit list of 'sha256:<64-hex>' record hashes to summarize. Records not " +
+        'in the local mirror are silently skipped (use trace to inspect dangling).',
+    ),
+  focus: z
+    .string()
+    .min(1)
+    .max(2000)
+    .optional()
+    .describe(
+      'Optional steering for the synthesis (e.g. "what decisions did I make", ' +
+        '"why did I revise X", "which claims shaped the outcome"). Defaults to a ' +
+        'general "summarize what the agent did and why" focus.',
+    ),
+  max_records: z
+    .number()
+    .int()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe(
+      'Cap on records fed to the LLM, default 50. Records beyond the cap (after ' +
+        'sorting by timestamp ascending) are skipped and counted in records_skipped. ' +
+        'Increase carefully, large prompts run slower + cost more + risk model ' +
+        'context limits.',
+    ),
+  model: z
+    .string()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe(
+      'Override the configured model for this call. Format depends on provider ' +
+        '(NVIDIA NIM uses e.g. "qwen/qwen3.5-397b-a17b"). Defaults to env ' +
+        'ATRIB_SUMMARIZE_MODEL or the package default.',
+    ),
 })
 
 interface SummarizeOutput {
@@ -105,9 +128,7 @@ export async function createAtribSummarizeServer(): Promise<AtribSummarizeServer
   return { mcp }
 }
 
-async function handleSummarize(
-  input: z.infer<typeof SummarizeInput>,
-): Promise<SummarizeOutput> {
+async function handleSummarize(input: z.infer<typeof SummarizeInput>): Promise<SummarizeOutput> {
   const warnings: string[] = []
   const maxRecords = input.max_records ?? 50
 
@@ -148,7 +169,9 @@ async function handleSummarize(
   const summarized = selected.slice(0, maxRecords)
   const skipped = selected.length - summarized.length
   if (skipped > 0) {
-    warnings.push(`${skipped} record${skipped === 1 ? '' : 's'} skipped beyond max_records=${maxRecords}`)
+    warnings.push(
+      `${skipped} record${skipped === 1 ? '' : 's'} skipped beyond max_records=${maxRecords}`,
+    )
   }
 
   const withSidecar = summarized.filter((r) => r.local).length

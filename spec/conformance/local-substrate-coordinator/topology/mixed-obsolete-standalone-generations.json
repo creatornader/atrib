@@ -244,7 +244,8 @@
           }
         }
       }
-    ]
+    ],
+    "active_session_state": []
   },
   "expected": {
     "status": "mixed",
@@ -258,7 +259,9 @@
       "obsolete_standalone_primitive_generations": 2,
       "duplicate_primitive_groups": 1,
       "bridge_runtime_http_endpoints": 2,
-      "bridge_runtime_http_healthy": 2
+      "bridge_runtime_http_healthy": 2,
+      "active_session_profiles": 0,
+      "active_session_profiles_valid": 0
     },
     "gates": {
       "coordinator-health": "pass",
@@ -267,7 +270,8 @@
       "long-lived-agent-route": "pass",
       "watcher-wal-route": "pass",
       "broad-default-readiness": "fail",
-      "host-owned-bridge-http": "pass"
+      "host-owned-bridge-http": "pass",
+      "host-owned-active-session-context": "fail"
     }
   }
 }

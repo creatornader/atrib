@@ -4,7 +4,7 @@
 
 Editor: Nader Helmy
 
-This specification defines the atrib protocol for verifiable agent actions. When an AI agent calls a tool, atrib creates a signed record at the moment of action, chains it forward into the next call, and commits it to an append-only Merkle log. Any party can independently verify what an agent did, in what order, with what causal structure. When tool calls converge on a transaction, a deterministic algorithm computes a value distribution from the resulting graph under an agreed policy, producing a settlement document anyone can recompute. The spec covers the record format ([§1](#1-attribution-record-format)) including key rotation ([§1.9](#19-key-rotation-and-revocation)) and URI-typed event vocabulary ([§1.2.4](#124-event_type-values), [§1.4.5](#145-event_type-uri-validation)), the log protocol ([§2](#2-merkle-log-protocol)), the graph model ([§3](#3-graph-query-interface)), policies and the distribution algorithm ([§4](#4-attribution-policy-format)), the SDK middleware contracts ([§5](#5-sdk-specification)), the public-key directory ([§6](#6-key-directory)), informative integration patterns for agent harnesses ([§7](#7-harness-integration-patterns)), privacy postures ([§8](#8-privacy-postures)), and informative runtime integration patterns ([§9](#9-runtime-integration-patterns)).
+This specification defines the atrib protocol for verifiable agent actions. When an AI agent calls a tool, atrib creates a signed record at the moment of action, chains it forward into the next call, and commits it to an append-only Merkle log. Any party can independently verify what an agent did, in what order, with what signed structure and declared relationships. When tool calls converge on a transaction, a deterministic algorithm computes a value distribution from the resulting graph under an agreed policy, producing a settlement document anyone can recompute. The spec covers the record format ([§1](#1-attribution-record-format)) including key rotation ([§1.9](#19-key-rotation-and-revocation)) and URI-typed event vocabulary ([§1.2.4](#124-event_type-values), [§1.4.5](#145-event_type-uri-validation)), the log protocol ([§2](#2-merkle-log-protocol)), the graph model ([§3](#3-graph-query-interface)), policies and the distribution algorithm ([§4](#4-attribution-policy-format)), the SDK middleware contracts ([§5](#5-sdk-specification)), the public-key directory ([§6](#6-key-directory)), informative integration patterns for agent harnesses ([§7](#7-harness-integration-patterns)), privacy postures ([§8](#8-privacy-postures)), and informative runtime integration patterns ([§9](#9-runtime-integration-patterns)).
 
 ---
 
@@ -75,7 +75,7 @@ The window to build this substrate before platforms absorb the problem (and solv
 
 atrib is the substrate that makes agent actions verifiable. Every action becomes signed context for the next, anchored in a Merkle log, independently verifiable by anyone. Not an identity layer. Not a payment layer. Not a content attribution system. The thing that sits underneath all of those: **a substrate where agents reason from a past they can prove, and downstream consumers (merchants, auditors, other agents) verify that past without trusting any operator.**
 
-The central claim is this: it is possible to make the structural relationships of agent activity transparent (what tool calls preceded what outcomes, how contributions linked together within a session, what the observable shape of an agent's reasoning trail actually was) without making the content of those interactions visible to anyone who should not see it. Several distinct uses follow from this substrate: provable recall by the agent itself, independent audit by third parties, settlement when commerce closes a chain, and verifiable causality across handoffs between agents.
+The central claim is this: it is possible to make the structural relationships of agent activity transparent (what tool calls preceded what outcomes, how contributions linked together within a session, what the observable shape of an agent's reasoning trail actually was) without making the content of those interactions visible to anyone who should not see it. Several distinct uses follow from this substrate: provable recall by the agent itself, independent audit by third parties, settlement when commerce closes a chain, and verifiable continuity across handoffs between agents.
 
 This is observability without surveillance. The system becomes legible to itself (to its participants, to the parties with a legitimate stake in its outcomes) without becoming legible to surveillance. Accountability without inspection. Transparency without exposure.
 
@@ -135,9 +135,9 @@ This is the property that compliance-coded products (audit trail, SOC 2 reportin
 
 ### III. Cross-agent provenance and handoffs
 
-Agents that hand off work to other agents (a delegation flow, a multi-agent system, a marketplace of specialized agents) face the same provenance problem at higher complexity. A signed action by agent A passing context to agent B carries verifiable causality across the handoff: B can prove A actually requested this, A can prove B actually completed it, and any later observer can reconstruct the path.
+Agents that hand off work to other agents (a delegation flow, a multi-agent system, a marketplace of specialized agents) face the same provenance problem at higher complexity. A signed action by agent A passing context to agent B carries verifiable continuity across the handoff: B can prove A actually requested this, A can prove B actually completed it, and any later observer can reconstruct the path.
 
-Without the substrate, multi-agent flows reduce to "trust whoever is closest to the platform." With it, the chain is the trust.
+Without the substrate, multi-agent flows reduce to "trust whoever is closest to the platform." With it, the signed record graph becomes the shared evidence base.
 
 ### IV. Verifiable investigations and repair
 
@@ -2677,9 +2677,9 @@ The response carries the same `nodes` and `edges` shape as [§3.4.1](#341-get-v1
 
 #### 3.4.6 GET /v1/chain/{record_hash}
 
-Returns the **causal chain** of a record: the ancestor subgraph reachable by walking CHAIN_PRECEDES edges backward from the starting record. Causal chain walks substrate-derived ordering, the chain_root linkage every record carries per [§1.2.3](#123-chain_root-for-genesis-records). The walk terminates at the session's genesis record (where chain_root = SHA-256(context_id) per [§1.2.3](#123-chain_root-for-genesis-records)).
+Returns the **chronology chain** of a record: the ancestor subgraph reachable by walking CHAIN_PRECEDES edges backward from the starting record. Chronology chain walks substrate-derived ordering, the chain_root linkage every record carries per [§1.2.3](#123-chain_root-for-genesis-records). The walk terminates at the session's genesis record (where chain_root = SHA-256(context_id) per [§1.2.3](#123-chain_root-for-genesis-records)).
 
-Causal chain is the substrate's structural layer: every edge walked is a record whose chain_root identifies its immediate predecessor in the same context_id. Producers do not declare these edges; the substrate derives them per [§3.2.4](#324-edge-derivation-rules). Causal chain MUST NOT walk INFORMED_BY, ANNOTATES, or REVISES, those are producer claims, not substrate structure, and walking them would conflate the two layers.
+Chronology chain is the substrate's structural layer: every edge walked is a record whose chain_root identifies its immediate predecessor in the same context_id. Producers do not declare these edges; the substrate derives them per [§3.2.4](#324-edge-derivation-rules). Chronology chain MUST NOT walk INFORMED_BY, ANNOTATES, or REVISES, those are producer claims, not substrate structure, and walking them would conflate the two layers.
 
 ```
 GET /v1/chain/4797633fc95a...
@@ -4890,9 +4890,9 @@ This pattern uses existing primitives (observation records per [D042](DECISIONS.
 
 The verifier's trust shifts from "agent says the tool returned X" to "the tool itself attests it returned X" (Pattern A) or "the world independently confirms the outcome occurred" (Pattern B). Neither is normative; both are documented patterns consumers adopt as their threat model requires.
 
-### 7.7 Signed diagnostic outcome + causal trace replay
+### 7.7 Signed diagnostic outcome + trace replay
 
-Repair and refinement tasks often need more than a record of what the agent did. They need a signed account of what happened when that prior action was evaluated, linked back to the action it evaluated, so a later agent can replay the causal evidence without reading the whole session.
+Repair and refinement tasks often need more than a record of what the agent did. They need a signed account of what happened when that prior action was evaluated, linked back to the action it evaluated, so a later agent can replay the signed evidence path without reading the whole session.
 
 **The pattern.**
 
@@ -4904,7 +4904,7 @@ Repair and refinement tasks often need more than a record of what the agent did.
 
 **Consumer interpretation.**
 
-In repair and refinement contexts, a diagnostic outcome record is evidence about the action it evaluates. When the diagnostic record's expected/actual outcome conflicts with the implementation/action ancestor, the consumer SHOULD treat the diagnostic outcome as the repair target and the ancestor as the prior behavior being evaluated. This is not a new graph rule and does not change attribution weights; it is a consumer-side evidence rule for interpreting a signed causal chain.
+In repair and refinement contexts, a diagnostic outcome record is evidence about the action it evaluates. When the diagnostic record's expected/actual outcome conflicts with the implementation/action ancestor, the consumer SHOULD treat the diagnostic outcome as the repair target and the ancestor as the prior behavior being evaluated. This is not a new graph rule and does not change attribution weights; it is a consumer-side evidence rule for interpreting a signed trace.
 
 This rule is generic. It applies to tests, validators, linters, external verifiers, transaction-status checks, and other outcome-producing evaluators. Harnesses SHOULD express the task class ("repair", "refinement", "regression follow-up", "audit replay") plainly to the agent so the agent knows how to use the evidence. That is different from bespoke prompt nudging: the substrate shape and the precedence rule stay stable across tasks.
 

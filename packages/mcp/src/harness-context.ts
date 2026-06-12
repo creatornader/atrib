@@ -17,9 +17,9 @@
  * children are spawned at Claude Code launch; CLAUDE_CODE_SESSION_ID is
  * created later, per-conversation, and never reaches the child's env.
  *
- * D083 v2 (this file) adds a SECOND fallback per discovery entry: a
- * state file the harness writes from a session-aware context (typically a
- * SessionStart hook). The MCP child reads the file each call. The premise:
+ * D083 v2 adds a SECOND fallback per discovery entry: a state file the
+ * harness writes from a session-aware context (typically a SessionStart
+ * hook). The MCP child reads the file each call. The premise:
  *   - the harness has a session-aware writer (hook, callback) that DOES
  *     have the per-session id in its env
  *   - the MCP child has no such surface, but can read a file
@@ -27,6 +27,14 @@
  *
  * The file path is supplied as a thunk so it can resolve dynamically
  * (e.g., per-parent-PID to isolate concurrent harness instances).
+ *
+ * D083 v3 adds a host-profile state file for long-lived primitive hosts
+ * whose parent PID is not the interactive harness. The motivating case is
+ * Codex's launchd-owned `atrib-primitives` Streamable HTTP runtime:
+ * process.ppid is 1, while Codex hooks write the active session under the
+ * app-server PID. The runtime can still declare `ATRIB_AGENT=codex`, so the
+ * reader also checks `~/.claude/state/active-session-id-codex` when a safe
+ * profile name is present.
  *
  * Per D078's precedent the fallback is silent: harness state files
  * represent the spawning host's declared session scope, not a
@@ -40,6 +48,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 const HEX_32 = /^[0-9a-f]{32}$/
+const SAFE_PROFILE = /^[A-Za-z0-9._-]{1,64}$/
 
 /** Maximum bytes to read from a fallback file. A 32-hex or UUID-form
  * session id is < 40 bytes; anything larger is suspicious garbage. */
@@ -62,7 +71,7 @@ export interface HarnessDiscovery {
    * harness-specific SessionStart hook in the operator's hooks directory.
    * The file convention is documented per discovery entry.
    */
-  fallbackFile?: () => string
+  fallbackFile?: (env?: NodeJS.ProcessEnv) => string
   /**
    * Parse a candidate value (from env or file) into a 32-hex context_id,
    * or return null if the value cannot produce one. Pure function; no
@@ -103,14 +112,48 @@ export const KNOWN_HARNESS_DISCOVERIES: readonly HarnessDiscovery[] = [
   //         today serves one active session per instance at a time.
   {
     envVar: 'CLAUDE_CODE_SESSION_ID',
-    fallbackFile: () =>
-      join(homedir(), '.claude', 'state', `active-session-id-${process.ppid}`),
-    parse: (value: string): string | null => {
-      const candidate = value.replace(/-/g, '').toLowerCase()
-      return HEX_32.test(candidate) ? candidate : null
-    },
+    fallbackFile: claudeCodeParentProcessFile,
+    parse: parseUuidOrHexSessionId,
+  },
+  // Codex app server: hook subprocesses expose the active thread id as
+  // CODEX_THREAD_ID. Per-session spawned children can inherit it directly.
+  // Long-lived primitive hosts usually cannot, so the profile fallback entry
+  // below covers the launchd-owned Streamable HTTP runtime.
+  {
+    envVar: 'CODEX_THREAD_ID',
+    parse: parseUuidOrHexSessionId,
+  },
+  // Host-profile fallback for long-lived local runtimes that are not parented
+  // by the interactive app process. The reader uses ATRIB_ACTIVE_SESSION_PROFILE
+  // first, then ATRIB_AGENT. The matching hook writer maintains
+  // ~/.claude/state/active-session-id-<profile>. This is intentionally after
+  // concrete harness env vars so explicit per-session env still wins.
+  {
+    envVar: '',
+    fallbackFile: activeSessionProfileFile,
+    parse: parseUuidOrHexSessionId,
   },
 ] as const
+
+function parseUuidOrHexSessionId(value: string): string | null {
+  const candidate = value.replace(/-/g, '').toLowerCase()
+  return HEX_32.test(candidate) ? candidate : null
+}
+
+function claudeCodeParentProcessFile(): string {
+  if (process.ppid <= 1) {
+    throw new Error('no interactive parent process')
+  }
+  return join(homedir(), '.claude', 'state', `active-session-id-${process.ppid}`)
+}
+
+function activeSessionProfileFile(env: NodeJS.ProcessEnv = process.env): string {
+  const profile = env['ATRIB_ACTIVE_SESSION_PROFILE'] ?? env['ATRIB_AGENT']
+  if (!profile || !SAFE_PROFILE.test(profile)) {
+    throw new Error('no safe active-session profile')
+  }
+  return join(homedir(), '.claude', 'state', `active-session-id-${profile}`)
+}
 
 /**
  * Read up to FALLBACK_FILE_MAX_BYTES from a fallback state file. Returns
@@ -149,9 +192,7 @@ function readFallbackFile(path: string): string | null {
  * while file is a fallback for cases env can't reach. If a harness
  * intentionally overrides via env, that should win over a stale file.
  */
-export function resolveEnvContextId(
-  env: NodeJS.ProcessEnv = process.env,
-): string | undefined {
+export function resolveEnvContextId(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const explicit = env['ATRIB_CONTEXT_ID']
   if (explicit && HEX_32.test(explicit)) return explicit
   for (const discovery of KNOWN_HARNESS_DISCOVERIES) {
@@ -175,7 +216,7 @@ export function resolveEnvContextId(
     if (discovery.fallbackFile !== undefined) {
       let path: string | null = null
       try {
-        path = discovery.fallbackFile()
+        path = discovery.fallbackFile(env)
       } catch {
         path = null
       }

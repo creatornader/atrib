@@ -16,17 +16,20 @@ Why the agent-facing surface is seven primitives, what each one is for, and why 
 The seven primitives:
 
 **Writes (sign new records):**
+
 - `atrib-emit` — RECORD. Present-moment noting / conclusion. Signs an observation.
 - `atrib-annotate` — MARK. Tag a past record's importance + topics + summary. Signs an annotation.
 - `atrib-revise` — CHANGE-MIND. Supersede a prior position with stated reason. Signs a revision.
 
 **Reads (query the graph, no signing):**
+
 - `atrib-recall` — LOOK-UP. Find prior records by creator, context, time window, event_type.
 - `atrib-trace` — LINEAGE. Walk `informed_by` backward from a record_hash.
 - `atrib-summarize` — DIGEST. Condense N records into a narrative.
 - `atrib-verify`: CHECK. Verify counterparty handoff evidence before citing accepted hashes.
 
 To cover:
+
 - Why exactly seven: the boundary-drawing test (different cognitive purpose, different required args, different graph effect) plus [D106](../../DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7)'s verify-before-linking use case
 - Why monomorphic and not polymorphic dispatch (per [D079](../../DECISIONS.md)): one tool, one job — the bash standard
 - When to reach for each (the decision tree)
@@ -34,7 +37,7 @@ To cover:
 - How the cognitive primitives compose: emit → annotate (mark the emit as important) → revise (later change mind about the emit)
 - The reads as graph-traversal verbs over the substrate
 - Distribution shape per [D081](../../DECISIONS.md) + [D082](../../DECISIONS.md): the WRITE primitives ship as both an MCP server (`atrib-emit`, long-lived stdio child for MCP-aware harnesses) and a CLI binary (`atrib-emit-cli`, short-lived spawn-per-call for hook-class producers like Claude Code's PostToolUse hooks). Records are byte-identical; only the integration shape differs.
-- Worked example: an agent reasoning about a past failure — uses recall to find prior records, trace to walk the causal chain, summarize to condense the relevant context, then emit a new observation reflecting what was learned
+- Worked example: an agent reasoning about a past failure: uses recall to find prior records, trace to walk the signed relationship path, summarize to condense the relevant context, then emit a new observation reflecting what was learned
 
 ## See also
 
