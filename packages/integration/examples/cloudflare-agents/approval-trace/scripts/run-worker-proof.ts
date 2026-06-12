@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+/* eslint-disable no-console */
 
 import { execFile as execFileCallback } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -20,7 +20,7 @@ import { buildGraph } from '@atrib/graph-node'
 const execFile = promisify(execFileCallback)
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PROJECT_DIR = resolve(HERE, '..')
-const SECRETS_PATH = resolve(PROJECT_DIR, '.tmp/secrets.json')
+const PREPARE_SECRETS_SCRIPT = resolve(HERE, 'prepare-demo-secrets.mjs')
 const RUNS_DIR = resolve(PROJECT_DIR, 'runs')
 
 type WorkflowStatus =
@@ -86,14 +86,6 @@ interface GraphResponseLike {
   edges: GraphEdgeLike[]
 }
 
-function base64url(bytes: Uint8Array): string {
-  return Buffer.from(bytes)
-    .toString('base64')
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replace(/=+$/u, '')
-}
-
 function recordHash(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
 }
@@ -120,28 +112,10 @@ function verifyProof(proof: ProofBundle): boolean {
 }
 
 async function ensureSecretFile(): Promise<void> {
-  let secrets: Record<string, string> = {}
-  try {
-    secrets = JSON.parse(await readFile(SECRETS_PATH, 'utf8')) as Record<string, string>
-  } catch {
-    secrets = {}
-  }
-
-  let changed = false
-  for (const name of [
-    'ATRIB_AGENT_PRIVATE_KEY',
-    'ATRIB_HUMAN_APPROVER_PRIVATE_KEY',
-    'ATRIB_ACTION_MCP_PRIVATE_KEY',
-  ]) {
-    if (!secrets[name]) {
-      secrets[name] = base64url(randomBytes(32))
-      changed = true
-    }
-  }
-
-  if (!changed) return
-  await mkdir(dirname(SECRETS_PATH), { recursive: true })
-  await writeFile(SECRETS_PATH, `${JSON.stringify(secrets, null, 2)}\n`, { mode: 0o600 })
+  await execFile(process.execPath, [PREPARE_SECRETS_SCRIPT], {
+    cwd: PROJECT_DIR,
+    maxBuffer: 1024 * 1024,
+  })
 }
 
 async function runWranglerDeploy(): Promise<string> {
@@ -178,12 +152,6 @@ async function postJson<T>(
   throw new Error(`${url} failed: ${lastError}`)
 }
 
-async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`${url} failed: ${response.status} ${await response.text()}`)
-  return (await response.json()) as T
-}
-
 async function runApproved(workerUrl: string, simulateError: boolean): Promise<TraceResponse> {
   const runId = `${simulateError ? 'error' : 'approved'}-${crypto.randomUUID()}`
   await postJson<TraceResponse>(`${workerUrl}/api/runs`, {
@@ -191,10 +159,14 @@ async function runApproved(workerUrl: string, simulateError: boolean): Promise<T
     prompt:
       'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.',
   })
-  return postJson<TraceResponse>(`${workerUrl}/api/runs/${runId}/approve`, {
-    reason: 'Payload matches the issue scope and expected Cloudflare repository target.',
-    simulate_error: simulateError,
-  }, { retryServerErrors: false })
+  return postJson<TraceResponse>(
+    `${workerUrl}/api/runs/${runId}/approve`,
+    {
+      reason: 'Payload matches the issue scope and expected Cloudflare repository target.',
+      simulate_error: simulateError,
+    },
+    { retryServerErrors: false },
+  )
 }
 
 async function runRejected(workerUrl: string): Promise<TraceResponse> {
@@ -204,9 +176,13 @@ async function runRejected(workerUrl: string): Promise<TraceResponse> {
     prompt:
       'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.',
   })
-  return postJson<TraceResponse>(`${workerUrl}/api/runs/${runId}/reject`, {
-    reason: 'The reviewer decided this repository file update should not be applied.',
-  }, { retryServerErrors: false })
+  return postJson<TraceResponse>(
+    `${workerUrl}/api/runs/${runId}/reject`,
+    {
+      reason: 'The reviewer decided this repository file update should not be applied.',
+    },
+    { retryServerErrors: false },
+  )
 }
 
 function refsEqual(actual: string[] | undefined, expected: string[]): boolean {
