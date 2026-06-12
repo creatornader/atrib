@@ -66,6 +66,14 @@ function readMirrorPath(): string {
 const HEX_32_PATTERN = /^[0-9a-f]{32}$/
 // 16 bytes encoded as base64url with no padding = 22 chars per spec §1.2.6.
 const PROVENANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/
+const DEFAULT_KEY_RESOLVE_RETRY_MS = 30_000
+
+function keyResolveRetryMs(): number {
+  const raw = process.env['ATRIB_KEY_RESOLVE_RETRY_MS']
+  if (raw === undefined || raw === '') return DEFAULT_KEY_RESOLVE_RETRY_MS
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_KEY_RESOLVE_RETRY_MS
+}
 
 const EmitInput = z.object({
   event_type: z
@@ -349,15 +357,36 @@ export async function createAtribEmitServer(
   }
 }
 
-function createServerKeyResolver(options: CreateAtribEmitServerOptions): () => Promise<ResolvedKey | null> {
+function createServerKeyResolver(
+  options: CreateAtribEmitServerOptions,
+): () => Promise<ResolvedKey | null> {
   if (Object.prototype.hasOwnProperty.call(options, 'key')) {
     const fixed = options.key ?? null
     return async () => fixed
   }
-  let resolved: Promise<ResolvedKey | null> | null = null
+  let resolved: ResolvedKey | null = null
+  let inFlight: Promise<ResolvedKey | null> | null = null
+  let lastMissAt = 0
   return async () => {
-    resolved ??= resolveKey()
-    return resolved
+    if (resolved) return resolved
+
+    const now = Date.now()
+    if (lastMissAt > 0 && now - lastMissAt < keyResolveRetryMs()) return null
+
+    inFlight ??= resolveKey()
+      .then((key) => {
+        if (key) {
+          resolved = key
+        } else {
+          lastMissAt = Date.now()
+        }
+        return key
+      })
+      .finally(() => {
+        inFlight = null
+      })
+
+    return inFlight
   }
 }
 
@@ -608,7 +637,9 @@ async function handleEmit({
   const proof = recordHash ? (getProofFor(queue, recordHash) ?? null) : null
 
   if (!proof && localSubstrateCommitted) {
-    warnings.push('submission delegated to local substrate coordinator; proof not available in this process')
+    warnings.push(
+      'submission delegated to local substrate coordinator; proof not available in this process',
+    )
   } else if (!proof) {
     warnings.push('submission queued; proof not yet available (poll the log later if needed)')
   }
@@ -891,7 +922,9 @@ async function dispatchEmitLocalSubstrateCommit(input: {
         : result.status === 'unavailable'
           ? result.reason
           : result.issues.map((issue) => `${issue.path} ${issue.message}`).join('; ')
-    warnings.push(`local substrate watcher-WAL commit failed (${result.status}: ${reason}); signed locally`)
+    warnings.push(
+      `local substrate watcher-WAL commit failed (${result.status}: ${reason}); signed locally`,
+    )
     return { accepted: false, warnings }
   }
 
@@ -1087,7 +1120,7 @@ export async function emitInProcess(
 // Test-only export of handleEmit. Mirrors the `__test_only__` pattern
 // used in sign.ts; lets unit tests assert on the validation paths
 // without going through the McpServer transport surface.
-export const __test_only__ = { handleEmit }
+export const __test_only__ = { createServerKeyResolver, handleEmit, keyResolveRetryMs }
 
 // ---- public helpers (D079, for atrib-annotate, atrib-revise, future specialized writers) ----
 //

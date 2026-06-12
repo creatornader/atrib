@@ -241,6 +241,45 @@ function checkRouteRegistryDiagnosticsGate() {
   }
 }
 
+function checkPrimitiveBackendContractGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  for (const item of snapshot.primitive_runtime_health ?? []) {
+    const runtime = item.report?.primitive_runtime
+    if (!runtime) continue
+    delete runtime.backend
+    delete runtime.session_model
+    delete runtime.mounted_primitive_count
+  }
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'mixed') {
+    fail(`primitive backend contract gate: expected status mixed, got ${report.summary.status}`)
+  }
+  if (report.summary.primitive_runtime_http_shared !== 0) {
+    fail(
+      `primitive backend contract gate: expected summary.primitive_runtime_http_shared=0, got ${report.summary.primitive_runtime_http_shared}`,
+    )
+  }
+  const primitiveGate = report.gates.find((gate) => gate.name === 'host-owned-primitives-http')
+  if (primitiveGate?.status !== 'warn') {
+    fail('primitive backend contract gate: expected host-owned-primitives-http=warn')
+  }
+  const broadGate = report.gates.find((gate) => gate.name === 'broad-default-readiness')
+  if (broadGate?.status !== 'fail') {
+    fail('primitive backend contract gate: expected broad-default-readiness=fail')
+  }
+  if (
+    !report.recommendations.includes(
+      'start or restart one loopback atrib-primitives Streamable HTTP host with a shared primitive backend per startup-spawn agent profile before broad process-sharing rollout',
+    )
+  ) {
+    fail('primitive backend contract gate: expected shared-backend recommendation')
+  }
+}
+
 function checkCombinedRestartResidueClassification() {
   const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
   const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
@@ -357,6 +396,7 @@ function main() {
   }
   checkRouteRegistryNormalization()
   checkRouteRegistryDiagnosticsGate()
+  checkPrimitiveBackendContractGate()
   checkCombinedRestartResidueClassification()
 
   if (failures.length > 0) {

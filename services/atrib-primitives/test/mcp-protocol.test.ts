@@ -63,6 +63,21 @@ async function connectStdioClient(env: NodeJS.ProcessEnv): Promise<Client> {
   }
 }
 
+async function connectHttpClient(endpoint: string, name: string): Promise<Client> {
+  const transport = new StreamableHTTPClientTransport(new URL(endpoint))
+  const client = new Client({
+    name,
+    version: '0.0.0',
+  })
+  try {
+    await client.connect(transport)
+    return client
+  } catch (error) {
+    await transport.close().catch(() => {})
+    throw error
+  }
+}
+
 function startHttpHost(env: NodeJS.ProcessEnv, path = '/mcp'): Promise<HttpHost> {
   return new Promise((resolveHost, rejectHost) => {
     const child = spawn(
@@ -205,22 +220,28 @@ describe('atrib-primitives MCP runtime', () => {
       const health = (await (await fetch(host.healthEndpoint)).json()) as {
         status?: string
         report?: {
-          primitive_runtime?: { transport?: string; tool_count?: number }
+          primitive_runtime?: {
+            backend?: string
+            mounted_primitive_count?: number
+            session_model?: string
+            tool_count?: number
+            transport?: string
+          }
           profile?: { agent?: string }
         }
       }
       expect(health.status).toBe('healthy')
       expect(health.report?.primitive_runtime?.transport).toBe('streamable-http')
+      expect(health.report?.primitive_runtime?.backend).toBe('shared')
+      expect(health.report?.primitive_runtime?.session_model).toBe(
+        'per-session-transport-shared-backend',
+      )
+      expect(health.report?.primitive_runtime?.mounted_primitive_count).toBe(7)
       expect(health.report?.primitive_runtime?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
       expect(health.report?.profile?.agent).toBe('test-agent')
 
-      const transport = new StreamableHTTPClientTransport(new URL(host.endpoint))
-      const client = new Client({
-        name: 'atrib-primitives-http-test',
-        version: '0.0.0',
-      })
+      const client = await connectHttpClient(host.endpoint, 'atrib-primitives-http-test')
       try {
-        await client.connect(transport)
         const listed = await client.listTools()
         expect(listed.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
         const result = await client.callTool({
@@ -237,6 +258,54 @@ describe('atrib-primitives MCP runtime', () => {
         await client.close()
       }
     } finally {
+      await host.close()
+    }
+  })
+
+  it('shares one mounted primitive backend across HTTP sessions', async () => {
+    const host = await startHttpHost({ ATRIB_AGENT: 'test-agent', ATRIB_RECORD_FILE: recordFile })
+    let first: Client | undefined
+    let second: Client | undefined
+    try {
+      first = await connectHttpClient(host.endpoint, 'atrib-primitives-http-test-a')
+      second = await connectHttpClient(host.endpoint, 'atrib-primitives-http-test-b')
+
+      const health = (await (await fetch(host.healthEndpoint)).json()) as {
+        report?: {
+          primitive_runtime?: {
+            backend?: string
+            mounted_primitive_count?: number
+            tool_count?: number
+          }
+          sessions?: { active?: number; opened?: number }
+        }
+      }
+      expect(health.report?.primitive_runtime?.backend).toBe('shared')
+      expect(health.report?.primitive_runtime?.mounted_primitive_count).toBe(7)
+      expect(health.report?.primitive_runtime?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
+      expect(health.report?.sessions?.active).toBe(2)
+      expect(health.report?.sessions?.opened).toBe(2)
+
+      const [firstTools, secondTools] = await Promise.all([first.listTools(), second.listTools()])
+      expect(firstTools.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
+      expect(secondTools.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
+
+      await first.close()
+      first = undefined
+
+      const result = await second.callTool({
+        name: 'recall_my_attribution_history',
+        arguments: { compact: true },
+      })
+      const payload = JSON.parse(result.content[0]!.text) as {
+        total: number
+        returned: number
+      }
+      expect(payload.total).toBe(0)
+      expect(payload.returned).toBe(0)
+    } finally {
+      await first?.close().catch(() => {})
+      await second?.close().catch(() => {})
       await host.close()
     }
   })

@@ -117,6 +117,15 @@
         "reachable": true,
         "status": "healthy",
         "report": {
+          "primitive_runtime": {
+            "pid": 110,
+            "version": "0.2.0",
+            "transport": "streamable-http",
+            "backend": "shared",
+            "session_model": "per-session-transport-shared-backend",
+            "tool_count": 15,
+            "mounted_primitive_count": 7
+          },
           "profile": {
             "agent": "codex",
             "local_substrate_endpoint": "http://127.0.0.1:8797/atrib/local-substrate"
@@ -128,6 +137,15 @@
         "reachable": true,
         "status": "healthy",
         "report": {
+          "primitive_runtime": {
+            "pid": 111,
+            "version": "0.2.0",
+            "transport": "streamable-http",
+            "backend": "shared",
+            "session_model": "per-session-transport-shared-backend",
+            "tool_count": 15,
+            "mounted_primitive_count": 7
+          },
           "profile": {
             "agent": "claude-code",
             "local_substrate_endpoint": "http://127.0.0.1:8788/atrib/local-substrate"
@@ -139,6 +157,15 @@
         "reachable": true,
         "status": "healthy",
         "report": {
+          "primitive_runtime": {
+            "pid": 112,
+            "version": "0.2.0",
+            "transport": "streamable-http",
+            "backend": "shared",
+            "session_model": "per-session-transport-shared-backend",
+            "tool_count": 15,
+            "mounted_primitive_count": 7
+          },
           "profile": {
             "agent": "future-spawn",
             "local_substrate_endpoint": "http://127.0.0.1:8792/atrib/local-substrate"
