@@ -1819,7 +1819,9 @@ function buildReport(input, options = {}) {
       watcher_wal_launch_agents: launchAgents.filter((agent) => agent.kind === 'watcher-wal')
         .length,
       long_lived_agents: longLivedAgents.length,
-      long_lived_agent_routes: unique(longLivedAgents.map((agent) => agent.endpoint)).length,
+      long_lived_agent_routes: longLivedRoutes.total,
+      long_lived_agent_route_endpoints: unique(longLivedAgents.map((agent) => agent.endpoint))
+        .length,
       long_lived_agent_routes_configured: longLivedRoutes.configured,
       long_lived_agent_routes_healthy: longLivedRoutes.healthy,
       long_lived_agent_routes_missing: longLivedRoutes.missing,
@@ -1920,7 +1922,7 @@ function formatTextReport(report) {
     `host-owned bridge HTTP: healthy=${report.summary.bridge_runtime_http_healthy}/${report.summary.bridge_runtime_http_endpoints}`,
     `active-session profile state: valid=${report.summary.active_session_profiles_valid}/${report.summary.active_session_profiles}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
-    `long-lived agent routes: healthy=${report.summary.long_lived_agent_routes_healthy}/${report.summary.long_lived_agents}, configured=${report.summary.long_lived_agent_routes_configured}, missing=${report.summary.long_lived_agent_routes_missing}`,
+    `long-lived agent routes: healthy=${report.summary.long_lived_agent_routes_healthy}/${report.summary.long_lived_agent_routes}, configured=${report.summary.long_lived_agent_routes_configured}, missing=${report.summary.long_lived_agent_routes_missing}, endpoints=${report.summary.long_lived_agent_route_endpoints}`,
     '',
     'gates:',
   ]
