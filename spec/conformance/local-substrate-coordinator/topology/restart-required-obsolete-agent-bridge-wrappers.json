@@ -178,7 +178,10 @@
             "pid": 210,
             "version": "0.2.0",
             "transport": "streamable-http",
-            "tool_count": 15
+            "tool_count": 15,
+            "backend": "shared",
+            "session_model": "per-session-transport-shared-backend",
+            "mounted_primitive_count": 7
           },
           "profile": {
             "agent": "codex",
@@ -200,7 +203,10 @@
             "pid": 211,
             "version": "0.2.0",
             "transport": "streamable-http",
-            "tool_count": 15
+            "tool_count": 15,
+            "backend": "shared",
+            "session_model": "per-session-transport-shared-backend",
+            "mounted_primitive_count": 7
           },
           "profile": {
             "agent": "claude-code",

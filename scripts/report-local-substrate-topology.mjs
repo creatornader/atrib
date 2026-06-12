@@ -12,7 +12,7 @@ const SCHEMA = 'atrib.local-substrate-topology-report.v0'
 const SNAPSHOT_SCHEMA = 'atrib.local-substrate-topology-snapshot.v0'
 const ROUTE_REGISTRY_SCHEMA = 'atrib.local-substrate-route-registry.v0'
 const DEFAULT_ROUTE_REGISTRY_PATH = join(HOME, '.atrib/local-substrate/routes.json')
-const DEFAULT_HEALTH_TIMEOUT_MS = 400
+const DEFAULT_HEALTH_TIMEOUT_MS = 1500
 const HEX_32 = /^[0-9a-f]{32}$/
 const ACTIVE_SESSION_STATE_MAX_BYTES = 128
 const SAFE_ACTIVE_SESSION_PROFILE = /^[A-Za-z0-9._-]{1,64}$/
@@ -52,7 +52,7 @@ Options:
   --json                  Print JSON instead of the text summary.
   --snapshot <path>       Build the report from a fixture snapshot.
   --route-registry <path> Read supervised agent routes from a JSON registry.
-  --timeout-ms <n>        Live coordinator health timeout. Defaults to 400.
+  --timeout-ms <n>        Live coordinator health timeout. Defaults to 1500.
   --help                  Print this help.
 
 The live report reads process rows, local MCP config summaries, launchd
@@ -1341,7 +1341,10 @@ function primitiveRuntimeHealthSummary(items) {
       pid: report.primitive_runtime?.pid,
       version: report.primitive_runtime?.version,
       transport: report.primitive_runtime?.transport,
+      backend: report.primitive_runtime?.backend,
+      session_model: report.primitive_runtime?.session_model,
       tool_count: report.primitive_runtime?.tool_count,
+      mounted_primitive_count: report.primitive_runtime?.mounted_primitive_count,
       agent: report.profile?.agent,
       mirror_file: report.profile?.mirror_file,
       local_substrate_endpoint: report.profile?.local_substrate_endpoint,
@@ -1351,6 +1354,19 @@ function primitiveRuntimeHealthSummary(items) {
       http_status: item.http_status,
     }
   })
+}
+
+function hasSharedPrimitiveHttpBackend(item) {
+  const runtime = item.report?.primitive_runtime ?? {}
+  return (
+    item.reachable === true &&
+    item.status === 'healthy' &&
+    runtime.transport === 'streamable-http' &&
+    runtime.backend === 'shared' &&
+    runtime.session_model === 'per-session-transport-shared-backend' &&
+    Number(runtime.mounted_primitive_count) === 7 &&
+    Number(runtime.tool_count) === 15
+  )
 }
 
 function activeSessionStateSummary(items) {
@@ -1530,6 +1546,7 @@ function buildGates({
   const healthyPrimitiveHttp = primitiveHealth.filter(
     (item) => item.reachable && item.status === 'healthy',
   )
+  const sharedPrimitiveHttp = healthyPrimitiveHttp.filter(hasSharedPrimitiveHttpBackend)
   const healthyPrimitiveHttpByEndpoint = new Map(
     healthyPrimitiveHttp.map((item) => [item.endpoint, item]),
   )
@@ -1573,8 +1590,12 @@ function buildGates({
     configsWithPrimitiveHttp.flatMap((config) => config.primitive_http_endpoints ?? []),
   )
   const healthyPrimitiveHttpEndpoints = new Set(healthyPrimitiveHttp.map((item) => item.endpoint))
+  const sharedPrimitiveHttpEndpoints = new Set(sharedPrimitiveHttp.map((item) => item.endpoint))
   const unhealthyConfiguredPrimitiveEndpoints = configuredPrimitiveHttpEndpoints.filter(
     (endpoint) => !healthyPrimitiveHttpEndpoints.has(endpoint),
+  )
+  const nonSharedConfiguredPrimitiveEndpoints = configuredPrimitiveHttpEndpoints.filter(
+    (endpoint) => !sharedPrimitiveHttpEndpoints.has(endpoint),
   )
   const agentScopedEndpointCountOk =
     configuredPrimitiveHttpEndpoints.length >= configsWithPrimitiveHttp.length
@@ -1585,6 +1606,7 @@ function buildGates({
     existingConfigs.length > 0 &&
     configsWithPrimitiveHttp.length === existingConfigs.length &&
     unhealthyConfiguredPrimitiveEndpoints.length === 0 &&
+    nonSharedConfiguredPrimitiveEndpoints.length === 0 &&
     agentScopedEndpointCountOk &&
     profileMismatches.length === 0 &&
     processSummary.primitive_runtime_http_processes >= configuredPrimitiveHttpEndpoints.length
@@ -1605,7 +1627,7 @@ function buildGates({
       gate(
         'host-owned-primitives-http',
         'warn',
-        `${processSummary.primitive_runtime_http_processes} primitive HTTP process(es), ${healthyPrimitiveHttp.length} healthy endpoint(s), ${configuredPrimitiveHttpEndpoints.length} configured endpoint(s), ${configsWithPrimitiveHttp.length}/${existingConfigs.length} config(s) point at HTTP, ${profileMismatches.length} profile mismatch(es)`,
+        `${processSummary.primitive_runtime_http_processes} primitive HTTP process(es), ${healthyPrimitiveHttp.length} healthy endpoint(s), ${sharedPrimitiveHttp.length} shared backend endpoint(s), ${configuredPrimitiveHttpEndpoints.length} configured endpoint(s), ${configsWithPrimitiveHttp.length}/${existingConfigs.length} config(s) point at HTTP, ${profileMismatches.length} profile mismatch(es)`,
       ),
     )
   } else {
@@ -1955,6 +1977,7 @@ function buildReport(input, options = {}) {
       .map((item) => item.endpoint),
   )
   const longLivedRoutes = summarizeLongLivedRoutes(longLivedAgents, reachableEndpoints)
+  const sharedPrimitiveHttp = primitiveHealth.filter(hasSharedPrimitiveHttpBackend)
   const gates = buildGates({
     processSummary,
     configs,
@@ -1987,6 +2010,7 @@ function buildReport(input, options = {}) {
       primitive_runtime_processes: processSummary.primitive_runtime_processes,
       primitive_runtime_http_processes: processSummary.primitive_runtime_http_processes,
       primitive_runtime_stdio_processes: processSummary.primitive_runtime_stdio_processes,
+      primitive_runtime_http_shared: sharedPrimitiveHttp.length,
       standalone_primitive_processes: processSummary.standalone_primitive_processes,
       standalone_primitive_generations: processSummary.standalone_primitive_generations,
       complete_standalone_primitive_generations:
@@ -2071,7 +2095,7 @@ function recommendationsFor({ status, gates, processSummary }) {
   }
   if (gates.find((item) => item.name === 'host-owned-primitives-http')?.status !== 'pass') {
     recommendations.push(
-      'start one loopback atrib-primitives Streamable HTTP host per startup-spawn agent profile before broad process-sharing rollout',
+      'start or restart one loopback atrib-primitives Streamable HTTP host with a shared primitive backend per startup-spawn agent profile before broad process-sharing rollout',
     )
   }
   if (gates.find((item) => item.name === 'host-owned-active-session-context')?.status !== 'pass') {
@@ -2124,7 +2148,7 @@ function formatTextReport(report) {
     `local-substrate topology: ${report.summary.status}`,
     `coordinators: healthy=${report.summary.healthy_coordinators}, configured=${report.summary.configured_coordinators}`,
     `route registry: ${report.summary.route_registry_status}`,
-    `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, stdio=${report.summary.primitive_runtime_stdio_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
+    `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, shared-http=${report.summary.primitive_runtime_http_shared}, stdio=${report.summary.primitive_runtime_stdio_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
     `bridge processes: wrappers=${report.summary.bridge_wrapper_processes}, upstream=${report.summary.bridge_upstream_processes}, duplicate-groups=${report.summary.duplicate_bridge_wrapper_groups}`,
     `host-owned bridge HTTP: healthy=${report.summary.bridge_runtime_http_healthy}/${report.summary.bridge_runtime_http_endpoints}`,
     `active-session profile state: valid=${report.summary.active_session_profiles_valid}/${report.summary.active_session_profiles}`,

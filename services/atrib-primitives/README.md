@@ -2,7 +2,7 @@
 
 Private local MCP runtime for atrib dogfood.
 
-`atrib-primitives` mounts the seven public cognitive-primitive MCP packages in process and exposes their 15 physical tools through one MCP server. It supports stdio for compatibility and Streamable HTTP for host-owned dogfood configs that should share one primitive runtime across active threads for the same agent profile.
+`atrib-primitives` mounts the seven public cognitive-primitive MCP packages in process and exposes their 15 physical tools through one local runtime. It supports stdio for compatibility and Streamable HTTP for host-owned dogfood configs that should share one primitive backend across active threads for the same agent profile.
 
 It does not replace the public packages. `@atrib/emit`, `@atrib/annotate`, `@atrib/revise`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`, and `@atrib/verify-mcp` remain the published surfaces. This package is private and exists to reduce local process bloat in dogfood configs.
 
@@ -36,7 +36,7 @@ Streamable HTTP mode keeps one host-owned process alive and lets MCP clients for
 - MCP endpoint: `http://127.0.0.1:8796/mcp`
 - health endpoint: `http://127.0.0.1:8796/mcp/health`
 
-The HTTP host creates one in-process primitive runtime per MCP session, closes idle sessions after 12 hours by default, and never spawns the seven standalone primitive binaries.
+The HTTP host creates one mounted primitive backend per host process, gives each MCP client its own Streamable HTTP session transport, closes idle sessions after 12 hours by default, and never spawns the seven standalone primitive binaries.
 
 ## Test
 
@@ -44,4 +44,4 @@ The HTTP host creates one in-process primitive runtime per MCP session, closes i
 pnpm --filter @atrib/primitives-runtime test
 ```
 
-The protocol test lists all 15 tools over stdio, routes a recall call through the combined server, then repeats the tool-list and recall path through Streamable HTTP.
+The protocol test lists all 15 tools over stdio, routes a recall call through the combined server, repeats the path through Streamable HTTP, and checks that two HTTP sessions share one mounted primitive backend.

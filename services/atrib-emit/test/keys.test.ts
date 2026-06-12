@@ -21,6 +21,7 @@ const spawnSyncMock = vi.hoisted(() => vi.fn())
 vi.mock('node:child_process', () => ({ spawnSync: spawnSyncMock }))
 
 import { resolveKey } from '../src/keys.js'
+import { __test_only__ as emitIndexTestOnly } from '../src/index.js'
 
 /** A spawnSync result shaped like a timeout kill (per Node's spawnSync contract). */
 function timedOut(): SpawnSyncReturns<string> {
@@ -43,6 +44,19 @@ function notFound(): SpawnSyncReturns<string> {
     stdout: '',
     stderr: 'security: SecKeychainSearchCopyNext: not found',
     status: 44,
+    signal: null,
+  } as unknown as SpawnSyncReturns<string>
+}
+
+/** A spawnSync result shaped like a found Keychain seed. */
+function foundSeed(): SpawnSyncReturns<string> {
+  const seed = Buffer.alloc(32, 7).toString('base64url')
+  return {
+    pid: 123,
+    output: [],
+    stdout: `${seed}\n`,
+    stderr: '',
+    status: 0,
     signal: null,
   } as unknown as SpawnSyncReturns<string>
 }
@@ -111,11 +125,39 @@ describe('resolveKey fail-fast', () => {
     } finally {
       delete process.env['ATRIB_OP_REFERENCE']
     }
-    const opCall = spawnSyncMock.mock.calls.find(
-      (c) => (c as unknown as [string])[0] === 'op',
-    ) as [string, string[], { timeout?: unknown }] | undefined
+    const opCall = spawnSyncMock.mock.calls.find((c) => (c as unknown as [string])[0] === 'op') as
+      | [string, string[], { timeout?: unknown }]
+      | undefined
     expect(opCall, 'op spawn should have been attempted').toBeDefined()
     expect(typeof opCall![2].timeout).toBe('number')
     expect(opCall![2].timeout as number).toBeGreaterThan(0)
+  })
+
+  it('does not cache a missing MCP server key forever', async () => {
+    process.env['ATRIB_KEY_RESOLVE_RETRY_MS'] = '0'
+    spawnSyncMock
+      .mockReturnValueOnce(notFound())
+      .mockReturnValueOnce(notFound())
+      .mockReturnValue(foundSeed())
+
+    const resolver = emitIndexTestOnly.createServerKeyResolver({})
+    expect(await resolver()).toBeNull()
+
+    const key = await resolver()
+    expect(key?.source).toBe('keychain')
+    expect(key?.keychainService).toBe('atrib-creator-claude-code')
+    expect(spawnSyncMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('caches a found MCP server key', async () => {
+    spawnSyncMock.mockReturnValue(foundSeed())
+
+    const resolver = emitIndexTestOnly.createServerKeyResolver({})
+    const first = await resolver()
+    const second = await resolver()
+
+    expect(first?.source).toBe('keychain')
+    expect(second).toBe(first)
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1)
   })
 })

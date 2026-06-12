@@ -30,6 +30,7 @@ import {
   ErrorCode,
   ListToolsRequestSchema,
   McpError,
+  type CallToolRequest,
   type CallToolResult,
   type Tool,
   isInitializeRequest,
@@ -60,6 +61,15 @@ interface ToolRoute {
   client: Client
 }
 
+interface AtribPrimitivesBackend {
+  tools: Tool[]
+  toolNames: string[]
+  mountedPrimitiveCount: number
+  callTool(request: CallToolRequest['params']): Promise<CallToolResult>
+  flush(): Promise<void>
+  close(): Promise<void>
+}
+
 export interface AtribPrimitivesRuntime {
   server: Server
   tools: Tool[]
@@ -82,7 +92,7 @@ interface CliOptions {
 }
 
 interface HttpSession {
-  runtime: AtribPrimitivesRuntime
+  server: Server
   transport: StreamableHTTPServerTransport
   sessionId?: string
   createdAt: number
@@ -147,7 +157,7 @@ async function mountPrimitive(name: string, factory: PrimitiveFactory): Promise<
   return { name, handle, client, tools: listed.tools }
 }
 
-export async function createAtribPrimitivesRuntime(): Promise<AtribPrimitivesRuntime> {
+async function createAtribPrimitivesBackend(): Promise<AtribPrimitivesBackend> {
   const mounted = await Promise.all(
     PRIMITIVES.map(([name, factory]) => mountPrimitive(name, factory)),
   )
@@ -169,6 +179,34 @@ export async function createAtribPrimitivesRuntime(): Promise<AtribPrimitivesRun
 
   tools.sort((a, b) => a.name.localeCompare(b.name))
 
+  return {
+    tools,
+    toolNames: tools.map((tool) => tool.name),
+    mountedPrimitiveCount: mounted.length,
+    callTool: async (request) => {
+      const route = routeByTool.get(request.name)
+      if (!route) {
+        throw new McpError(
+          ErrorCode.MethodNotFound,
+          `unknown atrib primitive tool: ${request.name}`,
+        )
+      }
+      return route.client.callTool(request) as Promise<CallToolResult>
+    },
+    flush: async () => {
+      await Promise.all(mounted.map((primitive) => primitive.handle.flush?.() ?? Promise.resolve()))
+    },
+    close: async () => {
+      await Promise.allSettled(
+        mounted.map((primitive) => primitive.handle.flush?.() ?? Promise.resolve()),
+      )
+      await Promise.allSettled(mounted.map((primitive) => primitive.client.close()))
+      await Promise.allSettled(mounted.map((primitive) => primitive.handle.mcp.close()))
+    },
+  }
+}
+
+function createOuterServer(backend: AtribPrimitivesBackend): Server {
   const server = new Server(
     {
       name: 'atrib-primitives',
@@ -182,37 +220,28 @@ export async function createAtribPrimitivesRuntime(): Promise<AtribPrimitivesRun
     },
   )
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }))
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: backend.tools }))
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const route = routeByTool.get(request.params.name)
-    if (!route) {
-      throw new McpError(
-        ErrorCode.MethodNotFound,
-        `unknown atrib primitive tool: ${request.params.name}`,
-      )
-    }
-    return route.client.callTool({
-      name: request.params.name,
-      arguments: request.params.arguments,
-      _meta: request.params._meta,
-    }) as Promise<CallToolResult>
+    return backend.callTool(request.params)
   })
+
+  return server
+}
+
+export async function createAtribPrimitivesRuntime(): Promise<AtribPrimitivesRuntime> {
+  const backend = await createAtribPrimitivesBackend()
+  const server = createOuterServer(backend)
 
   return {
     server,
-    tools,
-    toolNames: tools.map((tool) => tool.name),
-    flush: async () => {
-      await Promise.all(mounted.map((primitive) => primitive.handle.flush?.() ?? Promise.resolve()))
-    },
+    tools: backend.tools,
+    toolNames: backend.toolNames,
+    flush: backend.flush,
     close: async () => {
-      await Promise.allSettled(
-        mounted.map((primitive) => primitive.handle.flush?.() ?? Promise.resolve()),
-      )
-      await Promise.allSettled(mounted.map((primitive) => primitive.client.close()))
-      await Promise.allSettled(mounted.map((primitive) => primitive.handle.mcp.close()))
+      await backend.flush()
       await server.close()
+      await backend.close()
     },
   }
 }
@@ -416,6 +445,7 @@ function parsePositiveInt(raw: string, name: string): number {
 export async function bindAtribPrimitivesHttpHost(
   options: AtribPrimitivesHttpHostOptions = {},
 ): Promise<AtribPrimitivesHttpHost> {
+  const backend = await createAtribPrimitivesBackend()
   const host = options.host ?? DEFAULT_HTTP_HOST
   const port = options.port ?? DEFAULT_HTTP_PORT
   const mcpPath = normalizeMcpPath(options.path ?? DEFAULT_HTTP_PATH)
@@ -433,7 +463,7 @@ export async function bindAtribPrimitivesHttpHost(
     session.closing = true
     if (session.sessionId) sessions.delete(session.sessionId)
     closedSessions += 1
-    await Promise.allSettled([session.transport.close(), session.runtime.close()])
+    await Promise.allSettled([session.transport.close(), session.server.close()])
   }
 
   const sweepIdleSessions = (): void => {
@@ -457,9 +487,12 @@ export async function bindAtribPrimitivesHttpHost(
             version,
             pid: process.pid,
             transport: 'streamable-http',
+            backend: 'shared',
+            session_model: 'per-session-transport-shared-backend',
             endpoint,
             health_endpoint: healthEndpoint,
-            tool_count: 15,
+            tool_count: backend.toolNames.length,
+            mounted_primitive_count: backend.mountedPrimitiveCount,
           },
           profile: {
             agent: process.env.ATRIB_AGENT,
@@ -525,9 +558,9 @@ export async function bindAtribPrimitivesHttpHost(
 
       let session: HttpSession | undefined
       try {
-        const runtime = await createAtribPrimitivesRuntime()
+        const sessionServer = createOuterServer(backend)
         session = {
-          runtime,
+          server: sessionServer,
           transport: new StreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (newSessionId) => {
@@ -544,7 +577,7 @@ export async function bindAtribPrimitivesHttpHost(
         session.transport.onclose = () => {
           if (session) void closeSession(session)
         }
-        await runtime.server.connect(session.transport)
+        await sessionServer.connect(session.transport)
         openedSessions += 1
         await session.transport.handleRequest(req, res, body)
       } finally {
@@ -560,7 +593,13 @@ export async function bindAtribPrimitivesHttpHost(
     }
   })
 
-  await listen(server, host, port)
+  try {
+    await listen(server, host, port)
+  } catch (error) {
+    clearInterval(sweepTimer)
+    await backend.close().catch(() => {})
+    throw error
+  }
   const boundPort = actualPort(server)
   endpoint = httpEndpoint(host, boundPort, mcpPath)
   healthEndpoint = httpEndpoint(host, boundPort, healthPath)
@@ -587,7 +626,11 @@ export async function bindAtribPrimitivesHttpHost(
       clearInterval(sweepTimer)
       const active = [...sessions.values()]
       await Promise.allSettled(active.map((session) => closeSession(session)))
-      await closeHttpServer(server)
+      try {
+        await closeHttpServer(server)
+      } finally {
+        await backend.close()
+      }
     },
   }
 }
