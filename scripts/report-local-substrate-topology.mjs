@@ -12,7 +12,26 @@ const SCHEMA = 'atrib.local-substrate-topology-report.v0'
 const SNAPSHOT_SCHEMA = 'atrib.local-substrate-topology-snapshot.v0'
 const ROUTE_REGISTRY_SCHEMA = 'atrib.local-substrate-route-registry.v0'
 const DEFAULT_ROUTE_REGISTRY_PATH = join(HOME, '.atrib/local-substrate/routes.json')
+const LEGACY_KNOWLEDGE_BASE_RECEIPT_REPORT_ENV = ['ATRIB_HEALTH_SECOND', 'BRAIN_REPORT'].join('_')
+const DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_GENERIC_PATH = join(
+  HOME,
+  '.atrib/state/knowledge-base-reports/receipt-join-latest.json',
+)
+const DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_LEGACY_PATH = join(
+  HOME,
+  '.atrib',
+  'state',
+  ['second', 'brain-reports'].join('-'),
+  'receipt-join-latest.json',
+)
+const DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_PATH =
+  process.env.ATRIB_HEALTH_KNOWLEDGE_BASE_REPORT ??
+  process.env[LEGACY_KNOWLEDGE_BASE_RECEIPT_REPORT_ENV] ??
+  (existsSync(DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_GENERIC_PATH)
+    ? DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_GENERIC_PATH
+    : DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_LEGACY_PATH)
 const DEFAULT_HEALTH_TIMEOUT_MS = 1500
+const DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_MAX_AGE_MS = 30 * 3_600_000
 const HEX_32 = /^[0-9a-f]{32}$/
 const ACTIVE_SESSION_STATE_MAX_BYTES = 128
 const SAFE_ACTIVE_SESSION_PROFILE = /^[A-Za-z0-9._-]{1,64}$/
@@ -35,9 +54,14 @@ const LOCAL_SUBSTRATE_INFRA_LABEL_PREFIXES = [
 ]
 const SAFE_ENDPOINT_ENV_KEYS = [
   'ATRIB_LOCAL_SUBSTRATE_ENDPOINT',
-  'SECOND_BRAIN_ATRIB_LOCAL_SUBSTRATE_ENDPOINT',
+  'KNOWLEDGE_BASE_ATRIB_LOCAL_SUBSTRATE_ENDPOINT',
+  ['SECOND', 'BRAIN_ATRIB_LOCAL_SUBSTRATE_ENDPOINT'].join('_'),
 ]
-const SAFE_AGENT_ENV_KEYS = ['ATRIB_AGENT', 'SECOND_BRAIN_ATRIB_AGENT']
+const SAFE_AGENT_ENV_KEYS = [
+  'ATRIB_AGENT',
+  'KNOWLEDGE_BASE_ATRIB_AGENT',
+  ['SECOND', 'BRAIN_ATRIB_AGENT'].join('_'),
+]
 
 process.stdout.on('error', (error) => {
   if (error?.code === 'EPIPE') process.exit(0)
@@ -52,13 +76,16 @@ Options:
   --json                  Print JSON instead of the text summary.
   --snapshot <path>       Build the report from a fixture snapshot.
   --route-registry <path> Read supervised agent routes from a JSON registry.
+  --knowledge-base-receipt-report <path>
+                          Read the knowledge-base receipt join-back report.
   --timeout-ms <n>        Live coordinator health timeout. Defaults to 1500.
   --help                  Print this help.
 
 The live report reads process rows, local MCP config summaries, launchd
 service metadata, an optional route registry for supervised agents and
-startup-spawn config summaries, and local-substrate health probes. It does not
-print raw config files or environment secrets.
+startup-spawn config summaries, the knowledge-base receipt join-back report, and
+local-substrate health probes. It does not print raw config files, raw pending
+receipt rows, or environment secrets.
 `
 }
 
@@ -67,6 +94,7 @@ function parseArgs(argv) {
     json: false,
     snapshotPath: undefined,
     routeRegistryPath: DEFAULT_ROUTE_REGISTRY_PATH,
+    knowledgeBaseReceiptReportPath: DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_PATH,
     timeoutMs: DEFAULT_HEALTH_TIMEOUT_MS,
     help: false,
   }
@@ -79,6 +107,12 @@ function parseArgs(argv) {
       out.snapshotPath = requireValue(argv, ++i, '--snapshot')
     } else if (arg === '--route-registry') {
       out.routeRegistryPath = requireValue(argv, ++i, '--route-registry')
+    } else if (arg === '--knowledge-base-receipt-report') {
+      out.knowledgeBaseReceiptReportPath = requireValue(
+        argv,
+        ++i,
+        '--knowledge-base-receipt-report',
+      )
     } else if (arg === '--timeout-ms') {
       out.timeoutMs = parsePositiveInt(requireValue(argv, ++i, '--timeout-ms'), '--timeout-ms')
     } else if (arg === '--help' || arg === '-h') {
@@ -632,16 +666,14 @@ function parseLaunchAgent(path) {
         ? parsed.EnvironmentVariables
         : {}
     const endpoint =
-      env.ATRIB_LOCAL_SUBSTRATE_ENDPOINT ||
-      env.SECOND_BRAIN_ATRIB_LOCAL_SUBSTRATE_ENDPOINT ||
-      endpointFromProgramArguments(args)
+      firstEnvValue(env, SAFE_ENDPOINT_ENV_KEYS) || endpointFromProgramArguments(args)
     return {
       label: parsed.Label ?? undefined,
       path: displayPath(path),
       kind: String(parsed.Label ?? '').includes('atrib-drain') ? 'watcher-wal' : 'coordinator',
       program: args[0] ?? undefined,
       endpoint,
-      agent: env.ATRIB_AGENT || env.SECOND_BRAIN_ATRIB_AGENT || undefined,
+      agent: firstEnvValue(env, SAFE_AGENT_ENV_KEYS),
       start_interval: parsed.StartInterval ?? undefined,
     }
   } catch {
@@ -799,6 +831,116 @@ function collectRouteRegistryDiagnostics(routeRegistryPath = DEFAULT_ROUTE_REGIS
       },
     ]
   }
+}
+
+function collectKnowledgeBaseReceiptReport({
+  path = DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_PATH,
+  maxAgeMs = DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_MAX_AGE_MS,
+} = {}) {
+  const expandedPath = expandHomePath(path)
+  const display = expandedPath ? displayPath(expandedPath) : path
+  if (!expandedPath || !existsSync(expandedPath)) {
+    return {
+      path: display,
+      exists: false,
+      status: 'absent',
+      max_age_ms: maxAgeMs,
+    }
+  }
+
+  let raw
+  try {
+    raw = readJson(expandedPath)
+  } catch (error) {
+    return {
+      path: display,
+      exists: true,
+      status: 'parse_error',
+      reason: error instanceof Error ? error.message : String(error),
+      max_age_ms: maxAgeMs,
+    }
+  }
+
+  const numericFields = {
+    observation_entries: raw?.observations?.entries,
+    observation_pending_receipt_joins: raw?.observations?.pending_receipt_joins,
+    annotation_entries: raw?.annotations?.entries,
+    annotation_pending_receipt_or_parent_joins: raw?.annotations?.pending_receipt_or_parent_joins,
+    wal_queued: raw?.wal?.queued,
+    wal_quarantined: raw?.wal?.quarantined,
+    wal_receipted: raw?.wal?.receipted,
+  }
+  const missingFields = Object.entries(numericFields)
+    .filter(([, value]) => !isNonNegativeInteger(value))
+    .map(([name]) => name)
+
+  const generatedAtMs =
+    typeof raw?.generated_at === 'string' ? Date.parse(raw.generated_at) : Number.NaN
+  let fileMtimeMs = Number.NaN
+  try {
+    fileMtimeMs = statSync(expandedPath).mtimeMs
+  } catch {
+    fileMtimeMs = Number.NaN
+  }
+  const ageSourceMs = Number.isFinite(generatedAtMs) ? generatedAtMs : fileMtimeMs
+  const ageMs = Number.isFinite(ageSourceMs) ? Math.max(0, Date.now() - ageSourceMs) : undefined
+
+  if (missingFields.length > 0) {
+    return {
+      path: display,
+      exists: true,
+      status: 'invalid_shape',
+      reason: `missing or non-negative-integer field(s): ${missingFields.join(', ')}`,
+      generated_at: typeof raw?.generated_at === 'string' ? raw.generated_at : undefined,
+      age_ms: ageMs === undefined ? undefined : Math.round(ageMs),
+      max_age_ms: maxAgeMs,
+    }
+  }
+
+  const observationPending = Number(raw.observations.pending_receipt_joins)
+  const annotationPending = Number(raw.annotations.pending_receipt_or_parent_joins)
+  const walQueued = Number(raw.wal.queued)
+  const walQuarantined = Number(raw.wal.quarantined)
+  const totalPending = observationPending + annotationPending + walQueued + walQuarantined
+  const stale = ageMs === undefined ? true : ageMs > maxAgeMs
+  const status = totalPending > 0 ? 'backlog' : stale ? 'stale' : 'clean'
+
+  return {
+    path: display,
+    exists: true,
+    status,
+    generated_at: typeof raw.generated_at === 'string' ? raw.generated_at : undefined,
+    age_ms: ageMs === undefined ? undefined : Math.round(ageMs),
+    max_age_ms: maxAgeMs,
+    stale,
+    days: Number.isFinite(Number(raw.days)) ? Number(raw.days) : undefined,
+    observations: {
+      entries: Number(raw.observations.entries),
+      pending_receipt_joins: observationPending,
+    },
+    annotations: {
+      entries: Number(raw.annotations.entries),
+      pending_receipt_or_parent_joins: annotationPending,
+    },
+    wal: {
+      queued: walQueued,
+      quarantined: walQuarantined,
+      receipted: Number(raw.wal.receipted),
+    },
+    pending: {
+      observations: observationPending,
+      annotations: annotationPending,
+      wal_queued: walQueued,
+      wal_quarantined: walQuarantined,
+      total: totalPending,
+    },
+    caveats: Array.isArray(raw.caveats) ? raw.caveats.length : undefined,
+  }
+}
+
+function isNonNegativeInteger(value) {
+  const n = Number(value)
+  return Number.isInteger(n) && n >= 0
 }
 
 function routeRegistryDiagnosticsFromRegistry(registry, { registryPath } = {}) {
@@ -1199,6 +1341,7 @@ async function fetchHealth(endpoint, timeoutMs) {
 async function collectLiveSnapshot({
   timeoutMs = DEFAULT_HEALTH_TIMEOUT_MS,
   routeRegistryPath = DEFAULT_ROUTE_REGISTRY_PATH,
+  knowledgeBaseReceiptReportPath = DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_PATH,
 } = {}) {
   const launchAgents = collectLaunchAgents()
   const longLivedAgents = collectLongLivedAgents({ routeRegistryPath })
@@ -1250,6 +1393,9 @@ async function collectLiveSnapshot({
     primitive_runtime_health: primitiveRuntimeHealth,
     active_session_state: activeSessionState,
     bridge_runtime_health: bridgeRuntimeHealth,
+    knowledge_base_receipt_report: collectKnowledgeBaseReceiptReport({
+      path: knowledgeBaseReceiptReportPath,
+    }),
   }
 }
 
@@ -1430,6 +1576,37 @@ function summarizeLongLivedRoutes(longLivedAgents, reachableEndpoints) {
   }
 }
 
+function knowledgeBaseReceiptReportStatus(report) {
+  if (!report || report.exists === false) return 'absent'
+  if (report.status === 'parse_error' || report.status === 'invalid_shape') return report.status
+  if (knowledgeBaseReceiptPendingTotal(report) > 0) return 'backlog'
+  if (report.stale || report.status === 'stale') return 'stale'
+  return 'clean'
+}
+
+function knowledgeBaseReceiptPendingTotal(report) {
+  return (
+    Number(report?.pending?.total ?? 0) ||
+    Number(report?.observations?.pending_receipt_joins ?? 0) +
+      Number(report?.annotations?.pending_receipt_or_parent_joins ?? 0) +
+      Number(report?.wal?.queued ?? 0) +
+      Number(report?.wal?.quarantined ?? 0)
+  )
+}
+
+function knowledgeBaseReceiptSummary(report) {
+  const status = knowledgeBaseReceiptReportStatus(report)
+  return {
+    status,
+    age_ms: Number.isFinite(Number(report?.age_ms)) ? Number(report.age_ms) : undefined,
+    pending_total: knowledgeBaseReceiptPendingTotal(report),
+    observation_pending: Number(report?.observations?.pending_receipt_joins ?? 0),
+    annotation_pending: Number(report?.annotations?.pending_receipt_or_parent_joins ?? 0),
+    wal_queued: Number(report?.wal?.queued ?? 0),
+    wal_quarantined: Number(report?.wal?.quarantined ?? 0),
+  }
+}
+
 function gate(name, status, detail) {
   return { name, status, detail }
 }
@@ -1444,6 +1621,7 @@ function buildGates({
   activeSessionState,
   bridgeHealth,
   routeRegistry,
+  knowledgeBaseReceiptReport,
 }) {
   const registryProblems = routeRegistry.filter(
     (item) => item.exists && item.status !== 'valid' && item.status !== 'absent',
@@ -1789,6 +1967,49 @@ function buildGates({
     gates.push(gate('watcher-wal-route', 'warn', 'no watcher-WAL launch agent evidence found'))
   }
 
+  const receiptSummary = knowledgeBaseReceiptSummary(knowledgeBaseReceiptReport)
+  if (receiptSummary.status === 'clean') {
+    gates.push(
+      gate(
+        'knowledge-base-receipt-join-back',
+        'pass',
+        'knowledge-base receipt join-back report is fresh and has no pending joins',
+      ),
+    )
+  } else if (receiptSummary.status === 'parse_error' || receiptSummary.status === 'invalid_shape') {
+    gates.push(
+      gate(
+        'knowledge-base-receipt-join-back',
+        'fail',
+        `knowledge-base receipt join-back report is ${receiptSummary.status}`,
+      ),
+    )
+  } else if (receiptSummary.status === 'backlog') {
+    gates.push(
+      gate(
+        'knowledge-base-receipt-join-back',
+        'warn',
+        `${receiptSummary.pending_total} pending knowledge-base receipt join-back item(s)`,
+      ),
+    )
+  } else if (receiptSummary.status === 'stale') {
+    gates.push(
+      gate(
+        'knowledge-base-receipt-join-back',
+        'warn',
+        'knowledge-base receipt join-back report is stale',
+      ),
+    )
+  } else {
+    gates.push(
+      gate(
+        'knowledge-base-receipt-join-back',
+        'warn',
+        'knowledge-base receipt join-back report is absent',
+      ),
+    )
+  }
+
   const longLivedRoutes = summarizeLongLivedRoutes(longLivedAgents, reachableEndpoints)
   if (longLivedRoutes.total > 0 && longLivedRoutes.healthy === longLivedRoutes.total) {
     gates.push(
@@ -1967,6 +2188,7 @@ function buildReport(input, options = {}) {
     ? snapshot.bridge_runtime_health
     : []
   const routeRegistry = Array.isArray(snapshot.route_registry) ? snapshot.route_registry : []
+  const knowledgeBaseReceiptReport = snapshot.knowledge_base_receipt_report
   const processSummary = annotateBridgeConfigDrift(
     annotateStandaloneConfigDrift(summarizeProcesses(processes), configs),
     configs,
@@ -1978,6 +2200,7 @@ function buildReport(input, options = {}) {
   )
   const longLivedRoutes = summarizeLongLivedRoutes(longLivedAgents, reachableEndpoints)
   const sharedPrimitiveHttp = primitiveHealth.filter(hasSharedPrimitiveHttpBackend)
+  const receiptSummary = knowledgeBaseReceiptSummary(knowledgeBaseReceiptReport)
   const gates = buildGates({
     processSummary,
     configs,
@@ -1988,6 +2211,7 @@ function buildReport(input, options = {}) {
     activeSessionState,
     bridgeHealth,
     routeRegistry,
+    knowledgeBaseReceiptReport,
   })
   const status = statusFromGates(gates, processSummary)
   const restartTargets = restartTargetsFor(processSummary)
@@ -2044,6 +2268,13 @@ function buildReport(input, options = {}) {
       bridge_upstreams_without_wrapper: processSummary.bridge_upstreams_without_wrapper,
       watcher_wal_launch_agents: launchAgents.filter((agent) => agent.kind === 'watcher-wal')
         .length,
+      knowledge_base_receipt_report_status: receiptSummary.status,
+      knowledge_base_receipt_report_age_ms: receiptSummary.age_ms,
+      knowledge_base_receipt_pending_total: receiptSummary.pending_total,
+      knowledge_base_receipt_observation_pending: receiptSummary.observation_pending,
+      knowledge_base_receipt_annotation_pending: receiptSummary.annotation_pending,
+      knowledge_base_wal_queued: receiptSummary.wal_queued,
+      knowledge_base_wal_quarantined: receiptSummary.wal_quarantined,
       long_lived_agents: longLivedAgents.length,
       long_lived_agent_routes: longLivedRoutes.total,
       long_lived_agent_route_endpoints: unique(longLivedAgents.map((agent) => agent.endpoint))
@@ -2058,6 +2289,7 @@ function buildReport(input, options = {}) {
     primitive_runtimes: primitiveRuntimeHealthSummary(primitiveHealth),
     active_session_state: activeSessionStateSummary(activeSessionState),
     bridge_runtimes: bridgeRuntimeHealthSummary(bridgeHealth),
+    knowledge_base_receipt_report: knowledgeBaseReceiptReport,
     route_registry: routeRegistry,
     process_inventory: processSummary,
     restart_targets: restartTargets,
@@ -2135,6 +2367,11 @@ function recommendationsFor({ status, gates, processSummary }) {
       'point watcher-WAL launch agents at a healthy coordinator endpoint before making watcher commit mode default',
     )
   }
+  if (gates.find((item) => item.name === 'knowledge-base-receipt-join-back')?.status !== 'pass') {
+    recommendations.push(
+      'refresh or repair the knowledge-base receipt join-back report before treating watcher-WAL routing as clean',
+    )
+  }
   if (gates.find((item) => item.name === 'long-lived-agent-route')?.status !== 'pass') {
     recommendations.push(
       'point every known long-lived agent route at a healthy coordinator endpoint before broad rollout',
@@ -2153,6 +2390,7 @@ function formatTextReport(report) {
     `host-owned bridge HTTP: healthy=${report.summary.bridge_runtime_http_healthy}/${report.summary.bridge_runtime_http_endpoints}`,
     `active-session profile state: valid=${report.summary.active_session_profiles_valid}/${report.summary.active_session_profiles}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
+    `knowledge-base receipt join-back: status=${report.summary.knowledge_base_receipt_report_status}, pending=${report.summary.knowledge_base_receipt_pending_total}, obs=${report.summary.knowledge_base_receipt_observation_pending}, annotations=${report.summary.knowledge_base_receipt_annotation_pending}, wal-queued=${report.summary.knowledge_base_wal_queued}, wal-quarantined=${report.summary.knowledge_base_wal_quarantined}`,
     `long-lived agent routes: healthy=${report.summary.long_lived_agent_routes_healthy}/${report.summary.long_lived_agent_routes}, configured=${report.summary.long_lived_agent_routes_configured}, missing=${report.summary.long_lived_agent_routes_missing}, endpoints=${report.summary.long_lived_agent_route_endpoints}`,
     '',
     'gates:',
@@ -2197,6 +2435,7 @@ async function main() {
     : await collectLiveSnapshot({
         timeoutMs: args.timeoutMs,
         routeRegistryPath: args.routeRegistryPath,
+        knowledgeBaseReceiptReportPath: args.knowledgeBaseReceiptReportPath,
       })
   const report = buildReport(snapshot)
   process.stdout.write(
@@ -2217,6 +2456,7 @@ if (import.meta.url === invokedPath) {
 export {
   SNAPSHOT_SCHEMA,
   buildReport,
+  collectKnowledgeBaseReceiptReport,
   collectLiveSnapshot,
   collectRegisteredLongLivedAgents,
   collectRegisteredStartupSpawnConfigs,

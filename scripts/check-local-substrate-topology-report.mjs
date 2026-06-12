@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   buildReport,
+  collectKnowledgeBaseReceiptReport,
   collectRegisteredLongLivedAgents,
   collectRegisteredStartupSpawnConfigs,
   registeredLongLivedAgentsFromRegistry,
@@ -280,6 +281,133 @@ function checkPrimitiveBackendContractGate() {
   }
 }
 
+function checkKnowledgeBaseReceiptJoinGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  snapshot.knowledge_base_receipt_report.status = 'backlog'
+  snapshot.knowledge_base_receipt_report.observations.pending_receipt_joins = 2
+  snapshot.knowledge_base_receipt_report.annotations.pending_receipt_or_parent_joins = 3
+  snapshot.knowledge_base_receipt_report.wal.queued = 1
+  snapshot.knowledge_base_receipt_report.wal.quarantined = 0
+  snapshot.knowledge_base_receipt_report.pending = {
+    observations: 2,
+    annotations: 3,
+    wal_queued: 1,
+    wal_quarantined: 0,
+    total: 6,
+  }
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'mixed') {
+    fail(`knowledge-base receipt join gate: expected status mixed, got ${report.summary.status}`)
+  }
+  if (report.summary.knowledge_base_receipt_report_status !== 'backlog') {
+    fail(
+      `knowledge-base receipt join gate: expected summary.knowledge_base_receipt_report_status=backlog, got ${report.summary.knowledge_base_receipt_report_status}`,
+    )
+  }
+  if (report.summary.knowledge_base_receipt_pending_total !== 6) {
+    fail(
+      `knowledge-base receipt join gate: expected pending total 6, got ${report.summary.knowledge_base_receipt_pending_total}`,
+    )
+  }
+  const receiptGate = report.gates.find((gate) => gate.name === 'knowledge-base-receipt-join-back')
+  if (receiptGate?.status !== 'warn') {
+    fail('knowledge-base receipt join gate: expected knowledge-base-receipt-join-back=warn')
+  }
+  const broadGate = report.gates.find((gate) => gate.name === 'broad-default-readiness')
+  if (broadGate?.status !== 'fail') {
+    fail('knowledge-base receipt join gate: expected broad-default-readiness=fail')
+  }
+  if (
+    !report.recommendations.includes(
+      'refresh or repair the knowledge-base receipt join-back report before treating watcher-WAL routing as clean',
+    )
+  ) {
+    fail('knowledge-base receipt join gate: expected receipt join-back recommendation')
+  }
+}
+
+function checkKnowledgeBaseReceiptCollector() {
+  const dir = mkdtempSync(join(tmpdir(), 'atrib-receipt-report-'))
+  try {
+    const missing = collectKnowledgeBaseReceiptReport({ path: join(dir, 'missing.json') })
+    if (missing.status !== 'absent' || missing.exists !== false) {
+      fail(
+        `knowledge-base receipt collector: expected missing report to be absent, got ${missing.status}`,
+      )
+    }
+
+    const malformedPath = join(dir, 'malformed.json')
+    writeFileSync(malformedPath, '{')
+    const malformed = collectKnowledgeBaseReceiptReport({ path: malformedPath })
+    if (malformed.status !== 'parse_error') {
+      fail(
+        `knowledge-base receipt collector: expected malformed report parse_error, got ${malformed.status}`,
+      )
+    }
+
+    const invalidPath = join(dir, 'invalid.json')
+    writeFileSync(
+      invalidPath,
+      JSON.stringify({
+        generated_at: '2026-06-12T00:00:00.000Z',
+        observations: { entries: 1, pending_receipt_joins: -1 },
+        annotations: { entries: 1, pending_receipt_or_parent_joins: 0 },
+        wal: { queued: 0, quarantined: 0, receipted: 0 },
+      }),
+    )
+    const invalid = collectKnowledgeBaseReceiptReport({ path: invalidPath })
+    if (invalid.status !== 'invalid_shape') {
+      fail(
+        `knowledge-base receipt collector: expected invalid report invalid_shape, got ${invalid.status}`,
+      )
+    }
+
+    const stalePath = join(dir, 'stale.json')
+    writeFileSync(
+      stalePath,
+      JSON.stringify({
+        generated_at: '2000-01-01T00:00:00.000Z',
+        days: 7,
+        observations: { entries: 1, pending_receipt_joins: 0 },
+        annotations: { entries: 1, pending_receipt_or_parent_joins: 0 },
+        wal: { queued: 0, quarantined: 0, receipted: 0 },
+      }),
+    )
+    const stale = collectKnowledgeBaseReceiptReport({
+      path: stalePath,
+      maxAgeMs: 3_600_000,
+    })
+    if (stale.status !== 'stale' || stale.pending.total !== 0) {
+      fail(
+        `knowledge-base receipt collector: expected stale clean-count report, got ${stale.status}`,
+      )
+    }
+
+    const cleanPath = join(dir, 'clean.json')
+    writeFileSync(
+      cleanPath,
+      JSON.stringify({
+        generated_at: new Date().toISOString(),
+        days: 7,
+        observations: { entries: 1, pending_receipt_joins: 0 },
+        annotations: { entries: 1, pending_receipt_or_parent_joins: 0 },
+        wal: { queued: 0, quarantined: 0, receipted: 0 },
+        caveats: ['join state, not public log inclusion'],
+      }),
+    )
+    const clean = collectKnowledgeBaseReceiptReport({ path: cleanPath })
+    if (clean.status !== 'clean' || clean.pending.total !== 0 || clean.caveats !== 1) {
+      fail(`knowledge-base receipt collector: expected clean report, got ${clean.status}`)
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 function checkCombinedRestartResidueClassification() {
   const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
   const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
@@ -397,6 +525,8 @@ function main() {
   checkRouteRegistryNormalization()
   checkRouteRegistryDiagnosticsGate()
   checkPrimitiveBackendContractGate()
+  checkKnowledgeBaseReceiptJoinGate()
+  checkKnowledgeBaseReceiptCollector()
   checkCombinedRestartResidueClassification()
 
   if (failures.length > 0) {
