@@ -298,7 +298,8 @@
       "bridge_runtime_http_endpoints": 2,
       "bridge_runtime_http_healthy": 2,
       "active_session_profiles": 2,
-      "active_session_profiles_valid": 2
+      "active_session_profiles_valid": 2,
+      "restart_targets": 2
     },
     "gates": {
       "coordinator-health": "pass",

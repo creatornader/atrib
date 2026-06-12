@@ -1771,6 +1771,71 @@ function statusFromGates(gates, processSummary) {
   return 'mixed'
 }
 
+function addRestartTarget(targets, group, reason, fields) {
+  const key = `${group.parent_service}:${group.ppid}`
+  const target = targets.get(key) ?? {
+    parent_pid: group.ppid,
+    parent_service: group.parent_service,
+    parent_label: group.parent_label,
+    config_surface: group.config_surface,
+    reasons: [],
+    child_pids: [],
+    primitive_pids: [],
+    bridge_wrapper_pids: [],
+    bridge_upstream_pids: [],
+    oldest_started_at: undefined,
+    newest_started_at: undefined,
+  }
+  if (!target.reasons.includes(reason)) target.reasons.push(reason)
+  for (const [field, values] of Object.entries(fields)) {
+    target[field] = unique([...(target[field] ?? []), ...(values ?? [])]).sort((a, b) => a - b)
+  }
+  target.child_pids = unique([
+    ...target.child_pids,
+    ...target.primitive_pids,
+    ...target.bridge_wrapper_pids,
+    ...target.bridge_upstream_pids,
+  ]).sort((a, b) => a - b)
+  if (
+    group.oldest_started_at &&
+    (!target.oldest_started_at ||
+      timestampMs(group.oldest_started_at) < timestampMs(target.oldest_started_at))
+  ) {
+    target.oldest_started_at = group.oldest_started_at
+  }
+  if (
+    group.newest_started_at &&
+    (!target.newest_started_at ||
+      timestampMs(group.newest_started_at) > timestampMs(target.newest_started_at))
+  ) {
+    target.newest_started_at = group.newest_started_at
+  }
+  targets.set(key, target)
+}
+
+function restartTargetsFor(processSummary) {
+  const targets = new Map()
+  for (const group of processSummary.standalone_groups) {
+    if (!group.obsolete_config_drift) continue
+    addRestartTarget(targets, group, 'obsolete-standalone-primitives', {
+      primitive_pids: group.pids,
+    })
+  }
+  for (const group of processSummary.bridge_groups) {
+    if (!group.obsolete_config_drift) continue
+    addRestartTarget(targets, group, 'obsolete-bridge-wrapper', {
+      bridge_wrapper_pids: group.pids,
+      bridge_upstream_pids: group.upstream_pids,
+    })
+  }
+  return [...targets.values()].sort(
+    (a, b) =>
+      String(a.config_surface ?? a.parent_service).localeCompare(
+        String(b.config_surface ?? b.parent_service),
+      ) || a.parent_pid - b.parent_pid,
+  )
+}
+
 function buildReport(input, options = {}) {
   const snapshot = normalizeSnapshot(input)
   const processes = Array.isArray(snapshot.processes) ? snapshot.processes : []
@@ -1810,6 +1875,7 @@ function buildReport(input, options = {}) {
     bridgeHealth,
   })
   const status = statusFromGates(gates, processSummary)
+  const restartTargets = restartTargetsFor(processSummary)
 
   return {
     schema: SCHEMA,
@@ -1863,6 +1929,7 @@ function buildReport(input, options = {}) {
       long_lived_agent_routes_configured: longLivedRoutes.configured,
       long_lived_agent_routes_healthy: longLivedRoutes.healthy,
       long_lived_agent_routes_missing: longLivedRoutes.missing,
+      restart_targets: restartTargets.length,
     },
     gates,
     coordinators: healthSummary(health),
@@ -1870,6 +1937,7 @@ function buildReport(input, options = {}) {
     active_session_state: activeSessionStateSummary(activeSessionState),
     bridge_runtimes: bridgeRuntimeHealthSummary(bridgeHealth),
     process_inventory: processSummary,
+    restart_targets: restartTargets,
     config_surfaces: configs,
     launch_agents: launchAgents,
     long_lived_agents: longLivedAgents,
@@ -1962,6 +2030,23 @@ function formatTextReport(report) {
   ]
   for (const gateResult of report.gates) {
     lines.push(`  ${gateResult.status.toUpperCase()} ${gateResult.name}: ${gateResult.detail}`)
+  }
+  if (report.restart_targets.length > 0) {
+    lines.push('', 'restart targets:')
+    for (const target of report.restart_targets) {
+      const pidGroups = [
+        target.primitive_pids.length > 0 ? `primitive=${target.primitive_pids.join(',')}` : '',
+        target.bridge_wrapper_pids.length > 0
+          ? `bridge-wrapper=${target.bridge_wrapper_pids.join(',')}`
+          : '',
+        target.bridge_upstream_pids.length > 0
+          ? `bridge-upstream=${target.bridge_upstream_pids.join(',')}`
+          : '',
+      ].filter(Boolean)
+      lines.push(
+        `  - ${target.parent_label} pid=${target.parent_pid} surface=${target.config_surface ?? 'unknown'} reasons=${target.reasons.join(',')} children=${pidGroups.join(' ')}`,
+      )
+    }
   }
   if (report.recommendations.length > 0) {
     lines.push('', 'next:')
