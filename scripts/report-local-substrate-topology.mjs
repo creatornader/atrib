@@ -557,6 +557,9 @@ function primitiveRuntimeHealthSummary(items) {
       version: report.primitive_runtime?.version,
       transport: report.primitive_runtime?.transport,
       tool_count: report.primitive_runtime?.tool_count,
+      agent: report.profile?.agent,
+      mirror_file: report.profile?.mirror_file,
+      local_substrate_endpoint: report.profile?.local_substrate_endpoint,
       active_sessions: report.sessions?.active,
       opened_sessions: report.sessions?.opened,
       reason: item.reason,
@@ -674,17 +677,41 @@ function buildGates({ processSummary, configs, launchAgents, health, primitiveHe
   const healthyPrimitiveHttp = primitiveHealth.filter(
     (item) => item.reachable && item.status === 'healthy',
   )
-  const configsNeedHttp = existingConfigs.length > 0
+  const healthyPrimitiveHttpByEndpoint = new Map(
+    healthyPrimitiveHttp.map((item) => [item.endpoint, item]),
+  )
+  const primitiveHttpConfigRoutes = configsWithPrimitiveHttp.flatMap((config) =>
+    (config.primitive_http_endpoints ?? []).map((endpoint) => ({
+      config: config.name,
+      endpoint,
+      profileAgent: healthyPrimitiveHttpByEndpoint.get(endpoint)?.report?.profile?.agent,
+    })),
+  )
+  const configuredPrimitiveHttpEndpoints = unique(
+    configsWithPrimitiveHttp.flatMap((config) => config.primitive_http_endpoints ?? []),
+  )
+  const healthyPrimitiveHttpEndpoints = new Set(healthyPrimitiveHttp.map((item) => item.endpoint))
+  const unhealthyConfiguredPrimitiveEndpoints = configuredPrimitiveHttpEndpoints.filter(
+    (endpoint) => !healthyPrimitiveHttpEndpoints.has(endpoint),
+  )
+  const agentScopedEndpointCountOk =
+    configuredPrimitiveHttpEndpoints.length >= configsWithPrimitiveHttp.length
+  const profileMismatches = primitiveHttpConfigRoutes.filter(
+    (route) => route.profileAgent !== route.config,
+  )
   if (
-    processSummary.primitive_runtime_http_processes > 0 &&
-    healthyPrimitiveHttp.length > 0 &&
-    (!configsNeedHttp || configsWithPrimitiveHttp.length === existingConfigs.length)
+    existingConfigs.length > 0 &&
+    configsWithPrimitiveHttp.length === existingConfigs.length &&
+    unhealthyConfiguredPrimitiveEndpoints.length === 0 &&
+    agentScopedEndpointCountOk &&
+    profileMismatches.length === 0 &&
+    processSummary.primitive_runtime_http_processes >= configuredPrimitiveHttpEndpoints.length
   ) {
     gates.push(
       gate(
         'host-owned-primitives-http',
         'pass',
-        `${processSummary.primitive_runtime_http_processes} host-owned primitive HTTP process(es), ${configsWithPrimitiveHttp.length}/${existingConfigs.length} config(s) point at HTTP`,
+        `${configuredPrimitiveHttpEndpoints.length} healthy agent-scoped primitive HTTP endpoint(s), ${configsWithPrimitiveHttp.length}/${existingConfigs.length} config(s) point at HTTP`,
       ),
     )
   } else if (
@@ -696,7 +723,7 @@ function buildGates({ processSummary, configs, launchAgents, health, primitiveHe
       gate(
         'host-owned-primitives-http',
         'warn',
-        `${processSummary.primitive_runtime_http_processes} primitive HTTP process(es), ${healthyPrimitiveHttp.length} healthy endpoint(s), ${configsWithPrimitiveHttp.length}/${existingConfigs.length} config(s) point at HTTP`,
+        `${processSummary.primitive_runtime_http_processes} primitive HTTP process(es), ${healthyPrimitiveHttp.length} healthy endpoint(s), ${configuredPrimitiveHttpEndpoints.length} configured endpoint(s), ${configsWithPrimitiveHttp.length}/${existingConfigs.length} config(s) point at HTTP, ${profileMismatches.length} profile mismatch(es)`,
       ),
     )
   } else {
@@ -704,7 +731,7 @@ function buildGates({ processSummary, configs, launchAgents, health, primitiveHe
       gate(
         'host-owned-primitives-http',
         'fail',
-        'no shared primitive HTTP runtime is running or configured',
+        'no agent-scoped primitive HTTP runtime is running or configured',
       ),
     )
   }
@@ -814,7 +841,7 @@ function recommendationsFor({ status, gates, processSummary }) {
   }
   if (gates.find((item) => item.name === 'host-owned-primitives-http')?.status !== 'pass') {
     recommendations.push(
-      'start one loopback atrib-primitives Streamable HTTP host and point startup-spawn MCP configs at it before broad process-sharing rollout',
+      'start one loopback atrib-primitives Streamable HTTP host per startup-spawn agent profile before broad process-sharing rollout',
     )
   }
   if (gates.find((item) => item.name === 'startup-spawn-config')?.status !== 'pass') {

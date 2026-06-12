@@ -459,6 +459,11 @@ export async function bindAtribPrimitivesHttpHost(
             health_endpoint: healthEndpoint,
             tool_count: 15,
           },
+          profile: {
+            agent: process.env.ATRIB_AGENT,
+            mirror_file: process.env.ATRIB_MIRROR_FILE,
+            local_substrate_endpoint: process.env.ATRIB_LOCAL_SUBSTRATE_ENDPOINT,
+          },
           sessions: {
             active: sessions.size,
             opened: openedSessions,

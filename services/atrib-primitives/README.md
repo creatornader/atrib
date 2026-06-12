@@ -2,7 +2,7 @@
 
 Private local MCP runtime for atrib dogfood.
 
-`atrib-primitives` mounts the seven public cognitive-primitive MCP packages in process and exposes their 15 physical tools through one MCP server. It supports stdio for compatibility and Streamable HTTP for host-owned dogfood configs that should share one primitive runtime across active threads.
+`atrib-primitives` mounts the seven public cognitive-primitive MCP packages in process and exposes their 15 physical tools through one MCP server. It supports stdio for compatibility and Streamable HTTP for host-owned dogfood configs that should share one primitive runtime across active threads for the same agent profile.
 
 It does not replace the public packages. `@atrib/emit`, `@atrib/annotate`, `@atrib/revise`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`, and `@atrib/verify-mcp` remain the published surfaces. This package is private and exists to reduce local process bloat in dogfood configs.
 
@@ -31,7 +31,7 @@ node services/atrib-primitives/dist/index.js \
   --json
 ```
 
-Streamable HTTP mode keeps one host-owned process alive and lets MCP clients connect to the same loopback endpoint. The host exposes:
+Streamable HTTP mode keeps one host-owned process alive and lets MCP clients for the same agent profile connect to the same loopback endpoint. The host exposes:
 
 - MCP endpoint: `http://127.0.0.1:8796/mcp`
 - health endpoint: `http://127.0.0.1:8796/mcp/health`

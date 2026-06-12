@@ -7,7 +7,7 @@ describe('overview copy', () => {
   it('uses user-facing trust labels in the pulse strip', () => {
     expect(html).toContain("pulseStat('log health', '—')")
     expect(html).toContain("pulseStat('protected history', '—')")
-    expect(html).toContain("pulseStat('signing actors', '—')")
+    expect(html).toContain("pulseStat('active signers', '—')")
     expect(html).toContain("pulseStat('proof status', '—')")
   })
 
@@ -15,6 +15,7 @@ describe('overview copy', () => {
     expect(html).not.toContain("pulseStat('latest record', '—')")
     expect(html).not.toContain("pulseStat('latest checkpoint', '—')")
     expect(html).not.toContain("pulseStat('signed records', '—')")
+    expect(html).not.toContain("pulseStat('signing actors', '—')")
     expect(html).not.toContain("pulseStat('signing identities', '—')")
   })
 

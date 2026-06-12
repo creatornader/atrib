@@ -198,15 +198,19 @@ describe('atrib-primitives MCP runtime', () => {
   })
 
   it('serves the same tools from one host-owned Streamable HTTP process', async () => {
-    const host = await startHttpHost({ ATRIB_RECORD_FILE: recordFile })
+    const host = await startHttpHost({ ATRIB_AGENT: 'test-agent', ATRIB_RECORD_FILE: recordFile })
     try {
       const health = (await (await fetch(host.healthEndpoint)).json()) as {
         status?: string
-        report?: { primitive_runtime?: { transport?: string; tool_count?: number } }
+        report?: {
+          primitive_runtime?: { transport?: string; tool_count?: number }
+          profile?: { agent?: string }
+        }
       }
       expect(health.status).toBe('healthy')
       expect(health.report?.primitive_runtime?.transport).toBe('streamable-http')
       expect(health.report?.primitive_runtime?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
+      expect(health.report?.profile?.agent).toBe('test-agent')
 
       const transport = new StreamableHTTPClientTransport(new URL(host.endpoint))
       const client = new Client({
