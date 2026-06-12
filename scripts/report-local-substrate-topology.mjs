@@ -779,6 +779,25 @@ function localSubstrateEndpointsForConfig(config, primitiveHealthByEndpoint) {
   ])
 }
 
+function summarizeLongLivedRoutes(longLivedAgents, reachableEndpoints) {
+  const agents = longLivedAgents.map((agent) => {
+    const endpoint = agent.endpoint
+    return {
+      ...agent,
+      route_configured: Boolean(endpoint),
+      route_healthy: Boolean(endpoint && reachableEndpoints.has(endpoint)),
+    }
+  })
+  return {
+    agents,
+    total: agents.length,
+    configured: agents.filter((agent) => agent.route_configured).length,
+    healthy: agents.filter((agent) => agent.route_healthy).length,
+    missing: agents.filter((agent) => !agent.route_configured).length,
+    unhealthy: agents.filter((agent) => agent.route_configured && !agent.route_healthy).length,
+  }
+}
+
 function gate(name, status, detail) {
   return { name, status, detail }
 }
@@ -984,30 +1003,29 @@ function buildGates({
     gates.push(gate('watcher-wal-route', 'warn', 'no watcher-WAL launch agent evidence found'))
   }
 
-  const longLivedEndpoints = unique(longLivedAgents.map((agent) => agent.endpoint))
-  const longLivedReachable = longLivedEndpoints.some((endpoint) => reachableEndpoints.has(endpoint))
-  if (longLivedAgents.length > 0 && longLivedReachable) {
+  const longLivedRoutes = summarizeLongLivedRoutes(longLivedAgents, reachableEndpoints)
+  if (longLivedRoutes.total > 0 && longLivedRoutes.healthy === longLivedRoutes.total) {
     gates.push(
       gate(
         'long-lived-agent-route',
         'pass',
-        'long-lived launch agent points at a healthy coordinator endpoint',
+        `${longLivedRoutes.healthy}/${longLivedRoutes.total} known long-lived launch agent(s) point at a healthy coordinator endpoint`,
       ),
     )
-  } else if (longLivedEndpoints.length > 0) {
+  } else if (longLivedRoutes.configured > 0) {
     gates.push(
       gate(
         'long-lived-agent-route',
         'warn',
-        'long-lived launch agent evidence exists, but no endpoint is healthy',
+        `${longLivedRoutes.healthy}/${longLivedRoutes.total} known long-lived launch agent(s) point at a healthy coordinator endpoint; ${longLivedRoutes.missing} missing endpoint(s), ${longLivedRoutes.unhealthy} unhealthy endpoint(s)`,
       ),
     )
-  } else if (longLivedAgents.length > 0) {
+  } else if (longLivedRoutes.total > 0) {
     gates.push(
       gate(
         'long-lived-agent-route',
         'warn',
-        'long-lived launch agent evidence exists, but no coordinator endpoint is configured',
+        'known long-lived launch agent evidence exists, but no coordinator endpoint is configured',
       ),
     )
   } else {
@@ -1051,6 +1069,12 @@ function buildReport(input, options = {}) {
     ? snapshot.primitive_runtime_health
     : []
   const processSummary = annotateStandaloneConfigDrift(summarizeProcesses(processes), configs)
+  const reachableEndpoints = new Set(
+    health
+      .filter((item) => item.reachable && item.status === 'healthy')
+      .map((item) => item.endpoint),
+  )
+  const longLivedRoutes = summarizeLongLivedRoutes(longLivedAgents, reachableEndpoints)
   const gates = buildGates({
     processSummary,
     configs,
@@ -1086,6 +1110,9 @@ function buildReport(input, options = {}) {
         .length,
       long_lived_agents: longLivedAgents.length,
       long_lived_agent_routes: unique(longLivedAgents.map((agent) => agent.endpoint)).length,
+      long_lived_agent_routes_configured: longLivedRoutes.configured,
+      long_lived_agent_routes_healthy: longLivedRoutes.healthy,
+      long_lived_agent_routes_missing: longLivedRoutes.missing,
     },
     gates,
     coordinators: healthSummary(health),
@@ -1138,7 +1165,7 @@ function recommendationsFor({ status, gates, processSummary }) {
   }
   if (gates.find((item) => item.name === 'long-lived-agent-route')?.status !== 'pass') {
     recommendations.push(
-      'point at least one long-lived agent or scheduled producer at a healthy coordinator endpoint before broad rollout',
+      'point every known long-lived launch agent at a healthy coordinator endpoint before broad rollout',
     )
   }
   return recommendations
@@ -1150,7 +1177,7 @@ function formatTextReport(report) {
     `coordinators: healthy=${report.summary.healthy_coordinators}, configured=${report.summary.configured_coordinators}`,
     `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, stdio=${report.summary.primitive_runtime_stdio_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
-    `long-lived agent routes: ${report.summary.long_lived_agent_routes}/${report.summary.long_lived_agents}`,
+    `long-lived agent routes: healthy=${report.summary.long_lived_agent_routes_healthy}/${report.summary.long_lived_agents}, configured=${report.summary.long_lived_agent_routes_configured}, missing=${report.summary.long_lived_agent_routes_missing}`,
     '',
     'gates:',
   ]
