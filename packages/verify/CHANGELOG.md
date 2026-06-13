@@ -1,5 +1,12 @@
 # @atrib/verify
 
+## 0.7.9
+
+### Patch Changes
+
+- Updated dependencies [e700e1a]
+  - @atrib/mcp@0.18.0
+
 ## 0.7.8
 
 ### Patch Changes

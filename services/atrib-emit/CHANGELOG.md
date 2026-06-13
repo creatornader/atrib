@@ -1,5 +1,12 @@
 # @atrib/emit
 
+## 0.16.1
+
+### Patch Changes
+
+- Updated dependencies [e700e1a]
+  - @atrib/mcp@0.18.0
+
 ## 0.16.0
 
 ### Minor Changes

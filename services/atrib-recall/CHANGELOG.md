@@ -1,5 +1,12 @@
 # @atrib/recall
 
+## 0.12.18
+
+### Patch Changes
+
+- Updated dependencies [e700e1a]
+  - @atrib/mcp@0.18.0
+
 ## 0.12.17
 
 ### Patch Changes
