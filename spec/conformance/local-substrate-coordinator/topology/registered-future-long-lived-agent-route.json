@@ -329,7 +329,9 @@
           "stale": false,
           "record_hash": "sha256:9f4e92320ca578b284f6e3240a5b0c9a1e9f9d9ce8c9bd2e4a721f59296ead28",
           "route_endpoint": "http://127.0.0.1:8788/atrib/local-substrate",
-          "producer": "future-agent"
+          "producer": "future-agent",
+          "local_substrate_mode": "commit",
+          "submission": "local_substrate_delegated"
         }
       ],
       "counts": {
@@ -363,7 +365,8 @@
       "long_lived_agent_activity_ok": 1,
       "long_lived_agent_activity_missing": 0,
       "long_lived_agent_activity_stale": 0,
-      "knowledge_base_activity_status": "ok"
+      "knowledge_base_activity_status": "ok",
+      "long_lived_agent_activity_not_delegated": 0
     },
     "gates": {
       "coordinator-health": "pass",

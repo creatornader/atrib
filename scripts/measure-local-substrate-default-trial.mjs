@@ -167,7 +167,8 @@ function buildDefaultTrialGates(report) {
     summary.long_lived_activity_report_status === 'clean' &&
     summary.long_lived_agent_activity_ok === summary.long_lived_agent_routes &&
     summary.long_lived_agent_activity_missing === 0 &&
-    summary.long_lived_agent_activity_stale === 0
+    summary.long_lived_agent_activity_stale === 0 &&
+    Number(summary.long_lived_agent_activity_not_delegated ?? 0) === 0
 
   return [
     gate(
@@ -223,8 +224,8 @@ function buildDefaultTrialGates(report) {
       'long-lived-activity-clean',
       longLivedActivityHealthy,
       longLivedActivityHealthy
-        ? 'every known long-lived route has recent activity evidence'
-        : `activity_status=${summary.long_lived_activity_report_status}, ok=${summary.long_lived_agent_activity_ok}/${summary.long_lived_agent_routes}, missing=${summary.long_lived_agent_activity_missing}, stale=${summary.long_lived_agent_activity_stale}`,
+        ? 'every known long-lived route has recent delegated commit evidence'
+        : `activity_status=${summary.long_lived_activity_report_status}, ok=${summary.long_lived_agent_activity_ok}/${summary.long_lived_agent_routes}, missing=${summary.long_lived_agent_activity_missing}, stale=${summary.long_lived_agent_activity_stale}, not_delegated=${summary.long_lived_agent_activity_not_delegated ?? 0}`,
     ),
   ]
 }
@@ -314,6 +315,7 @@ function buildDefaultTrialMeasurement(report, options = {}) {
         activity_ok: summary.long_lived_agent_activity_ok,
         activity_missing: summary.long_lived_agent_activity_missing,
         activity_stale: summary.long_lived_agent_activity_stale,
+        activity_not_delegated: Number(summary.long_lived_agent_activity_not_delegated ?? 0),
       },
     },
     gates,
@@ -336,7 +338,7 @@ function formatTextMeasurement(measurement) {
     `watcher-WAL: launch-agents=${measurement.process_footprint.watcher_wal.launch_agents}, receipt-status=${measurement.process_footprint.watcher_wal.receipt_report_status}, pending=${measurement.process_footprint.watcher_wal.receipt_pending_total}, receipted=${measurement.process_footprint.watcher_wal.wal_receipted}, non-joinable-receipted=${measurement.process_footprint.watcher_wal.wal_non_joinable_receipted}, mismatches=${measurement.process_footprint.watcher_wal.receipt_mismatches}, orphans=${measurement.process_footprint.watcher_wal.receipt_orphans}`,
     `watcher-WAL activity: status=${measurement.process_footprint.watcher_wal.activity_status}, source=${measurement.process_footprint.watcher_wal.activity_source ?? 'unknown'}, age-ms=${measurement.process_footprint.watcher_wal.activity_age_ms ?? 'unknown'}`,
     `long-lived routes: healthy=${measurement.process_footprint.long_lived_agents.healthy_routes}/${measurement.process_footprint.long_lived_agents.routes}, missing=${measurement.process_footprint.long_lived_agents.missing_routes}`,
-    `long-lived activity: status=${measurement.process_footprint.long_lived_agents.activity_report_status}, ok=${measurement.process_footprint.long_lived_agents.activity_ok}/${measurement.process_footprint.long_lived_agents.routes}, missing=${measurement.process_footprint.long_lived_agents.activity_missing}, stale=${measurement.process_footprint.long_lived_agents.activity_stale}`,
+    `long-lived activity: status=${measurement.process_footprint.long_lived_agents.activity_report_status}, ok=${measurement.process_footprint.long_lived_agents.activity_ok}/${measurement.process_footprint.long_lived_agents.routes}, missing=${measurement.process_footprint.long_lived_agents.activity_missing}, stale=${measurement.process_footprint.long_lived_agents.activity_stale}, not_delegated=${measurement.process_footprint.long_lived_agents.activity_not_delegated}`,
     '',
     'measurement gates:',
   ]

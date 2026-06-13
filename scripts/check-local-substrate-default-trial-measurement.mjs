@@ -63,6 +63,9 @@ function checkHealthyMeasurement() {
   if (measurement.process_footprint.watcher_wal.activity_status !== 'ok') {
     fail('healthy measurement: expected watcher-WAL activity status ok')
   }
+  if (measurement.process_footprint.long_lived_agents.activity_not_delegated !== 0) {
+    fail('healthy measurement: expected zero non-delegated long-lived activities')
+  }
 }
 
 function checkRestartResidueFailsMeasurement() {
@@ -226,6 +229,28 @@ function checkLongLivedActivityFailsMeasurement() {
   }
   if (statusFor(measurement, 'long-lived-activity-clean') !== 'fail') {
     fail('long-lived activity measurement: expected long-lived-activity-clean=fail')
+  }
+
+  const nonDelegatedFixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const nonDelegatedSnapshot = JSON.parse(JSON.stringify(nonDelegatedFixture.snapshot))
+  for (const activity of nonDelegatedSnapshot.long_lived_activity_report.activities) {
+    delete activity.local_substrate_mode
+    delete activity.submission
+  }
+  const nonDelegated = measurementForReport(
+    buildReport(nonDelegatedSnapshot, { generatedAt: GENERATED_AT }),
+  )
+  if (nonDelegated.status !== 'not_ready') {
+    fail(`non-delegated long-lived measurement: expected not_ready, got ${nonDelegated.status}`)
+  }
+  if (statusFor(nonDelegated, 'long-lived-activity-clean') !== 'fail') {
+    fail('non-delegated long-lived measurement: expected long-lived-activity-clean=fail')
+  }
+  if (nonDelegated.process_footprint.long_lived_agents.activity_not_delegated !== 1) {
+    fail('non-delegated long-lived measurement: expected one non-delegated activity')
+  }
+  if (nonDelegated.process_footprint.long_lived_agents.activity_stale !== 0) {
+    fail('non-delegated long-lived measurement: expected freshness to stay clean')
   }
 }
 

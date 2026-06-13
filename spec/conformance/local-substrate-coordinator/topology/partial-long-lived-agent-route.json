@@ -333,7 +333,9 @@
           "stale": false,
           "record_hash": "sha256:505ee3512b9444767673df49d656f1d288c135f517458a03ae71171a1eec9d7a",
           "route_endpoint": "http://127.0.0.1:8788/atrib/local-substrate",
-          "producer": "hermes"
+          "producer": "hermes",
+          "local_substrate_mode": "commit",
+          "submission": "local_substrate_delegated"
         },
         {
           "label": "ai.openclaw.gateway",
@@ -343,7 +345,9 @@
           "age_ms": 900000,
           "stale": false,
           "record_hash": "sha256:d854853e0ecff616c23919eb39657c36bafc114b29d75439b3b6f1e55f13789e",
-          "producer": "openclaw"
+          "producer": "openclaw",
+          "local_substrate_mode": "commit",
+          "submission": "local_substrate_delegated"
         }
       ],
       "counts": {
@@ -378,7 +382,8 @@
       "long_lived_agent_activity_ok": 2,
       "long_lived_agent_activity_missing": 0,
       "long_lived_agent_activity_stale": 0,
-      "knowledge_base_activity_status": "ok"
+      "knowledge_base_activity_status": "ok",
+      "long_lived_agent_activity_not_delegated": 0
     },
     "gates": {
       "coordinator-health": "pass",
