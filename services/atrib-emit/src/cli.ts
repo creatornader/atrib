@@ -52,9 +52,9 @@
 //   ATRIB_LOG_ENDPOINT, ATRIB_MIRROR_FILE, ATRIB_AUTOCHAIN_SOURCE,
 //   ATRIB_AGENT, ATRIB_PRIVATE_KEY, ATRIB_KEYCHAIN_TIMEOUT_MS,
 //   ATRIB_OP_TIMEOUT_MS, ATRIB_CONTEXT_ID, CLAUDE_CODE_SESSION_ID,
-//   CODEX_THREAD_ID, ATRIB_ACTIVE_SESSION_PROFILE. Optional P042 shadow
-//   probes also read ATRIB_LOCAL_SUBSTRATE_ENDPOINT,
-//   ATRIB_LOCAL_SUBSTRATE_MODE=shadow, and ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS.
+//   CODEX_THREAD_ID, ATRIB_ACTIVE_SESSION_PROFILE. Optional P042
+//   local-substrate attempts also read ATRIB_LOCAL_SUBSTRATE_ENDPOINT,
+//   ATRIB_LOCAL_SUBSTRATE_MODE=shadow|commit, and ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS.
 
 import { readFileSync, realpathSync, accessSync, constants as fsConstants } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -334,18 +334,18 @@ function buildDescription(): CliDescription {
       {
         name: 'ATRIB_LOCAL_SUBSTRATE_ENDPOINT',
         description:
-          'Optional P042 coordinator endpoint. When set with shadow mode, emitInProcess sends a bounded local-substrate shadow probe.',
+          'Optional P042 coordinator endpoint. Shadow mode sends a bounded probe; commit mode sends a bounded long-lived sign_record commit.',
         required: false,
       },
       {
         name: 'ATRIB_LOCAL_SUBSTRATE_MODE',
         description:
-          'Optional local-substrate mode. The default emit path honors "shadow"; CLI watcher-WAL commit is enabled by an explicit local_substrate envelope.',
+          'Optional local-substrate mode. "shadow" is the endpoint default; "commit" delegates long-lived sign_record submission after hash matching. Watcher-WAL commit still uses an explicit local_substrate envelope.',
         required: false,
       },
       {
         name: 'ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS',
-        description: 'Optional per-shadow-probe timeout in ms; defaults to 500.',
+        description: 'Optional per local-substrate attempt timeout in ms; defaults to 500.',
         required: false,
       },
       {

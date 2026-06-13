@@ -259,9 +259,9 @@ describe('D081 byte-identicality: emitInProcess vs handleEmit', () => {
 
     // The misleading "submission queued; proof not yet available" warning
     // must NOT appear once the flush has confirmed delivery.
-    expect(
-      r.warnings.some((w) => w.startsWith('submission queued; proof not yet available')),
-    ).toBe(false)
+    expect(r.warnings.some((w) => w.startsWith('submission queued; proof not yet available'))).toBe(
+      false,
+    )
   })
 
   it('delegates watcher-WAL commit to the local substrate coordinator and skips local queue submission', async () => {
@@ -309,6 +309,45 @@ describe('D081 byte-identicality: emitInProcess vs handleEmit', () => {
     coordinator.destroy()
   })
 
+  it('delegates long-lived emit commit to the local substrate coordinator and skips local queue submission', async () => {
+    const seed = await fixedSeed()
+    const observed: AtribRecord[] = []
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      creatorKey: base64urlEncode(seed),
+      supportedHarnessClasses: ['long-lived-agent'],
+      logSubmission: 'disabled',
+      onRecord: (record) => {
+        observed.push(record)
+      },
+    })
+
+    const r = await emitInProcess(
+      {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'long-lived-commit', topics: ['local-substrate'] },
+        context_id: '3333444455556666777788889999aaaa',
+      },
+      {
+        key: { privateKey: seed, source: 'env' },
+        logEndpoint: log.url,
+        localSubstrateCommit: {
+          transport: coordinator.transport,
+        },
+      },
+    )
+
+    expect(log.received.length).toBe(0)
+    expect(observed).toHaveLength(1)
+    expect(await verifyRecord(observed[0]!)).toBe(true)
+    expect(r.record_hash).toBe(`sha256:${hexEncode(sha256(canonicalRecord(observed[0]!)))}`)
+    expect(r.receipt_id).toMatch(/^[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{43}$/)
+    expect(r.warnings).toContain(
+      'submission delegated to local substrate coordinator; proof not available in this process',
+    )
+
+    coordinator.destroy()
+  })
+
   it('falls back to local queue submission when watcher-WAL commit is unavailable', async () => {
     const seed = await fixedSeed()
     const r = await emitInProcess(
@@ -340,6 +379,32 @@ describe('D081 byte-identicality: emitInProcess vs handleEmit', () => {
     expect(r.warnings.some((w) => w.includes('local substrate watcher-WAL commit failed'))).toBe(
       true,
     )
+    expect(r.log_index).not.toBeNull()
+  })
+
+  it('falls back to local queue submission when long-lived emit commit is unavailable', async () => {
+    const seed = await fixedSeed()
+    const r = await emitInProcess(
+      {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'long-lived-commit-fallback', topics: ['local-substrate'] },
+        context_id: '444455556666777788889999aaaabbbb',
+      },
+      {
+        key: { privateKey: seed, source: 'env' },
+        logEndpoint: log.url,
+        localSubstrateCommit: {
+          transport: async () => {
+            throw new Error('coordinator offline')
+          },
+        },
+      },
+    )
+
+    expect(log.received.length).toBe(1)
+    expect(r.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(r.receipt_id).toBeUndefined()
+    expect(r.warnings.some((w) => w.includes('local substrate emit commit failed'))).toBe(true)
     expect(r.log_index).not.toBeNull()
   })
 })

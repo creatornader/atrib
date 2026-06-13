@@ -256,17 +256,17 @@ export interface EmitLocalSubstrateWalCommitMetadata extends LocalSubstrateWalJo
 export interface EmitLocalSubstrateCommitOptions {
   /** Coordinator transport. HTTP, Unix-socket adapters, and tests all plug in here. */
   transport: LocalSubstrateCoordinatorTransport
-  /**
-   * Producer envelope written outside the signed record bytes. Defaults to a
-   * watcher-WAL envelope for the current process and producer label.
-   */
+  /** Producer envelope written outside the signed record bytes. */
   producer?: LocalSubstrateProducer | undefined
   /** Per-call timeout for the commit request. Defaults to 500ms. */
   timeoutMs?: number | undefined
   /** Degradation posture written into the coordinator request envelope. */
   fallback?: LocalSubstrateDegradationPolicy | undefined
-  /** WAL join-back metadata required by the watcher-WAL coordinator contract. */
-  wal: EmitLocalSubstrateWalCommitMetadata
+  /**
+   * WAL join-back metadata for watcher-WAL coordinator commits. Omit for a
+   * long-lived-agent `sign_record` commit.
+   */
+  wal?: EmitLocalSubstrateWalCommitMetadata | undefined
   /** Observer hook for tests, telemetry, or rollout reports. Never blocks fallback. */
   onAttempt?: ((attempt: EmitLocalSubstrateCommitAttempt) => void | Promise<void>) | undefined
   /** Warning hook for mismatch or observer failures. Never affects emit. */
@@ -282,6 +282,14 @@ export interface ResolveEmitLocalSubstrateShadowFromEnvOptions {
   fetch?: typeof fetch | undefined
 }
 
+export interface ResolveEmitLocalSubstrateCommitFromEnvOptions {
+  env?: NodeJS.ProcessEnv | undefined
+  producer?: string | undefined
+  harnessClass?: LocalSubstrateHarnessClass | undefined
+  transport?: string | undefined
+  fetch?: typeof fetch | undefined
+}
+
 const DEFAULT_LOCAL_SUBSTRATE_DEGRADATION: LocalSubstrateDegradationPolicy = {
   if_unavailable: 'sign locally in producer and continue without coordinator receipt',
   primary_path_blocking: false,
@@ -289,6 +297,11 @@ const DEFAULT_LOCAL_SUBSTRATE_DEGRADATION: LocalSubstrateDegradationPolicy = {
 
 const DEFAULT_LOCAL_SUBSTRATE_WATCHER_DEGRADATION: LocalSubstrateDegradationPolicy = {
   if_unavailable: 'sign locally in producer and write the WAL receipt through the existing drain',
+  primary_path_blocking: false,
+}
+
+const DEFAULT_LOCAL_SUBSTRATE_COMMIT_DEGRADATION: LocalSubstrateDegradationPolicy = {
+  if_unavailable: 'sign locally in producer and continue without coordinator receipt',
   primary_path_blocking: false,
 }
 
@@ -313,6 +326,12 @@ export interface CreateAtribEmitServerOptions {
    * opt-in env config; `false` disables env config for this server.
    */
   localSubstrate?: EmitLocalSubstrateShadowOptions | false | undefined
+  /**
+   * Optional long-lived-agent coordinator commit. `undefined` reads
+   * ATRIB_LOCAL_SUBSTRATE_MODE=commit from env unless localSubstrate was set
+   * explicitly; `false` disables env commit mode for this server.
+   */
+  localSubstrateCommit?: EmitLocalSubstrateCommitOptions | false | undefined
 }
 
 /**
@@ -350,6 +369,17 @@ export async function createAtribEmitServer(
           transport: 'stdio-mcp-server',
           waitForAttempt: false,
         }),
+        localSubstrateCommit: resolveLocalSubstrateCommitOption(
+          options.localSubstrateCommit !== undefined
+            ? options.localSubstrateCommit
+            : options.localSubstrate !== undefined
+              ? false
+              : undefined,
+          {
+            producer: 'atrib-emit',
+            transport: 'stdio-mcp-server',
+          },
+        ),
       })
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
@@ -755,6 +785,29 @@ export function resolveEmitLocalSubstrateShadowFromEnv(
   }
 }
 
+export function resolveEmitLocalSubstrateCommitFromEnv(
+  options: ResolveEmitLocalSubstrateCommitFromEnvOptions = {},
+): EmitLocalSubstrateCommitOptions | undefined {
+  const env = options.env ?? process.env
+  const endpoint = env['ATRIB_LOCAL_SUBSTRATE_ENDPOINT']
+  if (!endpoint) return undefined
+
+  const mode = env['ATRIB_LOCAL_SUBSTRATE_MODE']
+  if (mode !== 'commit') return undefined
+
+  const timeoutMs = parsePositiveInt(env['ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS'])
+  return {
+    transport: createHttpLocalSubstrateTransport(endpoint, {
+      ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
+    }),
+    producer: localSubstrateProducer(options.producer ?? 'atrib-emit', {
+      harnessClass: options.harnessClass,
+      transport: options.transport,
+    }),
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+  }
+}
+
 function resolveLocalSubstrateOption(
   option: EmitLocalSubstrateShadowOptions | false | undefined,
   defaults: {
@@ -778,6 +831,33 @@ function resolveLocalSubstrateOption(
     }
   }
   return resolveEmitLocalSubstrateShadowFromEnv(defaults)
+}
+
+function resolveLocalSubstrateCommitOption(
+  option: EmitLocalSubstrateCommitOptions | false | undefined,
+  defaults: {
+    producer: string
+    transport: string
+    harnessClass?: LocalSubstrateHarnessClass | undefined
+  },
+): EmitLocalSubstrateCommitOptions | undefined {
+  if (option === false) return undefined
+  if (option) {
+    return {
+      ...option,
+      producer:
+        option.producer ??
+        (option.wal
+          ? watcherWalLocalSubstrateProducer(defaults.producer, {
+              transport: defaults.transport,
+            })
+          : localSubstrateProducer(defaults.producer, {
+              transport: defaults.transport,
+              harnessClass: defaults.harnessClass,
+            })),
+    }
+  }
+  return resolveEmitLocalSubstrateCommitFromEnv(defaults)
 }
 
 function dispatchEmitLocalSubstrateShadow(input: {
@@ -872,12 +952,16 @@ async function dispatchEmitLocalSubstrateCommit(input: {
   producerLabel: string
 }): Promise<{ accepted: boolean; receiptId?: string; warnings: string[] }> {
   const warnings: string[] = []
+  const wal = input.localSubstrate.wal
   const producer =
     input.localSubstrate.producer ??
-    watcherWalLocalSubstrateProducer(input.producerLabel, { transport: 'emit-in-process-wal' })
+    (wal
+      ? watcherWalLocalSubstrateProducer(input.producerLabel, { transport: 'emit-in-process-wal' })
+      : localSubstrateProducer(input.producerLabel, { transport: 'emit-in-process' }))
   const request: LocalSubstrateCoordinatorRequest = {
     schema: LOCAL_SUBSTRATE_REQUEST_SCHEMA,
-    operation: 'enqueue_record_and_join_receipt',
+    operation: wal ? 'enqueue_record_and_join_receipt' : 'sign_record',
+    mode: wal ? undefined : 'commit',
     producer,
     context: {
       source: '@atrib/emit',
@@ -886,15 +970,23 @@ async function dispatchEmitLocalSubstrateCommit(input: {
       ...(input.parentRecordHash !== undefined
         ? { parent_record_hash: input.parentRecordHash }
         : {}),
-      join_back_target: input.localSubstrate.wal.join_back_target,
+      ...(wal ? { join_back_target: wal.join_back_target } : {}),
     },
     record_body: input.recordBody,
-    wal: {
-      entry_id: input.localSubstrate.wal.entry_id,
-      source_path: input.localSubstrate.wal.source_path,
-      receipt_join_field: input.localSubstrate.wal.receipt_join_field,
-    },
-    degradation: input.localSubstrate.fallback ?? DEFAULT_LOCAL_SUBSTRATE_WATCHER_DEGRADATION,
+    ...(wal
+      ? {
+          wal: {
+            entry_id: wal.entry_id,
+            source_path: wal.source_path,
+            receipt_join_field: wal.receipt_join_field,
+          },
+        }
+      : {}),
+    degradation:
+      input.localSubstrate.fallback ??
+      (wal
+        ? DEFAULT_LOCAL_SUBSTRATE_WATCHER_DEGRADATION
+        : DEFAULT_LOCAL_SUBSTRATE_COMMIT_DEGRADATION),
   }
 
   const result = await tryLocalSubstrateCoordinator(request, {
@@ -934,7 +1026,7 @@ async function dispatchEmitLocalSubstrateCommit(input: {
           ? result.reason
           : result.issues.map((issue) => `${issue.path} ${issue.message}`).join('; ')
     warnings.push(
-      `local substrate watcher-WAL commit failed (${result.status}: ${reason}); signed locally`,
+      `local substrate ${wal ? 'watcher-WAL' : 'emit'} commit failed (${result.status}: ${reason}); signed locally`,
     )
     return { accepted: false, warnings }
   }
@@ -948,7 +1040,9 @@ async function dispatchEmitLocalSubstrateCommit(input: {
         response_record_hash: responseRecordHash ?? null,
       },
     )
-    warnings.push('local substrate watcher-WAL commit record_hash mismatch; signed locally')
+    warnings.push(
+      `local substrate ${wal ? 'watcher-WAL' : 'emit'} commit record_hash mismatch; signed locally`,
+    )
     return { accepted: false, warnings }
   }
 
@@ -1035,10 +1129,12 @@ export interface EmitInProcessOptions {
    */
   localSubstrate?: EmitLocalSubstrateShadowOptions | false | undefined
   /**
-   * Optional watcher-WAL coordinator commit. When accepted, emitInProcess
-   * mirrors the local sidecar but skips its own log submission queue because
-   * the coordinator owns that side effect. On rejection or timeout, the
-   * existing local queue path remains the fallback.
+   * Optional coordinator commit. Without WAL metadata this sends a
+   * long-lived-agent `sign_record` commit. With WAL metadata it sends the
+   * watcher-WAL receipt join request. When accepted, emitInProcess mirrors the
+   * local sidecar but skips its own log submission queue because the
+   * coordinator owns that side effect. On rejection or timeout, the existing
+   * local queue path remains the fallback.
    */
   localSubstrateCommit?: EmitLocalSubstrateCommitOptions | false | undefined
 }
@@ -1092,8 +1188,17 @@ export async function emitInProcess(
       transport: 'emit-in-process',
       waitForAttempt: true,
     }),
-    localSubstrateCommit:
-      options.localSubstrateCommit === false ? undefined : options.localSubstrateCommit,
+    localSubstrateCommit: resolveLocalSubstrateCommitOption(
+      options.localSubstrateCommit !== undefined
+        ? options.localSubstrateCommit
+        : options.localSubstrate !== undefined
+          ? false
+          : undefined,
+      {
+        producer: options.producer ?? 'atrib-emit',
+        transport: 'emit-in-process',
+      },
+    ),
   })
   // Drain before returning, bounded by flushDeadlineMs. The typical caller
   // is a detached hook process that exits right after this resolves; we

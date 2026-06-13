@@ -5,6 +5,12 @@
 
 import { beforeAll } from 'vitest'
 
+delete process.env.ATRIB_ACTIVE_SESSION_PROFILE
+delete process.env.ATRIB_AGENT
+delete process.env.CLAUDE_CODE_SESSION_ID
+delete process.env.CODEX_THREAD_ID
+delete process.env.ATRIB_CONTEXT_ID
+
 const FORBIDDEN_HOSTS = [
   'log.atrib.dev',
   'graph.atrib.dev',
