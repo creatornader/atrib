@@ -1,5 +1,11 @@
 # @atrib/emit
 
+## 0.16.0
+
+### Minor Changes
+
+- 3a4af87: Honor `ATRIB_LOCAL_SUBSTRATE_MODE=commit` for long-lived emit producers. Emit now sends `sign_record` commit requests to the local substrate coordinator, skips its own log-submission queue only after the returned hash matches, and falls back to the local queue on rejection, timeout, or hash mismatch.
+
 ## 0.15.3
 
 ### Patch Changes
