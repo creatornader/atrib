@@ -4026,7 +4026,7 @@ Precedence remains conservative:
 - _Edit or replay the orphaned record into the active context._ Rejected. Records are immutable; repair must happen through a new signed observation, annotation, or revision, not by altering history.
 - _Make `resolveEnvContextId` scan for the newest active-session file._ Rejected. Recency is not a session boundary. It would silently conflate two running agents when files from different profiles exist.
 - _Use one global `active-session-id` file._ Rejected for the same reason as v2: concurrent agents would overwrite each other.
-- _Disable [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) orphan creation globally when session discovery fails._ Rejected. That would turn a visible graph-shape failure into lost evidence. The default failure mode is signed, isolated, and diagnosable. P042 later adds an explicit per-host opt-out for profiles such as Claude Desktop where contextless write primitives would be worse than a warnings-only non-signing response.
+- _Disable [D072](#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) orphan creation globally when session discovery fails._ Rejected. That would turn a visible graph-shape failure into lost evidence. The default failure mode is signed, isolated, and diagnosable. [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned) later accepts an explicit per-host opt-out for profiles such as Claude Desktop where contextless write primitives would be worse than a warnings-only non-signing response.
 
 **Consequences (v3).**
 
@@ -6146,6 +6146,143 @@ No external outreach is implied by this ADR.
 - [`docs/outreach/aauth-evidence-packet.md`](docs/outreach/aauth-evidence-packet.md),
   draft outreach packet.
 
+## D120: Local substrate coordinator keeps startup-spawn sidecars wrapper-owned
+
+**Date:** 2026-06-13
+
+**Status:** Accepted
+
+**Promoted from:** P042 (local substrate coordinator for long-lived and
+multi-harness dogfood). The original pending entry is removed from the Pending
+decisions section by this ADR; see git history prior to this commit for the
+rollout ledger text.
+
+**Context.** P042 came from four coupled dogfood failures: duplicated
+startup-spawn MCP bundles, stale Agent Bridge child processes, long-lived local
+agents that needed a non-MCP route, and watcher-WAL receipt mismatch bugs. A
+single "make one more MCP server" answer would have solved only the first
+symptom.
+
+The accepted implementation now has an optional host-owned local substrate
+coordinator per creator identity or trusted host boundary. The shared contract
+lives in `@atrib/mcp` and covers `startup-spawn`, `long-lived-agent`, and
+`watcher-wal` harness classes. `@atrib/emit` ships the supervised
+`atrib-local-substrate` host. The dogfood topology checker and default-trial
+measurement gate process footprint, coordinator health, runtime-version
+freshness, active-session context routing, watcher receipts, watcher activity,
+long-lived routes, long-lived activity, future-harness registry entries, and
+Agent Bridge process residue.
+
+The remaining rollout question was narrower: should startup-spawn MCP wrappers
+move signing, local mirror sidecars, and outbound attribution context into the
+coordinator, or is coordinator-owned queue delegation enough?
+
+**Decision.** Queue delegation is enough for the current dogfood system.
+Startup-spawn MCP wrappers keep local signing, local sidecar append, and
+outbound context injection. The coordinator owns log queue submission only after
+a bounded commit request returns the expected `record_hash`.
+
+The startup-spawn sequence is:
+
+1. The wrapper observes the upstream tool request and result.
+2. The wrapper builds the unsigned atrib record body, including args/result
+   commitments and source-aware `informed_by` claims.
+3. The wrapper signs locally and runs its `onRecord` sidecar observer.
+4. The wrapper attaches outbound attribution context to the MCP result before it
+   returns to the client.
+5. The wrapper sends the exact unsigned body to the coordinator as
+   `operation: "sign_record"` and `mode: "commit"`.
+6. If the coordinator accepts and returns the expected `record_hash`, the
+   wrapper skips its own log-submission queue. Rejection, timeout, invalid
+   response, or hash mismatch falls back to the local queue under
+   [§5.8](atrib-spec.md#58-degradation-contract).
+
+Long-lived `@atrib/emit` producers use the same queue-delegation rule for
+`operation: "sign_record"` and `mode: "commit"`. Watcher-WAL producers use the
+stronger `operation: "enqueue_record_and_join_receipt"` path because receipt
+join-back metadata is source-targeted and belongs with the WAL drain.
+
+**Why not move more into the coordinator now.**
+
+- The wrapper is the only component on the MCP hot path that sees both the tool
+  input and the tool result at the moment the record is built. Moving sidecar
+  ownership would require a larger private envelope for raw local evidence and a
+  new replay rule for that envelope.
+- Outbound context is written into the MCP result object before the caller sees
+  it. Moving that step to the coordinator would make the coordinator a response
+  proxy or introduce a second blocking callback in the primary action path.
+- Local mirror append is the fallback that keeps recall usable when the
+  coordinator is unavailable. Removing it from the wrapper would turn a degraded
+  coordinator into a local memory outage.
+- Current live evidence shows the actual bloat problem is process and queue
+  ownership, not byte construction. Agent-scoped primitive HTTP hosts, Agent
+  Bridge HTTP hosts, and queue delegation address that without changing signed
+  bytes or sidecar semantics.
+- [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox) remains the
+  right pattern when a wrapper is untrusted or sandboxed. That is a distinct
+  signer-proxy boundary, not a reason to move every trusted startup-spawn
+  wrapper's sidecar work into the coordinator.
+
+**Alternatives rejected.**
+
+- _Coordinator-owned signing, mirror append, and outbound context for all
+  startup-spawn wrappers._ Rejected for the current rollout. It expands the hot
+  path, requires a sidecar and result-context envelope the protocol does not yet
+  define, and gives up the wrapper's local fallback properties.
+- _Direct wrapper queues only._ Rejected. It preserves duplicate queue ownership
+  and hides host-level queue health from the topology report.
+- _One global coordinator for every local agent profile._ Rejected. It would
+  blur creator keys, mirror paths, context policies, and local-substrate
+  endpoints across startup-spawn clients, local knowledge bases, and supervised
+  long-lived assistants.
+- _Make `@atrib/primitives-runtime` the coordinator._ Rejected. The primitive
+  runtime is a process-count adapter. It does not own signer policy, WAL
+  commit, receipt join-back, queue health, or cross-harness supervision.
+
+**Consequences.**
+
+- [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
+  accepts P042 as a deployment architecture pattern: optional, host-owned,
+  per-creator coordinator processes for shared substrate work.
+- The current dogfood default-trial target is process sharing plus delegated
+  queue ownership, not coordinator-owned sidecars.
+- Future startup-spawn harnesses should first prove agent-scoped primitive HTTP,
+  Agent Bridge HTTP if applicable, active-session or explicit-context policy,
+  and queue-delegation commit evidence. They do not need a new sidecar handoff
+  contract before joining the default-trial requirement set.
+- Reopen coordinator-owned startup-spawn sidecars only if a concrete case needs
+  it: an untrusted wrapper that cannot hold a signing key, a non-JS harness that
+  cannot preserve local sidecars safely, repeated sidecar or outbound-context
+  bugs attributable to wrapper ownership, or a real multi-process response proxy
+  that can write outbound context without blocking primary work.
+- If reopened, the first artifact must be a sidecar and outbound-context
+  handoff contract with fixture coverage before any default config change.
+
+**Cross-references.**
+
+- [`docs/concepts/13-local-substrate-coordinator.md`](docs/concepts/13-local-substrate-coordinator.md),
+  local substrate coordinator concept and rollout gate.
+- [`spec/conformance/local-substrate-coordinator/`](spec/conformance/local-substrate-coordinator/),
+  fixture contract for body equality, fallback, and health reports.
+- [`packages/mcp/src/local-substrate.ts`](packages/mcp/src/local-substrate.ts),
+  shared request, response, transport, and health helpers.
+- [`packages/mcp/src/middleware.ts`](packages/mcp/src/middleware.ts),
+  startup-spawn wrapper commit path.
+- [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback),
+  earlier emit-only daemon design.
+  [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
+  supersedes it for local hot-path dogfood rollout decisions while preserving
+  its fallback and single-creator invariants.
+- [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess) and
+  [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape),
+  hook-class signing path.
+- [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers),
+  harness context discovery.
+- [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement),
+  host-side measurement precedent.
+- [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox), signer
+  isolation for sandboxed producers.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -6628,118 +6765,5 @@ Candidate demo:
 - [D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision), prior framework-adapter prioritization.
 - [D024](#d024-langchain-js-mcp-adapter-not-docs-only-multiservermcpclient-needs-a-proper-helper-because-its-internal-client-references-are-private), source-read-first precedent.
 - [P039](#p039-support-and-rca-signed-investigation-demo), support/RCA demo.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-## P042: Local substrate coordinator for long-lived and multi-harness dogfood
-
-**Source:** live Codex MCP process audit on 2026-06-10, repeated stale bridge child-process incidents, the operator's reminder that atrib must work across long-lived local agents and always-on assistants, and the earlier [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback), [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess), [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape), [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers), [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), and [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox) lessons. Local watcher WAL and receipt join-back incidents add the read/write reconciliation pressure.
-
-**The decision in question:** should atrib introduce an optional host-owned local substrate coordinator beneath all harness adapters, rather than keep adding MCP bundles, hook helpers, watcher-specific queues, and per-harness fixes?
-
-**Why this is not just [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) again:** [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) was emit-only spawn amortization. [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess) and [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape) removed that need for hook-class producers. The current issue is wider: Codex and Claude Code startup-spawn MCP children multiply cognitive-primitive processes per active bundle, bridge-backed always-on assistants may use bash/curl paths rather than an MCP host, scheduled long-lived producers need stable process ownership, and local watcher pipelines need WAL drain plus receipt join-back. A single aggregated MCP server would reduce one symptom and miss the system boundary.
-
-**Candidate shape.** One optional local service per creator identity or trusted host boundary, reachable over a Unix socket or explicit localhost transport, supervised by the host (launchd locally, container supervisor in server deployments). It owns shared substrate work only:
-
-- key resolution and signing request policy, subject to [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox)
-- `resolveChainRoot`, source-aware `informed_by` validation, and parent-child context threading
-- mirror/WAL append, receipt token generation, log submission queue, archive submission, and receipt join-back
-- local read indexes for recall, trace, and summarize, built from the same mirror and sidecars
-- health reporting: pid, socket, version, queue depth, WAL backlog, active contexts, stale wrapper/process detections
-
-Adapters stay thin:
-
-- Claude Code and Codex hooks plus stdio/HTTP MCP adapters inject session context and call the coordinator
-- bridge-backed always-on assistant wrappers call the same local service without becoming MCP hosts
-- long-lived heartbeat, critic, and prerun producers use the same socket under supervisor ownership
-- local knowledge-base watchers enqueue records and join receipts through the coordinator instead of each watcher owning sync details
-- Inspect/eval and sandboxed runtimes keep per-run env contexts and [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox) signer-proxy boundaries explicit
-
-**Non-negotiables.**
-
-1. No mandatory daemon for first-time users. Existing in-process, CLI, and stdio paths remain valid.
-2. No new cognitive primitive or event type. This is deployment architecture, not protocol vocabulary.
-3. No silent key multiplexing. Multiple creator keys mean separate sockets or explicit signer selection with policy.
-4. No primary-path blocking. Coordinator unavailable means fallback or no-op under [§5.8](atrib-spec.md#58-degradation-contract).
-5. No host-specific assumptions in core. Harness context discovery remains registry-driven per [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers).
-6. Signed bytes must stay identical to existing producer paths by routing through the existing signing and verifier code.
-
-**First work if accepted:** write the coordinator contract and fixture tests before moving a hot path. The first dogfood slice should prove one startup-spawn harness (Codex or Claude Code), one long-lived assistant or scheduled-producer harness, and one local watcher WAL path can use the same coordinator contract without changing record bytes. A process-health report should gate rollout before any default config change.
-
-**Design packet shipped 2026-06-10:** [`docs/concepts/13-local-substrate-coordinator.md`](docs/concepts/13-local-substrate-coordinator.md) defines the host-owned boundary, non-negotiables, fixture contract, worked startup-spawn example, and rollout gate. [`spec/conformance/local-substrate-coordinator/`](spec/conformance/local-substrate-coordinator/) pins the first executable contract across `startup-spawn`, `long-lived-agent`, and `watcher-wal` harness classes; `pnpm doc-sync` runs `scripts/check-local-substrate-coordinator-fixtures.mjs` so body-equality, fallback, and health-report gates stay checked. `@atrib/mcp` now exports the typed P042 contract helpers (`validateLocalSubstrateRequest`, `validateLocalSubstrateResponse`, `validateLocalSubstrateHealthReport`, `validateLocalSubstrateFixture`, and `hashLocalSubstrateRecordBody`) plus opt-in client, in-process coordinator prototype, and probe helpers (`tryLocalSubstrateCoordinator`, `createHttpLocalSubstrateTransport`, `createInProcessLocalSubstrateCoordinator`, `buildLocalSubstrateHealthReport`, and `probeLocalSubstrateHealth`). The in-process prototype signs only matching creator-key bodies, returns real hash and receipt identifiers, and keeps the default harness scope to `startup-spawn`; long-lived agents and any default daemon still require their own rollout evidence.
-
-**Startup-spawn shadow wiring shipped 2026-06-11:** `@atrib/mcp` accepts an opt-in local-substrate shadow option at the exact unsigned-record-body boundary. It sends `mode: "shadow_probe"` requests to a caller-supplied coordinator transport, then still signs, mirrors, attaches outbound context, and queues submission locally. `@atrib/mcp-wrap` exposes the first operator path through a JSON `localSubstrate` config that uses `createHttpLocalSubstrateTransport()` and a `startup-spawn` producer envelope. The coordinator signs and returns the hash in shadow mode but skips queue and mirror side effects, so real wrapper reachability can be tested without double-committing records.
-
-**Startup-spawn commit mode shipped 2026-06-13:** `@atrib/mcp` now accepts an opt-in `localSubstrateCommit` option for startup-spawn wrappers. The middleware still signs locally so it can attach outbound context, support pre-call receipt injection, and persist the local sidecar. After the upstream tool succeeds, it sends the exact unsigned body as `operation: "sign_record"` and `mode: "commit"` to the coordinator. If the coordinator accepts and returns the expected `record_hash`, the wrapper skips its own log-submission queue. If the coordinator is unavailable, rejects the request, returns an invalid response, or returns a mismatched hash, the wrapper falls back to the existing local queue path under [§5.8](atrib-spec.md#58-degradation-contract). `flush()` waits for pending coordinator commit attempts before draining local submissions. `@atrib/mcp-wrap` exposes this through `localSubstrate.mode = "commit"` while keeping `shadow` as the default. This delegates queue ownership for startup-spawn tool calls. It does not move local mirror append or outbound context ownership to the coordinator.
-
-**Long-lived emit shadow wiring shipped 2026-06-11:** `@atrib/emit` now accepts the same shadow-probe shape for explicit cognitive records. `handleEmit()` builds the normal signed record, strips `signature` back to the exact unsigned body, dispatches a bounded `mode: "shadow_probe"` request with a `long-lived-agent` producer envelope, and keeps local signing, mirror append, and queue submission authoritative. `emitInProcess()` waits only for that bounded attempt so short-lived hook producers do not exit before telemetry lands; the emit MCP server, `atrib-emit-cli`, `@atrib/annotate`, and `@atrib/revise` can opt in through `ATRIB_LOCAL_SUBSTRATE_ENDPOINT` plus `ATRIB_LOCAL_SUBSTRATE_MODE=shadow` or by passing an explicit transport. This covers the second P042 harness class without adding a daemon or enabling coordinator-owned emit commit mode.
-
-**Long-lived emit commit mode shipped 2026-06-13:** `@atrib/emit` now honors `ATRIB_LOCAL_SUBSTRATE_MODE=commit` for the `long-lived-agent` harness class. The emit path still builds and mirrors the local record body, then sends the exact unsigned body as `operation: "sign_record"` and `mode: "commit"` to the coordinator. If the coordinator accepts and returns the expected `record_hash`, emit skips its own log-submission queue and returns the coordinator `receipt_id`. If the coordinator is unavailable, rejects the request, or returns a mismatched hash, emit falls back to the existing local queue path under [§5.8](atrib-spec.md#58-degradation-contract). Watcher-WAL commit still uses the explicit `local_substrate` envelope because receipt join-back metadata is required and must stay source-targeted.
-
-**Watcher-WAL commit proof shipped 2026-06-11:** `createInProcessLocalSubstrateCoordinator()` now accepts `operation: "enqueue_record_and_join_receipt"` for callers that opt in to the `watcher-wal` harness class. The public fixture path proves the coordinator signs the exact watcher annotation body, returns the real `record_hash` and `receipt_id`, exposes WAL health counters, and hands the observer explicit join metadata (`entry_id`, `source_path`, `receipt_join_field`) without mutating signed bytes. The local knowledge-base WAL path now writes the same source-targeted join metadata into queued envelopes and durable receipts, and join-back refuses to let a declared-source receipt be claimed by a different markdown file. This covers the third P042 harness class at the in-process proof level. Default dogfood config and process-count reduction remain open.
-
-**HTTP service handler shipped 2026-06-11:** `@atrib/mcp` now exports `createLocalSubstrateCoordinatorHttpHandler()` and `handleLocalSubstrateCoordinatorHttpRequest()` as the server-side match for `createHttpLocalSubstrateTransport()`. The handler serves `POST /atrib/local-substrate` for coordinator requests and `GET`/`HEAD /atrib/local-substrate` or `/atrib/local-substrate/health` for read-only health. It rejects malformed JSON and invalid requests before the coordinator hot path, preserves application-level `rejected` envelopes for clients, and stays framework-neutral so Node HTTP, Hono, Bun, Deno, launchd-owned local services, and tests can share one route contract. This is still not a default daemon or a new MCP surface.
-
-**Node host binding shipped 2026-06-11:** `@atrib/mcp` now exports `bindLocalSubstrateCoordinatorNodeServer()` as the Node HTTP binding for the same P042 service contract. It binds loopback by default, returns endpoint and health URLs for clients, caps request bodies before JSON parsing, keeps malformed or oversized requests out of the coordinator hot path, and leaves browser CORS policy to the host. This makes the supervised-host path executable without adding another package, MCP server, or default background process.
-
-**Host binary shipped 2026-06-11:** `@atrib/emit` now ships `atrib-local-substrate`, the first supervised host process for the P042 boundary. It reuses `@atrib/emit`'s bounded `resolveKey()` chain, starts the shared Node HTTP coordinator at `127.0.0.1:8787` by default, supports `startup-spawn`, `long-lived-agent`, and `watcher-wal` requests, prints a machine-readable ready event for supervisors, and drains the coordinator queue on SIGTERM/SIGINT with a bounded timeout. The binary is opt-in and does not change default Codex, Claude Code, OpenClaw, Hermes, or watcher configs.
-
-**Process-health proof shipped 2026-06-11:** `scripts/prove-local-substrate-process-health.mjs` and `pnpm prove:local-substrate` now provide the first repo-owned rollout gate for the host process. The proof builds `@atrib/mcp` and `@atrib/emit`, starts the real `atrib-local-substrate` binary on an ephemeral loopback port, sends the three fixture harness requests over HTTP, checks watcher receipt issuance, validates final health, asserts zero stale children and zero orphan receipts, and proves unavailable coordinators classify as fallback-safe `unavailable`. This proves the host binary can satisfy the P042 contract in isolation. It does not prove default dogfood config, cross-thread process-count reduction, long-lived local-agent adoption, or watcher routing yet.
-
-**Watcher-WAL dogfood adoption shipped 2026-06-11:** `@atrib/emit` now exposes an explicit watcher-WAL coordinator commit path for in-process and CLI producers. `emitInProcess()` can send `operation: "enqueue_record_and_join_receipt"` with WAL join metadata, skip its own log queue only after the coordinator returns the expected `record_hash`, surface the coordinator `receipt_id`, and fall back to local queue submission on rejection, timeout, or hash mismatch. `atrib-emit-cli` accepts the same path through a top-level `local_substrate` envelope, while the default CLI path keeps shadow-only behavior. The local knowledge-base WAL drain now passes its source-targeted join metadata into that envelope, writes coordinator receipt ids only when present, and runs against a launchd-owned local-substrate host. A live probe produced record `sha256:89981cf752c2a09e076663f2c8ec75a82ced15a7e0622771a0a72a557bdd37df` and coordinator health reported zero queue depth, stale children, and orphan receipts afterward. This proves one real watcher route. Startup-spawn process-count cleanup remains restart-gated.
-
-**Aggregated MCP runtime shipped 2026-06-11:** `@atrib/primitives-runtime` adds a private local `atrib-primitives` binary for dogfood harnesses that need process-count reduction before a full coordinator migration. Stdio mode mounts the seven public primitive packages in process and exposes their 15 physical MCP tools through one MCP server, reducing the per-thread atrib primitive process target from seven OS child processes to one when a host config points at `services/atrib-primitives/dist/index.js`. Streamable HTTP mode serves the same tools from one loopback host process, with one mounted primitive backend per process and one outer MCP session transport per client, so startup-spawn harness configs can share a primitive host across threads for the same agent profile once they support HTTP MCP endpoints. Different agent profiles still need separate primitive HTTP hosts because the runtime inherits `ATRIB_AGENT`, mirror paths, key paths, and local-substrate endpoints from process env. A single mixed-profile primitive process would blur creator and mirror boundaries. The standalone public primitive packages stay unchanged and publishable. This is not a coordinator: it does not own signer policy, WAL commit, receipt join-back, queue health, or cross-harness supervision. The protocol proof is `services/atrib-primitives/test/mcp-protocol.test.ts`, which lists all 15 tools, routes recall through both stdio and Streamable HTTP, and checks that two HTTP sessions share one mounted primitive backend. The topology report now has a separate `host-owned-primitives-http` gate, so per-thread stdio collapse cannot be mistaken for agent-scoped cross-thread process sharing.
-
-**Stdio-only proxy path shipped 2026-06-12:** `@atrib/primitives-runtime` now has `--transport stdio-http-proxy --endpoint <url>` for clients that only support stdio MCP but should not mount the primitive backend themselves. The proxy connects to the agent-scoped Streamable HTTP host, lists the upstream tools, forwards tool calls, and owns no primitive package instances. Claude Code and Claude Desktop can therefore keep a stdio MCP entry while the seven primitive servers live in one launchd-owned HTTP process per agent profile. The topology report classifies proxy processes separately from direct stdio runtime processes and keeps `ready_for_default_trial` closed when a full `atrib-primitives` stdio runtime is still running.
-
-**Desktop explicit-context gate shipped 2026-06-13:** `@atrib/emit` now honors `ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID=1|true|yes|on`. When a write primitive call omits `context_id` and [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) env/profile lookup cannot resolve one, emit returns a warnings-only `sha256:unknown` response and does not sign a fresh orphan record. `@atrib/primitives-runtime` exposes that policy in its HTTP health report through `context_id_policy` and `requires_explicit_context_id`, and the topology report treats a primitive HTTP profile as context-ready when it either has valid active-session profile state or proves explicit-context enforcement. This is the Claude Desktop posture until Desktop exposes a trustworthy session-aware hook or API.
-
-**Long-lived emit key retry shipped 2026-06-12:** `@atrib/emit` no longer caches a missing MCP-server signing key for the lifetime of a long-lived server. A resolved key still stays cached, but a null lookup records a bounded retry cooldown (`ATRIB_KEY_RESOLVE_RETRY_MS`, default 30s) and retries later. This fixes the failure mode where a launchd-owned primitive runtime can start or take its first emit while Keychain is temporarily unavailable, then keep returning `record_hash: unknown` until process restart even after the `atrib-creator-<agent>` key is available.
-
-**Shared primitive backend topology gate shipped 2026-06-12:** the live topology report now requires each configured primitive HTTP endpoint to expose `backend: "shared"`, `session_model: "per-session-transport-shared-backend"`, `mounted_primitive_count: 7`, and `tool_count: 15` before `host-owned-primitives-http` can pass. Older primitive hosts can still be reachable and list the right tools, but they no longer satisfy broad-default readiness if they use the old per-session backend model. The report summary includes `primitive_runtime_http_shared`, and the fixture checker covers the old-host shape by deleting those health fields from the healthy snapshot.
-
-**Runtime version freshness gate shipped 2026-06-13:** `scripts/report-local-substrate-topology.mjs` now reads the checked-out versions for `@atrib/emit` and `@atrib/primitives-runtime`, compares them with live coordinator and primitive HTTP health reports, and fails `ready_for_default_trial` when healthy launchd endpoints still serve an older package version. `scripts/measure-local-substrate-default-trial.mjs` adds `runtime-version-freshness`, and the fixture checker pins the fresh, stale-coordinator, and stale-primitive cases. Live dogfood caught the gap after package propagation: all routes were healthy, but one watcher coordinator still reported `0.15.2` and the primitive HTTP hosts reported `0.1.4`. Restarting the supervised hosts brought coordinators to `0.16.0` and primitive hosts to `0.1.6`.
-
-**Long-lived route topology gate shipped 2026-06-11:** `scripts/report-local-substrate-topology.mjs` now treats supervised long-lived producer routing as its own live topology gate. The collector recognizes known Hermes and OpenClaw gateway launch agents, extracts only safe atrib endpoint and agent fields from launchd metadata or the referenced env file, and requires at least one long-lived route to point at a healthy coordinator before `ready_for_default_trial` can pass. The regression fixture `missing-long-lived-agent-route.json` keeps the default gate closed even when startup-spawn process sharing, agent-scoped primitive HTTP hosting, coordinator health, and watcher-WAL routing all pass. This aligns the live dogfood report with P042's three required harness classes.
-
-**Hermes long-lived route dogfood adoption shipped 2026-06-11:** the Hermes gateway launch agent now carries `ATRIB_LOCAL_SUBSTRATE_ENDPOINT=http://127.0.0.1:8789/atrib/local-substrate`, `ATRIB_LOCAL_SUBSTRATE_MODE=shadow`, and `ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS=500`. The first `launchctl kickstart -k` restarted Hermes from launchd's cached definition and did not load the new env, so the rollout used `launchctl bootout` plus `launchctl bootstrap` against the edited plist. A manual heartbeat smoke emitted record `sha256:e83dca5954ebbb1f8679dbaa0d91d09fde66009104bd5d1bee71b260209d29a7`, the live Hermes process now shows the ATRIB env, and `pnpm report:local-substrate` reports `PASS long-lived-agent-route` with `long-lived agent routes: 1/2`. OpenClaw remains unwired, and the startup-spawn collapse gate remains restart-gated by the current Codex app-server's stale primitive children.
-
-**Obsolete startup-spawn generation classification shipped 2026-06-11:** the live Codex app-server can retain older MCP child bundles after config moves to `atrib-primitives`; a later thread may use the collapsed runtime while older seven-primitive generations keep running under the same parent. `scripts/report-local-substrate-topology.mjs` now groups standalone primitive children into launch generations, maps those groups back to the current startup-spawn config surface, and reports `obsolete_standalone_primitive_*` counts when the current config no longer declares standalone primitives. The gate stays closed until the children are reaped, but the remediation changes from "config may still be wrong" to "fully quit or restart the startup-spawn host that owns obsolete generations." The regression fixture `mixed-obsolete-standalone-generations.json` pins the two-generation Codex shape observed during the dogfood rollout.
-
-**Strict long-lived route coverage shipped 2026-06-11:** the first long-lived topology gate passed with Hermes routed and OpenClaw present but unrouted because the P042 minimum was "at least one long-lived producer." The broader dogfood goal is stricter: known long-lived agents such as Hermes and OpenClaw should not disappear behind a passing aggregate gate. `scripts/report-local-substrate-topology.mjs` now reports configured, healthy, and missing long-lived route counts, and `long-lived-agent-route` only passes when every known long-lived launch agent in the report points at a healthy coordinator endpoint. The regression fixture `partial-long-lived-agent-route.json` pins the Hermes-routed, OpenClaw-missing shape as `mixed`.
-
-**Harness-agnostic long-lived route discovery shipped 2026-06-12:** the topology report no longer depends only on hard-coded Hermes and OpenClaw launchd labels. It still accepts those labels as compatibility shortcuts, but it also recognizes supervised launchd agents that self-declare safe `ATRIB_LOCAL_SUBSTRATE_ENDPOINT` and `ATRIB_AGENT` values. Future harnesses can register routes in `~/.atrib/local-substrate/routes.json` with `kind: "long-lived-agent"` and either a direct endpoint or an env file whose safe atrib keys are read. The collector excludes atrib's own coordinator, drain, and primitive-runtime launchd labels so startup-spawn process hosts do not count as long-lived producers. `registered-future-long-lived-agent-route.json` pins the registry path, and the local dogfood host now has a no-secret registry for Hermes and OpenClaw so launchd plus registry dedupe is exercised live.
-
-**Long-lived activity evidence gate shipped 2026-06-12:** route health is no longer enough to pass broad readiness. `scripts/report-local-substrate-topology.mjs` now reads the bounded long-lived activity report at `~/.atrib/state/local-substrate/long-lived-activity-latest.json`, imports only route labels, agent labels, loopback endpoints, record hashes, last activity times, and status, and adds `long-lived-agent-activity` as a first-class gate. Missing, stale, malformed, or partial activity evidence keeps `ready_for_default_trial` closed even when every route points at a healthy coordinator. The default-trial measurement also fails closed on this gate. Live dogfood now has Hermes pre-run evidence and OpenClaw managed-hook evidence, so the post-restart topology and measurement can prove two of two known long-lived routes have recent producer activity.
-
-**Bridge wrapper footprint gate shipped 2026-06-12:** repeated stale bridge child-process incidents are now part of the P042 live topology gate rather than a side observation. The report infers wrapper processes from their upstream stdio children, groups wrappers by startup-spawn parent, and warns when one parent owns multiple wrapper/upstream pairs or when wrapper/upstream counts stop lining up. `restart-required-obsolete-agent-bridge-generations.json` pins the observed shape where primitive HTTP hosting is healthy but one Codex app-server still owns obsolete bridge wrapper generations. The live dogfood report initially showed 5 wrappers plus 5 upstream children with one duplicate wrapper group, so broad default readiness stayed closed even after primitive config was correct.
-
-**Host-owned bridge HTTP topology gate shipped 2026-06-12:** bridge process reduction now has the same agent-scoped HTTP requirement as the primitive runtime. The topology report reads `agent-bridge` HTTP endpoints from sanitized Codex and Claude Code config summaries, probes each `/health` route, checks that the runtime profile matches the config surface, and exposes `host-owned-bridge-http` plus `bridge_runtimes[]` in the report. `missing-host-owned-bridge-http.json` pins the failure case where primitive HTTP and coordinator routing are healthy but the bridge remains startup-spawn stdio only. Once a host-owned bridge route is configured, duplicate wrapper groups become restart residue rather than missing architecture.
-
-**Harness-agnostic startup-spawn config registry shipped 2026-06-12:** the topology report now accepts sanitized `startup-spawn-config` entries in `~/.atrib/local-substrate/routes.json`. Future startup-spawn harnesses can register their profile name, loopback primitive and bridge HTTP endpoints, local-substrate endpoint evidence, and declared atrib server names without adding a hard-coded config parser. Registry endpoints are loopback-only and raw config files are not printed. `registered-future-startup-spawn-config.json` pins a future startup-spawn profile passing the same primitive and bridge runtime profile gates as Codex and Claude Code.
-
-**Route-registry diagnostics shipped 2026-06-12:** the topology report now treats route-registry parse errors, unknown schemas, and registry objects without route arrays as first-class gate failures. This closes the future-harness invisibility gap where a broken registry could otherwise look the same as an absent optional registry, especially for startup-spawn configs. The checker now pins wrong-schema diagnostics and verifies that a healthy topology plus a broken registry reports `mixed` with a route-registry recommendation.
-
-**Restart-required status and restart targets shipped 2026-06-12:** the topology report now separates incomplete routing from stale process residue. When coordinator, startup-spawn config, agent-scoped primitive HTTP, active-session profile state, agent-scoped bridge HTTP, watcher-WAL, and long-lived route gates pass, but a still-running startup-spawn parent owns only obsolete primitive or bridge children, the report returns `restart_required` rather than `mixed`. `restart_targets[]` names the parent process to restart and lists the obsolete child PIDs as evidence. Broad-default readiness still fails until those parents restart and the residue disappears.
-
-**Knowledge-base receipt join-back topology gate shipped 2026-06-12:** the live topology report now reads the bounded receipt report at `~/.atrib/state/knowledge-base-reports/receipt-join-latest.json` and adds `knowledge-base-receipt-join-back` as a first-class gate. The report imports only counts, age, and status, not raw pending markdown rows. `ready_for_default_trial` now requires a fresh report with zero observation pending joins, zero annotation pending receipt or parent joins, zero WAL queued files, and zero WAL quarantined files. Stale, malformed, absent, or pending join-back state now reports `mixed` or `fail` before a watcher-WAL path can be called clean. The checker mutates the healthy topology fixture to pin the backlog case.
-
-**Knowledge-base watcher activity topology gate shipped 2026-06-13:** the live topology report now reads the normalized `activity` block from the same bounded knowledge-base report and adds `knowledge-base-watcher-activity` as a first-class gate. The report imports only status, source, producer, last activity time, age, event type, normalized context id, valid record hash, and safe topic labels. `ready_for_default_trial` now requires recent signed activity from known knowledge-base automation sources, so clean receipt join-back no longer counts as proof that watcher-WAL production is active. The checker mutates the healthy topology fixture to pin the missing-activity case, and the collector strips unknown activity fields before exposing the public report.
-
-**Diagnostic WAL classification and activity age recompute shipped 2026-06-13:** the knowledge-base receipt report now separates join-required watcher or synthesis WAL from diagnostic WAL that intentionally has no markdown join target. Join-required queued files, active joinable receipts, invalid receipts, orphan receipts, and mismatches still block default-trial readiness. Non-joinable diagnostic queued or receipted files stay visible in `non_joinable_*` counters but do not create join-back backlog. The public topology collector also recomputes watcher activity age from `last_activity_at` and uses the larger of persisted `age_ms` and current wall-clock age, so stale activity cannot stay green because a prior report cached a small age.
-
-**Default-trial measurement gate shipped 2026-06-12, extended 2026-06-13:** `scripts/measure-local-substrate-default-trial.mjs` and `pnpm measure:local-substrate` now turn the post-restart recommendation into an executable gate. The measurement reuses the topology collector, then fails closed unless the topology is `ready_for_default_trial`, stale startup-spawn primitive and bridge wrapper processes are gone, startup-spawn profiles use shared primitive HTTP and healthy bridge HTTP, live coordinator and primitive runtime versions match the checked-out packages, all known coordinators have empty queues with no stale children or orphan receipts, the watcher receipt join-back report is clean, watcher activity is recent, every known long-lived route points at a healthy coordinator endpoint, and every known long-lived route has recent producer activity. `scripts/check-local-substrate-default-trial-measurement.mjs` pins the ready case plus restart residue, runtime version staleness, receipt backlog, missing watcher activity, missing long-lived route, and missing long-lived activity failures through `pnpm doc-sync`.
-
-**Likely outcome (not committed):** accept after a design packet validates the contract against current startup-spawn harnesses, bridge-backed always-on assistants, scheduled long-lived producers, and local watcher process models. If accepted, promote this into an ADR that supersedes [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback) for local hot paths while preserving [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback)'s fallback and single-creator-key invariants.
-
-**Cross-references.**
-
-- [D076](#d076-long-lived-atrib-emit-daemon-opt-in--spawn-per-emit-fallback), the earlier emit-only daemon design.
-- [D081](#d081-in-process-emit-for-hook-class-producers-emitinprocess) and [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape), the hook-path correction that avoided an unnecessary daemon on short-lived Node hooks.
-- [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers), harness context discovery.
-- [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), the measurement surface a coordinator health report should extend.
-- [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox), signer isolation for sandboxed producers.
-- [P002](#p002-agent-bridge-on-atrib-substrate), agent-bridge on atrib substrate.
-- [P027](#p027-deployment-architecture-for-host-side-hook-helpers-symlink-from-repo-vs-published-cli), hook helper deployment architecture.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
