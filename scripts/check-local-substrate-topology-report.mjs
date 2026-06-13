@@ -12,6 +12,7 @@ import {
   collectLongLivedActivityReport,
   collectRegisteredLongLivedAgents,
   collectRegisteredStartupSpawnConfigs,
+  formatTextReport,
   registeredLongLivedAgentsFromRegistry,
   registeredStartupSpawnConfigsFromRegistry,
   routeRegistryDiagnosticsFromRegistry,
@@ -987,11 +988,21 @@ function checkLongLivedActivityGate() {
   if (endpointMismatchGate?.status !== 'warn') {
     fail('long-lived activity gate: expected endpoint mismatch activity to warn')
   }
+  if (!endpointMismatchGate.detail.includes('endpoint_mismatch=1')) {
+    fail('long-lived activity gate: expected endpoint mismatch detail to be visible')
+  }
   if (endpointMismatchReport.summary.long_lived_agent_activity_endpoint_mismatch !== 1) {
     fail('long-lived activity gate: expected one endpoint mismatch activity')
   }
   if (endpointMismatchReport.summary.long_lived_agent_activity_not_delegated !== 0) {
     fail('long-lived activity gate: expected endpoint mismatch not to count as non-delegated')
+  }
+  const endpointMismatchText = formatTextReport(endpointMismatchReport)
+  if (!endpointMismatchText.includes('endpoint_mismatch=1')) {
+    fail('long-lived activity gate: expected endpoint mismatch text output to be visible')
+  }
+  if (!endpointMismatchText.includes('not_delegated=0')) {
+    fail('long-lived activity gate: expected non-delegated text output to stay visible')
   }
 }
 
