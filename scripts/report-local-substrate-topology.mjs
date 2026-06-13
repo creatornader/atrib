@@ -59,6 +59,7 @@ const LOCAL_SUBSTRATE_INFRA_LABEL_PREFIXES = [
   'com.nader.atrib-local-substrate.',
   'com.nader.atrib-primitives.',
 ]
+const AGENT_BRIDGE_ATTRIBUTED_SERVICE = ['agent', 'bridge', 'atrib'].join('-')
 const SAFE_ENDPOINT_ENV_KEYS = [
   'ATRIB_LOCAL_SUBSTRATE_ENDPOINT',
   'KNOWLEDGE_BASE_ATRIB_LOCAL_SUBSTRATE_ENDPOINT',
@@ -239,6 +240,11 @@ function serviceNameForCommand(command) {
     }
   }
   if (command.includes('/bridge-wrapper/dist/')) return 'bridge-wrapper'
+  if (command.includes(`/${AGENT_BRIDGE_ATTRIBUTED_SERVICE}/dist/`)) {
+    return bridgeRuntimeTransport({ command }) === 'stdio-http-proxy'
+      ? 'agent-bridge-proxy'
+      : 'agent-bridge-runtime'
+  }
   if (command.includes('/agent-bridge/dist/') || command.includes('/upstream-bridge/dist/')) {
     return 'bridge-upstream'
   }
@@ -350,6 +356,9 @@ function summarizeProcesses(processes) {
 }
 
 function summarizeBridgeProcesses(rows, byPid) {
+  const runtime = rows.filter((row) => row.service === 'agent-bridge-runtime')
+  const runtimeHttp = runtime.filter((row) => bridgeRuntimeTransport(row) === 'streamable-http')
+  const proxy = rows.filter((row) => row.service === 'agent-bridge-proxy')
   const upstreams = rows.filter((row) => row.service === 'bridge-upstream')
   const explicitWrappers = rows.filter((row) => row.service === 'bridge-wrapper')
   const inferredWrappers = upstreams
@@ -390,6 +399,12 @@ function summarizeBridgeProcesses(rows, byPid) {
   const upstreamsWithoutWrapper = upstreams.filter((row) => !wrapperByPid.has(row.ppid))
   return {
     bridge_processes: wrappers.length + upstreams.length,
+    bridge_runtime_processes: runtime.length,
+    bridge_runtime_http_processes: runtimeHttp.length,
+    bridge_proxy_processes: proxy.length,
+    bridge_proxy_stdio_processes: proxy.filter(
+      (row) => bridgeRuntimeTransport(row) === 'stdio-http-proxy',
+    ).length,
     bridge_wrapper_processes: wrappers.length,
     bridge_upstream_processes: upstreams.length,
     obsolete_bridge_wrapper_processes: 0,
@@ -520,6 +535,13 @@ function annotateBridgeConfigDrift(processSummary, configs) {
 }
 
 function primitiveRuntimeTransport(row) {
+  if (row.command.includes('--transport stdio-http-proxy')) return 'stdio-http-proxy'
+  return row.command.includes('--transport streamable-http') || row.command.includes('--http')
+    ? 'streamable-http'
+    : 'stdio'
+}
+
+function bridgeRuntimeTransport(row) {
   if (row.command.includes('--transport stdio-http-proxy')) return 'stdio-http-proxy'
   return row.command.includes('--transport streamable-http') || row.command.includes('--http')
     ? 'streamable-http'
@@ -953,9 +975,39 @@ function collectKnowledgeBaseReceiptReport({
   const annotationPending = Number(raw.annotations.pending_receipt_or_parent_joins)
   const walQueued = Number(raw.wal.queued)
   const walQuarantined = Number(raw.wal.quarantined)
-  const totalPending = observationPending + annotationPending + walQueued + walQuarantined
+  const walReceipted = Number(raw.wal.receipted)
+  const recomputedPending =
+    observationPending + annotationPending + walQueued + walQuarantined + walReceipted
+  const totalPending = Number.isFinite(Number(raw?.pending?.total))
+    ? Math.max(Number(raw.pending.total), recomputedPending)
+    : recomputedPending
   const stale = ageMs === undefined ? true : ageMs > maxAgeMs
   const status = totalPending > 0 ? 'backlog' : stale ? 'stale' : 'clean'
+  const rawReceiptIntegrity = raw?.receipt_integrity
+  const receiptIntegrity =
+    rawReceiptIntegrity && typeof rawReceiptIntegrity === 'object'
+      ? {
+          active_receipt_files: Number(rawReceiptIntegrity.active_receipt_files ?? walReceipted),
+          invalid_receipt_files: Number(rawReceiptIntegrity.invalid_receipt_files ?? 0),
+          orphan_receipt_files: Number(rawReceiptIntegrity.orphan_receipt_files ?? 0),
+          receipt_mismatches: Number(rawReceiptIntegrity.receipt_mismatches ?? 0),
+          ready_to_join_receipt_files: Number(
+            rawReceiptIntegrity.ready_to_join_receipt_files ?? 0,
+          ),
+          already_joined_receipt_files: Number(
+            rawReceiptIntegrity.already_joined_receipt_files ?? 0,
+          ),
+          issues: Array.isArray(rawReceiptIntegrity.issues) ? rawReceiptIntegrity.issues.length : 0,
+        }
+      : {
+          active_receipt_files: walReceipted,
+          invalid_receipt_files: 0,
+          orphan_receipt_files: 0,
+          receipt_mismatches: 0,
+          ready_to_join_receipt_files: 0,
+          already_joined_receipt_files: 0,
+          issues: undefined,
+        }
 
   return {
     path: display,
@@ -977,15 +1029,17 @@ function collectKnowledgeBaseReceiptReport({
     wal: {
       queued: walQueued,
       quarantined: walQuarantined,
-      receipted: Number(raw.wal.receipted),
+      receipted: walReceipted,
     },
     pending: {
       observations: observationPending,
       annotations: annotationPending,
+      wal_receipted: Number(raw?.pending?.wal_receipted ?? walReceipted),
       wal_queued: walQueued,
       wal_quarantined: walQuarantined,
       total: totalPending,
     },
+    receipt_integrity: receiptIntegrity,
     caveats: Array.isArray(raw.caveats) ? raw.caveats.length : undefined,
   }
 }
@@ -1955,13 +2009,14 @@ function knowledgeBaseReceiptReportStatus(report) {
 }
 
 function knowledgeBaseReceiptPendingTotal(report) {
-  return (
-    Number(report?.pending?.total ?? 0) ||
+  const recomputed =
     Number(report?.observations?.pending_receipt_joins ?? 0) +
-      Number(report?.annotations?.pending_receipt_or_parent_joins ?? 0) +
-      Number(report?.wal?.queued ?? 0) +
-      Number(report?.wal?.quarantined ?? 0)
-  )
+    Number(report?.annotations?.pending_receipt_or_parent_joins ?? 0) +
+    Number(report?.wal?.queued ?? 0) +
+    Number(report?.wal?.quarantined ?? 0) +
+    Number(report?.wal?.receipted ?? 0)
+  const declared = Number(report?.pending?.total ?? 0)
+  return Math.max(Number.isFinite(declared) ? declared : 0, recomputed)
 }
 
 function knowledgeBaseReceiptSummary(report) {
@@ -1974,6 +2029,8 @@ function knowledgeBaseReceiptSummary(report) {
     annotation_pending: Number(report?.annotations?.pending_receipt_or_parent_joins ?? 0),
     wal_queued: Number(report?.wal?.queued ?? 0),
     wal_quarantined: Number(report?.wal?.quarantined ?? 0),
+    wal_receipted: Number(report?.wal?.receipted ?? 0),
+    receipt_integrity: report?.receipt_integrity,
   }
 }
 
@@ -2277,7 +2334,17 @@ function buildGates({
   }
 
   if (processSummary.bridge_processes === 0) {
-    gates.push(gate('bridge-wrapper-footprint', 'pass', 'no bridge wrapper process evidence found'))
+    const proxyDetail =
+      processSummary.bridge_proxy_processes > 0
+        ? `; ${processSummary.bridge_proxy_processes} stdio-http bridge proxy adapter(s)`
+        : ''
+    gates.push(
+      gate(
+        'bridge-wrapper-footprint',
+        'pass',
+        `no legacy bridge wrapper process evidence found${proxyDetail}`,
+      ),
+    )
   } else if (processSummary.obsolete_bridge_wrapper_processes > 0) {
     gates.push(
       gate(
@@ -2338,7 +2405,7 @@ function buildGates({
       gate(
         'knowledge-base-receipt-join-back',
         'pass',
-        'knowledge-base receipt join-back report is fresh and has no pending joins',
+        'knowledge-base receipt join-back report is fresh and has no pending joins or active receipts',
       ),
     )
   } else if (receiptSummary.status === 'parse_error' || receiptSummary.status === 'invalid_shape') {
@@ -2354,7 +2421,7 @@ function buildGates({
       gate(
         'knowledge-base-receipt-join-back',
         'warn',
-        `${receiptSummary.pending_total} pending knowledge-base receipt join-back item(s)`,
+        `${receiptSummary.pending_total} pending knowledge-base receipt or integrity item(s)`,
       ),
     )
   } else if (receiptSummary.status === 'stale') {
@@ -2657,6 +2724,10 @@ function buildReport(input, options = {}) {
         processSummary.obsolete_standalone_primitive_generations,
       duplicate_primitive_groups: processSummary.duplicate_primitive_groups,
       bridge_processes: processSummary.bridge_processes,
+      bridge_runtime_processes: processSummary.bridge_runtime_processes,
+      bridge_runtime_http_processes: processSummary.bridge_runtime_http_processes,
+      bridge_proxy_processes: processSummary.bridge_proxy_processes,
+      bridge_proxy_stdio_processes: processSummary.bridge_proxy_stdio_processes,
       bridge_wrapper_processes: processSummary.bridge_wrapper_processes,
       bridge_upstream_processes: processSummary.bridge_upstream_processes,
       obsolete_bridge_wrapper_processes: processSummary.obsolete_bridge_wrapper_processes,
@@ -2684,6 +2755,15 @@ function buildReport(input, options = {}) {
       knowledge_base_receipt_annotation_pending: receiptSummary.annotation_pending,
       knowledge_base_wal_queued: receiptSummary.wal_queued,
       knowledge_base_wal_quarantined: receiptSummary.wal_quarantined,
+      knowledge_base_wal_receipted: receiptSummary.wal_receipted,
+      knowledge_base_receipt_integrity_active:
+        receiptSummary.receipt_integrity?.active_receipt_files,
+      knowledge_base_receipt_integrity_mismatches:
+        receiptSummary.receipt_integrity?.receipt_mismatches,
+      knowledge_base_receipt_integrity_orphans:
+        receiptSummary.receipt_integrity?.orphan_receipt_files,
+      knowledge_base_receipt_integrity_invalid:
+        receiptSummary.receipt_integrity?.invalid_receipt_files,
       long_lived_agents: longLivedAgents.length,
       long_lived_agent_routes: longLivedRoutes.total,
       long_lived_agent_route_endpoints: unique(longLivedAgents.map((agent) => agent.endpoint))
@@ -2815,7 +2895,7 @@ function formatTextReport(report) {
     `host-owned bridge HTTP: healthy=${report.summary.bridge_runtime_http_healthy}/${report.summary.bridge_runtime_http_endpoints}`,
     `context routing profiles: ready=${report.summary.active_session_profiles_ready}/${report.summary.active_session_profiles}, active-session=${report.summary.active_session_profiles_valid}, explicit-required=${report.summary.active_session_profiles_explicit_required}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
-    `knowledge-base receipt join-back: status=${report.summary.knowledge_base_receipt_report_status}, pending=${report.summary.knowledge_base_receipt_pending_total}, obs=${report.summary.knowledge_base_receipt_observation_pending}, annotations=${report.summary.knowledge_base_receipt_annotation_pending}, wal-queued=${report.summary.knowledge_base_wal_queued}, wal-quarantined=${report.summary.knowledge_base_wal_quarantined}`,
+    `knowledge-base receipt join-back: status=${report.summary.knowledge_base_receipt_report_status}, pending=${report.summary.knowledge_base_receipt_pending_total}, obs=${report.summary.knowledge_base_receipt_observation_pending}, annotations=${report.summary.knowledge_base_receipt_annotation_pending}, wal-queued=${report.summary.knowledge_base_wal_queued}, wal-receipted=${report.summary.knowledge_base_wal_receipted}, wal-quarantined=${report.summary.knowledge_base_wal_quarantined}, receipt-mismatches=${report.summary.knowledge_base_receipt_integrity_mismatches}, receipt-orphans=${report.summary.knowledge_base_receipt_integrity_orphans}`,
     `long-lived agent routes: healthy=${report.summary.long_lived_agent_routes_healthy}/${report.summary.long_lived_agent_routes}, configured=${report.summary.long_lived_agent_routes_configured}, missing=${report.summary.long_lived_agent_routes_missing}, endpoints=${report.summary.long_lived_agent_route_endpoints}`,
     `long-lived activity: status=${report.summary.long_lived_activity_report_status}, ok=${report.summary.long_lived_agent_activity_ok}/${report.summary.long_lived_agent_routes}, missing=${report.summary.long_lived_agent_activity_missing}, stale=${report.summary.long_lived_agent_activity_stale}`,
     '',

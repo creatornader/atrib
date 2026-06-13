@@ -11,6 +11,7 @@ import { buildReport } from './report-local-substrate-topology.mjs'
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const FIXTURE_DIR = join(ROOT, 'spec/conformance/local-substrate-coordinator/topology')
 const GENERATED_AT = '2026-06-12T00:00:00.000Z'
+const BRIDGE_SERVICE_DIR = ['agent', 'bridge', 'atrib'].join('-')
 const failures = []
 
 function readJson(path) {
@@ -53,6 +54,9 @@ function checkHealthyMeasurement() {
   if (measurement.process_footprint.watcher_wal.receipt_pending_total !== 0) {
     fail('healthy measurement: expected zero pending receipt joins')
   }
+  if (measurement.process_footprint.watcher_wal.wal_receipted !== 0) {
+    fail('healthy measurement: expected zero active receipted WAL files')
+  }
 }
 
 function checkRestartResidueFailsMeasurement() {
@@ -78,9 +82,20 @@ function checkReceiptBacklogFailsMeasurement() {
   const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
   snapshot.knowledge_base_receipt_report.status = 'backlog'
   snapshot.knowledge_base_receipt_report.observations.pending_receipt_joins = 1
+  snapshot.knowledge_base_receipt_report.wal.receipted = 1
+  snapshot.knowledge_base_receipt_report.receipt_integrity = {
+    active_receipt_files: 1,
+    invalid_receipt_files: 0,
+    orphan_receipt_files: 1,
+    receipt_mismatches: 0,
+    ready_to_join_receipt_files: 0,
+    already_joined_receipt_files: 0,
+    issues: [],
+  }
   snapshot.knowledge_base_receipt_report.pending = {
     observations: 1,
     annotations: 0,
+    wal_receipted: 0,
     wal_queued: 0,
     wal_quarantined: 0,
     total: 1,
@@ -91,6 +106,48 @@ function checkReceiptBacklogFailsMeasurement() {
   }
   if (statusFor(measurement, 'watcher-wal-and-receipts-clean') !== 'fail') {
     fail('receipt backlog measurement: expected watcher-wal-and-receipts-clean=fail')
+  }
+  if (measurement.process_footprint.watcher_wal.wal_receipted !== 1) {
+    fail('receipt backlog measurement: expected active receipted WAL count 1')
+  }
+  if (measurement.process_footprint.watcher_wal.receipt_orphans !== 1) {
+    fail('receipt backlog measurement: expected orphan receipt count 1')
+  }
+}
+
+function checkBridgeProxyProcessFootprint() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  snapshot.processes.push(
+    {
+      pid: 210,
+      ppid: 1,
+      service: 'claude-desktop',
+      command: '/Applications/Claude.app/Contents/MacOS/Claude',
+    },
+    {
+      pid: 230,
+      ppid: 1,
+      command: `node /workspace/private/services/${BRIDGE_SERVICE_DIR}/dist/index.js --transport streamable-http --host 127.0.0.1 --port 8791 --path /mcp`,
+    },
+    {
+      pid: 231,
+      ppid: 210,
+      command: `node /workspace/private/services/${BRIDGE_SERVICE_DIR}/dist/index.js --transport stdio-http-proxy --endpoint http://127.0.0.1:8791/mcp`,
+    },
+  )
+  const measurement = measurementForReport(buildReport(snapshot, { generatedAt: GENERATED_AT }))
+  if (measurement.status !== 'ready_for_default_trial') {
+    fail(`bridge proxy process footprint: expected ready, got ${measurement.status}`)
+  }
+  if (measurement.process_footprint.bridge.runtime_processes !== 1) {
+    fail('bridge proxy process footprint: expected one bridge runtime process')
+  }
+  if (measurement.process_footprint.bridge.proxy_processes !== 1) {
+    fail('bridge proxy process footprint: expected one bridge proxy process')
+  }
+  if (measurement.process_footprint.bridge.wrapper_processes !== 0) {
+    fail('bridge proxy process footprint: expected zero legacy bridge wrappers')
   }
 }
 
@@ -129,6 +186,7 @@ function main() {
   checkHealthyMeasurement()
   checkRestartResidueFailsMeasurement()
   checkReceiptBacklogFailsMeasurement()
+  checkBridgeProxyProcessFootprint()
   checkLongLivedGapFailsMeasurement()
   checkLongLivedActivityFailsMeasurement()
 
