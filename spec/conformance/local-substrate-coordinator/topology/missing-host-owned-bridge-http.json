@@ -241,7 +241,21 @@
         "wal_quarantined": 0,
         "total": 0
       },
-      "caveats": 2
+      "caveats": 2,
+      "activity": {
+        "status": "ok",
+        "source": "bridge-poller",
+        "producer": "atrib-emit",
+        "last_activity_at": "2026-06-10T22:50:00.000Z",
+        "age_ms": 600000,
+        "max_age_ms": 108000000,
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "35ae959b3e8d4d5f943a9cf90bf8e538",
+        "topics": [
+          "agent-bridge",
+          "codex"
+        ]
+      }
     },
     "long_lived_activity_report": {
       "schema": "atrib.long-lived-agent-activity-report.v0",
@@ -292,7 +306,8 @@
       "long_lived_activity_report_status": "clean",
       "long_lived_agent_activity_ok": 1,
       "long_lived_agent_activity_missing": 0,
-      "long_lived_agent_activity_stale": 0
+      "long_lived_agent_activity_stale": 0,
+      "knowledge_base_activity_status": "ok"
     },
     "gates": {
       "coordinator-health": "pass",
@@ -305,7 +320,8 @@
       "host-owned-bridge-http": "fail",
       "host-owned-active-session-context": "pass",
       "knowledge-base-receipt-join-back": "pass",
-      "long-lived-agent-activity": "pass"
+      "long-lived-agent-activity": "pass",
+      "knowledge-base-watcher-activity": "pass"
     },
     "recommendations": [
       "start one loopback Agent Bridge Streamable HTTP host per startup-spawn agent profile before removing per-thread bridge wrappers"

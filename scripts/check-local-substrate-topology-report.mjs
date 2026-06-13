@@ -444,6 +444,48 @@ function checkKnowledgeBaseReceiptJoinGate() {
   }
 }
 
+function checkKnowledgeBaseWatcherActivityGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  delete snapshot.knowledge_base_receipt_report.activity
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'mixed') {
+    fail(`knowledge-base watcher activity gate: expected status mixed, got ${report.summary.status}`)
+  }
+  if (report.summary.knowledge_base_receipt_report_status !== 'clean') {
+    fail('knowledge-base watcher activity gate: expected receipt report to stay clean')
+  }
+  if (report.summary.knowledge_base_activity_status !== 'missing') {
+    fail(
+      `knowledge-base watcher activity gate: expected activity status missing, got ${report.summary.knowledge_base_activity_status}`,
+    )
+  }
+  const receiptGate = report.gates.find((gate) => gate.name === 'knowledge-base-receipt-join-back')
+  if (receiptGate?.status !== 'pass') {
+    fail('knowledge-base watcher activity gate: expected knowledge-base-receipt-join-back=pass')
+  }
+  const activityGate = report.gates.find(
+    (gate) => gate.name === 'knowledge-base-watcher-activity',
+  )
+  if (activityGate?.status !== 'warn') {
+    fail('knowledge-base watcher activity gate: expected knowledge-base-watcher-activity=warn')
+  }
+  const broadGate = report.gates.find((gate) => gate.name === 'broad-default-readiness')
+  if (broadGate?.status !== 'fail') {
+    fail('knowledge-base watcher activity gate: expected broad-default-readiness=fail')
+  }
+  if (
+    !report.recommendations.includes(
+      'refresh or repair knowledge-base watcher activity evidence before treating watcher-WAL routing as active',
+    )
+  ) {
+    fail('knowledge-base watcher activity gate: expected watcher activity recommendation')
+  }
+}
+
 function checkKnowledgeBaseReceiptCollector() {
   const dir = mkdtempSync(join(tmpdir(), 'atrib-receipt-report-'))
   try {
@@ -510,12 +552,25 @@ function checkKnowledgeBaseReceiptCollector() {
         observations: { entries: 1, pending_receipt_joins: 0 },
         annotations: { entries: 1, pending_receipt_or_parent_joins: 0 },
         wal: { queued: 0, quarantined: 0, receipted: 0 },
+        activity: {
+          status: 'ok',
+          source: 'bridge-poller',
+          producer: 'atrib-emit',
+          last_activity_at: new Date().toISOString(),
+          age_ms: 1000,
+          max_age_ms: 108000000,
+          secret: 'must-not-leak',
+        },
         caveats: ['join state, not public log inclusion'],
       }),
     )
     const clean = collectKnowledgeBaseReceiptReport({ path: cleanPath })
     if (clean.status !== 'clean' || clean.pending.total !== 0 || clean.caveats !== 1) {
       fail(`knowledge-base receipt collector: expected clean report, got ${clean.status}`)
+    } else if (clean.activity.status !== 'ok' || clean.activity.source !== 'bridge-poller') {
+      fail('knowledge-base receipt collector: expected normalized watcher activity')
+    } else if (JSON.stringify(clean).includes('must-not-leak')) {
+      fail('knowledge-base receipt collector: unsafe activity field leaked into normalized report')
     }
 
     const activeReceiptPath = join(dir, 'active-receipt.json')
@@ -943,6 +998,7 @@ function main() {
   checkPrimitiveBackendContractGate()
   checkExplicitContextPolicyGate()
   checkKnowledgeBaseReceiptJoinGate()
+  checkKnowledgeBaseWatcherActivityGate()
   checkKnowledgeBaseReceiptCollector()
   checkLongLivedActivityCollector()
   checkLongLivedActivityGate()
